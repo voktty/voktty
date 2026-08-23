@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-23
+
 ### Added
 
 - fx as a harness: if `fx` is installed and logged in, it shows up next to Claude Code, Codex, Cursor, OpenCode, and Pi. Live sessions spawn `fx acp` and talk Agent Client Protocol. fx does not accept image or audio attachments, so the attach button is disabled with a tooltip. Follow-up messages while a turn is running are not steered - wait for the turn to finish.
@@ -73,7 +75,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/hardbeat920/monocode/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/hardbeat920/monocode/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/hardbeat920/monocode/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/hardbeat920/monocode/releases/tag/v0.1.0
