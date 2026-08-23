@@ -110,8 +110,12 @@ jobs:
           DMG=$(ls "$BUNDLE"/dmg/*.dmg | head -n 1)
           BASE="${R2_PUBLIC_BASE_URL%/}"
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          RELEASE_PREFIX="releases/${VERSION}"
+          TAR_KEY="${RELEASE_PREFIX}/MonoCode.app.tar.gz"
+          SIG_KEY="${TAR_KEY}.sig"
+          DMG_KEY="${RELEASE_PREFIX}/MonoCode_${VERSION}_aarch64.dmg"
 
-          VERSION="$VERSION" SIG="$SIG" TAR_URL="$BASE/MonoCode.app.tar.gz" node <<'NODE'
+          VERSION="$VERSION" SIG="$SIG" TAR_URL="$BASE/$TAR_KEY" node <<'NODE'
           const fs = require("fs");
           fs.writeFileSync(
             "latest.json",
@@ -134,10 +138,15 @@ jobs:
           NODE
 
           brew list awscli >/dev/null 2>&1 || brew install awscli
-          aws s3 cp "$DMG" "s3://${R2_BUCKET_NAME}/MonoCode.dmg" --endpoint-url "$ENDPOINT"
-          aws s3 cp "$TAR" "s3://${R2_BUCKET_NAME}/MonoCode.app.tar.gz" --endpoint-url "$ENDPOINT"
-          aws s3 cp "$SIG" "s3://${R2_BUCKET_NAME}/MonoCode.app.tar.gz.sig" --endpoint-url "$ENDPOINT"
-          aws s3 cp latest.json "s3://${R2_BUCKET_NAME}/latest.json" --endpoint-url "$ENDPOINT"
+          IMMUTABLE_CACHE="public,max-age=31536000,immutable"
+          NO_CACHE="no-store,max-age=0,must-revalidate"
+          aws s3 cp "$DMG" "s3://${R2_BUCKET_NAME}/${DMG_KEY}" --cache-control "$IMMUTABLE_CACHE" --endpoint-url "$ENDPOINT"
+          aws s3 cp "$TAR" "s3://${R2_BUCKET_NAME}/${TAR_KEY}" --cache-control "$IMMUTABLE_CACHE" --endpoint-url "$ENDPOINT"
+          aws s3 cp "$SIG" "s3://${R2_BUCKET_NAME}/${SIG_KEY}" --cache-control "$IMMUTABLE_CACHE" --endpoint-url "$ENDPOINT"
+          # Keep the website's stable DMG link, but never let the CDN retain an
+          # older release under this mutable name.
+          aws s3 cp "$DMG" "s3://${R2_BUCKET_NAME}/MonoCode.dmg" --cache-control "$NO_CACHE" --endpoint-url "$ENDPOINT"
+          aws s3 cp latest.json "s3://${R2_BUCKET_NAME}/latest.json" --content-type "application/json" --cache-control "$NO_CACHE" --endpoint-url "$ENDPOINT"
 
       - name: GitHub Release
         env:

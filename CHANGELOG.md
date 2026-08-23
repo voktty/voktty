@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-23
+
+### Fixed
+
+- Updater archives now use immutable, versioned URLs so Cloudflare cannot pair a cached previous release with the latest signature.
+
 ## [0.1.4] - 2026-08-23
 
 ### Added
@@ -89,7 +95,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/hardbeat920/monocode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/hardbeat920/monocode/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/hardbeat920/monocode/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/hardbeat920/monocode/compare/v0.1.1...v0.1.2
