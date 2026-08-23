@@ -6,7 +6,6 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -19,6 +18,7 @@ import {
 import { looksLikeProject } from "../lib/recents";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { MatchText } from "./MatchText";
 
 type Props = {
   open: boolean;
@@ -304,7 +304,7 @@ function FileList({
               <FileTypeIcon name={file.name} isDir={false} />
             </span>
             <span className="min-w-0 flex-1 truncate">
-              <Highlight
+              <MatchText
                 text={file.name}
                 positions={file.positions
                   .filter((pos) => pos >= nameOffset)
@@ -314,7 +314,7 @@ function FileList({
             </span>
             {dir ? (
               <span className="min-w-0 max-w-[45%] truncate font-mono text-[11px] text-content/40">
-                <Highlight
+                <MatchText
                   text={dir}
                   positions={file.positions.filter((pos) => pos < slash)}
                   active={Boolean(query.trim())}
@@ -325,34 +325,5 @@ function FileList({
         );
       })}
     </div>
-  );
-}
-
-function Highlight({
-  text,
-  positions,
-  active,
-}: {
-  text: string;
-  positions: number[];
-  active: boolean;
-}): ReactNode {
-  if (!active || positions.length === 0) return text;
-  const marked = new Set(positions);
-  const runs: { text: string; match: boolean }[] = [];
-  for (let i = 0; i < text.length; i++) {
-    const match = marked.has(i);
-    const last = runs[runs.length - 1];
-    if (last && last.match === match) last.text += text[i];
-    else runs.push({ text: text[i], match });
-  }
-  return runs.map((run, index) =>
-    run.match ? (
-      <span key={index} className="text-accent">
-        {run.text}
-      </span>
-    ) : (
-      <span key={index}>{run.text}</span>
-    ),
   );
 }

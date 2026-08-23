@@ -12,6 +12,7 @@
   );
   --color-accent: hsl(211 92% 62%);
   --color-skill: #e8c547;
+  --color-mention: #38bdf8;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
@@ -28,6 +29,7 @@
   --content-lightness: 92%;
   --link-color: #7dd3fc;
   --color-skill: #e8c547;
+  --color-mention: #38bdf8;
 }
 
 html {
@@ -39,6 +41,7 @@ html.theme-light {
   --content-lightness: 18%;
   --link-color: hsl(211 92% 40%);
   --color-skill: #a07c10;
+  --color-mention: #0284c7;
   color-scheme: light;
 }
 

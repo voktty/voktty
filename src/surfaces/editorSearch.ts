@@ -35,7 +35,11 @@ export function handleEditorFindKey(event: KeyboardEvent): boolean {
   if (event.isComposing) return false;
 
   const target = event.target instanceof Element ? event.target : null;
-  if (target?.closest("[data-file-picker], [data-model-picker], [data-branch-picker], [data-skill-picker]")) {
+  if (
+    target?.closest(
+      "[data-file-picker], [data-model-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker]",
+    )
+  ) {
     return false;
   }
 

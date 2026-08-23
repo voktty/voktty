@@ -20,7 +20,23 @@ import {
   revokeAttachment,
 } from "../lib/attachments";
 import type { ContextUsage } from "../lib/contextUsage";
-import type { RecentProject } from "../lib/recents";
+import {
+  loadProjectFiles,
+  peekProjectFiles,
+  recentOpenedFiles,
+} from "../lib/fileIndex";
+import {
+  buildMentionIndex,
+  fileMentionParts,
+  mentionLabel,
+  mentionTokenAt,
+  rankMentionFiles,
+  replaceMentionToken,
+  type MentionIndex,
+  type MentionToken,
+} from "../lib/fileMentions";
+import type { ProjectFile } from "../lib/fs";
+import { looksLikeProject, type RecentProject } from "../lib/recents";
 import type { Attachment, HarnessId, RuntimeMode } from "../lib/session";
 import { harnessSupportsAttachments } from "../lib/session";
 import {
@@ -40,6 +56,8 @@ import { ContextMeter } from "./ContextMeter";
 import { AttachmentChip } from "./AttachmentChip";
 import { BranchPicker } from "./BranchPicker";
 import { CwdPicker } from "./CwdPicker";
+import { FileMentionPicker } from "./FileMentionPicker";
+import { FileTypeIcon } from "./FileTypeIcon";
 import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
 import { SkillPicker } from "./SkillPicker";
@@ -132,6 +150,7 @@ export function Composer({
   const highlightRef = useRef<HTMLDivElement>(null);
   const attachmentsRef = useRef<Attachment[]>([]);
   const slashRef = useRef<SlashToken | null>(null);
+  const mentionRef = useRef<MentionToken | null>(null);
   const [draft, setDraft] = useState("");
   const [hasValue, setHasValue] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -144,19 +163,36 @@ export function Composer({
   const [creatingSkill, setCreatingSkill] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createBusy, setCreateBusy] = useState(false);
+  const [files, setFiles] = useState<ProjectFile[]>(
+    () => peekProjectFiles(cwd) ?? [],
+  );
+  const [mention, setMention] = useState<MentionToken | null>(null);
+  const [mentionActive, setMentionActive] = useState(0);
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
 
   slashRef.current = slash;
+  mentionRef.current = mention;
 
   attachmentsRef.current = attachments;
 
   const rankedSkills = rankSkills(skills, slash?.query ?? "");
+  const mentionOpen = mention !== null && looksLikeProject(cwd);
   const pickerOpen = creatingSkill || slash !== null;
   const attachmentsSupported = harnessSupportsAttachments(harness);
   const skillNames = useMemo(
     () => new Set(skills.map((skill) => skill.name)),
     [skills],
+  );
+  const mentionIndex = useMemo(() => buildMentionIndex(files), [files]);
+  const mentionIndexRef = useRef<MentionIndex>(mentionIndex);
+  mentionIndexRef.current = mentionIndex;
+  const rankedFiles = useMemo(
+    () =>
+      mentionOpen
+        ? rankMentionFiles(files, mention?.query ?? "", recentOpenedFiles(cwd))
+        : [],
+    [files, mention?.query, mentionOpen, cwd],
   );
 
   const syncHasValue = useCallback((text: string, files: Attachment[]) => {
@@ -226,6 +262,28 @@ export function Composer({
     );
   }, [rankedSkills.length]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void loadProjectFiles(cwd, mentionOpen)
+      .then((next) => {
+        if (!cancelled) setFiles(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [cwd, mentionOpen]);
+
+  useEffect(() => {
+    setMentionActive(0);
+  }, [mention?.query, cwd]);
+
+  useEffect(() => {
+    setMentionActive((index) =>
+      rankedFiles.length === 0 ? 0 : Math.min(index, rankedFiles.length - 1),
+    );
+  }, [rankedFiles.length]);
+
   const resizeTextarea = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
@@ -238,9 +296,12 @@ export function Composer({
     highlight.scrollLeft = e.currentTarget.scrollLeft;
   };
 
-  const syncSlashFromTextarea = (el: HTMLTextAreaElement) => {
+  const syncTokensFromTextarea = (el: HTMLTextAreaElement) => {
     if (creatingSkill) return;
-    setSlash(slashTokenAt(el.value, el.selectionStart ?? 0));
+    const cursor = el.selectionStart ?? 0;
+    const token = slashTokenAt(el.value, cursor);
+    setSlash(token);
+    setMention(token ? null : mentionTokenAt(el.value, cursor));
   };
 
   const pickSkill = useCallback(
@@ -267,11 +328,34 @@ export function Composer({
     [syncHasValue],
   );
 
+  const pickMention = useCallback(
+    (file: ProjectFile) => {
+      const el = ref.current;
+      const token = mentionRef.current;
+      if (!el || !token) {
+        setMention(null);
+        return;
+      }
+      const label = mentionLabel(file, mentionIndexRef.current);
+      const next = replaceMentionToken(el.value, token, label);
+      el.value = next;
+      resizeTextarea(el);
+      let cursor = token.start + label.length + 1;
+      if (next[cursor] === " ") cursor += 1;
+      el.setSelectionRange(cursor, cursor);
+      setDraft(next);
+      syncHasValue(next, attachmentsRef.current);
+      setMention(null);
+      el.focus();
+    },
+    [syncHasValue],
+  );
+
   useEffect(() => {
     if (!focused) return;
     if (
       document.querySelector(
-        "[data-model-picker], [data-access-picker], [data-model-settings], [data-file-picker], [data-branch-picker], [data-skill-picker]",
+        "[data-model-picker], [data-access-picker], [data-model-settings], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker]",
       )
     )
       return;
@@ -389,12 +473,50 @@ export function Composer({
     setAttachments([]);
     setHasValue(false);
     setSlash(null);
+    setMention(null);
     setCreatingSkill(false);
     setCreateError(null);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (creatingSkill) return;
+
+    if (mentionOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (rankedFiles.length === 0) return;
+        setMentionActive((index) => (index + 1) % rankedFiles.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (rankedFiles.length === 0) return;
+        setMentionActive(
+          (index) => (index - 1 + rankedFiles.length) % rankedFiles.length,
+        );
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMention(null);
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const file = rankedFiles[mentionActive];
+        if (file) pickMention(file);
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        const file = rankedFiles[mentionActive];
+        if (file) {
+          e.preventDefault();
+          pickMention(file);
+          return;
+        }
+        setMention(null);
+      }
+    }
 
     if (slash) {
       if (e.key === "ArrowDown") {
@@ -486,7 +608,7 @@ export function Composer({
                 setCreatingSkill(false);
                 setCreateError(null);
                 const el = ref.current;
-                if (el) syncSlashFromTextarea(el);
+                if (el) syncTokensFromTextarea(el);
                 el?.focus();
               }}
               onCreate={(name, scope) => {
@@ -519,6 +641,18 @@ export function Composer({
                   })
                   .finally(() => setCreateBusy(false));
               }}
+            />
+          </div>
+        ) : null}
+        {mentionOpen && !pickerOpen ? (
+          <div className="absolute inset-x-0 bottom-full z-30 mb-1">
+            <FileMentionPicker
+              files={rankedFiles}
+              query={mention?.query ?? ""}
+              active={mentionActive}
+              loading={peekProjectFiles(cwd) == null}
+              onActive={setMentionActive}
+              onPick={pickMention}
             />
           </div>
         ) : null}
@@ -575,7 +709,11 @@ export function Composer({
                 shell ? "py-4" : "py-3"
               }`}
             >
-              <ComposerSkillHighlight text={draft} names={skillNames} />
+              <ComposerHighlight
+                text={draft}
+                names={skillNames}
+                mentions={mentionIndex.labels}
+              />
             </div>
             <textarea
               ref={ref}
@@ -593,15 +731,15 @@ export function Composer({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onScroll={syncHighlightScroll}
-              onClick={(e) => syncSlashFromTextarea(e.currentTarget)}
-              onKeyUp={(e) => syncSlashFromTextarea(e.currentTarget)}
-              onSelect={(e) => syncSlashFromTextarea(e.currentTarget)}
+              onClick={(e) => syncTokensFromTextarea(e.currentTarget)}
+              onKeyUp={(e) => syncTokensFromTextarea(e.currentTarget)}
+              onSelect={(e) => syncTokensFromTextarea(e.currentTarget)}
               onInput={(e) => {
                 const el = e.currentTarget;
                 resizeTextarea(el);
                 setDraft(el.value);
                 syncHasValue(el.value, attachments);
-                syncSlashFromTextarea(el);
+                syncTokensFromTextarea(el);
               }}
             />
           </div>
@@ -674,12 +812,14 @@ export function Composer({
   );
 }
 
-function ComposerSkillHighlight({
+function ComposerHighlight({
   text,
   names,
+  mentions,
 }: {
   text: string;
   names: ReadonlySet<string>;
+  mentions: ReadonlyMap<string, ProjectFile>;
 }) {
   const parts = skillTextParts(text, names);
   return (
@@ -690,10 +830,43 @@ function ComposerSkillHighlight({
             {part.text}
           </span>
         ) : (
-          part.text
+          // Skill tokens always end on whitespace, so each remaining run still
+          // starts on a boundary `@mention` matching can rely on.
+          <MentionRuns key={index} text={part.text} mentions={mentions} />
         ),
       )}
       {text.endsWith("\n") ? "\n" : null}
+    </>
+  );
+}
+
+function MentionRuns({
+  text,
+  mentions,
+}: {
+  text: string;
+  mentions: ReadonlyMap<string, ProjectFile>;
+}) {
+  const parts = fileMentionParts(text, mentions);
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.file ? (
+          <span key={index} className="text-mention">
+            {/* The `@` keeps its width so the textarea underneath stays in
+                lockstep; the file icon sits on top of it. */}
+            <span className="relative text-transparent">
+              {"@"}
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                <FileTypeIcon name={part.file.name} isDir={false} size={13} />
+              </span>
+            </span>
+            {part.text.slice(1)}
+          </span>
+        ) : (
+          part.text
+        ),
+      )}
     </>
   );
 }

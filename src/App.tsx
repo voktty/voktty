@@ -176,6 +176,7 @@ import {
   type TabVisitHistory,
 } from "./lib/tabVisitHistory";
 import { applySkillsToTurn } from "./lib/skills";
+import { applyFileMentionsToTurn } from "./lib/fileMentions";
 import { PaneTree } from "./surfaces/PaneTree";
 import { DiffPane } from "./surfaces/DiffPane";
 import {
@@ -232,6 +233,11 @@ function scheduleHarnessFlush(run: () => void): ScheduledFlush {
     return { kind: "timeout", id: window.setTimeout(run, 32) };
   }
   return { kind: "raf", id: requestAnimationFrame(run) };
+}
+
+/** Expand the composer's `@file` and `/skill` tokens for the harness. */
+async function preparePrompt(text: string, cwd: string): Promise<string> {
+  return applySkillsToTurn(await applyFileMentionsToTurn(text, cwd), cwd);
 }
 
 function openSessionIds(tabs: WorkspaceTab[]): Set<string> {
@@ -2156,7 +2162,7 @@ export default function App({
         void (async () => {
           try {
             const prepared = await prepareAttachments(attachments);
-            const prompt = await applySkillsToTurn(text, current.cwd);
+            const prompt = await preparePrompt(text, current.cwd);
             await steerHarnessTurn({
               harness: current.harness,
               sessionId,
@@ -2247,7 +2253,7 @@ export default function App({
         if (turnGen.current.get(sessionId) !== gen) return;
         try {
           const prepared = await prepareAttachments(attachments);
-          const prompt = await applySkillsToTurn(text, current.cwd);
+          const prompt = await preparePrompt(text, current.cwd);
           await sendHarnessTurn({
             harness: current.harness,
             sessionId,
@@ -2496,7 +2502,7 @@ export default function App({
         const inPicker =
           target &&
           target.closest(
-            "[data-model-picker], [data-file-picker], [data-branch-picker], [data-skill-picker]",
+            "[data-model-picker], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker]",
           );
         if (inPicker && typeof cmd === "object" && "activate" in cmd) {
           return;
