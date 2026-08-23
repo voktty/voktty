@@ -617,13 +617,15 @@ export default function App({
       setHistoryStatus("idle");
       return;
     }
-    setHistory([]);
+    // Keep the current list while refetching so sidebar cards don't unmount.
     setHistoryStatus("loading");
     try {
       const rows = await listSessionsByProject(cwd);
+      if (cwd !== sidebarCwdRef.current) return;
       setHistory(rows);
       setHistoryStatus("idle");
     } catch {
+      if (cwd !== sidebarCwdRef.current) return;
       setHistoryStatus("error");
     }
   }, []);

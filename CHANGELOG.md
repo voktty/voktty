@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Closing a title-bar tab no longer flashes the sidebar session list. The cards stay on screen while history refreshes instead of disappearing and popping back.
 - Git diff gutter and the Changes sidebar update live when files are modified externally, including after discarding a change, without closing and reopening the tab.
 - The title-bar `+n -n` badge clears when the Changes sidebar shows no uncommitted files, instead of keeping stale addition/deletion counts.
 - Launch no longer flashes a fully clear window: the boot splash uses the same `background-base` / glass tint as the loaded app.
