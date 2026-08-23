@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-23
+
+### Added
+
+- Project files now show their Git status with color in the file tree.
+
+### Fixed
+
+- fx sessions no longer stall after the first turn or when starting another session; fast ACP responses are registered before they can be delivered, and failed transports are recycled cleanly.
+- fx now exposes the model selected by its TUI even when `fx models --json` omits it, including GLM 5.2.
+- fx tool activity shows useful file, search, command, output, and failure details instead of empty or misleading rows.
+- Finder-launched builds pass the user environment and available Gateway credentials to fx instead of hanging on an invisible Keychain prompt.
+- The access-mode control is hidden for fx because fx always runs in its automatic mode.
+
 ## [0.1.3] - 2026-08-23
 
 ### Added
@@ -75,7 +89,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/hardbeat920/monocode/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/hardbeat920/monocode/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/hardbeat920/monocode/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/hardbeat920/monocode/compare/v0.1.0...v0.1.1
