@@ -11,6 +11,7 @@
     var(--theme-hue) var(--theme-saturation) var(--content-lightness)
   );
   --color-accent: hsl(211 92% 62%);
+  --color-skill: #e8c547;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
@@ -26,6 +27,7 @@
   --background-lightness: 9%;
   --content-lightness: 92%;
   --link-color: #7dd3fc;
+  --color-skill: #e8c547;
 }
 
 html {
@@ -36,6 +38,7 @@ html.theme-light {
   --background-lightness: 97%;
   --content-lightness: 18%;
   --link-color: hsl(211 92% 40%);
+  --color-skill: #a07c10;
   color-scheme: light;
 }
 
@@ -155,6 +158,21 @@ html.is-reordering * {
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+}
+
+.composer-field {
+  color: transparent;
+  caret-color: var(--color-content);
+  -webkit-text-fill-color: transparent;
+}
+
+.composer-field::placeholder {
+  color: color-mix(in srgb, var(--color-content) 40%, transparent);
+  -webkit-text-fill-color: color-mix(
+    in srgb,
+    var(--color-content) 40%,
+    transparent
+  );
 }
 
 .composer-toolbar::-webkit-scrollbar,

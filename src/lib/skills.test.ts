@@ -8,6 +8,7 @@ import {
   rankSkills,
   replaceSlashToken,
   skillNamesInText,
+  skillTextParts,
   slashTokenAt,
   slugSkillName,
   type Skill,
@@ -75,6 +76,31 @@ describe("skillNamesInText", () => {
       "create-skill",
     ]);
     expect(skillNamesInText("path /tmp/foo")).toEqual([]);
+  });
+});
+
+describe("skillTextParts", () => {
+  const names = new Set(["review-pr", "create-skill"]);
+
+  it("marks known /skill tokens", () => {
+    expect(skillTextParts("/review-pr look at auth", names)).toEqual([
+      { text: "/review-pr", skill: true },
+      { text: " look at auth", skill: false },
+    ]);
+  });
+
+  it("leaves unknown /tokens as plain text", () => {
+    expect(skillTextParts("see /not-a-skill please", names)).toEqual([
+      { text: "see /not-a-skill please", skill: false },
+    ]);
+  });
+
+  it("splits multiple skills", () => {
+    expect(skillTextParts("/review-pr then /create-skill", names)).toEqual([
+      { text: "/review-pr", skill: true },
+      { text: " then ", skill: false },
+      { text: "/create-skill", skill: true },
+    ]);
   });
 });
 

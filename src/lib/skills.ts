@@ -187,6 +187,47 @@ export function skillNamesInText(text: string): string[] {
   return names;
 }
 
+export type SkillTextPart = {
+  text: string;
+  skill: boolean;
+};
+
+/** Split composer text so known `/skill` tokens can be highlighted. */
+export function skillTextParts(
+  text: string,
+  names: ReadonlySet<string>,
+): SkillTextPart[] {
+  if (!text) return [];
+  if (names.size === 0) return [{ text, skill: false }];
+
+  const parts: SkillTextPart[] = [];
+  const push = (value: string, skill: boolean) => {
+    if (!value) return;
+    const last = parts[parts.length - 1];
+    if (last && last.skill === skill) {
+      last.text += value;
+      return;
+    }
+    parts.push({ text: value, skill });
+  };
+
+  SKILL_TOKEN_RE.lastIndex = 0;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = SKILL_TOKEN_RE.exec(text))) {
+    const name = match[2];
+    if (!name || !names.has(name)) continue;
+    const lead = match[1] ?? "";
+    const start = match.index + lead.length;
+    const end = start + 1 + name.length;
+    push(text.slice(cursor, start), false);
+    push(text.slice(start, end), true);
+    cursor = end;
+  }
+  push(text.slice(cursor), false);
+  return parts;
+}
+
 export function injectSkillPrompt(
   text: string,
   skills: Skill[],

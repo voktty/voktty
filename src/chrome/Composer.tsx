@@ -2,11 +2,13 @@ import { ArrowUp, Plus, Square } from "lucide-react";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
   type ReactNode,
+  type UIEvent,
 } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
@@ -27,6 +29,7 @@ import {
   peekSkills,
   rankSkills,
   replaceSlashToken,
+  skillTextParts,
   slashTokenAt,
   type Skill,
   type SlashToken,
@@ -123,8 +126,10 @@ export function Composer({
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
   const attachmentsRef = useRef<Attachment[]>([]);
   const slashRef = useRef<SlashToken | null>(null);
+  const [draft, setDraft] = useState("");
   const [hasValue, setHasValue] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fileDrag, setFileDrag] = useState(false);
@@ -145,6 +150,10 @@ export function Composer({
 
   const rankedSkills = rankSkills(skills, slash?.query ?? "");
   const pickerOpen = creatingSkill || slash !== null;
+  const skillNames = useMemo(
+    () => new Set(skills.map((skill) => skill.name)),
+    [skills],
+  );
 
   const syncHasValue = useCallback((text: string, files: Attachment[]) => {
     setHasValue(text.trim().length > 0 || files.length > 0);
@@ -208,6 +217,13 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   };
 
+  const syncHighlightScroll = (e: UIEvent<HTMLTextAreaElement>) => {
+    const highlight = highlightRef.current;
+    if (!highlight) return;
+    highlight.scrollTop = e.currentTarget.scrollTop;
+    highlight.scrollLeft = e.currentTarget.scrollLeft;
+  };
+
   const syncSlashFromTextarea = (el: HTMLTextAreaElement) => {
     if (creatingSkill) return;
     setSlash(slashTokenAt(el.value, el.selectionStart ?? 0));
@@ -228,6 +244,7 @@ export function Composer({
       let cursor = token.start + skill.name.length + 1;
       if (next[cursor] === " ") cursor += 1;
       el.setSelectionRange(cursor, cursor);
+      setDraft(next);
       syncHasValue(next, attachmentsRef.current);
       setSlash(null);
       setCreatingSkill(false);
@@ -352,6 +369,7 @@ export function Composer({
     if (!ref.current) return;
     ref.current.value = "";
     ref.current.style.height = "auto";
+    setDraft("");
     setAttachments([]);
     setHasValue(false);
     setSlash(null);
@@ -466,6 +484,7 @@ export function Composer({
                       el.value = next;
                       resizeTextarea(el);
                       el.setSelectionRange(token.start, token.start);
+                      setDraft(next);
                       syncHasValue(next, attachments);
                     }
                     setCreatingSkill(false);
@@ -530,31 +549,44 @@ export function Composer({
             </div>
           ) : null}
 
-          <textarea
-            ref={ref}
-            rows={1}
-            spellCheck={false}
-            placeholder={
-              shell
-                ? "How can I help you today?"
-                : "Ask, build, / for skills... "
-            }
-            className={`max-h-40 w-full resize-none overflow-x-hidden bg-transparent px-3 text-sm leading-5.5 text-content outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap placeholder:text-content/40 font-sans ${
-              shell ? "py-4" : "py-3"
-            }`}
-            onFocus={onFocus}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            onClick={(e) => syncSlashFromTextarea(e.currentTarget)}
-            onKeyUp={(e) => syncSlashFromTextarea(e.currentTarget)}
-            onSelect={(e) => syncSlashFromTextarea(e.currentTarget)}
-            onInput={(e) => {
-              const el = e.currentTarget;
-              resizeTextarea(el);
-              syncHasValue(el.value, attachments);
-              syncSlashFromTextarea(el);
-            }}
-          />
+          <div className="relative">
+            <div
+              ref={highlightRef}
+              aria-hidden
+              className={`composer-highlight pointer-events-none absolute inset-0 max-h-40 overflow-hidden whitespace-pre-wrap break-words px-3 text-sm leading-5.5 text-content font-sans ${
+                shell ? "py-4" : "py-3"
+              }`}
+            >
+              <ComposerSkillHighlight text={draft} names={skillNames} />
+            </div>
+            <textarea
+              ref={ref}
+              rows={1}
+              spellCheck={false}
+              placeholder={
+                shell
+                  ? "How can I help you today?"
+                  : "Ask, build, / for skills... "
+              }
+              className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
+                shell ? "py-4" : "py-3"
+              }`}
+              onFocus={onFocus}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              onScroll={syncHighlightScroll}
+              onClick={(e) => syncSlashFromTextarea(e.currentTarget)}
+              onKeyUp={(e) => syncSlashFromTextarea(e.currentTarget)}
+              onSelect={(e) => syncSlashFromTextarea(e.currentTarget)}
+              onInput={(e) => {
+                const el = e.currentTarget;
+                resizeTextarea(el);
+                setDraft(el.value);
+                syncHasValue(el.value, attachments);
+                syncSlashFromTextarea(el);
+              }}
+            />
+          </div>
 
           <div className="flex items-center gap-1 px-2 pb-2">
             <ToolButton label="Attach files" onClick={attachFromPicker}>
@@ -610,6 +642,30 @@ export function Composer({
         </div>
       </div>
     </div>
+  );
+}
+
+function ComposerSkillHighlight({
+  text,
+  names,
+}: {
+  text: string;
+  names: ReadonlySet<string>;
+}) {
+  const parts = skillTextParts(text, names);
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.skill ? (
+          <span key={index} className="text-skill">
+            {part.text}
+          </span>
+        ) : (
+          part.text
+        ),
+      )}
+      {text.endsWith("\n") ? "\n" : null}
+    </>
   );
 }
 
