@@ -1,7 +1,9 @@
-import { GripVertical, X } from "lucide-react";
+import { ChevronDown, GripVertical, X } from "lucide-react";
 import {
   memo,
   useCallback,
+  useRef,
+  useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Composer } from "../chrome/Composer";
@@ -85,6 +87,11 @@ export const SessionPane = memo(function SessionPane({
     (blockId: string) => onOpenPlan(session.id, blockId),
     [onOpenPlan, session.id],
   );
+  const jumpToBottomRef = useRef<(() => void) | null>(null);
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const onJumpToBottomReady = useCallback((jump: () => void) => {
+    jumpToBottomRef.current = jump;
+  }, []);
   const isEmpty = session.blocks.length === 0;
   const dockComposer = !isEmpty || inSplit;
   const composer = (
@@ -185,15 +192,32 @@ export const SessionPane = memo(function SessionPane({
             composer={dockComposer ? undefined : composer}
           />
         ) : (
-          <AgentTranscript
-            blocks={session.blocks}
-            busy={!!session.busy}
-            cwd={session.cwd}
-            onApproval={approve}
-            onOpenFile={onOpenFile}
-            onOpenDiff={onOpenDiff}
-            onOpenPlan={openPlan}
-          />
+          <>
+            <AgentTranscript
+              blocks={session.blocks}
+              busy={!!session.busy}
+              cwd={session.cwd}
+              onApproval={approve}
+              onOpenFile={onOpenFile}
+              onOpenDiff={onOpenDiff}
+              onOpenPlan={openPlan}
+              onJumpToBottomChange={setShowJumpToBottom}
+              onJumpToBottomReady={onJumpToBottomReady}
+            />
+            {showJumpToBottom ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-2 z-30 flex justify-center">
+                <button
+                  type="button"
+                  title="Jump to latest"
+                  aria-label="Jump to latest"
+                  onClick={() => jumpToBottomRef.current?.()}
+                  className="pointer-events-auto grid size-6 place-items-center rounded-md border border-content/15 bg-content/10 text-content shadow-md hover:bg-content/5 backdrop-blur-md"
+                >
+                  <ChevronDown className="size-4" strokeWidth={2} />
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
       {dockComposer ? (

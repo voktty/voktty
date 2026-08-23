@@ -59,6 +59,8 @@ type Props = {
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
+  onJumpToBottomChange?: (show: boolean) => void;
+  onJumpToBottomReady?: (jump: () => void) => void;
 };
 
 export function AgentTranscript({
@@ -69,45 +71,84 @@ export function AgentTranscript({
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
+  onJumpToBottomChange,
+  onJumpToBottomReady,
 }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const showJumpRef = useRef(false);
+  const distanceFromBottom = useRef(0);
   const prependHeight = useRef<number | null>(null);
+  const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
   const [visibleTurnCount, setVisibleTurnCount] = useState(INITIAL_TURNS);
   const lastUserId = lastUserBlockId(blocks);
   const liveStartedAt = turnUserBlock(blocks)?.startedAt;
   const waitingForApproval = hasPendingApproval(blocks);
 
+  const setShowJump = useCallback(
+    (show: boolean) => {
+      if (showJumpRef.current === show) return;
+      showJumpRef.current = show;
+      onJumpToBottomChange?.(show);
+    },
+    [onJumpToBottomChange],
+  );
+
+  const syncPinned = useCallback(
+    (el: HTMLElement) => {
+      const near = isNearBottom(el);
+      stickToBottom.current = near;
+      distanceFromBottom.current =
+        el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowJump(!near);
+    },
+    [setShowJump],
+  );
+
+  const jumpToBottom = useCallback(() => {
+    stickToBottom.current = true;
+    distanceFromBottom.current = 0;
+    setShowJump(false);
+    pinToBottom(scroller.current);
+  }, [setShowJump]);
+
   const setScroller = useCallback(
     (el: HTMLDivElement | null) => {
       scroller.current = el;
+      setScrollerEl(el);
       lockOverscroll(el);
     },
     [lockOverscroll],
   );
 
   useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const onScroll = () => {
-      stickToBottom.current = isNearBottom(el);
-    };
+    onJumpToBottomReady?.(jumpToBottom);
+  }, [jumpToBottom, onJumpToBottomReady]);
+
+  useEffect(() => {
+    if (!scrollerEl) return;
+    syncPinned(scrollerEl);
+    const onScroll = () => syncPinned(scrollerEl);
     const onWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) stickToBottom.current = false;
+      if (e.deltaY < 0) {
+        stickToBottom.current = false;
+        setShowJump(true);
+      }
     };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    el.addEventListener("wheel", onWheel, { passive: true });
+    scrollerEl.addEventListener("scroll", onScroll, { passive: true });
+    scrollerEl.addEventListener("wheel", onWheel, { passive: true });
     return () => {
-      el.removeEventListener("scroll", onScroll);
-      el.removeEventListener("wheel", onWheel);
+      scrollerEl.removeEventListener("scroll", onScroll);
+      scrollerEl.removeEventListener("wheel", onWheel);
     };
-  }, []);
+  }, [scrollerEl, setShowJump, syncPinned]);
 
   useLayoutEffect(() => {
     stickToBottom.current = true;
+    setShowJump(false);
     pinToBottom(scroller.current);
-  }, [lastUserId]);
+  }, [lastUserId, setShowJump]);
 
   useLayoutEffect(() => {
     if (!stickToBottom.current) return;
@@ -115,15 +156,22 @@ export function AgentTranscript({
   }, [blocks, busy]);
 
   useEffect(() => {
-    const el = scroller.current;
+    const el = scrollerEl;
     const inner = el?.firstElementChild;
     if (!el || !inner) return;
     const observer = new ResizeObserver(() => {
-      if (stickToBottom.current) pinToBottom(el);
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (stickToBottom.current) {
+        pinToBottom(el);
+        distanceFromBottom.current = 0;
+        return;
+      }
+      distanceFromBottom.current = distance;
+      setShowJump(!isNearBottom(el));
     });
     observer.observe(inner);
     return () => observer.disconnect();
-  }, []);
+  }, [scrollerEl, setShowJump]);
 
   const turns = groupTurns(blocks);
   const firstVisibleTurn = Math.max(0, turns.length - visibleTurnCount);
@@ -135,6 +183,8 @@ export function AgentTranscript({
     if (previousHeight == null || !el) return;
     prependHeight.current = null;
     el.scrollTop += el.scrollHeight - previousHeight;
+    distanceFromBottom.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
   }, [visibleTurnCount]);
 
   const loadEarlier = () => {
