@@ -48,6 +48,48 @@ describe("historyWithLiveSessions", () => {
 
     const rows = historyWithLiveSessions([], [session], "/tmp/project-a");
     expect(rows.map((row) => row.id)).toEqual([session.id]);
+    expect(rows[0]?.repo).toBe("project-a");
+  });
+
+  it("stamps composer git onto a live session that is not persisted yet", () => {
+    const session = newSession("cursor", "/tmp/monocode");
+    session.blocks = [{ id: "u1", role: "user", text: "hello" }];
+    session.busy = true;
+
+    const rows = historyWithLiveSessions([], [session], "/tmp/monocode", {
+      repo: "monocode",
+      branch: "main",
+    });
+    expect(rows[0]).toMatchObject({
+      id: session.id,
+      repo: "monocode",
+      branch: "main",
+    });
+  });
+
+  it("copies origin repo from sibling history and prefers the live branch", () => {
+    const history = [
+      {
+        ...summary("a1", "/tmp/agent-terminal"),
+        repo: "monocode",
+        branch: "main",
+      },
+    ];
+    const session = newSession("cursor", "/tmp/agent-terminal");
+    session.blocks = [{ id: "u1", role: "user", text: "hello" }];
+    session.busy = true;
+
+    const rows = historyWithLiveSessions(
+      history,
+      [session],
+      "/tmp/agent-terminal",
+      { repo: "agent-terminal", branch: "fix-gutter" },
+    );
+    const live = rows.find((row) => row.id === session.id);
+    expect(live).toMatchObject({
+      repo: "monocode",
+      branch: "fix-gutter",
+    });
   });
 
   it("matches project paths with trailing slashes", () => {

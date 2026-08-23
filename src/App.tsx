@@ -16,6 +16,7 @@ import {
 import { IS_MAC } from "./lib/platform";
 import { displayAttachments, prepareAttachments } from "./lib/attachments";
 import { basename, notifyGitChanged, pickFolder } from "./lib/fs";
+import { useProjectBranches } from "./lib/useProjectBranches";
 import {
   invalidateProjectFiles,
   prefetchProjectFiles,
@@ -500,6 +501,10 @@ export default function App({
     projectCwd;
   const sidebarCwdRef = useRef(sidebarCwd);
   sidebarCwdRef.current = sidebarCwd;
+  const projectBranches = useProjectBranches(
+    sidebarCwd,
+    Boolean(sidebarCwd) && sidebarCwd !== "~",
+  );
 
   const nextBusySessionIds = useMemo(() => {
     const ids = new Set<string>();
@@ -631,6 +636,27 @@ export default function App({
     prefetchProjectFiles(sidebarCwd);
   }, [sidebarCwd]);
 
+  const persistSession = useCallback((session: Session | undefined) => {
+    if (!session || !shouldPersistSession(session)) return;
+    const fingerprint = persistFingerprint(session);
+    void upsertSession(session)
+      .then((summary) => {
+        if (!summary) return;
+        lastPersisted.current.set(session.id, fingerprint);
+        if (summary.cwd === sidebarCwdRef.current) {
+          setHistory((current) =>
+            mergeHistorySummary(
+              current.filter((entry) =>
+                sameProjectPath(entry.cwd, summary.cwd),
+              ),
+              summary,
+            ),
+          );
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     const liveIds = new Set(sessions.map((session) => session.id));
     const visibleIds = openSessionIds(tabsRef.current);
@@ -655,13 +681,7 @@ export default function App({
         (newlyBound || newUserTurn) &&
         shouldPersistSession(session)
       ) {
-        const snapshot = session;
-        void upsertSession(snapshot)
-          .then((summary) => {
-            if (!summary) return;
-            lastPersisted.current.set(snapshot.id, persistFingerprint(snapshot));
-          })
-          .catch(() => undefined);
+        persistSession(session);
       }
       if (
         shouldPersistSession(session) &&
@@ -705,7 +725,7 @@ export default function App({
       );
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [sessions]);
+  }, [persistSession, sessions]);
 
   useEffect(() => {
     const refs = inFlightRefs(sessions, tabs);
@@ -767,27 +787,6 @@ export default function App({
       return changed ? next : prev;
     });
   }, [tabs]);
-
-  const persistSession = useCallback((session: Session | undefined) => {
-    if (!session || !shouldPersistSession(session)) return;
-    const fingerprint = persistFingerprint(session);
-    void upsertSession(session)
-      .then((summary) => {
-        if (!summary) return;
-        lastPersisted.current.set(session.id, fingerprint);
-        if (summary.cwd === sidebarCwdRef.current) {
-          setHistory((current) =>
-            mergeHistorySummary(
-              current.filter((entry) =>
-                sameProjectPath(entry.cwd, summary.cwd),
-              ),
-              summary,
-            ),
-          );
-        }
-      })
-      .catch(() => undefined);
-  }, []);
 
   // Tabs are views. A working agent stays in memory (and keeps its child)
   // until the turn finishes or the session is deleted.
@@ -2367,8 +2366,16 @@ export default function App({
   const titleTabs = titleTabsRef.current;
 
   const sidebarHistory = useMemo(
-    () => historyWithLiveSessions(history, sessions, sidebarCwd),
-    [history, sessions, sidebarCwd],
+    () =>
+      historyWithLiveSessions(history, sessions, sidebarCwd, {
+        ...(projectBranches?.current
+          ? { branch: projectBranches.current }
+          : {}),
+        ...(sidebarCwd && sidebarCwd !== "~"
+          ? { repo: projectName(sidebarCwd) }
+          : {}),
+      }),
+    [history, projectBranches, sessions, sidebarCwd],
   );
 
   const onToggleSidebar = useCallback(() => {
