@@ -46,6 +46,7 @@ import {
 import type { HarnessId } from "../lib/session";
 import { generateCommitMessage, generatePrContent } from "../lib/harness";
 import { invalidateWatchedFiles } from "../lib/fileWatch";
+import { applyProjectDiffStats } from "../lib/useProjectDiffStats";
 import { useLockOverscroll } from "../lib/useLockOverscroll";
 import { MOD } from "../lib/platform";
 
@@ -1058,6 +1059,11 @@ function useDiffIndex(cwd: string): {
         if (sameIndex(prev, next)) return;
         indexRef.current = next;
         setIndex(next);
+        applyProjectDiffStats(cwd, {
+          files: next.files.length,
+          additions: next.additions,
+          deletions: next.deletions,
+        });
         if (prev) {
           const paths = changedFilePaths(prev, next);
           invalidateWatchedFiles(paths);

@@ -6,6 +6,8 @@ type Entry = {
   stats: GitDiffStats | null;
   listeners: Set<() => void>;
   inFlight: boolean;
+  pending: boolean;
+  epoch: number;
   unsubscribeGit: (() => void) | null;
   onResume: (() => void) | null;
 };
@@ -20,6 +22,8 @@ function entryFor(cwd: string): Entry {
     stats: null,
     listeners: new Set(),
     inFlight: false,
+    pending: false,
+    epoch: 0,
     unsubscribeGit: null,
     onResume: null,
   };
@@ -40,15 +44,33 @@ function publish(entry: Entry, stats: GitDiffStats | null) {
 }
 
 async function load(entry: Entry, force = false) {
-  if (entry.inFlight || (!force && document.hidden)) return;
+  if (entry.inFlight) {
+    entry.pending = true;
+    return;
+  }
+  if (!force && document.hidden) return;
   entry.inFlight = true;
+  const epoch = entry.epoch;
   try {
-    publish(entry, await gitDiffStats(entry.cwd));
+    const stats = await gitDiffStats(entry.cwd);
+    if (epoch === entry.epoch) publish(entry, stats);
   } catch {
-    publish(entry, null);
+    if (epoch === entry.epoch) publish(entry, null);
   } finally {
     entry.inFlight = false;
+    if (entry.pending) {
+      entry.pending = false;
+      void load(entry, true);
+    }
   }
+}
+
+/** Push stats from a fuller git index (diff pane) so the title-bar badge cannot lag behind. */
+export function applyProjectDiffStats(cwd: string, stats: GitDiffStats) {
+  if (!cwd || cwd === "~") return;
+  const entry = entryFor(cwd);
+  entry.epoch += 1;
+  publish(entry, stats);
 }
 
 function start(entry: Entry) {
