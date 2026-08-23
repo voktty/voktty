@@ -15,7 +15,7 @@ import {
   sameProjectPath,
   type RecentProject,
 } from "../lib/recents";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { MOD } from "../lib/platform";
 

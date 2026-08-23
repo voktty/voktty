@@ -38,7 +38,7 @@ import {
   HARNESS_TITLE,
   type HarnessId,
 } from "../lib/session";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { HarnessIcon } from "./HarnessIcon";
 import { MOD } from "../lib/platform";
 

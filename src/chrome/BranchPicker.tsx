@@ -15,8 +15,8 @@ import {
   type GitBranchInfo,
   type GitBranches,
 } from "../lib/fs";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
-import { useProjectBranches } from "../lib/useProjectBranches";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useProjectBranches } from "../hooks/useProjectBranches";
 
 type Props = {
   cwd: string;

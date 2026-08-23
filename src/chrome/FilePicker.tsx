@@ -17,7 +17,7 @@ import {
   type RankedFile,
 } from "../lib/fileIndex";
 import { looksLikeProject } from "../lib/recents";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { FileTypeIcon } from "./FileTypeIcon";
 
 type Props = {

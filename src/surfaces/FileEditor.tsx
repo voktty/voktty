@@ -33,6 +33,9 @@ import {
   MarkdownViewShell,
   useMarkdownMode,
 } from "../chrome/MarkdownModeToggle";
+import { useColorScheme } from "../hooks/useColorScheme";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { isLightScheme } from "../lib/appearance";
 import { formatText } from "../lib/format";
 import {
   basename,
@@ -46,9 +49,6 @@ import {
 import { syncWatchedMtime, watchFile } from "../lib/fileWatch";
 import { displayPath } from "../lib/paths";
 import type { EditorNavigation } from "../lib/search";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
-import { isLightScheme } from "../lib/appearance";
-import { useColorScheme } from "../lib/useColorScheme";
 import { MarkdownPreview } from "./AgentMarkdown";
 import { languageForPath, schemeExtensions } from "./editorChrome";
 import { editorAutocomplete } from "./editorAutocomplete";

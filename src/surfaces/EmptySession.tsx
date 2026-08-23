@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { basename } from "../lib/fs";
 import { looksLikeProject } from "../lib/recents";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { TerminalGridBackground } from "./TerminalGridBackground";
 
 type Props = {

@@ -4,8 +4,8 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { setGrabbing, suppressTextSelection } from "./drag";
-import { moveItem } from "./reorder";
+import { setGrabbing, suppressTextSelection } from "../lib/drag";
+import { moveItem } from "../lib/reorder";
 
 const THRESHOLD = 5;
 const DROP_ON_INSET = 0.25;

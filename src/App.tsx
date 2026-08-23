@@ -7,6 +7,7 @@ import { ApprovalToasts } from "./chrome/ApprovalToasts";
 import { TitleBar, type Tab as TitleTab } from "./chrome/TitleBar";
 import { MenuBar } from "./chrome/MenuBar";
 import { FilePicker } from "./chrome/FilePicker";
+import { useProjectBranches } from "./hooks/useProjectBranches";
 import {
   loadSidebarOpen,
   loadSidebarTabOrder,
@@ -16,7 +17,6 @@ import {
 import { IS_MAC } from "./lib/platform";
 import { displayAttachments, prepareAttachments } from "./lib/attachments";
 import { basename, notifyGitChanged, pickFolder } from "./lib/fs";
-import { useProjectBranches } from "./lib/useProjectBranches";
 import {
   invalidateProjectFiles,
   prefetchProjectFiles,

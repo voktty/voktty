@@ -1,12 +1,9 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState } from "react";
 import {
-  loadTabGroupLogos,
   notifyTabGroupLogosChanged,
   saveTabGroupLogo,
   tabGroupLogoDisplayRevision,
-  TAB_GROUP_LOGOS_CHANGED,
 } from "./tabGroups";
 
 export async function pickImageFile(): Promise<string | null> {
@@ -46,14 +43,4 @@ export async function clearProjectLogo(project: string): Promise<void> {
 export function projectLogoSrc(path: string | null | undefined): string | null {
   if (!path) return null;
   return `${convertFileSrc(path)}?v=${tabGroupLogoDisplayRevision()}`;
-}
-
-export function useTabGroupLogos(): Record<string, string> {
-  const [logos, setLogos] = useState(loadTabGroupLogos);
-  useEffect(() => {
-    const refresh = () => setLogos(loadTabGroupLogos());
-    window.addEventListener(TAB_GROUP_LOGOS_CHANGED, refresh);
-    return () => window.removeEventListener(TAB_GROUP_LOGOS_CHANGED, refresh);
-  }, []);
-  return logos;
 }

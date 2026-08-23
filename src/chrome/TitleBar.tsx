@@ -47,10 +47,10 @@ import {
 import { TabGroupMenu, type TabGroupMenuAction } from "./TabGroupMenu";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
-import { useProjectDiffStats } from "../lib/useProjectDiffStats";
-import { useSegmentDrag } from "../lib/useSegmentDrag";
-import { useSortable, type SortableDropTarget } from "../lib/useSortable";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
+import { useSegmentDrag } from "../hooks/useSegmentDrag";
+import { useSortable, type SortableDropTarget } from "../hooks/useSortable";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { getCurrentWindow } from "@tauri-apps/api/window";

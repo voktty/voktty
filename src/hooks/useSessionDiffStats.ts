@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
-import { sessionCheckpointStats, subscribeReviewChanged } from "./checkpoint";
-import { subscribeGitChanged, type GitDiffStats } from "./fs";
+import { sessionCheckpointStats, subscribeReviewChanged } from "../lib/checkpoint";
+import { subscribeGitChanged, type GitDiffStats } from "../lib/fs";
 
 const EMPTY: Record<string, GitDiffStats> = {};
 

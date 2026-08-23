@@ -4,7 +4,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { setGrabbing, suppressTextSelection } from "./drag";
+import { setGrabbing, suppressTextSelection } from "../lib/drag";
 
 const THRESHOLD = 5;
 

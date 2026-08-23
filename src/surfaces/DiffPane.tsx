@@ -46,9 +46,9 @@ import {
 import type { HarnessId } from "../lib/session";
 import { generateCommitMessage, generatePrContent } from "../lib/harness";
 import { invalidateWatchedFiles } from "../lib/fileWatch";
-import { applyProjectDiffStats } from "../lib/useProjectDiffStats";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
 import { MOD } from "../lib/platform";
+import { applyProjectDiffStats } from "../hooks/useProjectDiffStats";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 
 const MIN_WIDTH = 280;
 const DEFAULT_WIDTH = 300;

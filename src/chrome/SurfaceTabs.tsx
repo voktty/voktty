@@ -4,8 +4,8 @@ import { useLayoutEffect, useRef } from "react";
 import { basename } from "../lib/fs";
 import { isPlanTab, isReviewTab, isTerminalTab, type FilePaneTab } from "../lib/layout";
 import { terminalTabLabel } from "../lib/terminalTab";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
-import { useSortable } from "../lib/useSortable";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useSortable } from "../hooks/useSortable";
 import { FileTypeIcon } from "./FileTypeIcon";
 
 type Props = {

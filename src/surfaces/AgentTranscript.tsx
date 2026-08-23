@@ -35,7 +35,7 @@ import {
   type Block,
   type ToolPreview,
 } from "../lib/session";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { AgentMarkdown } from "./AgentMarkdown";
 import {
   groupTurnItems,

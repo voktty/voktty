@@ -3,7 +3,7 @@ import {
   loadColorScheme,
   SCHEME_CHANGE_EVENT,
   type ColorScheme,
-} from "./appearance";
+} from "../lib/appearance";
 
 /** Subscribes to color scheme changes triggered by applyColorScheme(). */
 export function useColorScheme(): ColorScheme {

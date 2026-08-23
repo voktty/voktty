@@ -22,8 +22,8 @@ import {
 import type { PluggableList } from "unified";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { resolveWorkspacePath } from "../lib/paths";
-import { useLockOverscroll } from "../lib/useLockOverscroll";
-import { useColorScheme } from "../lib/useColorScheme";
+import { useColorScheme } from "../hooks/useColorScheme";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 
 const MERMAID_BASE_CONFIG = {
   startOnLoad: false,

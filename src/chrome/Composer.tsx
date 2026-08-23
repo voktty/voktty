@@ -43,7 +43,7 @@ import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
 import { SkillPicker } from "./SkillPicker";
 import { projectName } from "../lib/paths";
-import { useTabGroupLogos } from "../lib/projectLogos";
+import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 
 type Props = {
