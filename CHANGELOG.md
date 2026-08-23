@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Linux desktop builds: native window controls, an Alt menu bar, and Linux CLI/PATH discovery (`/usr/bin`, Snap, `~/.cargo/bin`, `~/.npm-global/bin`) so the same agent harnesses run off macOS.
 
+### Fixed
+
+- Launch no longer flashes a fully clear window: the boot splash uses the same `background-base` / glass tint as the loaded app.
+
 ## [0.1.2] - 2026-08-22
 
 ### Added

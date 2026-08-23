@@ -44,8 +44,18 @@
         --theme-hue: 240;
         --theme-saturation: 0%;
         --sidebar-opacity: 0.85;
+        --background-lightness: 9%;
+        --color-background-base: hsl(
+          var(--theme-hue) var(--theme-saturation) var(--background-lightness)
+        );
       }
 
+      html.theme-light {
+        --background-lightness: 97%;
+      }
+
+      /* Match .body-glass before index.css loads, so the window is not a
+         clear pane over the desktop while the bundle is still arriving. */
       #boot-splash {
         position: fixed;
         inset: 0;
@@ -54,7 +64,15 @@
         align-items: center;
         justify-content: center;
         pointer-events: none;
-        background: transparent;
+        background: var(--color-background-base);
+      }
+
+      html.glass-body #boot-splash {
+        background: color-mix(
+          in srgb,
+          var(--color-background-base) calc(var(--sidebar-opacity) * 100%),
+          transparent
+        );
       }
 
       #boot-splash.boot-splash-out img {
