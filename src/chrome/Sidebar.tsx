@@ -1,4 +1,4 @@
-import { CircleAlert, GitBranch, GitCompare } from "lucide-react";
+import { Check, CircleAlert, GitBranch, GitCompare } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -17,6 +17,7 @@ import { basename } from "../lib/fs";
 import { resolveModel } from "../lib/models";
 import { projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
+import { nextUnseenFinishedSessions } from "../lib/sessionDone";
 import type { SessionSummary } from "../lib/sessionStore";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
@@ -124,6 +125,23 @@ function SidebarComponent({
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
     null,
   );
+  const busyIdsRef = useRef(busySessionIds);
+  const focusedSessionIdRef = useRef(activeSessionId);
+  const unseenFinishedRef = useRef<Set<string>>(new Set());
+  if (
+    busyIdsRef.current !== busySessionIds ||
+    focusedSessionIdRef.current !== activeSessionId
+  ) {
+    unseenFinishedRef.current = nextUnseenFinishedSessions({
+      previousBusyIds: busyIdsRef.current,
+      busyIds: busySessionIds,
+      previousUnseenIds: unseenFinishedRef.current,
+      focusedSessionId: activeSessionId,
+    });
+    busyIdsRef.current = busySessionIds;
+    focusedSessionIdRef.current = activeSessionId;
+  }
+  const unseenFinishedIds = unseenFinishedRef.current;
   const sortable = useSortable(tabOrder, (ids) => {
     const next = ids as SidebarTab[];
     setTabOrder(next);
@@ -463,6 +481,7 @@ function SidebarComponent({
                         session={session}
                         isActive={session.id === activeSessionId}
                         busy={busySessionIds.has(session.id)}
+                        done={unseenFinishedIds.has(session.id)}
                         needsApproval={approvalSessionIds.has(session.id)}
                         now={now}
                         additions={sessionDiffs[session.id]?.additions ?? 0}
@@ -529,6 +548,7 @@ function SessionCard({
   session,
   isActive,
   busy,
+  done,
   needsApproval,
   now,
   additions,
@@ -541,6 +561,7 @@ function SessionCard({
   session: SessionSummary;
   isActive: boolean;
   busy: boolean;
+  done: boolean;
   needsApproval: boolean;
   now: number;
   additions: number;
@@ -599,7 +620,9 @@ function SessionCard({
               ? "text-amber-400"
               : busy
                 ? "text-accent"
-                : "text-content/45"
+                : done
+                  ? "text-emerald-400"
+                  : "text-content/45"
           }`}
         >
           {needsApproval ? (
@@ -611,6 +634,11 @@ function SessionCard({
             <>
               <TerminalSpinner className="inline-block w-3 select-none text-center text-[11px] leading-none text-accent" />
               <span>Working...</span>
+            </>
+          ) : done ? (
+            <>
+              <Check className="size-3" strokeWidth={2.25} />
+              <span>Done</span>
             </>
           ) : (
             <span>{time}</span>
