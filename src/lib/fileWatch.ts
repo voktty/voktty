@@ -34,17 +34,40 @@ export function watchFile(path: string, onChange: Listener): () => void {
 export function nudgeWatchedFiles(paths?: string[]) {
   if (listeners.size === 0) return;
   if (typeof document !== "undefined" && document.hidden) return;
-  if (!paths) {
-    void poll("all");
-    return;
+  const watched = watchedPaths(paths);
+  if (watched.length > 0) void poll(paths ? watched : "all");
+}
+
+/**
+ * Reload open editors even when mtime looks unchanged (git restore can
+ * rewrite a file in the same second as the last save).
+ */
+export function invalidateWatchedFiles(paths?: string[]) {
+  if (listeners.size === 0) return;
+  const watched = watchedPaths(paths);
+  for (const path of watched) {
+    mtimes.set(path, undefined);
+    listeners.get(path)?.forEach((listener) => listener());
   }
-  const watched = new Set<string>();
+  if (
+    watched.length > 0 &&
+    (typeof document === "undefined" || !document.hidden)
+  ) {
+    void poll(paths ? watched : "all");
+  }
+}
+
+function watchedPaths(paths?: string[]): string[] {
+  if (!paths) return [...listeners.keys()];
+  const watched: string[] = [];
   for (const path of paths) {
     for (const key of listeners.keys()) {
-      if (editorPathsEqual(key, path)) watched.add(key);
+      if (editorPathsEqual(key, path) && !watched.includes(key)) {
+        watched.push(key);
+      }
     }
   }
-  if (watched.size > 0) void poll([...watched]);
+  return watched;
 }
 
 /** Update the mtime baseline after our own save so we do not reload it. */

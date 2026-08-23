@@ -114,6 +114,8 @@ export function FileEditor({
   const loadGeneration = useRef(0);
   const dirtyRef = useRef(false);
   const pendingDiskRef = useRef(false);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
 
   const applyDiskContent = useCallback((content: string) => {
     setLoadState((current) => {
@@ -125,20 +127,24 @@ export function FileEditor({
     setDraft(content);
   }, []);
 
-  const reloadFromDisk = useCallback(async () => {
+  const reloadFromDisk = useCallback(async (force = false) => {
     const generation = ++loadGeneration.current;
     try {
       const content = await readTextFile(path);
       if (generation !== loadGeneration.current) return;
-      if (dirtyRef.current) {
+      if (dirtyRef.current && !force) {
         pendingDiskRef.current = true;
         return;
       }
       pendingDiskRef.current = false;
+      if (force && dirtyRef.current) {
+        dirtyRef.current = false;
+        onDirtyChangeRef.current(path, false);
+      }
       applyDiskContent(content);
     } catch (error: unknown) {
       if (generation !== loadGeneration.current) return;
-      if (dirtyRef.current) {
+      if (dirtyRef.current && !force) {
         pendingDiskRef.current = true;
         return;
       }
@@ -203,15 +209,33 @@ export function FileEditor({
     };
 
     load();
-    const onResume = () => load();
-    window.addEventListener("focus", onResume);
-    const unsubGit = subscribeGitChanged(onResume);
+    const onFocus = () => {
+      if (!document.hidden) load();
+    };
+    const onGit = () => {
+      if (!document.hidden) load();
+    };
+    let timer = 0;
+    const onDisk = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        load();
+        void reloadFromDisk(true);
+      }, 50);
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    const unsubGit = subscribeGitChanged(onGit);
+    const unsubWatch = watchFile(path, onDisk);
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", onResume);
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
       unsubGit();
+      unsubWatch();
     };
-  }, [cwd, path, showDiff]);
+  }, [cwd, path, reloadFromDisk, showDiff]);
 
   const gitOriginal = gitBase.path === path ? gitBase.original : null;
 
@@ -219,20 +243,20 @@ export function FileEditor({
     if (loadState.status !== "ready") return;
     let timer = 0;
     const stop = watchFile(path, () => {
-      if (dirtyRef.current) {
+      if (dirtyRef.current && !showDiff) {
         pendingDiskRef.current = true;
         return;
       }
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        void reloadFromDisk();
+        void reloadFromDisk(showDiff);
       }, 50);
     });
     return () => {
       window.clearTimeout(timer);
       stop();
     };
-  }, [loadState.status, path, reloadFromDisk]);
+  }, [loadState.status, path, reloadFromDisk, showDiff]);
 
   const save = useCallback(
     async (content: string) => {
@@ -680,6 +704,7 @@ function CodeMirrorEditor({
     setGitOriginal(view, gitOriginal);
     chunkNavPinnedRef.current = null;
     syncChunkNav(view);
+    view.requestMeasure();
   }, [gitOriginal, showDiff, syncChunkNav]);
 
   useEffect(() => {
@@ -695,7 +720,7 @@ function CodeMirrorEditor({
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || dirtyRef.current) return;
+    if (!view || (dirtyRef.current && !showDiff)) return;
     if (view.state.doc.toString() === value) return;
     const { scrollTop, scrollLeft } = view.scrollDOM;
     const selection = view.state.selection.main;
@@ -716,7 +741,12 @@ function CodeMirrorEditor({
     view.scrollDOM.scrollLeft = scrollLeft;
     savedDocumentRef.current = view.state.doc;
     setDirty(false);
-  }, [value]);
+    if (showDiff) {
+      chunkNavPinnedRef.current = null;
+      syncChunkNav(view);
+      view.requestMeasure();
+    }
+  }, [showDiff, syncChunkNav, value]);
 
   useEffect(() => {
     if (!navigation) return;

@@ -45,12 +45,14 @@ import {
 } from "../lib/fs";
 import type { HarnessId } from "../lib/session";
 import { generateCommitMessage, generatePrContent } from "../lib/harness";
+import { invalidateWatchedFiles } from "../lib/fileWatch";
 import { useLockOverscroll } from "../lib/useLockOverscroll";
 import { MOD } from "../lib/platform";
 
 const MIN_WIDTH = 280;
 const DEFAULT_WIDTH = 300;
 
+const GIT_POLL_MS = 2000;
 let rememberedWidth = DEFAULT_WIDTH;
 let stagedOpen = true;
 let changesOpen = true;
@@ -233,9 +235,11 @@ export function DiffPane({
         files={files}
         selected={selectedPath}
         onOpenFile={onOpenFile}
-        onMutated={() => {
+        onMutated={(paths) => {
           reload();
           notifyGitChanged();
+          invalidateWatchedFiles(paths);
+          window.setTimeout(() => invalidateWatchedFiles(paths), 150);
         }}
       />
     </section>
@@ -257,7 +261,7 @@ function ChangedFiles({
   files: GitChangedFile[];
   selected?: string;
   onOpenFile: (path: string) => void;
-  onMutated: () => void;
+  onMutated: (paths?: string[]) => void;
 }) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -346,7 +350,7 @@ function ChangedFiles({
       if (action === "stage") await gitStageFile(cwd, file.relative);
       else if (action === "unstage") await gitUnstageFile(cwd, file.relative);
       else await gitDiscardFile(cwd, file.relative);
-      onMutated();
+      onMutated([file.path]);
     } catch (error) {
       fail(error);
     } finally {
@@ -1028,6 +1032,8 @@ function useDiffIndex(cwd: string): {
   const [index, setIndex] = useState<GitDiffIndex | null>(null);
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => setNonce((value) => value + 1), []);
+  const indexRef = useRef(index);
+  indexRef.current = index;
 
   useEffect(() => {
     if (!cwd || cwd === "~") {
@@ -1048,7 +1054,15 @@ function useDiffIndex(cwd: string): {
       try {
         const next = await gitDiffIndex(cwd);
         if (cancelled) return;
-        setIndex((prev) => (sameIndex(prev, next) ? prev : next));
+        const prev = indexRef.current;
+        if (sameIndex(prev, next)) return;
+        indexRef.current = next;
+        setIndex(next);
+        if (prev) {
+          const paths = changedFilePaths(prev, next);
+          invalidateWatchedFiles(paths);
+          notifyGitChanged();
+        }
       } catch {
         if (!cancelled) setIndex(null);
       } finally {
@@ -1064,11 +1078,13 @@ function useDiffIndex(cwd: string): {
     const onResume = () => {
       if (!document.hidden) void load();
     };
+    const timer = window.setInterval(onResume, GIT_POLL_MS);
     window.addEventListener("focus", onResume);
     document.addEventListener("visibilitychange", onResume);
     const unsubGit = subscribeGitChanged(onResume);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
       window.removeEventListener("focus", onResume);
       document.removeEventListener("visibilitychange", onResume);
       unsubGit();
@@ -1076,6 +1092,33 @@ function useDiffIndex(cwd: string): {
   }, [cwd, nonce]);
 
   return { index, reload };
+}
+
+function changedFilePaths(prev: GitDiffIndex, next: GitDiffIndex): string[] {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  const previous = new Map(prev.files.map((file) => [file.relative, file]));
+  const current = new Set(next.files.map((file) => file.relative));
+  for (const file of next.files) {
+    const before = previous.get(file.relative);
+    if (
+      !before ||
+      before.status !== file.status ||
+      before.additions !== file.additions ||
+      before.deletions !== file.deletions ||
+      before.staged !== file.staged ||
+      before.unstaged !== file.unstaged
+    ) {
+      paths.push(file.path);
+      seen.add(file.path);
+    }
+  }
+  for (const file of prev.files) {
+    if (!current.has(file.relative) && !seen.has(file.path)) {
+      paths.push(file.path);
+    }
+  }
+  return paths;
 }
 
 function sameIndex(prev: GitDiffIndex | null, next: GitDiffIndex): boolean {

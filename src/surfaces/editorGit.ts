@@ -8,6 +8,7 @@ import {
   StateField,
   Text,
   type Extension,
+  type Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -78,6 +79,11 @@ const chunksField = StateField.define<readonly Chunk[]>({
     }
     if (!original) return [];
     if (tr.docChanged) {
+      // Disk reloads replace the whole document. Incremental updateB can
+      // keep stale hunks until the editor is recreated.
+      if (replacesEntireDoc(tr)) {
+        return chunksFor(original, tr.state.doc);
+      }
       return Chunk.updateB(
         chunks,
         original,
@@ -225,10 +231,17 @@ export function diffLineStatsForView(view: EditorView): {
   additions: number;
   deletions: number;
 } {
+  return diffLineStatsFromState(view.state);
+}
+
+export function diffLineStatsFromState(state: EditorState): {
+  additions: number;
+  deletions: number;
+} {
   return diffLineStats(
-    view.state.doc,
-    view.state.field(chunksField),
-    view.state.field(originalField),
+    state.doc,
+    state.field(chunksField),
+    state.field(originalField),
   );
 }
 
@@ -237,6 +250,19 @@ export function setGitOriginal(view: EditorView, original: string | null) {
   const next = original == null ? null : textFromString(original);
   if (sameText(current, next)) return;
   view.dispatch({ effects: setOriginalEffect.of(original) });
+}
+
+export function stateWithGitDoc(state: EditorState, doc: string): EditorState {
+  return state.update({
+    changes: { from: 0, to: state.doc.length, insert: doc },
+  }).state;
+}
+
+export function stateWithGitOriginalUpdated(
+  state: EditorState,
+  original: string | null,
+): EditorState {
+  return state.update({ effects: setOriginalEffect.of(original) }).state;
 }
 
 /** Apply git original (index) text to an editor state. Used by the view and by tests. */
@@ -332,6 +358,18 @@ export function findChunk(
 function chunksFor(original: Text | null, current: Text): readonly Chunk[] {
   if (!original) return [];
   return Chunk.build(original, current, DIFF_CONFIG);
+}
+
+function replacesEntireDoc(tr: Transaction): boolean {
+  let from = tr.startState.doc.length;
+  let to = 0;
+  let changed = false;
+  tr.changes.iterChangedRanges((fromA, toA) => {
+    changed = true;
+    from = Math.min(from, fromA);
+    to = Math.max(to, toA);
+  });
+  return changed && from === 0 && to === tr.startState.doc.length;
 }
 
 function revertChunkChanges(
@@ -630,6 +668,8 @@ function sameText(a: Text | null, b: Text | null): boolean {
 const gitGutter = gutter({
   class: "cm-gitGutter",
   markers: (view) => view.state.field(gitDecorations).gutter,
+  lineMarkerChange: (update) =>
+    update.startState.field(chunksField) !== update.state.field(chunksField),
 });
 
 function activeChunkIndex(view: EditorView, positions: number[]): number {

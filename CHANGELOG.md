@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Git diff gutter and the Changes sidebar update live when files are modified externally, including after discarding a change, without closing and reopening the tab.
 - Launch no longer flashes a fully clear window: the boot splash uses the same `background-base` / glass tint as the loaded app.
 
 ## [0.1.2] - 2026-08-22

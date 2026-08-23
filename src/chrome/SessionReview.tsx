@@ -8,7 +8,7 @@ import {
   type CheckpointFile,
 } from "../lib/checkpoint";
 import { invalidateProjectFiles } from "../lib/fileIndex";
-import { nudgeWatchedFiles } from "../lib/fileWatch";
+import { invalidateWatchedFiles } from "../lib/fileWatch";
 import { basename, notifyGitChanged, subscribeGitChanged } from "../lib/fs";
 import { FileTypeIcon } from "./FileTypeIcon";
 
@@ -97,7 +97,7 @@ export function SessionReview({
       .then((status) => {
         setFiles(status.files);
         notifyGitChanged();
-        nudgeWatchedFiles(previous);
+        invalidateWatchedFiles(previous);
         invalidateProjectFiles(cwd);
       })
       .catch(() => load())

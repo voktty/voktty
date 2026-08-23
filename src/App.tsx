@@ -15,7 +15,7 @@ import {
 } from "./lib/appearance";
 import { IS_MAC } from "./lib/platform";
 import { displayAttachments, prepareAttachments } from "./lib/attachments";
-import { basename, pickFolder } from "./lib/fs";
+import { basename, notifyGitChanged, pickFolder } from "./lib/fs";
 import {
   invalidateProjectFiles,
   prefetchProjectFiles,
@@ -2276,6 +2276,7 @@ export default function App({
             () => undefined,
           );
           notifyReviewChanged(sessionId);
+          notifyGitChanged();
           nudgeWorkspace(current.cwd);
           nudgeWatchedFiles();
           window.setTimeout(() => nudgeWatchedFiles(), 150);
@@ -2327,6 +2328,7 @@ export default function App({
         .catch(() => undefined)
         .then(() => notifyReviewChanged(sessionId));
       nudgeWorkspace(session.cwd);
+      notifyGitChanged();
       nudgeWatchedFiles();
       window.setTimeout(() => nudgeWatchedFiles(), 150);
     } else {
@@ -2956,6 +2958,7 @@ function nudgeOpenEditors(event: HarnessEvent, cwd: string) {
     if (!completed) return;
     nudgeWatchedFiles();
     window.setTimeout(() => nudgeWatchedFiles(), 150);
+    notifyGitChanged();
     nudgeWorkspace(cwd);
     window.setTimeout(() => nudgeWorkspace(cwd), 150);
     return;
@@ -2971,6 +2974,7 @@ function nudgeOpenEditors(event: HarnessEvent, cwd: string) {
   }
   if (completed) {
     window.setTimeout(() => nudgeWatchedFiles(), 150);
+    notifyGitChanged();
     nudgeWorkspace(cwd);
   }
 }

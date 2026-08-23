@@ -6,8 +6,11 @@ import {
   revertChunkText,
   stageChunkText,
   deletedLineTexts,
+  diffLineStatsFromState,
   overviewTicks,
+  stateWithGitDoc,
   stateWithGitOriginal,
+  stateWithGitOriginalUpdated,
 } from "./editorGit";
 
 describe("stageChunkText", () => {
@@ -156,5 +159,61 @@ describe("stateWithGitOriginal", () => {
     expect(() =>
       stateWithGitOriginal("hello\nworld\n", ""),
     ).not.toThrow();
+  });
+
+  it("rebuilds hunks when the whole document is replaced", () => {
+    const original = "alpha\nbeta\ngamma\n";
+    const clean = stateWithGitOriginal(original, original);
+    expect(diffLineStatsFromState(clean)).toEqual({
+      additions: 0,
+      deletions: 0,
+    });
+
+    const replaced = stateWithGitDoc(clean, "alpha\nBETA\ngamma\n");
+    expect(diffLineStatsFromState(replaced)).toEqual({
+      additions: 1,
+      deletions: 1,
+    });
+  });
+
+  it("rebuilds hunks when git original changes without a doc edit", () => {
+    const current = "alpha\nBETA\ngamma\n";
+    const matching = stateWithGitOriginal(current, current);
+    expect(diffLineStatsFromState(matching)).toEqual({
+      additions: 0,
+      deletions: 0,
+    });
+
+    const updated = stateWithGitOriginalUpdated(
+      matching,
+      "alpha\nbeta\ngamma\n",
+    );
+    expect(diffLineStatsFromState(updated)).toEqual({
+      additions: 1,
+      deletions: 1,
+    });
+  });
+
+  it("keeps incremental edits on the live hunk path", () => {
+    const original = "alpha\nbeta\ngamma\n";
+    const state = stateWithGitOriginal(original, original).update({
+      changes: { from: 6, insert: "X" },
+    }).state;
+    expect(diffLineStatsFromState(state).additions).toBeGreaterThan(0);
+  });
+
+  it("clears hunks when a disk replace matches git original", () => {
+    const original = "alpha\nbeta\ngamma\n";
+    const dirty = stateWithGitOriginal("alpha\nBETA\ngamma\n", original);
+    expect(diffLineStatsFromState(dirty)).toEqual({
+      additions: 1,
+      deletions: 1,
+    });
+
+    const restored = stateWithGitDoc(dirty, original);
+    expect(diffLineStatsFromState(restored)).toEqual({
+      additions: 0,
+      deletions: 0,
+    });
   });
 });
