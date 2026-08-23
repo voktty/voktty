@@ -169,15 +169,25 @@ export function composeToolTitle(opts: {
   const query = opts.query?.trim();
   const previewKind = opts.previewKind;
 
+  // A title that already names a different action is finished; re-prefixing it
+  // with "Read" produces nonsense like "Read List ." when only a stale
+  // read-shaped preview is pulling us into the branch below.
+  if (!path && /^(list|write|edit|run|delete|move|fetch)\s+\S/i.test(title)) {
+    return title;
+  }
+
   if (previewKind === "read" || isReadTool(kind, title)) {
     if (path) return `Read ${path}`;
-    const rest = title.replace(/^read(?:\s+file)?\s*/i, "").trim();
+    // \b keeps "Reading" from being sliced into "Read ing".
+    const rest = title.replace(/^read(?:ing)?(?:\s+file)?\b\s*/i, "").trim();
     if (rest && !isWeakToolTitle(rest)) return `Read ${rest}`;
     return "Read";
   }
 
   if (previewKind === "search" || isSearchTool(kind, title)) {
-    const q = query || title.replace(/^(find|search|grep|glob)\s*/i, "").trim();
+    const q =
+      query ||
+      title.replace(/^(?:find|search|grep|glob)(?:ing)?\b\s*/i, "").trim();
     if (q && !isWeakToolTitle(q)) return `Find ${q}`;
     return "Find";
   }
@@ -197,7 +207,7 @@ export function stubFilePreview(
 }
 
 export function isWeakToolTitle(value: string): boolean {
-  return /^(tool|shell|read|edit|search|find|grep|glob|fetch|other|write|delete|move|think|working|mcp:\s*tool|read file|edit file|write file|unnamed)$/i.test(
+  return /^(tool|shell|read|edit|search|find|grep|glob|fetch|other|write|delete|move|think|run|list|working|reading|editing|searching|writing|running|listing|fetching|thinking|deleting|moving|mcp:\s*tool|read file|edit file|write file|unnamed)$/i.test(
     value.trim(),
   );
 }

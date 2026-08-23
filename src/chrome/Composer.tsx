@@ -649,11 +649,13 @@ export function Composer({
                   onChange={(settings) => onModelSettingsChange?.(settings)}
                   onClose={() => ref.current?.focus()}
                 />
-                <AccessPicker
-                  value={runtimeMode}
-                  onChange={onRuntimeModeChange}
-                  onClose={() => ref.current?.focus()}
-                />
+                {harness !== "fx" ? (
+                  <AccessPicker
+                    value={runtimeMode}
+                    onChange={onRuntimeModeChange}
+                    onClose={() => ref.current?.focus()}
+                  />
+                ) : null}
               </div>
             </div>
 

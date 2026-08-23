@@ -32,8 +32,63 @@ fn home_dir() -> String {
     dirs_home().unwrap_or_else(|| "~".into())
 }
 
+pub(crate) struct PasswdIdentity {
+    pub home: String,
+    pub user: String,
+    pub shell: String,
+}
+
 pub(crate) fn dirs_home() -> Option<String> {
-    std::env::var_os("HOME").map(|h| h.to_string_lossy().into_owned())
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = home.to_string_lossy().into_owned();
+        if !home.is_empty() {
+            return Some(home);
+        }
+    }
+    passwd_identity().map(|id| id.home)
+}
+
+/// Finder-launched .app bundles often omit HOME/USER/SHELL. Fall back to the
+/// passwd database so harness CLIs still find `~/.fx` and the login keychain.
+pub(crate) fn passwd_identity() -> Option<PasswdIdentity> {
+    #[cfg(unix)]
+    {
+        let uid = unsafe { libc::getuid() };
+        let mut buf = vec![0u8; 4096];
+        let mut pwd = unsafe { std::mem::zeroed::<libc::passwd>() };
+        let mut result = std::ptr::null_mut::<libc::passwd>();
+        let rc = unsafe {
+            libc::getpwuid_r(
+                uid,
+                &mut pwd,
+                buf.as_mut_ptr() as *mut libc::c_char,
+                buf.len(),
+                &mut result,
+            )
+        };
+        if rc != 0 || result.is_null() {
+            return None;
+        }
+        unsafe {
+            let user = std::ffi::CStr::from_ptr(pwd.pw_name)
+                .to_string_lossy()
+                .into_owned();
+            let home = std::ffi::CStr::from_ptr(pwd.pw_dir)
+                .to_string_lossy()
+                .into_owned();
+            let shell = std::ffi::CStr::from_ptr(pwd.pw_shell)
+                .to_string_lossy()
+                .into_owned();
+            if user.is_empty() || home.is_empty() {
+                return None;
+            }
+            Some(PasswdIdentity { home, user, shell })
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
 }
 
 #[tauri::command]

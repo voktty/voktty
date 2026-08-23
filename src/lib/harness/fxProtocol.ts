@@ -7,6 +7,7 @@ import {
   extractSearchQuery,
   extractToolPreview,
 } from "./preview";
+import { fxToolInfo, fxToolVerb } from "./fxTool";
 
 export type FxModeId = "ask" | "code";
 
@@ -41,15 +42,28 @@ export function fxPromptBlocks(text: string): PromptContentBlock[] {
   return trimmed ? [{ type: "text", text: trimmed }] : [];
 }
 
-export function fxModeId(runtimeMode: RuntimeMode): FxModeId {
-  return runtimeMode === "supervised" ? "ask" : "code";
+/**
+ * fx always runs in its own `code` (auto) mode.
+ *
+ * fx defaults to `ask`, which makes it stop and request permission for every
+ * read, list and command. We do not surface those prompts, so a turn that
+ * touched a single file would park forever with nothing on screen. fx has a
+ * working auto mode; use it and let fx police itself.
+ */
+export function fxModeId(_runtimeMode: RuntimeMode): FxModeId {
+  return "code";
 }
 
+/**
+ * Approve anything fx still asks about. `set_mode` can fail, and fx keeps a few
+ * prompts even in code mode, so this is the backstop that guarantees a turn is
+ * never blocked on an approval nobody can see.
+ */
 export function autoPermissionOption(
-  runtimeMode: RuntimeMode,
+  _runtimeMode: RuntimeMode,
   optionIds: string[],
 ): string | null {
-  if (runtimeMode !== "full-access" || optionIds.length === 0) return null;
+  if (optionIds.length === 0) return null;
   return pickOption(optionIds, [
     "allow-always",
     "allow_always",
@@ -100,11 +114,20 @@ export function permissionRequestFromAcp(
     {};
   const command = stringField(subject ?? {}, "command");
   const kind = stringField(tool, "kind") ?? stringField(subject ?? {}, "kind");
-  const preview = extractToolPreview(tool, tool);
+  const fx = fxToolInfo(tool, tool);
+  const preview = fx.resolved
+    ? fx.preview
+    : (fx.preview ?? extractToolPreview(tool, tool));
+  const label =
+    fx.title ??
+    fxToolVerb(toolLabel(tool)) ??
+    toolLabel(tool) ??
+    command ??
+    stringField(rec ?? {}, "title");
   const title =
     composeToolTitle({
       kind,
-      title: toolLabel(tool) ?? command ?? stringField(rec ?? {}, "title"),
+      title: label,
       path: preview?.path,
       query: preview?.query ?? extractSearchQuery(tool),
       previewKind: preview?.kind,
@@ -166,15 +189,20 @@ export function eventsFromAcpUpdate(params: unknown): HarnessEvent[] {
         "",
     );
     if (!callId) return [];
+    const status = stringField(update, "status") ?? stringField(tool, "status");
+    // fx sends no rawInput/locations/diff, so the generic ACP extraction has
+    // nothing to work with. Mine the result blob instead, and only fall back to
+    // the shared path if fx ever starts sending structured fields.
+    const fx = fxToolInfo(update, tool);
     const toolKind =
-      stringField(update, "kind") ?? stringField(tool, "kind");
-    const status =
-      stringField(update, "status") ?? stringField(tool, "status");
-    const preview = extractToolPreview(update, tool);
+      fx.kind ?? stringField(update, "kind") ?? stringField(tool, "kind");
+    const preview = fx.resolved
+      ? fx.preview
+      : (fx.preview ?? extractToolPreview(update, tool));
     const title =
       composeToolTitle({
         kind: toolKind,
-        title: toolLabel(update) ?? toolLabel(tool),
+        title: fx.title ?? toolLabel(update) ?? toolLabel(tool),
         path: preview?.path,
         query:
           preview?.query ??
@@ -187,7 +215,10 @@ export function eventsFromAcpUpdate(params: unknown): HarnessEvent[] {
               tool.input,
           ),
         previewKind: preview?.kind,
-      }) || toolLabel(update) || toolLabel(tool);
+      }) ||
+      fx.title ||
+      toolLabel(update) ||
+      toolLabel(tool);
     return [
       {
         type: "tool.updated",
@@ -195,7 +226,7 @@ export function eventsFromAcpUpdate(params: unknown): HarnessEvent[] {
         title,
         kind: toolKind,
         status,
-        detail: toolDetail(update, tool),
+        detail: cap(fx.detail ?? "") || toolDetail(update, tool),
         preview,
       },
     ];
@@ -231,6 +262,33 @@ export function modelsFromFxOutput(stdout: string): AgentModel[] {
     }
     return uniqueFxModels(modelsFromFxText(trimmed));
   }
+}
+
+/** fx can omit its active/TUI-selected model from `models --json`. */
+export function modelFromFxStatusOutput(stdout: string): AgentModel | null {
+  const trimmed = stdout.trim();
+  if (!trimmed) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    if (start < 0) return null;
+    try {
+      raw = JSON.parse(trimmed.slice(start));
+    } catch {
+      return null;
+    }
+  }
+  const model = stringField(asRecord(raw) ?? {}, "model");
+  return model ? modelFromJson(model) : null;
+}
+
+export function mergeFxCatalogModels(
+  models: AgentModel[],
+  active: AgentModel | null,
+): AgentModel[] {
+  return uniqueFxModels(active ? [...models, active] : models);
 }
 
 export function modelsFromFxJson(raw: unknown): AgentModel[] {
@@ -275,8 +333,11 @@ export function readConfigOptions(raw: unknown): SessionConfigOption[] {
 export function extractModelConfigId(
   options: SessionConfigOption[],
 ): string {
+  const exact = options.find((option) => option.id === "model");
+  if (exact) return exact.id;
+  // fx lists provider first with category "model"; that is not the model picker.
   const model = options.find(
-    (option) => option.category === "model" || option.id === "model",
+    (option) => option.category === "model" && option.id !== "provider",
   );
   return model?.id ?? "model";
 }

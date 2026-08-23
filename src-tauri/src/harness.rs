@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::dirs_home;
 use crate::fs::expand_home;
+use crate::passwd_identity;
 
 const STDOUT_EVENT: &str = "harness-stdout";
 const STDERR_EVENT: &str = "harness-stderr";
@@ -261,8 +262,7 @@ pub fn harness_spawn(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    apply_gui_path(&mut cmd);
-    isolate_child(&mut cmd);
+    prepare_child(&mut cmd, &command);
 
     let mut child = cmd
         .spawn()
@@ -534,6 +534,7 @@ const EXEC_ALLOWED_ARGS: &[&[&str]] = &[
     &["--list-models"],
     &["models", "--verbose"],
     &["models", "--json"],
+    &["status", "--json"],
     &["agent", "list"],
 ];
 
@@ -586,8 +587,7 @@ fn exec_capture(command: &str, args: &[String], cwd: Option<&str>) -> Result<Str
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    apply_gui_path(&mut cmd);
-    isolate_child(&mut cmd);
+    prepare_child(&mut cmd, command);
     if let Some(dir) = cwd {
         let workdir = expand_home(dir);
         if workdir.is_dir() {
@@ -666,8 +666,12 @@ fn signal_tree(pid: u32, signal: TreeSignal) {
         };
         let ipid = pid as i32;
         unsafe {
-            libc::kill(ipid, sig);
+            // Every child is isolated with process_group(0), so its pid is the
+            // stable group id even after the leader exits. Signal the group
+            // first; looking it up through a dead leader loses descendants
+            // that ignored SIGTERM and prevents the SIGKILL escalation.
             libc::kill(-ipid, sig);
+            libc::kill(ipid, sig);
         }
     }
     #[cfg(not(unix))]
@@ -904,19 +908,36 @@ fn is_fx_agent(path: &Path) -> bool {
     file_mentions_fx_agent(path) || fx_help_mentions_acp(path)
 }
 
+/// The fx markers sit megabytes into the compiled binary, so a small head-read
+/// never matched and every resolve fell through to spawning `fx --help`. Scan
+/// the whole file in chunks instead, overlapping enough to catch a marker that
+/// straddles a boundary.
 fn file_mentions_fx_agent(path: &Path) -> bool {
-    let Ok(mut file) = std::fs::File::open(path) else {
+    const MARKERS: [&str; 4] = ["vercel-labs/fx", "FX_MODEL", "createFxAgent", "fx acp"];
+    const CHUNK: usize = 1024 * 1024;
+    const OVERLAP: usize = 64;
+
+    let Ok(file) = std::fs::File::open(path) else {
         return false;
     };
-    let mut buf = vec![0u8; 64 * 1024];
-    let Ok(n) = file.read(&mut buf) else {
-        return false;
-    };
-    let text = String::from_utf8_lossy(&buf[..n]);
-    text.contains("vercel-labs/fx")
-        || text.contains("FX_MODEL")
-        || text.contains("createFxAgent")
-        || text.contains("fx acp")
+    let mut reader = BufReader::new(file);
+    let mut buf = vec![0u8; CHUNK + OVERLAP];
+    let mut carry = 0usize;
+    loop {
+        let Ok(n) = reader.read(&mut buf[carry..]) else {
+            return false;
+        };
+        if n == 0 {
+            return false;
+        }
+        let filled = carry + n;
+        let text = String::from_utf8_lossy(&buf[..filled]);
+        if MARKERS.iter().any(|marker| text.contains(marker)) {
+            return true;
+        }
+        carry = filled.min(OVERLAP);
+        buf.copy_within(filled - carry..filled, 0);
+    }
 }
 
 fn fx_help_mentions_acp(path: &Path) -> bool {
@@ -1024,9 +1045,120 @@ fn apply_gui_path(cmd: &mut Command) {
         parts.push(existing);
     }
     cmd.env("PATH", parts.join(":"));
-    if let Some(home) = dirs_home() {
+}
+
+fn apply_gui_env(cmd: &mut Command) {
+    apply_gui_path(cmd);
+    if let Some(id) = passwd_identity() {
+        if std::env::var_os("HOME").is_none() {
+            cmd.env("HOME", &id.home);
+        }
+        if std::env::var_os("USER").is_none() {
+            cmd.env("USER", &id.user);
+            cmd.env("LOGNAME", &id.user);
+        }
+        if std::env::var_os("SHELL").is_none() && !id.shell.is_empty() {
+            cmd.env("SHELL", &id.shell);
+        }
+    } else if let Some(home) = dirs_home() {
         cmd.env("HOME", home);
     }
+    if std::env::var_os("LANG").is_none() && std::env::var_os("LC_ALL").is_none() {
+        cmd.env("LANG", "en_US.UTF-8");
+    }
+}
+
+fn prepare_child(cmd: &mut Command, command: &str) {
+    apply_gui_env(cmd);
+    if command_basename(command) == "fx" {
+        apply_fx_env(cmd);
+    }
+    isolate_child(cmd);
+}
+
+/// fx keeps its Gateway credential in the macOS Keychain and reads it by
+/// shelling out to `osascript`. From a bundled app that read can block on a
+/// SecurityAgent prompt nobody ever sees, and fx then rejects `initialize`
+/// outright. Forwarding an API key from the login shell skips the Keychain
+/// entirely for users who have one set.
+fn apply_fx_env(cmd: &mut Command) {
+    for key in [
+        "AI_GATEWAY_API_KEY",
+        "FX_AI_GATEWAY_API_KEY",
+        "VERCEL_OIDC_TOKEN",
+    ] {
+        if std::env::var_os(key).is_some() {
+            continue;
+        }
+        if let Some(value) = login_shell_env(key) {
+            cmd.env(key, value);
+        }
+    }
+}
+
+static LOGIN_SHELL_ENV: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+fn login_shell_env(name: &str) -> Option<String> {
+    let mut cache = LOGIN_SHELL_ENV.lock().ok()?;
+    if cache.is_none() {
+        *cache = Some(load_login_shell_env());
+    }
+    cache
+        .as_ref()
+        .and_then(|map| map.get(name).cloned())
+        .filter(|value| !value.is_empty())
+}
+
+fn load_login_shell_env() -> HashMap<String, String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| {
+        if cfg!(target_os = "macos") {
+            "/bin/zsh".into()
+        } else {
+            "/bin/bash".into()
+        }
+    });
+    let mut cmd = Command::new(&shell);
+    cmd.args(["-lc", "printenv"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    isolate_child(&mut cmd);
+    let Ok(child) = cmd.spawn() else {
+        return HashMap::new();
+    };
+    let pid = child.id();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(child.wait_with_output());
+    });
+    let output = match rx.recv_timeout(Duration::from_secs(3)) {
+        Ok(Ok(output)) => output,
+        _ => {
+            terminate(pid);
+            return HashMap::new();
+        }
+    };
+    let mut map = HashMap::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if matches!(
+            key,
+            "AI_GATEWAY_API_KEY" | "FX_AI_GATEWAY_API_KEY" | "VERCEL_OIDC_TOKEN"
+        ) && !value.is_empty()
+        {
+            map.insert(key.to_string(), value.to_string());
+        }
+    }
+    map
+}
+
+fn command_basename(command: &str) -> &str {
+    Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(command)
 }
 
 #[cfg(unix)]
@@ -1080,6 +1212,20 @@ mod tests {
         if !wait_dead(pid, &mut child) {
             let _ = child.kill();
             panic!("SIGTERM-ignoring process survived SIGKILL escalate");
+        }
+    }
+
+    #[test]
+    fn terminate_escalates_after_group_leader_exits() {
+        let mut child = spawn_group(
+            "trap 'exit 0' TERM; sh -c 'trap \"\" TERM; while true; do sleep 1; done' & wait",
+        );
+        let pid = child.id();
+        assert!(tree_alive(pid));
+        terminate_after(pid, Duration::from_millis(150));
+        if !wait_dead(pid, &mut child) {
+            let _ = child.kill();
+            panic!("process group survived after its leader exited");
         }
     }
 
@@ -1147,6 +1293,43 @@ mod tests {
         assert!(!is_fx_agent(&dir.join("missing")));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// The real fx binary carries its markers megabytes in. A head-only read
+    /// missed them and silently fell back to spawning `fx --help`.
+    #[test]
+    fn fx_marker_is_found_past_the_first_chunk() {
+        let dir = std::env::temp_dir().join(format!("monocode-fx-deep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let agent = dir.join("fx");
+        let mut blob = vec![b'\0'; 6 * 1024 * 1024];
+        blob.extend_from_slice(b"https://github.com/vercel-labs/fx");
+        std::fs::write(&agent, &blob).unwrap();
+        assert!(file_mentions_fx_agent(&agent));
+
+        // A marker straddling a chunk boundary must still be caught.
+        let split = dir.join("fx-split");
+        let mut edge = vec![b'\0'; 1024 * 1024 - 4];
+        edge.extend_from_slice(b"vercel-labs/fx");
+        std::fs::write(&split, &edge).unwrap();
+        assert!(file_mentions_fx_agent(&split));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn command_basename_strips_path() {
+        assert_eq!(command_basename("/Users/me/.local/bin/fx"), "fx");
+        assert_eq!(command_basename("fx"), "fx");
+    }
+
+    #[test]
+    fn passwd_identity_resolves_the_current_user() {
+        let id = passwd_identity().expect("passwd");
+        assert!(!id.user.is_empty());
+        assert!(PathBuf::from(&id.home).is_dir());
+    }
 }
 
 #[cfg(test)]
@@ -1163,6 +1346,7 @@ mod exec_allowlist_tests {
         assert!(exec_args_allowed(&args(&["--list-models"])));
         assert!(exec_args_allowed(&args(&["models", "--verbose"])));
         assert!(exec_args_allowed(&args(&["models", "--json"])));
+        assert!(exec_args_allowed(&args(&["status", "--json"])));
         assert!(exec_args_allowed(&args(&["agent", "list"])));
     }
 

@@ -93,13 +93,10 @@ export class JsonRpcClient {
     if (this.closed) throw new Error("Harness process is not running");
     const id = this.nextId++;
     const key = String(id);
-    await this.send({
-      ...(this.includeJsonrpc ? { jsonrpc: "2.0" } : {}),
-      id,
-      method,
-      ...(params !== undefined ? { params } : {}),
-    });
-    return new Promise<T>((resolve, reject) => {
+    // Register before writing. A local harness can answer quickly enough for
+    // Tauri to deliver its stdout event before harness_write resolves; adding
+    // the pending entry after send() silently discarded that response.
+    const response = new Promise<T>((resolve, reject) => {
       const timer =
         timeoutMs > 0
           ? setTimeout(() => {
@@ -118,6 +115,23 @@ export class JsonRpcClient {
         },
       });
     });
+    try {
+      await this.send({
+        ...(this.includeJsonrpc ? { jsonrpc: "2.0" } : {}),
+        id,
+        method,
+        ...(params !== undefined ? { params } : {}),
+      });
+    } catch (error) {
+      const pending = this.pending.get(key);
+      if (pending) {
+        this.pending.delete(key);
+        pending.reject(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    }
+    return response;
   }
 
   async notify(method: string, params?: unknown): Promise<void> {
@@ -161,8 +175,7 @@ export class JsonRpcClient {
       if (msg.error) {
         pending.reject(
           new Error(
-            msg.error.message ||
-              `${this.label} error ${msg.error.code ?? ""}`,
+            msg.error.message || `${this.label} error ${msg.error.code ?? ""}`,
           ),
         );
         return;

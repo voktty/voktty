@@ -21,7 +21,12 @@ import {
   sessionIdFromResult,
   type SessionConfigOption,
 } from "./fxProtocol";
-import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
+import type {
+  ApprovalDecision,
+  HarnessEvent,
+  SendTurnInput,
+  SteerTurnInput,
+} from "./types";
 
 type SessionSetupResult = {
   sessionId?: string;
@@ -39,7 +44,6 @@ type Live = {
   cancelled: boolean;
   runtimeMode: RuntimeMode;
   onEvent: (event: HarnessEvent) => void;
-  approvals: Map<number, (decision: ApprovalDecision) => void>;
   turns: Promise<void>;
 };
 
@@ -48,7 +52,32 @@ type Resume = {
   cwd: string;
 };
 
-const INIT_TIMEOUT_MS = 45_000;
+// fx answers `initialize` in well under a second when it can reach a
+// credential. A long wait means it is blocked reading the macOS Keychain, not
+// working — so fail fast with something actionable instead of stalling.
+const INIT_TIMEOUT_MS = 12_000;
+const SESSION_TIMEOUT_MS = 45_000;
+const CONTROL_TIMEOUT_MS = 15_000;
+const PROMPT_TIMEOUT_MS = 30 * 60_000;
+
+const AUTH_HELP =
+  "fx has no Vercel AI Gateway credential it can read from here. " +
+  "Run `fx login` (or `fx setup`) in a terminal, or export AI_GATEWAY_API_KEY " +
+  "so it does not depend on the macOS Keychain.";
+
+/** fx rejects `initialize` itself when it cannot read a credential. */
+function fxStartupError(error: unknown): Error {
+  const detail = error instanceof Error ? error.message : String(error);
+  if (/needs access|AI Gateway|API key|Keychain/i.test(detail)) {
+    return new Error(`${detail.trim()}\n\n${AUTH_HELP}`);
+  }
+  if (/timed out/i.test(detail)) {
+    return new Error(
+      `fx did not answer initialize within ${INIT_TIMEOUT_MS / 1000}s. ${AUTH_HELP}`,
+    );
+  }
+  return new Error(`fx did not start. ${detail}`);
+}
 
 const CLIENT_CAPABILITIES = {
   fs: { readTextFile: false, writeTextFile: false },
@@ -75,34 +104,45 @@ export async function sendFxTurn(input: SendTurnInput): Promise<void> {
 
   live.onEvent = input.onEvent;
   live.runtimeMode = input.runtimeMode;
-  live.turns = live.turns.catch(() => undefined).then(async () => {
-    live.cancelled = false;
-    live.muteUpdates = false;
-    try {
-      await applyModelSelection(live, input);
-      if (live.cancelled) return;
-      await applyRuntimeMode(live, input.runtimeMode);
-      if (live.cancelled) return;
-      await prompt(live, input);
-    } catch (error) {
-      if (live.cancelled) return;
-      throw error;
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      try {
+        await applyModelSelection(live, input);
+        if (live.cancelled) return;
+        await applyRuntimeMode(live, input.runtimeMode);
+        if (live.cancelled) return;
+        await prompt(live, input);
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
+  try {
+    await live.turns;
+  } catch (error) {
+    // A timed-out or failed turn leaves fx's process state unknowable. Keep
+    // its provider session id, but recycle the child so the next turn can
+    // resume instead of inheriting a permanently wedged transport.
+    if (liveByThread.get(input.sessionId) === live) {
+      await stopFxSession(input.sessionId);
     }
-  });
-  await live.turns;
+    throw error;
+  }
 }
 
 export async function steerFxTurn(_input: SteerTurnInput): Promise<void> {
   throw new Error("fx does not support steering an in-flight turn");
 }
 
+/** fx auto-approves in `code` mode, so there is never a pending approval. */
 export function respondFxApproval(
-  sessionId: string,
-  requestId: number,
-  decision: ApprovalDecision,
-) {
-  liveByThread.get(sessionId)?.approvals.get(requestId)?.(decision);
-}
+  _sessionId: string,
+  _requestId: number,
+  _decision: ApprovalDecision,
+) {}
 
 export async function cancelFxTurn(sessionId: string): Promise<void> {
   const live = liveByThread.get(sessionId);
@@ -112,8 +152,6 @@ export async function cancelFxTurn(sessionId: string): Promise<void> {
   }
   live.cancelled = true;
   live.muteUpdates = true;
-  for (const [, resolve] of live.approvals) resolve("deny");
-  live.approvals.clear();
   await live.acp
     .notify("session/cancel", { sessionId: live.acpSessionId })
     .catch(() => undefined);
@@ -177,8 +215,25 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
   };
   handlers.onRequest = (id, method, params) => {
     const live = liveRef.current;
-    if (!live) return;
+    if (!live) {
+      void acp
+        .respondError(id, {
+          code: -32601,
+          message: `Method not found: ${method}`,
+        })
+        .catch(() => undefined);
+      return;
+    }
     void handleRequest(live, id, method, params);
+  };
+
+  // ensureLive runs once per session, so these handlers outlive the turn that
+  // created them. Routing through the live record keeps them on the *current*
+  // turn's listener — capturing `input.onEvent` meant every exit and stderr
+  // error after turn 1 was addressed to a finished turn and silently dropped,
+  // leaving the session spinning on "Working…" forever.
+  const emit = (event: HarnessEvent) => {
+    (liveRef.current?.onEvent ?? input.onEvent)(event);
   };
 
   watchChild(
@@ -187,22 +242,32 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
     (code) => {
       acp.close(new Error("fx exited"));
       liveByThread.delete(input.sessionId);
-      input.onEvent({ type: "session.ended", code });
+      emit({ type: "session.ended", code });
+    },
+    (line) => {
+      console.debug("[monocode] fx stderr", line);
+      if (/Fx needs access|AI Gateway|not start/i.test(line)) {
+        emit({ type: "session.error", message: line.trim() });
+      }
     },
   );
 
-  await spawnChild(input.sessionId, path, ["acp"], input.cwd);
+  await spawnChild(input.sessionId, path, fxSpawnArgs(input.model), input.cwd);
 
   try {
-    await acp.request(
-      "initialize",
-      {
-        protocolVersion: 1,
-        clientCapabilities: CLIENT_CAPABILITIES,
-        clientInfo: { name: "monocode", version: "0.1.0" },
-      },
-      INIT_TIMEOUT_MS,
-    );
+    try {
+      await acp.request(
+        "initialize",
+        {
+          protocolVersion: 1,
+          clientCapabilities: CLIENT_CAPABILITIES,
+          clientInfo: { name: "monocode", version: "0.1.0" },
+        },
+        INIT_TIMEOUT_MS,
+      );
+    } catch (error) {
+      throw fxStartupError(error);
+    }
 
     let setup: SessionSetupResult | undefined;
     let acpSessionId: string | undefined;
@@ -213,10 +278,9 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
         setup = await acp.request<SessionSetupResult>(
           "session/resume",
           { sessionId: resume.acpSessionId },
-          INIT_TIMEOUT_MS,
+          SESSION_TIMEOUT_MS,
         );
-        acpSessionId =
-          sessionIdFromResult(setup) ?? resume.acpSessionId;
+        acpSessionId = sessionIdFromResult(setup) ?? resume.acpSessionId;
         didLoad = true;
       } catch {
         muteGate.current = true;
@@ -228,10 +292,9 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
               cwd: input.cwd,
               mcpServers: [],
             },
-            INIT_TIMEOUT_MS,
+            SESSION_TIMEOUT_MS,
           );
-          acpSessionId =
-            sessionIdFromResult(setup) ?? resume.acpSessionId;
+          acpSessionId = sessionIdFromResult(setup) ?? resume.acpSessionId;
           didLoad = true;
         } catch {
           setup = undefined;
@@ -247,7 +310,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       setup = await acp.request<SessionSetupResult>(
         "session/new",
         { cwd: input.cwd, mcpServers: [] },
-        INIT_TIMEOUT_MS,
+        SESSION_TIMEOUT_MS,
       );
       acpSessionId = sessionIdFromResult(setup);
     }
@@ -264,7 +327,6 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       cancelled: false,
       runtimeMode: input.runtimeMode,
       onEvent: input.onEvent,
-      approvals: new Map(),
       turns: Promise.resolve(),
     };
     liveRef.current = live;
@@ -292,22 +354,24 @@ async function applyModelSelection(
 ): Promise<void> {
   const base = nativeModelId(input.model);
   const settings = input.modelSettings ?? {};
+  const modelConfigId =
+    live.modelConfigId === "provider" ? "model" : live.modelConfigId;
 
-  try {
-    await setConfigOption(live, live.modelConfigId, base);
-  } catch {
-    await live.acp
-      .request("session/set_model", {
-        sessionId: live.acpSessionId,
-        modelId: base,
-      })
-      .catch(() => undefined);
+  await setConfigOption(live, modelConfigId, base).catch((error: unknown) => {
+    ignoreUnsupportedControl("set_config_option", error);
+  });
+  if (modelConfigId !== "model") {
+    await setConfigOption(live, "model", base).catch((error: unknown) => {
+      ignoreUnsupportedControl("set_config_option", error);
+    });
   }
 
   for (const [settingId, value] of Object.entries(settings)) {
     const configId = resolveSettingConfigId(live.configOptions, settingId);
-    if (!configId) continue;
-    await setConfigOption(live, configId, value).catch(() => undefined);
+    if (!configId || configId === "provider") continue;
+    await setConfigOption(live, configId, value).catch((error: unknown) => {
+      ignoreUnsupportedControl("set_config_option", error);
+    });
   }
 }
 
@@ -315,12 +379,21 @@ async function applyRuntimeMode(
   live: Live,
   runtimeMode: RuntimeMode,
 ): Promise<void> {
+  // Unsupported mode control is non-fatal because handlePermission remains a
+  // backstop. Transport failures and timeouts are rethrown so the wedged child
+  // is recycled rather than leaving this turn pending forever.
   await live.acp
-    .request("session/set_mode", {
-      sessionId: live.acpSessionId,
-      modeId: fxModeId(runtimeMode),
-    })
-    .catch(() => undefined);
+    .request(
+      "session/set_mode",
+      {
+        sessionId: live.acpSessionId,
+        modeId: fxModeId(runtimeMode),
+      },
+      CONTROL_TIMEOUT_MS,
+    )
+    .catch((error: unknown) => {
+      ignoreUnsupportedControl("set_mode", error);
+    });
 }
 
 async function setConfigOption(
@@ -328,16 +401,18 @@ async function setConfigOption(
   configId: string,
   value: string | boolean,
 ): Promise<void> {
+  const encoded = String(value);
   const current = live.configOptions.find((option) => option.id === configId);
-  if (current && String(current.currentValue ?? "") === String(value)) return;
+  if (current && String(current.currentValue ?? "") === encoded) return;
 
   const result = await live.acp.request<SessionSetupResult>(
     "session/set_config_option",
     {
       sessionId: live.acpSessionId,
       configId,
-      value,
+      value: encoded,
     },
+    CONTROL_TIMEOUT_MS,
   );
   if (result?.configOptions) {
     live.configOptions = readConfigOptions(result.configOptions);
@@ -345,25 +420,43 @@ async function setConfigOption(
   }
 }
 
+function fxSpawnArgs(model: string): string[] {
+  const native = nativeModelId(model).trim();
+  return native ? ["acp", "--model", native] : ["acp"];
+}
+
 async function prompt(live: Live, input: SendTurnInput): Promise<void> {
   try {
     const blocks = fxPromptBlocks(input.text);
     if (blocks.length === 0) return;
-    await live.acp.request("session/prompt", {
-      sessionId: live.acpSessionId,
-      prompt: blocks,
-    });
+    await live.acp.request(
+      "session/prompt",
+      {
+        sessionId: live.acpSessionId,
+        prompt: blocks,
+      },
+      PROMPT_TIMEOUT_MS,
+    );
     if (live.cancelled) return;
     live.onEvent({ type: "message.completed" });
     live.onEvent({ type: "reasoning.completed" });
   } catch (error) {
     if (live.cancelled) return;
+    const detail = error instanceof Error ? error.message : String(error);
     live.onEvent({
       type: "session.error",
-      message: error instanceof Error ? error.message : String(error),
+      message: /needs access|AI Gateway|API key|Keychain/i.test(detail)
+        ? `${detail.trim()}\n\n${AUTH_HELP}`
+        : detail,
     });
     throw error;
   }
+}
+
+function ignoreUnsupportedControl(method: string, error: unknown): void {
+  console.debug(`[monocode] fx ${method} failed`, error);
+  const detail = error instanceof Error ? error.message : String(error);
+  if (/timed out|not running|exited|closed|pipe/i.test(detail)) throw error;
 }
 
 function handleNotification(live: Live, method: string, params: unknown) {
@@ -383,38 +476,25 @@ async function handleRequest(
     await handlePermission(live, id, params);
     return;
   }
-  await live.acp.respond(id, {}).catch(() => undefined);
+  await live.acp
+    .respondError(id, {
+      code: -32601,
+      message: `Method not found: ${method}`,
+    })
+    .catch(() => undefined);
 }
 
+/**
+ * fx polices its own permissions in `code` mode, so anything that still reaches
+ * us is answered immediately. We never park a turn on an approval — that is
+ * what left sessions stuck on "Working…" with an empty transcript.
+ */
 async function handlePermission(live: Live, id: number, params: unknown) {
   const request = permissionRequestFromAcp(params);
-  const auto = autoPermissionOption(live.runtimeMode, request.optionIds);
-  if (auto) {
-    await live.acp.respond(id, {
-      outcome: { outcome: "selected", optionId: auto },
-    });
-    return;
-  }
-
-  live.onEvent({
-    type: "approval.requested",
-    requestId: id,
-    title: request.title,
-    kind: request.kind,
-    callId: request.callId,
-    preview: request.preview,
-  });
-
-  const decision = await new Promise<ApprovalDecision>((resolve) => {
-    live.approvals.set(id, resolve);
-  });
-  live.approvals.delete(id);
-  live.onEvent({ type: "approval.resolved", requestId: id, decision });
-
+  const optionId =
+    autoPermissionOption(live.runtimeMode, request.optionIds) ??
+    permissionOptionId("allow", request.optionIds);
   await live.acp.respond(id, {
-    outcome: {
-      outcome: "selected",
-      optionId: permissionOptionId(decision, request.optionIds),
-    },
+    outcome: { outcome: "selected", optionId },
   });
 }

@@ -62,4 +62,11 @@ export class AcpClient {
   respond(id: number, result: unknown): Promise<void> {
     return this.rpc.respond(id as JsonRpcId, result);
   }
+
+  respondError(
+    id: number,
+    error: { code: number; message: string; data?: unknown },
+  ): Promise<void> {
+    return this.rpc.respondError(id as JsonRpcId, error);
+  }
 }

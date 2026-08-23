@@ -1,7 +1,11 @@
 import { homeDir } from "../fs";
 import { setHarnessModels } from "../models";
 import { execChild, resolveFxBinary } from "./child";
-import { modelsFromFxOutput } from "./fxProtocol";
+import {
+  mergeFxCatalogModels,
+  modelFromFxStatusOutput,
+  modelsFromFxOutput,
+} from "./fxProtocol";
 
 let inflight: Promise<void> | null = null;
 
@@ -23,6 +27,12 @@ export function refreshFxCatalog(): Promise<void> {
 async function discoverFxModels() {
   const { path } = await resolveFxBinary();
   const cwd = await homeDir();
-  const stdout = await execChild(path, ["models", "--json"], cwd);
-  return modelsFromFxOutput(stdout);
+  const [modelsOutput, statusOutput] = await Promise.all([
+    execChild(path, ["models", "--json"], cwd),
+    execChild(path, ["status", "--json"], cwd).catch(() => ""),
+  ]);
+  return mergeFxCatalogModels(
+    modelsFromFxOutput(modelsOutput),
+    modelFromFxStatusOutput(statusOutput),
+  );
 }
