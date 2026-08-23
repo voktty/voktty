@@ -40,6 +40,14 @@ export {
   forgetPiSession,
   bindPiSession,
 } from "./pi";
+export {
+  sendFxTurn,
+  cancelFxTurn,
+  respondFxApproval,
+  stopFxSession,
+  forgetFxSession,
+  bindFxSession,
+} from "./fx";
 export { generateCursorSessionTitle } from "./cursorTitle";
 export { generateCodexSessionTitle } from "./codexTitle";
 export { generateOpenCodeSessionTitle } from "./opencodeTitle";
@@ -77,6 +85,7 @@ export { refreshCodexCatalog } from "./codexCatalog";
 export { refreshOpenCodeCatalog } from "./opencodeCatalog";
 export { refreshClaudeCatalog } from "./claudeCatalog";
 export { refreshPiCatalog } from "./piCatalog";
+export { refreshFxCatalog } from "./fxCatalog";
 export { registerBuiltinHarnesses } from "./register";
 export {
   getHarnessAvailabilitySnapshot,

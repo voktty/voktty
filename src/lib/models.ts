@@ -1,4 +1,5 @@
 import type { HarnessId } from "./session";
+import { HARNESSES } from "./session";
 
 export type ModelSettingChoice = {
   value: string;
@@ -115,6 +116,12 @@ export const MODELS: AgentModel[] = [
     name: "Default",
     nativeId: "",
   },
+  {
+    id: "fx:zai/glm-5.2-fast",
+    harness: "fx",
+    name: "GLM 5.2 Fast",
+    nativeId: "zai/glm-5.2-fast",
+  },
 ];
 
 export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
@@ -123,6 +130,7 @@ export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
   cursor: "cursor:composer-2.5",
   opencode: "opencode:glm-5",
   pi: "pi:default",
+  fx: "fx:zai/glm-5.2-fast",
 };
 
 const FAVORITES_KEY = "monocode.favoriteModels";
@@ -143,6 +151,7 @@ const HARNESS_ORDER: HarnessId[] = [
   "cursor",
   "opencode",
   "pi",
+  "fx",
 ];
 
 let overlays: Partial<Record<HarnessId, AgentModel[]>> = {};
@@ -348,6 +357,24 @@ export function saveModelPickerTab(tab: ModelPickerTab) {
   }
 }
 
+export function modelPickerTabs(
+  available: (id: HarnessId) => boolean,
+): ModelPickerTab[] {
+  return ["favorites", ...HARNESSES.filter(available)];
+}
+
+export function stepModelPickerTab(
+  tab: ModelPickerTab,
+  delta: -1 | 1,
+  available: (id: HarnessId) => boolean,
+): ModelPickerTab {
+  const tabs = modelPickerTabs(available);
+  if (tabs.length === 0) return tab;
+  const index = tabs.indexOf(tab);
+  const from = index < 0 ? 0 : index;
+  return tabs[(from + delta + tabs.length) % tabs.length] ?? tab;
+}
+
 export function loadLastModelChoice(): LastModelChoice | null {
   try {
     const raw = localStorage.getItem(LAST_MODEL_KEY);
@@ -435,6 +462,24 @@ function pickDefaultId(harness: HarnessId, models: AgentModel[]): string {
   }
   if (harness === "codex") {
     return models[0]?.id ?? "";
+  }
+  if (harness === "fx") {
+    const preferred = [
+      "zai/glm-5.2-fast",
+      "zai/glm-5.2",
+      "zai/glm-4.7-flash",
+      "zai/glm-4.7",
+      "openai/gpt-5.2",
+    ];
+    for (const nativeId of preferred) {
+      const hit = models.find((model) => model.nativeId === nativeId);
+      if (hit) return hit.id;
+    }
+    return (
+      models.find((model) => model.id === DEFAULT_MODEL_ID.fx)?.id ??
+      models[0]?.id ??
+      DEFAULT_MODEL_ID.fx
+    );
   }
   return (
     models.find((model) => model.id === DEFAULT_MODEL_ID[harness])?.id ??

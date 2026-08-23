@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { HarnessId } from "./session";
 import {
   loadLastModelSettings,
   mergeModelSettings,
+  modelPickerTabs,
   preferredModelSettings,
   saveLastModelSettings,
+  stepModelPickerTab,
   type AgentModel,
 } from "./models";
 
@@ -151,5 +154,30 @@ describe("model settings memory", () => {
     expect(
       preferredModelSettings(opus, { effort: "xhigh", fast: "true" }),
     ).toEqual({ effort: "xhigh", fast: "true" });
+  });
+});
+
+describe("model picker tabs", () => {
+  const available = (id: HarnessId) =>
+    id === "claude" || id === "fx" || id === "cursor";
+
+  it("starts with favorites then installed providers", () => {
+    expect(modelPickerTabs(available)).toEqual([
+      "favorites",
+      "claude",
+      "cursor",
+      "fx",
+    ]);
+  });
+
+  it("wraps left and right across favorites and providers", () => {
+    expect(stepModelPickerTab("favorites", 1, available)).toBe("claude");
+    expect(stepModelPickerTab("claude", 1, available)).toBe("cursor");
+    expect(stepModelPickerTab("fx", 1, available)).toBe("favorites");
+    expect(stepModelPickerTab("favorites", -1, available)).toBe("fx");
+  });
+
+  it("treats an unavailable current tab as the start of the list", () => {
+    expect(stepModelPickerTab("pi", 1, available)).toBe("claude");
   });
 });

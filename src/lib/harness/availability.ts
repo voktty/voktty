@@ -4,6 +4,7 @@ import {
   resolveClaudeBinary,
   resolveCodexBinary,
   resolveCursorBinary,
+  resolveFxBinary,
   resolveOpenCodeBinary,
   resolvePiBinary,
 } from "./child";
@@ -17,6 +18,7 @@ const UNAVAILABLE_HINT: Record<HarnessId, string> = {
   cursor: "Install Cursor CLI and run `agent login`",
   opencode: "Install OpenCode and run `opencode auth login`",
   pi: "Install Pi (`npm i -g @earendil-works/pi-coding-agent`) and authenticate",
+  fx: "Install fx (`curl -fsSL https://fx.sh/setup.sh | bash`) and run `fx login`",
 };
 
 let availability: HarnessAvailability = {
@@ -25,6 +27,7 @@ let availability: HarnessAvailability = {
   cursor: false,
   opencode: false,
   pi: false,
+  fx: false,
 };
 let version = 0;
 let inflight: Promise<void> | null = null;
@@ -94,6 +97,14 @@ export function probeHarnessAvailability(): Promise<void> {
       if (id === "pi") {
         try {
           await resolvePiBinary();
+          return [id, true] as const;
+        } catch {
+          return [id, false] as const;
+        }
+      }
+      if (id === "fx") {
+        try {
+          await resolveFxBinary();
           return [id, true] as const;
         } catch {
           return [id, false] as const;

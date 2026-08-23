@@ -213,6 +213,18 @@ pub fn harness_resolve_pi() -> Result<CursorBinary, String> {
         })
 }
 
+/// Resolve the Vercel fx coding agent CLI (`fx`), never the JSON viewer of the same name.
+#[tauri::command]
+pub fn harness_resolve_fx() -> Result<CursorBinary, String> {
+    resolve_fx()
+        .map(|path| CursorBinary {
+            path: path.to_string_lossy().into_owned(),
+        })
+        .ok_or_else(|| {
+            "fx CLI not found. Install it from https://fx.sh and run `fx login`, then retry.".into()
+        })
+}
+
 /// Bind an ephemeral loopback port for `opencode serve`.
 #[tauri::command]
 pub fn harness_free_port() -> Result<u16, String> {
@@ -521,6 +533,7 @@ const EXEC_ALLOWED_ARGS: &[&[&str]] = &[
     &["--version"],
     &["--list-models"],
     &["models", "--verbose"],
+    &["models", "--json"],
     &["agent", "list"],
 ];
 
@@ -540,6 +553,7 @@ fn is_resolved_harness_binary(command: &str) -> bool {
         resolve_opencode(),
         resolve_claude(),
         resolve_pi(),
+        resolve_fx(),
     ]
     .into_iter()
     .flatten()
@@ -794,6 +808,30 @@ fn resolve_pi() -> Option<PathBuf> {
     candidates.into_iter().find(|path| is_pi_coding_agent(path))
 }
 
+fn resolve_fx() -> Option<PathBuf> {
+    let home = dirs_home().map(PathBuf::from);
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // Installer default first so a Homebrew JSON-viewer `fx` does not win.
+    if let Some(home) = &home {
+        candidates.push(home.join(".local/bin/fx"));
+        candidates.push(home.join(".fx/bin/fx"));
+        candidates.push(home.join(".npm-global/bin/fx"));
+        candidates.push(home.join(".cargo/bin/fx"));
+        candidates.push(home.join("n/bin/fx"));
+    }
+    #[cfg(target_os = "macos")]
+    candidates.push(PathBuf::from("/opt/homebrew/bin/fx"));
+    candidates.push(PathBuf::from("/usr/local/bin/fx"));
+    candidates.push(PathBuf::from("/usr/bin/fx"));
+    candidates.push(PathBuf::from("/snap/bin/fx"));
+    if let Some(from_shell) = which_via_login_shell("fx") {
+        candidates.push(from_shell);
+    }
+
+    candidates.into_iter().find(|path| is_fx_agent(path))
+}
+
 fn is_pi_coding_agent(path: &Path) -> bool {
     if !path.is_file() {
         return false;
@@ -847,6 +885,64 @@ fn pi_help_mentions_rpc(path: &Path) -> bool {
             )
             .to_ascii_lowercase();
             text.contains("--mode") && text.contains("rpc")
+        }
+        _ => {
+            terminate(pid);
+            false
+        }
+    }
+}
+
+fn is_fx_agent(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if name != "fx" {
+        return false;
+    }
+    file_mentions_fx_agent(path) || fx_help_mentions_acp(path)
+}
+
+fn file_mentions_fx_agent(path: &Path) -> bool {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut buf = vec![0u8; 64 * 1024];
+    let Ok(n) = file.read(&mut buf) else {
+        return false;
+    };
+    let text = String::from_utf8_lossy(&buf[..n]);
+    text.contains("vercel-labs/fx")
+        || text.contains("FX_MODEL")
+        || text.contains("createFxAgent")
+        || text.contains("fx acp")
+}
+
+fn fx_help_mentions_acp(path: &Path) -> bool {
+    let mut cmd = Command::new(path);
+    cmd.arg("--help")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    isolate_child(&mut cmd);
+    let Ok(child) = cmd.spawn() else {
+        return false;
+    };
+    let pid = child.id();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(child.wait_with_output());
+    });
+    match rx.recv_timeout(Duration::from_secs(2)) {
+        Ok(Ok(output)) => {
+            let text = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .to_ascii_lowercase();
+            text.contains("acp") && (text.contains("ask") || text.contains("gateway"))
         }
         _ => {
             terminate(pid);
@@ -1028,6 +1124,29 @@ mod tests {
         assert!(!is_pi_coding_agent(&dir.join("missing")));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn fx_accepts_vercel_agent_and_rejects_json_viewer() {
+        let dir = std::env::temp_dir().join(format!("monocode-fx-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let agent = dir.join("fx");
+        std::fs::write(&agent, b"#!/bin/sh\necho vercel-labs/fx\n# FX_MODEL\n").unwrap();
+        assert!(is_fx_agent(&agent));
+
+        let viewer = dir.join("fx-viewer");
+        std::fs::write(&viewer, b"#!/bin/sh\necho Terminal JSON viewer\n").unwrap();
+        assert!(!is_fx_agent(&viewer));
+
+        let other = dir.join("fx");
+        std::fs::write(&other, b"#!/bin/sh\necho json viewer\n").unwrap();
+        assert!(!file_mentions_fx_agent(&other));
+        assert!(!is_fx_agent(&other));
+
+        assert!(!is_fx_agent(&dir.join("missing")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[cfg(test)]
@@ -1043,6 +1162,7 @@ mod exec_allowlist_tests {
         assert!(exec_args_allowed(&args(&["--version"])));
         assert!(exec_args_allowed(&args(&["--list-models"])));
         assert!(exec_args_allowed(&args(&["models", "--verbose"])));
+        assert!(exec_args_allowed(&args(&["models", "--json"])));
         assert!(exec_args_allowed(&args(&["agent", "list"])));
     }
 

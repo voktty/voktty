@@ -11,6 +11,7 @@ You need Node.js 20+, a current stable Rust toolchain, and at least one provider
 - [Cursor CLI](https://cursor.com/cli) - `agent login`
 - [OpenCode](https://opencode.ai) - `opencode auth login`
 - [Pi](https://pi.dev/) - `npm install -g @earendil-works/pi-coding-agent`
+- [fx](https://fx.sh) - `curl -fsSL https://fx.sh/setup.sh | bash` then `fx login`
 
 macOS and Linux are supported targets.
 

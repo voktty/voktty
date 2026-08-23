@@ -24,6 +24,7 @@ export type SkillSource =
   | "codex"
   | "opencode"
   | "pi"
+  | "fx"
   | "monocode";
 
 export type Skill = {

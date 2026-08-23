@@ -22,6 +22,7 @@ import {
 import type { ContextUsage } from "../lib/contextUsage";
 import type { RecentProject } from "../lib/recents";
 import type { Attachment, HarnessId, RuntimeMode } from "../lib/session";
+import { harnessSupportsAttachments } from "../lib/session";
 import {
   createBlankSkill,
   loadSkills,
@@ -58,6 +59,7 @@ type Props = {
   recents?: RecentProject[];
   context?: ContextUsage;
   busy?: boolean;
+  hotkeys?: boolean;
   onFocus: () => void;
   onCwdChange: (cwd: string) => void;
   onNewTerminal?: () => void;
@@ -104,6 +106,7 @@ function ToolButton({
 export function Composer({
   enabled = true,
   focused,
+  hotkeys = false,
   shell = false,
   harness,
   model,
@@ -150,6 +153,7 @@ export function Composer({
 
   const rankedSkills = rankSkills(skills, slash?.query ?? "");
   const pickerOpen = creatingSkill || slash !== null;
+  const attachmentsSupported = harnessSupportsAttachments(harness);
   const skillNames = useMemo(
     () => new Set(skills.map((skill) => skill.name)),
     [skills],
@@ -161,7 +165,7 @@ export function Composer({
 
   const addAttachments = useCallback(
     (incoming: Attachment[]) => {
-      if (incoming.length === 0) return;
+      if (!harnessSupportsAttachments(harness) || incoming.length === 0) return;
       setAttachments((prev) => {
         const next = mergeAttachments(prev, incoming);
         syncHasValue(ref.current?.value ?? "", next);
@@ -169,7 +173,7 @@ export function Composer({
       });
       ref.current?.focus();
     },
-    [syncHasValue],
+    [harness, syncHasValue],
   );
 
   const removeAttachment = useCallback(
@@ -191,6 +195,16 @@ export function Composer({
       for (const file of attachmentsRef.current) revokeAttachment(file);
     };
   }, []);
+
+  useEffect(() => {
+    if (harnessSupportsAttachments(harness)) return;
+    setAttachments((prev) => {
+      if (prev.length === 0) return prev;
+      for (const file of prev) revokeAttachment(file);
+      syncHasValue(ref.current?.value ?? "", []);
+      return [];
+    });
+  }, [harness, syncHasValue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -300,6 +314,7 @@ export function Composer({
       const data = event.dataTransfer;
       if (!hasFiles(data)) return;
       event.preventDefault();
+      if (!attachmentsSupported) return;
       data.dropEffect = "copy";
       setFileDrag(true);
     };
@@ -315,6 +330,7 @@ export function Composer({
       if (!hasFiles(data)) return;
       event.preventDefault();
       setFileDrag(false);
+      if (!attachmentsSupported) return;
       if (Date.now() - nativeDropAt < 250) return;
       const files = [...data.files];
       if (files.length === 0) return;
@@ -337,12 +353,12 @@ export function Composer({
         const { x, y } = event.payload.position;
         const over = overTarget(x, y);
         if (event.payload.type === "enter" || event.payload.type === "over") {
-          setFileDrag(over);
+          setFileDrag(over && attachmentsSupported);
           return;
         }
         if (event.payload.type !== "drop") return;
         setFileDrag(false);
-        if (!over) return;
+        if (!over || !attachmentsSupported) return;
         nativeDropAt = Date.now();
         void attachmentsFromPaths(event.payload.paths).then(addAttachments);
       })
@@ -359,7 +375,7 @@ export function Composer({
       root?.removeEventListener("drop", onDrop);
       unlisten?.();
     };
-  }, [addAttachments, enabled]);
+  }, [addAttachments, attachmentsSupported, enabled]);
 
   const submit = (value: string) => {
     const text = value.trim();
@@ -431,10 +447,12 @@ export function Composer({
     const files = filesFromClipboard(e.clipboardData);
     if (files.length === 0) return;
     e.preventDefault();
+    if (!attachmentsSupported) return;
     void attachmentsFromFiles(files).then(addAttachments);
   };
 
   const attachFromPicker = () => {
+    if (!attachmentsSupported) return;
     void pickAttachments().then((files) => {
       addAttachments(files);
       ref.current?.focus();
@@ -589,7 +607,15 @@ export function Composer({
           </div>
 
           <div className="flex items-center gap-1 px-2 pb-2">
-            <ToolButton label="Attach files" onClick={attachFromPicker}>
+            <ToolButton
+              label={
+                attachmentsSupported
+                  ? "Attach files"
+                  : "fx does not support attachments"
+              }
+              disabled={!attachmentsSupported}
+              onClick={attachFromPicker}
+            >
               <Plus className="size-3.5" strokeWidth={1.5} />
             </ToolButton>
             <div
@@ -612,6 +638,7 @@ export function Composer({
                 <ModelPicker
                   harness={harness}
                   model={model}
+                  hotkeys={hotkeys && enabled}
                   onChange={onModelChange}
                   onClose={() => ref.current?.focus()}
                 />

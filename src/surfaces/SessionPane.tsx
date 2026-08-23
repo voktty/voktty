@@ -91,6 +91,7 @@ export const SessionPane = memo(function SessionPane({
     <Composer
       enabled={visible}
       focused={focused && composerFocused}
+      hotkeys={focused}
       shell={!dockComposer}
       harness={session.harness}
       model={session.model}

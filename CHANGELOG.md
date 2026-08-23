@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Linux desktop builds: native window controls, an Alt menu bar, and Linux CLI/PATH discovery (`/usr/bin`, Snap, `~/.cargo/bin`, `~/.npm-global/bin`) so the same agent harnesses run off macOS.
+- fx as a harness: if `fx` is installed and logged in, it shows up next to Claude Code, Codex, Cursor, OpenCode, and Pi. Live sessions spawn `fx acp` and talk Agent Client Protocol. fx does not accept image or audio attachments, so the attach button is disabled with a tooltip. Follow-up messages while a turn is running are not steered - wait for the turn to finish.
+- Model picker shortcuts: `⌘.` (`Ctrl+.`) opens or closes it, and left/right arrows move between provider tabs.
 
 ### Fixed
 
@@ -23,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Editor diff hunks show a centered gutter pill with revert and stage. Plus stages that hunk (or the selected lines) so you can commit some changes and leave the rest unstaged.
-- Pi Coding Agent as a harness: if `pi` is installed, it shows up next to Claude Code, Codex, Cursor, and OpenCode. Live sessions spawn `pi --mode rpc` with the user's existing config and extensions loaded, so globally installed Pi packages (todos, subagents, custom tools) still run. Project-local `.pi` resources follow Pi's saved trust file. TUI-only widgets do not appear in MonoCode; extension confirm/select dialogs use the existing approval UI. MonoCode's runtime-mode control does not gate Pi tools — Pi has no native permission prompts.
+- Pi Coding Agent as a harness: if `pi` is installed, it shows up next to Claude Code, Codex, Cursor, and OpenCode. Live sessions spawn `pi --mode rpc` with the user's existing config and extensions loaded, so globally installed Pi packages (todos, subagents, custom tools) still run. Project-local `.pi` resources follow Pi's saved trust file. TUI-only widgets do not appear in MonoCode; extension confirm/select dialogs use the existing approval UI. MonoCode's runtime-mode control does not gate Pi tools - Pi has no native permission prompts.
 - Closing the window no longer kills a running chat: MonoCode hides instead, and reopening the app brings the same window back mid-turn.
 - Quit (⌘Q) asks first if chats are still running, then restores those sessions the next time you open the app and continues the turn.
 - Reopening the app restores the last window: tabs, splits, and open file or terminal panes, instead of always starting on a blank homepage.
@@ -32,14 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Quitting during a later turn still resumes: a previous interrupt note no longer blocks Continue on the next quit.
 - Opening a file scrolls its tab into view when the pane's tab strip overflows.
-- Editor syntax lint no longer underlines valid TypeScript (arrow type predicates, typed `catch`, JSX comments, `typeof import()`) or Tailwind `@source` rules. Rust files are still highlighted but are not linted — the highlighter grammar was marking real code as errors.
+- Editor syntax lint no longer underlines valid TypeScript (arrow type predicates, typed `catch`, JSX comments, `typeof import()`) or Tailwind `@source` rules. Rust files are still highlighted but are not linted - the highlighter grammar was marking real code as errors.
 
 ## [0.1.1] - 2026-08-21
 
 ### Added
 
 - Light mode: toggle Dark/Light in the appearance panel. Terminal, editor, markdown (including Mermaid), and sidebar all follow the scheme; preference persists across restarts.
-- Editor syntax linting for supported source files (JavaScript, TypeScript, JSON, CSS, HTML, Rust, and Python): lightweight diagnostics straight from the Lezer parse tree, with wavy red underlines and hover tooltips. Catches unclosed brackets, stray quotes, and other typo-class mistakes — not a type checker or language server.
+- Editor syntax linting for supported source files (JavaScript, TypeScript, JSON, CSS, HTML, Rust, and Python): lightweight diagnostics straight from the Lezer parse tree, with wavy red underlines and hover tooltips. Catches unclosed brackets, stray quotes, and other typo-class mistakes - not a type checker or language server.
 - File tabs show syntax problems: the label turns red and the tooltip appends a problem count, similar to VS Code.
 - Context meter in the composer: a ring showing how much of the model context window the session is using, with exact token counts on hover. It turns amber at 75% and red at 90%.
 - Context usage is read from each CLI rather than estimated, so the window matches whatever model the session actually runs. Claude Code, Codex, and OpenCode report it; Cursor does not expose token usage over ACP, so no meter is shown for Cursor sessions.

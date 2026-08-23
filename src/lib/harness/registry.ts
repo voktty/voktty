@@ -16,6 +16,8 @@ export type HarnessAdapter = {
   id: HarnessId;
   /** True when this adapter can run live turns. */
   live: boolean;
+  /** False when the harness cannot accept a follow-up while a turn is running. Default: same as live. */
+  canSteer?: boolean;
   sendTurn(input: SendTurnInput): Promise<void>;
   steerTurn(input: SteerTurnInput): Promise<void>;
   cancelTurn(sessionId: string): Promise<void>;
@@ -85,7 +87,9 @@ export async function sendHarnessTurn(input: SendTurnInput & { harness: HarnessI
 }
 
 export function canSteerHarness(id: HarnessId): boolean {
-  return adapters.get(id)?.live === true;
+  const adapter = adapters.get(id);
+  if (!adapter?.live) return false;
+  return adapter.canSteer !== false;
 }
 
 export async function steerHarnessTurn(

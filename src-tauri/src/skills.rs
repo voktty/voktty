@@ -60,6 +60,7 @@ pub(crate) fn list_skills_from(project: &Path, home: Option<&Path>) -> Vec<Disco
         (".codex/skills", "codex"),
         (".opencode/skills", "opencode"),
         (".pi/skills", "pi"),
+        (".fx/skills", "fx"),
     ] {
         add_root(project.join(dir), "project", source);
         if let Some(home) = home {
@@ -382,6 +383,30 @@ mod tests {
         assert_eq!(project_skill.scope, "project");
         let user_skill = skills.iter().find(|s| s.name == "pi-global").unwrap();
         assert_eq!(user_skill.source, "pi");
+        assert_eq!(user_skill.scope, "user");
+    }
+
+    #[test]
+    fn discovers_fx_project_and_user_skills() {
+        let project = tmp("proj-fx");
+        let home = tmp("home-fx");
+        write_skill(
+            &project.0.join(".fx/skills"),
+            "fx-review",
+            "---\nname: fx-review\ndescription: fx project skill\n---\n",
+        );
+        write_skill(
+            &home.0.join(".fx/skills"),
+            "fx-global",
+            "---\nname: fx-global\ndescription: fx user skill\n---\n",
+        );
+
+        let skills = list_skills_from(&project.0, Some(&home.0));
+        let project_skill = skills.iter().find(|s| s.name == "fx-review").unwrap();
+        assert_eq!(project_skill.source, "fx");
+        assert_eq!(project_skill.scope, "project");
+        let user_skill = skills.iter().find(|s| s.name == "fx-global").unwrap();
+        assert_eq!(user_skill.source, "fx");
         assert_eq!(user_skill.scope, "user");
     }
 

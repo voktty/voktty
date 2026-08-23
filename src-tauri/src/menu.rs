@@ -20,7 +20,8 @@ pub fn dispatch(app: &AppHandle, id: &str) {
         "new_tab" | "close_tab" | "next_tab" | "prev_tab" | "back_tab" | "forward_tab"
         | "split_right" | "split_down" | "focus_left" | "focus_right" | "focus_up"
         | "focus_down" | "toggle_sidebar" | "sidebar_opacity" | "open_project" | "go_to_file"
-        | "find_in_project" | "find" | "new_terminal" | "new_terminal_tab" => {
+        | "find_in_project" | "find" | "new_terminal" | "new_terminal_tab"
+        | "open_model_picker" => {
             let _ = app.emit(id, ());
         }
         _ => {}
@@ -85,6 +86,9 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let toggle_sidebar = MenuItemBuilder::with_id("toggle_sidebar", "Toggle Sidebar")
         .accelerator("CmdOrCtrl+B")
         .build(app)?;
+    let open_model_picker = MenuItemBuilder::with_id("open_model_picker", "Switch Model…")
+        .accelerator("CmdOrCtrl+.")
+        .build(app)?;
     let sidebar_opacity =
         MenuItemBuilder::with_id("sidebar_opacity", "Sidebar Appearance…").build(app)?;
     let find = MenuItemBuilder::with_id("find", "Find")
@@ -116,6 +120,7 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 
     let view = SubmenuBuilder::new(app, "View")
         .item(&toggle_sidebar)
+        .item(&open_model_picker)
         .separator()
         .item(&focus_left)
         .item(&focus_right)

@@ -1,7 +1,13 @@
 import type { ContextUsage } from "./contextUsage";
 import { defaultModelId, preferredModelSettings, resolveModel } from "./models";
 
-export type HarnessId = "claude" | "codex" | "cursor" | "opencode" | "pi";
+export type HarnessId =
+  | "claude"
+  | "codex"
+  | "cursor"
+  | "opencode"
+  | "pi"
+  | "fx";
 
 export const HARNESSES: HarnessId[] = [
   "claude",
@@ -9,6 +15,7 @@ export const HARNESSES: HarnessId[] = [
   "cursor",
   "opencode",
   "pi",
+  "fx",
 ];
 
 export type BlockRole =
@@ -136,6 +143,7 @@ export const HARNESS_LABEL: Record<HarnessId, string> = {
   cursor: "cursor",
   opencode: "opencode",
   pi: "pi",
+  fx: "fx",
 };
 
 export const HARNESS_TITLE: Record<HarnessId, string> = {
@@ -144,7 +152,13 @@ export const HARNESS_TITLE: Record<HarnessId, string> = {
   cursor: "Cursor",
   opencode: "OpenCode",
   pi: "Pi",
+  fx: "fx",
 };
+
+/** fx ACP rejects image and audio blocks; other live harnesses accept files. */
+export function harnessSupportsAttachments(id: HarnessId): boolean {
+  return id !== "fx";
+}
 
 export function newSession(
   harness: HarnessId = "claude",

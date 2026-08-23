@@ -112,6 +112,9 @@ export function MenuBar({
         case "toggle_sidebar":
           onToggleSidebar();
           break;
+        case "open_model_picker":
+          window.dispatchEvent(new Event("open_model_picker"));
+          break;
         case "toggle_diff":
           onToggleDiff?.();
           break;
@@ -147,6 +150,7 @@ export function MenuBar({
       case "view":
         return [
           { kind: "item", id: "toggle_sidebar", label: "Toggle Sidebar", shortcut: `${MOD}B` },
+          { kind: "item", id: "open_model_picker", label: "Switch Model…", shortcut: `${MOD}.` },
           { kind: "item", id: "toggle_diff", label: "Toggle Changes" },
         ];
       case "terminal":

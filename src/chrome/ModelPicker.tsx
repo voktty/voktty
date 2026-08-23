@@ -20,6 +20,7 @@ import {
   saveFavoriteModels,
   saveLastModelChoice,
   saveModelPickerTab,
+  stepModelPickerTab,
   subscribeModels,
   type AgentModel,
   type ModelPickerTab,
@@ -45,6 +46,7 @@ import { MOD } from "../lib/platform";
 type Props = {
   harness: HarnessId;
   model: string;
+  hotkeys?: boolean;
   onChange: (harness: HarnessId, model: string) => void;
   onClose?: () => void;
 };
@@ -67,7 +69,13 @@ function menuStyle(anchor: DOMRect): CSSProperties {
   };
 }
 
-export function ModelPicker({ harness, model, onChange, onClose }: Props) {
+export function ModelPicker({
+  harness,
+  model,
+  hotkeys = false,
+  onChange,
+  onClose,
+}: Props) {
   useSyncExternalStore(subscribeModels, getModelSnapshot, getModelSnapshot);
   useSyncExternalStore(
     subscribeHarnessAvailability,
@@ -85,10 +93,38 @@ export function ModelPicker({ harness, model, onChange, onClose }: Props) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const current = resolveModel(harness, model);
+  const tabRef = useRef(tab);
+  const openRef = useRef(open);
+  const lastHotkey = useRef(0);
+  tabRef.current = tab;
+  openRef.current = open;
 
   const dismiss = (restore: boolean) => {
     setOpen(false);
     if (restore) onCloseRef.current?.();
+  };
+
+  const openPicker = () => {
+    const rect = root.current?.getBoundingClientRect();
+    if (rect) setMenu(menuStyle(rect));
+    setOpen(true);
+  };
+
+  const togglePicker = () => {
+    if (openRef.current) dismiss(true);
+    else openPicker();
+  };
+
+  const toggleFromHotkey = () => {
+    const now = performance.now();
+    if (now - lastHotkey.current < 80) return;
+    lastHotkey.current = now;
+    togglePicker();
+  };
+
+  const selectTab = (next: ModelPickerTab) => {
+    setTab(next);
+    saveModelPickerTab(next);
   };
 
   useEffect(() => {
@@ -120,19 +156,71 @@ export function ModelPicker({ harness, model, onChange, onClose }: Props) {
     const onPointerDown = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) dismiss(false);
     };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    const inBlockingUi = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return false;
+      if (target.closest(".monocode-terminal")) return true;
+      return Boolean(
+        target.closest(
+          "[data-file-picker], [data-branch-picker], [data-skill-picker], [data-access-picker], [data-model-settings]",
+        ),
+      );
+    };
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.isComposing) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (
+        hotkeys &&
+        mod &&
+        !e.altKey &&
+        !e.shiftKey &&
+        (e.key === "." || e.code === "Period")
+      ) {
+        if (!openRef.current && inBlockingUi(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFromHotkey();
+        return;
+      }
+      if (!openRef.current) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        dismiss(true);
+        return;
+      }
+      if (mod || e.altKey || e.shiftKey) return;
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (inBlockingUi(e.target)) return;
       e.preventDefault();
       e.stopPropagation();
-      dismiss(true);
+      selectTab(
+        stepModelPickerTab(
+          tabRef.current,
+          e.key === "ArrowLeft" ? -1 : 1,
+          isHarnessAvailable,
+        ),
+      );
     };
-    window.addEventListener("pointerdown", onPointerDown);
+
+    const onMenu = () => {
+      if (!hotkeys) return;
+      if (inBlockingUi(document.activeElement)) return;
+      toggleFromHotkey();
+    };
+
     window.addEventListener("keydown", onKey, true);
+    window.addEventListener("open_model_picker", onMenu);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("open_model_picker", onMenu);
     };
-  }, [open]);
+  }, [hotkeys]);
 
   useEffect(() => {
     if (open) search.current?.focus();
@@ -171,11 +259,6 @@ export function ModelPicker({ harness, model, onChange, onClose }: Props) {
     saveLastModelChoice(item.harness, item.id);
     onChange(item.harness, item.id);
     dismiss(true);
-  };
-
-  const selectTab = (next: ModelPickerTab) => {
-    setTab(next);
-    saveModelPickerTab(next);
   };
 
   const toggleFavorite = (id: string) => {
@@ -217,8 +300,9 @@ export function ModelPicker({ harness, model, onChange, onClose }: Props) {
     <div ref={root} className="relative">
       <button
         type="button"
-        title={`${HARNESS_TITLE[current.harness]} · ${current.name}`}
+        title={`${HARNESS_TITLE[current.harness]} · ${current.name} (${MOD}.)`}
         aria-label={`${HARNESS_TITLE[current.harness]} ${current.name}`}
+        aria-keyshortcuts={`${MOD}.`}
         aria-expanded={open}
         aria-haspopup="dialog"
         onMouseDown={(e) => e.preventDefault()}
@@ -227,9 +311,7 @@ export function ModelPicker({ harness, model, onChange, onClose }: Props) {
             dismiss(true);
             return;
           }
-          const rect = root.current?.getBoundingClientRect();
-          if (rect) setMenu(menuStyle(rect));
-          setOpen(true);
+          openPicker();
         }}
         className={`flex h-6.5 max-w-52 items-center gap-1 rounded-md px-1.5 ${
           open
@@ -255,6 +337,7 @@ export function ModelPicker({ harness, model, onChange, onClose }: Props) {
           <nav
             role="tablist"
             aria-label="Providers"
+            aria-keyshortcuts="ArrowLeft ArrowRight"
             aria-orientation="horizontal"
             className="flex w-full shrink-0 items-stretch border-b border-content/10"
           >

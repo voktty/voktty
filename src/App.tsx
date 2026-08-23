@@ -2203,7 +2203,7 @@ export default function App({
                 {
                   id: crypto.randomUUID(),
                   role: "system",
-                  text: `${s.harness} is not connected yet — Claude Code, Cursor, Codex, and OpenCode are the live adapters.`,
+                  text: `${s.harness} is not connected yet — install and sign in to that provider, then retry.`,
                 },
               ],
             };
@@ -2584,6 +2584,9 @@ export default function App({
       listen("find_in_project", () => actions.current.onFindInProject()),
       listen("find", () => {
         openFindInActiveEditor();
+      }),
+      listen("open_model_picker", () => {
+        window.dispatchEvent(new Event("open_model_picker"));
       }),
     ];
     return () => {
