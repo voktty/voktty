@@ -272,10 +272,9 @@ function SidebarComponent({
       }`}
     >
       <div
-        className="flex h-9.75 shrink-0 items-center pr-1.5"
+        className="flex h-9.75 shrink-0 items-center justify-end pr-1.5"
         data-tauri-drag-region
       >
-        <div className="min-w-0 flex-1" data-tauri-drag-region />
         <TabVisitNav
           canGoBack={canGoBack}
           canGoForward={canGoForward}
