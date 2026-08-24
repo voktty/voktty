@@ -531,20 +531,19 @@ export function toolTitle(
   input: Record<string, unknown>,
 ): string {
   const kind = toolKindFromName(name);
-  const path =
-    stringField(input, "path") ??
-    stringField(input, "file_path") ??
-    stringField(input, "filePath");
-  const query =
-    stringField(input, "pattern") ??
-    stringField(input, "query") ??
-    stringField(input, "glob");
-  return composeToolTitle({
-    kind,
-    title: name,
-    path,
-    query,
-  });
+  const preview = extractToolPreview(
+    { title: name, name, kind, rawInput: input, input },
+    { title: name, name, kind, rawInput: input },
+  );
+  return (
+    composeToolTitle({
+      kind,
+      title: name,
+      path: preview?.path,
+      query: preview?.query,
+      previewKind: preview?.kind,
+    }) || name
+  );
 }
 
 export function previewFromTool(

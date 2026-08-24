@@ -28,7 +28,7 @@ import {
   isSearchTool,
   stubFilePreview,
 } from "../lib/harness/preview";
-import { resolveWorkspacePath } from "../lib/paths";
+import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import { Shimmer } from "./Shimmer";
 import {
   hasPendingApproval,
@@ -772,16 +772,25 @@ function ToolCallSummary({
   interactive?: boolean;
 }) {
   const parts = label.match(/^(Read|Find)\s+(.+)$/);
-  if (!parts) {
+  const action = parts?.[1]
+    ?? (/^read$/i.test(label.trim()) && (preview?.path || preview?.fileName)
+      ? "Read"
+      : /^find$/i.test(label.trim()) && preview?.query
+        ? "Find"
+        : undefined);
+  const target = parts?.[2]
+    ?? (action === "Read"
+      ? (preview?.path ? displayPath(preview.path, cwd) : preview?.fileName)
+      : action === "Find"
+        ? preview?.query
+        : undefined);
+  if (!action || !target) {
     return (
       <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-content/80">
         {label}
       </span>
     );
   }
-
-  const action = parts[1];
-  const target = parts[2];
   const isFile = action === "Read";
   const fileName =
     preview?.fileName ||

@@ -131,3 +131,27 @@ describe("applyHarnessEvent context", () => {
     expect(session.blocks).toEqual([]);
   });
 });
+
+describe("tool enrichment", () => {
+  it("fills in a bare Read row when approval carries the path", () => {
+    let session = newSession("cursor", "/repo");
+    session = applyHarnessEvent(session, {
+      type: "tool.updated",
+      callId: "call_1",
+      title: "Read",
+      kind: "read",
+      status: "pending",
+    });
+    session = applyHarnessEvent(session, {
+      type: "approval.requested",
+      requestId: 1,
+      title: "Read src/App.tsx",
+      kind: "read",
+      callId: "call_1",
+      preview: { kind: "read", path: "src/App.tsx", fileName: "App.tsx" },
+    });
+    const tool = session.blocks.find((block) => block.tool?.callId === "call_1");
+    expect(tool?.text).toBe("Read src/App.tsx");
+    expect(tool?.tool?.preview?.path).toBe("src/App.tsx");
+  });
+});

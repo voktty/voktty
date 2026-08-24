@@ -79,6 +79,24 @@ describe("fx protocol", () => {
     expect(request.title).toContain("fx.ts");
   });
 
+  it("extracts nested shell args from permission payloads", () => {
+    const request = permissionRequestFromAcp({
+      toolCall: {
+        toolCallId: "call_a",
+        title: "terminal.exec git status -s",
+        kind: "execute",
+        rawInput: {
+          action: "exec",
+          command: "git status -s",
+          cwd: "/repo",
+        },
+      },
+      options: [{ optionId: "allow_once" }],
+    });
+    expect(request.callId).toBe("call_a");
+    expect(request.title).toContain("git status -s");
+  });
+
   it("maps agent message and tool updates to harness events", () => {
     expect(
       eventsFromAcpUpdate({

@@ -20,6 +20,7 @@ import {
   extractSearchQuery,
   extractToolPreview,
   isWeakToolTitle,
+  mergeToolPreview,
 } from "./preview";
 
 type SessionConfigOption = {
@@ -432,15 +433,43 @@ async function handlePermission(live: Live, id: number, params: unknown) {
     {};
   const command = stringField(subject ?? {}, "command");
   const kind = stringField(tool, "kind") ?? stringField(subject ?? {}, "kind");
-  const preview = extractToolPreview(tool, tool);
+  const preview = mergeToolPreview(
+    extractToolPreview(tool, tool),
+    subject ? extractToolPreview(subject, subject) : undefined,
+  );
   const title =
     composeToolTitle({
       kind,
-      title: toolLabel(tool, tool) ?? command ?? stringField(rec ?? {}, "title"),
+      title: toolLabel(tool, subject ?? tool) ?? command ?? stringField(rec ?? {}, "title"),
       path: preview?.path,
-      query: preview?.query ?? extractSearchQuery(tool),
+      query:
+        preview?.query ??
+        extractSearchQuery(tool) ??
+        extractSearchQuery(subject),
       previewKind: preview?.kind,
     }) || "Permission";
+  const callId =
+    stringField(tool, "toolCallId") ??
+    stringField(tool, "tool_call_id") ??
+    stringField(rec ?? {}, "toolCallId") ??
+    stringField(subject ?? {}, "toolCallId");
+  if (callId) {
+    live.onEvent({
+      type: "tool.updated",
+      callId,
+      title,
+      kind,
+      status: live.toolStatuses.get(callId),
+      preview,
+    });
+    if (preview?.path || preview?.query) {
+      live.enrichedTools.add(callId);
+      live.pendingToolEnrichments.delete(callId);
+    } else if (needsCursorToolEnrichment(kind, title, preview)) {
+      queueCursorToolEnrichment(live, callId, kind);
+    }
+  }
+
   const options = Array.isArray(rec?.options) ? rec.options : [];
   const optionIds = options
     .map((item) => asRecord(item)?.optionId)
@@ -459,12 +488,8 @@ async function handlePermission(live: Live, id: number, params: unknown) {
     requestId: id,
     title,
     kind,
-    callId:
-      stringField(tool, "toolCallId") ??
-      stringField(tool, "tool_call_id") ??
-      stringField(rec ?? {}, "toolCallId") ??
-      stringField(subject ?? {}, "toolCallId"),
-    preview: extractToolPreview(tool, tool),
+    callId,
+    preview,
   });
 
   const decision = await new Promise<ApprovalDecision>((resolve) => {
@@ -573,6 +598,9 @@ function needsCursorToolEnrichment(
   const key = (kind ?? "").toLowerCase();
   if (key === "execute" || key === "think" || key === "fetch") return false;
   if (preview?.path || preview?.query) return false;
+  if (key === "read" || key === "search" || key === "edit" || key === "write") {
+    return true;
+  }
   return !title || isWeakToolTitle(title);
 }
 
@@ -657,15 +685,16 @@ function applyStoredCursorToolCall(
   stored: StoredCursorToolCall,
   kind?: string,
 ): boolean {
+  const mappedKind = kindFromCursorToolName(stored.toolName, kind);
   const recovered = {
-    kind,
+    kind: mappedKind,
     name: stored.toolName,
     rawInput: stored.args,
   };
   const preview = extractToolPreview(recovered, recovered);
   const title =
     composeToolTitle({
-      kind,
+      kind: mappedKind,
       title: toolLabel(recovered, recovered) ?? stored.toolName,
       path: preview?.path,
       query: preview?.query ?? extractSearchQuery(stored.args),
@@ -681,11 +710,37 @@ function applyStoredCursorToolCall(
     type: "tool.updated",
     callId: stored.toolCallId,
     title,
-    kind,
+    kind: mappedKind,
     status: live.toolStatuses.get(stored.toolCallId),
     preview,
   });
   return true;
+}
+
+function kindFromCursorToolName(
+  name: string | undefined,
+  fallback?: string,
+): string | undefined {
+  const key = (name ?? "").toLowerCase();
+  if (
+    key === "grep" ||
+    key === "glob" ||
+    key === "rg" ||
+    key.includes("search")
+  ) {
+    return "search";
+  }
+  if (key === "read") return "read";
+  if (
+    key === "edit" ||
+    key === "write" ||
+    key === "strreplace" ||
+    key === "applypatch"
+  ) {
+    return "edit";
+  }
+  if (key === "shell" || key === "bash") return "execute";
+  return fallback;
 }
 
 function toolEnrichmentDelay(live: Live): number {

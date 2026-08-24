@@ -629,6 +629,8 @@ async function handleControlRequest(
     return;
   }
 
+  applyKnownToolInput(live, toolName, input, control.toolUseId);
+
   if (live.runtimeMode === "full-access") {
     await writeJson(
       sessionId,
@@ -658,6 +660,28 @@ async function handleControlRequest(
       toClaudePermissionResult(decision, input),
     ),
   ).catch(() => undefined);
+}
+
+function applyKnownToolInput(
+  live: Live,
+  toolName: string,
+  input: Record<string, unknown>,
+  callId?: string,
+): void {
+  if (!callId || Object.keys(input).length === 0) return;
+  const existing = live.toolsById.get(callId);
+  if (existing) {
+    existing.input = input;
+    existing.title = toolTitle(toolName, input);
+  }
+  live.onEvent({
+    type: "tool.updated",
+    callId,
+    title: toolTitle(toolName, input),
+    kind: toolKindFromName(toolName),
+    status: "pending",
+    preview: previewFromTool(toolName, input),
+  });
 }
 
 function waitApproval(

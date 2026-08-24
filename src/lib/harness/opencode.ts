@@ -34,6 +34,7 @@ import {
   toolKindFromName,
   type OpenCodePart,
 } from "./opencodeProtocol";
+import { composeToolTitle } from "./preview";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
 
 type PendingApproval = {
@@ -454,18 +455,55 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
       const patterns = Array.isArray(properties.patterns)
         ? properties.patterns.filter((item): item is string => typeof item === "string")
         : [];
+      const metadata = asRecord(properties.metadata) ?? {};
+      const callId =
+        stringField(properties, "callID") ??
+        stringField(properties, "toolCallId") ??
+        stringField(metadata, "callID") ??
+        stringField(metadata, "toolCallId");
       const uiId = live.nextApprovalUiId++;
-      const preview = previewFromToolPart({
-        id,
-        type: "tool",
-        tool: permission,
-        state: asRecord(properties.metadata) ?? {},
-      });
+      const kind = toolKindFromName(permission);
+      const preview =
+        previewFromToolPart({
+          id,
+          type: "tool",
+          tool: permission,
+          state: {
+            ...metadata,
+            input: metadata.input ?? (patterns[0] ? { path: patterns[0] } : undefined),
+          },
+        }) ??
+        (patterns[0]
+          ? previewFromToolPart({
+              id,
+              type: "tool",
+              tool: permission,
+              state: { input: { path: patterns[0], pattern: patterns[0] } },
+            })
+          : undefined);
+      const title =
+        composeToolTitle({
+          kind,
+          title: permissionTitle(permission, patterns),
+          path: preview?.path,
+          query: preview?.query,
+          previewKind: preview?.kind,
+        }) || permissionTitle(permission, patterns);
+      if (callId) {
+        live.onEvent({
+          type: "tool.updated",
+          callId,
+          title,
+          kind,
+          preview,
+        });
+      }
       live.onEvent({
         type: "approval.requested",
         requestId: uiId,
-        title: permissionTitle(permission, patterns),
-        kind: toolKindFromName(permission),
+        title,
+        kind,
+        callId,
         preview,
       });
       void waitApproval(live, uiId, id, "permission");
@@ -553,10 +591,18 @@ function emitTool(live: Live, part: OpenCodePart): void {
   const tool = part.tool ?? "tool";
   const state = part.state ?? {};
   const status = typeof state.status === "string" ? state.status : "pending";
-  const title =
-    (typeof state.title === "string" && state.title) || tool;
   const kind = toolKindFromName(tool);
   const preview = previewFromToolPart(part);
+  const title =
+    composeToolTitle({
+      kind,
+      title: (typeof state.title === "string" && state.title) || tool,
+      path: preview?.path,
+      query: preview?.query,
+      previewKind: preview?.kind,
+    }) ||
+    (typeof state.title === "string" && state.title) ||
+    tool;
   const detail = detailFromToolPart(part);
   if (status === "pending") {
     live.onEvent({

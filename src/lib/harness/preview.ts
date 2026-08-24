@@ -17,24 +17,24 @@ export function extractToolPreview(
     coerceString(tool.kind) ??
     ""
   ).toLowerCase();
-  const rawInput = parseRecord(
-    update.rawInput ??
-      tool.rawInput ??
-      update.raw_input ??
-      tool.raw_input ??
-      update.input ??
-      tool.input,
+  const inputs = inputRecords(
+    update.rawInput ?? update.raw_input ?? update.input,
+    tool.rawInput ?? tool.raw_input ?? tool.input,
+    update.arguments ?? update.args ?? update.params,
+    tool.arguments ?? tool.args ?? tool.params,
+    update,
+    tool,
   );
   const content = update.content ?? tool.content;
   const diff = extractDiff(content);
-  const path = extractPath(update, tool, rawInput, diff?.path);
+  const path = extractPath(update, tool, inputs, diff?.path);
   const startLine =
-    locationLine(update.locations) ??
-    locationLine(tool.locations) ??
-    numberField(rawInput, "line") ??
-    numberField(rawInput, "offset");
+    locationLine(update.locations ?? update.location) ??
+    locationLine(tool.locations ?? tool.location) ??
+    firstNumber(inputs, "line") ??
+    firstNumber(inputs, "offset");
   const kind = previewKind(rawKind, title, !!diff, !!path);
-  const query = extractSearchQuery(rawInput);
+  const query = extractSearchQuery(inputs);
 
   if (
     kind === "search" ||
@@ -138,7 +138,6 @@ export function isFileTool(
 }
 
 export function extractSearchQuery(value: unknown): string | undefined {
-  const raw = parseRecord(value);
   const keys = [
     "pattern",
     "query",
@@ -149,11 +148,34 @@ export function extractSearchQuery(value: unknown): string | undefined {
     "searchTerm",
     "regex",
   ];
-  for (const key of keys) {
-    const found = coerceString(raw[key]);
-    if (found) return found;
+  for (const raw of inputRecords(value)) {
+    for (const key of keys) {
+      const found = coerceString(raw[key]);
+      if (found) return found;
+    }
   }
   return undefined;
+}
+
+/** Shared title builder used by Claude, Pi, and OpenCode tool mappers. */
+export function titleFromToolInput(
+  name: string,
+  kind: string,
+  input: Record<string, unknown>,
+): string {
+  const preview = extractToolPreview(
+    { title: name, name, kind, rawInput: input, input },
+    { title: name, name, kind, rawInput: input },
+  );
+  return (
+    composeToolTitle({
+      kind,
+      title: name,
+      path: preview?.path,
+      query: preview?.query,
+      previewKind: preview?.kind,
+    }) || name
+  );
 }
 
 export function composeToolTitle(opts: {
@@ -279,6 +301,7 @@ function previewKind(
     case "move":
       return "write";
     case "execute":
+    case "shell":
       return "shell";
     default:
       if (hasDiff) return "write";
@@ -292,13 +315,13 @@ function previewKind(
 function extractPath(
   update: Record<string, unknown>,
   tool: Record<string, unknown>,
-  rawInput: Record<string, unknown>,
+  inputs: Record<string, unknown>[],
   diffPath?: string,
 ): string | undefined {
   return (
     locationPath(update.locations ?? update.location) ??
     locationPath(tool.locations ?? tool.location) ??
-    inputPath(rawInput) ??
+    firstInputPath(inputs) ??
     diffPath ??
     contentPath(update.content ?? tool.content) ??
     findPathInUnknown(update, 0) ??
@@ -309,6 +332,27 @@ function extractPath(
   );
 }
 
+function firstInputPath(
+  inputs: Record<string, unknown>[],
+): string | undefined {
+  for (const raw of inputs) {
+    const found = inputPath(raw);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function firstNumber(
+  inputs: Record<string, unknown>[],
+  key: string,
+): number | undefined {
+  for (const raw of inputs) {
+    const found = numberField(raw, key);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 function inputPath(rawInput: Record<string, unknown>): string | undefined {
   const keys = [
     "path",
@@ -317,13 +361,14 @@ function inputPath(rawInput: Record<string, unknown>): string | undefined {
     "targetFile",
     "target_file",
     "relative_workspace_path",
+    "relativeWorkspacePath",
     "uri",
     "file",
     "absolutePath",
   ];
   for (const key of keys) {
     const value = coerceString(rawInput[key]);
-    if (value && looksLikePath(value)) return normalizePath(value);
+    if (value && looksLikeToolPath(value)) return normalizePath(value);
   }
   return undefined;
 }
@@ -335,7 +380,7 @@ function pathFromTitle(title?: string): string | undefined {
   );
   const rest = match?.[1]?.trim();
   if (!rest) return undefined;
-  return looksLikePath(rest) ? rest : undefined;
+  return looksLikeToolPath(rest) ? rest : undefined;
 }
 
 function locationPath(locations: unknown): string | undefined {
@@ -345,6 +390,9 @@ function locationPath(locations: unknown): string | undefined {
       ? [locations]
       : [];
   for (const item of items) {
+    if (typeof item === "string" && looksLikeToolPath(item)) {
+      return normalizePath(item);
+    }
     const rec = asRecord(item);
     const path =
       rec &&
@@ -352,7 +400,7 @@ function locationPath(locations: unknown): string | undefined {
         coerceString(rec.filePath) ??
         coerceString(rec.uri) ??
         coerceString(rec.file));
-    if (path) return normalizePath(path);
+    if (path && looksLikeToolPath(path)) return normalizePath(path);
   }
   return undefined;
 }
@@ -374,10 +422,10 @@ function locationLine(locations: unknown): number | undefined {
 function contentPath(content: unknown): string | undefined {
   for (const block of contentBlocks(content)) {
     const path = coerceString(block.path);
-    if (path) return normalizePath(path);
+    if (path && looksLikeToolPath(path)) return normalizePath(path);
     const change = firstChange(block);
     const changePath = change && coerceString(change.path);
-    if (changePath) return normalizePath(changePath);
+    if (changePath && looksLikeToolPath(changePath)) return normalizePath(changePath);
   }
   return undefined;
 }
@@ -598,7 +646,7 @@ function findPathInUnknown(value: unknown, depth: number): string | undefined {
         return undefined;
       }
     }
-    return looksLikeAbsPath(text) ? normalizePath(text) : undefined;
+    return looksLikeToolPath(text) ? normalizePath(text) : undefined;
   }
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -616,6 +664,15 @@ function findPathInUnknown(value: unknown, depth: number): string | undefined {
     "status",
     "kind",
     "title",
+    "content",
+    "text",
+    "rawOutput",
+    "raw_output",
+    "output",
+    "result",
+    "cwd",
+    "workingDirectory",
+    "working_directory",
   ]);
   for (const [key, nested] of Object.entries(rec)) {
     if (skip.has(key)) continue;
@@ -625,21 +682,30 @@ function findPathInUnknown(value: unknown, depth: number): string | undefined {
   return undefined;
 }
 
+function looksLikeToolPath(value: string): boolean {
+  const text = value.trim();
+  if (!text || text.length > 400 || /[\n\r]/.test(text)) return false;
+  if (isWeakToolTitle(text)) return false;
+  if (/^(\/\/|\/\*|\*)/.test(text)) return false;
+  if (/^https?:/i.test(text)) return false;
+  return looksLikePath(text);
+}
+
 function looksLikePath(value: string): boolean {
   const text = value.trim();
   return (
     looksLikeAbsPath(text) ||
-    text.includes("/") ||
+    (text.includes("/") && !/^(\/\/|\/\*)/.test(text)) ||
     /\.[a-z0-9]{1,8}$/i.test(text)
   );
 }
 
 function looksLikeAbsPath(value: string): boolean {
-  return (
-    value.startsWith("file://") ||
-    value.startsWith("/") ||
-    /^[A-Za-z]:[\\/]/.test(value)
-  );
+  const text = value.trim();
+  if (text.startsWith("file://")) return true;
+  if (/^(\/\/|\/\*)/.test(text)) return false;
+  if (text.startsWith("/")) return /\/[^/\s]/.test(text) && text.length < 512;
+  return /^[A-Za-z]:[\\/]/.test(text);
 }
 
 function capLine(text: string): string {
@@ -675,6 +741,30 @@ function parseRecord(value: unknown): Record<string, unknown> {
     }
   }
   return asRecord(value) ?? {};
+}
+
+/** Flatten the nested argument bags ACP agents stuff under args/input/rawInput. */
+function inputRecords(...values: unknown[]): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  const seen = new Set<object>();
+  const add = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) add(item);
+      return;
+    }
+    const rec = parseRecord(value);
+    if (Object.keys(rec).length === 0 || seen.has(rec)) return;
+    seen.add(rec);
+    out.push(rec);
+    add(rec.arguments);
+    add(rec.args);
+    add(rec.params);
+    add(rec.input);
+    add(rec.rawInput);
+    add(rec.raw_input);
+  };
+  for (const value of values) add(value);
+  return out;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

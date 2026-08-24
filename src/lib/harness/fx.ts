@@ -491,6 +491,15 @@ async function handleRequest(
  */
 async function handlePermission(live: Live, id: number, params: unknown) {
   const request = permissionRequestFromAcp(params);
+  if (request.callId) {
+    live.onEvent({
+      type: "tool.updated",
+      callId: request.callId,
+      title: request.title,
+      kind: request.kind,
+      preview: request.preview,
+    });
+  }
   const optionId =
     autoPermissionOption(live.runtimeMode, request.optionIds) ??
     permissionOptionId("allow", request.optionIds);
