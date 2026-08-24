@@ -280,7 +280,6 @@ function TitleTabItem({
   const inGroup = groupPosition != null;
   const { headline, meta, tooltip } = tabCopy(tab, { inGroup });
   const fileIcon = tab.files[0];
-  const busy = tab.busyHarnesses.length > 0;
   const showStart =
     canDrag &&
     sortable.draggingId &&
