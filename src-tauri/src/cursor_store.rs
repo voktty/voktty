@@ -193,10 +193,9 @@ fn ids_match(stored: &str, wanted: &str) -> bool {
     }
     let stored_parts = id_parts(stored);
     let wanted_parts = id_parts(wanted);
-    stored_parts
-        .iter()
-        .any(|part| *part == wanted || wanted_parts.iter().any(|wanted_part| wanted_part == part))
-        || wanted_parts.iter().any(|part| *part == stored)
+    stored_parts.contains(&wanted)
+        || wanted_parts.contains(&stored)
+        || stored_parts.iter().any(|part| wanted_parts.contains(part))
 }
 
 fn id_parts(value: &str) -> Vec<&str> {
