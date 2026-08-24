@@ -104,7 +104,6 @@ import {
 } from "./lib/harness";
 import {
   appendPreparingHandoff,
-  appendReadyHandoff,
   buildDeterministicHandoff,
   chooseHandoffBrief,
   completeHandoff,
@@ -2302,22 +2301,11 @@ export default function App({
               title: titled,
               pendingSwitch: undefined,
             });
-            const askOutgoing =
-              shouldAskOutgoingAgent(current) &&
-              isLiveHarness(pendingSwitch.from);
-            const started = askOutgoing
-              ? appendPreparingHandoff(
-                  sealed,
-                  pendingSwitch.from,
-                  s.harness,
-                )
-              : appendReadyHandoff(
-                  sealed,
-                  pendingSwitch.from,
-                  s.harness,
-                  buildDeterministicHandoff(sealed, text),
-                );
-            return appendUser(started, text, visible);
+            return appendUser(
+              appendPreparingHandoff(sealed, pendingSwitch.from, s.harness),
+              text,
+              visible,
+            );
           }
           return appendUser({ ...s, title: titled }, text, visible);
         }),
@@ -2380,15 +2368,17 @@ export default function App({
           );
           await forgetHarnessSession(pendingSwitch.from, sessionId);
           if (turnGen.current.get(sessionId) !== gen) return;
-          setSessions((prev) =>
-            prev.map((s) =>
-              s.id === sessionId
-                ? { ...completeHandoff(s, brief), busy: true }
-                : s,
-            ),
-          );
           wrap = { from: pendingSwitch.from, to: current.harness, text: brief };
         }
+
+        const revealHandoff = (brief: string) => {
+          setSessions((prev) =>
+            prev.map((s) => {
+              if (s.id !== sessionId || !isPreparingHandoff(s)) return s;
+              return { ...completeHandoff(s, brief), busy: true };
+            }),
+          );
+        };
 
         await beginSessionTurn(sessionId, current.cwd).catch(() => undefined);
         if (turnGen.current.get(sessionId) !== gen) return;
@@ -2411,6 +2401,13 @@ export default function App({
             attachments: prepared,
             onEvent: (event) => {
               if (turnGen.current.get(sessionId) !== gen) return;
+              if (
+                wrap &&
+                (event.type === "session.started" ||
+                  event.type === "session.providerBound")
+              ) {
+                revealHandoff(wrap.text);
+              }
               nudgeOpenEditors(event, current.cwd);
               trackSessionEdits(sessionId, current.cwd, event);
               enqueueHarnessEvent(sessionId, event);
@@ -2419,13 +2416,18 @@ export default function App({
           if (turnGen.current.get(sessionId) !== gen) return;
           if (wrap) {
             setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sessionId ? consumeHandoff(s) : s,
-              ),
+              prev.map((s) => {
+                if (s.id !== sessionId) return s;
+                const ready = isPreparingHandoff(s)
+                  ? completeHandoff(s, wrap.text)
+                  : s;
+                return consumeHandoff(ready);
+              }),
             );
           }
         } catch (error: unknown) {
           if (turnGen.current.get(sessionId) !== gen) return;
+          if (wrap) revealHandoff(wrap.text);
           const message =
             error instanceof Error
               ? error.message
@@ -2485,20 +2487,21 @@ export default function App({
 
   const onStop = useCallback((sessionId: string) => {
     const session = sessionsRef.current.find((s) => s.id === sessionId);
-    if (session && isPreparingHandoff(session)) {
-      const from =
-        session.blocks.find(
-          (block) =>
-            block.role === "handoff" && block.handoff?.status === "preparing",
-        )?.handoff?.from ?? session.pendingSwitch?.from;
-      if (from) void cancelHarnessTurn(from, sessionId);
-      return;
-    }
     turnGen.current.set(sessionId, (turnGen.current.get(sessionId) ?? 0) + 1);
     flushHarnessEvents();
-    if (session) void cancelHarnessTurn(session.harness, sessionId);
+    if (session) {
+      for (const id of sessionChildHarnesses(session)) {
+        void cancelHarnessTurn(id, sessionId);
+      }
+    }
     setSessions((prev) =>
-      prev.map((s) => (s.id === sessionId ? stopStreaming(s) : s)),
+      prev.map((s) => {
+        if (s.id !== sessionId) return s;
+        const stopped = stopStreaming(s);
+        return isPreparingHandoff(stopped)
+          ? completeHandoff(stopped, buildDeterministicHandoff(stopped))
+          : stopped;
+      }),
     );
     if (session) {
       void syncSessionCheckpoint(sessionId, session.cwd)

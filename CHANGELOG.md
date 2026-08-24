@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Handoff: switching providers mid-session continues the chat on the next send. The new message goes to the incoming provider with a short recap of what happened and any files this chat edited. The thread shows that provider’s logo and name.
+- Handoff: switching providers mid-session continues the chat on the next send. The new message goes to the incoming provider with a short recap of what happened and any files this chat edited. The divider shows a spinner and “Preparing a handoff” until that provider starts, then its logo and name.
 
 ### Fixed
 
