@@ -783,15 +783,19 @@ function ToolCallSummary({
   interactive?: boolean;
 }) {
   const parts = label.match(/^(Read|Find)\s+(.+)$/);
-  const action = parts?.[1]
-    ?? (/^read$/i.test(label.trim()) && (preview?.path || preview?.fileName)
+  const action =
+    parts?.[1] ??
+    (/^read$/i.test(label.trim()) && (preview?.path || preview?.fileName)
       ? "Read"
       : /^find$/i.test(label.trim()) && preview?.query
         ? "Find"
         : undefined);
-  const target = parts?.[2]
-    ?? (action === "Read"
-      ? (preview?.path ? displayPath(preview.path, cwd) : preview?.fileName)
+  const target =
+    parts?.[2] ??
+    (action === "Read"
+      ? preview?.path
+        ? displayPath(preview.path, cwd)
+        : preview?.fileName
       : action === "Find"
         ? preview?.query
         : undefined);
@@ -906,9 +910,7 @@ function HandoffDivider({ block }: { block: Block }) {
   if (!meta) return null;
 
   const preparing = meta.status === "preparing";
-  const label = preparing
-    ? "Preparing a handoff"
-    : HARNESS_TITLE[meta.to];
+  const label = preparing ? "Preparing a handoff" : HARNESS_TITLE[meta.to];
 
   return (
     <div className="px-4 py-5">
@@ -931,7 +933,6 @@ function HandoffDivider({ block }: { block: Block }) {
           ) : (
             <>
               <HarnessIcon harness={meta.to} className="size-3.5 shrink-0" />
-              <span className="truncate">{label}</span>
             </>
           )}
         </div>
