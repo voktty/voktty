@@ -54,10 +54,7 @@ fn validate_id(value: &str, label: &str) -> Result<(), String> {
         return Err(format!("Invalid {label} id"));
     }
     // Cursor composites ACP ids as `call-…\nfc_…`. Reject path-like junk only.
-    if trimmed
-        .bytes()
-        .any(|byte| matches!(byte, b'/' | b'\\' | 0))
-    {
+    if trimmed.bytes().any(|byte| matches!(byte, b'/' | b'\\' | 0)) {
         return Err(format!("Invalid {label} id"));
     }
     Ok(())
@@ -159,8 +156,7 @@ fn lookup_tool_calls(
             let Some(stored_id) = item.get("toolCallId").and_then(Value::as_str) else {
                 continue;
             };
-            let Some(requested) = wanted.iter().copied().find(|id| ids_match(stored_id, id))
-            else {
+            let Some(requested) = wanted.iter().copied().find(|id| ids_match(stored_id, id)) else {
                 continue;
             };
             if found
@@ -197,9 +193,10 @@ fn ids_match(stored: &str, wanted: &str) -> bool {
     }
     let stored_parts = id_parts(stored);
     let wanted_parts = id_parts(wanted);
-    stored_parts.iter().any(|part| {
-        *part == wanted || wanted_parts.iter().any(|wanted_part| wanted_part == part)
-    }) || wanted_parts.iter().any(|part| *part == stored)
+    stored_parts
+        .iter()
+        .any(|part| *part == wanted || wanted_parts.iter().any(|wanted_part| wanted_part == part))
+        || wanted_parts.iter().any(|part| *part == stored)
 }
 
 fn id_parts(value: &str) -> Vec<&str> {
