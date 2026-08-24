@@ -336,12 +336,6 @@ function TitleTabItem({
           className={`pointer-events-none absolute inset-0 z-10 ${dropTargetTint(dropTarget)}`}
         />
       ) : null}
-      {busy ? (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 z-30 h-px bg-accent"
-          aria-hidden
-        />
-      ) : null}
       <button
         type="button"
         title={tooltip}
@@ -1291,7 +1285,10 @@ function TitleBarComponent({
             <Plus className="size-3.5" strokeWidth={1.75} />
           </IconButton>
           {onNewTerminal ? (
-            <IconButton label={`New Terminal (${MOD}\`)`} onClick={onNewTerminal}>
+            <IconButton
+              label={`New Terminal (${MOD}\`)`}
+              onClick={onNewTerminal}
+            >
               <SquareTerminal className="size-3.5" strokeWidth={1.75} />
             </IconButton>
           ) : null}
