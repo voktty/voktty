@@ -106,6 +106,27 @@ export function isActivityBlock(block: Block): boolean {
   return !isHiddenTool(block);
 }
 
+/** User turns, with handoff dividers sitting on their own row. */
+export function groupTurns(blocks: Block[]): Block[][] {
+  const turns: Block[][] = [];
+  let current: Block[] = [];
+  for (const block of blocks) {
+    if (block.role === "handoff") {
+      if (current.length > 0) turns.push(current);
+      turns.push([block]);
+      current = [];
+      continue;
+    }
+    if (block.role === "user" && current.length > 0) {
+      turns.push(current);
+      current = [];
+    }
+    current.push(block);
+  }
+  if (current.length > 0) turns.push(current);
+  return turns;
+}
+
 export function groupTurnItems(blocks: Block[]): TurnItem[] {
   const items: TurnItem[] = [];
   let activity: Block[] = [];

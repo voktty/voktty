@@ -37,4 +37,22 @@ describe("sanitizeSessionForPersist", () => {
       "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     );
   });
+
+  it("keeps a handoff divider and settles a preparing one", () => {
+    const session = newSession("cursor", "/tmp/project");
+    session.blocks = [
+      { id: "u1", role: "user", text: "hey" },
+      {
+        id: "h1",
+        role: "handoff",
+        text: "",
+        handoff: { from: "cursor", to: "claude", status: "preparing" },
+      },
+    ];
+    const persisted = sanitizeSessionForPersist(session);
+    expect(persisted.blocks[1]).toMatchObject({
+      role: "handoff",
+      handoff: { from: "cursor", to: "claude", status: "ready", pending: true },
+    });
+  });
 });

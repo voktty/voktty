@@ -33,6 +33,7 @@ struct HarnessLine {
 struct HarnessExit {
     session_id: String,
     code: Option<i32>,
+    pid: u32,
 }
 
 #[derive(Serialize, Clone)]
@@ -243,7 +244,7 @@ pub fn harness_spawn(
     command: String,
     args: Vec<String>,
     cwd: String,
-) -> Result<(), String> {
+) -> Result<u32, String> {
     if let Some(prev) = host.remove(&session_id) {
         terminate(prev.pid);
     }
@@ -320,6 +321,7 @@ pub fn harness_spawn(
 
     let wait_app = app.clone();
     let wait_id = session_id;
+    let wait_pid = pid;
     thread::spawn(move || {
         let code = child.wait().ok().and_then(|status| status.code());
         if let Some(host) = wait_app.try_state::<HarnessHost>() {
@@ -331,11 +333,12 @@ pub fn harness_spawn(
             HarnessExit {
                 session_id: wait_id,
                 code,
+                pid: wait_pid,
             },
         );
     });
 
-    Ok(())
+    Ok(pid)
 }
 
 #[tauri::command]

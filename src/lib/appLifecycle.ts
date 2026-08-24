@@ -17,6 +17,7 @@ import {
 import { leafIds, type WorkspaceTab } from "./layout";
 import { killPty } from "./pty";
 import type { Session } from "./session";
+import { sessionChildHarnesses } from "./handoff";
 import {
   getSession,
   listInFlightSessions,
@@ -260,7 +261,13 @@ export async function reapWindowRuntime(
   tabs: WorkspaceTab[],
 ): Promise<void> {
   await Promise.all(
-    sessions.map((session) => forgetHarnessSession(session.harness, session.id)),
+    sessions.map((session) =>
+      Promise.all(
+        sessionChildHarnesses(session).map((harness) =>
+          forgetHarnessSession(harness, session.id),
+        ),
+      ),
+    ),
   );
   await Promise.all(terminalFileIds(tabs).map((id) => killPty(id)));
 }

@@ -5,6 +5,8 @@ import { normalizeProjectPath } from "./recents";
 import type {
   Block,
   HarnessId,
+  HandoffMeta,
+  HandoffStatus,
   RuntimeMode,
   Session,
 } from "./session";
@@ -188,6 +190,9 @@ function sanitizeBlock(block: Block): Block | null {
     // Drop stale live approval prompts; request ids don't survive restarts.
     if (block.role === "approval") return null;
   }
+  const handoff = sanitizeHandoff(block.handoff);
+  if (handoff) next.handoff = handoff;
+  else if (block.role === "handoff") return null;
   return next;
 }
 
@@ -256,6 +261,22 @@ function asHarness(value: string): HarnessId {
   return (HARNESSES as string[]).includes(value)
     ? (value as HarnessId)
     : "cursor";
+}
+
+const HANDOFF_STATUSES: HandoffStatus[] = ["preparing", "ready"];
+
+function sanitizeHandoff(value: Block["handoff"]): HandoffMeta | undefined {
+  if (!value) return undefined;
+  if (!(HARNESSES as string[]).includes(value.from)) return undefined;
+  if (!(HARNESSES as string[]).includes(value.to)) return undefined;
+  if (!HANDOFF_STATUSES.includes(value.status)) return undefined;
+  const interrupted = value.status === "preparing";
+  return {
+    from: value.from,
+    to: value.to,
+    status: "ready",
+    pending: interrupted || !!value.pending,
+  };
 }
 
 function asRuntimeMode(value: string): RuntimeMode {

@@ -32,13 +32,16 @@ import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import { Shimmer } from "./Shimmer";
 import {
   hasPendingApproval,
+  HARNESS_TITLE,
   type Block,
   type ToolPreview,
 } from "../lib/session";
+import { HarnessIcon } from "../chrome/HarnessIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { AgentMarkdown } from "./AgentMarkdown";
 import {
   groupTurnItems,
+  groupTurns,
   isIncompleteTool,
   needsApproval,
   splitActivityRows,
@@ -85,6 +88,10 @@ export function AgentTranscript({
   const lastUserId = lastUserBlockId(blocks);
   const liveStartedAt = turnUserBlock(blocks)?.startedAt;
   const waitingForApproval = hasPendingApproval(blocks);
+  const preparingHandoff = blocks.some(
+    (block) =>
+      block.role === "handoff" && block.handoff?.status === "preparing",
+  );
 
   const setShowJump = useCallback(
     (show: boolean) => {
@@ -249,7 +256,7 @@ export function AgentTranscript({
             </div>
           );
         })}
-        {busy ? (
+        {busy && !preparingHandoff ? (
           <LiveWorking startedAt={liveStartedAt} paused={waitingForApproval} />
         ) : null}
       </div>
@@ -360,6 +367,10 @@ const TranscriptBlock = memo(function TranscriptBlock({
         onOpenDiff={onOpenDiff}
       />
     );
+  }
+
+  if (block.role === "handoff") {
+    return <HandoffDivider block={block} />;
   }
 
   if (block.role === "system") {
@@ -890,18 +901,44 @@ function ApprovalControls({
   );
 }
 
-function groupTurns(blocks: Block[]): Block[][] {
-  const turns: Block[][] = [];
-  let current: Block[] = [];
-  for (const block of blocks) {
-    if (block.role === "user" && current.length > 0) {
-      turns.push(current);
-      current = [];
-    }
-    current.push(block);
-  }
-  if (current.length > 0) turns.push(current);
-  return turns;
+function HandoffDivider({ block }: { block: Block }) {
+  const meta = block.handoff;
+  if (!meta) return null;
+
+  const preparing = meta.status === "preparing";
+  const label = preparing
+    ? "Preparing a handoff"
+    : HARNESS_TITLE[meta.to];
+
+  return (
+    <div className="px-4 py-5">
+      <div className="flex items-center gap-3">
+        <div className="h-px min-w-4 flex-1 bg-content/12" />
+        <div
+          role="separator"
+          aria-label={
+            preparing
+              ? `Preparing a handoff to ${HARNESS_TITLE[meta.to]}`
+              : `Continued with ${label}`
+          }
+          className="flex max-w-[min(100%,20rem)] items-center gap-1.5 px-1.5 font-sans text-[12px] text-content/55"
+        >
+          {preparing ? (
+            <>
+              <TerminalSpinner className="inline-block w-3.5 shrink-0 select-none text-center text-[11px] leading-none text-content/45" />
+              <Shimmer duration={1.4}>{label}</Shimmer>
+            </>
+          ) : (
+            <>
+              <HarnessIcon harness={meta.to} className="size-3.5 shrink-0" />
+              <span className="truncate">{label}</span>
+            </>
+          )}
+        </div>
+        <div className="h-px min-w-4 flex-1 bg-content/12" />
+      </div>
+    </div>
+  );
 }
 
 function lastUserBlockId(blocks: Block[]): string | undefined {

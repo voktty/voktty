@@ -25,7 +25,18 @@ export type BlockRole =
   | "tool"
   | "approval"
   | "plan"
-  | "system";
+  | "system"
+  | "handoff";
+
+export type HandoffStatus = "preparing" | "ready";
+
+export type HandoffMeta = {
+  from: HarnessId;
+  to: HarnessId;
+  status: HandoffStatus;
+  /** Inject this brief into prompts to `to` until that harness accepts a turn. */
+  pending?: boolean;
+};
 
 export type ToolPreviewKind = "read" | "write" | "shell" | "search";
 
@@ -88,6 +99,7 @@ export type Block = {
     requestId: number;
     decided?: "allow" | "deny";
   };
+  handoff?: HandoffMeta;
 };
 
 export type RuntimeMode =
@@ -135,6 +147,18 @@ export type Session = {
   providerSessionId?: string;
   /** Context-window level reported by the harness. Absent until it reports. */
   context?: ContextUsage;
+  /**
+   * Composer switched providers, but the previous child is still live.
+   * Handoff runs on the next send, not on picker change.
+   */
+  pendingSwitch?: PendingHarnessSwitch;
+};
+
+export type PendingHarnessSwitch = {
+  from: HarnessId;
+  fromModel: string;
+  fromSettings: Record<string, string>;
+  fromProviderSessionId?: string;
 };
 
 export const HARNESS_LABEL: Record<HarnessId, string> = {

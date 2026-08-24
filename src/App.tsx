@@ -102,6 +102,22 @@ import {
   type ApprovalDecision,
   type HarnessEvent,
 } from "./lib/harness";
+import {
+  appendPreparingHandoff,
+  appendReadyHandoff,
+  buildDeterministicHandoff,
+  chooseHandoffBrief,
+  completeHandoff,
+  consumeHandoff,
+  isPreparingHandoff,
+  pendingHandoff,
+  planComposerSwitch,
+  sessionChildHarnesses,
+  shouldAskOutgoingAgent,
+  userMessagesAfterHandoff,
+  wrapHandoffPrompt,
+} from "./lib/handoff";
+import { requestOutgoingHandoff } from "./lib/handoffTurn";
 import { isEditTool } from "./lib/harness/preview";
 import {
   beginSessionTurn,
@@ -238,6 +254,31 @@ function scheduleHarnessFlush(run: () => void): ScheduledFlush {
 /** Expand the composer's `@file` and `/skill` tokens for the harness. */
 async function preparePrompt(text: string, cwd: string): Promise<string> {
   return applySkillsToTurn(await applyFileMentionsToTurn(text, cwd), cwd);
+}
+
+function withHarnessChoice(
+  session: Session,
+  harness: HarnessId,
+  model: string,
+  modelSettings: Record<string, string>,
+): Session {
+  return {
+    ...session,
+    harness,
+    model,
+    modelSettings,
+    title:
+      session.blocks.length === 0
+        ? HARNESS_LABEL[harness]
+        : formatSessionTitle(
+            harness,
+            sessionDisplayTitle(session.title, session.harness),
+          ),
+    ...(session.model === model
+      ? {}
+      : { context: dropContextWindow(session.context) }),
+    ...(session.harness === harness ? {} : { providerSessionId: undefined }),
+  };
 }
 
 function openSessionIds(tabs: WorkspaceTab[]): Set<string> {
@@ -807,7 +848,9 @@ export default function App({
     for (const session of idleDetached) {
       if (skipForgetSessionIds.current.has(session.id)) continue;
       persistSession(session);
-      void forgetHarnessSession(session.harness, session.id);
+      for (const harness of sessionChildHarnesses(session)) {
+        void forgetHarnessSession(harness, session.id);
+      }
     }
     setSessions((prev) =>
       prev.filter(
@@ -1769,11 +1812,19 @@ export default function App({
           sessionId,
           (turnGen.current.get(sessionId) ?? 0) + 1,
         );
-        void cancelHarnessTurn(open.harness, sessionId);
+        for (const id of sessionChildHarnesses(open)) {
+          void cancelHarnessTurn(id, sessionId);
+        }
       }
 
       const harness = open?.harness ?? summary?.harness ?? "cursor";
-      void forgetHarnessSession(harness, sessionId);
+      if (open) {
+        for (const id of sessionChildHarnesses(open)) {
+          void forgetHarnessSession(id, sessionId);
+        }
+      } else {
+        void forgetHarnessSession(harness, sessionId);
+      }
       lastPersisted.current.delete(sessionId);
       await deleteSession(sessionId).catch(() => undefined);
 
@@ -2081,36 +2132,46 @@ export default function App({
   const onModelChange = useCallback(
     (sessionId: string, harness: HarnessId, model: string) => {
       const current = sessionsRef.current.find((s) => s.id === sessionId);
-      if (current && current.harness !== harness) {
-        void forgetHarnessSession(current.harness, sessionId);
-      }
+      if (!current) return;
+      if (isPreparingHandoff(current)) return;
       const resolved = resolveModel(harness, model);
-      if (current?.modelSettings) {
+      if (current.modelSettings) {
         saveLastModelSettings(current.modelSettings, "fill");
       }
       const modelSettings = preferredModelSettings(
         resolved,
-        current?.modelSettings,
+        current.modelSettings,
       );
       saveLastModelChoice(harness, resolved.id);
+      const plan = planComposerSwitch(current, harness);
+      if (plan.kind === "empty") {
+        void forgetHarnessSession(plan.forget, sessionId);
+      }
       setSessions((prev) =>
         prev.map((s) => {
           if (s.id !== sessionId) return s;
-          return {
-            ...s,
+          const next = withHarnessChoice(
+            s,
             harness,
-            model: resolved.id,
+            resolved.id,
             modelSettings,
-            title: s.blocks.length === 0 ? HARNESS_LABEL[harness] : s.title,
-            // The window belongs to the old model; keep the level and let the
-            // next turn re-report the window rather than showing a stale one.
-            ...(s.model === resolved.id
-              ? {}
-              : { context: dropContextWindow(s.context) }),
-            ...(current?.harness === harness
-              ? {}
-              : { providerSessionId: undefined }),
-          };
+          );
+          if (plan.kind === "arm") {
+            return { ...next, pendingSwitch: plan.pending };
+          }
+          if (plan.kind === "revert") {
+            return {
+              ...next,
+              pendingSwitch: undefined,
+              ...(plan.restoreProviderSessionId
+                ? { providerSessionId: plan.restoreProviderSessionId }
+                : { providerSessionId: undefined }),
+            };
+          }
+          if (plan.kind === "empty") {
+            return { ...next, pendingSwitch: undefined };
+          }
+          return next;
         }),
       );
     },
@@ -2141,8 +2202,15 @@ export default function App({
       const current = sessionsRef.current.find((s) => s.id === sessionId);
       if (!current) return;
       if (!text.trim() && attachments.length === 0) return;
+      if (isPreparingHandoff(current)) return;
 
-      if (current.busy) {
+      const pendingSwitch =
+        current.pendingSwitch &&
+        current.pendingSwitch.from !== current.harness
+          ? current.pendingSwitch
+          : null;
+
+      if (current.busy && !pendingSwitch) {
         if (!isLiveHarness(current.harness) || !canSteerHarness(current.harness)) {
           // Harnesses that cannot steer (fx) used to drop the message on the
           // floor here, so a follow-up sent mid-turn just vanished. Say so.
@@ -2195,6 +2263,12 @@ export default function App({
         : current.title;
       const visible = displayAttachments(attachments);
       const live = isLiveHarness(current.harness);
+      const queuedHandoff =
+        live && !pendingSwitch ? pendingHandoff(current) : null;
+
+      if (pendingSwitch && current.busy) {
+        void cancelHarnessTurn(pendingSwitch.from, sessionId);
+      }
 
       setSessions((prev) =>
         prev.map((s) => {
@@ -2204,6 +2278,7 @@ export default function App({
             return {
               ...s,
               title: titled,
+              pendingSwitch: undefined,
               busy: false,
               blocks: [
                 ...s.blocks,
@@ -2220,6 +2295,29 @@ export default function App({
                 },
               ],
             };
+          }
+          if (pendingSwitch) {
+            const sealed = stopStreaming({
+              ...s,
+              title: titled,
+              pendingSwitch: undefined,
+            });
+            const askOutgoing =
+              shouldAskOutgoingAgent(current) &&
+              isLiveHarness(pendingSwitch.from);
+            const started = askOutgoing
+              ? appendPreparingHandoff(
+                  sealed,
+                  pendingSwitch.from,
+                  s.harness,
+                )
+              : appendReadyHandoff(
+                  sealed,
+                  pendingSwitch.from,
+                  s.harness,
+                  buildDeterministicHandoff(sealed, text),
+                );
+            return appendUser(started, text, visible);
           }
           return appendUser({ ...s, title: titled }, text, visible);
         }),
@@ -2246,14 +2344,60 @@ export default function App({
           .catch(() => undefined);
       }
 
-      if (!live) return;
+      if (!live) {
+        if (pendingSwitch) {
+          void forgetHarnessSession(pendingSwitch.from, sessionId);
+        }
+        return;
+      }
 
       void (async () => {
+        let wrap = queuedHandoff;
+        if (pendingSwitch) {
+          let agentText = "";
+          if (
+            shouldAskOutgoingAgent(current) &&
+            isLiveHarness(pendingSwitch.from)
+          ) {
+            try {
+              agentText = await requestOutgoingHandoff({
+                harness: pendingSwitch.from,
+                sessionId,
+                cwd: current.cwd,
+                model: pendingSwitch.fromModel,
+                modelSettings: pendingSwitch.fromSettings,
+                userRequest: text,
+              });
+            } catch {
+              agentText = "";
+            }
+          }
+          if (turnGen.current.get(sessionId) !== gen) return;
+          const latest = sessionsRef.current.find((s) => s.id === sessionId);
+          const brief = chooseHandoffBrief(
+            agentText,
+            buildDeterministicHandoff(latest ?? current, text),
+          );
+          await forgetHarnessSession(pendingSwitch.from, sessionId);
+          if (turnGen.current.get(sessionId) !== gen) return;
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId
+                ? { ...completeHandoff(s, brief), busy: true }
+                : s,
+            ),
+          );
+          wrap = { from: pendingSwitch.from, to: current.harness, text: brief };
+        }
+
         await beginSessionTurn(sessionId, current.cwd).catch(() => undefined);
         if (turnGen.current.get(sessionId) !== gen) return;
         try {
           const prepared = await prepareAttachments(attachments);
           const prompt = await preparePrompt(text, current.cwd);
+          const earlier = queuedHandoff
+            ? userMessagesAfterHandoff(current)
+            : [];
           await sendHarnessTurn({
             harness: current.harness,
             sessionId,
@@ -2261,7 +2405,9 @@ export default function App({
             model: current.model,
             modelSettings: current.modelSettings,
             runtimeMode: current.runtimeMode,
-            text: prompt,
+            text: wrap
+              ? wrapHandoffPrompt(wrap.text, wrap.from, prompt, earlier)
+              : prompt,
             attachments: prepared,
             onEvent: (event) => {
               if (turnGen.current.get(sessionId) !== gen) return;
@@ -2270,6 +2416,14 @@ export default function App({
               enqueueHarnessEvent(sessionId, event);
             },
           });
+          if (turnGen.current.get(sessionId) !== gen) return;
+          if (wrap) {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionId ? consumeHandoff(s) : s,
+              ),
+            );
+          }
         } catch (error: unknown) {
           if (turnGen.current.get(sessionId) !== gen) return;
           const message =
@@ -2330,9 +2484,18 @@ export default function App({
   }, [autoContinueKey, onSubmit]);
 
   const onStop = useCallback((sessionId: string) => {
+    const session = sessionsRef.current.find((s) => s.id === sessionId);
+    if (session && isPreparingHandoff(session)) {
+      const from =
+        session.blocks.find(
+          (block) =>
+            block.role === "handoff" && block.handoff?.status === "preparing",
+        )?.handoff?.from ?? session.pendingSwitch?.from;
+      if (from) void cancelHarnessTurn(from, sessionId);
+      return;
+    }
     turnGen.current.set(sessionId, (turnGen.current.get(sessionId) ?? 0) + 1);
     flushHarnessEvents();
-    const session = sessionsRef.current.find((s) => s.id === sessionId);
     if (session) void cancelHarnessTurn(session.harness, sessionId);
     setSessions((prev) =>
       prev.map((s) => (s.id === sessionId ? stopStreaming(s) : s)),

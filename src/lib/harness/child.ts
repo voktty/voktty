@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 type LinePayload = { sessionId: string; line: string };
-type ExitPayload = { sessionId: string; code: number | null };
+type ExitPayload = { sessionId: string; code: number | null; pid?: number };
 type SsePayload = { sessionId: string; data: string };
 type SseEndPayload = { sessionId: string; error?: string | null };
 
@@ -18,6 +18,17 @@ const stderrHandlers = new Map<string, LineHandler>();
 const sseHandlers = new Map<string, SseHandler>();
 const sseEndHandlers = new Map<string, SseEndHandler>();
 const sseBuffer = new Map<string, string[]>();
+const livePid = new Map<string, number>();
+
+/** True when this exit belongs to the child we currently have spawned. */
+export function isCurrentChildExit(
+  expectedPid: number | undefined,
+  exitedPid: number | undefined,
+): boolean {
+  if (expectedPid == null || expectedPid <= 0) return false;
+  if (exitedPid == null || exitedPid <= 0) return false;
+  return exitedPid === expectedPid;
+}
 
 const MAX_BUFFERED = 1000;
 let bridge: Promise<UnlistenFn[]> | null = null;
@@ -54,7 +65,9 @@ function ensureBridge() {
       stderrHandlers.get(sessionId)?.(line);
     }),
     listen<ExitPayload>("harness-exit", (event) => {
-      const { sessionId, code } = event.payload;
+      const { sessionId, code, pid } = event.payload;
+      if (!isCurrentChildExit(livePid.get(sessionId), pid)) return;
+      livePid.delete(sessionId);
       exitHandlers.get(sessionId)?.(code);
     }),
     listen<SsePayload>("harness-sse", (event) => {
@@ -83,6 +96,7 @@ function teardownBridge() {
   sseHandlers.clear();
   sseEndHandlers.clear();
   sseBuffer.clear();
+  livePid.clear();
   void pending?.then((fns) => fns.forEach((fn) => fn()));
 }
 
@@ -154,13 +168,19 @@ export function unwatchSse(sessionId: string) {
   sseBuffer.delete(sessionId);
 }
 
-export function spawnChild(
+export async function spawnChild(
   sessionId: string,
   command: string,
   args: string[],
   cwd: string,
 ): Promise<void> {
-  return invoke("harness_spawn", { sessionId, command, args, cwd });
+  const pid = await invoke<number>("harness_spawn", {
+    sessionId,
+    command,
+    args,
+    cwd,
+  });
+  if (typeof pid === "number" && pid > 0) livePid.set(sessionId, pid);
 }
 
 export function writeChild(sessionId: string, line: string): Promise<void> {
@@ -168,6 +188,7 @@ export function writeChild(sessionId: string, line: string): Promise<void> {
 }
 
 export function killChild(sessionId: string): Promise<void> {
+  livePid.delete(sessionId);
   unwatchChild(sessionId);
   return invoke("harness_kill", { sessionId });
 }
@@ -180,6 +201,7 @@ export function killAllChildren(): Promise<void> {
   sseHandlers.clear();
   sseEndHandlers.clear();
   sseBuffer.clear();
+  livePid.clear();
   return invoke("harness_kill_all");
 }
 

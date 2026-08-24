@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Block } from "../lib/session";
-import { groupTurnItems, splitActivityRows } from "./transcriptActivity";
+import {
+  groupTurnItems,
+  groupTurns,
+  splitActivityRows,
+} from "./transcriptActivity";
 
 function shell(
   id: string,
@@ -106,5 +110,26 @@ describe("splitActivityRows", () => {
     expect(rows.latest).toBeUndefined();
     expect(rows.pending.map((block) => block.id)).toEqual(["read", "run"]);
     expect(rows.hidden).toEqual([]);
+  });
+});
+
+describe("groupTurns", () => {
+  it("keeps a handoff divider on its own row between providers", () => {
+    const turns = groupTurns([
+      { id: "u1", role: "user", text: "go" },
+      { id: "a1", role: "assistant", text: "working" },
+      {
+        id: "h1",
+        role: "handoff",
+        text: "Goal: go",
+        handoff: { from: "cursor", to: "claude", status: "ready" },
+      },
+      { id: "u2", role: "user", text: "continue" },
+    ]);
+    expect(turns.map((turn) => turn.map((block) => block.id))).toEqual([
+      ["u1", "a1"],
+      ["h1"],
+      ["u2"],
+    ]);
   });
 });
