@@ -208,7 +208,7 @@ function TabHarnesses({
           }`}
         >
           {busy.has(harness) ? (
-            <TerminalSpinner className="inline-block w-3.5 select-none text-center text-[11px] leading-none" />
+            <TerminalSpinner className="inline-block w-3.5 select-none text-center text-[11px] leading-none text-accent" />
           ) : (
             <HarnessIcon harness={harness} className="size-3.5 shrink-0" />
           )}
@@ -280,6 +280,7 @@ function TitleTabItem({
   const inGroup = groupPosition != null;
   const { headline, meta, tooltip } = tabCopy(tab, { inGroup });
   const fileIcon = tab.files[0];
+  const busy = tab.busyHarnesses.length > 0;
   const showStart =
     canDrag &&
     sortable.draggingId &&
@@ -333,6 +334,12 @@ function TitleTabItem({
       {dropTarget ? (
         <div
           className={`pointer-events-none absolute inset-0 z-10 ${dropTargetTint(dropTarget)}`}
+        />
+      ) : null}
+      {busy ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-30 h-px bg-accent"
+          aria-hidden
         />
       ) : null}
       <button
