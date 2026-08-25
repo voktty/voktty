@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { HARNESS_ICONS } from "../chrome/HarnessIcon";
+import { HARNESS_ICONS, MONOCHROME_HARNESSES } from "../chrome/HarnessIcon";
 import { HARNESSES, type HarnessId } from "../lib/session";
 import {
   LOGO_CELLS,
@@ -82,6 +82,8 @@ export function TerminalGridBackground() {
         return [harness, image];
       }),
     ) as Record<HarnessId, HTMLImageElement>;
+    const tintCanvas = document.createElement("canvas");
+    const tintCtx = tintCanvas.getContext("2d");
 
     let raf = 0;
     let cols = 0;
@@ -196,8 +198,26 @@ export function TerminalGridBackground() {
       const logo = pickup ? logos[pickup.harness] : null;
       if (pickup && logo?.complete && logo.naturalWidth) {
         const span = LOGO_CELLS * PITCH - GAP;
+        const dx = pickup.x * PITCH;
+        const dy = pickup.y * PITCH;
         ctx.globalAlpha = pickup.alpha * LOGO_OPACITY;
-        ctx.drawImage(logo, pickup.x * PITCH, pickup.y * PITCH, span, span);
+        if (MONOCHROME_HARNESSES.has(pickup.harness) && tintCtx) {
+          const size = Math.max(1, Math.ceil(span));
+          if (tintCanvas.width !== size || tintCanvas.height !== size) {
+            tintCanvas.width = size;
+            tintCanvas.height = size;
+          } else {
+            tintCtx.clearRect(0, 0, size, size);
+          }
+          tintCtx.globalCompositeOperation = "source-over";
+          tintCtx.drawImage(logo, 0, 0, size, size);
+          tintCtx.globalCompositeOperation = "source-in";
+          tintCtx.fillStyle = `rgb(${rgb})`;
+          tintCtx.fillRect(0, 0, size, size);
+          ctx.drawImage(tintCanvas, dx, dy, span, span);
+        } else {
+          ctx.drawImage(logo, dx, dy, span, span);
+        }
         ctx.globalAlpha = 1;
       }
 

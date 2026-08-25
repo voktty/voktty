@@ -1,20 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
-  <path fill="#fff" fill-rule="evenodd" d="
-    M165.29 165.29
-    H517.36
-    V400
-    H400
-    V517.36
-    H282.65
-    V634.72
-    H165.29
-    Z
-    M282.65 282.65
-    V400
-    H400
-    V282.65
-    Z
-  "/>
-  <path fill="#fff" d="M517.36 400 H634.72 V634.72 H517.36 Z"/>
+<svg viewBox="-4 -4 37 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M1 1H22V14.4997H14.9998V21.2499H8.0002V28H1V1ZM8.0002 7.75014V14.4997H14.9998V7.75014H8.0002Z" fill="currentColor"/>
+<path d="M22 15H28V28H22V15Z" fill="currentColor"/>
 </svg>
