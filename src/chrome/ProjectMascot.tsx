@@ -2,7 +2,10 @@ import { MASCOT_GRID, projectMascot } from "../lib/projectMascots";
 
 type Props = {
   project: string;
-  color: string;
+  /** Project color; omit to inherit the surrounding text color. */
+  color?: string;
+  /** Explicit pick from the project menu; falls back to the hashed one. */
+  name?: string | null;
   className?: string;
   /** Cycles the mascot's two frames while a turn is in flight. */
   active?: boolean;
@@ -12,17 +15,19 @@ type Props = {
 export function ProjectMascot({
   project,
   color,
+  name,
   className = "size-3 shrink-0",
   active = false,
 }: Props) {
-  const mascot = projectMascot(project);
+  const mascot = projectMascot(project, name);
   return (
     <svg
       aria-hidden
       viewBox={`0 0 ${MASCOT_GRID} ${MASCOT_GRID}`}
       shapeRendering="crispEdges"
       className={`${className} ${active ? "mascot-active" : ""}`}
-      style={{ fill: color }}
+      fill="currentColor"
+      style={color ? { color } : undefined}
     >
       {active ? (
         <>

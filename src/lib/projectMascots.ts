@@ -257,8 +257,17 @@ export const PROJECT_MASCOTS: readonly ProjectMascot[] = Object.entries(
 export const MASCOT_GRID = GRID;
 
 /** Stable per-project pick — a different mix than the color hash so a project's
- *  mascot and color vary independently. */
-export function projectMascot(project: string): ProjectMascot {
+ *  mascot and color vary independently. An explicit `name` wins; an unknown one
+ *  falls back to the hash. */
+export function projectMascot(
+  project: string,
+  name?: string | null,
+): ProjectMascot {
+  const chosen = name
+    ? PROJECT_MASCOTS.find((mascot) => mascot.name === name)
+    : undefined;
+  if (chosen) return chosen;
+
   let hash = 0;
   for (let i = 0; i < project.length; i++) {
     hash = (hash * 131 + project.charCodeAt(i)) >>> 0;

@@ -33,6 +33,14 @@ describe("projectMascots", () => {
     );
   });
 
+  it("honors an explicit pick and ignores unknown names", () => {
+    expect(projectMascot("alpha", "ghost").name).toBe("ghost");
+    expect(projectMascot("alpha", "nope").name).toBe(
+      projectMascot("alpha").name,
+    );
+    expect(projectMascot("alpha", null).name).toBe(projectMascot("alpha").name);
+  });
+
   it("spreads projects across the roster", () => {
     const names = new Set(
       ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"].map(

@@ -44,14 +44,17 @@ import {
   loadTabGroupColors,
   loadTabGroupCustomColors,
   loadTabGroupLabels,
+  loadTabGroupMascots,
   resolveTabGroupColor,
   resolveTabGroupColorIndex,
   resolveTabGroupCustomColor,
   resolveTabGroupLabel,
   resolveTabGroupLogo,
+  resolveTabGroupMascot,
   saveTabGroupColor,
   saveTabGroupCustomColor,
   saveTabGroupLabel,
+  saveTabGroupMascot,
 } from "../lib/tabGroups";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
@@ -114,6 +117,7 @@ export function ProjectRail({
   const [pinnedPaths, setPinnedPaths] = useState(loadPinnedProjects);
   const [groupLabels, setGroupLabels] = useState(loadTabGroupLabels);
   const [groupColors, setGroupColors] = useState(loadTabGroupColors);
+  const [groupMascots, setGroupMascots] = useState(loadTabGroupMascots);
   const [groupCustomColors, setGroupCustomColors] = useState(
     loadTabGroupCustomColors,
   );
@@ -201,6 +205,11 @@ export function ProjectRail({
     saveTabGroupColor(projectKey, colorIndex);
     setGroupColors(loadTabGroupColors());
     setGroupCustomColors(loadTabGroupCustomColors());
+  };
+
+  const onProjectMascotChange = (projectKey: string, name: string | null) => {
+    saveTabGroupMascot(projectKey, name);
+    setGroupMascots(loadTabGroupMascots());
   };
 
   const onProjectCustomColorChange = (projectKey: string, color: string) => {
@@ -418,6 +427,7 @@ export function ProjectRail({
             groupColors={groupColors}
             groupCustomColors={groupCustomColors}
             groupLogos={groupLogos}
+            groupMascots={groupMascots}
           />
         ) : null}
 
@@ -438,6 +448,7 @@ export function ProjectRail({
             groupColors={groupColors}
             groupCustomColors={groupCustomColors}
             groupLogos={groupLogos}
+            groupMascots={groupMascots}
           />
         ) : null}
       </div>
@@ -469,9 +480,15 @@ export function ProjectRail({
           )}
           logoPath={resolveTabGroupLogo(projectMenu.projectKey, groupLogos)}
           logoProject={projectMenu.projectKey}
+          mascotName={resolveTabGroupMascot(
+            projectMenu.projectKey,
+            groupMascots,
+          )}
+          mascotProject={projectMenu.projectKey}
           onRename={onProjectRename}
           onColorChange={onProjectColorChange}
           onCustomColorChange={onProjectCustomColorChange}
+          onMascotChange={onProjectMascotChange}
           onLogoChange={() => {}}
           onPick={() => {}}
           onClose={() => setProjectMenu(null)}
@@ -575,6 +592,7 @@ function ProjectSection({
   groupColors,
   groupCustomColors,
   groupLogos,
+  groupMascots,
 }: {
   label: string;
   items: RecentProject[];
@@ -591,6 +609,7 @@ function ProjectSection({
   groupColors: Record<string, number>;
   groupCustomColors: Record<string, string>;
   groupLogos: ReturnType<typeof useTabGroupLogos>;
+  groupMascots: Record<string, string>;
 }) {
   return (
     <div className="shrink-0">
@@ -615,6 +634,7 @@ function ProjectSection({
             groupColors={groupColors}
             groupCustomColors={groupCustomColors}
             groupLogos={groupLogos}
+            groupMascots={groupMascots}
           />
         ))}
       </div>
@@ -640,6 +660,7 @@ function ProjectCard({
   groupColors,
   groupCustomColors,
   groupLogos,
+  groupMascots,
 }: {
   item: RecentProject;
   selected: boolean;
@@ -655,6 +676,7 @@ function ProjectCard({
   groupColors: Record<string, number>;
   groupCustomColors: Record<string, string>;
   groupLogos: ReturnType<typeof useTabGroupLogos>;
+  groupMascots: Record<string, string>;
 }) {
   const fallbackName = basename(item.path);
   const projectKey = projectName(item.path);
@@ -740,6 +762,7 @@ function ProjectCard({
                 <ProjectMascot
                   project={projectKey}
                   color={color}
+                  name={resolveTabGroupMascot(projectKey, groupMascots)}
                   className="size-3"
                   active={busy}
                 />

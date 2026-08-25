@@ -31,17 +31,20 @@ import {
   loadTabGroupColors,
   loadTabGroupCustomColors,
   loadTabGroupLabels,
+  loadTabGroupMascots,
   loadTabGroupLogos,
   reorderTabSegments,
   resolveTabGroupColor,
   resolveTabGroupColorIndex,
   resolveTabGroupCustomColor,
   resolveTabGroupLabel,
+  resolveTabGroupMascot,
   resolveTabGroupLogo,
   saveCollapsedTabGroups,
   saveTabGroupColor,
   saveTabGroupCustomColor,
   saveTabGroupLabel,
+  saveTabGroupMascot,
   sharedGroupProject,
   TAB_GROUP_LOGOS_CHANGED,
   segmentTabs,
@@ -434,6 +437,7 @@ function GroupLabel({
   collapsed,
   project,
   projectKey,
+  mascotName,
   busy,
   count,
   logoPath,
@@ -449,6 +453,7 @@ function GroupLabel({
   collapsed: boolean;
   project: string;
   projectKey: string;
+  mascotName: string | null;
   busy: boolean;
   count: number;
   logoPath?: string | null;
@@ -505,6 +510,7 @@ function GroupLabel({
         <ProjectMascot
           project={projectKey}
           color={color}
+          name={mascotName}
           className="size-3 min-w-3 shrink-0"
           active={busy}
         />
@@ -525,6 +531,7 @@ function TabGroupBlock({
   displayColor,
   displayLabel,
   projectKey,
+  mascotName,
   logoPath,
   activeId,
   closable,
@@ -546,6 +553,7 @@ function TabGroupBlock({
   displayColor: string;
   displayLabel: string;
   projectKey: string;
+  mascotName: string | null;
   logoPath?: string | null;
   activeId: string;
   closable: boolean;
@@ -618,6 +626,7 @@ function TabGroupBlock({
         collapsed={collapsed}
         project={displayLabel}
         projectKey={projectKey}
+        mascotName={mascotName}
         busy={groupBusy}
         count={segment.tabs.length}
         logoPath={logoPath}
@@ -877,6 +886,7 @@ function TitleBarComponent({
   );
   const [groupLabels, setGroupLabels] = useState(loadTabGroupLabels);
   const [groupLogos, setGroupLogos] = useState(loadTabGroupLogos);
+  const [groupMascots, setGroupMascots] = useState(loadTabGroupMascots);
   const [groupMenu, setGroupMenu] = useState<{
     x: number;
     y: number;
@@ -1021,6 +1031,14 @@ function TitleBarComponent({
     setGroupLabels(loadTabGroupLabels());
   }, []);
 
+  const onGroupMascotChange = useCallback(
+    (projectKey: string, name: string | null) => {
+      saveTabGroupMascot(projectKey, name);
+      setGroupMascots(loadTabGroupMascots());
+    },
+    [],
+  );
+
   const onGroupColorChange = useCallback(
     (projectKey: string, colorIndex: number | null) => {
       saveTabGroupColor(projectKey, colorIndex);
@@ -1123,14 +1141,14 @@ function TitleBarComponent({
     currentProjectKey,
     groupLogos,
   );
+  const currentProjectBusy = tabs.some(
+    (tab) => tab.project === currentProjectKey && tab.busyHarnesses.length > 0,
+  );
   const currentProjectColor = resolveTabGroupColor(
     currentProjectKey,
     groupColors,
     groupCustomColors,
     currentProjectKey,
-  );
-  const currentProjectBusy = tabs.some(
-    (tab) => tab.project === currentProjectKey && tab.busyHarnesses.length > 0,
   );
   const showCurrentProject = looksLikeProject(cwd);
   const trailingControls = (
@@ -1190,6 +1208,10 @@ function TitleBarComponent({
                     <ProjectMascot
                       project={currentProjectKey}
                       color={currentProjectColor}
+                      name={resolveTabGroupMascot(
+                        currentProjectKey,
+                        groupMascots,
+                      )}
                       className="size-3 shrink-0"
                       active={currentProjectBusy}
                     />
@@ -1303,6 +1325,10 @@ function TitleBarComponent({
                       shared || "Group",
                     )}
                     projectKey={shared || segment.key}
+                    mascotName={resolveTabGroupMascot(
+                      segment.key,
+                      groupMascots,
+                    )}
                     logoPath={
                       shared ? resolveTabGroupLogo(shared, groupLogos) : null
                     }
@@ -1410,9 +1436,12 @@ function TitleBarComponent({
                 : null
             }
             logoProject={groupMenuShared}
+            mascotName={resolveTabGroupMascot(groupMenu.groupId, groupMascots)}
+            mascotProject={groupMenuShared || groupMenu.groupId}
             onRename={onGroupRename}
             onColorChange={onGroupColorChange}
             onCustomColorChange={onGroupCustomColorChange}
+            onMascotChange={onGroupMascotChange}
             onLogoChange={onGroupLogoChange}
             onPick={onGroupMenuPick}
             onClose={() => setGroupMenu(null)}

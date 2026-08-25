@@ -13,13 +13,16 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { normalizeHex } from "../lib/colorUtils";
 import { clearProjectLogo, pickAndSetProjectLogo } from "../lib/projectLogos";
+import { PROJECT_MASCOTS, projectMascot } from "../lib/projectMascots";
 import { TAB_GROUP_COLORS } from "../lib/tabGroups";
 import { ColorPickerPopover } from "./ColorPickerPopover";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
+import { ProjectMascot } from "./ProjectMascot";
 import { MOD } from "../lib/platform";
 
 export type TabGroupMenuAction =
@@ -45,9 +48,14 @@ type Props = {
   currentColor: string;
   logoPath: string | null;
   logoProject?: string | null;
+  /** Explicit mascot pick; null means the one hashed from `mascotProject`. */
+  mascotName: string | null;
+  /** Key the fallback mascot is hashed from — same one the icon uses. */
+  mascotProject: string;
   onRename: (groupId: string, label: string) => void;
   onColorChange: (groupId: string, colorIndex: number | null) => void;
   onCustomColorChange: (groupId: string, color: string) => void;
+  onMascotChange: (groupId: string, name: string | null) => void;
   onLogoChange: () => void;
   onPick: (action: TabGroupMenuAction) => void;
   onClose: () => void;
@@ -108,9 +116,12 @@ export function TabGroupMenu({
   currentColor,
   logoPath,
   logoProject,
+  mascotName,
+  mascotProject,
   onRename,
   onColorChange,
   onCustomColorChange,
+  onMascotChange,
   onLogoChange,
   onPick,
   onClose,
@@ -167,6 +178,8 @@ export function TabGroupMenu({
       window.removeEventListener("keydown", onKey, true);
     };
   }, []);
+
+  const shownMascot = projectMascot(mascotProject, mascotName).name;
 
   const commitName = () => {
     onRename(groupId, name.trim());
@@ -325,6 +338,26 @@ export function TabGroupMenu({
         />
       ) : null}
 
+      <div className="mb-2 px-0.5">
+        <p className="mb-1 text-[11px] text-content/50">Mascot</p>
+        <div className="flex items-center justify-between gap-1">
+          {PROJECT_MASCOTS.map((mascot) => (
+            <MascotSwatch
+              key={mascot.name}
+              title={mascot.name}
+              selected={shownMascot === mascot.name}
+              onPick={() => onMascotChange(groupId, mascot.name)}
+            >
+              <ProjectMascot
+                project={groupId}
+                name={mascot.name}
+                className="size-3 text-content/75"
+              />
+            </MascotSwatch>
+          ))}
+        </div>
+      </div>
+
       {showActions ? (
         <>
           <div className="my-1 h-px bg-content/10" />
@@ -364,6 +397,34 @@ export function TabGroupMenu({
       ) : null}
     </div>,
     document.body,
+  );
+}
+
+function MascotSwatch({
+  title,
+  selected,
+  onPick,
+  children,
+}: {
+  title: string;
+  selected: boolean;
+  onPick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={`Mascot ${title}`}
+      aria-pressed={selected}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onPick}
+      className={`grid size-5 shrink-0 place-items-center rounded-md ${
+        selected ? "bg-content/15 ring-1 ring-content/50" : "hover:bg-content/8"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
