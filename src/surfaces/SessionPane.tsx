@@ -9,7 +9,7 @@ import {
 import { Composer } from "../chrome/Composer";
 import { SessionReview } from "../chrome/SessionReview";
 import type { ApprovalDecision } from "../lib/harness";
-import type { RecentProject } from "../lib/recents";
+import { looksLikeProject, type RecentProject } from "../lib/recents";
 import {
   sessionDisplayTitle,
   type Attachment,
@@ -95,6 +95,8 @@ export const SessionPane = memo(function SessionPane({
     jumpToBottomRef.current = jump;
   }, []);
   const isEmpty = session.blocks.length === 0;
+  const showDeckProjectPicker =
+    isEmpty && !looksLikeProject(session.cwd);
   const dockComposer = !isEmpty || inSplit;
   const composer = (
     <Composer
@@ -108,7 +110,9 @@ export const SessionPane = memo(function SessionPane({
       runtimeMode={session.runtimeMode}
       cwd={session.cwd}
       recents={recents}
-      hideProjectPicker={hideProjectPicker && !isEmpty}
+      hideProjectPicker={
+        hideProjectPicker ? !showDeckProjectPicker : false
+      }
       context={session.context}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}
