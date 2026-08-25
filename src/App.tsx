@@ -2873,72 +2873,77 @@ export default function App({
         />
 
         <main className="relative min-h-0 min-w-0 flex-1">
-          {tabs.map((tab) => (
-            <div
-              key={tab.id}
-              aria-hidden={tab.id !== activeTabId}
-              className={
-                tab.id === activeTabId
-                  ? "absolute inset-0 flex h-full min-h-0 flex-row"
-                  : "hidden"
-              }
-            >
-              <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                <PaneTree
-                  visible={tab.id === activeTabId}
-                  layout={tab.layout}
-                  sessions={sessions}
-                  editorPanes={[
-                    ...tab.editorPanes,
-                    ...(tab.terminalPanes ?? []),
-                  ]}
-                  dirtyFileIds={dirtyFiles}
-                  fileErrorCounts={fileErrorCounts}
-                  focusedId={
-                    tab.id === activeTabId && !tab.diffFocused
-                      ? tab.focusedId
-                      : ""
+          <div className="absolute inset-0 flex h-full min-h-0 flex-row">
+            <div className="relative min-h-0 min-w-0 flex-1">
+              {tabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  aria-hidden={tab.id !== activeTabId}
+                  className={
+                    tab.id === activeTabId
+                      ? "absolute inset-0 flex h-full min-h-0 flex-col"
+                      : "hidden"
                   }
-                  composerFocused={composerFocused}
-                  recents={recents}
-                  onFocus={onFocusPane}
-                  onClose={onClosePane}
-                  onSelectFile={onSelectFileSurface}
-                  onCloseFile={onCloseFile}
-                  onReorderFiles={onReorderFiles}
-                  onFileDirtyChange={onFileDirtyChange}
-                  onFileErrorCountChange={onFileErrorCountChange}
-                  onRatio={(splitId, index, ratio) =>
-                    onRatio(tab.id, splitId, index, ratio)
-                  }
-                  onCwdChange={onCwdChange}
-                  onModelChange={onModelChange}
-                  onModelSettingsChange={onModelSettingsChange}
-                  onRuntimeModeChange={onRuntimeModeChange}
-                  onSubmit={onSubmit}
-                  onStop={onStop}
-                  onApproval={onApproval}
-                  onOpenFile={onOpenFile}
-                  editorNavigation={editorNavigation}
-                  onOpenDiff={onOpenDiff}
-                  onOpenPlan={onOpenPlan}
-                  onMovePane={onMovePane}
-                  onNewTerminal={onNewTerminalInSession}
-                  onTerminalMetaChange={onTerminalMetaChange}
-                />
-              </div>
-              {tab.diffOpen && tab.id === activeTabId ? (
-                <DiffPane
-                  cwd={sidebarCwd}
-                  textHarness={pickTextHarness(active?.harness)}
-                  selectedPath={selectedChangePath(tab)}
-                  focused={tab.id === activeTabId && !!tab.diffFocused}
-                  onFocus={onFocusDiff}
-                  onOpenFile={onOpenDiff}
-                />
-              ) : null}
+                >
+                  <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                    <PaneTree
+                      visible={tab.id === activeTabId}
+                      layout={tab.layout}
+                      sessions={sessions}
+                      editorPanes={[
+                        ...tab.editorPanes,
+                        ...(tab.terminalPanes ?? []),
+                      ]}
+                      dirtyFileIds={dirtyFiles}
+                      fileErrorCounts={fileErrorCounts}
+                      focusedId={
+                        tab.id === activeTabId && !tab.diffFocused
+                          ? tab.focusedId
+                          : ""
+                      }
+                      composerFocused={composerFocused}
+                      recents={recents}
+                      onFocus={onFocusPane}
+                      onClose={onClosePane}
+                      onSelectFile={onSelectFileSurface}
+                      onCloseFile={onCloseFile}
+                      onReorderFiles={onReorderFiles}
+                      onFileDirtyChange={onFileDirtyChange}
+                      onFileErrorCountChange={onFileErrorCountChange}
+                      onRatio={(splitId, index, ratio) =>
+                        onRatio(tab.id, splitId, index, ratio)
+                      }
+                      onCwdChange={onCwdChange}
+                      onModelChange={onModelChange}
+                      onModelSettingsChange={onModelSettingsChange}
+                      onRuntimeModeChange={onRuntimeModeChange}
+                      onSubmit={onSubmit}
+                      onStop={onStop}
+                      onApproval={onApproval}
+                      onOpenFile={onOpenFile}
+                      editorNavigation={editorNavigation}
+                      onOpenDiff={onOpenDiff}
+                      onOpenPlan={onOpenPlan}
+                      onMovePane={onMovePane}
+                      onNewTerminal={onNewTerminalInSession}
+                      onTerminalMetaChange={onTerminalMetaChange}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+            {activeTab?.diffOpen ? (
+              <DiffPane
+                key={sidebarCwd ?? ""}
+                cwd={sidebarCwd}
+                textHarness={pickTextHarness(active?.harness)}
+                selectedPath={selectedChangePath(activeTab)}
+                focused={!!activeTab.diffFocused}
+                onFocus={onFocusDiff}
+                onOpenFile={onOpenDiff}
+              />
+            ) : null}
+          </div>
         </main>
       </div>
 

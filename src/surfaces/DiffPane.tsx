@@ -56,6 +56,8 @@ const GIT_POLL_MS = 2000;
 let rememberedWidth = DEFAULT_WIDTH;
 let stagedOpen = true;
 let changesOpen = true;
+const indexByCwd = new Map<string, GitDiffIndex>();
+const prByCwd = new Map<string, GitPr | null>();
 
 function clampDiffWidth(value: number) {
   const max = Math.min(
@@ -623,7 +625,7 @@ function usePrStatus(
   cwd: string,
   branch: string | null | undefined,
 ): { pr: GitPr | null; reload: () => void } {
-  const [pr, setPr] = useState<GitPr | null>(null);
+  const [pr, setPr] = useState<GitPr | null>(() => cachedPr(cwd, branch));
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => setNonce((value) => value + 1), []);
 
@@ -636,10 +638,14 @@ function usePrStatus(
     const load = () => {
       void gitPrStatus(cwd)
         .then((next) => {
-          if (!cancelled) setPr(next);
+          if (cancelled) return;
+          prByCwd.set(cwd, next);
+          setPr(next);
         })
         .catch(() => {
-          if (!cancelled) setPr(null);
+          if (cancelled) return;
+          prByCwd.set(cwd, null);
+          setPr(null);
         });
     };
     load();
@@ -652,6 +658,14 @@ function usePrStatus(
   }, [branch, cwd, nonce]);
 
   return { pr, reload };
+}
+
+function cachedPr(
+  cwd: string,
+  branch: string | null | undefined,
+): GitPr | null {
+  if (!cwd || cwd === "~" || !branch) return null;
+  return prByCwd.get(cwd) ?? null;
 }
 
 function syncStatusLabel(index: GitDiffIndex): string {
@@ -1018,7 +1032,9 @@ function useDiffIndex(cwd: string): {
   index: GitDiffIndex | null;
   reload: () => void;
 } {
-  const [index, setIndex] = useState<GitDiffIndex | null>(null);
+  const [index, setIndex] = useState<GitDiffIndex | null>(
+    () => cachedIndex(cwd),
+  );
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => setNonce((value) => value + 1), []);
   const indexRef = useRef(index);
@@ -1028,6 +1044,11 @@ function useDiffIndex(cwd: string): {
     if (!cwd || cwd === "~") {
       setIndex(null);
       return;
+    }
+    const cached = cachedIndex(cwd);
+    if (cached && !sameIndex(indexRef.current, cached)) {
+      indexRef.current = cached;
+      setIndex(cached);
     }
     let cancelled = false;
     let inFlight = false;
@@ -1045,6 +1066,7 @@ function useDiffIndex(cwd: string): {
         if (cancelled) return;
         const prev = indexRef.current;
         if (sameIndex(prev, next)) return;
+        indexByCwd.set(cwd, next);
         indexRef.current = next;
         setIndex(next);
         applyProjectDiffStats(cwd, {
@@ -1058,7 +1080,10 @@ function useDiffIndex(cwd: string): {
           notifyGitChanged();
         }
       } catch {
-        if (!cancelled) setIndex(null);
+        if (!cancelled) {
+          indexByCwd.delete(cwd);
+          setIndex(null);
+        }
       } finally {
         inFlight = false;
         if (pending && !cancelled) {
@@ -1086,6 +1111,11 @@ function useDiffIndex(cwd: string): {
   }, [cwd, nonce]);
 
   return { index, reload };
+}
+
+function cachedIndex(cwd: string | undefined): GitDiffIndex | null {
+  if (!cwd || cwd === "~") return null;
+  return indexByCwd.get(cwd) ?? null;
 }
 
 function changedFilePaths(prev: GitDiffIndex, next: GitDiffIndex): string[] {
