@@ -1,12 +1,21 @@
 import {
+  FolderOpen,
   Inbox,
+  MoreHorizontal,
   Pin,
   PinOff,
   Plus,
   Search,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
@@ -17,7 +26,7 @@ import {
   PROJECT_RAIL_WIDTH_MIN,
   saveProjectRailWidth,
 } from "../lib/appearance";
-import { basename } from "../lib/fs";
+import { basename, revealPath } from "../lib/fs";
 import { IS_MAC } from "../lib/platform";
 import { projectName } from "../lib/paths";
 import {
@@ -31,12 +40,39 @@ import {
   syncProjectRailOrder,
   type RecentProject,
 } from "../lib/recents";
-import { resolveTabGroupLogo } from "../lib/tabGroups";
-import { FileTypeIcon } from "./FileTypeIcon";
+import {
+  loadTabGroupColors,
+  loadTabGroupCustomColors,
+  loadTabGroupLabels,
+  resolveTabGroupColor,
+  resolveTabGroupColorIndex,
+  resolveTabGroupCustomColor,
+  resolveTabGroupLabel,
+  resolveTabGroupLogo,
+  saveTabGroupColor,
+  saveTabGroupCustomColor,
+  saveTabGroupLabel,
+} from "../lib/tabGroups";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
 import { SidebarUpdate } from "./SidebarUpdate";
+import { TabGroupMenu, type TabGroupMenuExtraItem } from "./TabGroupMenu";
+
+const REVEAL_LABEL = IS_MAC
+  ? "Reveal in Finder"
+  : typeof navigator !== "undefined" && /Win/.test(navigator.platform)
+    ? "Reveal in File Explorer"
+    : "Open Containing Folder";
+
+function projectMenuExtraItems(pinned: boolean): TabGroupMenuExtraItem[] {
+  return [
+    pinned
+      ? { id: "unpin", label: "Unpin project", icon: PinOff }
+      : { id: "pin", label: "Pin project", icon: Pin },
+    { id: "reveal", label: REVEAL_LABEL, icon: FolderOpen },
+  ];
+}
 
 type Props = {
   cwd: string;
@@ -76,7 +112,19 @@ export function ProjectRail({
   const [dragging, setDragging] = useState(false);
   const [railOrder, setRailOrder] = useState(loadProjectRailOrder);
   const [pinnedPaths, setPinnedPaths] = useState(loadPinnedProjects);
+  const [groupLabels, setGroupLabels] = useState(loadTabGroupLabels);
+  const [groupColors, setGroupColors] = useState(loadTabGroupColors);
+  const [groupCustomColors, setGroupCustomColors] = useState(
+    loadTabGroupCustomColors,
+  );
+  const [projectMenu, setProjectMenu] = useState<{
+    x: number;
+    y: number;
+    path: string;
+    projectKey: string;
+  } | null>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const groupLogos = useTabGroupLogos();
   const navRef = useRef<HTMLElement>(null);
   const drag = useRef<{ startX: number; startW: number } | null>(null);
@@ -114,6 +162,52 @@ export function ProjectRail({
       return next;
     });
   }, [allProjects]);
+
+  useEffect(() => {
+    if (!projectMenu) return;
+    const onScroll = () => setProjectMenu(null);
+    const scrollParent = scrollRef.current ?? window;
+    scrollParent.addEventListener("scroll", onScroll, true);
+    return () => scrollParent.removeEventListener("scroll", onScroll, true);
+  }, [projectMenu]);
+
+  const openProjectMenu = (path: string, x: number, y: number) => {
+    setProjectMenu({
+      x,
+      y,
+      path,
+      projectKey: projectName(path),
+    });
+  };
+
+  const onProjectContextMenu = (
+    path: string,
+    event: MouseEvent<HTMLElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openProjectMenu(path, event.clientX, event.clientY);
+  };
+
+  const onProjectRename = (projectKey: string, label: string) => {
+    saveTabGroupLabel(projectKey, label);
+    setGroupLabels(loadTabGroupLabels());
+  };
+
+  const onProjectColorChange = (
+    projectKey: string,
+    colorIndex: number | null,
+  ) => {
+    saveTabGroupColor(projectKey, colorIndex);
+    setGroupColors(loadTabGroupColors());
+    setGroupCustomColors(loadTabGroupCustomColors());
+  };
+
+  const onProjectCustomColorChange = (projectKey: string, color: string) => {
+    saveTabGroupCustomColor(projectKey, color);
+    setGroupColors(loadTabGroupColors());
+    setGroupCustomColors(loadTabGroupCustomColors());
+  };
 
   const clamp = (value: number) => {
     const max = Math.min(
@@ -237,6 +331,13 @@ export function ProjectRail({
     savePinnedProjects(next);
   };
 
+  const onProjectMenuPick = (action: string) => {
+    if (!projectMenu) return;
+    const { path } = projectMenu;
+    if (action === "pin" || action === "unpin") onTogglePin(path);
+    else if (action === "reveal") void revealPath(path);
+  };
+
   const pinnedIds = sections.pinned.map((item) => item.path);
   const projectIds = sections.projects.map((item) => item.path);
   const pinnedSortable = useSortable(pinnedIds, onReorderPinned, {
@@ -289,7 +390,10 @@ export function ProjectRail({
       </div>
 
       <div
-        ref={lockOverscroll}
+        ref={(el) => {
+          lockOverscroll(el);
+          scrollRef.current = el;
+        }}
         className={`flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none pb-2 transition-opacity ${
           inboxOpen ? "opacity-50" : ""
         }`}
@@ -307,11 +411,16 @@ export function ProjectRail({
             cwd={cwd}
             inboxOpen={inboxOpen}
             busy={busy}
-            groupLogos={groupLogos}
             sortable={pinnedSortable}
             pinned
             onSelect={onSelectProject}
             onTogglePin={onTogglePin}
+            onContextMenu={onProjectContextMenu}
+            onOpenMenu={openProjectMenu}
+            groupLabels={groupLabels}
+            groupColors={groupColors}
+            groupCustomColors={groupCustomColors}
+            groupLogos={groupLogos}
           />
         ) : null}
 
@@ -322,15 +431,62 @@ export function ProjectRail({
             cwd={cwd}
             inboxOpen={inboxOpen}
             busy={busy}
-            groupLogos={groupLogos}
             sortable={projectSortable}
             pinned={false}
             onSelect={onSelectProject}
             onTogglePin={onTogglePin}
+            onContextMenu={onProjectContextMenu}
+            onOpenMenu={openProjectMenu}
+            groupLabels={groupLabels}
+            groupColors={groupColors}
+            groupCustomColors={groupCustomColors}
+            groupLogos={groupLogos}
           />
         ) : null}
       </div>
       <SidebarUpdate />
+      {projectMenu ? (
+        <TabGroupMenu
+          x={projectMenu.x}
+          y={projectMenu.y}
+          groupId={projectMenu.projectKey}
+          label={resolveTabGroupLabel(
+            projectMenu.projectKey,
+            groupLabels,
+            basename(projectMenu.path),
+          )}
+          colorIndex={resolveTabGroupColorIndex(
+            projectMenu.projectKey,
+            groupColors,
+            groupCustomColors,
+          )}
+          customColor={resolveTabGroupCustomColor(
+            projectMenu.projectKey,
+            groupCustomColors,
+          )}
+          currentColor={resolveTabGroupColor(
+            projectMenu.projectKey,
+            groupColors,
+            groupCustomColors,
+            projectMenu.projectKey,
+          )}
+          logoPath={resolveTabGroupLogo(projectMenu.projectKey, groupLogos)}
+          logoProject={projectMenu.projectKey}
+          onRename={onProjectRename}
+          onColorChange={onProjectColorChange}
+          onCustomColorChange={onProjectCustomColorChange}
+          onLogoChange={() => {}}
+          onPick={() => {}}
+          onClose={() => setProjectMenu(null)}
+          showActions={false}
+          extraItems={projectMenuExtraItems(
+            pinnedPaths.some((pinned) =>
+              sameProjectPath(pinned, projectMenu.path),
+            ),
+          )}
+          onExtraPick={onProjectMenuPick}
+        />
+      ) : null}
       <div
         role="separator"
         aria-orientation="vertical"
@@ -372,7 +528,7 @@ function RailAction({
       onClick={onClick}
       disabled={!onClick}
       aria-label={ariaLabel ?? label}
-      className={`relative flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left ${
+      className={`relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${
         active
           ? "bg-content/12 text-content"
           : "text-content/75 hover:bg-content/5 hover:text-content"
@@ -405,22 +561,32 @@ function ProjectSection({
   cwd,
   inboxOpen,
   busy,
-  groupLogos,
   sortable,
   pinned,
   onSelect,
   onTogglePin,
+  onContextMenu,
+  onOpenMenu,
+  groupLabels,
+  groupColors,
+  groupCustomColors,
+  groupLogos,
 }: {
   label: string;
   items: RecentProject[];
   cwd: string;
   inboxOpen: boolean;
   busy: Set<string>;
-  groupLogos: ReturnType<typeof useTabGroupLogos>;
   sortable: SortableHandle;
   pinned: boolean;
   onSelect: (path: string) => void;
   onTogglePin: (path: string) => void;
+  onContextMenu: (path: string, event: MouseEvent<HTMLElement>) => void;
+  onOpenMenu: (path: string, x: number, y: number) => void;
+  groupLabels: Record<string, string>;
+  groupColors: Record<string, number>;
+  groupCustomColors: Record<string, string>;
+  groupLogos: ReturnType<typeof useTabGroupLogos>;
 }) {
   return (
     <div className="shrink-0">
@@ -435,11 +601,16 @@ function ProjectSection({
             selected={!inboxOpen && sameProjectPath(item.path, cwd)}
             busy={isBusyPath(item.path, busy)}
             pinned={pinned}
-            logoPath={resolveTabGroupLogo(projectName(item.path), groupLogos)}
             sortable={sortable}
             index={index}
             onSelect={onSelect}
             onTogglePin={onTogglePin}
+            onContextMenu={onContextMenu}
+            onOpenMenu={onOpenMenu}
+            groupLabels={groupLabels}
+            groupColors={groupColors}
+            groupCustomColors={groupCustomColors}
+            groupLogos={groupLogos}
           />
         ))}
       </div>
@@ -452,23 +623,42 @@ function ProjectCard({
   selected,
   busy,
   pinned,
-  logoPath,
   sortable,
   index,
   onSelect,
   onTogglePin,
+  onContextMenu,
+  onOpenMenu,
+  groupLabels,
+  groupColors,
+  groupCustomColors,
+  groupLogos,
 }: {
   item: RecentProject;
   selected: boolean;
   busy: boolean;
   pinned: boolean;
-  logoPath: string | null;
   sortable: SortableHandle;
   index: number;
   onSelect: (path: string) => void;
   onTogglePin: (path: string) => void;
+  onContextMenu: (path: string, event: MouseEvent<HTMLElement>) => void;
+  onOpenMenu: (path: string, x: number, y: number) => void;
+  groupLabels: Record<string, string>;
+  groupColors: Record<string, number>;
+  groupCustomColors: Record<string, string>;
+  groupLogos: ReturnType<typeof useTabGroupLogos>;
 }) {
-  const name = basename(item.path);
+  const fallbackName = basename(item.path);
+  const projectKey = projectName(item.path);
+  const name = resolveTabGroupLabel(projectKey, groupLabels, fallbackName);
+  const logoPath = resolveTabGroupLogo(projectKey, groupLogos);
+  const color = resolveTabGroupColor(
+    projectKey,
+    groupColors,
+    groupCustomColors,
+    projectKey,
+  );
   const dragging = sortable.draggingId === item.path;
   const showStart =
     sortable.draggingId &&
@@ -484,7 +674,7 @@ function ProjectCard({
   return (
     <div
       ref={(el) => sortable.setItemRef(item.path, el)}
-      className={`group relative flex touch-none items-stretch rounded-lg px-2 py-2 ${
+      className={`group relative flex touch-none items-stretch rounded-md px-2 py-2 ${
         selected
           ? "bg-content/12 text-content"
           : "text-content/75 hover:bg-content/5 hover:text-content"
@@ -503,6 +693,7 @@ function ProjectCard({
         if (sortable.consumeClick()) return;
         onSelect(item.path);
       }}
+      onContextMenu={(event) => onContextMenu(item.path, event)}
     >
       {showStart ? (
         <div className="pointer-events-none absolute inset-x-2 top-0 z-20 h-0.5 rounded-full bg-accent" />
@@ -515,7 +706,7 @@ function ProjectCard({
         title={item.path}
         aria-label={name}
         aria-current={selected ? "true" : undefined}
-        className="flex min-w-0 flex-1 cursor-default items-center gap-2 text-left"
+        className="flex min-w-0 flex-1 cursor-default items-center gap-2 pr-5 text-left group-hover:pr-6"
       >
         <div className="relative size-4 shrink-0">
           <div className="grid size-4 place-items-center transition-opacity group-hover:opacity-0">
@@ -526,7 +717,13 @@ function ProjectCard({
                 imageClassName="size-4"
               />
             ) : (
-              <FileTypeIcon name={name} isDir isRoot size={14} />
+              <div className="size-4 flex items-center justify-center">
+                <span
+                  aria-hidden
+                  className="block size-2 rounded-full"
+                  style={{ background: color }}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -538,6 +735,21 @@ function ProjectCard({
             <TerminalSpinner className="inline-block w-2.5 select-none text-center text-[9px] leading-none text-accent" />
           </span>
         ) : null}
+      </button>
+      <button
+        type="button"
+        data-no-drag
+        title="Project options"
+        aria-label="Project options"
+        aria-haspopup="menu"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenMenu(item.path, event.clientX, event.clientY);
+        }}
+        className="absolute right-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-content/55 opacity-0 pointer-events-none transition-opacity hover:bg-content/8 hover:text-content group-hover:pointer-events-auto group-hover:opacity-100"
+      >
+        <MoreHorizontal className="size-4" strokeWidth={1.75} />
       </button>
       <button
         type="button"

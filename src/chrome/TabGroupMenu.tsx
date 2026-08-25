@@ -29,6 +29,12 @@ export type TabGroupMenuAction =
   | "ungroup"
   | "delete-group";
 
+export type TabGroupMenuExtraItem = {
+  id: string;
+  label: string;
+  icon: typeof SquarePlus;
+};
+
 type Props = {
   x: number;
   y: number;
@@ -45,17 +51,23 @@ type Props = {
   onLogoChange: () => void;
   onPick: (action: TabGroupMenuAction) => void;
   onClose: () => void;
+  /** When false, only name / logo / color controls are shown. */
+  showActions?: boolean;
+  extraItems?: TabGroupMenuExtraItem[];
+  onExtraPick?: (id: string) => void;
 };
 
 const MENU_WIDTH = 260;
 
-const ITEMS: {
-  id: TabGroupMenuAction;
+type MenuItem = {
+  id: string;
   label: string;
   shortcut?: string;
   danger?: boolean;
   icon: typeof SquarePlus;
-}[] = [
+};
+
+const ITEMS: MenuItem[] = [
   {
     id: "new-tab",
     label: "New tab in group",
@@ -102,6 +114,9 @@ export function TabGroupMenu({
   onLogoChange,
   onPick,
   onClose,
+  showActions = true,
+  extraItems,
+  onExtraPick,
 }: Props) {
   const menu = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -310,23 +325,43 @@ export function TabGroupMenu({
         />
       ) : null}
 
-      <div className="my-1 h-px bg-content/10" />
+      {showActions ? (
+        <>
+          <div className="my-1 h-px bg-content/10" />
 
-      {ITEMS.slice(0, 2).map((item) => (
-        <MenuRow key={item.id} item={item} onPick={() => onPick(item.id)} />
-      ))}
+          {ITEMS.slice(0, 2).map((item) => (
+            <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
+          ))}
 
-      <div className="my-1 h-px bg-content/10" />
+          <div className="my-1 h-px bg-content/10" />
 
-      {ITEMS.slice(2, 4).map((item) => (
-        <MenuRow key={item.id} item={item} onPick={() => onPick(item.id)} />
-      ))}
+          {ITEMS.slice(2, 4).map((item) => (
+            <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
+          ))}
 
-      <div className="my-1 h-px bg-content/10" />
+          <div className="my-1 h-px bg-content/10" />
 
-      {ITEMS.slice(4).map((item) => (
-        <MenuRow key={item.id} item={item} onPick={() => onPick(item.id)} />
-      ))}
+          {ITEMS.slice(4).map((item) => (
+            <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
+          ))}
+        </>
+      ) : null}
+
+      {extraItems && extraItems.length > 0 ? (
+        <>
+          <div className="my-1 h-px bg-content/10" />
+          {extraItems.map((item) => (
+            <MenuRow
+              key={item.id}
+              item={item}
+              onPick={() => {
+                onExtraPick?.(item.id);
+                onClose();
+              }}
+            />
+          ))}
+        </>
+      ) : null}
     </div>,
     document.body,
   );
@@ -336,7 +371,7 @@ function MenuRow({
   item,
   onPick,
 }: {
-  item: (typeof ITEMS)[number];
+  item: MenuItem;
   onPick: () => void;
 }) {
   const Icon = item.icon;

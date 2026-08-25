@@ -33,10 +33,8 @@ export function InboxPanel({
       style={{ width }}
       className="sidebar-glass relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
     >
-      <div className="flex h-9.75 shrink-0 items-center border-b border-content/10 px-3">
-        <span className="text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
-          Inbox
-        </span>
+      <div className="flex h-10 shrink-0 items-center border-b border-content/10 px-3">
+        <span className="text-sm font-medium text-content">Inbox</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-none">
         {items.length === 0 ? (
@@ -96,7 +94,10 @@ function InboxSessionCard({
     >
       <span className="flex items-center gap-2">
         <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          <HarnessIcon harness={session.harness} className="size-3.5 shrink-0" />
+          <HarnessIcon
+            harness={session.harness}
+            className="size-3.5 shrink-0"
+          />
           <span className="min-w-0 truncate text-[11px] text-content/50">
             {project}
           </span>
