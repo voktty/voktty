@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-25
+
 ### Added
 
 - Handoff: switching providers mid-session continues the chat on the next send. The new message goes to the incoming provider with a short recap of what happened and any files this chat edited. The divider shows a spinner and “Preparing a handoff” until that provider starts, then its logo and name.
@@ -105,7 +107,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/hardbeat920/monocode/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/hardbeat920/monocode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/hardbeat920/monocode/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/hardbeat920/monocode/compare/v0.1.2...v0.1.3
