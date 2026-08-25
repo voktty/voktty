@@ -155,7 +155,7 @@ import {
   rememberProject,
   sameProjectPath,
 } from "./lib/recents";
-import { findTabForProject } from "./lib/workspaceTabGroups";
+import { findTabForProject, filterTabsForProject, workspaceTabCwd } from "./lib/workspaceTabGroups";
 import {
   HARNESS_LABEL,
   canReplaceSessionTitle,
@@ -891,11 +891,21 @@ export default function App({
   const activateTab = useCallback((id: string) => {
     setActiveTabId(id);
     const tab = tabsRef.current.find((entry) => entry.id === id);
+    if (deckLayout && tab) {
+      const cwd = workspaceTabCwd(tab, sessionsRef.current);
+      if (cwd && looksLikeProject(cwd)) {
+        const normalized = normalizeProjectPath(cwd);
+        if (!sameProjectPath(normalized, projectCwdRef.current)) {
+          setProjectCwd(normalized);
+          setRecents(rememberProject(normalized));
+        }
+      }
+    }
     setComposerFocused(
       !!tab &&
         sessionsRef.current.some((session) => session.id === tab.focusedId),
     );
-  }, []);
+  }, [deckLayout]);
 
   const commitTabVisit = useCallback((history: TabVisitHistory) => {
     tabVisitRef.current = history;
@@ -1468,17 +1478,27 @@ export default function App({
     ],
   );
 
+  const deckProjectTabs = useMemo(
+    () =>
+      deckLayout
+        ? filterTabsForProject(tabs, sessions, projectCwd)
+        : tabs,
+    [deckLayout, tabs, sessions, projectCwd],
+  );
+
   const onNext = useCallback(() => {
-    const index = tabs.findIndex((t) => t.id === activeTabId);
-    if (index >= 0) activateTab(tabs[(index + 1) % tabs.length].id);
-  }, [activateTab, activeTabId, tabs]);
+    const scope = deckLayout ? deckProjectTabs : tabs;
+    const index = scope.findIndex((t) => t.id === activeTabId);
+    if (index >= 0) activateTab(scope[(index + 1) % scope.length].id);
+  }, [activateTab, activeTabId, deckLayout, deckProjectTabs, tabs]);
 
   const onPrev = useCallback(() => {
-    const index = tabs.findIndex((t) => t.id === activeTabId);
+    const scope = deckLayout ? deckProjectTabs : tabs;
+    const index = scope.findIndex((t) => t.id === activeTabId);
     if (index >= 0) {
-      activateTab(tabs[(index - 1 + tabs.length) % tabs.length].id);
+      activateTab(scope[(index - 1 + scope.length) % scope.length].id);
     }
-  }, [activateTab, activeTabId, tabs]);
+  }, [activateTab, activeTabId, deckLayout, deckProjectTabs, tabs]);
 
   const onVisitBack = useCallback(() => {
     const openIds = new Set(tabsRef.current.map((tab) => tab.id));
@@ -1510,10 +1530,11 @@ export default function App({
 
   const onActivate = useCallback(
     (slot: number) => {
-      const tab = slot < 0 ? tabs[tabs.length - 1] : tabs[slot];
+      const scope = deckLayout ? deckProjectTabs : tabs;
+      const tab = slot < 0 ? scope[scope.length - 1] : scope[slot];
       if (tab) activateTab(tab.id);
     },
-    [activateTab, tabs],
+    [activateTab, deckLayout, deckProjectTabs, tabs],
   );
 
   const onFocusPane = useCallback(
@@ -2654,7 +2675,7 @@ export default function App({
     [focusOpenSession, onSelectHistorySession],
   );
 
-  const nextTitleTabs: TitleTab[] = tabs.map((tab) =>
+  const nextTitleTabs: TitleTab[] = deckProjectTabs.map((tab) =>
     toTitleTab(tab, sessions, dirtyFiles),
   );
   tabProjectsRef.current = new Map(
@@ -3072,6 +3093,7 @@ export default function App({
                       }
                       composerFocused={composerFocused}
                       recents={recents}
+                      hideProjectPicker={deckLayout}
                       onFocus={onFocusPane}
                       onClose={onClosePane}
                       onSelectFile={onSelectFileSurface}

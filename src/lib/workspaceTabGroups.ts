@@ -43,6 +43,17 @@ export function findTabForProject(
   });
 }
 
+export function filterTabsForProject(
+  tabs: WorkspaceTab[],
+  sessions: Session[],
+  path: string,
+): WorkspaceTab[] {
+  return tabs.filter((tab) => {
+    const cwd = workspaceTabCwd(tab, sessions);
+    return cwd ? sameProjectPath(cwd, path) : false;
+  });
+}
+
 export function isGroupableProject(
   project: string | null,
 ): project is string {
