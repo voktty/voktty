@@ -27,7 +27,7 @@ import {
   saveProjectRailWidth,
 } from "../lib/appearance";
 import { basename, revealPath, type GitDiffStats } from "../lib/fs";
-import { IS_MAC } from "../lib/platform";
+import { IS_MAC, MOD } from "../lib/platform";
 import { projectName } from "../lib/paths";
 import {
   collectRailProjects,
@@ -84,6 +84,7 @@ type Props = {
   onGoForward?: () => void;
   onNew?: () => void;
   onSearch?: () => void;
+  searchActive?: boolean;
   onSelectProject: (path: string) => void;
   onOpenProject: () => void;
 };
@@ -98,6 +99,7 @@ export function ProjectRail({
   onGoForward,
   onNew,
   onSearch,
+  searchActive = false,
   onSelectProject,
   onOpenProject: _onOpenProject,
 }: Props) {
@@ -370,7 +372,14 @@ export function ProjectRail({
 
       <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
         <RailAction label="New" icon={Plus} onClick={onNew} />
-        <RailAction label="Search" icon={Search} onClick={onSearch} />
+        <RailAction
+          label="Search"
+          icon={Search}
+          onClick={onSearch}
+          active={searchActive}
+          shortcut={`${MOD}K`}
+          ariaLabel={`Search (${MOD}K)`}
+        />
       </div>
 
       <div
@@ -394,6 +403,7 @@ export function ProjectRail({
             busy={busy}
             sortable={pinnedSortable}
             pinned
+            searchActive={searchActive}
             onSelect={onSelectProject}
             onTogglePin={onTogglePin}
             onContextMenu={onProjectContextMenu}
@@ -413,6 +423,7 @@ export function ProjectRail({
             busy={busy}
             sortable={projectSortable}
             pinned={false}
+            searchActive={searchActive}
             onSelect={onSelectProject}
             onTogglePin={onTogglePin}
             onContextMenu={onProjectContextMenu}
@@ -493,6 +504,7 @@ function RailAction({
   onClick,
   active = false,
   badge,
+  shortcut,
   ariaLabel,
 }: {
   label: string;
@@ -500,6 +512,7 @@ function RailAction({
   onClick?: () => void;
   active?: boolean;
   badge?: number;
+  shortcut?: string;
   ariaLabel?: string;
 }) {
   return (
@@ -529,6 +542,11 @@ function RailAction({
       <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
         {label}
       </span>
+      {shortcut ? (
+        <span aria-hidden className="shrink-0 text-[11px] text-content/40">
+          {shortcut}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -542,6 +560,7 @@ function ProjectSection({
   busy,
   sortable,
   pinned,
+  searchActive,
   onSelect,
   onTogglePin,
   onContextMenu,
@@ -557,6 +576,7 @@ function ProjectSection({
   busy: Set<string>;
   sortable: SortableHandle;
   pinned: boolean;
+  searchActive: boolean;
   onSelect: (path: string) => void;
   onTogglePin: (path: string) => void;
   onContextMenu: (path: string, event: MouseEvent<HTMLElement>) => void;
@@ -576,7 +596,7 @@ function ProjectSection({
           <ProjectCard
             key={item.path}
             item={item}
-            selected={sameProjectPath(item.path, cwd)}
+            selected={!searchActive && sameProjectPath(item.path, cwd)}
             busy={isBusyPath(item.path, busy)}
             pinned={pinned}
             sortable={sortable}

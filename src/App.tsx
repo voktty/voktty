@@ -200,6 +200,7 @@ import { applySkillsToTurn } from "./lib/skills";
 import { applyFileMentionsToTurn } from "./lib/fileMentions";
 import { PaneTree } from "./surfaces/PaneTree";
 import { DiffPane } from "./surfaces/DiffPane";
+import { SearchView } from "./surfaces/SearchView";
 import {
   handleEditorFindKey,
   openFindInActiveEditor,
@@ -379,6 +380,8 @@ export default function App({
   );
   const [filesSearchOpen, setFilesSearchOpen] = useState(false);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
+  const [searchViewOpen, setSearchViewOpen] = useState(false);
+  const [searchViewFocusToken, setSearchViewFocusToken] = useState(0);
   const [editorNavigation, setEditorNavigation] =
     useState<EditorNavigationTarget | null>(null);
   const editorNavigationToken = useRef(0);
@@ -404,6 +407,8 @@ export default function App({
   activeTabIdRef.current = activeTabId;
   const projectCwdRef = useRef(projectCwd);
   projectCwdRef.current = projectCwd;
+  const searchViewOpenRef = useRef(searchViewOpen);
+  searchViewOpenRef.current = searchViewOpen;
   const tabVisitRef = useRef(emptyTabVisitHistory(activeTabId));
   const tabVisitFromHistoryRef = useRef(false);
   const [tabVisitNav, setTabVisitNav] = useState({
@@ -943,6 +948,7 @@ export default function App({
   );
 
   const onNew = useCallback(() => {
+    setSearchViewOpen(false);
     const cwd = active?.cwd ?? sessionDefaults?.cwd ?? projectCwd;
     const session = newSession(
       sessionDefaults?.harness ?? "claude",
@@ -2065,6 +2071,7 @@ export default function App({
 
   const onSelectProject = useCallback(
     (path: string) => {
+      setSearchViewOpen(false);
       const normalized = normalizeProjectPath(path);
       if (!looksLikeProject(normalized)) return;
 
@@ -2703,10 +2710,12 @@ export default function App({
   }, []);
 
   const onGoToFile = useCallback(() => {
+    setSearchViewOpen(false);
     setFilePickerOpen(true);
   }, []);
 
   const onFindInProject = useCallback(() => {
+    setSearchViewOpen(false);
     setSidebarOpen(true);
     saveSidebarOpen(true);
     setSidebarTab("files");
@@ -2714,13 +2723,28 @@ export default function App({
     setSearchFocusToken((token) => token + 1);
   }, []);
 
-  const onRailSearch = useCallback(() => {
-    setSidebarOpen(true);
-    saveSidebarOpen(true);
-    setSidebarTab("files");
-    setFilesSearchOpen(true);
-    setSearchFocusToken((token) => token + 1);
+  const onOpenSearch = useCallback(() => {
+    setFilePickerOpen(false);
+    setSearchViewOpen(true);
+    setSearchViewFocusToken((token) => token + 1);
   }, []);
+
+  const onLeaveSearch = useCallback(() => {
+    setSearchViewOpen(false);
+  }, []);
+
+  const onRailBack = useCallback(() => {
+    if (searchViewOpen) {
+      setSearchViewOpen(false);
+      return;
+    }
+    onVisitBack();
+  }, [onVisitBack, searchViewOpen]);
+
+  const onRailForward = useCallback(() => {
+    setSearchViewOpen(false);
+    onVisitForward();
+  }, [onVisitForward]);
 
   useEffect(() => {
     const onLayoutChange = (event: Event) => {
@@ -2776,6 +2800,7 @@ export default function App({
     onToggleSidebar,
     onGoToFile,
     onFindInProject,
+    onOpenSearch,
     pickProject,
     onNewTerminal,
     onNewTerminalTab,
@@ -2793,6 +2818,7 @@ export default function App({
     onToggleSidebar,
     onGoToFile,
     onFindInProject,
+    onOpenSearch,
     pickProject,
     onNewTerminal,
     onNewTerminalTab,
@@ -2831,7 +2857,7 @@ export default function App({
         const inPicker =
           target &&
           target.closest(
-            "[data-model-picker], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker]",
+            "[data-model-picker], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker], [data-app-search]",
           );
         if (inPicker && typeof cmd === "object" && "activate" in cmd) {
           return;
@@ -2857,7 +2883,7 @@ export default function App({
         else run(`activate-${cmd.activate}`, () => a.onActivate(cmd.activate));
         return;
       }
-      if (handleEditorFindKey(e)) {
+      if (!searchViewOpenRef.current && handleEditorFindKey(e)) {
         e.stopPropagation();
         return;
       }
@@ -2872,6 +2898,16 @@ export default function App({
         e.preventDefault();
         e.stopPropagation();
         run("go_to_file", actions.current.onGoToFile);
+        return;
+      }
+      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+        const target = e.target instanceof Element ? e.target : null;
+        if (target?.closest(".monocode-terminal") && e.ctrlKey && !e.metaKey) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        run("open_search", actions.current.onOpenSearch);
         return;
       }
       if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
@@ -2925,6 +2961,7 @@ export default function App({
         void actions.current.pickProject();
       }),
       listen("go_to_file", () => actions.current.onGoToFile()),
+      listen("open_search", () => actions.current.onOpenSearch()),
       listen("find_in_project", () => actions.current.onFindInProject()),
       listen("find", () => {
         openFindInActiveEditor();
@@ -2967,10 +3004,10 @@ export default function App({
         onOpenTerminal={(cwd) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
         onFileDeleted={onFileDeleted}
-        canGoBack={tabVisitNav.canBack}
+        canGoBack={tabVisitNav.canBack || searchViewOpen}
         canGoForward={tabVisitNav.canForward}
-        onGoBack={onVisitBack}
-        onGoForward={onVisitForward}
+        onGoBack={onRailBack}
+        onGoForward={onRailForward}
         onOpenDiff={onOpenDiff}
         onShowSourceControl={onToggleChanges}
         selectedDiffPath={activeTab ? selectedChangePath(activeTab) : undefined}
@@ -2982,11 +3019,21 @@ export default function App({
         onSelectProject={deckLayout ? onSelectProject : undefined}
         onOpenProject={deckLayout ? pickProject : undefined}
         onNew={deckLayout ? onNew : undefined}
-        onSearch={deckLayout ? onRailSearch : undefined}
+        onSearch={onOpenSearch}
+        searchActive={searchViewOpen}
         unseenFinishedIds={unseenFinishedIds}
       />
 
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
+        <div
+          className={
+            searchViewOpen
+              ? "hidden"
+              : "flex min-h-0 min-w-0 flex-1 flex-col"
+          }
+          aria-hidden={searchViewOpen}
+          inert={searchViewOpen || undefined}
+        >
         {!IS_MAC ? (
           <MenuBar
             onNew={onNew}
@@ -2999,6 +3046,7 @@ export default function App({
             }
             onPickProject={pickProject}
             onFindInProject={onFindInProject}
+            onSearch={onOpenSearch}
           />
         ) : null}
         <TitleBar
@@ -3108,6 +3156,22 @@ export default function App({
             ) : null}
           </div>
         </main>
+        </div>
+        {searchViewOpen ? (
+          <SearchView
+            open
+            cwd={sidebarCwd}
+            recents={recents}
+            history={history}
+            sessions={sessions}
+            focusToken={searchViewFocusToken}
+            besideRail={deckLayout}
+            onClose={onLeaveSearch}
+            onOpenFile={onOpenFile}
+            onOpenSession={onSelectHistorySession}
+            onOpenProject={onSelectProject}
+          />
+        ) : null}
       </div>
 
       {filePickerOpen ? (

@@ -113,6 +113,7 @@ type Props = {
   onOpenProject?: () => void;
   onNew?: () => void;
   onSearch?: () => void;
+  searchActive?: boolean;
   unseenFinishedIds?: Set<string>;
 };
 
@@ -153,6 +154,7 @@ function SidebarComponent({
   onOpenProject,
   onNew,
   onSearch,
+  searchActive = false,
   unseenFinishedIds: unseenFinishedIdsProp,
 }: Props) {
   const [width, setWidth] = useState(rememberedWidth);
@@ -817,7 +819,11 @@ function SidebarComponent({
   );
 
   return (
-    <div className={`flex h-full shrink-0 ${open ? "" : "hidden"}`}>
+    <div
+      className={`flex h-full shrink-0 ${
+        open || (searchActive && showProjectRail) ? "" : "hidden"
+      }`}
+    >
       {onSelectProject && onOpenProject ? (
         <ProjectRail
           cwd={cwd}
@@ -829,11 +835,12 @@ function SidebarComponent({
           onGoForward={onGoForward}
           onNew={onNew}
           onSearch={onSearch}
+          searchActive={searchActive}
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}
         />
       ) : null}
-      {sidebarContent}
+      {open && !searchActive ? sidebarContent : null}
     </div>
   );
 }

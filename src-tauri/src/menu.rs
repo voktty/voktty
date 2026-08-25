@@ -20,7 +20,7 @@ pub fn dispatch(app: &AppHandle, id: &str) {
         "new_tab" | "close_tab" | "next_tab" | "prev_tab" | "back_tab" | "forward_tab"
         | "split_right" | "split_down" | "focus_left" | "focus_right" | "focus_up"
         | "focus_down" | "toggle_sidebar" | "sidebar_opacity" | "open_project" | "go_to_file"
-        | "find_in_project" | "find" | "new_terminal" | "new_terminal_tab"
+        | "open_search" | "find_in_project" | "find" | "new_terminal" | "new_terminal_tab"
         | "open_model_picker" => {
             let _ = app.emit(id, ());
         }
@@ -38,6 +38,9 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .build(app)?;
     let go_to_file = MenuItemBuilder::with_id("go_to_file", "Go to File…")
         .accelerator("CmdOrCtrl+P")
+        .build(app)?;
+    let open_search = MenuItemBuilder::with_id("open_search", "Search…")
+        .accelerator("CmdOrCtrl+K")
         .build(app)?;
     let new_tab = MenuItemBuilder::with_id("new_tab", "New Tab")
         .accelerator("CmdOrCtrl+T")
@@ -102,6 +105,7 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let file = SubmenuBuilder::new(app, "File")
         .item(&new_window)
         .item(&open_project)
+        .item(&open_search)
         .item(&go_to_file)
         .item(&find_in_project)
         .separator()

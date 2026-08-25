@@ -14,6 +14,7 @@ type Props = {
   onCloseCurrentTab?: () => void;
   onPickProject?: () => void;
   onFindInProject?: () => void;
+  onSearch?: () => void;
 };
 
 export function MenuBar({
@@ -25,6 +26,7 @@ export function MenuBar({
   onCloseCurrentTab,
   onPickProject,
   onFindInProject,
+  onSearch,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
@@ -100,6 +102,9 @@ export function MenuBar({
         case "open_project":
           onPickProject?.();
           break;
+        case "open_search":
+          onSearch?.();
+          break;
         case "go_to_file":
           onGoToFile?.();
           break;
@@ -128,6 +133,7 @@ export function MenuBar({
       onNew,
       onNewTerminal,
       onPickProject,
+      onSearch,
       onShowSourceControl,
       onToggleSidebar,
     ],
@@ -142,6 +148,7 @@ export function MenuBar({
           { kind: "item", id: "new_window", label: "New Window", shortcut: `${MOD}${SHIFT}N` },
           { kind: "sep" },
           { kind: "item", id: "open_project", label: "Open Project…", shortcut: `${MOD}O` },
+          { kind: "item", id: "open_search", label: "Search…", shortcut: `${MOD}K` },
           { kind: "item", id: "go_to_file", label: "Go to File…", shortcut: `${MOD}P` },
           { kind: "item", id: "find_in_project", label: "Find in Files…", shortcut: `${MOD}${SHIFT}F` },
           { kind: "sep" },

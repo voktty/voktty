@@ -174,6 +174,53 @@ pub fn session_get(
     get_session(&conn, &session_id).map_err(|e| e.to_string())
 }
 
+const MAX_SEARCH_SCAN: usize = 400;
+const MAX_CONVERSATION_HITS: usize = 40;
+const MAX_MESSAGE_HITS: usize = 40;
+const SNIPPET_RADIUS: usize = 42;
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSearchOptions {
+    pub query: String,
+    #[serde(default)]
+    pub cwd: Option<String>,
+    #[serde(default)]
+    pub include_archived: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSearchHit {
+    pub kind: String,
+    pub session_id: String,
+    pub cwd: String,
+    pub harness: String,
+    pub title: String,
+    pub updated_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    pub preview: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSearchResult {
+    pub hits: Vec<SessionSearchHit>,
+    pub truncated: bool,
+}
+
+#[tauri::command]
+pub fn session_search(
+    store: State<'_, SessionStore>,
+    options: SessionSearchOptions,
+) -> Result<SessionSearchResult, String> {
+    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    search_sessions(&conn, &options).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn session_delete(store: State<'_, SessionStore>, session_id: String) -> Result<(), String> {
     validate_id(&session_id, "session")?;
@@ -440,6 +487,252 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         updated_at,
         archived,
     })
+}
+
+fn search_sessions(
+    conn: &Connection,
+    options: &SessionSearchOptions,
+) -> rusqlite::Result<SessionSearchResult> {
+    let query = options.query.trim();
+    if query.is_empty() {
+        return Ok(SessionSearchResult {
+            hits: Vec::new(),
+            truncated: false,
+        });
+    }
+    let needle = query.to_lowercase();
+    let pattern = like_pattern(query);
+    let cwd = options
+        .cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let mut sql = String::from(
+        "SELECT id, cwd, harness, title, updated_at, archived, blocks_json
+         FROM sessions
+         WHERE blocks_json != '[]'
+           AND blocks_json LIKE '%\"role\":\"user\"%'
+           AND (LOWER(title) LIKE LOWER(?1) ESCAPE '\\'
+                OR LOWER(blocks_json) LIKE LOWER(?1) ESCAPE '\\')",
+    );
+    if !options.include_archived {
+        sql.push_str(" AND archived = 0");
+    }
+    if cwd.is_some() {
+        sql.push_str(" AND cwd = ?2");
+        sql.push_str(" ORDER BY updated_at DESC, id ASC LIMIT ?3");
+    } else {
+        sql.push_str(" ORDER BY updated_at DESC, id ASC LIMIT ?2");
+    }
+
+    let mut statement = conn.prepare(&sql)?;
+    let limit = (MAX_SEARCH_SCAN as i64) + 1;
+    let rows = if let Some(cwd) = cwd {
+        statement.query_map(params![pattern, cwd, limit], search_row)?
+    } else {
+        statement.query_map(params![pattern, limit], search_row)?
+    };
+
+    let mut conversations = Vec::new();
+    let mut messages = Vec::new();
+    let mut scanned = 0;
+    let mut truncated = false;
+    for row in rows {
+        let (id, cwd, harness, title, updated_at, blocks_raw) = row?;
+        scanned += 1;
+        if scanned > MAX_SEARCH_SCAN {
+            truncated = true;
+            break;
+        }
+
+        let title_hit = title.to_lowercase().contains(&needle);
+        if title_hit && conversations.len() < MAX_CONVERSATION_HITS {
+            conversations.push(SessionSearchHit {
+                kind: "conversation".into(),
+                session_id: id.clone(),
+                cwd: cwd.clone(),
+                harness: harness.clone(),
+                title: title.clone(),
+                updated_at,
+                block_id: None,
+                role: None,
+                preview: String::new(),
+            });
+        }
+
+        if messages.len() >= MAX_MESSAGE_HITS {
+            if title_hit {
+                continue;
+            }
+            if conversations.len() >= MAX_CONVERSATION_HITS {
+                truncated = true;
+                break;
+            }
+            continue;
+        }
+
+        let Ok(blocks) = serde_json::from_str::<Value>(&blocks_raw) else {
+            continue;
+        };
+        for hit in block_hits(&blocks, &needle) {
+            messages.push(SessionSearchHit {
+                kind: "message".into(),
+                session_id: id.clone(),
+                cwd: cwd.clone(),
+                harness: harness.clone(),
+                title: title.clone(),
+                updated_at,
+                block_id: Some(hit.0),
+                role: Some(hit.1),
+                preview: hit.2,
+            });
+            if messages.len() >= MAX_MESSAGE_HITS {
+                truncated = true;
+                break;
+            }
+        }
+    }
+
+    if conversations.len() >= MAX_CONVERSATION_HITS {
+        truncated = true;
+    }
+
+    let mut hits = conversations;
+    hits.extend(messages);
+    Ok(SessionSearchResult { hits, truncated })
+}
+
+fn search_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<(String, String, String, String, i64, String)> {
+    Ok((
+        row.get(0)?,
+        row.get(1)?,
+        row.get(2)?,
+        row.get(3)?,
+        row.get(4)?,
+        row.get(6)?,
+    ))
+}
+
+fn like_pattern(query: &str) -> String {
+    let mut out = String::from("%");
+    for ch in query.chars().take(200) {
+        match ch {
+            '%' | '_' | '\\' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            _ => out.push(ch),
+        }
+    }
+    out.push('%');
+    out
+}
+
+fn block_hits(blocks: &Value, needle: &str) -> Vec<(String, String, String)> {
+    let Some(items) = blocks.as_array() else {
+        return Vec::new();
+    };
+    let mut hits = Vec::new();
+    for block in items {
+        let role = block
+            .get("role")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if !matches!(role, "user" | "assistant" | "tool" | "plan") {
+            continue;
+        }
+        let id = block
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        if id.is_empty() {
+            continue;
+        }
+        for text in block_texts(block) {
+            if !text.to_lowercase().contains(needle) {
+                continue;
+            }
+            hits.push((id.clone(), role.to_string(), snippet_around(&text, needle)));
+            break;
+        }
+    }
+    hits
+}
+
+fn block_texts(block: &Value) -> Vec<String> {
+    let mut texts = Vec::new();
+    push_text(&mut texts, block.get("text"));
+    if let Some(tool) = block.get("tool") {
+        push_text(&mut texts, tool.get("title"));
+        push_text(&mut texts, tool.get("detail"));
+        if let Some(preview) = tool.get("preview") {
+            push_text(&mut texts, preview.get("query"));
+            push_text(&mut texts, preview.get("path"));
+            push_text(&mut texts, preview.get("output"));
+            push_text(&mut texts, preview.get("title"));
+        }
+    }
+    texts
+}
+
+fn push_text(texts: &mut Vec<String>, value: Option<&Value>) {
+    if let Some(text) = value.and_then(Value::as_str) {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            texts.push(trimmed.to_string());
+        }
+    }
+}
+
+fn snippet_around(text: &str, needle: &str) -> String {
+    let compact = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = compact.to_lowercase();
+    let Some(index) = lower.find(needle) else {
+        if compact.chars().count() <= SNIPPET_RADIUS * 2 {
+            return compact;
+        }
+        return format!(
+            "{}…",
+            compact.chars().take(SNIPPET_RADIUS * 2).collect::<String>()
+        );
+    };
+    let start = floor_char_boundary(&compact, index.saturating_sub(SNIPPET_RADIUS));
+    let end = ceil_char_boundary(
+        &compact,
+        (index + needle.len() + SNIPPET_RADIUS).min(compact.len()),
+    );
+    let mut snippet = compact[start..end].trim().to_string();
+    if start > 0 {
+        snippet = format!("…{snippet}");
+    }
+    if end < compact.len() {
+        snippet = format!("{snippet}…");
+    }
+    snippet
+}
+
+fn floor_char_boundary(text: &str, mut index: usize) -> usize {
+    if index >= text.len() {
+        return text.len();
+    }
+    while index > 0 && !text.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
+}
+
+fn ceil_char_boundary(text: &str, mut index: usize) -> usize {
+    if index >= text.len() {
+        return text.len();
+    }
+    while index < text.len() && !text.is_char_boundary(index) {
+        index += 1;
+    }
+    index
 }
 
 fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<SessionSummary>> {
@@ -1093,5 +1386,105 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         assert_eq!(inflight, 1);
         assert_eq!(snapshot, 1);
+    }
+
+    #[test]
+    fn search_finds_title_and_message_hits() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        let mut session = sample("s1", "/tmp/a", "Fix sidebar search");
+        session.blocks = json!([
+            { "id": "u1", "role": "user", "text": "Please search the sidebar filter chips" },
+            { "id": "a1", "role": "assistant", "text": "I will look through the explorer next." }
+        ]);
+        upsert_session(&conn, &session).unwrap();
+        upsert_session(&conn, &sample("s2", "/tmp/b", "Unrelated title")).unwrap();
+
+        let result = search_sessions(
+            &conn,
+            &SessionSearchOptions {
+                query: "sidebar".into(),
+                cwd: None,
+                include_archived: false,
+            },
+        )
+        .unwrap();
+        let kinds: Vec<_> = result
+            .hits
+            .iter()
+            .map(|hit| {
+                (
+                    hit.kind.as_str(),
+                    hit.session_id.as_str(),
+                    hit.block_id.as_deref(),
+                )
+            })
+            .collect();
+        assert!(kinds.contains(&("conversation", "s1", None)));
+        assert!(kinds.contains(&("message", "s1", Some("u1"))));
+        assert!(!result.hits.iter().any(|hit| hit.session_id == "s2"));
+    }
+
+    #[test]
+    fn search_respects_cwd_and_skips_archived() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        upsert_session(&conn, &sample("s1", "/tmp/a", "Search project a")).unwrap();
+        upsert_session(&conn, &sample("s2", "/tmp/b", "Search project b")).unwrap();
+        set_archived(&conn, "s1", true).unwrap();
+
+        let scoped = search_sessions(
+            &conn,
+            &SessionSearchOptions {
+                query: "Search project".into(),
+                cwd: Some("/tmp/a".into()),
+                include_archived: false,
+            },
+        )
+        .unwrap();
+        assert!(scoped.hits.is_empty());
+
+        let with_archived = search_sessions(
+            &conn,
+            &SessionSearchOptions {
+                query: "Search project".into(),
+                cwd: Some("/tmp/a".into()),
+                include_archived: true,
+            },
+        )
+        .unwrap();
+        assert!(with_archived
+            .hits
+            .iter()
+            .any(|hit| hit.session_id == "s1" && hit.kind == "conversation"));
+
+        let other = search_sessions(
+            &conn,
+            &SessionSearchOptions {
+                query: "Search project".into(),
+                cwd: Some("/tmp/b".into()),
+                include_archived: false,
+            },
+        )
+        .unwrap();
+        assert!(other.hits.iter().any(|hit| hit.session_id == "s2"));
+    }
+
+    #[test]
+    fn search_empty_query_is_empty() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        upsert_session(&conn, &sample("s1", "/tmp/a", "Anything")).unwrap();
+        let result = search_sessions(
+            &conn,
+            &SessionSearchOptions {
+                query: "   ".into(),
+                cwd: None,
+                include_archived: false,
+            },
+        )
+        .unwrap();
+        assert!(result.hits.is_empty());
+        assert!(!result.truncated);
     }
 }
