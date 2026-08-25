@@ -17,6 +17,7 @@ import {
   type PointerEvent,
 } from "react";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import {
@@ -26,7 +27,7 @@ import {
   PROJECT_RAIL_WIDTH_MIN,
   saveProjectRailWidth,
 } from "../lib/appearance";
-import { basename, revealPath } from "../lib/fs";
+import { basename, revealPath, type GitDiffStats } from "../lib/fs";
 import { IS_MAC } from "../lib/platform";
 import { projectName } from "../lib/paths";
 import {
@@ -611,6 +612,7 @@ function ProjectSection({
             groupColors={groupColors}
             groupCustomColors={groupCustomColors}
             groupLogos={groupLogos}
+            inboxOpen={inboxOpen}
           />
         ))}
       </div>
@@ -633,6 +635,7 @@ function ProjectCard({
   groupColors,
   groupCustomColors,
   groupLogos,
+  inboxOpen,
 }: {
   item: RecentProject;
   selected: boolean;
@@ -648,6 +651,7 @@ function ProjectCard({
   groupColors: Record<string, number>;
   groupCustomColors: Record<string, string>;
   groupLogos: ReturnType<typeof useTabGroupLogos>;
+  inboxOpen: boolean;
 }) {
   const fallbackName = basename(item.path);
   const projectKey = projectName(item.path);
@@ -670,6 +674,15 @@ function ProjectCard({
     sortable.toIndex === index &&
     sortable.fromIndex !== null &&
     sortable.toIndex > sortable.fromIndex;
+  const diffEnabled =
+    !inboxOpen && Boolean(item.path) && item.path !== "~";
+  const stats = useProjectDiffStats(item.path, diffEnabled);
+  const files = stats?.files ?? 0;
+  const additions = stats?.additions ?? 0;
+  const deletions = stats?.deletions ?? 0;
+  const hasChanges = files > 0 || additions > 0 || deletions > 0;
+  const cardTitle = projectCardTitle(item.path, name, stats, busy);
+  const cardAriaLabel = projectCardAriaLabel(name, stats, busy);
 
   return (
     <div
@@ -703,10 +716,10 @@ function ProjectCard({
       ) : null}
       <button
         type="button"
-        title={item.path}
-        aria-label={name}
+        title={cardTitle}
+        aria-label={cardAriaLabel}
         aria-current={selected ? "true" : undefined}
-        className="flex min-w-0 flex-1 cursor-default items-center gap-2 pr-5 text-left group-hover:pr-6"
+        className="flex min-w-0 flex-1 cursor-default items-center gap-2 text-left group-hover:pr-6"
       >
         <div className="relative size-4 shrink-0">
           <div className="grid size-4 place-items-center transition-opacity group-hover:opacity-0">
@@ -735,6 +748,16 @@ function ProjectCard({
             <TerminalSpinner className="inline-block w-2.5 select-none text-center text-[9px] leading-none text-accent" />
           </span>
         ) : null}
+        {hasChanges ? (
+          <span className="flex shrink-0 items-center gap-1.5 group-hover:hidden">
+            {files > 0 ? (
+              <span className="text-[11px] tabular-nums text-content/45">
+                {files > 99 ? "99+" : files}
+              </span>
+            ) : null}
+            <ProjectDiffStat additions={additions} deletions={deletions} />
+          </span>
+        ) : null}
       </button>
       <button
         type="button"
@@ -747,7 +770,7 @@ function ProjectCard({
           event.stopPropagation();
           onOpenMenu(item.path, event.clientX, event.clientY);
         }}
-        className="absolute right-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-content/55 opacity-0 pointer-events-none transition-opacity hover:bg-content/8 hover:text-content group-hover:pointer-events-auto group-hover:opacity-100"
+        className="absolute right-1 top-1/2 hidden size-6 -translate-y-1/2 place-items-center rounded-md text-content/55 hover:bg-content/8 hover:text-content group-hover:grid"
       >
         <MoreHorizontal className="size-4" strokeWidth={1.75} />
       </button>
@@ -778,4 +801,80 @@ function isBusyPath(path: string, busy: Set<string>): boolean {
     if (sameProjectPath(path, other)) return true;
   }
   return false;
+}
+
+function ProjectDiffStat({
+  additions,
+  deletions,
+}: {
+  additions: number;
+  deletions: number;
+}) {
+  if (additions <= 0 && deletions <= 0) return null;
+
+  const label = [
+    additions > 0 ? `+${additions}` : "",
+    deletions > 0 ? `-${deletions}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <span
+      title={`${label} uncommitted`}
+      className="flex shrink-0 items-center gap-1 font-mono text-[11px] font-semibold tabular-nums"
+    >
+      {additions > 0 ? (
+        <span className="text-emerald-400">+{additions}</span>
+      ) : null}
+      {deletions > 0 ? (
+        <span className="text-red-400">-{deletions}</span>
+      ) : null}
+    </span>
+  );
+}
+
+function projectCardTitle(
+  path: string,
+  name: string,
+  stats: GitDiffStats | null,
+  busy: boolean,
+): string {
+  const parts = [name, path];
+  if (busy) parts.push("Working");
+  const files = stats?.files ?? 0;
+  const additions = stats?.additions ?? 0;
+  const deletions = stats?.deletions ?? 0;
+  if (files > 0 || additions > 0 || deletions > 0) {
+    parts.push(
+      [
+        files > 0
+          ? `${files} ${files === 1 ? "file" : "files"} changed`
+          : "",
+        additions > 0 ? `+${additions}` : "",
+        deletions > 0 ? `-${deletions}` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+  }
+  return parts.join("\n");
+}
+
+function projectCardAriaLabel(
+  name: string,
+  stats: GitDiffStats | null,
+  busy: boolean,
+): string {
+  const parts = [name];
+  if (busy) parts.push("working");
+  const files = stats?.files ?? 0;
+  const additions = stats?.additions ?? 0;
+  const deletions = stats?.deletions ?? 0;
+  if (files > 0) {
+    parts.push(`${files} ${files === 1 ? "file" : "files"} changed`);
+  }
+  if (additions > 0) parts.push(`+${additions}`);
+  if (deletions > 0) parts.push(`-${deletions}`);
+  return parts.join(", ");
 }

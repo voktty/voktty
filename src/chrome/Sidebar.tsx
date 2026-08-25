@@ -74,7 +74,7 @@ type SidebarTab = SidebarTabId;
 const TAB_LABELS: Record<SidebarTab, string> = {
   sessions: "Sessions",
   files: "Explorer",
-  changes: "Source Control",
+  changes: "Changes",
 };
 
 type Props = {
@@ -522,7 +522,7 @@ function SidebarComponent({
                   if (sortable.consumeClick()) return;
                   onTabPick(itemId);
                 }}
-                className={`relative flex h-9.5 min-w-0 flex-1 items-center justify-center text-[12px] leading-none ${
+                className={`relative flex h-9.5 min-w-0 flex-1 items-center justify-center text-[12px] leading-none truncate ${
                   canDragTabs ? "cursor-grab active:cursor-grabbing" : ""
                 } ${
                   active
