@@ -58,6 +58,7 @@ import { ProjectMascot } from "./ProjectMascot";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
 import { SidebarUpdate } from "./SidebarUpdate";
+import { Shimmer } from "../surfaces/Shimmer";
 import { TabGroupMenu, type TabGroupMenuExtraItem } from "./TabGroupMenu";
 
 const REVEAL_LABEL = IS_MAC
@@ -621,6 +622,9 @@ function ProjectSection({
   );
 }
 
+const nameClassName =
+  "min-w-0 flex-1 truncate text-sm font-medium leading-tight";
+
 function ProjectCard({
   item,
   selected,
@@ -743,9 +747,17 @@ function ProjectCard({
             </div>
           )}
         </div>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
-          {name}
-        </span>
+        {busy ? (
+          <Shimmer
+            as="span"
+            duration={1.4}
+            className={nameClassName}
+          >
+            {name}
+          </Shimmer>
+        ) : (
+          <span className={nameClassName}>{name}</span>
+        )}
         {hasChanges ? (
           <span className="flex shrink-0 items-center gap-1.5 group-hover:hidden">
             {files > 0 ? (
