@@ -360,7 +360,7 @@ export function ProjectRail({
       className="sidebar-glass relative flex shrink-0 flex-col border-r border-content/10"
     >
       <div
-        className="flex h-9.75 shrink-0 items-center pr-1.5"
+        className="flex h-10 shrink-0 items-center pr-1.5"
         data-tauri-drag-region
       >
         {IS_MAC ? (
@@ -532,7 +532,7 @@ function RailAction({
       className={`relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${
         active
           ? "bg-content/12 text-content"
-          : "text-content/75 hover:bg-content/5 hover:text-content"
+          : "text-content/50 hover:bg-content/5 hover:text-content"
       } disabled:cursor-default disabled:opacity-40`}
     >
       {badge != null ? (
@@ -674,8 +674,7 @@ function ProjectCard({
     sortable.toIndex === index &&
     sortable.fromIndex !== null &&
     sortable.toIndex > sortable.fromIndex;
-  const diffEnabled =
-    !inboxOpen && Boolean(item.path) && item.path !== "~";
+  const diffEnabled = !inboxOpen && Boolean(item.path) && item.path !== "~";
   const stats = useProjectDiffStats(item.path, diffEnabled);
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
@@ -848,9 +847,7 @@ function projectCardTitle(
   if (files > 0 || additions > 0 || deletions > 0) {
     parts.push(
       [
-        files > 0
-          ? `${files} ${files === 1 ? "file" : "files"} changed`
-          : "",
+        files > 0 ? `${files} ${files === 1 ? "file" : "files"} changed` : "",
         additions > 0 ? `+${additions}` : "",
         deletions > 0 ? `-${deletions}` : "",
       ]

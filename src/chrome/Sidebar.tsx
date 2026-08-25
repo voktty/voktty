@@ -193,6 +193,7 @@ function SidebarComponent({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const deckLayout = layout === "deck";
   const busyIdsRef = useRef(busySessionIds);
   const focusedSessionIdRef = useRef(activeSessionId);
   const unseenFinishedLocalRef = useRef<Set<string>>(new Set());
@@ -226,7 +227,7 @@ function SidebarComponent({
       approvalSessionIds,
       unseenFinishedIds,
     ),
-    searchOpen ? searchQuery : "",
+    deckLayout || searchOpen ? searchQuery : "",
   );
   const sessionHarnesses = harnessesInSessions(sessions);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
@@ -236,7 +237,6 @@ function SidebarComponent({
     saveSidebarTabOrder(next);
     if (next[0]) onTabChange(next[0]);
   });
-  const deckLayout = layout === "deck";
   const visibleTabs = deckLayout
     ? tabOrder
     : tabOrder.filter((itemId) => itemId !== "changes");
@@ -359,6 +359,49 @@ function SidebarComponent({
     });
   };
 
+  const onFilterButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (filterMenu) {
+      setFilterMenu(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setSessionMenu(null);
+    setFilterMenu({
+      x: rect.right - 228,
+      y: rect.bottom + 2,
+    });
+  };
+
+  const sessionSearchInput = (
+    <input
+      ref={searchInputRef}
+      type="text"
+      value={searchQuery}
+      placeholder="Search conversations..."
+      aria-label="Search conversations"
+      spellCheck={false}
+      autoComplete="off"
+      autoCorrect="off"
+      autoCapitalize="off"
+      onChange={(event) => setSearchQuery(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (searchQuery) {
+          setSearchQuery("");
+          return;
+        }
+        if (!deckLayout) setSearchOpen(false);
+      }}
+      className={
+        deckLayout
+          ? "h-full w-full min-w-0 rounded-md bg-transparent py-0 pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/35"
+          : "w-full px-3 py-2 text-[12px] text-content outline-none placeholder:text-content/35"
+      }
+    />
+  );
+
   useEffect(() => {
     if (!searchOpen) return;
     searchInputRef.current?.focus();
@@ -464,7 +507,9 @@ function SidebarComponent({
     >
       {showProjectRail ? null : (
         <div
-          className="flex h-9.75 shrink-0 items-center justify-end pr-1.5"
+          className={`flex shrink-0 items-center justify-end pr-1.5 ${
+            deckLayout ? "h-10" : "h-9.75"
+          }`}
           data-tauri-drag-region
         >
           <TabVisitNav
@@ -479,10 +524,16 @@ function SidebarComponent({
         role="tablist"
         aria-label="Sidebar"
         data-tauri-drag-region={showProjectRail ? true : undefined}
-        className="flex shrink-0 border-y border-content/10"
+        className={`flex shrink-0 overflow-visible border-content/10 ${
+          deckLayout
+            ? "h-10 items-center border-b"
+            : "border-y"
+        }`}
       >
         {visibleTabs.map((itemId, index) => {
           const active = tab === itemId;
+          const changeCount = changeStats?.files ?? 0;
+          const showChangeBadge = itemId === "changes" && changeCount > 0;
           const draggingTab = sortable.draggingId === itemId;
           const showStart =
             sortable.draggingId &&
@@ -522,7 +573,7 @@ function SidebarComponent({
                   if (sortable.consumeClick()) return;
                   onTabPick(itemId);
                 }}
-                className={`relative flex h-9.5 min-w-0 flex-1 items-center justify-center text-[12px] leading-none truncate ${
+                className={`relative flex h-9 min-w-0 flex-1 items-center justify-center px-1 text-[12px] leading-none ${
                   canDragTabs ? "cursor-grab active:cursor-grabbing" : ""
                 } ${
                   active
@@ -530,12 +581,21 @@ function SidebarComponent({
                     : "text-content/50 hover:text-content"
                 }`}
               >
-                {TAB_LABELS[itemId]}
-                {itemId === "changes" && (changeStats?.files ?? 0) > 0 ? (
-                  <span className="ml-1 text-[10px] tabular-nums text-content/45">
-                    {changeStats?.files}
+                <span className="relative inline-block min-w-0 max-w-full">
+                  <span
+                    className={`block truncate${showChangeBadge ? " pr-2.5" : ""}`}
+                  >
+                    {TAB_LABELS[itemId]}
                   </span>
-                ) : null}
+                  {showChangeBadge ? (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute top-0 left-[calc(100%-4px)] grid min-h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[7px] font-semibold leading-none text-white tabular-nums"
+                    >
+                      {changeCount > 99 ? "99+" : changeCount}
+                    </span>
+                  ) : null}
+                </span>
                 {active ? (
                   <span className="absolute inset-x-0 bottom-0 h-px bg-content" />
                 ) : null}
@@ -564,6 +624,7 @@ function SidebarComponent({
             <FileTree
               key={cwd}
               cwd={cwd}
+              deckLayout={deckLayout}
               onOpenFile={onOpenFile}
               onOpenTerminal={onOpenTerminal}
               onFileMoved={onFileMoved}
@@ -580,6 +641,23 @@ function SidebarComponent({
           </p>
         )}
       </div>
+      {deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
+        <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
+          <div className="relative flex h-7 min-w-0 flex-1 items-center rounded-md bg-content/8">
+            <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
+            {sessionSearchInput}
+          </div>
+          <SessionsHeaderButton
+            label="Filter sessions"
+            active={filtersActive}
+            open={!!filterMenu}
+            hasPopup
+            onClick={onFilterButtonClick}
+          >
+            <ListFilter className="size-3" strokeWidth={1.75} />
+          </SessionsHeaderButton>
+        </div>
+      ) : null}
       <div
         ref={(el) => {
           sessionsLock(el);
@@ -595,13 +673,9 @@ function SidebarComponent({
           </p>
         ) : (
           <div>
-            <div className="sticky top-0 bg-content/5 backdrop-blur-md">
-              <div className="flex h-8 items-center px-2 pr-1.5">
-                {showProjectRail ? (
-                  <span className="min-w-0 flex-1 truncate pl-1.5 text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
-                    Sessions
-                  </span>
-                ) : (
+            {!deckLayout ? (
+              <div className="sticky top-0 z-10 shrink-0 border-b border-content/10 bg-content/5 backdrop-blur-md">
+                <div className="flex h-9 items-center px-2 pr-1.5">
                   <div
                     title={cwd}
                     className="flex h-full min-w-0 flex-1 items-center gap-1.5"
@@ -621,67 +695,34 @@ function SidebarComponent({
                       {basename(cwd)}
                     </span>
                   </div>
-                )}
-                <div className="flex shrink-0 items-center gap-px">
-                  <SessionsHeaderButton
-                    label="Search conversations"
-                    active={searchOpen}
-                    open={searchOpen}
-                    onClick={onToggleSessionSearch}
-                  >
-                    <Search className="size-3" strokeWidth={1.75} />
-                  </SessionsHeaderButton>
-                  <SessionsHeaderButton
-                    label="Filter sessions"
-                    active={filtersActive}
-                    open={!!filterMenu}
-                    hasPopup
-                    onClick={(event) => {
-                      if (filterMenu) {
-                        setFilterMenu(null);
-                        return;
-                      }
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      setSessionMenu(null);
-                      setFilterMenu({
-                        x: rect.right - 228,
-                        y: rect.bottom + 2,
-                      });
-                    }}
-                  >
-                    <ListFilter className="size-3" strokeWidth={1.75} />
-                  </SessionsHeaderButton>
+                  <div className="flex shrink-0 items-center gap-px">
+                    <SessionsHeaderButton
+                      label="Search conversations"
+                      active={searchOpen}
+                      open={searchOpen}
+                      onClick={onToggleSessionSearch}
+                    >
+                      <Search className="size-3" strokeWidth={1.75} />
+                    </SessionsHeaderButton>
+                    <SessionsHeaderButton
+                      label="Filter sessions"
+                      active={filtersActive}
+                      open={!!filterMenu}
+                      hasPopup
+                      onClick={onFilterButtonClick}
+                    >
+                      <ListFilter className="size-3" strokeWidth={1.75} />
+                    </SessionsHeaderButton>
+                  </div>
                 </div>
+                {searchOpen ? (
+                  <div className="relative flex items-center border-y border-content/10 pl-3.5">
+                    <Search className="size-3 opacity-50" />
+                    {sessionSearchInput}
+                  </div>
+                ) : null}
               </div>
-              {searchOpen ? (
-                <div className="relative flex items-center border-y border-content/10 pl-3.5">
-                  <Search className="size-3 opacity-50" />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchQuery}
-                    placeholder="Search conversations..."
-                    aria-label="Search conversations"
-                    spellCheck={false}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Escape") return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (searchQuery) {
-                        setSearchQuery("");
-                        return;
-                      }
-                      setSearchOpen(false);
-                    }}
-                    className="w-full px-3 py-2 text-[12px] text-content outline-none placeholder:text-content/35"
-                  />
-                </div>
-              ) : null}
-            </div>
+            ) : null}
             {status === "loading" && sessions.length === 0 ? (
               <p className="px-3 py-2 text-[12px] text-content/50">Loading…</p>
             ) : status === "error" && sessions.length === 0 ? (
@@ -690,7 +731,7 @@ function SidebarComponent({
               </p>
             ) : visibleSessions.length === 0 ? (
               <p className="px-3 py-2 text-[12px] text-content/50">
-                {searchOpen && searchQuery.trim()
+                {(deckLayout || searchOpen) && searchQuery.trim()
                   ? "No matching sessions"
                   : filtersActive
                     ? "No sessions match these filters"
@@ -778,6 +819,22 @@ function SidebarComponent({
           onClose={() => setFilterMenu(null)}
         />
       ) : null}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        aria-valuenow={width}
+        aria-valuemin={MIN_WIDTH}
+        aria-valuemax={MAX_WIDTH}
+        className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
+          dragging ? "bg-content/15" : "hover:bg-content/10"
+        }`}
+        onPointerDown={onResizePointerDown}
+        onPointerMove={onResizePointerMove}
+        onPointerUp={onResizePointerUp}
+        onPointerCancel={onResizePointerUp}
+        onDoubleClick={onResizeDoubleClick}
+      />
     </aside>
   );
 
@@ -802,24 +859,6 @@ function SidebarComponent({
         />
       ) : null}
       {sidebarContent}
-      <div className="relative shrink-0 self-stretch" style={{ width: 0 }}>
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize sidebar"
-          aria-valuenow={width}
-          aria-valuemin={MIN_WIDTH}
-          aria-valuemax={MAX_WIDTH}
-          className={`absolute inset-y-0 -left-px z-10 w-1.5 cursor-col-resize touch-none ${
-            dragging ? "bg-content/15" : "hover:bg-content/10"
-          }`}
-          onPointerDown={onResizePointerDown}
-          onPointerMove={onResizePointerMove}
-          onPointerUp={onResizePointerUp}
-          onPointerCancel={onResizePointerUp}
-          onDoubleClick={onResizeDoubleClick}
-        />
-      </div>
     </div>
   );
 }
