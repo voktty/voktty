@@ -113,6 +113,7 @@ type Props = {
   busyProjectPaths?: Iterable<string>;
   onSelectProject?: (path: string) => void;
   onOpenProject?: () => void;
+  onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
   onNew?: () => void;
   onNewBlank?: () => void;
   onSearch?: () => void;
@@ -158,6 +159,7 @@ function SidebarComponent({
   busyProjectPaths,
   onSelectProject,
   onOpenProject,
+  onRemoveProject,
   onNew,
   onNewBlank,
   onSearch,
@@ -901,6 +903,7 @@ function SidebarComponent({
           onTogglePanel={onToggleProjectRail}
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}
+          onRemoveProject={onRemoveProject}
         />
       ) : null}
       {sidebarVisible ? sidebarContent : null}

@@ -160,6 +160,22 @@ export function saveTabGroupMascot(project: string, name: string | null): void {
   writeRecord(MASCOT_KEY, next);
 }
 
+/** Drops every saved appearance override for a project. */
+export function clearTabGroupSettings(project: string): void {
+  for (const key of [
+    COLOR_KEY,
+    CUSTOM_COLOR_KEY,
+    LABEL_KEY,
+    LOGO_KEY,
+    MASCOT_KEY,
+  ]) {
+    const next = readRecord(key);
+    if (!(project in next)) continue;
+    delete next[project];
+    writeRecord(key, next);
+  }
+}
+
 export function resolveTabGroupMascot(
   project: string,
   overrides?: Record<string, string>,

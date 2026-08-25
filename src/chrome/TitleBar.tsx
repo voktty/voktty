@@ -275,6 +275,7 @@ function TitleTabItem({
   dropTarget,
   groupPosition,
   showLeftBorder: showLeftBorderProp,
+  showRightBorder = false,
   itemRef,
   deckLayout = false,
 }: {
@@ -290,6 +291,7 @@ function TitleTabItem({
   dropTarget?: TabDropTarget | null;
   groupPosition?: TabGroupPosition;
   showLeftBorder?: boolean;
+  showRightBorder?: boolean;
   itemRef?: (el: HTMLDivElement | null) => void;
   deckLayout?: boolean;
 }) {
@@ -321,11 +323,15 @@ function TitleTabItem({
         sortable.setItemRef(tab.id, el);
         itemRef?.(el);
       }}
-      className={`group @container relative flex h-full w-56 min-w-28 shrink touch-none self-stretch ${
+      className={`group @container relative flex h-full touch-none self-stretch ${
+        deckLayout
+          ? "min-w-56 shrink-0 grow basis-56"
+          : "w-56 min-w-28 shrink"
+      } ${
         showLeftBorder ? "border-l border-content/10" : ""
-      } ${dragging ? "opacity-40" : ""} ${
-        canDrag ? "cursor-grab active:cursor-grabbing" : ""
-      }`}
+      } ${showRightBorder ? "border-r border-content/10" : ""} ${
+        dragging ? "opacity-40" : ""
+      } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
       data-tauri-drag-region="false"
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -610,7 +616,9 @@ function TabGroupBlock({
   return (
     <div
       ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-      className={`relative flex h-full shrink-0 items-stretch ${
+      className={`relative flex h-full items-stretch ${
+        deckLayout ? "min-w-0 flex-1" : "shrink-0"
+      } ${
         segment.startIndex > 0 ? "border-l border-content/10" : ""
       } ${draggingGroup ? "opacity-40" : ""}`}
       data-tauri-drag-region="false"
@@ -833,18 +841,26 @@ function TitleBarComponent({
   onSelectProject,
 }: Props) {
   const tabIds = tabs.map((tab) => tab.id);
-  const segments = segmentTabs(tabs);
-  const canDragSegments = segments.length > 1;
+  const segments = deckLayout
+    ? tabs.map((tab, index) => ({ kind: "single" as const, tab, index }))
+    : segmentTabs(tabs);
+  const canDragSegments = !deckLayout && segments.length > 1;
   const projectOf = (id: string) => tabs.find((tab) => tab.id === id)?.project;
-  const sortable = useSortable(tabIds, onReorder, {
-    onDropOnItem: onJoinTab,
-    onDropOnGroup: onJoinTabToGroup,
-    // Tab groups are project-scoped; a foreign drop is flagged, not applied.
-    canDropOn: (draggedId, kind, id) =>
-      kind === "group"
-        ? canJoinTabGroup(tabs, draggedId, id, projectOf)
-        : canJoinTabOnto(tabs, draggedId, id, projectOf),
-  });
+  const sortable = useSortable(
+    tabIds,
+    onReorder,
+    deckLayout
+      ? {}
+      : {
+          onDropOnItem: onJoinTab,
+          onDropOnGroup: onJoinTabToGroup,
+          // Tab groups are project-scoped; a foreign drop is flagged, not applied.
+          canDropOn: (draggedId, kind, id) =>
+            kind === "group"
+              ? canJoinTabGroup(tabs, draggedId, id, projectOf)
+              : canJoinTabOnto(tabs, draggedId, id, projectOf),
+        },
+  );
   const segmentDrag = useSegmentDrag(segments.length, (fromIndex, toIndex) => {
     const valid = reorderTabSegments(tabs, fromIndex, toIndex);
     if (valid) onReorder(valid);
@@ -980,13 +996,14 @@ function TitleBarComponent({
 
   const onTabContextMenu = useCallback(
     (tab: Tab, event: ReactMouseEvent<HTMLDivElement>) => {
+      if (deckLayout) return;
       setTabMenu({ x: event.clientX, y: event.clientY, tabId: tab.id });
     },
-    [],
+    [deckLayout],
   );
 
   const tabMenuItems: ExplorerMenuItem[] = (() => {
-    if (!tabMenu) return [];
+    if (!tabMenu || deckLayout) return [];
     const tab = tabs.find((entry) => entry.id === tabMenu.tabId);
     if (!tab) return [];
     const items: ExplorerMenuItem[] = [
@@ -1137,10 +1154,7 @@ function TitleBarComponent({
     groupLabels,
     basename(cwd) || currentProjectKey,
   );
-  const currentProjectLogo = resolveTabGroupLogo(
-    currentProjectKey,
-    groupLogos,
-  );
+  const currentProjectLogo = resolveTabGroupLogo(currentProjectKey, groupLogos);
   const currentProjectBusy = tabs.some(
     (tab) => tab.project === currentProjectKey && tab.busyHarnesses.length > 0,
   );
@@ -1160,11 +1174,13 @@ function TitleBarComponent({
   const trailingControls = (
     <div className="flex h-full shrink-0 items-stretch">
       <div className="flex items-center gap-0.5 px-2">
-        <ProjectDiffStats
-          cwd={cwd}
-          active={sourceControlActive}
-          onClick={onShowSourceControl}
-        />
+        {!deckLayout ? (
+          <ProjectDiffStats
+            cwd={cwd}
+            active={sourceControlActive}
+            onClick={onShowSourceControl}
+          />
+        ) : null}
         {railClosed && !projectless ? (
           <>
             <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
@@ -1176,10 +1192,7 @@ function TitleBarComponent({
           </>
         ) : null}
         {deckLayout && !projectless && onNewTerminal ? (
-          <IconButton
-            label={`New Terminal (${MOD}\`)`}
-            onClick={onNewTerminal}
-          >
+          <IconButton label={`New Terminal (${MOD}\`)`} onClick={onNewTerminal}>
             <SquareTerminal className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
@@ -1239,7 +1252,7 @@ function TitleBarComponent({
           placement="below"
           onCwdChange={onSelectProject}
           onNewTerminal={onNewTerminal}
-          buttonClassName="flex h-full min-w-0 max-w-64 shrink items-center gap-2 px-3 text-left text-sm font-medium leading-tight"
+          buttonClassName="flex h-full min-w-0 max-w-64 shrink items-center gap-2 px-6 text-left text-sm font-medium leading-tight"
         >
           {showCurrentProject ? (
             <>
@@ -1274,9 +1287,12 @@ function TitleBarComponent({
         {/*
           Strip sizes to its tabs (w-56 each), sits left; + follows.
           When crowded, tabs shrink to min-w-28 then the strip scrolls.
+          Deck mode grows tabs evenly; once each hits w-56 the strip scrolls.
         */}
         <div
-          className="relative h-full min-w-0 shrink overflow-hidden"
+          className={`relative h-full min-w-0 overflow-hidden ${
+            deckLayout ? "flex-1" : "shrink"
+          }`}
           data-tauri-drag-region="false"
           onWheel={(event) => {
             const el = tabStripRef.current;
@@ -1393,6 +1409,9 @@ function TitleBarComponent({
                       tab.id,
                     )}
                     deckLayout={deckLayout}
+                    showRightBorder={
+                      deckLayout && segmentIndex === segments.length - 1
+                    }
                     itemRef={
                       tab.id === activeId
                         ? (el) => {
@@ -1479,19 +1498,21 @@ function TitleBarComponent({
           </div>
         )}
 
-        <div
-          className="flex min-w-0 flex-1 items-center justify-center px-4"
-          data-tauri-drag-region
-        >
-          {!IS_MAC ? (
-            <span
-              className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
-              data-tauri-drag-region
-            >
-              {systemTitle}
-            </span>
-          ) : null}
-        </div>
+        {deckLayout && IS_MAC ? null : (
+          <div
+            className="flex min-w-0 flex-1 items-center justify-center px-4"
+            data-tauri-drag-region
+          >
+            {!IS_MAC ? (
+              <span
+                className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
+                data-tauri-drag-region
+              >
+                {systemTitle}
+              </span>
+            ) : null}
+          </div>
+        )}
         {trailingControls}
       </div>
     </header>

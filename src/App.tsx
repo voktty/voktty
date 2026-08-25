@@ -1674,32 +1674,39 @@ export default function App({
 
   const onJoinTab = useCallback(
     (draggedId: string, targetId: string) => {
+      if (deckLayout) return;
       setTabs(
         (prev) =>
           joinTabOnto(prev, draggedId, targetId, undefined, projectOfTab)
             ?.tabs ?? prev,
       );
     },
-    [projectOfTab],
+    [deckLayout, projectOfTab],
   );
 
   const onJoinTabToGroup = useCallback(
     (tabId: string, groupId: string) => {
+      if (deckLayout) return;
       setTabs((prev) => addTabToGroup(prev, tabId, groupId, projectOfTab));
     },
-    [projectOfTab],
+    [deckLayout, projectOfTab],
   );
 
-  const onAddToNewGroup = useCallback((tabId: string) => {
-    const groupId = newTabGroupId();
-    setTabs((prev) => addTabsToNewGroup(prev, [tabId], groupId));
-  }, []);
+  const onAddToNewGroup = useCallback(
+    (tabId: string) => {
+      if (deckLayout) return;
+      const groupId = newTabGroupId();
+      setTabs((prev) => addTabsToNewGroup(prev, [tabId], groupId));
+    },
+    [deckLayout],
+  );
 
   const onAddToGroup = useCallback(
     (tabId: string, groupId: string) => {
+      if (deckLayout) return;
       setTabs((prev) => addTabToGroup(prev, tabId, groupId, projectOfTab));
     },
-    [projectOfTab],
+    [deckLayout, projectOfTab],
   );
 
   const onRemoveFromGroup = useCallback((tabId: string) => {

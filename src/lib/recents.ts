@@ -65,6 +65,20 @@ export function rememberProject(path: string): RecentProject[] {
   return next;
 }
 
+/** Drops a project from the rail: its recent entry, saved order slot, and pin. */
+export function forgetProject(path: string): RecentProject[] {
+  const normalized = normalize(path);
+  const next = loadRecents().filter((item) => item.path !== normalized);
+  save(next);
+  saveProjectRailOrder(
+    loadProjectRailOrder().filter((entry) => entry !== normalized),
+  );
+  savePinnedProjects(
+    loadPinnedProjects().filter((entry) => entry !== normalized),
+  );
+  return next;
+}
+
 /** Most recently opened project, if any. Used to restore the folder on launch. */
 export function lastProjectPath(): string | null {
   for (const item of loadRecents()) {

@@ -36,6 +36,7 @@ export type TabGroupMenuExtraItem = {
   id: string;
   label: string;
   icon: typeof SquarePlus;
+  danger?: boolean;
 };
 
 type Props = {

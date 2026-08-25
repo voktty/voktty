@@ -5,6 +5,7 @@ import {
   PinOff,
   Plus,
   Search,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -58,6 +59,7 @@ import {
 } from "../lib/tabGroups";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
+import { RemoveProjectDialog } from "./RemoveProjectDialog";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
 import { SidebarUpdate } from "./SidebarUpdate";
@@ -70,13 +72,25 @@ const REVEAL_LABEL = IS_MAC
     ? "Reveal in File Explorer"
     : "Open Containing Folder";
 
-function projectMenuExtraItems(pinned: boolean): TabGroupMenuExtraItem[] {
-  return [
+function projectMenuExtraItems(
+  pinned: boolean,
+  canRemove: boolean,
+): TabGroupMenuExtraItem[] {
+  const items: TabGroupMenuExtraItem[] = [
     pinned
       ? { id: "unpin", label: "Unpin project", icon: PinOff }
       : { id: "pin", label: "Pin project", icon: Pin },
     { id: "reveal", label: REVEAL_LABEL, icon: FolderOpen },
   ];
+  if (canRemove) {
+    items.push({
+      id: "remove",
+      label: "Remove project",
+      icon: Trash2,
+      danger: true,
+    });
+  }
+  return items;
 }
 
 type Props = {
@@ -95,6 +109,7 @@ type Props = {
   onTogglePanel?: () => void;
   onSelectProject: (path: string) => void;
   onOpenProject: () => void;
+  onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
 };
 
 export function ProjectRail({
@@ -113,6 +128,7 @@ export function ProjectRail({
   onTogglePanel,
   onSelectProject,
   onOpenProject,
+  onRemoveProject,
 }: Props) {
   const [width, setWidth] = useState(loadProjectRailWidth);
   const [dragging, setDragging] = useState(false);
@@ -129,6 +145,10 @@ export function ProjectRail({
     y: number;
     path: string;
     projectKey: string;
+  } | null>(null);
+  const [removing, setRemoving] = useState<{
+    path: string;
+    name: string;
   } | null>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -345,9 +365,21 @@ export function ProjectRail({
 
   const onProjectMenuPick = (action: string) => {
     if (!projectMenu) return;
-    const { path } = projectMenu;
+    const { path, projectKey } = projectMenu;
     if (action === "pin" || action === "unpin") onTogglePin(path);
     else if (action === "reveal") void revealPath(path);
+    else if (action === "remove") {
+      setRemoving({
+        path,
+        name: resolveTabGroupLabel(projectKey, groupLabels, basename(path)),
+      });
+    }
+  };
+
+  const onConfirmRemove = (options: { purgeData: boolean }) => {
+    if (!removing) return;
+    onRemoveProject?.(removing.path, options);
+    setRemoving(null);
   };
 
   const pinnedIds = sections.pinned.map((item) => item.path);
@@ -500,8 +532,17 @@ export function ProjectRail({
             pinnedPaths.some((pinned) =>
               sameProjectPath(pinned, projectMenu.path),
             ),
+            Boolean(onRemoveProject),
           )}
           onExtraPick={onProjectMenuPick}
+        />
+      ) : null}
+      {removing ? (
+        <RemoveProjectDialog
+          name={removing.name}
+          path={removing.path}
+          onConfirm={onConfirmRemove}
+          onCancel={() => setRemoving(null)}
         />
       ) : null}
       <div
