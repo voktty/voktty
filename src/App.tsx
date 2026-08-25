@@ -3039,6 +3039,7 @@ export default function App({
         onOpenProject={deckLayout ? pickProject : undefined}
         onNew={deckLayout ? onNew : undefined}
         onSearch={onOpenSearch}
+        onGoToFile={deckLayout ? onGoToFile : undefined}
         searchActive={searchViewOpen}
         projectRailOpen={projectRailOpen}
         onToggleProjectRail={onToggleProjectRail}

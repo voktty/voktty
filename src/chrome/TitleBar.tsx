@@ -690,7 +690,7 @@ function TabStripChevron({
   );
 }
 
-function IconButton({
+export function IconButton({
   label,
   active,
   disabled,
@@ -1121,6 +1121,16 @@ function TitleBarComponent({
           active={sourceControlActive}
           onClick={onShowSourceControl}
         />
+        {stackPaneTabs ? (
+          <>
+            <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+              <Search className="size-3.5" strokeWidth={1.75} />
+            </IconButton>
+            <IconButton label={`New session (${MOD}T)`} onClick={onNew}>
+              <Plus className="size-3.5" strokeWidth={1.75} />
+            </IconButton>
+          </>
+        ) : null}
         {IS_MAC ? <OpacityControl /> : null}
       </div>
       {!IS_MAC ? <WindowControls /> : null}
@@ -1172,11 +1182,6 @@ function TitleBarComponent({
               )}
             </CwdPicker>
           ) : null}
-          <div className="flex shrink-0 items-center gap-0.5 px-2">
-            <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
-              <Search className="size-3.5" strokeWidth={1.75} />
-            </IconButton>
-          </div>
           <div className="flex min-w-0 flex-1 items-stretch">
             <div className="min-w-0 flex-1" data-tauri-drag-region />
             {trailingControls}
@@ -1187,16 +1192,16 @@ function TitleBarComponent({
           {sidebarOpen || !IS_MAC ? null : (
             <div className="w-[78px] shrink-0" data-tauri-drag-region />
           )}
-          <div className="flex shrink-0 items-center gap-0.5 px-2">
-            {sidebarOpen ? null : (
-              <TabVisitNav
-                canGoBack={canGoBack}
-                canGoForward={canGoForward}
-                onGoBack={onGoBack}
-                onGoForward={onGoForward}
-              />
-            )}
-            {deckLayout ? null : (
+          {deckLayout ? null : (
+            <div className="flex shrink-0 items-center gap-0.5 px-2">
+              {sidebarOpen ? null : (
+                <TabVisitNav
+                  canGoBack={canGoBack}
+                  canGoForward={canGoForward}
+                  onGoBack={onGoBack}
+                  onGoForward={onGoForward}
+                />
+              )}
               <IconButton
                 label={`Toggle Sidebar (${MOD}B)`}
                 active={sidebarOpen}
@@ -1204,11 +1209,11 @@ function TitleBarComponent({
               >
                 <PanelLeft className="size-3.5" strokeWidth={1.75} />
               </IconButton>
-            )}
-            <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
-              <Search className="size-3.5" strokeWidth={1.75} />
-            </IconButton>
-          </div>
+              <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+                <Search className="size-3.5" strokeWidth={1.75} />
+              </IconButton>
+            </div>
+          )}
         </>
       )}
 
@@ -1216,7 +1221,9 @@ function TitleBarComponent({
         className={
           stackPaneTabs
             ? "flex h-10 shrink-0 items-stretch border-y border-content/10"
-            : "flex min-w-0 flex-1 items-stretch border-l border-content/10"
+            : `flex min-w-0 flex-1 items-stretch${
+                deckLayout ? "" : " border-l border-content/10"
+              }`
         }
       >
         {/*

@@ -3,6 +3,7 @@ import {
   CircleAlert,
   GitBranch,
   ListFilter,
+  Plus,
   Search,
 } from "lucide-react";
 import {
@@ -22,7 +23,7 @@ import {
   type SidebarTabId,
 } from "../lib/appearance";
 import { basename } from "../lib/fs";
-import { IS_MAC } from "../lib/platform";
+import { IS_MAC, MOD } from "../lib/platform";
 import { resolveModel } from "../lib/models";
 import { projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
@@ -57,7 +58,7 @@ import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { ProjectRail } from "./ProjectRail";
 import { TerminalSpinner } from "./TerminalSpinner";
-import { TabVisitNav } from "./TitleBar";
+import { IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { SessionFiltersMenu } from "./SessionFiltersMenu";
@@ -114,6 +115,7 @@ type Props = {
   onOpenProject?: () => void;
   onNew?: () => void;
   onSearch?: () => void;
+  onGoToFile?: () => void;
   searchActive?: boolean;
   onToggleProjectRail?: () => void;
   projectRailOpen?: boolean;
@@ -157,6 +159,7 @@ function SidebarComponent({
   onOpenProject,
   onNew,
   onSearch,
+  onGoToFile,
   searchActive = false,
   onToggleProjectRail,
   projectRailOpen = true,
@@ -573,12 +576,13 @@ function SidebarComponent({
       {deckLayout && railVisible ? (
         <>
           <div
-            className="flex h-10 shrink-0 items-center border-b border-content/10 px-3"
+            className="flex h-10 shrink-0 items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
             data-tauri-drag-region
           >
-            <span className="min-w-0 truncate text-sm font-medium leading-tight">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
               Workspace
             </span>
+            <WorkspaceTitleActions onSearch={onGoToFile} onNew={onNew} />
           </div>
           <div
             role="tablist"
@@ -895,6 +899,33 @@ function SidebarComponent({
 }
 
 export const Sidebar = memo(SidebarComponent);
+
+function WorkspaceTitleActions({
+  onSearch,
+  onNew,
+}: {
+  onSearch?: () => void;
+  onNew?: () => void;
+}) {
+  if (!onSearch && !onNew) return null;
+  return (
+    <div
+      className="flex shrink-0 items-center gap-0.5"
+      data-tauri-drag-region="false"
+    >
+      {onSearch ? (
+        <IconButton label={`Go to File (${MOD}P)`} onClick={onSearch}>
+          <Search className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      ) : null}
+      {onNew ? (
+        <IconButton label={`New session (${MOD}T)`} onClick={onNew}>
+          <Plus className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      ) : null}
+    </div>
+  );
+}
 
 function SessionsHeaderButton({
   label,
