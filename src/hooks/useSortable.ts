@@ -19,6 +19,8 @@ export type SortableDropTarget = {
 
 export type SortableOptions = {
   axis?: "x" | "y";
+  /** Called once the pointer crosses the drag threshold. */
+  onActivate?: (id: string) => void;
   onDropOnItem?: (draggedId: string, targetId: string) => void;
   onDropOnGroup?: (draggedId: string, groupId: string) => void;
   canDropOn?: (
@@ -61,6 +63,8 @@ export function useSortable(
   onDropOnItemRef.current = options.onDropOnItem;
   const onDropOnGroupRef = useRef(options.onDropOnGroup);
   onDropOnGroupRef.current = options.onDropOnGroup;
+  const onActivateRef = useRef(options.onActivate);
+  onActivateRef.current = options.onActivate;
   const canDropOnRef = useRef(options.canDropOn);
   canDropOnRef.current = options.canDropOn;
   const nodes = useRef(new Map<string, HTMLElement>());
@@ -180,6 +184,7 @@ export function useSortable(
           setGrabbing(true);
           setDraggingId(id);
           setToIndex(from);
+          onActivateRef.current?.(id);
         }
         const dropOn = dropTargetAt(id, ev.clientX, ev.clientY);
         const next = indexAt(ev.clientX, ev.clientY);

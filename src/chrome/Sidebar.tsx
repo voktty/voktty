@@ -40,7 +40,7 @@ import {
   saveSessionSidebarFilters,
   type SessionSidebarFilters,
 } from "../lib/sessionFilters";
-import type { HarnessId } from "../lib/session";
+import type { HarnessId, Session } from "../lib/session";
 import type { SessionSummary } from "../lib/sessionStore";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
@@ -54,6 +54,7 @@ import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTree } from "./FileTree";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
+import { InboxPanel } from "./InboxPanel";
 import { ProjectRail } from "./ProjectRail";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
@@ -112,7 +113,12 @@ type Props = {
   onSelectProject?: (path: string) => void;
   onOpenProject?: () => void;
   onNew?: () => void;
+  onSearch?: () => void;
   onInbox?: () => void;
+  inboxOpen?: boolean;
+  inboxCount?: number;
+  inboxSessions?: Session[];
+  unseenFinishedIds?: Set<string>;
 };
 
 function SidebarComponent({
@@ -151,7 +157,12 @@ function SidebarComponent({
   onSelectProject,
   onOpenProject,
   onNew,
+  onSearch,
   onInbox,
+  inboxOpen = false,
+  inboxCount = 0,
+  inboxSessions = [],
+  unseenFinishedIds: unseenFinishedIdsProp,
 }: Props) {
   const [width, setWidth] = useState(rememberedWidth);
   const [dragging, setDragging] = useState(false);
@@ -184,21 +195,21 @@ function SidebarComponent({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const busyIdsRef = useRef(busySessionIds);
   const focusedSessionIdRef = useRef(activeSessionId);
-  const unseenFinishedRef = useRef<Set<string>>(new Set());
+  const unseenFinishedLocalRef = useRef<Set<string>>(new Set());
   if (
     busyIdsRef.current !== busySessionIds ||
     focusedSessionIdRef.current !== activeSessionId
   ) {
-    unseenFinishedRef.current = nextUnseenFinishedSessions({
+    unseenFinishedLocalRef.current = nextUnseenFinishedSessions({
       previousBusyIds: busyIdsRef.current,
       busyIds: busySessionIds,
-      previousUnseenIds: unseenFinishedRef.current,
+      previousUnseenIds: unseenFinishedLocalRef.current,
       focusedSessionId: activeSessionId,
     });
     busyIdsRef.current = busySessionIds;
     focusedSessionIdRef.current = activeSessionId;
   }
-  const unseenFinishedIds = unseenFinishedRef.current;
+  const unseenFinishedIds = unseenFinishedIdsProp ?? unseenFinishedLocalRef.current;
   const visibleSessions = filterSessionsByQuery(
     filterSessionsByStatus(
       filterSessionsByTime(
@@ -428,28 +439,27 @@ function SidebarComponent({
     commitWidth();
   };
 
-  return (
-    <div className={`flex h-full shrink-0 ${open ? "" : "hidden"}`}>
-      {onSelectProject && onOpenProject ? (
-        <ProjectRail
-          cwd={cwd}
-          recents={recents}
-          busyPaths={busyProjectPaths}
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
-          onGoBack={onGoBack}
-          onGoForward={onGoForward}
-          onNew={onNew}
-          onInbox={onInbox}
-          onSelectProject={onSelectProject}
-          onOpenProject={onOpenProject}
-        />
-      ) : null}
-      <aside
-        ref={asideRef}
-        style={{ width }}
-        className="sidebar-glass relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
-      >
+  const onTabPick = (itemId: SidebarTab) => {
+    if (inboxOpen) onInbox?.();
+    onTabChange(itemId);
+  };
+
+  const sidebarContent = inboxOpen ? (
+    <InboxPanel
+      width={width}
+      sessions={inboxSessions}
+      approvalSessionIds={approvalSessionIds}
+      doneSessionIds={unseenFinishedIds}
+      busySessionIds={busySessionIds}
+      activeSessionId={activeSessionId}
+      onSelectSession={onSelectSession}
+    />
+  ) : (
+    <aside
+      ref={asideRef}
+      style={{ width }}
+      className="sidebar-glass relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
+    >
         {showProjectRail ? null : (
           <div
             className="flex h-9.75 shrink-0 items-center justify-end pr-1.5"
@@ -491,7 +501,7 @@ function SidebarComponent({
                 } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return;
-                  onTabChange(itemId);
+                  onTabPick(itemId);
                   sortable.onItemPointerDown(itemId, event);
                 }}
               >
@@ -508,7 +518,7 @@ function SidebarComponent({
                   data-tauri-drag-region="false"
                   onClick={() => {
                     if (sortable.consumeClick()) return;
-                    onTabChange(itemId);
+                    onTabPick(itemId);
                   }}
                   className={`relative flex h-9.75 min-w-0 flex-1 items-center justify-center text-[12px] leading-none ${
                     canDragTabs ? "cursor-grab active:cursor-grabbing" : ""
@@ -771,6 +781,31 @@ function SidebarComponent({
             onClose={() => setFilterMenu(null)}
           />
         ) : null}
+      </aside>
+  );
+
+  return (
+    <div className={`flex h-full shrink-0 ${open ? "" : "hidden"}`}>
+      {onSelectProject && onOpenProject ? (
+        <ProjectRail
+          cwd={cwd}
+          recents={recents}
+          busyPaths={busyProjectPaths}
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          onGoBack={onGoBack}
+          onGoForward={onGoForward}
+          onNew={onNew}
+          onSearch={onSearch}
+          onInbox={onInbox}
+          inboxOpen={inboxOpen}
+          inboxCount={inboxCount}
+          onSelectProject={onSelectProject}
+          onOpenProject={onOpenProject}
+        />
+      ) : null}
+      {sidebarContent}
+      <div className="relative shrink-0 self-stretch" style={{ width: 0 }}>
         <div
           role="separator"
           aria-orientation="vertical"
@@ -778,7 +813,7 @@ function SidebarComponent({
           aria-valuenow={width}
           aria-valuemin={MIN_WIDTH}
           aria-valuemax={MAX_WIDTH}
-          className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
+          className={`absolute inset-y-0 -left-px z-10 w-1.5 cursor-col-resize touch-none ${
             dragging ? "bg-content/15" : "hover:bg-content/10"
           }`}
           onPointerDown={onResizePointerDown}
@@ -787,7 +822,7 @@ function SidebarComponent({
           onPointerCancel={onResizePointerUp}
           onDoubleClick={onResizeDoubleClick}
         />
-      </aside>
+      </div>
     </div>
   );
 }
