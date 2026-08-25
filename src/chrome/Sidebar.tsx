@@ -525,9 +525,7 @@ function SidebarComponent({
         aria-label="Sidebar"
         data-tauri-drag-region={showProjectRail ? true : undefined}
         className={`flex shrink-0 overflow-visible border-content/10 ${
-          deckLayout
-            ? "h-10 items-center border-b"
-            : "border-y"
+          deckLayout ? "h-10 items-center border-b" : "border-y"
         }`}
       >
         {visibleTabs.map((itemId, index) => {
@@ -643,7 +641,7 @@ function SidebarComponent({
       </div>
       {deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
         <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
-          <div className="relative flex h-7 min-w-0 flex-1 items-center rounded-md bg-content/8">
+          <div className="relative flex h-7 min-w-0 flex-1 items-center">
             <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
             {sessionSearchInput}
           </div>
