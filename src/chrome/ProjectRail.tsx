@@ -721,32 +721,33 @@ function ProjectCard({
         className="flex min-w-0 flex-1 cursor-default items-center gap-2 text-left group-hover:pr-6"
       >
         <div className="relative size-4 shrink-0">
-          <div className="grid size-4 place-items-center transition-opacity group-hover:opacity-0">
-            {logoPath ? (
-              <ProjectLogoIcon
-                path={logoPath}
-                className="size-4 rounded-sm"
-                imageClassName="size-4"
-              />
-            ) : (
-              <div className="size-4 flex items-center justify-center">
-                <span
-                  aria-hidden
-                  className="block size-2 rounded-full"
-                  style={{ background: color }}
+          {busy ? (
+            <span className="grid size-4 place-items-center text-accent">
+              <TerminalSpinner className="inline-block w-2.5 select-none text-center text-[9px] leading-none text-accent" />
+            </span>
+          ) : (
+            <div className="grid size-4 place-items-center transition-opacity group-hover:opacity-0">
+              {logoPath ? (
+                <ProjectLogoIcon
+                  path={logoPath}
+                  className="size-4 rounded-sm"
+                  imageClassName="size-4"
                 />
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="size-4 flex items-center justify-center">
+                  <span
+                    aria-hidden
+                    className="block size-2 rounded-full"
+                    style={{ background: color }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
           {name}
         </span>
-        {busy ? (
-          <span className="grid size-4 shrink-0 place-items-center text-accent">
-            <TerminalSpinner className="inline-block w-2.5 select-none text-center text-[9px] leading-none text-accent" />
-          </span>
-        ) : null}
         {hasChanges ? (
           <span className="flex shrink-0 items-center gap-1.5 group-hover:hidden">
             {files > 0 ? (
