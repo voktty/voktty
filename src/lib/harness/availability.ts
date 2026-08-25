@@ -12,13 +12,17 @@ import { isLiveHarness } from "./registry";
 
 export type HarnessAvailability = Record<HarnessId, boolean>;
 
-const UNAVAILABLE_HINT: Record<HarnessId, string> = {
-  claude: "Install Claude Code and run `claude auth login`",
-  codex: "Install Codex CLI and run `codex login`",
-  cursor: "Install Cursor CLI and run `agent login`",
-  opencode: "Install OpenCode and run `opencode auth login`",
-  pi: "Install Pi (`npm i -g @earendil-works/pi-coding-agent`) and authenticate",
-  fx: "Install fx (`curl -fsSL https://fx.sh/setup.sh | bash`) and run `fx login`",
+/**
+ * We only ever check whether the binary exists, never whether it is
+ * authenticated, so the hint must not blame a login.
+ */
+const CLI: Record<HarnessId, { name: string; install?: string }> = {
+  claude: { name: "Claude Code CLI" },
+  codex: { name: "Codex CLI" },
+  cursor: { name: "Cursor CLI" },
+  opencode: { name: "OpenCode CLI" },
+  pi: { name: "Pi CLI", install: "npm i -g @earendil-works/pi-coding-agent" },
+  fx: { name: "fx CLI", install: "curl -fsSL https://fx.sh/setup.sh | bash" },
 };
 
 let availability: HarnessAvailability = {
@@ -54,7 +58,9 @@ export function isHarnessAvailable(id: HarnessId): boolean {
 }
 
 export function harnessUnavailableHint(id: HarnessId): string {
-  return UNAVAILABLE_HINT[id];
+  const { name, install } = CLI[id];
+  const how = install ? ` (\`${install}\`)` : "";
+  return `${name} not found${how}. Install it, or restart MonoCode if it is already installed.`;
 }
 
 export function probeHarnessAvailability(): Promise<void> {

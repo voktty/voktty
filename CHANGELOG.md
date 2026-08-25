@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Read and Find rows show the file or search query next to the verb, instead of a bare Read/Find. Every provider uses the same nested-arg extraction; Cursor also recovers Glob/Grep from its session store when ACP sends empty input.
+- Provider CLIs installed through a Node version manager (nvm, fnm, mise, Volta) no longer show as unavailable when MonoCode is launched from Finder. Detection reads PATH from an interactive login shell, so anything set up in `.zshrc` is found, and a disabled provider now says its CLI was not found instead of implying it needs to be authenticated.
+- Codex works when only the Codex desktop app is installed. MonoCode falls back to the CLI bundled inside `Codex.app` when no standalone `codex` is on PATH, preferring a real install whenever one exists.
 
 ## [0.1.5] - 2026-08-23
 

@@ -626,6 +626,10 @@ fn exec_capture(command: &str, args: &[String], cwd: Option<&str>) -> Result<Str
 
 const KILL_ESCALATE: Duration = Duration::from_secs(2);
 
+/// An interactive shell has to source the user's whole rc file; nvm alone can
+/// take a second.
+const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(5);
+
 fn isolate_child(cmd: &mut Command) {
     #[cfg(unix)]
     {
@@ -737,6 +741,16 @@ fn resolve_codex() -> Option<PathBuf> {
     if let Some(from_shell) = which_via_login_shell("codex") {
         candidates.push(from_shell);
     }
+
+    // Last resort: the Codex app bundles its own CLI, but never puts it on
+    // PATH. It is pinned to the app release (often a prerelease), so a real
+    // CLI install always wins.
+    if let Some(home) = &home {
+        candidates.push(home.join("Applications/Codex.app/Contents/Resources/codex"));
+    }
+    candidates.push(PathBuf::from(
+        "/Applications/Codex.app/Contents/Resources/codex",
+    ));
 
     candidates.into_iter().find(|path| path.is_file())
 }
@@ -874,6 +888,9 @@ fn pi_help_mentions_rpc(path: &Path) -> bool {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // npm-installed harnesses are `#!/usr/bin/env node` scripts, so this probe
+    // fails outright without a PATH that has node on it.
+    apply_gui_env(&mut cmd);
     isolate_child(&mut cmd);
     let Ok(child) = cmd.spawn() else {
         return false;
@@ -949,6 +966,9 @@ fn fx_help_mentions_acp(path: &Path) -> bool {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // npm-installed harnesses are `#!/usr/bin/env node` scripts, so this probe
+    // fails outright without a PATH that has node on it.
+    apply_gui_env(&mut cmd);
     isolate_child(&mut cmd);
     let Ok(child) = cmd.spawn() else {
         return false;
@@ -1002,35 +1022,44 @@ fn is_cursor_agent(path: &Path) -> bool {
     false
 }
 
+/// Look `name` up in the interactive login shell's PATH.
+///
+/// Reads the cached PATH rather than spawning a shell per lookup: six
+/// resolvers each asking `command -v` meant six shell startups per probe.
 fn which_via_login_shell(name: &str) -> Option<PathBuf> {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| {
-        if cfg!(target_os = "macos") {
-            "/bin/zsh".into()
-        } else {
-            "/bin/bash".into()
-        }
-    });
-    let output = Command::new(&shell)
-        .args(["-lc", &format!("command -v {name}")])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
+    which_in_path(&login_shell_path()?, name)
+}
+
+fn which_in_path(path: &str, name: &str) -> Option<PathBuf> {
+    path.split(':')
+        .filter(|dir| !dir.is_empty())
+        .map(|dir| Path::new(dir).join(name))
+        .find(|candidate| is_executable_file(candidate))
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path)
+            .map(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
     }
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if path.is_empty() {
-        return None;
-    }
-    let p = PathBuf::from(path);
-    if p.is_file() {
-        Some(p)
-    } else {
-        None
+    #[cfg(not(unix))]
+    {
+        path.is_file()
     }
 }
 
 fn apply_gui_path(cmd: &mut Command) {
     let mut parts: Vec<String> = Vec::new();
+    // The user's own PATH wins. A harness is always spawned by absolute path,
+    // so this only decides which `node`, `git`, or `rg` the harness itself
+    // finds -- and there the answer should match the user's terminal. The
+    // fixed list below stays as a fallback for when the shell read fails.
+    if let Some(path) = login_shell_path() {
+        parts.push(path);
+    }
     if let Some(home) = dirs_home() {
         parts.push(format!("{home}/.local/bin"));
         parts.push(format!("{home}/.cargo/bin"));
@@ -1101,6 +1130,19 @@ fn apply_fx_env(cmd: &mut Command) {
 
 static LOGIN_SHELL_ENV: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
+/// Keys worth keeping out of `printenv`. PATH is the important one: a
+/// Finder-launched app inherits only launchd's bare PATH.
+const LOGIN_SHELL_KEYS: [&str; 4] = [
+    "PATH",
+    "AI_GATEWAY_API_KEY",
+    "FX_AI_GATEWAY_API_KEY",
+    "VERCEL_OIDC_TOKEN",
+];
+
+fn login_shell_path() -> Option<String> {
+    login_shell_env("PATH")
+}
+
 fn login_shell_env(name: &str) -> Option<String> {
     let mut cache = LOGIN_SHELL_ENV.lock().ok()?;
     if cache.is_none() {
@@ -1112,6 +1154,12 @@ fn login_shell_env(name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Read the environment the user actually gets in a terminal.
+///
+/// `-lic`, not `-lc`: zsh reads `.zshrc` only for *interactive* shells, and
+/// version managers (nvm, fnm, mise, volta) all initialize from there. A
+/// login-but-not-interactive shell sees `.zshenv`/`.zprofile` only, so every
+/// nvm-managed CLI looks uninstalled.
 fn load_login_shell_env() -> HashMap<String, String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| {
         if cfg!(target_os = "macos") {
@@ -1121,7 +1169,7 @@ fn load_login_shell_env() -> HashMap<String, String> {
         }
     });
     let mut cmd = Command::new(&shell);
-    cmd.args(["-lc", "printenv"])
+    cmd.args(["-lic", "printenv"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
@@ -1134,7 +1182,7 @@ fn load_login_shell_env() -> HashMap<String, String> {
     thread::spawn(move || {
         let _ = tx.send(child.wait_with_output());
     });
-    let output = match rx.recv_timeout(Duration::from_secs(3)) {
+    let output = match rx.recv_timeout(LOGIN_SHELL_TIMEOUT) {
         Ok(Ok(output)) => output,
         _ => {
             terminate(pid);
@@ -1146,11 +1194,7 @@ fn load_login_shell_env() -> HashMap<String, String> {
         let Some((key, value)) = line.split_once('=') else {
             continue;
         };
-        if matches!(
-            key,
-            "AI_GATEWAY_API_KEY" | "FX_AI_GATEWAY_API_KEY" | "VERCEL_OIDC_TOKEN"
-        ) && !value.is_empty()
-        {
+        if LOGIN_SHELL_KEYS.contains(&key) && !value.is_empty() {
             map.insert(key.to_string(), value.to_string());
         }
     }
@@ -1230,6 +1274,39 @@ mod tests {
             let _ = child.kill();
             panic!("process group survived after its leader exited");
         }
+    }
+
+    #[test]
+    fn which_in_path_takes_the_first_executable_hit() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("monocode-which-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (empty, unreadable, real) = (dir.join("a"), dir.join("b"), dir.join("c"));
+        for sub in [&empty, &unreadable, &real] {
+            std::fs::create_dir_all(sub).unwrap();
+        }
+
+        // A same-named file that is not executable must not win.
+        let decoy = unreadable.join("claude");
+        std::fs::write(&decoy, b"not a program\n").unwrap();
+        std::fs::set_permissions(&decoy, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        let target = real.join("claude");
+        std::fs::write(&target, b"#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let path = format!(
+            "{}::{}:{}",
+            empty.display(),
+            unreadable.display(),
+            real.display()
+        );
+        assert_eq!(which_in_path(&path, "claude"), Some(target));
+        assert_eq!(which_in_path(&path, "codex"), None);
+        assert_eq!(which_in_path("", "claude"), None);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
