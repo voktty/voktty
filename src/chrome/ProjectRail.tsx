@@ -88,6 +88,8 @@ type Props = {
   onGoBack?: () => void;
   onGoForward?: () => void;
   onNew?: () => void;
+  newActive?: boolean;
+  newShortcut?: string;
   onSearch?: () => void;
   searchActive?: boolean;
   onTogglePanel?: () => void;
@@ -104,13 +106,14 @@ export function ProjectRail({
   onGoBack,
   onGoForward,
   onNew,
+  newActive = false,
+  newShortcut,
   onSearch,
   searchActive = false,
   onTogglePanel,
   onSelectProject,
-  onOpenProject: _onOpenProject,
+  onOpenProject,
 }: Props) {
-  void _onOpenProject;
   const [width, setWidth] = useState(loadProjectRailWidth);
   const [dragging, setDragging] = useState(false);
   const [railOrder, setRailOrder] = useState(loadProjectRailOrder);
@@ -357,9 +360,6 @@ export function ProjectRail({
     axis: "y",
     onActivate: onSelectProject,
   });
-  const hasProjects =
-    sections.pinned.length > 0 || sections.projects.length > 0;
-
   return (
     <nav
       ref={navRef}
@@ -386,7 +386,16 @@ export function ProjectRail({
       </div>
 
       <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
-        <RailAction label="New" icon={Plus} onClick={onNew} />
+        <RailAction
+          label="New project"
+          icon={Plus}
+          onClick={onNew}
+          active={newActive}
+          shortcut={newShortcut}
+          ariaLabel={
+            newShortcut ? `New project (${newShortcut})` : "New project"
+          }
+        />
         <RailAction
           label="Search"
           icon={Search}
@@ -404,12 +413,6 @@ export function ProjectRail({
         }}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none pb-2"
       >
-        {!hasProjects ? (
-          <p className="px-3 py-2 text-[11px] leading-tight text-content/40">
-            No projects yet
-          </p>
-        ) : null}
-
         {sections.pinned.length > 0 ? (
           <ProjectSection
             label="Pinned"
@@ -431,26 +434,26 @@ export function ProjectRail({
           />
         ) : null}
 
-        {sections.projects.length > 0 ? (
-          <ProjectSection
-            label="Projects"
-            items={sections.projects}
-            cwd={cwd}
-            busy={busy}
-            sortable={projectSortable}
-            pinned={false}
-            searchActive={searchActive}
-            onSelect={onSelectProject}
-            onTogglePin={onTogglePin}
-            onContextMenu={onProjectContextMenu}
-            onOpenMenu={openProjectMenu}
-            groupLabels={groupLabels}
-            groupColors={groupColors}
-            groupCustomColors={groupCustomColors}
-            groupLogos={groupLogos}
-            groupMascots={groupMascots}
-          />
-        ) : null}
+        <ProjectSection
+          label="Projects"
+          items={sections.projects}
+          emptyLabel="No projects yet"
+          onAdd={onOpenProject}
+          cwd={cwd}
+          busy={busy}
+          sortable={projectSortable}
+          pinned={false}
+          searchActive={searchActive}
+          onSelect={onSelectProject}
+          onTogglePin={onTogglePin}
+          onContextMenu={onProjectContextMenu}
+          onOpenMenu={openProjectMenu}
+          groupLabels={groupLabels}
+          groupColors={groupColors}
+          groupCustomColors={groupCustomColors}
+          groupLogos={groupLogos}
+          groupMascots={groupMascots}
+        />
       </div>
       <SidebarUpdate />
       {projectMenu ? (
@@ -579,6 +582,8 @@ type SortableHandle = ReturnType<typeof useSortable>;
 function ProjectSection({
   label,
   items,
+  emptyLabel,
+  onAdd,
   cwd,
   busy,
   sortable,
@@ -596,6 +601,8 @@ function ProjectSection({
 }: {
   label: string;
   items: RecentProject[];
+  emptyLabel?: string;
+  onAdd?: () => void;
   cwd: string;
   busy: Set<string>;
   sortable: SortableHandle;
@@ -613,9 +620,27 @@ function ProjectSection({
 }) {
   return (
     <div className="shrink-0">
-      <div className="px-3 pb-1.5 pt-1">
-        <span className="px-1 text-xs text-content/50">{label}</span>
+      <div className="flex items-center gap-1 px-3 pb-1.5 pt-1">
+        <span className="min-w-0 flex-1 truncate px-1 text-xs text-content/50">
+          {label}
+        </span>
+        {onAdd ? (
+          <button
+            type="button"
+            title="Open project"
+            aria-label="Open project"
+            onClick={onAdd}
+            className="grid size-5 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/8 hover:text-content"
+          >
+            <Plus className="size-3.5" strokeWidth={1.75} />
+          </button>
+        ) : null}
       </div>
+      {items.length === 0 && emptyLabel ? (
+        <p className="px-4 pb-1 text-[11px] leading-tight text-content/40">
+          {emptyLabel}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-px px-2">
         {items.map((item, index) => (
           <ProjectCard
@@ -714,7 +739,7 @@ function ProjectCard({
       className={`group relative flex touch-none items-stretch rounded-md px-2 py-2 ${
         selected
           ? "bg-content/12 text-content"
-          : "text-content/75 hover:bg-content/5 hover:text-content"
+          : "opacity-65 hover:bg-content/5 hover:text-content"
       } ${dragging ? "opacity-40" : ""} cursor-default`}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -771,11 +796,7 @@ function ProjectCard({
           )}
         </div>
         {busy ? (
-          <Shimmer
-            as="span"
-            duration={1.4}
-            className={nameClassName}
-          >
+          <Shimmer as="span" duration={1.4} className={nameClassName}>
             {name}
           </Shimmer>
         ) : (

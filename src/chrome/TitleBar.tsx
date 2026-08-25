@@ -1130,7 +1130,7 @@ function TitleBarComponent({
     } catch {}
   }, [systemTitle]);
 
-  const stackPaneTabs = deckLayout && !projectRailOpen;
+  const railClosed = deckLayout && !projectRailOpen;
   const currentProjectKey = projectName(cwd);
   const currentProjectLabel = resolveTabGroupLabel(
     currentProjectKey,
@@ -1151,6 +1151,12 @@ function TitleBarComponent({
     currentProjectKey,
   );
   const showCurrentProject = looksLikeProject(cwd);
+  // Until a project is picked, deck mode hides the rail and the sidebar, so
+  // nothing project-scoped is actionable and the window controls need room.
+  const projectless = deckLayout && !showCurrentProject;
+  // With the rail closed the sidebar header carries no actions, so the project
+  // button and its shortcuts ride in the title bar's single row.
+  const showProjectButton = railClosed && Boolean(onSelectProject);
   const trailingControls = (
     <div className="flex h-full shrink-0 items-stretch">
       <div className="flex items-center gap-0.5 px-2">
@@ -1159,7 +1165,7 @@ function TitleBarComponent({
           active={sourceControlActive}
           onClick={onShowSourceControl}
         />
-        {stackPaneTabs ? (
+        {railClosed && !projectless ? (
           <>
             <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
               <Search className="size-3.5" strokeWidth={1.75} />
@@ -1169,6 +1175,14 @@ function TitleBarComponent({
             </IconButton>
           </>
         ) : null}
+        {deckLayout && !projectless && onNewTerminal ? (
+          <IconButton
+            label={`New Terminal (${MOD}\`)`}
+            onClick={onNewTerminal}
+          >
+            <SquareTerminal className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
         {IS_MAC ? <OpacityControl /> : null}
       </div>
       {!IS_MAC ? <WindowControls /> : null}
@@ -1177,97 +1191,85 @@ function TitleBarComponent({
 
   return (
     <header
-      className={
-        stackPaneTabs
-          ? "flex shrink-0 flex-col"
-          : "flex h-10 shrink-0 items-stretch border-b border-content/10"
-      }
+      className="flex h-10 shrink-0 items-stretch border-b border-content/10"
       data-tauri-drag-region
       onDoubleClick={onTitleBarDoubleClick}
     >
-      {stackPaneTabs ? (
-        <div className="flex h-10 shrink-0 items-stretch">
-          {!projectRailOpen && onSelectProject ? (
-            <CwdPicker
-              cwd={cwd}
-              recents={recents}
-              placement="below"
-              onCwdChange={onSelectProject}
-              onNewTerminal={onNewTerminal}
-              buttonClassName="flex h-full min-w-0 max-w-64 shrink items-center gap-2 px-3 text-left text-sm font-medium leading-tight"
-            >
-              {showCurrentProject ? (
-                <>
-                  {currentProjectLogo ? (
-                    <ProjectLogoIcon
-                      path={currentProjectLogo}
-                      className="size-4 shrink-0 rounded-sm"
-                      imageClassName="size-4"
-                    />
-                  ) : (
-                    <ProjectMascot
-                      project={currentProjectKey}
-                      color={currentProjectColor}
-                      name={resolveTabGroupMascot(
-                        currentProjectKey,
-                        groupMascots,
-                      )}
-                      className="size-3 shrink-0"
-                      active={currentProjectBusy}
-                    />
-                  )}
-                  <span className="min-w-0 truncate">{currentProjectLabel}</span>
-                </>
-              ) : (
-                <span className="min-w-0 truncate text-content/50">
-                  No project
-                </span>
-              )}
-            </CwdPicker>
-          ) : null}
-          <div className="flex min-w-0 flex-1 items-stretch">
-            <div className="min-w-0 flex-1" data-tauri-drag-region />
-            {trailingControls}
-          </div>
+      {/* Both the rail and the sidebar step aside without a project, so the
+          title bar takes over the traffic lights and the rail toggle. */}
+      {(projectless && railClosed) || (!sidebarOpen && IS_MAC) ? (
+        <div className="w-[78px] shrink-0" data-tauri-drag-region />
+      ) : null}
+      {projectless && railClosed ? (
+        <div className="flex shrink-0 items-center px-1.5">
+          <IconButton
+            label={`Toggle Sidebar (${MOD}B)`}
+            onClick={onToggleSidebar}
+          >
+            <PanelLeft className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
         </div>
-      ) : (
-        <>
-          {sidebarOpen || !IS_MAC ? null : (
-            <div className="w-[78px] shrink-0" data-tauri-drag-region />
+      ) : null}
+      {deckLayout ? null : (
+        <div className="flex shrink-0 items-center gap-0.5 px-2">
+          {sidebarOpen ? null : (
+            <TabVisitNav
+              canGoBack={canGoBack}
+              canGoForward={canGoForward}
+              onGoBack={onGoBack}
+              onGoForward={onGoForward}
+            />
           )}
-          {deckLayout ? null : (
-            <div className="flex shrink-0 items-center gap-0.5 px-2">
-              {sidebarOpen ? null : (
-                <TabVisitNav
-                  canGoBack={canGoBack}
-                  canGoForward={canGoForward}
-                  onGoBack={onGoBack}
-                  onGoForward={onGoForward}
+          <IconButton
+            label={`Toggle Sidebar (${MOD}B)`}
+            active={sidebarOpen}
+            onClick={onToggleSidebar}
+          >
+            <PanelLeft className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+          <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+            <Search className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        </div>
+      )}
+      {showProjectButton && onSelectProject ? (
+        <CwdPicker
+          cwd={cwd}
+          recents={recents}
+          placement="below"
+          onCwdChange={onSelectProject}
+          onNewTerminal={onNewTerminal}
+          buttonClassName="flex h-full min-w-0 max-w-64 shrink items-center gap-2 px-3 text-left text-sm font-medium leading-tight"
+        >
+          {showCurrentProject ? (
+            <>
+              {currentProjectLogo ? (
+                <ProjectLogoIcon
+                  path={currentProjectLogo}
+                  className="size-4 shrink-0 rounded-sm"
+                  imageClassName="size-4"
+                />
+              ) : (
+                <ProjectMascot
+                  project={currentProjectKey}
+                  color={currentProjectColor}
+                  name={resolveTabGroupMascot(currentProjectKey, groupMascots)}
+                  className="size-3 shrink-0"
+                  active={currentProjectBusy}
                 />
               )}
-              <IconButton
-                label={`Toggle Sidebar (${MOD}B)`}
-                active={sidebarOpen}
-                onClick={onToggleSidebar}
-              >
-                <PanelLeft className="size-3.5" strokeWidth={1.75} />
-              </IconButton>
-              <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
-                <Search className="size-3.5" strokeWidth={1.75} />
-              </IconButton>
-            </div>
+              <span className="min-w-0 truncate">{currentProjectLabel}</span>
+            </>
+          ) : (
+            <span className="min-w-0 truncate text-content/50">No project</span>
           )}
-        </>
-      )}
+        </CwdPicker>
+      ) : null}
 
       <div
-        className={
-          stackPaneTabs
-            ? "flex h-10 shrink-0 items-stretch border-y border-content/10"
-            : `flex min-w-0 flex-1 items-stretch${
-                deckLayout ? "" : " border-l border-content/10"
-              }`
-        }
+        className={`flex min-w-0 flex-1 items-stretch${
+          deckLayout && !showProjectButton ? "" : " border-l border-content/10"
+        }`}
       >
         {/*
           Strip sizes to its tabs (w-56 each), sits left; + follows.
@@ -1459,40 +1461,38 @@ function TitleBarComponent({
           />
         ) : null}
 
-        <div className="flex shrink-0 items-center gap-0.5 border-l border-content/10 px-1.5">
-          <IconButton label={`New Tab (${MOD}T)`} onClick={onNew}>
-            <Plus className="size-3.5" strokeWidth={1.75} />
-          </IconButton>
-          {onNewTerminal ? (
-            <IconButton
-              label={`New Terminal (${MOD}\`)`}
-              onClick={onNewTerminal}
-            >
-              <SquareTerminal className="size-3.5" strokeWidth={1.75} />
+        {/* Deck mode keeps New in the sidebar and Terminal by the appearance
+            control, so the strip carries no trailing actions. */}
+        {deckLayout ? null : (
+          <div className="flex shrink-0 items-center gap-0.5 border-l border-content/10 px-1.5">
+            <IconButton label={`New Tab (${MOD}T)`} onClick={onNew}>
+              <Plus className="size-3.5" strokeWidth={1.75} />
             </IconButton>
-          ) : null}
-        </div>
+            {onNewTerminal ? (
+              <IconButton
+                label={`New Terminal (${MOD}\`)`}
+                onClick={onNewTerminal}
+              >
+                <SquareTerminal className="size-3.5" strokeWidth={1.75} />
+              </IconButton>
+            ) : null}
+          </div>
+        )}
 
-        {stackPaneTabs ? (
-          <div className="min-w-0 flex-1" data-tauri-drag-region />
-        ) : (
-          <>
-            <div
-              className="flex min-w-0 flex-1 items-center justify-center px-4"
+        <div
+          className="flex min-w-0 flex-1 items-center justify-center px-4"
+          data-tauri-drag-region
+        >
+          {!IS_MAC ? (
+            <span
+              className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
               data-tauri-drag-region
             >
-              {!IS_MAC ? (
-                <span
-                  className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
-                  data-tauri-drag-region
-                >
-                  {systemTitle}
-                </span>
-              ) : null}
-            </div>
-            {trailingControls}
-          </>
-        )}
+              {systemTitle}
+            </span>
+          ) : null}
+        </div>
+        {trailingControls}
       </div>
     </header>
   );

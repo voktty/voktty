@@ -108,7 +108,7 @@ export const SessionPane = memo(function SessionPane({
       runtimeMode={session.runtimeMode}
       cwd={session.cwd}
       recents={recents}
-      hideProjectPicker={hideProjectPicker}
+      hideProjectPicker={hideProjectPicker && !isEmpty}
       context={session.context}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}

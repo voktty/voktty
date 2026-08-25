@@ -51,7 +51,7 @@ import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSessionDiffStats } from "../hooks/useSessionDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
-import type { RecentProject } from "../lib/recents";
+import { looksLikeProject, type RecentProject } from "../lib/recents";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTree } from "./FileTree";
 import { FileTypeIcon } from "./FileTypeIcon";
@@ -114,6 +114,7 @@ type Props = {
   onSelectProject?: (path: string) => void;
   onOpenProject?: () => void;
   onNew?: () => void;
+  onNewBlank?: () => void;
   onSearch?: () => void;
   onGoToFile?: () => void;
   searchActive?: boolean;
@@ -158,6 +159,7 @@ function SidebarComponent({
   onSelectProject,
   onOpenProject,
   onNew,
+  onNewBlank,
   onSearch,
   onGoToFile,
   searchActive = false,
@@ -245,7 +247,11 @@ function SidebarComponent({
   const showProjectRail =
     deckLayout && Boolean(onSelectProject && onOpenProject);
   const railVisible = showProjectRail && projectRailOpen;
-  const sidebarVisible = open && !searchActive;
+  const inProject = looksLikeProject(cwd);
+  // A blank session has no project to browse, so the shell stands alone until
+  // one is picked — whether or not the rail is open.
+  const sidebarVisible =
+    open && !searchActive && !(deckLayout && !inProject);
   const gitStatuses = useGitFileStatuses(cwd, open && tab === "files");
   const changeStats = useProjectDiffStats(cwd, open);
   const groupLogos = useTabGroupLogos();
@@ -596,7 +602,7 @@ function SidebarComponent({
         <>
           {deckLayout ? (
             <div
-              className="flex h-10 shrink-0 items-center pr-1.5"
+              className="flex h-10 shrink-0 items-center border-b border-content/10 pr-1.5"
               data-tauri-drag-region
             >
               {IS_MAC ? (
@@ -629,7 +635,9 @@ function SidebarComponent({
             role="tablist"
             aria-label="Workspace"
             className={`flex shrink-0 overflow-visible border-content/10 ${
-              deckLayout ? "h-10 items-stretch border-y" : "border-y"
+              // Mirrors the rail-open header stack: each row owns its own
+              // bottom border, so the seams land on the title bar's.
+              deckLayout ? "h-9 items-stretch border-b" : "border-y"
             }`}
           >
             {workspaceTabItems}
@@ -885,7 +893,9 @@ function SidebarComponent({
           canGoForward={canGoForward}
           onGoBack={onGoBack}
           onGoForward={onGoForward}
-          onNew={onNew}
+          onNew={onNewBlank ?? onNew}
+          newActive={!searchActive && !inProject}
+          newShortcut={onNewBlank ? `${MOD}N` : undefined}
           onSearch={onSearch}
           searchActive={searchActive}
           onTogglePanel={onToggleProjectRail}
