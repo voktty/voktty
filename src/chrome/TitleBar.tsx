@@ -51,6 +51,7 @@ import { TabGroupMenu, type TabGroupMenuAction } from "./TabGroupMenu";
 import { CwdPicker } from "./CwdPicker";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
+import { ProjectMascot } from "./ProjectMascot";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSegmentDrag } from "../hooks/useSegmentDrag";
@@ -432,6 +433,8 @@ function GroupLabel({
   color,
   collapsed,
   project,
+  projectKey,
+  busy,
   count,
   logoPath,
   canDrag,
@@ -445,6 +448,8 @@ function GroupLabel({
   color: string;
   collapsed: boolean;
   project: string;
+  projectKey: string;
+  busy: boolean;
   count: number;
   logoPath?: string | null;
   canDrag: boolean;
@@ -497,11 +502,11 @@ function GroupLabel({
           imageClassName="size-3.5"
         />
       ) : (
-        <span
-          className="size-2 min-w-2 rounded-full mt-px"
-          style={{
-            background: `color-mix(in srgb, ${color} 70%, transparent)`,
-          }}
+        <ProjectMascot
+          project={projectKey}
+          color={color}
+          className="size-3 min-w-3 shrink-0"
+          active={busy}
         />
       )}
       <span className="text-[12.5px] truncate">{project}</span>
@@ -519,6 +524,7 @@ function TabGroupBlock({
   segment,
   displayColor,
   displayLabel,
+  projectKey,
   logoPath,
   activeId,
   closable,
@@ -539,6 +545,7 @@ function TabGroupBlock({
   segment: Extract<TabGroupSegment, { kind: "group" }>;
   displayColor: string;
   displayLabel: string;
+  projectKey: string;
   logoPath?: string | null;
   activeId: string;
   closable: boolean;
@@ -556,6 +563,7 @@ function TabGroupBlock({
   deckLayout?: boolean;
 }) {
   const activeInGroup = segment.tabs.some((tab) => tab.id === activeId);
+  const groupBusy = segment.tabs.some((tab) => tab.busyHarnesses.length > 0);
   const activeTabRef = useRef<HTMLDivElement | null>(null);
   const draggingGroup = segmentDrag.draggingFromIndex === segmentIndex;
   const showSegmentStart =
@@ -609,6 +617,8 @@ function TabGroupBlock({
         color={displayColor}
         collapsed={collapsed}
         project={displayLabel}
+        projectKey={projectKey}
+        busy={groupBusy}
         count={segment.tabs.length}
         logoPath={logoPath}
         canDrag={canDragGroup}
@@ -1119,6 +1129,9 @@ function TitleBarComponent({
     groupCustomColors,
     currentProjectKey,
   );
+  const currentProjectBusy = tabs.some(
+    (tab) => tab.project === currentProjectKey && tab.busyHarnesses.length > 0,
+  );
   const showCurrentProject = looksLikeProject(cwd);
   const trailingControls = (
     <div className="flex h-full shrink-0 items-stretch">
@@ -1174,10 +1187,11 @@ function TitleBarComponent({
                       imageClassName="size-4"
                     />
                   ) : (
-                    <span
-                      aria-hidden
-                      className="block size-2 shrink-0 rounded-full"
-                      style={{ background: currentProjectColor }}
+                    <ProjectMascot
+                      project={currentProjectKey}
+                      color={currentProjectColor}
+                      className="size-3 shrink-0"
+                      active={currentProjectBusy}
                     />
                   )}
                   <span className="min-w-0 truncate">{currentProjectLabel}</span>
@@ -1288,6 +1302,7 @@ function TitleBarComponent({
                       groupLabels,
                       shared || "Group",
                     )}
+                    projectKey={shared || segment.key}
                     logoPath={
                       shared ? resolveTabGroupLogo(shared, groupLogos) : null
                     }

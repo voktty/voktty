@@ -443,6 +443,52 @@ html.is-reordering * {
   animation: shimmer-text var(--shimmer-duration, 2s) linear infinite;
 }
 
+/* Two-frame mascot loop — a hard swap plus a one-pixel hop, arcade style. */
+.mascot-active {
+  animation: mascot-hop var(--mascot-beat, 460ms) infinite;
+}
+
+.mascot-rest {
+  animation: mascot-rest var(--mascot-beat, 460ms) infinite;
+}
+
+.mascot-talk {
+  animation: mascot-talk var(--mascot-beat, 460ms) infinite;
+}
+
+@keyframes mascot-hop {
+  0%,
+  49.99% {
+    transform: translateY(0);
+  }
+  50%,
+  100% {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes mascot-rest {
+  0%,
+  49.99% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes mascot-talk {
+  0%,
+  49.99% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
 @keyframes shimmer-text {
   from {
     background-position: 100% center;

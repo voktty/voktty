@@ -54,6 +54,7 @@ import {
   saveTabGroupLabel,
 } from "../lib/tabGroups";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
+import { ProjectMascot } from "./ProjectMascot";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
 import { SidebarUpdate } from "./SidebarUpdate";
@@ -719,7 +720,7 @@ function ProjectCard({
         className="flex min-w-0 flex-1 cursor-default items-center gap-2 text-left group-hover:pr-6"
       >
         <div className="relative size-4 shrink-0">
-          {busy ? (
+          {busy && logoPath ? (
             <span className="grid size-4 place-items-center text-accent">
               <TerminalSpinner className="inline-block w-2.5 select-none text-center text-[9px] leading-none text-accent" />
             </span>
@@ -732,13 +733,12 @@ function ProjectCard({
                   imageClassName="size-4"
                 />
               ) : (
-                <div className="size-4 flex items-center justify-center">
-                  <span
-                    aria-hidden
-                    className="block size-2 rounded-full"
-                    style={{ background: color }}
-                  />
-                </div>
+                <ProjectMascot
+                  project={projectKey}
+                  color={color}
+                  className="size-3"
+                  active={busy}
+                />
               )}
             </div>
           )}
