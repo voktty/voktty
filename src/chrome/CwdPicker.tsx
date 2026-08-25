@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import { basename, pickFolder } from "../lib/fs";
 import { prettyCwd, prettyParent } from "../lib/paths";
@@ -24,6 +25,9 @@ type Props = {
   recents: RecentProject[];
   projectLogoPath?: string | null;
   enabled?: boolean;
+  placement?: "above" | "below";
+  buttonClassName?: string;
+  children?: ReactNode;
   onCwdChange: (path: string) => void;
   onNewTerminal?: () => void;
   onClose?: () => void;
@@ -40,12 +44,25 @@ type Row =
   | { kind: "new-project" }
   | { kind: "new-terminal" };
 
-function menuStyle(anchor: DOMRect): CSSProperties {
+function menuStyle(
+  anchor: DOMRect,
+  placement: "above" | "below",
+): CSSProperties {
   const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
   const left = Math.min(
     Math.max(8, anchor.left),
     window.innerWidth - width - 8,
   );
+  if (placement === "below") {
+    return {
+      position: "fixed",
+      left,
+      top: anchor.bottom + 6,
+      width,
+      maxHeight: Math.min(360, window.innerHeight - anchor.bottom - 12),
+      zIndex: 50,
+    };
+  }
   return {
     position: "fixed",
     left,
@@ -82,6 +99,9 @@ export function CwdPicker({
   recents,
   projectLogoPath,
   enabled = true,
+  placement = "above",
+  buttonClassName,
+  children,
   onCwdChange,
   onNewTerminal,
   onClose,
@@ -149,7 +169,7 @@ export function CwdPicker({
   };
 
   const openMenu = (anchor: DOMRect) => {
-    setMenu(menuStyle(anchor));
+    setMenu(menuStyle(anchor, placement));
     setOpen(true);
   };
 
@@ -157,12 +177,12 @@ export function CwdPicker({
     if (!open || !root.current) return;
     const place = () => {
       const rect = root.current?.getBoundingClientRect();
-      if (rect) setMenu(menuStyle(rect));
+      if (rect) setMenu(menuStyle(rect, placement));
     };
     place();
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
-  }, [open]);
+  }, [open, placement]);
 
   useLayoutEffect(() => {
     if (!moreOpen || !moreRef.current) {
@@ -265,7 +285,7 @@ export function CwdPicker({
   const moreIndex = hasMore ? previewRecents.length : -1;
 
   return (
-    <div ref={root} className="relative min-w-0">
+    <div ref={root} className="relative flex h-full min-w-0">
       <button
         type="button"
         title={cwd}
@@ -273,6 +293,7 @@ export function CwdPicker({
         aria-expanded={open}
         aria-haspopup="menu"
         disabled={!enabled}
+        data-tauri-drag-region="false"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
           if (!enabled) return;
@@ -284,12 +305,25 @@ export function CwdPicker({
           if (rect) openMenu(rect);
         }}
         onKeyDown={onKeyDown}
-        className={`flex min-w-0 items-center gap-1.5 ${
-          open ? "text-content" : "text-content/50 hover:text-content"
-        } disabled:opacity-40`}
+        className={
+          buttonClassName
+            ? `${buttonClassName} ${
+                open ? "bg-content/8 text-content" : "hover:bg-content/5"
+              } disabled:opacity-40`
+            : `flex min-w-0 items-center gap-1.5 ${
+                open ? "text-content" : "text-content/50 hover:text-content"
+              } disabled:opacity-40`
+        }
       >
-        <ProjectLogoIcon path={projectLogoPath} fallbackStrokeWidth={1.5} />
-        <span className="truncate font-mono text-[12px]">{label}</span>
+        {children ?? (
+          <>
+            <ProjectLogoIcon
+              path={projectLogoPath}
+              fallbackStrokeWidth={1.5}
+            />
+            <span className="truncate font-mono text-[12px]">{label}</span>
+          </>
+        )}
       </button>
       {open && menu ? (
         <div

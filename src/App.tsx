@@ -12,8 +12,10 @@ import { useSidebarLayout } from "./hooks/useSidebarLayout";
 import {
   LAYOUT_CHANGE_EVENT,
   loadSidebarOpen,
+  loadProjectRailOpen,
   loadSidebarTabOrder,
   saveSidebarOpen,
+  saveProjectRailOpen,
   type SidebarLayout,
   type SidebarTabId,
 } from "./lib/appearance";
@@ -373,6 +375,7 @@ export default function App({
     [],
   );
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen);
+  const [projectRailOpen, setProjectRailOpen] = useState(loadProjectRailOpen);
   const sidebarLayout = useSidebarLayout();
   const deckLayout = sidebarLayout === "deck";
   const [sidebarTab, setSidebarTab] = useState<SidebarTabId>(
@@ -2702,9 +2705,25 @@ export default function App({
   );
 
   const onToggleSidebar = useCallback(() => {
+    if (deckLayout) {
+      setProjectRailOpen((open) => {
+        const next = !open;
+        saveProjectRailOpen(next);
+        return next;
+      });
+      return;
+    }
     setSidebarOpen((open) => {
       const next = !open;
       saveSidebarOpen(next);
+      return next;
+    });
+  }, [deckLayout]);
+
+  const onToggleProjectRail = useCallback(() => {
+    setProjectRailOpen((open) => {
+      const next = !open;
+      saveProjectRailOpen(next);
       return next;
     });
   }, []);
@@ -2983,7 +3002,7 @@ export default function App({
     >
       <Sidebar
         cwd={sidebarCwd}
-        open={sidebarOpen}
+        open={deckLayout || sidebarOpen}
         layout={sidebarLayout}
         tab={sidebarTab}
         onTabChange={setSidebarTab}
@@ -3021,6 +3040,8 @@ export default function App({
         onNew={deckLayout ? onNew : undefined}
         onSearch={onOpenSearch}
         searchActive={searchViewOpen}
+        projectRailOpen={projectRailOpen}
+        onToggleProjectRail={onToggleProjectRail}
         unseenFinishedIds={unseenFinishedIds}
       />
 
@@ -3053,7 +3074,9 @@ export default function App({
           tabs={titleTabs}
           activeId={activeTabId}
           cwd={sidebarCwd}
-          sidebarOpen={sidebarOpen}
+          sidebarOpen={deckLayout || sidebarOpen}
+          deckLayout={deckLayout}
+          projectRailOpen={projectRailOpen}
           sourceControlActive={
             deckLayout
               ? sidebarOpen && sidebarTab === "changes"
@@ -3080,6 +3103,8 @@ export default function App({
           onGroupNewTab={onGroupNewTab}
           onGroupClose={onGroupCloseTabs}
           onGroupMoveToNewWindow={onGroupMoveToNewWindow}
+          recents={recents}
+          onSelectProject={deckLayout ? onSelectProject : undefined}
         />
 
         <main className="relative min-h-0 min-w-0 flex-1">
@@ -3165,7 +3190,7 @@ export default function App({
             history={history}
             sessions={sessions}
             focusToken={searchViewFocusToken}
-            besideRail={deckLayout}
+            besideRail={deckLayout && projectRailOpen}
             onClose={onLeaveSearch}
             onOpenFile={onOpenFile}
             onOpenSession={onSelectHistorySession}

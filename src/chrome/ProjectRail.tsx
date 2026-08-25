@@ -85,6 +85,7 @@ type Props = {
   onNew?: () => void;
   onSearch?: () => void;
   searchActive?: boolean;
+  onTogglePanel?: () => void;
   onSelectProject: (path: string) => void;
   onOpenProject: () => void;
 };
@@ -100,6 +101,7 @@ export function ProjectRail({
   onNew,
   onSearch,
   searchActive = false,
+  onTogglePanel,
   onSelectProject,
   onOpenProject: _onOpenProject,
 }: Props) {
@@ -355,7 +357,7 @@ export function ProjectRail({
       className="sidebar-glass relative flex shrink-0 flex-col border-r border-content/10"
     >
       <div
-        className="flex h-10 shrink-0 items-center pr-1.5"
+        className="flex h-10 shrink-0 items-center border-b border-content/10 pr-1.5"
         data-tauri-drag-region
       >
         {IS_MAC ? (
@@ -367,6 +369,8 @@ export function ProjectRail({
           canGoForward={canGoForward}
           onGoBack={onGoBack}
           onGoForward={onGoForward}
+          onTogglePanel={onTogglePanel}
+          panelActive
         />
       </div>
 

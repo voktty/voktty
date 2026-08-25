@@ -6,6 +6,7 @@ const THEME_SATURATION_KEY = "monocode.themeSaturation";
 const OPACITY_KEY = "monocode.sidebarOpacity";
 const BLUR_KEY = "monocode.sidebarBlur";
 const OPEN_KEY = "monocode.sidebarOpen";
+const PROJECT_RAIL_OPEN_KEY = "monocode.projectRailOpen";
 const BODY_KEY = "monocode.bodyGlass";
 const SCHEME_KEY = "monocode.colorScheme";
 const SIDEBAR_TAB_ORDER_KEY = "monocode.sidebarTabOrder";
@@ -252,6 +253,14 @@ export function loadSidebarOpen(): boolean {
 
 export function saveSidebarOpen(value: boolean) {
   writeFlag(OPEN_KEY, value);
+}
+
+export function loadProjectRailOpen(): boolean {
+  return readFlag(PROJECT_RAIL_OPEN_KEY) ?? true;
+}
+
+export function saveProjectRailOpen(value: boolean) {
+  writeFlag(PROJECT_RAIL_OPEN_KEY, value);
 }
 
 export function loadSidebarTabOrder(): SidebarTabId[] {

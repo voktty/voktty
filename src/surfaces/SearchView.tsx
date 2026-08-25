@@ -63,10 +63,7 @@ import { IS_MAC } from "../lib/platform";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import { searchProject, type OpenFileFn } from "../lib/search";
 import { type Session } from "../lib/session";
-import {
-  searchSessions,
-  type SessionSummary,
-} from "../lib/sessionStore";
+import { searchSessions, type SessionSummary } from "../lib/sessionStore";
 
 const SCOPES: { id: SearchScope; label: string }[] = [
   { id: "all", label: "All" },
@@ -457,7 +454,7 @@ function EmptyState() {
             <Icon key={index} className="size-5" strokeWidth={1.5} />
           ))}
         </div>
-        <div className="absolute grid size-14 place-items-center rounded-2xl bg-content/6">
+        <div className="absolute grid size-14 place-items-center rounded-2xl bg-content/6 backdrop-blur-sm">
           <Search className="size-6 text-content/50" strokeWidth={1.75} />
         </div>
       </div>
@@ -568,7 +565,10 @@ function rowCopy(
   if (hit.kind === "message") {
     return {
       icon: (
-        <MessageSquare className="size-3.5 text-content/55" strokeWidth={1.75} />
+        <MessageSquare
+          className="size-3.5 text-content/55"
+          strokeWidth={1.75}
+        />
       ),
       title: <Highlight text={hit.preview || hit.title} query={query} />,
       meta: hit.title,

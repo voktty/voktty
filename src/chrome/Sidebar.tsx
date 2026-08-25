@@ -22,6 +22,7 @@ import {
   type SidebarTabId,
 } from "../lib/appearance";
 import { basename } from "../lib/fs";
+import { IS_MAC } from "../lib/platform";
 import { resolveModel } from "../lib/models";
 import { projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
@@ -114,6 +115,8 @@ type Props = {
   onNew?: () => void;
   onSearch?: () => void;
   searchActive?: boolean;
+  onToggleProjectRail?: () => void;
+  projectRailOpen?: boolean;
   unseenFinishedIds?: Set<string>;
 };
 
@@ -155,6 +158,8 @@ function SidebarComponent({
   onNew,
   onSearch,
   searchActive = false,
+  onToggleProjectRail,
+  projectRailOpen = true,
   unseenFinishedIds: unseenFinishedIdsProp,
 }: Props) {
   const [width, setWidth] = useState(rememberedWidth);
@@ -236,6 +241,8 @@ function SidebarComponent({
   const canDragTabs = visibleTabs.length > 1;
   const showProjectRail =
     deckLayout && Boolean(onSelectProject && onOpenProject);
+  const railVisible = showProjectRail && projectRailOpen;
+  const sidebarVisible = open && !searchActive;
   const gitStatuses = useGitFileStatuses(cwd, open && tab === "files");
   const changeStats = useProjectDiffStats(cwd, open);
   const groupLogos = useTabGroupLogos();
@@ -481,109 +488,150 @@ function SidebarComponent({
     onTabChange(itemId);
   };
 
+  const workspaceTabItems = visibleTabs.map((itemId, index) => {
+    const active = tab === itemId;
+    const changeCount = changeStats?.files ?? 0;
+    const showChangeBadge = itemId === "changes" && changeCount > 0;
+    const draggingTab = sortable.draggingId === itemId;
+    const showStart =
+      sortable.draggingId &&
+      sortable.toIndex === index &&
+      sortable.fromIndex !== null &&
+      sortable.toIndex < sortable.fromIndex;
+    const showEnd =
+      sortable.draggingId &&
+      sortable.toIndex === index &&
+      sortable.fromIndex !== null &&
+      sortable.toIndex > sortable.fromIndex;
+    return (
+      <div
+        key={itemId}
+        ref={(el) => sortable.setItemRef(itemId, el)}
+        className={`relative flex min-w-0 flex-1 touch-none items-stretch ${
+          draggingTab ? "opacity-40" : ""
+        } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          onTabPick(itemId);
+          sortable.onItemPointerDown(itemId, event);
+        }}
+      >
+        {showStart ? (
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-0.5 bg-accent" />
+        ) : null}
+        {showEnd ? (
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-0.5 bg-accent" />
+        ) : null}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={active}
+          data-tauri-drag-region="false"
+          onClick={() => {
+            if (sortable.consumeClick()) return;
+            onTabPick(itemId);
+          }}
+          className={`relative flex min-w-0 flex-1 items-center justify-center px-1 text-[12px] leading-none ${
+            deckLayout ? "h-full" : "h-9"
+          } ${
+            canDragTabs ? "cursor-grab active:cursor-grabbing" : ""
+          } ${
+            active
+              ? "text-content bg-content/10"
+              : "text-content/50 hover:text-content"
+          }`}
+        >
+          <span className="relative inline-block min-w-0 max-w-full">
+            <span
+              className={`block truncate${showChangeBadge ? " pr-2.5" : ""}`}
+            >
+              {TAB_LABELS[itemId]}
+            </span>
+            {showChangeBadge ? (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute top-0 left-[calc(100%-4px)] grid min-h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[7px] font-semibold leading-none text-white tabular-nums"
+              >
+                {changeCount > 99 ? "99+" : changeCount}
+              </span>
+            ) : null}
+          </span>
+          {active ? (
+            <span className="absolute inset-x-0 bottom-0 h-px bg-content" />
+          ) : null}
+        </button>
+      </div>
+    );
+  });
+
   const sidebarContent = (
     <aside
       ref={asideRef}
       style={{ width }}
       className="sidebar-glass relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
     >
-      {showProjectRail ? null : (
-        <div
-          className={`flex shrink-0 items-center justify-end pr-1.5 ${
-            deckLayout ? "h-10" : "h-9.75"
-          }`}
-          data-tauri-drag-region
-        >
-          <TabVisitNav
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            onGoBack={onGoBack}
-            onGoForward={onGoForward}
-          />
-        </div>
-      )}
-      <div
-        role="tablist"
-        aria-label="Sidebar"
-        data-tauri-drag-region={showProjectRail ? true : undefined}
-        className={`flex shrink-0 overflow-visible border-content/10 ${
-          deckLayout ? "h-10 items-center border-b" : "border-y"
-        }`}
-      >
-        {visibleTabs.map((itemId, index) => {
-          const active = tab === itemId;
-          const changeCount = changeStats?.files ?? 0;
-          const showChangeBadge = itemId === "changes" && changeCount > 0;
-          const draggingTab = sortable.draggingId === itemId;
-          const showStart =
-            sortable.draggingId &&
-            sortable.toIndex === index &&
-            sortable.fromIndex !== null &&
-            sortable.toIndex < sortable.fromIndex;
-          const showEnd =
-            sortable.draggingId &&
-            sortable.toIndex === index &&
-            sortable.fromIndex !== null &&
-            sortable.toIndex > sortable.fromIndex;
-          return (
+      {deckLayout && railVisible ? (
+        <>
+          <div
+            className="flex h-10 shrink-0 items-center border-b border-content/10 px-3"
+            data-tauri-drag-region
+          >
+            <span className="min-w-0 truncate text-sm font-medium leading-tight">
+              Workspace
+            </span>
+          </div>
+          <div
+            role="tablist"
+            aria-label="Workspace"
+            className="flex h-9 shrink-0 items-stretch border-b border-content/10"
+          >
+            {workspaceTabItems}
+          </div>
+        </>
+      ) : (
+        <>
+          {deckLayout ? (
             <div
-              key={itemId}
-              ref={(el) => sortable.setItemRef(itemId, el)}
-              className={`relative flex min-w-0 flex-1 touch-none items-stretch ${
-                draggingTab ? "opacity-40" : ""
-              } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
-              onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                onTabPick(itemId);
-                sortable.onItemPointerDown(itemId, event);
-              }}
+              className="flex h-10 shrink-0 items-center pr-1.5"
+              data-tauri-drag-region
             >
-              {showStart ? (
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-0.5 bg-accent" />
+              {IS_MAC ? (
+                <div className="w-[78px] shrink-0" data-tauri-drag-region />
               ) : null}
-              {showEnd ? (
-                <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-0.5 bg-accent" />
-              ) : null}
-              <button
-                type="button"
-                role="tab"
-                aria-selected={active}
-                data-tauri-drag-region="false"
-                onClick={() => {
-                  if (sortable.consumeClick()) return;
-                  onTabPick(itemId);
-                }}
-                className={`relative flex h-9 min-w-0 flex-1 items-center justify-center px-1 text-[12px] leading-none ${
-                  canDragTabs ? "cursor-grab active:cursor-grabbing" : ""
-                } ${
-                  active
-                    ? "text-content bg-content/10"
-                    : "text-content/50 hover:text-content"
-                }`}
-              >
-                <span className="relative inline-block min-w-0 max-w-full">
-                  <span
-                    className={`block truncate${showChangeBadge ? " pr-2.5" : ""}`}
-                  >
-                    {TAB_LABELS[itemId]}
-                  </span>
-                  {showChangeBadge ? (
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute top-0 left-[calc(100%-4px)] grid min-h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[7px] font-semibold leading-none text-white tabular-nums"
-                    >
-                      {changeCount > 99 ? "99+" : changeCount}
-                    </span>
-                  ) : null}
-                </span>
-                {active ? (
-                  <span className="absolute inset-x-0 bottom-0 h-px bg-content" />
-                ) : null}
-              </button>
+              <div className="min-w-0 flex-1" data-tauri-drag-region />
+              <TabVisitNav
+                canGoBack={canGoBack}
+                canGoForward={canGoForward}
+                onGoBack={onGoBack}
+                onGoForward={onGoForward}
+                onTogglePanel={onToggleProjectRail}
+                panelActive={false}
+              />
             </div>
-          );
-        })}
-      </div>
+          ) : (
+            <div
+              className="flex h-9.75 shrink-0 items-center justify-end pr-1.5"
+              data-tauri-drag-region
+            >
+              <TabVisitNav
+                canGoBack={canGoBack}
+                canGoForward={canGoForward}
+                onGoBack={onGoBack}
+                onGoForward={onGoForward}
+              />
+            </div>
+          )}
+          <div
+            role="tablist"
+            aria-label="Workspace"
+            className={`flex shrink-0 overflow-visible border-content/10 ${
+              deckLayout ? "h-10 items-stretch border-y" : "border-y"
+            }`}
+          >
+            {workspaceTabItems}
+          </div>
+        </>
+      )}
       <div
         className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
           tab === "files" ? "" : "hidden"
@@ -821,10 +869,10 @@ function SidebarComponent({
   return (
     <div
       className={`flex h-full shrink-0 ${
-        open || (searchActive && showProjectRail) ? "" : "hidden"
+        railVisible || sidebarVisible ? "" : "hidden"
       }`}
     >
-      {onSelectProject && onOpenProject ? (
+      {railVisible && onSelectProject && onOpenProject ? (
         <ProjectRail
           cwd={cwd}
           recents={recents}
@@ -836,11 +884,12 @@ function SidebarComponent({
           onNew={onNew}
           onSearch={onSearch}
           searchActive={searchActive}
+          onTogglePanel={onToggleProjectRail}
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}
         />
       ) : null}
-      {open && !searchActive ? sidebarContent : null}
+      {sidebarVisible ? sidebarContent : null}
     </div>
   );
 }

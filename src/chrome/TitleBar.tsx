@@ -21,6 +21,8 @@ import {
   type ReactNode,
 } from "react";
 import { basename } from "../lib/fs";
+import { projectName } from "../lib/paths";
+import { looksLikeProject } from "../lib/recents";
 import type { HarnessId } from "../lib/session";
 import {
   canJoinTabGroup,
@@ -46,6 +48,7 @@ import {
   type TabGroupSegment,
 } from "../lib/tabGroups";
 import { TabGroupMenu, type TabGroupMenuAction } from "./TabGroupMenu";
+import { CwdPicker } from "./CwdPicker";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
@@ -59,6 +62,7 @@ import { TerminalSpinner } from "./TerminalSpinner";
 import { OpacityControl } from "./OpacityControl";
 import { WindowControls } from "./WindowControls";
 import { IS_MAC, MOD } from "../lib/platform";
+import type { RecentProject } from "../lib/recents";
 
 export type Tab = {
   id: string;
@@ -89,6 +93,8 @@ type Props = {
   activeId: string;
   cwd: string;
   sidebarOpen: boolean;
+  deckLayout?: boolean;
+  projectRailOpen?: boolean;
   sourceControlActive?: boolean;
   onToggleSidebar: () => void;
   onShowSourceControl?: () => void;
@@ -111,6 +117,8 @@ type Props = {
   onGroupNewTab?: (groupId: string) => void;
   onGroupClose?: (tabIds: string[]) => void;
   onGroupMoveToNewWindow?: (tabIds: string[]) => void;
+  recents?: RecentProject[];
+  onSelectProject?: (path: string) => void;
 };
 
 function sessionMeta(tab: Tab): string {
@@ -725,11 +733,17 @@ export function TabVisitNav({
   canGoForward = false,
   onGoBack,
   onGoForward,
+  onTogglePanel,
+  panelActive = false,
+  panelLabel = "Toggle Projects",
 }: {
   canGoBack?: boolean;
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
+  onTogglePanel?: () => void;
+  panelActive?: boolean;
+  panelLabel?: string;
 }) {
   return (
     <div className="flex shrink-0 items-center gap-0.5">
@@ -747,6 +761,15 @@ export function TabVisitNav({
       >
         <ChevronRight className="size-3.5" strokeWidth={1.75} />
       </IconButton>
+      {onTogglePanel ? (
+        <IconButton
+          label={panelLabel}
+          active={panelActive}
+          onClick={onTogglePanel}
+        >
+          <PanelLeft className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      ) : null}
     </div>
   );
 }
@@ -756,6 +779,8 @@ function TitleBarComponent({
   activeId,
   cwd,
   sidebarOpen,
+  deckLayout = false,
+  projectRailOpen = true,
   sourceControlActive = false,
   onToggleSidebar,
   onShowSourceControl,
@@ -778,6 +803,8 @@ function TitleBarComponent({
   onGroupNewTab,
   onGroupClose,
   onGroupMoveToNewWindow,
+  recents = [],
+  onSelectProject,
 }: Props) {
   const tabIds = tabs.map((tab) => tab.id);
   const segments = segmentTabs(tabs);
@@ -1068,38 +1095,130 @@ function TitleBarComponent({
     } catch {}
   }, [systemTitle]);
 
+  const stackPaneTabs = deckLayout && !projectRailOpen;
+  const currentProjectKey = projectName(cwd);
+  const currentProjectLabel = resolveTabGroupLabel(
+    currentProjectKey,
+    groupLabels,
+    basename(cwd) || currentProjectKey,
+  );
+  const currentProjectLogo = resolveTabGroupLogo(
+    currentProjectKey,
+    groupLogos,
+  );
+  const currentProjectColor = resolveTabGroupColor(
+    currentProjectKey,
+    groupColors,
+    groupCustomColors,
+    currentProjectKey,
+  );
+  const showCurrentProject = looksLikeProject(cwd);
+  const trailingControls = (
+    <div className="flex h-full shrink-0 items-stretch">
+      <div className="flex items-center gap-0.5 px-2">
+        <ProjectDiffStats
+          cwd={cwd}
+          active={sourceControlActive}
+          onClick={onShowSourceControl}
+        />
+        {IS_MAC ? <OpacityControl /> : null}
+      </div>
+      {!IS_MAC ? <WindowControls /> : null}
+    </div>
+  );
+
   return (
     <header
-      className="flex h-10 shrink-0 items-stretch border-b border-content/10"
+      className={
+        stackPaneTabs
+          ? "flex shrink-0 flex-col"
+          : "flex h-10 shrink-0 items-stretch border-b border-content/10"
+      }
       data-tauri-drag-region
       onDoubleClick={onTitleBarDoubleClick}
     >
-      {sidebarOpen || !IS_MAC ? null : (
-        <div className="w-[78px] shrink-0" data-tauri-drag-region />
+      {stackPaneTabs ? (
+        <div className="flex h-10 shrink-0 items-stretch">
+          {!projectRailOpen && onSelectProject ? (
+            <CwdPicker
+              cwd={cwd}
+              recents={recents}
+              placement="below"
+              onCwdChange={onSelectProject}
+              onNewTerminal={onNewTerminal}
+              buttonClassName="flex h-full min-w-0 max-w-64 shrink items-center gap-2 px-3 text-left text-sm font-medium leading-tight"
+            >
+              {showCurrentProject ? (
+                <>
+                  {currentProjectLogo ? (
+                    <ProjectLogoIcon
+                      path={currentProjectLogo}
+                      className="size-4 shrink-0 rounded-sm"
+                      imageClassName="size-4"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="block size-2 shrink-0 rounded-full"
+                      style={{ background: currentProjectColor }}
+                    />
+                  )}
+                  <span className="min-w-0 truncate">{currentProjectLabel}</span>
+                </>
+              ) : (
+                <span className="min-w-0 truncate text-content/50">
+                  No project
+                </span>
+              )}
+            </CwdPicker>
+          ) : null}
+          <div className="flex shrink-0 items-center gap-0.5 px-2">
+            <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+              <Search className="size-3.5" strokeWidth={1.75} />
+            </IconButton>
+          </div>
+          <div className="flex min-w-0 flex-1 items-stretch">
+            <div className="min-w-0 flex-1" data-tauri-drag-region />
+            {trailingControls}
+          </div>
+        </div>
+      ) : (
+        <>
+          {sidebarOpen || !IS_MAC ? null : (
+            <div className="w-[78px] shrink-0" data-tauri-drag-region />
+          )}
+          <div className="flex shrink-0 items-center gap-0.5 px-2">
+            {sidebarOpen ? null : (
+              <TabVisitNav
+                canGoBack={canGoBack}
+                canGoForward={canGoForward}
+                onGoBack={onGoBack}
+                onGoForward={onGoForward}
+              />
+            )}
+            {deckLayout ? null : (
+              <IconButton
+                label={`Toggle Sidebar (${MOD}B)`}
+                active={sidebarOpen}
+                onClick={onToggleSidebar}
+              >
+                <PanelLeft className="size-3.5" strokeWidth={1.75} />
+              </IconButton>
+            )}
+            <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+              <Search className="size-3.5" strokeWidth={1.75} />
+            </IconButton>
+          </div>
+        </>
       )}
 
-      <div className="flex shrink-0 items-center gap-0.5 px-2">
-        {sidebarOpen ? null : (
-          <TabVisitNav
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            onGoBack={onGoBack}
-            onGoForward={onGoForward}
-          />
-        )}
-        <IconButton
-          label={`Toggle Sidebar (${MOD}B)`}
-          active={sidebarOpen}
-          onClick={onToggleSidebar}
-        >
-          <PanelLeft className="size-3.5" strokeWidth={1.75} />
-        </IconButton>
-        <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
-          <Search className="size-3.5" strokeWidth={1.75} />
-        </IconButton>
-      </div>
-
-      <div className="flex min-w-0 flex-1 items-stretch border-l border-content/10">
+      <div
+        className={
+          stackPaneTabs
+            ? "flex h-10 shrink-0 items-stretch border-y border-content/10"
+            : "flex min-w-0 flex-1 items-stretch border-l border-content/10"
+        }
+      >
         {/*
           Strip sizes to its tabs (w-56 each), sits left; + follows.
           When crowded, tabs shrink to min-w-28 then the strip scrolls.
@@ -1294,31 +1413,26 @@ function TitleBarComponent({
           ) : null}
         </div>
 
-        <div
-          className="flex min-w-0 flex-1 items-center justify-center px-4"
-          data-tauri-drag-region
-        >
-          {!IS_MAC ? (
-            <span
-              className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
+        {stackPaneTabs ? (
+          <div className="min-w-0 flex-1" data-tauri-drag-region />
+        ) : (
+          <>
+            <div
+              className="flex min-w-0 flex-1 items-center justify-center px-4"
               data-tauri-drag-region
             >
-              {systemTitle}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="flex h-full shrink-0 items-stretch">
-          <div className="flex items-center gap-0.5 px-2">
-            <ProjectDiffStats
-              cwd={cwd}
-              active={sourceControlActive}
-              onClick={onShowSourceControl}
-            />
-            {IS_MAC ? <OpacityControl /> : null}
-          </div>
-          {!IS_MAC ? <WindowControls /> : null}
-        </div>
+              {!IS_MAC ? (
+                <span
+                  className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
+                  data-tauri-drag-region
+                >
+                  {systemTitle}
+                </span>
+              ) : null}
+            </div>
+            {trailingControls}
+          </>
+        )}
       </div>
     </header>
   );
