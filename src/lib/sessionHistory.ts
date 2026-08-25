@@ -1,6 +1,7 @@
+import { fuzzyMatch } from "./fuzzy";
 import { projectName } from "./paths";
 import { sameProjectPath } from "./recents";
-import { hasPendingApproval, type Session } from "./session";
+import { hasPendingApproval, sessionDisplayTitle, type Session } from "./session";
 import { shouldPersistSession, type SessionSummary } from "./sessionStore";
 
 export type SessionGitHint = {
@@ -12,9 +13,37 @@ export function mergeHistorySummary(
   current: SessionSummary[],
   summary: SessionSummary,
 ): SessionSummary[] {
-  return [summary, ...current.filter((entry) => entry.id !== summary.id)].sort(
+  const previous = current.find((entry) => entry.id === summary.id);
+  const next = {
+    ...summary,
+    archived: summary.archived ?? previous?.archived,
+  };
+  return [next, ...current.filter((entry) => entry.id !== summary.id)].sort(
     (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id),
   );
+}
+
+export function filterSessionsByArchive(
+  rows: SessionSummary[],
+  showArchived: boolean,
+): SessionSummary[] {
+  return rows.filter((row) => !!row.archived === showArchived);
+}
+
+export function filterSessionsByQuery(
+  rows: SessionSummary[],
+  query: string,
+): SessionSummary[] {
+  const needle = query.trim();
+  if (!needle) return rows;
+  return rows.filter((row) => sessionSearchHit(row, needle));
+}
+
+function sessionSearchHit(row: SessionSummary, query: string): boolean {
+  const title = sessionDisplayTitle(row.title, row.harness);
+  const git = [row.repo, row.branch].filter(Boolean).join("/");
+  const fields = [title, row.title, row.model, row.harness, git];
+  return fields.some((field) => field && fuzzyMatch(query, field) != null);
 }
 
 export function summaryFromSession(

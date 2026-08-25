@@ -224,6 +224,7 @@ pub fn run() {
             session_store::session_list_by_project,
             session_store::session_get,
             session_store::session_delete,
+            session_store::session_set_archived,
             session_store::session_set_in_flight,
             session_store::session_list_in_flight,
             session_store::session_take_in_flight,

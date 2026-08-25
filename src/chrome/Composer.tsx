@@ -722,7 +722,7 @@ export function Composer({
               placeholder={
                 shell
                   ? "How can I help you today?"
-                  : "Ask, build, / for skills... "
+                  : "Ask, build, / for skills, @ for references... "
               }
               className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
                 shell ? "py-4" : "py-3"

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Session archive: right-click a session in the sidebar to archive or unarchive it. Archived sessions are hidden by default and stay archived across restarts.
+- Session sidebar filters: filter by provider, status (working, needs approval, done), and time (today, last 7 days, last 30 days). Toggle archived sessions from the filter menu. Filter choices persist across restarts.
+
+Thanks [@Queaxtra](https://github.com/Queaxtra) for the filter and archive ideas.
+
+### Changed
+
+- The changes view can be opened from the file tree header as well as the title bar. The title-bar control shows a diff icon when there are no uncommitted changes yet, and the close button was removed from the changes pane — use either toggle to show or hide it.
+- Composer placeholder mentions `@` for file references.
+
 ## [0.1.6] - 2026-08-25
 
 ### Added

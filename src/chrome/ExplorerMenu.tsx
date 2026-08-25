@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { Check } from "lucide-react";
 
 export type ExplorerMenuItem =
   | { kind: "sep" }
@@ -17,6 +18,7 @@ export type ExplorerMenuItem =
       shortcut?: string;
       disabled?: boolean;
       danger?: boolean;
+      checked?: boolean;
     };
 
 type Props = {
@@ -159,7 +161,8 @@ export function ExplorerMenu({
           <button
             key={item.id}
             type="button"
-            role="menuitem"
+            role={item.checked == null ? "menuitem" : "menuitemcheckbox"}
+            aria-checked={item.checked}
             disabled={item.disabled}
             onMouseDown={(e) => e.preventDefault()}
             onMouseEnter={() => setActive(index)}
@@ -179,7 +182,9 @@ export function ExplorerMenu({
             }`}
           >
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            {item.shortcut ? (
+            {item.checked ? (
+              <Check className="size-3.5 shrink-0" strokeWidth={2.25} />
+            ) : item.shortcut ? (
               <span className="shrink-0 text-[11px] text-content/40">
                 {item.shortcut}
               </span>

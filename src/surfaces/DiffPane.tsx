@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Undo2,
   WandSparkles,
-  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -72,7 +71,6 @@ type Props = {
   selectedPath?: string;
   focused: boolean;
   onFocus: () => void;
-  onClose: () => void;
   onOpenFile: (path: string) => void;
 };
 
@@ -82,7 +80,6 @@ export function DiffPane({
   selectedPath,
   focused,
   onFocus,
-  onClose,
   onOpenFile,
 }: Props) {
   const [width, setWidth] = useState(() => rememberedWidth);
@@ -219,15 +216,6 @@ export function DiffPane({
         ) : (
           <span className="ml-auto" />
         )}
-        <button
-          type="button"
-          title="Close changes"
-          aria-label="Close changes"
-          onClick={onClose}
-          className="grid size-6 shrink-0 place-items-center rounded text-content/45 hover:bg-content/10 hover:text-content"
-        >
-          <X className="size-3.5" strokeWidth={1.75} />
-        </button>
       </header>
       <ChangedFiles
         cwd={cwd}

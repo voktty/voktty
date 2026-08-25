@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { historyWithLiveSessions } from "./sessionHistory";
+import { historyWithLiveSessions, filterSessionsByArchive, filterSessionsByQuery } from "./sessionHistory";
 import { newSession } from "./session";
 import type { SessionSummary } from "./sessionStore";
 
@@ -97,5 +97,67 @@ describe("historyWithLiveSessions", () => {
 
     const rows = historyWithLiveSessions(history, [], "/tmp/project-a");
     expect(rows.map((row) => row.id)).toEqual(["a1"]);
+  });
+});
+
+describe("filterSessionsByArchive", () => {
+  it("hides archived sessions by default", () => {
+    const rows = [
+      summary("a1", "/tmp/project-a"),
+      { ...summary("a2", "/tmp/project-a"), archived: true },
+    ];
+    expect(filterSessionsByArchive(rows, false).map((row) => row.id)).toEqual([
+      "a1",
+    ]);
+  });
+
+  it("shows only archived sessions when filtered", () => {
+    const rows = [
+      summary("a1", "/tmp/project-a"),
+      { ...summary("a2", "/tmp/project-a"), archived: true },
+    ];
+    expect(filterSessionsByArchive(rows, true).map((row) => row.id)).toEqual([
+      "a2",
+    ]);
+  });
+});
+
+describe("filterSessionsByQuery", () => {
+  it("returns all rows when the query is empty", () => {
+    const rows = [
+      summary("a1", "/tmp/project-a"),
+      summary("a2", "/tmp/project-a"),
+    ];
+    expect(filterSessionsByQuery(rows, "  ").map((row) => row.id)).toEqual([
+      "a1",
+      "a2",
+    ]);
+  });
+
+  it("matches conversation titles", () => {
+    const rows = [
+      { ...summary("a1", "/tmp/project-a"), title: "cursor · Fix sidebar search" },
+      { ...summary("a2", "/tmp/project-a"), title: "cursor · Archive sessions" },
+    ];
+    expect(filterSessionsByQuery(rows, "sidebar").map((row) => row.id)).toEqual([
+      "a1",
+    ]);
+  });
+
+  it("matches model and branch labels", () => {
+    const rows = [
+      { ...summary("a1", "/tmp/project-a"), model: "gpt-5", branch: "main" },
+      {
+        ...summary("a2", "/tmp/project-a"),
+        model: "opus",
+        branch: "fix-gutter",
+      },
+    ];
+    expect(filterSessionsByQuery(rows, "opus").map((row) => row.id)).toEqual([
+      "a2",
+    ]);
+    expect(filterSessionsByQuery(rows, "gutter").map((row) => row.id)).toEqual([
+      "a2",
+    ]);
   });
 });

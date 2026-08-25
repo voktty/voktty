@@ -1,4 +1,10 @@
-import { Check, CircleAlert, GitBranch, GitCompare } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  GitBranch,
+  ListFilter,
+  Search,
+} from "lucide-react";
 import {
   memo,
   useEffect,
@@ -7,6 +13,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent,
+  type ReactNode,
 } from "react";
 import {
   loadSidebarTabOrder,
@@ -18,11 +25,24 @@ import { resolveModel } from "../lib/models";
 import { projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
+import {
+  filterSessionsByArchive,
+  filterSessionsByQuery,
+} from "../lib/sessionHistory";
+import {
+  filterSessionsByHarness,
+  filterSessionsByStatus,
+  filterSessionsByTime,
+  harnessesInSessions,
+  hasActiveSessionFilters,
+  loadSessionSidebarFilters,
+  saveSessionSidebarFilters,
+  type SessionSidebarFilters,
+} from "../lib/sessionFilters";
 import type { SessionSummary } from "../lib/sessionStore";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
-import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSessionDiffStats } from "../hooks/useSessionDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
@@ -34,6 +54,7 @@ import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
+import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SidebarUpdate } from "./SidebarUpdate";
 
 const MIN_WIDTH = 160;
@@ -59,13 +80,12 @@ type Props = {
   status: "idle" | "loading" | "error";
   onSelectSession: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, title: string) => void;
+  onArchiveSession?: (sessionId: string, archived: boolean) => void;
   onDeleteSession?: (sessionId: string) => void;
   onOpenFile: (path: string) => void;
   onOpenTerminal?: (cwd: string) => void;
   onFileMoved?: (from: string, to: string) => void;
   onFileDeleted?: (path: string) => void;
-  diffOpen?: boolean;
-  onToggleDiff?: () => void;
   tab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
   filesSearchOpen: boolean;
@@ -76,6 +96,8 @@ type Props = {
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
+  diffOpen?: boolean;
+  onToggleDiff?: () => void;
 };
 
 function SidebarComponent({
@@ -88,13 +110,12 @@ function SidebarComponent({
   status,
   onSelectSession,
   onRenameSession,
+  onArchiveSession,
   onDeleteSession,
   onOpenFile,
   onOpenTerminal,
   onFileMoved,
   onFileDeleted,
-  diffOpen = false,
-  onToggleDiff,
   tab,
   onTabChange,
   filesSearchOpen,
@@ -105,6 +126,8 @@ function SidebarComponent({
   canGoForward = false,
   onGoBack,
   onGoForward,
+  diffOpen = false,
+  onToggleDiff,
 }: Props) {
   const [width, setWidth] = useState(rememberedWidth);
   const [dragging, setDragging] = useState(false);
@@ -126,6 +149,13 @@ function SidebarComponent({
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
     null,
   );
+  const [sessionFilters, setSessionFilters] = useState(loadSessionSidebarFilters);
+  const [filterMenu, setFilterMenu] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const busyIdsRef = useRef(busySessionIds);
   const focusedSessionIdRef = useRef(activeSessionId);
   const unseenFinishedRef = useRef<Set<string>>(new Set());
@@ -143,6 +173,25 @@ function SidebarComponent({
     focusedSessionIdRef.current = activeSessionId;
   }
   const unseenFinishedIds = unseenFinishedRef.current;
+  const visibleSessions = filterSessionsByQuery(
+    filterSessionsByStatus(
+      filterSessionsByTime(
+        filterSessionsByHarness(
+          filterSessionsByArchive(sessions, sessionFilters.showArchived),
+          sessionFilters.hiddenHarnesses,
+        ),
+        sessionFilters.time,
+        now,
+      ),
+      sessionFilters.status,
+      busySessionIds,
+      approvalSessionIds,
+      unseenFinishedIds,
+    ),
+    searchOpen ? searchQuery : "",
+  );
+  const sessionHarnesses = harnessesInSessions(sessions);
+  const filtersActive = hasActiveSessionFilters(sessionFilters);
   const sortable = useSortable(tabOrder, (ids) => {
     const next = ids as SidebarTab[];
     setTabOrder(next);
@@ -150,7 +199,6 @@ function SidebarComponent({
     if (next[0]) onTabChange(next[0]);
   });
   const canDragTabs = tabOrder.length > 1;
-  const projectDiff = useProjectDiffStats(cwd, open);
   const gitStatuses = useGitFileStatuses(cwd, open && tab === "files");
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
@@ -167,45 +215,110 @@ function SidebarComponent({
   }, [tab]);
 
   useEffect(() => {
-    if (!sessionMenu) return;
-    const onScroll = () => setSessionMenu(null);
+    if (tab !== "sessions") {
+      setFilterMenu(null);
+      setSearchOpen(false);
+      setSearchQuery("");
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (!sessionMenu && !filterMenu) return;
+    const onScroll = () => {
+      setSessionMenu(null);
+      setFilterMenu(null);
+    };
     const scrollParent = sessionsScrollRef.current ?? window;
     scrollParent.addEventListener("scroll", onScroll, true);
     return () => scrollParent.removeEventListener("scroll", onScroll, true);
-  }, [sessionMenu]);
+  }, [sessionMenu, filterMenu]);
 
+  const menuSession = sessionMenu
+    ? sessions.find((session) => session.id === sessionMenu.sessionId)
+    : undefined;
   const sessionMenuItems: ExplorerMenuItem[] = [
-    { kind: "item", id: "rename", label: "Rename", shortcut: "F2" },
-    { kind: "sep" },
-    {
-      kind: "item",
-      id: "delete",
-      label: "Delete",
-      shortcut: "⌫",
-      danger: true,
-    },
+    ...(onRenameSession
+      ? [
+          {
+            kind: "item" as const,
+            id: "rename",
+            label: "Rename",
+            shortcut: "F2",
+          },
+        ]
+      : []),
+    ...(onArchiveSession || onDeleteSession
+      ? [
+          ...(onRenameSession ? [{ kind: "sep" as const }] : []),
+          ...(onArchiveSession
+            ? [
+                {
+                  kind: "item" as const,
+                  id: "archive",
+                  label: menuSession?.archived ? "Unarchive" : "Archive",
+                },
+              ]
+            : []),
+          ...(onDeleteSession
+            ? [
+                {
+                  kind: "item" as const,
+                  id: "delete",
+                  label: "Delete",
+                  shortcut: "⌫",
+                  danger: true,
+                },
+              ]
+            : []),
+        ]
+      : []),
   ];
 
   const onSessionContextMenu = (
     sessionId: string,
     e: ReactMouseEvent<HTMLButtonElement>,
   ) => {
-    if (!onRenameSession && !onDeleteSession) return;
+    if (!onRenameSession && !onArchiveSession && !onDeleteSession) return;
     e.preventDefault();
     e.stopPropagation();
+    setFilterMenu(null);
     setSessionMenu({ x: e.clientX, y: e.clientY, sessionId });
   };
 
   const onSessionMenuPick = (id: string) => {
     if (!sessionMenu) return;
     const sessionId = sessionMenu.sessionId;
+    const archived = !!menuSession?.archived;
     setSessionMenu(null);
     if (id === "rename") {
       setRenamingSessionId(sessionId);
       return;
     }
+    if (id === "archive") {
+      onArchiveSession?.(sessionId, !archived);
+      return;
+    }
     if (id === "delete") onDeleteSession?.(sessionId);
   };
+
+  const onSessionFiltersChange = (next: SessionSidebarFilters) => {
+    setSessionFilters(next);
+    saveSessionSidebarFilters(next);
+  };
+
+  const onToggleSessionSearch = () => {
+    setFilterMenu(null);
+    setSearchOpen((open) => {
+      if (open) setSearchQuery("");
+      return !open;
+    });
+  };
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  }, [searchOpen]);
 
   const clamp = (value: number) => {
     const max = Math.min(MAX_WIDTH, Math.floor(window.innerWidth * 0.5));
@@ -390,18 +503,8 @@ function SidebarComponent({
               onFileDeleted={onFileDeleted}
               onSearch={onOpenFilesSearch}
               gitStatuses={gitStatuses}
-              headerEnd={
-                onToggleDiff ? (
-                  <DiffStat
-                    files={projectDiff?.files ?? 0}
-                    additions={projectDiff?.additions ?? 0}
-                    deletions={projectDiff?.deletions ?? 0}
-                    active={diffOpen}
-                    onClick={onToggleDiff}
-                    variant="icon"
-                  />
-                ) : null
-              }
+              diffOpen={diffOpen}
+              onToggleDiff={onToggleDiff}
             />
           </div>
         ) : (
@@ -425,33 +528,86 @@ function SidebarComponent({
           </p>
         ) : (
           <div>
-            <div className="sticky top-0 flex h-8 items-center bg-content/5 backdrop-blur-md">
-              <div
-                title={cwd}
-                className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-2"
-              >
-                {projectLogoPath ? (
-                  <ProjectLogoIcon
-                    path={projectLogoPath}
-                    className="size-4 shrink-0 rounded-sm ml-1.5"
-                    imageClassName="size-4"
-                  />
-                ) : (
-                  <span className="grid size-6 shrink-0 place-items-center">
-                    <FileTypeIcon name={basename(cwd)} isDir isRoot />
+            <div className="sticky top-0 bg-content/5 backdrop-blur-md">
+              <div className="flex h-8 items-center px-2 pr-1.5">
+                <div
+                  title={cwd}
+                  className="flex h-full min-w-0 flex-1 items-center gap-1.5"
+                >
+                  {projectLogoPath ? (
+                    <ProjectLogoIcon
+                      path={projectLogoPath}
+                      className="size-4 shrink-0 rounded-sm ml-1.5"
+                      imageClassName="size-4"
+                    />
+                  ) : (
+                    <span className="grid size-6 shrink-0 place-items-center">
+                      <FileTypeIcon name={basename(cwd)} isDir isRoot />
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
+                    {basename(cwd)}
                   </span>
-                )}
-                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
-                  {basename(cwd)}
-                </span>
-                <DiffStat
-                  files={projectDiff?.files ?? 0}
-                  additions={projectDiff?.additions ?? 0}
-                  deletions={projectDiff?.deletions ?? 0}
-                  active={diffOpen}
-                  onClick={onToggleDiff}
-                />
+                </div>
+                <div className="flex shrink-0 items-center gap-px">
+                  <SessionsHeaderButton
+                    label="Search conversations"
+                    active={searchOpen}
+                    open={searchOpen}
+                    onClick={onToggleSessionSearch}
+                  >
+                    <Search className="size-3" strokeWidth={1.75} />
+                  </SessionsHeaderButton>
+                  <SessionsHeaderButton
+                    label="Filter sessions"
+                    active={filtersActive}
+                    open={!!filterMenu}
+                    hasPopup
+                    onClick={(event) => {
+                      if (filterMenu) {
+                        setFilterMenu(null);
+                        return;
+                      }
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setSessionMenu(null);
+                      setFilterMenu({
+                        x: rect.right - 228,
+                        y: rect.bottom + 2,
+                      });
+                    }}
+                  >
+                    <ListFilter className="size-3" strokeWidth={1.75} />
+                  </SessionsHeaderButton>
+                </div>
               </div>
+              {searchOpen ? (
+                <div className="relative flex items-center border-y border-content/10 pl-3.5">
+                  <Search className="size-3 opacity-50" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    placeholder="Search conversations..."
+                    aria-label="Search conversations"
+                    spellCheck={false}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Escape") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (searchQuery) {
+                        setSearchQuery("");
+                        return;
+                      }
+                      setSearchOpen(false);
+                    }}
+                    className="w-full px-3 py-2 text-[12px] text-content outline-none placeholder:text-content/35"
+                  />
+                </div>
+              ) : null}
             </div>
             {status === "loading" && sessions.length === 0 ? (
               <p className="px-3 py-2 text-[12px] text-content/50">Loading…</p>
@@ -459,13 +615,17 @@ function SidebarComponent({
               <p className="px-3 py-2 text-[12px] text-content/50">
                 Couldn’t load sessions
               </p>
-            ) : sessions.length === 0 ? (
+            ) : visibleSessions.length === 0 ? (
               <p className="px-3 py-2 text-[12px] text-content/50">
-                No sessions yet
+                {searchOpen && searchQuery.trim()
+                  ? "No matching sessions"
+                  : filtersActive
+                    ? "No sessions match these filters"
+                    : "No sessions yet"}
               </p>
             ) : (
               <ul className="flex flex-col gap-0.5 p-1.5">
-                {sessions.map((session) => (
+                {visibleSessions.map((session) => (
                   <li key={session.id}>
                     {renamingSessionId === session.id && onRenameSession ? (
                       <SessionRenameRow
@@ -491,7 +651,7 @@ function SidebarComponent({
                         deletions={sessionDiffs[session.id]?.deletions ?? 0}
                         onSelect={onSelectSession}
                         onContextMenu={
-                          onRenameSession || onDeleteSession
+                          onRenameSession || onArchiveSession || onDeleteSession
                             ? (e) => onSessionContextMenu(session.id, e)
                             : undefined
                         }
@@ -525,6 +685,16 @@ function SidebarComponent({
           onClose={() => setSessionMenu(null)}
         />
       ) : null}
+      {filterMenu ? (
+        <SessionFiltersMenu
+          x={filterMenu.x}
+          y={filterMenu.y}
+          harnesses={sessionHarnesses}
+          filters={sessionFilters}
+          onChange={onSessionFiltersChange}
+          onClose={() => setFilterMenu(null)}
+        />
+      ) : null}
       <div
         role="separator"
         aria-orientation="vertical"
@@ -546,6 +716,39 @@ function SidebarComponent({
 }
 
 export const Sidebar = memo(SidebarComponent);
+
+function SessionsHeaderButton({
+  label,
+  active = false,
+  open = false,
+  hasPopup = false,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  open?: boolean;
+  hasPopup?: boolean;
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-expanded={open}
+      aria-haspopup={hasPopup ? "menu" : undefined}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={onClick}
+      className={`relative z-50 grid size-6 place-items-center rounded-md text-content/50 hover:bg-content/10 hover:text-content ${
+        open || active ? "bg-content/10 text-content" : ""
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function SessionCard({
   session,
@@ -752,133 +955,32 @@ function SessionRenameRow({
 }
 
 function DiffStat({
-  files,
   additions,
   deletions,
-  active,
-  onClick,
-  variant = "chip",
 }: {
-  files?: number;
   additions: number;
   deletions: number;
-  active?: boolean;
-  onClick?: () => void;
-  variant?: "chip" | "icon";
 }) {
-  const fileCount = files ?? 0;
-  const empty = fileCount <= 0 && additions <= 0 && deletions <= 0;
-  if (empty && !onClick) return null;
-
-  if (variant === "icon" && onClick) {
-    const label = empty
-      ? active
-        ? "Hide changes"
-        : "Show changes"
-      : [
-          `${fileCount} ${fileCount === 1 ? "file" : "files"} changed`,
-          additions > 0 ? `+${additions}` : "",
-          deletions > 0 ? `-${deletions}` : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
-    const badge = fileCount > 99 ? "99+" : String(fileCount);
-    return (
-      <button
-        type="button"
-        title={label}
-        aria-label={label}
-        aria-pressed={active}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClick();
-        }}
-        className={`relative flex-1 h-8 shrink-0 place-items-center text-content/50 hover:bg-content/10 hover:text-content flex items-center justify-center ${
-          active ? "bg-content/10 text-content" : ""
-        }`}
-      >
-        <GitCompare className="size-3.5" strokeWidth={1.75} />
-        {fileCount > 0 ? (
-          <span className="absolute top-3.5 left-7 grid min-h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[7px] font-semibold leading-none text-white tabular-nums">
-            {badge}
-          </span>
-        ) : null}
-      </button>
-    );
-  }
-
-  if (empty && onClick) {
-    return (
-      <button
-        type="button"
-        title={active ? "Hide changes" : "Show changes"}
-        aria-label={active ? "Hide changes" : "Show changes"}
-        aria-pressed={active}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClick();
-        }}
-        className={`grid size-8 shrink-0 place-items-center text-content/50 hover:bg-content/10 hover:text-content ${
-          active ? "bg-content/10 text-content" : ""
-        }`}
-      >
-        <GitCompare className="size-3.5" strokeWidth={1.75} />
-      </button>
-    );
-  }
+  if (additions <= 0 && deletions <= 0) return null;
 
   const label = [
-    fileCount > 0 ? `${fileCount} ${fileCount === 1 ? "File" : "Files"}` : "",
     additions > 0 ? `+${additions}` : "",
     deletions > 0 ? `-${deletions}` : "",
   ]
     .filter(Boolean)
     .join(" ");
-  const body = (
-    <>
-      {fileCount > 0 ? (
-        <>
-          <span className="text-content/70 font-sans font-normal">
-            {fileCount} {fileCount === 1 ? "File" : "Files"}
-          </span>
-          <span className="text-content/70 font-sans font-normal">•</span>
-        </>
-      ) : null}
+
+  return (
+    <span
+      title={`${label} uncommitted`}
+      className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] font-semibold tabular-nums"
+    >
       {additions > 0 ? (
         <span className="text-emerald-400">+{additions}</span>
       ) : null}
       {deletions > 0 ? (
         <span className="text-red-400">-{deletions}</span>
       ) : null}
-    </>
-  );
-  const className = `flex shrink-0 items-center gap-1.5 font-mono text-[11px] font-semibold tabular-nums ${
-    onClick
-      ? `rounded cursor-pointer px-1.5 py-0.5 hover:bg-content/10 ${
-          active ? "bg-content/10" : ""
-        }`
-      : ""
-  }`;
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        title={`${label} uncommitted — review diffs`}
-        aria-pressed={active}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClick();
-        }}
-        className={className}
-      >
-        {body}
-      </button>
-    );
-  }
-  return (
-    <span title={`${label} uncommitted`} className={className}>
-      {body}
     </span>
   );
 }

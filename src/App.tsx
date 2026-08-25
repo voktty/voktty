@@ -173,6 +173,7 @@ import {
   persistFingerprint,
   replaceInFlightSessions,
   saveWorkspaceSnapshot,
+  setSessionArchived,
   shouldPersistSession,
   upsertSession,
   type SessionSummary,
@@ -202,6 +203,7 @@ import {
 import {
   mergeHistorySummary,
   historyWithLiveSessions,
+  summaryFromSession,
 } from "./lib/sessionHistory";
 import {
   CONTINUE_PROMPT,
@@ -354,7 +356,9 @@ export default function App({
     const tab =
       resumed.tabs.find((entry) => entry.id === resumed.activeTabId) ??
       resumed.tabs[0];
-    return !!tab && resumed.sessions.some((session) => session.id === tab.focusedId);
+    return (
+      !!tab && resumed.sessions.some((session) => session.id === tab.focusedId)
+    );
   });
   /** Tab id -> project name, kept in sync with the rendered title tabs. */
   const tabProjectsRef = useRef(new Map<string, string>());
@@ -448,21 +452,24 @@ export default function App({
     setSessions(next);
   }, []);
 
-  const applyApprovalEvent = useCallback((sessionId: string, event: HarnessEvent) => {
-    const queued = harnessQueued.current.get(sessionId) ?? [];
-    harnessQueued.current.delete(sessionId);
-    const events = [...queued, event];
-    const prev = sessionsRef.current;
-    const next = prev.map((session) =>
-      session.id === sessionId
-        ? events.reduce(applyHarnessEvent, session)
-        : session,
-    );
-    if (!next.some((session, index) => session !== prev[index])) return;
-    sessionsRef.current = next;
-    syncDockBadge(next);
-    setSessions(next);
-  }, []);
+  const applyApprovalEvent = useCallback(
+    (sessionId: string, event: HarnessEvent) => {
+      const queued = harnessQueued.current.get(sessionId) ?? [];
+      harnessQueued.current.delete(sessionId);
+      const events = [...queued, event];
+      const prev = sessionsRef.current;
+      const next = prev.map((session) =>
+        session.id === sessionId
+          ? events.reduce(applyHarnessEvent, session)
+          : session,
+      );
+      if (!next.some((session, index) => session !== prev[index])) return;
+      sessionsRef.current = next;
+      syncDockBadge(next);
+      setSessions(next);
+    },
+    [],
+  );
 
   const enqueueHarnessEvent = useCallback(
     (sessionId: string, event: HarnessEvent) => {
@@ -579,13 +586,7 @@ export default function App({
   const approvalSessionIds = approvalSessionIdsRef.current;
 
   const hiddenApprovalToasts = useMemo(
-    () =>
-      hiddenApprovalNotices(
-        sessions,
-        activeTabId,
-        tabs,
-        composerFocused,
-      ),
+    () => hiddenApprovalNotices(sessions, activeTabId, tabs, composerFocused),
     [sessions, activeTabId, tabs, composerFocused],
   );
 
@@ -725,10 +726,7 @@ export default function App({
       if (newUserTurn && lastUserId) {
         lastPersistedUserBlock.current.set(session.id, lastUserId);
       }
-      if (
-        (newlyBound || newUserTurn) &&
-        shouldPersistSession(session)
-      ) {
+      if ((newlyBound || newUserTurn) && shouldPersistSession(session)) {
         persistSession(session);
       }
       if (
@@ -883,11 +881,7 @@ export default function App({
 
   useEffect(() => {
     const openIds = new Set(tabs.map((tab) => tab.id));
-    let next = pruneTabVisitHistory(
-      tabVisitRef.current,
-      openIds,
-      activeTabId,
-    );
+    let next = pruneTabVisitHistory(tabVisitRef.current, openIds, activeTabId);
     if (tabVisitFromHistoryRef.current) {
       tabVisitFromHistoryRef.current = false;
     } else if (next.current !== activeTabId) {
@@ -988,7 +982,10 @@ export default function App({
         );
       }
 
-      const file = newTerminalFile(workdir, nextTerminalTitle(activeTab, workdir));
+      const file = newTerminalFile(
+        workdir,
+        nextTerminalTitle(activeTab, workdir),
+      );
       setTabs((prev) =>
         prev.map((tab) =>
           tab.id === activeTab.id
@@ -1007,7 +1004,9 @@ export default function App({
 
   const onNewTerminalInSession = useCallback(
     (sessionId: string) => {
-      const session = sessionsRef.current.find((entry) => entry.id === sessionId);
+      const session = sessionsRef.current.find(
+        (entry) => entry.id === sessionId,
+      );
       onOpenTerminal(session?.cwd ?? projectCwd, false, sessionId);
     },
     [onOpenTerminal, projectCwd],
@@ -1076,24 +1075,17 @@ export default function App({
       }
       finishClose();
     },
-    [
-      dirtyFiles,
-      activateTab,
-      persistSession,
-      refreshHistory,
-      sidebarCwd,
-    ],
+    [dirtyFiles, activateTab, persistSession, refreshHistory, sidebarCwd],
   );
 
   const onGroupNewTab = useCallback(
     (groupId: string) => {
       const groupTab = tabsRef.current.find((tab) => tab.groupId === groupId);
-      const sessionInTab =
-        groupTab
-          ? sessionsRef.current.find((session) =>
-              leafIds(groupTab.layout).includes(session.id),
-            )
-          : undefined;
+      const sessionInTab = groupTab
+        ? sessionsRef.current.find((session) =>
+            leafIds(groupTab.layout).includes(session.id),
+          )
+        : undefined;
       const cwd = sessionInTab?.cwd ?? active?.cwd ?? projectCwd;
       const session = newSession(
         sessionDefaults?.harness ?? "claude",
@@ -1151,7 +1143,9 @@ export default function App({
         return;
       }
 
-      const remainingTabs = tabsRef.current.filter((tab) => !tabIds.includes(tab.id));
+      const remainingTabs = tabsRef.current.filter(
+        (tab) => !tabIds.includes(tab.id),
+      );
       if (remainingTabs.length === 0) {
         const seedSession = sessionsRef.current.find((session) =>
           sessionIds.has(session.id),
@@ -1193,7 +1187,9 @@ export default function App({
 
   const onCloseFile = useCallback(
     (paneId: string, fileId: string) => {
-      const tab = tabsRef.current.find((entry) => findSurfacePane(entry, paneId));
+      const tab = tabsRef.current.find((entry) =>
+        findSurfacePane(entry, paneId),
+      );
       if (!tab) return;
       const found = findSurfacePane(tab, paneId);
       if (!found) return;
@@ -1314,8 +1310,7 @@ export default function App({
   const onClearTabSession = useCallback(
     (id: string) => {
       const tab = tabs.find((entry) => entry.id === id);
-      if (!tab || isBlankWorkspaceTab(tab, sessionsRef.current))
-        return;
+      if (!tab || isBlankWorkspaceTab(tab, sessionsRef.current)) return;
 
       const closingFiles = [
         ...tab.editorPanes.flatMap((pane) => pane.files),
@@ -1547,26 +1542,10 @@ export default function App({
     setComposerFocused(false);
   }, [activeTabId]);
 
-  const onCloseDiff = useCallback(() => {
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === activeTabId
-          ? {
-              ...tab,
-              diffOpen: false,
-              diffFocused: false,
-            }
-          : tab,
-      ),
-    );
-  }, [activeTabId]);
-
   const onFocusDiff = useCallback(() => {
     setTabs((prev) =>
       prev.map((tab) =>
-        tab.id === activeTabId
-          ? { ...tab, diffFocused: true }
-          : tab,
+        tab.id === activeTabId ? { ...tab, diffFocused: true } : tab,
       ),
     );
     setComposerFocused(false);
@@ -1658,17 +1637,14 @@ export default function App({
   );
 
   const focusOpenSession = useCallback((sessionId: string) => {
-    const tab = tabsRef.current.find(
-      (entry) =>
-        leafIds(entry.layout).includes(sessionId),
+    const tab = tabsRef.current.find((entry) =>
+      leafIds(entry.layout).includes(sessionId),
     );
     if (!tab) return false;
     setActiveTabId(tab.id);
     setTabs((prev) =>
       prev.map((entry) =>
-        entry.id === tab.id
-          ? { ...entry, focusedId: sessionId }
-          : entry,
+        entry.id === tab.id ? { ...entry, focusedId: sessionId } : entry,
       ),
     );
     setComposerFocused(true);
@@ -1757,7 +1733,13 @@ export default function App({
       setActiveTabId(tab.id);
       setComposerFocused(true);
     },
-    [appendTab, focusOpenSession, refreshHistory, replaceBlankPaneWithSession, sidebarCwd],
+    [
+      appendTab,
+      focusOpenSession,
+      refreshHistory,
+      replaceBlankPaneWithSession,
+      sidebarCwd,
+    ],
   );
 
   const onRenameHistorySession = useCallback(
@@ -1791,6 +1773,32 @@ export default function App({
       void refreshHistory(sidebarCwd);
     },
     [persistSession, refreshHistory, sidebarCwd],
+  );
+
+  const onArchiveHistorySession = useCallback(
+    async (sessionId: string, archived: boolean) => {
+      const open = sessionsRef.current.find(
+        (session) => session.id === sessionId,
+      );
+      if (open && shouldPersistSession(open)) {
+        await upsertSession(open).catch(() => undefined);
+      }
+      await setSessionArchived(sessionId, archived).catch(() => undefined);
+      setHistory((current) => {
+        const existing = current.find((entry) => entry.id === sessionId);
+        if (existing) {
+          return current.map((entry) =>
+            entry.id === sessionId ? { ...entry, archived } : entry,
+          );
+        }
+        if (!open) return current;
+        return mergeHistorySummary(current, {
+          ...summaryFromSession(open),
+          archived,
+        });
+      });
+    },
+    [],
   );
 
   const onDeleteHistorySession = useCallback(
@@ -1827,9 +1835,8 @@ export default function App({
       lastPersisted.current.delete(sessionId);
       await deleteSession(sessionId).catch(() => undefined);
 
-      const affectedTabs = tabsRef.current.filter(
-        (tab) =>
-          leafIds(tab.layout).includes(sessionId),
+      const affectedTabs = tabsRef.current.filter((tab) =>
+        leafIds(tab.layout).includes(sessionId),
       );
 
       if (affectedTabs.length === 0) {
@@ -1925,63 +1932,70 @@ export default function App({
     [],
   );
 
-  const onCwdChange = useCallback((sessionId: string, cwd: string) => {
-    const normalized = normalizeProjectPath(cwd);
-    const current = sessionsRef.current.find((s) => s.id === sessionId);
-    const previous = current?.cwd;
-    // Threads stay bound to their project. Switching from the composer opens a
-    // new tab instead of retargeting the conversation.
-    if (
-      current &&
-      previous &&
-      looksLikeProject(previous) &&
-      !sameProjectPath(previous, normalized) &&
-      !isBlankSession(current)
-    ) {
+  const onCwdChange = useCallback(
+    (sessionId: string, cwd: string) => {
+      const normalized = normalizeProjectPath(cwd);
+      const current = sessionsRef.current.find((s) => s.id === sessionId);
+      const previous = current?.cwd;
+      // Threads stay bound to their project. Switching from the composer opens a
+      // new tab instead of retargeting the conversation.
+      if (
+        current &&
+        previous &&
+        looksLikeProject(previous) &&
+        !sameProjectPath(previous, normalized) &&
+        !isBlankSession(current)
+      ) {
+        setProjectCwd(normalized);
+        setRecents(rememberProject(normalized));
+        const session = newSession(
+          current.harness,
+          normalized,
+          current.model,
+          current.runtimeMode,
+          current.modelSettings,
+        );
+        const tab = newTab(session.id);
+        setSessions((prev) => [...prev, session]);
+        appendTab(tab, normalized);
+        setActiveTabId(tab.id);
+        setComposerFocused(true);
+        return;
+      }
+      if (
+        previous &&
+        !sameProjectPath(previous, normalized) &&
+        previous !== "~"
+      ) {
+        void keepSessionChanges(sessionId, previous).catch(() => undefined);
+      }
       setProjectCwd(normalized);
       setRecents(rememberProject(normalized));
-      const session = newSession(
-        current.harness,
-        normalized,
-        current.model,
-        current.runtimeMode,
-        current.modelSettings,
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, cwd: normalized } : s)),
       );
-      const tab = newTab(session.id);
-      setSessions((prev) => [...prev, session]);
-      appendTab(tab, normalized);
-      setActiveTabId(tab.id);
-      setComposerFocused(true);
-      return;
-    }
-    if (previous && !sameProjectPath(previous, normalized) && previous !== "~") {
-      void keepSessionChanges(sessionId, previous).catch(() => undefined);
-    }
-    setProjectCwd(normalized);
-    setRecents(rememberProject(normalized));
-    setSessions((prev) =>
-      prev.map((s) => (s.id === sessionId ? { ...s, cwd: normalized } : s)),
-    );
-    // The session's project just moved in place; a group only holds tabs that
-    // share one project, so drop this tab out if it no longer matches.
-    setTabs((prev) => {
-      const tab = prev.find((t) => leafIds(t.layout).includes(sessionId));
-      // The tab's visible project follows its focused pane; a background
-      // pane changing project doesn't change what the group check should see.
-      if (!tab?.groupId || tab.focusedId !== sessionId) return prev;
-      const newProject = projectName(normalized);
-      const othersProject = tabGroupProject(
-        prev.filter((t) => t.id !== tab.id),
-        tab.groupId,
-        projectOfTab,
-      );
-      if (othersProject && newProject && othersProject !== newProject) {
-        return removeTabFromGroup(prev, tab.id);
-      }
-      return prev;
-    });
-    notifyReviewChanged(sessionId);
-  }, [appendTab, projectOfTab]);
+      // The session's project just moved in place; a group only holds tabs that
+      // share one project, so drop this tab out if it no longer matches.
+      setTabs((prev) => {
+        const tab = prev.find((t) => leafIds(t.layout).includes(sessionId));
+        // The tab's visible project follows its focused pane; a background
+        // pane changing project doesn't change what the group check should see.
+        if (!tab?.groupId || tab.focusedId !== sessionId) return prev;
+        const newProject = projectName(normalized);
+        const othersProject = tabGroupProject(
+          prev.filter((t) => t.id !== tab.id),
+          tab.groupId,
+          projectOfTab,
+        );
+        if (othersProject && newProject && othersProject !== newProject) {
+          return removeTabFromGroup(prev, tab.id);
+        }
+        return prev;
+      });
+      notifyReviewChanged(sessionId);
+    },
+    [appendTab, projectOfTab],
+  );
 
   const pickProject = useCallback(async () => {
     const path = await pickFolder();
@@ -2038,8 +2052,7 @@ export default function App({
   const onOpenFile = useCallback<OpenFileFn>(
     (path, navigation) => {
       void (async () => {
-        const resolved =
-          (await resolveOpenablePath(sidebarCwd, path)) ?? path;
+        const resolved = (await resolveOpenablePath(sidebarCwd, path)) ?? path;
         rememberOpenedFile(sidebarCwd, resolved);
         const tab = tabsRef.current.find((entry) => entry.id === activeTabId);
         if (!tab) return;
@@ -2204,13 +2217,15 @@ export default function App({
       if (isPreparingHandoff(current)) return;
 
       const pendingSwitch =
-        current.pendingSwitch &&
-        current.pendingSwitch.from !== current.harness
+        current.pendingSwitch && current.pendingSwitch.from !== current.harness
           ? current.pendingSwitch
           : null;
 
       if (current.busy && !pendingSwitch) {
-        if (!isLiveHarness(current.harness) || !canSteerHarness(current.harness)) {
+        if (
+          !isLiveHarness(current.harness) ||
+          !canSteerHarness(current.harness)
+        ) {
           // Harnesses that cannot steer (fx) used to drop the message on the
           // floor here, so a follow-up sent mid-turn just vanished. Say so.
           enqueueHarnessEvent(sessionId, {
@@ -2458,8 +2473,7 @@ export default function App({
 
   const autoContinueKey = sessions
     .filter(
-      (session) =>
-        canAutoContinue(session) && isLiveHarness(session.harness),
+      (session) => canAutoContinue(session) && isLiveHarness(session.harness),
     )
     .map((session) => session.id)
     .join("\n");
@@ -2485,36 +2499,39 @@ export default function App({
     return () => window.clearTimeout(timer);
   }, [autoContinueKey, onSubmit]);
 
-  const onStop = useCallback((sessionId: string) => {
-    const session = sessionsRef.current.find((s) => s.id === sessionId);
-    turnGen.current.set(sessionId, (turnGen.current.get(sessionId) ?? 0) + 1);
-    flushHarnessEvents();
-    if (session) {
-      for (const id of sessionChildHarnesses(session)) {
-        void cancelHarnessTurn(id, sessionId);
+  const onStop = useCallback(
+    (sessionId: string) => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      turnGen.current.set(sessionId, (turnGen.current.get(sessionId) ?? 0) + 1);
+      flushHarnessEvents();
+      if (session) {
+        for (const id of sessionChildHarnesses(session)) {
+          void cancelHarnessTurn(id, sessionId);
+        }
       }
-    }
-    setSessions((prev) =>
-      prev.map((s) => {
-        if (s.id !== sessionId) return s;
-        const stopped = stopStreaming(s);
-        return isPreparingHandoff(stopped)
-          ? completeHandoff(stopped, buildDeterministicHandoff(stopped))
-          : stopped;
-      }),
-    );
-    if (session) {
-      void syncSessionCheckpoint(sessionId, session.cwd)
-        .catch(() => undefined)
-        .then(() => notifyReviewChanged(sessionId));
-      nudgeWorkspace(session.cwd);
-      notifyGitChanged();
-      nudgeWatchedFiles();
-      window.setTimeout(() => nudgeWatchedFiles(), 150);
-    } else {
-      notifyReviewChanged(sessionId);
-    }
-  }, [flushHarnessEvents]);
+      setSessions((prev) =>
+        prev.map((s) => {
+          if (s.id !== sessionId) return s;
+          const stopped = stopStreaming(s);
+          return isPreparingHandoff(stopped)
+            ? completeHandoff(stopped, buildDeterministicHandoff(stopped))
+            : stopped;
+        }),
+      );
+      if (session) {
+        void syncSessionCheckpoint(sessionId, session.cwd)
+          .catch(() => undefined)
+          .then(() => notifyReviewChanged(sessionId));
+        nudgeWorkspace(session.cwd);
+        notifyGitChanged();
+        nudgeWatchedFiles();
+        window.setTimeout(() => nudgeWatchedFiles(), 150);
+      } else {
+        notifyReviewChanged(sessionId);
+      }
+    },
+    [flushHarnessEvents],
+  );
 
   const onApproval = useCallback(
     (sessionId: string, requestId: number, decision: ApprovalDecision) => {
@@ -2728,7 +2745,9 @@ export default function App({
       listen("next_tab", () => run("next", actions.current.onNext)),
       listen("prev_tab", () => run("prev", actions.current.onPrev)),
       listen("back_tab", () => run("back", actions.current.onVisitBack)),
-      listen("forward_tab", () => run("forward", actions.current.onVisitForward)),
+      listen("forward_tab", () =>
+        run("forward", actions.current.onVisitForward),
+      ),
       listen("split_right", () =>
         run("split-right", () => actions.current.onSplit("right")),
       ),
@@ -2795,17 +2814,18 @@ export default function App({
         status={historyStatus}
         onSelectSession={onSelectHistorySession}
         onRenameSession={onRenameHistorySession}
+        onArchiveSession={onArchiveHistorySession}
         onDeleteSession={onDeleteHistorySession}
         onOpenFile={onOpenFile}
         onOpenTerminal={(cwd) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
         onFileDeleted={onFileDeleted}
-        diffOpen={!!activeTab?.diffOpen}
-        onToggleDiff={onToggleDiff}
         canGoBack={tabVisitNav.canBack}
         canGoForward={tabVisitNav.canForward}
         onGoBack={onVisitBack}
         onGoForward={onVisitForward}
+        diffOpen={!!activeTab?.diffOpen}
+        onToggleDiff={onToggleDiff}
       />
 
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
@@ -2816,7 +2836,9 @@ export default function App({
             onGoToFile={onGoToFile}
             onToggleSidebar={onToggleSidebar}
             onToggleDiff={onToggleDiff}
-            onCloseCurrentTab={activeTabId ? () => onCloseTab(activeTabId) : undefined}
+            onCloseCurrentTab={
+              activeTabId ? () => onCloseTab(activeTabId) : undefined
+            }
             onPickProject={pickProject}
             onFindInProject={onFindInProject}
           />
@@ -2912,7 +2934,6 @@ export default function App({
                   selectedPath={selectedChangePath(tab)}
                   focused={tab.id === activeTabId && !!tab.diffFocused}
                   onFocus={onFocusDiff}
-                  onClose={onCloseDiff}
                   onOpenFile={onOpenDiff}
                 />
               ) : null}
@@ -2959,7 +2980,8 @@ function isBlankSession(session: Session | undefined): boolean {
 
 function selectedChangePath(tab: WorkspaceTab): string | undefined {
   const file = focusedFileTab(tab);
-  if (!file || isPlanTab(file) || isTerminalTab(file) || !file.review) return undefined;
+  if (!file || isPlanTab(file) || isTerminalTab(file) || !file.review)
+    return undefined;
   return displayPath(file.path, file.cwd);
 }
 
@@ -3113,8 +3135,7 @@ function trackSessionEdits(
   event: HarnessEvent,
 ) {
   if (event.type !== "tool.updated") return;
-  const completed =
-    event.status === "completed" || event.status === "success";
+  const completed = event.status === "completed" || event.status === "success";
   if (!completed) return;
   const kind = event.kind?.trim().toLowerCase();
   if (kind === "execute" || event.preview?.kind === "shell") {
@@ -3141,8 +3162,7 @@ function nudgeWorkspace(cwd?: string) {
 
 function nudgeOpenEditors(event: HarnessEvent, cwd: string) {
   if (event.type !== "tool.updated") return;
-  const completed =
-    event.status === "completed" || event.status === "success";
+  const completed = event.status === "completed" || event.status === "success";
 
   const kind = event.kind?.trim().toLowerCase();
   if (kind === "execute" || event.preview?.kind === "shell") {

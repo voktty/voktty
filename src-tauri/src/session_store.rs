@@ -102,6 +102,8 @@ pub struct SessionSummary {
     pub deletions: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    #[serde(default)]
+    pub archived: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,6 +179,17 @@ pub fn session_delete(store: State<'_, SessionStore>, session_id: String) -> Res
     validate_id(&session_id, "session")?;
     let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
     delete_session(&conn, &session_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn session_set_archived(
+    store: State<'_, SessionStore>,
+    session_id: String,
+    archived: bool,
+) -> Result<(), String> {
+    validate_id(&session_id, "session")?;
+    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    set_archived(&conn, &session_id, archived).map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -309,6 +322,16 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             params![now_millis()],
         )?;
     }
+    if current < 6 {
+        conn.execute(
+            "ALTER TABLE sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (6, ?1)",
+            params![now_millis()],
+        )?;
+    }
     // Create even when a version row already exists (another build may have
     // used the same numbers, or a previous run recorded the version without
     // the table). Restore writes into these; missing tables look like a
@@ -342,20 +365,27 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
     let git = crate::fs::git_info_for(&crate::fs::expand_home(&session.cwd));
     let branch = git.branch.as_deref().filter(|value| !value.is_empty());
 
-    let existing: Option<(i64, i64, String)> = conn
+    let existing: Option<(i64, i64, String, i64)> = conn
         .query_row(
-            "SELECT created_at, updated_at, blocks_json FROM sessions WHERE id = ?1",
+            "SELECT created_at, updated_at, blocks_json, archived FROM sessions WHERE id = ?1",
             params![session.id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()?;
-    let created_at = existing.as_ref().map(|(value, _, _)| *value).unwrap_or(now);
+    let created_at = existing
+        .as_ref()
+        .map(|(value, _, _, _)| *value)
+        .unwrap_or(now);
     let updated_at = match &existing {
-        Some((_, prev_updated, prev_blocks)) if json_eq(prev_blocks, &session.blocks) => {
+        Some((_, prev_updated, prev_blocks, _)) if json_eq(prev_blocks, &session.blocks) => {
             *prev_updated
         }
         _ => now,
     };
+    let archived = existing
+        .as_ref()
+        .map(|(_, _, _, value)| *value != 0)
+        .unwrap_or(false);
 
     conn.execute(
         "INSERT INTO sessions (
@@ -408,6 +438,7 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         deletions: 0,
         created_at,
         updated_at,
+        archived,
     })
 }
 
@@ -415,7 +446,7 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
     let git = crate::fs::git_info_for(&crate::fs::expand_home(cwd));
     let mut statement = conn.prepare(
         "SELECT id, cwd, harness, model, runtime_mode, title, provider_session_id,
-                created_at, updated_at, branch
+                created_at, updated_at, branch, archived
          FROM sessions
          WHERE cwd = ?1
            AND blocks_json != '[]'
@@ -424,6 +455,7 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
     )?;
     let rows = statement.query_map(params![cwd], |row| {
         let stored_branch: Option<String> = row.get(9)?;
+        let archived: i64 = row.get(10)?;
         Ok(SessionSummary {
             id: row.get(0)?,
             cwd: row.get(1)?,
@@ -438,6 +470,7 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
             repo: git.repo.clone(),
             additions: 0,
             deletions: 0,
+            archived: archived != 0,
         })
     })?;
     rows.collect()
@@ -456,6 +489,14 @@ fn json_eq(raw: &str, incoming: &Value) -> bool {
 
 fn delete_session(conn: &Connection, session_id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM sessions WHERE id = ?1", params![session_id])?;
+    Ok(())
+}
+
+fn set_archived(conn: &Connection, session_id: &str, archived: bool) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sessions SET archived = ?1 WHERE id = ?2",
+        params![if archived { 1 } else { 0 }, session_id],
+    )?;
     Ok(())
 }
 
@@ -765,6 +806,49 @@ mod tests {
         delete_session(&conn, "s1").unwrap();
         assert!(get_session(&conn, "s1").unwrap().is_none());
         assert!(list_by_project(&conn, "/tmp/a").unwrap().is_empty());
+    }
+
+    #[test]
+    fn migration_v6_adds_archived_column() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM schema_migrations WHERE version = 6",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+        let archived: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'archived'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(archived, 1);
+    }
+
+    #[test]
+    fn archive_round_trips_and_survives_upsert() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        upsert_session(&conn, &sample("s1", "/tmp/a", "First")).unwrap();
+        set_archived(&conn, "s1", true).unwrap();
+        let listed = list_by_project(&conn, "/tmp/a").unwrap();
+        assert!(listed[0].archived);
+        let mut next = sample("s1", "/tmp/a", "Updated");
+        next.blocks = json!([
+            { "id": "b1", "role": "user", "text": "hello" },
+            { "id": "b2", "role": "assistant", "text": "world" }
+        ]);
+        let summary = upsert_session(&conn, &next).unwrap();
+        assert!(summary.archived);
+        assert_eq!(summary.title, "Updated");
+        set_archived(&conn, "s1", false).unwrap();
+        let listed = list_by_project(&conn, "/tmp/a").unwrap();
+        assert!(!listed[0].archived);
     }
 
     #[test]

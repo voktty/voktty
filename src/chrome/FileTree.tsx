@@ -4,6 +4,7 @@ import {
   FilePlus,
   FolderPlus,
   FoldVertical,
+  GitCompare,
   Search,
 } from "lucide-react";
 import {
@@ -50,6 +51,7 @@ import {
 import { displayPath, parentPath, rebasePath } from "../lib/paths";
 import { IS_MAC, MOD } from "../lib/platform";
 import type { GitStatusMap } from "../hooks/useGitFileStatuses";
+import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTypeIcon } from "./FileTypeIcon";
 
@@ -67,8 +69,9 @@ type Props = {
   onFileMoved?: (from: string, to: string) => void;
   onFileDeleted?: (path: string) => void;
   onSearch?: () => void;
-  headerEnd?: ReactNode;
   gitStatuses?: GitStatusMap;
+  diffOpen?: boolean;
+  onToggleDiff?: () => void;
 };
 
 type Creating = { id: number; parent: string; isDir: boolean };
@@ -196,7 +199,13 @@ function explorerItems(
     },
     { kind: "sep" },
     ...(canOpenTerminal
-      ? [{ kind: "item" as const, id: "open-terminal", label: "Open in Terminal" }]
+      ? [
+          {
+            kind: "item" as const,
+            id: "open-terminal",
+            label: "Open in Terminal",
+          },
+        ]
       : []),
     { kind: "item", id: "reveal", label: REVEAL_LABEL },
   ];
@@ -209,8 +218,9 @@ export function FileTree({
   onFileMoved,
   onFileDeleted,
   onSearch,
-  headerEnd,
   gitStatuses,
+  diffOpen = false,
+  onToggleDiff,
 }: Props) {
   const [expanded, setExpanded] = useState(() => loadExpanded(cwd));
   const [selectedPath, setSelectedPath] = useState(() => loadSelected(cwd));
@@ -605,7 +615,7 @@ export function FileTree({
         onContextMenu={onBackgroundMenu}
       >
         <div
-          className="flex shrink-0 items-center"
+          className="flex shrink-0 items-center overflow-visible"
           onContextMenu={(e) => e.stopPropagation()}
         >
           <HeaderIcon label="New File" onClick={() => startCreate(false)}>
@@ -634,7 +644,13 @@ export function FileTree({
               <Search className="size-3.5" strokeWidth={1.75} />
             </HeaderIcon>
           ) : null}
-          {headerEnd}
+          {onToggleDiff ? (
+            <FileTreeDiffButton
+              cwd={cwd}
+              active={diffOpen}
+              onClick={onToggleDiff}
+            />
+          ) : null}
         </div>
         <div className="flex h-8 items-center sticky top-0 bg-content/5 backdrop-blur-md">
           <button
@@ -705,10 +721,12 @@ export function FileTree({
 function HeaderIcon({
   label,
   onClick,
+  active = false,
   children,
 }: {
   label: string;
   onClick?: () => void;
+  active?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -716,11 +734,64 @@ function HeaderIcon({
       type="button"
       title={label}
       aria-label={label}
+      aria-pressed={active || undefined}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className="flex-1 h-8 place-items-center text-content/50 hover:bg-content/10 hover:text-content flex items-center justify-center"
+      className={`flex h-8 flex-1 items-center justify-center place-items-center text-content/50 hover:bg-content/10 hover:text-content ${
+        active ? "bg-content/10 text-content" : ""
+      }`}
     >
       {children}
+    </button>
+  );
+}
+
+function FileTreeDiffButton({
+  cwd,
+  active,
+  onClick,
+}: {
+  cwd: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const enabled = Boolean(cwd) && cwd !== "~";
+  const stats = useProjectDiffStats(cwd, enabled);
+  const files = stats?.files ?? 0;
+  const additions = stats?.additions ?? 0;
+  const deletions = stats?.deletions ?? 0;
+  const empty = files <= 0 && additions <= 0 && deletions <= 0;
+  const label = empty
+    ? active
+      ? "Hide changes"
+      : "Show changes"
+    : [
+        `${files} ${files === 1 ? "file" : "files"} changed`,
+        additions > 0 ? `+${additions}` : "",
+        deletions > 0 ? `-${deletions}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+  const badge = files > 99 ? "99+" : String(files);
+
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className={`relative flex h-8 flex-1 shrink-0 items-center justify-center text-content/50 hover:bg-content/10 hover:text-content ${
+        active ? "bg-content/10 text-content" : ""
+      }`}
+    >
+      <GitCompare className="size-3.5" strokeWidth={1.75} />
+      {files > 0 ? (
+        <span className="pointer-events-none absolute top-3.5 left-7 grid min-h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[7px] font-semibold leading-none text-white tabular-nums">
+          {badge}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -885,9 +956,7 @@ function TreeNode({ entry, depth }: { entry: FsEntry; depth: number }) {
           </span>
           <span
             className={`min-w-0 truncate ${
-              entry.ignored
-                ? "italic text-content/50"
-                : gitColor ?? ""
+              entry.ignored ? "italic text-content/50" : (gitColor ?? "")
             }`}
           >
             {entry.name}

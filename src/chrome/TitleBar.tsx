@@ -1,6 +1,7 @@
 import {
   ChevronLeft,
   ChevronRight,
+  GitCompare,
   PanelLeft,
   Plus,
   Search,
@@ -1308,7 +1309,7 @@ function TitleBarComponent({
         </div>
 
         <div className="flex h-full shrink-0 items-stretch">
-          <div className="flex items-center gap-1 px-2">
+          <div className="flex items-center gap-0.5 px-2">
             <ProjectDiffStats
               cwd={cwd}
               active={diffOpen}
@@ -1334,26 +1335,47 @@ function ProjectDiffStats({
   active: boolean;
   onClick?: () => void;
 }) {
-  const enabled = Boolean(cwd) && cwd !== "~";
+  const enabled = Boolean(cwd) && cwd !== "~" && Boolean(onClick);
   const stats = useProjectDiffStats(cwd, enabled);
   if (!enabled) return null;
 
+  const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
   const deletions = stats?.deletions ?? 0;
-  if (additions <= 0 && deletions <= 0) return null;
+  const hasStats = additions > 0 || deletions > 0;
+  const label = hasStats
+    ? [
+        `${files} ${files === 1 ? "file" : "files"} changed`,
+        additions > 0 ? `+${additions}` : "",
+        deletions > 0 ? `-${deletions}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : active
+      ? "Hide changes"
+      : "Show changes";
 
   return (
     <button
       type="button"
-      title={`+${additions} -${deletions} uncommitted — review diffs`}
-      aria-label={`+${additions} -${deletions} uncommitted`}
+      title={label}
+      aria-label={label}
       aria-pressed={active}
       data-tauri-drag-region="false"
       onClick={onClick}
-      className={`flex h-6.5 items-center gap-1 rounded-md px-1.5 font-mono text-[11px] font-semibold tabular-nums ${
-        active ? "bg-content/10" : "hover:bg-content/10"
+      className={`flex h-6.5 items-center gap-1 rounded-md ${
+        hasStats
+          ? "px-1.5 font-mono text-[11px] font-semibold tabular-nums"
+          : "w-6.5 justify-center"
+      } ${
+        active
+          ? "bg-content/10 text-content"
+          : "text-content/50 hover:bg-content/10 hover:text-content"
       }`}
     >
+      {hasStats ? null : (
+        <GitCompare className="size-3.5 shrink-0" strokeWidth={1.75} />
+      )}
       {additions > 0 ? (
         <span className="text-emerald-400">+{additions}</span>
       ) : null}

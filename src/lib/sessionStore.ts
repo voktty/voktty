@@ -26,6 +26,7 @@ export type SessionSummary = {
   deletions?: number;
   createdAt: number;
   updatedAt: number;
+  archived?: boolean;
 };
 
 type SessionRecord = {
@@ -127,6 +128,13 @@ export async function deleteSession(sessionId: string): Promise<void> {
   await invoke<void>("session_delete", { sessionId });
 }
 
+export async function setSessionArchived(
+  sessionId: string,
+  archived: boolean,
+): Promise<void> {
+  await invoke<void>("session_set_archived", { sessionId, archived });
+}
+
 export async function replaceInFlightSessions(
   refs: { sessionId: string; cwd: string }[],
 ): Promise<void> {
@@ -208,6 +216,7 @@ function normalizeSummary(summary: SessionSummary): SessionSummary {
     ...(summary.repo ? { repo: summary.repo } : {}),
     additions: summary.additions ?? 0,
     deletions: summary.deletions ?? 0,
+    ...(summary.archived ? { archived: true } : {}),
   };
 }
 
