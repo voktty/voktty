@@ -89,9 +89,9 @@ type Props = {
   activeId: string;
   cwd: string;
   sidebarOpen: boolean;
-  diffOpen?: boolean;
+  sourceControlActive?: boolean;
   onToggleSidebar: () => void;
-  onToggleDiff?: () => void;
+  onShowSourceControl?: () => void;
   onSelect: (id: string) => void;
   canGoBack?: boolean;
   canGoForward?: boolean;
@@ -756,9 +756,9 @@ function TitleBarComponent({
   activeId,
   cwd,
   sidebarOpen,
-  diffOpen = false,
+  sourceControlActive = false,
   onToggleSidebar,
-  onToggleDiff,
+  onShowSourceControl,
   onSelect,
   canGoBack = false,
   canGoForward = false,
@@ -1312,8 +1312,8 @@ function TitleBarComponent({
           <div className="flex items-center gap-0.5 px-2">
             <ProjectDiffStats
               cwd={cwd}
-              active={diffOpen}
-              onClick={onToggleDiff}
+              active={sourceControlActive}
+              onClick={onShowSourceControl}
             />
             {IS_MAC ? <OpacityControl /> : null}
           </div>

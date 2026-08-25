@@ -10,12 +10,14 @@ import {
   loadBodyGlass,
   loadColorScheme,
   loadSidebarBlur,
+  loadSidebarLayout,
   loadSidebarOpacity,
   loadThemeHue,
   loadThemeSaturation,
   saveBodyGlass,
   saveColorScheme,
   saveSidebarBlur,
+  saveSidebarLayout,
   saveSidebarOpacity,
   saveThemeHue,
   saveThemeSaturation,
@@ -28,6 +30,7 @@ import {
   THEME_SATURATION_MAX,
   THEME_SATURATION_MIN,
   type ColorScheme,
+  type SidebarLayout,
 } from "../lib/appearance";
 
 export function OpacityControl() {
@@ -50,6 +53,8 @@ export function OpacityControl() {
   const [themeHue, setThemeHue] = useState(loadThemeHue);
   const [themeSaturation, setThemeSaturation] = useState(loadThemeSaturation);
   const [colorScheme, setColorScheme] = useState<ColorScheme>(loadColorScheme);
+  const [sidebarLayout, setSidebarLayout] =
+    useState<SidebarLayout>(loadSidebarLayout);
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -101,6 +106,11 @@ export function OpacityControl() {
     setColorScheme(next);
   };
 
+  const onSidebarLayout = (next: SidebarLayout) => {
+    saveSidebarLayout(next);
+    setSidebarLayout(next);
+  };
+
   const onThemeHue = (nextHue: number) => {
     const { hue, saturation } = applyThemeTint(nextHue, themeSaturation);
     saveThemeHue(hue);
@@ -140,6 +150,15 @@ export function OpacityControl() {
           data-tauri-drag-region="false"
           className="absolute right-0 top-full z-50 mt-1.5 flex w-72 flex-col gap-3 rounded-lg border border-content/5 bg-content/5 p-3 shadow-xl backdrop-blur-md"
         >
+          <SegmentedRow
+            label="Layout"
+            value={sidebarLayout}
+            options={[
+              { value: "classic", label: "Classic" },
+              { value: "deck", label: "Deck" },
+            ]}
+            onChange={onSidebarLayout}
+          />
           <SegmentedRow
             label="Theme"
             value={colorScheme}

@@ -70,8 +70,8 @@ type Props = {
   onFileDeleted?: (path: string) => void;
   onSearch?: () => void;
   gitStatuses?: GitStatusMap;
-  diffOpen?: boolean;
-  onToggleDiff?: () => void;
+  onShowSourceControl?: () => void;
+  sourceControlActive?: boolean;
 };
 
 type Creating = { id: number; parent: string; isDir: boolean };
@@ -219,8 +219,8 @@ export function FileTree({
   onFileDeleted,
   onSearch,
   gitStatuses,
-  diffOpen = false,
-  onToggleDiff,
+  sourceControlActive = false,
+  onShowSourceControl,
 }: Props) {
   const [expanded, setExpanded] = useState(() => loadExpanded(cwd));
   const [selectedPath, setSelectedPath] = useState(() => loadSelected(cwd));
@@ -644,11 +644,11 @@ export function FileTree({
               <Search className="size-3.5" strokeWidth={1.75} />
             </HeaderIcon>
           ) : null}
-          {onToggleDiff ? (
+          {onShowSourceControl ? (
             <FileTreeDiffButton
               cwd={cwd}
-              active={diffOpen}
-              onClick={onToggleDiff}
+              active={sourceControlActive}
+              onClick={onShowSourceControl}
             />
           ) : null}
         </div>

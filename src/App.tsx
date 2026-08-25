@@ -8,10 +8,13 @@ import { TitleBar, type Tab as TitleTab } from "./chrome/TitleBar";
 import { MenuBar } from "./chrome/MenuBar";
 import { FilePicker } from "./chrome/FilePicker";
 import { useProjectBranches } from "./hooks/useProjectBranches";
+import { useSidebarLayout } from "./hooks/useSidebarLayout";
 import {
+  LAYOUT_CHANGE_EVENT,
   loadSidebarOpen,
   loadSidebarTabOrder,
   saveSidebarOpen,
+  type SidebarLayout,
   type SidebarTabId,
 } from "./lib/appearance";
 import { IS_MAC } from "./lib/platform";
@@ -152,6 +155,7 @@ import {
   rememberProject,
   sameProjectPath,
 } from "./lib/recents";
+import { findTabForProject } from "./lib/workspaceTabGroups";
 import {
   HARNESS_LABEL,
   canReplaceSessionTitle,
@@ -367,6 +371,8 @@ export default function App({
     [],
   );
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen);
+  const sidebarLayout = useSidebarLayout();
+  const deckLayout = sidebarLayout === "deck";
   const [sidebarTab, setSidebarTab] = useState<SidebarTabId>(
     () => loadSidebarTabOrder()[0] ?? "sessions",
   );
@@ -1373,6 +1379,7 @@ export default function App({
     (sessionId?: string) => {
       if (!activeTab) return;
       if (
+        !deckLayout &&
         sessionId === undefined &&
         activeTab.diffOpen &&
         activeTab.diffFocused
@@ -1427,6 +1434,7 @@ export default function App({
     },
     [
       activeTab,
+      deckLayout,
       onCloseFile,
       onCloseTab,
       onClearTabSession,
@@ -1514,6 +1522,7 @@ export default function App({
             const opened = resolved
               ? openEditorTab(tab, newFileTab(resolved, sidebarCwd, true))
               : tab;
+            if (deckLayout) return opened;
             return {
               ...opened,
               diffOpen: true,
@@ -1521,10 +1530,15 @@ export default function App({
             };
           }),
         );
+        if (deckLayout) {
+          setSidebarOpen(true);
+          saveSidebarOpen(true);
+          setSidebarTab("changes");
+        }
         setComposerFocused(false);
       })();
     },
-    [activeTabId, sidebarCwd],
+    [activeTabId, deckLayout, sidebarCwd],
   );
 
   const onToggleDiff = useCallback(() => {
@@ -1550,6 +1564,17 @@ export default function App({
     );
     setComposerFocused(false);
   }, [activeTabId]);
+
+  const onShowSourceControl = useCallback(() => {
+    setSidebarOpen(true);
+    saveSidebarOpen(true);
+    setSidebarTab("changes");
+  }, []);
+
+  const onToggleChanges = useCallback(() => {
+    if (deckLayout) onShowSourceControl();
+    else onToggleDiff();
+  }, [deckLayout, onShowSourceControl, onToggleDiff]);
 
   const onReorderTabs = useCallback(
     (ids: string[], movedId?: string) => {
@@ -1997,12 +2022,64 @@ export default function App({
     [appendTab, projectOfTab],
   );
 
+  const onSelectProject = useCallback(
+    (path: string) => {
+      const normalized = normalizeProjectPath(path);
+      if (!looksLikeProject(normalized)) return;
+
+      const activeWorkspace = tabsRef.current.find(
+        (entry) => entry.id === activeTabIdRef.current,
+      );
+      const current = activeWorkspace
+        ? sessionsRef.current.find(
+            (session) => session.id === activeWorkspace.focusedId,
+          )
+        : undefined;
+      const currentCwd =
+        current?.cwd ??
+        (activeWorkspace ? focusedFileTab(activeWorkspace)?.cwd : undefined);
+      if (currentCwd && sameProjectPath(currentCwd, normalized)) return;
+
+      if (current && isBlankSession(current)) {
+        onCwdChange(current.id, normalized);
+        return;
+      }
+
+      const match = findTabForProject(
+        tabsRef.current,
+        sessionsRef.current,
+        normalized,
+      );
+      if (match) {
+        setProjectCwd(normalized);
+        setRecents(rememberProject(normalized));
+        activateTab(match.id);
+        return;
+      }
+
+      const seed = current ?? sessionsRef.current[0];
+      const session = newSession(
+        seed?.harness ?? "claude",
+        normalized,
+        seed?.model,
+        seed?.runtimeMode,
+        seed?.modelSettings,
+      );
+      const tab = newTab(session.id);
+      setProjectCwd(normalized);
+      setRecents(rememberProject(normalized));
+      setSessions((prev) => [...prev, session]);
+      appendTab(tab, normalized);
+      setActiveTabId(tab.id);
+      setComposerFocused(true);
+    },
+    [activateTab, appendTab, onCwdChange],
+  );
+
   const pickProject = useCallback(async () => {
     const path = await pickFolder();
-    const target = active ?? sessionsRef.current[0];
-    if (!path || !target) return;
-    onCwdChange(target.id, path);
-  }, [active, onCwdChange]);
+    if (path) onSelectProject(path);
+  }, [onSelectProject]);
 
   const onFileMoved = useCallback((from: string, to: string) => {
     invalidateProjectFiles();
@@ -2596,6 +2673,32 @@ export default function App({
     setSearchFocusToken((token) => token + 1);
   }, []);
 
+  const onInbox = useCallback(() => {
+    setSidebarOpen(true);
+    saveSidebarOpen(true);
+    setSidebarTab("sessions");
+  }, []);
+
+  useEffect(() => {
+    const onLayoutChange = (event: Event) => {
+      const layout = (event as CustomEvent<SidebarLayout>).detail;
+      setTabs((prev) =>
+        prev.map((tab) => ({ ...tab, diffOpen: false, diffFocused: false })),
+      );
+      if (layout === "classic") {
+        setSidebarTab((tab) => (tab === "changes" ? "sessions" : tab));
+      }
+    };
+    window.addEventListener(LAYOUT_CHANGE_EVENT, onLayoutChange);
+    return () => window.removeEventListener(LAYOUT_CHANGE_EVENT, onLayoutChange);
+  }, []);
+
+  useEffect(() => {
+    if (!deckLayout && sidebarTab === "changes") {
+      setSidebarTab("sessions");
+    }
+  }, [deckLayout, sidebarTab]);
+
   const openFilePaths = useMemo(() => {
     const paths: string[] = [];
     const seen = new Set<string>();
@@ -2801,6 +2904,7 @@ export default function App({
       <Sidebar
         cwd={sidebarCwd}
         open={sidebarOpen}
+        layout={sidebarLayout}
         tab={sidebarTab}
         onTabChange={setSidebarTab}
         filesSearchOpen={filesSearchOpen}
@@ -2824,8 +2928,18 @@ export default function App({
         canGoForward={tabVisitNav.canForward}
         onGoBack={onVisitBack}
         onGoForward={onVisitForward}
-        diffOpen={!!activeTab?.diffOpen}
-        onToggleDiff={onToggleDiff}
+        onOpenDiff={onOpenDiff}
+        onShowSourceControl={onToggleChanges}
+        selectedDiffPath={activeTab ? selectedChangePath(activeTab) : undefined}
+        textHarness={pickTextHarness(active?.harness)}
+        recents={recents}
+        busyProjectPaths={sessions.flatMap((session) =>
+          session.busy && session.cwd ? [session.cwd] : [],
+        )}
+        onSelectProject={deckLayout ? onSelectProject : undefined}
+        onOpenProject={deckLayout ? pickProject : undefined}
+        onNew={deckLayout ? onNew : undefined}
+        onInbox={deckLayout ? onInbox : undefined}
       />
 
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
@@ -2835,7 +2949,7 @@ export default function App({
             onNewTerminal={onNewTerminal}
             onGoToFile={onGoToFile}
             onToggleSidebar={onToggleSidebar}
-            onToggleDiff={onToggleDiff}
+            onShowSourceControl={onToggleChanges}
             onCloseCurrentTab={
               activeTabId ? () => onCloseTab(activeTabId) : undefined
             }
@@ -2848,9 +2962,13 @@ export default function App({
           activeId={activeTabId}
           cwd={sidebarCwd}
           sidebarOpen={sidebarOpen}
-          diffOpen={!!activeTab?.diffOpen}
+          sourceControlActive={
+            deckLayout
+              ? sidebarOpen && sidebarTab === "changes"
+              : !!activeTab?.diffOpen
+          }
           onToggleSidebar={onToggleSidebar}
-          onToggleDiff={onToggleDiff}
+          onShowSourceControl={onToggleChanges}
           onSelect={activateTab}
           canGoBack={tabVisitNav.canBack}
           canGoForward={tabVisitNav.canForward}
@@ -2932,7 +3050,7 @@ export default function App({
                 </div>
               ))}
             </div>
-            {activeTab?.diffOpen ? (
+            {!deckLayout && activeTab?.diffOpen ? (
               <DiffPane
                 key={sidebarCwd ?? ""}
                 cwd={sidebarCwd}

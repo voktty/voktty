@@ -71,6 +71,25 @@ export function lastProjectPath(): string | null {
   return null;
 }
 
+/** Recents plus the current folder when it is a project not yet remembered. */
+export function projectRailItems(
+  recents: RecentProject[],
+  currentCwd: string,
+): RecentProject[] {
+  const items: RecentProject[] = [];
+  const seen = new Set<string>();
+  const push = (path: string, openedAt: number) => {
+    if (!looksLikeProject(path)) return;
+    const normalized = normalize(path);
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    items.push({ path: normalized, openedAt });
+  };
+  if (currentCwd) push(currentCwd, Date.now());
+  for (const item of recents) push(item.path, item.openedAt);
+  return items;
+}
+
 /** True if this looks like a user project, not an app bundle or system root. */
 export function looksLikeProject(path: string): boolean {
   if (!path || path === "/" || path === "~") return false;

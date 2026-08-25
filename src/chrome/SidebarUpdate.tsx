@@ -75,23 +75,25 @@ export function SidebarUpdate() {
         type="button"
         onClick={onClick}
         disabled={busy}
-        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] leading-tight transition-colors ${
+        className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors ${
           hasUpdate
             ? "bg-accent/15 text-content hover:bg-accent/20"
-            : "text-content/50 hover:bg-content/5 hover:text-content"
+            : "text-content/75 hover:bg-content/5 hover:text-content"
         } disabled:cursor-default disabled:opacity-70`}
       >
-        <span className="grid size-5 shrink-0 place-items-center">
+        <span className="grid size-[18px] shrink-0 place-items-center">
           {busy ? (
-            <Loader className="size-3.5 animate-spin" aria-hidden />
+            <Loader className="size-[18px] animate-spin opacity-70" aria-hidden />
           ) : hasUpdate ? (
-            <ArrowDownCircle className="size-3.5 text-accent" aria-hidden />
+            <ArrowDownCircle className="size-[18px] text-accent" aria-hidden />
           ) : (
-            <RefreshCw className="size-3.5" aria-hidden />
+            <RefreshCw className="size-[18px] opacity-70" strokeWidth={1.75} aria-hidden />
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium">{label}</span>
+          <span className="block truncate text-[12px] font-medium leading-tight">
+            {label}
+          </span>
           <span className="block truncate text-[11px] text-content/40">
             v{snapshot.currentVersion}
           </span>

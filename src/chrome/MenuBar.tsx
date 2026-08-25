@@ -10,7 +10,7 @@ type Props = {
   onNewTerminal?: () => void;
   onGoToFile?: () => void;
   onToggleSidebar: () => void;
-  onToggleDiff?: () => void;
+  onShowSourceControl?: () => void;
   onCloseCurrentTab?: () => void;
   onPickProject?: () => void;
   onFindInProject?: () => void;
@@ -21,7 +21,7 @@ export function MenuBar({
   onNewTerminal,
   onGoToFile,
   onToggleSidebar,
-  onToggleDiff,
+  onShowSourceControl,
   onCloseCurrentTab,
   onPickProject,
   onFindInProject,
@@ -116,7 +116,7 @@ export function MenuBar({
           window.dispatchEvent(new Event("open_model_picker"));
           break;
         case "toggle_diff":
-          onToggleDiff?.();
+          onShowSourceControl?.();
           break;
       }
     },
@@ -128,7 +128,7 @@ export function MenuBar({
       onNew,
       onNewTerminal,
       onPickProject,
-      onToggleDiff,
+      onShowSourceControl,
       onToggleSidebar,
     ],
   );
