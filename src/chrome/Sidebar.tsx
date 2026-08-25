@@ -40,7 +40,7 @@ import {
   saveSessionSidebarFilters,
   type SessionSidebarFilters,
 } from "../lib/sessionFilters";
-import type { HarnessId, Session } from "../lib/session";
+import type { HarnessId } from "../lib/session";
 import type { SessionSummary } from "../lib/sessionStore";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
@@ -54,7 +54,6 @@ import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTree } from "./FileTree";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
-import { InboxPanel } from "./InboxPanel";
 import { ProjectRail } from "./ProjectRail";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
@@ -114,10 +113,6 @@ type Props = {
   onOpenProject?: () => void;
   onNew?: () => void;
   onSearch?: () => void;
-  onInbox?: () => void;
-  inboxOpen?: boolean;
-  inboxCount?: number;
-  inboxSessions?: Session[];
   unseenFinishedIds?: Set<string>;
 };
 
@@ -158,10 +153,6 @@ function SidebarComponent({
   onOpenProject,
   onNew,
   onSearch,
-  onInbox,
-  inboxOpen = false,
-  inboxCount = 0,
-  inboxSessions = [],
   unseenFinishedIds: unseenFinishedIdsProp,
 }: Props) {
   const [width, setWidth] = useState(rememberedWidth);
@@ -485,21 +476,10 @@ function SidebarComponent({
   };
 
   const onTabPick = (itemId: SidebarTab) => {
-    if (inboxOpen) onInbox?.();
     onTabChange(itemId);
   };
 
-  const sidebarContent = inboxOpen ? (
-    <InboxPanel
-      width={width}
-      sessions={inboxSessions}
-      approvalSessionIds={approvalSessionIds}
-      doneSessionIds={unseenFinishedIds}
-      busySessionIds={busySessionIds}
-      activeSessionId={activeSessionId}
-      onSelectSession={onSelectSession}
-    />
-  ) : (
+  const sidebarContent = (
     <aside
       ref={asideRef}
       style={{ width }}
@@ -849,9 +829,6 @@ function SidebarComponent({
           onGoForward={onGoForward}
           onNew={onNew}
           onSearch={onSearch}
-          onInbox={onInbox}
-          inboxOpen={inboxOpen}
-          inboxCount={inboxCount}
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}
         />

@@ -1,6 +1,5 @@
 import {
   FolderOpen,
-  Inbox,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -85,9 +84,6 @@ type Props = {
   onGoForward?: () => void;
   onNew?: () => void;
   onSearch?: () => void;
-  onInbox?: () => void;
-  inboxOpen?: boolean;
-  inboxCount?: number;
   onSelectProject: (path: string) => void;
   onOpenProject: () => void;
 };
@@ -102,9 +98,6 @@ export function ProjectRail({
   onGoForward,
   onNew,
   onSearch,
-  onInbox,
-  inboxOpen = false,
-  inboxCount = 0,
   onSelectProject,
   onOpenProject: _onOpenProject,
 }: Props) {
@@ -378,16 +371,6 @@ export function ProjectRail({
       <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
         <RailAction label="New" icon={Plus} onClick={onNew} />
         <RailAction label="Search" icon={Search} onClick={onSearch} />
-        <RailAction
-          label="Inbox"
-          icon={Inbox}
-          onClick={onInbox}
-          active={inboxOpen}
-          badge={inboxCount > 0 ? inboxCount : undefined}
-          ariaLabel={
-            inboxCount > 0 ? `Inbox, ${inboxCount} notifications` : "Inbox"
-          }
-        />
       </div>
 
       <div
@@ -395,9 +378,7 @@ export function ProjectRail({
           lockOverscroll(el);
           scrollRef.current = el;
         }}
-        className={`flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none pb-2 transition-opacity ${
-          inboxOpen ? "opacity-50" : ""
-        }`}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none pb-2"
       >
         {!hasProjects ? (
           <p className="px-3 py-2 text-[11px] leading-tight text-content/40">
@@ -410,7 +391,6 @@ export function ProjectRail({
             label="Pinned"
             items={sections.pinned}
             cwd={cwd}
-            inboxOpen={inboxOpen}
             busy={busy}
             sortable={pinnedSortable}
             pinned
@@ -430,7 +410,6 @@ export function ProjectRail({
             label="Projects"
             items={sections.projects}
             cwd={cwd}
-            inboxOpen={inboxOpen}
             busy={busy}
             sortable={projectSortable}
             pinned={false}
@@ -560,7 +539,6 @@ function ProjectSection({
   label,
   items,
   cwd,
-  inboxOpen,
   busy,
   sortable,
   pinned,
@@ -576,7 +554,6 @@ function ProjectSection({
   label: string;
   items: RecentProject[];
   cwd: string;
-  inboxOpen: boolean;
   busy: Set<string>;
   sortable: SortableHandle;
   pinned: boolean;
@@ -599,7 +576,7 @@ function ProjectSection({
           <ProjectCard
             key={item.path}
             item={item}
-            selected={!inboxOpen && sameProjectPath(item.path, cwd)}
+            selected={sameProjectPath(item.path, cwd)}
             busy={isBusyPath(item.path, busy)}
             pinned={pinned}
             sortable={sortable}
@@ -612,7 +589,6 @@ function ProjectSection({
             groupColors={groupColors}
             groupCustomColors={groupCustomColors}
             groupLogos={groupLogos}
-            inboxOpen={inboxOpen}
           />
         ))}
       </div>
@@ -635,7 +611,6 @@ function ProjectCard({
   groupColors,
   groupCustomColors,
   groupLogos,
-  inboxOpen,
 }: {
   item: RecentProject;
   selected: boolean;
@@ -651,7 +626,6 @@ function ProjectCard({
   groupColors: Record<string, number>;
   groupCustomColors: Record<string, string>;
   groupLogos: ReturnType<typeof useTabGroupLogos>;
-  inboxOpen: boolean;
 }) {
   const fallbackName = basename(item.path);
   const projectKey = projectName(item.path);
@@ -674,7 +648,7 @@ function ProjectCard({
     sortable.toIndex === index &&
     sortable.fromIndex !== null &&
     sortable.toIndex > sortable.fromIndex;
-  const diffEnabled = !inboxOpen && Boolean(item.path) && item.path !== "~";
+  const diffEnabled = Boolean(item.path) && item.path !== "~";
   const stats = useProjectDiffStats(item.path, diffEnabled);
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;

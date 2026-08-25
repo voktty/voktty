@@ -184,7 +184,6 @@ import {
 } from "./lib/sessionStore";
 import { syncDockBadge } from "./lib/dockBadge";
 import { hiddenApprovalNotices } from "./lib/approvalToast";
-import { inboxNotificationCount } from "./lib/inbox";
 import { nextUnseenFinishedSessions } from "./lib/sessionDone";
 import { tabCommand } from "./lib/tabKeys";
 import {
@@ -380,7 +379,6 @@ export default function App({
   );
   const [filesSearchOpen, setFilesSearchOpen] = useState(false);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
-  const [inboxOpen, setInboxOpen] = useState(false);
   const [editorNavigation, setEditorNavigation] =
     useState<EditorNavigationTarget | null>(null);
   const editorNavigationToken = useRef(0);
@@ -612,7 +610,6 @@ export default function App({
     focusedForDoneRef.current = activeSessionId;
   }
   const unseenFinishedIds = unseenFinishedRef.current;
-  const inboxCount = inboxNotificationCount(approvalSessionIds, unseenFinishedIds);
 
   const hiddenApprovalToasts = useMemo(
     () => hiddenApprovalNotices(sessions, activeTabId, tabs, composerFocused),
@@ -1575,7 +1572,6 @@ export default function App({
           }),
         );
         if (deckLayout) {
-          setInboxOpen(false);
           setSidebarOpen(true);
           saveSidebarOpen(true);
           setSidebarTab("changes");
@@ -1611,7 +1607,6 @@ export default function App({
   }, [activeTabId]);
 
   const onShowSourceControl = useCallback(() => {
-    setInboxOpen(false);
     setSidebarOpen(true);
     saveSidebarOpen(true);
     setSidebarTab("changes");
@@ -2070,7 +2065,6 @@ export default function App({
 
   const onSelectProject = useCallback(
     (path: string) => {
-      setInboxOpen(false);
       const normalized = normalizeProjectPath(path);
       if (!looksLikeProject(normalized)) return;
 
@@ -2713,36 +2707,20 @@ export default function App({
   }, []);
 
   const onFindInProject = useCallback(() => {
-    setInboxOpen(false);
     setSidebarOpen(true);
     saveSidebarOpen(true);
     setSidebarTab("files");
     setFilesSearchOpen(true);
     setSearchFocusToken((token) => token + 1);
-  }, []);
-
-  const onInbox = useCallback(() => {
-    setSidebarOpen(true);
-    saveSidebarOpen(true);
-    setInboxOpen((open) => !open);
   }, []);
 
   const onRailSearch = useCallback(() => {
-    setInboxOpen(false);
     setSidebarOpen(true);
     saveSidebarOpen(true);
     setSidebarTab("files");
     setFilesSearchOpen(true);
     setSearchFocusToken((token) => token + 1);
   }, []);
-
-  const onSelectInboxSession = useCallback(
-    (sessionId: string) => {
-      setInboxOpen(false);
-      void onSelectHistorySession(sessionId);
-    },
-    [onSelectHistorySession],
-  );
 
   useEffect(() => {
     const onLayoutChange = (event: Event) => {
@@ -2981,9 +2959,7 @@ export default function App({
         approvalSessionIds={approvalSessionIds}
         activeSessionId={active?.id}
         status={historyStatus}
-        onSelectSession={
-          deckLayout && inboxOpen ? onSelectInboxSession : onSelectHistorySession
-        }
+        onSelectSession={onSelectHistorySession}
         onRenameSession={onRenameHistorySession}
         onArchiveSession={onArchiveHistorySession}
         onDeleteSession={onDeleteHistorySession}
@@ -3007,10 +2983,6 @@ export default function App({
         onOpenProject={deckLayout ? pickProject : undefined}
         onNew={deckLayout ? onNew : undefined}
         onSearch={deckLayout ? onRailSearch : undefined}
-        onInbox={deckLayout ? onInbox : undefined}
-        inboxOpen={deckLayout ? inboxOpen : false}
-        inboxCount={deckLayout ? inboxCount : 0}
-        inboxSessions={sessions}
         unseenFinishedIds={unseenFinishedIds}
       />
 
