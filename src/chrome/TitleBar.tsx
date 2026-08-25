@@ -129,17 +129,19 @@ function sessionMeta(tab: Tab): string {
 
 export function tabCopy(
   tab: Tab,
-  options?: { inGroup?: boolean },
+  options?: { inGroup?: boolean; deckLayout?: boolean },
 ): {
   headline: string;
   meta: string;
   tooltip: string;
 } {
   const inGroup = options?.inGroup ?? false;
+  const deckLayout = options?.deckLayout ?? false;
   const project = tab.project.trim() || "~";
   const conversation = tab.title.trim();
   const file = tab.files[0] ?? "";
   const sessions = sessionMeta(tab);
+  const untitled = deckLayout ? "New session" : inGroup ? "New chat" : project;
 
   let headline: string;
   const metaParts: string[] = [];
@@ -157,12 +159,12 @@ export function tabCopy(
       headline = file;
       if (sessions) metaParts.push(sessions);
     } else {
-      headline = inGroup ? "New chat" : project;
+      headline = untitled;
       if (sessions) metaParts.push(sessions);
     }
   } else {
-    headline = conversation || file || (inGroup ? "New chat" : project);
-    if (!inGroup && headline !== project && project !== "~") {
+    headline = conversation || file || untitled;
+    if (!deckLayout && !inGroup && headline !== project && project !== "~") {
       metaParts.push(project);
     }
     if (sessions) metaParts.push(sessions);
@@ -270,6 +272,7 @@ function TitleTabItem({
   groupPosition,
   showLeftBorder: showLeftBorderProp,
   itemRef,
+  deckLayout = false,
 }: {
   tab: Tab;
   index: number;
@@ -284,10 +287,11 @@ function TitleTabItem({
   groupPosition?: TabGroupPosition;
   showLeftBorder?: boolean;
   itemRef?: (el: HTMLDivElement | null) => void;
+  deckLayout?: boolean;
 }) {
   const dragging = canDrag && sortable.draggingId === tab.id;
   const inGroup = groupPosition != null;
-  const { headline, meta, tooltip } = tabCopy(tab, { inGroup });
+  const { headline, meta, tooltip } = tabCopy(tab, { inGroup, deckLayout });
   const fileIcon = tab.files[0];
   const showStart =
     canDrag &&
@@ -529,6 +533,7 @@ function TabGroupBlock({
   onTabContextMenu,
   onToggleCollapse,
   onGroupContextMenu,
+  deckLayout = false,
 }: {
   segmentIndex: number;
   segment: Extract<TabGroupSegment, { kind: "group" }>;
@@ -548,6 +553,7 @@ function TabGroupBlock({
   onTabContextMenu: (tab: Tab, event: ReactMouseEvent<HTMLDivElement>) => void;
   onToggleCollapse: () => void;
   onGroupContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  deckLayout?: boolean;
 }) {
   const activeInGroup = segment.tabs.some((tab) => tab.id === activeId);
   const activeTabRef = useRef<HTMLDivElement | null>(null);
@@ -643,6 +649,7 @@ function TabGroupBlock({
                 dropTarget={dropTargetFor(sortable.dropTarget, "tab", tab.id)}
                 groupPosition={position}
                 showLeftBorder={offset > 0}
+                deckLayout={deckLayout}
                 itemRef={
                   tab.id === activeId
                     ? (el) => {
@@ -1303,6 +1310,7 @@ function TitleBarComponent({
                     onGroupContextMenu={(event) =>
                       onGroupContextMenu(segment, event)
                     }
+                    deckLayout={deckLayout}
                   />
                 );
               }
@@ -1341,6 +1349,7 @@ function TitleBarComponent({
                       "tab",
                       tab.id,
                     )}
+                    deckLayout={deckLayout}
                     itemRef={
                       tab.id === activeId
                         ? (el) => {
