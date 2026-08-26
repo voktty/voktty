@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Project rail context menu: Archive takes a project off the rail and keeps its conversations; Delete asks first, then also removes saved chats. Archived projects show up in Settings → Archive, where you can restore them to the rail or delete them. The folder on disk is left alone either way.
+- Session branches: switching or creating a branch in a session checks it out in a git worktree, so the project's HEAD stays put. Sidebar changes and diffs follow that session's working copy, and the branch comes back when you restore the session.
+- Per-provider default models in Settings → Providers. The model beside each provider is what new conversations use when that provider is selected.
+
+### Fixed
+
+- Wide code blocks in the transcript scroll horizontally instead of clipping.
 
 ## [0.1.7] - 2026-08-26
 
