@@ -40,7 +40,7 @@
     "@ai-sdk/groq": "^3.0.42",
     "@ai-sdk/openai": "^3.0.81",
     "@ai-sdk/openai-compatible": "^2.0.51",
-    "@ai-sdk/react": "^3.0.209",
+    "@ai-sdk/react": "^4.0.80",
     "@ai-sdk/xai": "^3.0.103",
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.11.0",
