@@ -418,7 +418,7 @@ export function ProjectRail({
       </div>
 
       <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
-        <RailAction
+        {/* <RailAction
           label="New project"
           icon={Plus}
           onClick={onNew}
@@ -427,7 +427,7 @@ export function ProjectRail({
           ariaLabel={
             newShortcut ? `New project (${newShortcut})` : "New project"
           }
-        />
+        /> */}
         <RailAction
           label="Search"
           icon={Search}

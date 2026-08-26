@@ -1,28 +1,4 @@
-import {
-  Bookmark,
-  Box,
-  Code2,
-  Compass,
-  Cpu,
-  Database,
-  FileCode,
-  FileText,
-  Folder,
-  FolderGit2,
-  GitBranch,
-  Globe,
-  Hash,
-  Inbox,
-  Layers,
-  LoaderCircle,
-  MessageSquare,
-  Package,
-  Search,
-  Sparkles,
-  Terminal,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { LoaderCircle, Search } from "lucide-react";
 import {
   useEffect,
   useMemo,
@@ -422,44 +398,35 @@ export function SearchView({
   );
 }
 
-const EMPTY_ICONS: LucideIcon[] = [
-  Package,
-  Users,
-  MessageSquare,
-  Globe,
-  FileText,
-  Folder,
-  Code2,
-  GitBranch,
-  Terminal,
-  Sparkles,
-  Hash,
-  Bookmark,
-  Layers,
-  Box,
-  Compass,
-  FileCode,
-  Inbox,
-  Database,
-  Cpu,
-  FolderGit2,
-];
+const EMPTY_DOT_COLS = 27;
+const EMPTY_DOT_ROWS = 19;
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center px-6 pb-10">
-      <div className="relative mb-8 grid h-40 w-56 place-items-center">
-        <div className="grid grid-cols-5 gap-x-5 gap-y-4 opacity-[0.11]">
-          {EMPTY_ICONS.map((Icon, index) => (
-            <Icon key={index} className="size-5" strokeWidth={1.5} />
-          ))}
+    <div className="flex flex-col items-center justify-center px-6 pb-24">
+      <div className="relative mb-2 grid h-48 w-72 place-items-center">
+        <div
+          className="grid gap-[7px] opacity-[0.14] [mask-image:radial-gradient(ellipse_72%_68%_at_50%_50%,#000_18%,transparent_76%)]"
+          style={{
+            gridTemplateColumns: `repeat(${EMPTY_DOT_COLS}, minmax(0, 1fr))`,
+          }}
+        >
+          {Array.from(
+            { length: EMPTY_DOT_COLS * EMPTY_DOT_ROWS },
+            (_, index) => (
+              <span
+                key={index}
+                className="mx-auto size-[3px] rounded-full bg-content"
+              />
+            ),
+          )}
         </div>
         <div className="absolute grid size-14 place-items-center rounded-2xl bg-content/6 backdrop-blur-sm">
           <Search className="size-6 text-content/50" strokeWidth={1.75} />
         </div>
       </div>
-      <h2 className="text-[15px] font-medium text-content">Search</h2>
-      <p className="mt-1 max-w-xs text-center text-[13px] text-content/45">
+
+      <p className="max-w-xs text-center text-[13px] text-content/45">
         Find files, conversations, messages, and projects.
       </p>
     </div>
