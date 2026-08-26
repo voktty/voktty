@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Deck layout: a second window layout, opt-in and off by default. Switch between Classic and Deck under Layout in the appearance menu. Deck puts a project rail down the left edge with every project you have opened, and scopes the title-bar tabs to the selected project instead of mixing all of them together. `⌘B` shows and hides the rail.
+- Project rail cards show live state: an animated pixel mascot per project, a spinner and a shimmering name while a turn is running, and `+n -n` for uncommitted changes. Pick a different mascot for a project from its context menu.
+- Project terminal dock (deck layout): terminals belong to the project rather than to one tab, and dock to the top, left, right, or bottom edge. `⌘J` hides and shows the dock, and the layout survives tab switches and restarts.
+- Changes is a sidebar tab in deck layout, next to Sessions and Explorer, with the working-tree diff stats on the tab itself.
+- Global search with `⌘K`: one field across files, projects, and past conversations, including the text of messages inside them.
+- Settings page with `⌘,`: general, appearance, keybindings, providers, and archived sessions in one place.
+- Sessions can start without a project in deck layout. The session opens with a project picker and you choose the folder when you are ready.
+- Projects can be removed from the rail, with an option to also delete their saved chats and appearance settings. The folder on disk is left alone either way.
 - Session archive: right-click a session in the sidebar to archive or unarchive it. Archived sessions are hidden by default and stay archived across restarts.
 - Session sidebar filters: filter by provider, status (working, needs approval, done), and time (today, last 7 days, last 30 days). Toggle archived sessions from the filter menu. Filter choices persist across restarts.
 
@@ -16,6 +24,7 @@ Thanks [@Queaxtra](https://github.com/Queaxtra) for the filter and archive ideas
 
 ### Changed
 
+- A paused turn shows “Waiting for approval” in place of the timer instead of dropping the row, so the transcript no longer shifts while you decide.
 - The changes view can be opened from the file tree header as well as the title bar. The title-bar control shows a diff icon when there are no uncommitted changes yet, and the close button was removed from the changes pane — use either toggle to show or hide it.
 - Composer placeholder mentions `@` for file references.
 
