@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { basename, pickFolder } from "../lib/fs";
+import { basename } from "../lib/fs";
 import { prettyCwd, prettyParent } from "../lib/paths";
 import {
   looksLikeProject,
@@ -41,7 +41,6 @@ const HOVER_CLOSE_MS = 100;
 type Row =
   | { kind: "recent"; path: string }
   | { kind: "more" }
-  | { kind: "new-project" }
   | { kind: "new-terminal" };
 
 function menuStyle(
@@ -135,7 +134,6 @@ export function CwdPicker({
       path: item.path,
     }));
     if (hasMore) out.push({ kind: "more" });
-    out.push({ kind: "new-project" });
     if (onNewTerminal) out.push({ kind: "new-terminal" });
     return out;
   }, [hasMore, onNewTerminal, previewRecents]);
@@ -223,12 +221,6 @@ export function CwdPicker({
   const pick = (row: Row) => {
     if (row.kind === "more") return;
     dismiss(true);
-    if (row.kind === "new-project") {
-      void pickFolder("Open project").then((path) => {
-        if (path) onCwdChange(path);
-      });
-      return;
-    }
     if (row.kind === "new-terminal") {
       onNewTerminal?.();
       return;
@@ -280,8 +272,9 @@ export function CwdPicker({
     }
   };
 
-  const newProjectIndex = previewRecents.length + (hasMore ? 1 : 0);
-  const newTerminalIndex = onNewTerminal ? newProjectIndex + 1 : -1;
+  const newTerminalIndex = onNewTerminal
+    ? previewRecents.length + (hasMore ? 1 : 0)
+    : -1;
   const moreIndex = hasMore ? previewRecents.length : -1;
 
   return (
@@ -416,28 +409,8 @@ export function CwdPicker({
               </button>
             ) : null}
           </div>
-          <div className="shrink-0 border-t border-content/10 py-1">
-            <button
-              type="button"
-              role="menuitem"
-              onMouseDown={(e) => e.stopPropagation()}
-              onMouseEnter={() => {
-                setMoreOpen(false);
-                setActive(newProjectIndex);
-              }}
-              onClick={() => pick({ kind: "new-project" })}
-              className={`flex w-full items-center justify-between gap-3 px-2.5 py-2 text-left ${
-                active === newProjectIndex
-                  ? "bg-content/10 text-content"
-                  : "text-content/80 hover:bg-content/5"
-              }`}
-            >
-              <span className="text-[13px]">New project</span>
-              <span className="shrink-0 font-mono text-[11px] text-content/45">
-                {MOD}N
-              </span>
-            </button>
-            {onNewTerminal ? (
+          {onNewTerminal ? (
+            <div className="shrink-0 border-t border-content/10 py-1">
               <button
                 type="button"
                 role="menuitem"
@@ -458,8 +431,8 @@ export function CwdPicker({
                   {MOD}`
                 </span>
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {open && moreOpen && submenu ? (

@@ -101,9 +101,6 @@ type Props = {
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
-  onNew?: () => void;
-  newActive?: boolean;
-  newShortcut?: string;
   onSearch?: () => void;
   searchActive?: boolean;
   onTogglePanel?: () => void;
@@ -120,9 +117,6 @@ export function ProjectRail({
   canGoForward = false,
   onGoBack,
   onGoForward,
-  onNew,
-  newActive = false,
-  newShortcut,
   onSearch,
   searchActive = false,
   onTogglePanel,
@@ -418,16 +412,6 @@ export function ProjectRail({
       </div>
 
       <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
-        {/* <RailAction
-          label="New project"
-          icon={Plus}
-          onClick={onNew}
-          active={newActive}
-          shortcut={newShortcut}
-          ariaLabel={
-            newShortcut ? `New project (${newShortcut})` : "New project"
-          }
-        /> */}
         <RailAction
           label="Search"
           icon={Search}

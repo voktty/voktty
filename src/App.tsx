@@ -976,39 +976,6 @@ export default function App({
     projectCwd,
   ]);
 
-  /** Rail "New": a session with no project yet, so the shell asks for one. */
-  const onNewBlank = useCallback(() => {
-    setSearchViewOpen(false);
-    const existing = tabsRef.current.find(
-      (tab) =>
-        !workspaceTabCwd(tab, sessionsRef.current) &&
-        isBlankWorkspaceTab(tab, sessionsRef.current),
-    );
-    if (existing) {
-      setActiveTabId(existing.id);
-      setComposerFocused(true);
-      return;
-    }
-    const session = newSession(
-      sessionDefaults?.harness ?? "claude",
-      "~",
-      sessionDefaults?.model,
-      sessionDefaults?.runtimeMode,
-      sessionDefaults?.modelSettings,
-    );
-    const tab = newTab(session.id);
-    setSessions((prev) => [...prev, session]);
-    appendTab(tab);
-    setActiveTabId(tab.id);
-    setComposerFocused(true);
-  }, [
-    appendTab,
-    sessionDefaults?.harness,
-    sessionDefaults?.model,
-    sessionDefaults?.runtimeMode,
-    sessionDefaults?.modelSettings,
-  ]);
-
   const onSplit = useCallback(
     (dir: SplitDir) => {
       if (!activeTab) return;
@@ -2849,7 +2816,6 @@ export default function App({
 
   const actions = useRef({
     onNew,
-    onNewBlank,
     onClosePane,
     onNext,
     onPrev,
@@ -2868,7 +2834,6 @@ export default function App({
   });
   actions.current = {
     onNew,
-    onNewBlank,
     onClosePane,
     onNext,
     onPrev,
@@ -2954,17 +2919,6 @@ export default function App({
         e.preventDefault();
         e.stopPropagation();
         run("toggle_sidebar", actions.current.onToggleSidebar);
-        return;
-      }
-      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "n") {
-        const target = e.target instanceof Element ? e.target : null;
-        // ctrl-n is a shell binding; only the mac accelerator claims it there.
-        if (target?.closest(".monocode-terminal") && e.ctrlKey && !e.metaKey) {
-          return;
-        }
-        e.preventDefault();
-        e.stopPropagation();
-        run("new_project", actions.current.onNewBlank);
         return;
       }
       if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "p") {
@@ -3092,7 +3046,6 @@ export default function App({
         onSelectProject={deckLayout ? onSelectProject : undefined}
         onOpenProject={deckLayout ? pickProject : undefined}
         onNew={deckLayout ? onNew : undefined}
-        onNewBlank={deckLayout ? onNewBlank : undefined}
         onSearch={onOpenSearch}
         onGoToFile={deckLayout ? onGoToFile : undefined}
         searchActive={searchViewOpen}

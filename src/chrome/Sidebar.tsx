@@ -115,7 +115,6 @@ type Props = {
   onOpenProject?: () => void;
   onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
   onNew?: () => void;
-  onNewBlank?: () => void;
   onSearch?: () => void;
   onGoToFile?: () => void;
   searchActive?: boolean;
@@ -161,7 +160,6 @@ function SidebarComponent({
   onOpenProject,
   onRemoveProject,
   onNew,
-  onNewBlank,
   onSearch,
   onGoToFile,
   searchActive = false,
@@ -895,9 +893,6 @@ function SidebarComponent({
           canGoForward={canGoForward}
           onGoBack={onGoBack}
           onGoForward={onGoForward}
-          onNew={onNewBlank ?? onNew}
-          newActive={!searchActive && !inProject}
-          newShortcut={onNewBlank ? `${MOD}N` : undefined}
           onSearch={onSearch}
           searchActive={searchActive}
           onTogglePanel={onToggleProjectRail}
