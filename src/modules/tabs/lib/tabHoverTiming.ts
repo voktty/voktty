@@ -1,0 +1,1 @@
+export const TAB_DETAILS_OPEN_DELAY_MS = 1_500;

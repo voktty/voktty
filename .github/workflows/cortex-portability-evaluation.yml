@@ -1,0 +1,66 @@
+name: Cortex portability evaluation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sqlite-spike:
+    name: SQLite spike (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/cortex-eval/sqlite-spike -> reports/target
+
+      - name: Run Windows spike
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/cortex-eval/sqlite-spike/run.ps1
+
+      - name: Run Unix spike
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/cortex-eval/sqlite-spike/run.sh
+
+      - name: Validate measurements
+        run: node scripts/cortex-eval/validate-report.mjs scripts/cortex-eval/sqlite-spike/reports/metrics.ndjson ${{ matrix.platform }}
+
+      - name: Upload measurements
+        uses: actions/upload-artifact@v7
+        with:
+          name: cortex-sqlite-${{ runner.os }}-${{ runner.arch }}
+          path: scripts/cortex-eval/sqlite-spike/reports/metrics.ndjson
+          if-no-files-found: error
+
+  accept-matrix:
+    name: Accept complete portability matrix
+    needs: sqlite-spike
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: cortex-sqlite-*
+          path: cortex-reports
+
+      - name: Validate complete matrix
+        shell: bash
+        run: node scripts/cortex-eval/validate-matrix.mjs cortex-reports/*/metrics.ndjson

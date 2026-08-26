@@ -1,0 +1,123 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Voktty",
+  "version": "1.0.0",
+  "identifier": "dev.voktty",
+  "build": {
+    "beforeDevCommand": "pnpm build:cli:dev && pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build:cli && pnpm build",
+    "frontendDist": "../dist",
+    "removeUnusedCommands": true
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "title": "Voktty",
+        "width": 800,
+        "height": 600,
+        "minWidth": 420,
+        "minHeight": 280,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "visible": false,
+        "transparent": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost https://asset.localhost asset://* blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost asset://* blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost https: http://localhost:* http://127.0.0.1:*; frame-src 'self' http: https: asset: http://asset.localhost https://asset.localhost asset://*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "externalBin": [
+      "binaries/voktty-cli"
+    ],
+    "resources": [
+      "resources/remote"
+    ],
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "copyright": "Copyright 2026 sergewinters",
+    "license": "Apache-2.0",
+    "publisher": "sergewinters",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "entitlements": "./entitlements.plist"
+    },
+    "linux": {
+      "deb": {
+        "section": "utils",
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "gtk3"
+        ]
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "./installer-hooks.nsh"
+      }
+    },
+    "category": "DeveloperTool",
+    "shortDescription": "AI-native terminal emulator",
+    "longDescription": "Voktty — an open-source AI-native terminal emulator with multi-tab, file explorer, code editor, web preview, voice input, and AI agents.",
+    "fileAssociations": [
+      {
+        "name": "Voktty Document",
+        "role": "Editor",
+        "mimeType": "text/plain",
+        "ext": [
+          "json", "jsonc", "txt", "log", "csv", "tsv",
+          "md", "markdown", "mdx",
+          "js", "mjs", "cjs", "jsx", "ts", "tsx", "mts", "cts",
+          "java", "kt", "kts", "gradle",
+          "py", "rb", "php", "go", "rs", "swift", "dart", "lua",
+          "c", "h", "cpp", "cc", "hpp", "hh", "cs",
+          "html", "htm", "css", "scss", "sass", "less", "vue", "svelte",
+          "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "properties",
+          "sh", "bash", "zsh", "sql", "graphql", "proto"
+        ]
+      }
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZBOEI1QkFERDkxMzBEQkUKUldTK0RSUFpyVnVMYXZLUXpWSVJKcHVkNTFYYlo2RXZpc1Y5ZDlKOUFqcEljeGtXUnNXajhvcXQK",
+      "endpoints": [
+        "https://github.com/voktty/voktty/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

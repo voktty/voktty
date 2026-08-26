@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Voktty",
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "shadow": false
+      }
+    ]
+  },
+  "bundle": {
+    "resources": [
+      "resources/remote",
+      "icons/document.ico"
+    ]
+  }
+}

@@ -1,0 +1,371 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-remote-helper:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install musl toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          key: remote-helper-linux-x86_64
+
+      - name: Build remote helper
+        working-directory: src-tauri
+        run: cargo build --locked -p voktty-remote --release --target x86_64-unknown-linux-musl
+
+      - name: Stage remote helper
+        run: |
+          mkdir -p src-tauri/resources/remote/linux-x86_64
+          cp src-tauri/target/x86_64-unknown-linux-musl/release/voktty-remote \
+            src-tauri/resources/remote/linux-x86_64/voktty-remote
+          test -s src-tauri/resources/remote/linux-x86_64/voktty-remote
+
+      - name: Upload remote helper
+        uses: actions/upload-artifact@v7
+        with:
+          name: voktty-remote-linux-x86_64
+          path: src-tauri/resources/remote/linux-x86_64/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-tauri:
+    needs: build-remote-helper
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      SIGNPATH_ENABLED: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+      APPLE_API_ENABLED: ${{ secrets.APPLE_API_KEY_PATH != '' && secrets.APPLE_API_KEY != '' && secrets.APPLE_API_ISSUER != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            rust-target: aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            rust-target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+            rust-target: ""
+          - platform: windows-latest
+            args: ""
+            rust-target: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          key: ${{ matrix.platform }}-${{ matrix.rust-target }}
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download remote helper
+        uses: actions/download-artifact@v8
+        with:
+          name: voktty-remote-linux-x86_64
+          path: src-tauri/resources/remote/linux-x86_64
+
+      - name: Verify remote helper resource
+        shell: bash
+        run: test -s src-tauri/resources/remote/linux-x86_64/voktty-remote
+
+      - name: Write Apple API key to disk
+        if: startsWith(matrix.platform, 'macos') && env.APPLE_API_ENABLED == 'true'
+        shell: bash
+        env:
+          KEY_CONTENT: ${{ secrets.APPLE_API_KEY_PATH }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          KEY_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          mkdir -p "$HOME/private_keys"
+          printf '%s' "$KEY_CONTENT" > "$HOME/private_keys/AuthKey.p8"
+          echo "APPLE_API_KEY_PATH=$HOME/private_keys/AuthKey.p8" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY=$KEY_ID" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER=$KEY_ISSUER" >> "$GITHUB_ENV"
+
+      - id: tauri
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VOKTTY_CLI_TARGET: ${{ matrix.rust-target }}
+
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Voktty ${{ github.ref_name }}"
+          releaseBody: "See the assets to download and install. Auto-update is built in."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # Strip the bundled libwayland-* libs from the AppImage so it loads the
+      # host copies at runtime. The Ubuntu 22.04 build host ships libwayland
+      # 1.20, but recent Mesa (Fedora 43 / Arch / Bazzite, Mesa 1.22+) needs
+      # newer symbols; AppImage puts its bundled libs first on the search path,
+      # so the stale copy wins and EGL fails with EGL_BAD_PARAMETER. libgdk-3
+      # hard-links these three, so removing them only redirects resolution to
+      # the host copy, which every GTK-capable system has. They are on the
+      # AppImage excludelist for this exact reason. The re-signed AppImage and
+      # its .sig are re-uploaded here; the updater manifest is patched in the
+      # patch-appimage-updater job after all matrix legs finish, so a parallel
+      # macOS/Windows upload cannot clobber the combined latest.json.
+      - name: Fix AppImage wayland libs and re-sign
+        if: matrix.platform == 'ubuntu-22.04' && startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          APPIMAGE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -n1)
+          BASENAME=$(basename "$APPIMAGE")
+          echo "Patching: $APPIMAGE"
+
+          WORK=$(mktemp -d)
+          cp "$APPIMAGE" "$WORK/"
+          pushd "$WORK" >/dev/null
+          chmod +x "./$BASENAME"
+          "./$BASENAME" --appimage-extract >/dev/null
+
+          # Fail loud if Tauri/linuxdeploy stops bundling these, so a future
+          # layout change cannot silently ship an unfixed AppImage.
+          for lib in libwayland-client.so.0 libwayland-egl.so.1 libwayland-cursor.so.0; do
+            test -e "squashfs-root/usr/lib/$lib" \
+              || { echo "expected bundled lib missing: $lib (layout changed?)"; exit 1; }
+          done
+
+          rm -f squashfs-root/usr/lib/libwayland-client.so.0 \
+                squashfs-root/usr/lib/libwayland-egl.so.1 \
+                squashfs-root/usr/lib/libwayland-cursor.so.0 \
+                squashfs-root/usr/lib/libwayland-server.so.0
+
+          curl -fsSL -o appimagetool.AppImage \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x appimagetool.AppImage
+          ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run squashfs-root "$BASENAME"
+
+          # Sanity-check the repacked image before it replaces the original.
+          rm -rf squashfs-root
+          chmod +x "./$BASENAME"
+          "./$BASENAME" --appimage-extract >/dev/null
+          for lib in libwayland-client.so.0 libwayland-egl.so.1 libwayland-cursor.so.0; do
+            test ! -e "squashfs-root/usr/lib/$lib" \
+              || { echo "lib still present after repack: $lib"; exit 1; }
+          done
+          test -x squashfs-root/usr/bin/voktty \
+            || { echo "voktty binary missing from repacked AppImage"; exit 1; }
+          popd >/dev/null
+
+          cp "$WORK/$BASENAME" "$APPIMAGE"
+
+          rm -f "$APPIMAGE.sig"
+          pnpm tauri signer sign "$APPIMAGE"
+
+          TAG="${GITHUB_REF_NAME}"
+          gh release upload "$TAG" "$APPIMAGE" "$APPIMAGE.sig" \
+            --clobber --repo "$GITHUB_REPOSITORY"
+
+      # SignPath Authenticode-signs the Windows installers. Their bytes change,
+      # so the minisign updater signatures tauri-action produced over the
+      # unsigned files no longer match. We stage the installers under the exact
+      # names the SignPath artifact configuration expects, submit them, then
+      # re-run the tauri signer over the SIGNED files and re-upload both the
+      # installers and their new .sig. latest.json is patched in the final
+      # patch-updater-manifest job, after every matrix leg has merged, so a
+      # parallel macOS/Linux upload cannot clobber the Windows signatures.
+      - name: Stage Windows installers for SignPath
+        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $bundleDir = "src-tauri/target/release/bundle"
+          $exe = Get-ChildItem "$bundleDir/nsis" -Filter *.exe | Select-Object -First 1
+          $msi = Get-ChildItem "$bundleDir/msi"  -Filter *.msi | Select-Object -First 1
+          if (-not $exe) { throw "No NSIS .exe produced by Tauri" }
+          if (-not $msi) { throw "No .msi produced by Tauri" }
+          New-Item -ItemType Directory -Path signpath-staging -Force | Out-Null
+          Copy-Item $exe.FullName signpath-staging/voktty-setup.exe
+          Copy-Item $msi.FullName signpath-staging/voktty.msi
+          "EXE_REAL_PATH=$($exe.FullName)" | Out-File $env:GITHUB_ENV -Append
+          "MSI_REAL_PATH=$($msi.FullName)" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Upload unsigned Windows artifact
+        id: upload-windows
+        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-unsigned
+          path: signpath-staging/
+          if-no-files-found: error
+
+      # Requires manual approval in the SignPath UI for the production policy.
+      # The default wait timeout is 600s; bumped so the job survives the time
+      # it takes to review and approve the request during a release.
+      - name: Submit Windows installers to SignPath
+        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/') && env.SIGNPATH_ENABLED == 'true'
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: 'df665bf4-9b76-41ae-9596-1ba3a23010aa'
+          project-slug: 'voktty'
+          signing-policy-slug: 'release-signing'
+          artifact-configuration-slug: 'initial'
+          github-artifact-id: ${{ steps.upload-windows.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: 'signed'
+
+      - name: Re-sign updater and upload signed Windows installers
+        if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/') && env.SIGNPATH_ENABLED == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $signedExe = "signed/voktty-setup.exe"
+          $signedMsi = "signed/voktty.msi"
+          foreach ($f in @($signedExe, $signedMsi)) {
+            if (-not (Test-Path $f)) { throw "Signed artifact missing: $f" }
+            $sig = Get-AuthenticodeSignature $f
+            if ($null -eq $sig.SignerCertificate) { throw "$f is NOT Authenticode-signed" }
+            if ($sig.Status -ne 'Valid') { throw "$f signature status: $($sig.Status)" }
+            Write-Host "OK $f -> $($sig.SignerCertificate.Subject)"
+          }
+          Copy-Item $signedExe $env:EXE_REAL_PATH -Force
+          Copy-Item $signedMsi $env:MSI_REAL_PATH -Force
+          Remove-Item "$($env:EXE_REAL_PATH).sig" -ErrorAction SilentlyContinue
+          Remove-Item "$($env:MSI_REAL_PATH).sig" -ErrorAction SilentlyContinue
+          pnpm tauri signer sign $env:EXE_REAL_PATH
+          pnpm tauri signer sign $env:MSI_REAL_PATH
+          gh release upload $env:GITHUB_REF_NAME `
+            $env:EXE_REAL_PATH "$($env:EXE_REAL_PATH).sig" `
+            $env:MSI_REAL_PATH "$($env:MSI_REAL_PATH).sig" `
+            --clobber --repo $env:GITHUB_REPOSITORY
+
+  # Patch the re-signed AppImage and SignPath-signed Windows signatures into the
+  # combined updater manifest. Runs once, after every matrix leg has finished
+  # merging its platform into latest.json, so it operates on the full manifest
+  # and cannot be clobbered by a parallel upload. Both linux keys point at the
+  # AppImage; the three windows keys are patched from the minisign signatures
+  # regenerated over the Authenticode-signed installers.
+  patch-updater-manifest:
+    needs: publish-tauri
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Patch latest.json with re-signed AppImage and Windows signatures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "latest.json" \
+            --pattern "*_amd64.AppImage.sig" \
+            --pattern "*_x64-setup.exe.sig" \
+            --pattern "*_x64_en-US.msi.sig" --clobber
+
+          APP_SIG=$(cat ./*_amd64.AppImage.sig)
+          EXE_SIG=$(cat ./*_x64-setup.exe.sig)
+          MSI_SIG=$(cat ./*_x64_en-US.msi.sig)
+
+          # Re-signing an artifact re-uploads it with --clobber, which deletes
+          # and recreates the asset under a new id. tauri-action baked the old
+          # asset-id API urls into latest.json, so we also rewrite the urls of
+          # the re-signed artifacts to the tag+filename download url, which is
+          # stable across clobbers. Filenames come from the .sig names.
+          APP_FILE=$(basename "$(ls ./*_amd64.AppImage.sig)" .sig)
+          EXE_FILE=$(basename "$(ls ./*_x64-setup.exe.sig)" .sig)
+          MSI_FILE=$(basename "$(ls ./*_x64_en-US.msi.sig)" .sig)
+          DL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+
+          jq -e 'has("platforms") and (.platforms | has("linux-x86_64")
+            and has("windows-x86_64") and has("windows-x86_64-msi")
+            and has("windows-x86_64-nsis"))' latest.json >/dev/null \
+            || { echo "latest.json missing an expected platform key"; exit 1; }
+
+          # The generic windows-x86_64 key mirrors whichever installer Tauri
+          # picked as primary; decode its current signature to see which file it
+          # references so the correct regenerated signature and url are used.
+          GEN_FILE=$(jq -r '.platforms["windows-x86_64"].signature' latest.json \
+            | base64 -d | grep -oE 'file:[^[:space:]]+' | head -n1)
+          GEN_FILE=${GEN_FILE#file:}
+          case "$GEN_FILE" in
+            *.msi) WIN_GEN="$MSI_SIG" ;;
+            *)     WIN_GEN="$EXE_SIG" ;;
+          esac
+
+          jq --arg app "$APP_SIG" --arg gen "$WIN_GEN" \
+             --arg msi "$MSI_SIG" --arg nsis "$EXE_SIG" \
+             --arg appurl "$DL/$APP_FILE" --arg genurl "$DL/$GEN_FILE" \
+             --arg msiurl "$DL/$MSI_FILE" --arg exeurl "$DL/$EXE_FILE" '
+            .platforms["linux-x86_64"] += {signature: $app, url: $appurl}
+            | (if .platforms["linux-x86_64-appimage"]
+               then .platforms["linux-x86_64-appimage"] += {signature: $app, url: $appurl}
+               else . end)
+            | .platforms["windows-x86_64"] += {signature: $gen, url: $genurl}
+            | .platforms["windows-x86_64-msi"] += {signature: $msi, url: $msiurl}
+            | .platforms["windows-x86_64-nsis"] += {signature: $nsis, url: $exeurl}
+          ' latest.json > latest.json.tmp
+          mv latest.json.tmp latest.json
+
+          gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"

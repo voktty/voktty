@@ -1,0 +1,16 @@
+[package]
+name = "voktty-cortex-sqlite-spike"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[features]
+default = []
+sqlite = ["dep:rusqlite"]
+
+[dependencies]
+memory-stats = "1.2"
+rusqlite = { version = "0.31", optional = true, features = ["bundled"] }

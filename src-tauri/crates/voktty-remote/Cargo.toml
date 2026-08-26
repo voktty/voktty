@@ -1,0 +1,27 @@
+[package]
+name = "voktty-remote"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "voktty-remote"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+globset = "0.4"
+grep-matcher = "0.1"
+grep-regex = "0.1"
+grep-searcher = "0.1"
+ignore = "0.4"
+notify = "8.2.0"
+portable-pty = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+voktty-remote-protocol = { path = "../voktty-remote-protocol" }
+voktty-workspace-edit = { path = "../voktty-workspace-edit" }
+
+[dev-dependencies]
+tempfile = "3"

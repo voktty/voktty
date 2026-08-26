@@ -1,0 +1,267 @@
+@keyframes voktty-avatar-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-0.6px) scale(1.025);
+  }
+}
+
+@keyframes voktty-avatar-think {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateX(0.8px) rotate(1deg);
+  }
+}
+
+@keyframes voktty-avatar-attention {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.09);
+  }
+}
+
+@keyframes voktty-avatar-blink {
+  0%,
+  43%,
+  47%,
+  100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(0.12);
+  }
+}
+
+.voktty-avatar-body {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: voktty-avatar-breathe
+    calc(3.2s / var(--voktty-avatar-animation-speed, 1)) ease-in-out infinite;
+}
+
+.voktty-avatar-face {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: voktty-avatar-blink
+    calc(5.4s / var(--voktty-avatar-animation-speed, 1)) ease-in-out infinite;
+}
+
+.voktty-avatar[data-state="thinking"] .voktty-avatar-body,
+.voktty-avatar[data-state="planning"] .voktty-avatar-body {
+  animation: voktty-avatar-think
+    calc(1.7s / var(--voktty-avatar-animation-speed, 1)) ease-in-out infinite;
+}
+
+.voktty-avatar[data-state="tool-running"] .voktty-avatar-body,
+.voktty-avatar[data-state="streaming"] .voktty-avatar-body {
+  animation-duration: calc(1.15s / var(--voktty-avatar-animation-speed, 1));
+}
+
+.voktty-avatar[data-state="awaiting-approval"] .voktty-avatar-body,
+.voktty-avatar[data-state="warning"] .voktty-avatar-body,
+.voktty-avatar[data-state="error"] .voktty-avatar-body {
+  animation: voktty-avatar-attention
+    calc(1.3s / var(--voktty-avatar-animation-speed, 1)) ease-in-out infinite;
+}
+
+.voktty-avatar[data-state="success"] .voktty-avatar-body {
+  animation: voktty-avatar-attention
+    calc(0.9s / var(--voktty-avatar-animation-speed, 1)) ease-out 2;
+}
+
+.voktty-avatar[data-motion="reduced"] .voktty-avatar-body,
+.voktty-avatar[data-motion="reduced"] .voktty-avatar-face {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voktty-avatar-body,
+  .voktty-avatar-face,
+  .voktty-avatar[data-state="thinking"] .voktty-avatar-body,
+  .voktty-avatar[data-state="planning"] .voktty-avatar-body,
+  .voktty-avatar[data-state="tool-running"] .voktty-avatar-body,
+  .voktty-avatar[data-state="streaming"] .voktty-avatar-body,
+  .voktty-avatar[data-state="awaiting-approval"] .voktty-avatar-body,
+  .voktty-avatar[data-state="warning"] .voktty-avatar-body,
+  .voktty-avatar[data-state="error"] .voktty-avatar-body,
+  .voktty-avatar[data-state="success"] .voktty-avatar-body {
+    animation: none;
+  }
+}
+
+@keyframes voktty-agent-tab-work {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-0.65px) scale(1.055);
+  }
+}
+
+@keyframes voktty-agent-tab-alert {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes voktty-agent-tab-success {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-1px) scale(1.12);
+  }
+  70% {
+    transform: translateY(0) scale(0.98);
+  }
+}
+
+@keyframes voktty-agent-tab-error {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-1px);
+  }
+  75% {
+    transform: translateX(1px);
+  }
+}
+
+@keyframes voktty-agent-tab-eyes-work {
+  0%,
+  100% {
+    transform: translateX(-0.5px);
+  }
+  50% {
+    transform: translateX(0.7px);
+  }
+}
+
+@keyframes voktty-agent-tab-mouth-work {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1.15);
+  }
+}
+
+.voktty-agent-tab {
+  overflow: visible;
+}
+
+.voktty-agent-tab-icon {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: none;
+}
+
+.voktty-agent-tab-face {
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--voktty-agent-tab-face-color);
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--voktty-agent-tab-face-color);
+  z-index: 1;
+  transform-origin: center;
+  animation: none;
+}
+
+.voktty-agent-tab-face svg {
+  display: block;
+  overflow: visible;
+}
+
+.voktty-agent-tab-eyes,
+.voktty-agent-tab-mouth {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.voktty-agent-tab[data-state="thinking"] .voktty-agent-tab-icon,
+.voktty-agent-tab[data-state="planning"] .voktty-agent-tab-icon,
+.voktty-agent-tab[data-state="tool-running"] .voktty-agent-tab-icon,
+.voktty-agent-tab[data-state="streaming"] .voktty-agent-tab-icon {
+  animation-name: voktty-agent-tab-work;
+  animation-duration: calc(1.45s / var(--voktty-agent-tab-speed, 1));
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.voktty-agent-tab[data-state="thinking"] .voktty-agent-tab-eyes,
+.voktty-agent-tab[data-state="planning"] .voktty-agent-tab-eyes,
+.voktty-agent-tab[data-state="tool-running"] .voktty-agent-tab-eyes,
+.voktty-agent-tab[data-state="streaming"] .voktty-agent-tab-eyes {
+  animation: voktty-agent-tab-eyes-work
+    calc(1.15s / var(--voktty-agent-tab-speed, 1)) ease-in-out infinite;
+}
+
+.voktty-agent-tab[data-state="tool-running"] .voktty-agent-tab-mouth,
+.voktty-agent-tab[data-state="streaming"] .voktty-agent-tab-mouth {
+  animation: voktty-agent-tab-mouth-work
+    calc(0.75s / var(--voktty-agent-tab-speed, 1)) ease-in-out infinite;
+}
+
+.voktty-agent-tab[data-state="awaiting-approval"] .voktty-agent-tab-icon,
+.voktty-agent-tab[data-state="warning"] .voktty-agent-tab-icon {
+  animation-name: voktty-agent-tab-alert;
+  animation-duration: calc(1.25s / var(--voktty-agent-tab-speed, 1));
+}
+
+.voktty-agent-tab[data-state="success"] .voktty-agent-tab-icon,
+.voktty-agent-tab[data-state="success"] .voktty-agent-tab-face {
+  animation-name: voktty-agent-tab-success;
+  animation-duration: calc(0.9s / var(--voktty-agent-tab-speed, 1));
+  animation-iteration-count: 2;
+}
+
+.voktty-agent-tab[data-state="error"] .voktty-agent-tab-icon,
+.voktty-agent-tab[data-state="cancelled"] .voktty-agent-tab-icon {
+  animation-name: voktty-agent-tab-error;
+  animation-duration: calc(0.5s / var(--voktty-agent-tab-speed, 1));
+  animation-iteration-count: 2;
+}
+
+.voktty-agent-tab[data-motion="reduced"] .voktty-agent-tab-icon,
+.voktty-agent-tab[data-motion="reduced"] .voktty-agent-tab-face,
+.voktty-agent-tab[data-motion="reduced"] .voktty-agent-tab-eyes,
+.voktty-agent-tab[data-motion="reduced"] .voktty-agent-tab-mouth {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voktty-agent-tab-icon,
+  .voktty-agent-tab-face,
+  .voktty-agent-tab-eyes,
+  .voktty-agent-tab-mouth,
+  .voktty-agent-tab[data-state="thinking"] .voktty-agent-tab-icon,
+  .voktty-agent-tab[data-state="planning"] .voktty-agent-tab-icon,
+  .voktty-agent-tab[data-state="tool-running"] .voktty-agent-tab-icon,
+  .voktty-agent-tab[data-state="streaming"] .voktty-agent-tab-icon,
+  .voktty-agent-tab[data-state="awaiting-approval"] .voktty-agent-tab-icon,
+  .voktty-agent-tab[data-state="warning"] .voktty-agent-tab-icon,
+  .voktty-agent-tab[data-state="success"] .voktty-agent-tab-icon,
+  .voktty-agent-tab[data-state="error"] .voktty-agent-tab-icon,
+  .voktty-agent-tab[data-state="cancelled"] .voktty-agent-tab-icon {
+    animation: none;
+  }
+}
