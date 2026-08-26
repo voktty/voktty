@@ -75,7 +75,11 @@ export function ModelPicker({
   onChange,
   onClose,
 }: Props) {
-  useSyncExternalStore(subscribeModels, getModelSnapshot, getModelSnapshot);
+  const catalogVersion = useSyncExternalStore(
+    subscribeModels,
+    getModelSnapshot,
+    getModelSnapshot,
+  );
   useSyncExternalStore(
     subscribeHarnessAvailability,
     getHarnessAvailabilitySnapshot,
@@ -239,7 +243,10 @@ export function ModelPicker({
         `${item.name} ${HARNESS_TITLE[item.harness]} ${HARNESS_LABEL[item.harness]}`.toLowerCase();
       return hay.includes(needle);
     });
-  }, [tab, query, favorites]);
+    // `catalogVersion` is the dependency that matters here: harness catalogs
+    // land a second or two after mount, and without it the list stays pinned
+    // to whatever the seed models were on first render.
+  }, [tab, query, favorites, catalogVersion]);
 
   useEffect(() => {
     if (!open) return;

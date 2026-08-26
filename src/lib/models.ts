@@ -117,6 +117,12 @@ export const MODELS: AgentModel[] = [
     nativeId: "",
   },
   {
+    id: "omp:default",
+    harness: "omp",
+    name: "Default",
+    nativeId: "",
+  },
+  {
     id: "fx:zai/glm-5.2-fast",
     harness: "fx",
     name: "GLM 5.2 Fast",
@@ -130,6 +136,7 @@ export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
   cursor: "cursor:composer-2.5",
   opencode: "opencode:glm-5",
   pi: "pi:default",
+  omp: "omp:default",
   fx: "fx:zai/glm-5.2-fast",
 };
 
@@ -152,6 +159,7 @@ const HARNESS_ORDER: HarnessId[] = [
   "cursor",
   "opencode",
   "pi",
+  "omp",
   "fx",
 ];
 

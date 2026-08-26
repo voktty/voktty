@@ -215,6 +215,19 @@ pub fn harness_resolve_pi() -> Result<CursorBinary, String> {
         })
 }
 
+/// Resolve the omp (oh-my-pi) coding agent CLI.
+#[tauri::command]
+pub fn harness_resolve_omp() -> Result<CursorBinary, String> {
+    resolve_omp()
+        .map(|path| CursorBinary {
+            path: path.to_string_lossy().into_owned(),
+        })
+        .ok_or_else(|| {
+            "omp CLI not found. Install it with `curl -fsSL https://omp.sh/install | sh` and authenticate, then retry."
+                .into()
+        })
+}
+
 /// Resolve the Vercel fx coding agent CLI (`fx`), never the JSON viewer of the same name.
 #[tauri::command]
 pub fn harness_resolve_fx() -> Result<CursorBinary, String> {
@@ -557,6 +570,7 @@ fn is_resolved_harness_binary(command: &str) -> bool {
         resolve_opencode(),
         resolve_claude(),
         resolve_pi(),
+        resolve_omp(),
         resolve_fx(),
     ]
     .into_iter()
@@ -829,6 +843,44 @@ fn resolve_pi() -> Option<PathBuf> {
     candidates.into_iter().find(|path| is_pi_coding_agent(path))
 }
 
+fn resolve_omp() -> Option<PathBuf> {
+    let home = dirs_home().map(PathBuf::from);
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // Installer default first, then bun/brew, then anything on the login PATH.
+    if let Some(home) = &home {
+        candidates.push(home.join(".local/bin/omp"));
+        candidates.push(home.join(".bun/bin/omp"));
+        candidates.push(home.join(".npm-global/bin/omp"));
+        candidates.push(home.join(".cargo/bin/omp"));
+        candidates.push(home.join("n/bin/omp"));
+    }
+    #[cfg(target_os = "macos")]
+    candidates.push(PathBuf::from("/opt/homebrew/bin/omp"));
+    candidates.push(PathBuf::from("/usr/local/bin/omp"));
+    candidates.push(PathBuf::from("/usr/bin/omp"));
+    candidates.push(PathBuf::from("/snap/bin/omp"));
+    if let Some(from_shell) = which_via_login_shell("omp") {
+        candidates.push(from_shell);
+    }
+
+    candidates.into_iter().find(|path| is_omp_agent(path))
+}
+
+/// omp ships as a ~126MB compiled binary, so the cheap string scan that
+/// identifies the npm-installed Pi CLI finds nothing in its Mach-O header.
+/// Identify it by name plus a `--help` probe instead.
+fn is_omp_agent(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if name != "omp" {
+        return false;
+    }
+    help_mentions_rpc_mode(path)
+}
+
 fn resolve_fx() -> Option<PathBuf> {
     let home = dirs_home().map(PathBuf::from);
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -864,7 +916,7 @@ fn is_pi_coding_agent(path: &Path) -> bool {
     if name == "pi-coding-agent" {
         return true;
     }
-    file_mentions_pi_coding_agent(path) || pi_help_mentions_rpc(path)
+    file_mentions_pi_coding_agent(path) || help_mentions_rpc_mode(path)
 }
 
 fn file_mentions_pi_coding_agent(path: &Path) -> bool {
@@ -882,7 +934,7 @@ fn file_mentions_pi_coding_agent(path: &Path) -> bool {
         || text.contains("PI_CODING_AGENT")
 }
 
-fn pi_help_mentions_rpc(path: &Path) -> bool {
+fn help_mentions_rpc_mode(path: &Path) -> bool {
     let mut cmd = Command::new(path);
     cmd.arg("--help")
         .stdin(Stdio::null())
@@ -1348,6 +1400,37 @@ mod tests {
         assert!(!is_pi_coding_agent(&other));
 
         assert!(!is_pi_coding_agent(&dir.join("missing")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn omp_accepts_rpc_capable_binary_and_rejects_other_names() {
+        let dir = std::env::temp_dir().join(format!("monocode-omp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // omp is a compiled binary, so identification leans on the --help probe.
+        // A shell stub that answers `--help` the same way stands in for it here.
+        let agent = dir.join("omp");
+        std::fs::write(
+            &agent,
+            b"#!/bin/sh\necho '--mode=<value> Output mode: text, json, rpc, or rpc-ui'\n",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&agent, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        #[cfg(unix)]
+        assert!(is_omp_agent(&agent));
+
+        // oh-my-posh and friends must not win the name.
+        let other = dir.join("oh-my-posh");
+        std::fs::write(&other, b"#!/bin/sh\necho prompt theme engine\n").unwrap();
+        assert!(!is_omp_agent(&other));
+
+        assert!(!is_omp_agent(&dir.join("missing")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

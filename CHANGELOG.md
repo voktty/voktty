@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- omp ([oh-my-pi](https://omp.sh)) joins the provider list. Install it with `curl -fsSL https://omp.sh/install | sh` and log in, and MonoCode runs it like any other harness: live turns, steering, approvals, model catalog, and skills from `.omp/skills`.
 - Check for updates in the classic sidebar footer.
 
 ### Changed
 
+- Pi and omp share one adapter core. omp is a fork of Pi and speaks the same `--mode rpc` protocol, so both run on the same code path instead of two copies that drift apart.
 - Classic layout opens the full settings page with `⌘,` instead of the appearance popover in the title bar. Section navigation lives in the sidebar while settings are open, and Settings sits at the bottom next to Check for updates.
 - Deck layout shows Settings and Check for updates in the sidebar footer when the project rail is collapsed.
 

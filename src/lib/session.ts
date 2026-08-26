@@ -12,6 +12,7 @@ export type HarnessId =
   | "cursor"
   | "opencode"
   | "pi"
+  | "omp"
   | "fx";
 
 export const HARNESSES: HarnessId[] = [
@@ -20,6 +21,7 @@ export const HARNESSES: HarnessId[] = [
   "cursor",
   "opencode",
   "pi",
+  "omp",
   "fx",
 ];
 
@@ -179,6 +181,7 @@ export const HARNESS_LABEL: Record<HarnessId, string> = {
   cursor: "cursor",
   opencode: "opencode",
   pi: "pi",
+  omp: "omp",
   fx: "fx",
 };
 
@@ -188,6 +191,7 @@ export const HARNESS_TITLE: Record<HarnessId, string> = {
   cursor: "Cursor",
   opencode: "OpenCode",
   pi: "Pi",
+  omp: "omp",
   fx: "fx",
 };
 

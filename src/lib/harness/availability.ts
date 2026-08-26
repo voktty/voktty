@@ -5,6 +5,7 @@ import {
   resolveCodexBinary,
   resolveCursorBinary,
   resolveFxBinary,
+  resolveOmpBinary,
   resolveOpenCodeBinary,
   resolvePiBinary,
 } from "./child";
@@ -22,6 +23,7 @@ const CLI: Record<HarnessId, { name: string; install?: string }> = {
   cursor: { name: "Cursor CLI" },
   opencode: { name: "OpenCode CLI" },
   pi: { name: "Pi CLI", install: "npm i -g @earendil-works/pi-coding-agent" },
+  omp: { name: "omp CLI", install: "curl -fsSL https://omp.sh/install | sh" },
   fx: { name: "fx CLI", install: "curl -fsSL https://fx.sh/setup.sh | bash" },
 };
 
@@ -31,6 +33,7 @@ let availability: HarnessAvailability = {
   cursor: false,
   opencode: false,
   pi: false,
+  omp: false,
   fx: false,
 };
 let version = 0;
@@ -103,6 +106,14 @@ export function probeHarnessAvailability(): Promise<void> {
       if (id === "pi") {
         try {
           await resolvePiBinary();
+          return [id, true] as const;
+        } catch {
+          return [id, false] as const;
+        }
+      }
+      if (id === "omp") {
+        try {
+          await resolveOmpBinary();
           return [id, true] as const;
         } catch {
           return [id, false] as const;

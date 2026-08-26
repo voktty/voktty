@@ -24,17 +24,15 @@ import {
   toolKindFromName,
   toolTitle,
 } from "./piProtocol";
+import { OMP_FLAVOR, PI_FLAVOR } from "./piFlavor";
 
 describe("buildPiSpawnArgs", () => {
   it("starts RPC without stripping the user's extensions", () => {
-    expect(buildPiSpawnArgs({})).toEqual(["--mode", "rpc"]);
-    expect(buildPiSpawnArgs({ model: "anthropic/claude-sonnet-4" })).toEqual([
-      "--mode",
-      "rpc",
-      "--model",
-      "anthropic/claude-sonnet-4",
-    ]);
-    expect(buildPiSpawnArgs({ resume: "abc123" })).toEqual([
+    expect(buildPiSpawnArgs(PI_FLAVOR, {})).toEqual(["--mode", "rpc"]);
+    expect(
+      buildPiSpawnArgs(PI_FLAVOR, { model: "anthropic/claude-sonnet-4" }),
+    ).toEqual(["--mode", "rpc", "--model", "anthropic/claude-sonnet-4"]);
+    expect(buildPiSpawnArgs(PI_FLAVOR, { resume: "abc123" })).toEqual([
       "--mode",
       "rpc",
       "--session",
@@ -43,18 +41,18 @@ describe("buildPiSpawnArgs", () => {
   });
 
   it("can skip session files without disabling extensions", () => {
-    expect(buildPiSpawnArgs({ noSession: true })).toEqual([
+    expect(buildPiSpawnArgs(PI_FLAVOR, { noSession: true })).toEqual([
       "--mode",
       "rpc",
       "--no-session",
     ]);
-    expect(buildPiSpawnArgs({ noSession: true, noExtensions: true })).toContain(
-      "--no-extensions",
-    );
+    expect(
+      buildPiSpawnArgs(PI_FLAVOR, { noSession: true, noExtensions: true }),
+    ).toContain("--no-extensions");
   });
 
   it("isolates throwaway text jobs from tools and project context", () => {
-    expect(buildPiSpawnArgs({ isolated: true })).toEqual([
+    expect(buildPiSpawnArgs(PI_FLAVOR, { isolated: true })).toEqual([
       "--mode",
       "rpc",
       "--no-session",
@@ -62,6 +60,24 @@ describe("buildPiSpawnArgs", () => {
       "--no-tools",
       "--no-skills",
       "--no-context-files",
+    ]);
+  });
+
+  it("uses omp's renamed resume and context flags", () => {
+    expect(buildPiSpawnArgs(OMP_FLAVOR, { resume: "abc123" })).toEqual([
+      "--mode",
+      "rpc",
+      "--resume",
+      "abc123",
+    ]);
+    expect(buildPiSpawnArgs(OMP_FLAVOR, { isolated: true })).toEqual([
+      "--mode",
+      "rpc",
+      "--no-session",
+      "--no-extensions",
+      "--no-tools",
+      "--no-skills",
+      "--no-rules",
     ]);
   });
 });
@@ -248,7 +264,7 @@ describe("tools and models", () => {
   });
 
   it("flattens get_available_models payloads", () => {
-    const models = modelsFromRpcData({
+    const models = modelsFromRpcData(PI_FLAVOR, {
       models: [
         {
           id: "claude-sonnet-4-20250514",
