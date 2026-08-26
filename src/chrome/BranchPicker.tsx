@@ -69,8 +69,8 @@ export function BranchPicker({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const visible = enabled && Boolean(cwd) && cwd !== "~";
-  const projectBranches = useProjectBranches(cwd, visible);
+  const inProject = Boolean(cwd) && cwd !== "~";
+  const projectBranches = useProjectBranches(cwd, inProject);
 
   useEffect(() => {
     setInfo(projectBranches);
@@ -127,6 +127,14 @@ export function BranchPicker({
   useEffect(() => {
     if (open) search.current?.focus();
   }, [open, menu]);
+
+  useEffect(() => {
+    if (enabled) return;
+    setOpen(false);
+    setQuery("");
+    setError(null);
+    setBusy(false);
+  }, [enabled]);
 
   const rows = useMemo((): Row[] => {
     const branches = info?.branches ?? [];
@@ -208,7 +216,7 @@ export function BranchPicker({
     }
   };
 
-  if (!visible || !current) return null;
+  if (!inProject || !current) return null;
 
   const label = detached ? `detached ${current}` : current;
 
@@ -221,8 +229,10 @@ export function BranchPicker({
           aria-label={`Branch ${label}`}
           aria-expanded={open}
           aria-haspopup="dialog"
+          disabled={!enabled}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
+            if (!enabled) return;
             if (open) {
               dismiss(true);
               return;
@@ -233,7 +243,7 @@ export function BranchPicker({
           }}
           className={`flex min-w-0 items-center gap-1.5 ${
             open ? "text-content" : "text-content/50 hover:text-content"
-          }`}
+          } disabled:opacity-40 disabled:hover:text-content/50`}
         >
           <GitBranch className="size-3.5 shrink-0" strokeWidth={1.5} />
           <span className="truncate font-mono text-[12px]">{label}</span>
