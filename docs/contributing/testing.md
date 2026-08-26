@@ -18,6 +18,18 @@ cargo nextest run --locked        # CI uses nextest
 
 If you do not have `cargo-nextest` installed, `cargo test --locked` is the local fallback. Install nextest with `cargo install cargo-nextest`.
 
+## Cross-platform package validation
+
+Before creating a version tag, run the manual `Package validation` workflow from the Actions page against the intended commit. It builds the same desktop targets as the release pipeline:
+
+- Windows x64 with NSIS and MSI packages
+- Linux x64 with AppImage, DEB and RPM packages
+- macOS ARM64 and Intel with DMG packages
+
+The workflow has read-only repository permissions, disables updater artifacts and operating-system code signing, and uploads its packages only as short-lived workflow artifacts rather than release assets. It cannot create a GitHub release or modify a tag.
+
+Only create and push a release tag after the complete package matrix is green. A successful validation proves compilation and unsigned packaging on every runner. It does not prove Apple notarization or Windows Authenticode signing, which remain separate checks when those credentials are enabled.
+
 ## What must have a test
 
 `CONTRIBUTING.md` requires a test for any change that touches behavior in these load-bearing paths:
