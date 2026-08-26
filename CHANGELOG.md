@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-08-26
+
 ### Added
 
 - Deck layout: a second window layout, opt-in and off by default. Switch between Classic and Deck under Layout in the appearance menu. Deck puts a project rail down the left edge with every project you have opened, and scopes the title-bar tabs to the selected project instead of mixing all of them together. `⌘B` shows and hides the rail.
@@ -128,7 +130,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/hardbeat920/monocode/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/hardbeat920/monocode/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/hardbeat920/monocode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/hardbeat920/monocode/compare/v0.1.3...v0.1.4
