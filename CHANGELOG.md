@@ -9,9 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Check for updates in the classic sidebar footer.
+
+### Changed
+
+- Classic layout opens the full settings page with `⌘,` instead of the appearance popover in the title bar. Section navigation lives in the sidebar while settings are open, and Settings sits at the bottom next to Check for updates.
+- Deck layout shows Settings and Check for updates in the sidebar footer when the project rail is collapsed.
+
+### Fixed
+
+- Deck layout no longer duplicates Settings and Check for updates when the project rail is open, or shows a title bar settings button while a project is selected.
+
+## [0.1.8] - 2026-08-26
+
+### Added
+
 - Project rail context menu: Archive takes a project off the rail and keeps its conversations; Delete asks first, then also removes saved chats. Archived projects show up in Settings → Archive, where you can restore them to the rail or delete them. The folder on disk is left alone either way.
 - Session branches: switching or creating a branch in a session checks it out in a git worktree, so the project's HEAD stays put. Sidebar changes and diffs follow that session's working copy, and the branch comes back when you restore the session.
 - Per-provider default models in Settings → Providers. The model beside each provider is what new conversations use when that provider is selected.
+
+### Changed
+
+- Global search placeholder reads “Search everything…”, with tighter scope buttons and a clearer hover state on unselected scopes.
+- Delete project confirmation states that all project conversations will be removed, with a separate count when saved conversations exist.
 
 ### Fixed
 
