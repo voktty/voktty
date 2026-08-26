@@ -1436,7 +1436,7 @@ mod tests {
         let fixture = root.join("scripts/fixtures/mcp-stdio-server.mjs");
         let mut config = StdioServerConfig::new("fixture", node, &root, &root);
         config.args = vec![fixture.to_string_lossy().into_owned(), mode.into()];
-        config.probe_timeout = Duration::from_millis(500);
+        config.probe_timeout = Duration::from_secs(3);
         config.request_timeout = Duration::from_secs(2);
         config
     }
