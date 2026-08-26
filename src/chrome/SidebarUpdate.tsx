@@ -70,33 +70,37 @@ export function SidebarUpdate() {
       : "Check for updates";
 
   return (
-    <div className="shrink-0 border-t border-content/10 p-2">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={busy}
-        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] leading-tight transition-colors ${
-          hasUpdate
-            ? "bg-accent/15 text-content hover:bg-accent/20"
-            : "text-content/50 hover:bg-content/5 hover:text-content"
-        } disabled:cursor-default disabled:opacity-70`}
-      >
-        <span className="grid size-5 shrink-0 place-items-center">
-          {busy ? (
-            <Loader className="size-3.5 animate-spin" aria-hidden />
-          ) : hasUpdate ? (
-            <ArrowDownCircle className="size-3.5 text-accent" aria-hidden />
-          ) : (
-            <RefreshCw className="size-3.5" aria-hidden />
-          )}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors ${
+        hasUpdate
+          ? "bg-accent/15 text-content hover:bg-accent/20"
+          : "bg-content/5 text-content/75 hover:bg-content/10 hover:text-content"
+      } disabled:cursor-default disabled:opacity-70`}
+    >
+      <span className="grid size-[18px] shrink-0 place-items-center">
+        {busy ? (
+          <Loader className="size-4 animate-spin opacity-70" aria-hidden />
+        ) : hasUpdate ? (
+          <ArrowDownCircle className="size-4 text-accent" aria-hidden />
+        ) : (
+          <RefreshCw
+            className="size-4 opacity-70"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        )}
+      </span>
+      <span className="min-w-0 flex-1 flex items-center">
+        <span className="block truncate text-[12px] font-medium leading-tight">
+          {label}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium">{label}</span>
-          <span className="block truncate text-[11px] text-content/40">
-            v{snapshot.currentVersion}
-          </span>
+        <span className="ml-auto block text-[11px] text-content/40">
+          v{snapshot.currentVersion}
         </span>
-      </button>
-    </div>
+      </span>
+    </button>
   );
 }

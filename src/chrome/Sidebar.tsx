@@ -3,6 +3,7 @@ import {
   CircleAlert,
   GitBranch,
   ListFilter,
+  Plus,
   Search,
 } from "lucide-react";
 import {
@@ -18,9 +19,11 @@ import {
 import {
   loadSidebarTabOrder,
   saveSidebarTabOrder,
+  type SidebarLayout,
   type SidebarTabId,
 } from "../lib/appearance";
 import { basename } from "../lib/fs";
+import { IS_MAC, MOD } from "../lib/platform";
 import { resolveModel } from "../lib/models";
 import { projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
@@ -39,23 +42,28 @@ import {
   saveSessionSidebarFilters,
   type SessionSidebarFilters,
 } from "../lib/sessionFilters";
+import type { HarnessId } from "../lib/session";
 import type { SessionSummary } from "../lib/sessionStore";
+import type { SettingsSectionId } from "../lib/settings";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSessionDiffStats } from "../hooks/useSessionDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
+import { looksLikeProject, type RecentProject } from "../lib/recents";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTree } from "./FileTree";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
+import { ProjectRail } from "./ProjectRail";
 import { TerminalSpinner } from "./TerminalSpinner";
-import { TabVisitNav } from "./TitleBar";
+import { IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { SessionFiltersMenu } from "./SessionFiltersMenu";
-import { SidebarUpdate } from "./SidebarUpdate";
+import { SourceControl } from "./SourceControl";
 
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 560;
@@ -66,13 +74,15 @@ let rememberedWidth = DEFAULT_WIDTH;
 type SidebarTab = SidebarTabId;
 
 const TAB_LABELS: Record<SidebarTab, string> = {
-  files: "Files",
   sessions: "Sessions",
+  files: "Explorer",
+  changes: "Changes",
 };
 
 type Props = {
   cwd: string;
   open: boolean;
+  layout: SidebarLayout;
   sessions: SessionSummary[];
   busySessionIds: Set<string>;
   approvalSessionIds: Set<string>;
@@ -96,13 +106,33 @@ type Props = {
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
-  diffOpen?: boolean;
-  onToggleDiff?: () => void;
+  onOpenDiff?: (path: string) => void;
+  selectedDiffPath?: string;
+  textHarness?: HarnessId;
+  onShowSourceControl?: () => void;
+  recents?: RecentProject[];
+  busyProjectPaths?: Iterable<string>;
+  onSelectProject?: (path: string) => void;
+  onOpenProject?: () => void;
+  onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
+  onNew?: () => void;
+  onSearch?: () => void;
+  onGoToFile?: () => void;
+  searchActive?: boolean;
+  onToggleProjectRail?: () => void;
+  projectRailOpen?: boolean;
+  unseenFinishedIds?: Set<string>;
+  settingsOpen?: boolean;
+  settingsSection?: SettingsSectionId;
+  onOpenSettings?: () => void;
+  onSelectSettingsSection?: (section: SettingsSectionId) => void;
+  onCloseSettings?: () => void;
 };
 
 function SidebarComponent({
   cwd,
   open,
+  layout,
   sessions,
   busySessionIds,
   approvalSessionIds,
@@ -126,8 +156,27 @@ function SidebarComponent({
   canGoForward = false,
   onGoBack,
   onGoForward,
-  diffOpen = false,
-  onToggleDiff,
+  onOpenDiff,
+  selectedDiffPath,
+  textHarness,
+  onShowSourceControl,
+  recents = [],
+  busyProjectPaths,
+  onSelectProject,
+  onOpenProject,
+  onRemoveProject,
+  onNew,
+  onSearch,
+  onGoToFile,
+  searchActive = false,
+  onToggleProjectRail,
+  projectRailOpen = true,
+  unseenFinishedIds: unseenFinishedIdsProp,
+  settingsOpen = false,
+  settingsSection = "general",
+  onOpenSettings,
+  onSelectSettingsSection,
+  onCloseSettings,
 }: Props) {
   const [width, setWidth] = useState(rememberedWidth);
   const [dragging, setDragging] = useState(false);
@@ -149,30 +198,34 @@ function SidebarComponent({
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
     null,
   );
-  const [sessionFilters, setSessionFilters] = useState(loadSessionSidebarFilters);
+  const [sessionFilters, setSessionFilters] = useState(
+    loadSessionSidebarFilters,
+  );
   const [filterMenu, setFilterMenu] = useState<{ x: number; y: number } | null>(
     null,
   );
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const deckLayout = layout === "deck";
   const busyIdsRef = useRef(busySessionIds);
   const focusedSessionIdRef = useRef(activeSessionId);
-  const unseenFinishedRef = useRef<Set<string>>(new Set());
+  const unseenFinishedLocalRef = useRef<Set<string>>(new Set());
   if (
     busyIdsRef.current !== busySessionIds ||
     focusedSessionIdRef.current !== activeSessionId
   ) {
-    unseenFinishedRef.current = nextUnseenFinishedSessions({
+    unseenFinishedLocalRef.current = nextUnseenFinishedSessions({
       previousBusyIds: busyIdsRef.current,
       busyIds: busySessionIds,
-      previousUnseenIds: unseenFinishedRef.current,
+      previousUnseenIds: unseenFinishedLocalRef.current,
       focusedSessionId: activeSessionId,
     });
     busyIdsRef.current = busySessionIds;
     focusedSessionIdRef.current = activeSessionId;
   }
-  const unseenFinishedIds = unseenFinishedRef.current;
+  const unseenFinishedIds =
+    unseenFinishedIdsProp ?? unseenFinishedLocalRef.current;
   const visibleSessions = filterSessionsByQuery(
     filterSessionsByStatus(
       filterSessionsByTime(
@@ -188,7 +241,7 @@ function SidebarComponent({
       approvalSessionIds,
       unseenFinishedIds,
     ),
-    searchOpen ? searchQuery : "",
+    deckLayout || searchOpen ? searchQuery : "",
   );
   const sessionHarnesses = harnessesInSessions(sessions);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
@@ -198,8 +251,22 @@ function SidebarComponent({
     saveSidebarTabOrder(next);
     if (next[0]) onTabChange(next[0]);
   });
-  const canDragTabs = tabOrder.length > 1;
+  const visibleTabs = deckLayout
+    ? tabOrder
+    : tabOrder.filter((itemId) => itemId !== "changes");
+  const canDragTabs = visibleTabs.length > 1;
+  const showProjectRail =
+    deckLayout && Boolean(onSelectProject && onOpenProject);
+  // Settings live in the rail slot, so they keep it visible even when the
+  // project rail itself is collapsed.
+  const railVisible = showProjectRail && (projectRailOpen || settingsOpen);
+  const inProject = looksLikeProject(cwd);
+  // A blank session has no project to browse, so the shell stands alone until
+  // one is picked — whether or not the rail is open.
+  const sidebarVisible =
+    open && !searchActive && !settingsOpen && !(deckLayout && !inProject);
   const gitStatuses = useGitFileStatuses(cwd, open && tab === "files");
+  const changeStats = useProjectDiffStats(cwd, open);
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
   const sessionDiffs = useSessionDiffStats(
@@ -314,6 +381,49 @@ function SidebarComponent({
     });
   };
 
+  const onFilterButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (filterMenu) {
+      setFilterMenu(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setSessionMenu(null);
+    setFilterMenu({
+      x: rect.right - 228,
+      y: rect.bottom + 2,
+    });
+  };
+
+  const sessionSearchInput = (
+    <input
+      ref={searchInputRef}
+      type="text"
+      value={searchQuery}
+      placeholder="Search conversations..."
+      aria-label="Search conversations"
+      spellCheck={false}
+      autoComplete="off"
+      autoCorrect="off"
+      autoCapitalize="off"
+      onChange={(event) => setSearchQuery(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (searchQuery) {
+          setSearchQuery("");
+          return;
+        }
+        if (!deckLayout) setSearchOpen(false);
+      }}
+      className={
+        deckLayout
+          ? "h-full w-full min-w-0 rounded-md bg-transparent py-0 pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/35"
+          : "w-full px-3 py-2 text-[12px] text-content outline-none placeholder:text-content/35"
+      }
+    />
+  );
+
   useEffect(() => {
     if (!searchOpen) return;
     searchInputRef.current?.focus();
@@ -396,87 +506,166 @@ function SidebarComponent({
     commitWidth();
   };
 
-  return (
+  const onTabPick = (itemId: SidebarTab) => {
+    onTabChange(itemId);
+  };
+
+  const changeAdditions = changeStats?.additions ?? 0;
+  const changeDeletions = changeStats?.deletions ?? 0;
+  const hasChangeStats = changeAdditions > 0 || changeDeletions > 0;
+
+  const workspaceTabItems = visibleTabs.map((itemId, index) => {
+    const active = tab === itemId;
+    const isChangesTab = itemId === "changes";
+    const draggingTab = sortable.draggingId === itemId;
+    const showStart =
+      sortable.draggingId &&
+      sortable.toIndex === index &&
+      sortable.fromIndex !== null &&
+      sortable.toIndex < sortable.fromIndex;
+    const showEnd =
+      sortable.draggingId &&
+      sortable.toIndex === index &&
+      sortable.fromIndex !== null &&
+      sortable.toIndex > sortable.fromIndex;
+    return (
+      <div
+        key={itemId}
+        ref={(el) => sortable.setItemRef(itemId, el)}
+        className={`relative flex min-w-0 flex-1 touch-none items-stretch ${
+          index > 0 ? "border-l border-content/10" : ""
+        } ${draggingTab ? "opacity-40" : ""} ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          onTabPick(itemId);
+          sortable.onItemPointerDown(itemId, event);
+        }}
+      >
+        {showStart ? (
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-0.5 bg-accent" />
+        ) : null}
+        {showEnd ? (
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-0.5 bg-accent" />
+        ) : null}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={active}
+          aria-label={
+            isChangesTab
+              ? hasChangeStats
+                ? [
+                    "Changes",
+                    changeAdditions > 0 ? `+${changeAdditions}` : "",
+                    changeDeletions > 0 ? `-${changeDeletions}` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                : "Changes"
+              : undefined
+          }
+          data-tauri-drag-region="false"
+          onClick={() => {
+            if (sortable.consumeClick()) return;
+            onTabPick(itemId);
+          }}
+          className={`relative flex min-w-0 flex-1 items-center justify-center px-1 text-[12px] leading-none ${
+            deckLayout ? "h-full" : "h-9"
+          } ${
+            canDragTabs ? "cursor-grab active:cursor-grabbing" : ""
+          } ${
+            active
+              ? "text-content bg-content/10"
+              : "text-content/50 hover:text-content"
+          }`}
+        >
+          {isChangesTab && hasChangeStats ? (
+            <DiffStat
+              additions={changeAdditions}
+              deletions={changeDeletions}
+            />
+          ) : (
+            <span className="block truncate">{TAB_LABELS[itemId]}</span>
+          )}
+          {active ? (
+            <span className="absolute inset-x-0 bottom-0 h-px bg-content" />
+          ) : null}
+        </button>
+      </div>
+    );
+  });
+
+  const sidebarContent = (
     <aside
       ref={asideRef}
       style={{ width }}
-      className={`sidebar-glass relative shrink-0 flex-col border-r border-content/10 ${
-        open ? "flex" : "hidden"
-      }`}
+      className="sidebar-glass relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
     >
-      <div
-        className="flex h-9.75 shrink-0 items-center justify-end pr-1.5"
-        data-tauri-drag-region
-      >
-        <TabVisitNav
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
-          onGoBack={onGoBack}
-          onGoForward={onGoForward}
-        />
-      </div>
-      <div
-        role="tablist"
-        aria-label="Sidebar"
-        className="flex shrink-0 border-y border-content/10"
-      >
-        {tabOrder.map((itemId, index) => {
-          const active = tab === itemId;
-          const draggingTab = sortable.draggingId === itemId;
-          const showStart =
-            sortable.draggingId &&
-            sortable.toIndex === index &&
-            sortable.fromIndex !== null &&
-            sortable.toIndex < sortable.fromIndex;
-          const showEnd =
-            sortable.draggingId &&
-            sortable.toIndex === index &&
-            sortable.fromIndex !== null &&
-            sortable.toIndex > sortable.fromIndex;
-          return (
+      {deckLayout && railVisible ? (
+        <>
+          <div
+            className="flex h-10 shrink-0 items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
+            data-tauri-drag-region
+          >
+            <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
+              Workspace
+            </span>
+            <WorkspaceTitleActions onSearch={onGoToFile} onNew={onNew} />
+          </div>
+          <div
+            role="tablist"
+            aria-label="Workspace"
+            className="flex h-9 shrink-0 items-stretch border-b border-content/10"
+          >
+            {workspaceTabItems}
+          </div>
+        </>
+      ) : (
+        <>
+          {deckLayout ? (
             <div
-              key={itemId}
-              ref={(el) => sortable.setItemRef(itemId, el)}
-              className={`relative flex min-w-0 flex-1 touch-none items-stretch ${
-                draggingTab ? "opacity-40" : ""
-              } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
-              onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                onTabChange(itemId);
-                sortable.onItemPointerDown(itemId, event);
-              }}
+              className="flex h-10 shrink-0 items-center border-b border-content/10 pr-1.5"
+              data-tauri-drag-region
             >
-              {showStart ? (
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-0.5 bg-accent" />
+              {IS_MAC ? (
+                <div className="w-[78px] shrink-0" data-tauri-drag-region />
               ) : null}
-              {showEnd ? (
-                <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-0.5 bg-accent" />
-              ) : null}
-              <button
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => {
-                  if (sortable.consumeClick()) return;
-                  onTabChange(itemId);
-                }}
-                className={`relative h-9 min-w-0 flex-1 text-[12px] leading-none ${
-                  canDragTabs ? "cursor-grab active:cursor-grabbing" : ""
-                } ${
-                  active
-                    ? "text-content bg-content/10"
-                    : "text-content/50 hover:text-content"
-                }`}
-              >
-                {TAB_LABELS[itemId]}
-                {active ? (
-                  <span className="absolute inset-x-0 bottom-0 h-px bg-content" />
-                ) : null}
-              </button>
+              <div className="min-w-0 flex-1" data-tauri-drag-region />
+              <TabVisitNav
+                canGoBack={canGoBack}
+                canGoForward={canGoForward}
+                onGoBack={onGoBack}
+                onGoForward={onGoForward}
+                onTogglePanel={onToggleProjectRail}
+                panelActive={false}
+              />
             </div>
-          );
-        })}
-      </div>
+          ) : (
+            <div
+              className="flex h-9.75 shrink-0 items-center justify-end pr-1.5"
+              data-tauri-drag-region
+            >
+              <TabVisitNav
+                canGoBack={canGoBack}
+                canGoForward={canGoForward}
+                onGoBack={onGoBack}
+                onGoForward={onGoForward}
+              />
+            </div>
+          )}
+          <div
+            role="tablist"
+            aria-label="Workspace"
+            className={`flex shrink-0 overflow-visible border-content/10 ${
+              // Mirrors the rail-open header stack: each row owns its own
+              // bottom border, so the seams land on the title bar's.
+              deckLayout ? "h-9 items-stretch border-b" : "border-y"
+            }`}
+          >
+            {workspaceTabItems}
+          </div>
+        </>
+      )}
       <div
         className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
           tab === "files" ? "" : "hidden"
@@ -497,14 +686,15 @@ function SidebarComponent({
             <FileTree
               key={cwd}
               cwd={cwd}
+              deckLayout={deckLayout}
               onOpenFile={onOpenFile}
               onOpenTerminal={onOpenTerminal}
               onFileMoved={onFileMoved}
               onFileDeleted={onFileDeleted}
               onSearch={onOpenFilesSearch}
               gitStatuses={gitStatuses}
-              diffOpen={diffOpen}
-              onToggleDiff={onToggleDiff}
+              sourceControlActive={open && tab === "changes"}
+              onShowSourceControl={onShowSourceControl}
             />
           </div>
         ) : (
@@ -513,6 +703,23 @@ function SidebarComponent({
           </p>
         )}
       </div>
+      {deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
+        <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
+          <div className="relative flex h-7 min-w-0 flex-1 items-center">
+            <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
+            {sessionSearchInput}
+          </div>
+          <SessionsHeaderButton
+            label="Filter sessions"
+            active={filtersActive}
+            open={!!filterMenu}
+            hasPopup
+            onClick={onFilterButtonClick}
+          >
+            <ListFilter className="size-3" strokeWidth={1.75} />
+          </SessionsHeaderButton>
+        </div>
+      ) : null}
       <div
         ref={(el) => {
           sessionsLock(el);
@@ -528,87 +735,56 @@ function SidebarComponent({
           </p>
         ) : (
           <div>
-            <div className="sticky top-0 bg-content/5 backdrop-blur-md">
-              <div className="flex h-8 items-center px-2 pr-1.5">
-                <div
-                  title={cwd}
-                  className="flex h-full min-w-0 flex-1 items-center gap-1.5"
-                >
-                  {projectLogoPath ? (
-                    <ProjectLogoIcon
-                      path={projectLogoPath}
-                      className="size-4 shrink-0 rounded-sm ml-1.5"
-                      imageClassName="size-4"
-                    />
-                  ) : (
-                    <span className="grid size-6 shrink-0 place-items-center">
-                      <FileTypeIcon name={basename(cwd)} isDir isRoot />
+            {!deckLayout ? (
+              <div className="sticky top-0 z-10 shrink-0 border-b border-content/10 bg-content/5 backdrop-blur-md">
+                <div className="flex h-9 items-center px-2 pr-1.5">
+                  <div
+                    title={cwd}
+                    className="flex h-full min-w-0 flex-1 items-center gap-1.5"
+                  >
+                    {projectLogoPath ? (
+                      <ProjectLogoIcon
+                        path={projectLogoPath}
+                        className="size-4 shrink-0 rounded-sm ml-1.5"
+                        imageClassName="size-4"
+                      />
+                    ) : (
+                      <span className="grid size-6 shrink-0 place-items-center">
+                        <FileTypeIcon name={basename(cwd)} isDir isRoot />
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
+                      {basename(cwd)}
                     </span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
-                    {basename(cwd)}
-                  </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-px">
+                    <SessionsHeaderButton
+                      label="Search conversations"
+                      active={searchOpen}
+                      open={searchOpen}
+                      onClick={onToggleSessionSearch}
+                    >
+                      <Search className="size-3" strokeWidth={1.75} />
+                    </SessionsHeaderButton>
+                    <SessionsHeaderButton
+                      label="Filter sessions"
+                      active={filtersActive}
+                      open={!!filterMenu}
+                      hasPopup
+                      onClick={onFilterButtonClick}
+                    >
+                      <ListFilter className="size-3" strokeWidth={1.75} />
+                    </SessionsHeaderButton>
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-px">
-                  <SessionsHeaderButton
-                    label="Search conversations"
-                    active={searchOpen}
-                    open={searchOpen}
-                    onClick={onToggleSessionSearch}
-                  >
-                    <Search className="size-3" strokeWidth={1.75} />
-                  </SessionsHeaderButton>
-                  <SessionsHeaderButton
-                    label="Filter sessions"
-                    active={filtersActive}
-                    open={!!filterMenu}
-                    hasPopup
-                    onClick={(event) => {
-                      if (filterMenu) {
-                        setFilterMenu(null);
-                        return;
-                      }
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      setSessionMenu(null);
-                      setFilterMenu({
-                        x: rect.right - 228,
-                        y: rect.bottom + 2,
-                      });
-                    }}
-                  >
-                    <ListFilter className="size-3" strokeWidth={1.75} />
-                  </SessionsHeaderButton>
-                </div>
+                {searchOpen ? (
+                  <div className="relative flex items-center border-y border-content/10 pl-3.5">
+                    <Search className="size-3 opacity-50" />
+                    {sessionSearchInput}
+                  </div>
+                ) : null}
               </div>
-              {searchOpen ? (
-                <div className="relative flex items-center border-y border-content/10 pl-3.5">
-                  <Search className="size-3 opacity-50" />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchQuery}
-                    placeholder="Search conversations..."
-                    aria-label="Search conversations"
-                    spellCheck={false}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Escape") return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (searchQuery) {
-                        setSearchQuery("");
-                        return;
-                      }
-                      setSearchOpen(false);
-                    }}
-                    className="w-full px-3 py-2 text-[12px] text-content outline-none placeholder:text-content/35"
-                  />
-                </div>
-              ) : null}
-            </div>
+            ) : null}
             {status === "loading" && sessions.length === 0 ? (
               <p className="px-3 py-2 text-[12px] text-content/50">Loading…</p>
             ) : status === "error" && sessions.length === 0 ? (
@@ -617,7 +793,7 @@ function SidebarComponent({
               </p>
             ) : visibleSessions.length === 0 ? (
               <p className="px-3 py-2 text-[12px] text-content/50">
-                {searchOpen && searchQuery.trim()
+                {(deckLayout || searchOpen) && searchQuery.trim()
                   ? "No matching sessions"
                   : filtersActive
                     ? "No sessions match these filters"
@@ -674,7 +850,17 @@ function SidebarComponent({
           </div>
         )}
       </div>
-      <SidebarUpdate />
+      {deckLayout && tab === "changes" ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <SourceControl
+            cwd={cwd}
+            enabled={open}
+            textHarness={textHarness}
+            selectedPath={selectedDiffPath}
+            onOpenFile={onOpenDiff ?? onOpenFile}
+          />
+        </div>
+      ) : null}
       {sessionMenu ? (
         <ExplorerMenu
           x={sessionMenu.x}
@@ -713,9 +899,68 @@ function SidebarComponent({
       />
     </aside>
   );
+
+  return (
+    <div
+      className={`flex h-full shrink-0 ${
+        railVisible || sidebarVisible ? "" : "hidden"
+      }`}
+    >
+      {railVisible && onSelectProject && onOpenProject ? (
+        <ProjectRail
+          cwd={cwd}
+          recents={recents}
+          busyPaths={busyProjectPaths}
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          onGoBack={onGoBack}
+          onGoForward={onGoForward}
+          onSearch={onSearch}
+          searchActive={searchActive}
+          onTogglePanel={onToggleProjectRail}
+          onSelectProject={onSelectProject}
+          onOpenProject={onOpenProject}
+          onRemoveProject={onRemoveProject}
+          settingsOpen={settingsOpen}
+          settingsSection={settingsSection}
+          onOpenSettings={onOpenSettings}
+          onSelectSettingsSection={onSelectSettingsSection}
+          onCloseSettings={onCloseSettings}
+        />
+      ) : null}
+      {sidebarVisible ? sidebarContent : null}
+    </div>
+  );
 }
 
 export const Sidebar = memo(SidebarComponent);
+
+function WorkspaceTitleActions({
+  onSearch,
+  onNew,
+}: {
+  onSearch?: () => void;
+  onNew?: () => void;
+}) {
+  if (!onSearch && !onNew) return null;
+  return (
+    <div
+      className="flex shrink-0 items-center gap-0.5"
+      data-tauri-drag-region="false"
+    >
+      {onSearch ? (
+        <IconButton label={`Go to File (${MOD}P)`} onClick={onSearch}>
+          <Search className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      ) : null}
+      {onNew ? (
+        <IconButton label={`New session (${MOD}T)`} onClick={onNew}>
+          <Plus className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      ) : null}
+    </div>
+  );
+}
 
 function SessionsHeaderButton({
   label,

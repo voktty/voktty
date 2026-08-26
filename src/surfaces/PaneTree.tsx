@@ -39,6 +39,7 @@ type Shared = {
   focusedId: string;
   composerFocused: boolean;
   recents: RecentProject[];
+  hideProjectPicker?: boolean;
   onFocus: (paneId: string) => void;
   onClose: (sessionId: string) => void;
   onSelectFile: (paneId: string, fileId: string) => void;
@@ -105,6 +106,7 @@ function PaneTreeComponent({
   focusedId,
   composerFocused,
   recents,
+  hideProjectPicker,
   onFocus,
   onClose,
   onSelectFile,
@@ -276,6 +278,7 @@ function PaneTreeComponent({
                 inSplit={inSplit}
                 composerFocused={composerFocused}
                 recents={recents}
+                hideProjectPicker={hideProjectPicker}
                 onFocus={onFocus}
                 onClose={onClose}
                 onCwdChange={onCwdChange}

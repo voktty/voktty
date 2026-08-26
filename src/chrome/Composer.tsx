@@ -75,6 +75,7 @@ type Props = {
   runtimeMode: RuntimeMode;
   cwd?: string;
   recents?: RecentProject[];
+  hideProjectPicker?: boolean;
   context?: ContextUsage;
   busy?: boolean;
   hotkeys?: boolean;
@@ -132,6 +133,7 @@ export function Composer({
   runtimeMode,
   cwd = "~",
   recents = [],
+  hideProjectPicker = false,
   context,
   busy = false,
   onFocus,
@@ -670,15 +672,17 @@ export function Composer({
             </div>
           ) : null}
           <div className="flex min-w-0 items-center gap-2.5 px-3 pt-2.5">
-            <CwdPicker
-              cwd={cwd}
-              recents={recents}
-              projectLogoPath={projectLogoPath}
-              enabled={enabled}
-              onCwdChange={onCwdChange}
-              onNewTerminal={onNewTerminal}
-              onClose={() => ref.current?.focus()}
-            />
+            {hideProjectPicker ? null : (
+              <CwdPicker
+                cwd={cwd}
+                recents={recents}
+                projectLogoPath={projectLogoPath}
+                enabled={enabled}
+                onCwdChange={onCwdChange}
+                onNewTerminal={onNewTerminal}
+                onClose={() => ref.current?.focus()}
+              />
+            )}
             <BranchPicker
               cwd={cwd}
               enabled={enabled}

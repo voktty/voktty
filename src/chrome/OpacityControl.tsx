@@ -1,6 +1,13 @@
 import { listen } from "@tauri-apps/api/event";
-import { Blend } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Blend, Settings } from "lucide-react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   applyBodyGlass,
   applyColorScheme,
@@ -10,12 +17,14 @@ import {
   loadBodyGlass,
   loadColorScheme,
   loadSidebarBlur,
+  loadSidebarLayout,
   loadSidebarOpacity,
   loadThemeHue,
   loadThemeSaturation,
   saveBodyGlass,
   saveColorScheme,
   saveSidebarBlur,
+  saveSidebarLayout,
   saveSidebarOpacity,
   saveThemeHue,
   saveThemeSaturation,
@@ -28,9 +37,21 @@ import {
   THEME_SATURATION_MAX,
   THEME_SATURATION_MIN,
   type ColorScheme,
+  type SidebarLayout,
 } from "../lib/appearance";
 
-export function OpacityControl() {
+const PANEL_WIDTH = 288;
+const PANEL_GAP = 6;
+const PANEL_PAD = 8;
+const PANEL_CLASS =
+  "flex w-72 flex-col gap-3 rounded-lg border border-content/5 bg-content/5 p-3 shadow-xl backdrop-blur-md";
+
+type Props = {
+  variant?: "icon" | "rail";
+  label?: string;
+};
+
+export function OpacityControl({ variant = "icon", label }: Props) {
   const [open, setOpen] = useState(false);
   const [opacity, setOpacity] = useState(() => {
     const value = loadSidebarOpacity();
@@ -50,7 +71,17 @@ export function OpacityControl() {
   const [themeHue, setThemeHue] = useState(loadThemeHue);
   const [themeSaturation, setThemeSaturation] = useState(loadThemeSaturation);
   const [colorScheme, setColorScheme] = useState<ColorScheme>(loadColorScheme);
+  const [sidebarLayout, setSidebarLayout] =
+    useState<SidebarLayout>(loadSidebarLayout);
+  const [railPanelStyle, setRailPanelStyle] = useState<CSSProperties>({
+    left: 0,
+    top: 0,
+    visibility: "hidden",
+  });
   const root = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const name = label ?? (variant === "rail" ? "Settings" : "Appearance");
+  const Icon = variant === "rail" || name === "Settings" ? Settings : Blend;
 
   useEffect(() => {
     const unlisten = listen("sidebar_opacity", () => setOpen(true));
@@ -62,7 +93,11 @@ export function OpacityControl() {
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (root.current?.contains(target) || panelRef.current?.contains(target)) {
+        return;
+      }
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -74,6 +109,33 @@ export function OpacityControl() {
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || variant !== "rail") return;
+    const place = () => {
+      const trigger = root.current;
+      const panel = panelRef.current;
+      if (!trigger || !panel) return;
+      const triggerRect = trigger.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      let left = triggerRect.right + PANEL_GAP;
+      if (left + PANEL_WIDTH > window.innerWidth - PANEL_PAD) {
+        left = Math.max(PANEL_PAD, window.innerWidth - PANEL_WIDTH - PANEL_PAD);
+      }
+      let top = triggerRect.bottom - panelRect.height;
+      if (top < PANEL_PAD) top = PANEL_PAD;
+      if (top + panelRect.height > window.innerHeight - PANEL_PAD) {
+        top = Math.max(
+          PANEL_PAD,
+          window.innerHeight - panelRect.height - PANEL_PAD,
+        );
+      }
+      setRailPanelStyle({ left, top, visibility: "visible" });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open, variant]);
 
   const percent = Math.round(opacity * 100);
 
@@ -101,6 +163,11 @@ export function OpacityControl() {
     setColorScheme(next);
   };
 
+  const onSidebarLayout = (next: SidebarLayout) => {
+    saveSidebarLayout(next);
+    setSidebarLayout(next);
+  };
+
   const onThemeHue = (nextHue: number) => {
     const { hue, saturation } = applyThemeTint(nextHue, themeSaturation);
     saveThemeHue(hue);
@@ -115,75 +182,120 @@ export function OpacityControl() {
     setThemeSaturation(saturation);
   };
 
+  const panel = (
+    <>
+      <SegmentedRow
+        label="Layout"
+        value={sidebarLayout}
+        options={[
+          { value: "classic", label: "Classic" },
+          { value: "deck", label: "Deck" },
+        ]}
+        onChange={onSidebarLayout}
+      />
+      <SegmentedRow
+        label="Theme"
+        value={colorScheme}
+        options={[
+          { value: "dark", label: "Dark" },
+          { value: "light", label: "Light" },
+        ]}
+        onChange={onColorScheme}
+      />
+      <SliderRow
+        label="Opacity"
+        value={percent}
+        display={`${percent}%`}
+        min={Math.round(SIDEBAR_OPACITY_MIN * 100)}
+        max={Math.round(SIDEBAR_OPACITY_MAX * 100)}
+        onChange={onOpacity}
+      />
+      <SliderRow
+        label="Hue"
+        value={themeHue}
+        display={`${themeHue}°`}
+        min={THEME_HUE_MIN}
+        max={THEME_HUE_MAX}
+        onChange={onThemeHue}
+      />
+      <SliderRow
+        label="Saturation"
+        value={themeSaturation}
+        display={`${themeSaturation}%`}
+        min={THEME_SATURATION_MIN}
+        max={THEME_SATURATION_MAX}
+        onChange={onThemeSaturation}
+      />
+      <SliderRow
+        label="Blur radius"
+        value={blur}
+        display={String(blur)}
+        min={SIDEBAR_BLUR_MIN}
+        max={SIDEBAR_BLUR_MAX}
+        onChange={onBlur}
+      />
+      <ToggleRow label="Main pane" on={bodyGlass} onChange={onBodyGlass} />
+    </>
+  );
+
+  const panelClassName =
+    variant === "rail"
+      ? `fixed z-80 ${PANEL_CLASS}`
+      : `absolute right-0 top-full z-50 mt-1.5 ${PANEL_CLASS}`;
+  const panelNode = open ? (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label={name}
+      data-tauri-drag-region="false"
+      className={panelClassName}
+      style={variant === "rail" ? railPanelStyle : undefined}
+    >
+      {panel}
+    </div>
+  ) : null;
+
   return (
-    <div ref={root} className="relative" data-tauri-drag-region="false">
+    <div
+      ref={root}
+      className={variant === "rail" ? "relative w-full" : "relative"}
+      data-tauri-drag-region="false"
+    >
       <button
         type="button"
-        title="Appearance"
-        aria-label="Appearance"
+        title={name}
+        aria-label={name}
         aria-expanded={open}
         aria-haspopup="dialog"
         data-tauri-drag-region="false"
         onClick={() => setOpen((value) => !value)}
-        className={`grid size-6.5 place-items-center rounded-md ${
-          open
-            ? "bg-content/10 text-content"
-            : "text-content/50 hover:bg-content/10 hover:text-content"
-        }`}
+        className={
+          variant === "rail"
+            ? `relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${
+                open
+                  ? "bg-content/10 text-content"
+                  : "text-content/50 bg-content/5 hover:bg-content/10 hover:text-content"
+              }`
+            : `grid size-6.5 place-items-center rounded-md ${
+                open
+                  ? "bg-content/10 text-content"
+                  : "text-content/50 hover:bg-content/10 hover:text-content"
+              }`
+        }
       >
-        <Blend className="size-3.5" strokeWidth={1.75} />
+        <Icon
+          className={variant === "rail" ? "size-4 shrink-0 opacity-70" : "size-3.5"}
+          strokeWidth={1.75}
+        />
+        {variant === "rail" ? (
+          <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
+            {name}
+          </span>
+        ) : null}
       </button>
-      {open ? (
-        <div
-          role="dialog"
-          aria-label="Appearance"
-          data-tauri-drag-region="false"
-          className="absolute right-0 top-full z-50 mt-1.5 flex w-72 flex-col gap-3 rounded-lg border border-content/5 bg-content/5 p-3 shadow-xl backdrop-blur-md"
-        >
-          <SegmentedRow
-            label="Theme"
-            value={colorScheme}
-            options={[
-              { value: "dark", label: "Dark" },
-              { value: "light", label: "Light" },
-            ]}
-            onChange={onColorScheme}
-          />
-          <SliderRow
-            label="Opacity"
-            value={percent}
-            display={`${percent}%`}
-            min={Math.round(SIDEBAR_OPACITY_MIN * 100)}
-            max={Math.round(SIDEBAR_OPACITY_MAX * 100)}
-            onChange={onOpacity}
-          />
-          <SliderRow
-            label="Hue"
-            value={themeHue}
-            display={`${themeHue}°`}
-            min={THEME_HUE_MIN}
-            max={THEME_HUE_MAX}
-            onChange={onThemeHue}
-          />
-          <SliderRow
-            label="Saturation"
-            value={themeSaturation}
-            display={`${themeSaturation}%`}
-            min={THEME_SATURATION_MIN}
-            max={THEME_SATURATION_MAX}
-            onChange={onThemeSaturation}
-          />
-          <SliderRow
-            label="Blur radius"
-            value={blur}
-            display={String(blur)}
-            min={SIDEBAR_BLUR_MIN}
-            max={SIDEBAR_BLUR_MAX}
-            onChange={onBlur}
-          />
-          <ToggleRow label="Main pane" on={bodyGlass} onChange={onBodyGlass} />
-        </div>
-      ) : null}
+      {variant === "rail" && panelNode
+        ? createPortal(panelNode, document.body)
+        : panelNode}
     </div>
   );
 }

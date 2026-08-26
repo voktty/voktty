@@ -6,20 +6,33 @@ const THEME_SATURATION_KEY = "monocode.themeSaturation";
 const OPACITY_KEY = "monocode.sidebarOpacity";
 const BLUR_KEY = "monocode.sidebarBlur";
 const OPEN_KEY = "monocode.sidebarOpen";
+const PROJECT_RAIL_OPEN_KEY = "monocode.projectRailOpen";
 const BODY_KEY = "monocode.bodyGlass";
 const SCHEME_KEY = "monocode.colorScheme";
 const SIDEBAR_TAB_ORDER_KEY = "monocode.sidebarTabOrder";
+const PROJECT_RAIL_WIDTH_KEY = "monocode.projectRailWidth";
+const SIDEBAR_LAYOUT_KEY = "monocode.sidebarLayout";
 
 export type ColorScheme = "dark" | "light";
+export type SidebarLayout = "classic" | "deck";
 
 export const COLOR_SCHEME_DEFAULT: ColorScheme = "dark";
 
 /** Fired on `window` whenever the color scheme flips (detail: ColorScheme). */
 export const SCHEME_CHANGE_EVENT = "monocode:schemechange";
 
-export type SidebarTabId = "files" | "sessions";
+/** Fired on `window` whenever the sidebar layout flips (detail: SidebarLayout). */
+export const LAYOUT_CHANGE_EVENT = "monocode:layoutchange";
 
-const DEFAULT_SIDEBAR_TAB_ORDER: SidebarTabId[] = ["sessions", "files"];
+export const SIDEBAR_LAYOUT_DEFAULT: SidebarLayout = "classic";
+
+export type SidebarTabId = "files" | "sessions" | "changes";
+
+const DEFAULT_SIDEBAR_TAB_ORDER: SidebarTabId[] = [
+  "sessions",
+  "files",
+  "changes",
+];
 
 export const THEME_HUE_MIN = 0;
 export const THEME_HUE_MAX = 360;
@@ -36,6 +49,10 @@ export const SIDEBAR_OPACITY_DEFAULT = 0.85;
 export const SIDEBAR_BLUR_MIN = 1;
 export const SIDEBAR_BLUR_MAX = 64;
 export const SIDEBAR_BLUR_DEFAULT = 24;
+
+export const PROJECT_RAIL_WIDTH_MIN = 120;
+export const PROJECT_RAIL_WIDTH_MAX = 360;
+export const PROJECT_RAIL_WIDTH_DEFAULT = 168;
 
 export const BODY_GLASS_DEFAULT = true;
 
@@ -227,7 +244,7 @@ export function applyBodyGlass(value: boolean) {
 }
 
 function isSidebarTabId(value: unknown): value is SidebarTabId {
-  return value === "files" || value === "sessions";
+  return value === "files" || value === "sessions" || value === "changes";
 }
 
 export function loadSidebarOpen(): boolean {
@@ -236,6 +253,14 @@ export function loadSidebarOpen(): boolean {
 
 export function saveSidebarOpen(value: boolean) {
   writeFlag(OPEN_KEY, value);
+}
+
+export function loadProjectRailOpen(): boolean {
+  return readFlag(PROJECT_RAIL_OPEN_KEY) ?? true;
+}
+
+export function saveProjectRailOpen(value: boolean) {
+  writeFlag(PROJECT_RAIL_OPEN_KEY, value);
 }
 
 export function loadSidebarTabOrder(): SidebarTabId[] {
@@ -262,4 +287,47 @@ export function saveSidebarTabOrder(order: SidebarTabId[]) {
   } catch {
     // private mode / quota
   }
+}
+
+export function loadProjectRailWidth(): number {
+  return Math.round(
+    clamp(
+      readNumber(PROJECT_RAIL_WIDTH_KEY) ?? PROJECT_RAIL_WIDTH_DEFAULT,
+      PROJECT_RAIL_WIDTH_MIN,
+      PROJECT_RAIL_WIDTH_MAX,
+    ),
+  );
+}
+
+export function saveProjectRailWidth(value: number) {
+  writeNumber(
+    PROJECT_RAIL_WIDTH_KEY,
+    Math.round(
+      clamp(value, PROJECT_RAIL_WIDTH_MIN, PROJECT_RAIL_WIDTH_MAX),
+    ),
+  );
+}
+
+function isSidebarLayout(value: unknown): value is SidebarLayout {
+  return value === "classic" || value === "deck";
+}
+
+export function loadSidebarLayout(): SidebarLayout {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_LAYOUT_KEY);
+    return isSidebarLayout(raw) ? raw : SIDEBAR_LAYOUT_DEFAULT;
+  } catch {
+    return SIDEBAR_LAYOUT_DEFAULT;
+  }
+}
+
+export function saveSidebarLayout(value: SidebarLayout) {
+  try {
+    localStorage.setItem(SIDEBAR_LAYOUT_KEY, value);
+  } catch {
+    // private mode / quota
+  }
+  window.dispatchEvent(
+    new CustomEvent<SidebarLayout>(LAYOUT_CHANGE_EVENT, { detail: value }),
+  );
 }

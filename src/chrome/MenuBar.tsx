@@ -8,23 +8,27 @@ type MenuKey = "file" | "view" | "terminal";
 type Props = {
   onNew: () => void;
   onNewTerminal?: () => void;
+  onToggleTerminal?: () => void;
   onGoToFile?: () => void;
   onToggleSidebar: () => void;
-  onToggleDiff?: () => void;
+  onShowSourceControl?: () => void;
   onCloseCurrentTab?: () => void;
   onPickProject?: () => void;
   onFindInProject?: () => void;
+  onSearch?: () => void;
 };
 
 export function MenuBar({
   onNew,
   onNewTerminal,
+  onToggleTerminal,
   onGoToFile,
   onToggleSidebar,
-  onToggleDiff,
+  onShowSourceControl,
   onCloseCurrentTab,
   onPickProject,
   onFindInProject,
+  onSearch,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
@@ -94,11 +98,17 @@ export function MenuBar({
         case "new_terminal":
           onNewTerminal?.();
           break;
+        case "toggle_terminal":
+          onToggleTerminal?.();
+          break;
         case "new_window":
           void invoke("open_new_window").catch(() => {});
           break;
         case "open_project":
           onPickProject?.();
+          break;
+        case "open_search":
+          onSearch?.();
           break;
         case "go_to_file":
           onGoToFile?.();
@@ -116,7 +126,7 @@ export function MenuBar({
           window.dispatchEvent(new Event("open_model_picker"));
           break;
         case "toggle_diff":
-          onToggleDiff?.();
+          onShowSourceControl?.();
           break;
       }
     },
@@ -127,8 +137,10 @@ export function MenuBar({
       onGoToFile,
       onNew,
       onNewTerminal,
+      onToggleTerminal,
       onPickProject,
-      onToggleDiff,
+      onSearch,
+      onShowSourceControl,
       onToggleSidebar,
     ],
   );
@@ -142,6 +154,7 @@ export function MenuBar({
           { kind: "item", id: "new_window", label: "New Window", shortcut: `${MOD}${SHIFT}N` },
           { kind: "sep" },
           { kind: "item", id: "open_project", label: "Open Project…", shortcut: `${MOD}O` },
+          { kind: "item", id: "open_search", label: "Search…", shortcut: `${MOD}K` },
           { kind: "item", id: "go_to_file", label: "Go to File…", shortcut: `${MOD}P` },
           { kind: "item", id: "find_in_project", label: "Find in Files…", shortcut: `${MOD}${SHIFT}F` },
           { kind: "sep" },
@@ -150,12 +163,14 @@ export function MenuBar({
       case "view":
         return [
           { kind: "item", id: "toggle_sidebar", label: "Toggle Sidebar", shortcut: `${MOD}B` },
+          { kind: "item", id: "toggle_terminal", label: "Toggle Terminal", shortcut: `${MOD}J` },
           { kind: "item", id: "open_model_picker", label: "Switch Model…", shortcut: `${MOD}.` },
           { kind: "item", id: "toggle_diff", label: "Toggle Changes" },
         ];
       case "terminal":
         return [
           { kind: "item", id: "new_terminal", label: "New Terminal", shortcut: `${MOD}\`` },
+          { kind: "item", id: "toggle_terminal", label: "Toggle Terminal", shortcut: `${MOD}J` },
         ];
     }
   };

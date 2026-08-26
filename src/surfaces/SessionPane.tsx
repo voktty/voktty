@@ -9,7 +9,7 @@ import {
 import { Composer } from "../chrome/Composer";
 import { SessionReview } from "../chrome/SessionReview";
 import type { ApprovalDecision } from "../lib/harness";
-import type { RecentProject } from "../lib/recents";
+import { looksLikeProject, type RecentProject } from "../lib/recents";
 import {
   sessionDisplayTitle,
   type Attachment,
@@ -28,6 +28,7 @@ type Props = {
   inSplit: boolean;
   composerFocused: boolean;
   recents: RecentProject[];
+  hideProjectPicker?: boolean;
   onFocus: (sessionId: string) => void;
   onClose: (sessionId: string) => void;
   onCwdChange: (sessionId: string, cwd: string) => void;
@@ -62,6 +63,7 @@ export const SessionPane = memo(function SessionPane({
   inSplit,
   composerFocused,
   recents,
+  hideProjectPicker,
   onFocus,
   onClose,
   onCwdChange,
@@ -93,6 +95,8 @@ export const SessionPane = memo(function SessionPane({
     jumpToBottomRef.current = jump;
   }, []);
   const isEmpty = session.blocks.length === 0;
+  const showDeckProjectPicker =
+    isEmpty && !looksLikeProject(session.cwd);
   const dockComposer = !isEmpty || inSplit;
   const composer = (
     <Composer
@@ -106,6 +110,9 @@ export const SessionPane = memo(function SessionPane({
       runtimeMode={session.runtimeMode}
       cwd={session.cwd}
       recents={recents}
+      hideProjectPicker={
+        hideProjectPicker ? !showDeckProjectPicker : false
+      }
       context={session.context}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}

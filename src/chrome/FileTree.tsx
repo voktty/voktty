@@ -70,8 +70,9 @@ type Props = {
   onFileDeleted?: (path: string) => void;
   onSearch?: () => void;
   gitStatuses?: GitStatusMap;
-  diffOpen?: boolean;
-  onToggleDiff?: () => void;
+  onShowSourceControl?: () => void;
+  sourceControlActive?: boolean;
+  deckLayout?: boolean;
 };
 
 type Creating = { id: number; parent: string; isDir: boolean };
@@ -219,8 +220,9 @@ export function FileTree({
   onFileDeleted,
   onSearch,
   gitStatuses,
-  diffOpen = false,
-  onToggleDiff,
+  sourceControlActive = false,
+  onShowSourceControl,
+  deckLayout = false,
 }: Props) {
   const [expanded, setExpanded] = useState(() => loadExpanded(cwd));
   const [selectedPath, setSelectedPath] = useState(() => loadSelected(cwd));
@@ -615,13 +617,23 @@ export function FileTree({
         onContextMenu={onBackgroundMenu}
       >
         <div
-          className="flex shrink-0 items-center overflow-visible"
+          className={`flex shrink-0 items-center overflow-visible ${
+            deckLayout ? "h-9 border-b border-content/10" : ""
+          }`}
           onContextMenu={(e) => e.stopPropagation()}
         >
-          <HeaderIcon label="New File" onClick={() => startCreate(false)}>
+          <HeaderIcon
+            label="New File"
+            onClick={() => startCreate(false)}
+            deckLayout={deckLayout}
+          >
             <FilePlus className="size-3.5" strokeWidth={1.75} />
           </HeaderIcon>
-          <HeaderIcon label="New Folder" onClick={() => startCreate(true)}>
+          <HeaderIcon
+            label="New Folder"
+            onClick={() => startCreate(true)}
+            deckLayout={deckLayout}
+          >
             <FolderPlus className="size-3.5" strokeWidth={1.75} />
           </HeaderIcon>
           <HeaderIcon
@@ -633,6 +645,7 @@ export function FileTree({
               saveExpanded(cwd, next);
               setExpanded(next);
             }}
+            deckLayout={deckLayout}
           >
             <FoldVertical className="size-3.5" strokeWidth={1.75} />
           </HeaderIcon>
@@ -640,15 +653,17 @@ export function FileTree({
             <HeaderIcon
               label={`Search in files (${MOD}Shift+F)`}
               onClick={onSearch}
+              deckLayout={deckLayout}
             >
               <Search className="size-3.5" strokeWidth={1.75} />
             </HeaderIcon>
           ) : null}
-          {onToggleDiff ? (
+          {onShowSourceControl ? (
             <FileTreeDiffButton
               cwd={cwd}
-              active={diffOpen}
-              onClick={onToggleDiff}
+              active={sourceControlActive}
+              onClick={onShowSourceControl}
+              deckLayout={deckLayout}
             />
           ) : null}
         </div>
@@ -722,11 +737,13 @@ function HeaderIcon({
   label,
   onClick,
   active = false,
+  deckLayout = false,
   children,
 }: {
   label: string;
   onClick?: () => void;
   active?: boolean;
+  deckLayout?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -737,9 +754,9 @@ function HeaderIcon({
       aria-pressed={active || undefined}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`flex h-8 flex-1 items-center justify-center place-items-center text-content/50 hover:bg-content/10 hover:text-content ${
-        active ? "bg-content/10 text-content" : ""
-      }`}
+      className={`flex flex-1 items-center justify-center place-items-center text-content/50 hover:bg-content/10 hover:text-content ${
+        deckLayout ? "h-9" : "h-8"
+      } ${active ? "bg-content/10 text-content" : ""}`}
     >
       {children}
     </button>
@@ -750,10 +767,12 @@ function FileTreeDiffButton({
   cwd,
   active,
   onClick,
+  deckLayout = false,
 }: {
   cwd: string;
   active: boolean;
   onClick: () => void;
+  deckLayout?: boolean;
 }) {
   const enabled = Boolean(cwd) && cwd !== "~";
   const stats = useProjectDiffStats(cwd, enabled);
@@ -782,9 +801,9 @@ function FileTreeDiffButton({
       aria-pressed={active}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      className={`relative flex h-8 flex-1 shrink-0 items-center justify-center text-content/50 hover:bg-content/10 hover:text-content ${
-        active ? "bg-content/10 text-content" : ""
-      }`}
+      className={`relative flex flex-1 shrink-0 items-center justify-center text-content/50 hover:bg-content/10 hover:text-content ${
+        deckLayout ? "h-9" : "h-8"
+      } ${active ? "bg-content/10 text-content" : ""}`}
     >
       <GitCompare className="size-3.5" strokeWidth={1.75} />
       {files > 0 ? (

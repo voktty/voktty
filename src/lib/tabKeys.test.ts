@@ -45,6 +45,9 @@ describe("tabCommand", () => {
   it("keeps existing tab chrome bindings", () => {
     expect(tabCommand(key({ key: "t", metaKey: true }))).toBe("new");
     expect(tabCommand(key({ key: "d", metaKey: true }))).toBe("split-right");
+    expect(tabCommand(key({ key: "j", metaKey: true }))).toBe(
+      "toggle-terminal",
+    );
   });
 
   it("walks tab visit history with cmd-brackets", () => {

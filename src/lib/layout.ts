@@ -124,18 +124,26 @@ export function newTerminalWorkspaceTab(file: FilePaneTab): WorkspaceTab {
   };
 }
 
-export function nextTerminalTitle(tab: WorkspaceTab, cwd: string): string {
+export function nextTerminalTitleFromFiles(
+  files: Iterable<FilePaneTab>,
+  cwd: string,
+): string {
   const base = defaultTerminalTitle(cwd);
   const taken = new Set<string>();
-  for (const pane of tab.terminalPanes ?? []) {
-    for (const file of pane.files) {
-      if (isTerminalTab(file)) taken.add(file.path);
-    }
+  for (const file of files) {
+    if (isTerminalTab(file)) taken.add(file.path);
   }
   if (!taken.has(base)) return base;
   let index = 2;
   while (taken.has(`${base} ${index}`)) index += 1;
   return `${base} ${index}`;
+}
+
+export function nextTerminalTitle(tab: WorkspaceTab, cwd: string): string {
+  return nextTerminalTitleFromFiles(
+    (tab.terminalPanes ?? []).flatMap((pane) => pane.files),
+    cwd,
+  );
 }
 
 export function updateTerminalTab(

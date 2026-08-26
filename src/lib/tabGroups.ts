@@ -25,6 +25,7 @@ const COLOR_KEY = "monocode:tab-group:colors";
 const CUSTOM_COLOR_KEY = "monocode:tab-group:custom-colors";
 const LABEL_KEY = "monocode:tab-group:labels";
 const LOGO_KEY = "monocode:tab-group:logos";
+const MASCOT_KEY = "monocode:tab-group:mascots";
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -145,6 +146,41 @@ export function saveTabGroupLogo(project: string, path: string | null): void {
   if (!path) delete next[project];
   else next[project] = path;
   writeRecord(LOGO_KEY, next);
+}
+
+export function loadTabGroupMascots(): Record<string, string> {
+  return readRecord(MASCOT_KEY);
+}
+
+/** `null` restores the mascot picked from the project's name. */
+export function saveTabGroupMascot(project: string, name: string | null): void {
+  const next = loadTabGroupMascots();
+  if (!name) delete next[project];
+  else next[project] = name;
+  writeRecord(MASCOT_KEY, next);
+}
+
+/** Drops every saved appearance override for a project. */
+export function clearTabGroupSettings(project: string): void {
+  for (const key of [
+    COLOR_KEY,
+    CUSTOM_COLOR_KEY,
+    LABEL_KEY,
+    LOGO_KEY,
+    MASCOT_KEY,
+  ]) {
+    const next = readRecord(key);
+    if (!(project in next)) continue;
+    delete next[project];
+    writeRecord(key, next);
+  }
+}
+
+export function resolveTabGroupMascot(
+  project: string,
+  overrides?: Record<string, string>,
+): string | null {
+  return overrides?.[project] ?? null;
 }
 
 export function resolveTabGroupLogo(

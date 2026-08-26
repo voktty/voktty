@@ -222,6 +222,7 @@ pub fn run() {
             pty::pty_kill_all,
             session_store::session_upsert,
             session_store::session_list_by_project,
+            session_store::session_search,
             session_store::session_get,
             session_store::session_delete,
             session_store::session_set_archived,

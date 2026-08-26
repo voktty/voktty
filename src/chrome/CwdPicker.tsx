@@ -7,8 +7,9 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
-import { basename, pickFolder } from "../lib/fs";
+import { basename } from "../lib/fs";
 import { prettyCwd, prettyParent } from "../lib/paths";
 import {
   looksLikeProject,
@@ -24,6 +25,9 @@ type Props = {
   recents: RecentProject[];
   projectLogoPath?: string | null;
   enabled?: boolean;
+  placement?: "above" | "below";
+  buttonClassName?: string;
+  children?: ReactNode;
   onCwdChange: (path: string) => void;
   onNewTerminal?: () => void;
   onClose?: () => void;
@@ -37,15 +41,27 @@ const HOVER_CLOSE_MS = 100;
 type Row =
   | { kind: "recent"; path: string }
   | { kind: "more" }
-  | { kind: "new-project" }
   | { kind: "new-terminal" };
 
-function menuStyle(anchor: DOMRect): CSSProperties {
+function menuStyle(
+  anchor: DOMRect,
+  placement: "above" | "below",
+): CSSProperties {
   const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
   const left = Math.min(
     Math.max(8, anchor.left),
     window.innerWidth - width - 8,
   );
+  if (placement === "below") {
+    return {
+      position: "fixed",
+      left,
+      top: anchor.bottom + 6,
+      width,
+      maxHeight: Math.min(360, window.innerHeight - anchor.bottom - 12),
+      zIndex: 50,
+    };
+  }
   return {
     position: "fixed",
     left,
@@ -82,6 +98,9 @@ export function CwdPicker({
   recents,
   projectLogoPath,
   enabled = true,
+  placement = "above",
+  buttonClassName,
+  children,
   onCwdChange,
   onNewTerminal,
   onClose,
@@ -115,7 +134,6 @@ export function CwdPicker({
       path: item.path,
     }));
     if (hasMore) out.push({ kind: "more" });
-    out.push({ kind: "new-project" });
     if (onNewTerminal) out.push({ kind: "new-terminal" });
     return out;
   }, [hasMore, onNewTerminal, previewRecents]);
@@ -149,7 +167,7 @@ export function CwdPicker({
   };
 
   const openMenu = (anchor: DOMRect) => {
-    setMenu(menuStyle(anchor));
+    setMenu(menuStyle(anchor, placement));
     setOpen(true);
   };
 
@@ -157,12 +175,12 @@ export function CwdPicker({
     if (!open || !root.current) return;
     const place = () => {
       const rect = root.current?.getBoundingClientRect();
-      if (rect) setMenu(menuStyle(rect));
+      if (rect) setMenu(menuStyle(rect, placement));
     };
     place();
     window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);
-  }, [open]);
+  }, [open, placement]);
 
   useLayoutEffect(() => {
     if (!moreOpen || !moreRef.current) {
@@ -203,12 +221,6 @@ export function CwdPicker({
   const pick = (row: Row) => {
     if (row.kind === "more") return;
     dismiss(true);
-    if (row.kind === "new-project") {
-      void pickFolder("Open project").then((path) => {
-        if (path) onCwdChange(path);
-      });
-      return;
-    }
     if (row.kind === "new-terminal") {
       onNewTerminal?.();
       return;
@@ -260,12 +272,13 @@ export function CwdPicker({
     }
   };
 
-  const newProjectIndex = previewRecents.length + (hasMore ? 1 : 0);
-  const newTerminalIndex = onNewTerminal ? newProjectIndex + 1 : -1;
+  const newTerminalIndex = onNewTerminal
+    ? previewRecents.length + (hasMore ? 1 : 0)
+    : -1;
   const moreIndex = hasMore ? previewRecents.length : -1;
 
   return (
-    <div ref={root} className="relative min-w-0">
+    <div ref={root} className="relative flex h-full min-w-0">
       <button
         type="button"
         title={cwd}
@@ -273,6 +286,7 @@ export function CwdPicker({
         aria-expanded={open}
         aria-haspopup="menu"
         disabled={!enabled}
+        data-tauri-drag-region="false"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
           if (!enabled) return;
@@ -284,12 +298,25 @@ export function CwdPicker({
           if (rect) openMenu(rect);
         }}
         onKeyDown={onKeyDown}
-        className={`flex min-w-0 items-center gap-1.5 ${
-          open ? "text-content" : "text-content/50 hover:text-content"
-        } disabled:opacity-40`}
+        className={
+          buttonClassName
+            ? `${buttonClassName} ${
+                open ? "bg-content/8 text-content" : "hover:bg-content/5"
+              } disabled:opacity-40`
+            : `flex min-w-0 items-center gap-1.5 ${
+                open ? "text-content" : "text-content/50 hover:text-content"
+              } disabled:opacity-40`
+        }
       >
-        <ProjectLogoIcon path={projectLogoPath} fallbackStrokeWidth={1.5} />
-        <span className="truncate font-mono text-[12px]">{label}</span>
+        {children ?? (
+          <>
+            <ProjectLogoIcon
+              path={projectLogoPath}
+              fallbackStrokeWidth={1.5}
+            />
+            <span className="truncate font-mono text-[12px]">{label}</span>
+          </>
+        )}
       </button>
       {open && menu ? (
         <div
@@ -382,28 +409,8 @@ export function CwdPicker({
               </button>
             ) : null}
           </div>
-          <div className="shrink-0 border-t border-content/10 py-1">
-            <button
-              type="button"
-              role="menuitem"
-              onMouseDown={(e) => e.stopPropagation()}
-              onMouseEnter={() => {
-                setMoreOpen(false);
-                setActive(newProjectIndex);
-              }}
-              onClick={() => pick({ kind: "new-project" })}
-              className={`flex w-full items-center justify-between gap-3 px-2.5 py-2 text-left ${
-                active === newProjectIndex
-                  ? "bg-content/10 text-content"
-                  : "text-content/80 hover:bg-content/5"
-              }`}
-            >
-              <span className="text-[13px]">New project</span>
-              <span className="shrink-0 font-mono text-[11px] text-content/45">
-                {MOD}N
-              </span>
-            </button>
-            {onNewTerminal ? (
+          {onNewTerminal ? (
+            <div className="shrink-0 border-t border-content/10 py-1">
               <button
                 type="button"
                 role="menuitem"
@@ -424,8 +431,8 @@ export function CwdPicker({
                   {MOD}`
                 </span>
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {open && moreOpen && submenu ? (

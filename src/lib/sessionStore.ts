@@ -116,6 +116,45 @@ export async function listSessionsByProject(
   return rows.map(normalizeSummary);
 }
 
+export type SessionSearchHit = {
+  kind: "conversation" | "message";
+  sessionId: string;
+  cwd: string;
+  harness: string;
+  title: string;
+  updatedAt: number;
+  blockId?: string;
+  role?: string;
+  preview: string;
+};
+
+export type SessionSearchResult = {
+  hits: SessionSearchHit[];
+  truncated: boolean;
+};
+
+export async function searchSessions(options: {
+  query: string;
+  cwd?: string;
+  includeArchived?: boolean;
+}): Promise<SessionSearchResult> {
+  const query = options.query.trim();
+  if (!query) return { hits: [], truncated: false };
+  const result = await invoke<SessionSearchResult>("session_search", {
+    options: {
+      query,
+      ...(options.cwd && options.cwd !== "~"
+        ? { cwd: normalizeProjectPath(options.cwd) }
+        : {}),
+      ...(options.includeArchived ? { includeArchived: true } : {}),
+    },
+  });
+  return {
+    hits: Array.isArray(result?.hits) ? result.hits : [],
+    truncated: !!result?.truncated,
+  };
+}
+
 export async function getSession(sessionId: string): Promise<Session | null> {
   const record = await invoke<SessionRecord | null>("session_get", {
     sessionId,

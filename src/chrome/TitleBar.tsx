@@ -5,7 +5,8 @@ import {
   PanelLeft,
   Plus,
   Search,
-  SquareTerminal,
+  Settings,
+  Terminal,
   X,
 } from "lucide-react";
 import {
@@ -21,6 +22,8 @@ import {
   type ReactNode,
 } from "react";
 import { basename } from "../lib/fs";
+import { projectName } from "../lib/paths";
+import { looksLikeProject } from "../lib/recents";
 import type { HarnessId } from "../lib/session";
 import {
   canJoinTabGroup,
@@ -29,25 +32,30 @@ import {
   loadTabGroupColors,
   loadTabGroupCustomColors,
   loadTabGroupLabels,
+  loadTabGroupMascots,
   loadTabGroupLogos,
   reorderTabSegments,
   resolveTabGroupColor,
   resolveTabGroupColorIndex,
   resolveTabGroupCustomColor,
   resolveTabGroupLabel,
+  resolveTabGroupMascot,
   resolveTabGroupLogo,
   saveCollapsedTabGroups,
   saveTabGroupColor,
   saveTabGroupCustomColor,
   saveTabGroupLabel,
+  saveTabGroupMascot,
   sharedGroupProject,
   TAB_GROUP_LOGOS_CHANGED,
   segmentTabs,
   type TabGroupSegment,
 } from "../lib/tabGroups";
 import { TabGroupMenu, type TabGroupMenuAction } from "./TabGroupMenu";
+import { CwdPicker } from "./CwdPicker";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
+import { ProjectMascot } from "./ProjectMascot";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSegmentDrag } from "../hooks/useSegmentDrag";
@@ -59,6 +67,7 @@ import { TerminalSpinner } from "./TerminalSpinner";
 import { OpacityControl } from "./OpacityControl";
 import { WindowControls } from "./WindowControls";
 import { IS_MAC, MOD } from "../lib/platform";
+import type { RecentProject } from "../lib/recents";
 
 export type Tab = {
   id: string;
@@ -89,9 +98,11 @@ type Props = {
   activeId: string;
   cwd: string;
   sidebarOpen: boolean;
-  diffOpen?: boolean;
+  deckLayout?: boolean;
+  projectRailOpen?: boolean;
+  sourceControlActive?: boolean;
   onToggleSidebar: () => void;
-  onToggleDiff?: () => void;
+  onShowSourceControl?: () => void;
   onSelect: (id: string) => void;
   canGoBack?: boolean;
   canGoForward?: boolean;
@@ -99,6 +110,9 @@ type Props = {
   onGoForward?: () => void;
   onNew: () => void;
   onNewTerminal?: () => void;
+  onShowTerminal?: () => void;
+  projectTerminalActive?: boolean;
+  onOpenSettings?: () => void;
   onClose: (id: string) => void;
   onReorder: (ids: string[], movedId?: string) => void;
   onGoToFile?: () => void;
@@ -111,6 +125,8 @@ type Props = {
   onGroupNewTab?: (groupId: string) => void;
   onGroupClose?: (tabIds: string[]) => void;
   onGroupMoveToNewWindow?: (tabIds: string[]) => void;
+  recents?: RecentProject[];
+  onSelectProject?: (path: string) => void;
 };
 
 function sessionMeta(tab: Tab): string {
@@ -121,17 +137,19 @@ function sessionMeta(tab: Tab): string {
 
 export function tabCopy(
   tab: Tab,
-  options?: { inGroup?: boolean },
+  options?: { inGroup?: boolean; deckLayout?: boolean },
 ): {
   headline: string;
   meta: string;
   tooltip: string;
 } {
   const inGroup = options?.inGroup ?? false;
+  const deckLayout = options?.deckLayout ?? false;
   const project = tab.project.trim() || "~";
   const conversation = tab.title.trim();
   const file = tab.files[0] ?? "";
   const sessions = sessionMeta(tab);
+  const untitled = deckLayout ? "New session" : inGroup ? "New chat" : project;
 
   let headline: string;
   const metaParts: string[] = [];
@@ -149,12 +167,12 @@ export function tabCopy(
       headline = file;
       if (sessions) metaParts.push(sessions);
     } else {
-      headline = inGroup ? "New chat" : project;
+      headline = untitled;
       if (sessions) metaParts.push(sessions);
     }
   } else {
-    headline = conversation || file || (inGroup ? "New chat" : project);
-    if (!inGroup && headline !== project && project !== "~") {
+    headline = conversation || file || untitled;
+    if (!deckLayout && !inGroup && headline !== project && project !== "~") {
       metaParts.push(project);
     }
     if (sessions) metaParts.push(sessions);
@@ -261,7 +279,9 @@ function TitleTabItem({
   dropTarget,
   groupPosition,
   showLeftBorder: showLeftBorderProp,
+  showRightBorder = false,
   itemRef,
+  deckLayout = false,
 }: {
   tab: Tab;
   index: number;
@@ -275,11 +295,13 @@ function TitleTabItem({
   dropTarget?: TabDropTarget | null;
   groupPosition?: TabGroupPosition;
   showLeftBorder?: boolean;
+  showRightBorder?: boolean;
   itemRef?: (el: HTMLDivElement | null) => void;
+  deckLayout?: boolean;
 }) {
   const dragging = canDrag && sortable.draggingId === tab.id;
   const inGroup = groupPosition != null;
-  const { headline, meta, tooltip } = tabCopy(tab, { inGroup });
+  const { headline, meta, tooltip } = tabCopy(tab, { inGroup, deckLayout });
   const fileIcon = tab.files[0];
   const showStart =
     canDrag &&
@@ -305,11 +327,13 @@ function TitleTabItem({
         sortable.setItemRef(tab.id, el);
         itemRef?.(el);
       }}
-      className={`group @container relative flex h-full w-56 min-w-28 shrink touch-none self-stretch ${
+      className={`group @container relative flex h-full touch-none self-stretch ${
+        deckLayout ? "min-w-56 shrink-0 grow basis-56" : "w-56 min-w-28 shrink"
+      } ${
         showLeftBorder ? "border-l border-content/10" : ""
-      } ${dragging ? "opacity-40" : ""} ${
-        canDrag ? "cursor-grab active:cursor-grabbing" : ""
-      }`}
+      } ${showRightBorder ? "border-r border-content/10" : ""} ${
+        dragging ? "opacity-40" : ""
+      } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
       data-tauri-drag-region="false"
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -360,7 +384,7 @@ function TitleTabItem({
             dimmed={!active}
           />
         ) : tab.terminal || !fileIcon ? (
-          <SquareTerminal
+          <Terminal
             className={`size-3.5 shrink-0 ${
               active ? "text-content" : "text-content/55"
             }`}
@@ -420,6 +444,9 @@ function GroupLabel({
   color,
   collapsed,
   project,
+  projectKey,
+  mascotName,
+  busy,
   count,
   logoPath,
   canDrag,
@@ -433,6 +460,9 @@ function GroupLabel({
   color: string;
   collapsed: boolean;
   project: string;
+  projectKey: string;
+  mascotName: string | null;
+  busy: boolean;
   count: number;
   logoPath?: string | null;
   canDrag: boolean;
@@ -485,11 +515,12 @@ function GroupLabel({
           imageClassName="size-3.5"
         />
       ) : (
-        <span
-          className="size-2 min-w-2 rounded-full mt-px"
-          style={{
-            background: `color-mix(in srgb, ${color} 70%, transparent)`,
-          }}
+        <ProjectMascot
+          project={projectKey}
+          color={color}
+          name={mascotName}
+          className="size-3 min-w-3 shrink-0"
+          active={busy}
         />
       )}
       <span className="text-[12.5px] truncate">{project}</span>
@@ -507,6 +538,8 @@ function TabGroupBlock({
   segment,
   displayColor,
   displayLabel,
+  projectKey,
+  mascotName,
   logoPath,
   activeId,
   closable,
@@ -521,11 +554,14 @@ function TabGroupBlock({
   onTabContextMenu,
   onToggleCollapse,
   onGroupContextMenu,
+  deckLayout = false,
 }: {
   segmentIndex: number;
   segment: Extract<TabGroupSegment, { kind: "group" }>;
   displayColor: string;
   displayLabel: string;
+  projectKey: string;
+  mascotName: string | null;
   logoPath?: string | null;
   activeId: string;
   closable: boolean;
@@ -540,8 +576,10 @@ function TabGroupBlock({
   onTabContextMenu: (tab: Tab, event: ReactMouseEvent<HTMLDivElement>) => void;
   onToggleCollapse: () => void;
   onGroupContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  deckLayout?: boolean;
 }) {
   const activeInGroup = segment.tabs.some((tab) => tab.id === activeId);
+  const groupBusy = segment.tabs.some((tab) => tab.busyHarnesses.length > 0);
   const activeTabRef = useRef<HTMLDivElement | null>(null);
   const draggingGroup = segmentDrag.draggingFromIndex === segmentIndex;
   const showSegmentStart =
@@ -580,7 +618,9 @@ function TabGroupBlock({
   return (
     <div
       ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-      className={`relative flex h-full shrink-0 items-stretch ${
+      className={`relative flex h-full items-stretch ${
+        deckLayout ? "min-w-0 flex-1" : "shrink-0"
+      } ${
         segment.startIndex > 0 ? "border-l border-content/10" : ""
       } ${draggingGroup ? "opacity-40" : ""}`}
       data-tauri-drag-region="false"
@@ -595,6 +635,9 @@ function TabGroupBlock({
         color={displayColor}
         collapsed={collapsed}
         project={displayLabel}
+        projectKey={projectKey}
+        mascotName={mascotName}
+        busy={groupBusy}
         count={segment.tabs.length}
         logoPath={logoPath}
         canDrag={canDragGroup}
@@ -635,6 +678,7 @@ function TabGroupBlock({
                 dropTarget={dropTargetFor(sortable.dropTarget, "tab", tab.id)}
                 groupPosition={position}
                 showLeftBorder={offset > 0}
+                deckLayout={deckLayout}
                 itemRef={
                   tab.id === activeId
                     ? (el) => {
@@ -682,15 +726,17 @@ function TabStripChevron({
   );
 }
 
-function IconButton({
+export function IconButton({
   label,
   active,
+  accent,
   disabled,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  accent?: boolean;
   disabled?: boolean;
   onClick?: () => void;
   children: ReactNode;
@@ -700,7 +746,7 @@ function IconButton({
       type="button"
       title={label}
       aria-label={label}
-      aria-pressed={active}
+      aria-pressed={active || accent}
       aria-disabled={disabled}
       data-tauri-drag-region="false"
       onClick={() => {
@@ -710,9 +756,11 @@ function IconButton({
       className={`grid size-6.5 place-items-center rounded-md ${
         disabled
           ? "text-content/25"
-          : active
-            ? "text-content hover:bg-content/10"
-            : "text-content/50 hover:bg-content/10 hover:text-content"
+          : accent
+            ? "text-accent hover:bg-content/10"
+            : active
+              ? "text-content hover:bg-content/10"
+              : "text-content/50 hover:bg-content/10 hover:text-content"
       }`}
     >
       {children}
@@ -725,14 +773,20 @@ export function TabVisitNav({
   canGoForward = false,
   onGoBack,
   onGoForward,
+  onTogglePanel,
+  panelActive = false,
+  panelLabel = "Toggle Projects",
 }: {
   canGoBack?: boolean;
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
+  onTogglePanel?: () => void;
+  panelActive?: boolean;
+  panelLabel?: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-0.5">
+    <div className="flex shrink-0 items-center">
       <IconButton
         label={`Back (${MOD}[)`}
         disabled={!canGoBack}
@@ -747,6 +801,15 @@ export function TabVisitNav({
       >
         <ChevronRight className="size-3.5" strokeWidth={1.75} />
       </IconButton>
+      {onTogglePanel ? (
+        <IconButton
+          label={panelLabel}
+          active={panelActive}
+          onClick={onTogglePanel}
+        >
+          <PanelLeft className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      ) : null}
     </div>
   );
 }
@@ -756,9 +819,11 @@ function TitleBarComponent({
   activeId,
   cwd,
   sidebarOpen,
-  diffOpen = false,
+  deckLayout = false,
+  projectRailOpen = true,
+  sourceControlActive = false,
   onToggleSidebar,
-  onToggleDiff,
+  onShowSourceControl,
   onSelect,
   canGoBack = false,
   canGoForward = false,
@@ -766,6 +831,9 @@ function TitleBarComponent({
   onGoForward,
   onNew,
   onNewTerminal,
+  onShowTerminal,
+  projectTerminalActive = false,
+  onOpenSettings,
   onClose,
   onReorder,
   onGoToFile,
@@ -778,20 +846,30 @@ function TitleBarComponent({
   onGroupNewTab,
   onGroupClose,
   onGroupMoveToNewWindow,
+  recents = [],
+  onSelectProject,
 }: Props) {
   const tabIds = tabs.map((tab) => tab.id);
-  const segments = segmentTabs(tabs);
-  const canDragSegments = segments.length > 1;
+  const segments = deckLayout
+    ? tabs.map((tab, index) => ({ kind: "single" as const, tab, index }))
+    : segmentTabs(tabs);
+  const canDragSegments = !deckLayout && segments.length > 1;
   const projectOf = (id: string) => tabs.find((tab) => tab.id === id)?.project;
-  const sortable = useSortable(tabIds, onReorder, {
-    onDropOnItem: onJoinTab,
-    onDropOnGroup: onJoinTabToGroup,
-    // Tab groups are project-scoped; a foreign drop is flagged, not applied.
-    canDropOn: (draggedId, kind, id) =>
-      kind === "group"
-        ? canJoinTabGroup(tabs, draggedId, id, projectOf)
-        : canJoinTabOnto(tabs, draggedId, id, projectOf),
-  });
+  const sortable = useSortable(
+    tabIds,
+    onReorder,
+    deckLayout
+      ? {}
+      : {
+          onDropOnItem: onJoinTab,
+          onDropOnGroup: onJoinTabToGroup,
+          // Tab groups are project-scoped; a foreign drop is flagged, not applied.
+          canDropOn: (draggedId, kind, id) =>
+            kind === "group"
+              ? canJoinTabGroup(tabs, draggedId, id, projectOf)
+              : canJoinTabOnto(tabs, draggedId, id, projectOf),
+        },
+  );
   const segmentDrag = useSegmentDrag(segments.length, (fromIndex, toIndex) => {
     const valid = reorderTabSegments(tabs, fromIndex, toIndex);
     if (valid) onReorder(valid);
@@ -833,6 +911,7 @@ function TitleBarComponent({
   );
   const [groupLabels, setGroupLabels] = useState(loadTabGroupLabels);
   const [groupLogos, setGroupLogos] = useState(loadTabGroupLogos);
+  const [groupMascots, setGroupMascots] = useState(loadTabGroupMascots);
   const [groupMenu, setGroupMenu] = useState<{
     x: number;
     y: number;
@@ -926,13 +1005,14 @@ function TitleBarComponent({
 
   const onTabContextMenu = useCallback(
     (tab: Tab, event: ReactMouseEvent<HTMLDivElement>) => {
+      if (deckLayout) return;
       setTabMenu({ x: event.clientX, y: event.clientY, tabId: tab.id });
     },
-    [],
+    [deckLayout],
   );
 
   const tabMenuItems: ExplorerMenuItem[] = (() => {
-    if (!tabMenu) return [];
+    if (!tabMenu || deckLayout) return [];
     const tab = tabs.find((entry) => entry.id === tabMenu.tabId);
     if (!tab) return [];
     const items: ExplorerMenuItem[] = [
@@ -976,6 +1056,14 @@ function TitleBarComponent({
     saveTabGroupLabel(projectKey, label);
     setGroupLabels(loadTabGroupLabels());
   }, []);
+
+  const onGroupMascotChange = useCallback(
+    (projectKey: string, name: string | null) => {
+      saveTabGroupMascot(projectKey, name);
+      setGroupMascots(loadTabGroupMascots());
+    },
+    [],
+  );
 
   const onGroupColorChange = useCallback(
     (projectKey: string, colorIndex: number | null) => {
@@ -1068,44 +1156,170 @@ function TitleBarComponent({
     } catch {}
   }, [systemTitle]);
 
+  const railClosed = deckLayout && !projectRailOpen;
+  const currentProjectKey = projectName(cwd);
+  const currentProjectLabel = resolveTabGroupLabel(
+    currentProjectKey,
+    groupLabels,
+    basename(cwd) || currentProjectKey,
+  );
+  const currentProjectLogo = resolveTabGroupLogo(currentProjectKey, groupLogos);
+  const currentProjectBusy = tabs.some(
+    (tab) => tab.project === currentProjectKey && tab.busyHarnesses.length > 0,
+  );
+  const currentProjectColor = resolveTabGroupColor(
+    currentProjectKey,
+    groupColors,
+    groupCustomColors,
+    currentProjectKey,
+  );
+  const showCurrentProject = looksLikeProject(cwd);
+  // Until a project is picked, deck mode hides the rail and the sidebar, so
+  // nothing project-scoped is actionable and the window controls need room.
+  const projectless = deckLayout && !showCurrentProject;
+  // With the rail closed the sidebar header carries no actions, so the project
+  // button and its shortcuts ride in the title bar's single row.
+  const showProjectButton = railClosed && Boolean(onSelectProject);
+  const trailingControls = (
+    <div className="flex h-full shrink-0 items-stretch">
+      <div className="flex items-center gap-0.5 px-2">
+        {!deckLayout ? (
+          <ProjectDiffStats
+            cwd={cwd}
+            active={sourceControlActive}
+            onClick={onShowSourceControl}
+          />
+        ) : null}
+        {railClosed && !projectless ? (
+          <>
+            <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+              <Search className="size-3.5" strokeWidth={1.75} />
+            </IconButton>
+            <IconButton label={`New session (${MOD}T)`} onClick={onNew}>
+              <Plus className="size-3.5" strokeWidth={1.75} />
+            </IconButton>
+          </>
+        ) : null}
+        {deckLayout && !projectless && (onShowTerminal || onNewTerminal) ? (
+          <IconButton
+            label={
+              projectTerminalActive
+                ? "Terminal"
+                : `New Terminal (${MOD}\`)`
+            }
+            accent={projectTerminalActive}
+            onClick={
+              projectTerminalActive
+                ? (onShowTerminal ?? onNewTerminal)
+                : onNewTerminal
+            }
+          >
+            <Terminal className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
+        {deckLayout && !projectRailOpen && onOpenSettings ? (
+          <IconButton label="Settings" onClick={onOpenSettings}>
+            <Settings className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : IS_MAC && !deckLayout ? (
+          <OpacityControl />
+        ) : null}
+      </div>
+      {!IS_MAC ? <WindowControls /> : null}
+    </div>
+  );
+
   return (
     <header
       className="flex h-10 shrink-0 items-stretch border-b border-content/10"
       data-tauri-drag-region
       onDoubleClick={onTitleBarDoubleClick}
     >
-      {sidebarOpen || !IS_MAC ? null : (
+      {/* Both the rail and the sidebar step aside without a project, so the
+          title bar takes over the traffic lights and the rail toggle. */}
+      {(projectless && railClosed) || (!sidebarOpen && IS_MAC) ? (
         <div className="w-[78px] shrink-0" data-tauri-drag-region />
+      ) : null}
+      {projectless && railClosed ? (
+        <div className="flex shrink-0 items-center px-1.5">
+          <IconButton
+            label={`Toggle Sidebar (${MOD}B)`}
+            onClick={onToggleSidebar}
+          >
+            <PanelLeft className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        </div>
+      ) : null}
+      {deckLayout ? null : (
+        <div className="flex shrink-0 items-center gap-0.5 px-2">
+          {sidebarOpen ? null : (
+            <TabVisitNav
+              canGoBack={canGoBack}
+              canGoForward={canGoForward}
+              onGoBack={onGoBack}
+              onGoForward={onGoForward}
+            />
+          )}
+          <IconButton
+            label={`Toggle Sidebar (${MOD}B)`}
+            active={sidebarOpen}
+            onClick={onToggleSidebar}
+          >
+            <PanelLeft className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+          <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+            <Search className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        </div>
       )}
-
-      <div className="flex shrink-0 items-center gap-0.5 px-2">
-        {sidebarOpen ? null : (
-          <TabVisitNav
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            onGoBack={onGoBack}
-            onGoForward={onGoForward}
-          />
-        )}
-        <IconButton
-          label={`Toggle Sidebar (${MOD}B)`}
-          active={sidebarOpen}
-          onClick={onToggleSidebar}
+      {showProjectButton && onSelectProject ? (
+        <CwdPicker
+          cwd={cwd}
+          recents={recents}
+          placement="below"
+          onCwdChange={onSelectProject}
+          onNewTerminal={onNewTerminal}
+          buttonClassName="flex h-full min-w-0 max-w-64 shrink items-center gap-2 px-6 text-left text-sm font-medium leading-tight"
         >
-          <PanelLeft className="size-3.5" strokeWidth={1.75} />
-        </IconButton>
-        <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
-          <Search className="size-3.5" strokeWidth={1.75} />
-        </IconButton>
-      </div>
+          {showCurrentProject ? (
+            <>
+              {currentProjectLogo ? (
+                <ProjectLogoIcon
+                  path={currentProjectLogo}
+                  className="size-4 shrink-0 rounded-sm"
+                  imageClassName="size-4"
+                />
+              ) : (
+                <ProjectMascot
+                  project={currentProjectKey}
+                  color={currentProjectColor}
+                  name={resolveTabGroupMascot(currentProjectKey, groupMascots)}
+                  className="size-3 shrink-0"
+                  active={currentProjectBusy}
+                />
+              )}
+              <span className="min-w-0 truncate">{currentProjectLabel}</span>
+            </>
+          ) : (
+            <span className="min-w-0 truncate text-content/50">No project</span>
+          )}
+        </CwdPicker>
+      ) : null}
 
-      <div className="flex min-w-0 flex-1 items-stretch border-l border-content/10">
+      <div
+        className={`flex min-w-0 flex-1 items-stretch${
+          deckLayout && !showProjectButton ? "" : " border-l border-content/10"
+        }`}
+      >
         {/*
           Strip sizes to its tabs (w-56 each), sits left; + follows.
           When crowded, tabs shrink to min-w-28 then the strip scrolls.
+          Deck mode grows tabs evenly; once each hits w-56 the strip scrolls.
         */}
         <div
-          className="relative h-full min-w-0 shrink overflow-hidden"
+          className={`relative h-full min-w-0 overflow-hidden ${
+            deckLayout ? "flex-1" : "shrink"
+          }`}
           data-tauri-drag-region="false"
           onWheel={(event) => {
             const el = tabStripRef.current;
@@ -1155,6 +1369,11 @@ function TitleBarComponent({
                       groupLabels,
                       shared || "Group",
                     )}
+                    projectKey={shared || segment.key}
+                    mascotName={resolveTabGroupMascot(
+                      segment.key,
+                      groupMascots,
+                    )}
                     logoPath={
                       shared ? resolveTabGroupLogo(shared, groupLogos) : null
                     }
@@ -1177,6 +1396,7 @@ function TitleBarComponent({
                     onGroupContextMenu={(event) =>
                       onGroupContextMenu(segment, event)
                     }
+                    deckLayout={deckLayout}
                   />
                 );
               }
@@ -1215,6 +1435,10 @@ function TitleBarComponent({
                       "tab",
                       tab.id,
                     )}
+                    deckLayout={deckLayout}
+                    showRightBorder={
+                      deckLayout && segmentIndex === segments.length - 1
+                    }
                     itemRef={
                       tab.id === activeId
                         ? (el) => {
@@ -1260,9 +1484,12 @@ function TitleBarComponent({
                 : null
             }
             logoProject={groupMenuShared}
+            mascotName={resolveTabGroupMascot(groupMenu.groupId, groupMascots)}
+            mascotProject={groupMenuShared || groupMenu.groupId}
             onRename={onGroupRename}
             onColorChange={onGroupColorChange}
             onCustomColorChange={onGroupCustomColorChange}
+            onMascotChange={onGroupMascotChange}
             onLogoChange={onGroupLogoChange}
             onPick={onGroupMenuPick}
             onClose={() => setGroupMenu(null)}
@@ -1280,45 +1507,40 @@ function TitleBarComponent({
           />
         ) : null}
 
-        <div className="flex shrink-0 items-center gap-0.5 border-l border-content/10 px-1.5">
-          <IconButton label={`New Tab (${MOD}T)`} onClick={onNew}>
-            <Plus className="size-3.5" strokeWidth={1.75} />
-          </IconButton>
-          {onNewTerminal ? (
-            <IconButton
-              label={`New Terminal (${MOD}\`)`}
-              onClick={onNewTerminal}
-            >
-              <SquareTerminal className="size-3.5" strokeWidth={1.75} />
+        {/* Deck mode keeps New in the sidebar and Terminal in the title bar,
+            so the strip carries no trailing actions. */}
+        {deckLayout ? null : (
+          <div className="flex shrink-0 items-center gap-0.5 border-l border-content/10 px-1.5">
+            <IconButton label={`New Tab (${MOD}T)`} onClick={onNew}>
+              <Plus className="size-3.5" strokeWidth={1.75} />
             </IconButton>
-          ) : null}
-        </div>
-
-        <div
-          className="flex min-w-0 flex-1 items-center justify-center px-4"
-          data-tauri-drag-region
-        >
-          {!IS_MAC ? (
-            <span
-              className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
-              data-tauri-drag-region
-            >
-              {systemTitle}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="flex h-full shrink-0 items-stretch">
-          <div className="flex items-center gap-0.5 px-2">
-            <ProjectDiffStats
-              cwd={cwd}
-              active={diffOpen}
-              onClick={onToggleDiff}
-            />
-            {IS_MAC ? <OpacityControl /> : null}
+            {onNewTerminal ? (
+              <IconButton
+                label={`New Terminal (${MOD}\`)`}
+                onClick={onNewTerminal}
+              >
+                <Terminal className="size-3.5" strokeWidth={1.75} />
+              </IconButton>
+            ) : null}
           </div>
-          {!IS_MAC ? <WindowControls /> : null}
-        </div>
+        )}
+
+        {deckLayout && IS_MAC ? null : (
+          <div
+            className="flex min-w-0 flex-1 items-center justify-center px-4"
+            data-tauri-drag-region
+          >
+            {!IS_MAC ? (
+              <span
+                className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
+                data-tauri-drag-region
+              >
+                {systemTitle}
+              </span>
+            ) : null}
+          </div>
+        )}
+        {trailingControls}
       </div>
     </header>
   );

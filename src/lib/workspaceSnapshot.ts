@@ -1,5 +1,6 @@
 import { markTurnInterrupted, type ResumedWorkspace } from "./inFlight";
 import {
+  isTerminalTab,
   leafIds,
   newTab,
   type EditorPane,
@@ -8,6 +9,12 @@ import {
   type PlanTabSource,
   type WorkspaceTab,
 } from "./layout";
+import {
+  clampDockSize,
+  isDockSide,
+  type ProjectTerminalDock,
+} from "./projectTerminal";
+import { normalizeProjectPath } from "./recents";
 import {
   HARNESSES,
   RUNTIME_MODES,
@@ -33,6 +40,7 @@ export type WorkspaceSnapshot = {
   sessions: WorkspaceSessionStub[];
   activeTabId: string;
   projectCwd: string;
+  projectTerminals: ProjectTerminalDock[];
 };
 
 export function collectWorkspaceSnapshot(
@@ -40,12 +48,16 @@ export function collectWorkspaceSnapshot(
   sessions: Session[],
   activeTabId: string,
   projectCwd: string,
+  projectTerminals: ProjectTerminalDock[] = [],
 ): WorkspaceSnapshot {
   return {
     tabs: tabs.map(sanitizeTab).filter((tab): tab is WorkspaceTab => tab != null),
     sessions: sessions.map(sessionStub).filter((stub): stub is WorkspaceSessionStub => stub != null),
     activeTabId,
     projectCwd: projectCwd.trim() || "~",
+    projectTerminals: projectTerminals
+      .map(sanitizeProjectTerminal)
+      .filter((dock): dock is ProjectTerminalDock => dock != null),
   };
 }
 
@@ -56,6 +68,7 @@ export function parseWorkspaceSnapshot(raw: unknown): WorkspaceSnapshot | null {
     sessions?: unknown;
     activeTabId?: unknown;
     projectCwd?: unknown;
+    projectTerminals?: unknown;
   };
   if (!Array.isArray(value.tabs) || typeof value.activeTabId !== "string") {
     return null;
@@ -76,7 +89,12 @@ export function parseWorkspaceSnapshot(raw: unknown): WorkspaceSnapshot | null {
     typeof value.projectCwd === "string" && value.projectCwd.trim()
       ? value.projectCwd.trim()
       : "~";
-  return { tabs, sessions, activeTabId, projectCwd };
+  const projectTerminals = Array.isArray(value.projectTerminals)
+    ? value.projectTerminals
+        .map(sanitizeProjectTerminal)
+        .filter((dock): dock is ProjectTerminalDock => dock != null)
+    : [];
+  return { tabs, sessions, activeTabId, projectCwd, projectTerminals };
 }
 
 export function workspaceSnapshotKey(snapshot: WorkspaceSnapshot): string {
@@ -159,6 +177,7 @@ export function hydrateWorkspaceSnapshot(
     sessions: [...sessions.values()],
     activeTabId,
     projectCwd,
+    projectTerminals: parsed.projectTerminals,
   };
 }
 
@@ -324,6 +343,29 @@ function sanitizeFile(raw: unknown): FilePaneTab | null {
     ...(plan ? { plan } : {}),
     ...(value.review === true ? { review: true } : {}),
     ...(value.terminal === true ? { terminal: true } : {}),
+  };
+}
+
+function sanitizeProjectTerminal(raw: unknown): ProjectTerminalDock | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.projectPath !== "string" || !value.projectPath.trim()) {
+    return null;
+  }
+  if (!isDockSide(value.side)) return null;
+  const pane = sanitizePane(value.pane);
+  if (!pane) return null;
+  const files = pane.files.filter(isTerminalTab);
+  if (files.length === 0) return null;
+  const activeFileId = files.some((file) => file.id === pane.activeFileId)
+    ? pane.activeFileId
+    : files[0].id;
+  return {
+    projectPath: normalizeProjectPath(value.projectPath),
+    pane: { ...pane, files, activeFileId },
+    side: value.side,
+    size: clampDockSize(value.side, Number(value.size)),
+    open: value.open !== false,
   };
 }
 

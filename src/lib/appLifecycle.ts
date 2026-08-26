@@ -16,6 +16,10 @@ import {
 } from "./inFlight";
 import { leafIds, type WorkspaceTab } from "./layout";
 import { killPty } from "./pty";
+import {
+  projectTerminalFileIds,
+  type ProjectTerminalDock,
+} from "./projectTerminal";
 import type { Session } from "./session";
 import { sessionChildHarnesses } from "./handoff";
 import {
@@ -45,6 +49,7 @@ let liveWorkspace: {
   tabs: () => WorkspaceTab[];
   activeTabId: () => string;
   projectCwd: () => string;
+  projectTerminals: () => ProjectTerminalDock[];
   flush: () => void;
 } | null = null;
 
@@ -57,9 +62,17 @@ export function setQuitWorkspace(
   tabs: () => WorkspaceTab[],
   activeTabId: () => string,
   projectCwd: () => string,
+  projectTerminals: () => ProjectTerminalDock[],
   flush: () => void,
 ): () => void {
-  liveWorkspace = { sessions, tabs, activeTabId, projectCwd, flush };
+  liveWorkspace = {
+    sessions,
+    tabs,
+    activeTabId,
+    projectCwd,
+    projectTerminals,
+    flush,
+  };
   bootingResumed = null;
   return () => {
     if (liveWorkspace?.sessions === sessions) liveWorkspace = null;
@@ -74,6 +87,7 @@ export async function handleQuitRequested(): Promise<void> {
       liveWorkspace.tabs(),
       liveWorkspace.activeTabId(),
       liveWorkspace.projectCwd(),
+      liveWorkspace.projectTerminals(),
     );
     return;
   }
@@ -180,6 +194,7 @@ export async function persistQuitState(
   activeTabId: string,
   projectCwd: string,
   mode: "quit" | "unload" = "quit",
+  projectTerminals: ProjectTerminalDock[] = [],
 ): Promise<void> {
   const refs = inFlightRefs(sessions, tabs);
   const interrupted = new Set(refs.map((ref) => ref.sessionId));
@@ -193,7 +208,13 @@ export async function persistQuitState(
     }),
   );
   await saveWorkspaceSnapshot(
-    collectWorkspaceSnapshot(tabs, sessions, activeTabId, projectCwd),
+    collectWorkspaceSnapshot(
+      tabs,
+      sessions,
+      activeTabId,
+      projectCwd,
+      projectTerminals,
+    ),
   ).catch(() => undefined);
   // Vite/webview reload must not wipe a restored snapshot: those chats are idle
   // in this process until Continue runs.
@@ -214,6 +235,7 @@ async function persistBootingResume(workspace: ResumedWorkspace): Promise<void> 
       workspace.sessions,
       workspace.activeTabId,
       workspace.projectCwd,
+      workspace.projectTerminals ?? [],
     ),
   ).catch(() => undefined);
   await replaceInFlightSessions(
@@ -231,6 +253,7 @@ async function confirmQuitAndExit(
   tabs: WorkspaceTab[],
   activeTabId: string,
   projectCwd: string,
+  projectTerminals: ProjectTerminalDock[] = [],
 ): Promise<void> {
   if (quitDialogOpen) return;
   quitDialogOpen = true;
@@ -246,7 +269,14 @@ async function confirmQuitAndExit(
     }
     quitting = true;
     try {
-      await persistQuitState(sessions, tabs, activeTabId, projectCwd);
+      await persistQuitState(
+        sessions,
+        tabs,
+        activeTabId,
+        projectCwd,
+        "quit",
+        projectTerminals,
+      );
       await invoke("confirm_quit");
     } catch {
       quitting = false;
@@ -259,6 +289,7 @@ async function confirmQuitAndExit(
 export async function reapWindowRuntime(
   sessions: Session[],
   tabs: WorkspaceTab[],
+  projectTerminals: ProjectTerminalDock[] = [],
 ): Promise<void> {
   await Promise.all(
     sessions.map((session) =>
@@ -269,7 +300,11 @@ export async function reapWindowRuntime(
       ),
     ),
   );
-  await Promise.all(terminalFileIds(tabs).map((id) => killPty(id)));
+  await Promise.all(
+    [...terminalFileIds(tabs), ...projectTerminalFileIds(projectTerminals)].map(
+      (id) => killPty(id),
+    ),
+  );
 }
 
 function terminalFileIds(tabs: WorkspaceTab[]): string[] {

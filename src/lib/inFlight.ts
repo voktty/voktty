@@ -1,4 +1,5 @@
 import { leafIds, newTab, type WorkspaceTab } from "./layout";
+import type { ProjectTerminalDock } from "./projectTerminal";
 import { hasPendingApproval, type Session } from "./session";
 import { stopStreaming } from "./harness/apply";
 
@@ -17,6 +18,7 @@ export type ResumedWorkspace = {
   tabs: WorkspaceTab[];
   activeTabId: string;
   projectCwd: string;
+  projectTerminals?: ProjectTerminalDock[];
 };
 
 /** A turn or approval that would be lost if this webview died. */
