@@ -1,3 +1,4 @@
+#[cfg(windows)]
 use std::path::PathBuf;
 
 use portable_pty::CommandBuilder;
