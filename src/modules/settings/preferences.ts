@@ -6,6 +6,8 @@ import {
   syncTrayLanguage,
   type Preferences,
 } from "./store";
+import { applyDocumentLocale } from "@/modules/i18n/direction";
+import type { LanguageId } from "@/modules/i18n/types";
 
 type State = Preferences & {
   hydrated: boolean;
@@ -55,10 +57,14 @@ export const usePreferencesStore = create<State>((set) => ({
       try {
         const prefs = await loadPreferences();
         set({ ...prefs, hydrated: true });
+        applyDocumentLocale(prefs.language);
         void syncTrayLanguage(prefs.language);
         mirrorBgFastPath(prefs.backgroundKind, prefs.backgroundImageId);
         void onPreferencesChange((key, value) => {
           set({ [key]: value } as Partial<State>);
+          if (key === "language") {
+            applyDocumentLocale(value as LanguageId);
+          }
           if (key === "backgroundKind" || key === "backgroundImageId") {
             const s = usePreferencesStore.getState();
             mirrorBgFastPath(s.backgroundKind, s.backgroundImageId);

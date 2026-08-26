@@ -144,7 +144,10 @@ function BlockChrome({
   children: React.ReactNode;
 }) {
   return (
-    <div className="not-prose my-2 overflow-hidden rounded-lg border border-border/50 bg-muted/30">
+    <div
+      dir="ltr"
+      className="not-prose my-2 overflow-hidden rounded-lg border border-border/50 bg-muted/30 text-left"
+    >
       <div className="flex items-center justify-between gap-2 border-b border-border/40 bg-muted/20 px-3 py-1">
         <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
           {label}
@@ -163,7 +166,10 @@ function FinalizedCodeBlock({ code, lang }: { code: string; lang: string }) {
   if (!isHighlightable(lang)) {
     return (
       <BlockChrome label={lang} code={code}>
-        <pre className="m-0 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
+        <pre
+          dir="ltr"
+          className="m-0 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-foreground text-left"
+        >
           {code}
         </pre>
       </BlockChrome>
@@ -217,14 +223,20 @@ const HighlightedPre = memo(function HighlightedPre({
 
   if (!nodes) {
     return (
-      <pre className="m-0 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
+      <pre
+        dir="ltr"
+        className="m-0 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-foreground text-left"
+      >
         {code}
       </pre>
     );
   }
 
   return (
-    <pre className="m-0 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
+    <pre
+      dir="ltr"
+      className="m-0 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-foreground text-left"
+    >
       {nodes.map((node, i) =>
         node.kind === "break" ? (
           // eslint-disable-next-line react/no-array-index-key
@@ -244,7 +256,10 @@ function CommandCard({ code, lang }: { code: string; lang: string }) {
   const isMultiline = code.includes("\n");
   const prompt = shellPrompt(lang);
   return (
-    <div className="not-prose my-2 overflow-hidden rounded-lg border border-border/50 bg-muted/40">
+    <div
+      dir="ltr"
+      className="not-prose my-2 overflow-hidden rounded-lg border border-border/50 bg-muted/40 text-left"
+    >
       <div className="flex items-center justify-between gap-2 px-3 py-1.5">
         <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
           {normalizeLangLabel(lang)}
@@ -256,8 +271,9 @@ function CommandCard({ code, lang }: { code: string; lang: string }) {
       </div>
       <div className="border-t border-border/40 bg-background/40">
         <pre
+          dir="ltr"
           className={cn(
-            "m-0 overflow-x-auto px-3 py-2 font-mono text-[12px] leading-relaxed text-foreground",
+            "m-0 overflow-x-auto px-3 py-2 font-mono text-[12px] leading-relaxed text-foreground text-left",
             isMultiline ? "whitespace-pre" : "whitespace-pre-wrap",
           )}
         >

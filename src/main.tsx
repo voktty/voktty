@@ -7,6 +7,9 @@ import ReactDOM from "react-dom/client";
 import App from "./app/App";
 import { initLaunchRequests } from "./lib/launchRequest";
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "./lib/platform";
+import { applyDocumentLocale, readFastLanguage } from "./modules/i18n";
+
+applyDocumentLocale(readFastLanguage());
 
 document.documentElement.dataset.platform = IS_WINDOWS
   ? "windows"

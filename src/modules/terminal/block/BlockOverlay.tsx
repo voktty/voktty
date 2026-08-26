@@ -120,7 +120,10 @@ export function BlockOverlay(props: Props) {
   };
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+    <div
+      dir="ltr"
+      className="pointer-events-none absolute inset-0 z-10 overflow-hidden text-left"
+    >
       {vis.blocks.map((b) => (
         <BlockChrome key={b.id} block={b} all={props} onSearch={setSearchId} />
       ))}

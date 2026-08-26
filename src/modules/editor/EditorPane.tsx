@@ -1666,7 +1666,10 @@ export const EditorPane = memo(
     return (
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className="relative flex h-full min-h-0 flex-col zoom-exempt">
+          <div
+            dir="ltr"
+            className="relative flex h-full min-h-0 flex-col zoom-exempt text-left"
+          >
             <EditorBreadcrumbs
               editorId={editorId}
               path={path}

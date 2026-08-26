@@ -366,7 +366,8 @@ export const TerminalPane = memo(
 
     return (
       <div
-        className="zoom-exempt flex h-full w-full flex-col"
+        dir="ltr"
+        className="zoom-exempt flex h-full w-full flex-col text-left"
         style={hideStyle}
       >
         <ProjectScriptsHud
