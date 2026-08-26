@@ -160,11 +160,11 @@ export type Session = {
    */
   pendingSwitch?: PendingHarnessSwitch;
   /**
-   * Branch pinned from the composer. Isolated sessions keep this even when the
-   * project checkout moves.
+   * Last composer-pinned branch. Unused after session worktrees were removed;
+   * kept so older session records still load.
    */
   branch?: string;
-  /** Git worktree for a pinned branch. Absent when the session uses `cwd`. */
+  /** Extra git worktree from the old session-branch feature. Unused. */
   worktreeCwd?: string;
 };
 

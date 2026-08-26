@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-08-26
+
 ### Added
 
 - omp ([oh-my-pi](https://omp.sh)) joins the provider list. Install it with `curl -fsSL https://omp.sh/install | sh` and log in, and MonoCode runs it like any other harness: live turns, steering, approvals, model catalog, and skills from `.omp/skills`.
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pi and omp share one adapter core. omp is a fork of Pi and speaks the same `--mode rpc` protocol, so both run on the same code path instead of two copies that drift apart.
 - Classic layout opens the full settings page with `⌘,` instead of the appearance popover in the title bar. Section navigation lives in the sidebar while settings are open, and Settings sits at the bottom next to Check for updates.
 - Deck layout shows Settings and Check for updates in the sidebar footer when the project rail is collapsed.
+- Composer branch picker creates and checks out a branch in this folder.
 
 ### Fixed
 
@@ -162,7 +165,10 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/hardbeat920/monocode/compare/v0.1.9...v0.1.10
+[0.1.9]: https://github.com/hardbeat920/monocode/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/hardbeat920/monocode/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/hardbeat920/monocode/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/hardbeat920/monocode/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/hardbeat920/monocode/compare/v0.1.4...v0.1.5

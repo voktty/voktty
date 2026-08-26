@@ -9,12 +9,11 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
-  gitSessionCheckout,
-  gitSessionCreateBranch,
+  gitCheckout,
+  gitCreateBranch,
   notifyGitChanged,
   type GitBranchInfo,
   type GitBranches,
-  type GitSessionCheckout,
 } from "../lib/fs";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectBranches } from "../hooks/useProjectBranches";
@@ -23,14 +22,15 @@ type Props = {
   cwd: string;
   branch?: string;
   enabled?: boolean;
-  onChange?: (checkout: GitSessionCheckout) => void;
+  onChange?: () => void;
   onClose?: () => void;
 };
 
-const MENU_WIDTH = 240;
+const MENU_WIDTH = 280;
 
 type Row =
-  { kind: "create"; name: string } | { kind: "branch"; branch: GitBranchInfo };
+  | { kind: "create"; name: string }
+  | { kind: "branch"; branch: GitBranchInfo };
 
 function menuStyle(anchor: DOMRect): CSSProperties {
   const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
@@ -138,19 +138,22 @@ export function BranchPicker({
 
   const rows = useMemo((): Row[] => {
     const branches = info?.branches ?? [];
-    const needle = query.trim().toLowerCase();
+    const name = query.trim();
+    const needle = name.toLowerCase();
     const filtered = needle
-      ? branches.filter((branch) => {
-          const hay = branch.remote
-            ? `${branch.name} ${branch.remote}`
-            : branch.name;
+      ? branches.filter((entry) => {
+          const hay = entry.remote
+            ? `${entry.name} ${entry.remote}`
+            : entry.name;
           return hay.toLowerCase().includes(needle);
         })
       : branches;
-    const name = query.trim();
-    const exists = branches.some((entry) => entry.name === name);
-    const create: Row[] = name && !exists ? [{ kind: "create", name }] : [];
+    const taken = branches.some(
+      (entry) => !entry.remote && entry.name === name,
+    );
     const selected = branch || info?.current;
+    const create: Row[] =
+      name && !taken ? [{ kind: "create", name }] : [];
     return [
       ...create,
       ...filtered.map((entry) => ({
@@ -167,14 +170,14 @@ export function BranchPicker({
     setActive((i) => (rows.length === 0 ? 0 : Math.min(i, rows.length - 1)));
   }, [rows.length]);
 
-  const run = async (work: () => Promise<GitSessionCheckout>, created: boolean) => {
+  const run = async (work: () => Promise<string>) => {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      const checkout = await work();
-      onChangeRef.current?.(checkout);
-      if (created) notifyGitChanged();
+      await work();
+      notifyGitChanged();
+      onChangeRef.current?.();
       dismiss(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -185,27 +188,26 @@ export function BranchPicker({
 
   const pick = (row: Row) => {
     if (row.kind === "create") {
-      void run(() => gitSessionCreateBranch(cwd, row.name), true);
+      void run(() => gitCreateBranch(cwd, row.name));
       return;
     }
     if (row.branch.current) {
       dismiss(true);
       return;
     }
-    void run(
-      () => gitSessionCheckout(cwd, row.branch.name, row.branch.remote),
-      false,
-    );
+    void run(() => gitCheckout(cwd, row.branch.name, row.branch.remote));
   };
 
   const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      if (rows.length === 0) return;
       setActive((i) => Math.min(rows.length - 1, i + 1));
       return;
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
+      if (rows.length === 0) return;
       setActive((i) => Math.max(0, i - 1));
       return;
     }
@@ -351,21 +353,25 @@ function BranchList({
             onMouseDown={(e) => e.preventDefault()}
             onMouseEnter={() => onActive(index)}
             onClick={() => onPick(row)}
-            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left disabled:opacity-60 ${
-              highlighted || selected
-                ? "bg-content/10 text-content"
-                : "text-content hover:bg-content/5"
-            }`}
+            className={
+              row.kind === "create"
+                ? `mb-1 flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left disabled:opacity-60 ${
+                    highlighted
+                      ? "bg-content/15 text-content"
+                      : "bg-content/10 text-content hover:bg-content/15"
+                  }`
+                : `flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left disabled:opacity-60 ${
+                    highlighted || selected
+                      ? "bg-content/10 text-content"
+                      : "text-content hover:bg-content/5"
+                  }`
+            }
           >
             {row.kind === "create" ? (
               <>
-                <Plus
-                  className="size-3.5 shrink-0 text-content/70"
-                  strokeWidth={1.75}
-                />
-                <span className="min-w-0 flex-1 truncate text-[12px]">
-                  Create{" "}
-                  <span className="font-mono text-content/80">{row.name}</span>
+                <Plus className="size-3.5 shrink-0" strokeWidth={1.75} />
+                <span className="min-w-0 truncate text-[12px]">
+                  Create and checkout {row.name}
                 </span>
               </>
             ) : (

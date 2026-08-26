@@ -21,7 +21,7 @@ import {
 } from "./lib/appearance";
 import { IS_MAC } from "./lib/platform";
 import { displayAttachments, prepareAttachments } from "./lib/attachments";
-import { basename, notifyGitChanged, pickFolder, restoreSessionCheckout, type GitSessionCheckout } from "./lib/fs";
+import { basename, notifyGitChanged, pickFolder, restoreSessionCheckout } from "./lib/fs";
 import {
   invalidateProjectFiles,
   prefetchProjectFiles,
@@ -2320,29 +2320,18 @@ export default function App({
   );
 
   const onBranchChange = useCallback(
-    (sessionId: string, checkout: GitSessionCheckout) => {
+    (sessionId: string) => {
+      notifyGitChanged();
       const current = sessionsRef.current.find((s) => s.id === sessionId);
-      if (!current || current.busy) return;
-      const isolated =
-        checkout.isolated && !sameProjectPath(checkout.cwd, current.cwd);
-      const nextWorktree = isolated ? checkout.cwd : undefined;
-      const nextBranch = isolated ? checkout.branch : undefined;
-      if (
-        current.branch === nextBranch &&
-        (current.worktreeCwd || undefined) === nextWorktree
-      ) {
-        return;
-      }
-      if (current.providerSessionId) {
+      if (!current || (!current.branch && !current.worktreeCwd)) return;
+      if (current.worktreeCwd && current.providerSessionId) {
         void forgetHarnessSession(current.harness, sessionId);
       }
       const next = {
         ...current,
-        branch: nextBranch,
-        worktreeCwd: nextWorktree,
-        ...(current.providerSessionId
-          ? { providerSessionId: undefined }
-          : {}),
+        branch: undefined,
+        worktreeCwd: undefined,
+        ...(current.worktreeCwd ? { providerSessionId: undefined } : {}),
       };
       setSessions((prev) =>
         prev.map((s) => (s.id === sessionId ? next : s)),
@@ -2984,7 +2973,7 @@ export default function App({
             () => undefined,
           );
           notifyReviewChanged(sessionId);
-          if (!current.worktreeCwd) notifyGitChanged();
+          notifyGitChanged();
           nudgeWorkspace(workCwd);
           nudgeWatchedFiles();
           window.setTimeout(() => nudgeWatchedFiles(), 150);
@@ -3046,7 +3035,7 @@ export default function App({
           .catch(() => undefined)
           .then(() => notifyReviewChanged(sessionId));
         nudgeWorkspace(sessionWorkCwd(session));
-        if (!session.worktreeCwd) notifyGitChanged();
+        notifyGitChanged();
         nudgeWatchedFiles();
         window.setTimeout(() => nudgeWatchedFiles(), 150);
       } else {

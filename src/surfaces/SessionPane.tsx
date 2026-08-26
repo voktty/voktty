@@ -9,7 +9,6 @@ import {
 import { Composer } from "../chrome/Composer";
 import { SessionReview } from "../chrome/SessionReview";
 import type { ApprovalDecision } from "../lib/harness";
-import type { GitSessionCheckout } from "../lib/fs";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import {
   sessionDisplayTitle,
@@ -34,7 +33,7 @@ type Props = {
   onFocus: (sessionId: string) => void;
   onClose: (sessionId: string) => void;
   onCwdChange: (sessionId: string, cwd: string) => void;
-  onBranchChange: (sessionId: string, checkout: GitSessionCheckout) => void;
+  onBranchChange: (sessionId: string) => void;
   onModelChange: (sessionId: string, harness: HarnessId, model: string) => void;
   onModelSettingsChange: (
     sessionId: string,
@@ -114,7 +113,6 @@ export const SessionPane = memo(function SessionPane({
       modelSettings={session.modelSettings}
       runtimeMode={session.runtimeMode}
       cwd={session.cwd}
-      branch={session.branch}
       recents={recents}
       hideProjectPicker={
         hideProjectPicker ? !showDeckProjectPicker : false
@@ -122,7 +120,7 @@ export const SessionPane = memo(function SessionPane({
       context={session.context}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}
-      onBranchChange={(checkout) => onBranchChange(session.id, checkout)}
+      onBranchChange={() => onBranchChange(session.id)}
       onNewTerminal={() => onNewTerminal(session.id)}
       onModelChange={(harness, model) =>
         onModelChange(session.id, harness, model)
