@@ -4,11 +4,32 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  build-remote-helper:
+  validate-release-tag:
     runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Require a semantic version tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release workflows require a semantic version tag such as v1.2.3."
+            exit 1
+          fi
+
+  build-remote-helper:
+    needs: validate-release-tag
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
