@@ -330,7 +330,7 @@ export function SearchView({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onQueryKeyDown}
-            placeholder="Search"
+            placeholder="Search everything..."
             aria-label="Search"
             spellCheck={false}
             autoComplete="off"
@@ -349,7 +349,7 @@ export function SearchView({
         {!IS_MAC ? <WindowControls /> : null}
       </div>
 
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-3">
+      <div className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-3">
         {SCOPES.map((item) => {
           const selected = scope === item.id;
           return (
@@ -361,7 +361,7 @@ export function SearchView({
               className={`rounded-md px-2 py-1 text-[12px] ${
                 selected
                   ? "bg-content/10 text-content"
-                  : "text-content/50 hover:text-content"
+                  : "text-content/50 hover:bg-content/5 hover:text-content"
               }`}
             >
               {item.label}
