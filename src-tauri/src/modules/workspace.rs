@@ -304,6 +304,7 @@ fn is_safe_native_spawn_dir(path: &Path) -> bool {
     true
 }
 
+#[cfg(windows)]
 fn is_windows_system_path(path: &Path, windows_dir: Option<&OsStr>) -> bool {
     fn normalize(value: &OsStr) -> String {
         let normalized = value
@@ -1172,6 +1173,7 @@ mod auth_tests {
         );
     }
 
+    #[cfg(windows)]
     #[test]
     fn windows_system_directory_is_not_a_safe_inherited_launch_dir() {
         assert!(is_windows_system_path(

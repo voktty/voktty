@@ -58,6 +58,13 @@ class MockElement {
   }
 
   insertBefore(newNode: MockElement | MockTextNode, refNode: MockElement | MockTextNode | null) {
+    const previousParent = newNode.parentNode;
+    if (previousParent) {
+      const previousIndex = previousParent.childNodes.indexOf(newNode);
+      if (previousIndex !== -1) {
+        previousParent.childNodes.splice(previousIndex, 1);
+      }
+    }
     newNode.parentNode = this;
     newNode.parentElement = this;
     const idx = refNode ? this.childNodes.indexOf(refNode) : -1;
