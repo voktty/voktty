@@ -61,7 +61,6 @@ import {
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { RemoveProjectDialog } from "./RemoveProjectDialog";
-import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
 import { SidebarUpdate } from "./SidebarUpdate";
 import { SettingsNav } from "./SettingsRail";
@@ -834,29 +833,21 @@ function ProjectCard({
         aria-current={selected ? "true" : undefined}
         className="flex min-w-0 flex-1 cursor-default items-center gap-2 text-left group-hover:pr-6"
       >
-        <div className="relative size-4 shrink-0">
-          {busy && logoPath ? (
-            <span className="grid size-4 place-items-center text-accent">
-              <TerminalSpinner className="inline-block w-2.5 select-none text-center text-[9px] leading-none text-accent" />
-            </span>
+        <div className="grid size-4 shrink-0 place-items-center transition-opacity group-hover:opacity-0">
+          {logoPath && !busy ? (
+            <ProjectLogoIcon
+              path={logoPath}
+              className="size-4 rounded-sm"
+              imageClassName="size-4"
+            />
           ) : (
-            <div className="grid size-4 place-items-center transition-opacity group-hover:opacity-0">
-              {logoPath ? (
-                <ProjectLogoIcon
-                  path={logoPath}
-                  className="size-4 rounded-sm"
-                  imageClassName="size-4"
-                />
-              ) : (
-                <ProjectMascot
-                  project={projectKey}
-                  color={color}
-                  name={resolveTabGroupMascot(projectKey, groupMascots)}
-                  className="size-3"
-                  active={busy}
-                />
-              )}
-            </div>
+            <ProjectMascot
+              project={projectKey}
+              color={color}
+              name={resolveTabGroupMascot(projectKey, groupMascots)}
+              className="size-3"
+              active={busy}
+            />
           )}
         </div>
         {busy ? (
