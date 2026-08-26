@@ -2,7 +2,6 @@ import {
   Check,
   CircleAlert,
   GitBranch,
-  GitCompare,
   ListFilter,
   Plus,
   Search,
@@ -567,15 +566,11 @@ function SidebarComponent({
               : "text-content/50 hover:text-content"
           }`}
         >
-          {isChangesTab ? (
-            hasChangeStats ? (
-              <DiffStat
-                additions={changeAdditions}
-                deletions={changeDeletions}
-              />
-            ) : (
-              <GitCompare className="size-3.5 shrink-0" strokeWidth={1.75} />
-            )
+          {isChangesTab && hasChangeStats ? (
+            <DiffStat
+              additions={changeAdditions}
+              deletions={changeDeletions}
+            />
           ) : (
             <span className="block truncate">{TAB_LABELS[itemId]}</span>
           )}
