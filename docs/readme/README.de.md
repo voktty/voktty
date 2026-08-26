@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/release/voktty/voktty?label=version&color=blue" alt="Version" />
     <img src="https://img.shields.io/github/downloads/voktty/voktty/total?label=downloads&color=blue" alt="Downloads" />
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Plattform" />
-    <a href="https://discord.gg/tyveTUyEp7"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
+    <a href="https://discord.gg/z8mzebCzJB"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 
   </p>
 </div>

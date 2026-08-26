@@ -26,7 +26,7 @@ For the architecture and how to contribute safely, see [VOKTTY.md](VOKTTY.md) an
 
 ## Where to discuss
 
-Discord: [sergewinters OS](https://discord.gg/tyveTUyEp7)
+Discord: [Voktty community](https://discord.gg/z8mzebCzJB)
 
 Use Discord for design discussion, scope questions, "should I work on X?", quick feedback. Use GitHub Issues for tracking concrete bugs and features.
 
