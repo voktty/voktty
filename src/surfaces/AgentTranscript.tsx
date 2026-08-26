@@ -272,25 +272,30 @@ function LiveWorking({
   paused: boolean;
 }) {
   const elapsedMs = useElapsedFrom(startedAt, paused);
-  if (paused) return null;
-  return <TurnDuration elapsedMs={elapsedMs} live />;
+  return <TurnDuration elapsedMs={elapsedMs} live waiting={paused} />;
 }
 
 function TurnDuration({
   elapsedMs,
   live = false,
   done = false,
+  waiting = false,
 }: {
   elapsedMs: number | null;
   live?: boolean;
   done?: boolean;
+  waiting?: boolean;
 }) {
-  const label = formatWorkingDuration(elapsedMs, done);
+  const label = waiting
+    ? "Waiting for approval"
+    : formatWorkingDuration(elapsedMs, done);
   return (
     <div
       role={live ? "status" : undefined}
       aria-live={live ? "polite" : undefined}
-      aria-label={live ? "Agent is working" : label}
+      aria-label={
+        waiting ? "Waiting for approval" : live ? "Agent is working" : label
+      }
       className="flex items-center gap-2 px-4 py-3 font-sans text-sm text-content/40"
     >
       {done ? (
