@@ -171,7 +171,7 @@ pub fn fs_workspace_edit_apply(
 }
 
 fn safe_relative_path(path: &str) -> Result<PathBuf, String> {
-    if path.is_empty() || path.contains('\0') || path.contains('\\') {
+    if path.is_empty() || path.contains('\0') || path.contains('\\') || path.contains(':') {
         return Err("invalid replacement path".to_string());
     }
     let path = Path::new(path);
@@ -203,6 +203,8 @@ mod tests {
         assert!(safe_relative_path("../outside").is_err());
         assert!(safe_relative_path("src\\main.rs").is_err());
         assert!(safe_relative_path("C:/outside").is_err());
+        assert!(safe_relative_path("C:outside").is_err());
+        assert!(safe_relative_path("src/main.rs:stream").is_err());
     }
 
     #[test]
