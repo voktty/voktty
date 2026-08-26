@@ -272,6 +272,7 @@ function SidebarComponent({
   const railVisible = showProjectRail && (projectRailOpen || settingsOpen);
   const inProject = looksLikeProject(cwd);
   const classicSettings = settingsOpen && !deckLayout;
+  const showSidebarFooter = !deckLayout || !projectRailOpen;
   // A blank session has no project to browse, so the shell stands alone until
   // one is picked — whether or not the rail is open. Classic settings keep the
   // sidebar so it can host the section nav the rail would otherwise carry.
@@ -808,7 +809,7 @@ function SidebarComponent({
           />
         </div>
       ) : null}
-      {!deckLayout ? (
+      {showSidebarFooter ? (
         <>
           <div className="p-2 pb-1">
             <SidebarUpdate />

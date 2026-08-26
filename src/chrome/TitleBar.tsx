@@ -1218,7 +1218,10 @@ function TitleBarComponent({
             <Terminal className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
-        {deckLayout && !projectRailOpen && onOpenSettings ? (
+        {deckLayout &&
+        !projectRailOpen &&
+        !showCurrentProject &&
+        onOpenSettings ? (
           <IconButton label={`Settings (${MOD},)`} onClick={onOpenSettings}>
             <Settings className="size-3.5" strokeWidth={1.75} />
           </IconButton>
