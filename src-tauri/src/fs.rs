@@ -451,6 +451,16 @@ pub async fn git_create_branch(cwd: String, name: String) -> Result<String, Stri
         .map_err(|e| e.to_string())?
 }
 
+/// Stash tracked and untracked local changes so a checkout can proceed.
+#[tauri::command]
+pub async fn git_stash(cwd: String, message: Option<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git_stash_for(&expand_home(&cwd), message.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 fn git_diff_stats_for(root: &Path) -> GitDiffStats {
     if !git_is_work_tree(root) {
         return GitDiffStats::default();
@@ -1284,20 +1294,20 @@ fn git_checkout_for(root: &Path, name: &str, remote: Option<&str>) -> Result<Str
         if git_head_branch(root).as_deref() == Some(name.as_str()) {
             return Ok(name);
         }
-        git_checked(root, &["checkout", "--track", &format!("{remote}/{name}")])?;
+        git_switch(root, &["checkout", "--track", &format!("{remote}/{name}")])?;
         return Ok(name);
     }
     if git_head_branch(root).as_deref() == Some(name.as_str()) {
         return Ok(name);
     }
     if git_ref_exists(root, &format!("refs/heads/{name}")) {
-        git_checked(root, &["checkout", &name])?;
+        git_switch(root, &["checkout", &name])?;
         return Ok(name);
     }
     if let Some(remote) = git_remote_name(root) {
         let spec = format!("refs/remotes/{remote}/{name}");
         if git_ref_exists(root, &spec) {
-            git_checked(root, &["checkout", "--track", &format!("{remote}/{name}")])?;
+            git_switch(root, &["checkout", "--track", &format!("{remote}/{name}")])?;
             return Ok(name);
         }
     }
@@ -1314,8 +1324,40 @@ fn git_create_branch_for(root: &Path, name: &str) -> Result<String, String> {
     {
         return Err(format!("Branch {name} already exists"));
     }
-    git_checked(root, &["checkout", "-b", &name])?;
+    git_switch(root, &["checkout", "-b", &name])?;
     Ok(name)
+}
+
+fn git_stash_for(root: &Path, message: Option<&str>) -> Result<(), String> {
+    if !git_is_work_tree(root) {
+        return Err("Not a git repository".into());
+    }
+    match message.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(message) => git_checked(
+            root,
+            &["stash", "push", "--include-untracked", "-m", message],
+        ),
+        None => git_checked(root, &["stash", "push", "--include-untracked"]),
+    }
+}
+
+fn git_switch(root: &Path, args: &[&str]) -> Result<(), String> {
+    git_checked(root, args).map_err(map_local_changes_err)
+}
+
+fn map_local_changes_err(err: String) -> String {
+    if checkout_blocked_by_changes(&err) {
+        "Your local changes would be overwritten. Commit or stash them first.".into()
+    } else {
+        err
+    }
+}
+
+fn checkout_blocked_by_changes(err: &str) -> bool {
+    let text = err.to_ascii_lowercase();
+    text.contains("would be overwritten")
+        || text.contains("commit your changes or stash")
+        || text.contains("please move or remove them before")
 }
 
 fn git_branch_name(root: &Path, name: &str) -> Result<String, String> {
@@ -3152,6 +3194,95 @@ mod tests {
         assert!(git_create_branch_for(&dir.0, "feat/picker").is_err());
         assert!(git_create_branch_for(&dir.0, "bad name").is_err());
         assert!(git_checkout_for(&dir.0, "missing", None).is_err());
+    }
+
+    #[test]
+    fn git_stash_lets_checkout_proceed() {
+        let dir = tmp("git-stash-checkout");
+        if !init_git_commit(&dir.0, &[("a.txt", "main\n")]) {
+            return;
+        }
+        if git_create_branch_for(&dir.0, "feature").is_err() {
+            return;
+        }
+        std::fs::write(dir.0.join("a.txt"), "feature\n").unwrap();
+        if !git(&dir.0, &["add", "."]) || !git(&dir.0, &["commit", "-m", "feature"]) {
+            return;
+        }
+        if git_checkout_for(&dir.0, "main", None).is_err() {
+            return;
+        }
+        std::fs::write(dir.0.join("a.txt"), "dirty\n").unwrap();
+        let err = git_checkout_for(&dir.0, "feature", None).unwrap_err();
+        assert!(checkout_blocked_by_changes(&err), "{err}");
+        git_stash_for(&dir.0, Some("wip")).unwrap();
+        assert_eq!(
+            git_checkout_for(&dir.0, "feature", None).unwrap(),
+            "feature"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.0.join("a.txt")).unwrap(),
+            "feature\n"
+        );
+    }
+
+    #[test]
+    fn git_stash_includes_untracked_that_block_checkout() {
+        let dir = tmp("git-stash-untracked");
+        if !init_git_commit(&dir.0, &[("a.txt", "main\n")]) {
+            return;
+        }
+        if git_create_branch_for(&dir.0, "feature").is_err() {
+            return;
+        }
+        std::fs::write(dir.0.join("new.txt"), "on-feature\n").unwrap();
+        if !git(&dir.0, &["add", "."]) || !git(&dir.0, &["commit", "-m", "add new"]) {
+            return;
+        }
+        if git_checkout_for(&dir.0, "main", None).is_err() {
+            return;
+        }
+        std::fs::write(dir.0.join("new.txt"), "untracked\n").unwrap();
+        let err = git_checkout_for(&dir.0, "feature", None).unwrap_err();
+        assert!(checkout_blocked_by_changes(&err), "{err}");
+        git_stash_for(&dir.0, None).unwrap();
+        assert_eq!(
+            git_checkout_for(&dir.0, "feature", None).unwrap(),
+            "feature"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.0.join("new.txt")).unwrap(),
+            "on-feature\n"
+        );
+    }
+
+    #[test]
+    fn git_commit_lets_checkout_proceed() {
+        let dir = tmp("git-commit-checkout");
+        if !init_git_commit(&dir.0, &[("a.txt", "main\n")]) {
+            return;
+        }
+        if git_create_branch_for(&dir.0, "feature").is_err() {
+            return;
+        }
+        std::fs::write(dir.0.join("a.txt"), "feature\n").unwrap();
+        if !git(&dir.0, &["add", "."]) || !git(&dir.0, &["commit", "-m", "feature"]) {
+            return;
+        }
+        if git_checkout_for(&dir.0, "main", None).is_err() {
+            return;
+        }
+        std::fs::write(dir.0.join("a.txt"), "dirty\n").unwrap();
+        git_checked(&dir.0, &["add", "-A", "--", "."]).unwrap();
+        git_commit_for(&dir.0, "save dirty").unwrap();
+        assert_eq!(
+            git_checkout_for(&dir.0, "feature", None).unwrap(),
+            "feature"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.0.join("a.txt")).unwrap(),
+            "feature\n"
+        );
     }
 
     #[test]

@@ -1204,9 +1204,7 @@ function TitleBarComponent({
         {deckLayout && !projectless && (onShowTerminal || onNewTerminal) ? (
           <IconButton
             label={
-              projectTerminalActive
-                ? "Terminal"
-                : `New Terminal (${MOD}\`)`
+              projectTerminalActive ? "Terminal" : `New Terminal (${MOD}\`)`
             }
             accent={projectTerminalActive}
             onClick={

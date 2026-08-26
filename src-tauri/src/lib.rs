@@ -182,6 +182,7 @@ pub fn run() {
             fs::git_branches,
             fs::git_checkout,
             fs::git_create_branch,
+            fs::git_stash,
             fs::create_path,
             fs::rename_path,
             fs::delete_path,

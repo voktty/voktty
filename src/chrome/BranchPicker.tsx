@@ -10,13 +10,18 @@ import {
 } from "react";
 import {
   gitCheckout,
+  gitCommit,
   gitCreateBranch,
+  gitStageAll,
+  gitStash,
+  isCheckoutBlockedByChanges,
   notifyGitChanged,
   type GitBranchInfo,
   type GitBranches,
 } from "../lib/fs";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectBranches } from "../hooks/useProjectBranches";
+import { SwitchBranchDialog } from "./SwitchBranchDialog";
 
 type Props = {
   cwd: string;
@@ -31,6 +36,10 @@ const MENU_WIDTH = 280;
 type Row =
   | { kind: "create"; name: string }
   | { kind: "branch"; branch: GitBranchInfo };
+
+type PendingSwitch =
+  | { kind: "create"; name: string }
+  | { kind: "checkout"; name: string; remote: string | null };
 
 function menuStyle(anchor: DOMRect): CSSProperties {
   const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
@@ -61,6 +70,11 @@ export function BranchPicker({
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<PendingSwitch | null>(null);
+  const [blockedError, setBlockedError] = useState<string | null>(null);
+  const [blockedBusy, setBlockedBusy] = useState<"stash" | "commit" | null>(
+    null,
+  );
   const [menu, setMenu] = useState<CSSProperties>();
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -84,6 +98,9 @@ export function BranchPicker({
     setQuery("");
     setError(null);
     setBusy(false);
+    setBlocked(null);
+    setBlockedError(null);
+    setBlockedBusy(null);
     if (restore) onCloseRef.current?.();
   };
 
@@ -134,6 +151,9 @@ export function BranchPicker({
     setQuery("");
     setError(null);
     setBusy(false);
+    setBlocked(null);
+    setBlockedError(null);
+    setBlockedBusy(null);
   }, [enabled]);
 
   const rows = useMemo((): Row[] => {
@@ -170,32 +190,76 @@ export function BranchPicker({
     setActive((i) => (rows.length === 0 ? 0 : Math.min(i, rows.length - 1)));
   }, [rows.length]);
 
-  const run = async (work: () => Promise<string>) => {
-    if (busy) return;
+  const applySwitch = (pending: PendingSwitch) =>
+    pending.kind === "create"
+      ? gitCreateBranch(cwd, pending.name)
+      : gitCheckout(cwd, pending.name, pending.remote);
+
+  const finishSwitch = () => {
+    notifyGitChanged();
+    onChangeRef.current?.();
+    dismiss(true);
+  };
+
+  const failMessage = (err: unknown) =>
+    err instanceof Error ? err.message : String(err);
+
+  const run = async (pending: PendingSwitch) => {
+    if (busy || blocked) return;
     setBusy(true);
     setError(null);
     try {
-      await work();
-      notifyGitChanged();
-      onChangeRef.current?.();
-      dismiss(true);
+      await applySwitch(pending);
+      finishSwitch();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = failMessage(err);
+      if (isCheckoutBlockedByChanges(message)) {
+        setOpen(false);
+        setQuery("");
+        setError(null);
+        setBusy(false);
+        setBlockedError(null);
+        setBlockedBusy(null);
+        setBlocked(pending);
+        return;
+      }
+      setError(message);
       setBusy(false);
       search.current?.focus();
     }
   };
 
+  const resolveBlocked = async (
+    kind: "stash" | "commit",
+    work: () => Promise<unknown>,
+  ) => {
+    if (!blocked || blockedBusy) return;
+    setBlockedBusy(kind);
+    setBlockedError(null);
+    try {
+      await work();
+      await applySwitch(blocked);
+      finishSwitch();
+    } catch (err) {
+      setBlockedError(failMessage(err));
+      setBlockedBusy(null);
+    }
+  };
+
   const pick = (row: Row) => {
     if (row.kind === "create") {
-      void run(() => gitCreateBranch(cwd, row.name));
+      void run({ kind: "create", name: row.name });
       return;
     }
     if (row.branch.current) {
       dismiss(true);
       return;
     }
-    void run(() => gitCheckout(cwd, row.branch.name, row.branch.remote));
+    void run({
+      kind: "checkout",
+      name: row.branch.name,
+      remote: row.branch.remote,
+    });
   };
 
   const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -234,7 +298,7 @@ export function BranchPicker({
           disabled={!enabled}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            if (!enabled) return;
+            if (!enabled || blocked) return;
             if (open) {
               dismiss(true);
               return;
@@ -250,6 +314,32 @@ export function BranchPicker({
           <GitBranch className="size-3.5 shrink-0" strokeWidth={1.5} />
           <span className="truncate font-mono text-[12px]">{label}</span>
         </button>
+        {blocked ? (
+          <SwitchBranchDialog
+            cwd={cwd}
+            branch={blocked.name}
+            creating={blocked.kind === "create"}
+            busy={blockedBusy}
+            error={blockedError}
+            onStash={() => {
+              void resolveBlocked("stash", () =>
+                gitStash(cwd, `WIP before switching to ${blocked.name}`),
+              );
+            }}
+            onCommit={(message) => {
+              void resolveBlocked("commit", async () => {
+                await gitStageAll(cwd);
+                await gitCommit(cwd, message);
+              });
+            }}
+            onCancel={() => {
+              if (blockedBusy) return;
+              setBlocked(null);
+              setBlockedError(null);
+              onCloseRef.current?.();
+            }}
+          />
+        ) : null}
         {open && menu ? (
           <div
             role="dialog"

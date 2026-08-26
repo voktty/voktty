@@ -209,6 +209,20 @@ export function gitCreateBranch(cwd: string, name: string): Promise<string> {
   return invoke<string>("git_create_branch", { cwd, name });
 }
 
+export function gitStash(cwd: string, message?: string): Promise<void> {
+  return invoke<void>("git_stash", { cwd, message: message ?? null });
+}
+
+/** Git refused a checkout because the working tree would be overwritten. */
+export function isCheckoutBlockedByChanges(message: string): boolean {
+  const text = message.toLowerCase();
+  return (
+    text.includes("would be overwritten") ||
+    text.includes("commit your changes or stash") ||
+    text.includes("please move or remove them before")
+  );
+}
+
 /** Drop leftover session-worktree pins. The composer now switches this folder. */
 export function restoreSessionCheckout<
   T extends { cwd: string; branch?: string; worktreeCwd?: string; providerSessionId?: string },
