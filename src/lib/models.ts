@@ -137,6 +137,7 @@ const FAVORITES_KEY = "monocode.favoriteModels";
 const MODEL_PICKER_TAB_KEY = "monocode.modelPickerTab";
 const LAST_MODEL_KEY = "monocode.lastModel";
 const LAST_MODEL_SETTINGS_KEY = "monocode.lastModelSettings";
+const DEFAULT_MODELS_KEY = "monocode.defaultModels";
 
 export type ModelPickerTab = "favorites" | HarnessId;
 
@@ -375,6 +376,51 @@ export function stepModelPickerTab(
   return tabs[(from + delta + tabs.length) % tabs.length] ?? tab;
 }
 
+export function loadDefaultModels(): Partial<Record<HarnessId, string>> {
+  try {
+    const raw = localStorage.getItem(DEFAULT_MODELS_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const out: Partial<Record<HarnessId, string>> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (isHarnessId(key) && typeof value === "string" && value) {
+        out[key] = value;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function saveDefaultModel(harness: HarnessId, model: string) {
+  const next = { ...loadDefaultModels(), [harness]: model };
+  try {
+    localStorage.setItem(DEFAULT_MODELS_KEY, JSON.stringify(next));
+  } catch {
+    // private mode / quota
+  }
+}
+
+/** User-picked model for a provider, else the catalog default. */
+export function preferredModelId(harness: HarnessId): string {
+  const saved = loadDefaultModels()[harness];
+  if (saved) return saved;
+  const last = loadLastModelChoice();
+  if (last?.harness === harness) return last.model;
+  return defaultModelId(harness);
+}
+
+/** Provider + model new conversations should start with. */
+export function defaultSessionChoice(): LastModelChoice {
+  const last = loadLastModelChoice();
+  const harness = last?.harness ?? "cursor";
+  return { harness, model: preferredModelId(harness) };
+}
+
 export function loadLastModelChoice(): LastModelChoice | null {
   try {
     const raw = localStorage.getItem(LAST_MODEL_KEY);
@@ -398,6 +444,7 @@ export function loadLastModelChoice(): LastModelChoice | null {
 }
 
 export function saveLastModelChoice(harness: HarnessId, model: string) {
+  saveDefaultModel(harness, model);
   try {
     localStorage.setItem(LAST_MODEL_KEY, JSON.stringify({ harness, model }));
   } catch {

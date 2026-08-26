@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -37,6 +38,7 @@ export type TabGroupMenuExtraItem = {
   label: string;
   icon: typeof SquarePlus;
   danger?: boolean;
+  sepBefore?: boolean;
 };
 
 type Props = {
@@ -385,14 +387,18 @@ export function TabGroupMenu({
         <>
           <div className="my-1 h-px bg-content/10" />
           {extraItems.map((item) => (
-            <MenuRow
-              key={item.id}
-              item={item}
-              onPick={() => {
-                onExtraPick?.(item.id);
-                onClose();
-              }}
-            />
+            <Fragment key={item.id}>
+              {item.sepBefore ? (
+                <div role="separator" className="my-1 h-px bg-content/10" />
+              ) : null}
+              <MenuRow
+                item={item}
+                onPick={() => {
+                  onExtraPick?.(item.id);
+                  onClose();
+                }}
+              />
+            </Fragment>
           ))}
         </>
       ) : null}

@@ -18,7 +18,6 @@ import {
   modelsFor,
   resolveModel,
   saveFavoriteModels,
-  saveLastModelChoice,
   saveModelPickerTab,
   stepModelPickerTab,
   subscribeModels,
@@ -256,7 +255,6 @@ export function ModelPicker({
 
   const pick = (item: AgentModel) => {
     if (!isHarnessAvailable(item.harness)) return;
-    saveLastModelChoice(item.harness, item.id);
     onChange(item.harness, item.id);
     dismiss(true);
   };

@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { HarnessId } from "./session";
 import {
+  defaultModelId,
+  defaultSessionChoice,
+  loadDefaultModels,
+  loadLastModelChoice,
   loadLastModelSettings,
   mergeModelSettings,
   modelPickerTabs,
+  preferredModelId,
   preferredModelSettings,
+  saveDefaultModel,
+  saveLastModelChoice,
   saveLastModelSettings,
   stepModelPickerTab,
   type AgentModel,
@@ -154,6 +161,57 @@ describe("model settings memory", () => {
     expect(
       preferredModelSettings(opus, { effort: "xhigh", fast: "true" }),
     ).toEqual({ effort: "xhigh", fast: "true" });
+  });
+});
+
+describe("provider defaults", () => {
+  beforeEach(() => {
+    mockLocalStorage();
+  });
+
+  afterEach(() => {
+    mockLocalStorage();
+  });
+
+  it("remembers a model per provider without changing the default provider", () => {
+    saveLastModelChoice("cursor", "cursor:grok-4.6");
+    saveDefaultModel("claude", "claude:opus-5");
+    saveDefaultModel("opencode", "opencode:glm-5");
+    expect(loadLastModelChoice()).toEqual({
+      harness: "cursor",
+      model: "cursor:grok-4.6",
+    });
+    expect(loadDefaultModels()).toEqual({
+      cursor: "cursor:grok-4.6",
+      claude: "claude:opus-5",
+      opencode: "opencode:glm-5",
+    });
+    expect(preferredModelId("claude")).toBe("claude:opus-5");
+    expect(preferredModelId("cursor")).toBe("cursor:grok-4.6");
+  });
+
+  it("falls back to lastModel for the default provider when no map exists", () => {
+    localStorage.setItem(
+      "monocode.lastModel",
+      JSON.stringify({ harness: "cursor", model: "cursor:grok-4.6" }),
+    );
+    expect(preferredModelId("cursor")).toBe("cursor:grok-4.6");
+    expect(preferredModelId("claude")).toBe(defaultModelId("claude"));
+  });
+
+  it("uses the saved default provider and its model for new sessions", () => {
+    saveLastModelChoice("claude", "claude:opus-5");
+    expect(defaultSessionChoice()).toEqual({
+      harness: "claude",
+      model: "claude:opus-5",
+    });
+  });
+
+  it("keeps catalog defaults when nothing is saved", () => {
+    expect(defaultSessionChoice()).toEqual({
+      harness: "cursor",
+      model: defaultModelId("cursor"),
+    });
   });
 });
 

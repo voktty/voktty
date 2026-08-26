@@ -152,11 +152,9 @@ import { notifyDirsChanged } from "./lib/fileTree";
 import { nudgeWatchedFiles } from "./lib/fileWatch";
 import { type EditorNavigationTarget, type OpenFileFn } from "./lib/search";
 import {
-  loadLastModelChoice,
   mergeModelSettings,
   preferredModelSettings,
   resolveModel,
-  saveLastModelChoice,
   saveLastModelSettings,
 } from "./lib/models";
 import { planTitle } from "./lib/plan";
@@ -167,7 +165,10 @@ import {
   rebasePath,
   resolveWorkspacePath,
 } from "./lib/paths";
+import { removeProjectData } from "./lib/projectData";
 import {
+  archiveProject,
+  forgetProject,
   lastProjectPath,
   loadRecents,
   looksLikeProject,
@@ -181,6 +182,7 @@ import {
   canReplaceSessionTitle,
   formatSessionTitle,
   hasPendingApproval,
+  newDefaultSession,
   newSession,
   sessionDisplayTitle,
   titleFromPrompt,
@@ -367,10 +369,7 @@ export default function App({
   );
   const [seed] = useState(() => {
     const cwd = lastProjectPath() ?? "~";
-    const last = loadLastModelChoice();
-    const session = last
-      ? newSession(last.harness, cwd, last.model)
-      : newSession("cursor", cwd);
+    const session = newDefaultSession(cwd);
     const tab = newTab(session.id);
     return { session, tab };
   });
@@ -1004,13 +1003,7 @@ export default function App({
   const onNew = useCallback(() => {
     setSearchViewOpen(false);
     const cwd = active?.cwd ?? sessionDefaults?.cwd ?? projectCwd;
-    const session = newSession(
-      sessionDefaults?.harness ?? "claude",
-      cwd,
-      sessionDefaults?.model,
-      sessionDefaults?.runtimeMode,
-      sessionDefaults?.modelSettings,
-    );
+    const session = newDefaultSession(cwd, sessionDefaults?.runtimeMode);
     const tab = newTab(session.id);
     setSessions((prev) => [...prev, session]);
     appendTab(tab, cwd);
@@ -1019,23 +1012,17 @@ export default function App({
   }, [
     active?.cwd,
     appendTab,
-    sessionDefaults?.harness,
     sessionDefaults?.cwd,
-    sessionDefaults?.model,
     sessionDefaults?.runtimeMode,
-    sessionDefaults?.modelSettings,
     projectCwd,
   ]);
 
   const onSplit = useCallback(
     (dir: SplitDir) => {
       if (!activeTab) return;
-      const session = newSession(
-        sessionDefaults?.harness ?? "claude",
+      const session = newDefaultSession(
         sessionDefaults?.cwd ?? projectCwd,
-        sessionDefaults?.model,
         sessionDefaults?.runtimeMode,
-        sessionDefaults?.modelSettings,
       );
       setSessions((prev) => [...prev, session]);
       setTabs((prev) =>
@@ -1050,7 +1037,12 @@ export default function App({
       );
       setComposerFocused(true);
     },
-    [activeTab, projectCwd, sessionDefaults],
+    [
+      activeTab,
+      projectCwd,
+      sessionDefaults?.cwd,
+      sessionDefaults?.runtimeMode,
+    ],
   );
 
   const focusProjectTerminal = useCallback(() => {
@@ -1346,13 +1338,7 @@ export default function App({
           )
         : undefined;
       const cwd = sessionInTab?.cwd ?? active?.cwd ?? projectCwd;
-      const session = newSession(
-        sessionDefaults?.harness ?? "claude",
-        cwd,
-        sessionDefaults?.model,
-        sessionDefaults?.runtimeMode,
-        sessionDefaults?.modelSettings,
-      );
+      const session = newDefaultSession(cwd, sessionDefaults?.runtimeMode);
       const tab = newTab(session.id);
       setSessions((prev) => [...prev, session]);
       setTabs((prev) => insertTabInGroup(prev, tab, groupId));
@@ -1362,11 +1348,7 @@ export default function App({
     [
       active?.cwd,
       projectCwd,
-      sessionDefaults?.harness,
-      sessionDefaults?.cwd,
-      sessionDefaults?.model,
       sessionDefaults?.runtimeMode,
-      sessionDefaults?.modelSettings,
     ],
   );
 
@@ -2385,6 +2367,119 @@ export default function App({
     if (path) onSelectProject(path);
   }, [onSelectProject]);
 
+  const onRemoveProject = useCallback(
+    (path: string, options: { purgeData: boolean }) => {
+      const normalized = normalizeProjectPath(path);
+      const wasCurrent = sameProjectPath(projectCwdRef.current, normalized);
+      const remaining = options.purgeData
+        ? forgetProject(normalized)
+        : archiveProject(normalized);
+      setRecents(remaining);
+
+      const tabs = tabsRef.current;
+      const sessions = sessionsRef.current;
+      const projectTabs = filterTabsForProject(tabs, sessions, normalized);
+      const projectTabIds = new Set(projectTabs.map((tab) => tab.id));
+      const projectSessions = sessions.filter((session) =>
+        sameProjectPath(session.cwd, normalized),
+      );
+      const projectSessionIds = new Set(
+        projectSessions.map((session) => session.id),
+      );
+
+      if (options.purgeData) {
+        for (const session of projectSessions) {
+          pendingPersist.current.delete(session.id);
+          if (session.busy) {
+            turnGen.current.set(
+              session.id,
+              (turnGen.current.get(session.id) ?? 0) + 1,
+            );
+            for (const id of sessionChildHarnesses(session)) {
+              void cancelHarnessTurn(id, session.id);
+            }
+          }
+          for (const id of sessionChildHarnesses(session)) {
+            void forgetHarnessSession(id, session.id);
+          }
+          lastPersisted.current.delete(session.id);
+        }
+        void removeProjectData(normalized);
+      } else {
+        for (const session of projectSessions) {
+          if (session.busy) continue;
+          persistSession(session);
+          pendingPersist.current.delete(session.id);
+          for (const id of sessionChildHarnesses(session)) {
+            void forgetHarnessSession(id, session.id);
+          }
+        }
+      }
+
+      let nextTabs = tabs.filter((tab) => !projectTabIds.has(tab.id));
+      let nextSessions = sessions.filter((session) => {
+        if (!projectSessionIds.has(session.id)) return true;
+        return !options.purgeData && session.busy;
+      });
+      let nextActiveTabId = activeTabIdRef.current;
+
+      if (nextTabs.length === 0) {
+        const fallback = nextSessions[0];
+        const session = newDefaultSession("~", fallback?.runtimeMode);
+        const tab = newTab(session.id);
+        nextSessions = [...nextSessions, session];
+        nextTabs = [tab];
+        nextActiveTabId = tab.id;
+      } else if (projectTabIds.has(nextActiveTabId)) {
+        nextActiveTabId = nextTabs[0]?.id ?? nextActiveTabId;
+      }
+
+      sessionsRef.current = nextSessions;
+      tabsRef.current = nextTabs;
+      activeTabIdRef.current = nextActiveTabId;
+      setSessions(nextSessions);
+      setTabs(nextTabs);
+      if (nextActiveTabId !== activeTabId) {
+        setActiveTabId(nextActiveTabId);
+      }
+      setDirtyFiles((prev) => {
+        const updated = new Set(prev);
+        for (const tab of projectTabs) {
+          for (const file of [
+            ...tab.editorPanes.flatMap((pane) => pane.files),
+            ...(tab.terminalPanes ?? []).flatMap((pane) => pane.files),
+          ]) {
+            updated.delete(file.id);
+          }
+        }
+        return updated;
+      });
+      setProjectTerminals((prev) =>
+        prev.filter((dock) => !sameProjectPath(dock.projectPath, normalized)),
+      );
+
+      if (wasCurrent) {
+        const next = remaining.find((item) => looksLikeProject(item.path));
+        if (next) {
+          onSelectProject(next.path);
+          setProjectCwd(next.path);
+        } else {
+          setProjectCwd("~");
+          setComposerFocused(true);
+        }
+      }
+    },
+    [activeTabId, onSelectProject, persistSession],
+  );
+
+  const onRestoreProject = useCallback(
+    (path: string) => {
+      setRecents(rememberProject(path));
+      onSelectProject(path);
+    },
+    [onSelectProject],
+  );
+
   const onFileMoved = useCallback((from: string, to: string) => {
     invalidateProjectFiles();
     setTabs((prev) =>
@@ -2535,7 +2630,6 @@ export default function App({
         resolved,
         current.modelSettings,
       );
-      saveLastModelChoice(harness, resolved.id);
       const plan = planComposerSwitch(current, harness);
       if (plan.kind === "empty") {
         void forgetHarnessSession(plan.forget, sessionId);
@@ -3383,6 +3477,7 @@ export default function App({
         )}
         onSelectProject={deckLayout ? onSelectProject : undefined}
         onOpenProject={deckLayout ? pickProject : undefined}
+        onRemoveProject={deckLayout ? onRemoveProject : undefined}
         onNew={deckLayout ? onNew : undefined}
         onSearch={onOpenSearch}
         onGoToFile={deckLayout ? onGoToFile : undefined}
@@ -3612,6 +3707,10 @@ export default function App({
             onOpenSession={onOpenArchivedSession}
             onArchiveSession={onArchiveHistorySession}
             onDeleteSession={onDeleteHistorySession}
+            onRestoreProject={onRestoreProject}
+            onDeleteProject={(path) =>
+              onRemoveProject(path, { purgeData: true })
+            }
           />
         ) : null}
       </div>

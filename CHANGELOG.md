@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Project rail context menu: Archive takes a project off the rail and keeps its conversations; Delete asks first, then also removes saved chats. Archived projects show up in Settings → Archive, where you can restore them to the rail or delete them. The folder on disk is left alone either way.
+
 ## [0.1.7] - 2026-08-26
 
 ### Added

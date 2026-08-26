@@ -39,7 +39,7 @@ export const SETTINGS_SECTIONS: {
   {
     id: "archive",
     label: "Archive",
-    description: "Conversations you have archived, and where they show up.",
+    description: "Projects and conversations you have archived.",
   },
 ];
 

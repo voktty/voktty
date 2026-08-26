@@ -1,10 +1,43 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  archiveProject,
+  forgetProject,
+  loadArchivedProjects,
+  loadPinnedProjects,
+  loadProjectRailOrder,
+  loadRecents,
   looksLikeProject,
   projectRailItems,
   projectRailSections,
+  rememberProject,
+  savePinnedProjects,
+  saveProjectRailOrder,
   syncProjectRailOrder,
 } from "./recents";
+
+function mockLocalStorage() {
+  const data = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      data.set(key, value);
+    },
+    removeItem: (key: string) => {
+      data.delete(key);
+    },
+    clear: () => {
+      data.clear();
+    },
+    key: (index: number) => [...data.keys()][index] ?? null,
+    get length() {
+      return data.size;
+    },
+  };
+  Object.defineProperty(globalThis, "localStorage", {
+    value: storage,
+    configurable: true,
+  });
+}
 
 describe("looksLikeProject", () => {
   it("rejects the home directory so it is never indexed", () => {
@@ -86,6 +119,73 @@ describe("projectRailItems", () => {
         (item) => item.path,
       ),
     ).toEqual(["/tmp/app"]);
+  });
+});
+
+describe("forgetProject", () => {
+  beforeEach(() => {
+    mockLocalStorage();
+  });
+
+  afterEach(() => {
+    mockLocalStorage();
+  });
+
+  it("drops the recent entry, rail order slot, and pin", () => {
+    rememberProject("/tmp/keep");
+    rememberProject("/tmp/gone");
+    saveProjectRailOrder(["/tmp/keep", "/tmp/gone"]);
+    savePinnedProjects(["/tmp/gone"]);
+
+    expect(forgetProject("/tmp/gone").map((item) => item.path)).toEqual([
+      "/tmp/keep",
+    ]);
+    expect(loadRecents().map((item) => item.path)).toEqual(["/tmp/keep"]);
+    expect(loadProjectRailOrder()).toEqual(["/tmp/keep"]);
+    expect(loadPinnedProjects()).toEqual([]);
+  });
+});
+
+describe("archiveProject", () => {
+  beforeEach(() => {
+    mockLocalStorage();
+  });
+
+  afterEach(() => {
+    mockLocalStorage();
+  });
+
+  it("files the project in the archive and takes it off the rail", () => {
+    rememberProject("/tmp/keep");
+    rememberProject("/tmp/gone");
+    savePinnedProjects(["/tmp/gone"]);
+
+    expect(archiveProject("/tmp/gone").map((item) => item.path)).toEqual([
+      "/tmp/keep",
+    ]);
+    expect(loadArchivedProjects().map((item) => item.path)).toEqual([
+      "/tmp/gone",
+    ]);
+    expect(loadPinnedProjects()).toEqual([]);
+    expect(loadRecents().map((item) => item.path)).toEqual(["/tmp/keep"]);
+  });
+
+  it("opening a project again restores it from the archive", () => {
+    rememberProject("/tmp/gone");
+    archiveProject("/tmp/gone");
+    expect(loadArchivedProjects()).toHaveLength(1);
+
+    rememberProject("/tmp/gone");
+    expect(loadArchivedProjects()).toEqual([]);
+    expect(loadRecents().map((item) => item.path)).toEqual(["/tmp/gone"]);
+  });
+
+  it("delete drops an archived project instead of restoring it", () => {
+    rememberProject("/tmp/gone");
+    archiveProject("/tmp/gone");
+    forgetProject("/tmp/gone");
+    expect(loadArchivedProjects()).toEqual([]);
+    expect(loadRecents()).toEqual([]);
   });
 });
 

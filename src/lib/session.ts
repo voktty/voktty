@@ -1,5 +1,10 @@
 import type { ContextUsage } from "./contextUsage";
-import { defaultModelId, preferredModelSettings, resolveModel } from "./models";
+import {
+  defaultSessionChoice,
+  preferredModelId,
+  preferredModelSettings,
+  resolveModel,
+} from "./models";
 
 export type HarnessId =
   | "claude"
@@ -191,7 +196,7 @@ export function newSession(
   runtimeMode: RuntimeMode = DEFAULT_RUNTIME_MODE,
   modelSettings?: Record<string, string>,
 ): Session {
-  const resolved = resolveModel(harness, model ?? defaultModelId(harness));
+  const resolved = resolveModel(harness, model ?? preferredModelId(harness));
   return {
     id: crypto.randomUUID(),
     harness,
@@ -202,6 +207,15 @@ export function newSession(
     cwd,
     blocks: [],
   };
+}
+
+/** New conversation using the Providers defaults. */
+export function newDefaultSession(
+  cwd = "~",
+  runtimeMode: RuntimeMode = DEFAULT_RUNTIME_MODE,
+): Session {
+  const choice = defaultSessionChoice();
+  return newSession(choice.harness, cwd, choice.model, runtimeMode);
 }
 
 /** First line of a prompt, truncated for the tab strip. */

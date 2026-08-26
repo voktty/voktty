@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from "react";
 import { HarnessIcon } from "../chrome/HarnessIcon";
+import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
 import { WindowControls } from "../chrome/WindowControls";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
@@ -64,15 +65,22 @@ import {
 import {
   defaultModelId,
   getModelSnapshot,
+  loadDefaultModels,
   loadLastModelChoice,
   modelsFor,
   resolveModel,
+  saveDefaultModel,
   saveLastModelChoice,
   subscribeModels,
 } from "../lib/models";
-import { projectName } from "../lib/paths";
+import { prettyCwd, projectName } from "../lib/paths";
 import { IS_MAC } from "../lib/platform";
-import { looksLikeProject } from "../lib/recents";
+import {
+  loadArchivedProjects,
+  looksLikeProject,
+  subscribeArchivedProjects,
+  type ArchivedProject,
+} from "../lib/recents";
 import {
   HARNESSES,
   HARNESS_TITLE,
@@ -84,6 +92,10 @@ import {
   saveSessionSidebarFilters,
 } from "../lib/sessionFilters";
 import type { SessionSummary } from "../lib/sessionStore";
+import {
+  loadTabGroupLabels,
+  resolveTabGroupLabel,
+} from "../lib/tabGroups";
 import {
   filterKeybindings,
   KEYBINDINGS,
@@ -107,6 +119,8 @@ type Props = {
   onOpenSession: (sessionId: string) => void;
   onArchiveSession: (sessionId: string, archived: boolean) => void;
   onDeleteSession: (sessionId: string) => void;
+  onRestoreProject?: (path: string) => void;
+  onDeleteProject?: (path: string) => void;
 };
 
 export function SettingsView({
@@ -118,6 +132,8 @@ export function SettingsView({
   onOpenSession,
   onArchiveSession,
   onDeleteSession,
+  onRestoreProject,
+  onDeleteProject,
 }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const onCloseRef = useRef(onClose);
@@ -197,6 +213,8 @@ export function SettingsView({
               onOpenSession={onOpenSession}
               onArchiveSession={onArchiveSession}
               onDeleteSession={onDeleteSession}
+              onRestoreProject={onRestoreProject}
+              onDeleteProject={onDeleteProject}
             />
           ) : null}
         </div>
@@ -523,13 +541,24 @@ function ProvidersPage() {
     getHarnessAvailabilitySnapshot,
   );
   const [choice, setChoice] = useState(loadLastModelChoice);
+  const [defaultModels, setDefaultModels] = useState(loadDefaultModels);
 
   useEffect(() => {
     void probeHarnessAvailability();
   }, []);
 
+  const onModelChange = (harness: HarnessId, model: string) => {
+    saveDefaultModel(harness, model);
+    setDefaultModels((prev) => ({ ...prev, [harness]: model }));
+    if (choice?.harness === harness) {
+      saveLastModelChoice(harness, model);
+      setChoice({ harness, model });
+    }
+  };
+
   const onDefault = (harness: HarnessId, model: string) => {
     saveLastModelChoice(harness, model);
+    setDefaultModels((prev) => ({ ...prev, [harness]: model }));
     setChoice({ harness, model });
   };
 
@@ -537,16 +566,20 @@ function ProvidersPage() {
     <>
       <p className="pb-2 text-[12px] leading-relaxed text-content/45">
         A provider is listed as installed once its CLI is found on your PATH.
+        The model beside each provider is what new conversations use when that
+        provider is selected; Use by default picks the provider itself.
       </p>
       {HARNESSES.map((harness) => (
         <ProviderRow
           key={harness}
           harness={harness}
           selectedModel={
-            choice?.harness === harness ? choice.model : defaultModelId(harness)
+            defaultModels[harness] ??
+            (choice?.harness === harness ? choice.model : defaultModelId(harness))
           }
           isDefault={choice?.harness === harness}
           onDefault={onDefault}
+          onModelChange={onModelChange}
         />
       ))}
     </>
@@ -558,24 +591,18 @@ function ProviderRow({
   selectedModel,
   isDefault,
   onDefault,
+  onModelChange,
 }: {
   harness: HarnessId;
   selectedModel: string;
   isDefault: boolean;
   onDefault: (harness: HarnessId, model: string) => void;
+  onModelChange: (harness: HarnessId, model: string) => void;
 }) {
   const models = modelsFor(harness);
   const available = isHarnessAvailable(harness);
-  const [model, setModel] = useState(selectedModel);
   const current =
-    models.length > 0
-      ? resolveModel(harness, isDefault ? selectedModel : model)
-      : null;
-
-  const onModelChange = (next: string) => {
-    setModel(next);
-    if (isDefault) onDefault(harness, next);
-  };
+    models.length > 0 ? resolveModel(harness, selectedModel) : null;
 
   return (
     <Row
@@ -600,7 +627,7 @@ function ProviderRow({
         <Select
           label={`${HARNESS_TITLE[harness]} model`}
           value={current.id}
-          onChange={onModelChange}
+          onChange={(next) => onModelChange(harness, next)}
           options={models.map((item) => ({
             value: item.id,
             label: item.name,
@@ -617,20 +644,43 @@ function ProviderRow({
   );
 }
 
+function useArchivedProjects(): ArchivedProject[] {
+  const [items, setItems] = useState(loadArchivedProjects);
+  useEffect(
+    () => subscribeArchivedProjects(() => setItems(loadArchivedProjects())),
+    [],
+  );
+  return items;
+}
+
+function archivedProjectLabel(path: string): string {
+  return resolveTabGroupLabel(
+    projectName(path),
+    loadTabGroupLabels(),
+    projectName(path),
+  );
+}
+
 function ArchivePage({
   cwd,
   sessions,
   onOpenSession,
   onArchiveSession,
   onDeleteSession,
+  onRestoreProject,
+  onDeleteProject,
 }: {
   cwd: string;
   sessions: SessionSummary[];
   onOpenSession: (sessionId: string) => void;
   onArchiveSession: (sessionId: string, archived: boolean) => void;
   onDeleteSession: (sessionId: string) => void;
+  onRestoreProject?: (path: string) => void;
+  onDeleteProject?: (path: string) => void;
 }) {
   const [filters, setFilters] = useState(loadSessionSidebarFilters);
+  const [deleting, setDeleting] = useState<ArchivedProject | null>(null);
+  const archivedProjects = useArchivedProjects();
   const archived = useMemo(
     () =>
       sessions
@@ -647,6 +697,45 @@ function ArchivePage({
 
   return (
     <>
+      <Heading title="Archived projects" first />
+      {archivedProjects.length === 0 ? (
+        <p className="py-3 text-[12px] text-content/45">
+          Archive a project from the rail to keep its chats without listing it
+          in the sidebar.
+        </p>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-content/10">
+          {archivedProjects.map((project) => (
+            <div
+              key={project.path}
+              className="flex items-center gap-3 border-b border-content/5 px-3 py-2 last:border-b-0"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px]">
+                  {archivedProjectLabel(project.path)}
+                </div>
+                <div className="truncate text-[11px] text-content/40">
+                  {prettyCwd(project.path)}
+                </div>
+              </div>
+              {onRestoreProject ? (
+                <SecondaryButton onClick={() => onRestoreProject(project.path)}>
+                  Restore
+                </SecondaryButton>
+              ) : null}
+              {onDeleteProject ? (
+                <SecondaryButton
+                  danger
+                  onClick={() => setDeleting(project)}
+                >
+                  Delete
+                </SecondaryButton>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
       <Row
         label="Show archived in the sidebar"
         description="Keep archived conversations listed alongside the active ones."
@@ -710,6 +799,18 @@ function ArchivePage({
           ))}
         </div>
       )}
+
+      {deleting ? (
+        <RemoveProjectDialog
+          name={archivedProjectLabel(deleting.path)}
+          path={deleting.path}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => {
+            onDeleteProject?.(deleting.path);
+            setDeleting(null);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -747,9 +848,13 @@ function PageHeader({
   );
 }
 
-function Heading({ title }: { title: string }) {
+function Heading({ title, first = false }: { title: string; first?: boolean }) {
   return (
-    <h2 className="pb-1 pt-8 text-[15px] font-semibold text-content">
+    <h2
+      className={`pb-1 text-[15px] font-semibold text-content ${
+        first ? "" : "pt-8"
+      }`}
+    >
       {title}
     </h2>
   );

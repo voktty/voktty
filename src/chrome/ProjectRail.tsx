@@ -1,4 +1,5 @@
 import {
+  Archive,
   FolderOpen,
   MoreHorizontal,
   Pin,
@@ -85,12 +86,10 @@ function projectMenuExtraItems(
     { id: "reveal", label: REVEAL_LABEL, icon: FolderOpen },
   ];
   if (canRemove) {
-    items.push({
-      id: "remove",
-      label: "Remove project",
-      icon: Trash2,
-      danger: true,
-    });
+    items.push(
+      { id: "archive", label: "Archive", icon: Archive, sepBefore: true },
+      { id: "delete", label: "Delete", icon: Trash2, danger: true },
+    );
   }
   return items;
 }
@@ -374,7 +373,9 @@ export function ProjectRail({
     const { path, projectKey } = projectMenu;
     if (action === "pin" || action === "unpin") onTogglePin(path);
     else if (action === "reveal") void revealPath(path);
-    else if (action === "remove") {
+    else if (action === "archive") {
+      onRemoveProject?.(path, { purgeData: false });
+    } else if (action === "delete") {
       setRemoving({
         path,
         name: resolveTabGroupLabel(projectKey, groupLabels, basename(path)),
@@ -382,9 +383,9 @@ export function ProjectRail({
     }
   };
 
-  const onConfirmRemove = (purgeData: boolean) => {
+  const onConfirmDelete = () => {
     if (!removing) return;
-    onRemoveProject?.(removing.path, { purgeData });
+    onRemoveProject?.(removing.path, { purgeData: true });
     setRemoving(null);
   };
 
@@ -559,7 +560,7 @@ export function ProjectRail({
         <RemoveProjectDialog
           name={removing.name}
           path={removing.path}
-          onConfirm={onConfirmRemove}
+          onConfirm={onConfirmDelete}
           onCancel={() => setRemoving(null)}
         />
       ) : null}

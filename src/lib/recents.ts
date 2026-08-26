@@ -3,11 +3,18 @@ import { prettyCwd } from "./paths";
 const KEY = "monocode.recentProjects";
 const RAIL_ORDER_KEY = "monocode.projectRailOrder";
 const RAIL_PINNED_KEY = "monocode.projectRailPinned";
+const ARCHIVED_KEY = "monocode.archivedProjects";
+const ARCHIVED_CHANGED = "monocode:archived-projects-changed";
 const MAX = 20;
 
 export type RecentProject = {
   path: string;
   openedAt: number;
+};
+
+export type ArchivedProject = {
+  path: string;
+  archivedAt: number;
 };
 
 export function normalizeProjectPath(path: string): string {
@@ -56,6 +63,7 @@ function save(next: RecentProject[]) {
 export function rememberProject(path: string): RecentProject[] {
   const normalized = normalize(path);
   if (normalized === "~") return loadRecents();
+  dropArchived(normalized);
   const prev = loadRecents().filter((p) => p.path !== normalized);
   const next = [{ path: normalized, openedAt: Date.now() }, ...prev].slice(
     0,
@@ -66,7 +74,7 @@ export function rememberProject(path: string): RecentProject[] {
 }
 
 /** Drops a project from the rail: its recent entry, saved order slot, and pin. */
-export function forgetProject(path: string): RecentProject[] {
+function dropFromRail(path: string): RecentProject[] {
   const normalized = normalize(path);
   const next = loadRecents().filter((item) => item.path !== normalized);
   save(next);
@@ -77,6 +85,74 @@ export function forgetProject(path: string): RecentProject[] {
     loadPinnedProjects().filter((entry) => entry !== normalized),
   );
   return next;
+}
+
+/** Removes a project from the rail and from the archive (Delete). */
+export function forgetProject(path: string): RecentProject[] {
+  dropArchived(path);
+  return dropFromRail(path);
+}
+
+/** Removes a project from the rail and files it in the archive (Archive). */
+export function archiveProject(path: string): RecentProject[] {
+  const normalized = normalize(path);
+  if (!looksLikeProject(normalized)) return loadRecents();
+  const recents = dropFromRail(normalized);
+  const rest = loadArchivedProjects().filter((item) => item.path !== normalized);
+  saveArchived([{ path: normalized, archivedAt: Date.now() }, ...rest]);
+  return recents;
+}
+
+export function loadArchivedProjects(): ArchivedProject[] {
+  try {
+    const raw = localStorage.getItem(ARCHIVED_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const out: ArchivedProject[] = [];
+    const seen = new Set<string>();
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const rec = item as { path?: unknown; archivedAt?: unknown };
+      if (typeof rec.path !== "string" || !rec.path) continue;
+      const path = normalize(rec.path);
+      if (seen.has(path) || !looksLikeProject(path)) continue;
+      seen.add(path);
+      const archivedAt =
+        typeof rec.archivedAt === "number" && Number.isFinite(rec.archivedAt)
+          ? rec.archivedAt
+          : 0;
+      out.push({ path, archivedAt });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export function subscribeArchivedProjects(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(ARCHIVED_CHANGED, onChange);
+  return () => window.removeEventListener(ARCHIVED_CHANGED, onChange);
+}
+
+function saveArchived(next: ArchivedProject[]) {
+  try {
+    localStorage.setItem(ARCHIVED_KEY, JSON.stringify(next));
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(ARCHIVED_CHANGED));
+  }
+}
+
+function dropArchived(path: string) {
+  const normalized = normalize(path);
+  const prev = loadArchivedProjects();
+  const next = prev.filter((item) => item.path !== normalized);
+  if (next.length === prev.length) return;
+  saveArchived(next);
 }
 
 /** Most recently opened project, if any. Used to restore the folder on launch. */
