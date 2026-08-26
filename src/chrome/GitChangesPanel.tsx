@@ -6,6 +6,7 @@ import {
   CloudUpload,
   ExternalLink,
   GitBranch,
+  GitCompare,
   GitPullRequest,
   Loader,
   Minus,
@@ -81,11 +82,17 @@ export function GitChangesPanel({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex h-9 shrink-0 items-center gap-2 border-b border-content/10 px-3">
-        <span className="text-[12px] font-medium text-content">Changes</span>
-        <DiffCounts
-          additions={index?.additions ?? 0}
-          deletions={index?.deletions ?? 0}
-        />
+        {(index?.additions ?? 0) > 0 || (index?.deletions ?? 0) > 0 ? (
+          <DiffCounts
+            additions={index?.additions ?? 0}
+            deletions={index?.deletions ?? 0}
+          />
+        ) : (
+          <GitCompare
+            className="size-3.5 shrink-0 text-content/50"
+            strokeWidth={1.75}
+          />
+        )}
         {index?.branch ? (
           <span className="ml-auto flex min-w-0 items-center gap-1 text-[11px] text-content/50">
             <GitBranch className="size-3 shrink-0" strokeWidth={1.75} />

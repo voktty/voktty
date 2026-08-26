@@ -2,6 +2,7 @@ import {
   Check,
   CircleAlert,
   GitBranch,
+  GitCompare,
   ListFilter,
   Plus,
   Search,
@@ -497,10 +498,13 @@ function SidebarComponent({
     onTabChange(itemId);
   };
 
+  const changeAdditions = changeStats?.additions ?? 0;
+  const changeDeletions = changeStats?.deletions ?? 0;
+  const hasChangeStats = changeAdditions > 0 || changeDeletions > 0;
+
   const workspaceTabItems = visibleTabs.map((itemId, index) => {
     const active = tab === itemId;
-    const changeCount = changeStats?.files ?? 0;
-    const showChangeBadge = itemId === "changes" && changeCount > 0;
+    const isChangesTab = itemId === "changes";
     const draggingTab = sortable.draggingId === itemId;
     const showStart =
       sortable.draggingId &&
@@ -517,8 +521,8 @@ function SidebarComponent({
         key={itemId}
         ref={(el) => sortable.setItemRef(itemId, el)}
         className={`relative flex min-w-0 flex-1 touch-none items-stretch ${
-          draggingTab ? "opacity-40" : ""
-        } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
+          index > 0 ? "border-l border-content/10" : ""
+        } ${draggingTab ? "opacity-40" : ""} ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
         onPointerDown={(event) => {
           if (event.button !== 0) return;
           onTabPick(itemId);
@@ -535,6 +539,19 @@ function SidebarComponent({
           type="button"
           role="tab"
           aria-selected={active}
+          aria-label={
+            isChangesTab
+              ? hasChangeStats
+                ? [
+                    "Changes",
+                    changeAdditions > 0 ? `+${changeAdditions}` : "",
+                    changeDeletions > 0 ? `-${changeDeletions}` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                : "Changes"
+              : undefined
+          }
           data-tauri-drag-region="false"
           onClick={() => {
             if (sortable.consumeClick()) return;
@@ -550,21 +567,18 @@ function SidebarComponent({
               : "text-content/50 hover:text-content"
           }`}
         >
-          <span className="relative inline-block min-w-0 max-w-full">
-            <span
-              className={`block truncate${showChangeBadge ? " pr-2.5" : ""}`}
-            >
-              {TAB_LABELS[itemId]}
-            </span>
-            {showChangeBadge ? (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute top-0 left-[calc(100%-4px)] grid min-h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[7px] font-semibold leading-none text-white tabular-nums"
-              >
-                {changeCount > 99 ? "99+" : changeCount}
-              </span>
-            ) : null}
-          </span>
+          {isChangesTab ? (
+            hasChangeStats ? (
+              <DiffStat
+                additions={changeAdditions}
+                deletions={changeDeletions}
+              />
+            ) : (
+              <GitCompare className="size-3.5 shrink-0" strokeWidth={1.75} />
+            )
+          ) : (
+            <span className="block truncate">{TAB_LABELS[itemId]}</span>
+          )}
           {active ? (
             <span className="absolute inset-x-0 bottom-0 h-px bg-content" />
           ) : null}

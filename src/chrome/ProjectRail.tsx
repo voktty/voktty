@@ -828,12 +828,7 @@ function ProjectCard({
           <span className={nameClassName}>{name}</span>
         )}
         {hasChanges ? (
-          <span className="flex shrink-0 items-center gap-1.5 group-hover:hidden">
-            {files > 0 ? (
-              <span className="text-[11px] tabular-nums text-content/45">
-                {files > 99 ? "99+" : files}
-              </span>
-            ) : null}
+          <span className="shrink-0 group-hover:hidden">
             <ProjectDiffStat additions={additions} deletions={deletions} />
           </span>
         ) : null}

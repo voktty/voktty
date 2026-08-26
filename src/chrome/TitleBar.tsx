@@ -324,9 +324,7 @@ function TitleTabItem({
         itemRef?.(el);
       }}
       className={`group @container relative flex h-full touch-none self-stretch ${
-        deckLayout
-          ? "min-w-56 shrink-0 grow basis-56"
-          : "w-56 min-w-28 shrink"
+        deckLayout ? "min-w-56 shrink-0 grow basis-56" : "w-56 min-w-28 shrink"
       } ${
         showLeftBorder ? "border-l border-content/10" : ""
       } ${showRightBorder ? "border-r border-content/10" : ""} ${
@@ -780,7 +778,7 @@ export function TabVisitNav({
   panelLabel?: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-0.5">
+    <div className="flex shrink-0 items-center">
       <IconButton
         label={`Back (${MOD}[)`}
         disabled={!canGoBack}
