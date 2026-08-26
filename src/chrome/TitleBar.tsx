@@ -64,7 +64,6 @@ import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TerminalSpinner } from "./TerminalSpinner";
-import { OpacityControl } from "./OpacityControl";
 import { WindowControls } from "./WindowControls";
 import { IS_MAC, MOD } from "../lib/platform";
 import type { RecentProject } from "../lib/recents";
@@ -1219,12 +1218,10 @@ function TitleBarComponent({
             <Terminal className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
-        {deckLayout && !projectRailOpen && onOpenSettings ? (
-          <IconButton label="Settings" onClick={onOpenSettings}>
+        {onOpenSettings && (!deckLayout || !projectRailOpen) ? (
+          <IconButton label={`Settings (${MOD},)`} onClick={onOpenSettings}>
             <Settings className="size-3.5" strokeWidth={1.75} />
           </IconButton>
-        ) : IS_MAC && !deckLayout ? (
-          <OpacityControl />
         ) : null}
       </div>
       {!IS_MAC ? <WindowControls /> : null}

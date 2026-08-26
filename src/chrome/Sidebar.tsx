@@ -58,6 +58,7 @@ import { FileTree } from "./FileTree";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { ProjectRail } from "./ProjectRail";
+import { SettingsNav } from "./SettingsRail";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
@@ -266,10 +267,14 @@ function SidebarComponent({
   // project rail itself is collapsed.
   const railVisible = showProjectRail && (projectRailOpen || settingsOpen);
   const inProject = looksLikeProject(cwd);
+  const classicSettings = settingsOpen && !deckLayout;
   // A blank session has no project to browse, so the shell stands alone until
-  // one is picked — whether or not the rail is open.
+  // one is picked — whether or not the rail is open. Classic settings keep the
+  // sidebar so it can host the section nav the rail would otherwise carry.
   const sidebarVisible =
-    open && !searchActive && !settingsOpen && !(deckLayout && !inProject);
+    open &&
+    !searchActive &&
+    (classicSettings || (!settingsOpen && !(deckLayout && !inProject)));
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
   const changeStats = useProjectDiffStats(gitRoot, open);
   const groupLogos = useTabGroupLogos();
@@ -658,19 +663,29 @@ function SidebarComponent({
               />
             </div>
           )}
-          <div
-            role="tablist"
-            aria-label="Workspace"
-            className={`flex shrink-0 overflow-visible border-content/10 ${
-              // Mirrors the rail-open header stack: each row owns its own
-              // bottom border, so the seams land on the title bar's.
-              deckLayout ? "h-9 items-stretch border-b" : "border-y"
-            }`}
-          >
-            {workspaceTabItems}
-          </div>
+          {classicSettings ? null : (
+            <div
+              role="tablist"
+              aria-label="Workspace"
+              className={`flex shrink-0 overflow-visible border-content/10 ${
+                // Mirrors the rail-open header stack: each row owns its own
+                // bottom border, so the seams land on the title bar's.
+                deckLayout ? "h-9 items-stretch border-b" : "border-y"
+              }`}
+            >
+              {workspaceTabItems}
+            </div>
+          )}
         </>
       )}
+      {classicSettings ? (
+        <SettingsNav
+          section={settingsSection}
+          onSelect={(next) => onSelectSettingsSection?.(next)}
+          onClose={() => onCloseSettings?.()}
+        />
+      ) : (
+        <>
       <div
         className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
           tab === "files" ? "" : "hidden"
@@ -867,6 +882,8 @@ function SidebarComponent({
         </div>
       ) : null}
       {!deckLayout ? <SidebarUpdate variant="classic" /> : null}
+        </>
+      )}
       {sessionMenu ? (
         <ExplorerMenu
           x={sessionMenu.x}

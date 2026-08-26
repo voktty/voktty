@@ -3204,8 +3204,6 @@ export default function App({
       if (layout === "classic") {
         setSidebarTab((tab) => (tab === "changes" ? "sessions" : tab));
         setProjectTerminalFocused(false);
-        // Classic has no rail to host the settings nav, so the page closes.
-        setSettingsOpen(false);
       }
     };
     window.addEventListener(LAYOUT_CHANGE_EVENT, onLayoutChange);
@@ -3437,10 +3435,8 @@ export default function App({
       listen("go_to_file", () => actions.current.onGoToFile()),
       listen("open_search", () => actions.current.onOpenSearch()),
       listen("open_settings", () => actions.current.openSettings()),
-      // Deck mode drops the appearance popover, so the menu item lands on the
-      // settings page instead.
       listen("sidebar_opacity", () => {
-        if (deckLayoutRef.current) actions.current.openSettings("appearance");
+        actions.current.openSettings("appearance");
       }),
       listen("find_in_project", () => actions.current.onFindInProject()),
       listen("find", () => {
@@ -3491,7 +3487,7 @@ export default function App({
       <Sidebar
         cwd={sidebarCwd}
         gitCwd={gitCwd}
-        open={deckLayout || sidebarOpen}
+        open={deckLayout || sidebarOpen || settingsOpen}
         layout={sidebarLayout}
         tab={sidebarTab}
         onTabChange={setSidebarTab}
@@ -3595,7 +3591,7 @@ export default function App({
           projectTerminalActive={
             !!currentProjectDock && currentProjectDock.pane.files.length > 0
           }
-          onOpenSettings={deckLayout ? onOpenSettings : undefined}
+          onOpenSettings={onOpenSettings}
           onClose={onCloseTab}
           onReorder={onReorderTabs}
           onGoToFile={onGoToFile}
@@ -3755,7 +3751,8 @@ export default function App({
             section={settingsSection}
             cwd={sidebarCwd}
             sessions={sidebarHistory}
-            besideRail={deckLayout}
+            besideRail={deckLayout || sidebarOpen || settingsOpen}
+            showClose={!deckLayout}
             onClose={onCloseSettings}
             onOpenSession={onOpenArchivedSession}
             onArchiveSession={onArchiveHistorySession}
