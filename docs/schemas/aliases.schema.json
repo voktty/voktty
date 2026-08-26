@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voktty.dev/schemas/aliases.schema.json",
+  "title": "Voktty terminal aliases",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "aliases"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "aliases": {
+      "type": "object",
+      "maxProperties": 256,
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_-]{0,63}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/alias"
+      }
+    }
+  },
+  "$defs": {
+    "alias": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "disabledWorkspaces": {
+          "$ref": "#/$defs/scopes"
+        },
+        "disabledProfiles": {
+          "$ref": "#/$defs/scopes"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        }
+      }
+    },
+    "scopes": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 8192
+      }
+    },
+    "target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "executable"],
+          "properties": {
+            "kind": {
+              "const": "command"
+            },
+            "executable": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            "args": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "type": "string",
+                "maxLength": 8192
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "action"],
+          "properties": {
+            "kind": {
+              "const": "builtin"
+            },
+            "action": {
+              "enum": ["ipme"]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

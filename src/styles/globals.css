@@ -1,0 +1,621 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "./fonts.css";
+@import "./code-highlight.css";
+
+@source "../../node_modules/streamdown/dist/index.js";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Inter Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --color-frame: var(--frame);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Baseline tokens mirror the built-in default theme, so the first paint already
+ * matches what `applyTheme` writes a frame later. */
+:root {
+    --background: #fafafc;
+    --foreground: #18191c;
+    --card: #ffffff;
+    --card-foreground: #18191c;
+    --popover: #ffffff;
+    --popover-foreground: #18191c;
+    --primary: #18191c;
+    --primary-foreground: #ffffff;
+    --secondary: #f0f1f4;
+    --secondary-foreground: #18191c;
+    --muted: #f0f1f4;
+    --muted-foreground: #6b7280;
+    --accent: #e5e7eb;
+    --accent-foreground: #18191c;
+    --destructive: #ef4444;
+    --border: rgba(0, 0, 0, 0.08);
+    --input: rgba(0, 0, 0, 0.12);
+    --ring: #2563eb;
+    --chart-1: #18191c;
+    --chart-2: #4b5563;
+    --chart-3: #6b7280;
+    --chart-4: #9ca3af;
+    --chart-5: #d1d5db;
+    --radius: 0.5rem;
+    --sidebar: #f4f5f8;
+    --sidebar-foreground: #18191c;
+    --sidebar-primary: #18191c;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #e5e7eb;
+    --sidebar-accent-foreground: #18191c;
+    --sidebar-border: rgba(0, 0, 0, 0.08);
+    --sidebar-ring: #2563eb;
+}
+
+.dark {
+    --background: #0b0f19;
+    --foreground: #f8fafc;
+    --card: #121826;
+    --card-foreground: #f8fafc;
+    --popover: #0f172a;
+    --popover-foreground: #f8fafc;
+    --primary: #6366f1;
+    --primary-foreground: #ffffff;
+    --secondary: #1e293b;
+    --secondary-foreground: #e2e8f0;
+    --muted: #141c2c;
+    --muted-foreground: #94a3b8;
+    --accent: #1e293b;
+    --accent-foreground: #f8fafc;
+    --destructive: #f87171;
+    --border: rgba(51, 65, 85, 0.35);
+    --input: rgba(51, 65, 85, 0.45);
+    --ring: #6366f1;
+    --chart-1: #6366f1;
+    --chart-2: #10b981;
+    --chart-3: #94a3b8;
+    --chart-4: #475569;
+    --chart-5: #1e293b;
+    --radius: 0.5rem;
+    --sidebar: #090d16;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-primary: #6366f1;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #1e293b;
+    --sidebar-accent-foreground: #f8fafc;
+    --sidebar-border: rgba(30, 41, 59, 0.40);
+    --sidebar-ring: #6366f1;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply text-foreground;
+    background: var(--frame);
+    margin: 0;
+    overflow: hidden;
+  }
+  html, body, #root, #settings-root {
+    height: 100%;
+    width: 100%;
+  }
+  html {
+    @apply font-sans;
+    background: var(--frame);
+  }
+  html[data-vibrancy="on"],
+  html[data-vibrancy="on"] body,
+  html[data-vibrancy="on"] #root,
+  html[data-vibrancy="on"] #settings-root {
+    background: transparent !important;
+  }
+}
+
+:root {
+  --terminal-background: var(--background);
+  --terminal-foreground: var(--foreground);
+  --terminal-cursor: var(--foreground);
+  --terminal-cursor-accent: var(--background);
+  --terminal-selection: var(--accent);
+  --terminal-ansi-black: #18191c;
+  --terminal-ansi-red: #c0392f;
+  --terminal-ansi-green: #2f7d4f;
+  --terminal-ansi-yellow: #a37413;
+  --terminal-ansi-blue: #2f6bb5;
+  --terminal-ansi-magenta: #8a4fb5;
+  --terminal-ansi-cyan: #227d85;
+  --terminal-ansi-white: #cfcfcf;
+  --terminal-ansi-bright-black: #6b7280;
+  --terminal-ansi-bright-red: #d94f42;
+  --terminal-ansi-bright-green: #3d9c64;
+  --terminal-ansi-bright-yellow: #bf8a1f;
+  --terminal-ansi-bright-blue: #3f82d4;
+  --terminal-ansi-bright-magenta: #a065cf;
+  --terminal-ansi-bright-cyan: #2b98a2;
+  --terminal-ansi-bright-white: #18191c;
+}
+
+/* The default theme short-circuits `applyTheme` (ThemeProvider calls
+ * clearTheme instead), so these vars are the whole palette, not a pre-paint
+ * placeholder. An unscoped ANSI block would put dark colours on a white
+ * terminal for every light-mode user. */
+.dark {
+  --terminal-background: var(--background);
+  --terminal-foreground: #f8fafc;
+  --terminal-cursor: #10b981;
+  --terminal-cursor-accent: #0b0f19;
+  --terminal-selection: rgba(99, 102, 241, 0.28);
+  --terminal-ansi-black: #1e293b;
+  --terminal-ansi-red: #f87171;
+  --terminal-ansi-green: #10b981;
+  --terminal-ansi-yellow: #fbbf24;
+  --terminal-ansi-blue: #6366f1;
+  --terminal-ansi-magenta: #a855f7;
+  --terminal-ansi-cyan: #38bdf8;
+  --terminal-ansi-white: #e2e8f0;
+  --terminal-ansi-bright-black: #475569;
+  --terminal-ansi-bright-red: #fca5a5;
+  --terminal-ansi-bright-green: #34d399;
+  --terminal-ansi-bright-yellow: #fde047;
+  --terminal-ansi-bright-blue: #818cf8;
+  --terminal-ansi-bright-magenta: #c084fc;
+  --terminal-ansi-bright-cyan: #7dd3fc;
+  --terminal-ansi-bright-white: #ffffff;
+}
+
+:root {
+  --app-zoom: 1;
+  --editor-font-size: 13px;
+  --frame: var(--background);
+  --pane-radius: 0px;
+  --pane-shadow: none;
+}
+.dark {
+  --pane-shadow: none;
+}
+
+/* No floating island cuts: panes meet flush with 1px hairline dividers. */
+.voktty-pane {
+  border-radius: 0;
+  border: none;
+  background: var(--background);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+/* Window vibrancy (macOS NSVisualEffectView / Windows Mica / Acrylic).
+ * The translucent frame allows the native mica/vibrancy backdrop to shine through cleanly. */
+html[data-vibrancy="on"],
+html[data-vibrancy="on"] body {
+  background: transparent !important;
+}
+html[data-vibrancy="on"] #root,
+html[data-vibrancy="on"] #settings-root {
+  background: transparent !important;
+}
+html[data-vibrancy="on"] {
+  --frame: color-mix(in srgb, var(--background) 70%, transparent);
+}
+html[data-vibrancy="on"] header[data-tabs-header],
+html[data-vibrancy="on"] footer {
+  background: transparent;
+}
+
+html[data-chrome="borderless"] .voktty-bg-surface {
+  border-radius: 12px;
+}
+.zoom-content {
+  zoom: var(--app-zoom);
+}
+.zoom-exempt {
+  zoom: calc(1 / var(--app-zoom));
+}
+
+#root,
+#settings-root {
+  height: 100%;
+  width: 100%;
+  border-radius: 0 !important;
+  border: none !important;
+  box-sizing: border-box;
+  background: var(--frame);
+}
+
+/*
+ * xterm.js overrides — kept outside @layer so they win against the addon's
+ * own stylesheet (which is not in any layer and would otherwise override).
+ *
+ * Newer xterm renders scrollbars as real <div class="scrollbar vertical|horizontal">
+ * children rather than relying on native overflow scrollbars. Both code paths exist
+ * across versions, so we hide both.
+ */
+.xterm .scrollbar,
+.xterm .scrollbar.vertical,
+.xterm .scrollbar.horizontal {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+}
+.xterm .xterm-viewport,
+.xterm-viewport {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.xterm .xterm-viewport::-webkit-scrollbar,
+.xterm-viewport::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+.xterm,
+.xterm .xterm-screen,
+.xterm .xterm-viewport,
+.xterm .xterm-rows,
+.xterm-screen,
+.xterm:focus,
+.xterm.focus {
+  outline: none !important;
+}
+
+.cm-editor,
+.cm-scroller {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.cm-editor::-webkit-scrollbar,
+.cm-scroller::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea,
+[contenteditable="true"],
+.cm-editor,
+.select-text,
+.select-text * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.cm-color-swatch {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.35em;
+  border-radius: 3px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  vertical-align: middle;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.cm-color-swatch-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.no-scrollbar::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+.no-scrollbar-deep,
+.no-scrollbar-deep * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.no-scrollbar-deep::-webkit-scrollbar,
+.no-scrollbar-deep *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* Kill native scrollbars everywhere by default — Linux/Windows ship chunky
+ * Chromium bars that break the chrome, and macOS WKWebView flashes its overlay
+ * scrollbar briefly during layout transitions (AI panel open, pane split,
+ * window resize) which looks like a glitch. Visible scroll affordances are
+ * provided per-region via shadcn <ScrollArea>. */
+html,
+html *,
+html *::before,
+html *::after {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.voktty-editor-surface,
+.voktty-editor-surface .cm-scroller {
+  scrollbar-width: thin !important;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 42%, transparent)
+    transparent !important;
+  -ms-overflow-style: auto !important;
+  scrollbar-gutter: stable;
+}
+.voktty-editor-surface::-webkit-scrollbar,
+.voktty-editor-surface .cm-scroller::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+  display: block !important;
+}
+.voktty-editor-surface::-webkit-scrollbar-track,
+.voktty-editor-surface .cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.voktty-editor-surface::-webkit-scrollbar-thumb,
+.voktty-editor-surface .cm-scroller::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 42%, transparent);
+  background-clip: padding-box;
+}
+.voktty-editor-surface::-webkit-scrollbar-thumb:hover,
+.voktty-editor-surface .cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--foreground) 58%, transparent);
+  background-clip: padding-box;
+}
+
+.voktty-editor-surface .cm-minimap-gutter {
+  width: 104px;
+  min-width: 104px;
+  border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  background: color-mix(in srgb, var(--muted) 24%, transparent) !important;
+}
+
+.voktty-editor-surface .cm-minimap-inner {
+  width: 104px;
+}
+
+.voktty-editor-surface .cm-minimap-gutter canvas {
+  opacity: 0.78;
+}
+
+/* Motion tokens. Reduced-motion zeroes the durations as a global snap. */
+:root {
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-slow: 320ms;
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes voktty-collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes voktty-collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+.voktty-collapsible-content {
+  overflow: hidden;
+}
+.voktty-collapsible-content[data-state="open"] {
+  animation: voktty-collapsible-down var(--dur-base) var(--ease-soft);
+}
+.voktty-collapsible-content[data-state="closed"] {
+  animation: voktty-collapsible-up var(--dur-base) var(--ease-soft);
+}
+
+/* Height auto<->0 reveal without JS measuring: animate the grid track from 0fr
+ * to 1fr. The inner child must be the sole grid row with min-height:0. Used by
+ * the docked AI input bar and the composer voice-status row. */
+.voktty-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition:
+    grid-template-rows var(--dur-base) var(--ease-premium),
+    opacity var(--dur-base) var(--ease-premium);
+  opacity: 0;
+}
+.voktty-reveal[data-state="open"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.voktty-reveal > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@keyframes voktty-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.voktty-panel-in {
+  animation: voktty-panel-in var(--dur-slow) var(--ease-premium);
+}
+
+@keyframes voktty-tab-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.voktty-tab-in {
+  animation: voktty-tab-in var(--dur-base) var(--ease-premium);
+}
+
+@keyframes voktty-pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.voktty-pill-in {
+  animation: voktty-pill-in var(--dur-base) var(--ease-premium);
+}
+
+/* Text shimmer loop (replaces motion background-position animation). Driven by
+ * --shimmer-duration / --shimmer-spread set inline per instance. */
+@keyframes voktty-shimmer {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: 0% center;
+  }
+}
+.voktty-shimmer {
+  background-repeat: no-repeat, padding-box;
+  background-size:
+    250% 100%,
+    auto;
+  background-image:
+    linear-gradient(
+      90deg,
+      transparent calc(50% - var(--shimmer-spread)),
+      var(--color-background),
+      transparent calc(50% + var(--shimmer-spread))
+    ),
+    linear-gradient(
+      var(--color-muted-foreground),
+      var(--color-muted-foreground)
+    );
+  animation: voktty-shimmer var(--shimmer-duration, 2s) linear infinite;
+}
+
+/* CLI finished: slow pulse on pane border */
+@keyframes voktty-finished-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--primary) 35%, transparent);
+  }
+  50% {
+    box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--primary) 90%, transparent);
+  }
+}
+.voktty-finished-pulse {
+  animation: voktty-finished-pulse 1.8s ease-in-out infinite;
+}
+
+/* CLI finished: slow pulse on tab */
+@keyframes voktty-tab-finished-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 40%, transparent);
+    color: var(--primary);
+  }
+  50% {
+    box-shadow: 0 0 0 1.5px color-mix(in oklch, var(--primary) 95%, transparent);
+    color: var(--primary);
+  }
+}
+.voktty-tab-finished-pulse {
+  animation: voktty-tab-finished-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0.01ms;
+    --dur-base: 0.01ms;
+    --dur-slow: 0.01ms;
+  }
+  .voktty-reveal {
+    transition: none;
+  }
+  .voktty-shimmer {
+    animation: none;
+    background-position: 0% center;
+  }
+  .voktty-finished-pulse {
+    animation: none;
+    box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--primary) 75%, transparent);
+  }
+  .voktty-tab-finished-pulse {
+    animation: none;
+    box-shadow: 0 0 0 1.5px color-mix(in oklch, var(--primary) 80%, transparent);
+    color: var(--primary);
+  }
+}

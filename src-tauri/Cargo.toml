@@ -1,0 +1,171 @@
+[package]
+name = "voktty"
+version = "1.0.0"
+description = "Voktty — an open-source AI-native terminal emulator"
+authors = ["sergewinters"]
+license = "Apache-2.0"
+edition = "2021"
+default-run = "voktty"
+
+[workspace]
+members = [
+	"crates/voktty-cli",
+	"crates/voktty-aliases",
+	"crates/voktty-control-protocol",
+	"crates/voktty-collab-protocol",
+	"crates/voktty-remote-protocol",
+	"crates/voktty-remote",
+	"crates/voktty-tool-policy",
+	"crates/voktty-workspace-edit",
+]
+default-members = [
+	".",
+	"crates/voktty-cli",
+	"crates/voktty-aliases",
+	"crates/voktty-control-protocol",
+	"crates/voktty-collab-protocol",
+	"crates/voktty-remote-protocol",
+	"crates/voktty-remote",
+	"crates/voktty-tool-policy",
+	"crates/voktty-workspace-edit",
+]
+resolver = "2"
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "voktty_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json = "1"
+
+[dependencies]
+# macos-private-api backs the transparent window NSVisualEffectView needs.
+tauri = { version = "2", features = ["macos-private-api", "protocol-asset", "tray-icon", "image-png", "image-ico"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+jsonschema = { version = "0.50", default-features = false }
+getrandom = "0.3"
+voktty-control-protocol = { path = "crates/voktty-control-protocol" }
+voktty-aliases = { path = "crates/voktty-aliases" }
+voktty-collab-protocol = { path = "crates/voktty-collab-protocol" }
+voktty-remote-protocol = { path = "crates/voktty-remote-protocol" }
+voktty-tool-policy = { path = "crates/voktty-tool-policy" }
+voktty-workspace-edit = { path = "crates/voktty-workspace-edit" }
+portable-pty = "0.9"
+dirs = "6"
+log = "0.4"
+ignore = "0.4"
+grep-regex = "0.1"
+grep-searcher = "0.1"
+grep-matcher = "0.1"
+globset = "0.4"
+nucleo-matcher = "0.3"
+shared_child = "1"
+tauri-plugin-log = "2"
+tauri-plugin-os = "2"
+tauri-plugin-store = "2"
+tauri-plugin-process = "2"
+tauri-plugin-notification = "2"
+reqwest = { version = "0.12", default-features = false, features = [
+	"rustls-tls",
+	"stream",
+] }
+bytes = "1"
+futures-util = "0.3"
+tokio = { version = "1", default-features = false, features = [
+	"macros",
+	"io-util",
+	"net",
+	"rt",
+	"sync",
+	"time",
+] }
+tempfile = "3"
+notify = "8.2.0"
+which = "8.0.4"
+base64 = "0.22"
+hex = "0.4"
+sha2 = "0.10"
+hmac = "0.12"
+ring = "0.17"
+tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+url = "2.5"
+rfd = "0.15"
+serialport = "4.7"
+bollard = "0.18"
+ironrdp-pdu = "0.9"
+ironrdp-session = "0.8"
+ironrdp-graphics = "0.8"
+ironrdp-cliprdr = "0.7"
+ironrdp-tls = { version = "0.2", features = ["rustls"] }
+
+[dev-dependencies]
+proptest = "1"
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = [
+	"apple-native",
+] }
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSUserDefaults"] }
+window-vibrancy = "0.8"
+
+# WebKitGTK can't read external clipboard copies; mac/win webviews can.
+[target.'cfg(target_os = "linux")'.dependencies]
+tauri-plugin-clipboard-manager = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = [
+	"windows-native",
+] }
+window-vibrancy = "0.8"
+windows-sys = { version = "0.61", features = [
+	"Wdk_System_SystemServices",
+	"Win32_Foundation",
+	"Win32_Graphics_Dwm",
+	"Win32_Security",
+	"Win32_Storage_FileSystem",
+	"Win32_System_Console",
+	"Win32_System_JobObjects",
+	"Win32_System_SystemInformation",
+	"Win32_System_ProcessStatus",
+	"Win32_System_Threading",
+	"Win32_System_Diagnostics_ToolHelp",
+] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2.4.3"
+tauri-plugin-updater = "2"
+tauri-plugin-window-state = "2"
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = "debuginfo"
+
+# rust-lang/rust#110536: stripping proc-macro dylibs breaks the dlopen rustc does
+# at compile time on macOS, reported as a bogus E0463. Never shipped, so nothing to strip.
+[profile.release.build-override]
+strip = false

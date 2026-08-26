@@ -1,0 +1,114 @@
+diff --git a/cortex-core/tests/test_cache_and_perf.rs b/cortex-core/tests/test_cache_and_perf.rs
+index 9fc8990..5bbd6c0 100644
+--- a/cortex-core/tests/test_cache_and_perf.rs
++++ b/cortex-core/tests/test_cache_and_perf.rs
+@@ -240,8 +240,9 @@ fn test_retrieve_without_namespace_returns_all() {
+ 
+ #[test]
+ fn test_file_backed_storage_read_pool() {
+-    let path = format!("/tmp/cortex_read_pool_{}.db", uuid::Uuid::new_v4());
+-    let cortex = Cortex::open(&path).unwrap();
++    let directory = tempfile::tempdir().unwrap();
++    let path = directory.path().join("cortex_read_pool.db");
++    let cortex = Cortex::open(path.to_str().unwrap()).unwrap();
+ 
+     // Ingest and retrieve — exercises read pool
+     cortex.ingest("file backed test", "cli", None, None, None).unwrap();
+@@ -253,15 +254,13 @@ fn test_file_backed_storage_read_pool() {
+     assert_eq!(stats.episodic, 1);
+ 
+     drop(cortex);
+-    let _ = std::fs::remove_file(&path);
+-    let _ = std::fs::remove_file(format!("{}-wal", &path));
+-    let _ = std::fs::remove_file(format!("{}-shm", &path));
+ }
+ 
+ #[test]
+ fn test_file_backed_concurrent_reads() {
+-    let path = format!("/tmp/cortex_concurrent_{}.db", uuid::Uuid::new_v4());
+-    let cortex = Cortex::open(&path).unwrap();
++    let directory = tempfile::tempdir().unwrap();
++    let path = directory.path().join("cortex_concurrent.db");
++    let cortex = Cortex::open(path.to_str().unwrap()).unwrap();
+ 
+     for i in 0..20 {
+         cortex
+@@ -276,7 +275,4 @@ fn test_file_backed_concurrent_reads() {
+     }
+ 
+     drop(cortex);
+-    let _ = std::fs::remove_file(&path);
+-    let _ = std::fs::remove_file(format!("{}-wal", &path));
+-    let _ = std::fs::remove_file(format!("{}-shm", &path));
+ }
+diff --git a/cortex-core/tests/test_storage_advanced.rs b/cortex-core/tests/test_storage_advanced.rs
+index ae30f51..4079f67 100644
+--- a/cortex-core/tests/test_storage_advanced.rs
++++ b/cortex-core/tests/test_storage_advanced.rs
+@@ -178,8 +178,9 @@ fn test_store_link_upsert() {
+ 
+ #[test]
+ fn test_file_backed_wal_mode() {
+-    let path = format!("/tmp/cortex_wal_test_{}.db", Uuid::new_v4());
+-    let s = SqliteStorage::open(&path).unwrap();
++    let directory = tempfile::tempdir().unwrap();
++    let path = directory.path().join("cortex_wal_test.db");
++    let s = SqliteStorage::open(path.to_str().unwrap()).unwrap();
+ 
+     // Basic CRUD should work with WAL mode
+     let mem = make_mem("wal test", MemoryTier::Episodic);
+@@ -192,15 +193,13 @@ fn test_file_backed_wal_mode() {
+     assert_eq!(count, 1);
+ 
+     drop(s);
+-    let _ = std::fs::remove_file(&path);
+-    let _ = std::fs::remove_file(format!("{}-wal", &path));
+-    let _ = std::fs::remove_file(format!("{}-shm", &path));
+ }
+ 
+ #[test]
+ fn test_file_backed_read_pool_concurrent() {
+-    let path = format!("/tmp/cortex_pool_test_{}.db", Uuid::new_v4());
+-    let s = SqliteStorage::open(&path).unwrap();
++    let directory = tempfile::tempdir().unwrap();
++    let path = directory.path().join("cortex_pool_test.db");
++    let s = SqliteStorage::open(path.to_str().unwrap()).unwrap();
+ 
+     for i in 0..20 {
+         s.store_memory(&make_mem(&format!("pool {}", i), MemoryTier::Episodic)).unwrap();
+@@ -213,9 +212,6 @@ fn test_file_backed_read_pool_concurrent() {
+     }
+ 
+     drop(s);
+-    let _ = std::fs::remove_file(&path);
+-    let _ = std::fs::remove_file(format!("{}-wal", &path));
+-    let _ = std::fs::remove_file(format!("{}-shm", &path));
+ }
+ 
+ // ── Edge cases ───────────────────────────────────────────────────────────
+diff --git a/cortex-core/tests/test_cortex_full.rs b/cortex-core/tests/test_cortex_full.rs
+index c955d0c..d60ea65 100644
+--- a/cortex-core/tests/test_cortex_full.rs
++++ b/cortex-core/tests/test_cortex_full.rs
+@@ -18,18 +18,16 @@ fn test_open_with_config() {
+         ef_construction: 40,
+         ..Default::default()
+     };
+-    // Use a temp path
+-    let path = format!("/tmp/cortex_test_{}.db", uuid::Uuid::new_v4());
+-    let cortex = Cortex::open_with_config(&path, config).unwrap();
++    let directory = tempfile::tempdir().unwrap();
++    let path = directory.path().join("cortex_test.db");
++    let cortex = Cortex::open_with_config(path.to_str().unwrap(), config).unwrap();
+ 
+     // Should work normally
+     cortex.ingest("test", "cli", None, None, None).unwrap();
+     let stats = cortex.stats().unwrap();
+     assert_eq!(stats.episodic, 1);
+ 
+-    // Cleanup
+     drop(cortex);
+-    let _ = std::fs::remove_file(&path);
+ }
+ 
+ #[test]

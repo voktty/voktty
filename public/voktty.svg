@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Fondo Squircle -->
+  <rect width="512" height="512" rx="112" fill="#0D1117"/>
+  
+  <!-- Brazo izquierdo V (Chevron) -->
+  <path d="M148 168 L256 352" stroke="#F8FAFC" stroke-width="44" stroke-linecap="round"/>
+  
+  <!-- Brazo derecho V -->
+  <path d="M256 352 L364 168" stroke="#6366F1" stroke-width="44" stroke-linecap="round"/>
+  
+  <!-- Cursor terminal inferior / Prompt node -->
+  <line x1="290" y1="364" x2="350" y2="364" stroke="#10B981" stroke-width="36" stroke-linecap="round"/>
+</svg>
