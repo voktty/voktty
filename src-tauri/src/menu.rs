@@ -21,7 +21,7 @@ pub fn dispatch(app: &AppHandle, id: &str) {
         | "split_right" | "split_down" | "focus_left" | "focus_right" | "focus_up"
         | "focus_down" | "toggle_sidebar" | "sidebar_opacity" | "open_project" | "go_to_file"
         | "open_search" | "find_in_project" | "find" | "new_terminal" | "new_terminal_tab"
-        | "open_model_picker" => {
+        | "toggle_terminal" | "open_model_picker" => {
             let _ = app.emit(id, ());
         }
         _ => {}
@@ -50,6 +50,9 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .build(app)?;
     let new_terminal_tab = MenuItemBuilder::with_id("new_terminal_tab", "New Terminal Tab")
         .accelerator("CmdOrCtrl+Shift+`")
+        .build(app)?;
+    let toggle_terminal = MenuItemBuilder::with_id("toggle_terminal", "Toggle Terminal")
+        .accelerator("CmdOrCtrl+J")
         .build(app)?;
     let split_right = MenuItemBuilder::with_id("split_right", "Split Pane Right")
         .accelerator("CmdOrCtrl+D")
@@ -124,6 +127,7 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 
     let view = SubmenuBuilder::new(app, "View")
         .item(&toggle_sidebar)
+        .item(&toggle_terminal)
         .item(&open_model_picker)
         .separator()
         .item(&focus_left)

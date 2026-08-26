@@ -1,5 +1,5 @@
-import { GripVertical, SquareTerminal, X } from "lucide-react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { GripVertical, Terminal, X } from "lucide-react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { basename } from "../lib/fs";
 import { isPlanTab, isReviewTab, isTerminalTab, type FilePaneTab } from "../lib/layout";
@@ -17,6 +17,8 @@ type Props = {
   onCloseFile: (fileId: string) => void;
   onReorder: (ids: string[]) => void;
   onPaneDragStart?: (event: ReactPointerEvent<HTMLElement>) => void;
+  label?: string;
+  trailing?: ReactNode;
 };
 
 /** Mirrors the VS Code tab tooltip: the path, then what is wrong with it. */
@@ -34,6 +36,8 @@ export function SurfaceTabs({
   onCloseFile,
   onReorder,
   onPaneDragStart,
+  label = "Open files",
+  trailing,
 }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeTabRef = useRef<HTMLDivElement | null>(null);
@@ -50,12 +54,13 @@ export function SurfaceTabs({
   }, [activeFileId, sortable.draggingId]);
 
   return (
-    <div
-      ref={lockOverscroll}
-      role="tablist"
-      aria-label="Open files"
-      className="scrollbar-none flex h-9 shrink-0 overflow-x-auto overscroll-none border-b border-content/10 bg-content/2"
-    >
+    <div className="flex h-9 min-w-0 shrink-0 border-b border-content/10 bg-content/2">
+      <div
+        ref={lockOverscroll}
+        role="tablist"
+        aria-label={label}
+        className="scrollbar-none flex min-w-0 flex-1 overflow-x-auto overscroll-none"
+      >
       {onPaneDragStart ? (
         <div
           role="button"
@@ -151,7 +156,7 @@ export function SurfaceTabs({
               }`}
             >
               {terminal ? (
-                <SquareTerminal className="size-3.5 shrink-0" strokeWidth={1.75} />
+                <Terminal className="size-3.5 shrink-0" strokeWidth={1.75} />
               ) : (
                 <FileTypeIcon name={iconName} isDir={false} size={15} />
               )}
@@ -203,6 +208,8 @@ export function SurfaceTabs({
           }}
         />
       ) : null}
+      </div>
+      {trailing}
     </div>
   );
 }

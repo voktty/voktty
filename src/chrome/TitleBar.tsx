@@ -5,7 +5,7 @@ import {
   PanelLeft,
   Plus,
   Search,
-  SquareTerminal,
+  Terminal,
   X,
 } from "lucide-react";
 import {
@@ -109,6 +109,7 @@ type Props = {
   onGoForward?: () => void;
   onNew: () => void;
   onNewTerminal?: () => void;
+  projectTerminalActive?: boolean;
   onClose: (id: string) => void;
   onReorder: (ids: string[], movedId?: string) => void;
   onGoToFile?: () => void;
@@ -380,7 +381,7 @@ function TitleTabItem({
             dimmed={!active}
           />
         ) : tab.terminal || !fileIcon ? (
-          <SquareTerminal
+          <Terminal
             className={`size-3.5 shrink-0 ${
               active ? "text-content" : "text-content/55"
             }`}
@@ -725,12 +726,14 @@ function TabStripChevron({
 export function IconButton({
   label,
   active,
+  accent,
   disabled,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  accent?: boolean;
   disabled?: boolean;
   onClick?: () => void;
   children: ReactNode;
@@ -740,7 +743,7 @@ export function IconButton({
       type="button"
       title={label}
       aria-label={label}
-      aria-pressed={active}
+      aria-pressed={active || accent}
       aria-disabled={disabled}
       data-tauri-drag-region="false"
       onClick={() => {
@@ -750,9 +753,11 @@ export function IconButton({
       className={`grid size-6.5 place-items-center rounded-md ${
         disabled
           ? "text-content/25"
-          : active
-            ? "text-content hover:bg-content/10"
-            : "text-content/50 hover:bg-content/10 hover:text-content"
+          : accent
+            ? "text-accent hover:bg-content/10"
+            : active
+              ? "text-content hover:bg-content/10"
+              : "text-content/50 hover:bg-content/10 hover:text-content"
       }`}
     >
       {children}
@@ -823,6 +828,7 @@ function TitleBarComponent({
   onGoForward,
   onNew,
   onNewTerminal,
+  projectTerminalActive = false,
   onClose,
   onReorder,
   onGoToFile,
@@ -1190,8 +1196,16 @@ function TitleBarComponent({
           </>
         ) : null}
         {deckLayout && !projectless && onNewTerminal ? (
-          <IconButton label={`New Terminal (${MOD}\`)`} onClick={onNewTerminal}>
-            <SquareTerminal className="size-3.5" strokeWidth={1.75} />
+          <IconButton
+            label={
+              projectTerminalActive
+                ? `Terminal (${MOD}\`)`
+                : `New Terminal (${MOD}\`)`
+            }
+            accent={projectTerminalActive}
+            onClick={onNewTerminal}
+          >
+            <Terminal className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
         {IS_MAC ? <OpacityControl /> : null}
@@ -1490,7 +1504,7 @@ function TitleBarComponent({
                 label={`New Terminal (${MOD}\`)`}
                 onClick={onNewTerminal}
               >
-                <SquareTerminal className="size-3.5" strokeWidth={1.75} />
+                <Terminal className="size-3.5" strokeWidth={1.75} />
               </IconButton>
             ) : null}
           </div>

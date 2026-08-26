@@ -15,6 +15,7 @@
  *   Focus pane          cmd-opt-arrows
  *   New terminal        cmd-`
  *   New terminal tab    shift-cmd-`
+ *   Toggle terminal     cmd-j
  */
 
 import type { FocusDir } from "./layout";
@@ -30,6 +31,7 @@ export type TabCommand =
   | "split-down"
   | "new-terminal"
   | "new-terminal-tab"
+  | "toggle-terminal"
   | { activate: number }
   | { focus: FocusDir };
 
@@ -68,6 +70,7 @@ export function tabCommand(e: KeyboardEvent): TabCommand | null {
   if (key === "t") return "new";
   if (key === "w") return "close";
   if (key === "d") return "split-right";
+  if (key === "j") return "toggle-terminal";
   if (e.key === "[" || e.code === "BracketLeft") return "back";
   if (e.key === "]" || e.code === "BracketRight") return "forward";
   if (key >= "1" && key <= "8") return { activate: Number(key) - 1 };

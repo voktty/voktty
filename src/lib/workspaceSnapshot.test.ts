@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { INTERRUPT_MESSAGE } from "./inFlight";
 import { leaf, newFileTab, newTab, newTerminalFile } from "./layout";
+import { createProjectTerminal } from "./projectTerminal";
 import { newSession, type Session } from "./session";
 import {
   collectWorkspaceSnapshot,
@@ -46,6 +47,27 @@ describe("collectWorkspaceSnapshot", () => {
       }),
     ]);
     expect("blocks" in snapshot.sessions[0]!).toBe(false);
+    expect(snapshot.projectTerminals).toEqual([]);
+  });
+
+  it("stores the project terminal dock", () => {
+    const term = newTerminalFile("/tmp/a", "zsh");
+    const dock = createProjectTerminal("/tmp/a", term);
+    const snapshot = collectWorkspaceSnapshot(
+      [{ ...newTab("s1"), id: "t1" }],
+      [],
+      "t1",
+      "/tmp/a",
+      [dock],
+    );
+    expect(snapshot.projectTerminals).toEqual([
+      expect.objectContaining({
+        projectPath: "/tmp/a",
+        side: "bottom",
+        open: true,
+      }),
+    ]);
+    expect(snapshot.projectTerminals[0]?.pane.files[0]?.id).toBe(term.id);
   });
 });
 
@@ -149,5 +171,34 @@ describe("hydrateWorkspaceSnapshot", () => {
     const snapshot = collectWorkspaceSnapshot([tab], [], "t1", "/tmp/a");
     const workspace = hydrateWorkspaceSnapshot(snapshot, new Map());
     expect(workspace?.tabs[0]?.terminalPanes[0]?.files[0]?.terminal).toBe(true);
+  });
+
+  it("restores a project terminal dock", () => {
+    const term = newTerminalFile("/tmp/a");
+    const dock = {
+      ...createProjectTerminal("/tmp/a", term),
+      side: "left" as const,
+      size: 300,
+      open: false,
+    };
+    const snapshot = collectWorkspaceSnapshot(
+      [{ ...newTab("s1"), id: "t1" }],
+      [],
+      "t1",
+      "/tmp/a",
+      [dock],
+    );
+    const workspace = hydrateWorkspaceSnapshot(snapshot, new Map());
+    expect(workspace?.projectTerminals).toEqual([
+      expect.objectContaining({
+        projectPath: "/tmp/a",
+        side: "left",
+        size: 300,
+        open: false,
+      }),
+    ]);
+    expect(workspace?.projectTerminals?.[0]?.pane.files[0]?.terminal).toBe(
+      true,
+    );
   });
 });
