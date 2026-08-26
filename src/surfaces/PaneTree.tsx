@@ -8,6 +8,7 @@ import {
 } from "react";
 import { setGrabbing, suppressTextSelection } from "../lib/drag";
 import type { ApprovalDecision } from "../lib/harness";
+import type { GitSessionCheckout } from "../lib/fs";
 import type { EditorNavigationTarget } from "../lib/search";
 import {
   layoutLeaves,
@@ -49,6 +50,7 @@ type Shared = {
   onFileErrorCountChange: (fileId: string, count: number) => void;
   onRatio: (splitId: string, index: number, ratio: number) => void;
   onCwdChange: (sessionId: string, cwd: string) => void;
+  onBranchChange: (sessionId: string, checkout: GitSessionCheckout) => void;
   onModelChange: (sessionId: string, harness: HarnessId, model: string) => void;
   onModelSettingsChange: (
     sessionId: string,
@@ -116,6 +118,7 @@ function PaneTreeComponent({
   onFileErrorCountChange,
   onRatio,
   onCwdChange,
+  onBranchChange,
   onModelChange,
   onModelSettingsChange,
   onRuntimeModeChange,
@@ -282,6 +285,7 @@ function PaneTreeComponent({
                 onFocus={onFocus}
                 onClose={onClose}
                 onCwdChange={onCwdChange}
+                onBranchChange={onBranchChange}
                 onModelChange={onModelChange}
                 onModelSettingsChange={onModelSettingsChange}
                 onRuntimeModeChange={onRuntimeModeChange}

@@ -41,6 +41,8 @@ type SessionRecord = {
   blocks: Block[];
   contextUsed?: number | null;
   contextWindow?: number | null;
+  branch?: string | null;
+  worktreeCwd?: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -57,6 +59,8 @@ type SessionUpsertPayload = {
   blocks: Block[];
   contextUsed?: number;
   contextWindow?: number;
+  branch?: string;
+  worktreeCwd?: string;
 };
 
 /** Only real chats belong in project history — blank tabs stay ephemeral. */
@@ -91,6 +95,8 @@ export function sanitizeSessionForPersist(session: Session): SessionUpsertPayloa
     ...(session.context?.window
       ? { contextWindow: session.context.window }
       : {}),
+    ...(session.branch ? { branch: session.branch } : {}),
+    ...(session.worktreeCwd ? { worktreeCwd: session.worktreeCwd } : {}),
   };
 }
 
@@ -281,6 +287,8 @@ function recordToSession(record: SessionRecord): Session {
     ...(record.providerSessionId
       ? { providerSessionId: record.providerSessionId }
       : {}),
+    ...(record.branch ? { branch: record.branch } : {}),
+    ...(record.worktreeCwd ? { worktreeCwd: record.worktreeCwd } : {}),
     ...(contextFromRecord(record) ?? {}),
   };
 }

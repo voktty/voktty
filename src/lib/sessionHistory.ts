@@ -99,7 +99,11 @@ export function historyWithLiveSessions(
     const live = session.busy || hasPendingApproval(session.blocks);
     if (!shouldPersistSession(session) && !live) continue;
     if (rows.some((row) => row.id === session.id)) continue;
-    rows = mergeHistorySummary(rows, summaryFromSession(session, hint));
+    const sessionHint: SessionGitHint = {
+      ...hint,
+      ...(session.branch ? { branch: session.branch } : {}),
+    };
+    rows = mergeHistorySummary(rows, summaryFromSession(session, sessionHint));
   }
   return rows;
 }

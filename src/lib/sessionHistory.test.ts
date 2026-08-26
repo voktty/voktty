@@ -92,6 +92,25 @@ describe("historyWithLiveSessions", () => {
     });
   });
 
+  it("keeps a session's own branch instead of the project overlay", () => {
+    const session = newSession("cursor", "/tmp/agent-terminal");
+    session.blocks = [{ id: "u1", role: "user", text: "hello" }];
+    session.busy = true;
+    session.branch = "feat/picker";
+
+    const rows = historyWithLiveSessions(
+      [],
+      [session],
+      "/tmp/agent-terminal",
+      { repo: "monocode", branch: "main" },
+    );
+    expect(rows[0]).toMatchObject({
+      id: session.id,
+      repo: "monocode",
+      branch: "feat/picker",
+    });
+  });
+
   it("matches project paths with trailing slashes", () => {
     const history = [summary("a1", "/tmp/project-a/")];
 

@@ -157,6 +157,13 @@ export type Session = {
    * Handoff runs on the next send, not on picker change.
    */
   pendingSwitch?: PendingHarnessSwitch;
+  /**
+   * Branch pinned from the composer. Isolated sessions keep this even when the
+   * project checkout moves.
+   */
+  branch?: string;
+  /** Git worktree for a pinned branch. Absent when the session uses `cwd`. */
+  worktreeCwd?: string;
 };
 
 export type PendingHarnessSwitch = {
@@ -271,4 +278,12 @@ export function sessionDisplayTitle(title: string, harness: HarnessId): string {
     return "New session";
   }
   return title;
+}
+
+/** Working copy the agent and session git UIs should use. */
+export function sessionWorkCwd(session: {
+  cwd: string;
+  worktreeCwd?: string;
+}): string {
+  return session.worktreeCwd || session.cwd;
 }

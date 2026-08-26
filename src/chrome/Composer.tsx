@@ -35,7 +35,7 @@ import {
   type MentionIndex,
   type MentionToken,
 } from "../lib/fileMentions";
-import type { ProjectFile } from "../lib/fs";
+import type { ProjectFile, GitSessionCheckout } from "../lib/fs";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import type { Attachment, HarnessId, RuntimeMode } from "../lib/session";
 import { harnessSupportsAttachments } from "../lib/session";
@@ -74,6 +74,7 @@ type Props = {
   modelSettings?: Record<string, string>;
   runtimeMode: RuntimeMode;
   cwd?: string;
+  branch?: string;
   recents?: RecentProject[];
   hideProjectPicker?: boolean;
   context?: ContextUsage;
@@ -81,6 +82,7 @@ type Props = {
   hotkeys?: boolean;
   onFocus: () => void;
   onCwdChange: (cwd: string) => void;
+  onBranchChange?: (checkout: GitSessionCheckout) => void;
   onNewTerminal?: () => void;
   onModelChange: (harness: HarnessId, model: string) => void;
   onModelSettingsChange?: (settings: Record<string, string>) => void;
@@ -132,12 +134,14 @@ export function Composer({
   modelSettings = {},
   runtimeMode,
   cwd = "~",
+  branch,
   recents = [],
   hideProjectPicker = false,
   context,
   busy = false,
   onFocus,
   onCwdChange,
+  onBranchChange,
   onNewTerminal,
   onModelChange,
   onModelSettingsChange,
@@ -685,7 +689,9 @@ export function Composer({
             )}
             <BranchPicker
               cwd={cwd}
-              enabled={enabled}
+              branch={branch}
+              enabled={enabled && !busy}
+              onChange={onBranchChange}
               onClose={() => ref.current?.focus()}
             />
             <div className="ml-auto flex shrink-0 items-center">

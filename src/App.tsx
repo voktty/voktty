@@ -21,7 +21,7 @@ import {
 } from "./lib/appearance";
 import { IS_MAC } from "./lib/platform";
 import { displayAttachments, prepareAttachments } from "./lib/attachments";
-import { basename, notifyGitChanged, pickFolder } from "./lib/fs";
+import { basename, notifyGitChanged, pickFolder, restoreSessionCheckout, type GitSessionCheckout } from "./lib/fs";
 import {
   invalidateProjectFiles,
   prefetchProjectFiles,
@@ -185,6 +185,7 @@ import {
   newDefaultSession,
   newSession,
   sessionDisplayTitle,
+  sessionWorkCwd,
   titleFromPrompt,
   type Attachment,
   type HarnessId,
@@ -616,6 +617,9 @@ export default function App({
     projectCwd;
   const sidebarCwdRef = useRef(sidebarCwd);
   sidebarCwdRef.current = sidebarCwd;
+  const gitCwd = active ? sessionWorkCwd(active) : sidebarCwd;
+  const gitCwdRef = useRef(gitCwd);
+  gitCwdRef.current = gitCwd;
   const projectBranches = useProjectBranches(
     sidebarCwd,
     Boolean(sidebarCwd) && sidebarCwd !== "~",
@@ -1164,7 +1168,11 @@ export default function App({
       const session = sessionsRef.current.find(
         (entry) => entry.id === sessionId,
       );
-      onOpenTerminal(session?.cwd ?? projectCwd, false, sessionId);
+      onOpenTerminal(
+        session ? sessionWorkCwd(session) : projectCwd,
+        false,
+        sessionId,
+      );
     },
     [onOpenTerminal, projectCwd],
   );
@@ -1791,14 +1799,17 @@ export default function App({
     (path?: string) => {
       void (async () => {
         const resolved = path
-          ? ((await resolveOpenablePath(sidebarCwd, path)) ?? path)
+          ? ((await resolveOpenablePath(gitCwdRef.current, path)) ?? path)
           : undefined;
-        if (resolved) rememberOpenedFile(sidebarCwd, resolved);
+        if (resolved) rememberOpenedFile(sidebarCwdRef.current, resolved);
         setTabs((prev) =>
           prev.map((tab) => {
             if (tab.id !== activeTabId) return tab;
             const opened = resolved
-              ? openEditorTab(tab, newFileTab(resolved, sidebarCwd, true))
+              ? openEditorTab(
+                  tab,
+                  newFileTab(resolved, sidebarCwdRef.current, true),
+                )
               : tab;
             if (deckLayout) return opened;
             return {
@@ -1816,7 +1827,7 @@ export default function App({
         setComposerFocused(false);
       })();
     },
-    [activeTabId, deckLayout, sidebarCwd],
+    [activeTabId, deckLayout],
   );
 
   const onToggleDiff = useCallback(() => {
@@ -2018,17 +2029,18 @@ export default function App({
         return;
       }
 
-      const restored = await getSession(sessionId).catch(() => null);
-      if (!restored) {
+      const loaded = await getSession(sessionId).catch(() => null);
+      if (!loaded) {
         void refreshHistory(sidebarCwd);
         return;
       }
+      const restored = await restoreSessionCheckout(loaded);
       if (restored.providerSessionId && isLiveHarness(restored.harness)) {
         bindHarnessSession(
           restored.harness,
           restored.id,
           restored.providerSessionId,
-          restored.cwd,
+          sessionWorkCwd(restored),
         );
       }
       lastPersisted.current.set(restored.id, persistFingerprint(restored));
@@ -2282,7 +2294,7 @@ export default function App({
       setProjectCwd(normalized);
       setRecents(rememberProject(normalized));
       setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, cwd: normalized } : s)),
+        prev.map((s) => (s.id === sessionId ? { ...s, cwd: normalized, branch: undefined, worktreeCwd: undefined } : s)),
       );
       // The session's project just moved in place; a group only holds tabs that
       // share one project, so drop this tab out if it no longer matches.
@@ -2305,6 +2317,40 @@ export default function App({
       notifyReviewChanged(sessionId);
     },
     [appendTab, projectOfTab],
+  );
+
+  const onBranchChange = useCallback(
+    (sessionId: string, checkout: GitSessionCheckout) => {
+      const current = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!current || current.busy) return;
+      const isolated =
+        checkout.isolated && !sameProjectPath(checkout.cwd, current.cwd);
+      const nextWorktree = isolated ? checkout.cwd : undefined;
+      const nextBranch = isolated ? checkout.branch : undefined;
+      if (
+        current.branch === nextBranch &&
+        (current.worktreeCwd || undefined) === nextWorktree
+      ) {
+        return;
+      }
+      if (current.providerSessionId) {
+        void forgetHarnessSession(current.harness, sessionId);
+      }
+      const next = {
+        ...current,
+        branch: nextBranch,
+        worktreeCwd: nextWorktree,
+        ...(current.providerSessionId
+          ? { providerSessionId: undefined }
+          : {}),
+      };
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? next : s)),
+      );
+      persistSession(next);
+      notifyReviewChanged(sessionId);
+    },
+    [persistSession],
   );
 
   const onSelectProject = useCallback(
@@ -2528,11 +2574,12 @@ export default function App({
   const onOpenFile = useCallback<OpenFileFn>(
     (path, navigation) => {
       void (async () => {
-        const resolved = (await resolveOpenablePath(sidebarCwd, path)) ?? path;
-        rememberOpenedFile(sidebarCwd, resolved);
+        const resolved =
+          (await resolveOpenablePath(gitCwdRef.current, path)) ?? path;
+        rememberOpenedFile(sidebarCwdRef.current, resolved);
         const tab = tabsRef.current.find((entry) => entry.id === activeTabId);
         if (!tab) return;
-        const file = newFileTab(resolved, sidebarCwd);
+        const file = newFileTab(resolved, sidebarCwdRef.current);
         setTabs((prev) =>
           prev.map((entry) =>
             entry.id === tab.id ? openEditorTab(entry, file) : entry,
@@ -2549,7 +2596,7 @@ export default function App({
         setComposerFocused(false);
       })();
     },
-    [activeTabId, sidebarCwd],
+    [activeTabId],
   );
 
   const onOpenPlan = useCallback(
@@ -2690,6 +2737,7 @@ export default function App({
       if (!current) return;
       if (!text.trim() && attachments.length === 0) return;
       if (isPreparingHandoff(current)) return;
+      const workCwd = sessionWorkCwd(current);
 
       const pendingSwitch =
         current.pendingSwitch && current.pendingSwitch.from !== current.harness
@@ -2719,11 +2767,11 @@ export default function App({
         void (async () => {
           try {
             const prepared = await prepareAttachments(attachments);
-            const prompt = await preparePrompt(text, current.cwd);
+            const prompt = await preparePrompt(text, workCwd);
             await steerHarnessTurn({
               harness: current.harness,
               sessionId,
-              cwd: current.cwd,
+              cwd: workCwd,
               model: current.model,
               modelSettings: current.modelSettings,
               text: prompt,
@@ -2804,7 +2852,7 @@ export default function App({
       if (isFirstTurn && live) {
         void generateHarnessTitle(current.harness, {
           sessionId,
-          cwd: current.cwd,
+          cwd: workCwd,
           message: text || attachments.map((file) => file.name).join(", "),
         })
           .then((title) => {
@@ -2841,7 +2889,7 @@ export default function App({
               agentText = await requestOutgoingHandoff({
                 harness: pendingSwitch.from,
                 sessionId,
-                cwd: current.cwd,
+                cwd: workCwd,
                 model: pendingSwitch.fromModel,
                 modelSettings: pendingSwitch.fromSettings,
                 userRequest: text,
@@ -2870,18 +2918,18 @@ export default function App({
           );
         };
 
-        await beginSessionTurn(sessionId, current.cwd).catch(() => undefined);
+        await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
         if (turnGen.current.get(sessionId) !== gen) return;
         try {
           const prepared = await prepareAttachments(attachments);
-          const prompt = await preparePrompt(text, current.cwd);
+          const prompt = await preparePrompt(text, workCwd);
           const earlier = queuedHandoff
             ? userMessagesAfterHandoff(current)
             : [];
           await sendHarnessTurn({
             harness: current.harness,
             sessionId,
-            cwd: current.cwd,
+            cwd: workCwd,
             model: current.model,
             modelSettings: current.modelSettings,
             runtimeMode: current.runtimeMode,
@@ -2898,8 +2946,8 @@ export default function App({
               ) {
                 revealHandoff(wrap.text);
               }
-              nudgeOpenEditors(event, current.cwd);
-              trackSessionEdits(sessionId, current.cwd, event);
+              nudgeOpenEditors(event, workCwd);
+              trackSessionEdits(sessionId, workCwd, event);
               enqueueHarnessEvent(sessionId, event);
             },
           });
@@ -2932,12 +2980,12 @@ export default function App({
           setSessions((prev) =>
             prev.map((s) => (s.id === sessionId ? stopStreaming(s) : s)),
           );
-          await syncSessionCheckpoint(sessionId, current.cwd).catch(
+          await syncSessionCheckpoint(sessionId, workCwd).catch(
             () => undefined,
           );
           notifyReviewChanged(sessionId);
-          notifyGitChanged();
-          nudgeWorkspace(current.cwd);
+          if (!current.worktreeCwd) notifyGitChanged();
+          nudgeWorkspace(workCwd);
           nudgeWatchedFiles();
           window.setTimeout(() => nudgeWatchedFiles(), 150);
         }
@@ -2994,11 +3042,11 @@ export default function App({
         }),
       );
       if (session) {
-        void syncSessionCheckpoint(sessionId, session.cwd)
+        void syncSessionCheckpoint(sessionId, sessionWorkCwd(session))
           .catch(() => undefined)
           .then(() => notifyReviewChanged(sessionId));
-        nudgeWorkspace(session.cwd);
-        notifyGitChanged();
+        nudgeWorkspace(sessionWorkCwd(session));
+        if (!session.worktreeCwd) notifyGitChanged();
         nudgeWatchedFiles();
         window.setTimeout(() => nudgeWatchedFiles(), 150);
       } else {
@@ -3442,6 +3490,7 @@ export default function App({
     >
       <Sidebar
         cwd={sidebarCwd}
+        gitCwd={gitCwd}
         open={deckLayout || sidebarOpen}
         layout={sidebarLayout}
         tab={sidebarTab}
@@ -3469,7 +3518,9 @@ export default function App({
         onGoForward={onRailForward}
         onOpenDiff={onOpenDiff}
         onShowSourceControl={onToggleChanges}
-        selectedDiffPath={activeTab ? selectedChangePath(activeTab) : undefined}
+        selectedDiffPath={
+          activeTab ? selectedChangePath(activeTab, gitCwd) : undefined
+        }
         textHarness={pickTextHarness(active?.harness)}
         recents={recents}
         busyProjectPaths={sessions.flatMap((session) =>
@@ -3522,6 +3573,7 @@ export default function App({
           tabs={titleTabs}
           activeId={activeTabId}
           cwd={sidebarCwd}
+          gitCwd={gitCwd}
           sidebarOpen={deckLayout || sidebarOpen}
           deckLayout={deckLayout}
           projectRailOpen={projectRailOpen}
@@ -3649,6 +3701,7 @@ export default function App({
                         onRatio(tab.id, splitId, index, ratio)
                       }
                       onCwdChange={onCwdChange}
+                      onBranchChange={onBranchChange}
                       onModelChange={onModelChange}
                       onModelSettingsChange={onModelSettingsChange}
                       onRuntimeModeChange={onRuntimeModeChange}
@@ -3669,10 +3722,10 @@ export default function App({
               </div>
             {!deckLayout && activeTab?.diffOpen ? (
               <DiffPane
-                key={sidebarCwd ?? ""}
-                cwd={sidebarCwd}
+                key={gitCwd ?? ""}
+                cwd={gitCwd}
                 textHarness={pickTextHarness(active?.harness)}
-                selectedPath={selectedChangePath(activeTab)}
+                selectedPath={selectedChangePath(activeTab, gitCwd)}
                 focused={!!activeTab.diffFocused}
                 onFocus={onFocusDiff}
                 onOpenFile={onOpenDiff}
@@ -3718,7 +3771,7 @@ export default function App({
       {filePickerOpen ? (
         <FilePicker
           open
-          cwd={sidebarCwd}
+          cwd={gitCwd}
           openPaths={openFilePaths}
           onOpenFile={onOpenFile}
           onClose={() => setFilePickerOpen(false)}
@@ -3751,11 +3804,14 @@ function isBlankSession(session: Session | undefined): boolean {
   return !session.blocks.some((block) => block.role === "user");
 }
 
-function selectedChangePath(tab: WorkspaceTab): string | undefined {
+function selectedChangePath(
+  tab: WorkspaceTab,
+  gitCwd?: string,
+): string | undefined {
   const file = focusedFileTab(tab);
   if (!file || isPlanTab(file) || isTerminalTab(file) || !file.review)
     return undefined;
-  return displayPath(file.path, file.cwd);
+  return displayPath(file.path, gitCwd || file.cwd);
 }
 
 function isBlankWorkspaceTab(tab: WorkspaceTab, sessions: Session[]): boolean {

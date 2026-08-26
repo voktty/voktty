@@ -81,6 +81,10 @@ pub struct SessionUpsert {
     pub context_used: Option<i64>,
     #[serde(default)]
     pub context_window: Option<i64>,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub worktree_cwd: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,6 +127,10 @@ pub struct SessionRecord {
     pub context_used: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_window: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree_cwd: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -379,6 +387,13 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             params![now_millis()],
         )?;
     }
+    if current < 7 {
+        conn.execute("ALTER TABLE sessions ADD COLUMN worktree_cwd TEXT", [])?;
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (7, ?1)",
+            params![now_millis()],
+        )?;
+    }
     // Create even when a version row already exists (another build may have
     // used the same numbers, or a previous run recorded the version without
     // the table). Restore writes into these; missing tables look like a
@@ -410,7 +425,17 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         .map(|value| value.trim())
         .filter(|value| !value.is_empty());
     let git = crate::fs::git_info_for(&crate::fs::expand_home(&session.cwd));
-    let branch = git.branch.as_deref().filter(|value| !value.is_empty());
+    let branch = session
+        .branch
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| git.branch.as_deref().filter(|value| !value.is_empty()));
+    let worktree_cwd = session
+        .worktree_cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
 
     let existing: Option<(i64, i64, String, i64)> = conn
         .query_row(
@@ -438,8 +463,8 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         "INSERT INTO sessions (
            id, cwd, harness, model, model_settings, runtime_mode, title,
            provider_session_id, blocks_json, created_at, updated_at, branch,
-           context_used, context_window
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+           context_used, context_window, worktree_cwd
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
          ON CONFLICT(id) DO UPDATE SET
            cwd = excluded.cwd,
            harness = excluded.harness,
@@ -452,7 +477,8 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
            updated_at = excluded.updated_at,
            branch = excluded.branch,
            context_used = excluded.context_used,
-           context_window = excluded.context_window",
+           context_window = excluded.context_window,
+           worktree_cwd = excluded.worktree_cwd",
         params![
             session.id,
             session.cwd,
@@ -468,6 +494,7 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
             branch,
             session.context_used,
             session.context_window,
+            worktree_cwd,
         ],
     )?;
 
@@ -479,7 +506,7 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         runtime_mode: session.runtime_mode.clone(),
         title: session.title.clone(),
         provider_session_id: provider_session_id.map(str::to_owned),
-        branch: git.branch,
+        branch: branch.map(str::to_owned),
         repo: git.repo,
         additions: 0,
         deletions: 0,
@@ -797,7 +824,7 @@ fn get_session(conn: &Connection, session_id: &str) -> rusqlite::Result<Option<S
     conn.query_row(
         "SELECT id, cwd, harness, model, model_settings, runtime_mode, title,
                 provider_session_id, blocks_json, created_at, updated_at,
-                context_used, context_window
+                context_used, context_window, branch, worktree_cwd
          FROM sessions
          WHERE id = ?1",
         params![session_id],
@@ -830,6 +857,8 @@ fn get_session(conn: &Connection, session_id: &str) -> rusqlite::Result<Option<S
                 blocks,
                 context_used: row.get(11)?,
                 context_window: row.get(12)?,
+                branch: row.get(13)?,
+                worktree_cwd: row.get(14)?,
                 created_at: row.get(9)?,
                 updated_at: row.get(10)?,
             })
@@ -943,6 +972,8 @@ mod tests {
             blocks: json!([{ "id": "b1", "role": "user", "text": "hello" }]),
             context_used: None,
             context_window: None,
+            branch: None,
+            worktree_cwd: None,
         }
     }
 
@@ -1124,6 +1155,28 @@ mod tests {
     }
 
     #[test]
+    fn migration_v7_adds_worktree_cwd_column() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM schema_migrations WHERE version = 7",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+        let column: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'worktree_cwd'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(column, 1);
+    }
+
+    #[test]
     fn archive_round_trips_and_survives_upsert() {
         let store = SessionStore::open_in_memory().unwrap();
         let conn = store.conn.lock().unwrap();
@@ -1209,6 +1262,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(summary.branch.as_deref(), Some("fix-sidebar"));
         assert_eq!(summary.repo.as_deref(), Some("widget"));
+    }
+
+    #[test]
+    fn upsert_keeps_session_branch_and_worktree() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        let mut session = sample("s1", "/tmp/a", "First");
+        session.branch = Some("feat/picker".into());
+        session.worktree_cwd = Some("/tmp/a-feat".into());
+        let summary = upsert_session(&conn, &session).unwrap();
+        assert_eq!(summary.branch.as_deref(), Some("feat/picker"));
+        let record = get_session(&conn, "s1").unwrap().unwrap();
+        assert_eq!(record.branch.as_deref(), Some("feat/picker"));
+        assert_eq!(record.worktree_cwd.as_deref(), Some("/tmp/a-feat"));
+        let listed = list_by_project(&conn, "/tmp/a").unwrap();
+        assert_eq!(listed[0].branch.as_deref(), Some("feat/picker"));
     }
 
     #[test]

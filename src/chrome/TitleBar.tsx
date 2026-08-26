@@ -97,6 +97,7 @@ type Props = {
   tabs: Tab[];
   activeId: string;
   cwd: string;
+  gitCwd?: string;
   sidebarOpen: boolean;
   deckLayout?: boolean;
   projectRailOpen?: boolean;
@@ -818,6 +819,7 @@ function TitleBarComponent({
   tabs,
   activeId,
   cwd,
+  gitCwd,
   sidebarOpen,
   deckLayout = false,
   projectRailOpen = true,
@@ -1185,7 +1187,7 @@ function TitleBarComponent({
       <div className="flex items-center gap-0.5 px-2">
         {!deckLayout ? (
           <ProjectDiffStats
-            cwd={cwd}
+            cwd={gitCwd || cwd}
             active={sourceControlActive}
             onClick={onShowSourceControl}
           />

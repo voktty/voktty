@@ -33,6 +33,8 @@ export type WorkspaceSessionStub = {
   runtimeMode: RuntimeMode;
   title: string;
   providerSessionId?: string;
+  branch?: string;
+  worktreeCwd?: string;
 };
 
 export type WorkspaceSnapshot = {
@@ -194,6 +196,8 @@ function sessionStub(session: Session): WorkspaceSessionStub | null {
     ...(session.providerSessionId
       ? { providerSessionId: session.providerSessionId }
       : {}),
+    ...(session.branch ? { branch: session.branch } : {}),
+    ...(session.worktreeCwd ? { worktreeCwd: session.worktreeCwd } : {}),
   };
 }
 
@@ -212,6 +216,8 @@ function sessionFromStub(stub: WorkspaceSessionStub): Session {
     ...(stub.providerSessionId
       ? { providerSessionId: stub.providerSessionId }
       : {}),
+    ...(stub.branch ? { branch: stub.branch } : {}),
+    ...(stub.worktreeCwd ? { worktreeCwd: stub.worktreeCwd } : {}),
   };
 }
 
@@ -243,6 +249,12 @@ function sanitizeStub(raw: unknown): WorkspaceSessionStub | null {
     title: typeof value.title === "string" ? value.title : "",
     ...(typeof value.providerSessionId === "string" && value.providerSessionId
       ? { providerSessionId: value.providerSessionId }
+      : {}),
+    ...(typeof value.branch === "string" && value.branch.trim()
+      ? { branch: value.branch.trim() }
+      : {}),
+    ...(typeof value.worktreeCwd === "string" && value.worktreeCwd.trim()
+      ? { worktreeCwd: value.worktreeCwd.trim() }
       : {}),
   };
 }

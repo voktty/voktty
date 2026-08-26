@@ -20,7 +20,8 @@ import {
   projectTerminalFileIds,
   type ProjectTerminalDock,
 } from "./projectTerminal";
-import type { Session } from "./session";
+import { sessionWorkCwd, type Session } from "./session";
+import { restoreSessionCheckout } from "./fs";
 import { sessionChildHarnesses } from "./handoff";
 import {
   getSession,
@@ -147,6 +148,15 @@ async function loadResumedWorkspaceOnce(): Promise<ResumedWorkspace | null> {
     workspace = workspaceFromResumed(sessions);
   }
 
+  if (workspace) {
+    workspace = {
+      ...workspace,
+      sessions: await Promise.all(
+        workspace.sessions.map((session) => restoreSessionCheckout(session)),
+      ),
+    };
+  }
+
   bootingResumed = workspace;
   if (workspace) {
     await Promise.all(
@@ -165,7 +175,7 @@ export function bindResumedSessions(sessions: Session[]): void {
       session.harness,
       session.id,
       session.providerSessionId,
-      session.cwd,
+      sessionWorkCwd(session),
     );
   }
 }

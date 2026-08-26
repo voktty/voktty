@@ -81,6 +81,8 @@ const TAB_LABELS: Record<SidebarTab, string> = {
 
 type Props = {
   cwd: string;
+  /** Working copy for Changes / explorer git. Falls back to `cwd`. */
+  gitCwd?: string;
   open: boolean;
   layout: SidebarLayout;
   sessions: SessionSummary[];
@@ -131,6 +133,7 @@ type Props = {
 
 function SidebarComponent({
   cwd,
+  gitCwd,
   open,
   layout,
   sessions,
@@ -178,6 +181,7 @@ function SidebarComponent({
   onSelectSettingsSection,
   onCloseSettings,
 }: Props) {
+  const gitRoot = gitCwd || cwd;
   const [width, setWidth] = useState(rememberedWidth);
   const [dragging, setDragging] = useState(false);
   const [tabOrder, setTabOrder] = useState<SidebarTab[]>(loadSidebarTabOrder);
@@ -265,8 +269,8 @@ function SidebarComponent({
   // one is picked — whether or not the rail is open.
   const sidebarVisible =
     open && !searchActive && !settingsOpen && !(deckLayout && !inProject);
-  const gitStatuses = useGitFileStatuses(cwd, open && tab === "files");
-  const changeStats = useProjectDiffStats(cwd, open);
+  const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
+  const changeStats = useProjectDiffStats(gitRoot, open);
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
   const sessionDiffs = useSessionDiffStats(
@@ -673,7 +677,7 @@ function SidebarComponent({
       >
         {filesSearchOpen ? (
           <ProjectSearch
-            cwd={cwd}
+            cwd={gitRoot}
             focusToken={searchFocusToken}
             onOpenFile={onOpenFile}
             onClose={() => onFilesSearchOpenChange(false)}
@@ -684,8 +688,8 @@ function SidebarComponent({
             className="min-h-0 flex-1 overflow-y-auto overscroll-none"
           >
             <FileTree
-              key={cwd}
-              cwd={cwd}
+              key={gitRoot}
+              cwd={gitRoot}
               deckLayout={deckLayout}
               onOpenFile={onOpenFile}
               onOpenTerminal={onOpenTerminal}
@@ -853,7 +857,7 @@ function SidebarComponent({
       {deckLayout && tab === "changes" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <SourceControl
-            cwd={cwd}
+            cwd={gitRoot}
             enabled={open}
             textHarness={textHarness}
             selectedPath={selectedDiffPath}

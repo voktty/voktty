@@ -9,9 +9,11 @@ import {
 import { Composer } from "../chrome/Composer";
 import { SessionReview } from "../chrome/SessionReview";
 import type { ApprovalDecision } from "../lib/harness";
+import type { GitSessionCheckout } from "../lib/fs";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import {
   sessionDisplayTitle,
+  sessionWorkCwd,
   type Attachment,
   type HarnessId,
   type RuntimeMode,
@@ -32,6 +34,7 @@ type Props = {
   onFocus: (sessionId: string) => void;
   onClose: (sessionId: string) => void;
   onCwdChange: (sessionId: string, cwd: string) => void;
+  onBranchChange: (sessionId: string, checkout: GitSessionCheckout) => void;
   onModelChange: (sessionId: string, harness: HarnessId, model: string) => void;
   onModelSettingsChange: (
     sessionId: string,
@@ -67,6 +70,7 @@ export const SessionPane = memo(function SessionPane({
   onFocus,
   onClose,
   onCwdChange,
+  onBranchChange,
   onModelChange,
   onModelSettingsChange,
   onRuntimeModeChange,
@@ -94,6 +98,7 @@ export const SessionPane = memo(function SessionPane({
   const onJumpToBottomReady = useCallback((jump: () => void) => {
     jumpToBottomRef.current = jump;
   }, []);
+  const workCwd = sessionWorkCwd(session);
   const isEmpty = session.blocks.length === 0;
   const showDeckProjectPicker =
     isEmpty && !looksLikeProject(session.cwd);
@@ -109,6 +114,7 @@ export const SessionPane = memo(function SessionPane({
       modelSettings={session.modelSettings}
       runtimeMode={session.runtimeMode}
       cwd={session.cwd}
+      branch={session.branch}
       recents={recents}
       hideProjectPicker={
         hideProjectPicker ? !showDeckProjectPicker : false
@@ -116,6 +122,7 @@ export const SessionPane = memo(function SessionPane({
       context={session.context}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}
+      onBranchChange={(checkout) => onBranchChange(session.id, checkout)}
       onNewTerminal={() => onNewTerminal(session.id)}
       onModelChange={(harness, model) =>
         onModelChange(session.id, harness, model)
@@ -131,7 +138,7 @@ export const SessionPane = memo(function SessionPane({
     >
       <SessionReview
         sessionId={session.id}
-        cwd={session.cwd}
+        cwd={workCwd}
         enabled={visible}
         busy={!!session.busy}
         onOpenDiff={onOpenDiff}
@@ -203,7 +210,7 @@ export const SessionPane = memo(function SessionPane({
             <AgentTranscript
               blocks={session.blocks}
               busy={!!session.busy}
-              cwd={session.cwd}
+              cwd={workCwd}
               onApproval={approve}
               onOpenFile={onOpenFile}
               onOpenDiff={onOpenDiff}

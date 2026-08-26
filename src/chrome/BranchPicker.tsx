@@ -9,18 +9,21 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
-  gitCheckout,
-  gitCreateBranch,
+  gitSessionCheckout,
+  gitSessionCreateBranch,
   notifyGitChanged,
   type GitBranchInfo,
   type GitBranches,
+  type GitSessionCheckout,
 } from "../lib/fs";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectBranches } from "../hooks/useProjectBranches";
 
 type Props = {
   cwd: string;
+  branch?: string;
   enabled?: boolean;
+  onChange?: (checkout: GitSessionCheckout) => void;
   onClose?: () => void;
 };
 
@@ -45,7 +48,13 @@ function menuStyle(anchor: DOMRect): CSSProperties {
   };
 }
 
-export function BranchPicker({ cwd, enabled = true, onClose }: Props) {
+export function BranchPicker({
+  cwd,
+  branch,
+  enabled = true,
+  onChange,
+  onClose,
+}: Props) {
   const [info, setInfo] = useState<GitBranches | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -57,6 +66,8 @@ export function BranchPicker({ cwd, enabled = true, onClose }: Props) {
   const search = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const visible = enabled && Boolean(cwd) && cwd !== "~";
   const projectBranches = useProjectBranches(cwd, visible);
@@ -64,6 +75,9 @@ export function BranchPicker({ cwd, enabled = true, onClose }: Props) {
   useEffect(() => {
     setInfo(projectBranches);
   }, [projectBranches]);
+
+  const current = branch || info?.current || null;
+  const detached = !branch && !!info?.detached;
 
   const dismiss = (restore: boolean) => {
     setOpen(false);
@@ -126,37 +140,33 @@ export function BranchPicker({ cwd, enabled = true, onClose }: Props) {
         })
       : branches;
     const name = query.trim();
-    const exists = branches.some((branch) => branch.name === name);
+    const exists = branches.some((entry) => entry.name === name);
     const create: Row[] = name && !exists ? [{ kind: "create", name }] : [];
+    const selected = branch || info?.current;
     return [
       ...create,
-      ...filtered.map((branch) => ({ kind: "branch" as const, branch })),
+      ...filtered.map((entry) => ({
+        kind: "branch" as const,
+        branch: {
+          ...entry,
+          current: entry.name === selected && !entry.remote,
+        },
+      })),
     ];
-  }, [info, query]);
+  }, [branch, info, query]);
 
   useEffect(() => {
     setActive((i) => (rows.length === 0 ? 0 : Math.min(i, rows.length - 1)));
   }, [rows.length]);
 
-  const run = async (work: () => Promise<string>) => {
+  const run = async (work: () => Promise<GitSessionCheckout>, created: boolean) => {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      const name = await work();
-      setInfo((prev) =>
-        prev
-          ? {
-              current: name,
-              detached: false,
-              branches: prev.branches.map((branch) => ({
-                ...branch,
-                current: branch.name === name && !branch.remote,
-              })),
-            }
-          : prev,
-      );
-      notifyGitChanged();
+      const checkout = await work();
+      onChangeRef.current?.(checkout);
+      if (created) notifyGitChanged();
       dismiss(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -167,14 +177,17 @@ export function BranchPicker({ cwd, enabled = true, onClose }: Props) {
 
   const pick = (row: Row) => {
     if (row.kind === "create") {
-      void run(() => gitCreateBranch(cwd, row.name));
+      void run(() => gitSessionCreateBranch(cwd, row.name), true);
       return;
     }
     if (row.branch.current) {
       dismiss(true);
       return;
     }
-    void run(() => gitCheckout(cwd, row.branch.name, row.branch.remote));
+    void run(
+      () => gitSessionCheckout(cwd, row.branch.name, row.branch.remote),
+      false,
+    );
   };
 
   const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -195,9 +208,9 @@ export function BranchPicker({ cwd, enabled = true, onClose }: Props) {
     }
   };
 
-  if (!visible || !info?.current) return null;
+  if (!visible || !current) return null;
 
-  const label = info.detached ? `detached ${info.current}` : info.current;
+  const label = detached ? `detached ${current}` : current;
 
   return (
     <div className="flex max-w-[45%] shrink-0 items-center gap-2.5">

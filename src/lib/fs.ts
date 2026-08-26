@@ -200,6 +200,55 @@ export function gitCreateBranch(cwd: string, name: string): Promise<string> {
   return invoke<string>("git_create_branch", { cwd, name });
 }
 
+export type GitSessionCheckout = {
+  branch: string;
+  cwd: string;
+  isolated: boolean;
+};
+
+/** Check out a branch in a session worktree without moving the project HEAD. */
+export function gitSessionCheckout(
+  cwd: string,
+  name: string,
+  remote?: string | null,
+): Promise<GitSessionCheckout> {
+  return invoke<GitSessionCheckout>("git_session_checkout", {
+    cwd,
+    name,
+    remote: remote ?? null,
+  });
+}
+
+/** Create a branch in a session worktree without moving the project HEAD. */
+export function gitSessionCreateBranch(
+  cwd: string,
+  name: string,
+): Promise<GitSessionCheckout> {
+  return invoke<GitSessionCheckout>("git_session_create_branch", { cwd, name });
+}
+
+/** Reattach a session to its pinned worktree after restore. */
+export async function restoreSessionCheckout<
+  T extends { cwd: string; branch?: string; worktreeCwd?: string },
+>(session: T): Promise<T> {
+  if (!session.branch || !session.worktreeCwd || !session.cwd || session.cwd === "~") {
+    return session;
+  }
+  try {
+    const checkout = await gitSessionCheckout(session.cwd, session.branch);
+    if (!checkout.isolated) {
+      return { ...session, branch: undefined, worktreeCwd: undefined };
+    }
+    return {
+      ...session,
+      branch: checkout.branch,
+      worktreeCwd: checkout.cwd,
+    };
+  } catch {
+    return { ...session, branch: undefined, worktreeCwd: undefined };
+  }
+}
+
 const GIT_CHANGED = "monocode-git-changed";
 
 /** Tell git UIs (diff pane, branch picker) to reload after a local git mutation. */
