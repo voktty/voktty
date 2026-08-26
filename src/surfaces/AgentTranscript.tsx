@@ -208,7 +208,7 @@ export function AgentTranscript({
       ref={setScroller}
       className="agent-transcript h-full overflow-y-auto overscroll-none [overflow-anchor:none] font-mono text-[13px] leading-5"
     >
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-1">
+      <div className="mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-1">
         {firstVisibleTurn > 0 ? (
           <div className="flex justify-center px-4 py-3">
             <button
@@ -226,7 +226,7 @@ export function AgentTranscript({
           return (
             <div
               key={turn[0].id}
-              className="transcript-turn flex flex-col gap-1"
+              className="transcript-turn flex min-w-0 flex-col gap-1"
             >
               {groupTurnItems(turn).map((item) =>
                 item.type === "activity" ? (
@@ -391,7 +391,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   if (!block.text && block.streaming) return null;
 
   return (
-    <div className="px-4 py-3 text-content">
+    <div className="min-w-0 px-4 py-3 text-content">
       <AgentMarkdown
         text={block.text}
         streaming={block.streaming}

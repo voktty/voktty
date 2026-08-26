@@ -224,15 +224,26 @@ html.is-reordering * {
 .agent-markdown [data-streamdown="table-wrapper"] {
   gap: 0;
   padding: 0;
-  overflow: hidden;
   border-color: color-mix(in srgb, var(--color-content) 10%, transparent);
   border-radius: 10px;
   background: color-mix(in srgb, var(--color-content) 6%, transparent);
 }
 
+.agent-markdown [data-streamdown="code-block"] {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.agent-markdown [data-streamdown="table-wrapper"] {
+  overflow: hidden;
+}
+
 .agent-markdown .markdown-code-shell {
   position: relative;
   margin-block: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .agent-markdown .markdown-code-shell [data-streamdown="code-block"] {
@@ -324,6 +335,11 @@ html.is-reordering * {
   border-radius: 0;
   background: transparent;
   font-size: 12px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .agent-markdown
@@ -334,6 +350,16 @@ html.is-reordering * {
 
 .agent-markdown [data-streamdown="code-block-body"] pre {
   margin: 0;
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+}
+
+.agent-markdown [data-streamdown="code-block-body"] code > span {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  white-space: pre;
 }
 
 .agent-markdown [data-streamdown="code-block-body"] code > span::before {
