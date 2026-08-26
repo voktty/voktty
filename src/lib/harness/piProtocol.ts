@@ -1,5 +1,6 @@
 import type { Attachment, ToolPreview } from "../session";
 import type { AgentModel, ModelSetting } from "../models";
+import type { PiFlavor } from "./piFlavor";
 import { composeToolTitle, extractToolPreview } from "./preview";
 
 /** Images Pi RPC accepts on `prompt` / `steer`. */
@@ -101,24 +102,27 @@ export function parsePiVersion(output: string): string | null {
  * user's global Pi packages (todos, subagents, custom tools) still load.
  * Project-local `.pi` resources follow Pi's saved trust.json; RPC never prompts.
  */
-export function buildPiSpawnArgs(input: {
-  model?: string;
-  resume?: string;
-  /** Catalog probes: do not write a session file. */
-  noSession?: boolean;
-  /** Only for throwaway text jobs — never for live chat. */
-  noExtensions?: boolean;
-  /** Titles and other one-shot prompts: no tools, skills, or project context. */
-  isolated?: boolean;
-}): string[] {
+export function buildPiSpawnArgs(
+  flavor: PiFlavor,
+  input: {
+    model?: string;
+    resume?: string;
+    /** Catalog probes: do not write a session file. */
+    noSession?: boolean;
+    /** Only for throwaway text jobs — never for live chat. */
+    noExtensions?: boolean;
+    /** Titles and other one-shot prompts: no tools, skills, or project context. */
+    isolated?: boolean;
+  },
+): string[] {
   const args = ["--mode", "rpc"];
   if (input.isolated || input.noSession) args.push("--no-session");
   if (input.isolated || input.noExtensions) args.push("--no-extensions");
   if (input.isolated) {
-    args.push("--no-tools", "--no-skills", "--no-context-files");
+    args.push(...flavor.isolateFlags);
   }
   if (input.resume?.trim()) {
-    args.push("--session", input.resume.trim());
+    args.push(flavor.resumeFlag, input.resume.trim());
   }
   const model = input.model?.trim();
   if (model) args.push("--model", model);
@@ -590,7 +594,10 @@ export function summarizeToolRequest(
   }
 }
 
-export function modelsFromRpcData(data: unknown): AgentModel[] {
+export function modelsFromRpcData(
+  flavor: PiFlavor,
+  data: unknown,
+): AgentModel[] {
   const rec = asRecord(data);
   const list = Array.isArray(rec?.models)
     ? rec.models
@@ -612,8 +619,8 @@ export function modelsFromRpcData(data: unknown): AgentModel[] {
     const contextWindow = numberField(model, "contextWindow");
     const settings = thinkingSetting(model.reasoning === true);
     models.push({
-      id: `pi:${nativeId}`,
-      harness: "pi",
+      id: `${flavor.id}:${nativeId}`,
+      harness: flavor.id,
       name,
       nativeId,
       ...(settings ? { settings: [settings] } : {}),

@@ -225,6 +225,10 @@ export function resolvePiBinary(): Promise<{ path: string }> {
   return invoke("harness_resolve_pi");
 }
 
+export function resolveOmpBinary(): Promise<{ path: string }> {
+  return invoke("harness_resolve_omp");
+}
+
 export function resolveFxBinary(): Promise<{ path: string }> {
   return invoke("harness_resolve_fx");
 }

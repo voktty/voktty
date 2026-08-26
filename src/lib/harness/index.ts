@@ -41,6 +41,14 @@ export {
   bindPiSession,
 } from "./pi";
 export {
+  sendOmpTurn,
+  cancelOmpTurn,
+  respondOmpApproval,
+  stopOmpSession,
+  forgetOmpSession,
+  bindOmpSession,
+} from "./omp";
+export {
   sendFxTurn,
   cancelFxTurn,
   respondFxApproval,
@@ -52,7 +60,7 @@ export { generateCursorSessionTitle } from "./cursorTitle";
 export { generateCodexSessionTitle } from "./codexTitle";
 export { generateOpenCodeSessionTitle } from "./opencodeTitle";
 export { generateClaudeSessionTitle } from "./claudeTitle";
-export { generatePiSessionTitle } from "./piTitle";
+export { generatePiSessionTitle, generateOmpSessionTitle } from "./piTitle";
 export {
   generateCursorCommitMessage,
   generateCursorPrContent,
@@ -79,12 +87,12 @@ export {
 export { warmupCursorText } from "./cursorText";
 export { warmupOpenCodeText } from "./opencodeText";
 export { warmupClaudeText } from "./claudeText";
-export { warmupPiText } from "./piText";
+export { warmupPiText, warmupOmpText } from "./piText";
 export { refreshCursorCatalog } from "./cursorCatalog";
 export { refreshCodexCatalog } from "./codexCatalog";
 export { refreshOpenCodeCatalog } from "./opencodeCatalog";
 export { refreshClaudeCatalog } from "./claudeCatalog";
-export { refreshPiCatalog } from "./piCatalog";
+export { refreshPiCatalog, refreshOmpCatalog } from "./piCatalog";
 export { refreshFxCatalog } from "./fxCatalog";
 export { registerBuiltinHarnesses } from "./register";
 export {

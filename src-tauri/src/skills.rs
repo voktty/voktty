@@ -60,6 +60,7 @@ pub(crate) fn list_skills_from(project: &Path, home: Option<&Path>) -> Vec<Disco
         (".codex/skills", "codex"),
         (".opencode/skills", "opencode"),
         (".pi/skills", "pi"),
+        (".omp/skills", "omp"),
         (".fx/skills", "fx"),
     ] {
         add_root(project.join(dir), "project", source);
@@ -69,6 +70,7 @@ pub(crate) fn list_skills_from(project: &Path, home: Option<&Path>) -> Vec<Disco
     }
     if let Some(home) = home {
         add_root(home.join(".pi/agent/skills"), "user", "pi");
+        add_root(home.join(".omp/agent/skills"), "user", "omp");
     }
 
     let mut out: Vec<DiscoveredSkill> = by_name.into_values().collect();

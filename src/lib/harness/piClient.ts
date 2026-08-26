@@ -7,8 +7,8 @@ type Pending = {
 };
 
 /**
- * JSONL request/response multiplexer for `pi --mode rpc`.
- * Agent events and extension UI frames are forwarded to `onFrame`.
+ * JSONL request/response multiplexer for `pi --mode rpc` and the identical
+ * `omp --mode rpc`. Agent events and extension UI frames go to `onFrame`.
  */
 export class PiRpc {
   private nextId = 1;
@@ -18,6 +18,7 @@ export class PiRpc {
   constructor(
     private readonly sessionId: string,
     private readonly onFrame: (rec: Record<string, unknown>) => void,
+    private readonly label = "Pi",
   ) {}
 
   pushLine(line: string) {
@@ -29,7 +30,9 @@ export class PiRpc {
       this.pending.delete(response.id);
       if (!pending) return;
       if (!response.success) {
-        pending.reject(new Error(response.error || `Pi ${response.command} failed`));
+        pending.reject(
+          new Error(response.error || `${this.label} ${response.command} failed`),
+        );
         return;
       }
       pending.resolve(rec);
@@ -42,14 +45,14 @@ export class PiRpc {
     command: Record<string, unknown>,
     timeoutMs = 15_000,
   ): Promise<Record<string, unknown>> {
-    if (this.closed) throw new Error("Pi process is not running");
+    if (this.closed) throw new Error(`${this.label} process is not running`);
     const id = `mc_${this.nextId++}`;
     const payload = { ...command, id };
     const pending = new Promise<Record<string, unknown>>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         const type = stringField(command, "type") ?? "command";
-        reject(new Error(`Pi ${type} timed out`));
+        reject(new Error(`${this.label} ${type} timed out`));
       }, timeoutMs);
       this.pending.set(id, {
         resolve: (value) => {
@@ -69,7 +72,7 @@ export class PiRpc {
   close(error?: Error) {
     if (this.closed) return;
     this.closed = true;
-    const err = error ?? new Error("Pi process exited");
+    const err = error ?? new Error(`${this.label} process exited`);
     for (const pending of this.pending.values()) pending.reject(err);
     this.pending.clear();
   }

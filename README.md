@@ -12,7 +12,7 @@
   <img src="docs/screenshot.jpg" alt="MonoCode with sessions, agent chat, diffs, terminal, and editor" width="920" />
 </p>
 
-Works with your subscriptions on Claude Code, Codex, Cursor, OpenCode, Pi, and fx. If they’re installed and logged in, MonoCode can run them. Tabs are sessions. The composer is the input. MonoCode does not sell tokens.
+Works with your subscriptions on Claude Code, Codex, Cursor, OpenCode, Pi, omp, and fx. If they’re installed and logged in, MonoCode can run them. Tabs are sessions. The composer is the input. MonoCode does not sell tokens.
 
 ## Install
 
@@ -23,6 +23,7 @@ Works with your subscriptions on Claude Code, Codex, Cursor, OpenCode, Pi, and f
 > - [Cursor CLI](https://cursor.com/cli) - `agent login`
 > - [OpenCode](https://opencode.ai) - `opencode auth login`
 > - [Pi](https://pi.dev/) - `npm install -g @earendil-works/pi-coding-agent`
+> - [omp](https://omp.sh) - `curl -fsSL https://omp.sh/install | sh`
 > - [fx](https://fx.sh) - `curl -fsSL https://fx.sh/setup.sh | bash` then `fx login`
 
 macOS (Apple Silicon): download [MonoCode.dmg](https://dl.usemono.dev/MonoCode.dmg), open it, drag MonoCode to Applications.
