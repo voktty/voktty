@@ -109,6 +109,7 @@ type Props = {
   onGoForward?: () => void;
   onNew: () => void;
   onNewTerminal?: () => void;
+  onShowTerminal?: () => void;
   projectTerminalActive?: boolean;
   onClose: (id: string) => void;
   onReorder: (ids: string[], movedId?: string) => void;
@@ -828,6 +829,7 @@ function TitleBarComponent({
   onGoForward,
   onNew,
   onNewTerminal,
+  onShowTerminal,
   projectTerminalActive = false,
   onClose,
   onReorder,
@@ -1195,15 +1197,19 @@ function TitleBarComponent({
             </IconButton>
           </>
         ) : null}
-        {deckLayout && !projectless && onNewTerminal ? (
+        {deckLayout && !projectless && (onShowTerminal || onNewTerminal) ? (
           <IconButton
             label={
               projectTerminalActive
-                ? `Terminal (${MOD}\`)`
+                ? "Terminal"
                 : `New Terminal (${MOD}\`)`
             }
             accent={projectTerminalActive}
-            onClick={onNewTerminal}
+            onClick={
+              projectTerminalActive
+                ? (onShowTerminal ?? onNewTerminal)
+                : onNewTerminal
+            }
           >
             <Terminal className="size-3.5" strokeWidth={1.75} />
           </IconButton>

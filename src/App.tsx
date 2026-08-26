@@ -1126,22 +1126,28 @@ export default function App({
   );
 
   const onNewTerminal = useCallback(() => {
-    if (deckLayout) {
-      const dock = findProjectTerminal(
-        projectTerminalsRef.current,
-        projectCwd,
-      );
-      if (dock && dock.pane.files.length > 0) {
-        if (!dock.open) {
-          setProjectTerminals((prev) =>
-            mapProjectTerminal(prev, projectCwd, (entry) =>
-              withDockOpen(entry, true),
-            ),
-          );
-        }
-        focusProjectTerminal();
-        return;
+    onOpenTerminal(active?.cwd ?? projectCwd);
+  }, [active?.cwd, onOpenTerminal, projectCwd]);
+
+  const onShowProjectTerminal = useCallback(() => {
+    if (!deckLayout) {
+      onOpenTerminal(active?.cwd ?? projectCwd);
+      return;
+    }
+    const dock = findProjectTerminal(
+      projectTerminalsRef.current,
+      projectCwd,
+    );
+    if (dock && dock.pane.files.length > 0) {
+      if (!dock.open) {
+        setProjectTerminals((prev) =>
+          mapProjectTerminal(prev, projectCwd, (entry) =>
+            withDockOpen(entry, true),
+          ),
+        );
       }
+      focusProjectTerminal();
+      return;
     }
     onOpenTerminal(active?.cwd ?? projectCwd);
   }, [
@@ -3373,6 +3379,7 @@ export default function App({
           onGoForward={onVisitForward}
           onNew={onNew}
           onNewTerminal={onNewTerminal}
+          onShowTerminal={onShowProjectTerminal}
           projectTerminalActive={
             !!currentProjectDock && currentProjectDock.pane.files.length > 0
           }
