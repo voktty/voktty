@@ -574,8 +574,8 @@ function RailAction({
       aria-label={ariaLabel ?? label}
       className={`relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${
         active
-          ? "bg-content/12 text-content"
-          : "text-content/50 hover:bg-content/5 hover:text-content"
+          ? "bg-content/10 text-content"
+          : "text-content/50 bg-content/5 hover:bg-content/10 hover:text-content"
       } disabled:cursor-default disabled:opacity-40`}
     >
       {badge != null ? (
@@ -644,7 +644,7 @@ function ProjectSection({
   groupMascots: Record<string, string>;
 }) {
   return (
-    <div className="shrink-0">
+    <div className="shrink-0 mb-2">
       <div className="flex items-center gap-1 px-3 pb-1.5 pt-1">
         <span className="min-w-0 flex-1 truncate px-1 text-xs text-content/50">
           {label}
