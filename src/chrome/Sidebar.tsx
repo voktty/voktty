@@ -63,6 +63,7 @@ import { IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { SessionFiltersMenu } from "./SessionFiltersMenu";
+import { SidebarUpdate } from "./SidebarUpdate";
 import { SourceControl } from "./SourceControl";
 
 const MIN_WIDTH = 160;
@@ -865,6 +866,7 @@ function SidebarComponent({
           />
         </div>
       ) : null}
+      {!deckLayout ? <SidebarUpdate variant="classic" /> : null}
       {sessionMenu ? (
         <ExplorerMenu
           x={sessionMenu.x}
