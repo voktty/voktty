@@ -1220,7 +1220,7 @@ mod tests {
                 headers: vec![("MCP-Session-Id".into(), "fixture-session".into())],
                 body,
                 fragment: false,
-                hold_open: true,
+                hold_open: false,
             };
         }
         let method = request.body["method"].as_str().unwrap_or_default();

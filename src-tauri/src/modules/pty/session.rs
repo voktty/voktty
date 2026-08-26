@@ -417,6 +417,8 @@ mod tests {
             writer,
             master: PtyMaster::new(pair.master),
             exited: Arc::new(AtomicBool::new(false)),
+            output_gate: Arc::new(Mutex::new(())),
+            on_data: Channel::new(|_| Ok(())),
         });
 
         assert!(
@@ -466,6 +468,8 @@ mod tests {
             writer,
             master: PtyMaster::new(pair.master),
             exited: Arc::new(AtomicBool::new(false)),
+            output_gate: Arc::new(Mutex::new(())),
+            on_data: Channel::new(|_| Ok(())),
         });
 
         drop_session(session);
