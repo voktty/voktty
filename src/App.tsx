@@ -3233,6 +3233,12 @@ export default function App({
         run("open_search", actions.current.onOpenSearch);
         return;
       }
+      if (mod && !e.altKey && !e.shiftKey && e.key === ",") {
+        e.preventDefault();
+        e.stopPropagation();
+        run("open_settings", () => actions.current.openSettings());
+        return;
+      }
       if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
         e.stopPropagation();
@@ -3288,6 +3294,7 @@ export default function App({
       }),
       listen("go_to_file", () => actions.current.onGoToFile()),
       listen("open_search", () => actions.current.onOpenSearch()),
+      listen("open_settings", () => actions.current.openSettings()),
       // Deck mode drops the appearance popover, so the menu item lands on the
       // settings page instead.
       listen("sidebar_opacity", () => {

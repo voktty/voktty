@@ -432,32 +432,54 @@ export function ProjectRail({
         />
       ) : (
         <>
-        <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
-          <RailAction
-            label="Search"
-            icon={Search}
-            onClick={onSearch}
-            active={searchActive}
-            shortcut={`${MOD}K`}
-            ariaLabel={`Search (${MOD}K)`}
-          />
-        </div>
+          <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
+            <RailAction
+              label="Search"
+              icon={Search}
+              onClick={onSearch}
+              active={searchActive}
+              shortcut={`${MOD}K`}
+              ariaLabel={`Search (${MOD}K)`}
+            />
+          </div>
 
-        <div
-          ref={(el) => {
-            lockOverscroll(el);
-            scrollRef.current = el;
-          }}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none pb-2"
-        >
-          {sections.pinned.length > 0 ? (
+          <div
+            ref={(el) => {
+              lockOverscroll(el);
+              scrollRef.current = el;
+            }}
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none pb-2"
+          >
+            {sections.pinned.length > 0 ? (
+              <ProjectSection
+                label="Pinned"
+                items={sections.pinned}
+                cwd={cwd}
+                busy={busy}
+                sortable={pinnedSortable}
+                pinned
+                searchActive={searchActive}
+                onSelect={onSelectProject}
+                onTogglePin={onTogglePin}
+                onContextMenu={onProjectContextMenu}
+                onOpenMenu={openProjectMenu}
+                groupLabels={groupLabels}
+                groupColors={groupColors}
+                groupCustomColors={groupCustomColors}
+                groupLogos={groupLogos}
+                groupMascots={groupMascots}
+              />
+            ) : null}
+
             <ProjectSection
-              label="Pinned"
-              items={sections.pinned}
+              label="Projects"
+              items={sections.projects}
+              emptyLabel="No projects yet"
+              onAdd={onOpenProject}
               cwd={cwd}
               busy={busy}
-              sortable={pinnedSortable}
-              pinned
+              sortable={projectSortable}
+              pinned={false}
               searchActive={searchActive}
               onSelect={onSelectProject}
               onTogglePin={onTogglePin}
@@ -469,33 +491,20 @@ export function ProjectRail({
               groupLogos={groupLogos}
               groupMascots={groupMascots}
             />
-          ) : null}
-
-          <ProjectSection
-            label="Projects"
-            items={sections.projects}
-            emptyLabel="No projects yet"
-            onAdd={onOpenProject}
-            cwd={cwd}
-            busy={busy}
-            sortable={projectSortable}
-            pinned={false}
-            searchActive={searchActive}
-            onSelect={onSelectProject}
-            onTogglePin={onTogglePin}
-            onContextMenu={onProjectContextMenu}
-            onOpenMenu={openProjectMenu}
-            groupLabels={groupLabels}
-            groupColors={groupColors}
-            groupCustomColors={groupCustomColors}
-            groupLogos={groupLogos}
-            groupMascots={groupMascots}
-          />
-        </div>
-        <div className="flex shrink-0 flex-col gap-px border-t border-content/10 p-2">
-          <SidebarUpdate />
-          <RailAction label="Settings" icon={Settings} onClick={onOpenSettings} />
-        </div>
+          </div>
+          <div className="p-2 pb-1">
+            <SidebarUpdate />
+          </div>
+          <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
+            <RailAction
+              label="Settings"
+              icon={Settings}
+              onClick={onOpenSettings}
+              shortcut={`${MOD},`}
+              ariaLabel={`Settings (${MOD},)`}
+              isNavButton
+            />
+          </div>
         </>
       )}
       {projectMenu ? (
@@ -583,6 +592,7 @@ function RailAction({
   badge,
   shortcut,
   ariaLabel,
+  isNavButton = false,
 }: {
   label: string;
   icon: LucideIcon;
@@ -591,6 +601,7 @@ function RailAction({
   badge?: number;
   shortcut?: string;
   ariaLabel?: string;
+  isNavButton?: boolean;
 }) {
   return (
     <button
@@ -601,7 +612,9 @@ function RailAction({
       className={`relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${
         active
           ? "bg-content/10 text-content"
-          : "text-content/50 bg-content/5 hover:bg-content/10 hover:text-content"
+          : isNavButton
+            ? "text-content/50 hover:bg-content/10 hover:text-content"
+            : "text-content/50 bg-content/5 hover:bg-content/10 hover:text-content"
       } disabled:cursor-default disabled:opacity-40`}
     >
       {badge != null ? (

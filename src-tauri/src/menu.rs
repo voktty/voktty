@@ -21,7 +21,7 @@ pub fn dispatch(app: &AppHandle, id: &str) {
         | "split_right" | "split_down" | "focus_left" | "focus_right" | "focus_up"
         | "focus_down" | "toggle_sidebar" | "sidebar_opacity" | "open_project" | "go_to_file"
         | "open_search" | "find_in_project" | "find" | "new_terminal" | "new_terminal_tab"
-        | "toggle_terminal" | "open_model_picker" => {
+        | "toggle_terminal" | "open_model_picker" | "open_settings" => {
             let _ = app.emit(id, ());
         }
         _ => {}
@@ -30,6 +30,9 @@ pub fn dispatch(app: &AppHandle, id: &str) {
 
 #[cfg(target_os = "macos")]
 fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
+    let open_settings = MenuItemBuilder::with_id("open_settings", "Settings…")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)?;
     let new_window = MenuItemBuilder::with_id("new_window", "New Window")
         .accelerator("CmdOrCtrl+Shift+N")
         .build(app)?;
@@ -157,6 +160,8 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             .build(app)?;
         let app_menu = SubmenuBuilder::new(app, "MonoCode")
             .about(Some(AboutMetadata::default()))
+            .separator()
+            .item(&open_settings)
             .separator()
             .hide()
             .hide_others()
