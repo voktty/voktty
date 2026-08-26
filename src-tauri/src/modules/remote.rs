@@ -1523,7 +1523,7 @@ mod tests {
     #[test]
     fn upload_command_contains_only_fixed_remote_locations_and_digest() {
         let command = install_command("x86_64", &"a".repeat(64));
-        assert!(command.contains(".voktty/servers/1.0.0/linux-x86_64"));
+        assert!(command.contains(&format!(".voktty/servers/{REMOTE_VERSION}/linux-x86_64")));
         assert!(command.contains("sha256sum"));
         assert!(!command.contains("; rm -rf"));
     }
@@ -1532,7 +1532,7 @@ mod tests {
     fn probe_command_normalizes_architecture_and_checks_versioned_helper() {
         let command = probe_command();
         assert!(command.contains("aarch64|arm64) arch=aarch64"));
-        assert!(command.contains(".voktty/servers/1.0.0/linux-$arch"));
+        assert!(command.contains(&format!(".voktty/servers/{REMOTE_VERSION}/linux-$arch")));
         assert!(command.contains(".voktty/shell-integration/1/.digest"));
         assert!(command.contains("VOKTTY_HELPER|%s|%s|%s"));
     }
