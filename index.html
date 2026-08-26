@@ -16,6 +16,12 @@
                 ? "dark"
                 : "light";
           document.documentElement.classList.add(resolved);
+
+          var lang = localStorage.getItem("voktty-ui-language-shadow") || "en";
+          var dir = lang === "ar" ? "rtl" : "ltr";
+          document.documentElement.lang = lang;
+          document.documentElement.dir = dir;
+          document.documentElement.setAttribute("data-direction", dir);
         } catch (e) {}
       })();
     </script>

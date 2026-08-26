@@ -127,14 +127,13 @@ export function AiDiffPane({
     ],
     [originalContent, lang],
   );
-
   const stats = useMemo(
     () => computeLineStats(originalContent, proposedContent),
     [originalContent, proposedContent],
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div dir="ltr" className="flex h-full min-h-0 flex-col bg-background text-left">
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge

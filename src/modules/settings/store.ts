@@ -20,6 +20,7 @@ import {
   normalizeAgentLaunchCommands,
 } from "@/modules/agents/lib/launcher";
 import { type LanguageId, isLanguageId } from "@/modules/i18n/types";
+import { applyDocumentLocale } from "@/modules/i18n/direction";
 import type { SshConnection } from "@/modules/ssh/types";
 import type { SshTunnelConfig } from "@/modules/ssh/tunnels/types";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
@@ -581,7 +582,7 @@ export async function loadPreferences(): Promise<Preferences> {
   const entries = await store.entries();
   const map = new Map<string, unknown>(entries);
   const get = <T>(k: string): T | undefined => map.get(k) as T | undefined;
-  return {
+  const result: Preferences = {
     language: ((): LanguageId => {
       const stored = get<string>(KEY_LANGUAGE);
       return stored && isLanguageId(stored)
@@ -855,6 +856,8 @@ export async function loadPreferences(): Promise<Preferences> {
       get<boolean>(KEY_HAS_COMPLETED_ONBOARDING) ??
       DEFAULT_PREFERENCES.hasCompletedOnboarding,
   };
+  applyDocumentLocale(result.language);
+  return result;
 }
 
 export async function setSshConnections(value: SshConnection[]): Promise<void> {
@@ -885,6 +888,7 @@ export async function setLspCustomServers(
 }
 
 export async function setLanguage(value: LanguageId): Promise<void> {
+  applyDocumentLocale(value);
   await writePref(KEY_LANGUAGE, value);
   syncTrayLanguage(value);
 }
