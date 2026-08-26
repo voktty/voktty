@@ -5,6 +5,7 @@ import {
   PinOff,
   Plus,
   Search,
+  Settings,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -63,8 +64,10 @@ import { RemoveProjectDialog } from "./RemoveProjectDialog";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { TabVisitNav } from "./TitleBar";
 import { SidebarUpdate } from "./SidebarUpdate";
+import { SettingsNav } from "./SettingsRail";
 import { Shimmer } from "../surfaces/Shimmer";
 import { TabGroupMenu, type TabGroupMenuExtraItem } from "./TabGroupMenu";
+import type { SettingsSectionId } from "../lib/settings";
 
 const REVEAL_LABEL = IS_MAC
   ? "Reveal in Finder"
@@ -107,6 +110,11 @@ type Props = {
   onSelectProject: (path: string) => void;
   onOpenProject: () => void;
   onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
+  settingsOpen?: boolean;
+  settingsSection?: SettingsSectionId;
+  onOpenSettings?: () => void;
+  onSelectSettingsSection?: (section: SettingsSectionId) => void;
+  onCloseSettings?: () => void;
 };
 
 export function ProjectRail({
@@ -123,6 +131,11 @@ export function ProjectRail({
   onSelectProject,
   onOpenProject,
   onRemoveProject,
+  settingsOpen = false,
+  settingsSection = "general",
+  onOpenSettings,
+  onSelectSettingsSection,
+  onCloseSettings,
 }: Props) {
   const [width, setWidth] = useState(loadProjectRailWidth);
   const [dragging, setDragging] = useState(false);
@@ -370,9 +383,9 @@ export function ProjectRail({
     }
   };
 
-  const onConfirmRemove = (options: { purgeData: boolean }) => {
+  const onConfirmRemove = (purgeData: boolean) => {
     if (!removing) return;
-    onRemoveProject?.(removing.path, options);
+    onRemoveProject?.(removing.path, { purgeData });
     setRemoving(null);
   };
 
@@ -406,37 +419,67 @@ export function ProjectRail({
           canGoForward={canGoForward}
           onGoBack={onGoBack}
           onGoForward={onGoForward}
-          onTogglePanel={onTogglePanel}
+          onTogglePanel={settingsOpen ? undefined : onTogglePanel}
           panelActive
         />
       </div>
 
-      <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
-        <RailAction
-          label="Search"
-          icon={Search}
-          onClick={onSearch}
-          active={searchActive}
-          shortcut={`${MOD}K`}
-          ariaLabel={`Search (${MOD}K)`}
+      {settingsOpen ? (
+        <SettingsNav
+          section={settingsSection}
+          onSelect={(next) => onSelectSettingsSection?.(next)}
+          onClose={() => onCloseSettings?.()}
         />
-      </div>
+      ) : (
+        <>
+        <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
+          <RailAction
+            label="Search"
+            icon={Search}
+            onClick={onSearch}
+            active={searchActive}
+            shortcut={`${MOD}K`}
+            ariaLabel={`Search (${MOD}K)`}
+          />
+        </div>
 
-      <div
-        ref={(el) => {
-          lockOverscroll(el);
-          scrollRef.current = el;
-        }}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none pb-2"
-      >
-        {sections.pinned.length > 0 ? (
+        <div
+          ref={(el) => {
+            lockOverscroll(el);
+            scrollRef.current = el;
+          }}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none pb-2"
+        >
+          {sections.pinned.length > 0 ? (
+            <ProjectSection
+              label="Pinned"
+              items={sections.pinned}
+              cwd={cwd}
+              busy={busy}
+              sortable={pinnedSortable}
+              pinned
+              searchActive={searchActive}
+              onSelect={onSelectProject}
+              onTogglePin={onTogglePin}
+              onContextMenu={onProjectContextMenu}
+              onOpenMenu={openProjectMenu}
+              groupLabels={groupLabels}
+              groupColors={groupColors}
+              groupCustomColors={groupCustomColors}
+              groupLogos={groupLogos}
+              groupMascots={groupMascots}
+            />
+          ) : null}
+
           <ProjectSection
-            label="Pinned"
-            items={sections.pinned}
+            label="Projects"
+            items={sections.projects}
+            emptyLabel="No projects yet"
+            onAdd={onOpenProject}
             cwd={cwd}
             busy={busy}
-            sortable={pinnedSortable}
-            pinned
+            sortable={projectSortable}
+            pinned={false}
             searchActive={searchActive}
             onSelect={onSelectProject}
             onTogglePin={onTogglePin}
@@ -448,30 +491,13 @@ export function ProjectRail({
             groupLogos={groupLogos}
             groupMascots={groupMascots}
           />
-        ) : null}
-
-        <ProjectSection
-          label="Projects"
-          items={sections.projects}
-          emptyLabel="No projects yet"
-          onAdd={onOpenProject}
-          cwd={cwd}
-          busy={busy}
-          sortable={projectSortable}
-          pinned={false}
-          searchActive={searchActive}
-          onSelect={onSelectProject}
-          onTogglePin={onTogglePin}
-          onContextMenu={onProjectContextMenu}
-          onOpenMenu={openProjectMenu}
-          groupLabels={groupLabels}
-          groupColors={groupColors}
-          groupCustomColors={groupCustomColors}
-          groupLogos={groupLogos}
-          groupMascots={groupMascots}
-        />
-      </div>
-      <SidebarUpdate />
+        </div>
+        <div className="flex shrink-0 flex-col gap-px border-t border-content/10 p-2">
+          <SidebarUpdate />
+          <RailAction label="Settings" icon={Settings} onClick={onOpenSettings} />
+        </div>
+        </>
+      )}
       {projectMenu ? (
         <TabGroupMenu
           x={projectMenu.x}

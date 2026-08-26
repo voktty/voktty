@@ -1,0 +1,146 @@
+import { ALT, IS_MAC, MOD, SHIFT } from "./platform";
+
+const SECTION_KEY = "monocode.settingsSection";
+
+export type SettingsSectionId =
+  | "general"
+  | "appearance"
+  | "keybindings"
+  | "providers"
+  | "archive";
+
+export const SETTINGS_SECTIONS: {
+  id: SettingsSectionId;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "general",
+    label: "General",
+    description: "App-wide behavior and the build you are running.",
+  },
+  {
+    id: "appearance",
+    label: "Appearance",
+    description: "Theme, translucency, and the tint applied to the chrome.",
+  },
+  {
+    id: "keybindings",
+    label: "Keybindings",
+    description:
+      "Every shortcut the workspace handles, from the app menu and the key handler.",
+  },
+  {
+    id: "providers",
+    label: "Providers",
+    description:
+      "Agent CLIs MonoCode can drive, and the model new sessions start with.",
+  },
+  {
+    id: "archive",
+    label: "Archive",
+    description: "Conversations you have archived, and where they show up.",
+  },
+];
+
+export const SETTINGS_SECTION_DEFAULT: SettingsSectionId = "general";
+
+export function isSettingsSectionId(
+  value: unknown,
+): value is SettingsSectionId {
+  return SETTINGS_SECTIONS.some((section) => section.id === value);
+}
+
+export function settingsSectionLabel(id: SettingsSectionId): string {
+  return (
+    SETTINGS_SECTIONS.find((section) => section.id === id)?.label ?? "General"
+  );
+}
+
+export function settingsSectionDescription(id: SettingsSectionId): string {
+  return (
+    SETTINGS_SECTIONS.find((section) => section.id === id)?.description ?? ""
+  );
+}
+
+export function loadSettingsSection(): SettingsSectionId {
+  try {
+    const raw = localStorage.getItem(SECTION_KEY);
+    return isSettingsSectionId(raw) ? raw : SETTINGS_SECTION_DEFAULT;
+  } catch {
+    return SETTINGS_SECTION_DEFAULT;
+  }
+}
+
+export function saveSettingsSection(id: SettingsSectionId) {
+  try {
+    localStorage.setItem(SECTION_KEY, id);
+  } catch {
+    // private mode / quota
+  }
+}
+
+const CTRL = IS_MAC ? "⌃" : "Ctrl+";
+
+export type KeybindingRow = {
+  command: string;
+  keys: string;
+  when: string;
+};
+
+/**
+ * Mirrors the bindings we actually handle: the native menu accelerators in
+ * `src-tauri/src/menu.rs`, `tabCommand`, and the window key handler in App.
+ */
+export const KEYBINDINGS: KeybindingRow[] = [
+  { command: "App: Search", keys: `${MOD}K`, when: "Always" },
+  { command: "App: Go to File", keys: `${MOD}P`, when: "Always" },
+  { command: "App: Find in Files", keys: `${MOD}${SHIFT}F`, when: "Always" },
+  { command: "App: Open Project", keys: `${MOD}O`, when: "Always" },
+  { command: "App: New Window", keys: `${MOD}${SHIFT}N`, when: "Always" },
+  { command: "App: Toggle Sidebar", keys: `${MOD}B`, when: "Always" },
+  { command: "App: Switch Model", keys: `${MOD}.`, when: "Always" },
+  { command: "Tab: New", keys: `${MOD}T`, when: "Always" },
+  { command: "Tab: Next", keys: `${MOD}${SHIFT}]`, when: "Always" },
+  { command: "Tab: Previous", keys: `${MOD}${SHIFT}[`, when: "Always" },
+  { command: "Tab: Cycle Next", keys: `${CTRL}Tab`, when: "Always" },
+  {
+    command: "Tab: Cycle Previous",
+    keys: `${CTRL}${SHIFT}Tab`,
+    when: "Always",
+  },
+  { command: "Tab: Back", keys: `${MOD}[`, when: "Always" },
+  { command: "Tab: Forward", keys: `${MOD}]`, when: "Always" },
+  { command: "Tab: Activate 1–8", keys: `${MOD}1 … ${MOD}8`, when: "Always" },
+  { command: "Tab: Activate Last", keys: `${MOD}9`, when: "Always" },
+  { command: "Pane: Close", keys: `${MOD}W`, when: "Always" },
+  { command: "Pane: Split Right", keys: `${MOD}D`, when: "!editorFocus" },
+  {
+    command: "Pane: Split Down",
+    keys: `${MOD}${SHIFT}D`,
+    when: "!editorFocus",
+  },
+  { command: "Pane: Focus Left", keys: `${MOD}${ALT}←`, when: "Always" },
+  { command: "Pane: Focus Right", keys: `${MOD}${ALT}→`, when: "Always" },
+  { command: "Pane: Focus Up", keys: `${MOD}${ALT}↑`, when: "Always" },
+  { command: "Pane: Focus Down", keys: `${MOD}${ALT}↓`, when: "Always" },
+  { command: "Terminal: New", keys: `${MOD}\``, when: "Always" },
+  { command: "Terminal: New Tab", keys: `${MOD}${SHIFT}\``, when: "Always" },
+  { command: "Terminal: Toggle Dock", keys: `${MOD}J`, when: "deckLayout" },
+  { command: "Editor: Find", keys: `${MOD}F`, when: "editorFocus" },
+  { command: "Editor: Replace", keys: `${MOD}${ALT}F`, when: "editorFocus" },
+];
+
+export function filterKeybindings(
+  rows: KeybindingRow[],
+  query: string,
+): KeybindingRow[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return rows;
+  return rows.filter(
+    (row) =>
+      row.command.toLowerCase().includes(needle) ||
+      row.keys.toLowerCase().includes(needle) ||
+      row.when.toLowerCase().includes(needle),
+  );
+}

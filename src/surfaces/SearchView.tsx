@@ -1,4 +1,4 @@
-import { LoaderCircle, Search } from "lucide-react";
+import { Folder, LoaderCircle, MessageSquare, Search } from "lucide-react";
 import {
   useEffect,
   useMemo,

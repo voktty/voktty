@@ -44,6 +44,7 @@ import {
 } from "../lib/sessionFilters";
 import type { HarnessId } from "../lib/session";
 import type { SessionSummary } from "../lib/sessionStore";
+import type { SettingsSectionId } from "../lib/settings";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
@@ -121,6 +122,11 @@ type Props = {
   onToggleProjectRail?: () => void;
   projectRailOpen?: boolean;
   unseenFinishedIds?: Set<string>;
+  settingsOpen?: boolean;
+  settingsSection?: SettingsSectionId;
+  onOpenSettings?: () => void;
+  onSelectSettingsSection?: (section: SettingsSectionId) => void;
+  onCloseSettings?: () => void;
 };
 
 function SidebarComponent({
@@ -166,6 +172,11 @@ function SidebarComponent({
   onToggleProjectRail,
   projectRailOpen = true,
   unseenFinishedIds: unseenFinishedIdsProp,
+  settingsOpen = false,
+  settingsSection = "general",
+  onOpenSettings,
+  onSelectSettingsSection,
+  onCloseSettings,
 }: Props) {
   const [width, setWidth] = useState(rememberedWidth);
   const [dragging, setDragging] = useState(false);
@@ -246,12 +257,14 @@ function SidebarComponent({
   const canDragTabs = visibleTabs.length > 1;
   const showProjectRail =
     deckLayout && Boolean(onSelectProject && onOpenProject);
-  const railVisible = showProjectRail && projectRailOpen;
+  // Settings live in the rail slot, so they keep it visible even when the
+  // project rail itself is collapsed.
+  const railVisible = showProjectRail && (projectRailOpen || settingsOpen);
   const inProject = looksLikeProject(cwd);
   // A blank session has no project to browse, so the shell stands alone until
   // one is picked — whether or not the rail is open.
   const sidebarVisible =
-    open && !searchActive && !(deckLayout && !inProject);
+    open && !searchActive && !settingsOpen && !(deckLayout && !inProject);
   const gitStatuses = useGitFileStatuses(cwd, open && tab === "files");
   const changeStats = useProjectDiffStats(cwd, open);
   const groupLogos = useTabGroupLogos();
@@ -908,6 +921,11 @@ function SidebarComponent({
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}
           onRemoveProject={onRemoveProject}
+          settingsOpen={settingsOpen}
+          settingsSection={settingsSection}
+          onOpenSettings={onOpenSettings}
+          onSelectSettingsSection={onSelectSettingsSection}
+          onCloseSettings={onCloseSettings}
         />
       ) : null}
       {sidebarVisible ? sidebarContent : null}

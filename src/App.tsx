@@ -222,6 +222,12 @@ import { PaneTree } from "./surfaces/PaneTree";
 import { ProjectTerminalDock } from "./surfaces/ProjectTerminalDock";
 import { DiffPane } from "./surfaces/DiffPane";
 import { SearchView } from "./surfaces/SearchView";
+import { SettingsView } from "./surfaces/SettingsView";
+import {
+  loadSettingsSection,
+  saveSettingsSection,
+  type SettingsSectionId,
+} from "./lib/settings";
 import {
   handleEditorFindKey,
   openFindInActiveEditor,
@@ -415,6 +421,9 @@ export default function App({
   const [searchFocusToken, setSearchFocusToken] = useState(0);
   const [searchViewOpen, setSearchViewOpen] = useState(false);
   const [searchViewFocusToken, setSearchViewFocusToken] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSectionId>(loadSettingsSection);
   const [editorNavigation, setEditorNavigation] =
     useState<EditorNavigationTarget | null>(null);
   const editorNavigationToken = useRef(0);
@@ -2988,6 +2997,7 @@ export default function App({
 
   const onOpenSearch = useCallback(() => {
     setFilePickerOpen(false);
+    setSettingsOpen(false);
     setSearchViewOpen(true);
     setSearchViewFocusToken((token) => token + 1);
   }, []);
@@ -2996,16 +3006,50 @@ export default function App({
     setSearchViewOpen(false);
   }, []);
 
+  const openSettings = useCallback((section?: SettingsSectionId) => {
+    setFilePickerOpen(false);
+    setSearchViewOpen(false);
+    if (section) {
+      setSettingsSection(section);
+      saveSettingsSection(section);
+    }
+    setSettingsOpen(true);
+  }, []);
+
+  const onOpenSettings = useCallback(() => openSettings(), [openSettings]);
+
+  const onCloseSettings = useCallback(() => {
+    setSettingsOpen(false);
+  }, []);
+
+  const onSelectSettingsSection = useCallback((section: SettingsSectionId) => {
+    setSettingsSection(section);
+    saveSettingsSection(section);
+  }, []);
+
+  const onOpenArchivedSession = useCallback(
+    (sessionId: string) => {
+      setSettingsOpen(false);
+      void onSelectHistorySession(sessionId);
+    },
+    [onSelectHistorySession],
+  );
+
   const onRailBack = useCallback(() => {
+    if (settingsOpen) {
+      setSettingsOpen(false);
+      return;
+    }
     if (searchViewOpen) {
       setSearchViewOpen(false);
       return;
     }
     onVisitBack();
-  }, [onVisitBack, searchViewOpen]);
+  }, [onVisitBack, searchViewOpen, settingsOpen]);
 
   const onRailForward = useCallback(() => {
     setSearchViewOpen(false);
+    setSettingsOpen(false);
     onVisitForward();
   }, [onVisitForward]);
 
@@ -3018,6 +3062,8 @@ export default function App({
       if (layout === "classic") {
         setSidebarTab((tab) => (tab === "changes" ? "sessions" : tab));
         setProjectTerminalFocused(false);
+        // Classic has no rail to host the settings nav, so the page closes.
+        setSettingsOpen(false);
       }
     };
     window.addEventListener(LAYOUT_CHANGE_EVENT, onLayoutChange);
@@ -3073,6 +3119,7 @@ export default function App({
     onNewTerminal,
     onNewTerminalTab,
     onToggleProjectTerminal,
+    openSettings,
   });
   actions.current = {
     onNew,
@@ -3092,6 +3139,7 @@ export default function App({
     onNewTerminal,
     onNewTerminalTab,
     onToggleProjectTerminal,
+    openSettings,
   };
 
   const debounce = useRef({ name: "", at: 0 });
@@ -3240,6 +3288,11 @@ export default function App({
       }),
       listen("go_to_file", () => actions.current.onGoToFile()),
       listen("open_search", () => actions.current.onOpenSearch()),
+      // Deck mode drops the appearance popover, so the menu item lands on the
+      // settings page instead.
+      listen("sidebar_opacity", () => {
+        if (deckLayoutRef.current) actions.current.openSettings("appearance");
+      }),
       listen("find_in_project", () => actions.current.onFindInProject()),
       listen("find", () => {
         openFindInActiveEditor();
@@ -3309,7 +3362,7 @@ export default function App({
         onOpenTerminal={(cwd) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
         onFileDeleted={onFileDeleted}
-        canGoBack={tabVisitNav.canBack || searchViewOpen}
+        canGoBack={tabVisitNav.canBack || searchViewOpen || settingsOpen}
         canGoForward={tabVisitNav.canForward}
         onGoBack={onRailBack}
         onGoForward={onRailForward}
@@ -3330,17 +3383,22 @@ export default function App({
         projectRailOpen={projectRailOpen}
         onToggleProjectRail={onToggleProjectRail}
         unseenFinishedIds={unseenFinishedIds}
+        settingsOpen={settingsOpen}
+        settingsSection={settingsSection}
+        onOpenSettings={onOpenSettings}
+        onSelectSettingsSection={onSelectSettingsSection}
+        onCloseSettings={onCloseSettings}
       />
 
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           className={
-            searchViewOpen
+            searchViewOpen || settingsOpen
               ? "hidden"
               : "flex min-h-0 min-w-0 flex-1 flex-col"
           }
-          aria-hidden={searchViewOpen}
-          inert={searchViewOpen || undefined}
+          aria-hidden={searchViewOpen || settingsOpen}
+          inert={searchViewOpen || settingsOpen || undefined}
         >
         {!IS_MAC ? (
           <MenuBar
@@ -3383,6 +3441,7 @@ export default function App({
           projectTerminalActive={
             !!currentProjectDock && currentProjectDock.pane.files.length > 0
           }
+          onOpenSettings={deckLayout ? onOpenSettings : undefined}
           onClose={onCloseTab}
           onReorder={onReorderTabs}
           onGoToFile={onGoToFile}
@@ -3534,6 +3593,18 @@ export default function App({
             onOpenFile={onOpenFile}
             onOpenSession={onSelectHistorySession}
             onOpenProject={onSelectProject}
+          />
+        ) : null}
+        {settingsOpen ? (
+          <SettingsView
+            section={settingsSection}
+            cwd={sidebarCwd}
+            sessions={sidebarHistory}
+            besideRail={deckLayout}
+            onClose={onCloseSettings}
+            onOpenSession={onOpenArchivedSession}
+            onArchiveSession={onArchiveHistorySession}
+            onDeleteSession={onDeleteHistorySession}
           />
         ) : null}
       </div>

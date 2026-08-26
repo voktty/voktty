@@ -5,6 +5,7 @@ import {
   PanelLeft,
   Plus,
   Search,
+  Settings,
   Terminal,
   X,
 } from "lucide-react";
@@ -111,6 +112,7 @@ type Props = {
   onNewTerminal?: () => void;
   onShowTerminal?: () => void;
   projectTerminalActive?: boolean;
+  onOpenSettings?: () => void;
   onClose: (id: string) => void;
   onReorder: (ids: string[], movedId?: string) => void;
   onGoToFile?: () => void;
@@ -831,6 +833,7 @@ function TitleBarComponent({
   onNewTerminal,
   onShowTerminal,
   projectTerminalActive = false,
+  onOpenSettings,
   onClose,
   onReorder,
   onGoToFile,
@@ -1214,7 +1217,13 @@ function TitleBarComponent({
             <Terminal className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
-        {IS_MAC ? <OpacityControl /> : null}
+        {deckLayout && !projectRailOpen && onOpenSettings ? (
+          <IconButton label="Settings" onClick={onOpenSettings}>
+            <Settings className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : IS_MAC && !deckLayout ? (
+          <OpacityControl />
+        ) : null}
       </div>
       {!IS_MAC ? <WindowControls /> : null}
     </div>
@@ -1498,8 +1507,8 @@ function TitleBarComponent({
           />
         ) : null}
 
-        {/* Deck mode keeps New in the sidebar and Terminal by the appearance
-            control, so the strip carries no trailing actions. */}
+        {/* Deck mode keeps New in the sidebar and Terminal in the title bar,
+            so the strip carries no trailing actions. */}
         {deckLayout ? null : (
           <div className="flex shrink-0 items-center gap-0.5 border-l border-content/10 px-1.5">
             <IconButton label={`New Tab (${MOD}T)`} onClick={onNew}>
