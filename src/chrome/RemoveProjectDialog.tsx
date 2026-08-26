@@ -58,8 +58,17 @@ export function RemoveProjectDialog({ name, path, onCancel, onConfirm }: Props) 
             Delete “{name}”?
           </h2>
           <p className="text-[12px] leading-snug text-content/55">
-            {deleteCopy(sessions)}
+            All conversations for this project will be deleted. It also
+            leaves the sidebar. The folder on disk stays put, and opening it
+            again brings the project back empty.
           </p>
+          {sessions != null && sessions > 0 ? (
+            <p className="text-[12px] leading-snug text-content/45">
+              {sessions === 1
+                ? "1 saved conversation will be removed."
+                : `${sessions} saved conversations will be removed.`}
+            </p>
+          ) : null}
           <p className="truncate text-[11px] leading-tight text-content/40">
             {prettyCwd(path)}
           </p>
@@ -86,19 +95,4 @@ export function RemoveProjectDialog({ name, path, onCancel, onConfirm }: Props) 
     </div>,
     document.body,
   );
-}
-
-function deleteCopy(sessions: number | null): string {
-  const reopen =
-    "The folder on disk stays put, and opening it again brings the project back.";
-  if (sessions === 0) {
-    return `This removes it from the sidebar. ${reopen}`;
-  }
-  const chats =
-    sessions == null
-      ? "its saved chats"
-      : sessions === 1
-        ? "1 saved chat"
-        : `${sessions} saved chats`;
-  return `This removes it from the sidebar and deletes ${chats}. ${reopen}`;
 }
