@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use std::ffi::{OsStr, OsString};
+#[cfg(windows)]
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
