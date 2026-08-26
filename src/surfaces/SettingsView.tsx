@@ -4,7 +4,6 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -17,7 +16,6 @@ import {
 } from "react";
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
-import { IconButton } from "../chrome/TitleBar";
 import { WindowControls } from "../chrome/WindowControls";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
@@ -117,7 +115,6 @@ type Props = {
   cwd: string;
   sessions: SessionSummary[];
   besideRail?: boolean;
-  showClose?: boolean;
   onClose: () => void;
   onOpenSession: (sessionId: string) => void;
   onArchiveSession: (sessionId: string, archived: boolean) => void;
@@ -131,7 +128,6 @@ export function SettingsView({
   cwd,
   sessions,
   besideRail = false,
-  showClose = false,
   onClose,
   onOpenSession,
   onArchiveSession,
@@ -192,14 +188,7 @@ export function SettingsView({
             Restore defaults
           </button>
         ) : null}
-        {showClose ? (
-          <div className="flex shrink-0 items-center pr-1.5">
-            <IconButton label="Close settings" onClick={onClose}>
-              <X className="size-3.5" strokeWidth={1.75} />
-            </IconButton>
-          </div>
-        ) : null}
-        {!IS_MAC ? <WindowControls /> : null}
+        {IS_MAC ? null : <WindowControls />}
       </div>
 
       <div

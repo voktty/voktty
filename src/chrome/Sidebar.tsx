@@ -5,6 +5,7 @@ import {
   ListFilter,
   Plus,
   Search,
+  Settings,
 } from "lucide-react";
 import {
   memo,
@@ -13,7 +14,6 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  type PointerEvent,
   type ReactNode,
 } from "react";
 import {
@@ -46,6 +46,7 @@ import type { HarnessId } from "../lib/session";
 import type { SessionSummary } from "../lib/sessionStore";
 import type { SettingsSectionId } from "../lib/settings";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
+import { useDragResize } from "../hooks/useDragResize";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
@@ -58,6 +59,7 @@ import { FileTree } from "./FileTree";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { ProjectRail } from "./ProjectRail";
+import { RailAction } from "./RailAction";
 import { SettingsNav } from "./SettingsRail";
 import { TerminalSpinner } from "./TerminalSpinner";
 import { IconButton, TabVisitNav } from "./TitleBar";
@@ -67,7 +69,7 @@ import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SidebarUpdate } from "./SidebarUpdate";
 import { SourceControl } from "./SourceControl";
 
-const MIN_WIDTH = 160;
+const MIN_WIDTH = 260;
 const MAX_WIDTH = 560;
 const DEFAULT_WIDTH = 260;
 
@@ -184,15 +186,17 @@ function SidebarComponent({
   onCloseSettings,
 }: Props) {
   const gitRoot = gitCwd || cwd;
-  const [width, setWidth] = useState(rememberedWidth);
-  const [dragging, setDragging] = useState(false);
+  const resize = useDragResize({
+    min: MIN_WIDTH,
+    max: () => Math.min(MAX_WIDTH, Math.floor(window.innerWidth * 0.5)),
+    defaultWidth: DEFAULT_WIDTH,
+    initial: rememberedWidth,
+    onCommit: (next) => {
+      rememberedWidth = next;
+    },
+  });
   const [tabOrder, setTabOrder] = useState<SidebarTab[]>(loadSidebarTabOrder);
   const [now, setNow] = useState(() => Date.now());
-  const drag = useRef<{ startX: number; startW: number } | null>(null);
-  const asideRef = useRef<HTMLElement>(null);
-  const widthRef = useRef(width);
-  const pendingWidth = useRef(width);
-  const resizeFrame = useRef<number | null>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const sessionsLock = useLockOverscroll<HTMLDivElement>();
   const sessionsScrollRef = useRef<HTMLDivElement>(null);
@@ -440,82 +444,6 @@ function SidebarComponent({
     searchInputRef.current?.select();
   }, [searchOpen]);
 
-  const clamp = (value: number) => {
-    const max = Math.min(MAX_WIDTH, Math.floor(window.innerWidth * 0.5));
-    return Math.min(max, Math.max(MIN_WIDTH, Math.round(value)));
-  };
-
-  useEffect(() => {
-    if (!dragging) return;
-    const previous = document.body.style.cursor;
-    document.body.style.cursor = "col-resize";
-    return () => {
-      document.body.style.cursor = previous;
-    };
-  }, [dragging]);
-
-  useEffect(
-    () => () => {
-      if (resizeFrame.current != null) {
-        cancelAnimationFrame(resizeFrame.current);
-      }
-    },
-    [],
-  );
-
-  const paintWidth = (next: number) => {
-    pendingWidth.current = next;
-    if (resizeFrame.current != null) return;
-    resizeFrame.current = requestAnimationFrame(() => {
-      resizeFrame.current = null;
-      rememberedWidth = pendingWidth.current;
-      if (asideRef.current) {
-        asideRef.current.style.width = `${pendingWidth.current}px`;
-      }
-    });
-  };
-
-  const commitWidth = () => {
-    if (resizeFrame.current != null) {
-      cancelAnimationFrame(resizeFrame.current);
-      resizeFrame.current = null;
-    }
-    const next = pendingWidth.current;
-    rememberedWidth = next;
-    widthRef.current = next;
-    if (asideRef.current) asideRef.current.style.width = `${next}px`;
-    setWidth(next);
-  };
-
-  const onResizePointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { startX: e.clientX, startW: widthRef.current };
-    pendingWidth.current = widthRef.current;
-    setDragging(true);
-  };
-
-  const onResizePointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (!drag.current) return;
-    const next = clamp(drag.current.startW + (e.clientX - drag.current.startX));
-    paintWidth(next);
-  };
-
-  const onResizePointerUp = (e: PointerEvent<HTMLDivElement>) => {
-    if (!drag.current) return;
-    drag.current = null;
-    commitWidth();
-    setDragging(false);
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-  };
-
-  const onResizeDoubleClick = () => {
-    pendingWidth.current = DEFAULT_WIDTH;
-    commitWidth();
-  };
-
   const onTabPick = (itemId: SidebarTab) => {
     onTabChange(itemId);
   };
@@ -607,8 +535,7 @@ function SidebarComponent({
 
   const sidebarContent = (
     <aside
-      ref={asideRef}
-      style={{ width }}
+      ref={resize.setPaneRef}
       className="sidebar-glass relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
     >
       {deckLayout && railVisible ? (
@@ -881,7 +808,23 @@ function SidebarComponent({
           />
         </div>
       ) : null}
-      {!deckLayout ? <SidebarUpdate variant="classic" /> : null}
+      {!deckLayout ? (
+        <>
+          <div className="p-2 pb-1">
+            <SidebarUpdate />
+          </div>
+          <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
+            <RailAction
+              label="Settings"
+              icon={Settings}
+              onClick={onOpenSettings}
+              shortcut={`${MOD},`}
+              ariaLabel={`Settings (${MOD},)`}
+              isNavButton
+            />
+          </div>
+        </>
+      ) : null}
         </>
       )}
       {sessionMenu ? (
@@ -908,17 +851,14 @@ function SidebarComponent({
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize sidebar"
-        aria-valuenow={width}
+        aria-valuenow={resize.width}
         aria-valuemin={MIN_WIDTH}
         aria-valuemax={MAX_WIDTH}
         className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
-          dragging ? "bg-content/15" : "hover:bg-content/10"
+          resize.dragging ? "bg-content/15" : "hover:bg-content/10"
         }`}
-        onPointerDown={onResizePointerDown}
-        onPointerMove={onResizePointerMove}
-        onPointerUp={onResizePointerUp}
-        onPointerCancel={onResizePointerUp}
-        onDoubleClick={onResizeDoubleClick}
+        onPointerDown={resize.onPointerDown}
+        onDoubleClick={resize.onDoubleClick}
       />
     </aside>
   );

@@ -8,7 +8,6 @@ import {
   Search,
   Settings,
   Trash2,
-  type LucideIcon,
 } from "lucide-react";
 import {
   useEffect,
@@ -16,8 +15,8 @@ import {
   useRef,
   useState,
   type MouseEvent,
-  type PointerEvent,
 } from "react";
+import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSortable } from "../hooks/useSortable";
@@ -61,6 +60,7 @@ import {
 } from "../lib/tabGroups";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
+import { RailAction } from "./RailAction";
 import { RemoveProjectDialog } from "./RemoveProjectDialog";
 import { TabVisitNav } from "./TitleBar";
 import { SidebarUpdate } from "./SidebarUpdate";
@@ -135,8 +135,17 @@ export function ProjectRail({
   onSelectSettingsSection,
   onCloseSettings,
 }: Props) {
-  const [width, setWidth] = useState(loadProjectRailWidth);
-  const [dragging, setDragging] = useState(false);
+  const resize = useDragResize({
+    min: PROJECT_RAIL_WIDTH_MIN,
+    max: () =>
+      Math.min(
+        PROJECT_RAIL_WIDTH_MAX,
+        Math.floor(window.innerWidth * 0.35),
+      ),
+    defaultWidth: PROJECT_RAIL_WIDTH_DEFAULT,
+    initial: loadProjectRailWidth(),
+    onCommit: saveProjectRailWidth,
+  });
   const [railOrder, setRailOrder] = useState(loadProjectRailOrder);
   const [pinnedPaths, setPinnedPaths] = useState(loadPinnedProjects);
   const [groupLabels, setGroupLabels] = useState(loadTabGroupLabels);
@@ -158,11 +167,6 @@ export function ProjectRail({
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupLogos = useTabGroupLogos();
-  const navRef = useRef<HTMLElement>(null);
-  const drag = useRef<{ startX: number; startW: number } | null>(null);
-  const widthRef = useRef(width);
-  const pendingWidth = useRef(width);
-  const resizeFrame = useRef<number | null>(null);
   const allProjects = useMemo(
     () => collectRailProjects(recents, cwd),
     [cwd, recents],
@@ -246,84 +250,6 @@ export function ProjectRail({
     setGroupCustomColors(loadTabGroupCustomColors());
   };
 
-  const clamp = (value: number) => {
-    const max = Math.min(
-      PROJECT_RAIL_WIDTH_MAX,
-      Math.floor(window.innerWidth * 0.35),
-    );
-    return Math.min(max, Math.max(PROJECT_RAIL_WIDTH_MIN, Math.round(value)));
-  };
-
-  useEffect(() => {
-    if (!dragging) return;
-    const previous = document.body.style.cursor;
-    document.body.style.cursor = "col-resize";
-    return () => {
-      document.body.style.cursor = previous;
-    };
-  }, [dragging]);
-
-  useEffect(
-    () => () => {
-      if (resizeFrame.current != null) {
-        cancelAnimationFrame(resizeFrame.current);
-      }
-    },
-    [],
-  );
-
-  const paintWidth = (next: number) => {
-    pendingWidth.current = next;
-    if (resizeFrame.current != null) return;
-    resizeFrame.current = requestAnimationFrame(() => {
-      resizeFrame.current = null;
-      if (navRef.current) {
-        navRef.current.style.width = `${pendingWidth.current}px`;
-      }
-    });
-  };
-
-  const commitWidth = () => {
-    if (resizeFrame.current != null) {
-      cancelAnimationFrame(resizeFrame.current);
-      resizeFrame.current = null;
-    }
-    const next = pendingWidth.current;
-    widthRef.current = next;
-    if (navRef.current) navRef.current.style.width = `${next}px`;
-    setWidth(next);
-    saveProjectRailWidth(next);
-  };
-
-  const onResizePointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { startX: e.clientX, startW: widthRef.current };
-    pendingWidth.current = widthRef.current;
-    setDragging(true);
-  };
-
-  const onResizePointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (!drag.current) return;
-    const next = clamp(drag.current.startW + (e.clientX - drag.current.startX));
-    paintWidth(next);
-  };
-
-  const onResizePointerUp = (e: PointerEvent<HTMLDivElement>) => {
-    if (!drag.current) return;
-    drag.current = null;
-    commitWidth();
-    setDragging(false);
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-  };
-
-  const onResizeDoubleClick = () => {
-    pendingWidth.current = PROJECT_RAIL_WIDTH_DEFAULT;
-    commitWidth();
-  };
-
   const reorderSubset = (
     fullOrder: string[],
     subsetOrder: string[],
@@ -401,9 +327,8 @@ export function ProjectRail({
   });
   return (
     <nav
-      ref={navRef}
+      ref={resize.setPaneRef}
       aria-label="Projects"
-      style={{ width }}
       className="sidebar-glass relative flex shrink-0 flex-col border-r border-content/10"
     >
       <div
@@ -568,76 +493,16 @@ export function ProjectRail({
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize project sidebar"
-        aria-valuenow={width}
+        aria-valuenow={resize.width}
         aria-valuemin={PROJECT_RAIL_WIDTH_MIN}
         aria-valuemax={PROJECT_RAIL_WIDTH_MAX}
         className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
-          dragging ? "bg-content/15" : "hover:bg-content/10"
+          resize.dragging ? "bg-content/15" : "hover:bg-content/10"
         }`}
-        onPointerDown={onResizePointerDown}
-        onPointerMove={onResizePointerMove}
-        onPointerUp={onResizePointerUp}
-        onPointerCancel={onResizePointerUp}
-        onDoubleClick={onResizeDoubleClick}
+        onPointerDown={resize.onPointerDown}
+        onDoubleClick={resize.onDoubleClick}
       />
     </nav>
-  );
-}
-
-function RailAction({
-  label,
-  icon: Icon,
-  onClick,
-  active = false,
-  badge,
-  shortcut,
-  ariaLabel,
-  isNavButton = false,
-}: {
-  label: string;
-  icon: LucideIcon;
-  onClick?: () => void;
-  active?: boolean;
-  badge?: number;
-  shortcut?: string;
-  ariaLabel?: string;
-  isNavButton?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!onClick}
-      aria-label={ariaLabel ?? label}
-      className={`relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${
-        active
-          ? "bg-content/10 text-content"
-          : isNavButton
-            ? "text-content/50 hover:bg-content/10 hover:text-content"
-            : "text-content/50 bg-content/5 hover:bg-content/10 hover:text-content"
-      } disabled:cursor-default disabled:opacity-40`}
-    >
-      {badge != null ? (
-        <span
-          aria-hidden
-          className="absolute left-1 top-1/2 grid min-w-4 -translate-y-1/2 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-white tabular-nums"
-        >
-          {badge > 99 ? "99+" : badge}
-        </span>
-      ) : null}
-      <Icon
-        className={`size-4 shrink-0 opacity-70 ${badge != null ? "ml-4" : ""}`}
-        strokeWidth={1.75}
-      />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
-        {label}
-      </span>
-      {shortcut ? (
-        <span aria-hidden className="shrink-0 text-[11px] text-content/40">
-          {shortcut}
-        </span>
-      ) : null}
-    </button>
   );
 }
 

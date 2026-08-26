@@ -246,6 +246,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     };
 
     const applySize = () => {
+      if (closed) return;
       const next = fitTerminal(term, host, fitMode());
       if (!next) return;
       const { cols, rows } = next;

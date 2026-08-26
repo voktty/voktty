@@ -8,11 +8,7 @@ import {
   type UpdaterSnapshot,
 } from "../lib/updater";
 
-type Props = {
-  variant?: "classic" | "rail";
-};
-
-export function SidebarUpdate({ variant = "rail" }: Props) {
+export function SidebarUpdate() {
   const [snapshot, setSnapshot] = useState<UpdaterSnapshot>({
     phase: "idle",
     currentVersion: "…",
@@ -73,73 +69,38 @@ export function SidebarUpdate({ variant = "rail" }: Props) {
         : "Checking…"
       : "Check for updates";
 
-  const classic = variant === "classic";
-  const button = (
+  return (
     <button
       type="button"
       onClick={onClick}
       disabled={busy}
-      className={`flex w-full items-center gap-2 text-left transition-colors ${
-        classic
-          ? `rounded-md px-2 py-1.5 text-[12px] leading-tight ${
-              hasUpdate
-                ? "bg-accent/15 text-content hover:bg-accent/20"
-                : "text-content/50 hover:bg-content/5 hover:text-content"
-            }`
-          : `rounded-lg px-2 py-2 ${
-              hasUpdate
-                ? "bg-accent/15 text-content hover:bg-accent/20"
-                : "bg-content/5 text-content/75 hover:bg-content/10 hover:text-content"
-            }`
+      className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors ${
+        hasUpdate
+          ? "bg-accent/15 text-content hover:bg-accent/20"
+          : "bg-content/5 text-content/75 hover:bg-content/10 hover:text-content"
       } disabled:cursor-default disabled:opacity-70`}
     >
-      <span
-        className={`grid shrink-0 place-items-center ${
-          classic ? "size-5" : "size-[18px]"
-        }`}
-      >
+      <span className="grid size-[18px] shrink-0 place-items-center">
         {busy ? (
-          <Loader
-            className={`animate-spin ${classic ? "size-3.5" : "size-4 opacity-70"}`}
-            aria-hidden
-          />
+          <Loader className="size-4 animate-spin opacity-70" aria-hidden />
         ) : hasUpdate ? (
-          <ArrowDownCircle
-            className={`${classic ? "size-3.5" : "size-4"} text-accent`}
-            aria-hidden
-          />
+          <ArrowDownCircle className="size-4 text-accent" aria-hidden />
         ) : (
           <RefreshCw
-            className={`${classic ? "size-3.5" : "size-4 opacity-70"}`}
-            strokeWidth={classic ? undefined : 1.75}
+            className="size-4 opacity-70"
+            strokeWidth={1.75}
             aria-hidden
           />
         )}
       </span>
-      <span
-        className={`min-w-0 flex-1 ${classic ? "" : "flex items-center"}`}
-      >
-        <span
-          className={`block truncate font-medium ${
-            classic ? "" : "text-[12px] leading-tight"
-          }`}
-        >
+      <span className="min-w-0 flex-1 flex items-center">
+        <span className="block truncate text-[12px] font-medium leading-tight">
           {label}
         </span>
-        <span
-          className={`block truncate text-[11px] text-content/40 ${
-            classic ? "" : "ml-auto"
-          }`}
-        >
+        <span className="ml-auto block text-[11px] text-content/40">
           v{snapshot.currentVersion}
         </span>
       </span>
     </button>
-  );
-
-  if (!classic) return button;
-
-  return (
-    <div className="shrink-0 border-t border-content/10 p-2">{button}</div>
   );
 }

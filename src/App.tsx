@@ -3752,7 +3752,6 @@ export default function App({
             cwd={sidebarCwd}
             sessions={sidebarHistory}
             besideRail={deckLayout || sidebarOpen || settingsOpen}
-            showClose={!deckLayout}
             onClose={onCloseSettings}
             onOpenSession={onOpenArchivedSession}
             onArchiveSession={onArchiveHistorySession}
