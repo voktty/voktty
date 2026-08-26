@@ -112,6 +112,17 @@ describe("fileMentionParts", () => {
       { text: ", then" },
     ]);
   });
+
+  it("ignores file mentions inside Markdown blockquotes", () => {
+    const text = "@Composer.tsx\n> @apps/web/src/App.tsx";
+    expect(mentionTokenAt(text, text.indexOf("@apps/web") + 4)).toBeNull();
+    expect(
+      fileMentionsInText(text, index.labels).map((hit) => hit.label),
+    ).toEqual(["Composer.tsx"]);
+    expect(
+      fileMentionParts(text, index.labels).filter((part) => part.file),
+    ).toHaveLength(1);
+  });
 });
 
 describe("fileMentionsInText", () => {

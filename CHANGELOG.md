@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Select text in a finished agent response and choose **Add to chat** to quote that excerpt in the same session's composer.
 - omp ([oh-my-pi](https://omp.sh)) joins the provider list. Install it with `curl -fsSL https://omp.sh/install | sh` and log in, and MonoCode runs it like any other harness: live turns, steering, approvals, model catalog, and skills from `.omp/skills`.
 - Check for updates in the classic sidebar footer.
 

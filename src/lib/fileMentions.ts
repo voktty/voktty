@@ -1,5 +1,6 @@
 import { loadProjectFiles, rankProjectFiles, type RankedFile } from "./fileIndex";
 import type { ProjectFile } from "./fs";
+import { isMarkdownBlockquotePosition } from "./quoteDraft";
 
 export type MentionToken = {
   start: number;
@@ -41,6 +42,7 @@ export function mentionTokenAt(
   let start = i;
   while (start > 0 && !isSpace(text[start - 1]!)) start -= 1;
   if (text[start] !== "@") return null;
+  if (isMarkdownBlockquotePosition(text, start)) return null;
 
   let end = start + 1;
   while (end < text.length && !isSpace(text[end]!)) end += 1;
@@ -183,9 +185,10 @@ function scanMentions(
   while ((match = MENTION_TOKEN_RE.exec(text))) {
     const raw = match[2];
     if (!raw) continue;
+    const start = match.index + (match[1] ?? "").length;
+    if (isMarkdownBlockquotePosition(text, start)) continue;
     const resolved = resolveLabel(raw, labels);
     if (!resolved) continue;
-    const start = match.index + (match[1] ?? "").length;
     hits.push({
       start,
       end: start + 1 + resolved.label.length,

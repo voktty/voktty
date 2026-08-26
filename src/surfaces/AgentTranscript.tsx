@@ -38,7 +38,9 @@ import {
 } from "../lib/session";
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import { AgentMarkdown } from "./AgentMarkdown";
+import { TranscriptSelectionMenu } from "./TranscriptSelectionMenu";
 import {
   groupTurnItems,
   groupTurns,
@@ -59,6 +61,7 @@ type Props = {
   busy?: boolean;
   cwd?: string;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
+  onAddToChat?: (text: string) => void;
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
@@ -71,6 +74,7 @@ export function AgentTranscript({
   busy,
   cwd,
   onApproval,
+  onAddToChat,
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
@@ -85,6 +89,10 @@ export function AgentTranscript({
   const prependHeight = useRef<number | null>(null);
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
   const [visibleTurnCount, setVisibleTurnCount] = useState(INITIAL_TURNS);
+  const { selection, dismissSelection } = useTranscriptSelection(
+    scrollerEl,
+    onAddToChat !== undefined,
+  );
   const lastUserId = lastUserBlockId(blocks);
   const liveStartedAt = turnUserBlock(blocks)?.startedAt;
   const waitingForApproval = hasPendingApproval(blocks);
@@ -260,6 +268,13 @@ export function AgentTranscript({
           <LiveWorking startedAt={liveStartedAt} paused={waitingForApproval} />
         ) : null}
       </div>
+      {onAddToChat ? (
+        <TranscriptSelectionMenu
+          selection={selection}
+          onAddToChat={onAddToChat}
+          onDismiss={dismissSelection}
+        />
+      ) : null}
     </div>
   );
 }
@@ -391,7 +406,10 @@ const TranscriptBlock = memo(function TranscriptBlock({
   if (!block.text && block.streaming) return null;
 
   return (
-    <div className="min-w-0 px-4 py-3 text-content">
+    <div
+      data-selectable-agent-response={block.streaming ? undefined : block.id}
+      className="min-w-0 px-4 py-3 text-content"
+    >
       <AgentMarkdown
         text={block.text}
         streaming={block.streaming}

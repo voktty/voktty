@@ -62,6 +62,7 @@ import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
 import { SkillPicker } from "./SkillPicker";
 import { projectName } from "../lib/paths";
+import { consumeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 
@@ -78,6 +79,7 @@ type Props = {
   recents?: RecentProject[];
   hideProjectPicker?: boolean;
   context?: ContextUsage;
+  quoteRequest?: QuoteRequest;
   busy?: boolean;
   hotkeys?: boolean;
   onFocus: () => void;
@@ -87,6 +89,7 @@ type Props = {
   onModelChange: (harness: HarnessId, model: string) => void;
   onModelSettingsChange?: (settings: Record<string, string>) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
+  onQuoteRequestConsumed?: (id: number) => void;
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop?: () => void;
   onOpenFile?: (path: string) => void;
@@ -138,6 +141,7 @@ export function Composer({
   recents = [],
   hideProjectPicker = false,
   context,
+  quoteRequest,
   busy = false,
   onFocus,
   onCwdChange,
@@ -146,6 +150,7 @@ export function Composer({
   onModelChange,
   onModelSettingsChange,
   onRuntimeModeChange,
+  onQuoteRequestConsumed,
   onSubmit,
   onStop,
   onOpenFile,
@@ -155,6 +160,7 @@ export function Composer({
   const boxRef = useRef<HTMLDivElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const attachmentsRef = useRef<Attachment[]>([]);
+  const consumedQuoteId = useRef<number | null>(null);
   const slashRef = useRef<SlashToken | null>(null);
   const mentionRef = useRef<MentionToken | null>(null);
   const [draft, setDraft] = useState("");
@@ -309,6 +315,31 @@ export function Composer({
     setSlash(token);
     setMention(token ? null : mentionTokenAt(el.value, cursor));
   };
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !quoteRequest) return;
+
+    const result = consumeQuoteRequest(
+      el.value,
+      consumedQuoteId.current,
+      quoteRequest,
+    );
+    consumedQuoteId.current = result.consumedId;
+    if (result.changed) {
+      el.value = result.draft;
+      resizeTextarea(el);
+      setDraft(result.draft);
+      syncHasValue(result.draft, attachmentsRef.current);
+      setSlash(null);
+      setMention(null);
+      setCreatingSkill(false);
+      setCreateError(null);
+      el.setSelectionRange(result.draft.length, result.draft.length);
+      el.focus();
+    }
+    onQuoteRequestConsumed?.(quoteRequest.id);
+  }, [onQuoteRequestConsumed, quoteRequest, syncHasValue]);
 
   const pickSkill = useCallback(
     (skill: Skill) => {

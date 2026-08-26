@@ -10,6 +10,7 @@ import { invalidateProjectFiles } from "./fileIndex";
 import { fuzzyMatch } from "./fuzzy";
 import { joinPath } from "./paths";
 import { looksLikeProject } from "./recents";
+import { isMarkdownBlockquotePosition } from "./quoteDraft";
 import {
   CREATE_SKILL_BODY,
   CREATE_SKILL_DESCRIPTION,
@@ -153,6 +154,7 @@ export function slashTokenAt(text: string, cursor: number): SlashToken | null {
   while (start > 0 && !isSpace(text[start - 1]!)) start -= 1;
   if (text[start] !== "/") return null;
   if (start > 0 && text[start - 1] === ":") return null;
+  if (isMarkdownBlockquotePosition(text, start)) return null;
 
   let end = start + 1;
   while (end < text.length && !isSpace(text[end]!)) end += 1;
@@ -182,7 +184,10 @@ export function skillNamesInText(text: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = SKILL_TOKEN_RE.exec(text))) {
     const name = match[2];
-    if (!name || seen.has(name)) continue;
+    const start = match.index + (match[1]?.length ?? 0);
+    if (!name || seen.has(name) || isMarkdownBlockquotePosition(text, start)) {
+      continue;
+    }
     seen.add(name);
     names.push(name);
   }
@@ -218,9 +223,15 @@ export function skillTextParts(
   let match: RegExpExecArray | null;
   while ((match = SKILL_TOKEN_RE.exec(text))) {
     const name = match[2];
-    if (!name || !names.has(name)) continue;
     const lead = match[1] ?? "";
     const start = match.index + lead.length;
+    if (
+      !name ||
+      !names.has(name) ||
+      isMarkdownBlockquotePosition(text, start)
+    ) {
+      continue;
+    }
     const end = start + 1 + name.length;
     push(text.slice(cursor, start), false);
     push(text.slice(start, end), true);
