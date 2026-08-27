@@ -2092,6 +2092,7 @@ const frBase = mergeLocale(en, {
     somethingWentWrong: "Une erreur s'est produite",
     errorIn: "Erreur dans {name}",
     tryAgain: "Réessayer",
+    stackTrace: "Trace de la pile",
     editorLanguageServerFormatFailed:
       "Échec du formatage par le serveur de langage",
     editorFormatOnSaveSkipped: "Formatage à l'enregistrement ignoré",

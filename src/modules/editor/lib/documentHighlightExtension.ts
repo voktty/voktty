@@ -9,9 +9,9 @@ import {
   StateEffect,
   StateField,
 } from "@codemirror/state";
-import {
-  type DocumentHighlight,
-  type HighlightColor,
+import type {
+  DocumentHighlight,
+  HighlightColor,
 } from "../store/documentHighlightStore";
 
 export const setDocumentHighlightsEffect = StateEffect.define<

@@ -1932,6 +1932,7 @@ const zhBase = mergeLocale(en, {
     somethingWentWrong: "出现问题",
     errorIn: "{name} 中发生错误",
     tryAgain: "重试",
+    stackTrace: "调用栈跟踪",
     editorLanguageServerFormatFailed: "语言服务器格式化失败",
     editorFormatOnSaveSkipped: "已跳过保存时格式化",
     editorNoFormatter:

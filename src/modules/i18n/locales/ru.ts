@@ -2047,6 +2047,7 @@ const ruBase = mergeLocale(en, {
     somethingWentWrong: "Что-то пошло не так",
     errorIn: "Ошибка в {name}",
     tryAgain: "Повторить",
+    stackTrace: "Трассировка стека",
     editorLanguageServerFormatFailed:
       "Не удалось выполнить форматирование языковым сервером",
     editorFormatOnSaveSkipped: "Форматирование при сохранении пропущено",

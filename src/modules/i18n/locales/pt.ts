@@ -2071,6 +2071,7 @@ const ptBase = mergeLocale(en, {
     somethingWentWrong: "Algo deu errado",
     errorIn: "Erro em {name}",
     tryAgain: "Tentar novamente",
+    stackTrace: "Rastreamento de pilha",
     editorLanguageServerFormatFailed:
       "Falha na formatação pelo servidor de linguagem",
     editorFormatOnSaveSkipped: "A formatação ao salvar foi ignorada",

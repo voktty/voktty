@@ -2069,6 +2069,7 @@ const deBase = mergeLocale(en, {
     somethingWentWrong: "Etwas ist schiefgelaufen",
     errorIn: "Fehler in {name}",
     tryAgain: "Erneut versuchen",
+    stackTrace: "Stacktrace",
     editorLanguageServerFormatFailed:
       "Formatierung durch den Sprachserver fehlgeschlagen",
     editorFormatOnSaveSkipped: "Formatierung beim Speichern übersprungen",
