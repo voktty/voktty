@@ -74,7 +74,7 @@ jobs:
       id-token: write
     env:
       SIGNPATH_ENABLED: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
-      APPLE_SIGNING_ENABLED: ${{ secrets.APPLE_SIGNING_ENABLED == 'true' }}
+      APPLE_SIGNING_ENABLED: ${{ secrets.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_CERTIFICATE != '' }}
       APPLE_API_ENABLED: ${{ secrets.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_API_KEY_PATH != '' && secrets.APPLE_API_KEY != '' && secrets.APPLE_API_ISSUER != '' }}
     strategy:
       fail-fast: false
@@ -159,7 +159,7 @@ jobs:
           echo "APPLE_API_ISSUER=$KEY_ISSUER" >> "$GITHUB_ENV"
 
       - name: Configure Apple Signing Environment
-        if: startsWith(matrix.platform, 'macos') && env.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_CERTIFICATE != ''
+        if: startsWith(matrix.platform, 'macos') && env.APPLE_SIGNING_ENABLED == 'true'
         shell: bash
         env:
           CERT: ${{ secrets.APPLE_CERTIFICATE }}
