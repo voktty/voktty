@@ -29,10 +29,13 @@ import {
   Drag01Icon,
   MoreHorizontalIcon,
   PaintBoardIcon,
+  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { type Tab, labelFor } from "@/modules/tabs";
 import { useCallback, useMemo, useRef } from "react";
+import { useTerminalCopilotStore } from "@/modules/terminal/copilot/terminalCopilotStore";
+import { useShortcutLabel } from "@/modules/shortcuts/lib/useShortcutLabel";
 import {
   beginWorkspaceDrag,
   cancelWorkspaceDrag,
@@ -361,6 +364,8 @@ function OccupiedSpaceSlotActions({
     cancelWorkspaceDrag();
   };
 
+  const copilotShortcutLabel = useShortcutLabel("terminal.copilot");
+
   return (
     <div className="pointer-events-none absolute" style={rectStyle(rect)}>
       <div className="pointer-events-auto absolute right-1 top-1 z-50 flex items-center gap-0.5 rounded border border-border/60 bg-popover/90 p-0.5 shadow-sm backdrop-blur-sm">
@@ -383,6 +388,25 @@ function OccupiedSpaceSlotActions({
           tabKey={tab.tabKey}
           t={t}
         />
+        {tab.kind === "terminal" && (
+          <button
+            type="button"
+            onClick={() => useTerminalCopilotStore.getState().toggleCopilot(tab.id)}
+            aria-label={
+              copilotShortcutLabel
+                ? `${t("terminal.copilot.title")} (${copilotShortcutLabel})`
+                : t("terminal.copilot.title")
+            }
+            title={
+              copilotShortcutLabel
+                ? `${t("terminal.copilot.title")} (${copilotShortcutLabel})`
+                : t("terminal.copilot.title")
+            }
+            className="flex size-4.5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95 cursor-pointer"
+          >
+            <HugeiconsIcon icon={SparklesIcon} size={11} strokeWidth={2} className="text-primary" />
+          </button>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
