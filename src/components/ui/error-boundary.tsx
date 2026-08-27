@@ -63,7 +63,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {this.state.error.stack && (
               <details className="mt-2 text-left bg-muted/40 rounded-lg p-2 border border-border/40 text-[10px] font-mono text-muted-foreground max-h-40 overflow-auto">
                 <summary className="cursor-pointer font-semibold text-foreground hover:underline">
-                  Stack Trace
+                  {t("feedback.stackTrace")}
                 </summary>
                 <pre className="mt-1 whitespace-pre-wrap">{this.state.error.stack}</pre>
               </details>

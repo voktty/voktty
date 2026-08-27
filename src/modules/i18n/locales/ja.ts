@@ -2045,6 +2045,7 @@ const jaBase = mergeLocale(en, {
     somethingWentWrong: "問題が発生しました",
     errorIn: "{name} でエラーが発生しました",
     tryAgain: "もう一度試す",
+    stackTrace: "スタックトレース",
     editorLanguageServerFormatFailed:
       "言語サーバーのフォーマットに失敗しました",
     editorFormatOnSaveSkipped: "保存時のフォーマットをスキップしました",

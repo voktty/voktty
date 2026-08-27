@@ -3090,6 +3090,7 @@ export const es: TranslationSchema = {
     somethingWentWrong: "Algo salió mal",
     errorIn: "Error en {name}",
     tryAgain: "Reintentar",
+    stackTrace: "Seguimiento de pila",
     editorLanguageServerFormatFailed:
       "Falló el formato del servidor de lenguaje",
     editorFormatOnSaveSkipped: "Se omitió el formato al guardar",
