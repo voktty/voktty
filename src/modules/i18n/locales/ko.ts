@@ -148,6 +148,9 @@ const koBase = mergeLocale(en, {
         confirmCloseTitle: "실행 중인 프로세스를 종료하기 전에 확인",
         confirmCloseDesc:
           "명령이 아직 실행 중일 때 터미널 탭을 닫거나 종료하기 전에 확인합니다. 편집기의 저장되지 않은 변경 사항은 항상 확인을 요청합니다.",
+        suggestEnabledTitle: "명령어 기록 제안",
+        suggestEnabledDesc:
+          "터미널에서 입력할 때 명령어 기록 기반의 스마트 제안을 표시합니다.",
       },
       window: {
         title: "창 및 시작",

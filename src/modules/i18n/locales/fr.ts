@@ -153,6 +153,9 @@ const frBase = mergeLocale(en, {
         confirmCloseTitle: "Confirmer avant d'arrêter un processus en cours",
         confirmCloseDesc:
           "Demander confirmation avant de fermer un onglet de terminal ou de quitter lorsqu'une commande est encore en cours d'exécution. Les modifications non enregistrées dans l'éditeur sont toujours confirmées.",
+        suggestEnabledTitle: "Suggestions d'historique de commandes",
+        suggestEnabledDesc:
+          "Afficher des suggestions de commandes intelligentes lors de la saisie dans le terminal.",
       },
       window: {
         title: "Fenêtre et démarrage",

@@ -208,6 +208,7 @@ export type Preferences = {
   terminalFontSize: number;
   terminalScrollback: number;
   confirmCloseRunningTerminal: boolean;
+  terminalSuggestEnabled: boolean;
   lastWslDistro: string | null;
   zoomLevel: number;
   soundEnabled: boolean;
@@ -340,6 +341,7 @@ const KEY_TERMINAL_LETTER_SPACING = "terminalLetterSpacing";
 const KEY_TERMINAL_FONT_SIZE = "terminalFontSize";
 const KEY_TERMINAL_SCROLLBACK = "terminalScrollback";
 const KEY_CONFIRM_CLOSE_RUNNING_TERMINAL = "confirmCloseRunningTerminal";
+const KEY_TERMINAL_SUGGEST_ENABLED = "terminalSuggestEnabled";
 const KEY_LAST_WSL_DISTRO = "lastWslDistro";
 const KEY_ZOOM_LEVEL = "zoomLevel";
 const KEY_SOUND_ENABLED = "soundEnabled";
@@ -482,6 +484,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalFontSize: TERMINAL_FONT_SIZE_DEFAULT,
   terminalScrollback: TERMINAL_SCROLLBACK_DEFAULT,
   confirmCloseRunningTerminal: true,
+  terminalSuggestEnabled: true,
   lastWslDistro: null,
   zoomLevel: 1.0,
   soundEnabled: true,
@@ -755,6 +758,9 @@ export async function loadPreferences(): Promise<Preferences> {
     confirmCloseRunningTerminal:
       get<boolean>(KEY_CONFIRM_CLOSE_RUNNING_TERMINAL) ??
       DEFAULT_PREFERENCES.confirmCloseRunningTerminal,
+    terminalSuggestEnabled:
+      get<boolean>(KEY_TERMINAL_SUGGEST_ENABLED) ??
+      DEFAULT_PREFERENCES.terminalSuggestEnabled,
     lastWslDistro:
       get<string | null>(KEY_LAST_WSL_DISTRO) ??
       DEFAULT_PREFERENCES.lastWslDistro,
@@ -1226,6 +1232,12 @@ export async function setConfirmCloseRunningTerminal(
   await writePref(KEY_CONFIRM_CLOSE_RUNNING_TERMINAL, value);
 }
 
+export async function setTerminalSuggestEnabled(
+  value: boolean,
+): Promise<void> {
+  await writePref(KEY_TERMINAL_SUGGEST_ENABLED, value);
+}
+
 export async function setLastWslDistro(value: string | null): Promise<void> {
   await writePref(KEY_LAST_WSL_DISTRO, value);
 }
@@ -1410,6 +1422,7 @@ export async function onPreferencesChange(
     [KEY_TERMINAL_FONT_SIZE]: "terminalFontSize",
     [KEY_TERMINAL_SCROLLBACK]: "terminalScrollback",
     [KEY_CONFIRM_CLOSE_RUNNING_TERMINAL]: "confirmCloseRunningTerminal",
+    [KEY_TERMINAL_SUGGEST_ENABLED]: "terminalSuggestEnabled",
     [KEY_LAST_WSL_DISTRO]: "lastWslDistro",
     [KEY_ZOOM_LEVEL]: "zoomLevel",
     [KEY_SOUND_ENABLED]: "soundEnabled",
@@ -1546,6 +1559,7 @@ export const PREF_KEY_TO_STORAGE_KEY: Record<PrefKey, string> = {
   terminalFontSize: KEY_TERMINAL_FONT_SIZE,
   terminalScrollback: KEY_TERMINAL_SCROLLBACK,
   confirmCloseRunningTerminal: KEY_CONFIRM_CLOSE_RUNNING_TERMINAL,
+  terminalSuggestEnabled: KEY_TERMINAL_SUGGEST_ENABLED,
   lastWslDistro: KEY_LAST_WSL_DISTRO,
   zoomLevel: KEY_ZOOM_LEVEL,
   soundEnabled: KEY_SOUND_ENABLED,

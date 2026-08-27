@@ -153,6 +153,9 @@ const itBase = mergeLocale(en, {
           "Conferma prima di terminare un processo in esecuzione",
         confirmCloseDesc:
           "Chiedi conferma prima di chiudere una scheda del terminale o uscire se un comando è ancora in esecuzione. Le modifiche non salvate nell'editor vengono sempre confermate.",
+        suggestEnabledTitle: "Suggerimenti cronologia comandi",
+        suggestEnabledDesc:
+          "Mostra suggerimenti intelligenti dalla cronologia dei comandi durante la digitazione nel terminale.",
       },
       window: {
         title: "Finestra e avvio",

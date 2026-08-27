@@ -159,6 +159,9 @@ export const en = {
         confirmCloseTitle: "Confirm before killing a running process",
         confirmCloseDesc:
           "Ask before closing a terminal tab or quitting while a command is still running. Unsaved editor changes are always confirmed.",
+        suggestEnabledTitle: "Command history suggestions",
+        suggestEnabledDesc:
+          "Show intelligent command history suggestions when typing in the terminal.",
       },
       window: {
         title: "Window & Startup",
