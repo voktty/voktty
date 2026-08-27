@@ -121,7 +121,7 @@ export const useApiClientStore = create<ApiClientStore>()(
       history: [],
 
       // Discovery State
-      discoveryUrl: "https://forgenex.nexgestion.es/api/v1",
+      discoveryUrl: "https://dummyjson.com",
       isDiscovering: false,
       discoveryResult: null,
 

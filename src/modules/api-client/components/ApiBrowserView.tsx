@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/modules/i18n";
 import {
   ArrowRight01Icon,
   Copy01Icon,
@@ -28,14 +29,8 @@ const METHOD_BADGES: Record<ApiMethod, string> = {
   OPTIONS: "bg-zinc-500/10 text-zinc-500 border-zinc-500/30",
 };
 
-const FAST_TARGETS = [
-  { name: "ForgeNEX CRM", url: "https://forgenex.nexgestion.es/api/v1" },
-  { name: "Ollama LLM (11434)", url: "http://localhost:11434/api" },
-  { name: "Docker Daemon (2375)", url: "http://localhost:2375" },
-  { name: "OpenAI / LocalAI (v1)", url: "http://localhost:8000/v1" },
-];
-
 export function ApiBrowserView() {
+  const { t } = useTranslation();
   const {
     discoveryUrl,
     setDiscoveryUrl,
@@ -47,6 +42,13 @@ export function ApiBrowserView() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<string>("ALL");
+
+  const fastTargets = [
+    { name: t("apiClient.browser.presets.dummyJson"), url: "https://dummyjson.com" },
+    { name: t("apiClient.browser.presets.ollama"), url: "http://localhost:11434/api" },
+    { name: t("apiClient.browser.presets.docker"), url: "http://localhost:2375" },
+    { name: t("apiClient.browser.presets.openAi"), url: "http://localhost:8000/v1" },
+  ];
 
   const filteredEndpoints = useMemo(() => {
     if (!discoveryResult || !discoveryResult.endpoints) return [];
@@ -68,10 +70,10 @@ export function ApiBrowserView() {
       (e) => e.status && e.status >= 200 && e.status < 400,
     ).length;
 
-    let md = `# API Validation & Discovery Report — ${discoveryResult.detectedService || "API Service"}\n\n`;
+    let md = `# API Validation & Discovery Report — ${discoveryResult.detectedService || t("apiClient.browser.apiService")}\n\n`;
     md += `> **Target Base URL**: \`${discoveryResult.baseUrl}\`  \n`;
     md += `> **Generated**: ${dateStr} • **Engine**: Voktty Zero-CORS Native Scanner  \n`;
-    md += `> **Spec Origin**: ${discoveryResult.openApiFound ? "OpenAPI / Swagger 3.0" : "Smart Active Probing"}  \n\n`;
+    md += `> **Spec Origin**: ${discoveryResult.openApiFound ? t("apiClient.browser.openApiSpec") : t("apiClient.browser.smartRouteProbe")}  \n\n`;
     md += `### ✓ Discovery Summary (${passedCount}/${discoveryResult.endpoints.length} Active Endpoints)\n\n`;
     md += `| Method | Endpoint Path | Status | Latency | Discovery Source |\n`;
     md += `| :--- | :--- | :--- | :--- | :--- |\n`;
@@ -88,9 +90,9 @@ export function ApiBrowserView() {
 
     try {
       await navigator.clipboard.writeText(md);
-      toast.success("Validation report copied to clipboard in Markdown!");
+      toast.success(t("apiClient.browser.reportCopied"));
     } catch {
-      toast.error("Failed to copy report");
+      toast.error(t("apiClient.browser.reportCopyFailed"));
     }
   };
 
@@ -108,7 +110,7 @@ export function ApiBrowserView() {
             <Input
               value={discoveryUrl}
               onChange={(e) => setDiscoveryUrl(e.target.value)}
-              placeholder="Enter Base URL (e.g. https://forgenex.nexgestion.es/api/v1 or http://localhost:11434/api)"
+              placeholder={t("apiClient.browser.urlPlaceholder")}
               className="pl-9 font-mono text-xs"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !isDiscovering) {
@@ -133,26 +135,30 @@ export function ApiBrowserView() {
             ) : (
               <HugeiconsIcon icon={FlashIcon} size={14} />
             )}
-            <span>{isDiscovering ? "Discovering..." : "Auto-Discover"}</span>
+            <span>
+              {isDiscovering
+                ? t("apiClient.browser.discovering")
+                : t("apiClient.browser.autoDiscover")}
+            </span>
           </Button>
         </div>
 
         {/* Fast presets chips */}
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-[11px] font-medium text-muted-foreground mr-1">
-            Presets rápidos:
+            {t("apiClient.browser.fastPresets")}
           </span>
-          {FAST_TARGETS.map((t) => (
+          {fastTargets.map((target) => (
             <button
-              key={t.name}
+              key={target.name}
               type="button"
               onClick={() => {
-                setDiscoveryUrl(t.url);
-                void runDiscovery(t.url);
+                setDiscoveryUrl(target.url);
+                void runDiscovery(target.url);
               }}
               className="rounded border border-border/60 bg-background px-2 py-0.5 text-[11px] text-foreground/80 hover:bg-muted hover:text-foreground transition-colors"
             >
-              {t.name}
+              {target.name}
             </button>
           ))}
         </div>
@@ -171,16 +177,20 @@ export function ApiBrowserView() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm">
-                      {discoveryResult.detectedService || "API Service"}
+                      {discoveryResult.detectedService || t("apiClient.browser.apiService")}
                     </span>
                     <Badge variant="outline" className="text-[10px]">
                       {discoveryResult.openApiFound
-                        ? "OpenAPI / Swagger 3.0"
-                        : "Smart Route Probe"}
+                        ? t("apiClient.browser.openApiSpec")
+                        : t("apiClient.browser.smartRouteProbe")}
                     </Badge>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Base: <code className="font-mono">{discoveryResult.baseUrl}</code> • {discoveryResult.endpoints.length} endpoints encontrados en {discoveryResult.durationMs}ms
+                    {t("apiClient.browser.summaryBase", {
+                      base: discoveryResult.baseUrl,
+                      count: discoveryResult.endpoints.length,
+                      duration: discoveryResult.durationMs,
+                    })}
                   </p>
                 </div>
               </div>
@@ -193,7 +203,7 @@ export function ApiBrowserView() {
                   className="h-7 gap-1 px-2.5 text-xs"
                 >
                   <HugeiconsIcon icon={Copy01Icon} size={13} />
-                  <span>Copy Markdown Report</span>
+                  <span>{t("apiClient.browser.copyMarkdownReport")}</span>
                 </Button>
               </div>
             </div>
@@ -209,7 +219,7 @@ export function ApiBrowserView() {
                     onClick={() => setSelectedMethod(m)}
                     className="h-6 px-2 text-[11px]"
                   >
-                    {m}
+                    {m === "ALL" ? t("apiClient.browser.all") : m}
                   </Button>
                 ))}
               </div>
@@ -223,7 +233,7 @@ export function ApiBrowserView() {
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filtrar endpoints..."
+                  placeholder={t("apiClient.browser.filterPlaceholder")}
                   className="h-7 pl-8 text-xs"
                 />
               </div>
@@ -275,7 +285,7 @@ export function ApiBrowserView() {
                           {ep.requiresAuth && (
                             <span className="flex items-center gap-0.5 text-[10px] text-amber-500 font-medium">
                               <HugeiconsIcon icon={LockIcon} size={10} />
-                              <span>Auth Required</span>
+                              <span>{t("apiClient.browser.authRequired")}</span>
                             </span>
                           )}
                         </div>
@@ -293,11 +303,16 @@ export function ApiBrowserView() {
                       variant="secondary"
                       onClick={() => {
                         loadEndpointToEditor(ep);
-                        toast.success(`Cargado ${ep.method} ${ep.path} en el editor`);
+                        toast.success(
+                          t("apiClient.browser.loadedInEditor", {
+                            method: ep.method,
+                            path: ep.path,
+                          }),
+                        );
                       }}
                       className="h-7 gap-1 px-2.5 text-xs opacity-90 group-hover:opacity-100"
                     >
-                      <span>Test in Editor</span>
+                      <span>{t("apiClient.browser.testInEditor")}</span>
                       <HugeiconsIcon icon={ArrowRight01Icon} size={12} />
                     </Button>
                   </div>
@@ -305,7 +320,7 @@ export function ApiBrowserView() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-                <p className="text-xs">No se encontraron endpoints con el filtro actual.</p>
+                <p className="text-xs">{t("apiClient.browser.noEndpointsFound")}</p>
               </div>
             )}
           </div>
@@ -314,9 +329,11 @@ export function ApiBrowserView() {
             <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary mb-3">
               <HugeiconsIcon icon={GlobalIcon} size={24} />
             </div>
-            <h3 className="font-semibold text-sm text-foreground">API Discovery & Smart Browser</h3>
+            <h3 className="font-semibold text-sm text-foreground">
+              {t("apiClient.browser.emptyStateTitle")}
+            </h3>
             <p className="text-xs max-w-md mt-1">
-              Introduce la URL base de tu API (ej. Ollama, CRM, Docker o servicio web) y haz clic en <strong>Auto-Discover</strong> para detectar automáticamente todas las rutas, métodos y especificaciones OpenAPI disponibles.
+              {t("apiClient.browser.emptyStateDescription")}
             </p>
           </div>
         )}
