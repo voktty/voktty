@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-08-27
+
+### Added
+
+- Show in picker in Settings → Providers: hide an installed provider from the model picker without removing it from Settings.
+
+### Changed
+
+- The model picker only shows providers whose CLI is installed. Uninstalled harnesses stay listed in Settings → Providers.
+
+### Fixed
+
+- Claude usage in the footer refreshes OAuth tokens before they expire and retries on 401, so the chip stays signed in. Failed sign-in shows expired instead of a generic error.
+- GitHub inbox and `gh` subprocesses work when MonoCode is launched from Finder, by resolving the CLI through the login-shell PATH the same way harnesses do.
+
 ## [0.1.12] - 2026-08-27
 
 ### Added
@@ -201,7 +216,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/hardbeat920/monocode/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/hardbeat920/monocode/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/hardbeat920/monocode/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/hardbeat920/monocode/compare/v0.1.9...v0.1.10
