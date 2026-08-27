@@ -51,15 +51,23 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive ring-1 ring-destructive/30">
             <HugeiconsIcon icon={Alert02Icon} size={22} strokeWidth={2} />
           </div>
-          <div className="max-w-md">
+          <div className="max-w-md w-full">
             <h3 className="text-sm font-semibold text-foreground">
               {this.props.name
                 ? t("feedback.errorIn", { name: this.props.name })
                 : t("feedback.somethingWentWrong")}
             </h3>
-            <p className="mt-1 font-mono text-xs text-muted-foreground break-all line-clamp-3">
+            <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
               {this.state.error.message || t("feedback.unexpectedError")}
             </p>
+            {this.state.error.stack && (
+              <details className="mt-2 text-left bg-muted/40 rounded-lg p-2 border border-border/40 text-[10px] font-mono text-muted-foreground max-h-40 overflow-auto">
+                <summary className="cursor-pointer font-semibold text-foreground hover:underline">
+                  Stack Trace
+                </summary>
+                <pre className="mt-1 whitespace-pre-wrap">{this.state.error.stack}</pre>
+              </details>
+            )}
           </div>
           <Button
             size="sm"
