@@ -182,6 +182,12 @@ export type RdpTab = TabBase & {
   autoConnect?: boolean;
 };
 
+export type ApiClientTab = TabBase & {
+  id: number;
+  kind: "api-client";
+  title: string;
+};
+
 export type Tab =
   | TerminalTab
   | EditorTab
@@ -191,7 +197,8 @@ export type Tab =
   | GitDiffTab
   | GitHistoryTab
   | GitCommitFileDiffTab
-  | RdpTab;
+  | RdpTab
+  | ApiClientTab;
 
 export type TabPatch = Partial<{
   title: string;
@@ -1535,6 +1542,33 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     [],
   );
 
+  const newApiClientTab = useCallback((spaceId?: string) => {
+    const targetSpace = spaceId ?? activeSpaceIdRef.current;
+    const curr = tabsRef.current;
+    const existing = curr.find(
+      (t): t is ApiClientTab => t.kind === "api-client" && t.spaceId === targetSpace,
+    );
+    if (existing) {
+      setActiveId(existing.id);
+      return existing.id;
+    }
+    const id = nextIdRef.current++;
+    const nextTabs: Tab[] = [
+      ...curr,
+      {
+        id,
+        ...createTabIdentity(targetSpace),
+        kind: "api-client",
+        spaceId: targetSpace,
+        title: "API Client",
+      },
+    ];
+    tabsRef.current = nextTabs;
+    setTabs(nextTabs);
+    setActiveId(id);
+    return id;
+  }, []);
+
   const closeTab = useCallback((id: number, preferredNextId?: number | null) => {
     const editor = tabsRef.current.find(
       (tab): tab is EditorTab =>
@@ -1932,6 +1966,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     newPreviewTab,
     newMarkdownTab,
     newRdpTab,
+    newApiClientTab,
     setMarkdownView,
     openAiDiffTab,
     openGitDiffTab,

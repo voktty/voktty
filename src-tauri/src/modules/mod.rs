@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod api_client;
 pub mod collab;
 pub mod control;
 pub mod dap;

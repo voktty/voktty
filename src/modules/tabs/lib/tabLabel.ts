@@ -16,6 +16,7 @@ export function labelFor(t: Tab): string {
   if (t.kind === "git-history") return t.title;
   if (t.kind === "git-commit-file") return t.title;
   if (t.kind === "rdp") return t.title;
+  if (t.kind === "api-client") return t.title;
   if (t.customTitle) return t.customTitle;
   if (!t.cwd) return t.title;
   const parts = t.cwd.split(/[\\/]/).filter(Boolean);
@@ -90,6 +91,12 @@ export function getTabSubtitle(tab: Tab): {
       text: tab.host
         ? `rdp · ${tab.host}`
         : translate("tabs.subtitles.remoteDesktop"),
+    };
+  }
+  if (tab.kind === "api-client") {
+    return {
+      icon: "remote",
+      text: "API Client & Sandbox",
     };
   }
   return { icon: "none", text: "" };

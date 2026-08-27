@@ -103,6 +103,7 @@ type Props = {
   onNewPrivate: () => void;
   onNewPreview: () => void;
   onNewEditor: () => void;
+  onNewApiClient?: () => void;
   onNewRdp?: (options?: {
     host?: string;
     port?: number;
@@ -161,6 +162,7 @@ export function TabBar({
   onNewPrivate,
   onNewPreview,
   onNewEditor,
+  onNewApiClient,
   onNewRdp,
   onConnectRemote,
   onOpenFile,
@@ -1072,6 +1074,7 @@ export function TabBar({
           onNewPrivate={onNewPrivate}
           onNewPreview={onNewPreview}
           onNewEditor={onNewEditor}
+          onNewApiClient={onNewApiClient}
           onNewRdp={onNewRdp}
           onConnectRemote={onConnectRemote}
           onOpenFile={onOpenFile}
@@ -1261,6 +1264,16 @@ export function TabIcon({
         size={14}
         strokeWidth={2}
         className="shrink-0 text-blue-400"
+      />
+    );
+  }
+  if (tab.kind === "api-client") {
+    return (
+      <HugeiconsIcon
+        icon={Globe02Icon}
+        size={14}
+        strokeWidth={2}
+        className="shrink-0 text-emerald-400"
       />
     );
   }
