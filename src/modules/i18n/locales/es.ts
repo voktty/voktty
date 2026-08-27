@@ -2,6 +2,8 @@ import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
   common: {
+    textCopied: "Texto copiado al portapapeles",
+    textPasted: "Texto pegado",
     save: "Guardar",
     saved: "Guardado",
     cancel: "Cancelar",
@@ -1917,6 +1919,18 @@ export const es: TranslationSchema = {
     stage: "Preparar",
   },
   editor: {
+    highlightText: "Subrayar selección",
+    highlightColorYellow: "Amarillo",
+    highlightColorGreen: "Verde",
+    highlightColorBlue: "Azul",
+    highlightColorPink: "Rosa",
+    highlightColorPurple: "Púrpura",
+    removeHighlight: "Eliminar subrayado",
+    clearAllHighlights: "Limpiar todos los subrayados",
+    highlightAdded: "Subrayado guardado",
+    highlightRemoved: "Subrayado eliminado",
+    highlightsCleared: "Subrayados limpiados",
+    viewSourceCode: "Ver código fuente",
     externalChangeDetected: "El archivo {name} fue modificado externamente.",
     externalChangeConflict:
       "El archivo {name} fue modificado externamente y tienes cambios sin guardar.",

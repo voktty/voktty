@@ -2,6 +2,8 @@ import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const jaBase = mergeLocale(en, {
   common: {
+    textCopied: "クリップボードにコピーしました",
+    textPasted: "テキストを貼り付けました",
     save: "保存",
     saved: "保存済み",
     cancel: "キャンセル",
@@ -1324,6 +1326,18 @@ const jaBase = mergeLocale(en, {
     stage: "ステージ",
   },
   editor: {
+    highlightText: "選択範囲をハイライト",
+    highlightColorYellow: "イエロー",
+    highlightColorGreen: "グリーン",
+    highlightColorBlue: "ブルー",
+    highlightColorPink: "ピンク",
+    highlightColorPurple: "パープル",
+    removeHighlight: "ハイライトを解除",
+    clearAllHighlights: "すべてのハイライトを消去",
+    highlightAdded: "ハイライトを保存しました",
+    highlightRemoved: "ハイライトを解除しました",
+    highlightsCleared: "すべてのハイライトを消去しました",
+    viewSourceCode: "ソースコードを表示",
     dialog: {
       nameRequired: "名前は必須です",
       pathMustBeRelative: "相対パスである必要があります",

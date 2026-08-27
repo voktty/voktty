@@ -2,6 +2,8 @@ import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const ruBase = mergeLocale(en, {
   common: {
+    textCopied: "Текст скопирован в буфер обмена",
+    textPasted: "Текст вставлен",
     save: "Сохранить",
     saved: "Сохранено",
     cancel: "Отмена",
@@ -1327,6 +1329,18 @@ const ruBase = mergeLocale(en, {
     stage: "Подготовить",
   },
   editor: {
+    highlightText: "Выделить текст",
+    highlightColorYellow: "Желтый",
+    highlightColorGreen: "Зеленый",
+    highlightColorBlue: "Синий",
+    highlightColorPink: "Розовый",
+    highlightColorPurple: "Фиолетовый",
+    removeHighlight: "Удалить выделение",
+    clearAllHighlights: "Очистить все выделения",
+    highlightAdded: "Выделение сохранено",
+    highlightRemoved: "Выделение удалено",
+    highlightsCleared: "Все выделения очищены",
+    viewSourceCode: "Посмотреть исходный код",
     dialog: {
       nameRequired: "Имя обязательно",
       pathMustBeRelative: "Путь должен быть относительным",

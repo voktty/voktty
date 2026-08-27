@@ -2,6 +2,8 @@ import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const ptBase = mergeLocale(en, {
   common: {
+    textCopied: "Texto copiado para a área de transferência",
+    textPasted: "Texto colado",
     save: "Salvar",
     saved: "Salvo",
     cancel: "Cancelar",
@@ -1344,6 +1346,18 @@ const ptBase = mergeLocale(en, {
     stage: "Preparar",
   },
   editor: {
+    highlightText: "Realçar seleção",
+    highlightColorYellow: "Amarelo",
+    highlightColorGreen: "Verde",
+    highlightColorBlue: "Azul",
+    highlightColorPink: "Rosa",
+    highlightColorPurple: "Roxo",
+    removeHighlight: "Remover realce",
+    clearAllHighlights: "Limpar todos os realces",
+    highlightAdded: "Realce salvo",
+    highlightRemoved: "Realce removido",
+    highlightsCleared: "Todos os realces limpos",
+    viewSourceCode: "Ver código-fonte",
     dialog: {
       nameRequired: "O nome é obrigatório",
       pathMustBeRelative: "O caminho deve ser relativo",
