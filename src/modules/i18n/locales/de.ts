@@ -151,6 +151,9 @@ const deBase = mergeLocale(en, {
         confirmCloseTitle: "Vor Beenden eines laufenden Prozesses bestätigen",
         confirmCloseDesc:
           "Vor dem Schließen eines Terminal-Tabs oder dem Beenden nachfragen, wenn noch ein Befehl ausgeführt wird. Ungespeicherte Editor-Änderungen werden immer bestätigt.",
+        suggestEnabledTitle: "Befehlsverlauf-Vorschläge",
+        suggestEnabledDesc:
+          "Intelligente Vorschläge aus dem Befehlsverlauf beim Tippen im Terminal anzeigen.",
       },
       window: {
         title: "Fenster & Start",

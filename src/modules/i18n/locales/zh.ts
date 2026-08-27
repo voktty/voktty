@@ -146,6 +146,9 @@ const zhBase = mergeLocale(en, {
         confirmCloseTitle: "终止正在运行的进程前确认",
         confirmCloseDesc:
           "当命令仍在运行时，关闭终端标签页或退出前进行询问。未保存的编辑器更改始终会提示确认。",
+        suggestEnabledTitle: "命令历史建议",
+        suggestEnabledDesc:
+          "在终端中输入时显示基于命令历史的智能建议。",
       },
       window: {
         title: "窗口与启动",

@@ -160,6 +160,9 @@ export const es: TranslationSchema = {
         confirmCloseTitle: "Confirmar antes de terminar procesos",
         confirmCloseDesc:
           "Preguntar antes de cerrar una pestaña o salir cuando un comando sigue en ejecución. Cambios sin guardar en el editor siempre se confirman.",
+        suggestEnabledTitle: "Sugerencias de historial de comandos",
+        suggestEnabledDesc:
+          "Mostrar sugerencias del historial de comandos al escribir en la terminal.",
       },
       window: {
         title: "Ventana e Inicio",

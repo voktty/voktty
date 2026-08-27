@@ -58,6 +58,7 @@ import {
   setTerminalLetterSpacing,
   setTerminalScrollback,
   setTerminalShell,
+  setTerminalSuggestEnabled,
   setTerminalWebglEnabled,
   setZoomLevel,
   TAB_STYLES,
@@ -163,6 +164,9 @@ export function GeneralSection() {
   const terminalScrollback = usePreferencesStore((s) => s.terminalScrollback);
   const confirmCloseRunningTerminal = usePreferencesStore(
     (s) => s.confirmCloseRunningTerminal,
+  );
+  const terminalSuggestEnabled = usePreferencesStore(
+    (s) => s.terminalSuggestEnabled,
   );
   const tabStyle = usePreferencesStore((s) => s.tabStyle);
   const zoomLevel = usePreferencesStore((s) => s.zoomLevel);
@@ -727,6 +731,15 @@ export function GeneralSection() {
           <Switch
             checked={confirmCloseRunningTerminal}
             onCheckedChange={(v) => void setConfirmCloseRunningTerminal(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t("settings.general.terminal.suggestEnabledTitle")}
+          description={t("settings.general.terminal.suggestEnabledDesc")}
+        >
+          <Switch
+            checked={terminalSuggestEnabled}
+            onCheckedChange={(v) => void setTerminalSuggestEnabled(v)}
           />
         </SettingRow>
       </div>
