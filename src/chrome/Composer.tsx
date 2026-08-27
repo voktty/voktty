@@ -52,6 +52,7 @@ import {
   type SlashToken,
 } from "../lib/skills";
 import { AccessPicker } from "./AccessPicker";
+import { ComposerRunner } from "./ComposerRunner";
 import { ContextMeter } from "./ContextMeter";
 import { AttachmentChip } from "./AttachmentChip";
 import { BranchPicker } from "./BranchPicker";
@@ -64,6 +65,10 @@ import { SkillPicker } from "./SkillPicker";
 import { projectName } from "../lib/paths";
 import { consumeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
+import {
+  COMPOSER_RUNNER_CHANGE_EVENT,
+  loadComposerRunner,
+} from "../lib/settings";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 
 type Props = {
@@ -180,6 +185,10 @@ export function Composer({
   );
   const [mention, setMention] = useState<MentionToken | null>(null);
   const [mentionActive, setMentionActive] = useState(0);
+  const [runnerEnabled, setRunnerEnabled] = useState(loadComposerRunner);
+  const [runnerLive, setRunnerLive] = useState(
+    () => busy && loadComposerRunner(),
+  );
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
 
@@ -253,6 +262,21 @@ export function Composer({
       return [];
     });
   }, [harness, syncHasValue]);
+
+  useEffect(() => {
+    const refresh = () => setRunnerEnabled(loadComposerRunner());
+    window.addEventListener(COMPOSER_RUNNER_CHANGE_EVENT, refresh);
+    return () =>
+      window.removeEventListener(COMPOSER_RUNNER_CHANGE_EVENT, refresh);
+  }, []);
+
+  useEffect(() => {
+    if (!runnerEnabled) {
+      setRunnerLive(false);
+      return;
+    }
+    if (busy) setRunnerLive(true);
+  }, [busy, runnerEnabled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -620,11 +644,12 @@ export function Composer({
 
   return (
     <div
+      data-composer
       className={`relative shrink-0 ${shell ? "" : "p-1.5 pt-0"}`}
       onMouseDown={onFocus}
     >
       {children}
-      <div className="relative">
+      <div className="relative overflow-visible">
         {pickerOpen ? (
           <div className="absolute inset-x-0 bottom-full z-30 mb-1">
             <SkillPicker
@@ -695,6 +720,7 @@ export function Composer({
         ) : null}
         <div
           ref={boxRef}
+          data-composer-box
           className={`relative z-10 rounded-lg border bg-content/3 ${
             fileDrag
               ? "border-accent/60"
@@ -848,6 +874,15 @@ export function Composer({
             </div>
           </div>
         </div>
+        {runnerLive && runnerEnabled ? (
+          <ComposerRunner
+            boxRef={boxRef}
+            cwd={cwd}
+            busy={busy}
+            enabled={enabled}
+            onExited={() => setRunnerLive(false)}
+          />
+        ) : null}
       </div>
     </div>
   );

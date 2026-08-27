@@ -235,6 +235,7 @@ export const SessionPane = memo(function SessionPane({
                   type="button"
                   title="Jump to latest"
                   aria-label="Jump to latest"
+                  data-jump-to-bottom
                   onClick={() => jumpToBottomRef.current?.()}
                   className="pointer-events-auto grid size-6 place-items-center rounded-md border border-content/15 bg-content/10 text-content shadow-md hover:bg-content/5 backdrop-blur-md"
                 >

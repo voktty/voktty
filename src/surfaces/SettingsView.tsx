@@ -99,6 +99,8 @@ import {
 import {
   filterKeybindings,
   KEYBINDINGS,
+  loadComposerRunner,
+  saveComposerRunner,
   settingsSectionDescription,
   settingsSectionLabel,
   type SettingsSectionId,
@@ -225,10 +227,16 @@ export function SettingsView({
 
 function GeneralPage() {
   const [layout, setLayout] = useState<SidebarLayout>(loadSidebarLayout);
+  const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
 
   const onLayout = (next: SidebarLayout) => {
     saveSidebarLayout(next);
     setLayout(next);
+  };
+
+  const onComposerRunner = (next: boolean) => {
+    saveComposerRunner(next);
+    setComposerRunner(next);
   };
 
   return (
@@ -245,6 +253,16 @@ function GeneralPage() {
             { value: "deck", label: "Deck" },
           ]}
           onChange={onLayout}
+        />
+      </Row>
+      <Row
+        label="Composer mascot"
+        description="When a turn is running, the project mascot runs along the composer, jumps the scroll-to-latest button, and sometimes grabs a coin."
+      >
+        <Toggle
+          label="Composer mascot"
+          on={composerRunner}
+          onChange={onComposerRunner}
         />
       </Row>
 

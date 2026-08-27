@@ -522,6 +522,14 @@ html.is-resizing * {
   }
 }
 
+.composer-coin-face {
+  animation: mascot-rest 320ms infinite;
+}
+
+.composer-coin-edge {
+  animation: mascot-talk 320ms infinite;
+}
+
 @keyframes shimmer-text {
   from {
     background-position: 100% center;

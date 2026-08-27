@@ -80,6 +80,35 @@ export function saveSettingsSection(id: SettingsSectionId) {
   }
 }
 
+const COMPOSER_RUNNER_KEY = "monocode.composerRunner";
+
+export const COMPOSER_RUNNER_DEFAULT = true;
+
+/** Fired on `window` when the composer mascot setting flips. */
+export const COMPOSER_RUNNER_CHANGE_EVENT = "monocode:composer-runner-change";
+
+export function loadComposerRunner(): boolean {
+  try {
+    const raw = localStorage.getItem(COMPOSER_RUNNER_KEY);
+    if (raw == null) return COMPOSER_RUNNER_DEFAULT;
+    return raw === "1" || raw === "true";
+  } catch {
+    return COMPOSER_RUNNER_DEFAULT;
+  }
+}
+
+export function saveComposerRunner(value: boolean) {
+  try {
+    localStorage.setItem(COMPOSER_RUNNER_KEY, value ? "1" : "0");
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<boolean>(COMPOSER_RUNNER_CHANGE_EVENT, { detail: value }),
+  );
+}
+
 const CTRL = IS_MAC ? "⌃" : "Ctrl+";
 
 export type KeybindingRow = {

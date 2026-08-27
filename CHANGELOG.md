@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- While a turn is running, the project's pixel mascot patrols the composer (or the changes bar), hops the jump-to-latest control, and occasionally grabs a coin. Turn it off in Settings → General.
+
 ## [0.1.11] - 2026-08-27
 
 ### Added
