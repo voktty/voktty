@@ -2344,6 +2344,7 @@ export const ar: TranslationSchema = {
       tabNewBlock: "طرفية كتل جديدة",
       tabNewPrivate: "طرفية خاصة جديدة",
       tabNewPreview: "معاينة ويب جديدة",
+      tabNewApiClient: "عميل API وبيئة اختبار جديدة",
       tabNewEditor: "علامة تبويب محرر جديدة",
       tabClose: "إغلاق علامة التبويب أو اللوح",
       paneSplitRight: "تقسيم اللوح يميناً",

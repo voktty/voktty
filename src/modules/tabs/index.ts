@@ -33,6 +33,7 @@ export {
   type GitHistoryTab,
   type GitCommitFileDiffTab,
   type RdpTab,
+  type ApiClientTab,
   type AiDiffStatus,
   type TabPatch,
   type OpenFileTabOptions,

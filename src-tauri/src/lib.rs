@@ -3,7 +3,7 @@ pub(crate) mod launch;
 pub mod modules;
 
 use modules::{
-    agent, collab, control, dap, docker, extensions, fs, git, history, lsp, mcp, net, pty, rdp,
+    agent, api_client, collab, control, dap, docker, extensions, fs, git, history, lsp, mcp, net, pty, rdp,
     remote, secrets, serial, shell, tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -351,6 +351,9 @@ pub fn run() {
             net::lm_ping,
             net::ai_http_request,
             net::ai_http_stream,
+            api_client::api_client_send_request,
+            api_client::api_client_run_scenario,
+            api_client::api_client_dispatch_webhook,
             history::history_suggest,
             history::history_commands,
             history::history_record,

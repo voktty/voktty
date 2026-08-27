@@ -293,6 +293,7 @@ export default function App() {
     newPreviewTab,
     newMarkdownTab,
     newRdpTab,
+    newApiClientTab,
     setMarkdownView,
     setOverrideLanguage,
     openAiDiffTab,
@@ -2190,6 +2191,7 @@ export default function App() {
       "tab.newBlock": openNewBlockTab,
       "tab.newPrivate": openNewPrivateTab,
       "tab.newPreview": () => openPreviewTab(""),
+      "tab.newApiClient": () => newApiClientTab(),
       "tab.newEditor": openNewEditor,
       "tab.close": handleCloseTabOrPane,
       "tab.next": () => stepSwitcher(1),
@@ -3606,6 +3608,7 @@ export default function App() {
         canNavigateBack: navigationAvailability.canGoBack,
         canNavigateForward: navigationAvailability.canGoForward,
         openNewPreview: () => openPreviewTab(""),
+        openNewApiClient: () => newApiClientTab(),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
         toggleSourceControl,
@@ -3728,6 +3731,7 @@ export default function App() {
               onNewPrivate={openNewPrivateTab}
               onNewPreview={() => openPreviewTab("")}
               onNewEditor={openNewEditor}
+              onNewApiClient={() => newApiClientTab()}
               onNewRdp={(opts) => newRdpTab(opts)}
               onConnectRemote={() => setGuestConnectOpen(true)}
               onShareTerminal={handleShareTerminal}

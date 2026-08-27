@@ -166,6 +166,16 @@ function TabBadgeIcon({ tab }: { tab: Tab }) {
       />
     );
   }
+  if (tab.kind === "api-client") {
+    return (
+      <HugeiconsIcon
+        icon={Globe02Icon}
+        size={14}
+        strokeWidth={1.75}
+        className="text-emerald-400"
+      />
+    );
+  }
   if (tab.kind === "ai-diff") {
     return (
       <HugeiconsIcon

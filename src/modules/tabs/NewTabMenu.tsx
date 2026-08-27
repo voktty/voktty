@@ -28,6 +28,7 @@ import {
   File02Icon,
   FolderOpenIcon,
   GitBranchIcon,
+  GlobalIcon,
   Globe02Icon,
   IncognitoIcon,
   PencilEdit02Icon,
@@ -56,6 +57,7 @@ export type NewTabMenuProps = {
   onNewPrivate: () => void;
   onNewPreview: () => void;
   onNewEditor: () => void;
+  onNewApiClient?: () => void;
   onNewRdp?: (options?: {
     host?: string;
     port?: number;
@@ -288,6 +290,7 @@ export function NewTabMenuItems({
   onNewPrivate,
   onNewPreview,
   onNewEditor,
+  onNewApiClient,
   onConnectRemote,
   onOpenFile,
   onOpenFolder,
@@ -507,6 +510,23 @@ export function NewTabMenuItems({
         }
         label={t("git.commitGraph")}
       />
+
+      {/* 7. API Client & Sandbox */}
+      {onNewApiClient && (
+        <NewTabMenuItem
+          onSelect={onNewApiClient}
+          customIcon={
+            <HugeiconsIcon
+              icon={GlobalIcon}
+              size={14}
+              strokeWidth={1.75}
+              className="shrink-0 text-emerald-400"
+            />
+          }
+          label="API Client & Sandbox"
+          shortcut={fmtShortcut(MOD_KEY, SHIFT_KEY, "A")}
+        />
+      )}
 
       {/* 7. Acceso a Archivos */}
       {(onOpenFile || onOpenFolder) && (

@@ -2348,6 +2348,7 @@ export const en = {
       tabNewBlock: "New Blocks terminal",
       tabNewPrivate: "New private terminal",
       tabNewPreview: "New web preview",
+      tabNewApiClient: "New API Client & Sandbox",
       tabNewEditor: "New editor tab",
       tabClose: "Close tab or pane",
       paneSplitRight: "Split pane right",

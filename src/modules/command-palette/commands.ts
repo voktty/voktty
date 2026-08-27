@@ -81,6 +81,7 @@ export type CommandPaletteActionContext = {
   canNavigateBack: boolean;
   canNavigateForward: boolean;
   openNewPreview: () => void;
+  openNewApiClient?: () => void;
   openActiveTabs: () => void;
   openGitGraph: () => void;
   toggleSourceControl: () => void;
@@ -488,6 +489,25 @@ export function createCommandItems(
       icon: Globe02Icon,
       shortcutId: "tab.newPreview",
       run: ctx.openNewPreview,
+    },
+    {
+      id: "tab.newApiClient",
+      title: "New API Client & Sandbox",
+      group: "Tabs",
+      keywords: [
+        "api",
+        "client",
+        "http",
+        "curl",
+        "sandbox",
+        "webhook",
+        "postman",
+        "fetch",
+        "rest",
+      ],
+      icon: GlobalIcon,
+      shortcutId: "tab.newApiClient",
+      run: () => ctx.openNewApiClient?.(),
     },
     {
       id: "tab.close",
