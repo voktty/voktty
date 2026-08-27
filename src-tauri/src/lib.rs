@@ -3,8 +3,8 @@ pub(crate) mod launch;
 pub mod modules;
 
 use modules::{
-    agent, api_client, collab, control, dap, docker, extensions, fs, git, history, lsp, mcp, net, pty, rdp,
-    remote, secrets, serial, shell, tray, tunnel, vibrancy, web_server, workspace,
+    agent, api_client, collab, control, dap, docker, extensions, fs, git, history, lsp, mcp, net,
+    pty, rdp, remote, secrets, serial, shell, tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]

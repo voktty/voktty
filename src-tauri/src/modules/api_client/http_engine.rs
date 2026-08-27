@@ -135,13 +135,14 @@ pub async fn execute_http_request(req: ApiRequestPayload) -> Result<ApiResponseP
 
     // 3. Build Client with timeout & TLS options
     let timeout = Duration::from_millis(req.timeout_ms.unwrap_or(30_000).max(100));
-    let mut builder = reqwest::Client::builder()
-        .timeout(timeout)
-        .redirect(if req.follow_redirects {
-            reqwest::redirect::Policy::limited(10)
-        } else {
-            reqwest::redirect::Policy::none()
-        });
+    let mut builder =
+        reqwest::Client::builder()
+            .timeout(timeout)
+            .redirect(if req.follow_redirects {
+                reqwest::redirect::Policy::limited(10)
+            } else {
+                reqwest::redirect::Policy::none()
+            });
 
     if req.insecure_skip_verify {
         builder = builder.danger_accept_invalid_certs(true);
