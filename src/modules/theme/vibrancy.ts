@@ -38,9 +38,9 @@ async function run(enabled: boolean, dark: boolean): Promise<void> {
     paintOpaque();
   }
 
-  // Mica tints its own backdrop and cannot read the webview theme, so it has
-  // to be rebuilt on a mode flip; NSVisualEffectView adapts on its own.
-  const key = on ? (kind === "mica" ? `on:${dark}` : "on") : "off";
+  // Mica and macOS Vibrancy tint their own backdrop based on the active dark/light mode,
+  // so they have to be rebuilt on a mode flip.
+  const key = on ? `on:${dark}` : "off";
   if (key === applied) return;
 
   try {

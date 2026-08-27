@@ -7,4 +7,19 @@ export {
 export { useThemeFileEditing } from "./useThemeFileEditing";
 export { listBuiltinThemes } from "./themes";
 export { resolveEditorThemeId } from "./resolveEditorTheme";
-export { DEFAULT_THEME_ID } from "./types";
+export {
+  listBuiltinAppearancePacks,
+  getBuiltinAppearancePack,
+  BUILTIN_APPEARANCE_PACKS,
+  BUILTIN_SURFACE_PROFILES,
+  BUILTIN_TYPOGRAPHY_PROFILES,
+} from "./packs";
+export {
+  DEFAULT_THEME_ID,
+  DEFAULT_PACK_ID,
+  type AppearancePack,
+  type SurfaceProfile,
+  type TypographyProfile,
+  type FileIconTheme,
+  type ProductIconTheme,
+} from "./types";

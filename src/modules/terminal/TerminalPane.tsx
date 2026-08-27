@@ -5,6 +5,7 @@ import { GuestSessionBadge } from "@/modules/collab/components/GuestSessionBadge
 import { HostSessionBadge } from "@/modules/collab/components/HostSessionBadge";
 import type { ResourceConnectionState } from "@/modules/connections/lifecycle";
 import { useTranslation } from "@/modules/i18n";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useTheme } from "@/modules/theme";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import {
@@ -206,6 +207,7 @@ export const TerminalPane = memo(
     const containerRef = useRef<HTMLDivElement>(null);
     const downYRef = useRef<number | null>(null);
     const { resolvedMode, activeTheme } = useTheme();
+    const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
 
     const [currentCwd, setCurrentCwd] = useState<string | null>(
       initialCwd ?? leafCwd(leafId) ?? null,
@@ -233,7 +235,7 @@ export const TerminalPane = memo(
       // Defer one frame so CSS-variable token resolution sees the new class.
       const id = requestAnimationFrame(() => session.applyTheme());
       return () => cancelAnimationFrame(id);
-    }, [resolvedMode, activeTheme, session]);
+    }, [resolvedMode, activeTheme, session, windowVibrancy]);
 
     useImperativeHandle(
       ref,

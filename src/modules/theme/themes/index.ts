@@ -4,6 +4,8 @@ import { catppuccin } from "./catppuccin";
 import { claude } from "./claude";
 import { dracula } from "./dracula";
 import { everforest } from "./everforest";
+import { fluentDark } from "./fluent-dark";
+import { fluentLight } from "./fluent-light";
 import { gruvbox } from "./gruvbox";
 import { kanagawa } from "./kanagawa";
 import { kanagawaDragon } from "./kanagawa-dragon";
@@ -17,6 +19,8 @@ import { tokyoNight } from "./tokyo-night";
 import { xcode } from "./xcode";
 
 const BUILTIN: Theme[] = [
+  fluentDark,
+  fluentLight,
   vokttyDefault,
   xcode,
   claude,

@@ -58,19 +58,16 @@ fn os_build() -> u32 {
 }
 
 #[cfg(target_os = "macos")]
-fn set_backdrop(window: &tauri::Window, enabled: bool, _dark: bool) -> Result<(), String> {
+fn set_backdrop(window: &tauri::Window, enabled: bool, dark: bool) -> Result<(), String> {
     use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial};
 
     if enabled {
-        // UnderWindowBackground is the material meant for a whole-window
-        // backdrop; Sidebar/HudWindow are for panels drawn on top of content.
-        apply_vibrancy(
-            window,
-            NSVisualEffectMaterial::UnderWindowBackground,
-            None,
-            None,
-        )
-        .map_err(|e| e.to_string())
+        let material = if dark {
+            NSVisualEffectMaterial::HudWindow
+        } else {
+            NSVisualEffectMaterial::UnderWindowBackground
+        };
+        apply_vibrancy(window, material, None, None).map_err(|e| e.to_string())
     } else {
         clear_vibrancy(window)
             .map(|_| ())
@@ -107,12 +104,21 @@ pub fn apply_rounded_corners(_window: &tauri::Window) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn set_backdrop(window: &tauri::Window, enabled: bool, dark: bool) -> Result<(), String> {
-    use window_vibrancy::{apply_mica, clear_mica};
+    use window_vibrancy::{apply_acrylic, apply_mica, clear_acrylic, clear_mica};
 
     if enabled {
-        apply_mica(window, Some(dark)).map_err(|e| e.to_string())
+        let tint = if dark {
+            (18, 18, 20, 140)
+        } else {
+            (240, 240, 245, 140)
+        };
+        if apply_acrylic(window, Some(tint)).is_err() {
+            apply_mica(window, Some(dark)).map_err(|e| e.to_string())?;
+        }
+        Ok(())
     } else {
-        clear_mica(window).map_err(|e| e.to_string())?;
+        let _ = clear_acrylic(window);
+        let _ = clear_mica(window);
         let _ = apply_rounded_corners(window);
         Ok(())
     }
