@@ -158,6 +158,20 @@ jobs:
           echo "APPLE_API_KEY=$KEY_ID" >> "$GITHUB_ENV"
           echo "APPLE_API_ISSUER=$KEY_ISSUER" >> "$GITHUB_ENV"
 
+      - name: Configure Apple Signing Environment
+        if: startsWith(matrix.platform, 'macos') && env.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_CERTIFICATE != ''
+        shell: bash
+        env:
+          CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PASS: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || matrix.apple-signing-identity }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "APPLE_CERTIFICATE=$CERT" >> "$GITHUB_ENV"
+          echo "APPLE_CERTIFICATE_PASSWORD=$CERT_PASS" >> "$GITHUB_ENV"
+          echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
+
       - id: tauri
         uses: tauri-apps/tauri-action@v1
         env:
@@ -166,11 +180,6 @@ jobs:
 
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-          APPLE_CERTIFICATE: ${{ env.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_CERTIFICATE || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ env.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_SIGNING_IDENTITY || matrix.apple-signing-identity }}
-          APPLE_TEAM_ID: ${{ env.APPLE_SIGNING_ENABLED == 'true' && secrets.APPLE_TEAM_ID || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Voktty ${{ github.ref_name }}"
