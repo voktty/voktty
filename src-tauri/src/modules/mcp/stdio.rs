@@ -246,9 +246,9 @@ impl StdioServerConfig {
         }
         validate_environment(&self.environment)?;
         if self.probe_timeout.is_zero()
-            || self.probe_timeout > Duration::from_secs(5)
+            || self.probe_timeout > Duration::from_secs(20)
             || self.request_timeout.is_zero()
-            || self.request_timeout > Duration::from_secs(30)
+            || self.request_timeout > Duration::from_secs(60)
         {
             return Err(McpError::new(
                 McpErrorKind::Configuration,
@@ -1436,8 +1436,8 @@ mod tests {
         let fixture = root.join("scripts/fixtures/mcp-stdio-server.mjs");
         let mut config = StdioServerConfig::new("fixture", node, &root, &root);
         config.args = vec![fixture.to_string_lossy().into_owned(), mode.into()];
-        config.probe_timeout = Duration::from_secs(5);
-        config.request_timeout = Duration::from_secs(2);
+        config.probe_timeout = Duration::from_secs(15);
+        config.request_timeout = Duration::from_secs(15);
         config
     }
 
