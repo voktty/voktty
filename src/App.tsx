@@ -7,6 +7,7 @@ import { ApprovalToasts } from "./chrome/ApprovalToasts";
 import { TitleBar, type Tab as TitleTab } from "./chrome/TitleBar";
 import { MenuBar } from "./chrome/MenuBar";
 import { FilePicker } from "./chrome/FilePicker";
+import { UsageFooter } from "./chrome/UsageFooter";
 import { useProjectBranches } from "./hooks/useProjectBranches";
 import { useSidebarLayout } from "./hooks/useSidebarLayout";
 import {
@@ -3776,6 +3777,7 @@ export default function App({
             }
           />
         ) : null}
+        <UsageFooter />
       </div>
 
       {filePickerOpen ? (

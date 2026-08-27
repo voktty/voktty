@@ -9,6 +9,7 @@ mod macos;
 mod menu;
 mod project_logo;
 mod pty;
+mod rate_limits;
 mod search;
 mod session_store;
 mod skills;
@@ -216,6 +217,7 @@ pub fn run() {
             harness::harness_sse_open,
             harness::harness_sse_close,
             harness::harness_exec,
+            rate_limits::fetch_claude_usage,
             pty::pty_spawn,
             pty::pty_write,
             pty::pty_resize,

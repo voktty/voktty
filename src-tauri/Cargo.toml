@@ -23,7 +23,7 @@ serde_json.workspace = true
 base64 = "0.22"
 tauri-plugin-dialog = "2"
 rusqlite = { version = "0.40.2", features = ["bundled"], default-features = false }
-ureq = { version = "2.12.1", default-features = false }
+ureq = { version = "2.12.1", default-features = false, features = ["tls", "gzip"] }
 tauri-plugin-process = "2"
 
 [target.'cfg(unix)'.dependencies]
