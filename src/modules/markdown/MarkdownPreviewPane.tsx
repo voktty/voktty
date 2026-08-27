@@ -12,7 +12,9 @@ import {
 import { useTranslation } from "@/modules/i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Streamdown } from "streamdown";
+import { defaultRehypePlugins, Streamdown } from "streamdown";
+import { MarkdownDocContext } from "./lib/docContext";
+import { MarkdownImage } from "./MarkdownImage";
 import { MarkdownLink } from "./MarkdownLink";
 import { MarkdownViewToggle } from "./MarkdownViewToggle";
 import {
@@ -47,7 +49,16 @@ type Props = {
   onSetView: (mode: "rendered" | "raw") => void;
 };
 
-const components = { a: MarkdownLink, code: MarkdownCode };
+const components = {
+  a: MarkdownLink,
+  img: MarkdownImage,
+  code: MarkdownCode,
+};
+
+const customRehypePlugins = [
+  defaultRehypePlugins.raw,
+  defaultRehypePlugins.sanitize,
+];
 
 export const MarkdownPreviewPane = forwardRef<MarkdownSearchHandle, Props>(
   function MarkdownPreviewPane(
@@ -150,14 +161,17 @@ export const MarkdownPreviewPane = forwardRef<MarkdownSearchHandle, Props>(
             </p>
           )}
           {status.kind === "ready" && (
-            <Streamdown
-              className="select-text [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-              components={components}
-              mode="static"
-              parseIncompleteMarkdown={false}
-            >
-              {status.content}
-            </Streamdown>
+            <MarkdownDocContext.Provider value={{ docPath: path, workspaceEnv }}>
+              <Streamdown
+                className="select-text [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                components={components}
+                rehypePlugins={customRehypePlugins}
+                mode="static"
+                parseIncompleteMarkdown={false}
+              >
+                {status.content}
+              </Streamdown>
+            </MarkdownDocContext.Provider>
           )}
         </div>
       </div>
