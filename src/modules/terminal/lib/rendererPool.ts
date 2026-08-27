@@ -44,7 +44,7 @@ import {
   extractCurrentPromptInput,
   useTerminalSuggestStore,
 } from "./terminalSuggestStore";
-import { historyList } from "../block/lib/history";
+import { historyList, historyRecord } from "../block/lib/history";
 import { SHORTCUTS, matchBinding } from "@/modules/shortcuts";
 
 const PTY_RESIZE_DEBOUNCE_MS = 256;
@@ -468,10 +468,20 @@ function createSlot(): Slot {
     const bridge = adapter?.resolveLeaf(leafId);
     if (!bridge) return true;
 
-    // Track typing intent
+    // Track typing intent and record executed command
     if (event.type === "keydown") {
-      if (
-        event.key === "Enter" ||
+      if (event.key === "Enter") {
+        if (!event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+          const buf = slot.term.buffer.active;
+          const line = buf.getLine(buf.cursorY + buf.baseY);
+          const lineText = line ? line.translateToString(true) : "";
+          const typedCmd = extractCurrentPromptInput(lineText, buf.cursorX).trim();
+          if (typedCmd && typedCmd.length > 0) {
+            historyRecord(typedCmd);
+          }
+        }
+        slot.isDirectTyping = false;
+      } else if (
         event.key === "Escape" ||
         ((event.ctrlKey || event.metaKey) &&
           (event.key === "c" || event.key === "C" || event.key === "d" || event.key === "D"))

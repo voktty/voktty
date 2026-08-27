@@ -36,10 +36,14 @@ The themes below frame every scope decision.
 - [x] Split panes
 - [x] Shell integration (cwd, prompt markers)
 - [x] Inline search, link detection, true-color
+- [x] Inline terminal auto-suggestions (history-based suggest with ghost text, search filter, and settings toggle)
+- [x] Serial Terminal support (COM / TTY ports with baud rate and parity controls)
+- [x] SSH and remote workspace environments
 - [x] Drag and drop files into terminal panes as shell-safe quoted paths
 - [x] Private terminal tabs with AI-context redaction
 - [x] WSL bridge as workspace environment
 - [x] Spaces with restored tabs, working directories, and split-pane layouts
+- [x] Terminal collaboration with secure quick tunnels and permission roles
 
 ### Editor
 
@@ -51,15 +55,17 @@ The themes below frame every scope decision.
 
 ### Themes and Customization
 
+- [x] Fluent Design System with carbon palette and native Mica backdrop support
 - [x] Prebuilt and custom app and terminal themes with import and sharing
 - [x] Background images with adjustable opacity and blur
 - [x] App-theme-aware and independently selectable editor themes
 
-### File Explorer
+### File Explorer & Workspaces
 
 - [x] Icon theme with full file-type coverage
 - [x] Fuzzy search, keyboard navigation, inline rename, context actions
 - [x] Live filesystem updates in the explorer and open editor tabs
+- [x] Docker containers explorer and workspace management
 
 ### Git / Source Control
 
@@ -67,7 +73,7 @@ The themes below frame every scope decision.
 - [x] Git history with commit graph
 - [x] Per-file diffs
 
-### AI
+### AI & Agentic Tools
 
 - [x] Multiple cloud and local providers (BYOK)
 - [x] Multi-agent and sub-agents
@@ -79,16 +85,18 @@ The themes below frame every scope decision.
 - [x] Workspace file picker
 - [x] Auto-compact for long context
 
-### Previews
+### Tools & Previews
 
+- [x] Integrated API Client with cURL parser and response inspection
 - [x] Auto-detected local dev server preview
 - [x] Image, video, audio, and PDF viewers
 - [x] Rendered Markdown preview with raw and rendered views
 - [x] Sandboxed iframe
 
-### Platform Integration
+### Platform Integration & Localization
 
 - [x] macOS, Linux (.deb / .rpm / AppImage), Windows (NSIS), WSL
+- [x] Full internationalization in 12 languages (EN, ES, DE, FR, IT, JA, KO, PT, RU, ZH, AR, HI) with RTL/LTR support
 - [x] AUR (Arch)
 - [x] Windows Explorer context-menu integration
 - [x] Auto-updater
@@ -111,13 +119,16 @@ The themes below frame every scope decision.
 
 ### Coming next
 
-- [ ] SSH support (PTY auth and known_hosts first; SFTP and port forwarding later)
-- [ ] Inline terminal auto-suggestions (history-based first; AI-powered opt-in later)
-- [ ] AI agent reliability and workflow improvements (tool execution, context management, recovery, and long-running tasks)
-- [ ] Expand external coding-agent orchestration beyond Claude Code
-- [ ] Complete, extensible slash-command and reusable skills system
-- [ ] Approval flow improvements (YOLO / auto-approve, project-scoped policies, per-tool trust)
-- [ ] Persistent terminal processes across app restarts
+- [ ] **Agentic Memory & Durable Runs (`voktty-agent-core`):**
+  - 4-tier memory engine (Working, Episodic, Semantic, Procedural) with SQLite + FTS5 (<4 MiB RSS, <1ms search).
+  - Scoped persistent identity (global-user, git-root workspace, agent persona).
+  - Durable executions with atomic checkpoints and idempotency to scale to **Hermes Agent** autonomous loops.
+  - Transparent chat memory badges and portable `.voktty-memory.json` export/import.
+- [ ] Unified capability policy, per-tool trust levels, and MCP (Model Context Protocol) client runtime.
+- [ ] Expand external coding-agent orchestration beyond Claude Code (Hermes, Codex, Ollama agent loops).
+- [ ] Complete, extensible slash-command and reusable skills system.
+- [ ] Approval flow improvements (YOLO / auto-approve, project-scoped policies, per-tool trust).
+- [ ] Persistent terminal processes across app restarts.
 
 ### Longer horizon
 
