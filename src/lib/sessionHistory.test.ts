@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { historyWithLiveSessions, filterSessionsByArchive, filterSessionsByQuery } from "./sessionHistory";
+import {
+  historyWithLiveSessions,
+  filterSessionsByArchive,
+  filterSessionsByQuery,
+  mergeProjectHistorySummary,
+  replaceProjectHistory,
+} from "./sessionHistory";
 import { newSession } from "./session";
 import type { SessionSummary } from "./sessionStore";
 
@@ -178,5 +184,55 @@ describe("filterSessionsByQuery", () => {
     expect(filterSessionsByQuery(rows, "gutter").map((row) => row.id)).toEqual([
       "a2",
     ]);
+  });
+});
+
+describe("replaceProjectHistory", () => {
+  it("swaps one project's rows and keeps the others cached", () => {
+    const current = [
+      summary("a1", "/tmp/project-a", 3),
+      summary("b1", "/tmp/project-b", 2),
+    ];
+    const next = replaceProjectHistory(current, "/tmp/project-a", [
+      summary("a2", "/tmp/project-a", 5),
+    ]);
+    expect(next.map((row) => row.id).sort()).toEqual(["a2", "b1"]);
+  });
+
+  it("clears a project that came back empty without touching the rest", () => {
+    const current = [
+      summary("a1", "/tmp/project-a", 3),
+      summary("b1", "/tmp/project-b", 2),
+    ];
+    const next = replaceProjectHistory(current, "/tmp/project-a", []);
+    expect(next.map((row) => row.id)).toEqual(["b1"]);
+  });
+});
+
+describe("mergeProjectHistorySummary", () => {
+  it("merges into its own project and leaves other projects cached", () => {
+    const current = [
+      summary("a1", "/tmp/project-a", 1),
+      summary("b1", "/tmp/project-b", 2),
+    ];
+    const next = mergeProjectHistorySummary(
+      current,
+      summary("a1", "/tmp/project-a", 9),
+    );
+    expect(next.map((row) => row.id).sort()).toEqual(["a1", "b1"]);
+    expect(next.find((row) => row.id === "a1")?.updatedAt).toBe(9);
+  });
+
+  it("does not leave a duplicate behind when a session changes project", () => {
+    const current = [
+      summary("a1", "/tmp/project-a", 1),
+      summary("b1", "/tmp/project-b", 2),
+    ];
+    const next = mergeProjectHistorySummary(
+      current,
+      summary("a1", "/tmp/project-b", 9),
+    );
+    expect(next.map((row) => row.id).sort()).toEqual(["a1", "b1"]);
+    expect(next.find((row) => row.id === "a1")?.cwd).toBe("/tmp/project-b");
   });
 });

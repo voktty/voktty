@@ -238,6 +238,8 @@ import {
 
 import {
   mergeHistorySummary,
+  mergeProjectHistorySummary,
+  replaceProjectHistory,
   historyWithLiveSessions,
   summaryFromSession,
 } from "./lib/sessionHistory";
@@ -437,6 +439,8 @@ export default function App({
     () => new Map(),
   );
   const [history, setHistory] = useState<SessionSummary[]>([]);
+  /** Projects whose rows are already in `history`, so a revisit can skip the spinner. */
+  const loadedProjects = useRef<Set<string>>(new Set());
   const [historyStatus, setHistoryStatus] = useState<
     "idle" | "loading" | "error"
   >("idle");
@@ -747,20 +751,26 @@ export default function App({
 
   const refreshHistory = useCallback(async (cwd: string) => {
     if (!cwd || cwd === "~") {
-      setHistory([]);
       setHistoryStatus("idle");
       return;
     }
-    // Keep the current list while refetching so sidebar cards don't unmount.
-    setHistoryStatus("loading");
+    // `history` holds every visited project's rows and the sidebar filters it
+    // by cwd, so a project loaded once paints from cache on the way back. Only
+    // spin when there is nothing cached to show; otherwise revalidate quietly
+    // underneath the cards that are already up.
+    const cached = loadedProjects.current.has(normalizeProjectPath(cwd));
+    setHistoryStatus(cached ? "idle" : "loading");
     try {
       const rows = await listSessionsByProject(cwd);
       if (cwd !== sidebarCwdRef.current) return;
-      setHistory(rows);
+      loadedProjects.current.add(normalizeProjectPath(cwd));
+      setHistory((current) => replaceProjectHistory(current, cwd, rows));
       setHistoryStatus("idle");
     } catch {
       if (cwd !== sidebarCwdRef.current) return;
-      setHistoryStatus("error");
+      // A failed revalidate keeps the cached cards rather than replacing a
+      // good list with an error.
+      setHistoryStatus(cached ? "idle" : "error");
     }
   }, []);
 
@@ -781,12 +791,7 @@ export default function App({
         lastPersisted.current.set(session.id, fingerprint);
         if (summary.cwd === sidebarCwdRef.current) {
           setHistory((current) =>
-            mergeHistorySummary(
-              current.filter((entry) =>
-                sameProjectPath(entry.cwd, summary.cwd),
-              ),
-              summary,
-            ),
+            mergeProjectHistorySummary(current, summary),
           );
         }
       })
@@ -846,12 +851,7 @@ export default function App({
           lastPersisted.current.set(session.id, fingerprint);
           if (summary.cwd === sidebarCwdRef.current) {
             setHistory((current) =>
-              mergeHistorySummary(
-                current.filter((entry) =>
-                  sameProjectPath(entry.cwd, summary.cwd),
-                ),
-                summary,
-              ),
+              mergeProjectHistorySummary(current, summary),
             );
           }
         }),
@@ -3075,6 +3075,14 @@ export default function App({
   }
   const titleTabs = titleTabsRef.current;
 
+  // `history` now spans every visited project; consumers that expect the
+  // current project only get this slice.
+  const projectHistory = useMemo(
+    () =>
+      history.filter((entry) => sameProjectPath(entry.cwd, sidebarCwd)),
+    [history, sidebarCwd],
+  );
+
   const sidebarHistory = useMemo(
     () =>
       historyWithLiveSessions(history, sessions, sidebarCwd, {
@@ -3725,7 +3733,7 @@ export default function App({
             open
             cwd={sidebarCwd}
             recents={recents}
-            history={history}
+            history={projectHistory}
             sessions={sessions}
             focusToken={searchViewFocusToken}
             besideRail={deckLayout && projectRailOpen}

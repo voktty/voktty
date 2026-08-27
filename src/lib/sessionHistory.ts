@@ -23,6 +23,39 @@ export function mergeHistorySummary(
   );
 }
 
+/**
+ * Swap in one project's freshly fetched rows while leaving every other
+ * project's cached rows alone. `history` is keyed only by the `cwd` on each
+ * row, so holding several projects at once costs nothing and lets a revisit
+ * paint from cache instead of from an empty list.
+ */
+export function replaceProjectHistory(
+  current: SessionSummary[],
+  cwd: string,
+  rows: SessionSummary[],
+): SessionSummary[] {
+  const others = current.filter((entry) => !sameProjectPath(entry.cwd, cwd));
+  return [...others, ...rows];
+}
+
+/**
+ * `mergeHistorySummary`, but scoped so persisting a session cannot drop the
+ * other projects the cache is holding. A session that changed project is
+ * removed from its old one so the id cannot appear twice.
+ */
+export function mergeProjectHistorySummary(
+  current: SessionSummary[],
+  summary: SessionSummary,
+): SessionSummary[] {
+  const mine: SessionSummary[] = [];
+  const others: SessionSummary[] = [];
+  for (const entry of current) {
+    if (sameProjectPath(entry.cwd, summary.cwd)) mine.push(entry);
+    else if (entry.id !== summary.id) others.push(entry);
+  }
+  return [...others, ...mergeHistorySummary(mine, summary)];
+}
+
 export function filterSessionsByArchive(
   rows: SessionSummary[],
   showArchived: boolean,

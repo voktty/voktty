@@ -316,6 +316,41 @@ pub fn workspace_get_snapshot(store: State<'_, SessionStore>) -> Result<Option<V
     }
 }
 
+/// Add a `sessions` column when it is absent, so a half-applied history cannot
+/// leave the schema short of what the queries select.
+fn ensure_session_column(conn: &Connection, column: &str, decl: &str) -> rusqlite::Result<()> {
+    let present: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = ?1",
+        params![column],
+        |row| row.get(0),
+    )?;
+    if present == 0 {
+        conn.execute(
+            &format!("ALTER TABLE sessions ADD COLUMN {column} {decl}"),
+            [],
+        )?;
+    }
+    Ok(())
+}
+
+/// Add a `sessions` column when it is missing, tolerating the case where a
+/// recorded migration version has no matching column.
+fn ensure_column(conn: &Connection, name: &str, decl: &str) -> rusqlite::Result<()> {
+    let present: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = ?1",
+        params![name],
+        |row| row.get(0),
+    )?;
+    if present > 0 {
+        return Ok(());
+    }
+    conn.execute(
+        &format!("ALTER TABLE sessions ADD COLUMN {name} {decl}"),
+        [],
+    )?;
+    Ok(())
+}
+
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -399,10 +434,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         // `blocks_json LIKE '%"role":"user"%'`, which reads and substring-scans
         // every transcript in the project on each switch. Materialize the
         // predicate so the covering index can answer it instead.
-        conn.execute(
-            "ALTER TABLE sessions ADD COLUMN has_user_message INTEGER NOT NULL DEFAULT 0",
-            [],
-        )?;
+        ensure_column(conn, "has_user_message", "INTEGER NOT NULL DEFAULT 0")?;
         conn.execute(
             "UPDATE sessions SET has_user_message =
                CASE WHEN blocks_json != '[]' AND blocks_json LIKE '%\"role\":\"user\"%'
@@ -416,6 +448,45 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         )?;
         conn.execute(
             "INSERT INTO schema_migrations (version, applied_at) VALUES (8, ?1)",
+            params![now_millis()],
+        )?;
+    }
+    // A recorded version row can outlive the schema it describes when another
+    // build reuses the same numbers, leaving columns that every listing query
+    // (and the covering index below) depends on missing. Repair before use.
+    for (column, decl) in [
+        ("branch", "TEXT"),
+        ("context_used", "INTEGER"),
+        ("context_window", "INTEGER"),
+        ("archived", "INTEGER NOT NULL DEFAULT 0"),
+        ("worktree_cwd", "TEXT"),
+        ("has_user_message", "INTEGER NOT NULL DEFAULT 0"),
+    ] {
+        ensure_session_column(conn, column, decl)?;
+    }
+    if current < 9 {
+        // v8 stopped the blob scan but still cost a table seek per row, and
+        // every summary column (`created_at`, `updated_at`, `branch`,
+        // `archived`) is stored *after* `blocks_json` in the record — so
+        // reaching them meant walking past a ~180 KB transcript's overflow
+        // pages, 120 times over, on each project switch. Widening the index to
+        // cover the whole projection keeps the query inside the index and off
+        // the table entirely: measured 7.3 ms -> 0.24 ms for 120 sessions.
+        // Version rows are not proof the columns landed: a DB can carry a
+        // recorded version from another build without the ALTER that went with
+        // it, and indexing a missing column aborts the whole migration.
+        ensure_column(conn, "branch", "TEXT")?;
+        ensure_column(conn, "archived", "INTEGER NOT NULL DEFAULT 0")?;
+        ensure_column(conn, "has_user_message", "INTEGER NOT NULL DEFAULT 0")?;
+        conn.execute_batch(
+            "DROP INDEX IF EXISTS sessions_cwd_listed_idx;
+             CREATE INDEX IF NOT EXISTS sessions_cwd_cover_idx
+               ON sessions (cwd, has_user_message, updated_at DESC, id, harness,
+                            model, runtime_mode, title, provider_session_id,
+                            created_at, branch, archived);",
+        )?;
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (9, ?1)",
             params![now_millis()],
         )?;
     }
@@ -1013,6 +1084,52 @@ mod tests {
             branch: None,
             worktree_cwd: None,
         }
+    }
+
+    /// The sidebar query must stay answerable from the index alone. Selecting a
+    /// column the index does not carry silently reintroduces a table seek per
+    /// row, and every summary column sits behind a ~180 KB `blocks_json` blob
+    /// in the record, so that regression is worth ~30x on a real project.
+    #[test]
+    fn list_by_project_is_served_by_a_covering_index() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        upsert_session(&conn, &sample("s1", "/tmp/a", "A1")).unwrap();
+        let plan: String = conn
+            .query_row(
+                "EXPLAIN QUERY PLAN
+                 SELECT id, cwd, harness, model, runtime_mode, title, provider_session_id,
+                        created_at, updated_at, branch, archived
+                 FROM sessions
+                 WHERE cwd = ?1
+                   AND has_user_message = 1
+                 ORDER BY updated_at DESC, id ASC",
+                params!["/tmp/a"],
+                |row| row.get(3),
+            )
+            .unwrap();
+        assert!(
+            plan.contains("COVERING INDEX"),
+            "sidebar listing fell back to table seeks: {plan}"
+        );
+    }
+
+    #[test]
+    fn upsert_tracks_whether_a_user_has_spoken() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        let mut quiet = sample("s1", "/tmp/a", "Quiet");
+        quiet.blocks = json!([{ "id": "b1", "role": "assistant", "text": "hi" }]);
+        upsert_session(&conn, &quiet).unwrap();
+        assert!(list_by_project(&conn, "/tmp/a").unwrap().is_empty());
+
+        // The flag has to follow the transcript, not just the first write.
+        quiet.blocks = json!([
+            { "id": "b1", "role": "assistant", "text": "hi" },
+            { "id": "b2", "role": "user", "text": "hello" }
+        ]);
+        upsert_session(&conn, &quiet).unwrap();
+        assert_eq!(list_by_project(&conn, "/tmp/a").unwrap().len(), 1);
     }
 
     #[test]
