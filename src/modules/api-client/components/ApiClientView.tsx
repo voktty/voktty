@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/modules/i18n";
 import {
   Clock01Icon,
   Delete02Icon,
@@ -19,6 +20,7 @@ import { SandboxProbePanel } from "./SandboxProbePanel";
 import { ScenarioRunner } from "./ScenarioRunner";
 
 export function ApiClientView() {
+  const { t } = useTranslation();
   const {
     activeTab,
     setActiveTab,
@@ -34,7 +36,9 @@ export function ApiClientView() {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 text-primary">
             <HugeiconsIcon icon={GlobalIcon} size={15} strokeWidth={2} />
-            <span className="text-xs font-bold tracking-tight">API Client & Sandbox</span>
+            <span className="text-xs font-bold tracking-tight">
+              {t("apiClient.header.title")}
+            </span>
           </div>
 
           <div className="h-4 w-px bg-border/60" />
@@ -48,7 +52,7 @@ export function ApiClientView() {
               className="h-6 gap-1 px-2 text-[11px] font-medium"
             >
               <HugeiconsIcon icon={Link01Icon} size={12} />
-              <span>Request Builder</span>
+              <span>{t("apiClient.header.requestBuilder")}</span>
             </Button>
 
             <Button
@@ -58,7 +62,7 @@ export function ApiClientView() {
               className="h-6 gap-1 px-2 text-[11px] font-medium"
             >
               <HugeiconsIcon icon={FlashIcon} size={12} />
-              <span>API Browser</span>
+              <span>{t("apiClient.header.apiBrowser")}</span>
             </Button>
 
             <Button
@@ -68,7 +72,7 @@ export function ApiClientView() {
               className="h-6 gap-1 px-2 text-[11px] font-medium"
             >
               <HugeiconsIcon icon={Shield01Icon} size={12} />
-              <span>Sandbox Probes</span>
+              <span>{t("apiClient.header.sandboxProbes")}</span>
             </Button>
 
             <Button
@@ -78,7 +82,7 @@ export function ApiClientView() {
               className="h-6 gap-1 px-2 text-[11px] font-medium"
             >
               <HugeiconsIcon icon={WorkflowSquare01Icon} size={12} />
-              <span>Scenarios</span>
+              <span>{t("apiClient.header.scenarios")}</span>
             </Button>
 
             <Button
@@ -88,14 +92,16 @@ export function ApiClientView() {
               className="h-6 gap-1 px-2 text-[11px] font-medium"
             >
               <HugeiconsIcon icon={Clock01Icon} size={12} />
-              <span>History {history.length > 0 && `(${history.length})`}</span>
+              <span>
+                {t("apiClient.header.history")} {history.length > 0 && `(${history.length})`}
+              </span>
             </Button>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-[10px] text-muted-foreground">
-            Zero-CORS • Native Rust Engine
+            {t("apiClient.header.zeroCorsBadge")}
           </Badge>
         </div>
       </div>
@@ -118,7 +124,7 @@ export function ApiClientView() {
         {activeTab === "history" && (
           <div className="flex h-full flex-col p-4">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-semibold">Request History</span>
+              <span className="text-xs font-semibold">{t("apiClient.header.history")}</span>
               {history.length > 0 && (
                 <Button
                   size="sm"
@@ -127,14 +133,14 @@ export function ApiClientView() {
                   className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/10"
                 >
                   <HugeiconsIcon icon={Delete02Icon} size={12} />
-                  <span>Clear History</span>
+                  <span>{t("apiClient.header.clearHistory")}</span>
                 </Button>
               )}
             </div>
 
             {history.length === 0 ? (
               <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-                No requests recorded yet.
+                {t("apiClient.header.noHistory")}
               </div>
             ) : (
               <div className="flex flex-col gap-2 overflow-auto">

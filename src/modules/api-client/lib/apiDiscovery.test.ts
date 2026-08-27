@@ -3,28 +3,28 @@ import { discoverApiEndpoints } from "./apiDiscovery";
 
 vi.mock("./apiTauriBridge", () => ({
   sendApiRequest: vi.fn(async (req: { url: string }) => {
-    if (req.url.includes("/ping")) {
+    if (req.url.includes("/products")) {
       return {
         status: 200,
         statusText: "OK",
         headers: [],
-        body: JSON.stringify({ ok: true, message: "pong" }),
+        body: JSON.stringify({ products: [], total: 0 }),
         bodyBytesLen: 30,
         isJson: true,
-        jsonValue: { ok: true, message: "pong" },
+        jsonValue: { products: [], total: 0 },
         timings: { totalDurationMs: 15 },
         timestamp: Date.now(),
       };
     }
-    if (req.url.includes("/clients")) {
+    if (req.url.includes("/users")) {
       return {
         status: 200,
         statusText: "OK",
         headers: [],
-        body: JSON.stringify({ ok: true, data: [] }),
+        body: JSON.stringify({ users: [], total: 0 }),
         bodyBytesLen: 20,
         isJson: true,
-        jsonValue: { ok: true, data: [] },
+        jsonValue: { users: [], total: 0 },
         timings: { totalDurationMs: 22 },
         timestamp: Date.now(),
       };
@@ -50,9 +50,9 @@ describe("apiDiscovery", () => {
     expect(result.endpoints.some((e) => e.path === "/api/generate")).toBe(true);
   });
 
-  it("discovers active routes like /ping and /clients via probing", async () => {
-    const result = await discoverApiEndpoints("https://forgenex.nexgestion.es/api/v1");
-    expect(result.endpoints.some((e) => e.path === "/ping" && e.status === 200)).toBe(true);
-    expect(result.endpoints.some((e) => e.path === "/clients" && e.status === 200)).toBe(true);
+  it("discovers active routes like /products and /users via probing", async () => {
+    const result = await discoverApiEndpoints("https://dummyjson.com");
+    expect(result.endpoints.some((e) => e.path === "/products" && e.status === 200)).toBe(true);
+    expect(result.endpoints.some((e) => e.path === "/users" && e.status === 200)).toBe(true);
   });
 });
