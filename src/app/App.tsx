@@ -2443,7 +2443,7 @@ export default function App() {
       const tab = tabsRef.current.find(
         (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
       );
-      if (tab && tab.kind === "terminal" && !tab.customTitle) {
+      if (tab && tab.kind === "terminal" && !tab.customTitle && tab.title !== title) {
         updateTab(tab.id, { title });
       }
     },

@@ -1051,9 +1051,11 @@ function bindLeafToSlot(leafId: number, s: Session): void {
         shellState,
       );
       const osc52 = registerOsc52ClipboardHandler(term);
+      let lastReportedTitle: string | null = null;
       const titleDisposable = term.onTitleChange((newTitle) => {
         const trimmed = (newTitle || "").trim();
-        if (trimmed) {
+        if (trimmed && trimmed !== lastReportedTitle) {
+          lastReportedTitle = trimmed;
           s.callbacks.onTitle?.(trimmed);
         }
       });

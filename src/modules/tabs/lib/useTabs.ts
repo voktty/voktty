@@ -1646,15 +1646,17 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   }, [openFileTab]);
 
   const updateTab = useCallback((id: number, patch: TabPatch) => {
-    setTabs((t) =>
-      t.map((x) => {
+    setTabs((t) => {
+      let changed = false;
+      const next = t.map((x) => {
         if (x.id !== id) return x;
         const basePatch = {
           ...(patch.color !== undefined && { color: patch.color }),
           ...(patch.locked !== undefined && { locked: patch.locked }),
         };
+        let updated = x;
         if (x.kind === "terminal") {
-          return {
+          updated = {
             ...x,
             ...basePatch,
             ...(patch.title !== undefined && { title: patch.title }),
@@ -1667,9 +1669,8 @@ export function useTabs(initial?: Partial<TerminalTab>) {
               workspaceEnv: patch.workspaceEnv,
             }),
           };
-        }
-        if (x.kind === "preview") {
-          return {
+        } else if (x.kind === "preview") {
+          updated = {
             ...x,
             ...basePatch,
             ...(patch.title !== undefined && { title: patch.title }),
@@ -1681,39 +1682,47 @@ export function useTabs(initial?: Partial<TerminalTab>) {
               devServerScope: patch.devServerScope || undefined,
             }),
           };
-        }
-        if (x.kind === "markdown") {
-          return {
+        } else if (x.kind === "markdown") {
+          updated = {
             ...x,
             ...basePatch,
             ...(patch.title !== undefined && { title: patch.title }),
           };
-        }
-        if (x.kind === "rdp") {
-          return {
+        } else if (x.kind === "rdp") {
+          updated = {
             ...x,
             ...basePatch,
             ...(patch.title !== undefined && { title: patch.title }),
           };
+        } else {
+          // editor tab: auto-promote from preview the moment the file becomes dirty.
+          const autoPin =
+            patch.dirty === true && (x as EditorTab).preview
+              ? { preview: false }
+              : {};
+          updated = {
+            ...x,
+            ...basePatch,
+            ...autoPin,
+            ...(patch.title !== undefined && { title: patch.title }),
+            ...(patch.dirty !== undefined && { dirty: patch.dirty }),
+            ...(patch.path !== undefined && { path: patch.path }),
+            ...(patch.overrideLanguage !== undefined && {
+              overrideLanguage: patch.overrideLanguage,
+            }),
+          };
         }
-        // editor tab: auto-promote from preview the moment the file becomes dirty.
-        const autoPin =
-          patch.dirty === true && (x as EditorTab).preview
-            ? { preview: false }
-            : {};
-        return {
-          ...x,
-          ...basePatch,
-          ...autoPin,
-          ...(patch.title !== undefined && { title: patch.title }),
-          ...(patch.dirty !== undefined && { dirty: patch.dirty }),
-          ...(patch.path !== undefined && { path: patch.path }),
-          ...(patch.overrideLanguage !== undefined && {
-            overrideLanguage: patch.overrideLanguage,
-          }),
-        };
-      }),
-    );
+
+        const keys = Object.keys(updated) as (keyof typeof updated)[];
+        const isIdentical = keys.every(
+          (k) => (x as Record<string, unknown>)[k as string] === (updated as Record<string, unknown>)[k as string],
+        );
+        if (isIdentical) return x;
+        changed = true;
+        return updated;
+      });
+      return changed ? next : t;
+    });
   }, []);
 
   const selectByIndex = useCallback(
