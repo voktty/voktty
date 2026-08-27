@@ -26,7 +26,7 @@ export type ProviderRateLimits = {
 export const SESSION_WINDOW_MINUTES = 300;
 export const WEEKLY_WINDOW_MINUTES = 10_080;
 
-/** Background poll while the window is visible. Matches Orca's cadence. */
+/** Background poll while the window is visible. */
 export const RATE_LIMIT_POLL_MS = 15 * 60 * 1000;
 /** Skip focus/restore and timer refetches until the snapshot is this old. */
 export const RATE_LIMIT_MIN_REFETCH_MS = 5 * 60 * 1000;
@@ -37,8 +37,19 @@ export function isRateLimitSnapshotStale(
   minAgeMs = RATE_LIMIT_MIN_REFETCH_MS,
 ): boolean {
   if (!limits || limits.status === "idle") return true;
+  if (limits.status === "unavailable") return false;
   if (limits.updatedAt <= 0) return true;
   return now - limits.updatedAt >= minAgeMs;
+}
+
+export function shouldFetchProvider(
+  limits: ProviderRateLimits,
+  input: { force?: boolean; visible: boolean; now?: number },
+): boolean {
+  if (input.force) return true;
+  if (!input.visible) return false;
+  if (limits.status === "unavailable") return false;
+  return isRateLimitSnapshotStale(limits, input.now ?? Date.now());
 }
 
 export function shouldFetchRateLimits(input: {
@@ -48,12 +59,9 @@ export function shouldFetchRateLimits(input: {
   codex: ProviderRateLimits;
   now?: number;
 }): boolean {
-  if (input.force) return true;
-  if (!input.visible) return false;
-  const now = input.now ?? Date.now();
   return (
-    isRateLimitSnapshotStale(input.claude, now) ||
-    isRateLimitSnapshotStale(input.codex, now)
+    shouldFetchProvider(input.claude, input) ||
+    shouldFetchProvider(input.codex, input)
   );
 }
 

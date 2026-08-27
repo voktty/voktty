@@ -13,7 +13,7 @@ import {
   idleRateLimits,
   RATE_LIMIT_POLL_MS,
   rateLimitWindowTooltip,
-  shouldFetchRateLimits,
+  shouldFetchProvider,
   type ProviderRateLimits,
   type RateLimitWindow,
 } from "../lib/rateLimits";
@@ -37,35 +37,32 @@ export function UsageFooter() {
 
   const refresh = useCallback((force = false) => {
     if (inflight.current) return inflight.current;
-    if (
-      !shouldFetchRateLimits({
-        force,
-        visible: document.visibilityState === "visible",
-        claude: claudeRef.current,
-        codex: codexRef.current,
-      })
-    ) {
-      return;
-    }
+    const visible = document.visibilityState === "visible";
+    const fetchClaude = shouldFetchProvider(claudeRef.current, { force, visible });
+    const fetchCodex = shouldFetchProvider(codexRef.current, { force, visible });
+    if (!fetchClaude && !fetchCodex) return;
     if (force) setRefreshing(true);
-    setClaude((current) => fetchingRateLimits("claude", current));
-    setCodex((current) => fetchingRateLimits("codex", current));
-    const run = Promise.allSettled([
-      fetchClaudeRateLimits(),
-      fetchCodexRateLimits(),
-    ])
-      .then(([claudeResult, codexResult]) => {
-        if (claudeResult.status === "fulfilled") {
-          setClaude(claudeResult.value);
-        }
-        if (codexResult.status === "fulfilled") {
-          setCodex(codexResult.value);
-        }
-      })
-      .finally(() => {
-        inflight.current = null;
-        setRefreshing(false);
-      });
+    const jobs: Promise<void>[] = [];
+    if (fetchClaude) {
+      setClaude((current) => fetchingRateLimits("claude", current));
+      jobs.push(
+        fetchClaudeRateLimits().then((value) => {
+          setClaude(value);
+        }),
+      );
+    }
+    if (fetchCodex) {
+      setCodex((current) => fetchingRateLimits("codex", current));
+      jobs.push(
+        fetchCodexRateLimits().then((value) => {
+          setCodex(value);
+        }),
+      );
+    }
+    const run = Promise.allSettled(jobs).finally(() => {
+      inflight.current = null;
+      setRefreshing(false);
+    });
     inflight.current = run;
     return run;
   }, []);
@@ -123,6 +120,7 @@ function ProviderChip({
   const loading =
     limits.status === "idle" ||
     (limits.status === "fetching" && !limits.session && !limits.weekly);
+  const disconnected = limits.status === "unavailable";
   const windows = [
     limits.session ? { key: "session", window: limits.session } : null,
     limits.weekly ? { key: "weekly", window: limits.weekly } : null,
@@ -143,12 +141,20 @@ function ProviderChip({
     <span
       className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap"
       title={
-        tooltip || limits.error || (loading ? "Loading usage…" : undefined)
+        tooltip ||
+        limits.error ||
+        (disconnected
+          ? "Not connected"
+          : loading
+            ? "Loading usage…"
+            : undefined)
       }
     >
       <HarnessIcon harness={limits.provider} className="size-3 shrink-0" />
       {loading ? (
         <span className="animate-pulse text-content/35">···</span>
+      ) : disconnected ? (
+        <span className="text-content/35">not connected</span>
       ) : windows.length === 0 ? (
         <span className="text-content/35">—</span>
       ) : (

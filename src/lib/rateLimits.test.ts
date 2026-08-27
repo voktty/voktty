@@ -14,6 +14,7 @@ import {
   parseResetTimestamp,
   RATE_LIMIT_MIN_REFETCH_MS,
   rateLimitWindowTooltip,
+  shouldFetchProvider,
   shouldFetchRateLimits,
 } from "./rateLimits";
 
@@ -255,5 +256,58 @@ describe("shouldFetchRateLimits", () => {
 
   it("treats the first idle load as stale", () => {
     expect(isRateLimitSnapshotStale(idleRateLimits("claude"), now)).toBe(true);
+  });
+
+  it("does not keep polling a provider that is not connected", () => {
+    const disconnected = {
+      ...idleRateLimits("codex"),
+      status: "unavailable" as const,
+      updatedAt: now - RATE_LIMIT_MIN_REFETCH_MS,
+      error: "Codex CLI not found",
+    };
+    expect(isRateLimitSnapshotStale(disconnected, now)).toBe(false);
+    expect(
+      shouldFetchProvider(disconnected, { visible: true, now }),
+    ).toBe(false);
+    expect(
+      shouldFetchRateLimits({
+        visible: true,
+        claude: disconnected,
+        codex: disconnected,
+        now,
+      }),
+    ).toBe(false);
+  });
+
+  it("still polls the connected provider when the other is not", () => {
+    const disconnected = {
+      ...idleRateLimits("claude"),
+      status: "unavailable" as const,
+      updatedAt: now - RATE_LIMIT_MIN_REFETCH_MS,
+      error: "Claude not signed in",
+    };
+    expect(
+      shouldFetchProvider(disconnected, { visible: true, now }),
+    ).toBe(false);
+    expect(
+      shouldFetchRateLimits({
+        visible: true,
+        claude: disconnected,
+        codex: stale,
+        now,
+      }),
+    ).toBe(true);
+  });
+
+  it("retries a disconnected provider only when forced", () => {
+    const disconnected = {
+      ...idleRateLimits("codex"),
+      status: "unavailable" as const,
+      updatedAt: now,
+      error: "Codex not signed in",
+    };
+    expect(
+      shouldFetchProvider(disconnected, { force: true, visible: true, now }),
+    ).toBe(true);
   });
 });
