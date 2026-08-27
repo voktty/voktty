@@ -1,7 +1,7 @@
 const ANSI_ESCAPE =
   /\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\))/g;
 const LOOPBACK_URL =
-  /(?:https?:\/\/)?(?:localhost|[a-z0-9-]+\.localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[(?:::1|::)\])(?::\d{1,5})?(?:\/[^\s<>"'`]*)?/gi;
+  /(?:https?:\/\/(?:localhost|[a-z0-9-]+\.localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[(?:::1|::)\])(?::\d{2,5})?(?:\/[^\s<>"'`]*)?)|(?:(?:localhost|[a-z0-9-]+\.localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[(?:::1|::)\]):\d{2,5}(?:\/[^\s<>"'`]*)?)/gi;
 const MAX_TAIL_LENGTH = 2048;
 
 function isLoopbackIpv4(hostname: string): boolean {
@@ -29,9 +29,14 @@ function isAllowedLoopbackHost(hostname: string): boolean {
 /**
  * Converts terminal text into a safe browser origin. Paths, fragments,
  * credentials and query strings are deliberately not retained.
+ * Rejects bare hostname mentions without an explicit web port (>= 80) or http(s) scheme.
  */
 export function normalizeCapturedDevServerUrl(raw: string): string | null {
-  const candidate = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+  const hasScheme = /^https?:\/\//i.test(raw);
+  if (!hasScheme && !/:(?:[89]\d|[1-9]\d{2,4})(?:[/?#]|$)/.test(raw)) {
+    return null;
+  }
+  const candidate = hasScheme ? raw : `http://${raw}`;
   try {
     const url = new URL(candidate);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
@@ -40,7 +45,9 @@ export function normalizeCapturedDevServerUrl(raw: string): string | null {
     }
     if (url.port) {
       const port = Number(url.port);
-      if (!Number.isInteger(port) || port < 1 || port > 65_535) return null;
+      if (!Number.isInteger(port) || port < 80 || port > 65_535) return null;
+    } else if (!hasScheme) {
+      return null;
     }
     if (url.hostname === "0.0.0.0" || url.hostname === "[::]") {
       url.hostname = "localhost";

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { labelFor } from "./tabLabel";
+import {
+  extractRemoteHostLabel,
+  getTabSubtitle,
+  isSshOrRemoteSession,
+  labelFor,
+} from "./tabLabel";
 import type { TerminalTab } from "./useTabs";
 import { createTabIdentity } from "./tabIdentity";
 
@@ -48,9 +53,61 @@ describe("labelFor (terminal tabs)", () => {
   it("handles Windows-style cwd separators", () => {
     expect(labelFor(terminalTab({ cwd: "C:\\Users\\me\\proj" }))).toBe("proj");
   });
+
+  it("extracts remote host from SSH workspace environment", () => {
+    const sshTab = terminalTab({
+      cwd: "C:\\Users\\SergioRVargasHerranz",
+      workspaceEnv: {
+        kind: "ssh",
+        connection: { id: "1", name: "hermes-server", host: "docker", port: 22, user: "root" },
+        root: "/opt/docker/hermes-server",
+      },
+    });
+    expect(labelFor(sshTab)).toBe("hermes-server");
+  });
+
+  it("extracts user@host from CLI SSH title or remote prompt", () => {
+    const cliSshTab = terminalTab({
+      cwd: "C:\\Users\\SergioRVargasHerranz",
+      title: "root@docker: /opt/docker/hermes-server",
+    });
+    expect(labelFor(cliSshTab)).toBe("root@docker");
+  });
+
+  it("extracts host from ssh command title", () => {
+    const sshCmdTab = terminalTab({
+      cwd: "C:\\Users\\SergioRVargasHerranz",
+      title: "ssh root@prod.srv",
+    });
+    expect(labelFor(sshCmdTab)).toBe("root@prod.srv");
+  });
 });
 
-import { getTabSubtitle } from "./tabLabel";
+describe("isSshOrRemoteSession and extractRemoteHostLabel", () => {
+  it("detects remote SSH workspace", () => {
+    const tab = terminalTab({
+      workspaceEnv: {
+        kind: "ssh",
+        connection: { id: "1", name: "docker", host: "127.0.0.1", port: 22, user: "root" },
+        root: "/root",
+      },
+    });
+    expect(isSshOrRemoteSession(tab)).toBe(true);
+    expect(extractRemoteHostLabel(tab)).toBe("docker");
+  });
+
+  it("detects remote user@host prompt pattern", () => {
+    const tab = terminalTab({ title: "root@docker:~" });
+    expect(isSshOrRemoteSession(tab)).toBe(true);
+    expect(extractRemoteHostLabel(tab)).toBe("root@docker");
+  });
+
+  it("does not detect regular local shell", () => {
+    const tab = terminalTab({ title: "powershell.exe" });
+    expect(isSshOrRemoteSession(tab)).toBe(false);
+    expect(extractRemoteHostLabel(tab)).toBeNull();
+  });
+});
 
 describe("getTabSubtitle", () => {
   it("formats terminal cwd subtitle", () => {
@@ -62,7 +119,7 @@ describe("getTabSubtitle", () => {
     });
   });
 
-  it("formats SSH workspace subtitle", () => {
+  it("formats SSH workspace subtitle with connection name and user@host", () => {
     expect(
       getTabSubtitle(
         terminalTab({
@@ -75,7 +132,38 @@ describe("getTabSubtitle", () => {
       ),
     ).toEqual({
       icon: "remote",
+      text: "Prod (root@prod.srv)",
+    });
+  });
+
+  it("formats unnamed SSH workspace subtitle", () => {
+    expect(
+      getTabSubtitle(
+        terminalTab({
+          workspaceEnv: {
+            kind: "ssh",
+            connection: { id: "1", name: "", host: "prod.srv", port: 22, user: "root" },
+            root: "/var/www",
+          },
+        }),
+      ),
+    ).toEqual({
+      icon: "remote",
       text: "ssh root@prod.srv",
+    });
+  });
+
+  it("formats remote SSH subtitle from terminal title", () => {
+    expect(
+      getTabSubtitle(
+        terminalTab({
+          cwd: "C:\\Users\\SergioRVargasHerranz",
+          title: "root@docker: /opt/docker",
+        }),
+      ),
+    ).toEqual({
+      icon: "remote",
+      text: "ssh root@docker",
     });
   });
 

@@ -17,6 +17,7 @@ type LeafBundle = {
   onSearchReady: (leafId: number, addon: SearchAddon) => void;
   onCwd: (leafId: number, cwd: string) => void;
   onExit: (leafId: number, code: number) => void;
+  onTitle: (leafId: number, title: string) => void;
 };
 
 type Props = {
@@ -79,6 +80,7 @@ export const PaneTreeView = memo(function PaneTreeView(props: Props) {
           onSearchReady={b.onSearchReady}
           onCwd={b.onCwd}
           onExit={b.onExit}
+          onTitle={b.onTitle}
         />
         <DropOverlay leafId={node.id} />
         <FinishedPulse leafId={node.id} />

@@ -89,7 +89,7 @@ const technicalPatterns = [
   /^(?:Explain the last error in the terminal\.|Give me a command to|Summarize what just happened in the terminal\.)$/,
   /^(?:SSH|WSL|Docker|Serial|RDP): \{…\}$/,
   /^(?:unhandled method \{…\}|Space|←|↑\{…\} ↓\{…\}|[↑↓]\{…\}|~)$/,
-  /^(?:ssh \{…\}@\{…\}|serial · \{…\}|docker · \{…\}|wsl · \{…\}|\{…\} \(WSL\)|🐳 \{…\}|\{…\} \(AI diff\)|\{…\} @ \{…\}|\{…\} — \{…\})$/,
+  /^(?:ssh\s+\{…\}|ssh \{…\}@\{…\}|serial · \{…\}|docker · \{…\}|wsl · \{…\}|\{…\} \(WSL\)|\{…\} · localhost:\{…\}|\{…\} :\{…\}|🐳 \{…\}|\{…\} \(AI diff\)|\{…\} @ \{…\}|\{…\} — \{…\})$/,
   /^(?:, \{…\}|\{…\}%|\{…\}…|\{…\}@|· \{…\}|\{…\}% — \{…\}|\{…\} · v\{…\}|v\{…\}|\+\{…\})$/,
 ];
 

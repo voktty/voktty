@@ -7,6 +7,57 @@ import type { Tab } from "./useTabs";
  * cwd. Keeping this pure makes the "custom name survives a cd" invariant
  * testable without rendering the bar.
  */
+export function isSshOrRemoteSession(tab: Tab): boolean {
+  if (tab.kind === "terminal" && tab.workspaceEnv?.kind === "ssh") return true;
+  const title = (tab.title || "").trim().toLowerCase();
+  if (
+    title.startsWith("ssh ") ||
+    title.startsWith("ssh:") ||
+    title.startsWith("ssh_") ||
+    title === "ssh"
+  ) {
+    return true;
+  }
+  // Check for user@hostname or user@host:path pattern emitted by remote Linux shells
+  if (/^[a-z0-9._-]+@[a-z0-9._-]+/i.test(title)) {
+    return true;
+  }
+  return false;
+}
+
+export function extractRemoteHostLabel(tab: Tab): string | null {
+  if (tab.kind === "terminal" && tab.workspaceEnv?.kind === "ssh") {
+    const conn = tab.workspaceEnv.connection;
+    if (conn.name?.trim()) return conn.name.trim();
+    if (conn.user?.trim() && conn.host?.trim()) {
+      return `${conn.user.trim()}@${conn.host.trim()}`;
+    }
+    if (conn.host?.trim()) return conn.host.trim();
+  }
+
+  const title = (tab.title || "").trim();
+  // If title is ssh user@host or ssh host
+  if (/^ssh\s+([^\s]+)/i.test(title)) {
+    const match = title.match(/^ssh\s+([^\s]+)/i);
+    if (match && match[1]) {
+      return match[1].replace(/^-.*$/, "");
+    }
+  }
+
+  // If title is user@host:path or user@host:~ or user@host
+  const remoteMatch = title.match(/^([a-z0-9._-]+@[a-z0-9._-]+)(?::.*)?$/i);
+  if (remoteMatch && remoteMatch[1]) {
+    return remoteMatch[1];
+  }
+
+  return null;
+}
+
+/**
+ * The label shown on a tab. Non-terminal tabs use their stored title; terminal
+ * tabs prefer a user-set custom name, then fall back to remote host info or the
+ * last segment of the cwd.
+ */
 export function labelFor(t: Tab): string {
   if (t.kind === "editor") return t.title;
   if (t.kind === "preview") return t.title;
@@ -18,6 +69,28 @@ export function labelFor(t: Tab): string {
   if (t.kind === "rdp") return t.title;
   if (t.kind === "api-client") return t.title;
   if (t.customTitle) return t.customTitle;
+
+  const remoteLabel = extractRemoteHostLabel(t);
+  if (remoteLabel) return remoteLabel;
+
+  if (t.kind === "terminal") {
+    if (t.workspaceEnv?.kind === "docker") {
+      return (
+        t.workspaceEnv.connection.containerName ||
+        t.workspaceEnv.connection.image.split(":")[0] ||
+        t.title
+      );
+    }
+
+    if (t.workspaceEnv?.kind === "wsl") {
+      return t.workspaceEnv.distro || "WSL";
+    }
+
+    if (t.workspaceEnv?.kind === "serial") {
+      return t.workspaceEnv.portName;
+    }
+  }
+
   if (!t.cwd) return t.title;
   const parts = t.cwd.split(/[\\/]/).filter(Boolean);
   return parts.length ? parts[parts.length - 1] : "/";
@@ -29,9 +102,18 @@ export function getTabSubtitle(tab: Tab): {
 } {
   if (tab.kind === "terminal") {
     if (tab.workspaceEnv?.kind === "ssh") {
+      const conn = tab.workspaceEnv.connection;
+      const userHost = `${conn.user ? `${conn.user}@` : ""}${conn.host}`;
       return {
         icon: "remote",
-        text: `ssh ${tab.workspaceEnv.connection.user}@${tab.workspaceEnv.connection.host}`,
+        text: conn.name ? `${conn.name} (${userHost})` : `ssh ${userHost}`,
+      };
+    }
+    const remoteLabel = extractRemoteHostLabel(tab);
+    if (remoteLabel) {
+      return {
+        icon: "remote",
+        text: `ssh ${remoteLabel}`,
       };
     }
     if (tab.workspaceEnv?.kind === "serial") {
