@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-08-27
+
 ### Added
 
 - Inbox: assigned GitHub issues and pull requests from `gh`, plus Linear issues after you paste a personal API key in Settings → General. Start an issue in a local project; pull requests open on GitHub instead of starting a session from an untrusted branch. Linear Start includes the issue description, since agents cannot fetch Linear pages.
 - Starting from Inbox shows a Linear or GitHub card above the composer — logo, identifier, title, team or repo — instead of pasting the issue into the textarea. Send still includes the issue for the agent; you can add a note or dismiss the card.
 - Claude and Codex plan usage (5-hour and weekly) shows in a footer under the main pane: percent used and time until reset. If a provider isn't installed or signed in, the chip says not connected and isn't polled again until you refresh or relaunch.
 - While a turn is running, the project's pixel mascot patrols the composer (or the changes bar), hops the jump-to-latest control, and occasionally grabs a coin. Turn it off in Settings → General.
+
+### Fixed
+
+- Inbox still lists the other source when GitHub or Linear fails, with the error on that tab instead of a blank inbox.
+- Linear team hiding and status filters apply to the active tab, and Start errors show in the issue detail pane.
 
 ### Security
 
@@ -194,7 +201,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/hardbeat920/monocode/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/hardbeat920/monocode/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/hardbeat920/monocode/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/hardbeat920/monocode/compare/v0.1.8...v0.1.9
