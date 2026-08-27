@@ -37,6 +37,7 @@ import {
 import { ProjectScriptsHud } from "./scripts/ProjectScriptsHud";
 import { TerminalScrollBottomHud } from "./TerminalScrollBottomHud";
 import { TerminalInlineSuggest } from "./TerminalInlineSuggest";
+import { useShortcutLabel } from "@/modules/shortcuts/lib/useShortcutLabel";
 
 function ConnectionStatusBadge({
   workspaceEnv,
@@ -259,7 +260,7 @@ export const TerminalPane = memo(
     const copilotRequested = useTerminalCopilotStore(
       (s) => s.isOpen && (s.leafId === null || s.leafId === leafId),
     );
-    const copilotOpen = aiAvailable && copilotRequested;
+    const copilotOpen = copilotRequested && visible;
     const initialPrompt = useTerminalCopilotStore((s) => s.initialPrompt);
     const closeCopilot = useTerminalCopilotStore((s) => s.closeCopilot);
 
@@ -278,6 +279,8 @@ export const TerminalPane = memo(
       session.clearFailedExit();
     };
 
+    const copilotShortcutLabel = useShortcutLabel("terminal.copilot");
+
     if (blocks) {
       return (
         <div
@@ -292,6 +295,10 @@ export const TerminalPane = memo(
               if (session.blockMode === "prompt") focusLeafInput(leafId);
               else session.focus();
             }}
+            onOpenCopilot={() =>
+              useTerminalCopilotStore.getState().toggleCopilot(leafId)
+            }
+            copilotLabel={copilotShortcutLabel}
           />
           <div className="relative min-h-0 flex-1">
             {/* biome-ignore lint/a11y/noStaticElementInteractions: terminal surface; pointer selects command blocks */}
@@ -384,6 +391,10 @@ export const TerminalPane = memo(
             session.write(cmd);
             session.focus();
           }}
+          onOpenCopilot={() =>
+            useTerminalCopilotStore.getState().toggleCopilot(leafId)
+          }
+          copilotLabel={copilotShortcutLabel}
         />
         <div className="relative min-h-0 flex-1">
           <div

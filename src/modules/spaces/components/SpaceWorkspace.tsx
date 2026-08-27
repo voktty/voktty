@@ -605,7 +605,7 @@ function SpaceResizeHandle({
     <div
       role="separator"
       tabIndex={0}
-      className="pointer-events-auto absolute z-40 rounded-sm bg-border/45 outline-none transition-colors hover:bg-primary/60 focus-visible:bg-primary/70"
+      className="group/handle pointer-events-auto absolute z-40 flex items-center justify-center bg-transparent outline-none transition-colors"
       style={{ ...style, cursor: horizontal ? "col-resize" : "row-resize" }}
       aria-label={label}
       aria-keyshortcuts={
@@ -637,7 +637,27 @@ function SpaceResizeHandle({
           pendingPointerRef.current = null;
         }
       }}
-    />
+    >
+      <div
+        className={cn(
+          "pointer-events-none absolute transition-colors duration-150",
+          horizontal
+            ? "inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent group-hover/handle:bg-border/80 group-focus-visible/handle:bg-primary"
+            : "inset-x-0 top-1/2 h-px -translate-y-1/2 bg-transparent group-hover/handle:bg-border/80 group-focus-visible/handle:bg-primary",
+        )}
+      />
+      <div
+        className={cn(
+          "pointer-events-none z-10 flex items-center justify-center gap-1 transition-all duration-150",
+          horizontal ? "flex-col" : "flex-row",
+          "opacity-30 group-hover/handle:opacity-100 group-focus-visible/handle:opacity-100 group-hover/handle:scale-110",
+        )}
+      >
+        <span className="size-[2.5px] rounded-full bg-foreground/60 transition-colors group-hover/handle:bg-primary group-focus-visible/handle:bg-primary" />
+        <span className="size-[2.5px] rounded-full bg-foreground/60 transition-colors group-hover/handle:bg-primary group-focus-visible/handle:bg-primary" />
+        <span className="size-[2.5px] rounded-full bg-foreground/60 transition-colors group-hover/handle:bg-primary group-focus-visible/handle:bg-primary" />
+      </div>
+    </div>
   );
 }
 

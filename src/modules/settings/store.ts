@@ -507,7 +507,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   lspCustomServers: [],
   sshConnections: [],
   sshTunnels: [],
-  dockerEnabled: true,
+  dockerEnabled: false,
   dockerCustomHost: "",
   dockerDefaultShell: "/bin/sh",
   hasCompletedOnboarding: false,

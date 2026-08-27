@@ -13,6 +13,7 @@
     "build:cli:dev": "node scripts/build-cli.mjs",
     "build:remote": "pwsh -NoProfile -File scripts/build-remote-helper.ps1",
     "dev": "vite",
+    "dev:runner": "pwsh -NoProfile -File scripts/dev-runner.ps1",
     "dev:inspect": "INSPECT=true vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

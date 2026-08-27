@@ -17,6 +17,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import { SHORTCUTS, matchBinding } from "@/modules/shortcuts";
 import {
   generateTerminalCommand,
   type CopilotCommandResult,
@@ -50,6 +52,7 @@ export function TerminalCopilotPopup({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const cardRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -84,6 +87,45 @@ export function TerminalCopilotPopup({
       inputRef.current?.select();
     }
   }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+    const handlePointerDownOutside = (e: MouseEvent | TouchEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDownOutside);
+    document.addEventListener("touchstart", handlePointerDownOutside);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDownOutside);
+      document.removeEventListener("touchstart", handlePointerDownOutside);
+    };
+  }, [active, onClose]);
+
+  useEffect(() => {
+    if (!active) return;
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      const copilotBindings =
+        usePreferencesStore.getState().shortcuts["terminal.copilot"] ??
+        SHORTCUTS.find((s) => s.id === "terminal.copilot")?.defaultBindings ??
+        [];
+      if (copilotBindings.some((b) => matchBinding(e, b, "terminal.copilot"))) {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown, true);
+    };
+  }, [active, onClose]);
 
   useEffect(() => {
     return () => {
@@ -153,6 +195,7 @@ export function TerminalCopilotPopup({
   return (
     <div className="absolute inset-x-0 top-2 z-30 flex justify-center px-3 pointer-events-none">
       <div
+        ref={cardRef}
         style={{
           transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
         }}

@@ -110,7 +110,7 @@ fn set_backdrop(window: &tauri::Window, enabled: bool, dark: bool) -> Result<(),
         let tint = if dark {
             (18, 18, 20, 140)
         } else {
-            (245, 246, 250, 220)
+            (240, 240, 245, 140)
         };
         if apply_acrylic(window, Some(tint)).is_err() {
             apply_mica(window, Some(dark)).map_err(|e| e.to_string())?;
