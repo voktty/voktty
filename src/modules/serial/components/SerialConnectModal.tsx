@@ -84,13 +84,13 @@ export function SerialConnectModal({ open, onOpenChange, onConnect }: Props) {
   const handleConnect = () => {
     const portToUse = selectedPort === "__custom__" ? customPort : selectedPort;
     if (!portToUse) {
-      setError(t("serial.errorNoPort"));
+      setError(t("serial.errors.portRequired"));
       return;
     }
 
     const baud = customBaud ? parseInt(customBaud, 10) : baudRate;
     if (!baud || isNaN(baud)) {
-      setError(t("serial.errorInvalidBaud"));
+      setError(t("serial.errors.invalidBaudRate"));
       return;
     }
 

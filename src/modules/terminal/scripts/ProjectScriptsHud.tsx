@@ -205,10 +205,10 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
               type="button"
               onClick={onOpenCopilot}
               className="inline-flex items-center gap-1 rounded bg-muted/50 hover:bg-muted text-foreground/90 hover:text-foreground px-1.5 py-0.5 text-[10px] font-medium transition-colors cursor-pointer border border-border/60 active:scale-95"
-              title={`Copilot ${copilotLabel ? `(${copilotLabel})` : ""}`}
+              title={copilotLabel ? `${t("terminal.copilot.title")} (${copilotLabel})` : t("terminal.copilot.title")}
             >
               <HugeiconsIcon icon={SparklesIcon} size={10} strokeWidth={2} className="text-primary" />
-              <span>Copilot</span>
+              <span>{t("terminal.copilot.title")}</span>
               {copilotLabel && (
                 <span className="text-[9px] font-mono opacity-70">
                   {copilotLabel}

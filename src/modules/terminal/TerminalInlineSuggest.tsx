@@ -9,6 +9,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { submitToLeaf, writeToSession } from "./lib/useTerminalSession";
 import { historyList } from "./block/lib/history";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/modules/i18n";
 
 type Props = {
   leafId: number;
@@ -19,6 +20,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
   leafId,
   visible = true,
 }: Props) {
+  const { t } = useTranslation();
   const data = useTerminalSuggestStore((s) => s.suggestByLeaf[leafId]);
   const listRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -172,7 +174,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
         <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-2.5 py-1 text-[11px] font-semibold text-foreground">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <HugeiconsIcon icon={Clock01Icon} size={12} strokeWidth={2} />
-            <span className="text-foreground">History</span>
+            <span className="text-foreground">{t("terminal.history.title")}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -186,13 +188,13 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
                   ? "bg-primary/20 text-primary font-medium"
                   : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
-              title="Filter history (Ctrl+F)"
+              title={t("terminal.history.searchPlaceholder")}
             >
               <HugeiconsIcon icon={Search01Icon} size={10} />
-              <span>{searchMode ? "Filtering" : "Ctrl+F Filter"}</span>
+              <span>{searchMode ? t("common.search") : "Ctrl+F"}</span>
             </button>
             <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-mono text-primary">
-              {`<History(${items.length})>`}
+              {items.length}
             </span>
           </div>
         </div>
@@ -211,7 +213,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
               value={searchFilter ?? ""}
               onChange={handleSearchChange}
               onKeyDown={handleSearchKeyDown}
-              placeholder="Search / filter history..."
+              placeholder={t("terminal.history.searchPlaceholder")}
               className="flex-1 bg-transparent text-xs font-mono text-foreground outline-none placeholder:text-muted-foreground/60"
             />
             {searchFilter && (
@@ -241,7 +243,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
         <div ref={listRef} className="flex-1 overflow-y-auto p-1 text-xs">
           {items.length === 0 ? (
             <div className="py-4 text-center text-xs text-muted-foreground">
-              No matching history entries
+              {t("terminal.history.noResults")}
             </div>
           ) : (
             items.map((cmd, idx) => {
@@ -280,8 +282,8 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
                       cmd
                     )}
                   </span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground/70 font-sans">
-                    [History]
+                  <span className="shrink-0 text-[10px] text-muted-foreground/60 font-mono">
+                    #{idx + 1}
                   </span>
                 </button>
               );
@@ -296,26 +298,26 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
               <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
                 ↵
               </kbd>{" "}
-              {navigated || searchMode ? "replace prompt" : "run"}
+              {navigated || searchMode ? t("terminal.history.hintInsert") : t("terminal.scripts.run")}
             </span>
             <span>
               <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
                 ⇧↵
               </kbd>{" "}
-              run
+              {t("terminal.scripts.run")}
             </span>
             <span>
               <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
                 Ctrl+F
               </kbd>{" "}
-              filter
+              {t("common.search")}
             </span>
           </span>
           <span>
             <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
               Esc
             </kbd>{" "}
-            dismiss
+            {t("common.close")}
           </span>
         </div>
       </div>
