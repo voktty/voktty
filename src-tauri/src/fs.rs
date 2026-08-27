@@ -3,7 +3,8 @@ use std::io::ErrorKind;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Mutex;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +23,7 @@ pub struct DirEntry {
 }
 
 /// Immediate children of `path` (project tree). Folders first, then files.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_dir(path: String) -> Result<Vec<DirEntry>, String> {
     let dir = expand_home(&path);
     let reader = std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -138,7 +139,33 @@ pub(crate) struct GitInfo {
     pub repo: Option<String>,
 }
 
+/// `git_info_for` costs up to three `git` subprocesses, and it sits inside
+/// both `session_upsert` (which runs every time a transcript is persisted) and
+/// `list_by_project` (every project switch). Caching it for a beat keeps a
+/// busy session from respawning git on every keystroke-driven save; the branch
+/// can lag by at most `GIT_INFO_TTL`, which only affects a label.
+const GIT_INFO_TTL: Duration = Duration::from_secs(3);
+
+static GIT_INFO_CACHE: Mutex<Option<HashMap<PathBuf, (Instant, GitInfo)>>> = Mutex::new(None);
+
 pub(crate) fn git_info_for(root: &Path) -> GitInfo {
+    if let Ok(mut guard) = GIT_INFO_CACHE.lock() {
+        let cache = guard.get_or_insert_with(HashMap::new);
+        cache.retain(|_, (at, _)| at.elapsed() < GIT_INFO_TTL);
+        if let Some((_, info)) = cache.get(root) {
+            return info.clone();
+        }
+    }
+    let info = git_info_uncached(root);
+    if let Ok(mut guard) = GIT_INFO_CACHE.lock() {
+        guard
+            .get_or_insert_with(HashMap::new)
+            .insert(root.to_path_buf(), (Instant::now(), info.clone()));
+    }
+    info
+}
+
+fn git_info_uncached(root: &Path) -> GitInfo {
     let Some(top) = git_stdout(root, &["rev-parse", "--show-toplevel"])
         .map(PathBuf::from)
         .filter(|path| path.is_dir())
@@ -1698,7 +1725,7 @@ fn already_exists(label: &str) -> String {
 
 /// Create a file or folder under `parent`. `name` may contain `/` or `\` to
 /// nest (VS Code explorer). Returns the created path.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_path(parent: String, name: String, is_dir: bool) -> Result<String, String> {
     let parent_dir = expand_home(&parent);
     let dest = resolve_under(&parent_dir, &name)?;
@@ -1853,7 +1880,7 @@ fn git_url_repo_name(url: &str) -> Option<String> {
 }
 
 /// First few lines of a text file for tool previews.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_file_preview(
     path: String,
     max_lines: usize,
@@ -1910,7 +1937,7 @@ fn file_mtime_ms(meta: &std::fs::Metadata) -> Option<u64> {
 }
 
 /// Metadata only — used to notice disk changes on currently open editors.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stat_files(paths: Vec<String>) -> Result<Vec<FileMtime>, String> {
     if paths.len() > MAX_STAT_FILES {
         return Err("Too many paths".into());
@@ -1938,7 +1965,7 @@ pub struct PathInfo {
 }
 
 /// Metadata for files the composer is attaching (picker, drop, paste).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn inspect_paths(paths: Vec<String>) -> Vec<PathInfo> {
     paths
         .into_iter()

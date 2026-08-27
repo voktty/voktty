@@ -21,7 +21,7 @@ pub struct DiscoveredSkill {
 
 /// Skills visible for the open project: `.agents/skills` first, then native
 /// harness folders. Same name: earlier roots win.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_skills(cwd: String) -> Result<Vec<DiscoveredSkill>, String> {
     let project = expand_home(&cwd);
     let home = dirs_home().map(PathBuf::from);

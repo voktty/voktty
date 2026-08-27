@@ -1,4 +1,4 @@
-import { FolderIcon, getFileIcon, MaterialIcon } from "react-material-icon-theme";
+import { useSyncExternalStore } from "react";
 
 type Props = {
   name: string;
@@ -8,6 +8,38 @@ type Props = {
   size?: number;
 };
 
+type IconPack = typeof import("react-material-icon-theme");
+
+/**
+ * The Material icon pack inlines every glyph as a component — ~1.1 MB, the
+ * single largest thing in the boot chunk, for 16px decorations. Load it after
+ * first paint and hold a same-sized blank until it lands, so the app starts
+ * without it and nothing reflows when it arrives.
+ */
+let pack: IconPack | null = null;
+let loading: Promise<void> | null = null;
+const listeners = new Set<() => void>();
+
+function loadPack() {
+  if (pack || loading) return;
+  loading = import("react-material-icon-theme").then((mod) => {
+    pack = mod;
+    for (const listener of listeners) listener();
+  });
+}
+
+function subscribe(onStoreChange: () => void) {
+  listeners.add(onStoreChange);
+  loadPack();
+  return () => {
+    listeners.delete(onStoreChange);
+  };
+}
+
+function getSnapshot() {
+  return pack;
+}
+
 /** VS Code Material Icon Theme — filename maps to the matching icon. */
 export function FileTypeIcon({
   name,
@@ -16,9 +48,21 @@ export function FileTypeIcon({
   isRoot = false,
   size = 16,
 }: Props) {
+  const icons = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  if (!icons) {
+    return (
+      <span
+        aria-hidden
+        className="inline-block shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
   if (isDir) {
     return (
-      <FolderIcon
+      <icons.FolderIcon
         folderName={name}
         isOpen={isOpen}
         isRoot={isRoot}
@@ -29,8 +73,8 @@ export function FileTypeIcon({
   }
 
   return (
-    <MaterialIcon
-      name={resolveFileIcon(name)}
+    <icons.MaterialIcon
+      name={resolveFileIcon(icons, name)}
       size={size}
       className="shrink-0"
     />
@@ -42,13 +86,17 @@ export function FileTypeIcon({
  * peel an extension off `fileName`. Try the full name, then compound suffixes
  * (`d.ts`, then `ts`) so `.rs` / `.toml` / `.json` resolve like VS Code.
  */
-function resolveFileIcon(fileName: string): string {
+function resolveFileIcon(icons: IconPack, fileName: string): string {
   const key = fileName.toLowerCase();
-  const fromName = getFileIcon({ fileName: key, fallback: "", iconPack: "" });
+  const fromName = icons.getFileIcon({
+    fileName: key,
+    fallback: "",
+    iconPack: "",
+  });
   if (fromName) return fromName;
 
   for (const ext of compoundExtensions(key)) {
-    const fromExt = getFileIcon({
+    const fromExt = icons.getFileIcon({
       fileExtension: ext,
       fallback: "",
       iconPack: "",

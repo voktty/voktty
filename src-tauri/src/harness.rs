@@ -154,7 +154,7 @@ impl Drop for HarnessHost {
 }
 
 /// Resolve the Cursor CLI (`cursor-agent`), never Grok's `agent` shim.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn harness_resolve_cursor() -> Result<CursorBinary, String> {
     resolve_cursor_agent()
         .map(|path| CursorBinary {
@@ -164,7 +164,7 @@ pub fn harness_resolve_cursor() -> Result<CursorBinary, String> {
 }
 
 /// Resolve the Codex CLI (`codex`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn harness_resolve_codex() -> Result<CursorBinary, String> {
     resolve_codex()
         .map(|path| CursorBinary {
@@ -177,7 +177,7 @@ pub fn harness_resolve_codex() -> Result<CursorBinary, String> {
 }
 
 /// Resolve the OpenCode CLI (`opencode`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn harness_resolve_opencode() -> Result<CursorBinary, String> {
     resolve_opencode()
         .map(|path| CursorBinary {
@@ -190,7 +190,7 @@ pub fn harness_resolve_opencode() -> Result<CursorBinary, String> {
 }
 
 /// Resolve the Claude Code CLI (`claude`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn harness_resolve_claude() -> Result<CursorBinary, String> {
     resolve_claude()
         .map(|path| CursorBinary {
@@ -203,7 +203,7 @@ pub fn harness_resolve_claude() -> Result<CursorBinary, String> {
 }
 
 /// Resolve the Pi coding agent CLI (`pi`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn harness_resolve_pi() -> Result<CursorBinary, String> {
     resolve_pi()
         .map(|path| CursorBinary {
@@ -216,7 +216,7 @@ pub fn harness_resolve_pi() -> Result<CursorBinary, String> {
 }
 
 /// Resolve the omp (oh-my-pi) coding agent CLI.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn harness_resolve_omp() -> Result<CursorBinary, String> {
     resolve_omp()
         .map(|path| CursorBinary {
@@ -229,7 +229,7 @@ pub fn harness_resolve_omp() -> Result<CursorBinary, String> {
 }
 
 /// Resolve the Vercel fx coding agent CLI (`fx`), never the JSON viewer of the same name.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn harness_resolve_fx() -> Result<CursorBinary, String> {
     resolve_fx()
         .map(|path| CursorBinary {

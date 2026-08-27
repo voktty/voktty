@@ -135,7 +135,7 @@ pub struct SessionRecord {
     pub updated_at: i64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_upsert(
     store: State<'_, SessionStore>,
     session: SessionUpsert,
@@ -160,7 +160,7 @@ pub fn session_upsert(
     upsert_session(&conn, &session).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_list_by_project(
     store: State<'_, SessionStore>,
     cwd: String,
@@ -172,7 +172,7 @@ pub fn session_list_by_project(
     list_by_project(&conn, &cwd).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_get(
     store: State<'_, SessionStore>,
     session_id: String,
@@ -220,7 +220,7 @@ pub struct SessionSearchResult {
     pub truncated: bool,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_search(
     store: State<'_, SessionStore>,
     options: SessionSearchOptions,
@@ -229,14 +229,14 @@ pub fn session_search(
     search_sessions(&conn, &options).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_delete(store: State<'_, SessionStore>, session_id: String) -> Result<(), String> {
     validate_id(&session_id, "session")?;
     let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
     delete_session(&conn, &session_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_set_archived(
     store: State<'_, SessionStore>,
     session_id: String,
@@ -271,7 +271,7 @@ pub fn session_set_in_flight(
 
 /// Read the quit snapshot without clearing it. Vite/dev reloads must not
 /// consume the only copy.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_list_in_flight(
     store: State<'_, SessionStore>,
 ) -> Result<Vec<InFlightSession>, String> {
@@ -306,7 +306,7 @@ pub fn workspace_set_snapshot(
     set_workspace_snapshot(&conn, &json).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn workspace_get_snapshot(store: State<'_, SessionStore>) -> Result<Option<Value>, String> {
     let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
     let json = get_workspace_snapshot(&conn).map_err(|e| e.to_string())?;
@@ -394,6 +394,31 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             params![now_millis()],
         )?;
     }
+    if current < 8 {
+        // `list_by_project` used to filter with
+        // `blocks_json LIKE '%"role":"user"%'`, which reads and substring-scans
+        // every transcript in the project on each switch. Materialize the
+        // predicate so the covering index can answer it instead.
+        conn.execute(
+            "ALTER TABLE sessions ADD COLUMN has_user_message INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+        conn.execute(
+            "UPDATE sessions SET has_user_message =
+               CASE WHEN blocks_json != '[]' AND blocks_json LIKE '%\"role\":\"user\"%'
+                    THEN 1 ELSE 0 END",
+            [],
+        )?;
+        conn.execute_batch(
+            "DROP INDEX IF EXISTS sessions_cwd_updated_idx;
+             CREATE INDEX IF NOT EXISTS sessions_cwd_listed_idx
+               ON sessions (cwd, has_user_message, updated_at DESC);",
+        )?;
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (8, ?1)",
+            params![now_millis()],
+        )?;
+    }
     // Create even when a version row already exists (another build may have
     // used the same numbers, or a previous run recorded the version without
     // the table). Restore writes into these; missing tables look like a
@@ -437,6 +462,8 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
+    let has_user_message = has_user_block(&session.blocks);
+
     let existing: Option<(i64, i64, String, i64)> = conn
         .query_row(
             "SELECT created_at, updated_at, blocks_json, archived FROM sessions WHERE id = ?1",
@@ -463,8 +490,8 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         "INSERT INTO sessions (
            id, cwd, harness, model, model_settings, runtime_mode, title,
            provider_session_id, blocks_json, created_at, updated_at, branch,
-           context_used, context_window, worktree_cwd
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+           context_used, context_window, worktree_cwd, has_user_message
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
          ON CONFLICT(id) DO UPDATE SET
            cwd = excluded.cwd,
            harness = excluded.harness,
@@ -478,7 +505,8 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
            branch = excluded.branch,
            context_used = excluded.context_used,
            context_window = excluded.context_window,
-           worktree_cwd = excluded.worktree_cwd",
+           worktree_cwd = excluded.worktree_cwd,
+           has_user_message = excluded.has_user_message",
         params![
             session.id,
             session.cwd,
@@ -495,6 +523,7 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
             session.context_used,
             session.context_window,
             worktree_cwd,
+            i64::from(has_user_message),
         ],
     )?;
 
@@ -769,8 +798,7 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
                 created_at, updated_at, branch, archived
          FROM sessions
          WHERE cwd = ?1
-           AND blocks_json != '[]'
-           AND blocks_json LIKE '%\"role\":\"user\"%'
+           AND has_user_message = 1
          ORDER BY updated_at DESC, id ASC",
     )?;
     let rows = statement.query_map(params![cwd], |row| {
@@ -794,6 +822,16 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
         })
     })?;
     rows.collect()
+}
+
+/// Mirrors the sidebar's notion of a listable session: a transcript that the
+/// user has actually said something in.
+fn has_user_block(blocks: &Value) -> bool {
+    blocks.as_array().is_some_and(|blocks| {
+        blocks
+            .iter()
+            .any(|block| block.get("role").and_then(Value::as_str) == Some("user"))
+    })
 }
 
 fn nonempty(value: Option<String>) -> Option<String> {

@@ -1,5 +1,4 @@
 import { code } from "@streamdown/code";
-import { createMermaidPlugin } from "@streamdown/mermaid";
 import {
   createContext,
   isValidElement,
@@ -21,6 +20,7 @@ import {
 } from "streamdown";
 import type { PluggableList } from "unified";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
+import { createLazyMermaidPlugin } from "./mermaidPlugin";
 import { resolveWorkspacePath } from "../lib/paths";
 import { useColorScheme } from "../hooks/useColorScheme";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
@@ -31,7 +31,7 @@ const MERMAID_BASE_CONFIG = {
   suppressErrorRendering: true,
 } as const;
 
-const mermaid = createMermaidPlugin({
+const mermaid = createLazyMermaidPlugin({
   config: {
     ...MERMAID_BASE_CONFIG,
     theme: "dark",

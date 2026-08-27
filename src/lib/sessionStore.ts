@@ -100,12 +100,27 @@ export function sanitizeSessionForPersist(session: Session): SessionUpsertPayloa
   };
 }
 
+/**
+ * `session_upsert` runs off the main thread, so two writes for the same
+ * session could otherwise land in either order and let an older transcript
+ * overwrite a newer one. Chain them per session; different sessions still
+ * write concurrently.
+ */
+const upsertQueues = new Map<string, Promise<unknown>>();
+
 export async function upsertSession(session: Session): Promise<SessionSummary | null> {
   if (!shouldPersistSession(session)) return null;
-  const summary = await invoke<SessionSummary>("session_upsert", {
-    session: sanitizeSessionForPersist(session),
-  });
-  return normalizeSummary(summary);
+  const payload = sanitizeSessionForPersist(session);
+  const previous = upsertQueues.get(session.id) ?? Promise.resolve();
+  const run = previous
+    .catch(() => undefined)
+    .then(() => invoke<SessionSummary>("session_upsert", { session: payload }));
+  upsertQueues.set(session.id, run);
+  try {
+    return normalizeSummary(await run);
+  } finally {
+    if (upsertQueues.get(session.id) === run) upsertQueues.delete(session.id);
+  }
 }
 
 export function persistFingerprint(session: Session): string {

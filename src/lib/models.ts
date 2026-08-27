@@ -163,6 +163,8 @@ const HARNESS_ORDER: HarnessId[] = [
   "fx",
 ];
 
+const EMPTY_MODELS: AgentModel[] = [];
+
 let overlays: Partial<Record<HarnessId, AgentModel[]>> = {};
 let overlayDefaults: Partial<Record<HarnessId, string>> = {};
 let catalogVersion = 0;
@@ -170,6 +172,9 @@ const listeners = new Set<() => void>();
 
 function emit() {
   catalogVersion += 1;
+  baseByHarness = null;
+  indexById = null;
+  allCache = null;
   for (const listener of listeners) listener();
 }
 
@@ -198,16 +203,42 @@ export function defaultModelId(harness: HarnessId): string {
   return overlayDefaults[harness] ?? DEFAULT_MODEL_ID[harness];
 }
 
+// `modelsFor`/`findModel` sit in render bodies (every session card, every
+// provider row, the picker itself), so they must not rebuild the catalog on
+// each call. These caches are dropped in `emit()` whenever an overlay lands.
+let baseByHarness: Partial<Record<HarnessId, AgentModel[]>> | null = null;
+let allCache: AgentModel[] | null = null;
+let indexById: Map<string, AgentModel> | null = null;
+
+function baseModelsFor(harness: HarnessId): AgentModel[] {
+  if (!baseByHarness) {
+    const grouped: Partial<Record<HarnessId, AgentModel[]>> = {};
+    for (const model of MODELS) {
+      (grouped[model.harness] ??= []).push(model);
+    }
+    baseByHarness = grouped;
+  }
+  return baseByHarness[harness] ?? EMPTY_MODELS;
+}
+
 export function modelsFor(harness: HarnessId): AgentModel[] {
-  return overlays[harness] ?? MODELS.filter((model) => model.harness === harness);
+  return overlays[harness] ?? baseModelsFor(harness);
 }
 
 export function allModels(): AgentModel[] {
-  return HARNESS_ORDER.flatMap(modelsFor);
+  return (allCache ??= HARNESS_ORDER.flatMap(modelsFor));
 }
 
 export function findModel(id: string): AgentModel | undefined {
-  return allModels().find((model) => model.id === id);
+  if (!indexById) {
+    const index = new Map<string, AgentModel>();
+    // First writer wins, matching the previous `allModels().find(...)` order.
+    for (const model of allModels()) {
+      if (!index.has(model.id)) index.set(model.id, model);
+    }
+    indexById = index;
+  }
+  return indexById.get(id);
 }
 
 export function resolveModel(harness: HarnessId, id?: string): AgentModel {

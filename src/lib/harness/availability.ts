@@ -38,7 +38,16 @@ let availability: HarnessAvailability = {
 };
 let version = 0;
 let inflight: Promise<void> | null = null;
+let probedAt = 0;
 const listeners = new Set<() => void>();
+
+/**
+ * A probe stats ~100 paths across seven resolvers. The model picker and the
+ * providers pane both probe on open, so without a TTL every open pays for it
+ * again to learn what it already knows. Installing a CLI mid-session is rare,
+ * and `force` covers it.
+ */
+const PROBE_TTL_MS = 30_000;
 
 function emit() {
   version += 1;
@@ -66,8 +75,13 @@ export function harnessUnavailableHint(id: HarnessId): string {
   return `${name} not found${how}. Install it, or restart MonoCode if it is already installed.`;
 }
 
-export function probeHarnessAvailability(): Promise<void> {
+export function probeHarnessAvailability(
+  options?: { force?: boolean },
+): Promise<void> {
   if (inflight) return inflight;
+  if (!options?.force && probedAt > 0 && Date.now() - probedAt < PROBE_TTL_MS) {
+    return Promise.resolve();
+  }
   inflight = Promise.all(
     HARNESSES.map(async (id) => {
       if (!isLiveHarness(id)) return [id, false] as const;
@@ -137,6 +151,7 @@ export function probeHarnessAvailability(): Promise<void> {
       emit();
     })
     .finally(() => {
+      probedAt = Date.now();
       inflight = null;
     });
   return inflight;

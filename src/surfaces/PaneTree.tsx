@@ -146,6 +146,21 @@ function PaneTreeComponent({
     setDraft(null);
   }, [layout]);
 
+  // A sash drag re-renders this tree every frame. `SessionPane` compares props
+  // shallowly, so handing it a fresh drag handler each frame would re-render
+  // the whole session subtree (transcript, composer, picker) per frame.
+  const dragHandlers = useRef(
+    new Map<string, (event: ReactPointerEvent<HTMLElement>) => void>(),
+  );
+  const paneDragStartFor = (paneId: string) => {
+    const cached = dragHandlers.current.get(paneId);
+    if (cached) return cached;
+    const handler = (event: ReactPointerEvent<HTMLElement>) =>
+      startPaneDrag(paneId, event);
+    dragHandlers.current.set(paneId, handler);
+    return handler;
+  };
+
   const tree = draft ?? layout;
   const leaves = layoutLeaves(tree);
   const sashes = layoutSashes(tree);
@@ -233,10 +248,7 @@ function PaneTreeComponent({
         const editorPane = editorPanes.find((pane) => pane.id === leaf.id);
         const session = sessions.find((entry) => entry.id === leaf.id);
         const dragging = paneDrag?.fromId === leaf.id;
-        const onPaneDragStart = inSplit
-          ? (event: ReactPointerEvent<HTMLElement>) =>
-              startPaneDrag(leaf.id, event)
-          : undefined;
+        const onPaneDragStart = inSplit ? paneDragStartFor(leaf.id) : undefined;
         return (
           <div
             key={leaf.id}
