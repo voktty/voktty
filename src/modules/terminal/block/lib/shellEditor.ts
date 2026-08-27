@@ -60,6 +60,8 @@ export type ShellEditorOptions = {
   getCwd?: () => string | null;
   /** Fires on every edit with the current text (used to gate empty-state UI). */
   onChange?: (text: string) => void;
+  /** Ctrl-K / Cmd-K to trigger Copilot prompt */
+  onCopilot?: () => void;
 };
 
 export type ShellEditorHandle = {
@@ -418,6 +420,17 @@ export function createShellEditor(opts: ShellEditorOptions): ShellEditorHandle {
           opts.onInterrupt();
           clear(view);
           return true;
+        },
+        preventDefault: true,
+      },
+      {
+        key: "Mod-k",
+        run: () => {
+          if (opts.onCopilot) {
+            opts.onCopilot();
+            return true;
+          }
+          return false;
         },
         preventDefault: true,
       },

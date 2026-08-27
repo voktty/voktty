@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { useTranslation } from "@/modules/i18n";
 import {
   AlertCircleIcon,
@@ -56,18 +57,16 @@ export function SerialConnectModal({ open, onOpenChange, onConnect }: Props) {
   >("none");
   const [error, setError] = useState<string | null>(null);
 
+  const { position, dragHandleProps } = useDraggableModal();
+
   const fetchPorts = async () => {
     setLoading(true);
     setError(null);
     try {
       const list = await listSerialPorts();
       setPorts(list);
-      if (list.length > 0) {
-        if (!selectedPort || !list.some((p) => p.port_name === selectedPort)) {
-          setSelectedPort(list[0].port_name);
-        }
-      } else {
-        setSelectedPort("__custom__");
+      if (list.length > 0 && !selectedPort) {
+        setSelectedPort(list[0].port_name);
       }
     } catch (e) {
       setError(String(e));
@@ -79,49 +78,46 @@ export function SerialConnectModal({ open, onOpenChange, onConnect }: Props) {
   useEffect(() => {
     if (open) {
       void fetchPorts();
-      setError(null);
     }
   }, [open]);
 
   const handleConnect = () => {
-    const portName =
-      selectedPort === "__custom__"
-        ? customPort.trim()
-        : selectedPort.trim();
-
-    if (!portName) {
-      setError(t("serial.errors.portRequired"));
+    const portToUse = selectedPort === "__custom__" ? customPort : selectedPort;
+    if (!portToUse) {
+      setError(t("serial.errorNoPort"));
       return;
     }
 
-    let finalBaud = baudRate;
-    if (baudRate === 0) {
-      const parsed = parseInt(customBaud.trim(), 10);
-      if (Number.isNaN(parsed) || parsed <= 0) {
-        setError(
-          t("serial.errors.invalidBaudRate"),
-        );
-        return;
-      }
-      finalBaud = parsed;
+    const baud = customBaud ? parseInt(customBaud, 10) : baudRate;
+    if (!baud || isNaN(baud)) {
+      setError(t("serial.errorInvalidBaud"));
+      return;
     }
 
     onConnect({
-      portName,
-      baudRate: finalBaud,
+      portName: portToUse,
+      baudRate: baud,
       dataBits,
-      flowControl,
       parity,
       stopBits,
+      flowControl,
     });
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-card text-card-foreground border-border shadow-2xl p-6">
-        <DialogHeader className="space-y-1">
-          <div className="flex items-center gap-2">
+      <DialogContent
+        className="max-w-md bg-card text-card-foreground border-border shadow-2xl p-6 transition-shadow"
+        style={{
+          transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+        }}
+      >
+        <DialogHeader
+          {...dragHandleProps}
+          className="space-y-1 cursor-grab active:cursor-grabbing select-none"
+        >
+          <div className="flex items-center gap-2 pointer-events-none">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               <HugeiconsIcon icon={UsbIcon} size={18} strokeWidth={1.75} />
             </div>
@@ -129,7 +125,7 @@ export function SerialConnectModal({ open, onOpenChange, onConnect }: Props) {
               {t("serial.modalTitle")}
             </DialogTitle>
           </div>
-          <DialogDescription className="text-xs text-muted-foreground">
+          <DialogDescription className="text-xs text-muted-foreground pointer-events-none">
             {t("serial.modalSubtitle")}
           </DialogDescription>
         </DialogHeader>

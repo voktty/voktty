@@ -20,6 +20,7 @@ import {
   historyRecord,
   historySuggest,
 } from "./lib/history";
+import { useTerminalCopilotStore } from "../copilot/terminalCopilotStore";
 import type { BlockMode } from "./lib/modeMachine";
 import { createShellEditor, type ShellEditorHandle } from "./lib/shellEditor";
 
@@ -103,6 +104,8 @@ export default function ShellInput({
       },
       onInterrupt: () => cbRef.current.onInterrupt(),
       onEscape: () => clearLeafBlockSelection(leafIdRef.current),
+      onCopilot: () =>
+        useTerminalCopilotStore.getState().openCopilot(leafIdRef.current),
     });
     handleRef.current = handle;
     requestAnimationFrame(() => handleRef.current?.focus());
