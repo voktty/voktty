@@ -270,22 +270,31 @@ html[data-vibrancy="on"] {
 }
 
 html[data-vibrancy="on"].light {
-  --frame: rgba(244, 245, 248, 0.50);
-  --surface-sidebar: rgba(235, 236, 239, 0.70);
-  --surface-toolbar: rgba(248, 249, 250, 0.65);
-  --surface-card: rgba(255, 255, 255, 0.75);
-  --surface-pane: transparent;
-  --surface-popover: rgba(255, 255, 255, 0.92);
+  --frame: rgba(244, 245, 248, 0.85);
+  --surface-canvas: rgba(244, 245, 248, 0.85);
+  --surface-sidebar: rgba(235, 236, 239, 0.90);
+  --surface-toolbar: rgba(248, 249, 250, 0.90);
+  --surface-card: rgba(255, 255, 255, 0.92);
+  --surface-pane: rgba(255, 255, 255, 0.84);
+  --surface-popover: rgba(255, 255, 255, 0.96);
   --surface-active-item: rgba(0, 0, 0, 0.08);
-  --terminal-background: transparent;
+  --terminal-background: rgba(255, 255, 255, 0.84);
 }
 
-html[data-vibrancy="on"] .voktty-pane {
+html[data-vibrancy="on"]:not(.light) .voktty-pane {
   background: transparent !important;
 }
 
-html[data-vibrancy="on"] .bg-background {
+html[data-vibrancy="on"].light .voktty-pane {
+  background: rgba(255, 255, 255, 0.84) !important;
+}
+
+html[data-vibrancy="on"]:not(.light) .bg-background {
   background-color: transparent !important;
+}
+
+html[data-vibrancy="on"].light .bg-background {
+  background-color: rgba(244, 245, 248, 0.85) !important;
 }
 
 html[data-vibrancy="on"] .bg-frame {

@@ -5,10 +5,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { useTranslation } from "@/modules/i18n";
 import { Copy01Icon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DockerContainerInfo } from "./types";
 import { useDockerStore } from "./useDockerStore";
 
@@ -23,6 +24,10 @@ export function DockerLogsModal({ container, onClose }: Props) {
   const [logs, setLogs] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const scrollPosRef = useRef<number>(0);
+
+  const { position, dragHandleProps } = useDraggableModal();
 
   const load = async () => {
     if (!container) return;
@@ -43,6 +48,12 @@ export function DockerLogsModal({ container, onClose }: Props) {
     }
   }, [container?.id]);
 
+  useLayoutEffect(() => {
+    if (logContainerRef.current && scrollPosRef.current > 0) {
+      logContainerRef.current.scrollTop = scrollPosRef.current;
+    }
+  }, [logs]);
+
   const copyLogs = async () => {
     if (!logs) return;
     await navigator.clipboard.writeText(logs);
@@ -56,9 +67,17 @@ export function DockerLogsModal({ container, onClose }: Props) {
 
   return (
     <Dialog open={!!container} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col p-5 bg-card/95 backdrop-blur-md border border-border/40 shadow-2xl rounded-xl">
-        <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b border-border/30">
-          <div>
+      <DialogContent
+        className="max-w-3xl max-h-[80vh] flex flex-col p-5 bg-card/95 backdrop-blur-md border border-border/40 shadow-2xl rounded-xl transition-shadow"
+        style={{
+          transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+        }}
+      >
+        <DialogHeader
+          {...dragHandleProps}
+          className="flex flex-row items-center justify-between pb-3 border-b border-border/30 cursor-grab active:cursor-grabbing select-none"
+        >
+          <div className="pointer-events-none">
             <DialogTitle className="text-sm font-semibold flex items-center gap-2">
               <span className="text-base">🐳</span>
               <span>{containerName}</span>
@@ -93,7 +112,13 @@ export function DockerLogsModal({ container, onClose }: Props) {
           </div>
         </DialogHeader>
 
-        <div className="flex-1 min-h-[300px] overflow-auto bg-background/90 rounded-lg p-3 font-mono text-[11.5px] leading-relaxed border border-border/30 whitespace-pre-wrap select-text text-foreground/90">
+        <div
+          ref={logContainerRef}
+          onScroll={(e) => {
+            scrollPosRef.current = e.currentTarget.scrollTop;
+          }}
+          className="flex-1 min-h-[300px] overflow-auto bg-background/90 rounded-lg p-3 font-mono text-[11.5px] leading-relaxed border border-border/30 whitespace-pre-wrap select-text text-foreground/90"
+        >
           {logs}
         </div>
       </DialogContent>
