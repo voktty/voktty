@@ -7,11 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.10] - 2026-08-26
+## [0.1.11] - 2026-08-27
 
 ### Added
 
 - Select text in a finished agent response and choose **Add to chat** to quote that excerpt in the same session's composer.
+- Projects with no conversations yet show an empty sessions state instead of a blank list.
+- Switching or creating a branch prompts to stash or commit when checkout would overwrite local changes.
+
+### Changed
+
+- Branch picker stays put with a loading skeleton while git lookup settles.
+- Session history is cached across projects and refreshed in the background, so switching back is instant.
+- Startup is lighter: Material icons and Mermaid load on demand, and git, harness, and model probes are cached.
+
+### Fixed
+
+- Switching projects no longer flashes a loading spinner over the session list.
+
+## [0.1.10] - 2026-08-26
+
+### Added
+
 - omp ([oh-my-pi](https://omp.sh)) joins the provider list. Install it with `curl -fsSL https://omp.sh/install | sh` and log in, and MonoCode runs it like any other harness: live turns, steering, approvals, model catalog, and skills from `.omp/skills`.
 - Check for updates in the classic sidebar footer.
 
@@ -166,7 +183,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/hardbeat920/monocode/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/hardbeat920/monocode/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/hardbeat920/monocode/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/hardbeat920/monocode/compare/v0.1.7...v0.1.8
