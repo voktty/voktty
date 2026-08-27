@@ -23,7 +23,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
+import { defaultRehypePlugins, Streamdown } from "streamdown";
 import { ChatStreamingProvider } from "./chat-code";
 import { MarkdownCode } from "./markdown-code";
 
@@ -325,6 +325,10 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
 };
 
 const streamdownComponents = { code: MarkdownCode };
+const chatRehypePlugins = [
+  defaultRehypePlugins.raw,
+  defaultRehypePlugins.sanitize,
+];
 
 export const MessageResponse = memo(
   ({ className, streaming = false, ...props }: MessageResponseProps) => (
@@ -335,6 +339,7 @@ export const MessageResponse = memo(
           className,
         )}
         components={streamdownComponents}
+        rehypePlugins={chatRehypePlugins}
         {...props}
       />
     </ChatStreamingProvider>
