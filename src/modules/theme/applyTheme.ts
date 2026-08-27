@@ -28,6 +28,17 @@ const COLOR_VAR: Record<keyof ThemeColors, string> = {
   sidebarBorder: "--sidebar-border",
   sidebarRing: "--sidebar-ring",
   radius: "--radius",
+  surfaceCanvas: "--surface-canvas",
+  surfaceSidebar: "--surface-sidebar",
+  surfaceToolbar: "--surface-toolbar",
+  surfaceCard: "--surface-card",
+  surfacePane: "--surface-pane",
+  surfaceHeader: "--surface-header",
+  surfacePopover: "--surface-popover",
+  surfaceActiveItem: "--surface-active-item",
+  accentAction: "--accent-action",
+  accentIndicator: "--accent-indicator",
+  borderSubtle: "--border-subtle",
 };
 
 const ANSI_VARS: readonly string[] = [
@@ -89,18 +100,33 @@ function writeColors(root: HTMLElement, c: ThemeColors): void {
     const v = c[k];
     if (v) {
       root.style.setProperty(COLOR_VAR[k], v);
-      if (k === "background") {
-        root.style.setProperty("--frame", v);
-        root.style.setProperty("--terminal-background", v);
-        root.style.setProperty("--terminal-cursor-accent", v);
-      } else if (k === "foreground") {
-        root.style.setProperty("--terminal-foreground", v);
-        root.style.setProperty("--terminal-cursor", v);
-      } else if (k === "accent") {
-        root.style.setProperty("--terminal-selection", v);
-      }
     }
   }
+
+  // Synchronize derived fallback variables if not explicitly provided
+  const bg = c.background ?? "#121214";
+  const fg = c.foreground ?? "#f4f4f6";
+  const frame = c.surfaceToolbar ?? c.sidebar ?? bg;
+  const termBg = c.surfacePane ?? c.card ?? bg;
+  const borderSubtle = c.borderSubtle ?? c.border ?? "rgba(255, 255, 255, 0.07)";
+
+  root.style.setProperty("--frame", frame);
+  root.style.setProperty("--border-subtle", borderSubtle);
+
+  if (!c.surfaceCanvas) root.style.setProperty("--surface-canvas", bg);
+  if (!c.surfaceSidebar) root.style.setProperty("--surface-sidebar", c.sidebar ?? bg);
+  if (!c.surfaceToolbar) root.style.setProperty("--surface-toolbar", frame);
+  if (!c.surfaceCard) root.style.setProperty("--surface-card", c.card ?? bg);
+  if (!c.surfacePane) root.style.setProperty("--surface-pane", termBg);
+  if (!c.surfacePopover) root.style.setProperty("--surface-popover", c.popover ?? c.card ?? bg);
+  if (!c.surfaceActiveItem) root.style.setProperty("--surface-active-item", c.accent ?? "rgba(255, 255, 255, 0.08)");
+
+  // Default terminal bindings from palette
+  root.style.setProperty("--terminal-background", termBg);
+  root.style.setProperty("--terminal-foreground", fg);
+  root.style.setProperty("--terminal-cursor", c.primary ?? fg);
+  root.style.setProperty("--terminal-cursor-accent", termBg);
+  root.style.setProperty("--terminal-selection", c.accent ?? "rgba(99, 102, 241, 0.28)");
 }
 
 function writeTerminal(root: HTMLElement, t: TerminalPalette): void {

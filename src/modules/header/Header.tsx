@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { WindowControls } from "@/components/WindowControls";
+import { cn } from "@/lib/utils";
 import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
 import { NotificationBell } from "@/modules/agents";
 import type { AgentLaunchRequest } from "@/modules/agents/lib/launcher";
@@ -200,7 +201,10 @@ export function Header({
   return (
     <header
       ref={rootRef}
-      className="flex h-9 shrink-0 items-center justify-between border-b border-border/60 bg-frame px-2 select-none"
+      className={cn(
+        "flex h-9 shrink-0 items-center justify-between border-b border-border/60 bg-frame px-2 select-none",
+        IS_MAC && "pl-[76px]",
+      )}
       data-tauri-drag-region
     >
       <div className="flex shrink-0 items-center gap-1">
