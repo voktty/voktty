@@ -1103,16 +1103,29 @@ fn is_executable_file(path: &Path) -> bool {
     }
 }
 
-fn apply_gui_path(cmd: &mut Command) {
+/// Resolve `name` the way a terminal would, then fall back to common install
+/// dirs. Finder-launched apps inherit launchd's PATH (`/usr/bin:/bin/…`), so
+/// Homebrew / mise / `~/.local/bin` tools look missing unless we search here.
+pub(crate) fn resolve_gui_binary(name: &str) -> Option<PathBuf> {
+    which_in_path(&gui_search_path(), name)
+}
+
+fn gui_search_path() -> String {
+    gui_search_path_from(login_shell_path(), dirs_home(), std::env::var("PATH").ok())
+}
+
+fn gui_search_path_from(
+    login_path: Option<String>,
+    home: Option<String>,
+    existing: Option<String>,
+) -> String {
     let mut parts: Vec<String> = Vec::new();
-    // The user's own PATH wins. A harness is always spawned by absolute path,
-    // so this only decides which `node`, `git`, or `rg` the harness itself
-    // finds -- and there the answer should match the user's terminal. The
-    // fixed list below stays as a fallback for when the shell read fails.
-    if let Some(path) = login_shell_path() {
+    // Login-shell PATH first so Homebrew, mise, nvm, and custom dirs match
+    // the user's terminal. The fixed list is a fallback when that read fails.
+    if let Some(path) = login_path {
         parts.push(path);
     }
-    if let Some(home) = dirs_home() {
+    if let Some(home) = home {
         parts.push(format!("{home}/.local/bin"));
         parts.push(format!("{home}/.cargo/bin"));
         parts.push(format!("{home}/.claude/local"));
@@ -1125,13 +1138,17 @@ fn apply_gui_path(cmd: &mut Command) {
     parts.push("/usr/bin".into());
     parts.push("/bin".into());
     parts.push("/snap/bin".into());
-    if let Ok(existing) = std::env::var("PATH") {
+    if let Some(existing) = existing {
         parts.push(existing);
     }
-    cmd.env("PATH", parts.join(":"));
+    parts.join(":")
 }
 
-fn apply_gui_env(cmd: &mut Command) {
+fn apply_gui_path(cmd: &mut Command) {
+    cmd.env("PATH", gui_search_path());
+}
+
+pub(crate) fn apply_gui_env(cmd: &mut Command) {
     apply_gui_path(cmd);
     if let Some(id) = passwd_identity() {
         if std::env::var_os("HOME").is_none() {
@@ -1357,6 +1374,38 @@ mod tests {
         assert_eq!(which_in_path(&path, "claude"), Some(target));
         assert_eq!(which_in_path(&path, "codex"), None);
         assert_eq!(which_in_path("", "claude"), None);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn gui_search_path_puts_login_path_ahead_of_fallbacks() {
+        let path = gui_search_path_from(
+            Some("/custom/gh-dir:/usr/bin".into()),
+            Some("/tmp/home".into()),
+            Some("/bin".into()),
+        );
+        let parts: Vec<&str> = path.split(':').collect();
+        assert_eq!(parts[0], "/custom/gh-dir");
+        assert!(parts.contains(&"/tmp/home/.local/bin"));
+        assert!(parts.contains(&"/opt/homebrew/bin"));
+        assert!(parts.contains(&"/usr/local/bin"));
+        assert_eq!(*parts.last().unwrap(), "/bin");
+    }
+
+    #[test]
+    fn resolve_gui_binary_finds_a_binary_on_the_gui_path() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("monocode-gui-bin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("gh");
+        std::fs::write(&target, b"#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let path = gui_search_path_from(Some(dir.to_string_lossy().into_owned()), None, None);
+        assert_eq!(which_in_path(&path, "gh"), Some(target));
 
         let _ = std::fs::remove_dir_all(&dir);
     }

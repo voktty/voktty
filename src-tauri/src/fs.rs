@@ -1344,18 +1344,20 @@ fn gh_stdout(root: &Path, args: &[&str]) -> Option<String> {
 }
 
 fn gh_checked(root: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("gh")
-        .current_dir(root)
+    let program = crate::harness::resolve_gui_binary("gh")
+        .ok_or_else(|| "GitHub CLI (`gh`) is not installed.".to_string())?;
+    let mut cmd = Command::new(&program);
+    cmd.current_dir(root)
         .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()
-        .map_err(|error| {
-            if error.kind() == ErrorKind::NotFound {
-                "GitHub CLI (`gh`) is not installed.".to_string()
-            } else {
-                error.to_string()
-            }
-        })?;
+        .env("GIT_TERMINAL_PROMPT", "0");
+    crate::harness::apply_gui_env(&mut cmd);
+    let output = cmd.output().map_err(|error| {
+        if error.kind() == ErrorKind::NotFound {
+            "GitHub CLI (`gh`) is not installed.".to_string()
+        } else {
+            error.to_string()
+        }
+    })?;
     if output.status.success() {
         let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if text.is_empty() {
