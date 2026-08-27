@@ -158,7 +158,7 @@ function ProviderChip({
       ) : disconnected ? (
         <span className="text-content/35">not connected</span>
       ) : windows.length === 0 ? (
-        <span className="text-content/35">—</span>
+        <span className="text-content/35">{emptyUsageLabel(limits)}</span>
       ) : (
         <>
           {tightest ? <MiniBar usedPct={tightest.usedPercent} /> : null}
@@ -177,6 +177,13 @@ function ProviderChip({
       )}
     </span>
   );
+}
+
+function emptyUsageLabel(limits: ProviderRateLimits): string {
+  if (limits.status !== "error") return "—";
+  const text = limits.error?.toLowerCase() ?? "";
+  if (text.includes("expired") || text.includes("sign-in")) return "expired";
+  return "—";
 }
 
 function MiniBar({ usedPct }: { usedPct: number }) {
