@@ -307,9 +307,7 @@ export function EditorStack({
           const groupId = editorGroupLeaves(child)[0]?.groupId ?? index;
           return (
             <Fragment key={groupId}>
-              {index > 0 && (
-                <ResizableHandle className="bg-border/55 transition-colors after:w-3 hover:bg-border" />
-              )}
+              {index > 0 && <ResizableHandle />}
               <ResizablePanel id={`editor-group-${groupId}`} minSize="15%">
                 {renderGroupNode(child)}
               </ResizablePanel>

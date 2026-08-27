@@ -39,8 +39,11 @@ export type TerminalSuggestData = {
   open: boolean;
   query: string;
   items: string[];
+  rawItems?: string[];
   selectedIndex: number;
   navigated: boolean;
+  searchMode?: boolean;
+  searchFilter?: string;
   ghostTail: string;
   cursorX: number;
   cursorY: number;
@@ -58,6 +61,9 @@ type TerminalSuggestStore = {
   clear: (leafId?: number) => void;
   selectNext: (leafId: number) => void;
   selectPrev: (leafId: number) => void;
+  setSelectedIndex: (leafId: number, index: number) => void;
+  toggleSearch: (leafId: number, open?: boolean) => void;
+  setSearchFilter: (leafId: number, filter: string, items?: string[]) => void;
   getSuggest: (leafId: number) => TerminalSuggestData | undefined;
 };
 
@@ -69,7 +75,10 @@ export const useTerminalSuggestStore = create<TerminalSuggestStore>(
       set((state) => ({
         suggestByLeaf: {
           ...state.suggestByLeaf,
-          [data.leafId]: data,
+          [data.leafId]: {
+            ...data,
+            rawItems: data.rawItems ?? data.items,
+          },
         },
       })),
 
@@ -122,6 +131,76 @@ export const useTerminalSuggestStore = create<TerminalSuggestStore>(
             [leafId]: {
               ...cur,
               selectedIndex: prevIndex,
+              navigated: true,
+              ghostTail,
+            },
+          },
+        };
+      }),
+
+    setSelectedIndex: (leafId, index) =>
+      set((state) => {
+        const cur = state.suggestByLeaf[leafId];
+        if (!cur || cur.items.length === 0) return state;
+        const bounded = Math.max(0, Math.min(index, cur.items.length - 1));
+        const selectedCmd = cur.items[bounded] ?? "";
+        const ghostTail = selectedCmd.startsWith(cur.query)
+          ? selectedCmd.slice(cur.query.length)
+          : "";
+        return {
+          suggestByLeaf: {
+            ...state.suggestByLeaf,
+            [leafId]: {
+              ...cur,
+              selectedIndex: bounded,
+              navigated: true,
+              ghostTail,
+            },
+          },
+        };
+      }),
+
+    toggleSearch: (leafId, open) =>
+      set((state) => {
+        const cur = state.suggestByLeaf[leafId];
+        if (!cur) return state;
+        const nextOpen = open ?? !cur.searchMode;
+        return {
+          suggestByLeaf: {
+            ...state.suggestByLeaf,
+            [leafId]: {
+              ...cur,
+              searchMode: nextOpen,
+              navigated: true,
+              searchFilter: nextOpen ? cur.searchFilter ?? "" : "",
+              items: nextOpen ? cur.items : cur.rawItems ?? cur.items,
+            },
+          },
+        };
+      }),
+
+    setSearchFilter: (leafId, filter, newItems) =>
+      set((state) => {
+        const cur = state.suggestByLeaf[leafId];
+        if (!cur) return state;
+        const items =
+          newItems ??
+          (filter.trim()
+            ? (cur.rawItems ?? cur.items).filter((cmd) =>
+                cmd.toLowerCase().includes(filter.toLowerCase().trim()),
+              )
+            : (cur.rawItems ?? cur.items));
+        const top = items[0];
+        const ghostTail =
+          top && top.startsWith(cur.query) ? top.slice(cur.query.length) : "";
+        return {
+          suggestByLeaf: {
+            ...state.suggestByLeaf,
+            [leafId]: {
+              ...cur,
+              searchFilter: filter,
+              items,
+              selectedIndex: 0,
               navigated: true,
               ghostTail,
             },

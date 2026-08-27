@@ -96,9 +96,7 @@ export const PaneTreeView = memo(function PaneTreeView(props: Props) {
         const slotId = firstLeafSlotId(child);
         return (
           <Fragment key={slotId}>
-            {i > 0 && (
-              <ResizableHandle className="bg-border/50 transition-colors duration-[var(--dur-fast)] after:w-3 hover:bg-border" />
-            )}
+            {i > 0 && <ResizableHandle />}
             <ResizablePanel id={`pane-slot-${slotId}`} minSize="10%">
               <PaneTreeView {...props} node={child} />
             </ResizablePanel>

@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { isAiRuntimeAvailable } from "@/modules/ai/lib/runtimeAvailability";
 
 export type TerminalCopilotState = {
   isOpen: boolean;
@@ -7,6 +6,7 @@ export type TerminalCopilotState = {
   initialPrompt: string;
   autoApprovedLeafIds: number[];
   openCopilot: (leafId?: number | null, initialPrompt?: string) => void;
+  toggleCopilot: (leafId?: number | null, initialPrompt?: string) => void;
   closeCopilot: () => void;
   allowAlwaysForLeaf: (leafId: number) => void;
   isLeafAutoApproved: (leafId: number) => boolean;
@@ -19,8 +19,15 @@ export const useTerminalCopilotStore = create<TerminalCopilotState>(
     initialPrompt: "",
     autoApprovedLeafIds: [],
     openCopilot: (leafId = null, initialPrompt = "") => {
-      if (!isAiRuntimeAvailable()) return;
       set({ isOpen: true, leafId, initialPrompt });
+    },
+    toggleCopilot: (leafId = null, initialPrompt = "") => {
+      const current = get();
+      if (current.isOpen) {
+        set({ isOpen: false, initialPrompt: "" });
+      } else {
+        set({ isOpen: true, leafId, initialPrompt });
+      }
     },
     closeCopilot: () => set({ isOpen: false, initialPrompt: "" }),
     allowAlwaysForLeaf: (leafId: number) =>

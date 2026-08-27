@@ -20,6 +20,14 @@ describe("useTerminalCopilotStore", () => {
     const closed = useTerminalCopilotStore.getState();
     expect(closed.isOpen).toBe(false);
     expect(closed.initialPrompt).toBe("");
+
+    // Test toggleCopilot
+    closed.toggleCopilot(42, "toggle test");
+    expect(useTerminalCopilotStore.getState().isOpen).toBe(true);
+    expect(useTerminalCopilotStore.getState().initialPrompt).toBe("toggle test");
+
+    useTerminalCopilotStore.getState().toggleCopilot(42);
+    expect(useTerminalCopilotStore.getState().isOpen).toBe(false);
   });
 
   it("manages autoApprovedLeafIds correctly", () => {

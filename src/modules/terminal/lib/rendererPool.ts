@@ -45,6 +45,7 @@ import {
   useTerminalSuggestStore,
 } from "./terminalSuggestStore";
 import { historyList } from "../block/lib/history";
+import { SHORTCUTS, matchBinding } from "@/modules/shortcuts";
 
 const PTY_RESIZE_DEBOUNCE_MS = 256;
 const SNAPSHOT_SCROLLBACK_CAP = 5_000;
@@ -444,6 +445,52 @@ function createSlot(): Slot {
     // Terminal inline suggestions / ghost interception
     const suggest = useTerminalSuggestStore.getState().getSuggest(leafId);
     if (suggest && suggest.open && suggest.items.length > 0) {
+      const isSearchKey =
+        (IS_MAC ? event.metaKey : event.ctrlKey) &&
+        !event.altKey &&
+        (event.key === "f" || event.key === "F" || event.code === "KeyF");
+      if (isSearchKey) {
+        event.preventDefault();
+        if (event.type === "keydown") {
+          useTerminalSuggestStore.getState().toggleSearch(leafId, true);
+        }
+        return false;
+      }
+
+      if (
+        event.key === "Enter" &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey
+      ) {
+        if (suggest.navigated || suggest.searchMode) {
+          event.preventDefault();
+          if (event.type === "keydown") {
+            const selected =
+              suggest.items[suggest.selectedIndex] ?? suggest.items[0];
+            if (selected) {
+              const query = suggest.query;
+              if (selected.startsWith(query)) {
+                const remainder = selected.slice(query.length);
+                if (remainder) bridge.writeToPty(remainder);
+              } else {
+                const erase = "\x7f".repeat(query.length);
+                bridge.writeToPty(erase + selected);
+              }
+              if (event.shiftKey) {
+                bridge.writeToPty("\r");
+              }
+            }
+            useTerminalSuggestStore.getState().clear(leafId);
+          }
+          return false;
+        } else {
+          if (event.type === "keydown") {
+            useTerminalSuggestStore.getState().clear(leafId);
+          }
+        }
+      }
+
       if (
         event.key === "Tab" &&
         !event.ctrlKey &&
@@ -456,10 +503,14 @@ function createSlot(): Slot {
           const selected =
             suggest.items[suggest.selectedIndex] ?? suggest.items[0];
           if (selected) {
-            const remainder = selected.startsWith(suggest.query)
-              ? selected.slice(suggest.query.length)
-              : selected;
-            bridge.writeToPty(remainder);
+            const query = suggest.query;
+            if (selected.startsWith(query)) {
+              const remainder = selected.slice(query.length);
+              if (remainder) bridge.writeToPty(remainder);
+            } else {
+              const erase = "\x7f".repeat(query.length);
+              bridge.writeToPty(erase + selected);
+            }
           }
           useTerminalSuggestStore.getState().clear(leafId);
         }
@@ -501,8 +552,7 @@ function createSlot(): Slot {
         !event.ctrlKey &&
         !event.altKey &&
         !event.metaKey &&
-        !event.shiftKey &&
-        suggest.selectedIndex > 0
+        !event.shiftKey
       ) {
         event.preventDefault();
         if (event.type === "keydown") {
@@ -514,10 +564,30 @@ function createSlot(): Slot {
       if (event.key === "Escape") {
         event.preventDefault();
         if (event.type === "keydown") {
-          useTerminalSuggestStore.getState().clear(leafId);
+          if (suggest.searchMode) {
+            useTerminalSuggestStore.getState().toggleSearch(leafId, false);
+          } else {
+            useTerminalSuggestStore.getState().clear(leafId);
+          }
         }
         return false;
       }
+    }
+
+    const userShortcuts = usePreferencesStore.getState().shortcuts;
+    const copilotBindings =
+      userShortcuts["terminal.copilot"] ||
+      SHORTCUTS.find((s) => s.id === "terminal.copilot")?.defaultBindings ||
+      [];
+    const isCopilotKey = copilotBindings.some((b) =>
+      matchBinding(event, b, "terminal.copilot"),
+    );
+    if (isCopilotKey) {
+      event.preventDefault();
+      if (event.type === "keydown") {
+        useTerminalCopilotStore.getState().toggleCopilot(leafId);
+      }
+      return false;
     }
 
     const readlineSequence = terminalReadlineSequence(event, {
@@ -527,18 +597,6 @@ function createSlot(): Slot {
     if (readlineSequence) {
       event.preventDefault();
       if (event.type === "keydown") bridge.writeToPty(readlineSequence);
-      return false;
-    }
-    const isCopilotKey =
-      (IS_MAC ? event.metaKey : event.ctrlKey) &&
-      !event.altKey &&
-      !event.shiftKey &&
-      (event.key === "k" || event.code === "KeyK");
-    if (isCopilotKey) {
-      if (event.type === "keydown") {
-        useTerminalCopilotStore.getState().openCopilot(leafId);
-      }
-      event.preventDefault();
       return false;
     }
     if (isShiftEnter(event)) {

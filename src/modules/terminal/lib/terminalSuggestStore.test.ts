@@ -70,6 +70,7 @@ describe("useTerminalSuggestStore", () => {
     store.selectNext(1);
     s = useTerminalSuggestStore.getState().getSuggest(1);
     expect(s?.selectedIndex).toBe(1);
+    expect(s?.navigated).toBe(true);
     expect(s?.ghostTail).toBe("pull");
 
     // Select prev
@@ -81,5 +82,36 @@ describe("useTerminalSuggestStore", () => {
     // Clear
     store.clear(1);
     expect(useTerminalSuggestStore.getState().getSuggest(1)).toBeUndefined();
+  });
+
+  it("supports toggleSearch and filtering", () => {
+    const store = useTerminalSuggestStore.getState();
+    store.setSuggest({
+      leafId: 2,
+      open: true,
+      query: "cd ",
+      items: ["cd pepe", "cd /home/juan_peres", "cd /var/log"],
+      selectedIndex: 0,
+      navigated: false,
+      ghostTail: "pepe",
+      cursorX: 3,
+      cursorY: 5,
+      cellWidth: 8,
+      cellHeight: 18,
+      lineX: 24,
+      lineY: 108,
+      containerWidth: 800,
+      containerHeight: 600,
+    });
+
+    store.toggleSearch(2, true);
+    let s = useTerminalSuggestStore.getState().getSuggest(2);
+    expect(s?.searchMode).toBe(true);
+
+    store.setSearchFilter(2, "juan_peres");
+    s = useTerminalSuggestStore.getState().getSuggest(2);
+    expect(s?.items).toEqual(["cd /home/juan_peres"]);
+    expect(s?.selectedIndex).toBe(0);
+    expect(s?.navigated).toBe(true);
   });
 });
