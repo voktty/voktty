@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { HarnessId } from "./session";
 import {
+  coerceModelPickerTab,
   defaultModelId,
   defaultSessionChoice,
+  isPickerProviderVisible,
   loadDefaultModels,
+  loadHiddenPickerProviders,
   loadLastModelChoice,
   loadLastModelSettings,
   mergeModelSettings,
@@ -13,6 +16,8 @@ import {
   saveDefaultModel,
   saveLastModelChoice,
   saveLastModelSettings,
+  savePickerProviderVisible,
+  showProviderInModelPicker,
   stepModelPickerTab,
   type AgentModel,
 } from "./models";
@@ -237,5 +242,42 @@ describe("model picker tabs", () => {
 
   it("treats an unavailable current tab as the start of the list", () => {
     expect(stepModelPickerTab("pi", 1, available)).toBe("claude");
+  });
+
+  it("falls back to favorites when the current tab is hidden", () => {
+    expect(coerceModelPickerTab("pi", available)).toBe("favorites");
+    expect(coerceModelPickerTab("cursor", available)).toBe("cursor");
+    expect(coerceModelPickerTab("favorites", available)).toBe("favorites");
+  });
+});
+
+describe("picker provider visibility", () => {
+  beforeEach(mockLocalStorage);
+  afterEach(mockLocalStorage);
+
+  it("shows every provider until the user hides one", () => {
+    expect(loadHiddenPickerProviders()).toEqual([]);
+    expect(isPickerProviderVisible("pi")).toBe(true);
+    savePickerProviderVisible("pi", false);
+    savePickerProviderVisible("omp", false);
+    expect(isPickerProviderVisible("pi")).toBe(false);
+    expect(isPickerProviderVisible("omp")).toBe(false);
+    expect(isPickerProviderVisible("claude")).toBe(true);
+    expect(loadHiddenPickerProviders()).toEqual(["pi", "omp"]);
+    savePickerProviderVisible("pi", true);
+    expect(isPickerProviderVisible("pi")).toBe(true);
+    expect(loadHiddenPickerProviders()).toEqual(["omp"]);
+  });
+
+  it("omits hidden providers even before an install probe", () => {
+    savePickerProviderVisible("fx", false);
+    expect(showProviderInModelPicker("fx", true, false)).toBe(false);
+    expect(showProviderInModelPicker("claude", true, false)).toBe(true);
+  });
+
+  it("omits uninstalled providers after the probe, keeps them before", () => {
+    expect(showProviderInModelPicker("pi", false, false)).toBe(true);
+    expect(showProviderInModelPicker("pi", false, true)).toBe(false);
+    expect(showProviderInModelPicker("pi", true, true)).toBe(true);
   });
 });

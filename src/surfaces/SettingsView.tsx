@@ -67,12 +67,14 @@ import {
 import {
   defaultModelId,
   getModelSnapshot,
+  isPickerProviderVisible,
   loadDefaultModels,
   loadLastModelChoice,
   modelsFor,
   resolveModel,
   saveDefaultModel,
   saveLastModelChoice,
+  savePickerProviderVisible,
   subscribeModels,
 } from "../lib/models";
 import { prettyCwd, projectName } from "../lib/paths";
@@ -753,6 +755,8 @@ function ProvidersPage() {
     <>
       <p className="pb-2 text-[12px] leading-relaxed text-content/45">
         A provider is listed as installed once its CLI is found on your PATH.
+        Uninstalled CLIs stay listed here but are omitted from the model picker.
+        Turn off Show in picker to hide an installed provider from those tabs.
         The model beside each provider is what new conversations use when that
         provider is selected; Use by default picks the provider itself.
       </p>
@@ -792,6 +796,14 @@ function ProviderRow({
   const available = isHarnessAvailable(harness);
   const current =
     models.length > 0 ? resolveModel(harness, selectedModel) : null;
+  const [inPicker, setInPicker] = useState(() =>
+    isPickerProviderVisible(harness),
+  );
+
+  const onPickerVisible = (visible: boolean) => {
+    savePickerProviderVisible(harness, visible);
+    setInPicker(visible);
+  };
 
   return (
     <Row
@@ -829,6 +841,16 @@ function ProviderRow({
       >
         {isDefault ? "Default" : "Use by default"}
       </SecondaryButton>
+      {available ? (
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] text-content/50">Show in picker</span>
+          <Toggle
+            label={`Show ${HARNESS_TITLE[harness]} in the model picker`}
+            on={inPicker}
+            onChange={onPickerVisible}
+          />
+        </div>
+      ) : null}
     </Row>
   );
 }
@@ -1065,7 +1087,7 @@ function Row({
           </p>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center justify-end gap-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
         {children}
       </div>
     </div>

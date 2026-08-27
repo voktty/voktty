@@ -142,6 +142,7 @@ export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
 
 const FAVORITES_KEY = "monocode.favoriteModels";
 const MODEL_PICKER_TAB_KEY = "monocode.modelPickerTab";
+const HIDDEN_PICKER_PROVIDERS_KEY = "monocode.hiddenPickerProviders";
 const LAST_MODEL_KEY = "monocode.lastModel";
 const LAST_MODEL_SETTINGS_KEY = "monocode.lastModelSettings";
 const DEFAULT_MODELS_KEY = "monocode.defaultModels";
@@ -397,10 +398,86 @@ export function saveModelPickerTab(tab: ModelPickerTab) {
   }
 }
 
+let pickerVisibilityVersion = 0;
+const pickerVisibilityListeners = new Set<() => void>();
+
+function emitPickerVisibility() {
+  pickerVisibilityVersion += 1;
+  for (const listener of pickerVisibilityListeners) listener();
+}
+
+export function subscribePickerVisibility(
+  onStoreChange: () => void,
+): () => void {
+  pickerVisibilityListeners.add(onStoreChange);
+  return () => {
+    pickerVisibilityListeners.delete(onStoreChange);
+  };
+}
+
+export function getPickerVisibilitySnapshot(): number {
+  return pickerVisibilityVersion;
+}
+
+export function loadHiddenPickerProviders(): HarnessId[] {
+  try {
+    const raw = localStorage.getItem(HIDDEN_PICKER_PROVIDERS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (id): id is HarnessId => typeof id === "string" && isHarnessId(id),
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function isPickerProviderVisible(id: HarnessId): boolean {
+  return !loadHiddenPickerProviders().includes(id);
+}
+
+export function savePickerProviderVisible(id: HarnessId, visible: boolean) {
+  const hidden = new Set(loadHiddenPickerProviders());
+  if (visible) hidden.delete(id);
+  else hidden.add(id);
+  try {
+    localStorage.setItem(
+      HIDDEN_PICKER_PROVIDERS_KEY,
+      JSON.stringify([...hidden]),
+    );
+  } catch {
+    // private mode / quota
+  }
+  emitPickerVisibility();
+}
+
+/**
+ * Installed providers the user has not hidden appear as picker tabs.
+ * Before the first probe we keep them visible so the tab strip does not
+ * collapse to Favorites and then jump once CLIs are found.
+ */
+export function showProviderInModelPicker(
+  id: HarnessId,
+  installed: boolean,
+  probed: boolean,
+): boolean {
+  if (!isPickerProviderVisible(id)) return false;
+  return !probed || installed;
+}
+
 export function modelPickerTabs(
   available: (id: HarnessId) => boolean,
 ): ModelPickerTab[] {
   return ["favorites", ...HARNESSES.filter(available)];
+}
+
+export function coerceModelPickerTab(
+  tab: ModelPickerTab,
+  available: (id: HarnessId) => boolean,
+): ModelPickerTab {
+  const tabs = modelPickerTabs(available);
+  return tabs.includes(tab) ? tab : "favorites";
 }
 
 export function stepModelPickerTab(

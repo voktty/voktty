@@ -97,6 +97,7 @@ export { refreshFxCatalog } from "./fxCatalog";
 export { registerBuiltinHarnesses } from "./register";
 export {
   getHarnessAvailabilitySnapshot,
+  hasProbedHarnessAvailability,
   harnessUnavailableHint,
   isHarnessAvailable,
   probeHarnessAvailability,

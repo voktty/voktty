@@ -65,6 +65,10 @@ export function getHarnessAvailabilitySnapshot(): number {
   return version;
 }
 
+export function hasProbedHarnessAvailability(): boolean {
+  return probedAt > 0;
+}
+
 export function isHarnessAvailable(id: HarnessId): boolean {
   return availability[id];
 }

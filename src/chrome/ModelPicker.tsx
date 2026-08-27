@@ -11,22 +11,27 @@ import {
   type ReactNode,
 } from "react";
 import {
+  coerceModelPickerTab,
   findModel,
   getModelSnapshot,
+  getPickerVisibilitySnapshot,
   loadFavoriteModels,
   loadModelPickerTab,
   modelsFor,
   resolveModel,
   saveFavoriteModels,
   saveModelPickerTab,
+  showProviderInModelPicker,
   stepModelPickerTab,
   subscribeModels,
+  subscribePickerVisibility,
   type AgentModel,
   type ModelPickerTab,
 } from "../lib/models";
 import { refreshCodexCatalog } from "../lib/harness/codexCatalog";
 import {
   harnessUnavailableHint,
+  hasProbedHarnessAvailability,
   isHarnessAvailable,
   probeHarnessAvailability,
   subscribeHarnessAvailability,
@@ -80,10 +85,15 @@ export function ModelPicker({
     getModelSnapshot,
     getModelSnapshot,
   );
-  useSyncExternalStore(
+  const availabilityVersion = useSyncExternalStore(
     subscribeHarnessAvailability,
     getHarnessAvailabilitySnapshot,
     getHarnessAvailabilitySnapshot,
+  );
+  const visibilityVersion = useSyncExternalStore(
+    subscribePickerVisibility,
+    getPickerVisibilitySnapshot,
+    getPickerVisibilitySnapshot,
   );
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<ModelPickerTab>(() => loadModelPickerTab());
@@ -99,7 +109,19 @@ export function ModelPicker({
   const tabRef = useRef(tab);
   const openRef = useRef(open);
   const lastHotkey = useRef(0);
-  tabRef.current = tab;
+
+  const shownInPicker = (id: HarnessId) =>
+    showProviderInModelPicker(
+      id,
+      isHarnessAvailable(id),
+      hasProbedHarnessAvailability(),
+    );
+  const pickerHarnesses = HARNESSES.filter(shownInPicker);
+  const visibleTab = coerceModelPickerTab(tab, shownInPicker);
+  if (visibleTab !== tab) {
+    setTab(visibleTab);
+  }
+  tabRef.current = visibleTab;
   openRef.current = open;
 
   const dismiss = (restore: boolean) => {
@@ -133,15 +155,15 @@ export function ModelPicker({
   useEffect(() => {
     if (!open) return;
     void probeHarnessAvailability();
-    setTab(loadModelPickerTab());
+    setTab(coerceModelPickerTab(loadModelPickerTab(), shownInPicker));
     setQuery("");
   }, [open]);
 
   useEffect(() => {
-    if (!open || tab !== "codex") return;
+    if (!open || visibleTab !== "codex") return;
     if (modelsFor("codex").length > 0) return;
     void refreshCodexCatalog();
-  }, [open, tab]);
+  }, [open, visibleTab]);
 
   useLayoutEffect(() => {
     if (!open || !root.current) return;
@@ -206,7 +228,7 @@ export function ModelPicker({
         stepModelPickerTab(
           tabRef.current,
           e.key === "ArrowLeft" ? -1 : 1,
-          isHarnessAvailable,
+          shownInPicker,
         ),
       );
     };
@@ -232,27 +254,36 @@ export function ModelPicker({
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const pool =
-      tab === "favorites"
+      visibleTab === "favorites"
         ? favorites
             .map((id) => findModel(id))
-            .filter((item): item is AgentModel => item != null)
-        : modelsFor(tab);
+            .filter(
+              (item): item is AgentModel =>
+                item != null && shownInPicker(item.harness),
+            )
+        : modelsFor(visibleTab);
     if (!needle) return pool;
     return pool.filter((item) => {
       const hay =
         `${item.name} ${HARNESS_TITLE[item.harness]} ${HARNESS_LABEL[item.harness]}`.toLowerCase();
       return hay.includes(needle);
     });
-    // `catalogVersion` is the dependency that matters here: harness catalogs
-    // land a second or two after mount, and without it the list stays pinned
-    // to whatever the seed models were on first render.
-  }, [tab, query, favorites, catalogVersion]);
+    // Catalog, install probes, and picker-visibility all feed this list:
+    // catalogs land after mount, and hiding a provider must drop its favorites.
+  }, [
+    visibleTab,
+    query,
+    favorites,
+    catalogVersion,
+    availabilityVersion,
+    visibilityVersion,
+  ]);
 
   useEffect(() => {
     if (!open) return;
     const index = visible.findIndex((item) => item.id === current.id);
     setActive(index >= 0 ? index : 0);
-  }, [open, tab, query, current.id]);
+  }, [open, visibleTab, query, current.id]);
 
   useEffect(() => {
     setActive((i) =>
@@ -348,25 +379,20 @@ export function ModelPicker({
           >
             <ProviderTabButton
               title="Favorites"
-              selected={tab === "favorites"}
+              selected={visibleTab === "favorites"}
               onSelect={() => selectTab("favorites")}
             >
               <Star
                 className="size-4"
                 strokeWidth={1.75}
-                fill={tab === "favorites" ? "currentColor" : "none"}
+                fill={visibleTab === "favorites" ? "currentColor" : "none"}
               />
             </ProviderTabButton>
-            {HARNESSES.map((id) => (
+            {pickerHarnesses.map((id) => (
               <ProviderTabButton
                 key={id}
-                title={
-                  isHarnessAvailable(id)
-                    ? HARNESS_TITLE[id]
-                    : `${HARNESS_TITLE[id]} — ${harnessUnavailableHint(id)}`
-                }
-                selected={tab === id}
-                disabled={!isHarnessAvailable(id)}
+                title={HARNESS_TITLE[id]}
+                selected={visibleTab === id}
                 onSelect={() => selectTab(id)}
               >
                 <HarnessIcon harness={id} className="size-4" />
@@ -396,11 +422,11 @@ export function ModelPicker({
               currentId={current.id}
               favorites={favorites}
               emptyLabel={
-                tab === "favorites" && !query.trim()
+                visibleTab === "favorites" && !query.trim()
                   ? "No favorite models"
-                  : tab !== "favorites" && !isHarnessAvailable(tab)
-                    ? harnessUnavailableHint(tab)
-                    : tab === "codex" && !query.trim()
+                  : visibleTab !== "favorites" && !isHarnessAvailable(visibleTab)
+                    ? harnessUnavailableHint(visibleTab)
+                    : visibleTab === "codex" && !query.trim()
                       ? "Loading Codex models…"
                       : "No matching models"
               }
