@@ -59,10 +59,12 @@ export function UsageFooter() {
         }),
       );
     }
-    const run = Promise.allSettled(jobs).finally(() => {
-      inflight.current = null;
-      setRefreshing(false);
-    });
+    const run = Promise.allSettled(jobs)
+      .then(() => undefined)
+      .finally(() => {
+        inflight.current = null;
+        setRefreshing(false);
+      });
     inflight.current = run;
     return run;
   }, []);
