@@ -940,10 +940,17 @@ fn bounded_text(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::io::{Read, Write};
-    use std::net::{TcpListener, TcpStream};
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::thread;
+    use std::convert::Infallible;
+
+    use bytes::Bytes;
+    use futures_util::{stream, StreamExt};
+    use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
+    use hyper::body::{Frame, Incoming};
+    use hyper::service::service_fn;
+    use hyper::{Request, Response};
+    use hyper_util::rt::TokioIo;
+    use tokio::net::TcpListener;
+    use tokio::sync::watch;
 
     fn test_runtime() -> tokio::runtime::Runtime {
         tokio::runtime::Builder::new_current_thread()
@@ -965,7 +972,6 @@ mod tests {
         content_type: Option<&'static str>,
         headers: Vec<(String, String)>,
         body: Vec<u8>,
-        fragment: bool,
         hold_open: bool,
     }
 
@@ -976,7 +982,6 @@ mod tests {
                 content_type: Some("application/json"),
                 headers: Vec::new(),
                 body: serde_json::to_vec(&value).unwrap(),
-                fragment: false,
                 hold_open: false,
             }
         }
@@ -987,7 +992,6 @@ mod tests {
                 content_type: None,
                 headers: Vec::new(),
                 body: Vec::new(),
-                fragment: false,
                 hold_open: false,
             }
         }
@@ -996,17 +1000,15 @@ mod tests {
     struct TestServer {
         endpoint: String,
         requests: Arc<Mutex<Vec<TestRequest>>>,
-        stop: Arc<AtomicBool>,
-        thread: Option<thread::JoinHandle<()>>,
+        shutdown: watch::Sender<bool>,
+        runtime: Option<tokio::runtime::Runtime>,
     }
 
     impl Drop for TestServer {
         fn drop(&mut self) {
-            self.stop.store(true, Ordering::Release);
-            let address = self.endpoint.trim_start_matches("http://");
-            let _ = TcpStream::connect(address);
-            if let Some(thread) = self.thread.take() {
-                let _ = thread.join();
+            let _ = self.shutdown.send(true);
+            if let Some(runtime) = self.runtime.take() {
+                runtime.shutdown_timeout(Duration::from_secs(1));
             }
         }
     }
@@ -1015,121 +1017,108 @@ mod tests {
     where
         F: Fn(&TestRequest) -> TestResponse + Send + Sync + 'static,
     {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("build HTTP fixture runtime");
+        let listener = runtime
+            .block_on(TcpListener::bind("127.0.0.1:0"))
+            .expect("bind HTTP fixture listener");
         let endpoint = format!("http://{}", listener.local_addr().unwrap());
         let requests = Arc::new(Mutex::new(Vec::new()));
-        let requests_for_thread = requests.clone();
-        let stop = Arc::new(AtomicBool::new(false));
-        let stop_for_thread = stop.clone();
         let handler = Arc::new(handler);
-        let thread = thread::spawn(move || {
-            while !stop_for_thread.load(Ordering::Acquire) {
-                match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        if let Some(request) = read_request(&mut stream) {
-                            let response = handler(&request);
-                            requests_for_thread.lock().unwrap().push(request);
-                            write_response(&mut stream, response);
+        let (shutdown, mut shutdown_receiver) = watch::channel(false);
+        let requests_for_server = requests.clone();
+        runtime.spawn(async move {
+            loop {
+                tokio::select! {
+                    changed = shutdown_receiver.changed() => {
+                        if changed.is_err() || *shutdown_receiver.borrow() {
+                            break;
                         }
                     }
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(5));
+                    accepted = listener.accept() => {
+                        let Ok((stream, _)) = accepted else {
+                            break;
+                        };
+                        let handler = handler.clone();
+                        let requests = requests_for_server.clone();
+                        tokio::spawn(async move {
+                            let service = service_fn(move |request| {
+                                serve_test_request(request, handler.clone(), requests.clone())
+                            });
+                            let _ = hyper::server::conn::http1::Builder::new()
+                                .serve_connection(TokioIo::new(stream), service)
+                                .await;
+                        });
                     }
-                    Err(_) => break,
                 }
             }
         });
         TestServer {
             endpoint,
             requests,
-            stop,
-            thread: Some(thread),
+            shutdown,
+            runtime: Some(runtime),
         }
     }
 
-    fn read_request(stream: &mut TcpStream) -> Option<TestRequest> {
-        stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
-        let mut bytes = Vec::new();
-        let mut buffer = [0u8; 4096];
-        let header_end;
-        loop {
-            let read = stream.read(&mut buffer).ok()?;
-            if read == 0 {
-                return None;
-            }
-            bytes.extend_from_slice(&buffer[..read]);
-            if let Some(position) = bytes.windows(4).position(|window| window == b"\r\n\r\n") {
-                header_end = position + 4;
-                break;
-            }
-            if bytes.len() > MAX_HEADERS_BYTES {
-                return None;
-            }
-        }
-        let head = std::str::from_utf8(&bytes[..header_end]).ok()?;
-        let mut lines = head.split("\r\n");
-        let method = lines.next()?.split_whitespace().next()?.to_string();
+    async fn serve_test_request<F>(
+        request: Request<Incoming>,
+        handler: Arc<F>,
+        requests: Arc<Mutex<Vec<TestRequest>>>,
+    ) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible>
+    where
+        F: Fn(&TestRequest) -> TestResponse + Send + Sync + 'static,
+    {
+        let (parts, body) = request.into_parts();
+        let bytes = body
+            .collect()
+            .await
+            .map(|collected| collected.to_bytes())
+            .unwrap_or_default();
         let mut headers = HashMap::new();
-        for line in lines.filter(|line| !line.is_empty()) {
-            if let Some((name, value)) = line.split_once(':') {
-                headers.insert(name.to_ascii_lowercase(), value.trim().to_string());
+        for (name, value) in &parts.headers {
+            if let Ok(value) = value.to_str() {
+                headers.insert(name.as_str().to_ascii_lowercase(), value.to_string());
             }
         }
-        let content_length = headers
-            .get("content-length")
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(0);
-        while bytes.len().saturating_sub(header_end) < content_length {
-            let read = stream.read(&mut buffer).ok()?;
-            if read == 0 {
-                return None;
-            }
-            bytes.extend_from_slice(&buffer[..read]);
-        }
-        let body = if content_length == 0 {
-            Value::Null
-        } else {
-            serde_json::from_slice(&bytes[header_end..header_end + content_length]).ok()?
-        };
-        Some(TestRequest {
-            method,
+        let request = TestRequest {
+            method: parts.method.to_string(),
             headers,
-            body,
-        })
-    }
-
-    fn write_response(stream: &mut TcpStream, response: TestResponse) {
-        let declared_length = if response.hold_open {
-            response.body.len().saturating_add(1024)
-        } else {
-            response.body.len()
+            body: if bytes.is_empty() {
+                Value::Null
+            } else {
+                serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+            },
         };
-        let mut headers = format!(
-            "HTTP/1.1 {}\r\nContent-Length: {}\r\nConnection: close\r\n",
-            response.status, declared_length
-        );
+        let response = handler(&request);
+        requests.lock().unwrap().push(request);
+
+        let body = if response.hold_open {
+            let stream = stream::once(async move {
+                Ok::<_, Infallible>(Frame::data(Bytes::from(response.body)))
+            })
+            .chain(stream::pending());
+            BodyExt::boxed(StreamBody::new(stream))
+        } else {
+            BodyExt::boxed(Full::new(Bytes::from(response.body)))
+        };
+        let status = response
+            .status
+            .split_whitespace()
+            .next()
+            .and_then(|status| status.parse::<u16>().ok())
+            .unwrap_or(500);
+        let mut builder = Response::builder().status(status);
         if let Some(content_type) = response.content_type {
-            headers.push_str(&format!("Content-Type: {content_type}\r\n"));
+            builder = builder.header(CONTENT_TYPE.as_str(), content_type);
         }
         for (name, value) in response.headers {
-            headers.push_str(&format!("{name}: {value}\r\n"));
+            builder = builder.header(name, value);
         }
-        headers.push_str("\r\n");
-        let _ = stream.write_all(headers.as_bytes());
-        if response.fragment && response.body.len() > 2 {
-            let split = response.body.len() / 2;
-            let _ = stream.write_all(&response.body[..split]);
-            let _ = stream.flush();
-            thread::sleep(Duration::from_millis(5));
-            let _ = stream.write_all(&response.body[split..]);
-        } else {
-            let _ = stream.write_all(&response.body);
-        }
-        let _ = stream.flush();
-        if response.hold_open {
-            thread::sleep(Duration::from_millis(300));
-        }
+        Ok(builder.body(body).expect("build HTTP fixture response"))
     }
 
     fn rpc_result(request: &TestRequest, value: Value, result_type: bool) -> Value {
@@ -1169,7 +1158,6 @@ mod tests {
                     content_type: Some("text/event-stream"),
                     headers: Vec::new(),
                     body,
-                    fragment: false,
                     hold_open: false,
                 }
             }
@@ -1195,7 +1183,6 @@ mod tests {
                     content_type: Some("text/event-stream"),
                     headers: Vec::new(),
                     body,
-                    fragment: false,
                     hold_open: true,
                 }
             }
@@ -1219,7 +1206,6 @@ mod tests {
                 content_type: Some("text/event-stream"),
                 headers: vec![("MCP-Session-Id".into(), "fixture-session".into())],
                 body,
-                fragment: false,
                 hold_open: false,
             };
         }
@@ -1268,12 +1254,17 @@ mod tests {
     fn loopback_config(server: &TestServer) -> HttpServerConfig {
         let mut config = HttpServerConfig::new("fixture", &server.endpoint);
         config.allow_private_network = true;
-        config.request_timeout = Duration::from_secs(2);
+        config.request_timeout = Duration::from_secs(5);
         config
+    }
+
+    fn fixture_transport_guard() -> std::sync::MutexGuard<'static, ()> {
+        super::super::fixture_transport_guard()
     }
 
     #[test]
     fn modern_loopback_supports_json_sse_pagination_and_tool_calls() {
+        let _guard = fixture_transport_guard();
         let server = spawn_server(modern_handler);
         test_runtime().block_on(async {
             let client = HttpClient::connect(loopback_config(&server))
@@ -1299,6 +1290,7 @@ mod tests {
 
     #[test]
     fn legacy_sessions_are_isolated_and_bound_to_followup_requests() {
+        let _guard = fixture_transport_guard();
         let server = spawn_server(legacy_handler);
         test_runtime().block_on(async {
             let client = HttpClient::connect(loopback_config(&server))
@@ -1331,6 +1323,7 @@ mod tests {
 
     #[test]
     fn modern_subscription_requires_ack_and_stops_on_cancellation() {
+        let _guard = fixture_transport_guard();
         let server = spawn_server(modern_handler);
         test_runtime().block_on(async {
             let client = Arc::new(
@@ -1359,6 +1352,7 @@ mod tests {
 
     #[test]
     fn legacy_get_stream_resumes_from_last_event_id() {
+        let _guard = fixture_transport_guard();
         let server = spawn_server(legacy_handler);
         test_runtime().block_on(async {
             let client = Arc::new(
@@ -1398,6 +1392,7 @@ mod tests {
 
     #[test]
     fn loopback_requires_explicit_private_network_opt_in() {
+        let _guard = fixture_transport_guard();
         let server = spawn_server(modern_handler);
         let config = HttpServerConfig::new("fixture", &server.endpoint);
 
@@ -1421,6 +1416,7 @@ mod tests {
 
     #[test]
     fn legacy_session_hijack_is_rejected() {
+        let _guard = fixture_transport_guard();
         let server = spawn_server(|request| {
             let mut response = legacy_handler(request);
             if request.body["method"] == "tools/list" {
@@ -1445,6 +1441,7 @@ mod tests {
 
     #[test]
     fn authorization_challenge_is_structured_and_bounded() {
+        let _guard = fixture_transport_guard();
         let server = spawn_server(|_| {
             TestResponse {
             status: "401 Unauthorized",
@@ -1455,7 +1452,6 @@ mod tests {
                     .into(),
             )],
             body: Vec::new(),
-            fragment: false,
             hold_open: false,
         }
         });
@@ -1475,6 +1471,7 @@ mod tests {
 
     #[test]
     fn cross_origin_redirect_is_rejected_before_forwarding_token() {
+        let _guard = fixture_transport_guard();
         let target = spawn_server(modern_handler);
         let target_url = target.endpoint.clone();
         let redirect = spawn_server(move |_| TestResponse {
@@ -1482,7 +1479,6 @@ mod tests {
             content_type: None,
             headers: vec![("Location".into(), target_url.clone())],
             body: Vec::new(),
-            fragment: false,
             hold_open: false,
         });
         let mut config = loopback_config(&redirect);
@@ -1493,7 +1489,12 @@ mod tests {
             .err()
             .expect("cross-origin redirect must fail");
 
-        assert_eq!(error.kind, McpErrorKind::Configuration);
+        assert_eq!(
+            error.kind,
+            McpErrorKind::Configuration,
+            "redirect requests received: {}",
+            redirect.requests.lock().unwrap().len()
+        );
         assert!(target.requests.lock().unwrap().is_empty());
         let requests = redirect.requests.lock().unwrap();
         assert_eq!(

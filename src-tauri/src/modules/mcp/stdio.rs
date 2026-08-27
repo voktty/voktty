@@ -1436,13 +1436,18 @@ mod tests {
         let fixture = root.join("scripts/fixtures/mcp-stdio-server.mjs");
         let mut config = StdioServerConfig::new("fixture", node, &root, &root);
         config.args = vec![fixture.to_string_lossy().into_owned(), mode.into()];
-        config.probe_timeout = Duration::from_secs(3);
+        config.probe_timeout = Duration::from_secs(5);
         config.request_timeout = Duration::from_secs(2);
         config
     }
 
+    fn fixture_transport_guard() -> std::sync::MutexGuard<'static, ()> {
+        super::super::fixture_transport_guard()
+    }
+
     #[test]
     fn modern_fixture_discovers_all_pages_and_calls_a_tool() {
+        let _guard = fixture_transport_guard();
         let client = StdioClient::connect(fixture_config("modern")).expect("connect fixture");
         assert_eq!(client.descriptor().era, ProtocolEra::Modern);
 
@@ -1458,6 +1463,7 @@ mod tests {
 
     #[test]
     fn legacy_fixture_isolated_fallback_still_works() {
+        let _guard = fixture_transport_guard();
         let client = StdioClient::connect(fixture_config("legacy")).expect("connect fixture");
 
         assert_eq!(client.descriptor().era, ProtocolEra::Legacy);
@@ -1470,6 +1476,7 @@ mod tests {
 
     #[test]
     fn fragmented_fixture_output_is_reassembled() {
+        let _guard = fixture_transport_guard();
         let client = StdioClient::connect(fixture_config("fragmented")).expect("connect fixture");
 
         assert_eq!(client.list_tools().expect("list tools").len(), 2);
@@ -1477,6 +1484,7 @@ mod tests {
 
     #[test]
     fn concurrent_responses_may_arrive_out_of_order() {
+        let _guard = fixture_transport_guard();
         let client = Arc::new(
             StdioClient::connect(fixture_config("out-of-order")).expect("connect fixture"),
         );
@@ -1502,6 +1510,7 @@ mod tests {
 
     #[test]
     fn duplicate_response_ids_fail_closed() {
+        let _guard = fixture_transport_guard();
         let client = StdioClient::connect(fixture_config("duplicate")).expect("connect fixture");
         assert!(client.list_tools().is_ok());
         let deadline = Instant::now() + Duration::from_secs(1);
@@ -1520,6 +1529,7 @@ mod tests {
 
     #[test]
     fn stdout_garbage_fails_negotiation() {
+        let _guard = fixture_transport_guard();
         let error = StdioClient::connect(fixture_config("garbage"))
             .err()
             .expect("garbage must fail");
@@ -1529,6 +1539,7 @@ mod tests {
 
     #[test]
     fn timeout_sends_cancellation_and_keeps_connection_usable() {
+        let _guard = fixture_transport_guard();
         let mut config = fixture_config("modern");
         config.request_timeout = Duration::from_millis(150);
         let client = StdioClient::connect(config).expect("connect fixture");
@@ -1544,6 +1555,7 @@ mod tests {
 
     #[test]
     fn explicit_cancellation_notifies_server_and_keeps_connection_usable() {
+        let _guard = fixture_transport_guard();
         let client =
             Arc::new(StdioClient::connect(fixture_config("modern")).expect("connect fixture"));
         let cancellation = CancellationToken::new();
@@ -1594,6 +1606,7 @@ mod tests {
 
     #[test]
     fn hostile_external_schema_is_rejected() {
+        let _guard = fixture_transport_guard();
         let client =
             StdioClient::connect(fixture_config("hostile-schema")).expect("connect fixture");
 
@@ -1607,6 +1620,7 @@ mod tests {
     #[test]
     #[ignore = "manual Windows MCP performance baseline"]
     fn windows_mcp_performance_baseline() {
+        let _guard = fixture_transport_guard();
         let disabled_started = Instant::now();
         let disabled = crate::modules::mcp::manager::McpManagerState::default();
         let disabled_startup_us = disabled_started.elapsed().as_micros();
@@ -1645,6 +1659,7 @@ mod tests {
 
     #[test]
     fn dropping_client_terminates_descendant_processes() {
+        let _guard = fixture_transport_guard();
         let client = StdioClient::connect(fixture_config("modern")).expect("connect fixture");
         let outcome = client
             .call_tool("spawn_child", json!({}), None)
