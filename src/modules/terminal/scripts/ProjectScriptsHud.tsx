@@ -201,20 +201,21 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
 
         {onOpenCopilot && (
           <div className="ml-auto flex items-center gap-1 shrink-0 pl-1">
-            <button
-              type="button"
-              onClick={onOpenCopilot}
-              className="inline-flex items-center gap-1 rounded bg-muted/50 hover:bg-muted text-foreground/90 hover:text-foreground px-1.5 py-0.5 text-[10px] font-medium transition-colors cursor-pointer border border-border/60 active:scale-95"
-              title={copilotLabel ? `${t("terminal.copilot.title")} (${copilotLabel})` : t("terminal.copilot.title")}
-            >
-              <HugeiconsIcon icon={SparklesIcon} size={10} strokeWidth={2} className="text-primary" />
-              <span>{t("terminal.copilot.title")}</span>
-              {copilotLabel && (
-                <span className="text-[9px] font-mono opacity-70">
-                  {copilotLabel}
-                </span>
-              )}
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onOpenCopilot}
+                  className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95 cursor-pointer"
+                  aria-label={copilotLabel ? `${t("terminal.copilot.title")} (${copilotLabel})` : t("terminal.copilot.title")}
+                >
+                  <HugeiconsIcon icon={SparklesIcon} size={12} strokeWidth={2} className="text-primary" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-[10px] font-medium">
+                {copilotLabel ? `${t("terminal.copilot.title")} (${copilotLabel})` : t("terminal.copilot.title")}
+              </TooltipContent>
+            </Tooltip>
           </div>
         )}
       </div>
