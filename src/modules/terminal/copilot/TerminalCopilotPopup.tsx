@@ -228,7 +228,7 @@ export function TerminalCopilotPopup({
               data-no-drag
               onChange={(e) => setSelectedModelId(e.target.value)}
               className="h-5.5 max-w-36 rounded-md bg-muted/70 hover:bg-muted text-[10px] font-mono text-foreground px-1.5 py-0 border border-border/50 outline-none cursor-pointer focus:ring-1 focus:ring-primary/40 truncate"
-              title="Switch Active AI Model"
+              title={t("settings.tabs.models")}
             >
               {MODELS.map((m) => (
                 <option key={m.id} value={m.id}>
