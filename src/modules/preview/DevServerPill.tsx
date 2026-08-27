@@ -13,7 +13,7 @@ import {
 import { useTranslation } from "@/modules/i18n";
 import { Globe02Icon, PlayIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { isWebPreviewablePath } from "./components/LivePreviewButton";
 import {
   type DevServerCapture,
@@ -55,8 +55,10 @@ export function DevServerPill({
       : (state.capturesByLeaf[leafId] ?? NO_CAPTURES),
   );
 
-  const internalServers = useWebServerStore((state) =>
-    Object.values(state.servers),
+  const serversMap = useWebServerStore((state) => state.servers);
+  const internalServers = useMemo(
+    () => Object.values(serversMap),
+    [serversMap],
   );
 
   const isWebFile = Boolean(filePath && isWebPreviewablePath(filePath));
