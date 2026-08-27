@@ -157,6 +157,8 @@ function applyHighlightsToContainer(
   }
 }
 
+const EMPTY_HIGHLIGHTS: DocumentHighlight[] = [];
+
 export const MarkdownPreviewPane = forwardRef<MarkdownSearchHandle, Props>(
   function MarkdownPreviewPane(
     { path, workspaceEnv, visible, onSetView },
@@ -171,7 +173,7 @@ export const MarkdownPreviewPane = forwardRef<MarkdownSearchHandle, Props>(
 
     const normPath = normalizeHighlightPath(path);
     const highlights = useDocumentHighlightStore(
-      (s) => s.highlightsByPath[normPath] ?? [],
+      (s) => s.highlightsByPath[normPath] ?? EMPTY_HIGHLIGHTS,
     );
 
     useImperativeHandle(
