@@ -24,7 +24,8 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { SettingsSearch } from "./components/SettingsSearch";
-import React, { Suspense, useEffect, useId } from "react";
+import { useDraggableModal } from "@/hooks/useDraggableModal";
+import React, { Suspense, useEffect, useId, useLayoutEffect, useRef } from "react";
 import { playVokttySound, scheduleSettingsToggleSound } from "@/modules/sound";
 
 const GeneralSection = React.lazy(() =>
@@ -135,9 +136,19 @@ export function SettingsModal() {
   const active = useSettingsModalStore((s) => s.activeTab);
   const setActive = useSettingsModalStore((s) => s.setActiveTab);
   const closeSettings = useSettingsModalStore((s) => s.closeSettings);
+  const tabScrollPositions = useSettingsModalStore((s) => s.tabScrollPositions);
+  const setTabScroll = useSettingsModalStore((s) => s.setTabScroll);
+  const modalPosition = useSettingsModalStore((s) => s.modalPosition);
+  const setModalPosition = useSettingsModalStore((s) => s.setModalPosition);
   const init = usePreferencesStore((s) => s.init);
   const headerId = useId();
   const previousOpenRef = React.useRef(open);
+  const scrollContainerRef = useRef<HTMLElement>(null);
+
+  const { position, dragHandleProps } = useDraggableModal({
+    initialPosition: modalPosition ?? undefined,
+    onPositionChange: setModalPosition,
+  });
 
   useEffect(() => {
     const previousOpen = previousOpenRef.current;
@@ -153,6 +164,13 @@ export function SettingsModal() {
       void init();
     }
   }, [open, init]);
+
+  // Restore scroll position whenever active tab changes or modal opens
+  useLayoutEffect(() => {
+    if (!open || !scrollContainerRef.current) return;
+    const targetScroll = tabScrollPositions[active] ?? 0;
+    scrollContainerRef.current.scrollTop = targetScroll;
+  }, [open, active, tabScrollPositions]);
 
   useEffect(() => {
     if (!open) return;
@@ -190,7 +208,10 @@ export function SettingsModal() {
       onClick={closeSettings}
     >
       <div
-        className="flex flex-row w-full max-w-4xl h-[82vh] max-h-[660px] rounded-xl border border-border/70 bg-background/95 text-foreground shadow-2xl overflow-hidden duration-150 animate-in zoom-in-95 select-none"
+        className="flex flex-row w-full max-w-4xl h-[82vh] max-h-[660px] rounded-xl border border-border/70 bg-background/95 text-foreground shadow-2xl overflow-hidden duration-150 animate-in zoom-in-95 select-none transition-shadow"
+        style={{
+          transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+        }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -200,8 +221,12 @@ export function SettingsModal() {
         {/* Left Fluent Sidebar Navigation */}
         <aside className="w-48 sm:w-52 shrink-0 border-r border-border/40 bg-card/30 backdrop-blur-md flex flex-col justify-between p-2.5">
           <div className="flex flex-col gap-2 min-h-0 flex-1">
-            {/* Sidebar Title */}
-            <div className="flex items-center gap-2 px-2 py-1">
+            {/* Sidebar Title / Drag Handle */}
+            <div
+              {...dragHandleProps}
+              className="flex items-center gap-2 px-2 py-1 cursor-grab active:cursor-grabbing select-none"
+              title={t("settings.title")}
+            >
               <div className="flex size-6 items-center justify-center rounded-md bg-primary/10 text-primary border border-primary/20">
                 <HugeiconsIcon icon={Settings01Icon} size={13} />
               </div>
@@ -289,9 +314,12 @@ export function SettingsModal() {
 
         {/* Right Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-background/50">
-          {/* Header */}
-          <header className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border/40 bg-card/20 px-4">
-            <div className="flex items-center gap-2 text-[11.5px] font-semibold text-foreground">
+          {/* Header / Drag Handle */}
+          <header
+            {...dragHandleProps}
+            className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border/40 bg-card/20 px-4 cursor-grab active:cursor-grabbing select-none"
+          >
+            <div className="flex items-center gap-2 text-[11.5px] font-semibold text-foreground pointer-events-none">
               <HugeiconsIcon
                 icon={activeTabItem.icon}
                 size={14}
@@ -303,6 +331,7 @@ export function SettingsModal() {
             <Button
               variant="ghost"
               size="icon"
+              data-no-drag
               onClick={closeSettings}
               className="size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
               title={`${t("windowControls.close")} (Esc)`}
@@ -313,7 +342,11 @@ export function SettingsModal() {
           </header>
 
           {/* Scrollable Content Body */}
-          <main className="min-h-0 flex-1 overflow-y-auto px-5 sm:px-8 py-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <main
+            ref={scrollContainerRef}
+            onScroll={(e) => setTabScroll(active, e.currentTarget.scrollTop)}
+            className="min-h-0 flex-1 overflow-y-auto px-5 sm:px-8 py-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             <div className="mx-auto w-full max-w-xl">
               <SettingsSearch onSelect={handleSearchSelect} />
               <div data-settings-section={active} className="mt-3.5">

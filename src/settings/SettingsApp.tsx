@@ -172,6 +172,10 @@ function readInitialTab(): SettingsTab {
   const t = url.searchParams.get("tab");
   if (t === "ai" || t === "connections") return "models";
   if (t && (VALID_TABS as string[]).includes(t)) return t as SettingsTab;
+  try {
+    const saved = localStorage.getItem("voktty-settings-last-tab") as SettingsTab | null;
+    if (saved && (VALID_TABS as string[]).includes(saved)) return saved;
+  } catch {}
   return "general";
 }
 
@@ -194,15 +198,31 @@ function SettingsSectionSkeleton() {
 export function SettingsApp() {
   const { t, language } = useTranslation();
   const [active, setActive] = useState<SettingsTab>(readInitialTab);
+  const scrollPositionsRef = React.useRef<Record<string, number>>({});
+  const mainRef = React.useRef<HTMLElement>(null);
   const init = usePreferencesStore((s) => s.init);
   const ActiveSection = TABS.find((t) => t.id === active)?.component;
+
+  const handleTabChange = (tab: SettingsTab) => {
+    setActive(tab);
+    try {
+      localStorage.setItem("voktty-settings-last-tab", tab);
+    } catch {}
+  };
+
   const handleSearchSelect = (entry: SettingsSearchEntry) => {
     navigateToSettingsEntry(
       entry,
       entry.targetTitleKey ? t(entry.targetTitleKey) : undefined,
-      setActive,
+      handleTabChange,
     );
   };
+
+  React.useLayoutEffect(() => {
+    if (!mainRef.current) return;
+    const targetScroll = scrollPositionsRef.current[active] ?? 0;
+    mainRef.current.scrollTop = targetScroll;
+  }, [active]);
 
   useEffect(() => {
     void init();
@@ -255,7 +275,7 @@ export function SettingsApp() {
         >
           <Tabs
             value={active}
-            onValueChange={(v) => setActive(v as SettingsTab)}
+            onValueChange={(v) => handleTabChange(v as SettingsTab)}
             orientation="horizontal"
             className="flex items-center"
             data-tauri-drag-region
@@ -281,7 +301,13 @@ export function SettingsApp() {
         )}
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto px-8 pt-6 pb-7 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <main
+        ref={mainRef}
+        onScroll={(e) => {
+          scrollPositionsRef.current[active] = e.currentTarget.scrollTop;
+        }}
+        className="min-h-0 flex-1 overflow-y-auto px-8 pt-6 pb-7 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         <div className="mx-auto w-full max-w-160">
           <SettingsSearch onSelect={handleSearchSelect} />
           <div data-settings-section={active} className="mt-5">

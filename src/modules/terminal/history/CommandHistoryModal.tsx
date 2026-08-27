@@ -39,10 +39,11 @@ import {
   Upload01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type React from "react";
+import { useDraggableModal } from "@/hooks/useDraggableModal";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -69,6 +70,15 @@ export function CommandHistoryModal() {
   const setSearchQuery = useCommandHistoryStore((s) => s.setSearchQuery);
   const shellFilter = useCommandHistoryStore((s) => s.shellFilter);
   const setShellFilter = useCommandHistoryStore((s) => s.setShellFilter);
+  const scrollPosition = useCommandHistoryStore((s) => s.scrollPosition);
+  const setScrollPosition = useCommandHistoryStore((s) => s.setScrollPosition);
+  const modalPosition = useCommandHistoryStore((s) => s.modalPosition);
+  const setModalPosition = useCommandHistoryStore((s) => s.setModalPosition);
+
+  const { position, dragHandleProps } = useDraggableModal({
+    initialPosition: modalPosition ?? undefined,
+    onPositionChange: setModalPosition,
+  });
 
   const [entries, setEntries] = useState<VokttyHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,6 +89,12 @@ export function CommandHistoryModal() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Restore scroll position when modal opens
+  useLayoutEffect(() => {
+    if (!isOpen || !listRef.current) return;
+    listRef.current.scrollTop = scrollPosition;
+  }, [isOpen, scrollPosition]);
 
   const loadEntries = useCallback(async () => {
     setLoading(true);
@@ -242,31 +258,40 @@ export function CommandHistoryModal() {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeHistory()}>
       <DialogContent
-        className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-background/95 backdrop-blur-md border-border/70 shadow-2xl rounded-2xl"
+        className="max-w-2xl max-h-[82vh] flex flex-col p-0 gap-0 overflow-hidden bg-popover text-popover-foreground border border-border/80 shadow-2xl rounded-lg transition-shadow"
+        style={{
+          transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+        }}
         onKeyDown={handleKeyDown}
       >
-        <DialogHeader className="px-5 pt-4 pb-3 border-b border-border/40 flex-row items-center justify-between space-y-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
-              <HugeiconsIcon icon={Clock01Icon} size={18} strokeWidth={2} />
-            </div>
+        <DialogHeader
+          {...dragHandleProps}
+          className="px-4 py-2.5 border-b border-border/40 flex-row items-center justify-between space-y-0 cursor-grab active:cursor-grabbing select-none"
+        >
+          <div className="flex items-center gap-2 pointer-events-none min-w-0">
+            <HugeiconsIcon
+              icon={Clock01Icon}
+              size={14}
+              strokeWidth={2}
+              className="text-primary shrink-0"
+            />
             <div>
-              <DialogTitle className="text-base font-semibold tracking-tight text-foreground">
+              <DialogTitle className="text-xs font-semibold tracking-tight text-foreground">
                 {t("terminal.history.title")}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10.5px] text-muted-foreground">
                 {t("terminal.history.subtitle")}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0 pr-6">
             <Button
               variant="outline"
               size="sm"
-              className="h-8 gap-1.5 text-xs font-medium"
+              className="h-6 px-2 gap-1 text-[11px] font-medium rounded border-border/70 bg-background/80 hover:bg-muted cursor-pointer"
               onClick={() => fileInputRef.current?.click()}
             >
-              <HugeiconsIcon icon={Upload01Icon} size={14} />
+              <HugeiconsIcon icon={Upload01Icon} size={12} />
               {t("terminal.history.import")}
             </Button>
             <input
@@ -279,43 +304,43 @@ export function CommandHistoryModal() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 gap-1.5 text-xs font-medium"
+              className="h-6 px-2 gap-1 text-[11px] font-medium rounded border-border/70 bg-background/80 hover:bg-muted cursor-pointer"
               onClick={handleExport}
             >
-              <HugeiconsIcon icon={Download01Icon} size={14} />
+              <HugeiconsIcon icon={Download01Icon} size={12} />
               {t("terminal.history.export")}
             </Button>
           </div>
         </DialogHeader>
 
         {/* Search and Filters Bar */}
-        <div className="px-5 py-3 border-b border-border/30 bg-muted/20 flex flex-col gap-2.5">
+        <div className="px-4 py-2 border-b border-border/30 bg-muted/20 flex flex-col gap-2">
           <div className="relative">
             <HugeiconsIcon
               icon={Search01Icon}
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
             />
             <Input
               ref={inputRef}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t("terminal.history.searchPlaceholder")}
-              className="pl-9 pr-8 h-9 text-sm font-mono bg-background/60 border-border/60 focus-visible:ring-primary/30"
+              className="pl-8 pr-7 h-7.5 text-xs font-mono bg-background border-border/70 rounded-md focus-visible:ring-1 focus-visible:ring-primary/40"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
               >
-                <HugeiconsIcon icon={Cancel01Icon} size={14} />
+                <HugeiconsIcon icon={Cancel01Icon} size={12} />
               </button>
             )}
           </div>
 
           <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               {(
                 [
                   { id: "all", label: t("terminal.history.filterAll") },
@@ -333,9 +358,9 @@ export function CommandHistoryModal() {
                   key={tab.id}
                   variant={shellFilter === tab.id ? "secondary" : "ghost"}
                   size="sm"
-                  className={`h-7 px-2.5 text-xs rounded-md ${
+                  className={`h-6 px-2 text-[11px] rounded ${
                     shellFilter === tab.id
-                      ? "bg-accent font-medium text-accent-foreground shadow-xs"
+                      ? "bg-accent font-medium text-accent-foreground shadow-xs border border-border/40"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                   onClick={() => setShellFilter(tab.id as HistoryShellFilter)}
@@ -349,7 +374,7 @@ export function CommandHistoryModal() {
               <Button
                 variant={sortMode === "recent" ? "secondary" : "ghost"}
                 size="sm"
-                className="h-7 px-2 text-xs"
+                className="h-6 px-2 text-[11px] rounded"
                 onClick={() => setSortMode("recent")}
               >
                 {t("terminal.history.sortRecent")}
@@ -357,7 +382,7 @@ export function CommandHistoryModal() {
               <Button
                 variant={sortMode === "frequent" ? "secondary" : "ghost"}
                 size="sm"
-                className="h-7 px-2 text-xs"
+                className="h-6 px-2 text-[11px] rounded"
                 onClick={() => setSortMode("frequent")}
               >
                 {t("terminal.history.sortFrequent")}
@@ -369,21 +394,22 @@ export function CommandHistoryModal() {
         {/* History Items List */}
         <div
           ref={listRef}
-          className="flex-1 overflow-y-auto min-h-[300px] max-h-[460px] p-2 space-y-1"
+          onScroll={(e) => setScrollPosition(e.currentTarget.scrollTop)}
+          className="flex-1 overflow-y-auto min-h-[260px] max-h-[400px] p-1.5 space-y-0.5"
         >
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
+            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
               <HugeiconsIcon
                 icon={Clock01Icon}
-                size={24}
+                size={20}
                 className="animate-spin text-primary"
               />
               <span className="text-xs">{t("terminal.history.loading")}</span>
             </div>
           ) : sortedEntries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
-              <HugeiconsIcon icon={TerminalIcon} size={28} className="opacity-40" />
-              <p className="text-sm font-medium text-foreground/80">
+            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-1.5">
+              <HugeiconsIcon icon={TerminalIcon} size={22} className="opacity-40" />
+              <p className="text-xs font-medium text-foreground/80">
                 {t("terminal.history.noResults")}
               </p>
             </div>
@@ -406,17 +432,17 @@ export function CommandHistoryModal() {
                   data-index={i}
                   onDoubleClick={() => handleCopy(entry.cmd)}
                   onClick={() => setSelectedIndex(i)}
-                  className={`group flex items-center justify-between gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                  className={`group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md cursor-pointer transition-colors ${
                     isSelected
                       ? "bg-accent/80 text-accent-foreground shadow-xs border border-border/50"
                       : "hover:bg-muted/40 text-foreground/90"
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <HugeiconsIcon
                       icon={Clock01Icon}
-                      size={14}
-                      className="text-muted-foreground/60 shrink-0"
+                      size={12}
+                      className="text-muted-foreground/50 shrink-0"
                     />
                     <span className="font-mono text-xs truncate select-text leading-relaxed">
                       {entry.cmd}
@@ -428,7 +454,7 @@ export function CommandHistoryModal() {
                     {isPowershell && (
                       <Badge
                         variant="secondary"
-                        className="text-[10px] h-4.5 px-1.5 font-normal bg-sky-500/10 text-sky-400 border-sky-500/20"
+                        className="text-[9.5px] h-4 px-1 font-mono font-normal bg-sky-500/10 text-sky-500 border-sky-500/20"
                       >
                         PS
                       </Badge>
@@ -436,7 +462,7 @@ export function CommandHistoryModal() {
                     {isUnix && (
                       <Badge
                         variant="secondary"
-                        className="text-[10px] h-4.5 px-1.5 font-normal bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                        className="text-[9.5px] h-4 px-1 font-mono font-normal bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
                       >
                         {entry.shell_type}
                       </Badge>
@@ -444,28 +470,28 @@ export function CommandHistoryModal() {
                     {entry.category === "ssh" && (
                       <Badge
                         variant="secondary"
-                        className="text-[10px] h-4.5 px-1.5 font-normal bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        className="text-[9.5px] h-4 px-1 font-mono font-normal bg-amber-500/10 text-amber-500 border-amber-500/20"
                       >
                         SSH
                       </Badge>
                     )}
                     {entry.count > 1 && (
-                      <span className="text-[10px] font-mono text-muted-foreground/70 bg-muted/50 px-1.5 py-0.5 rounded">
+                      <span className="text-[9.5px] font-mono text-muted-foreground/70 bg-muted/60 px-1 py-0.2 rounded">
                         x{entry.count}
                       </span>
                     )}
                     {entry.last > 0 && (
-                      <span className="text-[10px] text-muted-foreground/60 min-w-[45px] text-right">
+                      <span className="text-[10px] text-muted-foreground/60 min-w-[40px] text-right">
                         {formatRelativeTime(entry.last)}
                       </span>
                     )}
 
                     {/* Action buttons on hover/selection */}
-                    <div className="flex items-center gap-1 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 rounded hover:bg-background/80"
+                        className="h-6 w-6 rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
                         title={t("terminal.history.copy")}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -474,45 +500,45 @@ export function CommandHistoryModal() {
                       >
                         <HugeiconsIcon
                           icon={isCopied ? CheckmarkCircle02Icon : Copy01Icon}
-                          size={13}
+                          size={12}
                           className={isCopied ? "text-emerald-400" : ""}
                         />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 rounded hover:bg-background/80"
+                        className="h-6 w-6 rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
                         title={t("terminal.history.insert")}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleInsert(entry.cmd);
                         }}
                       >
-                        <HugeiconsIcon icon={ArrowRight01Icon} size={13} />
+                        <HugeiconsIcon icon={ArrowRight01Icon} size={12} />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 rounded hover:bg-primary/20 text-primary"
+                        className="h-6 w-6 rounded hover:bg-primary/20 text-primary cursor-pointer"
                         title={t("terminal.history.run")}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleRun(entry.cmd);
                         }}
                       >
-                        <HugeiconsIcon icon={PlayIcon} size={13} />
+                        <HugeiconsIcon icon={PlayIcon} size={12} />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 rounded hover:bg-destructive/20 text-destructive/80"
+                        className="h-6 w-6 rounded hover:bg-destructive/20 text-destructive/80 cursor-pointer"
                         title={t("terminal.history.delete")}
                         onClick={(e) => {
                           e.stopPropagation();
                           void handleDelete(entry.cmd);
                         }}
                       >
-                        <HugeiconsIcon icon={Cancel01Icon} size={13} />
+                        <HugeiconsIcon icon={Cancel01Icon} size={12} />
                       </Button>
                     </div>
                   </div>
@@ -523,8 +549,8 @@ export function CommandHistoryModal() {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-5 py-2.5 border-t border-border/40 bg-muted/10 flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-3">
+        <div className="px-4 py-2 border-t border-border/40 bg-muted/10 flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-2.5">
             <span>
               {sortedEntries.length} {t("terminal.history.countLabel")}
             </span>
@@ -532,23 +558,23 @@ export function CommandHistoryModal() {
               <button
                 type="button"
                 onClick={handleClear}
-                className="text-destructive/80 hover:text-destructive flex items-center gap-1 hover:underline"
+                className="text-destructive/80 hover:text-destructive flex items-center gap-1 hover:underline cursor-pointer"
               >
-                <HugeiconsIcon icon={CleanIcon} size={12} />
+                <HugeiconsIcon icon={CleanIcon} size={11} />
                 {t("terminal.history.clearAll")}
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-3 font-mono text-[11px] opacity-75">
+          <div className="flex items-center gap-2.5 font-mono text-[10.5px] opacity-75">
             <span>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border/50 text-[10px]">
+              <kbd className="px-1 py-0.2 rounded bg-muted border border-border/50 text-[9px]">
                 ↵
               </kbd>{" "}
               {t("terminal.history.hintInsert")}
             </span>
             <span>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border/50 text-[10px]">
+              <kbd className="px-1 py-0.2 rounded bg-muted border border-border/50 text-[9px]">
                 ⇧↵
               </kbd>{" "}
               {t("terminal.history.hintRun")}
