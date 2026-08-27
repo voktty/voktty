@@ -17,6 +17,7 @@ type Props = {
   onSearchReady: (leafId: number, addon: SearchAddon) => void;
   onCwd: (leafId: number, cwd: string) => void;
   onExit: (leafId: number, code: number) => void;
+  onTitle?: (leafId: number, title: string) => void;
   onFocusLeaf: (tabId: number, leafId: number) => void;
   placements?: ReadonlyMap<number, WorkspacePlacement>;
 };
@@ -26,6 +27,7 @@ type Bundle = {
   onSearchReady: (leafId: number, addon: SearchAddon) => void;
   onCwd: (leafId: number, cwd: string) => void;
   onExit: (leafId: number, code: number) => void;
+  onTitle: (leafId: number, title: string) => void;
 };
 
 export function TerminalStack({
@@ -35,6 +37,7 @@ export function TerminalStack({
   onSearchReady,
   onCwd,
   onExit,
+  onTitle,
   onFocusLeaf,
   placements,
 }: Props) {
@@ -49,6 +52,7 @@ export function TerminalStack({
   const searchReadyRef = useRef(onSearchReady);
   const cwdRef = useRef(onCwd);
   const exitRef = useRef(onExit);
+  const titleRef = useRef(onTitle);
   useEffect(() => {
     registerRef.current = registerHandle;
   }, [registerHandle]);
@@ -61,6 +65,9 @@ export function TerminalStack({
   useEffect(() => {
     exitRef.current = onExit;
   }, [onExit]);
+  useEffect(() => {
+    titleRef.current = onTitle;
+  }, [onTitle]);
 
   const bundles = useRef(new Map<number, Bundle>());
   const getBundle = (leafId: number): Bundle => {
@@ -71,6 +78,7 @@ export function TerminalStack({
         onSearchReady: (id, addon) => searchReadyRef.current(id, addon),
         onCwd: (id, cwd) => cwdRef.current(id, cwd),
         onExit: (id, code) => exitRef.current(id, code),
+        onTitle: (id, title) => titleRef.current?.(id, title),
       };
       bundles.current.set(leafId, b);
     }

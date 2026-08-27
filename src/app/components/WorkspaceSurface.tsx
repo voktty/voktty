@@ -25,6 +25,7 @@ export type WorkspaceSurfaceProps = {
   onSearchReady: TerminalStackProps["onSearchReady"];
   onCwd: TerminalStackProps["onCwd"];
   onExit: TerminalStackProps["onExit"];
+  onTitle?: TerminalStackProps["onTitle"];
   onFocusLeaf: TerminalStackProps["onFocusLeaf"];
   registerEditorHandle: EditorStackProps["registerHandle"];
   registerEditorGroupHandle: EditorStackProps["registerGroupHandle"];
@@ -70,6 +71,7 @@ export function WorkspaceSurface({
   onSearchReady,
   onCwd,
   onExit,
+  onTitle,
   onFocusLeaf,
   registerEditorHandle,
   registerEditorGroupHandle,
@@ -125,6 +127,7 @@ export function WorkspaceSurface({
           onSearchReady={onSearchReady}
           onCwd={onCwd}
           onExit={onExit}
+          onTitle={onTitle}
           onFocusLeaf={onFocusLeaf}
           placements={placements ? placementByTabId : undefined}
         />

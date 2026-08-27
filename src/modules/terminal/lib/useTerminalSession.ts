@@ -83,6 +83,7 @@ type Callbacks = {
   onSearchReady?: (addon: SearchAddon) => void;
   onExit?: (code: number) => void;
   onCwd?: (cwd: string) => void;
+  onTitle?: (title: string) => void;
 };
 
 type Session = {
@@ -1050,11 +1051,18 @@ function bindLeafToSlot(leafId: number, s: Session): void {
         shellState,
       );
       const osc52 = registerOsc52ClipboardHandler(term);
+      const titleDisposable = term.onTitleChange((newTitle) => {
+        const trimmed = (newTitle || "").trim();
+        if (trimmed) {
+          s.callbacks.onTitle?.(trimmed);
+        }
+      });
       return [
         prompt.dispose,
         cwd,
         osc52,
         osc9,
+        () => titleDisposable.dispose(),
         () => {
           onScrollDisposable.dispose();
           onWriteDisposable.dispose();
@@ -1248,6 +1256,7 @@ type Options = {
   onSearchReady?: (addon: SearchAddon) => void;
   onExit?: (code: number) => void;
   onCwd?: (cwd: string) => void;
+  onTitle?: (title: string) => void;
 };
 
 export function useTerminalSession({
@@ -1262,9 +1271,10 @@ export function useTerminalSession({
   onSearchReady,
   onExit,
   onCwd,
+  onTitle,
 }: Options) {
-  const cbRef = useRef({ onSearchReady, onExit, onCwd });
-  cbRef.current = { onSearchReady, onExit, onCwd };
+  const cbRef = useRef({ onSearchReady, onExit, onCwd, onTitle });
+  cbRef.current = { onSearchReady, onExit, onCwd, onTitle };
 
   // initialCwd seeds the first PTY spawn only. It must NOT be an effect dep:
   // OSC 7 updates the leaf cwd on every `cd`, and re-running the bind effect
@@ -1289,6 +1299,7 @@ export function useTerminalSession({
         onSearchReady: (a) => cbRef.current.onSearchReady?.(a),
         onExit: (c) => cbRef.current.onExit?.(c),
         onCwd: (c) => cbRef.current.onCwd?.(c),
+        onTitle: (t) => cbRef.current.onTitle?.(t),
       });
       if (s.visibleNow && s.focusedNow && !s.blocks) focusSlot(leafId);
     });

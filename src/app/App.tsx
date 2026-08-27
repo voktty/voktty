@@ -1366,7 +1366,7 @@ export default function App() {
         }
         if (activeSpaceId)
           useSpaces.getState().setEnv(activeSpaceId, connected);
-        const opened = newSshTab(connected.root, conn.name, connected);
+        const opened = newSshTab(connected.root, targetLabel, connected);
         await waitForLeafConnection(opened.leafId);
         useWorkspaceEnvStore.getState().clearConnection(envCandidate);
         toast.success(t("ssh.connected", { name: targetLabel }), {
@@ -2436,6 +2436,18 @@ export default function App() {
       }
     },
     [setLeafCwd, workspaceEnv],
+  );
+
+  const handleTerminalTitle = useCallback(
+    (leafId: number, title: string) => {
+      const tab = tabsRef.current.find(
+        (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
+      );
+      if (tab && tab.kind === "terminal" && !tab.customTitle) {
+        updateTab(tab.id, { title });
+      }
+    },
+    [updateTab],
   );
 
   const handlePrepareExplorerNavigationRoot = useCallback(
@@ -3988,6 +4000,7 @@ export default function App() {
                             registerTerminalHandle={registerTerminalHandle}
                             onSearchReady={handleSearchReady}
                             onCwd={handleTerminalCwd}
+                            onTitle={handleTerminalTitle}
                             onExit={handleLeafExit}
                             onFocusLeaf={handleFocusLeaf}
                             registerEditorHandle={registerEditorHandle}
@@ -4184,6 +4197,7 @@ export default function App() {
               onRunCommand={handleRunTerminalCommand}
               onOpenFile={(path) => openFileTab(path, true)}
               onOpenDevServer={openDevServerPreview}
+              onOpenPreview={openPreviewTab}
               searchTarget={searchTarget}
               searchRef={searchInlineRef}
               hasComposer={hasComposer}

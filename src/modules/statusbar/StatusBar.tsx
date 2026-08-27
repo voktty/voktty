@@ -55,6 +55,7 @@ type Props = {
   onRunCommand?: (command: string) => void;
   onOpenFile?: (path: string) => void;
   onOpenDevServer: (capture: DevServerCapture) => void;
+  onOpenPreview?: (url: string) => void;
   searchTarget: SearchTarget;
   searchRef: RefObject<SearchInlineHandle | null>;
   /** True only after AI is enabled and the current configuration is verified. */
@@ -84,6 +85,7 @@ export function StatusBar({
   onRunCommand,
   onOpenFile,
   onOpenDevServer,
+  onOpenPreview,
   searchTarget,
   searchRef,
   hasComposer,
@@ -114,7 +116,13 @@ export function StatusBar({
         />
         <LspStatusPill filePath={filePath ?? null} />
         <DiagnosticsBadge filePath={filePath ?? null} />
-        <DevServerPill leafId={activeLeafId} onOpen={onOpenDevServer} />
+        <DevServerPill
+          leafId={activeLeafId}
+          filePath={filePath}
+          cwd={cwd}
+          onOpen={onOpenDevServer}
+          onOpenUrl={onOpenPreview}
+        />
         {privateActive ? (
           <Tooltip>
             <TooltipTrigger asChild>

@@ -39,6 +39,9 @@ describe("dev server output capture", () => {
       normalizeCapturedDevServerUrl("http://user:secret@localhost:3000"),
     ).toBeNull();
     expect(normalizeCapturedDevServerUrl("http://127.999.0.1:3000")).toBeNull();
+    expect(normalizeCapturedDevServerUrl("localhost")).toBeNull();
+    expect(normalizeCapturedDevServerUrl("localhost:2")).toBeNull();
+    expect(normalizeCapturedDevServerUrl("127.0.0.1")).toBeNull();
   });
 
   it("creates stable workspace scopes across Windows path casing", () => {
