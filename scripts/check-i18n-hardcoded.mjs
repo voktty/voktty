@@ -63,7 +63,7 @@ const internalMetadataPaths = [
   /\/modules\/editor\/lib\/externalFormat\.ts$/,
   /\/modules\/i18n\/types\.ts$/,
   /\/modules\/terminal\/scripts\/discoverProjectScripts\.ts$/,
-  /\/modules\/theme\/themes\//,
+  /\/modules\/theme\//,
 ];
 
 const technicalPatterns = [
