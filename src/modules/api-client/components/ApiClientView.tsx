@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import {
   Clock01Icon,
   Delete02Icon,
+  FlashIcon,
   GlobalIcon,
   Link01Icon,
   Shield01Icon,
@@ -11,6 +12,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useApiClientStore } from "../store/apiClientStore";
+import { ApiBrowserView } from "./ApiBrowserView";
 import { RequestEditor } from "./RequestEditor";
 import { ResponseViewer } from "./ResponseViewer";
 import { SandboxProbePanel } from "./SandboxProbePanel";
@@ -47,6 +49,16 @@ export function ApiClientView() {
             >
               <HugeiconsIcon icon={Link01Icon} size={12} />
               <span>Request Builder</span>
+            </Button>
+
+            <Button
+              size="sm"
+              variant={activeTab === "browser" ? "secondary" : "ghost"}
+              onClick={() => setActiveTab("browser")}
+              className="h-6 gap-1 px-2 text-[11px] font-medium"
+            >
+              <HugeiconsIcon icon={FlashIcon} size={12} />
+              <span>API Browser</span>
             </Button>
 
             <Button
@@ -97,6 +109,8 @@ export function ApiClientView() {
           </div>
         )}
 
+        {activeTab === "browser" && <ApiBrowserView />}
+
         {activeTab === "sandbox" && <SandboxProbePanel />}
 
         {activeTab === "scenarios" && <ScenarioRunner />}
@@ -110,30 +124,33 @@ export function ApiClientView() {
                   size="sm"
                   variant="ghost"
                   onClick={clearHistory}
-                  className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-destructive"
+                  className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/10"
                 >
-                  <HugeiconsIcon icon={Delete02Icon} size={12} /> Clear History
+                  <HugeiconsIcon icon={Delete02Icon} size={12} />
+                  <span>Clear History</span>
                 </Button>
               )}
             </div>
 
             {history.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground/60">
-                No request history yet.
+              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+                No requests recorded yet.
               </div>
             ) : (
-              <div className="flex flex-col gap-1.5 overflow-y-auto">
-                {history.map((item, idx) => (
+              <div className="flex flex-col gap-2 overflow-auto">
+                {history.map((item, index) => (
                   <div
-                    key={idx}
-                    onClick={() => loadFromHistory(idx)}
-                    className="flex cursor-pointer items-center justify-between rounded border border-border/50 bg-muted/20 p-2 text-xs transition-colors hover:bg-muted/50"
+                    key={`${item.request.id}-${item.timestamp}-${index}`}
+                    onClick={() => loadFromHistory(index)}
+                    className="flex cursor-pointer items-center justify-between rounded border border-border/40 bg-muted/20 p-2 text-xs transition-colors hover:border-primary/40 hover:bg-muted/40"
                   >
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="font-mono text-[10px] font-bold">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="font-mono font-bold text-primary">
                         {item.request.method}
-                      </Badge>
-                      <span className="font-mono text-xs text-foreground">{item.request.url}</span>
+                      </span>
+                      <span className="truncate font-mono text-muted-foreground">
+                        {item.request.url}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -143,14 +160,14 @@ export function ApiClientView() {
                           className={cn(
                             "text-[10px]",
                             item.response.status >= 200 && item.response.status < 300
-                              ? "border-emerald-500/40 text-emerald-600"
-                              : "border-rose-500/40 text-rose-600",
+                              ? "text-emerald-500 border-emerald-500/30"
+                              : "text-rose-500 border-rose-500/30",
                           )}
                         >
                           {item.response.status}
                         </Badge>
                       )}
-                      <span className="text-[10.5px] text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground">
                         {new Date(item.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
