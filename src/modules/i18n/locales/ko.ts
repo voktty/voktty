@@ -2,6 +2,8 @@ import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const koBase = mergeLocale(en, {
   common: {
+    textCopied: "클립보드에 복사되었습니다",
+    textPasted: "텍스트가 붙여넣어졌습니다",
     save: "저장",
     saved: "저장됨",
     cancel: "취소",
@@ -1292,6 +1294,18 @@ const koBase = mergeLocale(en, {
     stage: "스테이징",
   },
   editor: {
+    highlightText: "선택 항목 강조",
+    highlightColorYellow: "노란색",
+    highlightColorGreen: "초록색",
+    highlightColorBlue: "파란색",
+    highlightColorPink: "분홍색",
+    highlightColorPurple: "보라색",
+    removeHighlight: "강조 표시 제거",
+    clearAllHighlights: "모든 강조 표시 지우기",
+    highlightAdded: "강조 표시 저장됨",
+    highlightRemoved: "강조 표시 제거됨",
+    highlightsCleared: "모든 강조 표시 지워짐",
+    viewSourceCode: "소스 코드 보기",
     dialog: {
       nameRequired: "이름은 필수 항목입니다",
       pathMustBeRelative: "경로는 상대 경로여야 합니다",

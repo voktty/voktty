@@ -2,6 +2,8 @@ import type { TranslationSchema } from "./en";
 
 export const hi: TranslationSchema = {
   common: {
+    textCopied: "क्लिपबोर्ड पर टेक्स्ट कॉपी किया गया",
+    textPasted: "टेक्स्ट पेस्ट किया गया",
     save: "सहेजें",
     saved: "सहेजा गया",
     cancel: "रद्द करें",
@@ -1868,6 +1870,18 @@ export const hi: TranslationSchema = {
     stage: "स्टेज",
   },
   editor: {
+    highlightText: "चयन हाइलाइट करें",
+    highlightColorYellow: "पीला",
+    highlightColorGreen: "हरा",
+    highlightColorBlue: "नीला",
+    highlightColorPink: "गुलाबी",
+    highlightColorPurple: "बैंगनी",
+    removeHighlight: "हाइलाइट हटाएं",
+    clearAllHighlights: "सभी हाइलाइट हटाएं",
+    highlightAdded: "हाइलाइट सहेजा गया",
+    highlightRemoved: "हाइलाइट हटाया गया",
+    highlightsCleared: "सभी हाइलाइट हटाए गए",
+    viewSourceCode: "स्रोत कोड देखें",
     externalChangeDetected: "फ़ाइल {name} को बाह्य रूप से संशोधित किया गया था।",
     externalChangeConflict:
       "फ़ाइल {name} को बाह्य रूप से संशोधित किया गया था और आपके पास असहेजे गए परिवर्तन हैं।",

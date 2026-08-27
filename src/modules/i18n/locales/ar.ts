@@ -2,6 +2,8 @@ import type { TranslationSchema } from "./en";
 
 export const ar: TranslationSchema = {
   common: {
+    textCopied: "تم نسخ النص إلى الحافظة",
+    textPasted: "تم لصق النص",
     save: "حفظ",
     saved: "تم الحفظ",
     cancel: "إلغاء",
@@ -1866,6 +1868,18 @@ export const ar: TranslationSchema = {
     stage: "إدراج",
   },
   editor: {
+    highlightText: "تمييز التحديد",
+    highlightColorYellow: "أصفر",
+    highlightColorGreen: "أخضر",
+    highlightColorBlue: "أزرق",
+    highlightColorPink: "وردي",
+    highlightColorPurple: "أرجواني",
+    removeHighlight: "إزالة التمييز",
+    clearAllHighlights: "مسح كافة التمييزات",
+    highlightAdded: "تم حفظ التمييز",
+    highlightRemoved: "تمت إزالة التمييز",
+    highlightsCleared: "تم مسح كافة التمييزات",
+    viewSourceCode: "عرض التعليمات البرمجية المصدر",
     externalChangeDetected: "تم تعديل الملف {name} خارجياً.",
     externalChangeConflict:
       "تم تعديل الملف {name} خارجياً ولديك تغييرات غير محفوظة.",
