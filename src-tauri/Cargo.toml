@@ -89,6 +89,7 @@ tokio = { version = "1", default-features = false, features = [
 	"io-util",
 	"net",
 	"rt",
+	"rt-multi-thread",
 	"sync",
 	"time",
 ] }
@@ -114,6 +115,9 @@ ironrdp-tls = { version = "0.2", features = ["rustls"] }
 [dev-dependencies]
 proptest = "1"
 tempfile = "3"
+http-body-util = "0.1"
+hyper = { version = "1.9", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

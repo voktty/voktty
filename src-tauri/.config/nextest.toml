@@ -1,0 +1,8 @@
+# MCP transport fixtures launch external Node processes and ephemeral TCP servers.
+# Keep those fixtures mutually exclusive across nextest's separate test processes.
+[test-groups]
+mcp-transport-fixtures = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'test(modules::mcp::http::tests::) | test(modules::mcp::stdio::tests::)'
+test-group = 'mcp-transport-fixtures'
