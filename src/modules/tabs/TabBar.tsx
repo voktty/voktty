@@ -83,7 +83,7 @@ import {
 } from "react";
 import { TabDetailsHoverCard } from "./components/TabDetailsHoverCard";
 import { useTabContextMenuStore } from "./lib/tabContextMenuState";
-import { labelFor } from "./lib/tabLabel";
+import { isSshOrRemoteSession, labelFor } from "./lib/tabLabel";
 import {
   type TabProcessStatus,
   useTabProcessStatus,
@@ -1099,6 +1099,15 @@ function DropIndicator() {
 function resolveTerminalTechIcon(title: string): string | null {
   const lower = title.toLowerCase().trim();
   if (
+    lower.startsWith("ssh ") ||
+    lower.startsWith("ssh:") ||
+    lower.startsWith("ssh_") ||
+    lower === "ssh" ||
+    /^[a-z0-9._-]+@[a-z0-9._-]+/i.test(lower)
+  ) {
+    return null;
+  }
+  if (
     lower.startsWith("python") ||
     lower.startsWith("py ") ||
     lower === "python3"
@@ -1396,7 +1405,7 @@ export function TabIcon({
     }
     if (
       tab.workspaceEnv?.kind === "ssh" ||
-      tab.title.toLowerCase().startsWith("ssh")
+      isSshOrRemoteSession(tab)
     ) {
       return (
         <HugeiconsIcon

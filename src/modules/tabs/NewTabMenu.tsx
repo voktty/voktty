@@ -29,7 +29,6 @@ import {
   FolderOpenIcon,
   GitBranchIcon,
   GlobalIcon,
-  Globe02Icon,
   IncognitoIcon,
   PencilEdit02Icon,
   PlusSignIcon,
@@ -55,7 +54,7 @@ export type NewTabMenuProps = {
   onNewWsl?: (distro: string) => void;
   onNewBlock: () => void;
   onNewPrivate: () => void;
-  onNewPreview: () => void;
+  onNewPreview?: () => void;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
   onNewRdp?: (options?: {
@@ -288,7 +287,6 @@ export function NewTabMenuItems({
   onNewWsl,
   onNewBlock,
   onNewPrivate,
-  onNewPreview,
   onNewEditor,
   onNewApiClient,
   onConnectRemote,
@@ -482,22 +480,7 @@ export function NewTabMenuItems({
         shortcut={fmtShortcut(MOD_KEY, "E")}
       />
 
-      {/* 5. Vista Previa Web */}
-      <NewTabMenuItem
-        onSelect={onNewPreview}
-        customIcon={
-          <HugeiconsIcon
-            icon={Globe02Icon}
-            size={14}
-            strokeWidth={1.75}
-            className="shrink-0 opacity-80"
-          />
-        }
-        label={t("commandPalette.commands.newWebPreview")}
-        shortcut={fmtShortcut(MOD_KEY, "P")}
-      />
-
-      {/* 6. Gráfico de Commits */}
+      {/* 5. Gráfico de Commits */}
       <NewTabMenuItem
         onSelect={onNewGitGraph}
         customIcon={
