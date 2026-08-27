@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use tokio::time::{sleep, Duration};
 
 use super::http_engine::{
@@ -101,8 +101,8 @@ pub struct ApiScenarioResultPayload {
 }
 
 fn compute_hmac_sha256(secret: &str, data: &str) -> String {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC can take key of any size");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(data.as_bytes());
     let result = mac.finalize();
     hex::encode(result.into_bytes())
@@ -138,7 +138,10 @@ pub async fn dispatch_mock_webhook(
             if let Some(ref secret) = dispatch.secret {
                 let signed_payload = format!("{now_ts}.{payload_str}");
                 let sig = compute_hmac_sha256(secret, &signed_payload);
-                headers.insert("stripe-signature".to_string(), format!("t={now_ts},v1={sig}"));
+                headers.insert(
+                    "stripe-signature".to_string(),
+                    format!("t={now_ts},v1={sig}"),
+                );
             }
         }
         "github" => {
@@ -303,7 +306,9 @@ fn evaluate_assertion(assertion: &ApiAssertion, resp: &ApiResponsePayload) -> Ap
             ApiAssertionResult {
                 assertion: assertion.clone(),
                 passed,
-                actual: Some(serde_json::Value::String(resp.body.chars().take(200).collect())),
+                actual: Some(serde_json::Value::String(
+                    resp.body.chars().take(200).collect(),
+                )),
                 message: if passed {
                     format!("Body contains substring '{expected_substr}'")
                 } else {
@@ -363,7 +368,8 @@ pub async fn run_api_scenario(
                         assertion_results.push(eval);
                     }
 
-                    let step_passed = all_assertions_passed && resp.status >= 200 && resp.status < 400;
+                    let step_passed =
+                        all_assertions_passed && resp.status >= 200 && resp.status < 400;
                     if step_passed {
                         passed_steps += 1;
                     } else {
