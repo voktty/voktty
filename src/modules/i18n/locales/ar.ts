@@ -3008,6 +3008,7 @@ export const ar: TranslationSchema = {
     somethingWentWrong: "حدث خطأ ما",
     errorIn: "خطأ في {name}",
     tryAgain: "حاول مجدداً",
+    stackTrace: "تتبع مكدس الاستدعاءات",
     editorLanguageServerFormatFailed: "فشل تنسيق خادم اللغة",
     editorFormatOnSaveSkipped: "تم تخطي التنسيق عند الحفظ",
     editorNoFormatter:

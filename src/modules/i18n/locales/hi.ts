@@ -3010,6 +3010,7 @@ export const hi: TranslationSchema = {
     somethingWentWrong: "कुछ गलत हो गया",
     errorIn: "{name} में त्रुटि",
     tryAgain: "पुनः प्रयास करें",
+    stackTrace: "स्टैक ट्रेस",
     editorLanguageServerFormatFailed: "भाषा सर्वर प्रारूप विफल रहा",
     editorFormatOnSaveSkipped: "सहेजने पर फ़ॉर्मेट छोड़ दिया गया",
     editorNoFormatter:

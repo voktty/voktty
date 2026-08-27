@@ -1999,6 +1999,7 @@ const koBase = mergeLocale(en, {
     somethingWentWrong: "문제가 발생했습니다",
     errorIn: "{name}에서 오류 발생",
     tryAgain: "다시 시도",
+    stackTrace: "스택 추적",
     editorLanguageServerFormatFailed: "언어 서버 서식 지정에 실패했습니다",
     editorFormatOnSaveSkipped: "저장 시 서식 지정을 건너뛰었습니다",
     editorNoFormatter:

@@ -3012,6 +3012,7 @@ export const en = {
     somethingWentWrong: "Something went wrong",
     errorIn: "Error in {name}",
     tryAgain: "Try again",
+    stackTrace: "Stack trace",
     editorLanguageServerFormatFailed: "Language server format failed",
     editorFormatOnSaveSkipped: "Format on save skipped",
     editorNoFormatter:
