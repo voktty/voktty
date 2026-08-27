@@ -88,8 +88,11 @@ export default function ShellInput({
       getCwd: () => cbRef.current.getCwd(),
       onChange: (text) =>
         setLeafInputActivity(leafIdRef.current, text.length > 0),
-      suggest: historySuggest,
-      historyList,
+      suggest: (line) => historySuggest(line),
+      historyList: async (query, limit) => {
+        const entries = await historyList(query, undefined, limit);
+        return entries.map((e) => e.cmd);
+      },
       onSubmit: (text) => {
         historyRecord(text);
         const first = text.trim().split(/\s+/)[0];

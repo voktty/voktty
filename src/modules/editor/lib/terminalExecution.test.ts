@@ -10,6 +10,7 @@ import type { Tab } from "@/modules/tabs/lib/useTabs";
 import { createTabIdentity } from "@/modules/tabs/lib/tabIdentity";
 
 const terminalMocks = vi.hoisted(() => ({
+  getActiveTerminalLeafId: vi.fn<() => number | null>(),
   getAnyLiveTerminalLeafId: vi.fn<() => number | null>(),
   submitToLeaf: vi.fn(),
 }));
@@ -21,6 +22,7 @@ vi.mock("sonner", () => ({
 
 describe("terminalExecution", () => {
   beforeEach(() => {
+    terminalMocks.getActiveTerminalLeafId.mockReset();
     terminalMocks.getAnyLiveTerminalLeafId.mockReset();
     terminalMocks.submitToLeaf.mockReset();
   });
@@ -85,6 +87,7 @@ describe("terminalExecution", () => {
   });
 
   it("sends the active editor selection to an available terminal", () => {
+    terminalMocks.getActiveTerminalLeafId.mockReturnValue(42);
     terminalMocks.getAnyLiveTerminalLeafId.mockReturnValue(42);
     const state = EditorState.create({
       doc: "echo selected\necho ignored",
@@ -100,6 +103,7 @@ describe("terminalExecution", () => {
   });
 
   it("does not claim success when no terminal is available", () => {
+    terminalMocks.getActiveTerminalLeafId.mockReturnValue(null);
     terminalMocks.getAnyLiveTerminalLeafId.mockReturnValue(null);
     const state = EditorState.create({ doc: "echo missing" });
     const fakeView = { state } as unknown as EditorView;

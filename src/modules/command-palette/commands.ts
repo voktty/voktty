@@ -5,13 +5,14 @@ import { downloadConfiguration } from "@/modules/settings/configExport";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { stopAllSshTunnels } from "@/modules/ssh/tunnels";
 import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
-import { leafIds } from "@/modules/terminal";
+import { leafIds, useCommandHistoryStore } from "@/modules/terminal";
 import { useVaultStore } from "@/modules/vault";
 import {
   Alert02Icon,
   Cancel01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
+  Clock01Icon,
   CodeIcon,
   DashboardSquare01Icon,
   Download01Icon,
@@ -430,6 +431,24 @@ export function createCommandItems(
       icon: IncognitoIcon,
       shortcutId: "tab.newPrivate",
       run: ctx.openNewPrivate,
+    },
+    {
+      id: "terminal.history",
+      title: t("commandPalette.commands.commandHistory"),
+      group: "Tabs",
+      keywords: [
+        "history",
+        "historial",
+        "commands",
+        "comandos",
+        "ssh",
+        "powershell",
+        "bash",
+        "zsh",
+      ],
+      icon: Clock01Icon,
+      shortcutId: "terminal.history",
+      run: () => useCommandHistoryStore.getState().openHistory(),
     },
     {
       id: "tab.serialConnect",

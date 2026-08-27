@@ -71,12 +71,28 @@ const TOOLTIP: Tooltip = {
 function historyTooltipView(view: EditorView): TooltipView {
   const dom = document.createElement("div");
   dom.className = "cm-history-popover";
+
+  const header = document.createElement("div");
+  header.className = "cm-history-header";
+
+  const headerTitle = document.createElement("span");
+  headerTitle.className = "cm-history-header-title";
+  headerTitle.textContent = "History";
+
+  const headerBadge = document.createElement("span");
+  headerBadge.className = "cm-history-header-badge";
+  headerBadge.textContent = "<History(0)>";
+
+  header.append(headerTitle, headerBadge);
+
   const list = document.createElement("div");
   list.className = "cm-history-list";
+
   const footer = document.createElement("div");
   footer.className = "cm-history-footer";
   footer.textContent = "↑↓ navigate · ↵ run · esc";
-  dom.append(list, footer);
+
+  dom.append(header, list, footer);
 
   let lastSig = "";
   const render = () => {
@@ -84,17 +100,45 @@ function historyTooltipView(view: EditorView): TooltipView {
     const sig = `${h.index}|${h.items.length}|${h.items[0] ?? ""}`;
     if (sig === lastSig) return;
     lastSig = sig;
+
+    headerBadge.textContent = `<History(${h.items.length})>`;
     list.replaceChildren();
+
+    const query = view.state.doc.toString().trim().toLowerCase();
+
     h.items.forEach((cmd, i) => {
       const row = document.createElement("div");
       row.className = "cm-history-item";
       if (i === h.index) row.setAttribute("aria-selected", "true");
+
       const icon = hugeIcon(Clock01Icon, 12);
       icon.classList.add("cm-history-icon");
+
       const text = document.createElement("span");
       text.className = "cm-history-text";
-      text.textContent = cmd;
-      row.append(icon, text);
+
+      if (query && cmd.toLowerCase().includes(query)) {
+        const idx = cmd.toLowerCase().indexOf(query);
+        const before = cmd.slice(0, idx);
+        const match = cmd.slice(idx, idx + query.length);
+        const after = cmd.slice(idx + query.length);
+
+        if (before) text.appendChild(document.createTextNode(before));
+        const mark = document.createElement("mark");
+        mark.className = "cm-history-match";
+        mark.textContent = match;
+        text.appendChild(mark);
+        if (after) text.appendChild(document.createTextNode(after));
+      } else {
+        text.textContent = cmd;
+      }
+
+      const tag = document.createElement("span");
+      tag.className = "cm-history-tag";
+      tag.textContent = "[History]";
+
+      row.append(icon, text, tag);
+
       row.addEventListener("mousedown", (e) => {
         e.preventDefault();
         acceptIndex(view, i);
@@ -107,6 +151,7 @@ function historyTooltipView(view: EditorView): TooltipView {
       });
       list.appendChild(row);
     });
+
     const active = list.children[h.index] as HTMLElement | undefined;
     active?.scrollIntoView({ block: "nearest" });
   };

@@ -34,6 +34,7 @@ export type ShortcutId =
   | "terminal.clear"
   | "terminal.copilot"
   | "terminal.toggleInput"
+  | "terminal.history"
   | "blocks.prev"
   | "blocks.next"
   | "search.focus"
@@ -241,6 +242,12 @@ export const SHORTCUTS: Shortcut[] = [
     labelKey: "shortcuts.labels.terminalToggleInput",
     group: "Terminal",
     defaultBindings: [{ [MOD_PROP]: true, key: "u" }],
+  },
+  {
+    id: "terminal.history",
+    labelKey: "shortcuts.labels.terminalHistory",
+    group: "Terminal",
+    defaultBindings: [{ [MOD_PROP]: true, key: "h" }],
   },
   {
     id: "blocks.prev",

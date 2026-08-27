@@ -29,6 +29,7 @@ import {
   type BlockMatch,
   type VisibleBlocks,
 } from "../block/lib/blockDecorations";
+import { historyRecord } from "../block/lib/history";
 import type { BlockMode } from "../block/lib/modeMachine";
 import { DormantRing } from "./dormantRing";
 import {
@@ -321,7 +322,14 @@ function queuePendingInput(s: Session, data: string): void {
   s.pendingInput += data;
 }
 
+let lastFocusedLiveLeafId: number | null = null;
+
+export function markLeafFocused(leafId: number): void {
+  lastFocusedLiveLeafId = leafId;
+}
+
 export function writeToSession(leafId: number, data: string): boolean {
+  lastFocusedLiveLeafId = leafId;
   const s = sessions.get(leafId);
   if (!s || s.shellExited) return false;
   if (s.pty) {
@@ -333,10 +341,23 @@ export function writeToSession(leafId: number, data: string): boolean {
 }
 
 export function submitToLeaf(leafId: number, text: string): void {
+  lastFocusedLiveLeafId = leafId;
   const s = sessions.get(leafId);
   if (!s || s.shellExited) return;
   s.everSubmitted = true;
-  useTerminalProgressStore.getState().setLeafCommandStart(leafId, text.trim());
+  const trimmed = text.trim();
+  if (trimmed) {
+    historyRecord(
+      trimmed,
+      s.workspaceEnv?.kind === "ssh" ||
+        s.workspaceEnv?.kind === "docker" ||
+        s.workspaceEnv?.kind === "wsl"
+        ? "unix"
+        : undefined,
+      s.workspaceEnv?.kind,
+    );
+  }
+  useTerminalProgressStore.getState().setLeafCommandStart(leafId, trimmed);
   // Bracketed paste keeps a multiline command atomic; trailing CR runs it.
   const data = text.includes("\n")
     ? `\x1b[200~${text}\x1b[201~\r`
@@ -349,11 +370,46 @@ export function interruptLeaf(leafId: number): void {
   sessions.get(leafId)?.pty?.write("\x03");
 }
 
-export function getAnyLiveTerminalLeafId(): number | null {
+export function getActiveTerminalLeafId(): number | null {
+  // 1. If we have a tracked leaf that is still live and visible, return it
+  if (lastFocusedLiveLeafId !== null) {
+    const s = sessions.get(lastFocusedLiveLeafId);
+    if (s && !s.disposed && !s.shellExited && s.visibleNow) {
+      return lastFocusedLiveLeafId;
+    }
+  }
+
+  // 2. Otherwise, check if any currently visible session has focusedNow == true
+  for (const [leafId, s] of sessions.entries()) {
+    if (!s.disposed && !s.shellExited && s.visibleNow && s.focusedNow) {
+      return leafId;
+    }
+  }
+
+  // 3. If no session has focusedNow, but lastFocusedLiveLeafId is live, return it
+  if (lastFocusedLiveLeafId !== null) {
+    const s = sessions.get(lastFocusedLiveLeafId);
+    if (s && !s.disposed && !s.shellExited) {
+      return lastFocusedLiveLeafId;
+    }
+  }
+
+  // 4. Any live visible session
+  for (const [leafId, s] of sessions.entries()) {
+    if (!s.disposed && !s.shellExited && s.visibleNow) {
+      return leafId;
+    }
+  }
+
+  // 5. Fallback to any live non-exited session
   for (const [leafId, s] of sessions.entries()) {
     if (!s.disposed && !s.shellExited) return leafId;
   }
   return null;
+}
+
+export function getAnyLiveTerminalLeafId(): number | null {
+  return getActiveTerminalLeafId();
 }
 
 export function leafCwd(leafId: number): string | null {
@@ -403,6 +459,7 @@ export function setLeafInputFocus(
 }
 
 export function focusLeafInput(leafId: number): void {
+  lastFocusedLiveLeafId = leafId;
   sessions.get(leafId)?.inputFocus?.();
 }
 
@@ -614,6 +671,7 @@ configureRendererPool({
     if (!s) return null;
     return {
       writeToPty: (data) => {
+        lastFocusedLiveLeafId = leafId;
         // Shell spawn failed (bad cwd, missing binary): Enter retries.
         if (s.spawnFailed) {
           if (data.includes("\r")) void respawnSession(leafId);
@@ -1377,6 +1435,9 @@ export function useTerminalSession({
     s.visibleNow = visible;
     s.focusedNow = focused;
     if (visible) {
+      if (focused) {
+        lastFocusedLiveLeafId = leafId;
+      }
       cancelHiddenRelease(s);
       if (s.container && !s.hasSlot) bindLeafToSlot(leafId, s);
       else if (s.hasSlot) refreshLeafSlot(leafId);

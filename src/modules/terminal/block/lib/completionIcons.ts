@@ -1,4 +1,5 @@
 import {
+  Clock01Icon,
   CommandLineIcon,
   File01Icon,
   Folder01Icon,
@@ -32,6 +33,7 @@ const ICON_BY_TYPE: Record<string, IconData> = {
   keyword: CommandLineIcon,
   type: Folder01Icon,
   variable: File01Icon,
+  history: Clock01Icon,
 };
 
 export function completionIcon(type: string | undefined): HTMLElement | null {

@@ -40,6 +40,11 @@ import {
 } from "./terminalLinks";
 import { pasteIntoTerminal } from "./terminalPaste";
 import { useTerminalCopilotStore } from "../copilot/terminalCopilotStore";
+import {
+  extractCurrentPromptInput,
+  useTerminalSuggestStore,
+} from "./terminalSuggestStore";
+import { historyList } from "../block/lib/history";
 
 const PTY_RESIZE_DEBOUNCE_MS = 256;
 const SNAPSHOT_SCROLLBACK_CAP = 5_000;
@@ -231,6 +236,81 @@ export function applyBackgroundActive(active: boolean): void {
   }
 }
 
+let suggestDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function syncTerminalSuggestions(slot: Slot): void {
+  const leafId = slot.currentLeafId;
+  if (leafId === null) return;
+  if (isAltScreen(slot)) {
+    useTerminalSuggestStore.getState().clear(leafId);
+    return;
+  }
+
+  if (suggestDebounceTimer !== null) {
+    clearTimeout(suggestDebounceTimer);
+  }
+
+  suggestDebounceTimer = setTimeout(async () => {
+    suggestDebounceTimer = null;
+    if (slot.currentLeafId !== leafId || isAltScreen(slot)) {
+      useTerminalSuggestStore.getState().clear(leafId);
+      return;
+    }
+
+    const term = slot.term;
+    const buf = term.buffer.active;
+    const cursorX = buf.cursorX;
+    const cursorY = buf.cursorY;
+    const baseY = buf.baseY;
+    const line = buf.getLine(cursorY + baseY);
+    const lineText = line ? line.translateToString(true) : "";
+
+    const query = extractCurrentPromptInput(lineText, cursorX).trim();
+    if (!query || query.length < 1) {
+      useTerminalSuggestStore.getState().clear(leafId);
+      return;
+    }
+
+    try {
+      const list = await historyList(query, undefined, 8);
+      if (slot.currentLeafId !== leafId) return;
+
+      const items = list.map((e) => e.cmd);
+      const top = items.find(
+        (c) => c.startsWith(query) && c.length > query.length,
+      );
+      const ghostTail = top ? top.slice(query.length) : "";
+
+      const cols = Math.max(1, term.cols);
+      const rows = Math.max(1, term.rows);
+      const hostW = slot.host.clientWidth || 800;
+      const hostH = slot.host.clientHeight || 500;
+      const cellWidth = hostW / cols;
+      const cellHeight = hostH / rows;
+
+      useTerminalSuggestStore.getState().setSuggest({
+        leafId,
+        open: items.length > 0,
+        query,
+        items,
+        selectedIndex: 0,
+        navigated: false,
+        ghostTail,
+        cursorX,
+        cursorY,
+        cellWidth,
+        cellHeight,
+        lineX: cursorX * cellWidth,
+        lineY: (cursorY + 1) * cellHeight,
+        containerWidth: hostW,
+        containerHeight: hostH,
+      });
+    } catch {
+      useTerminalSuggestStore.getState().clear(leafId);
+    }
+  }, 40);
+}
+
 function createSlot(): Slot {
   let focusTerminal = () => {};
   const term = new Terminal({
@@ -360,6 +440,86 @@ function createSlot(): Slot {
     if (leafId === null) return false;
     const bridge = adapter?.resolveLeaf(leafId);
     if (!bridge) return true;
+
+    // Terminal inline suggestions / ghost interception
+    const suggest = useTerminalSuggestStore.getState().getSuggest(leafId);
+    if (suggest && suggest.open && suggest.items.length > 0) {
+      if (
+        event.key === "Tab" &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        if (event.type === "keydown") {
+          const selected =
+            suggest.items[suggest.selectedIndex] ?? suggest.items[0];
+          if (selected) {
+            const remainder = selected.startsWith(suggest.query)
+              ? selected.slice(suggest.query.length)
+              : selected;
+            bridge.writeToPty(remainder);
+          }
+          useTerminalSuggestStore.getState().clear(leafId);
+        }
+        return false;
+      }
+
+      if (
+        event.key === "ArrowRight" &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        suggest.ghostTail
+      ) {
+        event.preventDefault();
+        if (event.type === "keydown") {
+          bridge.writeToPty(suggest.ghostTail);
+          useTerminalSuggestStore.getState().clear(leafId);
+        }
+        return false;
+      }
+
+      if (
+        event.key === "ArrowDown" &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        if (event.type === "keydown") {
+          useTerminalSuggestStore.getState().selectNext(leafId);
+        }
+        return false;
+      }
+
+      if (
+        event.key === "ArrowUp" &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        suggest.selectedIndex > 0
+      ) {
+        event.preventDefault();
+        if (event.type === "keydown") {
+          useTerminalSuggestStore.getState().selectPrev(leafId);
+        }
+        return false;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (event.type === "keydown") {
+          useTerminalSuggestStore.getState().clear(leafId);
+        }
+        return false;
+      }
+    }
+
     const readlineSequence = terminalReadlineSequence(event, {
       isMac: IS_MAC,
       isAlternateScreen: isAltScreen(slot),
@@ -412,7 +572,15 @@ function createSlot(): Slot {
     const leafId = slot.currentLeafId;
     if (leafId === null) return;
     adapter?.resolveLeaf(leafId)?.writeToPty(data);
+    if (data === "\r" || data === "\x03" || data === "\x04") {
+      useTerminalSuggestStore.getState().clear(leafId);
+    } else {
+      syncTerminalSuggestions(slot);
+    }
   });
+
+  term.onCursorMove(() => syncTerminalSuggestions(slot));
+  term.onLineFeed(() => syncTerminalSuggestions(slot));
 
   term.onSelectionChange(() => {
     if (slot.selectionCopyTimer !== null) {
