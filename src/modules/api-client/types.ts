@@ -59,6 +59,26 @@ export type ApiResponse = {
   timestamp: number;
 };
 
+export type DiscoveredEndpoint = {
+  path: string;
+  fullUrl: string;
+  method: ApiMethod;
+  status?: number;
+  statusText?: string;
+  durationMs?: number;
+  description?: string;
+  requiresAuth?: boolean;
+  sampleBody?: string;
+  source: "openapi" | "fingerprint" | "probe";
+};
+
+export type ApiClientTabMode =
+  | "request"
+  | "browser"
+  | "sandbox"
+  | "scenarios"
+  | "history";
+
 export type ApiWebhookDispatch = {
   targetUrl: string;
   service: string;

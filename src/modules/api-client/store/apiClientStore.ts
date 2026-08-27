@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
+  ApiClientTabMode,
   ApiMethod,
   ApiRequest,
   ApiResponse,
@@ -8,6 +9,7 @@ import type {
   ApiScenarioResult,
   ApiWebhookDispatch,
   ApiWebhookResult,
+  DiscoveredEndpoint,
   KeyValueParam,
 } from "../types";
 import {
@@ -16,9 +18,10 @@ import {
   sendApiRequest,
 } from "../lib/apiTauriBridge";
 import { WEBHOOK_PRESETS, type WebhookPreset } from "../lib/presets";
+import { discoverApiEndpoints, type DiscoveryResult } from "../lib/apiDiscovery";
 
 export type ApiClientStore = {
-  activeTab: "request" | "sandbox" | "scenarios" | "history";
+  activeTab: ApiClientTabMode;
   activeRequest: ApiRequest;
   activeResponse: ApiResponse | null;
   isLoading: boolean;
@@ -26,6 +29,11 @@ export type ApiClientStore = {
 
   // History
   history: { request: ApiRequest; response?: ApiResponse; timestamp: number }[];
+
+  // Discovery / API Browser State
+  discoveryUrl: string;
+  isDiscovering: boolean;
+  discoveryResult: DiscoveryResult | null;
 
   // Sandbox Webhook State
   webhookConfig: ApiWebhookDispatch;
@@ -38,7 +46,7 @@ export type ApiClientStore = {
   isRunningScenario: boolean;
 
   // Actions
-  setActiveTab: (tab: "request" | "sandbox" | "scenarios" | "history") => void;
+  setActiveTab: (tab: ApiClientTabMode) => void;
   setUrl: (url: string) => void;
   setMethod: (method: ApiMethod) => void;
   addHeader: () => void;
@@ -57,6 +65,11 @@ export type ApiClientStore = {
   sendRequest: () => Promise<ApiResponse | null>;
   loadFromHistory: (index: number) => void;
   clearHistory: () => void;
+
+  // Discovery actions
+  setDiscoveryUrl: (url: string) => void;
+  runDiscovery: (targetUrl?: string) => Promise<DiscoveryResult | null>;
+  loadEndpointToEditor: (endpoint: DiscoveredEndpoint) => void;
 
   // Webhook sandbox actions
   setWebhookTargetUrl: (url: string) => void;
@@ -107,10 +120,17 @@ export const useApiClientStore = create<ApiClientStore>()(
       error: null,
       history: [],
 
+      // Discovery State
+      discoveryUrl: "https://forgenex.nexgestion.es/api/v1",
+      isDiscovering: false,
+      discoveryResult: null,
+
+      // Webhook State
       webhookConfig: DEFAULT_WEBHOOK,
       webhookResult: null,
       isDispatchingWebhook: false,
 
+      // Scenario State
       activeScenario: null,
       scenarioResult: null,
       isRunningScenario: false,
@@ -140,11 +160,13 @@ export const useApiClientStore = create<ApiClientStore>()(
 
       updateHeader: (index, patch) =>
         set((state) => {
-          const headers = [...state.activeRequest.headers];
-          if (headers[index]) {
-            headers[index] = { ...headers[index], ...patch };
+          const newHeaders = [...state.activeRequest.headers];
+          if (newHeaders[index]) {
+            newHeaders[index] = { ...newHeaders[index], ...patch };
           }
-          return { activeRequest: { ...state.activeRequest, headers } };
+          return {
+            activeRequest: { ...state.activeRequest, headers: newHeaders },
+          };
         }),
 
       removeHeader: (index) =>
@@ -168,11 +190,13 @@ export const useApiClientStore = create<ApiClientStore>()(
 
       updateQueryParam: (index, patch) =>
         set((state) => {
-          const queryParams = [...state.activeRequest.queryParams];
-          if (queryParams[index]) {
-            queryParams[index] = { ...queryParams[index], ...patch };
+          const newParams = [...state.activeRequest.queryParams];
+          if (newParams[index]) {
+            newParams[index] = { ...newParams[index], ...patch };
           }
-          return { activeRequest: { ...state.activeRequest, queryParams } };
+          return {
+            activeRequest: { ...state.activeRequest, queryParams: newParams },
+          };
         }),
 
       removeQueryParam: (index) =>
@@ -222,12 +246,12 @@ export const useApiClientStore = create<ApiClientStore>()(
         })),
 
       sendRequest: async () => {
-        const { activeRequest, history } = get();
+        const { activeRequest } = get();
         set({ isLoading: true, error: null });
 
         try {
           const response = await sendApiRequest(activeRequest);
-          set({
+          set((state) => ({
             activeResponse: response,
             isLoading: false,
             history: [
@@ -236,18 +260,18 @@ export const useApiClientStore = create<ApiClientStore>()(
                 response,
                 timestamp: Date.now(),
               },
-              ...history.slice(0, 49),
+              ...state.history.slice(0, 49),
             ],
-          });
+          }));
           return response;
         } catch (err) {
           const errorMsg = String(err);
           set({
-            error: errorMsg,
             isLoading: false,
+            error: errorMsg,
             activeResponse: {
               status: 0,
-              statusText: "Error",
+              statusText: "Client Error",
               headers: [],
               body: errorMsg,
               bodyBytesLen: errorMsg.length,
@@ -262,11 +286,12 @@ export const useApiClientStore = create<ApiClientStore>()(
       },
 
       loadFromHistory: (index) => {
-        const item = get().history[index];
+        const { history } = get();
+        const item = history[index];
         if (item) {
           set({
             activeRequest: { ...item.request },
-            activeResponse: item.response ?? null,
+            activeResponse: item.response ? { ...item.response } : null,
             activeTab: "request",
           });
         }
@@ -274,6 +299,48 @@ export const useApiClientStore = create<ApiClientStore>()(
 
       clearHistory: () => set({ history: [] }),
 
+      // Discovery actions
+      setDiscoveryUrl: (discoveryUrl) => set({ discoveryUrl }),
+
+      runDiscovery: async (targetUrl) => {
+        const { discoveryUrl, activeRequest } = get();
+        const urlToScan = targetUrl || discoveryUrl || activeRequest.url;
+        set({ isDiscovering: true });
+
+        try {
+          const res = await discoverApiEndpoints(
+            urlToScan,
+            activeRequest.headers,
+            activeRequest.apiKey,
+            activeRequest.bearerToken,
+          );
+          set({
+            discoveryResult: res,
+            discoveryUrl: urlToScan,
+            isDiscovering: false,
+          });
+          return res;
+        } catch (err) {
+          set({ isDiscovering: false });
+          return null;
+        }
+      },
+
+      loadEndpointToEditor: (endpoint) => {
+        const { activeRequest } = get();
+        set({
+          activeRequest: {
+            ...activeRequest,
+            url: endpoint.fullUrl,
+            method: endpoint.method,
+            bodyType: endpoint.sampleBody ? "json" : activeRequest.bodyType,
+            bodyContent: endpoint.sampleBody || activeRequest.bodyContent,
+          },
+          activeTab: "request",
+        });
+      },
+
+      // Webhook actions
       setWebhookTargetUrl: (targetUrl) =>
         set((state) => ({
           webhookConfig: { ...state.webhookConfig, targetUrl },
@@ -366,6 +433,7 @@ export const useApiClientStore = create<ApiClientStore>()(
       partialize: (state) => ({
         activeRequest: state.activeRequest,
         webhookConfig: state.webhookConfig,
+        discoveryUrl: state.discoveryUrl,
         history: state.history.slice(0, 30),
       }),
     },
