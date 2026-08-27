@@ -21,6 +21,7 @@ import {
 import { AgentTranscript } from "./AgentTranscript";
 import { EmptySession } from "./EmptySession";
 import { MOD } from "../lib/platform";
+import { acknowledgeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
 
 type Props = {
   session: Session;
@@ -93,9 +94,18 @@ export const SessionPane = memo(function SessionPane({
     [onOpenPlan, session.id],
   );
   const jumpToBottomRef = useRef<(() => void) | null>(null);
+  const quoteRequestId = useRef(0);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const [quoteRequest, setQuoteRequest] = useState<QuoteRequest>();
   const onJumpToBottomReady = useCallback((jump: () => void) => {
     jumpToBottomRef.current = jump;
+  }, []);
+  const addSelectionToChat = useCallback((text: string) => {
+    quoteRequestId.current += 1;
+    setQuoteRequest({ id: quoteRequestId.current, text });
+  }, []);
+  const acknowledgeQuote = useCallback((handledId: number) => {
+    setQuoteRequest((current) => acknowledgeQuoteRequest(current, handledId));
   }, []);
   const workCwd = sessionWorkCwd(session);
   const isEmpty = session.blocks.length === 0;
@@ -118,6 +128,8 @@ export const SessionPane = memo(function SessionPane({
         hideProjectPicker ? !showDeckProjectPicker : false
       }
       context={session.context}
+      quoteRequest={quoteRequest}
+      onQuoteRequestConsumed={acknowledgeQuote}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}
       onBranchChange={() => onBranchChange(session.id)}
@@ -210,6 +222,7 @@ export const SessionPane = memo(function SessionPane({
               busy={!!session.busy}
               cwd={workCwd}
               onApproval={approve}
+              onAddToChat={addSelectionToChat}
               onOpenFile={onOpenFile}
               onOpenDiff={onOpenDiff}
               onOpenPlan={openPlan}

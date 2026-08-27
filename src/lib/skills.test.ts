@@ -102,6 +102,17 @@ describe("skillTextParts", () => {
       { text: "/create-skill", skill: true },
     ]);
   });
+
+  it("ignores skill tokens inside Markdown blockquotes", () => {
+    const text = "/review-pr\n> /create-skill\n  > /review-pr";
+    expect(slashTokenAt(text, text.indexOf("/create-skill") + 3)).toBeNull();
+    expect(skillNamesInText(text)).toEqual(["review-pr"]);
+    expect(
+      skillTextParts(text, names)
+        .filter((part) => part.skill)
+        .map((part) => part.text),
+    ).toEqual(["/review-pr"]);
+  });
 });
 
 describe("injectSkillPrompt", () => {
