@@ -23,7 +23,7 @@ type LeafBundle = {
 type Props = {
   node: PaneNode;
   tabVisible: boolean;
-  activeLeafId: number;
+  activeLeafId: number | null;
   blocks: boolean;
   workspaceEnv: WorkspaceEnv;
   shellOverride?: string;
@@ -49,12 +49,12 @@ export const PaneTreeView = memo(function PaneTreeView(props: Props) {
     return (
       <section
         onMouseDownCapture={() => {
-          if (!focused) onFocusLeaf(node.id);
+          onFocusLeaf(node.id);
         }}
         // Catches focus from Tab, programmatic focus, or any path that
         // skips mousedown — keeps activeLeafId in sync with DOM focus.
         onFocus={() => {
-          if (!focused) onFocusLeaf(node.id);
+          onFocusLeaf(node.id);
         }}
         onMouseEnter={() => useAgentStore.getState().clearPulse(node.id)}
         onMouseMove={() => {

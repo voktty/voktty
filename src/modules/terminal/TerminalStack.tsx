@@ -101,6 +101,9 @@ export function TerminalStack({
         const tabVisible = placements
           ? placement !== undefined
           : t.id === activeId;
+        const isTabFocused = placements
+          ? Boolean(placement?.focused)
+          : t.id === activeId;
         return (
           <div
             key={t.id}
@@ -123,7 +126,7 @@ export function TerminalStack({
             <PaneTreeView
               node={t.paneTree}
               tabVisible={tabVisible}
-              activeLeafId={t.activeLeafId}
+              activeLeafId={isTabFocused ? t.activeLeafId : null}
               blocks={t.blocks ?? false}
               workspaceEnv={
                 t.workspaceEnv ?? spaceEnvs.get(t.spaceId) ?? LOCAL_WORKSPACE
