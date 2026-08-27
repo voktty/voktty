@@ -227,6 +227,12 @@ import { ProjectTerminalDock } from "./surfaces/ProjectTerminalDock";
 import { DiffPane } from "./surfaces/DiffPane";
 import { SearchView } from "./surfaces/SearchView";
 import { SettingsView } from "./surfaces/SettingsView";
+import { InboxView, InboxDetailPane } from "./surfaces/InboxView";
+import { inboxComposerCard, type InboxItem } from "./lib/githubTasks";
+import {
+  linearIssueDetails,
+  peekLinearIssueDetails,
+} from "./lib/linear";
 import {
   loadSettingsSection,
   saveSettingsSection,
@@ -420,10 +426,12 @@ export default function App({
   const [sidebarTab, setSidebarTab] = useState<SidebarTabId>(
     () => loadSidebarTabOrder()[0] ?? "sessions",
   );
+  const classicInbox = !deckLayout && sidebarTab === "inbox";
   const [filesSearchOpen, setFilesSearchOpen] = useState(false);
   const [searchFocusToken, setSearchFocusToken] = useState(0);
   const [searchViewOpen, setSearchViewOpen] = useState(false);
   const [searchViewFocusToken, setSearchViewFocusToken] = useState(0);
+  const [inboxViewOpen, setInboxViewOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] =
     useState<SettingsSectionId>(loadSettingsSection);
@@ -465,6 +473,8 @@ export default function App({
   projectCwdRef.current = projectCwd;
   const searchViewOpenRef = useRef(searchViewOpen);
   searchViewOpenRef.current = searchViewOpen;
+  const inboxViewOpenRef = useRef(inboxViewOpen);
+  inboxViewOpenRef.current = inboxViewOpen;
   const deckLayoutRef = useRef(deckLayout);
   deckLayoutRef.current = deckLayout;
   const tabVisitRef = useRef(emptyTabVisitHistory(activeTabId));
@@ -1023,6 +1033,7 @@ export default function App({
 
   const onNew = useCallback(() => {
     setSearchViewOpen(false);
+    setInboxViewOpen(false);
     const cwd = active?.cwd ?? sessionDefaults?.cwd ?? projectCwd;
     const session = newDefaultSession(cwd, sessionDefaults?.runtimeMode);
     const tab = newTab(session.id);
@@ -1037,6 +1048,64 @@ export default function App({
     sessionDefaults?.runtimeMode,
     projectCwd,
   ]);
+
+  const onStartInboxItem = useCallback(
+    (item: InboxItem) => {
+      const start = (body?: string) => {
+        setInboxViewOpen(false);
+        setSidebarTab("sessions");
+        const cwd =
+          item.projectPath ||
+          active?.cwd ||
+          sessionDefaults?.cwd ||
+          projectCwd;
+        const ref =
+          item.provider === "linear"
+            ? item.identifier?.trim() || `#${item.number}`
+            : `#${item.number}`;
+        const session = {
+          ...newDefaultSession(cwd, sessionDefaults?.runtimeMode),
+          title: `${ref} ${item.title}`,
+          inboxCard: inboxComposerCard(item, body),
+        };
+        const tab = newTab(session.id);
+        setSessions((prev) => [...prev, session]);
+        appendTab(tab, cwd);
+        setActiveTabId(tab.id);
+        setComposerFocused(true);
+      };
+
+      if (item.provider !== "linear" || !item.id) {
+        start();
+        return;
+      }
+      const cached = peekLinearIssueDetails(item.id)?.body;
+      if (cached?.trim()) {
+        start(cached);
+        return;
+      }
+      void linearIssueDetails(item.id)
+        .then((details) => start(details.body))
+        .catch(() => start());
+    },
+    [
+      active?.cwd,
+      appendTab,
+      sessionDefaults?.cwd,
+      sessionDefaults?.runtimeMode,
+      projectCwd,
+    ],
+  );
+
+  const onInboxCardDismiss = useCallback((sessionId: string) => {
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === sessionId && session.inboxCard
+          ? { ...session, inboxCard: undefined }
+          : session,
+      ),
+    );
+  }, []);
 
   const onSplit = useCallback(
     (dir: SplitDir) => {
@@ -2362,6 +2431,7 @@ export default function App({
   const onSelectProject = useCallback(
     (path: string) => {
       setSearchViewOpen(false);
+      setInboxViewOpen(false);
       const normalized = normalizeProjectPath(path);
       if (!looksLikeProject(normalized)) return;
 
@@ -2767,7 +2837,9 @@ export default function App({
         const visible = displayAttachments(attachments);
         setSessions((prev) =>
           prev.map((s) =>
-            s.id === sessionId ? appendSteerUser(s, text, visible) : s,
+            s.id === sessionId
+              ? appendSteerUser({ ...s, inboxCard: undefined }, text, visible)
+              : s,
           ),
         );
         void (async () => {
@@ -2801,9 +2873,10 @@ export default function App({
       const gen = (turnGen.current.get(sessionId) ?? 0) + 1;
       turnGen.current.set(sessionId, gen);
       const isFirstTurn = current.blocks.length === 0;
-      const titleSeed = isFirstTurn
-        ? titleFromPrompt(text, current.harness, attachments)
-        : current.title;
+      const titleSeed =
+        isFirstTurn && !current.inboxCard
+          ? titleFromPrompt(text, current.harness, attachments)
+          : current.title;
       const visible = displayAttachments(attachments);
       const live = isLiveHarness(current.harness);
       const queuedHandoff =
@@ -2817,14 +2890,15 @@ export default function App({
         prev.map((s) => {
           if (s.id !== sessionId) return s;
           const titled = isFirstTurn ? titleSeed : s.title;
+          const next = { ...s, inboxCard: undefined };
           if (!live) {
             return {
-              ...s,
+              ...next,
               title: titled,
               pendingSwitch: undefined,
               busy: false,
               blocks: [
-                ...s.blocks,
+                ...next.blocks,
                 {
                   id: crypto.randomUUID(),
                   role: "user",
@@ -2834,24 +2908,24 @@ export default function App({
                 {
                   id: crypto.randomUUID(),
                   role: "system",
-                  text: `${s.harness} is not connected yet — install and sign in to that provider, then retry.`,
+                  text: `${next.harness} is not connected yet — install and sign in to that provider, then retry.`,
                 },
               ],
             };
           }
           if (pendingSwitch) {
             const sealed = stopStreaming({
-              ...s,
+              ...next,
               title: titled,
               pendingSwitch: undefined,
             });
             return appendUser(
-              appendPreparingHandoff(sealed, pendingSwitch.from, s.harness),
+              appendPreparingHandoff(sealed, pendingSwitch.from, next.harness),
               text,
               visible,
             );
           }
-          return appendUser({ ...s, title: titled }, text, visible);
+          return appendUser({ ...next, title: titled }, text, visible);
         }),
       );
 
@@ -3139,11 +3213,13 @@ export default function App({
 
   const onGoToFile = useCallback(() => {
     setSearchViewOpen(false);
+    setInboxViewOpen(false);
     setFilePickerOpen(true);
   }, []);
 
   const onFindInProject = useCallback(() => {
     setSearchViewOpen(false);
+    setInboxViewOpen(false);
     setSidebarOpen(true);
     saveSidebarOpen(true);
     setSidebarTab("files");
@@ -3154,6 +3230,7 @@ export default function App({
   const onOpenSearch = useCallback(() => {
     setFilePickerOpen(false);
     setSettingsOpen(false);
+    setInboxViewOpen(false);
     setSearchViewOpen(true);
     setSearchViewFocusToken((token) => token + 1);
   }, []);
@@ -3162,9 +3239,28 @@ export default function App({
     setSearchViewOpen(false);
   }, []);
 
+  const onOpenInbox = useCallback(() => {
+    setFilePickerOpen(false);
+    setSettingsOpen(false);
+    setSearchViewOpen(false);
+    if (deckLayout) {
+      setInboxViewOpen(true);
+      return;
+    }
+    setInboxViewOpen(false);
+    setSidebarOpen(true);
+    saveSidebarOpen(true);
+    setSidebarTab("inbox");
+  }, [deckLayout]);
+
+  const onLeaveInbox = useCallback(() => {
+    setInboxViewOpen(false);
+  }, []);
+
   const openSettings = useCallback((section?: SettingsSectionId) => {
     setFilePickerOpen(false);
     setSearchViewOpen(false);
+    setInboxViewOpen(false);
     if (section) {
       setSettingsSection(section);
       saveSettingsSection(section);
@@ -3200,12 +3296,17 @@ export default function App({
       setSearchViewOpen(false);
       return;
     }
+    if (inboxViewOpen) {
+      setInboxViewOpen(false);
+      return;
+    }
     onVisitBack();
-  }, [onVisitBack, searchViewOpen, settingsOpen]);
+  }, [onVisitBack, searchViewOpen, settingsOpen, inboxViewOpen]);
 
   const onRailForward = useCallback(() => {
     setSearchViewOpen(false);
     setSettingsOpen(false);
+    setInboxViewOpen(false);
     onVisitForward();
   }, [onVisitForward]);
 
@@ -3216,8 +3317,21 @@ export default function App({
         prev.map((tab) => ({ ...tab, diffOpen: false, diffFocused: false })),
       );
       if (layout === "classic") {
-        setSidebarTab((tab) => (tab === "changes" ? "sessions" : tab));
+        setSidebarTab((tab) =>
+          inboxViewOpenRef.current
+            ? "inbox"
+            : tab === "changes"
+              ? "sessions"
+              : tab,
+        );
+        if (inboxViewOpenRef.current) {
+          setInboxViewOpen(false);
+          setSidebarOpen(true);
+          saveSidebarOpen(true);
+        }
         setProjectTerminalFocused(false);
+      } else {
+        setSidebarTab((tab) => (tab === "inbox" ? "sessions" : tab));
       }
     };
     window.addEventListener(LAYOUT_CHANGE_EVENT, onLayoutChange);
@@ -3226,6 +3340,9 @@ export default function App({
 
   useEffect(() => {
     if (!deckLayout && sidebarTab === "changes") {
+      setSidebarTab("sessions");
+    }
+    if (deckLayout && sidebarTab === "inbox") {
       setSidebarTab("sessions");
     }
   }, [deckLayout, sidebarTab]);
@@ -3269,6 +3386,7 @@ export default function App({
     onGoToFile,
     onFindInProject,
     onOpenSearch,
+    onOpenInbox,
     pickProject,
     onNewTerminal,
     onNewTerminalTab,
@@ -3289,6 +3407,7 @@ export default function App({
     onGoToFile,
     onFindInProject,
     onOpenSearch,
+    onOpenInbox,
     pickProject,
     onNewTerminal,
     onNewTerminalTab,
@@ -3360,7 +3479,7 @@ export default function App({
         else run(`activate-${cmd.activate}`, () => a.onActivate(cmd.activate));
         return;
       }
-      if (!searchViewOpenRef.current && handleEditorFindKey(e)) {
+      if (!searchViewOpenRef.current && !inboxViewOpenRef.current && handleEditorFindKey(e)) {
         e.stopPropagation();
         return;
       }
@@ -3448,6 +3567,7 @@ export default function App({
       }),
       listen("go_to_file", () => actions.current.onGoToFile()),
       listen("open_search", () => actions.current.onOpenSearch()),
+      listen("open_inbox", () => actions.current.onOpenInbox()),
       listen("open_settings", () => actions.current.openSettings()),
       listen("sidebar_opacity", () => {
         actions.current.openSettings("appearance");
@@ -3523,7 +3643,7 @@ export default function App({
         onOpenTerminal={(cwd) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
         onFileDeleted={onFileDeleted}
-        canGoBack={tabVisitNav.canBack || searchViewOpen || settingsOpen}
+        canGoBack={tabVisitNav.canBack || searchViewOpen || settingsOpen || inboxViewOpen}
         canGoForward={tabVisitNav.canForward}
         onGoBack={onRailBack}
         onGoForward={onRailForward}
@@ -3542,8 +3662,10 @@ export default function App({
         onRemoveProject={deckLayout ? onRemoveProject : undefined}
         onNew={deckLayout ? onNew : undefined}
         onSearch={onOpenSearch}
+        onOpenInbox={onOpenInbox}
         onGoToFile={deckLayout ? onGoToFile : undefined}
         searchActive={searchViewOpen}
+        inboxActive={inboxViewOpen}
         projectRailOpen={projectRailOpen}
         onToggleProjectRail={onToggleProjectRail}
         unseenFinishedIds={unseenFinishedIds}
@@ -3557,12 +3679,12 @@ export default function App({
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           className={
-            searchViewOpen || settingsOpen
+            searchViewOpen || settingsOpen || inboxViewOpen
               ? "hidden"
               : "flex min-h-0 min-w-0 flex-1 flex-col"
           }
-          aria-hidden={searchViewOpen || settingsOpen}
-          inert={searchViewOpen || settingsOpen || undefined}
+          aria-hidden={searchViewOpen || settingsOpen || inboxViewOpen}
+          inert={searchViewOpen || settingsOpen || inboxViewOpen || undefined}
         >
         {!IS_MAC ? (
           <MenuBar
@@ -3578,6 +3700,7 @@ export default function App({
             onPickProject={pickProject}
             onFindInProject={onFindInProject}
             onSearch={onOpenSearch}
+            onOpenInbox={onOpenInbox}
           />
         ) : null}
         <TitleBar
@@ -3607,6 +3730,7 @@ export default function App({
             !!currentProjectDock && currentProjectDock.pane.files.length > 0
           }
           onOpenSettings={onOpenSettings}
+          onOpenInbox={onOpenInbox}
           onClose={onCloseTab}
           onReorder={onReorderTabs}
           onGoToFile={onGoToFile}
@@ -3667,7 +3791,14 @@ export default function App({
               className="relative flex min-h-0 min-w-0 flex-row"
               style={{ gridArea: "main" }}
             >
-              <div className="relative min-h-0 min-w-0 flex-1">
+              {classicInbox ? (
+                <InboxDetailPane
+                  cwd={sidebarCwd}
+                  recents={recents}
+                  onStart={onStartInboxItem}
+                />
+              ) : (
+                <div className="relative min-h-0 min-w-0 flex-1">
               {tabs.map((tab) => (
                 <div
                   key={tab.id}
@@ -3718,6 +3849,7 @@ export default function App({
                       onRuntimeModeChange={onRuntimeModeChange}
                       onSubmit={onSubmit}
                       onStop={onStop}
+                      onInboxCardDismiss={onInboxCardDismiss}
                       onApproval={onApproval}
                       onOpenFile={onOpenFile}
                       editorNavigation={editorNavigation}
@@ -3730,8 +3862,9 @@ export default function App({
                   </div>
                 </div>
               ))}
-              </div>
-            {!deckLayout && activeTab?.diffOpen ? (
+                </div>
+              )}
+            {!deckLayout && !classicInbox && activeTab?.diffOpen ? (
               <DiffPane
                 key={gitCwd ?? ""}
                 cwd={gitCwd}
@@ -3759,6 +3892,15 @@ export default function App({
             onOpenFile={onOpenFile}
             onOpenSession={onSelectHistorySession}
             onOpenProject={onSelectProject}
+          />
+        ) : null}
+        {inboxViewOpen ? (
+          <InboxView
+            cwd={sidebarCwd}
+            recents={recents}
+            besideRail={deckLayout && projectRailOpen}
+            onClose={onLeaveInbox}
+            onStart={onStartInboxItem}
           />
         ) : null}
         {settingsOpen ? (

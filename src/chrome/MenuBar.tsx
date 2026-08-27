@@ -16,6 +16,7 @@ type Props = {
   onPickProject?: () => void;
   onFindInProject?: () => void;
   onSearch?: () => void;
+  onOpenInbox?: () => void;
 };
 
 export function MenuBar({
@@ -29,6 +30,7 @@ export function MenuBar({
   onPickProject,
   onFindInProject,
   onSearch,
+  onOpenInbox,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
@@ -110,6 +112,9 @@ export function MenuBar({
         case "open_search":
           onSearch?.();
           break;
+        case "open_inbox":
+          onOpenInbox?.();
+          break;
         case "go_to_file":
           onGoToFile?.();
           break;
@@ -140,6 +145,7 @@ export function MenuBar({
       onToggleTerminal,
       onPickProject,
       onSearch,
+      onOpenInbox,
       onShowSourceControl,
       onToggleSidebar,
     ],
@@ -163,6 +169,7 @@ export function MenuBar({
       case "view":
         return [
           { kind: "item", id: "toggle_sidebar", label: "Toggle Sidebar", shortcut: `${MOD}B` },
+          { kind: "item", id: "open_inbox", label: "Inbox" },
           { kind: "item", id: "toggle_terminal", label: "Toggle Terminal", shortcut: `${MOD}J` },
           { kind: "item", id: "open_model_picker", label: "Switch Model…", shortcut: `${MOD}.` },
           { kind: "item", id: "toggle_diff", label: "Toggle Changes" },

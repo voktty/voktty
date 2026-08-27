@@ -69,6 +69,7 @@ import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SessionsEmpty } from "./SessionsEmpty";
 import { SidebarUpdate } from "./SidebarUpdate";
 import { SourceControl } from "./SourceControl";
+import { InboxView } from "../surfaces/InboxView";
 
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 560;
@@ -80,6 +81,7 @@ type SidebarTab = SidebarTabId;
 
 const TAB_LABELS: Record<SidebarTab, string> = {
   sessions: "Sessions",
+  inbox: "Inbox",
   files: "Explorer",
   changes: "Changes",
 };
@@ -126,8 +128,10 @@ type Props = {
   onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
   onNew?: () => void;
   onSearch?: () => void;
+  onOpenInbox?: () => void;
   onGoToFile?: () => void;
   searchActive?: boolean;
+  inboxActive?: boolean;
   onToggleProjectRail?: () => void;
   projectRailOpen?: boolean;
   unseenFinishedIds?: Set<string>;
@@ -178,8 +182,10 @@ function SidebarComponent({
   onRemoveProject,
   onNew,
   onSearch,
+  onOpenInbox,
   onGoToFile,
   searchActive = false,
+  inboxActive = false,
   onToggleProjectRail,
   projectRailOpen = true,
   unseenFinishedIds: unseenFinishedIdsProp,
@@ -273,7 +279,7 @@ function SidebarComponent({
     if (next[0]) onTabChange(next[0]);
   });
   const visibleTabs = deckLayout
-    ? tabOrder
+    ? tabOrder.filter((itemId) => itemId !== "inbox")
     : tabOrder.filter((itemId) => itemId !== "changes");
   const canDragTabs = visibleTabs.length > 1;
   const showProjectRail =
@@ -290,6 +296,7 @@ function SidebarComponent({
   const sidebarVisible =
     open &&
     !searchActive &&
+    !inboxActive &&
     (classicSettings || (!settingsOpen && !(deckLayout && !inProject)));
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
   const changeStats = useProjectDiffStats(gitRoot, open);
@@ -831,6 +838,11 @@ function SidebarComponent({
           />
         </div>
       ) : null}
+      {!deckLayout && tab === "inbox" ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <InboxView cwd={cwd} recents={recents} variant="sidebar" />
+        </div>
+      ) : null}
       {showSidebarFooter ? (
         <>
           <div className="p-2 pb-1">
@@ -903,6 +915,8 @@ function SidebarComponent({
           onGoForward={onGoForward}
           onSearch={onSearch}
           searchActive={searchActive}
+          onOpenInbox={onOpenInbox}
+          inboxActive={inboxActive}
           onTogglePanel={onToggleProjectRail}
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}

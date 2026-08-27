@@ -36,6 +36,10 @@ import {
   type MentionToken,
 } from "../lib/fileMentions";
 import type { ProjectFile } from "../lib/fs";
+import {
+  composeInboxMessage,
+  type InboxComposerCard,
+} from "../lib/githubTasks";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import type { Attachment, HarnessId, RuntimeMode } from "../lib/session";
 import { harnessSupportsAttachments } from "../lib/session";
@@ -59,6 +63,7 @@ import { BranchPicker } from "./BranchPicker";
 import { CwdPicker } from "./CwdPicker";
 import { FileMentionPicker } from "./FileMentionPicker";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { InboxMiniCard } from "./InboxMiniCard";
 import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
 import { SkillPicker } from "./SkillPicker";
@@ -85,6 +90,8 @@ type Props = {
   hideProjectPicker?: boolean;
   context?: ContextUsage;
   quoteRequest?: QuoteRequest;
+  initialDraft?: string;
+  inboxCard?: InboxComposerCard;
   busy?: boolean;
   hotkeys?: boolean;
   onFocus: () => void;
@@ -95,6 +102,7 @@ type Props = {
   onModelSettingsChange?: (settings: Record<string, string>) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
   onQuoteRequestConsumed?: (id: number) => void;
+  onInboxCardDismiss?: () => void;
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop?: () => void;
   onOpenFile?: (path: string) => void;
@@ -147,6 +155,8 @@ export function Composer({
   hideProjectPicker = false,
   context,
   quoteRequest,
+  initialDraft,
+  inboxCard,
   busy = false,
   onFocus,
   onCwdChange,
@@ -156,6 +166,7 @@ export function Composer({
   onModelSettingsChange,
   onRuntimeModeChange,
   onQuoteRequestConsumed,
+  onInboxCardDismiss,
   onSubmit,
   onStop,
   onOpenFile,
@@ -168,8 +179,10 @@ export function Composer({
   const consumedQuoteId = useRef<number | null>(null);
   const slashRef = useRef<SlashToken | null>(null);
   const mentionRef = useRef<MentionToken | null>(null);
-  const [draft, setDraft] = useState("");
-  const [hasValue, setHasValue] = useState(false);
+  const [draft, setDraft] = useState(initialDraft ?? "");
+  const [hasValue, setHasValue] = useState(
+    () => (initialDraft ?? "").trim().length > 0 || !!inboxCard,
+  );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fileDrag, setFileDrag] = useState(false);
   const [skills, setSkills] = useState<Skill[]>(
@@ -216,9 +229,18 @@ export function Composer({
     [files, mention?.query, mentionOpen, cwd],
   );
 
-  const syncHasValue = useCallback((text: string, files: Attachment[]) => {
-    setHasValue(text.trim().length > 0 || files.length > 0);
-  }, []);
+  const syncHasValue = useCallback(
+    (text: string, files: Attachment[]) => {
+      setHasValue(
+        text.trim().length > 0 || files.length > 0 || !!inboxCard,
+      );
+    },
+    [inboxCard],
+  );
+
+  useEffect(() => {
+    syncHasValue(ref.current?.value ?? "", attachmentsRef.current);
+  }, [inboxCard, syncHasValue]);
 
   const addAttachments = useCallback(
     (incoming: Attachment[]) => {
@@ -324,6 +346,13 @@ export function Composer({
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   };
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !initialDraft) return;
+    el.value = initialDraft;
+    resizeTextarea(el);
+  }, [initialDraft]);
 
   const syncHighlightScroll = (e: UIEvent<HTMLTextAreaElement>) => {
     const highlight = highlightRef.current;
@@ -523,7 +552,7 @@ export function Composer({
   }, [addAttachments, attachmentsSupported, enabled]);
 
   const submit = (value: string) => {
-    const text = value.trim();
+    const text = composeInboxMessage(inboxCard, value);
     const files = attachments;
     if (!text && files.length === 0) return;
     onSubmit(text, files);
@@ -532,11 +561,11 @@ export function Composer({
     ref.current.style.height = "auto";
     setDraft("");
     setAttachments([]);
-    setHasValue(false);
     setSlash(null);
     setMention(null);
     setCreatingSkill(false);
     setCreateError(null);
+    syncHasValue("", []);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -768,6 +797,10 @@ export function Composer({
             </div>
           ) : null}
 
+          {inboxCard ? (
+            <InboxMiniCard card={inboxCard} onDismiss={onInboxCardDismiss} />
+          ) : null}
+
           <div className="relative">
             <div
               ref={highlightRef}
@@ -786,10 +819,13 @@ export function Composer({
               ref={ref}
               rows={1}
               spellCheck={false}
+              defaultValue={initialDraft}
               placeholder={
-                shell
-                  ? "How can I help you today?"
-                  : "Ask, build, / for skills, @ for references... "
+                inboxCard
+                  ? "Add a note, or send to start…"
+                  : shell
+                    ? "How can I help you today?"
+                    : "Ask, build, / for skills, @ for references... "
               }
               className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
                 shell ? "py-4" : "py-3"

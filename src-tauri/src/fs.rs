@@ -432,6 +432,87 @@ pub async fn git_pr_create(
     .map_err(|e| e.to_string())?
 }
 
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubLabel {
+    pub name: String,
+    pub color: String,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubAssignee {
+    pub login: String,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubWorkItem {
+    pub kind: String,
+    pub number: i64,
+    pub title: String,
+    pub url: String,
+    pub state: String,
+    pub updated_at: String,
+    pub labels: Vec<GitHubLabel>,
+    pub assignees: Vec<GitHubAssignee>,
+    pub draft: bool,
+    pub repo: String,
+}
+
+/// `owner/repo` for the GitHub remote of this working copy, via `gh`.
+#[tauri::command]
+pub async fn git_github_repo(cwd: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || git_github_repo_for(&expand_home(&cwd)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Open issues or pull requests for the current GitHub remote, via `gh`.
+#[tauri::command]
+pub async fn git_github_work_items(
+    cwd: String,
+    kind: String,
+    assigned_to_me: bool,
+    state: String,
+    search: String,
+    limit: Option<u32>,
+) -> Result<Vec<GitHubWorkItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git_github_work_items_for(
+            &expand_home(&cwd),
+            &kind,
+            assigned_to_me,
+            &state,
+            &search,
+            limit.unwrap_or(40),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubWorkItemDetails {
+    pub body: String,
+    pub author: String,
+}
+
+/// Issue or pull request body for the inbox detail pane.
+#[tauri::command]
+pub async fn git_github_work_item_details(
+    cwd: String,
+    kind: String,
+    number: i64,
+) -> Result<GitHubWorkItemDetails, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git_github_work_item_details_for(&expand_home(&cwd), &kind, number)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranches {
@@ -1027,6 +1108,165 @@ fn git_pr_status_for(root: &Path) -> Option<GitPr> {
         ],
     )?;
     parse_gh_pr_list(&json)
+}
+
+fn git_github_repo_for(root: &Path) -> Result<String, String> {
+    let json = gh_checked(root, &["repo", "view", "--json", "nameWithOwner"])?;
+    #[derive(Deserialize)]
+    struct View {
+        #[serde(rename = "nameWithOwner")]
+        name_with_owner: String,
+    }
+    let view: View = serde_json::from_str(&json).map_err(|error| error.to_string())?;
+    let slug = view.name_with_owner.trim();
+    if slug.is_empty() || !slug.contains('/') {
+        return Err("GitHub did not return a repository".into());
+    }
+    Ok(slug.to_string())
+}
+
+fn git_github_work_items_for(
+    root: &Path,
+    kind: &str,
+    assigned_to_me: bool,
+    state: &str,
+    search: &str,
+    limit: u32,
+) -> Result<Vec<GitHubWorkItem>, String> {
+    let kind = kind.trim();
+    if kind != "issue" && kind != "pr" {
+        return Err("Unknown GitHub task kind".into());
+    }
+    let state = if state.trim().eq_ignore_ascii_case("all") {
+        "all"
+    } else {
+        "open"
+    };
+    let limit = limit.clamp(1, 100).to_string();
+    let fields = if kind == "pr" {
+        "number,title,url,state,updatedAt,labels,assignees,isDraft"
+    } else {
+        "number,title,url,state,updatedAt,labels,assignees"
+    };
+    let mut args = vec![
+        kind.to_string(),
+        "list".into(),
+        "--state".into(),
+        state.into(),
+        "--limit".into(),
+        limit,
+        "--json".into(),
+        fields.into(),
+    ];
+    if assigned_to_me {
+        args.push("--assignee".into());
+        args.push("@me".into());
+    }
+    let search = search.trim();
+    if !search.is_empty() {
+        args.push("--search".into());
+        args.push(search.to_string());
+    }
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let json = gh_checked(root, &refs)?;
+    let repo = git_github_repo_for(root).unwrap_or_default();
+    parse_github_work_items(&json, kind, &repo)
+}
+
+fn git_github_work_item_details_for(
+    root: &Path,
+    kind: &str,
+    number: i64,
+) -> Result<GitHubWorkItemDetails, String> {
+    let kind = kind.trim();
+    if kind != "issue" && kind != "pr" {
+        return Err("Unknown GitHub task kind".into());
+    }
+    let number = number.to_string();
+    let json = gh_checked(root, &[kind, "view", &number, "--json", "body,author"])?;
+    parse_github_work_item_details(&json)
+}
+
+fn parse_github_work_item_details(json: &str) -> Result<GitHubWorkItemDetails, String> {
+    #[derive(Deserialize)]
+    struct Author {
+        #[serde(default)]
+        login: String,
+    }
+    #[derive(Deserialize)]
+    struct Row {
+        #[serde(default)]
+        body: String,
+        #[serde(default)]
+        author: Option<Author>,
+    }
+    let row: Row = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    Ok(GitHubWorkItemDetails {
+        body: row.body,
+        author: row.author.map(|author| author.login).unwrap_or_default(),
+    })
+}
+
+fn parse_github_work_items(
+    json: &str,
+    kind: &str,
+    repo: &str,
+) -> Result<Vec<GitHubWorkItem>, String> {
+    #[derive(Deserialize)]
+    struct RowLabel {
+        name: String,
+        #[serde(default)]
+        color: String,
+    }
+    #[derive(Deserialize)]
+    struct RowAssignee {
+        login: String,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Row {
+        number: i64,
+        title: String,
+        url: String,
+        state: String,
+        #[serde(default)]
+        updated_at: String,
+        #[serde(default)]
+        labels: Vec<RowLabel>,
+        #[serde(default)]
+        assignees: Vec<RowAssignee>,
+        #[serde(default)]
+        is_draft: bool,
+    }
+    let rows: Vec<Row> = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    Ok(rows
+        .into_iter()
+        .map(|row| GitHubWorkItem {
+            kind: kind.to_string(),
+            number: row.number,
+            title: row.title,
+            url: row.url,
+            state: row.state.to_lowercase(),
+            updated_at: row.updated_at,
+            labels: row
+                .labels
+                .into_iter()
+                .map(|label| GitHubLabel {
+                    name: label.name,
+                    color: label.color,
+                })
+                .collect(),
+            assignees: row
+                .assignees
+                .into_iter()
+                .map(|assignee| GitHubAssignee {
+                    login: assignee.login,
+                })
+                .collect(),
+            draft: row.is_draft,
+            repo: repo.to_string(),
+        })
+        .collect())
 }
 
 fn parse_gh_pr_list(json: &str) -> Option<GitPr> {
@@ -3173,6 +3413,55 @@ mod tests {
         assert_eq!(pr.number, 3);
         assert_eq!(pr.state, "open");
         assert_eq!(pr.title, "Now");
+    }
+
+    #[test]
+    fn parse_github_work_items_maps_issue_fields() {
+        let json = r#"[{
+            "number": 5138,
+            "title": "Promo codes fail to apply",
+            "url": "https://github.com/acme/web/issues/5138",
+            "state": "OPEN",
+            "updatedAt": "2026-08-27T08:00:00Z",
+            "labels": [{"name": "bug", "color": "d73a4a"}],
+            "assignees": [{"login": "maya"}]
+        }]"#;
+        let items = parse_github_work_items(json, "issue", "acme/web").unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].kind, "issue");
+        assert_eq!(items[0].number, 5138);
+        assert_eq!(items[0].state, "open");
+        assert_eq!(items[0].repo, "acme/web");
+        assert_eq!(items[0].labels[0].name, "bug");
+        assert_eq!(items[0].assignees[0].login, "maya");
+        assert!(!items[0].draft);
+    }
+
+    #[test]
+    fn parse_github_work_items_reads_draft_prs() {
+        let json = r#"[{
+            "number": 12,
+            "title": "WIP checkout",
+            "url": "https://github.com/acme/web/pull/12",
+            "state": "OPEN",
+            "isDraft": true
+        }]"#;
+        let items = parse_github_work_items(json, "pr", "acme/web").unwrap();
+        assert_eq!(items[0].kind, "pr");
+        assert!(items[0].draft);
+        assert!(items[0].labels.is_empty());
+        assert_eq!(items[0].repo, "acme/web");
+    }
+
+    #[test]
+    fn parse_github_work_item_details_reads_body_and_author() {
+        let json = r#"{
+            "body": "Steps to reproduce",
+            "author": {"login": "maya"}
+        }"#;
+        let details = parse_github_work_item_details(json).unwrap();
+        assert_eq!(details.body, "Steps to reproduce");
+        assert_eq!(details.author, "maya");
     }
 
     #[test]

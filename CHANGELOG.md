@@ -9,8 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Inbox: assigned GitHub issues and pull requests from `gh`, plus Linear issues after you paste a personal API key in Settings → General. Start an issue in a local project; pull requests open on GitHub instead of starting a session from an untrusted branch. Linear Start includes the issue description, since agents cannot fetch Linear pages.
+- Starting from Inbox shows a Linear or GitHub card above the composer — logo, identifier, title, team or repo — instead of pasting the issue into the textarea. Send still includes the issue for the agent; you can add a note or dismiss the card.
 - Claude and Codex plan usage (5-hour and weekly) shows in a footer under the main pane: percent used and time until reset. If a provider isn't installed or signed in, the chip says not connected and isn't polled again until you refresh or relaunch.
 - While a turn is running, the project's pixel mascot patrols the composer (or the changes bar), hops the jump-to-latest control, and occasionally grabs a coin. Turn it off in Settings → General.
+
+### Security
+
+- Linear personal API keys stay on this Mac: written to the app data folder (`~/Library/Application Support/com.monocode.desktop/linear-token`) with owner-only permissions (`0600`). They are sent only to Linear's API to list and read issues, never to MonoCode servers, and never placed in the agent prompt. Disconnect deletes the file. GitHub uses the `gh` login already on the machine; MonoCode does not store a GitHub token.
 
 ## [0.1.11] - 2026-08-27
 

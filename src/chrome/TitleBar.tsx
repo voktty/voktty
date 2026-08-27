@@ -2,6 +2,7 @@ import {
   ChevronLeft,
   ChevronRight,
   GitCompare,
+  Inbox,
   PanelLeft,
   Plus,
   Search,
@@ -113,6 +114,7 @@ type Props = {
   onShowTerminal?: () => void;
   projectTerminalActive?: boolean;
   onOpenSettings?: () => void;
+  onOpenInbox?: () => void;
   onClose: (id: string) => void;
   onReorder: (ids: string[], movedId?: string) => void;
   onGoToFile?: () => void;
@@ -835,6 +837,7 @@ function TitleBarComponent({
   onShowTerminal,
   projectTerminalActive = false,
   onOpenSettings,
+  onOpenInbox,
   onClose,
   onReorder,
   onGoToFile,
@@ -1190,6 +1193,11 @@ function TitleBarComponent({
             active={sourceControlActive}
             onClick={onShowSourceControl}
           />
+        ) : null}
+        {deckLayout && railClosed && onOpenInbox ? (
+          <IconButton label="Inbox" onClick={onOpenInbox}>
+            <Inbox className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
         ) : null}
         {railClosed && !projectless ? (
           <>

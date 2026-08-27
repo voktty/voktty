@@ -26,10 +26,11 @@ export const LAYOUT_CHANGE_EVENT = "monocode:layoutchange";
 
 export const SIDEBAR_LAYOUT_DEFAULT: SidebarLayout = "classic";
 
-export type SidebarTabId = "files" | "sessions" | "changes";
+export type SidebarTabId = "files" | "sessions" | "changes" | "inbox";
 
 const DEFAULT_SIDEBAR_TAB_ORDER: SidebarTabId[] = [
   "sessions",
+  "inbox",
   "files",
   "changes",
 ];
@@ -244,7 +245,12 @@ export function applyBodyGlass(value: boolean) {
 }
 
 function isSidebarTabId(value: unknown): value is SidebarTabId {
-  return value === "files" || value === "sessions" || value === "changes";
+  return (
+    value === "files" ||
+    value === "sessions" ||
+    value === "changes" ||
+    value === "inbox"
+  );
 }
 
 export function loadSidebarOpen(): boolean {

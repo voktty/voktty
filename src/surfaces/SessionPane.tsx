@@ -47,6 +47,7 @@ type Props = {
     attachments: Attachment[],
   ) => void;
   onStop: (sessionId: string) => void;
+  onInboxCardDismiss?: (sessionId: string) => void;
   onApproval: (
     sessionId: string,
     requestId: number,
@@ -76,6 +77,7 @@ export const SessionPane = memo(function SessionPane({
   onRuntimeModeChange,
   onSubmit,
   onStop,
+  onInboxCardDismiss,
   onApproval,
   onOpenFile,
   onOpenDiff,
@@ -129,7 +131,10 @@ export const SessionPane = memo(function SessionPane({
       }
       context={session.context}
       quoteRequest={quoteRequest}
+      initialDraft={session.inboxCard ? undefined : session.composerSeed}
+      inboxCard={session.inboxCard}
       onQuoteRequestConsumed={acknowledgeQuote}
+      onInboxCardDismiss={() => onInboxCardDismiss?.(session.id)}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}
       onBranchChange={() => onBranchChange(session.id)}

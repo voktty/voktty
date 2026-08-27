@@ -1,0 +1,1092 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  ArrowRight,
+  ChevronDown,
+  CircleDot,
+  ExternalLink,
+  GitPullRequest,
+  Inbox,
+  ListFilter,
+  LoaderCircle,
+  RefreshCw,
+  Search,
+} from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+import {
+  InboxFiltersMenu,
+  INBOX_FILTER_MENU_WIDTH,
+} from "../chrome/InboxFiltersMenu";
+import { InboxProviderMark } from "../chrome/InboxProviderMark";
+import { ProjectLogoIcon } from "../chrome/ProjectLogoIcon";
+import { ProjectMascot } from "../chrome/ProjectMascot";
+import { WindowControls } from "../chrome/WindowControls";
+import { useDragResize } from "../hooks/useDragResize";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
+import {
+  githubWorkItemDetails,
+  inboxItemKey,
+  inboxItemRef,
+  inboxItemStatus,
+  inboxListIsFresh,
+  listInboxItems,
+  peekGithubWorkItemDetails,
+  peekInboxItems,
+  formatRelativeTime,
+  type GithubLabel,
+  type GithubWorkItemDetails,
+  type InboxItem,
+  type InboxQuery,
+} from "../lib/githubTasks";
+import {
+  applyInboxFilters,
+  hasActiveInboxFilters,
+  inboxFetchState,
+  loadInboxFilters,
+  loadInboxSource,
+  pruneInboxFilters,
+  saveInboxFilters,
+  saveInboxSource,
+  type InboxFilters,
+  type InboxSource,
+} from "../lib/inboxFilters";
+import { projectName } from "../lib/paths";
+import { IS_MAC } from "../lib/platform";
+import {
+  collectRailProjects,
+  normalizeProjectPath,
+  sameProjectPath,
+  type RecentProject,
+} from "../lib/recents";
+import { setInboxSelection, useInboxSelection } from "../lib/inboxSelection";
+import {
+  LINEAR_CHANGE_EVENT,
+  linearIssueDetails,
+  peekLinearIssueDetails,
+} from "../lib/linear";
+import {
+  loadTabGroupColors,
+  loadTabGroupCustomColors,
+  loadTabGroupMascots,
+  resolveTabGroupColor,
+  resolveTabGroupLogo,
+  resolveTabGroupMascot,
+} from "../lib/tabGroups";
+import { AgentMarkdown } from "./AgentMarkdown";
+
+const MIN_WIDTH = 240;
+const MAX_WIDTH = 420;
+const DEFAULT_WIDTH = 280;
+
+let rememberedWidth = DEFAULT_WIDTH;
+
+type InboxProjectOption = {
+  path: string;
+  name: string;
+  logoPath: string | null;
+  mascotName: string | null;
+  mascotColor: string;
+};
+
+function inboxProjectOptions(
+  projects: RecentProject[],
+  logos: ReturnType<typeof useTabGroupLogos>,
+): InboxProjectOption[] {
+  const mascots = loadTabGroupMascots();
+  const colors = loadTabGroupColors();
+  const custom = loadTabGroupCustomColors();
+  return [...projects]
+    .map((project) => {
+      const key = projectName(project.path);
+      return {
+        path: project.path,
+        name: key,
+        logoPath: resolveTabGroupLogo(key, logos),
+        mascotName: resolveTabGroupMascot(key, mascots),
+        mascotColor: resolveTabGroupColor(key, colors, custom, key),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function InboxProjectMark({
+  project,
+}: {
+  project: Pick<
+    InboxProjectOption,
+    "name" | "logoPath" | "mascotName" | "mascotColor"
+  >;
+}) {
+  if (project.logoPath) {
+    return (
+      <ProjectLogoIcon
+        path={project.logoPath}
+        className="size-3.5 shrink-0 rounded-sm"
+        imageClassName="size-3.5"
+      />
+    );
+  }
+  return (
+    <ProjectMascot
+      project={project.name}
+      color={project.mascotColor}
+      name={project.mascotName}
+      className="size-3 shrink-0"
+    />
+  );
+}
+
+function inboxProjectsFor(
+  recents: RecentProject[],
+  cwd: string,
+): RecentProject[] {
+  const map = collectRailProjects(recents, cwd);
+  const current = cwd ? map.get(normalizeProjectPath(cwd)) : undefined;
+  const rest = [...map.values()].filter(
+    (project) => !current || !sameProjectPath(project.path, current.path),
+  );
+  return current ? [current, ...rest] : rest;
+}
+
+function peekInboxForRail(
+  recents: RecentProject[],
+  cwd: string,
+): InboxItem[] | null {
+  const projects = inboxProjectsFor(recents, cwd);
+  const filters = pruneInboxFilters(
+    loadInboxFilters(),
+    projects.map((project) => project.path),
+  );
+  return peekInboxItems(projects, {
+    assignedToMe: filters.assignedToMe,
+    state: inboxFetchState(filters),
+    search: "",
+  });
+}
+
+function InboxSourceTab({
+  source,
+  selected,
+  onSelect,
+}: {
+  source: InboxSource;
+  selected: boolean;
+  onSelect: (source: InboxSource) => void;
+}) {
+  const label = source === "linear" ? "Linear" : "GitHub";
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={() => onSelect(source)}
+      className={`relative flex h-full min-w-0 flex-1 items-center justify-center px-2 pb-0.5 text-[12px] leading-none ${
+        selected
+          ? "bg-content/10 text-content"
+          : "text-content/50 hover:bg-content/5 hover:text-content"
+      }`}
+    >
+      <span className="flex items-center gap-1.5">
+        <InboxProviderMark
+          provider={source}
+          className="block size-3.5 shrink-0"
+        />
+        <span className="leading-none">{label}</span>
+      </span>
+      {selected ? (
+        <span className="absolute inset-x-0 bottom-0 h-0.5 bg-content" />
+      ) : null}
+    </button>
+  );
+}
+
+type Props = {
+  cwd: string;
+  recents: RecentProject[];
+  besideRail?: boolean;
+  variant?: "overlay" | "sidebar";
+  onClose?: () => void;
+  onStart?: (item: InboxItem) => void;
+};
+
+export function InboxView({
+  cwd,
+  recents,
+  besideRail = false,
+  variant = "overlay",
+  onClose,
+  onStart,
+}: Props) {
+  const sidebar = variant === "sidebar";
+  const listLock = useLockOverscroll<HTMLDivElement>();
+  const detailLock = useLockOverscroll<HTMLDivElement>();
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const logos = useTabGroupLogos();
+  const [groupMascots] = useState(loadTabGroupMascots);
+  const [groupColors] = useState(loadTabGroupColors);
+  const [groupCustomColors] = useState(loadTabGroupCustomColors);
+
+  const [searchInput, setSearchInput] = useState("");
+  const [items, setItems] = useState<InboxItem[]>(
+    () => peekInboxForRail(recents, cwd) ?? [],
+  );
+  const [loading, setLoading] = useState(
+    () => peekInboxForRail(recents, cwd) == null,
+  );
+  const [revalidating, setRevalidating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refresh, setRefresh] = useState(0);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [filters, setFilters] = useState(loadInboxFilters);
+  const [source, setSource] = useState(loadInboxSource);
+  const [filterMenu, setFilterMenu] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const prevRefresh = useRef(refresh);
+
+  const projects = useMemo(
+    () => inboxProjectsFor(recents, cwd),
+    [cwd, recents],
+  );
+  const projectOptions = useMemo(
+    () => inboxProjectOptions(projects, logos),
+    [logos, projects],
+  );
+  const activeFilters = useMemo(
+    () =>
+      pruneInboxFilters(
+        filters,
+        projects.map((project) => project.path),
+      ),
+    [filters, projects],
+  );
+  const filtersActive = hasActiveInboxFilters(activeFilters, source);
+  const fetchState = inboxFetchState(activeFilters);
+  const fetchQuery = useMemo<InboxQuery>(
+    () => ({
+      assignedToMe: activeFilters.assignedToMe,
+      state: fetchState,
+      search: "",
+    }),
+    [activeFilters.assignedToMe, fetchState],
+  );
+
+  const resize = useDragResize({
+    min: MIN_WIDTH,
+    max: () => Math.min(MAX_WIDTH, Math.round(window.innerWidth * 0.5)),
+    defaultWidth: DEFAULT_WIDTH,
+    initial: rememberedWidth,
+    onCommit: (width) => {
+      rememberedWidth = width;
+    },
+  });
+
+  useEffect(() => {
+    if (sidebar) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (filterMenu) {
+        setFilterMenu(null);
+        return;
+      }
+      onCloseRef.current?.();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [filterMenu, sidebar]);
+
+  useEffect(() => {
+    const onChange = () => setRefresh((value) => value + 1);
+    window.addEventListener(LINEAR_CHANGE_EVENT, onChange);
+    return () => window.removeEventListener(LINEAR_CHANGE_EVENT, onChange);
+  }, []);
+
+  useEffect(() => {
+    const force = refresh !== prevRefresh.current;
+    prevRefresh.current = refresh;
+    const cached = peekInboxItems(projects, fetchQuery);
+    if (cached) {
+      setItems(cached);
+      setError(null);
+      setLoading(false);
+    }
+    if (!force && cached && inboxListIsFresh(projects, fetchQuery)) {
+      return;
+    }
+
+    let cancelled = false;
+    if (cached) setRevalidating(true);
+    else {
+      setLoading(true);
+      setError(null);
+    }
+    void listInboxItems(projects, fetchQuery, { force })
+      .then((next) => {
+        if (cancelled) return;
+        setItems(next);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (cached) return;
+        setItems([]);
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+        setRevalidating(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchQuery, projects, refresh]);
+
+  const visibleItems = useMemo(
+    () =>
+      applyInboxFilters(items, activeFilters, searchInput, Date.now(), source),
+    [activeFilters, items, searchInput, source],
+  );
+
+  const searchNarrowed = searchInput.trim().length > 0;
+  const narrowedByUser = searchNarrowed || filtersActive;
+
+  const selected =
+    visibleItems.find((item) => inboxItemKey(item) === selectedKey) ??
+    visibleItems[0] ??
+    null;
+
+  useEffect(() => {
+    if (!selected) {
+      setSelectedKey(null);
+      return;
+    }
+    const key = inboxItemKey(selected);
+    if (key !== selectedKey) setSelectedKey(key);
+  }, [selected, selectedKey]);
+
+  useEffect(() => {
+    setInboxSelection(selected);
+  }, [selected]);
+
+  const onFiltersChange = (next: InboxFilters) => {
+    const pruned = pruneInboxFilters(
+      next,
+      projects.map((project) => project.path),
+    );
+    setFilters(pruned);
+    saveInboxFilters(pruned);
+  };
+
+  const onSourceChange = (next: InboxSource) => {
+    setSource(next);
+    saveInboxSource(next);
+  };
+
+  const onFilterButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (filterMenu) {
+      setFilterMenu(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setFilterMenu({
+      x: rect.right - INBOX_FILTER_MENU_WIDTH,
+      y: rect.bottom + 2,
+    });
+  };
+
+  const list = (
+    <div
+      ref={sidebar ? undefined : resize.setPaneRef}
+      className={
+        sidebar
+          ? "flex min-h-0 min-w-0 flex-1 flex-col"
+          : "relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
+      }
+    >
+      <div
+        role="tablist"
+        aria-label="Inbox source"
+        className="flex h-10 shrink-0 items-stretch border-b border-content/10"
+      >
+        <InboxSourceTab
+          source="github"
+          selected={source === "github"}
+          onSelect={onSourceChange}
+        />
+        <InboxSourceTab
+          source="linear"
+          selected={source === "linear"}
+          onSelect={onSourceChange}
+        />
+      </div>
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
+        <div className="relative flex h-7 min-w-0 flex-1 items-center">
+          <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
+          <input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Filter inbox"
+            aria-label="Filter inbox"
+            spellCheck={false}
+            autoComplete="off"
+            className="h-7 w-full rounded-md bg-transparent pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/40"
+          />
+        </div>
+        <button
+          type="button"
+          title="Filter inbox"
+          aria-label="Filter inbox"
+          aria-expanded={!!filterMenu}
+          aria-haspopup="menu"
+          onClick={onFilterButtonClick}
+          className={`grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content ${
+            filterMenu || filtersActive ? "bg-content/10 text-content" : ""
+          }`}
+        >
+          <ListFilter className="size-3" strokeWidth={1.75} />
+        </button>
+        <button
+          type="button"
+          aria-label="Refresh"
+          onClick={() => setRefresh((value) => value + 1)}
+          className="grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
+        >
+          {loading || revalidating ? (
+            <LoaderCircle
+              className="size-3.5 animate-spin"
+              strokeWidth={1.75}
+            />
+          ) : (
+            <RefreshCw className="size-3.5" strokeWidth={1.75} />
+          )}
+        </button>
+      </div>
+      <div
+        ref={listLock}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-none"
+      >
+        {error && items.length === 0 ? (
+          <p className="px-3 py-2 text-[12px] text-content/50">{error}</p>
+        ) : loading && items.length === 0 ? (
+          <div className="flex justify-center py-10 text-content/40">
+            <LoaderCircle className="size-4 animate-spin" strokeWidth={1.75} />
+          </div>
+        ) : visibleItems.length === 0 ? (
+          <p className="px-3 py-2 text-[12px] text-content/50">
+            {narrowedByUser
+              ? searchNarrowed
+                ? source === "linear"
+                  ? "No matching Linear issues"
+                  : "No matching issues or pull requests"
+                : source === "linear"
+                  ? "No Linear issues match these filters"
+                  : "No issues or pull requests match these filters"
+              : source === "linear"
+                ? "No Linear issues"
+                : projects.length === 0
+                  ? "Open a project to fill the inbox"
+                  : "No matching issues or pull requests"}
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-0.5 p-1.5">
+            {visibleItems.map((item) => {
+              const key = inboxItemKey(item);
+              const projectKey = projectName(item.projectPath);
+              return (
+                <li key={key}>
+                  <InboxCard
+                    item={item}
+                    active={selected != null && key === inboxItemKey(selected)}
+                    logoPath={resolveTabGroupLogo(projectKey, logos)}
+                    mascotName={resolveTabGroupMascot(projectKey, groupMascots)}
+                    mascotColor={resolveTabGroupColor(
+                      projectKey,
+                      groupColors,
+                      groupCustomColors,
+                      projectKey,
+                    )}
+                    onSelect={() => setSelectedKey(key)}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      {sidebar ? null : (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize inbox list"
+          className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
+            resize.dragging ? "bg-content/15" : "hover:bg-content/10"
+          }`}
+          onPointerDown={resize.onPointerDown}
+          onDoubleClick={resize.onDoubleClick}
+        />
+      )}
+    </div>
+  );
+
+  const filtersPortal = filterMenu ? (
+    <InboxFiltersMenu
+      x={filterMenu.x}
+      y={filterMenu.y}
+      projects={projectOptions}
+      source={source}
+      filters={activeFilters}
+      onChange={onFiltersChange}
+      onClose={() => setFilterMenu(null)}
+    />
+  ) : null;
+
+  if (sidebar) {
+    return (
+      <div
+        role="region"
+        aria-label="Inbox"
+        className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
+      >
+        {list}
+        {filtersPortal}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="region"
+      aria-label="Inbox"
+      data-app-inbox
+      className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
+    >
+      <div
+        className="flex h-10 shrink-0 items-center border-b border-content/10"
+        data-tauri-drag-region
+      >
+        {IS_MAC && !besideRail ? (
+          <div className="w-[78px] shrink-0" data-tauri-drag-region />
+        ) : null}
+        <div
+          className="flex min-w-0 flex-1 items-center gap-2 px-3 text-[13px]"
+          data-tauri-drag-region
+        >
+          <Inbox
+            className="size-3.5 shrink-0 text-content/45"
+            strokeWidth={1.75}
+          />
+          <span className="min-w-0 truncate text-content">Inbox</span>
+        </div>
+        {IS_MAC ? null : <WindowControls />}
+      </div>
+
+      <div className="flex min-h-0 min-w-0 flex-1">
+        {list}
+        <div
+          ref={detailLock}
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-none"
+        >
+          <InboxDetailBody
+            item={selected}
+            cwd={cwd}
+            projects={projectOptions}
+            revision={refresh}
+            onStart={onStart}
+          />
+        </div>
+      </div>
+      {filtersPortal}
+    </div>
+  );
+}
+
+export function InboxDetailPane({
+  cwd,
+  recents,
+  onStart,
+}: {
+  cwd: string;
+  recents: RecentProject[];
+  onStart?: (item: InboxItem) => void;
+}) {
+  const item = useInboxSelection();
+  const logos = useTabGroupLogos();
+  const projects = useMemo(
+    () => inboxProjectsFor(recents, cwd),
+    [cwd, recents],
+  );
+  const projectOptions = useMemo(
+    () => inboxProjectOptions(projects, logos),
+    [logos, projects],
+  );
+  return (
+    <div
+      role="region"
+      aria-label="Inbox"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-none text-content"
+    >
+      <InboxDetailBody
+        item={item}
+        cwd={cwd}
+        projects={projectOptions}
+        onStart={onStart}
+      />
+    </div>
+  );
+}
+
+function InboxDetailBody({
+  item,
+  cwd,
+  projects,
+  revision = 0,
+  onStart,
+}: {
+  item: InboxItem | null;
+  cwd: string;
+  projects: InboxProjectOption[];
+  revision?: number;
+  onStart?: (item: InboxItem) => void;
+}) {
+  if (!item) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+        <Inbox className="mb-3 size-6 text-content/30" strokeWidth={1.75} />
+        <p className="text-[13px] text-content/45">
+          Select an issue or pull request
+        </p>
+      </div>
+    );
+  }
+  return (
+    <InboxDetail
+      key={inboxItemKey(item)}
+      item={item}
+      cwd={cwd}
+      projects={projects}
+      revision={revision}
+      onStart={onStart}
+    />
+  );
+}
+
+function InboxCard({
+  item,
+  active,
+  logoPath,
+  mascotName,
+  mascotColor,
+  onSelect,
+}: {
+  item: InboxItem;
+  active: boolean;
+  logoPath: string | null;
+  mascotName: string | null;
+  mascotColor: string;
+  onSelect: () => void;
+}) {
+  const KindIcon = item.kind === "pr" ? GitPullRequest : CircleDot;
+  const time = formatRelativeTime(item.updatedAt);
+  const name = projectName(item.projectPath);
+  const linear = item.provider === "linear";
+  const source = linear ? item.teamName || item.repo : item.repo || name;
+
+  return (
+    <button
+      type="button"
+      title={item.title}
+      aria-current={active ? "true" : undefined}
+      onClick={onSelect}
+      className={`flex w-full flex-col rounded-md border px-2.5 py-2 text-left ${
+        active
+          ? "border-transparent bg-content/10 text-content"
+          : "border-transparent text-content/80 hover:bg-content/5 hover:text-content"
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <InboxProviderMark
+            provider={item.provider}
+            className="size-3.5 shrink-0"
+          />
+          <KindIcon
+            className="size-3 shrink-0 text-content/45"
+            strokeWidth={1.75}
+          />
+          <span className="min-w-0 truncate text-[11px] text-content/50">
+            {item.kind === "pr" ? "Pull request" : "Issue"} ·{" "}
+            {inboxItemRef(item)}
+          </span>
+        </span>
+        {time ? (
+          <span className="shrink-0 text-[11px] tabular-nums text-content/45">
+            {time}
+          </span>
+        ) : null}
+      </span>
+      <span className="mt-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
+        {item.title}
+      </span>
+      <span className="mt-1 flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] text-content/45">
+          {linear ? null : logoPath ? (
+            <ProjectLogoIcon
+              path={logoPath}
+              className="size-3.5 shrink-0 rounded-sm"
+              imageClassName="size-3.5"
+            />
+          ) : (
+            <ProjectMascot
+              project={name}
+              color={mascotColor}
+              name={mascotName}
+              className="size-3 shrink-0"
+            />
+          )}
+          <span className="min-w-0 truncate">{source}</span>
+        </span>
+        {item.labels.length > 0 ? (
+          <span className="flex min-w-0 shrink-0 items-center gap-1">
+            {item.labels.slice(0, 2).map((label) => (
+              <InboxLabel key={label.name} label={label} compact />
+            ))}
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+function InboxDetail({
+  item,
+  cwd,
+  projects,
+  revision,
+  onStart,
+}: {
+  item: InboxItem;
+  cwd: string;
+  projects: InboxProjectOption[];
+  revision: number;
+  onStart?: (item: InboxItem) => void;
+}) {
+  const linear = item.provider === "linear";
+  const githubKind =
+    item.kind === "issue" || item.kind === "pr" ? item.kind : null;
+  const cached = linear
+    ? peekLinearIssueDetails(item.id ?? "")
+    : githubKind
+      ? peekGithubWorkItemDetails(item.projectPath, githubKind, item.number)
+      : null;
+  const [details, setDetails] = useState<GithubWorkItemDetails | null>(cached);
+  const [loading, setLoading] = useState(cached == null);
+  const [error, setError] = useState<string | null>(null);
+  const defaultProject =
+    projects.find((project) => sameProjectPath(project.path, cwd))?.path ??
+    projects[0]?.path ??
+    cwd;
+  const [startProject, setStartProject] = useState(defaultProject);
+  const status = linear
+    ? item.state || inboxItemStatus(item)
+    : inboxItemStatus(item);
+  const statusKind = inboxItemStatus(item);
+  const statusClass =
+    statusKind === "Open"
+      ? "text-emerald-400/90"
+      : statusKind === "Draft"
+        ? "text-content/50"
+        : statusKind === "Merged"
+          ? "text-violet-400/90"
+          : "text-content/45";
+
+  const source = linear
+    ? item.teamName || item.repo
+    : item.repo || projectName(item.projectPath);
+  const markdownCwd = linear ? startProject || cwd : item.projectPath || cwd;
+
+  useEffect(() => {
+    let cancelled = false;
+    const cachedDetails = linear
+      ? peekLinearIssueDetails(item.id ?? "")
+      : githubKind
+        ? peekGithubWorkItemDetails(item.projectPath, githubKind, item.number)
+        : null;
+    if (cachedDetails) {
+      setDetails(cachedDetails);
+      setLoading(false);
+      setError(null);
+    } else {
+      setLoading(true);
+      setError(null);
+      setDetails(null);
+    }
+    const pending = linear
+      ? item.id
+        ? linearIssueDetails(item.id)
+        : Promise.reject(new Error("Missing Linear issue"))
+      : githubKind
+        ? githubWorkItemDetails(item.projectPath, githubKind, item.number)
+        : Promise.reject(new Error("Unknown inbox item"));
+    void pending
+      .then((next) => {
+        if (cancelled) return;
+        setDetails(next);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (cachedDetails) return;
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [githubKind, item.id, item.number, item.projectPath, linear, revision]);
+
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-8 py-8">
+      <header className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 text-[12px] text-content/50">
+          <InboxProviderMark provider={item.provider} className="size-3.5" />
+          <span>{item.kind === "pr" ? "Pull request" : "Issue"}</span>
+          <span className="tabular-nums">{inboxItemRef(item)}</span>
+          <span className={statusClass}>{status}</span>
+          {source ? <span className="truncate">{source}</span> : null}
+        </div>
+        <h1 className="text-[20px] font-semibold leading-tight text-content">
+          {item.title}
+        </h1>
+        <div className="flex flex-wrap items-center gap-2 text-[12px] text-content/50">
+          {item.assignees.length > 0 ? (
+            <span>
+              {item.assignees.map((person) => person.login).join(", ")}
+            </span>
+          ) : (
+            <span>Unassigned</span>
+          )}
+          {linear ? null : (
+            <>
+              <span aria-hidden>·</span>
+              <span>{projectName(item.projectPath)}</span>
+            </>
+          )}
+          {formatRelativeTime(item.updatedAt) ? (
+            <>
+              <span aria-hidden>·</span>
+              <span>Updated {formatRelativeTime(item.updatedAt)}</span>
+            </>
+          ) : null}
+        </div>
+        {item.labels.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {item.labels.map((label) => (
+              <InboxLabel key={label.name} label={label} />
+            ))}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {onStart && item.kind !== "pr" ? (
+            <>
+              <button
+                type="button"
+                disabled={linear && !startProject}
+                onClick={() =>
+                  onStart(
+                    linear ? { ...item, projectPath: startProject } : item,
+                  )
+                }
+                className="inline-flex items-center gap-1 rounded-md bg-content px-3 h-6.5 text-[12px] text-background-base hover:bg-content/80 disabled:cursor-default disabled:opacity-40"
+              >
+                Start
+                <ArrowRight className="size-3" strokeWidth={1.75} />
+              </button>
+              {linear ? (
+                <InboxProjectPicker
+                  projects={projects}
+                  value={startProject}
+                  onChange={setStartProject}
+                />
+              ) : null}
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void openUrl(item.url)}
+            className={
+              item.kind === "pr"
+                ? "inline-flex items-center gap-1.5 rounded-md bg-content px-3 h-7 text-[12px] text-background-base hover:bg-content/80"
+                : "inline-flex items-center gap-1.5 rounded-md px-3 h-7 text-[12px] text-content/70 hover:bg-content/10 hover:text-content"
+            }
+          >
+            <ExternalLink className="size-3.5" strokeWidth={1.75} />
+            {item.kind === "pr"
+              ? "Review on GitHub"
+              : linear
+                ? "Open in Linear"
+                : "Open on GitHub"}
+          </button>
+        </div>
+      </header>
+      <div className="border-t border-content/10 pt-5">
+        {loading ? (
+          <div className="flex justify-center py-10 text-content/40">
+            <LoaderCircle className="size-4 animate-spin" strokeWidth={1.75} />
+          </div>
+        ) : error ? (
+          <p className="text-[13px] text-content/50">{error}</p>
+        ) : details?.body.trim() ? (
+          <div>
+            {details.author ? (
+              <p className="mb-3 text-[12px] text-content/45">
+                {details.author}
+              </p>
+            ) : null}
+            <AgentMarkdown text={details.body} cwd={markdownCwd} />
+          </div>
+        ) : (
+          <p className="text-[13px] text-content/45">No description</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InboxProjectPicker({
+  projects,
+  value,
+  onChange,
+}: {
+  projects: InboxProjectOption[];
+  value: string;
+  onChange: (path: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const selected =
+    projects.find((project) => sameProjectPath(project.path, value)) ??
+    projects[0] ??
+    null;
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (button.current?.contains(target) || menu.current?.contains(target)) {
+        return;
+      }
+      setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={button}
+        type="button"
+        disabled={projects.length === 0}
+        onClick={() => setOpen((next) => !next)}
+        className="inline-flex h-7 max-w-48 items-center gap-1.5 rounded-md border border-content/10 bg-content/5 px-2 text-[12px] text-content/80 hover:bg-content/10 hover:text-content disabled:cursor-default disabled:opacity-40"
+      >
+        {selected ? <InboxProjectMark project={selected} /> : null}
+        <span className="min-w-0 truncate">
+          {selected?.name ?? "Choose project"}
+        </span>
+        <ChevronDown
+          className="size-3 shrink-0 text-content/45"
+          strokeWidth={1.75}
+        />
+      </button>
+      {open ? (
+        <div
+          ref={menu}
+          role="listbox"
+          className="absolute left-0 top-full z-30 mt-1 max-h-64 min-w-full max-w-64 overflow-y-auto rounded-lg border border-content/10 bg-content/10 p-1 shadow-xl backdrop-blur-xl outline-none"
+        >
+          {projects.map((project) => {
+            const active = selected
+              ? sameProjectPath(project.path, selected.path)
+              : false;
+            return (
+              <button
+                key={project.path}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  onChange(project.path);
+                  setOpen(false);
+                }}
+                className={`flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[12px] ${
+                  active
+                    ? "bg-content/10 text-content"
+                    : "text-content/80 hover:bg-content/5 hover:text-content"
+                }`}
+              >
+                <InboxProjectMark project={project} />
+                <span className="min-w-0 truncate">{project.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function InboxLabel({
+  label,
+  compact = false,
+}: {
+  label: GithubLabel;
+  compact?: boolean;
+}) {
+  const color = labelColor(label.color);
+  return (
+    <span
+      className={`inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-px text-content/50 bg-content/8 ${
+        compact ? "max-w-20 text-[10px]" : "text-[11px]"
+      }`}
+    >
+      {color ? (
+        <span
+          aria-hidden
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+      ) : null}
+      <span className="min-w-0 truncate">{label.name}</span>
+    </span>
+  );
+}
+
+function labelColor(value: string): string | null {
+  const hex = value.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+  return `#${hex}`;
+}

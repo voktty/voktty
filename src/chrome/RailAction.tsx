@@ -32,7 +32,7 @@ export function RailAction({
           ? "bg-content/10 text-content"
           : isNavButton
             ? "text-content/50 hover:bg-content/10 hover:text-content"
-            : "text-content/50 bg-content/5 hover:bg-content/10 hover:text-content"
+            : "text-content/50 hover:bg-content/10 hover:text-content"
       } disabled:cursor-default disabled:opacity-40`}
     >
       {badge != null ? (

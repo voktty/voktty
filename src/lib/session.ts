@@ -1,4 +1,5 @@
 import type { ContextUsage } from "./contextUsage";
+import type { InboxComposerCard } from "./githubTasks";
 import {
   defaultSessionChoice,
   preferredModelId,
@@ -166,6 +167,10 @@ export type Session = {
   branch?: string;
   /** Extra git worktree from the old session-branch feature. Unused. */
   worktreeCwd?: string;
+  /** One-shot composer text when opening a session from Inbox. */
+  composerSeed?: string;
+  /** Inbox issue/PR chip shown above the composer. In-memory, one-shot. */
+  inboxCard?: InboxComposerCard;
 };
 
 export type PendingHarnessSwitch = {

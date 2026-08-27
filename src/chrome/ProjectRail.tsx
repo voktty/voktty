@@ -1,6 +1,7 @@
 import {
   Archive,
   FolderOpen,
+  Inbox,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -9,13 +10,7 @@ import {
   Settings,
   Trash2,
 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
@@ -104,6 +99,8 @@ type Props = {
   onGoForward?: () => void;
   onSearch?: () => void;
   searchActive?: boolean;
+  onOpenInbox?: () => void;
+  inboxActive?: boolean;
   onTogglePanel?: () => void;
   onSelectProject: (path: string) => void;
   onOpenProject: () => void;
@@ -125,6 +122,8 @@ export function ProjectRail({
   onGoForward,
   onSearch,
   searchActive = false,
+  onOpenInbox,
+  inboxActive = false,
   onTogglePanel,
   onSelectProject,
   onOpenProject,
@@ -138,10 +137,7 @@ export function ProjectRail({
   const resize = useDragResize({
     min: PROJECT_RAIL_WIDTH_MIN,
     max: () =>
-      Math.min(
-        PROJECT_RAIL_WIDTH_MAX,
-        Math.floor(window.innerWidth * 0.35),
-      ),
+      Math.min(PROJECT_RAIL_WIDTH_MAX, Math.floor(window.innerWidth * 0.35)),
     defaultWidth: PROJECT_RAIL_WIDTH_DEFAULT,
     initial: loadProjectRailWidth(),
     onCommit: saveProjectRailWidth,
@@ -365,6 +361,15 @@ export function ProjectRail({
               active={searchActive}
               shortcut={`${MOD}K`}
               ariaLabel={`Search (${MOD}K)`}
+              isNavButton
+            />
+            <RailAction
+              label="Inbox"
+              icon={Inbox}
+              onClick={onOpenInbox}
+              active={inboxActive}
+              ariaLabel="Inbox"
+              isNavButton
             />
           </div>
 
@@ -383,7 +388,7 @@ export function ProjectRail({
                 busy={busy}
                 sortable={pinnedSortable}
                 pinned
-                searchActive={searchActive}
+                searchActive={searchActive || inboxActive}
                 onSelect={onSelectProject}
                 onTogglePin={onTogglePin}
                 onContextMenu={onProjectContextMenu}
@@ -405,7 +410,7 @@ export function ProjectRail({
               busy={busy}
               sortable={projectSortable}
               pinned={false}
-              searchActive={searchActive}
+              searchActive={searchActive || inboxActive}
               onSelect={onSelectProject}
               onTogglePin={onTogglePin}
               onContextMenu={onProjectContextMenu}
