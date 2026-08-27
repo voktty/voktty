@@ -492,7 +492,7 @@ export function createCommandItems(
     },
     {
       id: "tab.newApiClient",
-      title: "New API Client & Sandbox",
+      title: t("commandPalette.commands.newApiClient"),
       group: "Tabs",
       keywords: [
         "api",

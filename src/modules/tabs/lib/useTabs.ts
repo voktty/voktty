@@ -1560,7 +1560,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         ...createTabIdentity(targetSpace),
         kind: "api-client",
         spaceId: targetSpace,
-        title: "API Client",
+        title: translate("tabs.titles.apiClient"),
       },
     ];
     tabsRef.current = nextTabs;
