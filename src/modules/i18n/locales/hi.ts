@@ -2346,6 +2346,7 @@ export const hi: TranslationSchema = {
       tabNewBlock: "नया ब्लॉक टर्मिनल",
       tabNewPrivate: "नया निजी टर्मिनल",
       tabNewPreview: "नया वेब पूर्वावलोकन",
+      tabNewApiClient: "नया एपीआई क्लाइंट और सैंडबॉक्स",
       tabNewEditor: "नया संपादक टैब",
       tabClose: "टैब या पेन बंद करें",
       paneSplitRight: "पेन को दाईं ओर विभाजित करें",

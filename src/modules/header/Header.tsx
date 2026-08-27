@@ -36,6 +36,7 @@ type Props = {
   onNewPrivate: () => void;
   onNewPreview: () => void;
   onNewEditor: () => void;
+  onNewApiClient?: () => void;
   onNewRdp?: (options?: {
     host?: string;
     port?: number;
@@ -106,6 +107,7 @@ export function Header({
   onNewPrivate,
   onNewPreview,
   onNewEditor,
+  onNewApiClient,
   onNewRdp,
   onConnectRemote,
   onOpenFile,
@@ -295,6 +297,7 @@ export function Header({
               onNewPrivate={onNewPrivate}
               onNewPreview={onNewPreview}
               onNewEditor={onNewEditor}
+              onNewApiClient={onNewApiClient}
               onNewRdp={onNewRdp}
               onConnectRemote={onConnectRemote}
               onShareTerminal={onShareTerminal}

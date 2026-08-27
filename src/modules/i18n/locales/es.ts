@@ -2416,6 +2416,7 @@ export const es: TranslationSchema = {
       tabNewBlock: "Nueva terminal de bloques",
       tabNewPrivate: "Nueva terminal privada",
       tabNewPreview: "Nueva vista previa web",
+      tabNewApiClient: "Nuevo Cliente API y Sandbox",
       tabNewEditor: "Nueva pestaña del editor",
       tabClose: "Cerrar pestaña o panel",
       paneSplitRight: "Dividir panel a la derecha",
