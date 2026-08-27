@@ -149,6 +149,9 @@ const jaBase = mergeLocale(en, {
         confirmCloseTitle: "実行中のプロセスを終了する前に確認",
         confirmCloseDesc:
           "コマンドの実行中にターミナルタブを閉じるか終了する前に確認します。エディターの未保存の変更は常に確認されます。",
+        suggestEnabledTitle: "コマンド履歴の候補表示",
+        suggestEnabledDesc:
+          "ターミナル入力時にコマンド履歴から候補を自動表示します。",
       },
       window: {
         title: "ウィンドウと起動",

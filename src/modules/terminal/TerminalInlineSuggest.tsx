@@ -191,7 +191,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
               title={t("terminal.history.searchPlaceholder")}
             >
               <HugeiconsIcon icon={Search01Icon} size={10} />
-              <span>{searchMode ? t("common.search") : "Ctrl+F"}</span>
+              <span>{searchMode ? t("common.search") : "Alt+F"}</span>
             </button>
             <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-mono text-primary">
               {items.length}
@@ -308,7 +308,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
             </span>
             <span>
               <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
-                Ctrl+F
+                Alt+F
               </kbd>{" "}
               {t("common.search")}
             </span>

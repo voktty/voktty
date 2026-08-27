@@ -151,6 +151,9 @@ const ptBase = mergeLocale(en, {
           "Confirmar antes de encerrar um processo em execução",
         confirmCloseDesc:
           "Perguntar antes de fechar uma aba do terminal ou sair enquanto um comando ainda estiver em execução. Alterações não salvas no editor são sempre confirmadas.",
+        suggestEnabledTitle: "Sugestões do histórico de comandos",
+        suggestEnabledDesc:
+          "Exibir sugestões inteligentes do histórico de comandos ao digitar no terminal.",
       },
       window: {
         title: "Janela e Inicialização",

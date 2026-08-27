@@ -100,6 +100,7 @@ export type Slot = {
   lastUsedAt: number;
   imeState: ImeBridgeState;
   selectionCopyTimer: ReturnType<typeof setTimeout> | null;
+  isDirectTyping: boolean;
 };
 
 const slots: Slot[] = [];
@@ -247,13 +248,31 @@ function syncTerminalSuggestions(slot: Slot): void {
     return;
   }
 
+  // Respect user preference for terminal suggestions
+  const suggestEnabled = usePreferencesStore.getState().terminalSuggestEnabled;
+  if (!suggestEnabled) {
+    useTerminalSuggestStore.getState().clear(leafId);
+    return;
+  }
+
+  // Only synchronize suggestions when the user is actively typing in the prompt
+  if (!slot.isDirectTyping) {
+    useTerminalSuggestStore.getState().clear(leafId);
+    return;
+  }
+
   if (suggestDebounceTimer !== null) {
     clearTimeout(suggestDebounceTimer);
   }
 
   suggestDebounceTimer = setTimeout(async () => {
     suggestDebounceTimer = null;
-    if (slot.currentLeafId !== leafId || isAltScreen(slot)) {
+    if (
+      slot.currentLeafId !== leafId ||
+      isAltScreen(slot) ||
+      !slot.isDirectTyping ||
+      !usePreferencesStore.getState().terminalSuggestEnabled
+    ) {
       useTerminalSuggestStore.getState().clear(leafId);
       return;
     }
@@ -274,7 +293,13 @@ function syncTerminalSuggestions(slot: Slot): void {
 
     try {
       const list = await historyList(query, undefined, 8);
-      if (slot.currentLeafId !== leafId) return;
+      if (
+        slot.currentLeafId !== leafId ||
+        !slot.isDirectTyping ||
+        !usePreferencesStore.getState().terminalSuggestEnabled
+      ) {
+        return;
+      }
 
       const items = list.map((e) => e.cmd);
       const top = items.find(
@@ -386,6 +411,7 @@ function createSlot(): Slot {
     lastUsedAt: 0,
     imeState: createImeBridgeState(),
     selectionCopyTimer: null,
+    isDirectTyping: false,
   };
 
   // Some WKWebView builds bypass xterm's composition events. The pure bridge
@@ -442,14 +468,36 @@ function createSlot(): Slot {
     const bridge = adapter?.resolveLeaf(leafId);
     if (!bridge) return true;
 
+    // Track typing intent
+    if (event.type === "keydown") {
+      if (
+        event.key === "Enter" ||
+        event.key === "Escape" ||
+        ((event.ctrlKey || event.metaKey) &&
+          (event.key === "c" || event.key === "C" || event.key === "d" || event.key === "D"))
+      ) {
+        slot.isDirectTyping = false;
+      } else if (event.key === "Backspace") {
+        slot.isDirectTyping = true;
+      } else if (
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        event.key.length === 1
+      ) {
+        slot.isDirectTyping = true;
+      }
+    }
+
     // Terminal inline suggestions / ghost interception
     const suggest = useTerminalSuggestStore.getState().getSuggest(leafId);
     if (suggest && suggest.open && suggest.items.length > 0) {
-      const isSearchKey =
-        (IS_MAC ? event.metaKey : event.ctrlKey) &&
-        !event.altKey &&
-        (event.key === "f" || event.key === "F" || event.code === "KeyF");
-      if (isSearchKey) {
+      const isSearchFilterKey =
+        (event.altKey && (event.key === "f" || event.key === "F" || event.code === "KeyF")) ||
+        ((IS_MAC ? event.metaKey : event.ctrlKey) &&
+          event.shiftKey &&
+          (event.key === "f" || event.key === "F" || event.code === "KeyF"));
+      if (isSearchFilterKey) {
         event.preventDefault();
         if (event.type === "keydown") {
           useTerminalSuggestStore.getState().toggleSearch(leafId, true);
@@ -481,11 +529,13 @@ function createSlot(): Slot {
                 bridge.writeToPty("\r");
               }
             }
+            slot.isDirectTyping = false;
             useTerminalSuggestStore.getState().clear(leafId);
           }
           return false;
         } else {
           if (event.type === "keydown") {
+            slot.isDirectTyping = false;
             useTerminalSuggestStore.getState().clear(leafId);
           }
         }
@@ -512,6 +562,7 @@ function createSlot(): Slot {
               bridge.writeToPty(erase + selected);
             }
           }
+          slot.isDirectTyping = false;
           useTerminalSuggestStore.getState().clear(leafId);
         }
         return false;
@@ -528,6 +579,7 @@ function createSlot(): Slot {
         event.preventDefault();
         if (event.type === "keydown") {
           bridge.writeToPty(suggest.ghostTail);
+          slot.isDirectTyping = false;
           useTerminalSuggestStore.getState().clear(leafId);
         }
         return false;
@@ -540,11 +592,13 @@ function createSlot(): Slot {
         !event.metaKey &&
         !event.shiftKey
       ) {
-        event.preventDefault();
-        if (event.type === "keydown") {
-          useTerminalSuggestStore.getState().selectNext(leafId);
+        if (suggest.navigated || slot.isDirectTyping || suggest.searchMode) {
+          event.preventDefault();
+          if (event.type === "keydown") {
+            useTerminalSuggestStore.getState().selectNext(leafId);
+          }
+          return false;
         }
-        return false;
       }
 
       if (
@@ -554,16 +608,19 @@ function createSlot(): Slot {
         !event.metaKey &&
         !event.shiftKey
       ) {
-        event.preventDefault();
-        if (event.type === "keydown") {
-          useTerminalSuggestStore.getState().selectPrev(leafId);
+        if (suggest.navigated || slot.isDirectTyping || suggest.searchMode) {
+          event.preventDefault();
+          if (event.type === "keydown") {
+            useTerminalSuggestStore.getState().selectPrev(leafId);
+          }
+          return false;
         }
-        return false;
       }
 
       if (event.key === "Escape") {
         event.preventDefault();
         if (event.type === "keydown") {
+          slot.isDirectTyping = false;
           if (suggest.searchMode) {
             useTerminalSuggestStore.getState().toggleSearch(leafId, false);
           } else {
@@ -571,6 +628,18 @@ function createSlot(): Slot {
           }
         }
         return false;
+      }
+    } else {
+      // Suggestion popup is closed: if user navigates with Up/Down arrows directly, ensure typing flag is reset
+      if (
+        event.type === "keydown" &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey
+      ) {
+        slot.isDirectTyping = false;
+        useTerminalSuggestStore.getState().clear(leafId);
       }
     }
 
@@ -631,6 +700,7 @@ function createSlot(): Slot {
     if (leafId === null) return;
     adapter?.resolveLeaf(leafId)?.writeToPty(data);
     if (data === "\r" || data === "\x03" || data === "\x04") {
+      slot.isDirectTyping = false;
       useTerminalSuggestStore.getState().clear(leafId);
     } else {
       syncTerminalSuggestions(slot);
