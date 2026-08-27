@@ -2,6 +2,8 @@ import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const itBase = mergeLocale(en, {
   common: {
+    textCopied: "Testo copiato negli appunti",
+    textPasted: "Testo incollato",
     save: "Salva",
     saved: "Salvato",
     cancel: "Annulla",
@@ -1350,6 +1352,18 @@ const itBase = mergeLocale(en, {
     stage: "Prepara",
   },
   editor: {
+    highlightText: "Evidenzia selezione",
+    highlightColorYellow: "Giallo",
+    highlightColorGreen: "Verde",
+    highlightColorBlue: "Blu",
+    highlightColorPink: "Rosa",
+    highlightColorPurple: "Viola",
+    removeHighlight: "Rimuovi evidenziazione",
+    clearAllHighlights: "Cancella tutte le evidenziazioni",
+    highlightAdded: "Evidenziazione salvata",
+    highlightRemoved: "Evidenziazione rimossa",
+    highlightsCleared: "Tutte le evidenziazioni cancellate",
+    viewSourceCode: "Visualizza codice sorgente",
     dialog: {
       nameRequired: "Il nome è obbligatorio",
       pathMustBeRelative: "Il percorso deve essere relativo",

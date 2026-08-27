@@ -1,5 +1,7 @@
 export const en = {
   common: {
+    textCopied: "Text copied to clipboard",
+    textPasted: "Text pasted",
     save: "Save",
     saved: "Saved",
     cancel: "Cancel",
@@ -1870,6 +1872,18 @@ export const en = {
     stage: "Stage",
   },
   editor: {
+    highlightText: "Highlight Selection",
+    highlightColorYellow: "Yellow",
+    highlightColorGreen: "Green",
+    highlightColorBlue: "Blue",
+    highlightColorPink: "Pink",
+    highlightColorPurple: "Purple",
+    removeHighlight: "Remove Highlight",
+    clearAllHighlights: "Clear All Highlights",
+    highlightAdded: "Highlight saved",
+    highlightRemoved: "Highlight removed",
+    highlightsCleared: "All highlights cleared",
+    viewSourceCode: "View Source Code",
     externalChangeDetected: "File {name} was modified externally.",
     externalChangeConflict:
       "File {name} was modified externally and you have unsaved changes.",

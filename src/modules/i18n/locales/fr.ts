@@ -2,6 +2,8 @@ import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const frBase = mergeLocale(en, {
   common: {
+    textCopied: "Texte copié dans le presse-papiers",
+    textPasted: "Texte collé",
     save: "Enregistrer",
     saved: "Enregistré",
     cancel: "Annuler",
@@ -1353,6 +1355,18 @@ const frBase = mergeLocale(en, {
     stage: "Indexer",
   },
   editor: {
+    highlightText: "Surligner la sélection",
+    highlightColorYellow: "Jaune",
+    highlightColorGreen: "Vert",
+    highlightColorBlue: "Bleu",
+    highlightColorPink: "Rose",
+    highlightColorPurple: "Violet",
+    removeHighlight: "Supprimer le surlignage",
+    clearAllHighlights: "Effacer tous les surlignages",
+    highlightAdded: "Surlignage enregistré",
+    highlightRemoved: "Surlignage supprimé",
+    highlightsCleared: "Tous les surlignages effacés",
+    viewSourceCode: "Voir le code source",
     dialog: {
       nameRequired: "Le nom est requis",
       pathMustBeRelative: "Le chemin doit être relatif",

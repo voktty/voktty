@@ -3,6 +3,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { endpointIdFromCompatModel } from "@/modules/ai/config";
@@ -57,6 +60,8 @@ import {
   CheckmarkCircle01Icon,
   CodeIcon,
   Copy01Icon,
+  Delete02Icon,
+  PencilEdit02Icon,
   PlayIcon,
   RefreshIcon,
   Search01Icon,
@@ -67,6 +72,15 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { vim } from "@replit/codemirror-vim";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { Button } from "@/components/ui/button";
+import {
+  documentHighlightExtension,
+  reconcileHighlightsWithDoc,
+  setDocumentHighlightsEffect,
+} from "./lib/documentHighlightExtension";
+import {
+  type HighlightColor,
+  useDocumentHighlightStore,
+} from "./store/documentHighlightStore";
 import {
   forwardRef,
   memo,
@@ -955,6 +969,7 @@ export const EditorPane = memo(
         lspCompartment.of([]),
         diffGutterCompartment.of([]),
         breakpointGutter(() => pathRef.current),
+        documentHighlightExtension(pathRef.current || path),
         minimapCompartment.of([]),
         diagnosticsReporter(() => pathRef.current),
         // Before inlineCompletion so an open popup wins Tab over the ghost.
@@ -1578,6 +1593,83 @@ export const EditorPane = memo(
       setInlineAiOpen(false);
     }, []);
 
+    const readyDocContent = doc.status === "ready" ? doc.content : null;
+    // Reconcile and load saved highlights for this document
+    useEffect(() => {
+      if (doc.status !== "ready" || readyDocContent === null) return;
+      const view = cmRef.current?.view;
+      if (!view) return;
+      const stored = useDocumentHighlightStore.getState().getHighlights(path);
+      if (stored.length > 0) {
+        const reconciled = reconcileHighlightsWithDoc(readyDocContent, stored);
+        view.dispatch({
+          effects: setDocumentHighlightsEffect.of(reconciled),
+        });
+      }
+    }, [doc.status, readyDocContent, path]);
+
+    const handleHighlightSelection = useCallback(
+      (color: HighlightColor = "yellow") => {
+        const view = cmRef.current?.view;
+        if (!view || !path) return;
+        const { from, to } = view.state.selection.main;
+        if (from === to) return;
+        const start = Math.min(from, to);
+        const end = Math.max(from, to);
+        const text = view.state.sliceDoc(start, end);
+        if (!text.trim()) return;
+
+        useDocumentHighlightStore.getState().addHighlight(path, {
+          from: start,
+          to: end,
+          text,
+          color,
+        });
+
+        const updated = useDocumentHighlightStore
+          .getState()
+          .getHighlights(path);
+        view.dispatch({
+          effects: setDocumentHighlightsEffect.of(updated),
+        });
+
+        toast.success(t("editor.highlightAdded"));
+      },
+      [path, t],
+    );
+
+    const handleRemoveHighlightSelection = useCallback(() => {
+      const view = cmRef.current?.view;
+      if (!view || !path) return;
+      const { from, to } = view.state.selection.main;
+      const start = Math.min(from, to);
+      const end = Math.max(from, to);
+
+      useDocumentHighlightStore
+        .getState()
+        .removeHighlightsInRange(path, start, end);
+      const updated = useDocumentHighlightStore
+        .getState()
+        .getHighlights(path);
+      view.dispatch({
+        effects: setDocumentHighlightsEffect.of(updated),
+      });
+
+      toast.info(t("editor.highlightRemoved"));
+    }, [path, t]);
+
+    const handleClearAllHighlights = useCallback(() => {
+      const view = cmRef.current?.view;
+      if (!view || !path) return;
+
+      useDocumentHighlightStore.getState().clearHighlights(path);
+      view.dispatch({
+        effects: setDocumentHighlightsEffect.of([]),
+      });
+
+      toast.info(t("editor.highlightsCleared"));
+    }, [path, t]);
+
     if (doc.status === "loading" || doc.status === "slow") {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-xs text-muted-foreground">
@@ -1963,6 +2055,71 @@ export const EditorPane = memo(
               Ctrl+V
             </span>
           </ContextMenuItem>
+
+          <ContextMenuSeparator className="my-1 border-border/30" />
+
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent focus:text-accent-foreground">
+              <HugeiconsIcon
+                icon={PencilEdit02Icon}
+                size={14}
+                className="text-amber-400"
+              />
+              <span className="flex-1">{t("editor.highlightText")}</span>
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-52 p-1">
+              <ContextMenuItem
+                onSelect={() => handleHighlightSelection("yellow")}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent"
+              >
+                <span className="h-3 w-3 rounded-full bg-yellow-400 border border-yellow-500/50 shadow-xs" />
+                <span className="flex-1">{t("editor.highlightColorYellow")}</span>
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => handleHighlightSelection("green")}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent"
+              >
+                <span className="h-3 w-3 rounded-full bg-emerald-400 border border-emerald-500/50 shadow-xs" />
+                <span className="flex-1">{t("editor.highlightColorGreen")}</span>
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => handleHighlightSelection("blue")}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent"
+              >
+                <span className="h-3 w-3 rounded-full bg-sky-400 border border-sky-500/50 shadow-xs" />
+                <span className="flex-1">{t("editor.highlightColorBlue")}</span>
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => handleHighlightSelection("pink")}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent"
+              >
+                <span className="h-3 w-3 rounded-full bg-pink-400 border border-pink-500/50 shadow-xs" />
+                <span className="flex-1">{t("editor.highlightColorPink")}</span>
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => handleHighlightSelection("purple")}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent"
+              >
+                <span className="h-3 w-3 rounded-full bg-purple-400 border border-purple-500/50 shadow-xs" />
+                <span className="flex-1">{t("editor.highlightColorPurple")}</span>
+              </ContextMenuItem>
+              <ContextMenuSeparator className="my-1 border-border/30" />
+              <ContextMenuItem
+                onSelect={handleRemoveHighlightSelection}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent text-muted-foreground hover:text-foreground"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} size={14} className="text-muted-foreground" />
+                <span className="flex-1">{t("editor.removeHighlight")}</span>
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={handleClearAllHighlights}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-destructive/10 text-destructive"
+              >
+                <HugeiconsIcon icon={Delete02Icon} size={14} className="text-destructive" />
+                <span className="flex-1">{t("editor.clearAllHighlights")}</span>
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
 
           <ContextMenuSeparator className="my-1 border-border/30" />
 

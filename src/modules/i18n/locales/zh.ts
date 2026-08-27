@@ -2,6 +2,8 @@ import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const zhBase = mergeLocale(en, {
   common: {
+    textCopied: "已复制到剪贴板",
+    textPasted: "已粘贴文本",
     save: "保存",
     saved: "已保存",
     cancel: "取消",
@@ -1246,6 +1248,18 @@ const zhBase = mergeLocale(en, {
     stage: "暂存",
   },
   editor: {
+    highlightText: "高亮选中文本",
+    highlightColorYellow: "黄色",
+    highlightColorGreen: "绿色",
+    highlightColorBlue: "蓝色",
+    highlightColorPink: "粉色",
+    highlightColorPurple: "紫色",
+    removeHighlight: "移除高亮",
+    clearAllHighlights: "清除所有高亮",
+    highlightAdded: "高亮已保存",
+    highlightRemoved: "高亮已移除",
+    highlightsCleared: "所有高亮已清除",
+    viewSourceCode: "查看源代码",
     dialog: {
       nameRequired: "必须填写名称",
       pathMustBeRelative: "路径必须是相对路径",

@@ -1,8 +1,10 @@
 import { openExternalUrl } from "@/lib/external-link";
 import { resolveFontFamily } from "@/lib/fonts";
+import { t } from "@/modules/i18n";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { TerminalCursorStyle } from "@/modules/settings/store";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
+import { toast } from "sonner";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
@@ -424,14 +426,20 @@ function createSlot(): Slot {
     // xterm emits selection changes while the pointer is still moving. Delay
     // the copy until the selection settles so the clipboard receives one
     // complete range instead of every intermediate mouse position.
-    slot.selectionCopyTimer = setTimeout(() => {
+    slot.selectionCopyTimer = setTimeout(async () => {
       slot.selectionCopyTimer = null;
       if (slot.currentLeafId !== leafId || !term.hasSelection()) return;
-      void copyTerminalSelection(term, writeTerminalClipboard);
+      const copied = await copyTerminalSelection(term, writeTerminalClipboard);
+      if (copied) {
+        toast.success(t("common.textCopied"), {
+          duration: 1400,
+          id: "terminal-clipboard-feedback",
+        });
+      }
     }, 120);
   });
 
-  host.addEventListener("contextmenu", (event) => {
+  host.addEventListener("contextmenu", async (event) => {
     event.preventDefault();
 
     const leafId = slot.currentLeafId;
@@ -439,11 +447,17 @@ function createSlot(): Slot {
 
     // Right click is intentionally a direct paste. xterm.paste() preserves
     // bracketed-paste mode and does not submit an extra Enter key.
-    void pasteClipboardIntoTerminal(
+    const pasted = await pasteClipboardIntoTerminal(
       term,
       readTerminalClipboard,
       () => slot.currentLeafId === leafId,
     );
+    if (pasted) {
+      toast.success(t("common.textPasted"), {
+        duration: 1400,
+        id: "terminal-clipboard-feedback",
+      });
+    }
   });
 
   slots.push(slot);
