@@ -230,9 +230,8 @@ pub async fn dispatch_mock_webhook(
                 "Idempotency probe PASSED: {duplicate_count} duplicate events processed cleanly with 2xx status."
             )
         } else {
-            format!(
-                "Idempotency probe FAILED: Duplicates caused non-2xx status or failed processing."
-            )
+            "Idempotency probe FAILED: Duplicates caused non-2xx status or failed processing."
+                .to_string()
         }
     } else if let Some(first) = attempts.first() {
         format!("Webhook dispatched: HTTP {}", first.status)

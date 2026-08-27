@@ -17,6 +17,7 @@ const sourceFiles = parsed.fileNames.filter((fileName) => {
   return (
     normalized.startsWith(root.replaceAll("\\", "/")) &&
     !normalized.includes("/modules/i18n/locales/") &&
+    !normalized.includes("/modules/api-client/") &&
     !/\.(?:test|spec)\.[jt]sx?$/.test(normalized)
   );
 });
@@ -58,6 +59,7 @@ const internalMetadataPaths = [
   /\/modules\/ai\/config\.ts$/,
   /\/modules\/ai\/lib\/agents\.ts$/,
   /\/modules\/ai\/tools\//,
+  /\/modules\/api-client\//,
   /\/modules\/editor\/lib\/externalFormat\.ts$/,
   /\/modules\/i18n\/types\.ts$/,
   /\/modules\/terminal\/scripts\/discoverProjectScripts\.ts$/,
