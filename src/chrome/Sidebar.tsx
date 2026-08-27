@@ -66,6 +66,7 @@ import { IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { SessionFiltersMenu } from "./SessionFiltersMenu";
+import { SessionsEmpty } from "./SessionsEmpty";
 import { SidebarUpdate } from "./SidebarUpdate";
 import { SourceControl } from "./SourceControl";
 
@@ -261,6 +262,10 @@ function SidebarComponent({
   );
   const sessionHarnesses = harnessesInSessions(sessions);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
+  const searchNarrowed = Boolean(
+    (deckLayout || searchOpen) && searchQuery.trim(),
+  );
+  const narrowedByUser = searchNarrowed || filtersActive;
   const sortable = useSortable(tabOrder, (ids) => {
     const next = ids as SidebarTab[];
     setTabOrder(next);
@@ -752,13 +757,18 @@ function SidebarComponent({
                 Couldn’t load sessions
               </p>
             ) : visibleSessions.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-content/50">
-                {(deckLayout || searchOpen) && searchQuery.trim()
-                  ? "No matching sessions"
-                  : filtersActive
-                    ? "No sessions match these filters"
-                    : "No sessions yet"}
-              </p>
+              // A narrowed-down result is a transient answer to what the user
+              // just typed, so it stays a quiet line of text. Only the genuine
+              // "this project has nothing in it" case earns the illustration.
+              narrowedByUser ? (
+                <p className="px-3 py-2 text-[12px] text-content/50">
+                  {searchNarrowed
+                    ? "No matching sessions"
+                    : "No sessions match these filters"}
+                </p>
+              ) : (
+                <SessionsEmpty message="Sessions you start will show up here" />
+              )
             ) : (
               <ul className="flex flex-col gap-0.5 p-1.5">
                 {visibleSessions.map((session) => (

@@ -1,9 +1,17 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { gitBranches, subscribeGitChanged, type GitBranches } from "../lib/fs";
 
+export type ProjectBranchesState = {
+  branches: GitBranches | null;
+  /** First lookup for this cwd has finished, repo or not. */
+  settled: boolean;
+};
+
+const PENDING: ProjectBranchesState = { branches: null, settled: false };
+
 type Entry = {
   cwd: string;
-  branches: GitBranches | null;
+  state: ProjectBranchesState;
   listeners: Set<() => void>;
   inFlight: boolean;
   unsubscribeGit: (() => void) | null;
@@ -38,7 +46,7 @@ function entryFor(cwd: string): Entry {
   if (existing) return existing;
   const entry: Entry = {
     cwd,
-    branches: null,
+    state: PENDING,
     listeners: new Set(),
     inFlight: false,
     unsubscribeGit: null,
@@ -49,8 +57,12 @@ function entryFor(cwd: string): Entry {
 }
 
 function publish(entry: Entry, branches: GitBranches | null) {
-  if (branchesEqual(entry.branches, branches)) return;
-  entry.branches = branches;
+  // `settled` still has to flip on a lookup that found nothing, so an
+  // unchanged `null` is only a no-op once the first one has landed.
+  if (entry.state.settled && branchesEqual(entry.state.branches, branches)) {
+    return;
+  }
+  entry.state = { branches, settled: true };
   for (const listener of entry.listeners) listener();
 }
 
@@ -87,10 +99,12 @@ function stop(entry: Entry) {
   entry.unsubscribeGit = null;
 }
 
-export function useProjectBranches(
+/** Branch list plus whether git has answered yet, for callers that must not
+ *  confuse "still looking" with "not a repo". */
+export function useProjectBranchesState(
   cwd: string,
   enabled: boolean,
-): GitBranches | null {
+): ProjectBranchesState {
   const active = enabled && Boolean(cwd) && cwd !== "~";
   const subscribe = useCallback(
     (listener: () => void) => {
@@ -106,8 +120,15 @@ export function useProjectBranches(
     [active, cwd],
   );
   const getSnapshot = useCallback(() => {
-    return active ? entryFor(cwd).branches : null;
+    return active ? entryFor(cwd).state : PENDING;
   }, [active, cwd]);
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useProjectBranches(
+  cwd: string,
+  enabled: boolean,
+): GitBranches | null {
+  return useProjectBranchesState(cwd, enabled).branches;
 }

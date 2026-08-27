@@ -17,10 +17,9 @@ import {
   isCheckoutBlockedByChanges,
   notifyGitChanged,
   type GitBranchInfo,
-  type GitBranches,
 } from "../lib/fs";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
-import { useProjectBranches } from "../hooks/useProjectBranches";
+import { useProjectBranchesState } from "../hooks/useProjectBranches";
 import { SwitchBranchDialog } from "./SwitchBranchDialog";
 
 type Props = {
@@ -64,7 +63,6 @@ export function BranchPicker({
   onChange,
   onClose,
 }: Props) {
-  const [info, setInfo] = useState<GitBranches | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -84,14 +82,11 @@ export function BranchPicker({
   onChangeRef.current = onChange;
 
   const inProject = Boolean(cwd) && cwd !== "~";
-  const projectBranches = useProjectBranches(cwd, inProject);
+  const { branches: projectBranches, settled: branchesSettled } =
+    useProjectBranchesState(cwd, inProject);
 
-  useEffect(() => {
-    setInfo(projectBranches);
-  }, [projectBranches]);
-
-  const current = branch || info?.current || null;
-  const detached = !branch && !!info?.detached;
+  const current = branch || projectBranches?.current || null;
+  const detached = !branch && !!projectBranches?.detached;
 
   const dismiss = (restore: boolean) => {
     setOpen(false);
@@ -157,7 +152,7 @@ export function BranchPicker({
   }, [enabled]);
 
   const rows = useMemo((): Row[] => {
-    const branches = info?.branches ?? [];
+    const branches = projectBranches?.branches ?? [];
     const name = query.trim();
     const needle = name.toLowerCase();
     const filtered = needle
@@ -171,7 +166,7 @@ export function BranchPicker({
     const taken = branches.some(
       (entry) => !entry.remote && entry.name === name,
     );
-    const selected = branch || info?.current;
+    const selected = branch || projectBranches?.current;
     const create: Row[] =
       name && !taken ? [{ kind: "create", name }] : [];
     return [
@@ -184,7 +179,7 @@ export function BranchPicker({
         },
       })),
     ];
-  }, [branch, info, query]);
+  }, [branch, projectBranches, query]);
 
   useEffect(() => {
     setActive((i) => (rows.length === 0 ? 0 : Math.min(i, rows.length - 1)));
@@ -282,20 +277,28 @@ export function BranchPicker({
     }
   };
 
-  if (!inProject || !current) return null;
+  if (!inProject) return null;
+  // A settled lookup with no branch really has none, and collapses. While one
+  // is still out we keep the control mounted so the composer's toolbar does
+  // not resize under it — but only the label's *content* may differ, never its
+  // box: the placeholder rides inside the same `text-[12px]` span so the line
+  // box (and with it the toolbar's height) is identical either way.
+  const awaitingBranch = !current && !branchesSettled;
+  if (!current && !awaitingBranch) return null;
 
-  const label = detached ? `detached ${current}` : current;
+  const label = current ? (detached ? `detached ${current}` : current) : "";
+  const title = awaitingBranch ? "Loading branch…" : label;
 
   return (
     <div className="flex max-w-[45%] shrink-0 items-center gap-2.5">
       <div ref={root} className="relative min-w-0">
         <button
           type="button"
-          title={label}
-          aria-label={`Branch ${label}`}
+          title={title}
+          aria-label={awaitingBranch ? "Loading branch" : `Branch ${label}`}
           aria-expanded={open}
           aria-haspopup="dialog"
-          disabled={!enabled}
+          disabled={!enabled || awaitingBranch}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             if (!enabled || blocked) return;
@@ -312,7 +315,22 @@ export function BranchPicker({
           } disabled:opacity-40 disabled:hover:text-content/50`}
         >
           <GitBranch className="size-3.5 shrink-0" strokeWidth={1.5} />
-          <span className="truncate font-mono text-[12px]">{label}</span>
+          <span className="relative truncate font-mono text-[12px]">
+            {awaitingBranch ? (
+              <>
+                {/*
+                  A real text node, hidden rather than absent, so the pending
+                  line box is produced exactly the way the loaded one is — the
+                  toolbar's height cannot depend on which branch we are in.
+                  "main" also keeps the reserved width near a typical branch.
+                */}
+                <span className="invisible">main</span>
+                <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-current opacity-50" />
+              </>
+            ) : (
+              label
+            )}
+          </span>
         </button>
         {blocked ? (
           <SwitchBranchDialog
