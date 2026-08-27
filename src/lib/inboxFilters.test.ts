@@ -212,6 +212,29 @@ describe("applyInboxFilters", () => {
       ).map((row) => row.number),
     ).toEqual([9]);
   });
+
+  it("ignores GitHub-only status filters on the Linear tab", () => {
+    const rows = [
+      item({
+        number: 9,
+        kind: "linear",
+        provider: "linear",
+        updatedAt: "2026-08-27T10:00:00Z",
+      }),
+    ];
+    expect(
+      applyInboxFilters(
+        rows,
+        {
+          ...DEFAULT_INBOX_FILTERS,
+          status: { open: false, draft: true, closed: false, merged: true },
+        },
+        "",
+        Date.now(),
+        "linear",
+      ).map((row) => row.number),
+    ).toEqual([9]);
+  });
 });
 
 describe("hasActiveInboxFilters", () => {

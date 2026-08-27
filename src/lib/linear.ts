@@ -56,6 +56,20 @@ export function listLinearTeams(): Promise<LinearTeam[]> {
   return invoke<LinearTeam[]>("linear_list_teams");
 }
 
+/** `null` means do not filter by team. `[]` means every known team is hidden. */
+export function linearTeamIdsForFetch(
+  teams: readonly LinearTeam[],
+  hiddenIds: readonly string[],
+): string[] | null {
+  if (hiddenIds.length === 0) return null;
+  const hidden = new Set(hiddenIds);
+  const visible = teams
+    .filter((team) => !hidden.has(team.id))
+    .map((team) => team.id);
+  if (visible.length === teams.length) return null;
+  return visible;
+}
+
 export function listLinearIssues(query: {
   assignedToMe: boolean;
   state: "open" | "all";
@@ -103,15 +117,6 @@ export function saveHiddenLinearTeamIds(ids: string[]) {
     // private mode / quota
   }
   notifyLinearChange();
-}
-
-export function linearTeamIdsForFetch(
-  teams: readonly LinearTeam[],
-  hiddenIds: readonly string[],
-): string[] {
-  if (hiddenIds.length === 0) return [];
-  const hidden = new Set(hiddenIds);
-  return teams.filter((team) => !hidden.has(team.id)).map((team) => team.id);
 }
 
 export function notifyLinearChange() {

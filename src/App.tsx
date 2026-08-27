@@ -1050,8 +1050,8 @@ export default function App({
   ]);
 
   const onStartInboxItem = useCallback(
-    (item: InboxItem) => {
-      const start = (body?: string) => {
+    async (item: InboxItem, body?: string) => {
+      const start = (description?: string) => {
         setInboxViewOpen(false);
         setSidebarTab("sessions");
         const cwd =
@@ -1066,7 +1066,7 @@ export default function App({
         const session = {
           ...newDefaultSession(cwd, sessionDefaults?.runtimeMode),
           title: `${ref} ${item.title}`,
-          inboxCard: inboxComposerCard(item, body),
+          inboxCard: inboxComposerCard(item, description),
         };
         const tab = newTab(session.id);
         setSessions((prev) => [...prev, session]);
@@ -1075,18 +1075,24 @@ export default function App({
         setComposerFocused(true);
       };
 
-      if (item.provider !== "linear" || !item.id) {
+      if (item.provider !== "linear") {
         start();
         return;
       }
-      const cached = peekLinearIssueDetails(item.id)?.body;
-      if (cached?.trim()) {
-        start(cached);
+      if (!item.id) {
+        throw new Error("Missing Linear issue");
+      }
+      if (body !== undefined) {
+        start(body);
         return;
       }
-      void linearIssueDetails(item.id)
-        .then((details) => start(details.body))
-        .catch(() => start());
+      const cached = peekLinearIssueDetails(item.id);
+      if (cached) {
+        start(cached.body);
+        return;
+      }
+      const details = await linearIssueDetails(item.id);
+      start(details.body);
     },
     [
       active?.cwd,

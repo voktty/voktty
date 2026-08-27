@@ -208,20 +208,35 @@ export function applyInboxFilters(
   source?: InboxSource,
 ): InboxItem[] {
   const scoped = source ? filterInboxByProvider(items, source) : [...items];
+  const hiddenProjects = source === "linear" ? [] : filters.hiddenProjects;
+  const hiddenKinds = source === "linear" ? [] : filters.hiddenKinds;
   return filterInboxItems(
     filterInboxByStatus(
       filterInboxByTime(
         filterInboxByKind(
-          filterInboxByProject(scoped, filters.hiddenProjects),
-          filters.hiddenKinds,
+          filterInboxByProject(scoped, hiddenProjects),
+          hiddenKinds,
         ),
         filters.time,
         now,
       ),
-      filters.status,
+      statusFilterForSource(filters.status, source),
     ),
     query,
   );
+}
+
+export function statusFilterForSource(
+  status: InboxStatusFilter,
+  source?: InboxSource,
+): InboxStatusFilter {
+  if (source !== "linear") return status;
+  return {
+    open: status.open,
+    closed: status.closed,
+    draft: false,
+    merged: false,
+  };
 }
 
 function isGithubInboxKind(value: unknown): value is InboxKind {

@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   linearConnected,
+  linearTeamIdsForFetch,
   listLinearIssues,
+  listLinearTeams,
   loadHiddenLinearTeamIds,
   type LinearIssue,
 } from "./linear";
@@ -58,19 +60,25 @@ export type GithubWorkItemQuery = {
 };
 
 export type InboxQuery = Omit<GithubWorkItemQuery, "kind"> & {
-  linearTeamIds?: string[];
+  linearHiddenTeamIds?: string[];
+};
+
+export type InboxProviderErrors = Partial<Record<InboxProvider, string>>;
+
+export type InboxListResult = {
+  items: InboxItem[];
+  errors: InboxProviderErrors;
 };
 
 const INBOX_CACHE_FRESH_MS = 30_000;
 
-type InboxListCache = {
+type InboxListCache = InboxListResult & {
   key: string;
-  items: InboxItem[];
   fetchedAt: number;
 };
 
 let inboxListCache: InboxListCache | null = null;
-const inboxListInflight = new Map<string, Promise<InboxItem[]>>();
+const inboxListInflight = new Map<string, Promise<InboxListResult>>();
 const repoByPath = new Map<string, string>();
 const detailsByKey = new Map<string, GithubWorkItemDetails>();
 
@@ -89,16 +97,24 @@ export function inboxListCacheKey(
     .map((project) => normalizeProjectPath(project.path))
     .sort()
     .join("|");
-  const teams = [...(query.linearTeamIds ?? [])].sort().join(",");
+  const teams = [...(query.linearHiddenTeamIds ?? [])].sort().join(",");
   return `${query.assignedToMe ? 1 : 0}:${query.state}:${paths}:${teams}`;
+}
+
+export function peekInboxList(
+  projects: readonly { path: string }[],
+  query: InboxQuery,
+): InboxListResult | null {
+  const key = inboxListCacheKey(projects, query);
+  if (inboxListCache?.key !== key) return null;
+  return { items: inboxListCache.items, errors: inboxListCache.errors };
 }
 
 export function peekInboxItems(
   projects: readonly { path: string }[],
   query: InboxQuery,
 ): InboxItem[] | null {
-  const key = inboxListCacheKey(projects, query);
-  return inboxListCache?.key === key ? inboxListCache.items : null;
+  return peekInboxList(projects, query)?.items ?? null;
 }
 
 export function inboxListIsFresh(
@@ -215,17 +231,17 @@ export async function listInboxItems(
   projects: readonly { path: string }[],
   query: InboxQuery,
   options?: { force?: boolean },
-): Promise<InboxItem[]> {
+): Promise<InboxListResult> {
   const key = inboxListCacheKey(projects, query);
   if (!options?.force && inboxListIsFresh(projects, query)) {
-    return inboxListCache?.items ?? [];
+    return peekInboxList(projects, query) ?? { items: [], errors: {} };
   }
   const pending = inboxListInflight.get(key);
   if (pending) return pending;
   const promise = fetchInboxItems(projects, query)
-    .then((items) => {
-      inboxListCache = { key, items, fetchedAt: Date.now() };
-      return items;
+    .then((result) => {
+      inboxListCache = { key, ...result, fetchedAt: Date.now() };
+      return result;
     })
     .finally(() => {
       if (inboxListInflight.get(key) === promise) inboxListInflight.delete(key);
@@ -237,8 +253,9 @@ export async function listInboxItems(
 async function fetchInboxItems(
   projects: readonly { path: string }[],
   query: InboxQuery,
-): Promise<InboxItem[]> {
+): Promise<InboxListResult> {
   const unique = uniqueInboxProjects(projects);
+  const preferredPaths = unique.map((project) => project.path);
   const resolved = await Promise.all(
     unique.map(async (project) => {
       try {
@@ -252,7 +269,7 @@ async function fetchInboxItems(
     }),
   );
   const grouped = groupProjectsByRepo(resolved);
-  const jobs: Promise<InboxItem[]>[] = grouped.flatMap((project) =>
+  const githubJobs = grouped.flatMap((project) =>
     (["issue", "pr"] as const).map(async (kind) => {
       const items = await listGithubWorkItems(project.path, {
         ...query,
@@ -266,22 +283,41 @@ async function fetchInboxItems(
       }));
     }),
   );
-  if ((await linearConnected()).connected) {
-    jobs.push(fetchLinearInboxItems(query));
-  }
-  return collectInboxResults(
-    await Promise.allSettled(jobs),
-    unique.map((project) => project.path),
+  const github = collectInboxResults(
+    await Promise.allSettled(githubJobs),
+    preferredPaths,
   );
+  const errors: InboxProviderErrors = {};
+  if (github.error && grouped.length > 0) errors.github = github.error;
+
+  let linearItems: InboxItem[] = [];
+  if ((await linearConnected()).connected) {
+    try {
+      linearItems = await fetchLinearInboxItems(query);
+    } catch (error) {
+      errors.linear = inboxErrorMessage(error);
+    }
+  }
+
+  return {
+    items: dedupeInboxItems([...github.items, ...linearItems], preferredPaths),
+    errors,
+  };
 }
 
 async function fetchLinearInboxItems(query: InboxQuery): Promise<InboxItem[]> {
+  const hiddenIds = query.linearHiddenTeamIds ?? loadHiddenLinearTeamIds();
+  let teamIds: string[] | null = null;
+  if (hiddenIds.length > 0) {
+    teamIds = linearTeamIdsForFetch(await listLinearTeams(), hiddenIds);
+    if (teamIds?.length === 0) return [];
+  }
   const issues = await listLinearIssues({
     assignedToMe: query.assignedToMe,
     state: query.state,
-    teamIds: query.linearTeamIds ?? [],
+    teamIds: teamIds ?? [],
   });
-  const hidden = new Set(loadHiddenLinearTeamIds());
+  const hidden = new Set(hiddenIds);
   return issues
     .filter((issue) => hidden.size === 0 || !hidden.has(issue.teamId))
     .map(linearIssueToInboxItem);
@@ -344,7 +380,7 @@ export function groupProjectsByRepo(
 export function collectInboxResults(
   settled: PromiseSettledResult<InboxItem[]>[],
   preferredPaths: readonly string[] = [],
-): InboxItem[] {
+): { items: InboxItem[]; error?: string } {
   const batches: InboxItem[][] = [];
   const errors: unknown[] = [];
   for (const result of settled) {
@@ -352,10 +388,13 @@ export function collectInboxResults(
     else errors.push(result.reason);
   }
   if (batches.length === 0 && errors.length > 0) {
-    const first = errors[0];
-    throw first instanceof Error ? first : new Error(String(first));
+    return { items: [], error: inboxErrorMessage(errors[0]) };
   }
-  return dedupeInboxItems(batches.flat(), preferredPaths);
+  return { items: dedupeInboxItems(batches.flat(), preferredPaths) };
+}
+
+function inboxErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function inboxIdentityKey(item: {

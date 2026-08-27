@@ -9,6 +9,7 @@ import {
   groupProjectsByRepo,
   inboxComposerCard,
   inboxItemKey,
+  inboxListCacheKey,
   inboxStartDraft,
   sortInboxItems,
   uniqueInboxProjects,
@@ -90,6 +91,20 @@ describe("sortInboxItems", () => {
   });
 });
 
+describe("inboxListCacheKey", () => {
+  it("includes hidden Linear team ids", () => {
+    const projects = [{ path: "/tmp/web" }];
+    const base = {
+      assignedToMe: false,
+      state: "open" as const,
+      search: "",
+    };
+    expect(inboxListCacheKey(projects, base)).not.toBe(
+      inboxListCacheKey(projects, { ...base, linearHiddenTeamIds: ["t2"] }),
+    );
+  });
+});
+
 describe("collectInboxResults", () => {
   it("keeps items from projects that succeeded", () => {
     const kept = item({ number: 4, updatedAt: "2026-08-27T11:00:00Z" });
@@ -98,16 +113,16 @@ describe("collectInboxResults", () => {
         { status: "fulfilled", value: [kept] },
         { status: "rejected", reason: new Error("gh missing") },
       ]),
-    ).toEqual([kept]);
+    ).toEqual({ items: [kept] });
   });
 
-  it("throws when every project fetch failed", () => {
-    expect(() =>
+  it("reports an error when every project fetch failed", () => {
+    expect(
       collectInboxResults([
         { status: "rejected", reason: new Error("not a github repo") },
         { status: "rejected", reason: "command not found" },
       ]),
-    ).toThrow("not a github repo");
+    ).toEqual({ items: [], error: "not a github repo" });
   });
 });
 

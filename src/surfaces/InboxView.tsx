@@ -37,11 +37,12 @@ import {
   inboxListIsFresh,
   listInboxItems,
   peekGithubWorkItemDetails,
-  peekInboxItems,
+  peekInboxList,
   formatRelativeTime,
   type GithubLabel,
   type GithubWorkItemDetails,
   type InboxItem,
+  type InboxProviderErrors,
   type InboxQuery,
 } from "../lib/githubTasks";
 import {
@@ -68,6 +69,7 @@ import { setInboxSelection, useInboxSelection } from "../lib/inboxSelection";
 import {
   LINEAR_CHANGE_EVENT,
   linearIssueDetails,
+  loadHiddenLinearTeamIds,
   peekLinearIssueDetails,
 } from "../lib/linear";
 import {
@@ -157,16 +159,17 @@ function inboxProjectsFor(
 function peekInboxForRail(
   recents: RecentProject[],
   cwd: string,
-): InboxItem[] | null {
+) {
   const projects = inboxProjectsFor(recents, cwd);
   const filters = pruneInboxFilters(
     loadInboxFilters(),
     projects.map((project) => project.path),
   );
-  return peekInboxItems(projects, {
+  return peekInboxList(projects, {
     assignedToMe: filters.assignedToMe,
     state: inboxFetchState(filters),
     search: "",
+    linearHiddenTeamIds: loadHiddenLinearTeamIds(),
   });
 }
 
@@ -212,7 +215,7 @@ type Props = {
   besideRail?: boolean;
   variant?: "overlay" | "sidebar";
   onClose?: () => void;
-  onStart?: (item: InboxItem) => void;
+  onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
 };
 
 export function InboxView({
@@ -235,19 +238,24 @@ export function InboxView({
 
   const [searchInput, setSearchInput] = useState("");
   const [items, setItems] = useState<InboxItem[]>(
-    () => peekInboxForRail(recents, cwd) ?? [],
+    () => peekInboxForRail(recents, cwd)?.items ?? [],
   );
   const [loading, setLoading] = useState(
     () => peekInboxForRail(recents, cwd) == null,
   );
   const [revalidating, setRevalidating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [providerErrors, setProviderErrors] = useState<InboxProviderErrors>(
+    () => peekInboxForRail(recents, cwd)?.errors ?? {},
+  );
   const [refresh, setRefresh] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [filters, setFilters] = useState(loadInboxFilters);
   const [source, setSource] = useState(loadInboxSource);
   const [filterMenu, setFilterMenu] = useState<{ x: number; y: number } | null>(
     null,
+  );
+  const [linearHiddenTeamIds, setLinearHiddenTeamIds] = useState(
+    loadHiddenLinearTeamIds,
   );
   const prevRefresh = useRef(refresh);
 
@@ -274,8 +282,9 @@ export function InboxView({
       assignedToMe: activeFilters.assignedToMe,
       state: fetchState,
       search: "",
+      linearHiddenTeamIds,
     }),
-    [activeFilters.assignedToMe, fetchState],
+    [activeFilters.assignedToMe, fetchState, linearHiddenTeamIds],
   );
 
   const resize = useDragResize({
@@ -305,7 +314,10 @@ export function InboxView({
   }, [filterMenu, sidebar]);
 
   useEffect(() => {
-    const onChange = () => setRefresh((value) => value + 1);
+    const onChange = () => {
+      setLinearHiddenTeamIds(loadHiddenLinearTeamIds());
+      setRefresh((value) => value + 1);
+    };
     window.addEventListener(LINEAR_CHANGE_EVENT, onChange);
     return () => window.removeEventListener(LINEAR_CHANGE_EVENT, onChange);
   }, []);
@@ -313,10 +325,10 @@ export function InboxView({
   useEffect(() => {
     const force = refresh !== prevRefresh.current;
     prevRefresh.current = refresh;
-    const cached = peekInboxItems(projects, fetchQuery);
+    const cached = peekInboxList(projects, fetchQuery);
     if (cached) {
-      setItems(cached);
-      setError(null);
+      setItems(cached.items);
+      setProviderErrors(cached.errors);
       setLoading(false);
     }
     if (!force && cached && inboxListIsFresh(projects, fetchQuery)) {
@@ -327,19 +339,20 @@ export function InboxView({
     if (cached) setRevalidating(true);
     else {
       setLoading(true);
-      setError(null);
+      setProviderErrors({});
     }
     void listInboxItems(projects, fetchQuery, { force })
       .then((next) => {
         if (cancelled) return;
-        setItems(next);
-        setError(null);
+        setItems(next.items);
+        setProviderErrors(next.errors);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         if (cached) return;
         setItems([]);
-        setError(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        setProviderErrors({ github: message, linear: message });
       })
       .finally(() => {
         if (cancelled) return;
@@ -360,6 +373,7 @@ export function InboxView({
 
   const searchNarrowed = searchInput.trim().length > 0;
   const narrowedByUser = searchNarrowed || filtersActive;
+  const sourceError = providerErrors[source] ?? null;
 
   const selected =
     visibleItems.find((item) => inboxItemKey(item) === selectedKey) ??
@@ -476,8 +490,8 @@ export function InboxView({
         ref={listLock}
         className="min-h-0 flex-1 overflow-y-auto overscroll-none"
       >
-        {error && items.length === 0 ? (
-          <p className="px-3 py-2 text-[12px] text-content/50">{error}</p>
+        {sourceError && visibleItems.length === 0 ? (
+          <p className="px-3 py-2 text-[12px] text-content/50">{sourceError}</p>
         ) : loading && items.length === 0 ? (
           <div className="flex justify-center py-10 text-content/40">
             <LoaderCircle className="size-4 animate-spin" strokeWidth={1.75} />
@@ -618,7 +632,7 @@ export function InboxDetailPane({
 }: {
   cwd: string;
   recents: RecentProject[];
-  onStart?: (item: InboxItem) => void;
+  onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
 }) {
   const item = useInboxSelection();
   const logos = useTabGroupLogos();
@@ -657,7 +671,7 @@ function InboxDetailBody({
   cwd: string;
   projects: InboxProjectOption[];
   revision?: number;
-  onStart?: (item: InboxItem) => void;
+  onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
 }) {
   if (!item) {
     return (
@@ -779,7 +793,7 @@ function InboxDetail({
   cwd: string;
   projects: InboxProjectOption[];
   revision: number;
-  onStart?: (item: InboxItem) => void;
+  onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
 }) {
   const linear = item.provider === "linear";
   const githubKind =
@@ -797,6 +811,8 @@ function InboxDetail({
     projects[0]?.path ??
     cwd;
   const [startProject, setStartProject] = useState(defaultProject);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const status = linear
     ? item.state || inboxItemStatus(item)
     : inboxItemStatus(item);
@@ -903,16 +919,33 @@ function InboxDetail({
             <>
               <button
                 type="button"
-                disabled={linear && !startProject}
-                onClick={() =>
-                  onStart(
-                    linear ? { ...item, projectPath: startProject } : item,
-                  )
+                disabled={
+                  starting ||
+                  (linear && (!startProject || loading || !!error))
                 }
+                onClick={() => {
+                  if (starting) return;
+                  setStarting(true);
+                  setStartError(null);
+                  const next = linear
+                    ? { ...item, projectPath: startProject }
+                    : item;
+                  void Promise.resolve(
+                    onStart(next, linear ? (details?.body ?? "") : undefined),
+                  )
+                    .catch((err: unknown) => {
+                      setStartError(
+                        err instanceof Error ? err.message : String(err),
+                      );
+                    })
+                    .finally(() => setStarting(false));
+                }}
                 className="inline-flex items-center gap-1 rounded-md bg-content px-3 h-6.5 text-[12px] text-background-base hover:bg-content/80 disabled:cursor-default disabled:opacity-40"
               >
-                Start
-                <ArrowRight className="size-3" strokeWidth={1.75} />
+                {starting ? "Starting" : "Start"}
+                {starting ? null : (
+                  <ArrowRight className="size-3" strokeWidth={1.75} />
+                )}
               </button>
               {linear ? (
                 <InboxProjectPicker
@@ -940,6 +973,9 @@ function InboxDetail({
                 : "Open on GitHub"}
           </button>
         </div>
+        {startError ? (
+          <p className="text-[12px] text-red-400/90">{startError}</p>
+        ) : null}
       </header>
       <div className="border-t border-content/10 pt-5">
         {loading ? (
