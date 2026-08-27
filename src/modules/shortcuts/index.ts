@@ -2,6 +2,7 @@ export {
   SHORTCUTS,
   SHORTCUT_GROUPS,
   getBindingTokens,
+  matchBinding,
   type Shortcut,
   type ShortcutGroup,
   type ShortcutId,

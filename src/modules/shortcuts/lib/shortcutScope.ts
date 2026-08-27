@@ -100,9 +100,12 @@ export function shouldDisableShortcut(
     return inTerminal;
   }
 
-  // 4. Terminal copilot: only enabled when active tab is a terminal
+  // 4. Terminal copilot: enabled when inside a terminal or terminal/space tab
   if (id === "terminal.copilot") {
-    return activeTabKind !== "terminal";
+    if (inTerminal || activeTabKind === "terminal" || activeTabKind === "space") {
+      return false;
+    }
+    return true;
   }
 
   // 5. Terminal clear (⌘K on Mac): only when focused inside a terminal

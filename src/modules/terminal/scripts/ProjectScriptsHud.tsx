@@ -33,6 +33,8 @@ type Props = {
   cwd: string | null | undefined;
   onRun: (command: string) => void;
   onInsert?: (command: string) => void;
+  onOpenCopilot?: () => void;
+  copilotLabel?: string;
   className?: string;
 };
 
@@ -74,6 +76,8 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
   cwd,
   onRun,
   onInsert,
+  onOpenCopilot,
+  copilotLabel,
   className,
 }: Props) {
   const { t } = useTranslation();
@@ -96,37 +100,39 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
     });
   };
 
-  if (!cwd || scripts.length === 0) return null;
+  if (!cwd || (scripts.length === 0 && !onOpenCopilot)) return null;
 
   return (
     <TooltipProvider delayDuration={400}>
       <div
         className={cn(
-          "flex items-center gap-1 px-2.5 py-0.5 text-[10.5px] border-b border-border/40 bg-card/60 backdrop-blur-sm transition-all select-none overflow-x-auto [scrollbar-width:none]",
+          "flex h-7.5 shrink-0 items-center gap-1 px-2 text-[10.5px] border-b border-border/60 select-none overflow-x-auto [scrollbar-width:none]",
           className,
         )}
       >
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          className="inline-flex items-center gap-1 text-[10.5px] font-medium text-muted-foreground/80 hover:text-foreground transition-colors cursor-pointer shrink-0 mr-1"
-          title={t("terminal.scripts.toggleHud")}
-        >
-          <HugeiconsIcon
-            icon={collapsed ? ArrowRight01Icon : ArrowDown01Icon}
-            size={10}
-            strokeWidth={2}
-          />
-          <HugeiconsIcon icon={CodeIcon} size={11} strokeWidth={1.75} />
-          <span className="font-semibold text-[10px]">
-            {t("terminal.scripts.title")}
-          </span>
-          <span className="text-[9px] rounded bg-muted/60 px-1 py-0.2 font-mono text-muted-foreground">
-            {scripts.length}
-          </span>
-        </button>
+        {scripts.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="inline-flex items-center gap-1 text-[10.5px] font-medium text-muted-foreground/80 hover:text-foreground transition-colors cursor-pointer shrink-0 mr-1"
+            title={t("terminal.scripts.toggleHud")}
+          >
+            <HugeiconsIcon
+              icon={collapsed ? ArrowRight01Icon : ArrowDown01Icon}
+              size={10}
+              strokeWidth={2}
+            />
+            <HugeiconsIcon icon={CodeIcon} size={11} strokeWidth={1.75} />
+            <span className="font-semibold text-[10px]">
+              {t("terminal.scripts.title")}
+            </span>
+            <span className="text-[9px] rounded bg-muted/60 px-1 py-0.2 font-mono text-muted-foreground">
+              {scripts.length}
+            </span>
+          </button>
+        )}
 
-        {!collapsed && (
+        {!collapsed && scripts.length > 0 && (
           <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none]">
             {scripts.slice(0, 10).map((script) => {
               const Icon = categoryIcon(script.category);
@@ -140,7 +146,7 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
                         type="button"
                         onClick={() => onRun(script.command)}
                         className={cn(
-                          "group/pill inline-flex items-center gap-1 rounded border bg-background/80 px-1.5 py-0.5 text-[10px] font-medium transition-all shadow-xs hover:shadow-sm cursor-pointer shrink-0 active:scale-97",
+                          "group/pill inline-flex items-center gap-1 rounded border bg-muted/30 hover:bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium transition-all shadow-none cursor-pointer shrink-0 active:scale-97",
                           colorClass,
                         )}
                       >
@@ -190,6 +196,25 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
                 </DropdownMenu>
               );
             })}
+          </div>
+        )}
+
+        {onOpenCopilot && (
+          <div className="ml-auto flex items-center gap-1 shrink-0 pl-1">
+            <button
+              type="button"
+              onClick={onOpenCopilot}
+              className="inline-flex items-center gap-1 rounded bg-muted/50 hover:bg-muted text-foreground/90 hover:text-foreground px-1.5 py-0.5 text-[10px] font-medium transition-colors cursor-pointer border border-border/60 active:scale-95"
+              title={`Copilot ${copilotLabel ? `(${copilotLabel})` : ""}`}
+            >
+              <HugeiconsIcon icon={SparklesIcon} size={10} strokeWidth={2} className="text-primary" />
+              <span>Copilot</span>
+              {copilotLabel && (
+                <span className="text-[9px] font-mono opacity-70">
+                  {copilotLabel}
+                </span>
+              )}
+            </button>
           </div>
         )}
       </div>

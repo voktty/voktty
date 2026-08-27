@@ -172,6 +172,7 @@ import {
   clearFocusedTerminal,
   disposeSession,
   findLeafCwd,
+  getActiveTerminalLeafId,
   getLeafTerminalStats,
   hasLeaf,
   leafIds,
@@ -2217,11 +2218,11 @@ export default function App() {
         clearFocusedTerminal();
       },
       "terminal.copilot": () => {
-        if (activeTab?.kind === "terminal") {
-          useTerminalCopilotStore
-            .getState()
-            .openCopilot(activeTab.activeLeafId);
-        }
+        const leafId =
+          activeTab?.kind === "terminal"
+            ? activeTab.activeLeafId
+            : getActiveTerminalLeafId();
+        useTerminalCopilotStore.getState().toggleCopilot(leafId);
       },
       "terminal.toggleInput": () => {
         if (activeTab?.kind === "terminal") {
