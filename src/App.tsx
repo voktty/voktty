@@ -439,11 +439,18 @@ export default function App({
     () => new Map(),
   );
   const [history, setHistory] = useState<SessionSummary[]>([]);
-  /** Projects whose rows are already in `history`, so a revisit can skip the spinner. */
-  const loadedProjects = useRef<Set<string>>(new Set());
-  const [historyStatus, setHistoryStatus] = useState<
-    "idle" | "loading" | "error"
-  >("idle");
+  /**
+   * Projects whose rows are already in `history`. This has to be state, not a
+   * ref: `sidebarCwd` is derived during render, so the frame that first shows
+   * a new project must already know the listing has not arrived yet.
+   */
+  const [loadedProjects, setLoadedProjects] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const loadedProjectsRef = useRef(loadedProjects);
+  loadedProjectsRef.current = loadedProjects;
+  /** Project whose listing failed, so the error cannot leak to another one. */
+  const [historyErrorCwd, setHistoryErrorCwd] = useState<string | null>(null);
 
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
@@ -621,6 +628,15 @@ export default function App({
     projectCwd;
   const sidebarCwdRef = useRef(sidebarCwd);
   sidebarCwdRef.current = sidebarCwd;
+  const sidebarCwdKey =
+    sidebarCwd && sidebarCwd !== "~" ? normalizeProjectPath(sidebarCwd) : null;
+  const historyFailed = sidebarCwdKey != null && historyErrorCwd === sidebarCwdKey;
+  // True from the very first frame that shows a project we have never listed,
+  // so the sidebar can stay blank instead of flashing "No sessions yet".
+  const historyPending =
+    sidebarCwdKey != null &&
+    !loadedProjects.has(sidebarCwdKey) &&
+    !historyFailed;
   const gitCwd = active ? sessionWorkCwd(active) : sidebarCwd;
   const gitCwdRef = useRef(gitCwd);
   gitCwdRef.current = gitCwd;
@@ -750,27 +766,27 @@ export default function App({
   }, [flushHarnessEvents]);
 
   const refreshHistory = useCallback(async (cwd: string) => {
-    if (!cwd || cwd === "~") {
-      setHistoryStatus("idle");
-      return;
-    }
+    if (!cwd || cwd === "~") return;
     // `history` holds every visited project's rows and the sidebar filters it
-    // by cwd, so a project loaded once paints from cache on the way back. Only
-    // spin when there is nothing cached to show; otherwise revalidate quietly
-    // underneath the cards that are already up.
-    const cached = loadedProjects.current.has(normalizeProjectPath(cwd));
-    setHistoryStatus(cached ? "idle" : "loading");
+    // by cwd, so a project loaded once paints from cache on the way back and
+    // revalidates quietly underneath the cards already on screen. Whether the
+    // first load is still pending is derived from `loadedProjects`, not
+    // tracked here — a status set from this effect lands a render too late to
+    // suppress the empty state.
+    const key = normalizeProjectPath(cwd);
+    setHistoryErrorCwd((prev) => (prev === key ? null : prev));
     try {
       const rows = await listSessionsByProject(cwd);
       if (cwd !== sidebarCwdRef.current) return;
-      loadedProjects.current.add(normalizeProjectPath(cwd));
       setHistory((current) => replaceProjectHistory(current, cwd, rows));
-      setHistoryStatus("idle");
+      setLoadedProjects((prev) =>
+        prev.has(key) ? prev : new Set(prev).add(key),
+      );
     } catch {
       if (cwd !== sidebarCwdRef.current) return;
       // A failed revalidate keeps the cached cards rather than replacing a
       // good list with an error.
-      setHistoryStatus(cached ? "idle" : "error");
+      if (!loadedProjectsRef.current.has(key)) setHistoryErrorCwd(key);
     }
   }, []);
 
@@ -3496,7 +3512,8 @@ export default function App({
         busySessionIds={busySessionIds}
         approvalSessionIds={approvalSessionIds}
         activeSessionId={active?.id}
-        status={historyStatus}
+        status={historyFailed ? "error" : "idle"}
+        pending={historyPending}
         onSelectSession={onSelectHistorySession}
         onRenameSession={onRenameHistorySession}
         onArchiveSession={onArchiveHistorySession}

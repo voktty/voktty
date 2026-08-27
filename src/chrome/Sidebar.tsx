@@ -93,7 +93,9 @@ type Props = {
   busySessionIds: Set<string>;
   approvalSessionIds: Set<string>;
   activeSessionId?: string;
-  status: "idle" | "loading" | "error";
+  status: "idle" | "error";
+  /** First listing for this project has not arrived yet. */
+  pending: boolean;
   onSelectSession: (sessionId: string) => void;
   onRenameSession?: (sessionId: string, title: string) => void;
   onArchiveSession?: (sessionId: string, archived: boolean) => void;
@@ -145,6 +147,7 @@ function SidebarComponent({
   approvalSessionIds,
   activeSessionId,
   status,
+  pending,
   onSelectSession,
   onRenameSession,
   onArchiveSession,
@@ -236,6 +239,9 @@ function SidebarComponent({
   }
   const unseenFinishedIds =
     unseenFinishedIdsProp ?? unseenFinishedLocalRef.current;
+  // Revisits render straight from cache, so this is only ever true the first
+  // time a project is opened.
+  const pendingFirstLoad = pending && sessions.length === 0;
   const visibleSessions = filterSessionsByQuery(
     filterSessionsByStatus(
       filterSessionsByTime(
@@ -733,9 +739,15 @@ function SidebarComponent({
                 ) : null}
               </div>
             ) : null}
-            {status === "loading" && sessions.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-content/50">Loading…</p>
-            ) : status === "error" && sessions.length === 0 ? (
+            {/*
+              A project's first load stays deliberately blank. The listing is
+              served from a covering index and resolves within a frame or two,
+              so a placeholder only ever flashed — reading as a glitch rather
+              than as progress. This is checked before the empty state so that
+              cannot claim "No sessions yet" before the rows have landed.
+            */}
+            {pendingFirstLoad ? null : status === "error" &&
+              sessions.length === 0 ? (
               <p className="px-3 py-2 text-[12px] text-content/50">
                 Couldn’t load sessions
               </p>
