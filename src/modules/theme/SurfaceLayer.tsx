@@ -6,7 +6,7 @@ import { BG_OPACITY_RENDER_FACTOR } from "@/modules/settings/store";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-const OVERLAY_Z = 2147483646;
+const OVERLAY_Z = -1;
 const RESIZE_IDLE_MS = 280;
 const FADE_IN_MS = 200;
 

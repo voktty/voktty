@@ -21,9 +21,19 @@ function toXtermColor(color: string, fallback: string): string {
 }
 
 export function buildTerminalTheme(): ITheme {
+  const isVibrancy =
+    typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-vibrancy") === "on";
   const t = readTerminalTokens();
 
-  const bg = toXtermColor(t.background, "#0b0f19");
+  const bgFallback = isVibrancy ? "rgba(0, 0, 0, 0)" : "#0b0f19";
+  const bg =
+    isVibrancy &&
+    (!t.background ||
+      t.background === "transparent" ||
+      t.background === "rgba(0, 0, 0, 0)")
+      ? "rgba(0, 0, 0, 0)"
+      : toXtermColor(t.background, bgFallback);
   const fg = toXtermColor(t.foreground, "#f8fafc");
   const cursor = toXtermColor(t.cursor, "#10b981");
   const cursorAccent = toXtermColor(t.cursorAccent, "#0b0f19");

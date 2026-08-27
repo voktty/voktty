@@ -28,6 +28,18 @@ export type ThemeColors = Partial<{
   sidebarBorder: string;
   sidebarRing: string;
   radius: string;
+  // Fluent Surface Hierarchy & Accent Tokens
+  surfaceCanvas: string;
+  surfaceSidebar: string;
+  surfaceToolbar: string;
+  surfaceCard: string;
+  surfacePane: string;
+  surfaceHeader: string;
+  surfacePopover: string;
+  surfaceActiveItem: string;
+  accentAction: string;
+  accentIndicator: string;
+  borderSubtle: string;
 }>;
 
 export type TerminalPalette = Partial<{
@@ -65,4 +77,55 @@ export type Theme = {
   };
 };
 
+export type SurfaceProfile = {
+  id: string;
+  name: string;
+  description?: string;
+  canvas: string;
+  sidebar: string;
+  toolbar: string;
+  pane: string;
+  header: string;
+  popover: string;
+  activeItem: string;
+  borderSubtle: string;
+  opacity?: number;
+};
+
+export type TypographyProfile = {
+  id: string;
+  name: string;
+  uiFontFamily: string;
+  editorFontFamily: string;
+  terminalFontFamily: string;
+  uiFontSize: number;
+  lineHeight: number;
+  density: "compact" | "normal" | "comfortable";
+};
+
+export type FileIconTheme = {
+  id: string;
+  name: string;
+  icons: Record<string, string>;
+};
+
+export type ProductIconTheme = {
+  id: string;
+  name: string;
+  strokeWidth: number;
+  variant: "line" | "solid" | "duotone";
+};
+
+export type AppearancePack = {
+  id: string;
+  name: string;
+  description?: string;
+  colorThemeId: string;
+  surfaceProfileId?: string;
+  typographyProfileId?: string;
+  fileIconThemeId?: string;
+  productIconThemeId?: string;
+};
+
 export const DEFAULT_THEME_ID = "voktty-default";
+export const DEFAULT_PACK_ID = "fluent-dark";
