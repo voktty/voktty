@@ -16,6 +16,7 @@ import {
   Cancel01Icon,
   CodeIcon,
   Copy01Icon,
+  FlashIcon,
   PlayIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -60,6 +61,9 @@ export function RequestEditor() {
     setApiKey,
     setBasicAuth,
     sendRequest,
+    setActiveTab,
+    setDiscoveryUrl,
+    runDiscovery,
   } = useApiClientStore();
 
   const [activeSubTab, setActiveSubTab] = useState<
@@ -140,6 +144,21 @@ export function RequestEditor() {
         >
           <HugeiconsIcon icon={PlayIcon} size={13} strokeWidth={2} />
           <span>{isLoading ? "Sending..." : "Send"}</span>
+        </Button>
+
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1 px-2.5 text-xs text-primary hover:bg-primary/10"
+          title="Auto-Discover routes from this Base URL"
+          onClick={() => {
+            setDiscoveryUrl(activeRequest.url);
+            setActiveTab("browser");
+            void runDiscovery(activeRequest.url);
+          }}
+        >
+          <HugeiconsIcon icon={FlashIcon} size={13} />
+          <span>Discover</span>
         </Button>
 
         <Button
