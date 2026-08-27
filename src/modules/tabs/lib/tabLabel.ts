@@ -96,7 +96,7 @@ export function getTabSubtitle(tab: Tab): {
   if (tab.kind === "api-client") {
     return {
       icon: "remote",
-      text: "API Client & Sandbox",
+      text: translate("tabs.subtitles.apiClient"),
     };
   }
   return { icon: "none", text: "" };

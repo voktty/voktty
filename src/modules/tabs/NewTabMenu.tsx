@@ -523,7 +523,7 @@ export function NewTabMenuItems({
               className="shrink-0 text-emerald-400"
             />
           }
-          label="API Client & Sandbox"
+          label={t("commandPalette.commands.newApiClient")}
           shortcut={fmtShortcut(MOD_KEY, SHIFT_KEY, "A")}
         />
       )}
