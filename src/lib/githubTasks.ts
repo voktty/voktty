@@ -7,7 +7,12 @@ import {
   loadHiddenLinearTeamIds,
   type LinearIssue,
 } from "./linear";
-import { normalizeProjectPath } from "./recents";
+import {
+  collectRailProjects,
+  normalizeProjectPath,
+  sameProjectPath,
+  type RecentProject,
+} from "./recents";
 
 export type GithubTaskKind = "issue" | "pr";
 export type InboxKind = GithubTaskKind | "linear";
@@ -343,6 +348,18 @@ function linearIssueToInboxItem(issue: LinearIssue): InboxItem {
     teamName: issue.teamName,
     projectPath: issue.projectPath || "",
   };
+}
+
+export function inboxProjectsForRail(
+  recents: RecentProject[],
+  cwd: string,
+): RecentProject[] {
+  const map = collectRailProjects(recents, cwd);
+  const current = cwd ? map.get(normalizeProjectPath(cwd)) : undefined;
+  const rest = [...map.values()].filter(
+    (project) => !current || !sameProjectPath(project.path, current.path),
+  );
+  return current ? [current, ...rest] : rest;
 }
 
 export function uniqueInboxProjects(

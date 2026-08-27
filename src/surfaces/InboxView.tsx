@@ -35,6 +35,7 @@ import {
   inboxItemRef,
   inboxItemStatus,
   inboxListIsFresh,
+  inboxProjectsForRail,
   listInboxItems,
   peekGithubWorkItemDetails,
   peekInboxList,
@@ -59,13 +60,13 @@ import {
 } from "../lib/inboxFilters";
 import { projectName } from "../lib/paths";
 import { IS_MAC } from "../lib/platform";
-import {
-  collectRailProjects,
-  normalizeProjectPath,
-  sameProjectPath,
-  type RecentProject,
-} from "../lib/recents";
+import { sameProjectPath, type RecentProject } from "../lib/recents";
 import { setInboxSelection, useInboxSelection } from "../lib/inboxSelection";
+import {
+  isInboxEntryUnseen,
+  markInboxItemSeen,
+  useInboxSeenTick,
+} from "../lib/inboxSeen";
 import {
   LINEAR_CHANGE_EVENT,
   linearIssueDetails,
@@ -144,23 +145,11 @@ function InboxProjectMark({
   );
 }
 
-function inboxProjectsFor(
-  recents: RecentProject[],
-  cwd: string,
-): RecentProject[] {
-  const map = collectRailProjects(recents, cwd);
-  const current = cwd ? map.get(normalizeProjectPath(cwd)) : undefined;
-  const rest = [...map.values()].filter(
-    (project) => !current || !sameProjectPath(project.path, current.path),
-  );
-  return current ? [current, ...rest] : rest;
-}
-
 function peekInboxForRail(
   recents: RecentProject[],
   cwd: string,
 ) {
-  const projects = inboxProjectsFor(recents, cwd);
+  const projects = inboxProjectsForRail(recents, cwd);
   const filters = pruneInboxFilters(
     loadInboxFilters(),
     projects.map((project) => project.path),
@@ -260,7 +249,7 @@ export function InboxView({
   const prevRefresh = useRef(refresh);
 
   const projects = useMemo(
-    () => inboxProjectsFor(recents, cwd),
+    () => inboxProjectsForRail(recents, cwd),
     [cwd, recents],
   );
   const projectOptions = useMemo(
@@ -530,7 +519,13 @@ export function InboxView({
                       groupCustomColors,
                       projectKey,
                     )}
-                    onSelect={() => setSelectedKey(key)}
+                    onSelect={() => {
+                      markInboxItemSeen({
+                        key,
+                        updatedAt: item.updatedAt,
+                      });
+                      setSelectedKey(key);
+                    }}
                   />
                 </li>
               );
@@ -637,7 +632,7 @@ export function InboxDetailPane({
   const item = useInboxSelection();
   const logos = useTabGroupLogos();
   const projects = useMemo(
-    () => inboxProjectsFor(recents, cwd),
+    () => inboxProjectsForRail(recents, cwd),
     [cwd, recents],
   );
   const projectOptions = useMemo(
@@ -710,17 +705,23 @@ function InboxCard({
   mascotColor: string;
   onSelect: () => void;
 }) {
+  useInboxSeenTick();
   const KindIcon = item.kind === "pr" ? GitPullRequest : CircleDot;
   const time = formatRelativeTime(item.updatedAt);
   const name = projectName(item.projectPath);
   const linear = item.provider === "linear";
   const source = linear ? item.teamName || item.repo : item.repo || name;
+  const unseen = isInboxEntryUnseen({
+    key: inboxItemKey(item),
+    updatedAt: item.updatedAt,
+  });
 
   return (
     <button
       type="button"
       title={item.title}
       aria-current={active ? "true" : undefined}
+      aria-label={unseen ? `${item.title}, new` : undefined}
       onClick={onSelect}
       className={`flex w-full flex-col rounded-md border px-2.5 py-2 text-left ${
         active
@@ -743,9 +744,16 @@ function InboxCard({
             {inboxItemRef(item)}
           </span>
         </span>
-        {time ? (
-          <span className="shrink-0 text-[11px] tabular-nums text-content/45">
-            {time}
+        {time || unseen ? (
+          <span className="flex shrink-0 items-center gap-1.5">
+            {time ? (
+              <span className="text-[11px] tabular-nums text-content/45">
+                {time}
+              </span>
+            ) : null}
+            {unseen ? (
+              <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+            ) : null}
           </span>
         ) : null}
       </span>

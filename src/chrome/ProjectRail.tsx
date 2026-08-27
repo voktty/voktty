@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useDragResize } from "../hooks/useDragResize";
+import { useInboxUnseen } from "../hooks/useInboxUnseen";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSortable } from "../hooks/useSortable";
@@ -160,6 +161,7 @@ export function ProjectRail({
     path: string;
     name: string;
   } | null>(null);
+  const inboxUnseen = useInboxUnseen(recents, cwd);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupLogos = useTabGroupLogos();
@@ -368,7 +370,8 @@ export function ProjectRail({
               icon={Inbox}
               onClick={onOpenInbox}
               active={inboxActive}
-              ariaLabel="Inbox"
+              dot={inboxUnseen}
+              ariaLabel={inboxUnseen ? "Inbox, new items" : "Inbox"}
               isNavButton
             />
           </div>

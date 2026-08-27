@@ -10,6 +10,7 @@ import {
   inboxComposerCard,
   inboxItemKey,
   inboxListCacheKey,
+  inboxProjectsForRail,
   inboxStartDraft,
   sortInboxItems,
   uniqueInboxProjects,
@@ -172,6 +173,20 @@ describe("uniqueInboxProjects", () => {
         { path: "/tmp/docs" },
       ]),
     ).toEqual([{ path: "/tmp/web" }, { path: "/tmp/docs" }]);
+  });
+});
+
+describe("inboxProjectsForRail", () => {
+  it("puts the current project first", () => {
+    expect(
+      inboxProjectsForRail(
+        [
+          { path: "/tmp/docs", openedAt: 1 },
+          { path: "/tmp/web", openedAt: 2 },
+        ],
+        "/tmp/web",
+      ).map((project) => project.path),
+    ).toEqual(["/tmp/web", "/tmp/docs"]);
   });
 });
 

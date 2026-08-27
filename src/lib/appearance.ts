@@ -24,7 +24,7 @@ export const SCHEME_CHANGE_EVENT = "monocode:schemechange";
 /** Fired on `window` whenever the sidebar layout flips (detail: SidebarLayout). */
 export const LAYOUT_CHANGE_EVENT = "monocode:layoutchange";
 
-export const SIDEBAR_LAYOUT_DEFAULT: SidebarLayout = "classic";
+export const SIDEBAR_LAYOUT_DEFAULT: SidebarLayout = "deck";
 
 export type SidebarTabId = "files" | "sessions" | "changes" | "inbox";
 

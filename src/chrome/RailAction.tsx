@@ -6,6 +6,7 @@ type Props = {
   onClick?: () => void;
   active?: boolean;
   badge?: number;
+  dot?: boolean;
   shortcut?: string;
   ariaLabel?: string;
   isNavButton?: boolean;
@@ -17,6 +18,7 @@ export function RailAction({
   onClick,
   active = false,
   badge,
+  dot = false,
   shortcut,
   ariaLabel,
   isNavButton = false,
@@ -50,7 +52,9 @@ export function RailAction({
       <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
         {label}
       </span>
-      {shortcut ? (
+      {dot ? (
+        <span aria-hidden className="size-2 shrink-0 rounded-full bg-accent" />
+      ) : shortcut ? (
         <span aria-hidden className="shrink-0 text-[11px] text-content/40">
           {shortcut}
         </span>

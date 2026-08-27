@@ -261,8 +261,8 @@ function GeneralPage() {
           label="Workspace layout"
           value={layout}
           options={[
-            { value: "classic", label: "Classic" },
             { value: "deck", label: "Deck" },
+            { value: "classic", label: "Classic" },
           ]}
           onChange={onLayout}
         />
