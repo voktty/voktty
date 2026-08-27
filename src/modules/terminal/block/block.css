@@ -8,14 +8,39 @@
 .cm-history-popover {
   display: flex;
   flex-direction: column;
-  min-width: 22rem;
-  max-width: 40rem;
+  min-width: 24rem;
+  max-width: 44rem;
   overflow: hidden;
   border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
   border-radius: 10px;
   background: var(--popover, #1b1b1d);
   color: var(--popover-foreground, #e6e6e6);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.cm-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--popover, #1b1b1d) 90%, #fff 10%);
+}
+
+.cm-history-header-title {
+  color: var(--foreground, #fff);
+  letter-spacing: 0.02em;
+}
+
+.cm-history-header-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: var(--primary, #3b82f6);
+  background: color-mix(in srgb, var(--primary, #3b82f6) 15%, transparent);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
 .cm-history-list {
@@ -27,7 +52,7 @@
 .cm-history-item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   padding: 6px 9px;
   border-radius: 6px;
   cursor: pointer;
@@ -39,6 +64,7 @@
 }
 
 .cm-history-text {
+  flex: 1 1 auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   white-space: pre;
@@ -46,9 +72,38 @@
   text-overflow: ellipsis;
 }
 
+.cm-history-match {
+  background: color-mix(in srgb, var(--primary, #3b82f6) 35%, transparent);
+  color: var(--primary-foreground, #fff);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.cm-history-tag {
+  flex: none;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted-foreground, rgba(160, 160, 160, 0.7));
+  margin-left: auto;
+  padding-left: 6px;
+}
+
+.cm-history-footer {
+  padding: 5px 10px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  font-size: 10px;
+  color: var(--muted-foreground, rgba(160, 160, 160, 0.8));
+  background: color-mix(in srgb, var(--popover, #1b1b1d) 95%, #000 5%);
+}
+
 .cm-history-item[aria-selected="true"] {
   background: var(--accent, rgba(127, 127, 127, 0.22));
   color: var(--accent-foreground, inherit);
+}
+
+.cm-history-item[aria-selected="true"] .cm-history-tag {
+  color: var(--foreground, #fff);
+  opacity: 0.9;
 }
 
 /* Command / path completion dropdown (portaled to <body>). */

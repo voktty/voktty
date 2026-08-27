@@ -10,7 +10,10 @@ export function useCommandHistory(
   enabled: boolean,
 ): AsyncQueryState<string> {
   const run = useCallback(
-    async (q: string) => Array.from(new Set(await historyList(q, LIMIT))),
+    async (q: string) => {
+      const entries = await historyList(q, undefined, LIMIT);
+      return Array.from(new Set(entries.map((e) => e.cmd)));
+    },
     [],
   );
 

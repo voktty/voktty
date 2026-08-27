@@ -204,21 +204,44 @@ const VALID_FOR = /^[\w./+-]*$/;
 // separator (; & | newline ( { ), so the 2nd command in `a; b` completes too.
 const SEGMENT_START = /(^|[\n;&|(){}])\s*$/;
 
-function commandOptions(
+async function commandOptions(
   prefix: string,
   getCommands: () => string[],
-): Completion[] {
+  historyList?: (query: string, limit: number) => Promise<string[]>,
+): Promise<Completion[]> {
+  const out: Completion[] = [];
+  const trimmed = prefix.trim();
+
+  if (historyList && trimmed.length > 0) {
+    try {
+      const hist = await historyList(trimmed, 15);
+      for (const cmd of hist) {
+        if (cmd.startsWith(trimmed) && !out.some((o) => o.label === cmd)) {
+          out.push({
+            label: cmd,
+            type: "history",
+            detail: "[History]",
+            boost: 99,
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const names = getCommands();
   const src = names.length ? names : SHELL_COMMANDS;
-  const out: Completion[] = [];
   for (const label of src) {
-    if (label.startsWith(prefix)) {
-      out.push({ label, type: "function" });
+    if (label.startsWith(prefix) && !out.some((o) => o.label === label)) {
+      out.push({ label, type: "function", boost: 10 });
       if (out.length >= 50) break;
     }
   }
   for (const k of SHELL_KEYWORDS) {
-    if (k.startsWith(prefix)) out.push({ label: k, type: "keyword" });
+    if (k.startsWith(prefix) && !out.some((o) => o.label === k)) {
+      out.push({ label: k, type: "keyword", boost: 5 });
+    }
   }
   return out;
 }
@@ -241,6 +264,7 @@ const PATH_VALID_FOR = /^[^/]*$/;
 function makeCompletionSource(
   getCommands: () => string[],
   getCwd: () => string | null,
+  historyList?: (query: string, limit: number) => Promise<string[]>,
 ) {
   return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
     if (historyOpen(ctx.state)) return null;
@@ -251,7 +275,7 @@ function makeCompletionSource(
     if (SEGMENT_START.test(before)) {
       return {
         from: word.from,
-        options: commandOptions(word.text, getCommands),
+        options: await commandOptions(word.text, getCommands, historyList),
         validFor: VALID_FOR,
       };
     }
@@ -417,6 +441,7 @@ export function createShellEditor(opts: ShellEditorOptions): ShellEditorHandle {
           makeCompletionSource(
             opts.commandNames ?? (() => []),
             opts.getCwd ?? (() => null),
+            opts.historyList,
           ),
         ],
         icons: false,

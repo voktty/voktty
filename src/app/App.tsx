@@ -177,6 +177,7 @@ import {
   leafIds,
   navigateFocusedBlocks,
   type PaneBounds,
+  markLeafFocused,
   ptyIdForLeaf,
   type TerminalPaneHandle,
   useAgentActivityStore,
@@ -185,6 +186,8 @@ import {
   waitForLeafConnection,
   whenSessionReady,
   writeToSession,
+  CommandHistoryModal,
+  useCommandHistoryStore,
 } from "@/modules/terminal";
 import {
   ThemeProvider,
@@ -2225,6 +2228,9 @@ export default function App() {
           toggleTabBlocks(activeTab.id);
         }
       },
+      "terminal.history": () => {
+        useCommandHistoryStore.getState().openHistory();
+      },
       "blocks.prev": () => navigateFocusedBlocks(-1),
       "blocks.next": () => navigateFocusedBlocks(1),
       "search.focus": (e) => {
@@ -2496,7 +2502,10 @@ export default function App() {
   );
 
   const handleFocusLeaf = useCallback(
-    (tabId: number, leafId: number) => focusPane(tabId, leafId),
+    (tabId: number, leafId: number) => {
+      markLeafFocused(leafId);
+      focusPane(tabId, leafId);
+    },
     [focusPane],
   );
 
@@ -3123,6 +3132,9 @@ export default function App() {
       if (!tab) return;
       state.setActive(tab.spaceId);
       setActiveId(tab.id);
+      if (tab.kind === "terminal" && tab.activeLeafId) {
+        markLeafFocused(tab.activeLeafId);
+      }
     },
     [setActiveId],
   );
@@ -4338,6 +4350,7 @@ export default function App() {
 
           <UpdaterDialog />
           <SettingsModal />
+          <CommandHistoryModal />
           <OnboardingWizard
             open={onboardingOpen}
             onOpenChange={setOnboardingOpen}

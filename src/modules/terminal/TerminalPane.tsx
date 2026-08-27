@@ -35,6 +35,7 @@ import {
 } from "./lib/useTerminalSession";
 import { ProjectScriptsHud } from "./scripts/ProjectScriptsHud";
 import { TerminalScrollBottomHud } from "./TerminalScrollBottomHud";
+import { TerminalInlineSuggest } from "./TerminalInlineSuggest";
 
 function ConnectionStatusBadge({
   workspaceEnv,
@@ -353,7 +354,8 @@ export const TerminalPane = memo(
                 />
               </ErrorBoundary>
             )}
-            <TerminalScrollBottomHud leafId={leafId} visible={visible} />
+            <TerminalInlineSuggest leafId={leafId} visible={visible} />
+          <TerminalScrollBottomHud leafId={leafId} visible={visible} />
             <HostSessionBadge leafId={leafId} />
             <GuestSessionBadge leafId={leafId} onReconnect={session.respawn} />
             <ConnectionStatusBadge
@@ -437,6 +439,7 @@ export const TerminalPane = memo(
               />
             </ErrorBoundary>
           )}
+          <TerminalInlineSuggest leafId={leafId} visible={visible} />
           <TerminalScrollBottomHud leafId={leafId} visible={visible} />
           <HostSessionBadge leafId={leafId} />
           <GuestSessionBadge leafId={leafId} onReconnect={session.respawn} />

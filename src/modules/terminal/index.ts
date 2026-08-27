@@ -28,11 +28,14 @@ export {
 export {
   clearFocusedTerminal,
   disposeSession,
+  getActiveTerminalLeafId,
+  getAnyLiveTerminalLeafId,
   getLeafTerminalStats,
   leafCwd,
   leafHasForegroundProcess,
   leafHasKnownActivity,
   leafIdForPty,
+  markLeafFocused,
   navigateFocusedBlocks,
   ptyIdForLeaf,
   respawnSession,
@@ -42,3 +45,8 @@ export {
 } from "./lib/useTerminalSession";
 export { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 export { TerminalStack } from "./TerminalStack";
+export { CommandHistoryModal } from "./history/CommandHistoryModal";
+export { useCommandHistoryStore } from "./history/commandHistoryStore";
+export { TerminalInlineSuggest } from "./TerminalInlineSuggest";
+export { useTerminalSuggestStore } from "./lib/terminalSuggestStore";
+

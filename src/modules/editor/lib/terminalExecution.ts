@@ -1,5 +1,5 @@
 import {
-  getAnyLiveTerminalLeafId,
+  getActiveTerminalLeafId,
   submitToLeaf,
 } from "@/modules/terminal/lib/useTerminalSession";
 import { EditorSelection } from "@codemirror/state";
@@ -52,7 +52,7 @@ export function sendActiveEditorCodeToTerminal(view: EditorView): boolean {
   const extracted = extractCodeToExecute(view);
   if (!extracted) return false;
 
-  const leafId = getAnyLiveTerminalLeafId();
+  const leafId = getActiveTerminalLeafId();
   if (leafId === null) {
     toast.error(t("editor.terminalNoActive"));
     return false;

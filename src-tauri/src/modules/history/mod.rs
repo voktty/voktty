@@ -1,8 +1,9 @@
 mod parse;
 
+pub use parse::HistEntry;
 use parse::{
-    build_index, complete_commands, demetafy, list, parse_bash, parse_fish, parse_powershell,
-    parse_zsh, sort_recent, suggest, HistEntry,
+    build_index, complete_commands, demetafy, list_entries, parse_bash, parse_fish,
+    parse_powershell, parse_zsh, sort_recent, suggest,
 };
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -25,7 +26,38 @@ fn now() -> i64 {
         .unwrap_or(0)
 }
 
-fn read_histories() -> Vec<(String, i64)> {
+fn history_file_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".voktty").join("history.json"))
+}
+
+fn load_persisted_history() -> Option<Vec<HistEntry>> {
+    let path = history_file_path()?;
+    if !path.exists() {
+        return None;
+    }
+    let data = std::fs::read_to_string(path).ok()?;
+    let mut entries: Vec<HistEntry> = serde_json::from_str(&data).ok()?;
+    sort_recent(&mut entries);
+    Some(entries)
+}
+
+fn save_persisted_history(entries: &[HistEntry]) {
+    if let Some(path) = history_file_path() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let slice = if entries.len() > 5000 {
+            &entries[..5000]
+        } else {
+            entries
+        };
+        if let Ok(json) = serde_json::to_string_pretty(slice) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+}
+
+fn read_histories() -> Vec<(String, i64, Option<String>)> {
     let mut all = Vec::new();
     let home = dirs::home_dir();
 
@@ -161,8 +193,16 @@ fn is_executable(entry: &std::fs::DirEntry) -> bool {
 fn ensure(state: &HistoryState) -> std::sync::MutexGuard<'_, Option<Index>> {
     let mut guard = state.inner.lock().unwrap();
     if guard.is_none() {
+        let entries = if let Some(saved) = load_persisted_history() {
+            saved
+        } else {
+            let bootstrapped = build_index(read_histories());
+            save_persisted_history(&bootstrapped);
+            bootstrapped
+        };
+
         *guard = Some(Index {
-            entries: build_index(read_histories()),
+            entries,
             path_cmds: scan_path(),
         });
     }
@@ -170,9 +210,13 @@ fn ensure(state: &HistoryState) -> std::sync::MutexGuard<'_, Option<Index>> {
 }
 
 #[tauri::command]
-pub fn history_suggest(state: tauri::State<'_, HistoryState>, line: String) -> Option<String> {
+pub fn history_suggest(
+    state: tauri::State<'_, HistoryState>,
+    line: String,
+    shell_type: Option<String>,
+) -> Option<String> {
     let guard = ensure(&state);
-    suggest(&guard.as_ref()?.entries, &line)
+    suggest(&guard.as_ref()?.entries, &line, shell_type.as_deref())
 }
 
 #[tauri::command]
@@ -192,20 +236,28 @@ pub fn history_commands(
 pub fn history_list(
     state: tauri::State<'_, HistoryState>,
     query: String,
+    shell_type: Option<String>,
     limit: Option<usize>,
-) -> Vec<String> {
+) -> Vec<HistEntry> {
     let guard = ensure(&state);
     match guard.as_ref() {
-        Some(idx) => list(&idx.entries, &query, limit.unwrap_or(200)),
+        Some(idx) => list_entries(
+            &idx.entries,
+            &query,
+            shell_type.as_deref(),
+            limit.unwrap_or(200),
+        ),
         None => Vec::new(),
     }
 }
 
-// Called on every accepted command so in-memory history stays hot without a
-// re-read. Only ever fed prompt-mode commands, never raw running-mode input,
-// so passwords typed into a running command never enter history.
 #[tauri::command]
-pub fn history_record(state: tauri::State<'_, HistoryState>, command: String) {
+pub fn history_record(
+    state: tauri::State<'_, HistoryState>,
+    command: String,
+    shell_type: Option<String>,
+    category: Option<String>,
+) {
     let cmd = command.trim();
     if cmd.is_empty() {
         return;
@@ -217,13 +269,115 @@ pub fn history_record(state: tauri::State<'_, HistoryState>, command: String) {
             Some(e) => {
                 e.count += 1;
                 e.last = n;
+                if e.shell_type.is_none() && shell_type.is_some() {
+                    e.shell_type = shell_type;
+                }
+                if e.category.is_none() && category.is_some() {
+                    e.category = category;
+                }
             }
             None => idx.entries.push(HistEntry {
                 cmd: cmd.to_string(),
                 count: 1,
                 last: n,
+                shell_type,
+                category,
             }),
         }
         sort_recent(&mut idx.entries);
+        save_persisted_history(&idx.entries);
     }
+}
+
+#[tauri::command]
+pub fn history_export(state: tauri::State<'_, HistoryState>) -> Result<String, String> {
+    let guard = ensure(&state);
+    match guard.as_ref() {
+        Some(idx) => serde_json::to_string_pretty(&idx.entries).map_err(|e| e.to_string()),
+        None => Ok("[]".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn history_import(
+    state: tauri::State<'_, HistoryState>,
+    json_data: String,
+) -> Result<usize, String> {
+    let imported: Vec<HistEntry> =
+        serde_json::from_str(&json_data).map_err(|e| format!("Formato JSON inválido: {e}"))?;
+    if imported.is_empty() {
+        return Ok(0);
+    }
+
+    let mut guard = ensure(&state);
+    let mut imported_count = 0;
+    if let Some(idx) = guard.as_mut() {
+        for item in imported {
+            let cmd = item.cmd.trim();
+            if cmd.is_empty() {
+                continue;
+            }
+            match idx.entries.iter_mut().find(|e| e.cmd == cmd) {
+                Some(existing) => {
+                    existing.count = existing.count.max(item.count);
+                    existing.last = existing.last.max(item.last);
+                    if existing.shell_type.is_none() {
+                        existing.shell_type = item.shell_type;
+                    }
+                    if existing.category.is_none() {
+                        existing.category = item.category;
+                    }
+                }
+                None => {
+                    idx.entries.push(item);
+                    imported_count += 1;
+                }
+            }
+        }
+        sort_recent(&mut idx.entries);
+        save_persisted_history(&idx.entries);
+    }
+    Ok(imported_count)
+}
+
+#[tauri::command]
+pub fn history_delete_entry(state: tauri::State<'_, HistoryState>, command: String) -> bool {
+    let cmd = command.trim();
+    if cmd.is_empty() {
+        return false;
+    }
+    let mut guard = ensure(&state);
+    if let Some(idx) = guard.as_mut() {
+        let initial_len = idx.entries.len();
+        idx.entries.retain(|e| e.cmd != cmd);
+        if idx.entries.len() != initial_len {
+            save_persisted_history(&idx.entries);
+            return true;
+        }
+    }
+    false
+}
+
+#[tauri::command]
+pub fn history_clear(state: tauri::State<'_, HistoryState>, shell_type: Option<String>) -> usize {
+    let mut guard = ensure(&state);
+    if let Some(idx) = guard.as_mut() {
+        let initial_len = idx.entries.len();
+        if let Some(st) = shell_type.filter(|s| !s.is_empty() && s != "all") {
+            let norm = parse::normalize_shell_type(&st);
+            idx.entries.retain(|e| {
+                e.shell_type
+                    .as_deref()
+                    .map(parse::normalize_shell_type)
+                    .unwrap_or("generic")
+                    != norm
+            });
+        } else {
+            idx.entries.clear();
+        }
+        let cleared = initial_len - idx.entries.len();
+        save_persisted_history(&idx.entries);
+        return cleared;
+    }
+    0
 }
