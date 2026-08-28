@@ -107,13 +107,14 @@ fn set_backdrop(window: &tauri::Window, enabled: bool, dark: bool) -> Result<(),
     use window_vibrancy::{apply_acrylic, apply_mica, clear_acrylic, clear_mica};
 
     if enabled {
-        let tint = if dark {
-            (18, 18, 20, 140)
-        } else {
-            (240, 240, 245, 140)
-        };
-        if apply_acrylic(window, Some(tint)).is_err() {
-            apply_mica(window, Some(dark)).map_err(|e| e.to_string())?;
+        let _ = clear_acrylic(window);
+        if apply_mica(window, Some(dark)).is_err() {
+            let tint = if dark {
+                (18, 18, 20, 100)
+            } else {
+                (240, 240, 245, 100)
+            };
+            apply_acrylic(window, Some(tint)).map_err(|e| e.to_string())?;
         }
         Ok(())
     } else {

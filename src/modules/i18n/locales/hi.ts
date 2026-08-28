@@ -409,6 +409,9 @@ export const hi: TranslationSchema = {
         backdropVibrancy: "विंडो वाइब्रेंसी",
         backdropVibrancyDesc:
           "विंडो के पीछे जो कुछ भी है उस पर हेडर, स्टेटस बार और गटर को फ्रॉस्ट करें। पेन ठोस रहते हैं।",
+        vibrancyOpacity: "सतह अपारदर्शिता",
+        vibrancyOpacityDesc:
+          "समायोजित करें कि ऐप सतहों के माध्यम से मूल मीका या वाइब्रेंसी पृष्ठभूमि कितनी चमकती है।",
       },
     },
     shortcuts: {

@@ -209,6 +209,7 @@ export const TerminalPane = memo(
     const downYRef = useRef<number | null>(null);
     const { resolvedMode, activeTheme } = useTheme();
     const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
+    const vibrancyOpacity = usePreferencesStore((s) => s.vibrancyOpacity);
 
     const [currentCwd, setCurrentCwd] = useState<string | null>(
       initialCwd ?? leafCwd(leafId) ?? null,
@@ -236,7 +237,7 @@ export const TerminalPane = memo(
       // Defer one frame so CSS-variable token resolution sees the new class.
       const id = requestAnimationFrame(() => session.applyTheme());
       return () => cancelAnimationFrame(id);
-    }, [resolvedMode, activeTheme, session, windowVibrancy]);
+    }, [resolvedMode, activeTheme, session, windowVibrancy, vibrancyOpacity]);
 
     useImperativeHandle(
       ref,
