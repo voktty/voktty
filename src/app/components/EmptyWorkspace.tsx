@@ -67,6 +67,8 @@ export function EmptyWorkspace({
   return (
     <div
       data-empty-workspace
+      role="region"
+      aria-label={t("workspace.empty.title")}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

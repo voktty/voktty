@@ -21,7 +21,7 @@ export function getOptimalInitialZoomLevel(
         }
       : null);
 
-  if (!screen || !screen.width || !screen.height) {
+  if (!screen?.width || !screen.height) {
     return 1.0;
   }
 
