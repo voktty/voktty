@@ -108,9 +108,9 @@ export function buildPiSpawnArgs(
   input: {
     model?: string;
     resume?: string;
-    /** Catalog probes: do not write a session file. */
+    /** Catalog probes and isolated jobs: do not write a session file. */
     noSession?: boolean;
-    /** Only for throwaway text jobs — never for live chat. */
+    /** Catalog probes and throwaway text jobs — never for live chat. */
     noExtensions?: boolean;
     /** Titles and other one-shot prompts: no tools, skills, or project context. */
     isolated?: boolean;

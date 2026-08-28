@@ -46,9 +46,12 @@ describe("buildPiSpawnArgs", () => {
       "rpc",
       "--no-session",
     ]);
+  });
+
+  it("strips extensions for throwaway catalog probes", () => {
     expect(
       buildPiSpawnArgs(PI_FLAVOR, { noSession: true, noExtensions: true }),
-    ).toContain("--no-extensions");
+    ).toEqual(["--mode", "rpc", "--no-session", "--no-extensions"]);
   });
 
   it("isolates throwaway text jobs from tools and project context", () => {

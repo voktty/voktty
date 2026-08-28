@@ -17,7 +17,7 @@ import {
   probeHarnessAvailability,
   subscribeHarnessAvailability,
 } from "../lib/harness/availability";
-import { refreshCodexCatalog } from "../lib/harness/codexCatalog";
+import { refreshHarnessCatalogs } from "../lib/harness/registry";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   getModelSnapshot,
@@ -106,9 +106,8 @@ export function SecondOpinionButton({ from, onPick }: Props) {
   }, [open]);
 
   useEffect(() => {
-    if (!open || activeHarness !== "codex") return;
-    if (modelsFor("codex").length > 0) return;
-    void refreshCodexCatalog();
+    if (!open || !activeHarness) return;
+    void refreshHarnessCatalogs([activeHarness]);
   }, [open, activeHarness]);
 
   useEffect(() => {

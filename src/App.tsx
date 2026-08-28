@@ -617,7 +617,12 @@ export default function App({
 
   useEffect(() => {
     void probeHarnessAvailability();
-    void refreshHarnessCatalogs().then(() => {
+    // Only the harnesses already in this window. Probing every installed CLI
+    // at boot left unused agents (especially Pi) running in the background.
+    const harnesses = [
+      ...new Set(sessionsRef.current.map((session) => session.harness)),
+    ];
+    void refreshHarnessCatalogs(harnesses).then(() => {
       setSessions((prev) =>
         prev.map((session) => {
           if (!isLiveHarness(session.harness)) return session;
@@ -680,6 +685,16 @@ export default function App({
     busySessionIdsRef.current = nextBusySessionIds;
   }
   const busySessionIds = busySessionIdsRef.current;
+
+  const usageProviders = useMemo(() => {
+    const ids = new Set<"claude" | "codex">();
+    for (const session of sessions) {
+      if (session.harness === "claude" || session.harness === "codex") {
+        ids.add(session.harness);
+      }
+    }
+    return [...ids];
+  }, [sessions]);
 
   const nextApprovalSessionIds = useMemo(() => {
     const ids = new Set<string>();
@@ -961,8 +976,9 @@ export default function App({
     });
   }, [tabs]);
 
-  // Tabs are views. A working agent stays in memory (and keeps its child)
-  // until the turn finishes or the session is deleted.
+  // Tabs are views. Hidden idle sessions drop their child. A visible session
+  // keeps its child for a few minutes after a turn so follow-ups stay instant,
+  // then parks it and resumes on the next prompt.
   useEffect(() => {
     const visibleIds = openSessionIds(tabs);
     const idleDetached = sessions.filter(
@@ -4025,7 +4041,7 @@ export default function App({
             }
           />
         ) : null}
-        <UsageFooter />
+        <UsageFooter providers={usageProviders} />
       </div>
 
       {filePickerOpen ? (

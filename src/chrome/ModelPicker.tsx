@@ -28,7 +28,6 @@ import {
   type AgentModel,
   type ModelPickerTab,
 } from "../lib/models";
-import { refreshCodexCatalog } from "../lib/harness/codexCatalog";
 import {
   harnessUnavailableHint,
   hasProbedHarnessAvailability,
@@ -37,6 +36,7 @@ import {
   subscribeHarnessAvailability,
   getHarnessAvailabilitySnapshot,
 } from "../lib/harness/availability";
+import { refreshHarnessCatalogs } from "../lib/harness/registry";
 import {
   HARNESSES,
   HARNESS_LABEL,
@@ -160,9 +160,8 @@ export function ModelPicker({
   }, [open]);
 
   useEffect(() => {
-    if (!open || visibleTab !== "codex") return;
-    if (modelsFor("codex").length > 0) return;
-    void refreshCodexCatalog();
+    if (!open || visibleTab === "favorites") return;
+    void refreshHarnessCatalogs([visibleTab]);
   }, [open, visibleTab]);
 
   useLayoutEffect(() => {
