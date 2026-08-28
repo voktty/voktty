@@ -297,28 +297,36 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
         if (m.provider === "ollama" && ollamaModelId?.trim()) {
           return {
             ...m,
-            label: `Ollama (${ollamaModelId.trim()})`,
+            label: t("settings.models.localProviderLabel.ollama", {
+              model: ollamaModelId.trim(),
+            }),
             hint: ollamaModelId.trim(),
           };
         }
         if (m.provider === "lmstudio" && lmstudioModelId?.trim()) {
           return {
             ...m,
-            label: `LM Studio (${lmstudioModelId.trim()})`,
+            label: t("settings.models.localProviderLabel.lmstudio", {
+              model: lmstudioModelId.trim(),
+            }),
             hint: lmstudioModelId.trim(),
           };
         }
         if (m.provider === "mlx" && mlxModelId?.trim()) {
           return {
             ...m,
-            label: `MLX (${mlxModelId.trim()})`,
+            label: t("settings.models.localProviderLabel.mlx", {
+              model: mlxModelId.trim(),
+            }),
             hint: mlxModelId.trim(),
           };
         }
         if (m.provider === "openrouter" && openrouterModelId?.trim()) {
           return {
             ...m,
-            label: `OpenRouter (${openrouterModelId.trim()})`,
+            label: t("settings.models.localProviderLabel.openrouter", {
+              model: openrouterModelId.trim(),
+            }),
             hint: openrouterModelId.trim(),
           };
         }
@@ -333,6 +341,7 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
     mlxModelId,
     openrouterModelId,
     epModelInfos,
+    t,
   ]);
 
   const current: ModelInfo = useMemo(() => {
