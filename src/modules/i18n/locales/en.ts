@@ -542,6 +542,15 @@ export const en = {
           "Any OpenRouter model. Enter its complete provider/model ID.",
         openrouterHint: "Browse model IDs at openrouter.ai/models.",
       },
+      localProviderLabel: {
+        ollama: "Ollama ({model})",
+        lmstudio: "LM Studio ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "OpenRouter ({model})",
+      },
+      customEndpoint: "Custom Endpoint",
+      browserBuiltIn: "Browser (built-in, free)",
+      defaultFastModel: "Default fast model",
       hints: {
         flagship: "Flagship",
         balanced: "Balanced",

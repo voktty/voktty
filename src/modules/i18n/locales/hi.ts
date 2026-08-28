@@ -538,6 +538,15 @@ export const hi: TranslationSchema = {
           "कोई भी OpenRouter मॉडल। इसका पूरा प्रदाता/मॉडल ID दर्ज करें।",
         openrouterHint: "openrouter.ai/models पर मॉडल ID ब्राउज़ करें।",
       },
+      localProviderLabel: {
+        ollama: "Ollama ({model})",
+        lmstudio: "LM Studio ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "OpenRouter ({model})",
+      },
+      customEndpoint: "कस्टम एंडपॉइंट",
+      browserBuiltIn: "ब्राउज़र (अंतर्निहित, निःशुल्क)",
+      defaultFastModel: "डिफ़ॉल्ट तेज़ मॉडल",
       hints: {
         flagship: "फ्लैगशिप",
         balanced: "संतुलित",

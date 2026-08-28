@@ -63,7 +63,7 @@ import {
   getLocalizedModelDescription,
   getLocalizedModelHint,
 } from "@/modules/ai/lib/modelDisplay";
-import { useTranslation } from "@/modules/i18n";
+import { t as globalT, useTranslation } from "@/modules/i18n";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   type AutocompleteTrigger,
@@ -614,7 +614,7 @@ function resolveDisplayModel(
         provider: "openai",
         label: "GPT-5.4 Mini",
         hint: "Fast",
-        description: "Default fast model",
+        description: globalT("settings.models.defaultFastModel"),
         capabilities: { intelligence: 4, speed: 5, cost: 5 },
       }
     );
@@ -628,28 +628,36 @@ function resolveDisplayModel(
     if (found.provider === "ollama" && prefs.ollamaModelId?.trim()) {
       return {
         ...found,
-        label: `Ollama (${prefs.ollamaModelId.trim()})`,
+        label: globalT("settings.models.localProviderLabel.ollama", {
+          model: prefs.ollamaModelId.trim(),
+        }),
         hint: prefs.ollamaModelId.trim(),
       };
     }
     if (found.provider === "lmstudio" && prefs.lmstudioModelId?.trim()) {
       return {
         ...found,
-        label: `LM Studio (${prefs.lmstudioModelId.trim()})`,
+        label: globalT("settings.models.localProviderLabel.lmstudio", {
+          model: prefs.lmstudioModelId.trim(),
+        }),
         hint: prefs.lmstudioModelId.trim(),
       };
     }
     if (found.provider === "mlx" && prefs.mlxModelId?.trim()) {
       return {
         ...found,
-        label: `MLX (${prefs.mlxModelId.trim()})`,
+        label: globalT("settings.models.localProviderLabel.mlx", {
+          model: prefs.mlxModelId.trim(),
+        }),
         hint: prefs.mlxModelId.trim(),
       };
     }
     if (found.provider === "openrouter" && prefs.openrouterModelId?.trim()) {
       return {
         ...found,
-        label: `OpenRouter (${prefs.openrouterModelId.trim()})`,
+        label: globalT("settings.models.localProviderLabel.openrouter", {
+          model: prefs.openrouterModelId.trim(),
+        }),
         hint: prefs.openrouterModelId.trim(),
       };
     }
@@ -954,7 +962,7 @@ function DefaultModelPicker({
                     )}
                   >
                     <span className="flex flex-1 flex-col">
-                      <span>{ep.name || ep.modelId || "Custom Endpoint"}</span>
+                      <span>{ep.name || ep.modelId || t("settings.models.customEndpoint")}</span>
                       <span className="text-[10px] text-muted-foreground">
                         {ep.baseURL}
                       </span>
@@ -1055,7 +1063,7 @@ function AutocompleteRow({
       provider: "openai",
       label: "GPT-5.4 Mini",
       hint: "Fast",
-      description: "Default fast model",
+      description: t("settings.models.defaultFastModel"),
       capabilities: { intelligence: 4, speed: 5, cost: 5 },
     };
 
@@ -1924,7 +1932,7 @@ function VoiceBlock() {
               <span>
                 {(sttProvider && STT_PROVIDER_LABELS[sttProvider]) ||
                   STT_PROVIDER_LABELS.browser ||
-                  "Browser (built-in, free)"}
+                  t("settings.models.browserBuiltIn")}
               </span>
               <HugeiconsIcon
                 icon={ArrowDown01Icon}
