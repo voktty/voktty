@@ -23,6 +23,7 @@ import {
   setBackgroundKind,
   setBackgroundOpacity,
   setEditorTheme,
+  setVibrancyOpacity,
   setWindowVibrancy,
 } from "@/modules/settings/store";
 import { useTheme } from "@/modules/theme";
@@ -47,7 +48,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
-import { SettingRow } from "../components/SettingRow";
 
 export function ThemesSection() {
   const { t } = useTranslation();
@@ -83,6 +83,7 @@ export function ThemesSection() {
   const backgroundOpacity = usePreferencesStore((s) => s.backgroundOpacity);
   const backgroundBlur = usePreferencesStore((s) => s.backgroundBlur);
   const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
+  const vibrancyOpacity = usePreferencesStore((s) => s.vibrancyOpacity);
 
   const [backdrop, setBackdrop] = useState<Backdrop>("none");
   useEffect(() => {
@@ -167,19 +168,49 @@ export function ThemesSection() {
       />
 
       {backdrop === "none" ? null : (
-        <SettingRow
-          title={backdrop === "mica" ? t("settings.themes.background.backdropMica") : t("settings.themes.background.backdropVibrancy")}
-          description={
-            backdrop === "mica"
-              ? t("settings.themes.background.backdropMicaDesc")
-              : t("settings.themes.background.backdropVibrancyDesc")
-          }
-        >
-          <Switch
-            checked={windowVibrancy}
-            onCheckedChange={(v) => void setWindowVibrancy(v)}
-          />
-        </SettingRow>
+        <div className="flex flex-col gap-3 rounded-lg border border-border/60 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-col">
+              <span className="text-[12.5px] font-medium">
+                {backdrop === "mica"
+                  ? t("settings.themes.background.backdropMica")
+                  : t("settings.themes.background.backdropVibrancy")}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                {backdrop === "mica"
+                  ? t("settings.themes.background.backdropMicaDesc")
+                  : t("settings.themes.background.backdropVibrancyDesc")}
+              </span>
+            </div>
+            <Switch
+              checked={windowVibrancy}
+              onCheckedChange={(v) => void setWindowVibrancy(v)}
+            />
+          </div>
+
+          {windowVibrancy ? (
+            <div className="flex flex-col gap-2 border-t border-border/40 pt-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11.5px] text-muted-foreground">
+                  {t("settings.themes.background.vibrancyOpacity")}
+                </span>
+                <span className="tabular-nums text-[11px] text-muted-foreground">
+                  {Math.round(vibrancyOpacity * 100)}%
+                </span>
+              </div>
+              <Slider
+                value={[vibrancyOpacity]}
+                min={0.2}
+                max={1}
+                step={0.01}
+                onValueChange={(v) => void setVibrancyOpacity(v[0] ?? 0.85)}
+              />
+              <span className="text-[10.5px] text-muted-foreground">
+                {t("settings.themes.background.vibrancyOpacityDesc")}
+              </span>
+            </div>
+          ) : null}
+        </div>
       )}
 
       <div

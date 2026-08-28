@@ -27,17 +27,20 @@ export function buildTerminalTheme(): ITheme {
   const t = readTerminalTokens();
 
   const bgFallback = isVibrancy ? "rgba(0, 0, 0, 0)" : "#0b0f19";
-  const bg =
-    isVibrancy &&
-    (!t.background ||
-      t.background === "transparent" ||
-      t.background === "rgba(0, 0, 0, 0)")
-      ? "rgba(0, 0, 0, 0)"
-      : toXtermColor(t.background, bgFallback);
+  const bg = isVibrancy
+    ? "rgba(0, 0, 0, 0)"
+    : toXtermColor(t.background, bgFallback);
   const fg = toXtermColor(t.foreground, "#f8fafc");
   const cursor = toXtermColor(t.cursor, "#10b981");
-  const cursorAccent = toXtermColor(t.cursorAccent, "#0b0f19");
+  const cursorAccent = toXtermColor(
+    t.cursorAccent,
+    isVibrancy ? "rgba(0, 0, 0, 0)" : "#0b0f19",
+  );
   const selection = toXtermColor(t.selection, "rgba(99, 102, 241, 0.28)");
+
+  const black = isVibrancy
+    ? "rgba(0, 0, 0, 0)"
+    : toXtermColor(t.ansiBlack, bg);
 
   return {
     background: bg,
@@ -45,7 +48,7 @@ export function buildTerminalTheme(): ITheme {
     cursor,
     cursorAccent,
     selectionBackground: selection,
-    black: toXtermColor(t.ansiBlack, "#1e293b"),
+    black,
     red: toXtermColor(t.ansiRed, "#f87171"),
     green: toXtermColor(t.ansiGreen, "#10b981"),
     yellow: toXtermColor(t.ansiYellow, "#fbbf24"),

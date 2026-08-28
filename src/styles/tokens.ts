@@ -94,6 +94,7 @@ const ALPHA_KEYS = new Set<keyof TerminalTokens>([
   "background",
   "selection",
   "cursorAccent",
+  "ansiBlack",
 ]);
 
 export function readTerminalTokens(): TerminalTokens {

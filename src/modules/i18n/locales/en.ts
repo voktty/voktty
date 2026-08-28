@@ -412,6 +412,9 @@ export const en = {
         backdropVibrancy: "Window vibrancy",
         backdropVibrancyDesc:
           "Frost the header, status bar and gutters over what is behind the window. Panes stay solid.",
+        vibrancyOpacity: "Surface opacity",
+        vibrancyOpacityDesc:
+          "Adjust how much the native Mica or Vibrancy backdrop shines through app surfaces.",
       },
     },
     shortcuts: {
