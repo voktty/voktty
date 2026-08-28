@@ -209,7 +209,7 @@ export function AiStatusBarControls({
       <ModelDropdown compact={compact} />
 
       <IconBtn
-        title="Agent Operational History (Ctrl+Shift+H)"
+        title={t("agentHistory.shortcutTooltip", { shortcut: "Ctrl+Shift+H" })}
         onClick={() => useAgentHistoryStore.getState().openHistory()}
       >
         <HugeiconsIcon icon={Clock01Icon} size={13} strokeWidth={1.75} />

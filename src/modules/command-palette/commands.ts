@@ -974,7 +974,7 @@ export function createCommandItems(
     },
     {
       id: "ai.askSelection",
-      title: t("commandPalette.commands.askAiAboutSelection"),
+      title: t("commandPalette.commands.askAiSelection"),
       group: "AI",
       keywords: ["ai", "ask", "selection", "explain", "review"],
       icon: SparklesIcon,
@@ -983,7 +983,7 @@ export function createCommandItems(
     },
     {
       id: "agentHistory.open",
-      title: "Agent Operational History",
+      title: t("agentHistory.modalTitle"),
       group: "AI",
       keywords: [
         "agent",
