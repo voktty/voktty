@@ -222,3 +222,21 @@ export function splitActivityRows(blocks: Block[]): {
     hidden: latest ? completed.slice(0, -1) : completed,
   };
 }
+
+export type ActivityGroupView = "summary" | "zen-expanded" | "live";
+
+/**
+ * Zen's settled summary is gated on its own open flag, not the live
+ * "+N previous" disclosure. Sharing that flag kept expanded history
+ * from folding when a turn settled or zen was turned on.
+ */
+export function activityGroupView(
+  collapsed: boolean,
+  pendingCount: number,
+  zenOpen: boolean,
+): ActivityGroupView {
+  if (!collapsed) return "live";
+  if (zenOpen) return "zen-expanded";
+  if (pendingCount > 0) return "live";
+  return "summary";
+}

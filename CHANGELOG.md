@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Zen mode: expanding a settled turn's toolchain no longer folds it again when the turn's earlier tool calls were already open. The summary and the `+N previous` disclosure now track their own state.
+
 ## [0.1.14] - 2026-08-28
 
 ### Added

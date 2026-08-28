@@ -48,6 +48,7 @@ import type { TranscriptLayout } from "../lib/appearance";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { TranscriptSelectionMenu } from "./TranscriptSelectionMenu";
 import {
+  activityGroupView,
   activitySummary,
   editVerb,
   groupTurnItems,
@@ -561,19 +562,23 @@ function ActivityGroup({
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  // Live "+N previous" and the settled zen summary are independent. Sharing
+  // one flag kept expanded history from folding when a turn settled.
+  const [showPrevious, setShowPrevious] = useState(false);
+  const [zenOpen, setZenOpen] = useState(false);
   const { latest, pending, hidden } = splitActivityRows(blocks);
+  const view = activityGroupView(!!collapsed, pending.length, zenOpen);
 
   // Zen mode: a settled turn keeps its whole toolchain behind one line, so the
   // agent's closing prose is the only full-size thing left on screen.
-  if (collapsed && pending.length === 0 && !expanded) {
+  if (view === "summary") {
     return (
       <div className="flex flex-col gap-0.5 px-4">
         <button
           type="button"
           aria-expanded={false}
           aria-label={`Show ${blocks.length} tool calls`}
-          onClick={() => setExpanded(true)}
+          onClick={() => setZenOpen(true)}
           className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
         >
           <ChevronRight className="size-3.5 shrink-0" strokeWidth={1.75} />
@@ -583,7 +588,7 @@ function ActivityGroup({
     );
   }
 
-  if (collapsed && expanded) {
+  if (view === "zen-expanded") {
     return (
       <div className="flex flex-col gap-0.5 px-4">
         {blocks.map((block) => (
@@ -598,7 +603,7 @@ function ActivityGroup({
         <button
           type="button"
           aria-expanded
-          onClick={() => setExpanded(false)}
+          onClick={() => setZenOpen(false)}
           className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
         >
           <ChevronDown className="size-3.5 shrink-0 rotate-180" />
@@ -628,7 +633,7 @@ function ActivityGroup({
         />
       ))}
       {hidden.length > 0 ? (
-        expanded ? (
+        showPrevious ? (
           <div className="flex flex-col gap-0.5">
             {[...hidden].reverse().map((block) => (
               <ActivityToolRow
@@ -641,7 +646,7 @@ function ActivityGroup({
             <button
               type="button"
               aria-expanded
-              onClick={() => setExpanded(false)}
+              onClick={() => setShowPrevious(false)}
               className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
             >
               <ChevronDown className="size-3.5 shrink-0 rotate-180" />
@@ -653,7 +658,7 @@ function ActivityGroup({
             type="button"
             aria-expanded={false}
             aria-label={`Show ${hidden.length} previous tool calls`}
-            onClick={() => setExpanded(true)}
+            onClick={() => setShowPrevious(true)}
             className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
           >
             <ChevronDown className="size-3.5 shrink-0" strokeWidth={1.75} />

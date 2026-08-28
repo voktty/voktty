@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Block } from "../lib/session";
 import {
+  activityGroupView,
   activitySummary,
   editVerb,
   groupTurnItems,
@@ -196,6 +197,13 @@ describe("zen mode grouping", () => {
       "3 tool calls · 1 file edited",
     );
     expect(activitySummary([shell("a")])).toBe("1 tool call");
+  });
+
+  it("folds to the summary even if live previous-tools were expanded", () => {
+    expect(activityGroupView(true, 0, false)).toBe("summary");
+    expect(activityGroupView(true, 0, true)).toBe("zen-expanded");
+    expect(activityGroupView(false, 0, false)).toBe("live");
+    expect(activityGroupView(true, 2, false)).toBe("live");
   });
 });
 
