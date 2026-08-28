@@ -1,4 +1,5 @@
 import type { SettingsTab } from "@/modules/settings/openSettingsWindow";
+import { useSettingsModalStore } from "@/modules/settings/settingsModalStore";
 
 export type SettingsSearchEntry = {
   id: string;
@@ -95,11 +96,11 @@ export const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
   section("models-voice", "models", "settings.models.voiceInput"),
   section("models-context", "models", "settings.models.contextLabel"),
 
-  section("agents", "agents", "settings.tabs.agents", "settings.agents.description"),
-  section("agents-instructions", "agents", "settings.agents.customInstructionsTitle", "settings.agents.customInstructionsDesc"),
-  section("agents-terminal", "agents", "settings.agents.terminalAgentsTitle", "settings.agents.terminalAgentsDesc"),
-  section("agents-hooks", "agents", "settings.agents.enableHooks", "settings.agents.hooksDescription"),
-  section("agents-snippets", "agents", "settings.agents.snippets", "settings.agents.snippetsDesc"),
+  section("agents", "models", "settings.models.subTabs.agents", "settings.agents.description"),
+  section("agents-instructions", "models", "settings.agents.customInstructionsTitle", "settings.agents.customInstructionsDesc"),
+  section("agents-terminal", "models", "settings.agents.terminalAgentsTitle", "settings.agents.terminalAgentsDesc"),
+  section("agents-hooks", "models", "settings.agents.enableHooks", "settings.agents.hooksDescription"),
+  section("agents-snippets", "models", "settings.agents.snippets", "settings.agents.snippetsDesc"),
 
   section("extensions", "extensions", "extensions.title", "extensions.description"),
   section("ssh", "ssh", "settings.tabs.ssh"),
@@ -161,6 +162,11 @@ export function navigateToSettingsEntry(
   targetTitle: string | undefined,
   setActive: (tab: SettingsTab) => void,
 ): void {
+  if (entry.id.startsWith("agents")) {
+    useSettingsModalStore.getState().setModelsSubTab("agents");
+  } else if (entry.id.startsWith("models")) {
+    useSettingsModalStore.getState().setModelsSubTab("models");
+  }
   setActive(entry.tab);
 
   let attempts = 0;

@@ -92,17 +92,22 @@ import {
 } from "@/modules/settings/store";
 import {
   Add01Icon,
+  AiScanIcon,
   ArrowDown01Icon,
   ArrowUpRight01Icon,
   Cancel01Icon,
   CheckmarkCircle02Icon,
   ChevronDown,
+  InformationCircleIcon,
   Mic01Icon,
+  UserMultiple02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSettingsModalStore } from "@/modules/settings/settingsModalStore";
+import { AgentsSection } from "./AgentsSection";
 import { ProviderIcon } from "../components/ProviderIcon";
 import { ProviderKeyCard } from "../components/ProviderKeyCard";
 import { SectionHeader } from "../components/SectionHeader";
@@ -361,43 +366,79 @@ export function ModelsSection() {
     setAdding((prev) => new Set(prev).add(id));
   };
 
+  const modelsSubTab = useSettingsModalStore((s) => s.modelsSubTab);
+  const setModelsSubTab = useSettingsModalStore((s) => s.setModelsSubTab);
+
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-6">
       <SectionHeader
         title={t("settings.models.title")}
         description={t("settings.models.description")}
       />
 
-      <DefaultsBlock
-        defaultModel={defaultModel}
-        configuredIds={configuredIds}
-        keys={keys}
-        customEndpoints={customEndpoints}
-        endpointKeys={epKeys}
-      />
+      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/50 w-fit">
+        <button
+          type="button"
+          onClick={() => setModelsSubTab("models")}
+          className={cn(
+            "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all cursor-pointer",
+            modelsSubTab === "models"
+              ? "bg-card text-foreground shadow-xs border border-border/60 font-semibold"
+              : "text-muted-foreground hover:text-foreground hover:bg-card/40",
+          )}
+        >
+          <HugeiconsIcon icon={AiScanIcon} size={14} strokeWidth={2} />
+          <span>{t("settings.models.subTabs.models")}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setModelsSubTab("agents")}
+          className={cn(
+            "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all cursor-pointer",
+            modelsSubTab === "agents"
+              ? "bg-card text-foreground shadow-xs border border-border/60 font-semibold"
+              : "text-muted-foreground hover:text-foreground hover:bg-card/40",
+          )}
+        >
+          <HugeiconsIcon icon={UserMultiple02Icon} size={14} strokeWidth={2} />
+          <span>{t("settings.models.subTabs.agents")}</span>
+        </button>
+      </div>
 
-      <VoiceBlock />
-
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <Label>{t("settings.models.providers")}</Label>
-          <AddProviderMenu
-            providers={addableProviders}
-            onAdd={addProvider}
-            onAddCompat={addCustomEndpoint}
+      {modelsSubTab === "agents" ? (
+        <AgentsSection hideHeader />
+      ) : (
+        <div className="flex flex-col gap-7">
+          <DefaultsBlock
+            defaultModel={defaultModel}
+            configuredIds={configuredIds}
+            keys={keys}
+            customEndpoints={customEndpoints}
+            endpointKeys={epKeys}
           />
-        </div>
 
-        {visibleProviders.length === 0 && customEndpoints.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-8 text-center">
-            <p className="text-[12px] text-muted-foreground">
-              {t("settings.models.noProvidersConnected")}
-            </p>
-            <p className="mt-0.5 text-[10.5px] text-muted-foreground/70">
-              {t("settings.models.noProvidersConnectedDesc")}
-            </p>
-          </div>
-        ) : (
+          <VoiceBlock />
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <Label>{t("settings.models.providers")}</Label>
+              <AddProviderMenu
+                providers={addableProviders}
+                onAdd={addProvider}
+                onAddCompat={addCustomEndpoint}
+              />
+            </div>
+
+            {visibleProviders.length === 0 && customEndpoints.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-8 text-center">
+                <p className="text-[12px] text-muted-foreground">
+                  {t("settings.models.noProvidersConnected")}
+                </p>
+                <p className="mt-0.5 text-[10.5px] text-muted-foreground/70">
+                  {t("settings.models.noProvidersConnectedDesc")}
+                </p>
+              </div>
+            ) : (
           <div className="flex flex-col gap-2">
             {visibleProviders.map((p) =>
               p.id === "openrouter" ? (
@@ -449,6 +490,8 @@ export function ModelsSection() {
         )}
       </div>
     </div>
+  )}
+</div>
   );
 }
 
@@ -609,6 +652,8 @@ function DefaultsBlock({
     }
   };
 
+  const isAiActive = aiEnabled && healthCurrent;
+
   return (
     <div className="flex flex-col gap-3">
       <Label>{t("settings.models.defaults")}</Label>
@@ -653,10 +698,25 @@ function DefaultsBlock({
             </span>
           </div>
         </FieldRow>
+        {!isAiActive && (
+          <div className="flex items-start gap-2 rounded-md bg-muted/40 border border-border/40 px-3 py-2 text-[11px] text-muted-foreground">
+            <HugeiconsIcon
+              icon={InformationCircleIcon}
+              size={14}
+              className="shrink-0 text-primary/80 mt-0.5"
+            />
+            <span>
+              {configuredIds.size === 0 && customEndpoints.length === 0
+                ? t("settings.models.noProvidersConnectedDesc")
+                : t("settings.models.aiInactiveBanner")}
+            </span>
+          </div>
+        )}
         <FieldRow label={t("settings.models.chatModel")}>
           <DefaultModelPicker
             defaultModel={defaultModel}
             configuredIds={configuredIds}
+            disabled={!isAiActive}
           />
         </FieldRow>
         <AutocompleteRow
@@ -664,6 +724,7 @@ function DefaultsBlock({
           configuredIds={configuredIds}
           customEndpoints={customEndpoints}
           endpointKeys={endpointKeys}
+          disabled={!isAiActive}
         />
       </div>
     </div>
@@ -673,9 +734,11 @@ function DefaultsBlock({
 function DefaultModelPicker({
   defaultModel,
   configuredIds,
+  disabled,
 }: {
   defaultModel: ModelId;
   configuredIds: Set<ProviderId>;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
   const m = getModel(defaultModel);
@@ -686,7 +749,7 @@ function DefaultModelPicker({
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          disabled={!hasAny}
+          disabled={disabled || !hasAny}
           className="h-8 flex-1 justify-between gap-2 px-2.5 text-[11.5px]"
         >
           <span className="flex items-center gap-2 truncate">
@@ -752,11 +815,13 @@ function AutocompleteRow({
   configuredIds,
   customEndpoints,
   endpointKeys,
+  disabled,
 }: {
   keys: KeysMap;
   configuredIds: Set<ProviderId>;
   customEndpoints: readonly CustomEndpoint[];
   endpointKeys: CustomEndpointKeys;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
   const enabled = usePreferencesStore((s) => s.autocompleteEnabled);
@@ -945,13 +1010,14 @@ function AutocompleteRow({
         <div className="flex flex-1 items-center gap-2">
           <Switch
             checked={enabled}
+            disabled={disabled}
             onCheckedChange={(v) => void setAutocompleteEnabled(v)}
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                disabled={!enabled}
+                disabled={disabled || !enabled}
                 className="h-8 flex-1 justify-between gap-2 px-2.5 text-[11.5px]"
               >
                 <span className="flex items-center gap-2 truncate">

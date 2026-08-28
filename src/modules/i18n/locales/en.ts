@@ -73,7 +73,7 @@ export const en = {
       editor: "Editor",
       themes: "Themes",
       shortcuts: "Shortcuts",
-      models: "Models",
+      models: "AI Models",
       agents: "Agents",
       extensions: "Extensions",
       ssh: "SSH",
@@ -431,8 +431,15 @@ export const en = {
       noResults: "No shortcuts found matching '{query}'",
     },
     models: {
-      title: "Models & Providers",
-      description: "Configure AI providers, API keys, and model parameters.",
+      title: "AI Models",
+      description:
+        "Configure AI providers, models, custom agents, and instructions.",
+      subTabs: {
+        models: "Models",
+        agents: "Agents",
+      },
+      aiInactiveBanner:
+        "AI is currently deactivated. Connect and verify a model below, then enable the AI switch to configure models and agents.",
       providers: "Providers",
       apiKey: "API Key",
       configurationRequired: "Configure the selected model first.",

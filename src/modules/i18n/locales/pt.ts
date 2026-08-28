@@ -65,7 +65,7 @@ const ptBase = mergeLocale(en, {
       editor: "Editor",
       themes: "Temas",
       shortcuts: "Atalhos",
-      models: "Modelos",
+      models: "Modelos IA",
       agents: "Agentes",
       extensions: "Extensões",
       ssh: "SSH",
@@ -380,9 +380,15 @@ const ptBase = mergeLocale(en, {
       noResults: "Nenhum atalho encontrado para '{query}'",
     },
     models: {
-      title: "Modelos e Provedores",
+      title: "Modelos IA",
       description:
-        "Configure provedores de IA, chaves de API e parâmetros do modelo.",
+        "Configure provedores de IA, modelos, agentes personalizados e instruções.",
+      subTabs: {
+        models: "Modelos",
+        agents: "Agentes",
+      },
+      aiInactiveBanner:
+        "A IA está desativada no momento. Conecte e verifique um modelo abaixo e, em seguida, ative a IA para configurar modelos e agentes.",
       providers: "Provedores",
       apiKey: "Chave de API",
       keySaved: "Chave armazenada com segurança no Chaveiro do SO",

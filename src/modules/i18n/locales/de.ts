@@ -65,7 +65,7 @@ const deBase = mergeLocale(en, {
       editor: "Editor",
       themes: "Themes",
       shortcuts: "Tastenkürzel",
-      models: "Modelle",
+      models: "KI-Modelle",
       agents: "Agenten",
       extensions: "Erweiterungen",
       ssh: "SSH",
@@ -377,9 +377,15 @@ const deBase = mergeLocale(en, {
       noResults: "Keine Tastenkürzel für '{query}' gefunden",
     },
     models: {
-      title: "Modelle & Anbieter",
+      title: "KI-Modelle",
       description:
-        "KI-Anbieter, API-Schlüssel und Modellparameter konfigurieren.",
+        "KI-Anbieter, Modelle, benutzerdefinierte Agenten und Anweisungen konfigurieren.",
+      subTabs: {
+        models: "Modelle",
+        agents: "Agenten",
+      },
+      aiInactiveBanner:
+        "KI ist derzeit deaktiviert. Verbinden und prüfen Sie unten ein Modell und aktivieren Sie anschließend den KI-Schalter, um Modelle und Agenten zu konfigurieren.",
       providers: "Anbieter",
       apiKey: "API-Schlüssel",
       keySaved:

@@ -75,7 +75,7 @@ export const ar: TranslationSchema = {
       editor: "المحرر",
       themes: "السمات",
       shortcuts: "اختصارات المفاتيح",
-      models: "النماذج",
+      models: "نماذج الذكاء الاصطناعي",
       agents: "الوكلاء",
       extensions: "الامتدادات",
       ssh: "SSH",
@@ -426,8 +426,15 @@ export const ar: TranslationSchema = {
       noResults: "لم يتم العثور على اختصارات تطابق '{query}'",
     },
     models: {
-      title: "النماذج والمزودون",
-      description: "تكوين مزودي الذكاء الاصطناعي، ومفاتيح API، ومعلمات النماذج.",
+      title: "نماذج الذكاء الاصطناعي",
+      description:
+        "تكوين مزودي الذكاء الاصطناعي، والنماذج، والوكلاء المخصصين، والتعليمات.",
+      subTabs: {
+        models: "النماذج",
+        agents: "الوكلاء",
+      },
+      aiInactiveBanner:
+        "الذكاء الاصطناعي معطل حاليًا. قم بتوصيل نموذج والتحقق منه أدناه، ثم شغّل مفتاح الذكاء الاصطناعي لتكوين النماذج والوكلاء.",
       providers: "المزودون",
       apiKey: "مفتاح API",
       configurationRequired: "قم بتكوين النموذج المحدد أولاً.",

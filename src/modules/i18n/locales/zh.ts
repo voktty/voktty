@@ -65,7 +65,7 @@ const zhBase = mergeLocale(en, {
       editor: "编辑器",
       themes: "主题",
       shortcuts: "快捷键",
-      models: "模型",
+      models: "AI 模型",
       agents: "智能体",
       extensions: "扩展",
       ssh: "SSH",
@@ -349,8 +349,14 @@ const zhBase = mergeLocale(en, {
       noResults: "未找到与 '{query}' 匹配的快捷键",
     },
     models: {
-      title: "模型与提供商",
-      description: "配置 AI 提供商、API 密钥和模型参数。",
+      title: "AI 模型",
+      description: "配置 AI 提供商、模型、自定义智能体与指令。",
+      subTabs: {
+        models: "模型",
+        agents: "智能体",
+      },
+      aiInactiveBanner:
+        "AI 当前已停用。请在下方连接并验证模型，然后开启 AI 开关以配置模型与智能体。",
       providers: "提供商",
       apiKey: "API 密钥",
       keySaved: "密钥已安全存储在系统钥匙串中",

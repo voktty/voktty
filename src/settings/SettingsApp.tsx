@@ -4,6 +4,7 @@ import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
 import { t as translate, useTranslation } from "@/modules/i18n";
 import type { SettingsTab } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { useSettingsModalStore } from "@/modules/settings/settingsModalStore";
 import {
   navigateToSettingsEntry,
   type SettingsSearchEntry,
@@ -19,7 +20,6 @@ import {
   ServerStack03Icon,
   Settings01Icon,
   SourceCodeIcon,
-  UserMultiple02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { SettingsSearch } from "./components/SettingsSearch";
@@ -50,11 +50,6 @@ const ShortcutsSection = React.lazy(() =>
 const ModelsSection = React.lazy(() =>
   import("./sections/ModelsSection").then((m) => ({
     default: m.ModelsSection,
-  })),
-);
-const AgentsSection = React.lazy(() =>
-  import("./sections/AgentsSection").then((m) => ({
-    default: m.AgentsSection,
   })),
 );
 const ExtensionsSection = React.lazy(() =>
@@ -115,11 +110,6 @@ const TABS: {
   },
   { id: "models", icon: AiScanIcon, component: ModelsSection },
   {
-    id: "agents",
-    icon: UserMultiple02Icon,
-    component: AgentsSection,
-  },
-  {
     id: "extensions",
     icon: PackageIcon,
     component: ExtensionsSection,
@@ -171,9 +161,17 @@ function readInitialTab(): SettingsTab {
   const url = new URL(window.location.href);
   const t = url.searchParams.get("tab");
   if (t === "ai" || t === "connections") return "models";
+  if (t === "agents") {
+    useSettingsModalStore.getState().setModelsSubTab("agents");
+    return "models";
+  }
   if (t && (VALID_TABS as string[]).includes(t)) return t as SettingsTab;
   try {
     const saved = localStorage.getItem("voktty-settings-last-tab") as SettingsTab | null;
+    if (saved === "agents") {
+      useSettingsModalStore.getState().setModelsSubTab("agents");
+      return "models";
+    }
     if (saved && (VALID_TABS as string[]).includes(saved)) return saved;
   } catch {}
   return "general";
@@ -201,12 +199,19 @@ export function SettingsApp() {
   const scrollPositionsRef = React.useRef<Record<string, number>>({});
   const mainRef = React.useRef<HTMLElement>(null);
   const init = usePreferencesStore((s) => s.init);
-  const ActiveSection = TABS.find((t) => t.id === active)?.component;
+  const ActiveSection =
+    TABS.find((t) => t.id === active)?.component ??
+    (active === "agents" ? ModelsSection : undefined);
 
   const handleTabChange = (tab: SettingsTab) => {
-    setActive(tab);
+    let nextTab = tab;
+    if (tab === "agents") {
+      useSettingsModalStore.getState().setModelsSubTab("agents");
+      nextTab = "models";
+    }
+    setActive(nextTab);
     try {
-      localStorage.setItem("voktty-settings-last-tab", tab);
+      localStorage.setItem("voktty-settings-last-tab", nextTab);
     } catch {}
   };
 
@@ -242,6 +247,12 @@ export function SettingsApp() {
   useEffect(() => {
     const apply = (detail: string) => {
       if (detail === "ai" || detail === "connections") {
+        useSettingsModalStore.getState().setModelsSubTab("models");
+        setActive("models");
+        return;
+      }
+      if (detail === "agents") {
+        useSettingsModalStore.getState().setModelsSubTab("agents");
         setActive("models");
         return;
       }

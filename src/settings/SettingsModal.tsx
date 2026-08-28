@@ -20,7 +20,6 @@ import {
   ServerStack03Icon,
   Settings01Icon,
   SourceCodeIcon,
-  UserMultiple02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { SettingsSearch } from "./components/SettingsSearch";
@@ -51,11 +50,6 @@ const ShortcutsSection = React.lazy(() =>
 const ModelsSection = React.lazy(() =>
   import("./sections/ModelsSection").then((m) => ({
     default: m.ModelsSection,
-  })),
-);
-const AgentsSection = React.lazy(() =>
-  import("./sections/AgentsSection").then((m) => ({
-    default: m.AgentsSection,
   })),
 );
 const ExtensionsSection = React.lazy(() =>
@@ -104,7 +98,6 @@ const TABS: {
   { id: "themes", icon: PaintBoardIcon, component: ThemesSection },
   { id: "shortcuts", icon: KeyboardIcon, component: ShortcutsSection },
   { id: "models", icon: AiScanIcon, component: ModelsSection },
-  { id: "agents", icon: UserMultiple02Icon, component: AgentsSection },
   { id: "extensions", icon: PackageIcon, component: ExtensionsSection },
   { id: "ssh", icon: ServerStack01Icon, component: SshSection },
   { id: "rdp", icon: ComputerIcon, component: RdpSection },
@@ -188,7 +181,9 @@ export function SettingsModal() {
 
   if (!open) return null;
 
-  const activeTabItem = TABS.find((tab) => tab.id === active) ?? TABS[0];
+  const activeTabItem =
+    TABS.find((tab) => tab.id === active) ??
+    (active === "agents" ? TABS.find((tab) => tab.id === "models")! : TABS[0]);
   const ActiveComponent = activeTabItem.component;
   const handleSearchSelect = (entry: SettingsSearchEntry) => {
     navigateToSettingsEntry(
