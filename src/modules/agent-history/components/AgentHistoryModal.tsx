@@ -1,4 +1,4 @@
-﻿import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -177,13 +177,14 @@ export function AgentHistoryModal() {
 
   useEffect(() => {
     if (isOpen) {
-      setLocalSearch(searchQuery);
-      setTimeout(() => inputRef.current?.focus(), 60);
+      setLocalSearch(useAgentHistoryStore.getState().searchQuery);
+      const timer = setTimeout(() => inputRef.current?.focus(), 60);
+      return () => clearTimeout(timer);
     } else {
       resetPosition();
       setIsMaximized(false);
     }
-  }, [isOpen, resetPosition, searchQuery]);
+  }, [isOpen, resetPosition]);
 
   if (!isOpen) return null;
 
@@ -213,21 +214,21 @@ export function AgentHistoryModal() {
     ? {
         width: "calc(100vw - 32px)",
         height: "calc(100vh - 32px)",
-        transform: "translate(-50%, -50%)",
+        transform: "translate3d(0, 0, 0)",
       }
     : {
         width: `${size.width}px`,
         height: `${size.height}px`,
         maxWidth: "calc(100vw - 24px)",
         maxHeight: "calc(100vh - 24px)",
-        transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
+        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
       };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeHistory()}>
       <DialogContent
         showCloseButton={false}
-        className="!fixed !top-1/2 !left-1/2 !max-w-none !w-auto !h-auto sm:!max-w-none flex flex-col p-0 gap-0 overflow-hidden bg-card text-card-foreground border border-border/80 shadow-2xl rounded-xl transition-all duration-75 select-none"
+        className="!max-w-none !w-auto !h-auto sm:!max-w-none flex flex-col p-0 gap-0 overflow-hidden bg-card text-card-foreground border border-border/80 shadow-2xl rounded-xl transition-shadow select-none"
         style={modalStyle}
       >
         {/* Draggable Header Bar */}
