@@ -134,7 +134,7 @@ import {
 } from "@/modules/spaces/lib/contextualInsertion";
 import { planWorkspaceDrop } from "@/modules/spaces/lib/planWorkspaceDrop";
 import { updateSpaceSplitRatio } from "@/modules/spaces/lib/spaceGeometry";
-import type { SlotId, ViewSpaceId } from "@/modules/spaces/lib/spaceLayout";
+import type { SlotId } from "@/modules/spaces/lib/spaceLayout";
 import {
   projectPaneBudget,
   tabAssignmentPaneBudget,
@@ -2122,27 +2122,44 @@ export default function App() {
       const newTab = tabsRef.current.find((t) => t.id === newTabId);
       if (newTab) {
         const spaceId = source.spaceId;
-        const viewSpaceId = `view-${spaceId}` as ViewSpaceId;
         const spacesState = useSpaces.getState();
-        const viewSpace = spacesState.viewSpaces.find(
-          (vs) => vs.id === viewSpaceId,
+        const existingOwner = spacesState.viewSpaces.find(
+          (vs) => !vs.deleted && vs.memberOrder.includes(source.tabKey),
         );
 
-        const currentMembers = viewSpace?.memberOrder ?? [];
-        if (
-          viewSpace &&
-          !viewSpace.deleted &&
-          currentMembers.length < spaceViewLimit
-        ) {
+        if (existingOwner) {
+          const currentMembers = existingOwner.memberOrder;
+          if (currentMembers.length < spaceViewLimit) {
+            spacesState.addMemberToViewSpace(
+              existingOwner.id,
+              newTab.tabKey,
+              spaceViewLimit,
+            );
+            spacesState.openViewSpace(existingOwner.id);
+            spacesState.focusVisualMember(newTab.tabKey);
+          } else {
+            spacesState.ensureStandaloneTab(newTab.tabKey);
+            spacesState.focusVisualMember(newTab.tabKey);
+          }
+        } else {
+          const meta = spacesState.spaces.find((space) => space.id === spaceId);
+          const viewSpaceId = spacesState.ensureViewSpace({
+            workspaceId: spaceId,
+            name: meta?.name ?? spaceId,
+            color: meta?.color,
+            initialMember: source.tabKey,
+          });
+          spacesState.addMemberToViewSpace(
+            viewSpaceId,
+            source.tabKey,
+            spaceViewLimit,
+          );
           spacesState.addMemberToViewSpace(
             viewSpaceId,
             newTab.tabKey,
             spaceViewLimit,
           );
           spacesState.openViewSpace(viewSpaceId);
-          spacesState.focusVisualMember(newTab.tabKey);
-        } else {
-          spacesState.ensureStandaloneTab(newTab.tabKey);
           spacesState.focusVisualMember(newTab.tabKey);
         }
       }
