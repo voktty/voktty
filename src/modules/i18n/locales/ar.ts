@@ -537,6 +537,15 @@ export const ar: TranslationSchema = {
           "أي نموذج من OpenRouter. أدخل معرّف المزود/النموذج الكامل.",
         openrouterHint: "تصفح معرّفات النماذج على openrouter.ai/models.",
       },
+      localProviderLabel: {
+        ollama: "Ollama ({model})",
+        lmstudio: "LM Studio ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "OpenRouter ({model})",
+      },
+      customEndpoint: "نقطة نهاية مخصصة",
+      browserBuiltIn: "المتصفح (مدمج، مجاني)",
+      defaultFastModel: "النموذج السريع الافتراضي",
       hints: {
         flagship: "رائد",
         balanced: "متوازن",

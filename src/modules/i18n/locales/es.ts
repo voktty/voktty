@@ -551,6 +551,15 @@ export const es: TranslationSchema = {
           "Cualquier modelo de OpenRouter. Introduce su ID completo provider/model.",
         openrouterHint: "Consulta los IDs de modelos en openrouter.ai/models.",
       },
+      localProviderLabel: {
+        ollama: "Ollama ({model})",
+        lmstudio: "LM Studio ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "OpenRouter ({model})",
+      },
+      customEndpoint: "Endpoint personalizado",
+      browserBuiltIn: "Navegador (integrado, gratuito)",
+      defaultFastModel: "Modelo rápido predeterminado",
       hints: {
         flagship: "Principal",
         balanced: "Equilibrado",
