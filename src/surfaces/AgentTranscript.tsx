@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDashed,
+  Copy,
   Hammer,
   Search,
   Terminal,
@@ -28,6 +29,7 @@ import {
   isSearchTool,
   stubFilePreview,
 } from "../lib/harness/preview";
+import { copyText } from "../lib/clipboard";
 import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import { Shimmer } from "./Shimmer";
 import {
@@ -49,6 +51,7 @@ import {
   splitActivityRows,
   toolCallLabel,
   toolCallState,
+  turnCopyText,
   type ToolCallState,
 } from "./transcriptActivity";
 
@@ -259,7 +262,11 @@ export function AgentTranscript({
                 ),
               )}
               {durationMs != null && !(busy && isLastTurn) ? (
-                <TurnDuration elapsedMs={durationMs} done />
+                <TurnDuration
+                  elapsedMs={durationMs}
+                  done
+                  copyText={turnCopyText(turn)}
+                />
               ) : null}
             </div>
           );
@@ -295,11 +302,13 @@ function TurnDuration({
   live = false,
   done = false,
   waiting = false,
+  copyText: output,
 }: {
   elapsedMs: number | null;
   live?: boolean;
   done?: boolean;
   waiting?: boolean;
+  copyText?: string;
 }) {
   const label = waiting
     ? "Waiting for approval"
@@ -313,7 +322,9 @@ function TurnDuration({
       }
       className="flex items-center gap-2 px-4 py-3 font-sans text-sm text-content/40"
     >
-      {done ? (
+      {done && output ? (
+        <CopyTurnButton text={output} />
+      ) : done ? (
         <Check className="size-3.5" strokeWidth={1.75} />
       ) : (
         <TerminalSpinner />
@@ -325,6 +336,43 @@ function TurnDuration({
         <span>{label}</span>
       )}
     </div>
+  );
+}
+
+function CopyTurnButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setCopied(false);
+    return () => {
+      if (timer.current != null) window.clearTimeout(timer.current);
+    };
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      title={copied ? "Copied" : "Copy response"}
+      aria-label={copied ? "Copied" : "Copy response"}
+      className="-m-1 rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
+      onClick={() => {
+        void copyText(text).then(
+          () => {
+            setCopied(true);
+            if (timer.current != null) window.clearTimeout(timer.current);
+            timer.current = window.setTimeout(() => setCopied(false), 2000);
+          },
+          () => {},
+        );
+      }}
+    >
+      {copied ? (
+        <Check className="size-3.5" strokeWidth={1.75} />
+      ) : (
+        <Copy className="size-3.5" strokeWidth={1.75} />
+      )}
+    </button>
   );
 }
 

@@ -4,6 +4,7 @@ import {
   groupTurnItems,
   groupTurns,
   splitActivityRows,
+  turnCopyText,
 } from "./transcriptActivity";
 
 function shell(
@@ -110,6 +111,34 @@ describe("splitActivityRows", () => {
     expect(rows.latest).toBeUndefined();
     expect(rows.pending.map((block) => block.id)).toEqual(["read", "run"]);
     expect(rows.hidden).toEqual([]);
+  });
+});
+
+describe("turnCopyText", () => {
+  it("joins assistant and plan markdown from the turn", () => {
+    expect(
+      turnCopyText([
+        { id: "u", role: "user", text: "fix it" },
+        { id: "a1", role: "assistant", text: "I'll inspect the file." },
+        shell("t"),
+        { id: "r", role: "reasoning", text: "thinking" },
+        { id: "p", role: "plan", text: "## Plan\n\n- edit App.tsx" },
+        { id: "a2", role: "assistant", text: "Done.\n\n```ts\nfixed\n```" },
+        { id: "s", role: "system", text: "session error" },
+      ]),
+    ).toBe(
+      "I'll inspect the file.\n\n## Plan\n\n- edit App.tsx\n\nDone.\n\n```ts\nfixed\n```",
+    );
+  });
+
+  it("returns empty when the turn has no readable output", () => {
+    expect(
+      turnCopyText([
+        { id: "u", role: "user", text: "go" },
+        shell("t"),
+        { id: "a", role: "assistant", text: "  " },
+      ]),
+    ).toBe("");
   });
 });
 

@@ -155,6 +155,15 @@ function isIgnoredTurnBlock(block: Block): boolean {
   return block.role === "assistant" && !block.text.trim();
 }
 
+/** Markdown the user actually reads: assistant prose plus any plan, not tool chrome. */
+export function turnCopyText(blocks: Block[]): string {
+  return blocks
+    .filter((block) => block.role === "assistant" || block.role === "plan")
+    .map((block) => block.text.replace(/\r\n?/g, "\n").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function splitActivityRows(blocks: Block[]): {
   latest?: Block;
   pending: Block[];
