@@ -59,6 +59,7 @@ impl HistoryDb {
              CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent);
              CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_name);
              CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
+             CREATE INDEX IF NOT EXISTS idx_sessions_file_path ON sessions(file_path);
 
              CREATE TABLE IF NOT EXISTS messages (
                  id TEXT PRIMARY KEY,
@@ -130,6 +131,18 @@ impl HistoryDb {
             ],
         )?;
         Ok(())
+    }
+
+    pub fn get_source_hash_by_path(&self, file_path: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare_cached("SELECT source_hash FROM sessions WHERE file_path = ?1 LIMIT 1")?;
+        let mut rows = stmt.query(params![file_path])?;
+        if let Some(row) = rows.next()? {
+            let hash: Option<String> = row.get(0)?;
+            Ok(hash)
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn replace_session_messages(&self, session_id: &str, messages: &[HistoryMessage]) -> Result<()> {
