@@ -38,10 +38,10 @@ const AGENT_BADGES: Record<string, { bg: string; text: string; label: string }> 
   kimi: { bg: "bg-teal-500/15", text: "text-teal-400", label: "Kimi" },
 };
 
-const DEFAULT_WIDTH = 1100;
-const DEFAULT_HEIGHT = 700;
-const MIN_WIDTH = 640;
-const MIN_HEIGHT = 440;
+const DEFAULT_WIDTH = 1120;
+const DEFAULT_HEIGHT = 720;
+const MIN_WIDTH = 680;
+const MIN_HEIGHT = 460;
 
 export function AgentHistoryModal() {
   const {
@@ -65,15 +65,34 @@ export function AgentHistoryModal() {
 
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [isMaximized, setIsMaximized] = useState(false);
+  const [localSearch, setLocalSearch] = useState(searchQuery);
   const [size, setSize] = useState({
-    width: typeof window !== "undefined" ? Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - 60)) : DEFAULT_WIDTH,
-    height: typeof window !== "undefined" ? Math.min(DEFAULT_HEIGHT, Math.max(MIN_HEIGHT, window.innerHeight - 60)) : DEFAULT_HEIGHT,
+    width: typeof window !== "undefined" ? Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - 80)) : DEFAULT_WIDTH,
+    height: typeof window !== "undefined" ? Math.min(DEFAULT_HEIGHT, Math.max(MIN_HEIGHT, window.innerHeight - 80)) : DEFAULT_HEIGHT,
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const { position, dragHandleProps, resetPosition, setPosition } = useDraggableModal({
     resetOnClose: true,
   });
+
+  // Debounced search
+  const handleSearchChange = (val: string) => {
+    setLocalSearch(val);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setSearchQuery(val);
+    }, 150);
+  };
+
+  const handleClearSearch = () => {
+    setLocalSearch("");
+    setSearchQuery("");
+  };
 
   // Resizing state
   const isResizingRef = useRef(false);
@@ -158,12 +177,13 @@ export function AgentHistoryModal() {
 
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setLocalSearch(searchQuery);
+      setTimeout(() => inputRef.current?.focus(), 60);
     } else {
       resetPosition();
       setIsMaximized(false);
     }
-  }, [isOpen, resetPosition]);
+  }, [isOpen, resetPosition, searchQuery]);
 
   if (!isOpen) return null;
 
@@ -193,21 +213,21 @@ export function AgentHistoryModal() {
     ? {
         width: "calc(100vw - 32px)",
         height: "calc(100vh - 32px)",
-        transform: "translate3d(0, 0, 0)",
+        transform: "translate(-50%, -50%)",
       }
     : {
         width: `${size.width}px`,
         height: `${size.height}px`,
-        maxWidth: "calc(100vw - 20px)",
-        maxHeight: "calc(100vh - 20px)",
-        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+        maxWidth: "calc(100vw - 24px)",
+        maxHeight: "calc(100vh - 24px)",
+        transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px))`,
       };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeHistory()}>
       <DialogContent
         showCloseButton={false}
-        className="!fixed !top-1/2 !left-1/2 -translate-x-1/2 -translate-y-1/2 !max-w-none !w-auto !h-auto sm:!max-w-none flex flex-col p-0 gap-0 overflow-hidden bg-card text-card-foreground border border-border/80 shadow-2xl rounded-xl transition-all duration-75 select-none"
+        className="!fixed !top-1/2 !left-1/2 !max-w-none !w-auto !h-auto sm:!max-w-none flex flex-col p-0 gap-0 overflow-hidden bg-card text-card-foreground border border-border/80 shadow-2xl rounded-xl transition-all duration-75 select-none"
         style={modalStyle}
       >
         {/* Draggable Header Bar */}
@@ -223,13 +243,19 @@ export function AgentHistoryModal() {
               strokeWidth={2}
               className="text-primary shrink-0"
             />
-            <DialogTitle className="text-xs font-semibold tracking-tight text-foreground">
+            <DialogTitle className="text-xs font-semibold tracking-tight text-foreground truncate">
               Agent Operational History & Recovery
             </DialogTitle>
             {stats && (
-              <Badge variant="outline" className="hidden sm:inline-flex text-[10px] text-muted-foreground font-mono">
+              <Badge variant="outline" className="hidden sm:inline-flex text-[10px] text-muted-foreground font-mono shrink-0">
                 {stats.total_sessions} sessions · {stats.total_messages} messages
               </Badge>
+            )}
+            {isScanning && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-primary animate-pulse font-medium">
+                <span className="size-1.5 rounded-full bg-primary" />
+                Scanning agent files...
+              </span>
             )}
           </div>
 
@@ -278,11 +304,11 @@ export function AgentHistoryModal() {
         </DialogHeader>
 
         {/* 2-Column Workspace */}
-        <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
           {/* Left Column: Session Browser & Filters (320px) */}
-          <div className="flex w-80 shrink-0 flex-col border-r border-border/60 bg-muted/20">
+          <div className="flex w-80 min-w-80 max-w-80 shrink-0 flex-col border-r border-border/60 bg-muted/20 overflow-hidden">
             {/* Search Box */}
-            <div className="relative border-b border-border/40 p-2">
+            <div className="relative border-b border-border/40 p-2 shrink-0">
               <HugeiconsIcon
                 icon={Search01Icon}
                 size={13}
@@ -290,15 +316,15 @@ export function AgentHistoryModal() {
               />
               <Input
                 ref={inputRef}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search sessions or content..."
+                value={localSearch}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search sessions, prompts or code..."
                 className="h-7.5 pl-7 pr-7 text-xs bg-background border-border/70 rounded-md focus-visible:ring-1 focus-visible:ring-primary/40"
               />
-              {searchQuery && (
+              {localSearch && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
+                  onClick={handleClearSearch}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   <HugeiconsIcon icon={Cancel01Icon} size={12} />
@@ -307,8 +333,8 @@ export function AgentHistoryModal() {
             </div>
 
             {/* Agent Filter Pills */}
-            <div className="flex flex-wrap gap-1 border-b border-border/40 p-2 bg-muted/30">
-              {["all", "claude", "codex", "gemini", "cursor", "voktty"].map((ag) => (
+            <div className="flex flex-wrap gap-1 border-b border-border/40 p-2 bg-muted/30 shrink-0">
+              {["all", "gemini", "codex", "claude", "cursor", "voktty"].map((ag) => (
                 <Button
                   key={ag}
                   size="xs"
@@ -316,7 +342,7 @@ export function AgentHistoryModal() {
                   onClick={() => setSelectedAgent(ag)}
                   className={cn(
                     "h-5.5 px-2 text-[10.5px] capitalize font-medium cursor-pointer",
-                    selectedAgent === ag && "shadow-xs border border-border/50",
+                    selectedAgent === ag && "shadow-xs border border-border/50 bg-background",
                   )}
                 >
                   {ag === "all" ? "All" : ag}
@@ -325,12 +351,29 @@ export function AgentHistoryModal() {
             </div>
 
             {/* Session List */}
-            <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
-              {sessions.length === 0 ? (
+            <div className="flex-1 overflow-y-auto p-1.5 space-y-1 min-h-0">
+              {isLoading && sessions.length === 0 ? (
+                <div className="flex h-48 flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
+                  <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2" />
+                  <span>Searching sessions...</span>
+                </div>
+              ) : sessions.length === 0 ? (
                 <div className="flex h-48 flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
                   <HugeiconsIcon icon={Clock01Icon} size={24} className="opacity-30 mb-2" />
-                  <span>No sessions found</span>
-                  <span className="text-[10.5px] opacity-70 mt-1">Click Rescan above to index agent histories</span>
+                  <span>{localSearch ? "No matches found" : "No sessions found"}</span>
+                  <span className="text-[10.5px] opacity-70 mt-1">
+                    {localSearch ? "Try a different search term" : "Click Rescan to index agent history"}
+                  </span>
+                  {localSearch && (
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={handleClearSearch}
+                      className="mt-3 text-[11px] h-6"
+                    >
+                      Clear search
+                    </Button>
+                  )}
                 </div>
               ) : (
                 sessions.map((s) => {
@@ -367,12 +410,12 @@ export function AgentHistoryModal() {
                         </span>
                       </div>
 
-                      <span className="line-clamp-2 font-medium leading-snug text-foreground">
+                      <span className="line-clamp-2 font-medium leading-snug text-foreground break-words">
                         {s.title}
                       </span>
 
                       <div className="flex items-center justify-between text-[10.5px] text-muted-foreground mt-0.5">
-                        <span className="truncate max-w-[140px]">📁 {s.project_name}</span>
+                        <span className="truncate max-w-[150px]">📁 {s.project_name}</span>
                         <span>{s.message_count} msgs</span>
                       </div>
                     </div>
@@ -383,12 +426,12 @@ export function AgentHistoryModal() {
           </div>
 
           {/* Right Column: Transcript View & Action Bar */}
-          <div className="flex flex-1 flex-col overflow-hidden bg-background">
+          <div className="flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden bg-background">
             {activeSession ? (
               <>
                 {/* Detail Action Header */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-muted/20 px-4 py-2">
-                  <div className="flex min-w-0 flex-col">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-muted/20 px-4 py-2 shrink-0">
+                  <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-xs font-semibold text-foreground">
                       {activeSession.title}
                     </span>
@@ -401,7 +444,7 @@ export function AgentHistoryModal() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {activeSession.can_resume && (
                       <Button
                         size="sm"
@@ -437,7 +480,7 @@ export function AgentHistoryModal() {
                 </div>
 
                 {/* Message Timeline */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 select-text">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 select-text min-h-0">
                   {isLoading ? (
                     <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
                       <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
@@ -456,7 +499,7 @@ export function AgentHistoryModal() {
                         <div
                           key={msg.id}
                           className={cn(
-                            "flex flex-col gap-1.5 rounded-lg border p-3 text-xs leading-relaxed",
+                            "flex flex-col gap-1.5 rounded-lg border p-3 text-xs leading-relaxed overflow-hidden",
                             isUser
                               ? "border-primary/40 bg-primary/5 ml-6"
                               : isTool
@@ -496,27 +539,27 @@ export function AgentHistoryModal() {
 
                           {/* Message Content */}
                           {msg.content && (
-                            <div className="whitespace-pre-wrap font-sans text-foreground/90 leading-relaxed">
+                            <div className="whitespace-pre-wrap font-sans text-foreground/90 leading-relaxed break-words overflow-hidden">
                               {msg.content}
                             </div>
                           )}
 
                           {/* Tool Invocations Accordion */}
                           {msg.tool_name && (
-                            <div className="mt-1 rounded border border-border/50 bg-muted/30">
+                            <div className="mt-1 rounded border border-border/50 bg-muted/30 overflow-hidden">
                               <div
                                 onClick={() => toggleTool(msg.id)}
                                 className="flex cursor-pointer items-center justify-between px-2.5 py-1 text-[11px] font-mono text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                               >
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 truncate">
                                   <HugeiconsIcon
                                     icon={expandedTools[msg.id] ? ArrowDown01Icon : ArrowRight01Icon}
                                     size={11}
                                   />
-                                  <span>Tool: <strong>{msg.tool_name}</strong></span>
+                                  <span className="truncate">Tool: <strong>{msg.tool_name}</strong></span>
                                 </div>
                                 {msg.is_error && (
-                                  <Badge variant="outline" className="text-[9px] text-rose-500 border-rose-500/30 font-mono">
+                                  <Badge variant="outline" className="text-[9px] text-rose-500 border-rose-500/30 font-mono shrink-0">
                                     Error
                                   </Badge>
                                 )}
@@ -527,7 +570,7 @@ export function AgentHistoryModal() {
                                   {msg.tool_input && (
                                     <div>
                                       <div className="text-muted-foreground/60 mb-0.5">Input:</div>
-                                      <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-foreground border border-border/40">
+                                      <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all">
                                         {msg.tool_input}
                                       </pre>
                                     </div>
@@ -536,7 +579,7 @@ export function AgentHistoryModal() {
                                   {msg.tool_output && (
                                     <div>
                                       <div className="text-muted-foreground/60 mb-0.5">Output:</div>
-                                      <pre className="max-h-48 overflow-auto rounded bg-background p-2 text-foreground border border-border/40">
+                                      <pre className="max-h-48 overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all">
                                         {msg.tool_output}
                                       </pre>
                                     </div>

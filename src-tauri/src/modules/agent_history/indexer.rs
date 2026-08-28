@@ -45,15 +45,17 @@ impl HistoryIndexer {
 
             let locations = adapter.scan();
             for loc in locations {
+                let path_str = loc.path.to_string_lossy().to_string();
+
+                // Fast check: if source_hash has not changed, skip expensive parse
+                if let Ok(Some(existing_hash)) = self.db.get_source_hash_by_path(&path_str) {
+                    if existing_hash == loc.source_hash {
+                        continue;
+                    }
+                }
+
                 // Parse session from file
                 if let Some((mut session, mut messages)) = adapter.parse_session(&loc.path) {
-                    // Check if existing session in DB has identical source_hash
-                    if let Ok(Some(existing_session)) = self.db.get_session(&session.id) {
-                        if existing_session.source_hash.as_deref() == session.source_hash.as_deref() {
-                            // No change, skip re-parsing
-                            continue;
-                        }
-                    }
 
                     // Saneamiento de secretos y tokens en los mensajes
                     for msg in &mut messages {
