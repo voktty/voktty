@@ -287,6 +287,10 @@ export function AgentHistoryModal() {
     }
   }, [isOpen, resetPosition, closeFind]);
 
+  const toggleTool = (msgId: string) => {
+    setExpandedTools((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
+  };
+
   if (!isOpen) return null;
 
   return (
