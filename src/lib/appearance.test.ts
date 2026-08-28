@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   loadTranscriptLayout,
+  loadTranscriptZen,
   saveTranscriptLayout,
+  saveTranscriptZen,
   TRANSCRIPT_LAYOUT_DEFAULT,
+  TRANSCRIPT_ZEN_DEFAULT,
 } from "./appearance";
 
 const KEY = "monocode.transcriptLayout";
+const ZEN_KEY = "monocode.transcriptZen";
 
 function mockLocalStorage() {
   const data = new Map<string, string>();
@@ -53,5 +57,24 @@ describe("transcript layout setting", () => {
   it("ignores unknown stored values", () => {
     localStorage.setItem(KEY, "bubbles");
     expect(loadTranscriptLayout()).toBe("full");
+  });
+});
+
+describe("zen mode setting", () => {
+  beforeEach(mockLocalStorage);
+  afterEach(() => {
+    localStorage.removeItem(ZEN_KEY);
+  });
+
+  it("defaults to off", () => {
+    expect(TRANSCRIPT_ZEN_DEFAULT).toBe(false);
+    expect(loadTranscriptZen()).toBe(false);
+  });
+
+  it("persists across loads", () => {
+    saveTranscriptZen(true);
+    expect(loadTranscriptZen()).toBe(true);
+    saveTranscriptZen(false);
+    expect(loadTranscriptZen()).toBe(false);
   });
 });

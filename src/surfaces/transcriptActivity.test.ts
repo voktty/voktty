@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Block } from "../lib/session";
 import {
+  activitySummary,
+  editVerb,
   groupTurnItems,
   groupTurns,
   splitActivityRows,
@@ -160,5 +162,54 @@ describe("groupTurns", () => {
       ["h1"],
       ["u2"],
     ]);
+  });
+});
+
+describe("zen mode grouping", () => {
+  it("folds edits into the activity stack", () => {
+    const items = groupTurnItems([shell("a"), edit("b"), shell("c")], true);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      type: "activity",
+      blocks: [{ id: "a" }, { id: "b" }, { id: "c" }],
+    });
+  });
+
+  it("leaves edits as their own blocks when zen is off", () => {
+    const items = groupTurnItems([shell("a"), edit("b"), shell("c")]);
+    expect(items.map((item) => item.type)).toEqual([
+      "activity",
+      "block",
+      "activity",
+    ]);
+  });
+
+  it("keeps an edit awaiting approval out of the stack", () => {
+    const pending = edit("b");
+    pending.approval = { requestId: 1 };
+    const items = groupTurnItems([shell("a"), pending], true);
+    expect(items.map((item) => item.type)).toEqual(["activity", "block"]);
+  });
+
+  it("summarises calls and distinct edited files", () => {
+    expect(activitySummary([shell("a"), edit("b"), edit("c")])).toBe(
+      "3 tool calls · 1 file edited",
+    );
+    expect(activitySummary([shell("a")])).toBe("1 tool call");
+  });
+});
+
+describe("editVerb", () => {
+  it("canonicalises past-tense harness phrasing", () => {
+    expect(editVerb("Edited src/App.tsx")).toBe("Edit");
+    expect(editVerb("Deleted src/old.ts")).toBe("Delete");
+    expect(editVerb("Renamed src/a.ts")).toBe("Move");
+    expect(editVerb("Created src/new.ts")).toBe("Create");
+    expect(editVerb("Wrote src/new.ts")).toBe("Write");
+  });
+
+  it("falls back to Edit for unknown phrasing", () => {
+    expect(editVerb("Patching src/App.tsx")).toBe("Edit");
+    expect(editVerb("")).toBe("Edit");
   });
 });

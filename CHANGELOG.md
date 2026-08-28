@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Zen mode in Settings → General quiets a noisy transcript. While a turn runs, edits collapse into the same one-line activity list as reads and searches instead of stacking full diff cards; once the turn settles the whole toolchain folds behind a single `12 tool calls · 4 files edited` line, leaving the agent's closing answer. Edits waiting on approval still show their diff, since you cannot judge a change you cannot see. Off by default.
+- Transcript layout in Settings → General: Full width keeps user prompts as a spanning card, Chat aligns them to the right with a max width.
+- Copy button on completed agent turns, copying the assistant prose and any plan as Markdown.
+- Inbox pull requests have Summary and Code tabs, with the `gh`-backed diff rendered as highlighted file changes (large diffs are truncated).
+- Inbox shows a dot on the project rail and on cards for items that are new or updated since you last looked.
+
+### Changed
+
+- Edit rows read as `Edit src/lib/appearance.ts` with a file-type icon and a clickable path, matching how reads and searches already render.
+- Inbox authors and assignees show avatars from GitHub and Linear, falling back to initials.
+- Inbox author moved into the detail metadata row alongside assignees and time, instead of repeating in the body.
+- New workspaces default to the Deck sidebar layout.
+
 ### Fixed
 
 - Streamed Markdown keeps headings, blank lines, tables, and repeated characters. Completed Claude/Codex snapshots no longer paste the same reply twice. Diagnosed in #15 by @kinsomicrote.

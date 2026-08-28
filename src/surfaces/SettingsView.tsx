@@ -36,6 +36,7 @@ import {
   loadThemeHue,
   loadThemeSaturation,
   loadTranscriptLayout,
+  loadTranscriptZen,
   saveBodyGlass,
   saveColorScheme,
   saveSidebarBlur,
@@ -44,6 +45,7 @@ import {
   saveThemeHue,
   saveThemeSaturation,
   saveTranscriptLayout,
+  saveTranscriptZen,
   SIDEBAR_BLUR_DEFAULT,
   SIDEBAR_BLUR_MAX,
   SIDEBAR_BLUR_MIN,
@@ -245,11 +247,17 @@ function GeneralPage() {
   const [transcriptLayout, setTranscriptLayout] = useState<TranscriptLayout>(
     loadTranscriptLayout,
   );
+  const [transcriptZen, setTranscriptZen] = useState(loadTranscriptZen);
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
 
   const onLayout = (next: SidebarLayout) => {
     saveSidebarLayout(next);
     setLayout(next);
+  };
+
+  const onTranscriptZen = (next: boolean) => {
+    saveTranscriptZen(next);
+    setTranscriptZen(next);
   };
 
   const onTranscriptLayout = (next: TranscriptLayout) => {
@@ -290,6 +298,16 @@ function GeneralPage() {
             { value: "chat", label: "Chat" },
           ]}
           onChange={onTranscriptLayout}
+        />
+      </Row>
+      <Row
+        label="Zen mode"
+        description="While a turn runs, edits collapse into the same one-line activity list as reads and searches. Once the turn settles the whole toolchain folds behind a single summary line, leaving the agent's final answer. Edits waiting on approval still show their diff."
+      >
+        <Toggle
+          label="Zen mode"
+          on={transcriptZen}
+          onChange={onTranscriptZen}
         />
       </Row>
       <Row

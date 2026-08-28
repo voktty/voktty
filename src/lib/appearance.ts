@@ -13,6 +13,7 @@ const SIDEBAR_TAB_ORDER_KEY = "monocode.sidebarTabOrder";
 const PROJECT_RAIL_WIDTH_KEY = "monocode.projectRailWidth";
 const SIDEBAR_LAYOUT_KEY = "monocode.sidebarLayout";
 const TRANSCRIPT_LAYOUT_KEY = "monocode.transcriptLayout";
+const TRANSCRIPT_ZEN_KEY = "monocode.transcriptZen";
 
 export type ColorScheme = "dark" | "light";
 export type SidebarLayout = "classic" | "deck";
@@ -29,6 +30,11 @@ export const LAYOUT_CHANGE_EVENT = "monocode:layoutchange";
 export const SIDEBAR_LAYOUT_DEFAULT: SidebarLayout = "deck";
 
 export const TRANSCRIPT_LAYOUT_DEFAULT: TranscriptLayout = "full";
+
+export const TRANSCRIPT_ZEN_DEFAULT = false;
+
+/** Fired on `window` whenever zen mode flips (detail: boolean). */
+export const TRANSCRIPT_ZEN_CHANGE_EVENT = "monocode:transcriptzenchange";
 
 /** Fired on `window` whenever the transcript layout flips (detail: TranscriptLayout). */
 export const TRANSCRIPT_LAYOUT_CHANGE_EVENT = "monocode:transcriptlayoutchange";
@@ -370,5 +376,17 @@ export function saveTranscriptLayout(value: TranscriptLayout) {
     new CustomEvent<TranscriptLayout>(TRANSCRIPT_LAYOUT_CHANGE_EVENT, {
       detail: next,
     }),
+  );
+}
+
+export function loadTranscriptZen(): boolean {
+  return readFlag(TRANSCRIPT_ZEN_KEY) ?? TRANSCRIPT_ZEN_DEFAULT;
+}
+
+export function saveTranscriptZen(value: boolean) {
+  writeFlag(TRANSCRIPT_ZEN_KEY, value);
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<boolean>(TRANSCRIPT_ZEN_CHANGE_EVENT, { detail: value }),
   );
 }

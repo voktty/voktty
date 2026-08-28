@@ -5,6 +5,7 @@ import {
   CircleDashed,
   Copy,
   Hammer,
+  Pencil,
   Search,
   Terminal,
   X,
@@ -41,11 +42,14 @@ import {
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
+import { useTranscriptZen } from "../hooks/useTranscriptZen";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import type { TranscriptLayout } from "../lib/appearance";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { TranscriptSelectionMenu } from "./TranscriptSelectionMenu";
 import {
+  activitySummary,
+  editVerb,
   groupTurnItems,
   groupTurns,
   isIncompleteTool,
@@ -99,6 +103,7 @@ export function AgentTranscript({
     onAddToChat !== undefined,
   );
   const transcriptLayout = useTranscriptLayout();
+  const zen = useTranscriptZen();
   const lastUserId = lastUserBlockId(blocks);
   const liveStartedAt = turnUserBlock(blocks)?.startedAt;
   const waitingForApproval = hasPendingApproval(blocks);
@@ -242,12 +247,13 @@ export function AgentTranscript({
               key={turn[0].id}
               className="transcript-turn flex min-w-0 flex-col gap-1"
             >
-              {groupTurnItems(turn).map((item) =>
+              {groupTurnItems(turn, zen).map((item) =>
                 item.type === "activity" ? (
                   <ActivityGroup
                     key={item.blocks[0].id}
                     blocks={item.blocks}
                     cwd={cwd}
+                    collapsed={zen && !(busy && isLastTurn)}
                     onApproval={onApproval}
                     onOpenFile={onOpenFile}
                   />
@@ -545,16 +551,62 @@ function UserMessageBlock({
 function ActivityGroup({
   blocks,
   cwd,
+  collapsed,
   onApproval,
   onOpenFile,
 }: {
   blocks: Block[];
   cwd?: string;
+  collapsed?: boolean;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { latest, pending, hidden } = splitActivityRows(blocks);
+
+  // Zen mode: a settled turn keeps its whole toolchain behind one line, so the
+  // agent's closing prose is the only full-size thing left on screen.
+  if (collapsed && pending.length === 0 && !expanded) {
+    return (
+      <div className="flex flex-col gap-0.5 px-4">
+        <button
+          type="button"
+          aria-expanded={false}
+          aria-label={`Show ${blocks.length} tool calls`}
+          onClick={() => setExpanded(true)}
+          className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
+        >
+          <ChevronRight className="size-3.5 shrink-0" strokeWidth={1.75} />
+          <span>{activitySummary(blocks)}</span>
+        </button>
+      </div>
+    );
+  }
+
+  if (collapsed && expanded) {
+    return (
+      <div className="flex flex-col gap-0.5 px-4">
+        {blocks.map((block) => (
+          <ActivityToolRow
+            key={block.id}
+            block={block}
+            cwd={cwd}
+            onApproval={onApproval}
+            onOpenFile={onOpenFile}
+          />
+        ))}
+        <button
+          type="button"
+          aria-expanded
+          onClick={() => setExpanded(false)}
+          className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
+        >
+          <ChevronDown className="size-3.5 shrink-0 rotate-180" />
+          <span>Hide activity</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-0.5 px-4">
@@ -679,6 +731,12 @@ function ActivityToolIcon({
     /shell|bash|execute/i.test(block.tool?.kind ?? "")
   ) {
     return <Terminal className={className} strokeWidth={1.75} />;
+  }
+  if (
+    kind === "write" ||
+    isEditTool(block.tool?.kind, label, block.tool?.preview)
+  ) {
+    return <Pencil className={className} strokeWidth={1.75} />;
   }
   if (
     kind === "read" ||
@@ -875,8 +933,17 @@ function ToolCallSummary({
   interactive?: boolean;
 }) {
   const parts = label.match(/^(Read|Find)\s+(.+)$/);
+  // A write preview carries the path itself, so edits get the same verb + file
+  // chip as reads rather than falling through to a raw label.
+  const writeTarget =
+    preview?.kind === "write"
+      ? preview.path
+        ? displayPath(preview.path, cwd)
+        : preview.fileName
+      : undefined;
   const action =
     parts?.[1] ??
+    (writeTarget ? editVerb(label) : undefined) ??
     (/^read$/i.test(label.trim()) && (preview?.path || preview?.fileName)
       ? "Read"
       : /^find$/i.test(label.trim()) && preview?.query
@@ -884,6 +951,7 @@ function ToolCallSummary({
         : undefined);
   const target =
     parts?.[2] ??
+    writeTarget ??
     (action === "Read"
       ? preview?.path
         ? displayPath(preview.path, cwd)
@@ -898,7 +966,7 @@ function ToolCallSummary({
       </span>
     );
   }
-  const isFile = action === "Read";
+  const isFile = action !== "Find";
   const fileName =
     preview?.fileName ||
     target
