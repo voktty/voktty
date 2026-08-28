@@ -3,6 +3,9 @@ import { useTerminalSuggestStore } from "./lib/terminalSuggestStore";
 import {
   Cancel01Icon,
   Clock01Icon,
+  CommandLineIcon,
+  File01Icon,
+  Folder01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -123,7 +126,6 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
     containerHeight,
     searchMode,
     searchFilter,
-    navigated,
   } = data;
 
   // Ensure popover doesn't overflow container bounds
@@ -251,6 +253,26 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
               const termLower = highlightTerm.toLowerCase();
               const cmdLower = cmd.toLowerCase();
               const matchIdx = termLower ? cmdLower.indexOf(termLower) : -1;
+              const struct = data.structuredItems?.[idx];
+
+              const kind = struct?.kind ?? "history";
+              const KindIcon =
+                kind === "folder"
+                  ? Folder01Icon
+                  : kind === "file"
+                    ? File01Icon
+                    : kind === "command"
+                      ? CommandLineIcon
+                      : Clock01Icon;
+
+              const iconToneClass =
+                kind === "folder"
+                  ? "text-amber-500/90 dark:text-amber-400/90"
+                  : kind === "file"
+                    ? "text-sky-500/90 dark:text-sky-400/90"
+                    : kind === "command"
+                      ? "text-emerald-500/90 dark:text-emerald-400/90"
+                      : "text-muted-foreground/70";
 
               return (
                 <button
@@ -269,6 +291,11 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
                   <span className="shrink-0 text-muted-foreground/60 text-[11px]">
                     {selected ? "❯" : " "}
                   </span>
+                  <HugeiconsIcon
+                    icon={KindIcon}
+                    size={13}
+                    className={cn("shrink-0", iconToneClass)}
+                  />
                   <span className="flex-1 truncate">
                     {matchIdx !== -1 ? (
                       <>
@@ -282,6 +309,11 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
                       cmd
                     )}
                   </span>
+                  {struct?.detail && (
+                    <span className="shrink-0 rounded bg-muted/60 px-1 py-0.2 text-[9px] text-muted-foreground">
+                      {struct.detail}
+                    </span>
+                  )}
                   <span className="shrink-0 text-[10px] text-muted-foreground/60 font-mono">
                     #{idx + 1}
                   </span>
@@ -296,15 +328,18 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
           <span className="flex items-center gap-1.5">
             <span>
               <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
-                ↵
+                Tab
               </kbd>{" "}
-              {navigated || searchMode ? t("terminal.history.hintInsert") : t("terminal.scripts.run")}
+              /{" "}
+              <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
+                →
+              </kbd>{" "}
+              {t("terminal.history.hintInsert")}
             </span>
             <span>
               <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
-                ⇧↵
-              </kbd>{" "}
-              {t("terminal.scripts.run")}
+                ↑↓
+              </kbd>
             </span>
             <span>
               <kbd className="rounded bg-muted px-1 py-0.2 border border-border/40 text-[9.5px]">
