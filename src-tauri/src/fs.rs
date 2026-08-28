@@ -443,6 +443,7 @@ pub struct GitHubLabel {
 #[serde(rename_all = "camelCase")]
 pub struct GitHubAssignee {
     pub login: String,
+    pub avatar_url: String,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -497,6 +498,7 @@ pub async fn git_github_work_items(
 pub struct GitHubWorkItemDetails {
     pub body: String,
     pub author: String,
+    pub author_avatar_url: String,
 }
 
 /// Issue or pull request body for the inbox detail pane.
@@ -1229,10 +1231,30 @@ fn parse_github_work_item_details(json: &str) -> Result<GitHubWorkItemDetails, S
         author: Option<Author>,
     }
     let row: Row = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    let author = row.author.map(|author| author.login).unwrap_or_default();
+    let author_avatar_url = github_avatar_url(&author);
     Ok(GitHubWorkItemDetails {
         body: row.body,
-        author: row.author.map(|author| author.login).unwrap_or_default(),
+        author,
+        author_avatar_url,
     })
+}
+
+fn github_avatar_url(login: &str) -> String {
+    let login = login.trim();
+    if login.is_empty() {
+        return String::new();
+    }
+    let mut encoded = String::with_capacity(login.len());
+    for byte in login.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => {
+                encoded.push(byte as char);
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    format!("https://avatars.githubusercontent.com/{encoded}?s=64")
 }
 
 fn git_github_pr_diff_for(root: &Path, number: i64) -> Result<GitHubPrDiff, String> {
@@ -1348,6 +1370,7 @@ fn parse_github_work_items(
                 .assignees
                 .into_iter()
                 .map(|assignee| GitHubAssignee {
+                    avatar_url: github_avatar_url(&assignee.login),
                     login: assignee.login,
                 })
                 .collect(),
@@ -3533,6 +3556,10 @@ mod tests {
         assert_eq!(items[0].repo, "acme/web");
         assert_eq!(items[0].labels[0].name, "bug");
         assert_eq!(items[0].assignees[0].login, "maya");
+        assert_eq!(
+            items[0].assignees[0].avatar_url,
+            "https://avatars.githubusercontent.com/maya?s=64"
+        );
         assert!(!items[0].draft);
     }
 
@@ -3561,6 +3588,19 @@ mod tests {
         let details = parse_github_work_item_details(json).unwrap();
         assert_eq!(details.body, "Steps to reproduce");
         assert_eq!(details.author, "maya");
+        assert_eq!(
+            details.author_avatar_url,
+            "https://avatars.githubusercontent.com/maya?s=64"
+        );
+    }
+
+    #[test]
+    fn github_avatar_url_encodes_bot_logins() {
+        assert_eq!(
+            github_avatar_url("dependabot[bot]"),
+            "https://avatars.githubusercontent.com/dependabot%5Bbot%5D?s=64"
+        );
+        assert_eq!(github_avatar_url("  "), "");
     }
 
     #[test]

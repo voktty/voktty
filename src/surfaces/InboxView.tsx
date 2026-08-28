@@ -1,6 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
-  ArrowRight,
   ChevronDown,
   CircleDot,
   ExternalLink,
@@ -42,6 +41,7 @@ import {
   peekGithubWorkItemDetails,
   peekInboxList,
   formatRelativeTime,
+  inboxPersonAvatarUrl,
   type GithubLabel,
   type GithubPrDiff,
   type GithubWorkItemDetails,
@@ -964,8 +964,19 @@ function InboxDetail({
         </h1>
         <div className="flex flex-wrap items-center gap-2 text-[12px] text-content/50">
           {item.assignees.length > 0 ? (
-            <span>
-              {item.assignees.map((person) => person.login).join(", ")}
+            <span className="flex min-w-0 flex-wrap items-center gap-2">
+              {item.assignees.map((person) => (
+                <InboxPerson
+                  key={person.login}
+                  name={person.login}
+                  avatarUrl={inboxPersonAvatarUrl(
+                    item.provider,
+                    person.login,
+                    person.avatarUrl,
+                  )}
+                  size={16}
+                />
+              ))}
             </span>
           ) : (
             <span>Unassigned</span>
@@ -1090,17 +1101,78 @@ function InboxDetail({
         </div>
       ) : error ? (
         <p className="text-[13px] text-content/50">{error}</p>
-      ) : details?.body.trim() ? (
-        <div>
-          {details.author ? (
-            <p className="mb-3 text-[12px] text-content/45">{details.author}</p>
-          ) : null}
-          <AgentMarkdown text={details.body} cwd={markdownCwd} />
-        </div>
       ) : (
-        <p className="text-[13px] text-content/45">No description</p>
+        <div>
+          {details?.author ? (
+            <InboxPerson
+              name={details.author}
+              avatarUrl={inboxPersonAvatarUrl(
+                item.provider,
+                details.author,
+                details.authorAvatarUrl,
+              )}
+              size={20}
+              className="mb-3 text-[12px] text-content/45"
+            />
+          ) : null}
+          {details?.body.trim() ? (
+            <AgentMarkdown text={details.body} cwd={markdownCwd} />
+          ) : (
+            <p className="text-[13px] text-content/45">No description</p>
+          )}
+        </div>
       )}
     </div>
+  );
+}
+
+function InboxPerson({
+  name,
+  avatarUrl,
+  size = 20,
+  className = "",
+}: {
+  name: string;
+  avatarUrl?: string;
+  size?: number;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(!avatarUrl);
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
+
+  useEffect(() => {
+    setFailed(!avatarUrl);
+  }, [avatarUrl]);
+
+  return (
+    <span className={`inline-flex min-w-0 items-center gap-1.5 ${className}`}>
+      {avatarUrl && !failed ? (
+        <img
+          src={avatarUrl}
+          alt=""
+          width={size}
+          height={size}
+          referrerPolicy="no-referrer"
+          draggable={false}
+          onError={() => setFailed(true)}
+          className="shrink-0 rounded-full bg-content/10 object-cover"
+          style={{ width: size, height: size }}
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="grid shrink-0 place-items-center rounded-full bg-content/12 font-medium text-content/55"
+          style={{
+            width: size,
+            height: size,
+            fontSize: Math.max(9, Math.round(size * 0.45)),
+          }}
+        >
+          {initial}
+        </span>
+      )}
+      <span className="min-w-0 truncate">{name}</span>
+    </span>
   );
 }
 

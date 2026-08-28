@@ -24,6 +24,7 @@ export type GithubLabel = {
 
 export type GithubAssignee = {
   login: string;
+  avatarUrl?: string;
 };
 
 export type GithubWorkItem = {
@@ -55,6 +56,7 @@ export type InboxItem = Omit<GithubWorkItem, "kind"> & {
 export type GithubWorkItemDetails = {
   body: string;
   author: string;
+  authorAvatarUrl?: string;
 };
 
 export type GithubPrFile = {
@@ -182,6 +184,23 @@ export function formatGithubQuery(query: GithubWorkItemQuery): string {
   const text = query.search.trim();
   if (text) parts.push(text);
   return parts.join(" ");
+}
+
+export function githubAvatarUrl(login: string, size = 64): string {
+  const name = login.trim();
+  if (!name) return "";
+  return `https://avatars.githubusercontent.com/${encodeURIComponent(name)}?s=${size}`;
+}
+
+export function inboxPersonAvatarUrl(
+  provider: InboxProvider,
+  login: string,
+  avatarUrl?: string,
+): string {
+  const explicit = avatarUrl?.trim() ?? "";
+  if (explicit) return explicit;
+  if (provider === "github") return githubAvatarUrl(login);
+  return "";
 }
 
 export function formatRelativeTime(

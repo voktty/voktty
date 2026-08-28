@@ -35,6 +35,7 @@ pub struct LinearLabel {
 #[serde(rename_all = "camelCase")]
 pub struct LinearAssignee {
     pub login: String,
+    pub avatar_url: String,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -64,6 +65,7 @@ pub struct LinearIssue {
 pub struct LinearIssueDetails {
     pub body: String,
     pub author: String,
+    pub author_avatar_url: String,
 }
 
 #[tauri::command]
@@ -164,7 +166,7 @@ query InboxIssues($first: Int!, $filter: IssueFilter) {
       state { name type }
       team { id key name }
       labels { nodes { name color } }
-      assignee { name displayName }
+      assignee { name displayName avatarUrl }
     }
   }
 }
@@ -173,8 +175,8 @@ const ISSUE_QUERY: &str = r#"
 query InboxIssue($id: String!) {
   issue(id: $id) {
     description
-    creator { name displayName }
-    assignee { name displayName }
+    creator { name displayName avatarUrl }
+    assignee { name displayName avatarUrl }
   }
 }
 "#;
@@ -356,10 +358,17 @@ fn parse_linear_issue_details(data: &Value) -> Result<LinearIssueDetails, String
     let issue = data
         .get("issue")
         .ok_or_else(|| "Linear did not return that issue".to_string())?;
-    let author = display_name(issue.get("creator")).or_else(|| display_name(issue.get("assignee")));
+    let creator = person_fields(issue.get("creator"));
+    let assignee = person_fields(issue.get("assignee"));
+    let (author, author_avatar_url) = if creator.0.is_some() {
+        creator
+    } else {
+        assignee
+    };
     Ok(LinearIssueDetails {
         body: string_field(issue, "description").unwrap_or_default(),
         author: author.unwrap_or_default(),
+        author_avatar_url,
     })
 }
 
@@ -383,9 +392,19 @@ fn parse_labels(node: &Value) -> Vec<LinearLabel> {
 }
 
 fn parse_assignees(node: &Value) -> Vec<LinearAssignee> {
-    display_name(node.get("assignee"))
-        .map(|login| vec![LinearAssignee { login }])
+    let (name, avatar_url) = person_fields(node.get("assignee"));
+    name.map(|login| vec![LinearAssignee { login, avatar_url }])
         .unwrap_or_default()
+}
+
+fn person_fields(node: Option<&Value>) -> (Option<String>, String) {
+    let Some(node) = node else {
+        return (None, String::new());
+    };
+    (
+        display_name(Some(node)),
+        string_field(node, "avatarUrl").unwrap_or_default(),
+    )
 }
 
 fn display_name(node: Option<&Value>) -> Option<String> {
@@ -538,7 +557,7 @@ mod tests {
                     "state": { "name": "In Progress", "type": "started" },
                     "team": { "id": "t1", "key": "ENG", "name": "Engineering" },
                     "labels": { "nodes": [{ "name": "bug", "color": "#eb5757" }] },
-                    "assignee": { "displayName": "Maya", "name": "maya" }
+                    "assignee": { "displayName": "Maya", "name": "maya", "avatarUrl": "https://uploads.linear.app/maya.png" }
                 }]
             }
         });
@@ -556,6 +575,10 @@ mod tests {
         assert_eq!(item.team_name, "Engineering");
         assert_eq!(item.labels[0].color, "eb5757");
         assert_eq!(item.assignees[0].login, "Maya");
+        assert_eq!(
+            item.assignees[0].avatar_url,
+            "https://uploads.linear.app/maya.png"
+        );
         assert!(item.project_path.is_empty());
     }
 
@@ -564,13 +587,17 @@ mod tests {
         let data = json!({
             "issue": {
                 "description": "Steps to reproduce",
-                "creator": { "name": "Ada" },
+                "creator": { "name": "Ada", "avatarUrl": "https://uploads.linear.app/ada.png" },
                 "assignee": { "displayName": "Maya" }
             }
         });
         let details = parse_linear_issue_details(&data).unwrap();
         assert_eq!(details.body, "Steps to reproduce");
         assert_eq!(details.author, "Ada");
+        assert_eq!(
+            details.author_avatar_url,
+            "https://uploads.linear.app/ada.png"
+        );
     }
 
     #[test]

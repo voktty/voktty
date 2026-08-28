@@ -18,7 +18,7 @@ export type LinearIssue = {
   stateType: string;
   updatedAt: string;
   labels: { name: string; color: string }[];
-  assignees: { login: string }[];
+  assignees: { login: string; avatarUrl?: string }[];
   draft: boolean;
   repo: string;
   teamId: string;
@@ -29,6 +29,7 @@ export type LinearIssue = {
 export type LinearIssueDetails = {
   body: string;
   author: string;
+  authorAvatarUrl?: string;
 };
 
 export type LinearStatus = {

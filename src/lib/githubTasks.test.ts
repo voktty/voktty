@@ -6,10 +6,12 @@ import {
   filterInboxItems,
   formatGithubQuery,
   formatRelativeTime,
+  githubAvatarUrl,
   groupProjectsByRepo,
   inboxComposerCard,
   inboxItemKey,
   inboxListCacheKey,
+  inboxPersonAvatarUrl,
   inboxProjectsForRail,
   inboxStartDraft,
   sortInboxItems,
@@ -56,6 +58,46 @@ describe("formatGithubQuery", () => {
         search: "  checkout  ",
       }),
     ).toBe("is:pr is:open checkout");
+  });
+});
+
+describe("githubAvatarUrl", () => {
+  it("builds the GitHub avatar URL", () => {
+    expect(githubAvatarUrl("maya")).toBe(
+      "https://avatars.githubusercontent.com/maya?s=64",
+    );
+  });
+
+  it("encodes bot logins", () => {
+    expect(githubAvatarUrl("dependabot[bot]")).toBe(
+      "https://avatars.githubusercontent.com/dependabot%5Bbot%5D?s=64",
+    );
+  });
+
+  it("returns empty for a blank login", () => {
+    expect(githubAvatarUrl("  ")).toBe("");
+  });
+});
+
+describe("inboxPersonAvatarUrl", () => {
+  it("prefers an explicit avatar", () => {
+    expect(
+      inboxPersonAvatarUrl(
+        "linear",
+        "Ada",
+        "https://uploads.linear.app/ada.png",
+      ),
+    ).toBe("https://uploads.linear.app/ada.png");
+  });
+
+  it("falls back to GitHub avatars for GitHub people", () => {
+    expect(inboxPersonAvatarUrl("github", "maya")).toBe(
+      "https://avatars.githubusercontent.com/maya?s=64",
+    );
+  });
+
+  it("does not invent a GitHub avatar for Linear names", () => {
+    expect(inboxPersonAvatarUrl("linear", "Ada")).toBe("");
   });
 });
 
