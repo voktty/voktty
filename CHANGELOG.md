@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Sidebar tabs read as rounded segments inset from the row rather than full-height boxes with dividers: Sessions, Explorer, and Changes in both layouts, and the inbox's GitHub and Linear tabs.
+- The classic sidebar's project header no longer floats over the session list, and the Explorer's toolbar and root folder row stay pinned while the tree scrolls under them.
+
 ### Fixed
 
 - Zen mode: expanding a settled turn's toolchain no longer folds it again when the turn's earlier tool calls were already open. The summary and the `+N previous` disclosure now track their own state.

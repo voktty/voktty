@@ -207,7 +207,6 @@ function SidebarComponent({
   });
   const [tabOrder, setTabOrder] = useState<SidebarTab[]>(loadSidebarTabOrder);
   const [now, setNow] = useState(() => Date.now());
-  const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const sessionsLock = useLockOverscroll<HTMLDivElement>();
   const sessionsScrollRef = useRef<HTMLDivElement>(null);
   const [sessionMenu, setSessionMenu] = useState<{
@@ -490,8 +489,8 @@ function SidebarComponent({
         key={itemId}
         ref={(el) => sortable.setItemRef(itemId, el)}
         className={`relative flex min-w-0 flex-1 touch-none items-stretch ${
-          index > 0 ? "border-l border-content/10" : ""
-        } ${draggingTab ? "opacity-40" : ""} ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
+          draggingTab ? "opacity-40" : ""
+        } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
         onPointerDown={(event) => {
           if (event.button !== 0) return;
           onTabPick(itemId);
@@ -526,15 +525,11 @@ function SidebarComponent({
             if (sortable.consumeClick()) return;
             onTabPick(itemId);
           }}
-          className={`relative flex min-w-0 flex-1 items-center justify-center px-1 text-[12px] leading-none ${
-            deckLayout ? "h-full" : "h-9"
-          } ${
-            canDragTabs ? "cursor-grab active:cursor-grabbing" : ""
-          } ${
+          className={`flex h-6 min-w-0 flex-1 items-center justify-center self-center rounded-md px-2 text-[12px] leading-none ${
             active
-              ? "text-content bg-content/10"
-              : "text-content/50 hover:text-content"
-          }`}
+              ? "bg-content/10 text-content"
+              : "text-content/50 hover:bg-content/5 hover:text-content"
+          } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
         >
           {isChangesTab && hasChangeStats ? (
             <DiffStat
@@ -544,9 +539,6 @@ function SidebarComponent({
           ) : (
             <span className="block truncate">{TAB_LABELS[itemId]}</span>
           )}
-          {active ? (
-            <span className="absolute inset-x-0 bottom-0 h-px bg-content" />
-          ) : null}
         </button>
       </div>
     );
@@ -571,7 +563,7 @@ function SidebarComponent({
           <div
             role="tablist"
             aria-label="Workspace"
-            className="flex h-9 shrink-0 items-stretch border-b border-content/10"
+            className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-2"
           >
             {workspaceTabItems}
           </div>
@@ -613,10 +605,10 @@ function SidebarComponent({
             <div
               role="tablist"
               aria-label="Workspace"
-              className={`flex shrink-0 overflow-visible border-content/10 ${
+              className={`flex h-9 shrink-0 items-center gap-px overflow-visible border-content/10 px-2 ${
                 // Mirrors the rail-open header stack: each row owns its own
                 // bottom border, so the seams land on the title bar's.
-                deckLayout ? "h-9 items-stretch border-b" : "border-y"
+                deckLayout ? "border-b" : "border-y"
               }`}
             >
               {workspaceTabItems}
@@ -645,10 +637,7 @@ function SidebarComponent({
             onClose={() => onFilesSearchOpenChange(false)}
           />
         ) : cwd && cwd !== "~" ? (
-          <div
-            ref={lockOverscroll}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-none"
-          >
+          <div className="flex min-h-0 flex-1 flex-col">
             <FileTree
               key={gitRoot}
               cwd={gitRoot}
@@ -669,6 +658,56 @@ function SidebarComponent({
           </p>
         )}
       </div>
+      {!deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
+        <div className="shrink-0 border-b border-content/10">
+          <div className="flex h-9 items-center px-2 pr-1.5">
+            <div
+              title={cwd}
+              className="flex h-full min-w-0 flex-1 items-center gap-1.5"
+            >
+              {projectLogoPath ? (
+                <ProjectLogoIcon
+                  path={projectLogoPath}
+                  className="size-4 shrink-0 rounded-sm ml-1.5"
+                  imageClassName="size-4"
+                />
+              ) : (
+                <span className="grid size-6 shrink-0 place-items-center">
+                  <FileTypeIcon name={basename(cwd)} isDir isRoot />
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
+                {basename(cwd)}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-px">
+              <SessionsHeaderButton
+                label="Search conversations"
+                active={searchOpen}
+                open={searchOpen}
+                onClick={onToggleSessionSearch}
+              >
+                <Search className="size-3" strokeWidth={1.75} />
+              </SessionsHeaderButton>
+              <SessionsHeaderButton
+                label="Filter sessions"
+                active={filtersActive}
+                open={!!filterMenu}
+                hasPopup
+                onClick={onFilterButtonClick}
+              >
+                <ListFilter className="size-3" strokeWidth={1.75} />
+              </SessionsHeaderButton>
+            </div>
+          </div>
+          {searchOpen ? (
+            <div className="relative flex items-center border-t border-content/10 pl-3.5">
+              <Search className="size-3 opacity-50" />
+              {sessionSearchInput}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
         <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
           <div className="relative flex h-7 min-w-0 flex-1 items-center">
@@ -701,56 +740,6 @@ function SidebarComponent({
           </p>
         ) : (
           <div>
-            {!deckLayout ? (
-              <div className="sticky top-0 z-10 shrink-0 border-b border-content/10 bg-content/5 backdrop-blur-md">
-                <div className="flex h-9 items-center px-2 pr-1.5">
-                  <div
-                    title={cwd}
-                    className="flex h-full min-w-0 flex-1 items-center gap-1.5"
-                  >
-                    {projectLogoPath ? (
-                      <ProjectLogoIcon
-                        path={projectLogoPath}
-                        className="size-4 shrink-0 rounded-sm ml-1.5"
-                        imageClassName="size-4"
-                      />
-                    ) : (
-                      <span className="grid size-6 shrink-0 place-items-center">
-                        <FileTypeIcon name={basename(cwd)} isDir isRoot />
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
-                      {basename(cwd)}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-px">
-                    <SessionsHeaderButton
-                      label="Search conversations"
-                      active={searchOpen}
-                      open={searchOpen}
-                      onClick={onToggleSessionSearch}
-                    >
-                      <Search className="size-3" strokeWidth={1.75} />
-                    </SessionsHeaderButton>
-                    <SessionsHeaderButton
-                      label="Filter sessions"
-                      active={filtersActive}
-                      open={!!filterMenu}
-                      hasPopup
-                      onClick={onFilterButtonClick}
-                    >
-                      <ListFilter className="size-3" strokeWidth={1.75} />
-                    </SessionsHeaderButton>
-                  </div>
-                </div>
-                {searchOpen ? (
-                  <div className="relative flex items-center border-y border-content/10 pl-3.5">
-                    <Search className="size-3 opacity-50" />
-                    {sessionSearchInput}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
             {/*
               A project's first load stays deliberately blank. The listing is
               served from a covering index and resolves within a frame or two,

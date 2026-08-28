@@ -179,7 +179,7 @@ function InboxSourceTab({
       role="tab"
       aria-selected={selected}
       onClick={() => onSelect(source)}
-      className={`relative flex h-full min-w-0 flex-1 items-center justify-center px-2 pb-0.5 text-[12px] leading-none ${
+      className={`flex h-6 min-w-0 flex-1 items-center justify-center rounded-md px-2 text-[12px] leading-none ${
         selected
           ? "bg-content/10 text-content"
           : "text-content/50 hover:bg-content/5 hover:text-content"
@@ -192,9 +192,6 @@ function InboxSourceTab({
         />
         <span className="leading-none">{label}</span>
       </span>
-      {selected ? (
-        <span className="absolute inset-x-0 bottom-0 h-0.5 bg-content" />
-      ) : null}
     </button>
   );
 }
@@ -448,7 +445,7 @@ export function InboxView({
       <div
         role="tablist"
         aria-label="Inbox source"
-        className="flex h-10 shrink-0 items-stretch border-b border-content/10"
+        className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-2"
       >
         <InboxSourceTab
           source="github"

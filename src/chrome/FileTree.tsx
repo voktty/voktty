@@ -23,6 +23,7 @@ import {
   wellFormedFileName,
   type NameIssue,
 } from "../lib/fileName";
+import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   createParentOf,
   dirsTouchedByCreate,
@@ -239,6 +240,7 @@ export function FileTree({
   const creatingRef = useRef(creating);
   creatingRef.current = creating;
   const rootRef = useRef<HTMLDivElement>(null);
+  const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const name = basename(cwd);
   const rootOpen = expanded.has(cwd);
 
@@ -612,13 +614,13 @@ export function FileTree({
       <div
         ref={rootRef}
         tabIndex={-1}
-        className="min-h-full outline-none"
+        className="flex h-full min-h-0 flex-col outline-none"
         onKeyDown={onKeyDown}
         onContextMenu={onBackgroundMenu}
       >
         <div
-          className={`flex shrink-0 items-center overflow-visible ${
-            deckLayout ? "h-9 border-b border-content/10" : ""
+          className={`flex shrink-0 items-center overflow-visible border-b border-content/10 ${
+            deckLayout ? "h-9" : ""
           }`}
           onContextMenu={(e) => e.stopPropagation()}
         >
@@ -667,7 +669,7 @@ export function FileTree({
             />
           ) : null}
         </div>
-        <div className="flex h-8 items-center sticky top-0 bg-content/5 backdrop-blur-md">
+        <div className="flex h-8 shrink-0 items-center">
           <button
             type="button"
             aria-expanded={rootOpen}
@@ -699,22 +701,27 @@ export function FileTree({
             </span>
           </button>
         </div>
-        {opError ? (
-          <p className="px-3 py-1 text-[12px] leading-4 text-red-400">
-            {opError}
-          </p>
-        ) : null}
-        {rootOpen ? (
-          <div role="tree" aria-label={`${name} files`}>
-            <TreeChildren
-              parent={cwd}
-              depth={0}
-              entries={children}
-              loading={children === null && !error}
-              error={error}
-            />
-          </div>
-        ) : null}
+        <div
+          ref={lockOverscroll}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-none"
+        >
+          {opError ? (
+            <p className="px-3 py-1 text-[12px] leading-4 text-red-400">
+              {opError}
+            </p>
+          ) : null}
+          {rootOpen ? (
+            <div role="tree" aria-label={`${name} files`}>
+              <TreeChildren
+                parent={cwd}
+                depth={0}
+                entries={children}
+                loading={children === null && !error}
+                error={error}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
       {menu ? (
         <ExplorerMenu
