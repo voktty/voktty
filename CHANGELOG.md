@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-08-28
+
 ### Changed
 
 - Sidebar tabs read as rounded segments inset from the row rather than full-height boxes with dividers: Sessions, Explorer, and Changes in both layouts, and the inbox's GitHub and Linear tabs.
@@ -246,7 +248,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/hardbeat920/monocode/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/hardbeat920/monocode/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/hardbeat920/monocode/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/hardbeat920/monocode/compare/v0.1.11...v0.1.12
