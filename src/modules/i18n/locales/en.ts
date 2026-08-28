@@ -1019,6 +1019,18 @@ export const en = {
     privateHidden: "Private: hidden from AI",
     privateHiddenTooltip:
       "AI can't see this terminal's output. Use it for secrets, SSH, or anything you don't want sent to the model.",
+    uptime: {
+      title: "Console Activity",
+      subtitle: "Screen time & weekly statistics",
+      activeNow: "Active now",
+      today: "Today",
+      thisWeek: "This week",
+      dailyAvg: "Daily avg",
+      weeklyChart: "Weekly Activity",
+      topPaths: "Most active workspaces",
+      takeBreak: "Remember to take a short break to rest your eyes and stretch!",
+      noPaths: "No recorded workspace activity yet",
+    },
     cwd: {
       noDirectory: "no directory",
       home: "Home",

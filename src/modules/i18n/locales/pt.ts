@@ -647,6 +647,18 @@ const ptBase = mergeLocale(en, {
     editor: "Editor",
     spaces: "Espaços",
     serial: "Serial",
+    uptime: {
+      title: "Atividade do Terminal",
+      subtitle: "Tempo de tela e estatísticas semanais",
+      activeNow: "Ativo agora",
+      today: "Hoje",
+      thisWeek: "Esta semana",
+      dailyAvg: "Média diária",
+      weeklyChart: "Atividade semanal",
+      topPaths: "Diretórios mais ativos",
+      takeBreak: "Lembre-se de fazer uma pausa rápida para descansar a visão e se alongar!",
+      noPaths: "Nenhuma atividade registrada ainda",
+    },
     stacks: {
       typescript: "TypeScript",
       javascript: "JavaScript",

@@ -2264,21 +2264,30 @@ export default function App() {
         clearFocusedTerminal();
       },
       "terminal.copilot": () => {
+        const currentTab = tabsRef.current.find(
+          (t) => t.id === effectiveActiveId,
+        );
         const leafId =
-          activeTab?.kind === "terminal"
-            ? activeTab.activeLeafId
+          currentTab?.kind === "terminal"
+            ? currentTab.activeLeafId
             : getActiveTerminalLeafId();
         useTerminalCopilotStore.getState().toggleCopilot(leafId);
       },
       "terminal.toggleInput": () => {
-        if (activeTab?.kind === "terminal") {
-          toggleTabBlocks(activeTab.id);
+        const currentTab = tabsRef.current.find(
+          (t) => t.id === effectiveActiveId,
+        );
+        if (currentTab?.kind === "terminal") {
+          toggleTabBlocks(currentTab.id);
         }
       },
       "terminal.history": () => {
+        const currentTab = tabsRef.current.find(
+          (t) => t.id === effectiveActiveId,
+        );
         const leafId =
-          activeTab?.kind === "terminal"
-            ? activeTab.activeLeafId
+          currentTab?.kind === "terminal"
+            ? currentTab.activeLeafId
             : getActiveTerminalLeafId();
         useCommandHistoryStore.getState().openHistory("", leafId);
       },

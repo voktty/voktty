@@ -645,6 +645,18 @@ const deBase = mergeLocale(en, {
     editor: "Editor",
     spaces: "Spaces",
     serial: "Seriell",
+    uptime: {
+      title: "Konsolenaktivität",
+      subtitle: "Bildschirmzeit & Wochenstatistik",
+      activeNow: "Jetzt aktiv",
+      today: "Heute",
+      thisWeek: "Diese Woche",
+      dailyAvg: "Tagesdurchschnitt",
+      weeklyChart: "Wöchentliche Aktivität",
+      topPaths: "Aktivste Arbeitsbereiche",
+      takeBreak: "Denken Sie daran, eine kurze Pause einzulegen, um die Augen zu entspannen und sich zu dehnen!",
+      noPaths: "Noch keine Aktivität aufgezeichnet",
+    },
     stacks: {
       typescript: "TypeScript",
       javascript: "JavaScript",

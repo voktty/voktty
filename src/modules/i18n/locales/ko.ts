@@ -631,6 +631,18 @@ const koBase = mergeLocale(en, {
     editor: "편집기",
     spaces: "스페이스",
     serial: "시리얼",
+    uptime: {
+      title: "콘솔 활동",
+      subtitle: "화면 사용 시간 및 주간 통계",
+      activeNow: "현재 사용 중",
+      today: "오늘",
+      thisWeek: "이번 주",
+      dailyAvg: "일평균",
+      weeklyChart: "주간 활동",
+      topPaths: "가장 많이 사용한 디렉터리",
+      takeBreak: "눈을 쉬어주고 스트레칭을 위해 짧은 휴식을 취하세요!",
+      noPaths: "기록된 활동이 없습니다",
+    },
     stacks: {
       typescript: "TypeScript",
       javascript: "JavaScript",
