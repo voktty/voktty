@@ -1,3 +1,4 @@
+import { useAgentHistoryStore } from "@/modules/agent-history";
 import { extensionCommands, useExtensionStore } from "@/modules/extensions";
 import type { SearchTarget } from "@/modules/header";
 import { t } from "@/modules/i18n";
@@ -973,12 +974,30 @@ export function createCommandItems(
     },
     {
       id: "ai.askSelection",
-      title: t("commandPalette.commands.askAiSelection"),
+      title: t("commandPalette.commands.askAiAboutSelection"),
       group: "AI",
-      keywords: ["selection", "explain", "assistant", "chat"],
+      keywords: ["ai", "ask", "selection", "explain", "review"],
       icon: SparklesIcon,
       shortcutId: "ai.askSelection",
       run: ctx.askAiSelection,
+    },
+    {
+      id: "agentHistory.open",
+      title: "Agent Operational History",
+      group: "AI",
+      keywords: [
+        "agent",
+        "history",
+        "claude",
+        "codex",
+        "cursor",
+        "transcript",
+        "sessions",
+        "resume",
+        "chat",
+      ],
+      icon: Clock01Icon,
+      run: () => useAgentHistoryStore.getState().openHistory(),
     },
   ];
 
