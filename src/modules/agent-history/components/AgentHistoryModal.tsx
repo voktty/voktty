@@ -1,11 +1,21 @@
-﻿import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { cn } from "@/lib/utils";
+import { createDomSearchController, type DomSearchMatchInfo } from "@/modules/markdown/lib/domSearch";
+import { getActiveTerminalLeafId, submitToLeaf } from "@/modules/terminal/lib/useTerminalSession";
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
+  ArrowUp01Icon,
   Cancel01Icon,
   Clock01Icon,
   Copy01Icon,
@@ -15,6 +25,7 @@ import {
   RefreshIcon,
   Search01Icon,
   SquareIcon,
+  TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -60,19 +71,27 @@ export function AgentHistoryModal() {
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [isMaximized, setIsMaximized] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
+  // In-transcript Ctrl+F search state
+  const [isFindOpen, setIsFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findMatchInfo, setFindMatchInfo] = useState<DomSearchMatchInfo>({ current: 0, total: 0 });
+
   const [size, setSize] = useState({
     width: typeof window !== "undefined" ? Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - 80)) : DEFAULT_WIDTH,
     height: typeof window !== "undefined" ? Math.min(DEFAULT_HEIGHT, Math.max(MIN_HEIGHT, window.innerHeight - 80)) : DEFAULT_HEIGHT,
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const findInputRef = useRef<HTMLInputElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const searchControllerRef = useRef<ReturnType<typeof createDomSearchController> | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { position, dragHandleProps, resetPosition, setPosition } = useDraggableModal({
     resetOnClose: true,
   });
 
-  // Debounced search
+  // Debounced session list search
   const handleSearchChange = (val: string) => {
     setLocalSearch(val);
     if (debounceTimerRef.current) {
@@ -87,6 +106,46 @@ export function AgentHistoryModal() {
     setLocalSearch("");
     setSearchQuery("");
   };
+
+  // In-transcript search controller lifecycle
+  useEffect(() => {
+    if (transcriptRef.current && activeSession) {
+      searchControllerRef.current = createDomSearchController(transcriptRef.current);
+    }
+    return () => {
+      searchControllerRef.current?.clearQuery();
+      searchControllerRef.current = null;
+    };
+  }, [activeSession, messages]);
+
+  const handleFindChange = (q: string) => {
+    setFindQuery(q);
+    if (searchControllerRef.current) {
+      const match = searchControllerRef.current.setQuery(q);
+      setFindMatchInfo(match);
+    }
+  };
+
+  const handleFindNext = () => {
+    if (searchControllerRef.current) {
+      const match = searchControllerRef.current.findNext();
+      setFindMatchInfo(match);
+    }
+  };
+
+  const handleFindPrev = () => {
+    if (searchControllerRef.current) {
+      const match = searchControllerRef.current.findPrevious();
+      setFindMatchInfo(match);
+    }
+  };
+
+  const closeFind = useCallback(() => {
+    setIsFindOpen(false);
+    setFindQuery("");
+    setFindMatchInfo({ current: 0, total: 0 });
+    searchControllerRef.current?.clearQuery();
+  }, []);
 
   // Resizing handler with pointer capture
   const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -135,42 +194,30 @@ export function AgentHistoryModal() {
     });
   }, [setPosition]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "h") {
-        e.preventDefault();
-        useAgentHistoryStore.getState().toggleHistory();
-      }
-      if (e.key === "Escape" && useAgentHistoryStore.getState().isOpen) {
-        useAgentHistoryStore.getState().closeHistory();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      setLocalSearch(useAgentHistoryStore.getState().searchQuery);
-      const timer = setTimeout(() => inputRef.current?.focus(), 60);
-      return () => clearTimeout(timer);
-    } else {
-      resetPosition();
-      setIsMaximized(false);
+  // Terminal Resume Actions
+  const handleResumeInTerminal = useCallback(async (session: HistorySession) => {
+    const cmd = await getResumeCommand(session.id);
+    if (!cmd) {
+      toast.error("No resume command available for this session.");
+      return;
     }
-  }, [isOpen, resetPosition]);
 
-  if (!isOpen) return null;
-
-  const toggleTool = (msgId: string) => {
-    setExpandedTools((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
-  };
+    const leafId = getActiveTerminalLeafId();
+    if (leafId !== null) {
+      submitToLeaf(leafId, cmd);
+      toast.success("Resumed session in active terminal", { description: cmd });
+      closeHistory();
+    } else {
+      await navigator.clipboard.writeText(cmd);
+      toast.success("Resume command copied (open a terminal to run)", { description: cmd });
+    }
+  }, [closeHistory]);
 
   const handleCopyResume = async (session: HistorySession) => {
     const cmd = await getResumeCommand(session.id);
     if (cmd) {
       await navigator.clipboard.writeText(cmd);
-      toast.success("Resume command copied to clipboard!");
+      toast.success("Resume command copied to clipboard!", { description: cmd });
     } else {
       toast.error("No resume command available for this session.");
     }
@@ -183,6 +230,62 @@ export function AgentHistoryModal() {
       toast.success("Transcript markdown copied to clipboard!");
     }
   };
+
+  const handleRunTextInTerminal = useCallback((text: string) => {
+    const leafId = getActiveTerminalLeafId();
+    if (leafId !== null) {
+      submitToLeaf(leafId, text);
+      toast.success("Sent to terminal", { description: text.slice(0, 50) });
+      closeHistory();
+    } else {
+      void navigator.clipboard.writeText(text);
+      toast.success("Copied to clipboard", { description: text.slice(0, 50) });
+    }
+  }, [closeHistory]);
+
+  // Keyboard shortcuts (Ctrl+H toggle, Ctrl+F in transcript, Escape)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        useAgentHistoryStore.getState().toggleHistory();
+        return;
+      }
+
+      if (!useAgentHistoryStore.getState().isOpen) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setIsFindOpen(true);
+        setTimeout(() => findInputRef.current?.focus(), 50);
+        return;
+      }
+
+      if (e.key === "Escape") {
+        if (isFindOpen) {
+          e.preventDefault();
+          closeFind();
+        } else {
+          useAgentHistoryStore.getState().closeHistory();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFindOpen, closeFind]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLocalSearch(useAgentHistoryStore.getState().searchQuery);
+      const timer = setTimeout(() => inputRef.current?.focus(), 60);
+      return () => clearTimeout(timer);
+    } else {
+      resetPosition();
+      setIsMaximized(false);
+      closeFind();
+    }
+  }, [isOpen, resetPosition, closeFind]);
 
   return (
     <div
@@ -357,40 +460,81 @@ export function AgentHistoryModal() {
                   const isActive = activeSessionId === s.id;
 
                   return (
-                    <div
-                      key={s.id}
-                      onClick={() => void selectSession(s.id)}
-                      className={cn(
-                        "group flex cursor-pointer flex-col gap-1 rounded-lg border p-2.5 transition-colors text-xs select-none",
-                        isActive
-                          ? "border-primary/60 bg-primary/10 shadow-xs"
-                          : "border-transparent bg-background/60 hover:border-border/60 hover:bg-muted/40",
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-1.5">
-                        <span
+                    <ContextMenu key={s.id}>
+                      <ContextMenuTrigger asChild>
+                        <div
+                          onClick={() => void selectSession(s.id)}
                           className={cn(
-                            "rounded px-1.5 py-0.5 text-[9.5px] font-semibold font-mono",
-                            badge.bg,
-                            badge.text,
+                            "group flex cursor-pointer flex-col gap-1 rounded-lg border p-2.5 transition-colors text-xs select-none",
+                            isActive
+                              ? "border-primary/60 bg-primary/10 shadow-xs"
+                              : "border-transparent bg-background/60 hover:border-border/60 hover:bg-muted/40",
                           )}
                         >
-                          {badge.label}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {s.updated_at ? new Date(s.updated_at * 1000).toLocaleDateString() : ""}
-                        </span>
-                      </div>
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span
+                              className={cn(
+                                "rounded px-1.5 py-0.5 text-[9.5px] font-semibold font-mono",
+                                badge.bg,
+                                badge.text,
+                              )}
+                            >
+                              {badge.label}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {s.updated_at ? new Date(s.updated_at * 1000).toLocaleDateString() : ""}
+                            </span>
+                          </div>
 
-                      <span className="line-clamp-2 font-medium leading-snug text-foreground break-words">
-                        {s.title}
-                      </span>
+                          <span className="line-clamp-2 font-medium leading-snug text-foreground break-words">
+                            {s.title}
+                          </span>
 
-                      <div className="flex items-center justify-between text-[10.5px] text-muted-foreground mt-0.5">
-                        <span className="truncate max-w-[140px]">📁 {s.project_name}</span>
-                        <span>{s.message_count} msgs</span>
-                      </div>
-                    </div>
+                          <div className="flex items-center justify-between text-[10.5px] text-muted-foreground mt-0.5">
+                            <span className="truncate max-w-[140px]">📁 {s.project_name}</span>
+                            <span>{s.message_count} msgs</span>
+                          </div>
+                        </div>
+                      </ContextMenuTrigger>
+
+                      <ContextMenuContent className="w-56 p-1 text-xs">
+                        {s.can_resume && (
+                          <ContextMenuItem
+                            onClick={() => void handleResumeInTerminal(s)}
+                            className="flex items-center gap-2 cursor-pointer font-medium text-primary"
+                          >
+                            <HugeiconsIcon icon={TerminalIcon} size={14} />
+                            <span>Resume in Terminal</span>
+                          </ContextMenuItem>
+                        )}
+
+                        <ContextMenuItem
+                          onClick={() => void handleCopyResume(s)}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <HugeiconsIcon icon={PlayIcon} size={14} />
+                          <span>Copy Resume Command</span>
+                        </ContextMenuItem>
+
+                        <ContextMenuItem
+                          onClick={() => void handleExportMarkdown(s)}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <HugeiconsIcon icon={Download01Icon} size={14} />
+                          <span>Copy Transcript (Markdown)</span>
+                        </ContextMenuItem>
+
+                        <ContextMenuSeparator className="my-1 border-border/40" />
+
+                        <ContextMenuItem
+                          onClick={() => void deleteSession(s.id)}
+                          className="flex items-center gap-2 cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
+                        >
+                          <HugeiconsIcon icon={Delete02Icon} size={14} />
+                          <span>Delete Session from Index</span>
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
                   );
                 })
               )}
@@ -417,14 +561,31 @@ export function AgentHistoryModal() {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {/* In-page Find Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsFindOpen(true);
+                        setTimeout(() => findInputRef.current?.focus(), 50);
+                      }}
+                      className="h-6.5 gap-1 px-2 text-xs bg-background/80 hover:bg-muted cursor-pointer"
+                      title="Find in Transcript (Ctrl+F)"
+                    >
+                      <HugeiconsIcon icon={Search01Icon} size={12} />
+                      <span>Find</span>
+                      <kbd className="hidden sm:inline text-[9px] opacity-60 ml-0.5 font-mono">Ctrl+F</kbd>
+                    </Button>
+
                     {activeSession.can_resume && (
                       <Button
                         size="sm"
-                        onClick={() => void handleCopyResume(activeSession)}
-                        className="h-6.5 gap-1 px-2.5 text-xs font-semibold cursor-pointer"
+                        onClick={() => void handleResumeInTerminal(activeSession)}
+                        className="h-6.5 gap-1.5 px-2.5 text-xs font-semibold cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
+                        title="Open and run resume command in active terminal"
                       >
-                        <HugeiconsIcon icon={PlayIcon} size={12} />
-                        <span>Copy Resume</span>
+                        <HugeiconsIcon icon={TerminalIcon} size={12} />
+                        <span>Resume in Terminal</span>
                       </Button>
                     )}
 
@@ -451,8 +612,65 @@ export function AgentHistoryModal() {
                   </div>
                 </div>
 
-                {/* Message Timeline */}
-                <div className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-3 select-text">
+                {/* Floating Ctrl+F Search Bar in Transcript */}
+                {isFindOpen && (
+                  <div className="absolute top-11 right-4 z-40 flex items-center gap-1.5 rounded-lg border border-border/80 bg-popover/95 p-1.5 text-xs shadow-xl backdrop-blur-md animate-in fade-in-0 zoom-in-95">
+                    <Input
+                      ref={findInputRef}
+                      value={findQuery}
+                      onChange={(e) => handleFindChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (e.shiftKey) handleFindPrev();
+                          else handleFindNext();
+                        }
+                      }}
+                      placeholder="Find in transcript..."
+                      className="h-6.5 w-48 text-xs font-mono bg-background border-border/60"
+                    />
+                    <span className="text-[10px] text-muted-foreground font-mono px-1">
+                      {findMatchInfo.total > 0
+                        ? `${findMatchInfo.current}/${findMatchInfo.total}`
+                        : findQuery
+                          ? "0/0"
+                          : ""}
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleFindPrev}
+                      className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Previous match (Shift+Enter)"
+                    >
+                      <HugeiconsIcon icon={ArrowUp01Icon} size={12} />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleFindNext}
+                      className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Next match (Enter)"
+                    >
+                      <HugeiconsIcon icon={ArrowDown01Icon} size={12} />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={closeFind}
+                      className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Close find (Esc)"
+                    >
+                      <HugeiconsIcon icon={Cancel01Icon} size={12} />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Message Timeline with Context Menu */}
+                <div
+                  ref={transcriptRef}
+                  className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-3 select-text"
+                >
                   {isLoading ? (
                     <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
                       <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
@@ -468,99 +686,138 @@ export function AgentHistoryModal() {
                       const isTool = msg.role === "tool";
 
                       return (
-                        <div
-                          key={msg.id}
-                          className={cn(
-                            "flex flex-col gap-1.5 rounded-lg border p-3 text-xs leading-relaxed max-w-full overflow-hidden",
-                            isUser
-                              ? "border-primary/40 bg-primary/5 ml-4"
-                              : isTool
-                                ? "border-amber-500/30 bg-amber-500/5 mx-1"
-                                : "border-border/70 bg-card mr-4",
-                          )}
-                        >
-                          {/* Message Header */}
-                          <div className="flex items-center justify-between text-[11px] font-semibold">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={cn(
-                                  "capitalize",
-                                  isUser
-                                    ? "text-primary"
-                                    : isTool
-                                      ? "text-amber-400"
-                                      : "text-foreground font-medium",
-                                )}
-                              >
-                                {isUser ? "👤 User" : isTool ? "⚙️ Tool Invocation" : "🤖 Assistant"}
-                              </span>
-
-                              {msg.redacted && (
-                                <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30 font-mono">
-                                  Secrets Redacted
-                                </Badge>
+                        <ContextMenu key={msg.id}>
+                          <ContextMenuTrigger asChild>
+                            <div
+                              className={cn(
+                                "flex flex-col gap-1.5 rounded-lg border p-3 text-xs leading-relaxed max-w-full overflow-hidden transition-colors",
+                                isUser
+                                  ? "border-primary/40 bg-primary/5 ml-4 hover:border-primary/60"
+                                  : isTool
+                                    ? "border-amber-500/30 bg-amber-500/5 mx-1"
+                                    : "border-border/70 bg-card mr-4 hover:border-border",
                               )}
-                            </div>
+                            >
+                              {/* Message Header */}
+                              <div className="flex items-center justify-between text-[11px] font-semibold select-none">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={cn(
+                                      "capitalize",
+                                      isUser
+                                        ? "text-primary"
+                                        : isTool
+                                          ? "text-amber-400"
+                                          : "text-foreground font-medium",
+                                    )}
+                                  >
+                                    {isUser ? "👤 User" : isTool ? "⚙️ Tool Invocation" : "🤖 Assistant"}
+                                  </span>
 
-                            {msg.timestamp > 0 && (
-                              <span className="text-[10px] text-muted-foreground font-mono">
-                                {new Date(msg.timestamp * 1000).toLocaleTimeString()}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Message Content */}
-                          {msg.content && (
-                            <div className="whitespace-pre-wrap break-words overflow-hidden [word-break:break-word] font-sans text-foreground/90 leading-relaxed max-w-full">
-                              {msg.content}
-                            </div>
-                          )}
-
-                          {/* Tool Invocations Accordion */}
-                          {msg.tool_name && (
-                            <div className="mt-1 rounded border border-border/50 bg-muted/30 overflow-hidden max-w-full">
-                              <div
-                                onClick={() => toggleTool(msg.id)}
-                                className="flex cursor-pointer items-center justify-between px-2.5 py-1 text-[11px] font-mono text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                              >
-                                <div className="flex items-center gap-1.5 truncate min-w-0">
-                                  <HugeiconsIcon
-                                    icon={expandedTools[msg.id] ? ArrowDown01Icon : ArrowRight01Icon}
-                                    size={11}
-                                  />
-                                  <span className="truncate">Tool: <strong>{msg.tool_name}</strong></span>
+                                  {msg.redacted && (
+                                    <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30 font-mono">
+                                      Secrets Redacted
+                                    </Badge>
+                                  )}
                                 </div>
-                                {msg.is_error && (
-                                  <Badge variant="outline" className="text-[9px] text-rose-500 border-rose-500/30 font-mono shrink-0">
-                                    Error
-                                  </Badge>
+
+                                {msg.timestamp > 0 && (
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    {new Date(msg.timestamp * 1000).toLocaleTimeString()}
+                                  </span>
                                 )}
                               </div>
 
-                              {expandedTools[msg.id] && (
-                                <div className="border-t border-border/40 p-2 space-y-2 text-[10.5px] font-mono max-w-full overflow-hidden">
-                                  {msg.tool_input && (
-                                    <div className="max-w-full overflow-hidden">
-                                      <div className="text-muted-foreground/60 mb-0.5">Input:</div>
-                                      <pre className="max-h-40 max-w-full overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all [word-break:break-word]">
-                                        {msg.tool_input}
-                                      </pre>
-                                    </div>
-                                  )}
+                              {/* Message Content */}
+                              {msg.content && (
+                                <div className="whitespace-pre-wrap break-words overflow-hidden [word-break:break-word] font-sans text-foreground/90 leading-relaxed max-w-full select-text">
+                                  {msg.content}
+                                </div>
+                              )}
 
-                                  {msg.tool_output && (
-                                    <div className="max-w-full overflow-hidden">
-                                      <div className="text-muted-foreground/60 mb-0.5">Output:</div>
-                                      <pre className="max-h-48 max-w-full overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all [word-break:break-word]">
-                                        {msg.tool_output}
-                                      </pre>
+                              {/* Tool Invocations Accordion */}
+                              {msg.tool_name && (
+                                <div className="mt-1 rounded border border-border/50 bg-muted/30 overflow-hidden max-w-full">
+                                  <div
+                                    onClick={() => toggleTool(msg.id)}
+                                    className="flex cursor-pointer items-center justify-between px-2.5 py-1 text-[11px] font-mono text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                                  >
+                                    <div className="flex items-center gap-1.5 truncate min-w-0">
+                                      <HugeiconsIcon
+                                        icon={expandedTools[msg.id] ? ArrowDown01Icon : ArrowRight01Icon}
+                                        size={11}
+                                      />
+                                      <span className="truncate">Tool: <strong>{msg.tool_name}</strong></span>
+                                    </div>
+                                    {msg.is_error && (
+                                      <Badge variant="outline" className="text-[9px] text-rose-500 border-rose-500/30 font-mono shrink-0">
+                                        Error
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  {expandedTools[msg.id] && (
+                                    <div className="border-t border-border/40 p-2 space-y-2 text-[10.5px] font-mono max-w-full overflow-hidden">
+                                      {msg.tool_input && (
+                                        <div className="max-w-full overflow-hidden">
+                                          <div className="text-muted-foreground/60 mb-0.5">Input:</div>
+                                          <pre className="max-h-40 max-w-full overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all [word-break:break-word]">
+                                            {msg.tool_input}
+                                          </pre>
+                                        </div>
+                                      )}
+
+                                      {msg.tool_output && (
+                                        <div className="max-w-full overflow-hidden">
+                                          <div className="text-muted-foreground/60 mb-0.5">Output:</div>
+                                          <pre className="max-h-48 max-w-full overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all [word-break:break-word]">
+                                            {msg.tool_output}
+                                          </pre>
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>
                               )}
                             </div>
-                          )}
-                        </div>
+                          </ContextMenuTrigger>
+
+                          <ContextMenuContent className="w-56 p-1 text-xs">
+                            <ContextMenuItem
+                              onClick={() => {
+                                void navigator.clipboard.writeText(msg.content);
+                                toast.success("Message content copied!");
+                              }}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <HugeiconsIcon icon={Copy01Icon} size={14} />
+                              <span>Copy Message Content</span>
+                            </ContextMenuItem>
+
+                            <ContextMenuItem
+                              onClick={() => handleRunTextInTerminal(msg.content)}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <HugeiconsIcon icon={TerminalIcon} size={14} />
+                              <span>Run / Insert into Terminal</span>
+                            </ContextMenuItem>
+
+                            <ContextMenuSeparator className="my-1 border-border/40" />
+
+                            <ContextMenuItem
+                              onClick={() => {
+                                setIsFindOpen(true);
+                                const selected = window.getSelection()?.toString() || msg.content.slice(0, 30);
+                                handleFindChange(selected);
+                                setTimeout(() => findInputRef.current?.focus(), 50);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <HugeiconsIcon icon={Search01Icon} size={14} />
+                              <span>Find in Transcript (Ctrl+F)</span>
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
                       );
                     })
                   )}
