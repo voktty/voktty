@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-08-28
+
 ### Added
 
 - Zen mode in Settings → General quiets a noisy transcript. While a turn runs, edits collapse into the same one-line activity list as reads and searches instead of stacking full diff cards; once the turn settles the whole toolchain folds behind a single `12 tool calls · 4 files edited` line, leaving the agent's closing answer. Edits waiting on approval still show their diff, since you cannot judge a change you cannot see. Off by default.
@@ -235,7 +237,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/hardbeat920/monocode/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/hardbeat920/monocode/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/hardbeat920/monocode/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/hardbeat920/monocode/compare/v0.1.10...v0.1.11
