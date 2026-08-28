@@ -988,7 +988,10 @@ function AutocompleteRow({
   const trigger = usePreferencesStore((s) => s.autocompleteTrigger);
   const provider = usePreferencesStore((s) => s.autocompleteProvider);
   const modelId = usePreferencesStore((s) => s.autocompleteModelId);
-  const eligible = useMemo(() => getAutocompleteEligibleModels(), []);
+  const eligible = useMemo(() => {
+    const allEligible = getAutocompleteEligibleModels();
+    return allEligible.filter((m) => configuredIds.has(m.provider));
+  }, [configuredIds]);
   const userShortcuts = usePreferencesStore((s) => s.shortcuts);
   const testSelection = resolveAutocompleteSelection(
     usePreferencesStore.getState(),
@@ -1056,36 +1059,37 @@ function AutocompleteRow({
       capabilities: { intelligence: 4, speed: 5, cost: 5 },
     };
 
-  // Fast cloud tiers + configured local providers + named compat endpoints.
-  const items = useMemo(() => {
-    const local = PROVIDERS.filter(
+  const local = useMemo(() => {
+    return PROVIDERS.filter(
       (p) =>
         isLocalProvider(p.id) &&
         p.id !== "openai-compatible" &&
         configuredIds.has(p.id),
     ).flatMap((p) => {
       const m = MODELS.find((x) => x.provider === p.id);
-      return m ? [m] : [];
+      return m ? [resolveDisplayModel(m.id, customEndpoints)] : [];
     });
+  }, [configuredIds, customEndpoints]);
+
+  // Fast cloud tiers + configured local providers + named compat endpoints.
+  const items = useMemo(() => {
     return [...eligible, ...local, ...compatItems];
-  }, [eligible, configuredIds, compatItems]);
+  }, [eligible, local, compatItems]);
 
   const currentModel: ModelInfo = useMemo(() => {
+    if (items.length === 0) return fallbackModel;
     if (provider === "openai-compatible" && isCompatModelId(modelId)) {
       return getCompatModelInfo(modelId, customEndpoints);
     }
-    if (isLocalProvider(provider)) {
-      return (
-        MODELS.find((m) => m.provider === provider) ??
-        fallbackModel
-      );
+    if (isLocalProvider(provider) && configuredIds.has(provider)) {
+      const found = local.find((m) => m.provider === provider);
+      return found ?? items[0] ?? fallbackModel;
     }
-    return (
-      MODELS.find((m) => m.provider === provider && m.id === modelId) ??
-      MODELS.find((m) => m.id === modelId) ??
-      fallbackModel
+    const foundCloud = eligible.find(
+      (m) => m.provider === provider && m.id === modelId,
     );
-  }, [fallbackModel, provider, modelId, customEndpoints]);
+    return foundCloud ?? items[0] ?? fallbackModel;
+  }, [items, provider, modelId, customEndpoints, configuredIds, local, eligible, fallbackModel]);
 
   const setModel = (id: string, providerId: ProviderId) => {
     void setAutocompleteProvider(providerId);
@@ -1094,6 +1098,26 @@ function AutocompleteRow({
       providerId === "openai-compatible" || !isLocalProvider(providerId);
     void setAutocompleteModelId(keep ? id : "");
   };
+
+  useEffect(() => {
+    if (items.length > 0) {
+      const isCurrentConfigured =
+        (provider === "openai-compatible" &&
+          isCompatModelId(modelId) &&
+          compatItems.some((c) => c.id === modelId)) ||
+        (isLocalProvider(provider) && configuredIds.has(provider)) ||
+        (!isLocalProvider(provider) &&
+          configuredIds.has(provider) &&
+          eligible.some((e) => e.provider === provider && e.id === modelId));
+
+      if (!isCurrentConfigured) {
+        const first = items[0];
+        if (first) {
+          setModel(first.id, first.provider);
+        }
+      }
+    }
+  }, [items, provider, modelId, configuredIds, compatItems, eligible]);
 
   const grouped = useMemo(() => {
     const map = new Map<ProviderId, (typeof items)[number][]>();
@@ -1191,16 +1215,22 @@ function AutocompleteRow({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                disabled={disabled || !enabled}
+                disabled={disabled || !enabled || items.length === 0}
                 className="h-8 flex-1 justify-between gap-2 px-2.5 text-[11.5px]"
               >
-                <span className="flex items-center gap-2 truncate">
-                  <ProviderIcon provider={currentModel.provider} size={12} />
-                  <span className="truncate">{currentModel.label}</span>
-                  <span className="text-muted-foreground">
-                    · {getLocalizedModelHint(currentModel, t)}
+                {items.length > 0 ? (
+                  <span className="flex items-center gap-2 truncate">
+                    <ProviderIcon provider={currentModel.provider} size={12} />
+                    <span className="truncate">{currentModel.label}</span>
+                    <span className="text-muted-foreground">
+                      · {getLocalizedModelHint(currentModel, t)}
+                    </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {t("settings.models.noProvidersConnected")}
+                  </span>
+                )}
                 <HugeiconsIcon
                   icon={ArrowDown01Icon}
                   size={11}
@@ -1214,30 +1244,28 @@ function AutocompleteRow({
               collisionPadding={12}
               className="max-h-72 min-w-70 overflow-y-auto"
             >
-              {PROVIDERS.map((p) => {
+              {PROVIDERS.filter(
+                (p) =>
+                  configuredIds.has(p.id) ||
+                  (p.id === "openai-compatible" && compatItems.length > 0),
+              ).map((p) => {
                 const list = grouped.get(p.id);
                 if (!list || list.length === 0) return null;
-                const pConfigured =
-                  p.id === "openai-compatible" || configuredIds.has(p.id);
                 return (
                   <div key={p.id} className="px-1 pt-1.5 first:pt-1">
                     <div className="mb-0.5 flex items-center gap-1.5 px-2 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
                       <ProviderIcon provider={p.id} size={11} />
                       <span>{p.label}</span>
-                      {!pConfigured ? (
-                        <span className="ml-auto text-[9.5px] normal-case tracking-normal text-muted-foreground/70">
-                          {t("settings.models.notConnected")}
-                        </span>
-                      ) : null}
                     </div>
                     {list.map((m) => (
                       <DropdownMenuItem
                         key={m.id}
-                        disabled={!pConfigured}
-                        onSelect={() => pConfigured && setModel(m.id, p.id)}
+                        onSelect={() => setModel(m.id, p.id)}
                         className={cn(
                           "text-[11.5px]",
-                          m.id === modelId && "bg-accent/50",
+                          (m.id === modelId ||
+                            (isLocalProvider(p.id) && p.id === provider)) &&
+                            "bg-accent/50",
                         )}
                       >
                         <span className="flex flex-col">
