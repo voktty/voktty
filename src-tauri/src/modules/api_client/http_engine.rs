@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, Response};
 
 // Global cancellation map for in-flight requests
-static ACTIVE_CANCELLATIONS: std::sync::LazyLock<
-    Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<()>>>>,
-> = std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+type CancellationMap = Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<()>>>>;
+static ACTIVE_CANCELLATIONS: std::sync::LazyLock<CancellationMap> =
+    std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 pub fn cancel_in_flight_request(request_id: &str) -> bool {
     let mut map = ACTIVE_CANCELLATIONS.lock().unwrap();
