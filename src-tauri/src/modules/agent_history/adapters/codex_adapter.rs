@@ -1,4 +1,4 @@
-﻿use super::{AgentHistoryAdapter, SessionLocation};
+use super::{AgentHistoryAdapter, SessionLocation};
 use crate::modules::agent_history::models::{HistoryMessage, HistorySession};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -33,6 +33,27 @@ impl CodexAdapter {
                 }
             }
         }
+    }
+
+    fn extract_codex_uuid(raw: &str) -> Option<String> {
+        let chars: Vec<char> = raw.chars().collect();
+        if chars.len() >= 36 {
+            for start in 0..=(chars.len() - 36) {
+                let candidate: String = chars[start..start + 36].iter().collect();
+                let parts: Vec<&str> = candidate.split('-').collect();
+                if parts.len() == 5
+                    && parts[0].len() == 8
+                    && parts[1].len() == 4
+                    && parts[2].len() == 4
+                    && parts[3].len() == 4
+                    && parts[4].len() == 12
+                    && parts.iter().all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
+                {
+                    return Some(candidate);
+                }
+            }
+        }
+        None
     }
 }
 
@@ -184,6 +205,8 @@ impl AgentHistoryAdapter for CodexAdapter {
             format!("Codex Session {}", &stem[..stem.len().min(8)])
         };
 
+        let resume_uuid = Self::extract_codex_uuid(&stem).unwrap_or_else(|| stem.clone());
+
         let session = HistorySession {
             id: session_id,
             agent: "codex".to_string(),
@@ -199,13 +222,66 @@ impl AgentHistoryAdapter for CodexAdapter {
             file_path: Some(path.to_string_lossy().to_string()),
             source_hash: Some(loc.source_hash),
             can_resume: true,
-            resume_command: Some(format!("codex resume {}", stem)),
+            resume_command: Some(format!("codex resume {}", resume_uuid)),
         };
 
         Some((session, messages))
     }
 
     fn resume_command(&self, session: &HistorySession) -> Option<String> {
-        session.resume_command.clone()
+        if let Some(ref cmd) = session.resume_command {
+            if let Some(uuid) = Self::extract_codex_uuid(cmd) {
+                return Some(format!("codex resume {}", uuid));
+            }
+            return Some(cmd.clone());
+        }
+        if let Some(uuid) = Self::extract_codex_uuid(&session.id) {
+            return Some(format!("codex resume {}", uuid));
+        }
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_codex_uuid() {
+        let raw = "rollout-2026-08-27T13-07-30-01a042e7-4d7d-72f2-885c-832fbd15883d";
+        assert_eq!(
+            CodexAdapter::extract_codex_uuid(raw),
+            Some("01a042e7-4d7d-72f2-885c-832fbd15883d".to_string())
+        );
+
+        let cmd = "codex resume rollout-2026-08-27T13-07-30-01a042e7-4d7d-72f2-885c-832fbd15883d";
+        assert_eq!(
+            CodexAdapter::extract_codex_uuid(cmd),
+            Some("01a042e7-4d7d-72f2-885c-832fbd15883d".to_string())
+        );
+
+        let session = HistorySession {
+            id: "codex_rollout-2026-08-27T13-07-30-01a042e7-4d7d-72f2-885c-832fbd15883d".to_string(),
+            agent: "codex".to_string(),
+            title: "Test".to_string(),
+            project_name: "Test".to_string(),
+            project_path: "/test".to_string(),
+            cwd: None,
+            git_branch: None,
+            created_at: 0,
+            updated_at: 0,
+            message_count: 0,
+            is_active: false,
+            file_path: None,
+            source_hash: None,
+            can_resume: true,
+            resume_command: Some("codex resume rollout-2026-08-27T13-07-30-01a042e7-4d7d-72f2-885c-832fbd15883d".to_string()),
+        };
+
+        let adapter = CodexAdapter::new();
+        assert_eq!(
+            adapter.resume_command(&session),
+            Some("codex resume 01a042e7-4d7d-72f2-885c-832fbd15883d".to_string())
+        );
     }
 }
