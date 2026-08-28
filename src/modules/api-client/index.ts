@@ -1,11 +1,14 @@
 export * from "./types";
 export * from "./lib/presets";
 export * from "./lib/curlParser";
+export * from "./lib/postmanParser";
+export * from "./lib/apiDiscovery";
 export * from "./lib/apiTauriBridge";
 export * from "./lib/markdownReceipt";
 export * from "./store/apiClientStore";
 export { ApiClientView } from "./components/ApiClientView";
 export { ApiClientStack } from "./components/ApiClientStack";
+export { ApiCollectionExplorer } from "./components/ApiCollectionExplorer";
 export { RequestEditor } from "./components/RequestEditor";
 export { ResponseViewer } from "./components/ResponseViewer";
 export { SandboxProbePanel } from "./components/SandboxProbePanel";

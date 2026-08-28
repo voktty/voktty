@@ -18,7 +18,7 @@ import { useApiClientStore } from "../store/apiClientStore";
 
 export function ResponseViewer() {
   const aiAvailable = useAiAvailable();
-  const { activeResponse, activeRequest, isLoading } = useApiClientStore();
+  const { activeResponse, activeRequest, isLoading, cancelRequest } = useApiClientStore();
   const [activeTab, setActiveTab] = useState<"body" | "headers" | "timings">("body");
   const [viewMode, setViewMode] = useState<"pretty" | "raw">("pretty");
 
@@ -26,7 +26,15 @@ export function ResponseViewer() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-background/50 p-6 text-muted-foreground">
         <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <span className="text-xs">Executing request...</span>
+        <span className="text-xs">Executing request via native Rust engine...</span>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void cancelRequest()}
+          className="h-7 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+        >
+          Cancel Request
+        </Button>
       </div>
     );
   }
@@ -215,22 +223,91 @@ Please search my workspace for where this route handler or webhook is implemente
           </div>
         </TabsContent>
 
-        {/* TIMINGS */}
-        <TabsContent value="timings" className="m-0 min-h-0 flex-1 p-3">
-          <div className="flex flex-col gap-2 text-xs">
+        {/* TIMINGS & NETWORK TIMELINE */}
+        <TabsContent value="timings" className="m-0 min-h-0 flex-1 overflow-auto p-3">
+          <div className="flex flex-col gap-3 text-xs">
+            {/* Visual Timeline Bar */}
+            {activeResponse.timings.firstByteMs && (
+              <div className="flex flex-col gap-1.5 rounded-lg border border-border/40 bg-muted/20 p-2.5">
+                <span className="text-[11px] font-semibold text-foreground">Network Phase Breakdown</span>
+                <div className="flex h-2.5 w-full overflow-hidden rounded bg-muted/60">
+                  <div
+                    style={{
+                      width: `${Math.max(
+                        5,
+                        Math.min(
+                          95,
+                          ((activeResponse.timings.firstByteMs || 0) /
+                            (activeResponse.timings.totalDurationMs || 1)) *
+                            100,
+                        ),
+                      )}%`,
+                    }}
+                    className="bg-indigo-500"
+                    title={`TTFB: ${(activeResponse.timings.firstByteMs || 0).toFixed(1)}ms`}
+                  />
+                  <div
+                    style={{
+                      width: `${Math.max(
+                        5,
+                        Math.min(
+                          95,
+                          (((activeResponse.timings.downloadMs || 0) /
+                            (activeResponse.timings.totalDurationMs || 1)) *
+                            100),
+                        ),
+                      )}%`,
+                    }}
+                    className="bg-emerald-500"
+                    title={`Content Download: ${(activeResponse.timings.downloadMs || 0).toFixed(1)}ms`}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-indigo-500" />
+                    <span>TTFB (Server Processing)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-emerald-500" />
+                    <span>Content Download</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
+              <span className="text-muted-foreground">Time to First Byte (TTFB):</span>
+              <span className="font-mono font-medium text-foreground">
+                {activeResponse.timings.firstByteMs
+                  ? `${activeResponse.timings.firstByteMs.toFixed(2)} ms`
+                  : "N/A"}
+              </span>
+            </div>
+
+            {activeResponse.timings.downloadMs && (
+              <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
+                <span className="text-muted-foreground">Content Download Duration:</span>
+                <span className="font-mono font-medium text-foreground">
+                  {activeResponse.timings.downloadMs.toFixed(2)} ms
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
               <span className="text-muted-foreground">Total Roundtrip Latency:</span>
-              <span className="font-mono font-semibold text-foreground">
+              <span className="font-mono font-semibold text-emerald-500">
                 {activeResponse.timings.totalDurationMs.toFixed(2)} ms
               </span>
             </div>
+
             <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
               <span className="text-muted-foreground">Payload Size:</span>
               <span className="font-mono text-foreground">{activeResponse.bodyBytesLen} bytes</span>
             </div>
+
             <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-              <span className="text-muted-foreground">CORS Bypass:</span>
-              <span className="font-mono text-emerald-500">Native Rust reqwest (Active)</span>
+              <span className="text-muted-foreground">Transport Engine:</span>
+              <span className="font-mono text-emerald-500">Native Rust Async Engine (No CORS restrictions)</span>
             </div>
           </div>
         </TabsContent>
