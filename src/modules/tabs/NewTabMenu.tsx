@@ -17,12 +17,14 @@ import {
 import { fmtShortcut, MOD_KEY, SHIFT_KEY } from "@/lib/platform";
 import { AgentLauncherPanel } from "@/modules/agents/components/AgentLauncherPanel";
 import type { AgentLaunchRequest } from "@/modules/agents/lib/launcher";
+import { useAgentHistoryStore } from "@/modules/agent-history";
 import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import { useTranslation } from "@/modules/i18n";
 import { useChatStore } from "@/modules/ai/store/chatStore";
 import {
   AiBrowserIcon,
   type ArrowRight01Icon,
+  Clock01Icon,
   ComputerScreenShareIcon,
   ComputerTerminal02Icon,
   File02Icon,
@@ -510,6 +512,21 @@ export function NewTabMenuItems({
           shortcut={fmtShortcut(MOD_KEY, SHIFT_KEY, "A")}
         />
       )}
+
+      {/* 8. Agent Operational History */}
+      <NewTabMenuItem
+        onSelect={() => useAgentHistoryStore.getState().openHistory()}
+        customIcon={
+          <HugeiconsIcon
+            icon={Clock01Icon}
+            size={14}
+            strokeWidth={1.75}
+            className="shrink-0 text-purple-400"
+          />
+        }
+        label="Agent Operational History"
+        shortcut={fmtShortcut(MOD_KEY, SHIFT_KEY, "H")}
+      />
 
       {/* 7. Acceso a Archivos */}
       {(onOpenFile || onOpenFolder) && (

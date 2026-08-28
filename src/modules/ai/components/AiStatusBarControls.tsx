@@ -10,6 +10,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Spinner } from "@/components/ui/spinner";
 import { fmtShortcut, MOD_KEY } from "@/lib/platform";
 import { cn } from "@/lib/utils";
+import { useAgentHistoryStore } from "@/modules/agent-history";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
   Add01Icon,
@@ -206,6 +207,13 @@ export function AiStatusBarControls({
       )}
 
       <ModelDropdown compact={compact} />
+
+      <IconBtn
+        title="Agent Operational History (Ctrl+Shift+H)"
+        onClick={() => useAgentHistoryStore.getState().openHistory()}
+      >
+        <HugeiconsIcon icon={Clock01Icon} size={13} strokeWidth={1.75} />
+      </IconBtn>
 
       {!hidePanelClose && (
         <>

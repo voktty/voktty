@@ -32,6 +32,7 @@ import {
   nextAttentionTarget,
   validateAgentLaunchCommand,
 } from "@/modules/agents";
+import { AgentHistoryModal } from "@/modules/agent-history";
 import {
   AgentRunBridge,
   AiSidebarPanel,
@@ -4416,6 +4417,7 @@ export default function App() {
           <UpdaterDialog />
           <SettingsModal />
           <CommandHistoryModal />
+          <AgentHistoryModal />
           <OnboardingWizard
             open={onboardingOpen}
             onOpenChange={setOnboardingOpen}
