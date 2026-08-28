@@ -140,9 +140,7 @@ pub async fn fs_read_dir(
 ) -> Result<Vec<DirEntry>, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
     match &workspace {
-        WorkspaceEnv::Ssh { connection, .. } => {
-            read_ssh_dir(connection, &path, show_hidden).await
-        }
+        WorkspaceEnv::Ssh { connection, .. } => read_ssh_dir(connection, &path, show_hidden).await,
         WorkspaceEnv::Docker { container_id, .. } => {
             read_docker_dir(container_id, &path, show_hidden).await
         }
