@@ -1,8 +1,9 @@
-﻿use super::{AgentHistoryAdapter, SessionLocation};
+use super::{AgentHistoryAdapter, SessionLocation};
 use crate::modules::agent_history::models::{HistoryMessage, HistorySession};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+#[derive(Default)]
 pub struct GeminiAdapter;
 
 impl GeminiAdapter {
@@ -133,10 +134,10 @@ impl AgentHistoryAdapter for GeminiAdapter {
                 // Look for workspace path in metadata if not yet found
                 if project_path.is_empty() {
                     if let Some(idx_cwd) = content_str.find("C:\\") {
-                        let end_idx = content_str[idx_cwd..].find(|c: char| c == '\n' || c == '<' || c == '"' || c == ']').unwrap_or(30);
+                        let end_idx = content_str[idx_cwd..].find(['\n', '<', '"', ']']).unwrap_or(30);
                         project_path = content_str[idx_cwd..idx_cwd + end_idx].trim().to_string();
                     } else if let Some(idx_cwd) = content_str.find("/Users/") {
-                        let end_idx = content_str[idx_cwd..].find(|c: char| c == '\n' || c == '<' || c == '"' || c == ']').unwrap_or(30);
+                        let end_idx = content_str[idx_cwd..].find(['\n', '<', '"', ']']).unwrap_or(30);
                         project_path = content_str[idx_cwd..idx_cwd + end_idx].trim().to_string();
                     }
                 }

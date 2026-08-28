@@ -1142,10 +1142,11 @@ mod tests {
         assert_eq!(params["focus"], false);
         assert_eq!(
             params["path"],
-            std::fs::canonicalize(file.path())
-                .expect("canonical temp path")
-                .to_string_lossy()
-                .as_ref()
+            strip_verbatim(
+                &std::fs::canonicalize(file.path()).expect("canonical temp path")
+            )
+            .to_string_lossy()
+            .as_ref()
         );
     }
 

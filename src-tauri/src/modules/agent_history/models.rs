@@ -1,4 +1,4 @@
-﻿use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -26,9 +26,13 @@ impl AgentType {
             AgentType::Custom(s) => s.as_str(),
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+impl std::str::FromStr for AgentType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
             "voktty" => AgentType::Voktty,
             "claude" | "claude_code" | "claudecode" => AgentType::Claude,
             "codex" => AgentType::Codex,
@@ -37,7 +41,7 @@ impl AgentType {
             "kimi" | "kimi_code" => AgentType::Kimi,
             "opencode" => AgentType::OpenCode,
             other => AgentType::Custom(other.to_string()),
-        }
+        })
     }
 }
 
@@ -78,15 +82,19 @@ impl MessageRole {
             MessageRole::Tool => "tool",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+impl std::str::FromStr for MessageRole {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
             "user" | "human" => MessageRole::User,
             "assistant" | "model" | "bot" => MessageRole::Assistant,
             "system" => MessageRole::System,
             "tool" | "tool_result" | "function" => MessageRole::Tool,
             _ => MessageRole::Assistant,
-        }
+        })
     }
 }
 

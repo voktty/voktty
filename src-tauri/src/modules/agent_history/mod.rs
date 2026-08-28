@@ -16,6 +16,12 @@ pub struct AgentHistoryState {
     initialized: Mutex<bool>,
 }
 
+impl Default for AgentHistoryState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentHistoryState {
     pub fn new() -> Self {
         let db_path = HistoryDb::default_db_path().unwrap_or_else(|| std::path::PathBuf::from("agent_history.db"));
@@ -129,7 +135,7 @@ pub async fn agent_history_export_markdown(
             if let Some(out) = m.tool_output {
                 md.push_str(&format!("*Output:*\n```\n{}\n```\n", out));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
     }
 
