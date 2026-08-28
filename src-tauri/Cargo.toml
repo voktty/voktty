@@ -111,6 +111,9 @@ ironrdp-session = "0.8"
 ironrdp-graphics = "0.8"
 ironrdp-cliprdr = "0.7"
 ironrdp-tls = { version = "0.2", features = ["rustls"] }
+rusqlite = { version = "0.33", features = ["bundled"] }
+regex = "1"
+chrono = "0.4"
 
 [dev-dependencies]
 proptest = "1"
