@@ -874,6 +874,13 @@ function InboxDetail({
     ? item.teamName || item.repo
     : item.repo || projectName(item.projectPath);
   const markdownCwd = linear ? startProject || cwd : item.projectPath || cwd;
+  const authorName = details?.author?.trim() ?? "";
+  const extraAssignees = item.assignees.filter(
+    (person) =>
+      !authorName ||
+      person.login.trim().toLowerCase() !== authorName.toLowerCase(),
+  );
+  const showAssignment = extraAssignees.length > 0 || item.assignees.length === 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -963,24 +970,40 @@ function InboxDetail({
           {item.title}
         </h1>
         <div className="flex flex-wrap items-center gap-2 text-[12px] text-content/50">
-          {item.assignees.length > 0 ? (
-            <span className="flex min-w-0 flex-wrap items-center gap-2">
-              {item.assignees.map((person) => (
-                <InboxPerson
-                  key={person.login}
-                  name={person.login}
-                  avatarUrl={inboxPersonAvatarUrl(
-                    item.provider,
-                    person.login,
-                    person.avatarUrl,
-                  )}
-                  size={16}
-                />
-              ))}
-            </span>
-          ) : (
-            <span>Unassigned</span>
-          )}
+          {authorName ? (
+            <InboxPerson
+              name={authorName}
+              avatarUrl={inboxPersonAvatarUrl(
+                item.provider,
+                authorName,
+                details?.authorAvatarUrl,
+              )}
+              size={16}
+            />
+          ) : null}
+          {showAssignment ? (
+            <>
+              {authorName ? <span aria-hidden>·</span> : null}
+              {extraAssignees.length > 0 ? (
+                <span className="flex min-w-0 flex-wrap items-center gap-2">
+                  {extraAssignees.map((person) => (
+                    <InboxPerson
+                      key={person.login}
+                      name={person.login}
+                      avatarUrl={inboxPersonAvatarUrl(
+                        item.provider,
+                        person.login,
+                        person.avatarUrl,
+                      )}
+                      size={16}
+                    />
+                  ))}
+                </span>
+              ) : (
+                <span>Unassigned</span>
+              )}
+            </>
+          ) : null}
           {linear ? null : (
             <>
               <span aria-hidden>·</span>
@@ -1101,26 +1124,10 @@ function InboxDetail({
         </div>
       ) : error ? (
         <p className="text-[13px] text-content/50">{error}</p>
+      ) : details?.body.trim() ? (
+        <AgentMarkdown text={details.body} cwd={markdownCwd} />
       ) : (
-        <div>
-          {details?.author ? (
-            <InboxPerson
-              name={details.author}
-              avatarUrl={inboxPersonAvatarUrl(
-                item.provider,
-                details.author,
-                details.authorAvatarUrl,
-              )}
-              size={20}
-              className="mb-3 text-[12px] text-content/45"
-            />
-          ) : null}
-          {details?.body.trim() ? (
-            <AgentMarkdown text={details.body} cwd={markdownCwd} />
-          ) : (
-            <p className="text-[13px] text-content/45">No description</p>
-          )}
-        </div>
+        <p className="text-[13px] text-content/45">No description</p>
       )}
     </div>
   );
