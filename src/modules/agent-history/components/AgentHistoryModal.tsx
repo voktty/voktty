@@ -1,11 +1,5 @@
-import { Badge } from "@/components/ui/badge";
+﻿import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { cn } from "@/lib/utils";
@@ -38,10 +32,10 @@ const AGENT_BADGES: Record<string, { bg: string; text: string; label: string }> 
   kimi: { bg: "bg-teal-500/15", text: "text-teal-400", label: "Kimi" },
 };
 
-const DEFAULT_WIDTH = 1120;
-const DEFAULT_HEIGHT = 720;
+const DEFAULT_WIDTH = 1100;
+const DEFAULT_HEIGHT = 700;
 const MIN_WIDTH = 680;
-const MIN_HEIGHT = 460;
+const MIN_HEIGHT = 450;
 
 export function AgentHistoryModal() {
   const {
@@ -94,65 +88,42 @@ export function AgentHistoryModal() {
     setSearchQuery("");
   };
 
-  // Resizing state
-  const isResizingRef = useRef(false);
-  const resizeStartRef = useRef({
-    x: 0,
-    y: 0,
-    width: size.width,
-    height: size.height,
-    direction: "both" as "both" | "x" | "y",
-  });
+  // Resizing handler with pointer capture
+  const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (isMaximized) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-  const handleResizeStart = useCallback(
-    (e: React.PointerEvent, direction: "both" | "x" | "y") => {
-      if (isMaximized) return;
-      e.preventDefault();
-      e.stopPropagation();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
 
-      isResizingRef.current = true;
-      resizeStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        width: size.width,
-        height: size.height,
-        direction,
-      };
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = size.width;
+    const startHeight = size.height;
 
-      const handlePointerMove = (ev: PointerEvent) => {
-        if (!isResizingRef.current) return;
-        const deltaX = ev.clientX - resizeStartRef.current.x;
-        const deltaY = ev.clientY - resizeStartRef.current.y;
+    const onPointerMove = (ev: PointerEvent) => {
+      const deltaX = ev.clientX - startX;
+      const deltaY = ev.clientY - startY;
 
-        const maxAllowedW = window.innerWidth - 30;
-        const maxAllowedH = window.innerHeight - 30;
+      const maxW = window.innerWidth - 32;
+      const maxH = window.innerHeight - 32;
 
-        setSize((prev) => {
-          let nextW = prev.width;
-          let nextH = prev.height;
+      setSize({
+        width: Math.max(MIN_WIDTH, Math.min(maxW, startWidth + deltaX)),
+        height: Math.max(MIN_HEIGHT, Math.min(maxH, startHeight + deltaY)),
+      });
+    };
 
-          if (resizeStartRef.current.direction === "both" || resizeStartRef.current.direction === "x") {
-            nextW = Math.max(MIN_WIDTH, Math.min(maxAllowedW, resizeStartRef.current.width + deltaX * 2));
-          }
-          if (resizeStartRef.current.direction === "both" || resizeStartRef.current.direction === "y") {
-            nextH = Math.max(MIN_HEIGHT, Math.min(maxAllowedH, resizeStartRef.current.height + deltaY * 2));
-          }
+    const onPointerUp = (ev: PointerEvent) => {
+      target.releasePointerCapture(ev.pointerId);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
 
-          return { width: nextW, height: nextH };
-        });
-      };
-
-      const handlePointerUp = () => {
-        isResizingRef.current = false;
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
-      };
-
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
-    },
-    [size, isMaximized],
-  );
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }, [size, isMaximized]);
 
   const toggleMaximize = useCallback(() => {
     setIsMaximized((prev) => {
@@ -169,6 +140,9 @@ export function AgentHistoryModal() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "h") {
         e.preventDefault();
         useAgentHistoryStore.getState().toggleHistory();
+      }
+      if (e.key === "Escape" && useAgentHistoryStore.getState().isOpen) {
+        useAgentHistoryStore.getState().closeHistory();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -210,32 +184,29 @@ export function AgentHistoryModal() {
     }
   };
 
-  const modalStyle = isMaximized
-    ? {
-        width: "calc(100vw - 32px)",
-        height: "calc(100vh - 32px)",
-        transform: "translate3d(0, 0, 0)",
-      }
-    : {
-        width: `${size.width}px`,
-        height: `${size.height}px`,
-        maxWidth: "calc(100vw - 24px)",
-        maxHeight: "calc(100vh - 24px)",
-        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
-      };
-
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && closeHistory()}>
-      <DialogContent
-        showCloseButton={false}
-        className="!max-w-none !w-auto !h-auto sm:!max-w-none flex flex-col p-0 gap-0 overflow-hidden bg-card text-card-foreground border border-border/80 shadow-2xl rounded-xl transition-shadow select-none"
-        style={modalStyle}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 sm:p-4 duration-150 animate-in fade-in-0"
+      onClick={closeHistory}
+    >
+      <div
+        className="relative flex flex-col rounded-xl border border-border/80 bg-card text-foreground shadow-2xl overflow-hidden select-none transition-shadow duration-150 animate-in zoom-in-95"
+        style={{
+          width: isMaximized ? "calc(100vw - 32px)" : `${size.width}px`,
+          height: isMaximized ? "calc(100vh - 32px)" : `${size.height}px`,
+          maxWidth: "calc(100vw - 24px)",
+          maxHeight: "calc(100vh - 24px)",
+          transform: isMaximized ? "none" : `translate3d(${position.x}px, ${position.y}px, 0)`,
+        }}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         {/* Draggable Header Bar */}
-        <DialogHeader
+        <div
           {...dragHandleProps}
           onDoubleClick={toggleMaximize}
-          className="h-11 shrink-0 px-4 border-b border-border/60 bg-muted/40 flex-row items-center justify-between space-y-0 cursor-grab active:cursor-grabbing select-none"
+          className="h-11 shrink-0 px-4 border-b border-border/60 bg-muted/40 flex items-center justify-between space-y-0 cursor-grab active:cursor-grabbing select-none"
         >
           <div className="flex items-center gap-2.5 pointer-events-none min-w-0">
             <HugeiconsIcon
@@ -244,9 +215,9 @@ export function AgentHistoryModal() {
               strokeWidth={2}
               className="text-primary shrink-0"
             />
-            <DialogTitle className="text-xs font-semibold tracking-tight text-foreground truncate">
+            <span className="text-xs font-semibold tracking-tight text-foreground truncate">
               Agent Operational History & Recovery
-            </DialogTitle>
+            </span>
             {stats && (
               <Badge variant="outline" className="hidden sm:inline-flex text-[10px] text-muted-foreground font-mono shrink-0">
                 {stats.total_sessions} sessions · {stats.total_messages} messages
@@ -302,12 +273,12 @@ export function AgentHistoryModal() {
               <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} />
             </Button>
           </div>
-        </DialogHeader>
+        </div>
 
         {/* 2-Column Workspace */}
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-          {/* Left Column: Session Browser & Filters (320px) */}
-          <div className="flex w-80 min-w-80 max-w-80 shrink-0 flex-col border-r border-border/60 bg-muted/20 overflow-hidden">
+          {/* Left Column: Session Browser & Filters (310px) */}
+          <div className="flex w-78 min-w-78 max-w-78 shrink-0 flex-col border-r border-border/60 bg-muted/20 overflow-hidden">
             {/* Search Box */}
             <div className="relative border-b border-border/40 p-2 shrink-0">
               <HugeiconsIcon
@@ -416,7 +387,7 @@ export function AgentHistoryModal() {
                       </span>
 
                       <div className="flex items-center justify-between text-[10.5px] text-muted-foreground mt-0.5">
-                        <span className="truncate max-w-[150px]">📁 {s.project_name}</span>
+                        <span className="truncate max-w-[140px]">📁 {s.project_name}</span>
                         <span>{s.message_count} msgs</span>
                       </div>
                     </div>
@@ -481,7 +452,7 @@ export function AgentHistoryModal() {
                 </div>
 
                 {/* Message Timeline */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 select-text min-h-0">
+                <div className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-3 select-text">
                   {isLoading ? (
                     <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
                       <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
@@ -500,12 +471,12 @@ export function AgentHistoryModal() {
                         <div
                           key={msg.id}
                           className={cn(
-                            "flex flex-col gap-1.5 rounded-lg border p-3 text-xs leading-relaxed overflow-hidden",
+                            "flex flex-col gap-1.5 rounded-lg border p-3 text-xs leading-relaxed max-w-full overflow-hidden",
                             isUser
-                              ? "border-primary/40 bg-primary/5 ml-6"
+                              ? "border-primary/40 bg-primary/5 ml-4"
                               : isTool
-                                ? "border-amber-500/30 bg-amber-500/5 mx-2"
-                                : "border-border/70 bg-card mr-6",
+                                ? "border-amber-500/30 bg-amber-500/5 mx-1"
+                                : "border-border/70 bg-card mr-4",
                           )}
                         >
                           {/* Message Header */}
@@ -540,19 +511,19 @@ export function AgentHistoryModal() {
 
                           {/* Message Content */}
                           {msg.content && (
-                            <div className="whitespace-pre-wrap font-sans text-foreground/90 leading-relaxed break-words overflow-hidden">
+                            <div className="whitespace-pre-wrap break-words overflow-hidden [word-break:break-word] font-sans text-foreground/90 leading-relaxed max-w-full">
                               {msg.content}
                             </div>
                           )}
 
                           {/* Tool Invocations Accordion */}
                           {msg.tool_name && (
-                            <div className="mt-1 rounded border border-border/50 bg-muted/30 overflow-hidden">
+                            <div className="mt-1 rounded border border-border/50 bg-muted/30 overflow-hidden max-w-full">
                               <div
                                 onClick={() => toggleTool(msg.id)}
                                 className="flex cursor-pointer items-center justify-between px-2.5 py-1 text-[11px] font-mono text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                               >
-                                <div className="flex items-center gap-1.5 truncate">
+                                <div className="flex items-center gap-1.5 truncate min-w-0">
                                   <HugeiconsIcon
                                     icon={expandedTools[msg.id] ? ArrowDown01Icon : ArrowRight01Icon}
                                     size={11}
@@ -567,20 +538,20 @@ export function AgentHistoryModal() {
                               </div>
 
                               {expandedTools[msg.id] && (
-                                <div className="border-t border-border/40 p-2 space-y-2 text-[10.5px] font-mono">
+                                <div className="border-t border-border/40 p-2 space-y-2 text-[10.5px] font-mono max-w-full overflow-hidden">
                                   {msg.tool_input && (
-                                    <div>
+                                    <div className="max-w-full overflow-hidden">
                                       <div className="text-muted-foreground/60 mb-0.5">Input:</div>
-                                      <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all">
+                                      <pre className="max-h-40 max-w-full overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all [word-break:break-word]">
                                         {msg.tool_input}
                                       </pre>
                                     </div>
                                   )}
 
                                   {msg.tool_output && (
-                                    <div>
+                                    <div className="max-w-full overflow-hidden">
                                       <div className="text-muted-foreground/60 mb-0.5">Output:</div>
-                                      <pre className="max-h-48 overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all">
+                                      <pre className="max-h-48 max-w-full overflow-auto rounded bg-background p-2 text-foreground border border-border/40 whitespace-pre-wrap break-all [word-break:break-word]">
                                         {msg.tool_output}
                                       </pre>
                                     </div>
@@ -607,29 +578,17 @@ export function AgentHistoryModal() {
           </div>
         </div>
 
-        {/* Resizing Edge & Corner Handles */}
+        {/* Resizing Corner Handle with Pointer Capture */}
         {!isMaximized && (
-          <>
-            {/* Right edge */}
-            <div
-              onPointerDown={(e) => handleResizeStart(e, "x")}
-              className="absolute top-0 right-0 w-2 h-full cursor-ew-resize hover:bg-primary/20 transition-colors z-50"
-            />
-            {/* Bottom edge */}
-            <div
-              onPointerDown={(e) => handleResizeStart(e, "y")}
-              className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize hover:bg-primary/20 transition-colors z-50"
-            />
-            {/* Bottom-right corner */}
-            <div
-              onPointerDown={(e) => handleResizeStart(e, "both")}
-              className="absolute bottom-0 right-0 size-4 cursor-nwse-resize hover:bg-primary/30 z-50 flex items-center justify-center"
-            >
-              <div className="size-2 border-r-2 border-b-2 border-muted-foreground/50 rounded-br-xs" />
-            </div>
-          </>
+          <div
+            onPointerDown={handleResizePointerDown}
+            className="absolute bottom-0 right-0 size-5 cursor-nwse-resize hover:bg-primary/30 z-50 flex items-end justify-end p-1 select-none"
+            title="Drag to resize"
+          >
+            <div className="size-2.5 border-r-2 border-b-2 border-muted-foreground/60 rounded-br-xs pointer-events-none" />
+          </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
