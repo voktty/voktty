@@ -655,6 +655,18 @@ const itBase = mergeLocale(en, {
     editor: "Editor",
     spaces: "Spazi",
     serial: "Seriale",
+    uptime: {
+      title: "Attività del terminale",
+      subtitle: "Tempo sullo schermo e statistiche settimanali",
+      activeNow: "Attivo ora",
+      today: "Oggi",
+      thisWeek: "Questa settimana",
+      dailyAvg: "Media giornaliera",
+      weeklyChart: "Attività settimanale",
+      topPaths: "Cartelle più attive",
+      takeBreak: "Ricordati di fare una breve pausa per riposare gli occhi e sgranchirti!",
+      noPaths: "Nessuna attività registrata finora",
+    },
     stacks: {
       typescript: "TypeScript",
       javascript: "JavaScript",

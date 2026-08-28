@@ -1015,6 +1015,18 @@ export const ar: TranslationSchema = {
     privateHidden: "خاص: مخفي عن الذكاء الاصطناعي",
     privateHiddenTooltip:
       "لا يمكن للذكاء الاصطناعي رؤية مخرجات هذه الطرفية. استخدمها للأسرار أو SSH أو أي شيء لا تريد إرساله للنموذج.",
+    uptime: {
+      title: "نشاط الطرفية",
+      subtitle: "وقت الشاشة والإحصائيات الأسبوعية",
+      activeNow: "نشط الآن",
+      today: "اليوم",
+      thisWeek: "هذا الأسبوع",
+      dailyAvg: "المعدل اليومي",
+      weeklyChart: "النشاط الأسبوعي",
+      topPaths: "أكثر المسارات نشاطاً",
+      takeBreak: "تذكر أن تأخذ استراحة قصيرة لإراحة عينيك والتمدد!",
+      noPaths: "لا يوجد نشاط مسجل بعد",
+    },
     cwd: {
       noDirectory: "لا يوجد دليل",
       home: "الرئيسية",

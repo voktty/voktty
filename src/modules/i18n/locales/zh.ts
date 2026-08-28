@@ -600,6 +600,18 @@ const zhBase = mergeLocale(en, {
     editor: "编辑器",
     spaces: "空间",
     serial: "串口",
+    uptime: {
+      title: "终端活跃度",
+      subtitle: "屏幕时间与每周统计",
+      activeNow: "当前在线",
+      today: "今日",
+      thisWeek: "本周",
+      dailyAvg: "日均",
+      weeklyChart: "每周活跃趋势",
+      topPaths: "最常访问目录",
+      takeBreak: "记得适当休息眼睛，活动一下身体！",
+      noPaths: "暂无记录的活动",
+    },
     stacks: {
       typescript: "TypeScript",
       javascript: "JavaScript",
