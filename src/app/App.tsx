@@ -134,7 +134,7 @@ import {
 } from "@/modules/spaces/lib/contextualInsertion";
 import { planWorkspaceDrop } from "@/modules/spaces/lib/planWorkspaceDrop";
 import { updateSpaceSplitRatio } from "@/modules/spaces/lib/spaceGeometry";
-import type { SlotId } from "@/modules/spaces/lib/spaceLayout";
+import type { SlotId, ViewSpaceId } from "@/modules/spaces/lib/spaceLayout";
 import {
   projectPaneBudget,
   tabAssignmentPaneBudget,
@@ -314,7 +314,6 @@ export default function App() {
     focusPane,
     focusNextPaneInTab,
     swapActivePaneInDirection,
-    splitActivePane,
     closeActivePane,
     closePaneByLeaf,
     toggleTabBlocks,
@@ -2108,13 +2107,60 @@ export default function App() {
     });
   }, [updateTab]);
 
-  const splitActivePaneInActiveTab = useCallback(
-    (dir: "row" | "col") => {
-      const t = tabsRef.current.find((x) => x.id === effectiveActiveId);
-      if (!t || t.kind !== "terminal") return;
-      splitActivePane(effectiveActiveId, dir);
+  const handleDuplicateTab = useCallback(
+    (id: number) => {
+      const source = tabsRef.current.find((tab) => tab.id === id);
+      if (source?.kind !== "terminal") return;
+      const spaceEnv = useSpaces
+        .getState()
+        .spaces.find((space) => space.id === source.spaceId)?.env;
+      const env = source.workspaceEnv ?? spaceEnv ?? LOCAL_WORKSPACE;
+      setWorkspaceEnv(env);
+      const newTabId = duplicateTab(id, env);
+      if (newTabId === null) return;
+
+      const newTab = tabsRef.current.find((t) => t.id === newTabId);
+      if (newTab) {
+        const spaceId = source.spaceId;
+        const viewSpaceId = `view-${spaceId}` as ViewSpaceId;
+        const spacesState = useSpaces.getState();
+        const viewSpace = spacesState.viewSpaces.find(
+          (vs) => vs.id === viewSpaceId,
+        );
+
+        const currentMembers = viewSpace?.memberOrder ?? [];
+        if (
+          viewSpace &&
+          !viewSpace.deleted &&
+          currentMembers.length < spaceViewLimit
+        ) {
+          spacesState.addMemberToViewSpace(
+            viewSpaceId,
+            newTab.tabKey,
+            spaceViewLimit,
+          );
+          spacesState.openViewSpace(viewSpaceId);
+          spacesState.focusVisualMember(newTab.tabKey);
+        } else {
+          spacesState.ensureStandaloneTab(newTab.tabKey);
+          spacesState.focusVisualMember(newTab.tabKey);
+        }
+      }
     },
-    [effectiveActiveId, splitActivePane],
+    [duplicateTab, setWorkspaceEnv, spaceViewLimit],
+  );
+
+  const splitActivePaneInActiveTab = useCallback(
+    (_dir: "row" | "col") => {
+      const t = tabsRef.current.find((x) => x.id === effectiveActiveId);
+      if (!t) return;
+      if (t.kind === "terminal") {
+        handleDuplicateTab(t.id);
+      } else if (t.kind === "editor" && t.path) {
+        openFileTab(t.path, true, { spaceId: t.spaceId });
+      }
+    },
+    [effectiveActiveId, handleDuplicateTab, openFileTab],
   );
 
   const livePaneBounds = useCallback((tabId: number): PaneBounds[] => {
@@ -2230,7 +2276,11 @@ export default function App() {
         }
       },
       "terminal.history": () => {
-        useCommandHistoryStore.getState().openHistory();
+        const leafId =
+          activeTab?.kind === "terminal"
+            ? activeTab.activeLeafId
+            : getActiveTerminalLeafId();
+        useCommandHistoryStore.getState().openHistory("", leafId);
       },
       "blocks.prev": () => navigateFocusedBlocks(-1),
       "blocks.next": () => navigateFocusedBlocks(1),
@@ -2556,19 +2606,7 @@ export default function App() {
     [updateTab],
   );
 
-  const handleDuplicateTab = useCallback(
-    (id: number) => {
-      const source = tabsRef.current.find((tab) => tab.id === id);
-      if (source?.kind !== "terminal") return;
-      const spaceEnv = useSpaces
-        .getState()
-        .spaces.find((space) => space.id === source.spaceId)?.env;
-      const env = source.workspaceEnv ?? spaceEnv ?? LOCAL_WORKSPACE;
-      setWorkspaceEnv(env);
-      duplicateTab(id, env);
-    },
-    [duplicateTab, setWorkspaceEnv],
-  );
+
 
   const searchTarget = useMemo<SearchTarget>(() => {
     if (isTerminalTab && activeLeafId !== null && activeSearchAddon)

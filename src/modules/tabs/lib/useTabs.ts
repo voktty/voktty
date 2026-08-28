@@ -1156,7 +1156,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   );
 
   const duplicateTab = useCallback(
-    (id: number, workspaceEnv?: WorkspaceEnv) => {
+    (id: number, workspaceEnv?: WorkspaceEnv): number | null => {
       const source = tabsRef.current.find((tab) => tab.id === id);
       if (!source || source.kind !== "terminal" || source.collaboration) {
         return null;
@@ -1164,22 +1164,22 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
       const env = workspaceEnv ?? source.workspaceEnv ?? LOCAL_WORKSPACE;
-      setTabs((curr) => [
-        ...curr,
-        {
-          id: tabId,
-          ...createTabIdentity(source.spaceId),
-          kind: "terminal",
-          spaceId: source.spaceId,
-          title: source.title,
-          customTitle: source.customTitle,
-          cwd: source.cwd,
-          paneTree: { kind: "leaf", id: leafId, cwd: source.cwd },
-          activeLeafId: leafId,
-          blocks: source.blocks,
-          workspaceEnv: env,
-        },
-      ]);
+      const identity = createTabIdentity(source.spaceId);
+      const newTab: TerminalTab = {
+        id: tabId,
+        ...identity,
+        kind: "terminal",
+        spaceId: source.spaceId,
+        title: source.title,
+        customTitle: source.customTitle,
+        cwd: source.cwd,
+        paneTree: { kind: "leaf", id: leafId, cwd: source.cwd },
+        activeLeafId: leafId,
+        blocks: source.blocks,
+        workspaceEnv: env,
+      };
+      tabsRef.current = [...tabsRef.current, newTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return tabId;
     },

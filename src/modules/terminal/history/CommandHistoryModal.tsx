@@ -65,6 +65,7 @@ function formatRelativeTime(timestampSec: number): string {
 export function CommandHistoryModal() {
   const { t } = useTranslation();
   const isOpen = useCommandHistoryStore((s) => s.isOpen);
+  const targetLeafId = useCommandHistoryStore((s) => s.targetLeafId);
   const closeHistory = useCommandHistoryStore((s) => s.closeHistory);
   const searchQuery = useCommandHistoryStore((s) => s.searchQuery);
   const setSearchQuery = useCommandHistoryStore((s) => s.setSearchQuery);
@@ -145,7 +146,7 @@ export function CommandHistoryModal() {
 
   const handleInsert = useCallback(
     (cmd: string) => {
-      const leafId = getActiveTerminalLeafId();
+      const leafId = targetLeafId ?? getActiveTerminalLeafId();
       if (leafId !== null) {
         writeToSession(leafId, cmd);
         toast.success(t("terminal.history.insertedToast"), {
@@ -156,12 +157,12 @@ export function CommandHistoryModal() {
         void handleCopy(cmd);
       }
     },
-    [closeHistory, handleCopy, t],
+    [closeHistory, handleCopy, t, targetLeafId],
   );
 
   const handleRun = useCallback(
     (cmd: string) => {
-      const leafId = getActiveTerminalLeafId();
+      const leafId = targetLeafId ?? getActiveTerminalLeafId();
       if (leafId !== null) {
         submitToLeaf(leafId, cmd);
         toast.success(t("terminal.history.executedToast"), {
@@ -172,7 +173,7 @@ export function CommandHistoryModal() {
         void handleCopy(cmd);
       }
     },
-    [closeHistory, handleCopy, t],
+    [closeHistory, handleCopy, t, targetLeafId],
   );
 
   const handleDelete = useCallback(
@@ -430,7 +431,7 @@ export function CommandHistoryModal() {
                 <div
                   key={`${entry.cmd}-${i}`}
                   data-index={i}
-                  onDoubleClick={() => handleCopy(entry.cmd)}
+                  onDoubleClick={() => handleInsert(entry.cmd)}
                   onClick={() => setSelectedIndex(i)}
                   className={`group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md cursor-pointer transition-colors ${
                     isSelected
