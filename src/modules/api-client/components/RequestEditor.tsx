@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
 import {
   Add01Icon,
+  ArrowDown01Icon,
+  ArrowRight01Icon,
   Cancel01Icon,
   CodeIcon,
   Copy01Icon,
@@ -20,7 +22,7 @@ import {
   PlayIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   exportToCurl,
@@ -32,13 +34,17 @@ import { useApiClientStore } from "../store/apiClientStore";
 import type { ApiMethod } from "../types";
 
 const METHOD_COLORS: Record<ApiMethod, string> = {
-  GET: "text-emerald-500 font-bold",
-  POST: "text-blue-500 font-bold",
-  PUT: "text-amber-500 font-bold",
-  PATCH: "text-orange-500 font-bold",
-  DELETE: "text-rose-500 font-bold",
-  HEAD: "text-purple-500 font-bold",
-  OPTIONS: "text-zinc-500 font-bold",
+  GET: "text-blue-400 font-bold",
+  POST: "text-emerald-400 font-bold",
+  PUT: "text-amber-400 font-bold",
+  PATCH: "text-yellow-400 font-bold",
+  DELETE: "text-rose-400 font-bold",
+  HEAD: "text-purple-400 font-bold",
+  OPTIONS: "text-zinc-400 font-bold",
+  GQL: "text-violet-400 font-bold",
+  SSE: "text-teal-400 font-bold",
+  GRPC: "text-indigo-400 font-bold",
+  WS: "text-sky-400 font-bold",
 };
 
 export function RequestEditor() {
@@ -60,6 +66,11 @@ export function RequestEditor() {
     setBearerToken,
     setApiKey,
     setBasicAuth,
+    setOAuth2,
+    setAwsSigV4,
+    setDigestAuth,
+    setRequestVariables,
+    importPostman,
     sendRequest,
     setActiveTab,
     setDiscoveryUrl,
@@ -72,6 +83,16 @@ export function RequestEditor() {
   const [codeLanguage, setCodeLanguage] = useState<"curl" | "fetch" | "python">("curl");
   const [curlImportOpen, setCurlImportOpen] = useState(false);
   const [curlImportText, setCurlImportText] = useState("");
+  const [postmanImportOpen, setPostmanImportOpen] = useState(false);
+  const [postmanImportText, setPostmanImportText] = useState("");
+  const [variablesOpen, setVariablesOpen] = useState(false);
+  const [variablesText, setVariablesText] = useState(
+    JSON.stringify(activeRequest.variables || {}, null, 2),
+  );
+
+  useEffect(() => {
+    setVariablesText(JSON.stringify(activeRequest.variables || {}, null, 2));
+  }, [activeRequest.id, activeRequest.variables]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -100,6 +121,21 @@ export function RequestEditor() {
     toast.success("cURL command imported successfully!");
   };
 
+  const handleImportPostman = () => {
+    try {
+      const { count, name } = importPostman(postmanImportText);
+      if (count === 0) {
+        toast.error("No valid requests found in Postman JSON");
+        return;
+      }
+      setPostmanImportOpen(false);
+      setPostmanImportText("");
+      toast.success(`Imported ${count} requests from collection "${name}"`);
+    } catch (e) {
+      toast.error("Failed to parse Postman collection");
+    }
+  };
+
   const generatedCode =
     codeLanguage === "curl"
       ? exportToCurl(activeRequest)
@@ -119,7 +155,21 @@ export function RequestEditor() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as ApiMethod[]).map((m) => (
+            {(
+              [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "HEAD",
+                "OPTIONS",
+                "GQL",
+                "SSE",
+                "GRPC",
+                "WS",
+              ] as ApiMethod[]
+            ).map((m) => (
               <SelectItem key={m} value={m} className={cn("font-mono text-xs", METHOD_COLORS[m])}>
                 {m}
               </SelectItem>
@@ -166,9 +216,25 @@ export function RequestEditor() {
           variant="outline"
           className="size-8"
           title="Import cURL"
-          onClick={() => setCurlImportOpen(!curlImportOpen)}
+          onClick={() => {
+            setCurlImportOpen(!curlImportOpen);
+            setPostmanImportOpen(false);
+          }}
         >
           <HugeiconsIcon icon={CodeIcon} size={13} strokeWidth={1.75} />
+        </Button>
+
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 px-2 text-xs font-medium"
+          title="Import Postman Collection"
+          onClick={() => {
+            setPostmanImportOpen(!postmanImportOpen);
+            setCurlImportOpen(false);
+          }}
+        >
+          <span>Postman</span>
         </Button>
       </div>
 
@@ -188,6 +254,27 @@ export function RequestEditor() {
             </Button>
             <Button size="sm" onClick={handleImportCurl} className="h-6 text-xs font-medium">
               Import
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Postman Import Drawer */}
+      {postmanImportOpen && (
+        <div className="flex flex-col gap-2 border-b border-border/60 bg-muted/20 p-2.5 text-xs">
+          <span className="font-semibold text-muted-foreground">Import Postman Collection JSON (v2.0 / v2.1):</span>
+          <textarea
+            value={postmanImportText}
+            onChange={(e) => setPostmanImportText(e.target.value)}
+            placeholder='Paste your collection.json exported from Postman here...'
+            className="h-20 w-full rounded border border-border/60 bg-background p-2 font-mono text-[11px] outline-none"
+          />
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setPostmanImportOpen(false)} className="h-6 text-xs">
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleImportPostman} className="h-6 text-xs font-medium">
+              Import Collection
             </Button>
           </div>
         </div>
@@ -325,6 +412,9 @@ export function RequestEditor() {
                 <SelectItem value="bearer">Bearer Token</SelectItem>
                 <SelectItem value="apiKey">API Key</SelectItem>
                 <SelectItem value="basic">Basic Auth</SelectItem>
+                <SelectItem value="oauth2">OAuth 2.0 Token</SelectItem>
+                <SelectItem value="awsSigV4">AWS Signature V4</SelectItem>
+                <SelectItem value="digest">Digest Auth</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -339,6 +429,128 @@ export function RequestEditor() {
                 placeholder="sk_test_..."
                 className="font-mono text-xs"
               />
+            </div>
+          )}
+
+          {activeRequest.authType === "oauth2" && (
+            <div className="flex flex-col gap-2">
+              <div>
+                <span className="text-[11px] text-muted-foreground">Access Token:</span>
+                <Input
+                  type="password"
+                  value={activeRequest.oauth2?.token ?? ""}
+                  onChange={(e) => setOAuth2(e.target.value, activeRequest.oauth2?.tokenType)}
+                  placeholder="oauth2_access_token..."
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-muted-foreground">Token Prefix (optional):</span>
+                <Input
+                  value={activeRequest.oauth2?.tokenType ?? "Bearer"}
+                  onChange={(e) => setOAuth2(activeRequest.oauth2?.token ?? "", e.target.value)}
+                  placeholder="Bearer"
+                  className="font-mono text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          {activeRequest.authType === "awsSigV4" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-[11px] text-muted-foreground">Access Key ID:</span>
+                <Input
+                  value={activeRequest.awsSigV4?.accessKey ?? ""}
+                  onChange={(e) =>
+                    setAwsSigV4({
+                      accessKey: e.target.value,
+                      secretKey: activeRequest.awsSigV4?.secretKey ?? "",
+                      region: activeRequest.awsSigV4?.region ?? "us-east-1",
+                      service: activeRequest.awsSigV4?.service ?? "s3",
+                      sessionToken: activeRequest.awsSigV4?.sessionToken,
+                    })
+                  }
+                  placeholder="AKIA..."
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-muted-foreground">Secret Access Key:</span>
+                <Input
+                  type="password"
+                  value={activeRequest.awsSigV4?.secretKey ?? ""}
+                  onChange={(e) =>
+                    setAwsSigV4({
+                      accessKey: activeRequest.awsSigV4?.accessKey ?? "",
+                      secretKey: e.target.value,
+                      region: activeRequest.awsSigV4?.region ?? "us-east-1",
+                      service: activeRequest.awsSigV4?.service ?? "s3",
+                      sessionToken: activeRequest.awsSigV4?.sessionToken,
+                    })
+                  }
+                  placeholder="Secret key"
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-muted-foreground">AWS Region:</span>
+                <Input
+                  value={activeRequest.awsSigV4?.region ?? "us-east-1"}
+                  onChange={(e) =>
+                    setAwsSigV4({
+                      accessKey: activeRequest.awsSigV4?.accessKey ?? "",
+                      secretKey: activeRequest.awsSigV4?.secretKey ?? "",
+                      region: e.target.value,
+                      service: activeRequest.awsSigV4?.service ?? "s3",
+                      sessionToken: activeRequest.awsSigV4?.sessionToken,
+                    })
+                  }
+                  placeholder="us-east-1"
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-muted-foreground">AWS Service:</span>
+                <Input
+                  value={activeRequest.awsSigV4?.service ?? "s3"}
+                  onChange={(e) =>
+                    setAwsSigV4({
+                      accessKey: activeRequest.awsSigV4?.accessKey ?? "",
+                      secretKey: activeRequest.awsSigV4?.secretKey ?? "",
+                      region: activeRequest.awsSigV4?.region ?? "us-east-1",
+                      service: e.target.value,
+                      sessionToken: activeRequest.awsSigV4?.sessionToken,
+                    })
+                  }
+                  placeholder="s3 / execute-api"
+                  className="font-mono text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          {activeRequest.authType === "digest" && (
+            <div className="flex flex-col gap-2">
+              <div>
+                <span className="text-[11px] text-muted-foreground">Username:</span>
+                <Input
+                  value={activeRequest.digestAuth?.username ?? ""}
+                  onChange={(e) => setDigestAuth(e.target.value, activeRequest.digestAuth?.password ?? "")}
+                  placeholder="user"
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] text-muted-foreground">Password:</span>
+                <Input
+                  type="password"
+                  value={activeRequest.digestAuth?.password ?? ""}
+                  onChange={(e) => setDigestAuth(activeRequest.digestAuth?.username ?? "", e.target.value)}
+                  placeholder="password"
+                  className="font-mono text-xs"
+                />
+              </div>
             </div>
           )}
 
@@ -405,6 +617,7 @@ export function RequestEditor() {
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
                 <SelectItem value="json">JSON (application/json)</SelectItem>
+                <SelectItem value="graphql">GraphQL (application/json)</SelectItem>
                 <SelectItem value="text">Text (text/plain)</SelectItem>
                 <SelectItem value="form-urlencoded">Form URL-encoded</SelectItem>
               </SelectContent>
@@ -415,7 +628,13 @@ export function RequestEditor() {
             <textarea
               value={activeRequest.bodyContent}
               onChange={(e) => setBodyContent(e.target.value)}
-              placeholder={activeRequest.bodyType === "json" ? '{\n  "key": "value"\n}' : "key=value"}
+              placeholder={
+                activeRequest.bodyType === "json"
+                  ? '{\n  "key": "value"\n}'
+                  : activeRequest.bodyType === "graphql"
+                    ? 'query {\n  pokemon(id: 1) {\n    name\n  }\n}'
+                    : "key=value"
+              }
               className="flex-1 resize-none rounded-md border border-border/60 bg-muted/20 p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground outline-none focus:border-primary"
             />
           )}
@@ -453,6 +672,48 @@ export function RequestEditor() {
           </pre>
         </TabsContent>
       </Tabs>
+
+      {/* Collapsible VARIABLES Drawer (Matching modern API clients) */}
+      <div className="border-t border-border/40 bg-muted/10">
+        <div
+          onClick={() => setVariablesOpen(!variablesOpen)}
+          className="flex cursor-pointer items-center justify-between px-3 py-1.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted/20 hover:text-foreground"
+        >
+          <div className="flex items-center gap-1.5">
+            <HugeiconsIcon
+              icon={variablesOpen ? ArrowDown01Icon : ArrowRight01Icon}
+              size={12}
+            />
+            <span className="tracking-wider uppercase">Variables</span>
+          </div>
+          <span className="text-[10px] font-mono text-muted-foreground/60">
+            {Object.keys(activeRequest.variables || {}).length > 0
+              ? `${Object.keys(activeRequest.variables || {}).length} variables`
+              : "None"}
+          </span>
+        </div>
+
+        {variablesOpen && (
+          <div className="border-t border-border/30 p-2">
+            <textarea
+              value={variablesText}
+              onChange={(e) => {
+                setVariablesText(e.target.value);
+                try {
+                  const parsed = JSON.parse(e.target.value);
+                  if (typeof parsed === "object" && parsed !== null) {
+                    setRequestVariables(parsed);
+                  }
+                } catch {
+                  // Invalid JSON while typing is fine
+                }
+              }}
+              placeholder='{ "limit": 6, "offset": 0, "type": "water" }'
+              className="h-20 w-full resize-none rounded border border-border/60 bg-background p-2 font-mono text-[11px] leading-relaxed outline-none focus:border-primary"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

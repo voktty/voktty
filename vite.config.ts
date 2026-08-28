@@ -158,4 +158,8 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  test: {
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: ["**/node_modules/**", "**/PROMPTS/**", "**/src-tauri/**"],
+  },
 }));

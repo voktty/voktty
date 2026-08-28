@@ -27,6 +27,10 @@ const METHOD_BADGES: Record<ApiMethod, string> = {
   DELETE: "bg-rose-500/10 text-rose-500 border-rose-500/30",
   HEAD: "bg-purple-500/10 text-purple-500 border-purple-500/30",
   OPTIONS: "bg-zinc-500/10 text-zinc-500 border-zinc-500/30",
+  GQL: "bg-violet-500/10 text-violet-500 border-violet-500/30",
+  SSE: "bg-teal-500/10 text-teal-500 border-teal-500/30",
+  GRPC: "bg-indigo-500/10 text-indigo-500 border-indigo-500/30",
+  WS: "bg-sky-500/10 text-sky-500 border-sky-500/30",
 };
 
 export function ApiBrowserView() {

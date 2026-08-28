@@ -276,6 +276,18 @@ fn request_without_params(args: Vec<OsString>, method: &'static str) -> Result<A
     )
 }
 
+fn strip_verbatim(path: &std::path::Path) -> PathBuf {
+    let s = path.to_string_lossy();
+    let stripped = if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        s.to_string()
+    };
+    PathBuf::from(stripped)
+}
+
 fn parse_open(args: Vec<OsString>) -> Result<Action, CliError> {
     let mut path: Option<OsString> = None;
     let mut line = None;
@@ -317,6 +329,7 @@ fn parse_open(args: Vec<OsString>) -> Result<Action, CliError> {
             EXIT_USAGE,
         )
     })?;
+    let canonical = strip_verbatim(&canonical);
     if !canonical.is_file() {
         return Err(CliError::new(
             "not_a_file",
@@ -904,6 +917,7 @@ fn open_alias_file(path: &std::path::Path, as_json: bool) -> Result<(), CliError
             EXIT_UNAVAILABLE,
         )
     })?;
+    let canonical = strip_verbatim(&canonical);
     let path = canonical.into_os_string().into_string().map_err(|_| {
         CliError::new(
             "non_utf8_path",

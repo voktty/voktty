@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import {
+  discoverApiEndpoints,
   dispatchMockWebhook,
   sendApiRequest,
 } from "@/modules/api-client";
@@ -146,6 +147,50 @@ export function buildApiClientTools(_ctx: ToolContext) {
             is_idempotent: res.isIdempotent,
             summary: res.summary,
             attempts: res.attempts,
+          };
+        } catch (err) {
+          return {
+            ok: false,
+            error: String(err),
+          };
+        }
+      },
+    }),
+
+    api_discover_endpoints: tool({
+      description:
+        "Probe a web server or OpenAPI schema (FastAPI, Swagger, Express, Next.js routes) to discover and list all available HTTP endpoints, methods, parameters, and authentication requirements.",
+      inputSchema: z.object({
+        base_url: z
+          .string()
+          .describe(
+            "Base server URL to probe (e.g. 'http://localhost:3000' or 'http://localhost:8000')",
+          ),
+        bearer_token: z
+          .string()
+          .optional()
+          .describe("Optional Bearer token for probing protected routes"),
+      }),
+      execute: async ({ base_url, bearer_token }) => {
+        try {
+          const res = await discoverApiEndpoints(
+            base_url,
+            [],
+            undefined,
+            bearer_token,
+          );
+          return {
+            ok: true,
+            detected_service: res.detectedService ?? "Generic REST Server",
+            open_api_found: res.openApiFound,
+            duration_ms: res.durationMs,
+            endpoints_count: res.endpoints.length,
+            endpoints: res.endpoints.slice(0, 50).map((e) => ({
+              method: e.method,
+              path: e.path,
+              description: e.description,
+              requires_auth: e.requiresAuth,
+            })),
           };
         } catch (err) {
           return {

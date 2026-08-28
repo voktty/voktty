@@ -31,7 +31,23 @@ export async function sendApiRequest(request: ApiRequest): Promise<ApiResponse> 
     | { type: "FormUrlEncoded"; value: { key: string; value: string; enabled: boolean }[] }
     | { type: "Raw"; value: { content: string; content_type: string } } = { type: "None" };
 
-  if (request.bodyType === "json" && request.bodyContent.trim()) {
+  let rustMethod: string = request.method;
+  if (rustMethod === "GQL") rustMethod = "POST";
+  else if (rustMethod === "SSE") rustMethod = "GET";
+  else if (rustMethod === "GRPC" || rustMethod === "WS") rustMethod = "POST";
+
+  if (request.bodyType === "graphql" && request.bodyContent.trim()) {
+    bodyPayload = {
+      type: "Json",
+      value: {
+        query: request.bodyContent,
+        variables: request.variables || {},
+      },
+    };
+    if (!headersObj["Content-Type"]) {
+      headersObj["Content-Type"] = "application/json";
+    }
+  } else if (request.bodyType === "json" && request.bodyContent.trim()) {
     try {
       const parsed = JSON.parse(request.bodyContent);
       bodyPayload = { type: "Json", value: parsed };
@@ -61,10 +77,41 @@ export async function sendApiRequest(request: ApiRequest): Promise<ApiResponse> 
     | { type: "None" }
     | { type: "Bearer"; token: string }
     | { type: "ApiKey"; key: string; value: string; in_header: boolean }
-    | { type: "Basic"; username: string; password: string } = { type: "None" };
+    | { type: "Basic"; username: string; password: string }
+    | { type: "OAuth2"; token: string; token_type?: string }
+    | {
+        type: "AwsSigV4";
+        access_key: string;
+        secret_key: string;
+        region: string;
+        service: string;
+        session_token?: string;
+      }
+    | { type: "Digest"; username: string; password: string } = { type: "None" };
 
   if (request.authType === "bearer" && request.bearerToken) {
     authPayload = { type: "Bearer", token: request.bearerToken };
+  } else if (request.authType === "oauth2" && request.oauth2) {
+    authPayload = {
+      type: "OAuth2",
+      token: request.oauth2.token,
+      token_type: request.oauth2.tokenType,
+    };
+  } else if (request.authType === "awsSigV4" && request.awsSigV4) {
+    authPayload = {
+      type: "AwsSigV4",
+      access_key: request.awsSigV4.accessKey,
+      secret_key: request.awsSigV4.secretKey,
+      region: request.awsSigV4.region,
+      service: request.awsSigV4.service,
+      session_token: request.awsSigV4.sessionToken,
+    };
+  } else if (request.authType === "digest" && request.digestAuth) {
+    authPayload = {
+      type: "Digest",
+      username: request.digestAuth.username,
+      password: request.digestAuth.password,
+    };
   } else if (request.authType === "apiKey" && request.apiKey) {
     authPayload = {
       type: "ApiKey",
@@ -89,13 +136,20 @@ export async function sendApiRequest(request: ApiRequest): Promise<ApiResponse> 
     body_bytes_len: number;
     is_json: boolean;
     json_value?: unknown;
-    timings: { total_duration_ms: number };
+    timings: {
+      dns_lookup_ms?: number;
+      tcp_connect_ms?: number;
+      tls_handshake_ms?: number;
+      first_byte_ms?: number;
+      download_ms?: number;
+      total_duration_ms: number;
+    };
     error?: string;
   }>("api_client_send_request", {
     request: {
       id: request.id,
       url: request.url,
-      method: request.method,
+      method: rustMethod,
       headers: headersObj,
       query_params: queryParams,
       body: bodyPayload,
@@ -103,6 +157,8 @@ export async function sendApiRequest(request: ApiRequest): Promise<ApiResponse> 
       timeout_ms: request.timeoutMs ?? 30000,
       follow_redirects: true,
       insecure_skip_verify: false,
+      variables: request.variables,
+      is_agent_call: false,
     },
   });
 
@@ -116,11 +172,20 @@ export async function sendApiRequest(request: ApiRequest): Promise<ApiResponse> 
     isJson: raw.is_json,
     jsonValue: raw.json_value,
     timings: {
+      dnsLookupMs: raw.timings.dns_lookup_ms,
+      tcpConnectMs: raw.timings.tcp_connect_ms,
+      tlsHandshakeMs: raw.timings.tls_handshake_ms,
+      firstByteMs: raw.timings.first_byte_ms,
+      downloadMs: raw.timings.download_ms,
       totalDurationMs: raw.timings.total_duration_ms,
     },
     error: raw.error,
     timestamp: Date.now(),
   };
+}
+
+export async function cancelApiRequest(requestId: string): Promise<boolean> {
+  return await invoke<boolean>("api_client_cancel_request", { requestId });
 }
 
 export async function dispatchMockWebhook(

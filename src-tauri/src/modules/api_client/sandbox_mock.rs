@@ -195,6 +195,8 @@ pub async fn dispatch_mock_webhook(
             timeout_ms: Some(15_000),
             follow_redirects: true,
             insecure_skip_verify: false,
+            variables: None,
+            is_agent_call: false,
         };
 
         match execute_http_request(req).await {
@@ -404,6 +406,11 @@ pub async fn run_api_scenario(
                             is_json: false,
                             json_value: None,
                             timings: super::http_engine::ApiTimings {
+                                dns_lookup_ms: None,
+                                tcp_connect_ms: None,
+                                tls_handshake_ms: None,
+                                first_byte_ms: None,
+                                download_ms: None,
                                 total_duration_ms: 0.0,
                             },
                             error: Some(e),
