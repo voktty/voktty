@@ -40,7 +40,9 @@ import {
 } from "../lib/session";
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
+import type { TranscriptLayout } from "../lib/appearance";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { TranscriptSelectionMenu } from "./TranscriptSelectionMenu";
 import {
@@ -96,6 +98,7 @@ export function AgentTranscript({
     scrollerEl,
     onAddToChat !== undefined,
   );
+  const transcriptLayout = useTranscriptLayout();
   const lastUserId = lastUserBlockId(blocks);
   const liveStartedAt = turnUserBlock(blocks)?.startedAt;
   const waitingForApproval = hasPendingApproval(blocks);
@@ -252,6 +255,7 @@ export function AgentTranscript({
                   <TranscriptBlock
                     key={item.block.id}
                     block={item.block}
+                    layout={transcriptLayout}
                     stickyIndex={firstVisibleTurn + turnIndex + 1}
                     onApproval={onApproval}
                     onOpenFile={onOpenFile}
@@ -378,6 +382,7 @@ function CopyTurnButton({ text }: { text: string }) {
 
 const TranscriptBlock = memo(function TranscriptBlock({
   block,
+  layout,
   stickyIndex,
   cwd,
   onApproval,
@@ -386,6 +391,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   onOpenPlan,
 }: {
   block: Block;
+  layout: TranscriptLayout;
   stickyIndex: number;
   cwd?: string;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
@@ -394,7 +400,13 @@ const TranscriptBlock = memo(function TranscriptBlock({
   onOpenPlan?: (blockId: string) => void;
 }) {
   if (block.role === "user") {
-    return <UserMessageBlock block={block} stickyIndex={stickyIndex} />;
+    return (
+      <UserMessageBlock
+        block={block}
+        layout={layout}
+        stickyIndex={stickyIndex}
+      />
+    );
   }
 
   if (block.role === "tool") {
@@ -470,15 +482,18 @@ const TranscriptBlock = memo(function TranscriptBlock({
 
 function UserMessageBlock({
   block,
+  layout,
   stickyIndex,
 }: {
   block: Block;
+  layout: TranscriptLayout;
   stickyIndex: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const textRef = useRef<HTMLPreElement>(null);
   const text = block.text;
+  const chat = layout === "chat";
 
   useLayoutEffect(() => {
     const el = textRef.current;
@@ -495,9 +510,15 @@ function UserMessageBlock({
   };
 
   return (
-    <div className="p-1.5 pb-0">
+    <div
+      className={
+        chat ? "flex justify-end pt-1.5 pr-4 pb-4 pl-14" : "p-1.5 pb-0"
+      }
+    >
       <div
-        className={`rounded-lg border-content/10 px-3 py-2 text-content border bg-content/10`}
+        className={`rounded-lg min-w-0 border border-content/10 bg-content/10 px-3 py-2 text-content ${
+          chat ? "w-fit max-w-xl" : ""
+        }`}
         style={{ zIndex: stickyIndex }}
         onClick={overflows ? toggle : undefined}
       >

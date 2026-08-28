@@ -35,6 +35,7 @@ import {
   loadSidebarOpacity,
   loadThemeHue,
   loadThemeSaturation,
+  loadTranscriptLayout,
   saveBodyGlass,
   saveColorScheme,
   saveSidebarBlur,
@@ -42,6 +43,7 @@ import {
   saveSidebarOpacity,
   saveThemeHue,
   saveThemeSaturation,
+  saveTranscriptLayout,
   SIDEBAR_BLUR_DEFAULT,
   SIDEBAR_BLUR_MAX,
   SIDEBAR_BLUR_MIN,
@@ -56,6 +58,7 @@ import {
   THEME_SATURATION_MIN,
   type ColorScheme,
   type SidebarLayout,
+  type TranscriptLayout,
 } from "../lib/appearance";
 import {
   getHarnessAvailabilitySnapshot,
@@ -239,11 +242,19 @@ export function SettingsView({
 
 function GeneralPage() {
   const [layout, setLayout] = useState<SidebarLayout>(loadSidebarLayout);
+  const [transcriptLayout, setTranscriptLayout] = useState<TranscriptLayout>(
+    loadTranscriptLayout,
+  );
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
 
   const onLayout = (next: SidebarLayout) => {
     saveSidebarLayout(next);
     setLayout(next);
+  };
+
+  const onTranscriptLayout = (next: TranscriptLayout) => {
+    saveTranscriptLayout(next);
+    setTranscriptLayout(next);
   };
 
   const onComposerRunner = (next: boolean) => {
@@ -265,6 +276,20 @@ function GeneralPage() {
             { value: "classic", label: "Classic" },
           ]}
           onChange={onLayout}
+        />
+      </Row>
+      <Row
+        label="Transcript layout"
+        description="Full width keeps user prompts as a spanning card. Chat aligns them to the right with a max width, like a messaging app."
+      >
+        <Segmented
+          label="Transcript layout"
+          value={transcriptLayout}
+          options={[
+            { value: "full", label: "Full width" },
+            { value: "chat", label: "Chat" },
+          ]}
+          onChange={onTranscriptLayout}
         />
       </Row>
       <Row

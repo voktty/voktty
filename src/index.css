@@ -139,11 +139,11 @@ html.is-mac.glass-body .body-glass {
   );
 }
 
-
 textarea,
 input,
 .agent-transcript,
 .markdown-preview,
+.inbox-pr-diff,
 .monocode-terminal,
 .monocode-terminal .xterm,
 .monocode-terminal .xterm-viewport {

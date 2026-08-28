@@ -12,9 +12,11 @@ const SCHEME_KEY = "monocode.colorScheme";
 const SIDEBAR_TAB_ORDER_KEY = "monocode.sidebarTabOrder";
 const PROJECT_RAIL_WIDTH_KEY = "monocode.projectRailWidth";
 const SIDEBAR_LAYOUT_KEY = "monocode.sidebarLayout";
+const TRANSCRIPT_LAYOUT_KEY = "monocode.transcriptLayout";
 
 export type ColorScheme = "dark" | "light";
 export type SidebarLayout = "classic" | "deck";
+export type TranscriptLayout = "full" | "chat";
 
 export const COLOR_SCHEME_DEFAULT: ColorScheme = "dark";
 
@@ -25,6 +27,11 @@ export const SCHEME_CHANGE_EVENT = "monocode:schemechange";
 export const LAYOUT_CHANGE_EVENT = "monocode:layoutchange";
 
 export const SIDEBAR_LAYOUT_DEFAULT: SidebarLayout = "deck";
+
+export const TRANSCRIPT_LAYOUT_DEFAULT: TranscriptLayout = "full";
+
+/** Fired on `window` whenever the transcript layout flips (detail: TranscriptLayout). */
+export const TRANSCRIPT_LAYOUT_CHANGE_EVENT = "monocode:transcriptlayoutchange";
 
 export type SidebarTabId = "files" | "sessions" | "changes" | "inbox";
 
@@ -335,5 +342,33 @@ export function saveSidebarLayout(value: SidebarLayout) {
   }
   window.dispatchEvent(
     new CustomEvent<SidebarLayout>(LAYOUT_CHANGE_EVENT, { detail: value }),
+  );
+}
+
+function isTranscriptLayout(value: unknown): value is TranscriptLayout {
+  return value === "full" || value === "chat";
+}
+
+export function loadTranscriptLayout(): TranscriptLayout {
+  try {
+    const raw = localStorage.getItem(TRANSCRIPT_LAYOUT_KEY);
+    return isTranscriptLayout(raw) ? raw : TRANSCRIPT_LAYOUT_DEFAULT;
+  } catch {
+    return TRANSCRIPT_LAYOUT_DEFAULT;
+  }
+}
+
+export function saveTranscriptLayout(value: TranscriptLayout) {
+  const next = isTranscriptLayout(value) ? value : TRANSCRIPT_LAYOUT_DEFAULT;
+  try {
+    localStorage.setItem(TRANSCRIPT_LAYOUT_KEY, next);
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<TranscriptLayout>(TRANSCRIPT_LAYOUT_CHANGE_EVENT, {
+      detail: next,
+    }),
   );
 }
