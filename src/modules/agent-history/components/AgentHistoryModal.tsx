@@ -297,6 +297,7 @@ export function AgentHistoryModal() {
 
   return (
     <div
+      role="presentation"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 sm:p-4 duration-150 animate-in fade-in-0"
       onClick={closeHistory}
     >

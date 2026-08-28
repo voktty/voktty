@@ -120,6 +120,7 @@ export function ApiCollectionExplorer() {
                   )}
                   {collections.length > 1 && (
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteCollection(col.id);
@@ -249,6 +250,7 @@ export function ApiCollectionExplorer() {
                     {folder.requests.length}
                   </span>
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteFolder(activeCollection.id, folder.id);
@@ -299,6 +301,7 @@ export function ApiCollectionExplorer() {
                             <span className="size-1.5 rounded-full bg-primary" />
                           )}
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteRequest(req.id);
@@ -352,6 +355,7 @@ export function ApiCollectionExplorer() {
               <div className="flex items-center gap-1 shrink-0">
                 {isActive && <span className="size-1.5 rounded-full bg-primary" />}
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteRequest(req.id);

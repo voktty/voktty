@@ -153,8 +153,8 @@ export function VaultSection() {
       const matchesQuery =
         !q ||
         item.name.toLowerCase().includes(q) ||
-        (item.description && item.description.toLowerCase().includes(q)) ||
-        (item.tags && item.tags.some((t) => t.toLowerCase().includes(q)));
+        item.description?.toLowerCase().includes(q) ||
+        item.tags?.some((t) => t.toLowerCase().includes(q));
       return matchesType && matchesQuery;
     });
   }, [items, typeFilter, searchQuery]);
