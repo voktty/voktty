@@ -100,19 +100,11 @@ html.is-mac #root {
 }
 
 .sidebar-glass {
-  background: color-mix(
-    in srgb,
-    var(--color-background-base) 90%,
-    black
-  );
+  background: color-mix(in srgb, var(--color-background-base) 90%, black);
 }
 
 html.theme-light .sidebar-glass {
-  background: color-mix(
-    in srgb,
-    var(--color-background-base) 93%,
-    black 7%
-  );
+  background: color-mix(in srgb, var(--color-background-base) 93%, black 7%);
 }
 
 html.is-mac .sidebar-glass {
@@ -129,6 +121,15 @@ html.is-mac .sidebar-glass {
 .transcript-turn {
   content-visibility: auto;
   contain-intrinsic-block-size: auto 240px;
+}
+
+/*
+ * The live turn is still growing. Size containment would flash the 240px
+ * intrinsic fallback when the first step arrives, which bounces Working
+ * down and then back up.
+ */
+.transcript-turn-live {
+  content-visibility: visible;
 }
 
 html.is-mac.glass-body .body-glass {
@@ -463,8 +464,12 @@ html.is-resizing * {
       transparent calc(50% + var(--spread))
     ),
     linear-gradient(
-      hsl(var(--theme-hue) var(--theme-saturation) var(--content-lightness) / 0.4),
-      hsl(var(--theme-hue) var(--theme-saturation) var(--content-lightness) / 0.4)
+      hsl(
+        var(--theme-hue) var(--theme-saturation) var(--content-lightness) / 0.4
+      ),
+      hsl(
+        var(--theme-hue) var(--theme-saturation) var(--content-lightness) / 0.4
+      )
     );
   background-size:
     250% 100%,
@@ -577,4 +582,82 @@ html.is-resizing * {
 
 .monocode-terminal .xterm-screen {
   user-select: text;
+}
+
+/*
+ * Zen mode's activity ticker: one line at a time, the old row rolling up and
+ * out of the viewport as the new one rises into it.
+ */
+@keyframes zen-ticker-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes zen-ticker-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-100%);
+    filter: blur(2px);
+  }
+}
+
+.zen-ticker-in {
+  animation: zen-ticker-in 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  contain: paint;
+}
+
+.zen-ticker-out {
+  animation: zen-ticker-out 300ms cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+@keyframes zen-thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* The thinking line breathes while reasoning streams in. */
+.zen-thinking-pulse {
+  animation: zen-thinking-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes zen-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The dashed ring on a running tool turns slowly, so the line reads as live. */
+.zen-ticker-live {
+  animation: zen-spin 3.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zen-ticker-in,
+  .zen-ticker-live,
+  .zen-thinking-pulse {
+    animation: none;
+  }
+
+  .zen-ticker-out {
+    animation: none;
+    opacity: 0;
+  }
 }

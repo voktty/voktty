@@ -390,3 +390,9 @@ export function saveTranscriptZen(value: boolean) {
     new CustomEvent<boolean>(TRANSCRIPT_ZEN_CHANGE_EVENT, { detail: value }),
   );
 }
+
+export function toggleTranscriptZen(): boolean {
+  const next = !loadTranscriptZen();
+  saveTranscriptZen(next);
+  return next;
+}

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Toggle zen mode with `⌘⌥Z` (`Ctrl+Alt+Z` on Windows and Linux).
+
+### Changed
+
+- Zen mode improvements.
+- Finished turns show the time they completed next to the copy button.
+
+### Fixed
+
+- Full-width transcript layout: a user prompt no longer sits flush against the tool call under it.
+
 ## [0.1.15] - 2026-08-28
 
 ### Changed

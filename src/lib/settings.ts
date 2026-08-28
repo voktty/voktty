@@ -128,6 +128,7 @@ export const KEYBINDINGS: KeybindingRow[] = [
   { command: "App: Open Project", keys: `${MOD}O`, when: "Always" },
   { command: "App: New Window", keys: `${MOD}${SHIFT}N`, when: "Always" },
   { command: "App: Toggle Sidebar", keys: `${MOD}B`, when: "Always" },
+  { command: "App: Toggle Zen Mode", keys: `${MOD}${ALT}Z`, when: "Always" },
   { command: "App: Switch Model", keys: `${MOD}.`, when: "Always" },
   { command: "Tab: New", keys: `${MOD}T`, when: "Always" },
   { command: "Tab: Next", keys: `${MOD}${SHIFT}]`, when: "Always" },

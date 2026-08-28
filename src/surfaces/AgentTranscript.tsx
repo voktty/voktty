@@ -1,10 +1,12 @@
 import {
+  Brain,
   Check,
-  ChevronDown,
   ChevronRight,
+  Clock,
   CircleDashed,
   Copy,
   Hammer,
+  Lightbulb,
   Pencil,
   Search,
   Terminal,
@@ -43,18 +45,25 @@ import { HarnessIcon } from "../chrome/HarnessIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
 import { useTranscriptZen } from "../hooks/useTranscriptZen";
+import { useActivityTicker } from "../hooks/useActivityTicker";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import type { TranscriptLayout } from "../lib/appearance";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { TranscriptSelectionMenu } from "./TranscriptSelectionMenu";
 import {
   activityGroupView,
+  activityPreviousCount,
+  activityPreviousLabel,
   activitySummary,
   editVerb,
   groupTurnItems,
   groupTurns,
   isIncompleteTool,
+  isThinkingBlock,
+  lastActivityIndex,
+  isProseBlock,
   needsApproval,
+  proseSummary,
   splitActivityRows,
   toolCallLabel,
   toolCallState,
@@ -63,6 +72,8 @@ import {
 } from "./transcriptActivity";
 
 const NEAR_BOTTOM_PX = 16;
+/** Matches the .zen-ticker-out animation, after which the old row is dropped. */
+const TICKER_EXIT_MS = 300;
 const INITIAL_TURNS = 20;
 const TURN_PAGE_SIZE = 20;
 
@@ -228,7 +239,7 @@ export function AgentTranscript({
       ref={setScroller}
       className="agent-transcript h-full overflow-y-auto overscroll-none [overflow-anchor:none] font-mono text-[13px] leading-5"
     >
-      <div className="mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-1">
+      <div className="mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-1 pb-1">
         {firstVisibleTurn > 0 ? (
           <div className="flex justify-center px-4 py-3">
             <button
@@ -243,18 +254,41 @@ export function AgentTranscript({
         {visibleTurns.map((turn, turnIndex) => {
           const isLastTurn = firstVisibleTurn + turnIndex === turns.length - 1;
           const durationMs = turnUserBlock(turn)?.durationMs;
+          const settled = !(busy && isLastTurn);
+          const items = groupTurnItems(turn, zen);
+          // Zen hangs the turn's "Worked for" line on the fold that replaced
+          // the ticker, so the footer under the answer keeps the clock only.
+          const foldedAt = zen ? lastActivityIndex(items) : -1;
+          const startedAt = turnUserBlock(turn)?.startedAt;
+          // The agent starting its answer is the end of the work: fold the
+          // stack then, not when the turn finally settles, so the collapse
+          // never lands under the text you have already started reading.
+          const answering =
+            foldedAt >= 0 &&
+            items
+              .slice(foldedAt + 1)
+              .some(
+                (item) => item.type === "block" && isProseBlock(item.block),
+              );
           return (
             <div
               key={turn[0].id}
-              className="transcript-turn flex min-w-0 flex-col gap-1"
+              className={`transcript-turn flex min-w-0 flex-col gap-1${
+                isLastTurn ? " transcript-turn-live" : ""
+              }`}
             >
-              {groupTurnItems(turn, zen).map((item) =>
+              {items.map((item, itemIndex) =>
                 item.type === "activity" ? (
                   <ActivityGroup
                     key={item.blocks[0].id}
                     blocks={item.blocks}
                     cwd={cwd}
-                    collapsed={zen && !(busy && isLastTurn)}
+                    collapsed={zen && (settled || answering)}
+                    zen={zen}
+                    durationMs={itemIndex === foldedAt ? durationMs : undefined}
+                    startedAt={
+                      itemIndex === foldedAt && !settled ? startedAt : undefined
+                    }
                     onApproval={onApproval}
                     onOpenFile={onOpenFile}
                   />
@@ -264,6 +298,11 @@ export function AgentTranscript({
                     block={item.block}
                     layout={transcriptLayout}
                     stickyIndex={firstVisibleTurn + turnIndex + 1}
+                    compactTop={
+                      foldedAt >= 0 &&
+                      itemIndex === foldedAt + 1 &&
+                      isProseBlock(item.block)
+                    }
                     onApproval={onApproval}
                     onOpenFile={onOpenFile}
                     onOpenDiff={onOpenDiff}
@@ -272,19 +311,26 @@ export function AgentTranscript({
                   />
                 ),
               )}
-              {durationMs != null && !(busy && isLastTurn) ? (
+              {durationMs != null && settled ? (
                 <TurnDuration
                   elapsedMs={durationMs}
                   done
+                  showElapsed={foldedAt < 0}
+                  completedAt={
+                    startedAt != null ? startedAt + durationMs : undefined
+                  }
                   copyText={turnCopyText(turn)}
+                />
+              ) : null}
+              {busy && !preparingHandoff && isLastTurn && !answering ? (
+                <LiveWorking
+                  startedAt={liveStartedAt}
+                  paused={waitingForApproval}
                 />
               ) : null}
             </div>
           );
         })}
-        {busy && !preparingHandoff ? (
-          <LiveWorking startedAt={liveStartedAt} paused={waitingForApproval} />
-        ) : null}
       </div>
       {onAddToChat ? (
         <TranscriptSelectionMenu
@@ -313,12 +359,16 @@ function TurnDuration({
   live = false,
   done = false,
   waiting = false,
+  showElapsed = true,
+  completedAt,
   copyText: output,
 }: {
   elapsedMs: number | null;
   live?: boolean;
   done?: boolean;
   waiting?: boolean;
+  showElapsed?: boolean;
+  completedAt?: number;
   copyText?: string;
 }) {
   const label = waiting
@@ -331,7 +381,7 @@ function TurnDuration({
       aria-label={
         waiting ? "Waiting for approval" : live ? "Agent is working" : label
       }
-      className="flex items-center gap-2 px-4 py-3 font-sans text-sm text-content/40"
+      className="flex items-center gap-2 px-4 pt-1 pb-3 font-sans text-sm text-content/40"
     >
       {done && output ? (
         <CopyTurnButton text={output} />
@@ -343,11 +393,26 @@ function TurnDuration({
 
       {live && !done ? (
         <Shimmer duration={1}>{label}</Shimmer>
-      ) : (
+      ) : showElapsed ? (
         <span>{label}</span>
-      )}
+      ) : null}
+
+      {completedAt != null ? (
+        <span className="flex items-center gap-1 text-content/35">
+          <Clock className="size-3.5 shrink-0" strokeWidth={1.75} />
+          {formatClockTime(completedAt)}
+        </span>
+      ) : null}
     </div>
   );
+}
+
+/** Wall-clock stamp for a finished turn, in the reader's own locale. */
+function formatClockTime(epochMs: number): string {
+  return new Date(epochMs).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function CopyTurnButton({ text }: { text: string }) {
@@ -391,6 +456,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   block,
   layout,
   stickyIndex,
+  compactTop = false,
   cwd,
   onApproval,
   onOpenFile,
@@ -400,6 +466,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   block: Block;
   layout: TranscriptLayout;
   stickyIndex: number;
+  compactTop?: boolean;
   cwd?: string;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
@@ -475,7 +542,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   return (
     <div
       data-selectable-agent-response={block.streaming ? undefined : block.id}
-      className="min-w-0 px-4 py-3 text-content"
+      className={`min-w-0 px-4 pb-1 text-content ${compactTop ? "pt-2" : "pt-3"}`}
     >
       <AgentMarkdown
         text={block.text}
@@ -519,7 +586,7 @@ function UserMessageBlock({
   return (
     <div
       className={
-        chat ? "flex justify-end pt-1.5 pr-4 pb-4 pl-14" : "p-1.5 pb-0"
+        chat ? "flex justify-end pt-1.5 pr-4 pb-4 pl-14" : "p-1.5 pb-3"
       }
     >
       <div
@@ -549,82 +616,157 @@ function UserMessageBlock({
   );
 }
 
+/** One activity row: py-1 around a 20px line. */
+const ACTIVITY_ROW_HEIGHT = "h-7";
+
+const DISCLOSURE_ROW = "flex w-fit items-center gap-1.5 py-1 font-sans text-sm";
+
 function ActivityGroup({
   blocks,
   cwd,
   collapsed,
+  zen,
+  durationMs,
+  startedAt,
   onApproval,
   onOpenFile,
 }: {
   blocks: Block[];
   cwd?: string;
   collapsed?: boolean;
+  zen?: boolean;
+  durationMs?: number;
+  startedAt?: number;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
 }) {
-  // Live "+N previous" and the settled zen summary are independent. Sharing
-  // one flag kept expanded history from folding when a turn settled.
+  // Live "+N previous" and the settled zen fold are independent. Sharing one
+  // flag kept expanded history from folding when a turn settled.
   const [showPrevious, setShowPrevious] = useState(false);
   const [zenOpen, setZenOpen] = useState(false);
-  const { latest, pending, hidden } = splitActivityRows(blocks);
+  const rolling = !!zen && !collapsed;
+  const tickerIndex = useActivityTicker(
+    blocks.filter((block) => !needsApproval(block)).length,
+    rolling,
+  );
+  const { latest, pending, hidden } = splitActivityRows(blocks, tickerIndex);
+  // Only the fold that carries the turn's clock ticks; everything else is
+  // paused, so historical turns are not re-rendering once a second.
+  const elapsedMs = useElapsedFrom(
+    startedAt,
+    durationMs != null || startedAt == null,
+  );
   const view = activityGroupView(!!collapsed, pending.length, zenOpen);
+  const previousCount = activityPreviousCount(hidden.length, !!latest, !!zen);
+  const canRevealPrevious = hidden.length > 0;
 
-  // Zen mode: a settled turn keeps its whole toolchain behind one line, so the
-  // agent's closing prose is the only full-size thing left on screen.
-  if (view === "summary") {
+  // Zen mode: once a turn settles the ticker folds into one line, and the whole
+  // run — tool calls, notes, thinking — waits behind it.
+  if (view === "summary" || view === "zen-expanded") {
+    const open = view === "zen-expanded";
+    const summary =
+      durationMs != null
+        ? formatWorkingDuration(durationMs, true)
+        : startedAt != null
+          ? formatWorkingDuration(elapsedMs, false)
+          : activitySummary(blocks);
     return (
-      <div className="flex flex-col gap-0.5 px-4">
+      <div className="flex min-w-0 flex-col gap-0 px-4">
         <button
           type="button"
-          aria-expanded={false}
-          aria-label={`Show ${blocks.length} tool calls`}
-          onClick={() => setZenOpen(true)}
-          className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
+          aria-expanded={open}
+          aria-label={open ? "Hide the work" : `Show ${summary}`}
+          onClick={() => setZenOpen(!open)}
+          className={`${DISCLOSURE_ROW} text-content/40 transition-colors duration-200 hover:text-content/70`}
         >
-          <ChevronRight className="size-3.5 shrink-0" strokeWidth={1.75} />
-          <span>{activitySummary(blocks)}</span>
-        </button>
-      </div>
-    );
-  }
-
-  if (view === "zen-expanded") {
-    return (
-      <div className="flex flex-col gap-0.5 px-4">
-        {blocks.map((block) => (
-          <ActivityToolRow
-            key={block.id}
-            block={block}
-            cwd={cwd}
-            onApproval={onApproval}
-            onOpenFile={onOpenFile}
+          <ChevronRight
+            className={`size-3.5 shrink-0 transition-transform duration-200 ${
+              open ? "rotate-90" : ""
+            }`}
+            strokeWidth={1.75}
           />
-        ))}
-        <button
-          type="button"
-          aria-expanded
-          onClick={() => setZenOpen(false)}
-          className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
-        >
-          <ChevronDown className="size-3.5 shrink-0 rotate-180" />
-          <span>Hide activity</span>
+          <span>{summary}</span>
         </button>
+        {open ? (
+          <div className="flex min-w-0 flex-col gap-0.5">
+            {blocks.map((block) => (
+              <ActivityRow
+                key={block.id}
+                block={block}
+                cwd={cwd}
+                expanded
+                onApproval={onApproval}
+                onOpenFile={onOpenFile}
+              />
+            ))}
+          </div>
+        ) : (
+          <div aria-hidden className="pt-2">
+            <div className="h-px w-full bg-content/10" />
+          </div>
+        )}
       </div>
     );
   }
 
+  // Zen leaves the running turn as nothing but the ticker. The "+N previous"
+  // row is on from the first step — not an empty spacer — so Working only
+  // moves once, to sit under the step.
   return (
-    <div className="flex flex-col gap-0.5 px-4">
+    <div className="flex min-w-0 flex-col gap-0.5 px-4">
+      {previousCount > 0 ? (
+        <button
+          type="button"
+          aria-expanded={canRevealPrevious ? showPrevious : undefined}
+          aria-disabled={!canRevealPrevious}
+          aria-label={
+            showPrevious
+              ? "Hide previous steps"
+              : `Show ${previousCount} previous steps`
+          }
+          onClick={
+            canRevealPrevious
+              ? () => setShowPrevious((open) => !open)
+              : undefined
+          }
+          className={`${DISCLOSURE_ROW} ${ACTIVITY_ROW_HEIGHT} shrink-0 text-content/40 transition-colors duration-200 ${
+            canRevealPrevious ? "hover:text-content/70" : "cursor-default"
+          }`}
+        >
+          <ChevronRight
+            className={`size-3.5 shrink-0 transition-transform duration-200 ${
+              showPrevious ? "rotate-90" : ""
+            }`}
+            strokeWidth={1.75}
+          />
+          <span>
+            {showPrevious
+              ? "Hide previous"
+              : activityPreviousLabel(previousCount, !!zen)}
+          </span>
+        </button>
+      ) : null}
+      {showPrevious && canRevealPrevious
+        ? hidden.map((block) => (
+            <ActivityRow
+              key={block.id}
+              block={block}
+              cwd={cwd}
+              expanded
+              onOpenFile={onOpenFile}
+            />
+          ))
+        : null}
       {latest ? (
-        <ActivityToolRow
+        <ActivityTicker
           block={latest}
           cwd={cwd}
-          onApproval={onApproval}
+          rolling={rolling}
           onOpenFile={onOpenFile}
         />
       ) : null}
       {pending.map((block) => (
-        <ActivityToolRow
+        <ActivityRow
           key={block.id}
           block={block}
           cwd={cwd}
@@ -632,43 +774,226 @@ function ActivityGroup({
           onOpenFile={onOpenFile}
         />
       ))}
-      {hidden.length > 0 ? (
-        showPrevious ? (
-          <div className="flex flex-col gap-0.5">
-            {[...hidden].reverse().map((block) => (
-              <ActivityToolRow
-                key={block.id}
-                block={block}
-                cwd={cwd}
-                onOpenFile={onOpenFile}
-              />
-            ))}
-            <button
-              type="button"
-              aria-expanded
-              onClick={() => setShowPrevious(false)}
-              className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
-            >
-              <ChevronDown className="size-3.5 shrink-0 rotate-180" />
-              <span>Hide previous</span>
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            aria-expanded={false}
-            aria-label={`Show ${hidden.length} previous tool calls`}
-            onClick={() => setShowPrevious(true)}
-            className="flex items-center gap-1.5 py-1 font-sans text-sm text-content/40 hover:text-content/55"
-          >
-            <ChevronDown className="size-3.5 shrink-0" strokeWidth={1.75} />
-            <span>
-              +{hidden.length} previous{" "}
-              {hidden.length === 1 ? "tool call" : "tool calls"}
-            </span>
-          </button>
-        )
+    </div>
+  );
+}
+
+/**
+ * The live line, as a ticker: the row the agent has moved on from rolls up out
+ * of a one-line viewport while the new one rises into it. Zen only — without
+ * it the row just swaps, the way it always has.
+ */
+function ActivityTicker({
+  block,
+  cwd,
+  rolling,
+  onOpenFile,
+}: {
+  block: Block;
+  cwd?: string;
+  rolling: boolean;
+  onOpenFile?: (path: string) => void;
+}) {
+  const [state, setState] = useState<{
+    current: Block;
+    leaving: Block | null;
+    roll: number;
+  }>({ current: block, leaving: null, roll: 0 });
+
+  // Adjusting during render keeps the swap in one frame: no flash of the old
+  // row sitting in the new row's place.
+  if (state.current.id !== block.id) {
+    setState((prev) => ({
+      current: block,
+      leaving: rolling ? prev.current : null,
+      roll: prev.roll + 1,
+    }));
+  } else if (state.current !== block) {
+    setState((prev) => ({ ...prev, current: block }));
+  }
+
+  useEffect(() => {
+    if (!state.leaving) return;
+    const timer = window.setTimeout(
+      () => setState((prev) => ({ ...prev, leaving: null })),
+      TICKER_EXIT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [state.leaving, state.roll]);
+
+  if (!rolling) {
+    return <ActivityRow block={block} cwd={cwd} onOpenFile={onOpenFile} />;
+  }
+
+  // The incoming row stays in flow so the viewport is exactly one row tall,
+  // whatever that row turns out to be; only the outgoing one is lifted out.
+  return (
+    <div className="relative min-w-0 overflow-clip">
+      {state.leaving ? (
+        <div
+          key={`out-${state.roll}`}
+          aria-hidden
+          className="zen-ticker-out pointer-events-none absolute inset-x-0 top-0"
+        >
+          <ActivityRow block={state.leaving} cwd={cwd} />
+        </div>
       ) : null}
+      <div
+        key={`in-${state.roll}`}
+        className={state.roll > 0 ? "zen-ticker-in" : undefined}
+      >
+        <ActivityRow
+          block={state.current}
+          cwd={cwd}
+          live
+          onOpenFile={onOpenFile}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The live stack is a ticker: whatever the agent did last holds the line,
+ * whether that was a tool call or a paragraph of prose.
+ */
+function ActivityRow({
+  block,
+  cwd,
+  expanded = false,
+  live = false,
+  onApproval,
+  onOpenFile,
+}: {
+  block: Block;
+  cwd?: string;
+  expanded?: boolean;
+  live?: boolean;
+  onApproval?: (requestId: number, decision: ApprovalDecision) => void;
+  onOpenFile?: (path: string) => void;
+}) {
+  if (isThinkingBlock(block)) {
+    return (
+      <ActivityThinkingRow
+        block={block}
+        cwd={cwd}
+        expandable={expanded}
+        onOpenFile={onOpenFile}
+      />
+    );
+  }
+  if (isProseBlock(block)) {
+    return expanded ? (
+      <div className="flex min-w-0 gap-1.5 py-1 text-content">
+        <Lightbulb
+          className="mt-[5px] size-3.5 shrink-0 text-content/50"
+          strokeWidth={1.75}
+        />
+        <div className="min-w-0 flex-1">
+          <AgentMarkdown text={block.text} cwd={cwd} onOpenFile={onOpenFile} />
+        </div>
+      </div>
+    ) : (
+      <ActivityNoteRow block={block} />
+    );
+  }
+  return (
+    <ActivityToolRow
+      block={block}
+      cwd={cwd}
+      live={live}
+      onApproval={onApproval}
+      onOpenFile={onOpenFile}
+    />
+  );
+}
+
+/**
+ * The line that keeps a long think from reading as a stall. Opening the fold
+ * around it does not open the thought itself — reasoning is only ever read on
+ * purpose, one line until you ask for it.
+ */
+function ActivityThinkingRow({
+  block,
+  cwd,
+  expandable = false,
+  onOpenFile,
+}: {
+  block: Block;
+  cwd?: string;
+  expandable?: boolean;
+  onOpenFile?: (path: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const text = proseSummary(block.text) || "Thinking";
+  const icon = (
+    <Brain
+      className={`size-3.5 shrink-0 text-content/40 ${
+        block.streaming ? "zen-thinking-pulse" : ""
+      }`}
+      strokeWidth={1.75}
+    />
+  );
+  const label = (
+    <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/50">
+      {text}
+    </span>
+  );
+
+  if (!expandable) {
+    return (
+      <div
+        aria-label={`Thinking: ${text}`}
+        className="flex min-w-0 items-center gap-1.5 py-1"
+      >
+        {icon}
+        {label}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={open ? "Hide thinking" : `Show thinking: ${text}`}
+        onClick={() => setOpen((value) => !value)}
+        className="group flex min-w-0 items-center gap-1.5 py-1 text-left"
+      >
+        {icon}
+        <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/50 transition-colors duration-200 group-hover:text-content/75">
+          {text}
+        </span>
+      </button>
+      {open ? (
+        <div className="min-w-0 pb-2 pl-5">
+          <AgentMarkdown
+            className="agent-reasoning"
+            text={block.text}
+            cwd={cwd}
+            onOpenFile={onOpenFile}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ActivityNoteRow({ block }: { block: Block }) {
+  const text = proseSummary(block.text);
+  return (
+    <div
+      aria-label={`Agent said: ${text}`}
+      className="flex min-w-0 items-center gap-1.5 py-1"
+    >
+      <Lightbulb
+        className="size-3.5 shrink-0 text-content/50"
+        strokeWidth={1.75}
+      />
+      <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/70">
+        {text}
+      </span>
     </div>
   );
 }
@@ -676,11 +1001,13 @@ function ActivityGroup({
 function ActivityToolRow({
   block,
   cwd,
+  live = false,
   onApproval,
   onOpenFile,
 }: {
   block: Block;
   cwd?: string;
+  live?: boolean;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
 }) {
@@ -694,7 +1021,7 @@ function ActivityToolRow({
         aria-label={`Tool call: ${label}`}
         className="flex min-w-0 items-center gap-1.5 py-1"
       >
-        <ActivityToolIcon block={block} state={state} />
+        <ActivityToolIcon block={block} state={state} live={live} />
         <ToolCallSummary
           label={label}
           preview={block.tool?.preview}
@@ -713,14 +1040,16 @@ function ActivityToolRow({
 function ActivityToolIcon({
   block,
   state,
+  live = false,
 }: {
   block: Block;
   state: ToolCallState;
+  live?: boolean;
 }) {
   if (state === "pending") {
     return (
       <CircleDashed
-        className="size-3.5 shrink-0 text-content/40"
+        className={`size-3.5 shrink-0 text-content/40 ${live ? "zen-ticker-live" : ""}`}
         strokeWidth={1.75}
       />
     );

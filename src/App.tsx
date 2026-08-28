@@ -17,6 +17,7 @@ import {
   loadSidebarTabOrder,
   saveSidebarOpen,
   saveProjectRailOpen,
+  toggleTranscriptZen,
   type SidebarLayout,
   type SidebarTabId,
 } from "./lib/appearance";
@@ -3496,6 +3497,12 @@ export default function App({
         run("toggle_sidebar", actions.current.onToggleSidebar);
         return;
       }
+      if (mod && e.altKey && !e.shiftKey && e.code === "KeyZ") {
+        e.preventDefault();
+        e.stopPropagation();
+        run("toggle_zen", () => toggleTranscriptZen());
+        return;
+      }
       if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
         e.stopPropagation();
@@ -3568,6 +3575,7 @@ export default function App({
       listen("toggle_sidebar", () =>
         run("toggle_sidebar", actions.current.onToggleSidebar),
       ),
+      listen("toggle_zen", () => run("toggle_zen", () => toggleTranscriptZen())),
       listen("open_project", () => {
         void actions.current.pickProject();
       }),

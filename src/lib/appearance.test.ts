@@ -4,6 +4,7 @@ import {
   loadTranscriptZen,
   saveTranscriptLayout,
   saveTranscriptZen,
+  toggleTranscriptZen,
   TRANSCRIPT_LAYOUT_DEFAULT,
   TRANSCRIPT_ZEN_DEFAULT,
 } from "./appearance";
@@ -75,6 +76,13 @@ describe("zen mode setting", () => {
     saveTranscriptZen(true);
     expect(loadTranscriptZen()).toBe(true);
     saveTranscriptZen(false);
+    expect(loadTranscriptZen()).toBe(false);
+  });
+
+  it("toggles from the current value", () => {
+    expect(toggleTranscriptZen()).toBe(true);
+    expect(loadTranscriptZen()).toBe(true);
+    expect(toggleTranscriptZen()).toBe(false);
     expect(loadTranscriptZen()).toBe(false);
   });
 });

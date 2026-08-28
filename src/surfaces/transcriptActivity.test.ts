@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { Block } from "../lib/session";
 import {
   activityGroupView,
+  activityPreviousCount,
+  activityPreviousLabel,
   activitySummary,
   editVerb,
   groupTurnItems,
   groupTurns,
+  lastActivityIndex,
+  nextTickerIndex,
+  proseSummary,
   splitActivityRows,
   turnCopyText,
 } from "./transcriptActivity";
@@ -117,6 +122,35 @@ describe("splitActivityRows", () => {
   });
 });
 
+describe("ticker", () => {
+  it("holds the row the ticker is on and counts the rest as passed", () => {
+    const rows = splitActivityRows([shell("a"), shell("b"), shell("c")], 1);
+    expect(rows.latest?.id).toBe("b");
+    expect(rows.hidden.map((block) => block.id)).toEqual(["a"]);
+    expect(rows.completed).toHaveLength(3);
+  });
+
+  it("clamps an index the stack has outgrown", () => {
+    const rows = splitActivityRows([shell("a")], 4);
+    expect(rows.latest?.id).toBe("a");
+    expect(rows.hidden).toEqual([]);
+  });
+
+  it("steps forward one row at a time", () => {
+    expect(nextTickerIndex(0, 3)).toBe(1);
+    expect(nextTickerIndex(2, 3)).toBe(2);
+  });
+
+  it("skips to the live row when it falls too far behind", () => {
+    expect(nextTickerIndex(0, 9)).toBe(8);
+  });
+
+  it("snaps back when the stack shrinks under it", () => {
+    expect(nextTickerIndex(6, 2)).toBe(1);
+    expect(nextTickerIndex(3, 0)).toBe(0);
+  });
+});
+
 describe("turnCopyText", () => {
   it("joins assistant and plan markdown from the turn", () => {
     expect(
@@ -192,6 +226,99 @@ describe("zen mode grouping", () => {
     expect(items.map((item) => item.type)).toEqual(["activity", "block"]);
   });
 
+  it("folds prose between tool calls in and leaves the final answer out", () => {
+    const items = groupTurnItems(
+      [
+        { id: "u", role: "user", text: "cut the release" },
+        { id: "a1", role: "assistant", text: "Running the checks first." },
+        shell("a"),
+        { id: "a2", role: "assistant", text: "Checks pass. Bumping:" },
+        edit("b"),
+        { id: "a3", role: "assistant", text: "Released." },
+      ],
+      true,
+    );
+    expect(items.map((item) => item.type)).toEqual([
+      "block",
+      "activity",
+      "block",
+    ]);
+    if (items[1]?.type !== "activity") return;
+    expect(items[1].blocks.map((block) => block.id)).toEqual([
+      "a1",
+      "a",
+      "a2",
+      "b",
+    ]);
+    expect(items[2]).toMatchObject({ type: "block", block: { id: "a3" } });
+  });
+
+  it("keeps the trailing run of prose blocks out of the stack", () => {
+    const items = groupTurnItems(
+      [
+        shell("a"),
+        { id: "a1", role: "assistant", text: "Half" },
+        { id: "a2", role: "assistant", text: "Done", streaming: true },
+      ],
+      true,
+    );
+    expect(items.map((item) => item.type)).toEqual([
+      "activity",
+      "block",
+      "block",
+    ]);
+  });
+
+  it("folds every paragraph when the turn ends on a tool call", () => {
+    const items = groupTurnItems(
+      [{ id: "a1", role: "assistant", text: "Looking now." }, shell("a")],
+      true,
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ type: "activity" });
+  });
+
+  it("leaves prose alone when zen is off", () => {
+    const items = groupTurnItems([
+      { id: "a1", role: "assistant", text: "Looking now." },
+      shell("a"),
+    ]);
+    expect(items.map((item) => item.type)).toEqual(["block", "activity"]);
+  });
+
+  it("keeps thinking in the stack so a long think is visible", () => {
+    const items = groupTurnItems(
+      [
+        { id: "r", role: "reasoning", text: "**Checking the config**" },
+        shell("a"),
+        { id: "done", role: "assistant", text: "Done." },
+      ],
+      true,
+    );
+    expect(items.map((item) => item.type)).toEqual(["activity", "block"]);
+    if (items[0]?.type !== "activity") return;
+    expect(items[0].blocks.map((block) => block.id)).toEqual(["r", "a"]);
+  });
+
+  it("drops thinking entirely when zen is off", () => {
+    const items = groupTurnItems([
+      { id: "r", role: "reasoning", text: "thinking" },
+      shell("a"),
+    ]);
+    expect(items).toHaveLength(1);
+    if (items[0]?.type !== "activity") return;
+    expect(items[0].blocks.map((block) => block.id)).toEqual(["a"]);
+  });
+
+  it("does not count thinking as a tool call", () => {
+    expect(
+      activitySummary([
+        { id: "r", role: "reasoning", text: "thinking" },
+        shell("a"),
+      ]),
+    ).toBe("1 tool call");
+  });
+
   it("summarises calls and distinct edited files", () => {
     expect(activitySummary([shell("a"), edit("b"), edit("c")])).toBe(
       "3 tool calls · 1 file edited",
@@ -199,11 +326,62 @@ describe("zen mode grouping", () => {
     expect(activitySummary([shell("a")])).toBe("1 tool call");
   });
 
+  it("counts only tool calls, and falls back to messages without them", () => {
+    const note: Block = { id: "a1", role: "assistant", text: "Looking now." };
+    expect(activitySummary([note, shell("a"), edit("b")])).toBe(
+      "2 tool calls · 1 file edited",
+    );
+    expect(activitySummary([note])).toBe("1 earlier message");
+    expect(
+      activitySummary([{ id: "r", role: "reasoning", text: "thinking" }]),
+    ).toBe("1 thought");
+  });
+
   it("folds to the summary even if live previous-tools were expanded", () => {
     expect(activityGroupView(true, 0, false)).toBe("summary");
     expect(activityGroupView(true, 0, true)).toBe("zen-expanded");
     expect(activityGroupView(false, 0, false)).toBe("live");
     expect(activityGroupView(true, 2, false)).toBe("live");
+  });
+});
+
+describe("activityPreviousCount", () => {
+  it("keeps zen's disclosure on from the first live step", () => {
+    expect(activityPreviousCount(0, true, true)).toBe(1);
+    expect(activityPreviousCount(0, true, false)).toBe(0);
+    expect(activityPreviousCount(0, false, true)).toBe(0);
+    expect(activityPreviousCount(3, true, true)).toBe(3);
+  });
+
+  it("labels the disclosure as steps in zen and tool calls otherwise", () => {
+    expect(activityPreviousLabel(1, true)).toBe("+1 previous step");
+    expect(activityPreviousLabel(2, true)).toBe("+2 previous steps");
+    expect(activityPreviousLabel(1, false)).toBe("+1 previous tool call");
+    expect(activityPreviousLabel(4, false)).toBe("+4 previous tool calls");
+  });
+});
+
+describe("lastActivityIndex", () => {
+  it("points at the fold that sits under the final answer", () => {
+    const items = groupTurnItems(
+      [
+        { id: "u", role: "user", text: "go" },
+        shell("a"),
+        { id: "p", role: "plan", text: "## Plan" },
+        shell("b"),
+        { id: "done", role: "assistant", text: "Done." },
+      ],
+      true,
+    );
+    expect(lastActivityIndex(items)).toBe(3);
+  });
+
+  it("returns -1 for a turn that ran no tools", () => {
+    expect(
+      lastActivityIndex(
+        groupTurnItems([{ id: "a", role: "assistant", text: "Hi." }], true),
+      ),
+    ).toBe(-1);
   });
 });
 
@@ -219,5 +397,21 @@ describe("editVerb", () => {
   it("falls back to Edit for unknown phrasing", () => {
     expect(editVerb("Patching src/App.tsx")).toBe("Edit");
     expect(editVerb("")).toBe("Edit");
+  });
+});
+
+describe("proseSummary", () => {
+  it("reduces a paragraph to one plain line", () => {
+    expect(
+      proseSummary(
+        "**Full checks pass** — `cargo fmt` and 134 tests.\n\nBumping:",
+      ),
+    ).toBe("Full checks pass — cargo fmt and 134 tests.");
+  });
+
+  it("skips fenced code and list markers", () => {
+    expect(
+      proseSummary("```ts\nconst a = 1;\n```\n\n- Ran [checks](x.md)"),
+    ).toBe("Ran checks");
   });
 });

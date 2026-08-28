@@ -46,6 +46,7 @@ import {
   saveThemeSaturation,
   saveTranscriptLayout,
   saveTranscriptZen,
+  TRANSCRIPT_ZEN_CHANGE_EVENT,
   SIDEBAR_BLUR_DEFAULT,
   SIDEBAR_BLUR_MAX,
   SIDEBAR_BLUR_MIN,
@@ -83,7 +84,7 @@ import {
   subscribeModels,
 } from "../lib/models";
 import { prettyCwd, projectName } from "../lib/paths";
-import { IS_MAC } from "../lib/platform";
+import { ALT, IS_MAC, MOD } from "../lib/platform";
 import {
   loadArchivedProjects,
   looksLikeProject,
@@ -250,6 +251,15 @@ function GeneralPage() {
   const [transcriptZen, setTranscriptZen] = useState(loadTranscriptZen);
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
 
+  useEffect(() => {
+    const onChange = (event: Event) => {
+      setTranscriptZen((event as CustomEvent<boolean>).detail === true);
+    };
+    window.addEventListener(TRANSCRIPT_ZEN_CHANGE_EVENT, onChange);
+    return () =>
+      window.removeEventListener(TRANSCRIPT_ZEN_CHANGE_EVENT, onChange);
+  }, []);
+
   const onLayout = (next: SidebarLayout) => {
     saveSidebarLayout(next);
     setLayout(next);
@@ -302,7 +312,7 @@ function GeneralPage() {
       </Row>
       <Row
         label="Zen mode"
-        description="While a turn runs, edits collapse into the same one-line activity list as reads and searches. Once the turn settles the whole toolchain folds behind a single summary line, leaving the agent's final answer. Edits waiting on approval still show their diff."
+        description={`While a turn runs, tool calls, thinking, and the notes the agent drops between them roll through a one-line ticker. Once the turn settles, the whole working process folds behind the turn's 'Worked for' line, leaving only the agent's final answer; expand it to read everything back. Edits waiting on approval still show their diff. ${MOD}${ALT}Z toggles it.`}
       >
         <Toggle
           label="Zen mode"
