@@ -210,7 +210,7 @@
   --terminal-cursor: #10b981;
   --terminal-cursor-accent: #0b0f19;
   --terminal-selection: rgba(99, 102, 241, 0.28);
-  --terminal-ansi-black: #1e293b;
+  --terminal-ansi-black: #121214;
   --terminal-ansi-red: #f87171;
   --terminal-ansi-green: #10b981;
   --terminal-ansi-yellow: #fbbf24;
@@ -258,26 +258,28 @@ html[data-vibrancy="on"] #settings-root {
 }
 
 html[data-vibrancy="on"] {
-  --frame: rgba(18, 18, 20, 0.45);
+  --frame: rgba(18, 18, 20, calc(var(--vibrancy-opacity, 0.85) * 0.55));
   --surface-canvas: transparent;
-  --surface-sidebar: rgba(22, 23, 26, 0.65);
-  --surface-toolbar: rgba(25, 26, 30, 0.60);
-  --surface-card: rgba(30, 32, 37, 0.70);
+  --surface-sidebar: rgba(22, 23, 26, calc(var(--vibrancy-opacity, 0.85) * 0.75));
+  --surface-toolbar: rgba(25, 26, 30, calc(var(--vibrancy-opacity, 0.85) * 0.70));
+  --surface-card: rgba(30, 32, 37, calc(var(--vibrancy-opacity, 0.85) * 0.85));
   --surface-pane: transparent;
   --surface-popover: rgba(34, 37, 42, 0.90);
   --surface-active-item: rgba(255, 255, 255, 0.10);
   --terminal-background: transparent;
+  --terminal-ansi-black: transparent;
 }
 
 html[data-vibrancy="on"].light {
-  --frame: rgba(244, 245, 248, 0.50);
-  --surface-sidebar: rgba(235, 236, 239, 0.70);
-  --surface-toolbar: rgba(248, 249, 250, 0.65);
-  --surface-card: rgba(255, 255, 255, 0.75);
+  --frame: rgba(244, 245, 248, calc(var(--vibrancy-opacity, 0.85) * 0.60));
+  --surface-sidebar: rgba(235, 236, 239, calc(var(--vibrancy-opacity, 0.85) * 0.80));
+  --surface-toolbar: rgba(248, 249, 250, calc(var(--vibrancy-opacity, 0.85) * 0.75));
+  --surface-card: rgba(255, 255, 255, calc(var(--vibrancy-opacity, 0.85) * 0.85));
   --surface-pane: transparent;
   --surface-popover: rgba(255, 255, 255, 0.92);
   --surface-active-item: rgba(0, 0, 0, 0.08);
   --terminal-background: transparent;
+  --terminal-ansi-black: transparent;
 }
 
 html[data-vibrancy="on"] .voktty-pane {

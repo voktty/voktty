@@ -419,6 +419,9 @@ export const es: TranslationSchema = {
         backdropVibrancy: "Efecto traslúcido (Vibrancy)",
         backdropVibrancyDesc:
           "Aplica translucidez a las barras sobre lo que está tras la ventana. Los paneles quedan opacos.",
+        vibrancyOpacity: "Opacidad de superficies",
+        vibrancyOpacityDesc:
+          "Ajusta cuánto se trasluce el fondo nativo Mica o Vibrancy a través de las superficies de la aplicación.",
       },
     },
     shortcuts: {

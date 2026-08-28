@@ -19,6 +19,7 @@ import {
   listCustomThemes,
   onCustomThemesChange,
 } from "./customThemes";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { SurfaceLayer } from "./SurfaceLayer";
 import { getBuiltinTheme, getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
@@ -134,6 +135,9 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     root.classList.add(resolvedMode);
   }, [resolvedMode]);
 
+  const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
+  const vibrancyOpacity = usePreferencesStore((s) => s.vibrancyOpacity);
+
   const effectiveId = previewId ?? themeId;
   const activeTheme = useMemo(
     () => resolveTheme(effectiveId, customThemes),
@@ -142,10 +146,22 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   useEffect(() => {
     if (effectiveId === DEFAULT_THEME_ID) {
       clearTheme();
+      if (windowVibrancy) {
+        document.documentElement.style.setProperty(
+          "--vibrancy-opacity",
+          String(vibrancyOpacity),
+        );
+      }
       return;
     }
-    applyTheme(activeTheme, resolvedMode);
-  }, [effectiveId, activeTheme, resolvedMode]);
+    applyTheme(activeTheme, resolvedMode, windowVibrancy, vibrancyOpacity);
+  }, [
+    effectiveId,
+    activeTheme,
+    resolvedMode,
+    windowVibrancy,
+    vibrancyOpacity,
+  ]);
 
   const setMode = useCallback((next: ThemePref) => {
     setModeState(next);

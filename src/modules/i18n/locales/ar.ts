@@ -407,6 +407,9 @@ export const ar: TranslationSchema = {
         backdropVibrancy: "تأثير الحيوية (Vibrancy)",
         backdropVibrancyDesc:
           "تطبيق تأثير زجاجي مثلج على الشريط العلوي وشريط الحالة والهوامش. تبقى الألواح مصمتة.",
+        vibrancyOpacity: "عتامة الأسطح",
+        vibrancyOpacityDesc:
+          "اضبط مقدار ظهور خلفية Mica أو Vibrancy الأصلية من خلال أسطح التطبيق.",
       },
     },
     shortcuts: {
