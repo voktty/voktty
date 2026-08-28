@@ -524,7 +524,7 @@ export function NewTabMenuItems({
             className="shrink-0 text-purple-400"
           />
         }
-        label="Agent Operational History"
+        label={t("agentHistory.modalTitle")}
         shortcut={fmtShortcut(MOD_KEY, SHIFT_KEY, "H")}
       />
 
