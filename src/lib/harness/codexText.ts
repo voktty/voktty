@@ -13,7 +13,7 @@ import {
   stringField,
 } from "./codexProtocol";
 import { JsonRpcClient, type JsonRpcId } from "./jsonRpc";
-import { mergeStream } from "./streamText";
+import { mergeStream, streamTextDelta } from "./streamText";
 
 const TEXT_CHILD_ID = "monocode-codex-text";
 const INIT_TIMEOUT_MS = 60_000;
@@ -272,7 +272,7 @@ function handleNotification(
   }
 
   if (method === "item/agentMessage/delta") {
-    const delta = stringField(asRecord(params), "delta") ?? "";
+    const delta = streamTextDelta(asRecord(params)?.delta);
     if (delta) session.output = mergeStream(session.output, delta);
     return;
   }

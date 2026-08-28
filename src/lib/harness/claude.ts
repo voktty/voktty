@@ -48,7 +48,7 @@ import {
   type ClaudeCliSettings,
   type ClaudeControlRequest,
 } from "./claudeProtocol";
-import { mergeStream } from "./streamText";
+import { joinStreamText, snapshotRemainder } from "./streamText";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
 
 type PendingApproval = {
@@ -438,10 +438,10 @@ function handleStreamEvent(live: Live, rec: Record<string, unknown>): void {
   if (delta) {
     if (subagent) return;
     if (delta.kind === "assistant") {
-      live.emittedAssistant = mergeStream(live.emittedAssistant, delta.text);
+      live.emittedAssistant = joinStreamText(live.emittedAssistant, delta.text);
       live.onEvent({ type: "message.delta", text: delta.text });
     } else {
-      live.emittedReasoning = mergeStream(live.emittedReasoning, delta.text);
+      live.emittedReasoning = joinStreamText(live.emittedReasoning, delta.text);
       live.onEvent({ type: "reasoning.delta", text: delta.text });
     }
     return;
@@ -500,11 +500,10 @@ function handleAssistant(live: Live, rec: Record<string, unknown>): void {
   if (used !== undefined) live.onEvent({ type: "context", used });
 
   const snapshot = assistantTextBlocks(rec).join("");
-  if (snapshot && snapshot !== live.emittedAssistant) {
-    const next = mergeStream(live.emittedAssistant, snapshot);
-    const delta = next.slice(live.emittedAssistant.length);
-    live.emittedAssistant = next;
-    if (delta) live.onEvent({ type: "message.delta", text: delta });
+  const extra = snapshotRemainder(live.emittedAssistant, snapshot);
+  if (extra) {
+    live.emittedAssistant = joinStreamText(live.emittedAssistant, extra);
+    live.onEvent({ type: "message.delta", text: extra });
   }
 
   for (const use of assistantToolUses(rec)) {

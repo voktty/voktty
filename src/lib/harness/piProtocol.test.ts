@@ -221,6 +221,12 @@ describe("streaming events", () => {
         assistantMessageEvent: { type: "thinking_delta", delta: "hmm" },
       }),
     ).toEqual({ kind: "thinking", text: "hmm" });
+    expect(
+      assistantDeltaFromEvent({
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", delta: "\n\n" },
+      }),
+    ).toEqual({ kind: "text", text: "\n\n" });
 
     expect(
       toolCallStartFromEvent({

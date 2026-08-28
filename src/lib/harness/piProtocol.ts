@@ -2,6 +2,7 @@ import type { Attachment, ToolPreview } from "../session";
 import type { AgentModel, ModelSetting } from "../models";
 import type { PiFlavor } from "./piFlavor";
 import { composeToolTitle, extractToolPreview } from "./preview";
+import { streamTextDelta } from "./streamText";
 
 /** Images Pi RPC accepts on `prompt` / `steer`. */
 export const SUPPORTED_PI_IMAGE_MIME_TYPES = new Set([
@@ -353,7 +354,7 @@ export function assistantDeltaFromEvent(
   if (stringField(rec, "type") !== "message_update") return null;
   const event = asRecord(rec.assistantMessageEvent);
   const type = stringField(event, "type");
-  const delta = stringField(event, "delta");
+  const delta = streamTextDelta(event?.delta);
   if (!delta) return null;
   if (type === "text_delta") return { kind: "text", text: delta };
   if (type === "thinking_delta") return { kind: "thinking", text: delta };
@@ -379,7 +380,7 @@ export function toolCallDeltaFromEvent(
   if (stringField(rec, "type") !== "message_update") return null;
   const event = asRecord(rec.assistantMessageEvent);
   if (stringField(event, "type") !== "toolcall_delta") return null;
-  const delta = stringField(event, "delta");
+  const delta = streamTextDelta(event?.delta);
   if (!delta) return null;
   return {
     index: numberField(event, "contentIndex") ?? -1,

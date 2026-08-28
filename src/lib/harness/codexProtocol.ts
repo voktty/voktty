@@ -3,6 +3,7 @@ import {
   composeToolTitle,
   extractToolPreview,
 } from "./preview";
+import { streamTextDelta } from "./streamText";
 import type { HarnessEvent } from "./types";
 
 /** Codex approval / sandbox settings for thread/start and turn/start. */
@@ -200,25 +201,25 @@ export function mapCodexNotification(
   if (!rec) return { events: [] };
 
   if (method === "item/agentMessage/delta") {
-    const delta = stringField(rec, "delta") ?? "";
+    const delta = streamTextDelta(rec.delta);
     if (!delta) return { events: [] };
     return { events: [{ type: "message.delta", text: delta }] };
   }
 
   if (method === "item/reasoning/summaryTextDelta") {
-    const delta = stringField(rec, "delta") ?? "";
+    const delta = streamTextDelta(rec.delta);
     if (!delta) return { events: [] };
     return { events: [{ type: "reasoning.delta", text: delta }] };
   }
 
   if (method === "item/reasoning/textDelta") {
-    const delta = stringField(rec, "delta") ?? "";
+    const delta = streamTextDelta(rec.delta);
     if (!delta) return { events: [] };
     return { events: [{ type: "reasoning.delta", text: delta }] };
   }
 
   if (method === "item/plan/delta") {
-    const delta = stringField(rec, "delta") ?? "";
+    const delta = streamTextDelta(rec.delta);
     if (!delta) return { events: [] };
     return { events: [{ type: "plan", text: delta }] };
   }
@@ -245,7 +246,7 @@ export function mapCodexNotification(
 
   if (method === "item/commandExecution/outputDelta") {
     const itemId = stringField(rec, "itemId") ?? "";
-    const delta = stringField(rec, "delta") ?? "";
+    const delta = streamTextDelta(rec.delta);
     if (!itemId || !delta) return { events: [] };
     return {
       events: [
@@ -400,7 +401,7 @@ function mapItemLifecycle(
   if (itemType === "agentMessage") {
     // Prefer deltas; completed agent messages may carry full text for non-streaming.
     if (completed) {
-      const text = stringField(item, "text");
+      const text = streamTextDelta(item.text);
       const events: HarnessEvent[] = [];
       if (text) {
         events.push(

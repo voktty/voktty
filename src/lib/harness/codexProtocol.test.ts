@@ -125,6 +125,13 @@ describe("mapCodexNotification", () => {
     expect(mapped.events).toEqual([{ type: "message.delta", text: "Hello" }]);
   });
 
+  it("keeps whitespace-only agent message deltas", () => {
+    const mapped = mapCodexNotification("item/agentMessage/delta", {
+      delta: "\n\n",
+    });
+    expect(mapped.events).toEqual([{ type: "message.delta", text: "\n\n" }]);
+  });
+
   it("maps reasoning summary deltas", () => {
     const mapped = mapCodexNotification("item/reasoning/summaryTextDelta", {
       delta: "thinking…",

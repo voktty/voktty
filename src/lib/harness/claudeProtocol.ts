@@ -1,5 +1,6 @@
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
 import { composeToolTitle, extractToolPreview } from "./preview";
+import { streamTextDelta } from "./streamText";
 import type { ApprovalDecision, HarnessEvent } from "./types";
 
 /** Claude Code versions that first ship Opus 5 / Fable 5 / Opus 4.8 / 4.7. */
@@ -408,11 +409,11 @@ export function streamDeltaFromEvent(
   const delta = asRecord(event.delta);
   const deltaType = stringField(delta, "type") ?? "";
   if (deltaType === "text_delta") {
-    const text = typeof delta?.text === "string" ? delta.text : "";
+    const text = streamTextDelta(delta?.text);
     return text ? { kind: "assistant", text } : null;
   }
   if (deltaType === "thinking_delta") {
-    const text = typeof delta?.thinking === "string" ? delta.thinking : "";
+    const text = streamTextDelta(delta?.thinking);
     return text ? { kind: "reasoning", text } : null;
   }
   return null;

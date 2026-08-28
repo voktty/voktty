@@ -8,7 +8,7 @@ import {
   mergeToolPreview,
   stubFilePreview,
 } from "./preview";
-import { mergeStream } from "./streamText";
+import { joinStreamText } from "./streamText";
 import type { HarnessEvent } from "./types";
 
 export function applyHarnessEvent(
@@ -183,7 +183,7 @@ function patchStreaming(
   if (!text && role === "reasoning") return session;
   const last = session.blocks[session.blocks.length - 1];
   if (last?.role === role) {
-    const nextText = mergeStream(last.text, text);
+    const nextText = joinStreamText(last.text, text);
     if (nextText === last.text && last.streaming === streaming) return session;
     const blocks = session.blocks.slice();
     blocks[blocks.length - 1] = {

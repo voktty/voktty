@@ -19,6 +19,7 @@ import {
   type CodexApprovalKind,
 } from "./codexProtocol";
 import { JsonRpcClient, type JsonRpcId } from "./jsonRpc";
+import { joinStreamText, snapshotRemainder } from "./streamText";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
 
 type PendingApproval = {
@@ -45,6 +46,8 @@ type Live = {
   /** turn/completed arrived before runTurn registered turnDone. */
   turnEndPending: boolean;
   turnWatchdog?: ReturnType<typeof setTimeout>;
+  emittedAssistant: string;
+  emittedReasoning: string;
 };
 
 const TURN_WATCHDOG_MS = 2_000;
@@ -314,6 +317,8 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       turnDone: null,
       turnFailed: null,
       turnEndPending: false,
+      emittedAssistant: "",
+      emittedReasoning: "",
     };
     liveRef.current = live;
     liveByThread.set(input.sessionId, live);
@@ -359,6 +364,9 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
     return;
   }
 
+  live.emittedAssistant = "";
+  live.emittedReasoning = "";
+
   const turnPromise = new Promise<void>((resolve, reject) => {
     live.turnDone = resolve;
     live.turnFailed = reject;
@@ -395,7 +403,16 @@ function handleNotification(
   params: unknown,
 ): void {
   const mapped = mapCodexNotification(method, params);
+  const snapshot = method === "item/completed";
   for (const event of mapped.events) {
+    if (event.type === "message.delta") {
+      publishCodexText(live, "assistant", event.text, snapshot);
+      continue;
+    }
+    if (event.type === "reasoning.delta") {
+      publishCodexText(live, "reasoning", event.text, snapshot);
+      continue;
+    }
     live.onEvent(event);
   }
   if (mapped.activeTurnId !== undefined) {
@@ -409,6 +426,25 @@ function handleNotification(
   }
 }
 
+function publishCodexText(
+  live: Live,
+  role: "assistant" | "reasoning",
+  text: string,
+  snapshot: boolean,
+): void {
+  const already =
+    role === "assistant" ? live.emittedAssistant : live.emittedReasoning;
+  const emit = snapshot ? snapshotRemainder(already, text) : text;
+  if (!emit) return;
+  if (role === "assistant") {
+    live.emittedAssistant = joinStreamText(already, emit);
+    live.onEvent({ type: "message.delta", text: emit });
+    return;
+  }
+  live.emittedReasoning = joinStreamText(already, emit);
+  live.onEvent({ type: "reasoning.delta", text: emit });
+}
+
 function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {
   if (live.turnWatchdog) {
     clearTimeout(live.turnWatchdog);
@@ -416,6 +452,8 @@ function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {
   }
   live.turnEndPending = false;
   live.activeTurnId = null;
+  live.emittedAssistant = "";
+  live.emittedReasoning = "";
   for (const event of extraEvents) {
     live.onEvent(event);
   }

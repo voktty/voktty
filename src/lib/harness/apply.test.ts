@@ -50,6 +50,42 @@ describe("turn duration", () => {
   });
 });
 
+describe("streamed markdown", () => {
+  it("keeps heading breaks, tables, and doubled letters", () => {
+    const chunks = [
+      "# Result",
+      "\n",
+      "\n",
+      "book",
+      "keeper..\n",
+      "\n",
+      "| a | b |\n",
+      "| --- | --- |\n",
+      "| 1 | 2 |",
+    ];
+    const session = chunks.reduce(
+      (current, text) =>
+        applyHarnessEvent(current, { type: "message.delta", text }),
+      newSession("pi", "/tmp"),
+    );
+    expect(session.blocks[0]?.text).toBe(chunks.join(""));
+  });
+
+  it("does not double an assistant block when a completed snapshot repeats it", () => {
+    let session = newSession("claude", "/tmp");
+    session = applyHarnessEvent(session, {
+      type: "message.delta",
+      text: "I'll read the file",
+    });
+    session = applyHarnessEvent(session, {
+      type: "message.delta",
+      text: "I'll read the file",
+    });
+    expect(session.blocks).toHaveLength(1);
+    expect(session.blocks[0]?.text).toBe("I'll read the file");
+  });
+});
+
 describe("appendSteerUser", () => {
   it("appends a user message without sealing an in-flight assistant block", () => {
     let session = appendUser(newSession("cursor", "/tmp"), "build it");

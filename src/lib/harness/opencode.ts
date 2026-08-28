@@ -35,6 +35,7 @@ import {
   type OpenCodePart,
 } from "./opencodeProtocol";
 import { composeToolTitle } from "./preview";
+import { streamTextDelta } from "./streamText";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
 
 type PendingApproval = {
@@ -420,7 +421,7 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
     }
     case "message.part.delta": {
       const partID = stringField(properties, "partID");
-      const delta = stringField(properties, "delta") ?? "";
+      const delta = streamTextDelta(properties.delta);
       if (!partID || !delta) break;
       const existing = live.partById.get(partID);
       if (!existing || roleForPart(live, existing) !== "assistant") break;
