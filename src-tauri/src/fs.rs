@@ -513,6 +513,34 @@ pub async fn git_github_work_item_details(
     .map_err(|e| e.to_string())?
 }
 
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPrFile {
+    pub path: String,
+    pub additions: i64,
+    pub deletions: i64,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPrDiff {
+    pub additions: i64,
+    pub deletions: i64,
+    pub files: Vec<GitHubPrFile>,
+    pub patch: String,
+    pub truncated: bool,
+}
+
+const MAX_PR_DIFF_BYTES: usize = 2 * 1024 * 1024;
+
+/// Unified diff and file stats for a pull request, via `gh`.
+#[tauri::command]
+pub async fn git_github_pr_diff(cwd: String, number: i64) -> Result<GitHubPrDiff, String> {
+    tauri::async_runtime::spawn_blocking(move || git_github_pr_diff_for(&expand_home(&cwd), number))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranches {
@@ -1207,6 +1235,66 @@ fn parse_github_work_item_details(json: &str) -> Result<GitHubWorkItemDetails, S
     })
 }
 
+fn git_github_pr_diff_for(root: &Path, number: i64) -> Result<GitHubPrDiff, String> {
+    if number <= 0 {
+        return Err("Invalid pull request number".into());
+    }
+    let number = number.to_string();
+    let json = gh_run(
+        root,
+        &["pr", "view", &number, "--json", "files,additions,deletions"],
+        false,
+    )?;
+    let mut diff = parse_github_pr_diff_meta(&json)?;
+    let patch = gh_run(root, &["pr", "diff", &number], true)?;
+    if patch.len() > MAX_PR_DIFF_BYTES {
+        diff.truncated = true;
+    } else {
+        diff.patch = patch;
+    }
+    if diff.additions == 0 && diff.deletions == 0 {
+        diff.additions = diff.files.iter().map(|file| file.additions).sum();
+        diff.deletions = diff.files.iter().map(|file| file.deletions).sum();
+    }
+    Ok(diff)
+}
+
+fn parse_github_pr_diff_meta(json: &str) -> Result<GitHubPrDiff, String> {
+    #[derive(Deserialize)]
+    struct FileRow {
+        path: String,
+        #[serde(default)]
+        additions: i64,
+        #[serde(default)]
+        deletions: i64,
+    }
+    #[derive(Deserialize)]
+    struct Row {
+        #[serde(default)]
+        additions: i64,
+        #[serde(default)]
+        deletions: i64,
+        #[serde(default)]
+        files: Vec<FileRow>,
+    }
+    let row: Row = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    Ok(GitHubPrDiff {
+        additions: row.additions,
+        deletions: row.deletions,
+        files: row
+            .files
+            .into_iter()
+            .map(|file| GitHubPrFile {
+                path: file.path,
+                additions: file.additions,
+                deletions: file.deletions,
+            })
+            .collect(),
+        patch: String::new(),
+        truncated: false,
+    })
+}
+
 fn parse_github_work_items(
     json: &str,
     kind: &str,
@@ -1340,16 +1428,22 @@ fn git_pr_create_for(root: &Path, input: &GitPrCreateInput) -> Result<String, St
 }
 
 fn gh_stdout(root: &Path, args: &[&str]) -> Option<String> {
-    gh_checked(root, args).ok()
+    gh_run(root, args, false).ok()
 }
 
 fn gh_checked(root: &Path, args: &[&str]) -> Result<String, String> {
+    gh_run(root, args, false)
+}
+
+fn gh_run(root: &Path, args: &[&str], allow_empty: bool) -> Result<String, String> {
     let program = crate::harness::resolve_gui_binary("gh")
         .ok_or_else(|| "GitHub CLI (`gh`) is not installed.".to_string())?;
     let mut cmd = Command::new(&program);
     cmd.current_dir(root)
         .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0");
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GH_PAGER", "cat")
+        .env("GIT_PAGER", "cat");
     crate::harness::apply_gui_env(&mut cmd);
     let output = cmd.output().map_err(|error| {
         if error.kind() == ErrorKind::NotFound {
@@ -1361,6 +1455,9 @@ fn gh_checked(root: &Path, args: &[&str]) -> Result<String, String> {
     if output.status.success() {
         let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if text.is_empty() {
+            if allow_empty {
+                return Ok(String::new());
+            }
             return Err("gh returned no output".into());
         }
         return Ok(text);
@@ -3464,6 +3561,26 @@ mod tests {
         let details = parse_github_work_item_details(json).unwrap();
         assert_eq!(details.body, "Steps to reproduce");
         assert_eq!(details.author, "maya");
+    }
+
+    #[test]
+    fn parse_github_pr_diff_meta_reads_files_and_totals() {
+        let json = r#"{
+            "additions": 971,
+            "deletions": 225,
+            "files": [
+                {"path": "next.config.ts", "additions": 4, "deletions": 0},
+                {"path": "package.json", "additions": 2, "deletions": 2}
+            ]
+        }"#;
+        let diff = parse_github_pr_diff_meta(json).unwrap();
+        assert_eq!(diff.additions, 971);
+        assert_eq!(diff.deletions, 225);
+        assert_eq!(diff.files.len(), 2);
+        assert_eq!(diff.files[0].path, "next.config.ts");
+        assert_eq!(diff.files[0].additions, 4);
+        assert_eq!(diff.patch, "");
+        assert!(!diff.truncated);
     }
 
     #[test]

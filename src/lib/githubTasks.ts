@@ -57,6 +57,20 @@ export type GithubWorkItemDetails = {
   author: string;
 };
 
+export type GithubPrFile = {
+  path: string;
+  additions: number;
+  deletions: number;
+};
+
+export type GithubPrDiff = {
+  additions: number;
+  deletions: number;
+  files: GithubPrFile[];
+  patch: string;
+  truncated: boolean;
+};
+
 export type GithubWorkItemQuery = {
   kind: GithubTaskKind;
   assignedToMe: boolean;
@@ -86,12 +100,16 @@ let inboxListCache: InboxListCache | null = null;
 const inboxListInflight = new Map<string, Promise<InboxListResult>>();
 const repoByPath = new Map<string, string>();
 const detailsByKey = new Map<string, GithubWorkItemDetails>();
+const prDiffByKey = new Map<string, GithubPrDiff>();
+const prDiffInflight = new Map<string, Promise<GithubPrDiff>>();
 
 export function clearInboxCache() {
   inboxListCache = null;
   inboxListInflight.clear();
   repoByPath.clear();
   detailsByKey.clear();
+  prDiffByKey.clear();
+  prDiffInflight.clear();
 }
 
 export function inboxListCacheKey(
@@ -230,6 +248,36 @@ export async function githubWorkItemDetails(
   );
   detailsByKey.set(detailsCacheKey(cwd, kind, number), details);
   return details;
+}
+
+export function prDiffCacheKey(cwd: string, number: number): string {
+  return `${normalizeProjectPath(cwd)}:pr:${number}`;
+}
+
+export function peekGithubPrDiff(
+  cwd: string,
+  number: number,
+): GithubPrDiff | null {
+  return prDiffByKey.get(prDiffCacheKey(cwd, number)) ?? null;
+}
+
+export async function githubPrDiff(
+  cwd: string,
+  number: number,
+): Promise<GithubPrDiff> {
+  const key = prDiffCacheKey(cwd, number);
+  const pending = prDiffInflight.get(key);
+  if (pending) return pending;
+  const promise = invoke<GithubPrDiff>("git_github_pr_diff", { cwd, number })
+    .then((diff) => {
+      prDiffByKey.set(key, diff);
+      return diff;
+    })
+    .finally(() => {
+      if (prDiffInflight.get(key) === promise) prDiffInflight.delete(key);
+    });
+  prDiffInflight.set(key, promise);
+  return promise;
 }
 
 export async function listInboxItems(

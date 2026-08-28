@@ -30,6 +30,7 @@ import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import {
+  githubPrDiff,
   githubWorkItemDetails,
   inboxItemKey,
   inboxItemRef,
@@ -37,10 +38,12 @@ import {
   inboxListIsFresh,
   inboxProjectsForRail,
   listInboxItems,
+  peekGithubPrDiff,
   peekGithubWorkItemDetails,
   peekInboxList,
   formatRelativeTime,
   type GithubLabel,
+  type GithubPrDiff,
   type GithubWorkItemDetails,
   type InboxItem,
   type InboxProviderErrors,
@@ -82,6 +85,7 @@ import {
   resolveTabGroupMascot,
 } from "../lib/tabGroups";
 import { AgentMarkdown } from "./AgentMarkdown";
+import { InboxPrDiff } from "./InboxPrDiff";
 
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 420;
@@ -145,10 +149,7 @@ function InboxProjectMark({
   );
 }
 
-function peekInboxForRail(
-  recents: RecentProject[],
-  cwd: string,
-) {
+function peekInboxForRail(recents: RecentProject[], cwd: string) {
   const projects = inboxProjectsForRail(recents, cwd);
   const filters = pruneInboxFilters(
     loadInboxFilters(),
@@ -191,6 +192,33 @@ function InboxSourceTab({
         />
         <span className="leading-none">{label}</span>
       </span>
+      {selected ? (
+        <span className="absolute inset-x-0 bottom-0 h-0.5 bg-content" />
+      ) : null}
+    </button>
+  );
+}
+
+function InboxDetailTab({
+  label,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onSelect}
+      className={`relative flex h-9 items-center text-[12px] leading-none ${
+        selected ? "text-content" : "text-content/50 hover:text-content"
+      }`}
+    >
+      {label}
       {selected ? (
         <span className="absolute inset-x-0 bottom-0 h-0.5 bg-content" />
       ) : null}
@@ -804,6 +832,7 @@ function InboxDetail({
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
 }) {
   const linear = item.provider === "linear";
+  const isPr = !linear && item.kind === "pr";
   const githubKind =
     item.kind === "issue" || item.kind === "pr" ? item.kind : null;
   const cached = linear
@@ -811,9 +840,16 @@ function InboxDetail({
     : githubKind
       ? peekGithubWorkItemDetails(item.projectPath, githubKind, item.number)
       : null;
+  const cachedDiff = isPr
+    ? peekGithubPrDiff(item.projectPath, item.number)
+    : null;
   const [details, setDetails] = useState<GithubWorkItemDetails | null>(cached);
   const [loading, setLoading] = useState(cached == null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"summary" | "code">("summary");
+  const [prDiff, setPrDiff] = useState<GithubPrDiff | null>(cachedDiff);
+  const [diffLoading, setDiffLoading] = useState(isPr && cachedDiff == null);
+  const [diffError, setDiffError] = useState<string | null>(null);
   const defaultProject =
     projects.find((project) => sameProjectPath(project.path, cwd))?.path ??
     projects[0]?.path ??
@@ -881,8 +917,40 @@ function InboxDetail({
     };
   }, [githubKind, item.id, item.number, item.projectPath, linear, revision]);
 
+  useEffect(() => {
+    if (!isPr) return;
+    let cancelled = false;
+    const cachedDiff = peekGithubPrDiff(item.projectPath, item.number);
+    if (cachedDiff) {
+      setPrDiff(cachedDiff);
+      setDiffLoading(false);
+      setDiffError(null);
+    } else {
+      setDiffLoading(true);
+      setDiffError(null);
+      setPrDiff(null);
+    }
+    void githubPrDiff(item.projectPath, item.number)
+      .then((next) => {
+        if (cancelled) return;
+        setPrDiff(next);
+        setDiffError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (cachedDiff) return;
+        setDiffError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setDiffLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPr, item.number, item.projectPath, revision]);
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-8 py-8">
+    <div className={`mx-auto flex w-full flex-col gap-5 px-8 py-8 max-w-5xl`}>
       <header className="flex flex-col gap-3">
         <div className="flex items-center gap-2 text-[12px] text-content/50">
           <InboxProviderMark provider={item.provider} className="size-3.5" />
@@ -928,8 +996,7 @@ function InboxDetail({
               <button
                 type="button"
                 disabled={
-                  starting ||
-                  (linear && (!startProject || loading || !!error))
+                  starting || (linear && (!startProject || loading || !!error))
                 }
                 onClick={() => {
                   if (starting) return;
@@ -950,10 +1017,7 @@ function InboxDetail({
                 }}
                 className="inline-flex items-center gap-1 rounded-md bg-content px-3 h-6.5 text-[12px] text-background-base hover:bg-content/80 disabled:cursor-default disabled:opacity-40"
               >
-                {starting ? "Starting" : "Start"}
-                {starting ? null : (
-                  <ArrowRight className="size-3" strokeWidth={1.75} />
-                )}
+                {starting ? "Sending..." : "Send to agent"}
               </button>
               {linear ? (
                 <InboxProjectPicker
@@ -985,26 +1049,57 @@ function InboxDetail({
           <p className="text-[12px] text-red-400/90">{startError}</p>
         ) : null}
       </header>
-      <div className="border-t border-content/10 pt-5">
-        {loading ? (
+      {isPr ? (
+        <div
+          role="tablist"
+          aria-label="Pull request sections"
+          className="flex h-9 gap-4 items-stretch border-b border-content/10"
+        >
+          <InboxDetailTab
+            label="Summary"
+            selected={tab === "summary"}
+            onSelect={() => setTab("summary")}
+          />
+          <InboxDetailTab
+            label="Code"
+            selected={tab === "code"}
+            onSelect={() => setTab("code")}
+          />
+        </div>
+      ) : (
+        <div className="border-t border-content/10" />
+      )}
+      {isPr && tab === "code" ? (
+        diffLoading ? (
           <div className="flex justify-center py-10 text-content/40">
             <LoaderCircle className="size-4 animate-spin" strokeWidth={1.75} />
           </div>
-        ) : error ? (
-          <p className="text-[13px] text-content/50">{error}</p>
-        ) : details?.body.trim() ? (
-          <div>
-            {details.author ? (
-              <p className="mb-3 text-[12px] text-content/45">
-                {details.author}
-              </p>
-            ) : null}
-            <AgentMarkdown text={details.body} cwd={markdownCwd} />
-          </div>
+        ) : diffError ? (
+          <p className="text-[13px] text-content/50">{diffError}</p>
+        ) : prDiff ? (
+          <InboxPrDiff
+            key={`${item.projectPath}:${item.number}:${revision}`}
+            diff={prDiff}
+          />
         ) : (
-          <p className="text-[13px] text-content/45">No description</p>
-        )}
-      </div>
+          <p className="text-[13px] text-content/45">No file changes</p>
+        )
+      ) : loading ? (
+        <div className="flex justify-center py-10 text-content/40">
+          <LoaderCircle className="size-4 animate-spin" strokeWidth={1.75} />
+        </div>
+      ) : error ? (
+        <p className="text-[13px] text-content/50">{error}</p>
+      ) : details?.body.trim() ? (
+        <div>
+          {details.author ? (
+            <p className="mb-3 text-[12px] text-content/45">{details.author}</p>
+          ) : null}
+          <AgentMarkdown text={details.body} cwd={markdownCwd} />
+        </div>
+      ) : (
+        <p className="text-[13px] text-content/45">No description</p>
+      )}
     </div>
   );
 }
