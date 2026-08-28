@@ -139,12 +139,133 @@ pub async fn fs_read_dir(
     workspace: Option<WorkspaceEnv>,
 ) -> Result<Vec<DirEntry>, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let root = resolve_path(&path, &workspace);
-    let network_path = is_network_path(&root);
-    blocking_fs(network_path, move || {
-        read_dir_sync(root, show_hidden, git_decorations)
+    match &workspace {
+        WorkspaceEnv::Ssh { connection, .. } => {
+            read_ssh_dir(connection, &path, show_hidden).await
+        }
+        WorkspaceEnv::Docker { container_id, .. } => {
+            read_docker_dir(container_id, &path, show_hidden).await
+        }
+        _ => {
+            let root = resolve_path(&path, &workspace);
+            let network_path = is_network_path(&root);
+            blocking_fs(network_path, move || {
+                read_dir_sync(root, show_hidden, git_decorations)
+            })
+            .await
+        }
+    }
+}
+
+async fn read_ssh_dir(
+    connection: &crate::modules::remote::RemoteSshConnection,
+    path: &str,
+    show_hidden: bool,
+) -> Result<Vec<DirEntry>, String> {
+    let conn = connection.clone();
+    let target_path = path.to_string();
+    tokio::task::spawn_blocking(move || {
+        let script = format!(
+            r#"sh -c 'P="${{1:-.}}"; if [ -d "$P" ]; then cd "$P" 2>/dev/null && for f in .* *; do [ "$f" = "." ] || [ "$f" = ".." ] && continue; [ ! -e "$f" ] && [ ! -L "$f" ] && continue; if [ -L "$f" ]; then echo "l|$f"; elif [ -d "$f" ]; then echo "d|$f"; else echo "f|$f"; fi; done; fi' _ "{}""#,
+            target_path.replace('"', "\\\"")
+        );
+        let output = crate::modules::remote::run_ssh_capture(&conn, &script)?;
+        let mut entries = Vec::new();
+        for line in output.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Some((kind_str, name)) = line.split_once('|') {
+                if !show_hidden && name.starts_with('.') {
+                    continue;
+                }
+                let kind = match kind_str {
+                    "d" => EntryKind::Dir,
+                    "l" => EntryKind::Symlink,
+                    _ => EntryKind::File,
+                };
+                entries.push(DirEntry {
+                    name: name.to_string(),
+                    kind,
+                    size: 0,
+                    mtime: 0,
+                    gitignored: false,
+                });
+            }
+        }
+        entries.sort_by(|a, b| {
+            let a_is_dir = matches!(a.kind, EntryKind::Dir);
+            let b_is_dir = matches!(b.kind, EntryKind::Dir);
+            match (a_is_dir, b_is_dir) {
+                (true, false) => Ordering::Less,
+                (false, true) => Ordering::Greater,
+                _ => natural_cmp(&a.name, &b.name),
+            }
+        });
+        Ok(entries)
     })
     .await
+    .map_err(|e| e.to_string())?
+}
+
+async fn read_docker_dir(
+    container_id: &str,
+    path: &str,
+    show_hidden: bool,
+) -> Result<Vec<DirEntry>, String> {
+    let cid = container_id.to_string();
+    let target_path = path.to_string();
+    tokio::task::spawn_blocking(move || {
+        let script = format!(
+            r#"sh -c 'P="${{1:-.}}"; if [ -d "$P" ]; then cd "$P" 2>/dev/null && for f in .* *; do [ "$f" = "." ] || [ "$f" = ".." ] && continue; [ ! -e "$f" ] && [ ! -L "$f" ] && continue; if [ -L "$f" ]; then echo "l|$f"; elif [ -d "$f" ]; then echo "d|$f"; else echo "f|$f"; fi; done; fi' _ "{}""#,
+            target_path.replace('"', "\\\"")
+        );
+        let mut cmd = std::process::Command::new("docker");
+        cmd.args(["exec", &cid, "sh", "-c", &script]);
+        crate::modules::proc::hide_console(&mut cmd);
+        let output = cmd.output().map_err(|e| format!("could not exec docker: {e}"))?;
+        if !output.status.success() {
+            return Err("docker exec failed".to_string());
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        let mut entries = Vec::new();
+        for line in out_str.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Some((kind_str, name)) = line.split_once('|') {
+                if !show_hidden && name.starts_with('.') {
+                    continue;
+                }
+                let kind = match kind_str {
+                    "d" => EntryKind::Dir,
+                    "l" => EntryKind::Symlink,
+                    _ => EntryKind::File,
+                };
+                entries.push(DirEntry {
+                    name: name.to_string(),
+                    kind,
+                    size: 0,
+                    mtime: 0,
+                    gitignored: false,
+                });
+            }
+        }
+        entries.sort_by(|a, b| {
+            let a_is_dir = matches!(a.kind, EntryKind::Dir);
+            let b_is_dir = matches!(b.kind, EntryKind::Dir);
+            match (a_is_dir, b_is_dir) {
+                (true, false) => Ordering::Less,
+                (false, true) => Ordering::Greater,
+                _ => natural_cmp(&a.name, &b.name),
+            }
+        });
+        Ok(entries)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn read_dir_sync(

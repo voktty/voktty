@@ -9,13 +9,8 @@ import {
 import { cn } from "@/lib/utils";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
-  AbsoluteIcon,
   ArrowDown01Icon,
-  CodeIcon,
-  PaintBrush04Icon,
-  PencilEdit02Icon,
   Settings01Icon,
-  ShieldUserIcon,
   SparklesIcon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
@@ -23,18 +18,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
 import { AgentAvatar } from "../avatar/AgentAvatar";
 import { useChatAvatarPresence } from "../avatar/useChatAvatarPresence";
-import type { Agent, AgentIconId } from "../lib/agents";
+import { type Agent, AGENT_ICONS } from "../lib/agents";
 import { useChatStore } from "../store/chatStore";
 import { useAgentsStore } from "../store/agentsStore";
 
-const ICONS: Record<AgentIconId, typeof CodeIcon> = {
-  coder: CodeIcon,
-  architect: AbsoluteIcon,
-  reviewer: PencilEdit02Icon,
-  security: ShieldUserIcon,
-  designer: PaintBrush04Icon,
-  spark: SparklesIcon,
-};
+const ICONS = AGENT_ICONS;
 
 type Translate = (key: string) => string;
 

@@ -176,8 +176,14 @@ export function migrateLegacyCompatEndpoint(
 
 export function getProvider(id: ProviderId): ProviderInfo {
   const p = PROVIDERS.find((x) => x.id === id);
-  if (!p) throw new Error(`Unknown provider: ${id}`);
-  return p;
+  if (p) return p;
+  return {
+    id,
+    label: id,
+    keyringAccount: "",
+    keyPrefix: null,
+    consoleUrl: "",
+  };
 }
 
 /** 1 (lowest) – 5 (highest). For `cost`, higher = cheaper. */

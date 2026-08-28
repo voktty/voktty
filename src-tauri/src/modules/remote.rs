@@ -1074,7 +1074,7 @@ fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
     args
 }
 
-fn run_ssh_capture(
+pub fn run_ssh_capture(
     connection: &RemoteSshConnection,
     remote_command: &str,
 ) -> Result<String, String> {

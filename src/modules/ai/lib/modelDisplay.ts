@@ -38,20 +38,22 @@ function modelTranslationId(modelId: string): string {
 }
 
 export function getLocalizedModelDescription(
-  model: ModelDisplayInfo,
+  model: ModelDisplayInfo | null | undefined,
   t: Translate,
 ): string {
-  if (!BUILTIN_MODEL_IDS.has(model.id)) return model.description;
+  if (!model?.id) return "";
+  if (!BUILTIN_MODEL_IDS.has(model.id)) return model.description ?? "";
   return t(
     `settings.models.modelDescriptions.${modelTranslationId(model.id)}`,
   );
 }
 
 export function getLocalizedModelHint(
-  model: ModelDisplayInfo,
+  model: ModelDisplayInfo | null | undefined,
   t: Translate,
 ): string {
-  if (!BUILTIN_MODEL_IDS.has(model.id)) return model.hint;
-  const key = MODEL_HINT_KEYS[model.hint];
-  return key ? t(`settings.models.hints.${key}`) : model.hint;
+  if (!model?.id) return "";
+  if (!BUILTIN_MODEL_IDS.has(model.id)) return model.hint ?? "";
+  const key = model.hint ? MODEL_HINT_KEYS[model.hint] : undefined;
+  return key ? t(`settings.models.hints.${key}`) : (model.hint ?? "");
 }

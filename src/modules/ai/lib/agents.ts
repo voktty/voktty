@@ -1,3 +1,11 @@
+import {
+  AbsoluteIcon,
+  CodeIcon,
+  PaintBrush04Icon,
+  PencilEdit02Icon,
+  ShieldUserIcon,
+  SparklesIcon,
+} from "@hugeicons/core-free-icons";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { ensureStorageMigrated } from "@/lib/storageMigration";
 
@@ -8,6 +16,15 @@ export type AgentIconId =
   | "security"
   | "designer"
   | "spark";
+
+export const AGENT_ICONS = {
+  coder: CodeIcon,
+  architect: AbsoluteIcon,
+  reviewer: PencilEdit02Icon,
+  security: ShieldUserIcon,
+  designer: PaintBrush04Icon,
+  spark: SparklesIcon,
+} as const;
 
 export type Agent = {
   id: string;

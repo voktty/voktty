@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,11 +26,11 @@ import {
   DEFAULT_MODEL_ID,
   getAutocompleteEligibleModels,
   getCompatModelInfo,
-  getModel,
   getProvider,
   isCompatModelId,
   MODELS,
   type ModelId,
+  type ModelInfo,
   PROVIDERS,
   type ProviderId,
   type ProviderInfo,
@@ -42,6 +43,7 @@ import {
   type CustomEndpointKeys,
   clearCustomEndpointKey,
   clearKey,
+  EMPTY_PROVIDER_KEYS,
   getAllCustomEndpointKeys,
   getAllKeys,
   setCustomEndpointKey,
@@ -177,6 +179,9 @@ export function ModelsSection() {
   const openrouterModelId = usePreferencesStore((s) => s.openrouterModelId);
   const customEndpoints = usePreferencesStore((s) => s.customEndpoints);
 
+  const modelsSubTab = useSettingsModalStore((s) => s.modelsSubTab) ?? "models";
+  const setModelsSubTab = useSettingsModalStore((s) => s.setModelsSubTab);
+
   useEffect(() => {
     void getAllKeys().then(setKeys);
   }, []);
@@ -184,6 +189,8 @@ export function ModelsSection() {
   useEffect(() => {
     void getAllCustomEndpointKeys(customEndpoints).then(setEpKeys);
   }, [customEndpoints]);
+
+  const currentKeys: KeysMap = keys ?? EMPTY_PROVIDER_KEYS;
 
   const onSaveKey = async (provider: ProviderId, value: string) => {
     await setKey(provider, value);
@@ -312,22 +319,14 @@ export function ModelsSection() {
   };
 
   const isConfigured = (id: ProviderId): boolean => {
-    if (id === "openrouter") return !!keys?.[id] && !!openrouterModelId.trim();
-    if (!isLocalProvider(id)) return !!keys?.[id];
+    if (id === "openrouter") return !!currentKeys[id] && !!openrouterModelId?.trim();
+    if (!isLocalProvider(id)) return !!currentKeys[id];
     const cfg = localConfig(id);
     if (!cfg) return false;
     if (id === "openai-compatible")
-      return !!cfg.baseURL.trim() && !!cfg.modelId.trim();
-    return !!cfg.modelId.trim();
+      return !!cfg.baseURL?.trim() && !!cfg.modelId?.trim();
+    return !!cfg.modelId?.trim();
   };
-
-  if (!keys) {
-    return (
-      <div className="text-[12px] text-muted-foreground">
-        {t("common.loading")}
-      </div>
-    );
-  }
 
   const configuredIds = new Set(
     PROVIDERS.filter((p) => isConfigured(p.id)).map((p) => p.id),
@@ -366,118 +365,126 @@ export function ModelsSection() {
     setAdding((prev) => new Set(prev).add(id));
   };
 
-  const modelsSubTab = useSettingsModalStore((s) => s.modelsSubTab);
-  const setModelsSubTab = useSettingsModalStore((s) => s.setModelsSubTab);
-
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title={t("settings.models.title")}
-        description={t("settings.models.description")}
-      />
+    <ErrorBoundary name="Models Section">
+      <div className="flex flex-col gap-6">
+        <SectionHeader
+          title={t("settings.models.title")}
+          description={t("settings.models.description")}
+        />
 
-      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/50 w-fit">
-        <button
-          type="button"
-          onClick={() => setModelsSubTab("models")}
-          className={cn(
-            "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all cursor-pointer",
-            modelsSubTab === "models"
-              ? "bg-card text-foreground shadow-xs border border-border/60 font-semibold"
-              : "text-muted-foreground hover:text-foreground hover:bg-card/40",
-          )}
-        >
-          <HugeiconsIcon icon={AiScanIcon} size={14} strokeWidth={2} />
-          <span>{t("settings.models.subTabs.models")}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setModelsSubTab("agents")}
-          className={cn(
-            "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all cursor-pointer",
-            modelsSubTab === "agents"
-              ? "bg-card text-foreground shadow-xs border border-border/60 font-semibold"
-              : "text-muted-foreground hover:text-foreground hover:bg-card/40",
-          )}
-        >
-          <HugeiconsIcon icon={UserMultiple02Icon} size={14} strokeWidth={2} />
-          <span>{t("settings.models.subTabs.agents")}</span>
-        </button>
-      </div>
-
-      {modelsSubTab === "agents" ? (
-        <AgentsSection hideHeader />
-      ) : (
-        <div className="flex flex-col gap-7">
-          <DefaultsBlock
-            defaultModel={defaultModel}
-            configuredIds={configuredIds}
-            keys={keys}
-            customEndpoints={customEndpoints}
-            endpointKeys={epKeys}
-          />
-
-          <VoiceBlock />
-
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <Label>{t("settings.models.providers")}</Label>
-              <AddProviderMenu
-                providers={addableProviders}
-                onAdd={addProvider}
-                onAddCompat={addCustomEndpoint}
-              />
-            </div>
-
-            {visibleProviders.length === 0 && customEndpoints.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-8 text-center">
-                <p className="text-[12px] text-muted-foreground">
-                  {t("settings.models.noProvidersConnected")}
-                </p>
-                <p className="mt-0.5 text-[10.5px] text-muted-foreground/70">
-                  {t("settings.models.noProvidersConnectedDesc")}
-                </p>
-              </div>
-            ) : (
-          <div className="flex flex-col gap-2">
-            {visibleProviders.map((p) =>
-              p.id === "openrouter" ? (
-                <LocalProviderCard
-                  key={p.id}
-                  provider={p}
-                  configured={configuredIds.has(p.id)}
-                  config={localConfig(p.id)!}
-                  meta={LOCAL_META[p.id]!}
-                  compatKey={keys[p.id]}
-                  onSaveKey={(v) => onSaveKey(p.id, v)}
-                  onClearKey={() => onClearKey(p.id)}
-                  onRemove={() => removeProvider(p.id)}
-                />
-              ) : isLocalProvider(p.id) ? (
-                <LocalProviderCard
-                  key={p.id}
-                  provider={p}
-                  configured={configuredIds.has(p.id)}
-                  config={localConfig(p.id)!}
-                  meta={LOCAL_META[p.id]!}
-                  onSaveKey={(v) => onSaveKey(p.id, v)}
-                  onClearKey={() => onClearKey(p.id)}
-                  onRemove={() => removeProvider(p.id)}
-                />
-              ) : (
-                <ProviderKeyCard
-                  key={p.id}
-                  provider={p}
-                  currentKey={keys[p.id]}
-                  onSave={(v) => onSaveKey(p.id, v)}
-                  onClear={() => onClearKey(p.id)}
-                  onRemove={() => removeProvider(p.id)}
-                />
-              ),
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/50 w-fit">
+          <button
+            type="button"
+            onClick={() => setModelsSubTab("models")}
+            className={cn(
+              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all cursor-pointer",
+              modelsSubTab === "models"
+                ? "bg-card text-foreground shadow-xs border border-border/60 font-semibold"
+                : "text-muted-foreground hover:text-foreground hover:bg-card/40",
             )}
-            {customEndpoints.map((ep) => (
-              <CustomEndpointCard
-                key={ep.id}
+          >
+            <HugeiconsIcon icon={AiScanIcon} size={14} strokeWidth={2} />
+            <span>{t("settings.models.subTabs.models")}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setModelsSubTab("agents")}
+            className={cn(
+              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-all cursor-pointer",
+              modelsSubTab === "agents"
+                ? "bg-card text-foreground shadow-xs border border-border/60 font-semibold"
+                : "text-muted-foreground hover:text-foreground hover:bg-card/40",
+            )}
+          >
+            <HugeiconsIcon icon={UserMultiple02Icon} size={14} strokeWidth={2} />
+            <span>{t("settings.models.subTabs.agents")}</span>
+          </button>
+        </div>
+
+        {modelsSubTab === "agents" ? (
+          <AgentsSection hideHeader />
+        ) : (
+          <div className="flex flex-col gap-7">
+            <DefaultsBlock
+              defaultModel={defaultModel}
+              configuredIds={configuredIds}
+              keys={currentKeys}
+              customEndpoints={customEndpoints}
+              endpointKeys={epKeys}
+            />
+
+            <VoiceBlock />
+
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <Label>{t("settings.models.providers")}</Label>
+                <AddProviderMenu
+                  providers={addableProviders}
+                  onAdd={addProvider}
+                  onAddCompat={addCustomEndpoint}
+                />
+              </div>
+
+              {visibleProviders.length === 0 && customEndpoints.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-8 text-center">
+                  <p className="text-[12px] text-muted-foreground">
+                    {t("settings.models.noProvidersConnected")}
+                  </p>
+                  <p className="mt-0.5 text-[10.5px] text-muted-foreground/70">
+                    {t("settings.models.noProvidersConnectedDesc")}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {visibleProviders.map((p) => {
+                    const meta = LOCAL_META[p.id];
+                    const cfg = localConfig(p.id);
+                    if (p.id === "openrouter") {
+                      if (!cfg || !meta) return null;
+                      return (
+                        <LocalProviderCard
+                          key={p.id}
+                          provider={p}
+                          configured={configuredIds.has(p.id)}
+                          config={cfg}
+                          meta={meta}
+                          compatKey={currentKeys[p.id]}
+                          onSaveKey={(v) => onSaveKey(p.id, v)}
+                          onClearKey={() => onClearKey(p.id)}
+                          onRemove={() => removeProvider(p.id)}
+                        />
+                      );
+                    }
+                    if (isLocalProvider(p.id)) {
+                      if (!cfg || !meta) return null;
+                      return (
+                        <LocalProviderCard
+                          key={p.id}
+                          provider={p}
+                          configured={configuredIds.has(p.id)}
+                          config={cfg}
+                          meta={meta}
+                          onSaveKey={(v) => onSaveKey(p.id, v)}
+                          onClearKey={() => onClearKey(p.id)}
+                          onRemove={() => removeProvider(p.id)}
+                        />
+                      );
+                    }
+                    return (
+                      <ProviderKeyCard
+                        key={p.id}
+                        provider={p}
+                        currentKey={currentKeys[p.id]}
+                        onSave={(v) => onSaveKey(p.id, v)}
+                        onClear={() => onClearKey(p.id)}
+                        onRemove={() => removeProvider(p.id)}
+                      />
+                    );
+                  })}
+                  {customEndpoints.map((ep) => (
+                    <CustomEndpointCard
+                      key={ep.id}
                 endpoint={ep}
                 endpointKey={epKeys[ep.id] ?? null}
                 onSaveKey={(v) => onSaveEndpointKey(ep.id, v)}
@@ -489,9 +496,10 @@ export function ModelsSection() {
           </div>
         )}
       </div>
-    </div>
-  )}
-</div>
+          </div>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
 
@@ -579,6 +587,84 @@ function ProviderMenuItem({
   );
 }
 
+function getFirstConfiguredModelId(
+  configuredIds: Set<ProviderId>,
+  customEndpoints: readonly CustomEndpoint[],
+): ModelId | null {
+  for (const p of PROVIDERS) {
+    if (configuredIds.has(p.id)) {
+      const m = MODELS.find((x) => x.provider === p.id);
+      if (m) return m.id as ModelId;
+    }
+  }
+  if (customEndpoints.length > 0 && customEndpoints[0]?.id) {
+    return compatModelIdForEndpoint(customEndpoints[0].id) as ModelId;
+  }
+  return null;
+}
+
+function resolveDisplayModel(
+  modelId: string | undefined | null,
+  customEndpoints: readonly CustomEndpoint[] = [],
+): ModelInfo {
+  if (!modelId) {
+    return (
+      MODELS[0] ?? {
+        id: "gpt-5.4-mini" as ModelId,
+        provider: "openai",
+        label: "GPT-5.4 Mini",
+        hint: "Fast",
+        description: "Default fast model",
+        capabilities: { intelligence: 4, speed: 5, cost: 5 },
+      }
+    );
+  }
+  if (isCompatModelId(modelId)) {
+    return getCompatModelInfo(modelId, customEndpoints);
+  }
+  const found = MODELS.find((x) => x.id === modelId);
+  if (found) {
+    const prefs = usePreferencesStore.getState();
+    if (found.provider === "ollama" && prefs.ollamaModelId?.trim()) {
+      return {
+        ...found,
+        label: `Ollama (${prefs.ollamaModelId.trim()})`,
+        hint: prefs.ollamaModelId.trim(),
+      };
+    }
+    if (found.provider === "lmstudio" && prefs.lmstudioModelId?.trim()) {
+      return {
+        ...found,
+        label: `LM Studio (${prefs.lmstudioModelId.trim()})`,
+        hint: prefs.lmstudioModelId.trim(),
+      };
+    }
+    if (found.provider === "mlx" && prefs.mlxModelId?.trim()) {
+      return {
+        ...found,
+        label: `MLX (${prefs.mlxModelId.trim()})`,
+        hint: prefs.mlxModelId.trim(),
+      };
+    }
+    if (found.provider === "openrouter" && prefs.openrouterModelId?.trim()) {
+      return {
+        ...found,
+        label: `OpenRouter (${prefs.openrouterModelId.trim()})`,
+        hint: prefs.openrouterModelId.trim(),
+      };
+    }
+    return found;
+  }
+  return {
+    id: modelId as ModelId,
+    provider: "openai-compatible",
+    label: modelId || "Default Model",
+    hint: modelId,
+    description: modelId,
+    capabilities: { intelligence: 3, speed: 3, cost: 3 },
+  };
+}
+
 function DefaultsBlock({
   defaultModel,
   configuredIds,
@@ -614,6 +700,22 @@ function DefaultsBlock({
     setHealthStatus({ phase: "idle" });
   }, [aiConfigRevision]);
 
+  const hasAny = configuredIds.size > 0 || customEndpoints.length > 0;
+  const defaultModelInfo = resolveDisplayModel(defaultModel, customEndpoints);
+  const isDefaultConfigured =
+    configuredIds.has(defaultModelInfo.provider) ||
+    (isCompatModelId(defaultModel) &&
+      customEndpoints.some((e) => compatModelIdForEndpoint(e.id) === defaultModel));
+
+  useEffect(() => {
+    if (!isDefaultConfigured && hasAny) {
+      const fallback = getFirstConfiguredModelId(configuredIds, customEndpoints);
+      if (fallback && fallback !== defaultModel) {
+        void setDefaultModel(fallback);
+      }
+    }
+  }, [isDefaultConfigured, hasAny, configuredIds, customEndpoints, defaultModel]);
+
   const testAi = async () => {
     const revision = aiConfigRevision;
     const controller = new AbortController();
@@ -621,9 +723,17 @@ function DefaultsBlock({
     setHealthStatus({ phase: "testing" });
     try {
       const preferences = usePreferencesStore.getState();
+      const targetModel = isDefaultConfigured
+        ? defaultModel
+        : (getFirstConfiguredModelId(configuredIds, customEndpoints) ?? defaultModel);
+
+      if (!isDefaultConfigured && targetModel !== defaultModel) {
+        await setDefaultModel(targetModel);
+      }
+
       const result = await runAiHealthCheck(
         {
-          modelId: defaultModel,
+          modelId: targetModel,
           keys,
           customEndpointKeys: endpointKeys,
           lmstudioBaseURL: preferences.lmstudioBaseURL,
@@ -645,6 +755,9 @@ function DefaultsBlock({
           ? { phase: "ok", latencyMs: result.latencyMs }
           : { phase: "fail" },
       );
+      if (recorded) {
+        await setAiEnabled(true);
+      }
     } catch {
       setHealthStatus({ phase: "fail" });
     } finally {
@@ -662,17 +775,24 @@ function DefaultsBlock({
           <div className="flex flex-1 items-center gap-2">
             <Switch
               checked={aiEnabled && healthCurrent}
-              disabled={!healthCurrent}
-              onCheckedChange={(value) => void setAiEnabled(value)}
+              disabled={!hasAny || healthStatus.phase === "testing"}
+              onCheckedChange={async (value) => {
+                if (value) {
+                  if (!healthCurrent) {
+                    await testAi();
+                  } else {
+                    await setAiEnabled(true);
+                  }
+                } else {
+                  await setAiEnabled(false);
+                }
+              }}
               aria-label={t("settings.models.aiActivation")}
             />
             <Button
               size="sm"
               variant="outline"
-              disabled={
-                healthStatus.phase === "testing" ||
-                !configuredIds.has(getModel(defaultModel).provider)
-              }
+              disabled={healthStatus.phase === "testing" || !hasAny}
               onClick={() => void testAi()}
               className="h-8 px-3 text-[11px]"
             >
@@ -706,7 +826,7 @@ function DefaultsBlock({
               className="shrink-0 text-primary/80 mt-0.5"
             />
             <span>
-              {configuredIds.size === 0 && customEndpoints.length === 0
+              {!hasAny
                 ? t("settings.models.noProvidersConnectedDesc")
                 : t("settings.models.aiInactiveBanner")}
             </span>
@@ -716,7 +836,8 @@ function DefaultsBlock({
           <DefaultModelPicker
             defaultModel={defaultModel}
             configuredIds={configuredIds}
-            disabled={!isAiActive}
+            customEndpoints={customEndpoints}
+            disabled={!hasAny}
           />
         </FieldRow>
         <AutocompleteRow
@@ -734,15 +855,17 @@ function DefaultsBlock({
 function DefaultModelPicker({
   defaultModel,
   configuredIds,
+  customEndpoints,
   disabled,
 }: {
   defaultModel: ModelId;
   configuredIds: Set<ProviderId>;
+  customEndpoints: readonly CustomEndpoint[];
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
-  const m = getModel(defaultModel);
-  const hasAny = configuredIds.size > 0;
+  const hasAny = configuredIds.size > 0 || customEndpoints.length > 0;
+  const m = resolveDisplayModel(defaultModel, customEndpoints);
 
   return (
     <DropdownMenu>
@@ -752,13 +875,19 @@ function DefaultModelPicker({
           disabled={disabled || !hasAny}
           className="h-8 flex-1 justify-between gap-2 px-2.5 text-[11.5px]"
         >
-          <span className="flex items-center gap-2 truncate">
-            <ProviderIcon provider={m.provider} size={13} />
-            <span className="truncate">{m.label}</span>
-            <span className="text-muted-foreground">
-              · {getLocalizedModelHint(m, t)}
+          {hasAny ? (
+            <span className="flex items-center gap-2 truncate">
+              <ProviderIcon provider={m.provider} size={13} />
+              <span className="truncate">{m.label}</span>
+              <span className="text-muted-foreground">
+                · {getLocalizedModelHint(m, t)}
+              </span>
             </span>
-          </span>
+          ) : (
+            <span className="text-muted-foreground">
+              {t("settings.models.noProvidersConnected")}
+            </span>
+          )}
           <HugeiconsIcon
             icon={ArrowDown01Icon}
             size={11}
@@ -784,26 +913,57 @@ function DefaultModelPicker({
                   <ProviderIcon provider={p.id} size={11} />
                   <span>{p.label}</span>
                 </div>
-                {models.map((mod) => (
-                  <DropdownMenuItem
-                    key={mod.id}
-                    onSelect={() => void setDefaultModel(mod.id as ModelId)}
-                    className={cn(
-                      "flex items-start gap-2 text-[12px]",
-                      mod.id === defaultModel && "bg-accent/50",
-                    )}
-                  >
-                    <span className="flex flex-1 flex-col">
-                      <span>{mod.label}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {getLocalizedModelDescription(mod, t)}
+                {models.map((mod) => {
+                  const displayMod = resolveDisplayModel(mod.id, customEndpoints);
+                  return (
+                    <DropdownMenuItem
+                      key={mod.id}
+                      onSelect={() => void setDefaultModel(mod.id as ModelId)}
+                      className={cn(
+                        "flex items-start gap-2 text-[12px]",
+                        mod.id === defaultModel && "bg-accent/50",
+                      )}
+                    >
+                      <span className="flex flex-1 flex-col">
+                        <span>{displayMod.label}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {getLocalizedModelDescription(displayMod, t)}
+                        </span>
                       </span>
-                    </span>
-                  </DropdownMenuItem>
-                ))}
+                    </DropdownMenuItem>
+                  );
+                })}
               </div>
             );
           })}
+          {customEndpoints.length > 0 && (
+            <div className="px-1 pt-1.5 first:pt-1">
+              <div className="mb-0.5 flex items-center gap-1.5 px-2 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                <ProviderIcon provider="openai-compatible" size={11} />
+                <span>{t("ai.openAiCompatible")}</span>
+              </div>
+              {customEndpoints.map((ep) => {
+                const compatId = compatModelIdForEndpoint(ep.id) as ModelId;
+                return (
+                  <DropdownMenuItem
+                    key={ep.id}
+                    onSelect={() => void setDefaultModel(compatId)}
+                    className={cn(
+                      "flex items-start gap-2 text-[12px]",
+                      compatId === defaultModel && "bg-accent/50",
+                    )}
+                  >
+                    <span className="flex flex-1 flex-col">
+                      <span>{ep.name || ep.modelId || "Custom Endpoint"}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {ep.baseURL}
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                );
+              })}
+            </div>
+          )}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -842,8 +1002,8 @@ function AutocompleteRow({
     openaiCompatibleBaseURL: testSelection.openaiCompatibleBaseURL,
     profile: testSelection.profileOverride,
     keyConfigured: testSelection.endpointId
-      ? Boolean(endpointKeys[testSelection.endpointId])
-      : Boolean(keys[testSelection.provider]),
+      ? Boolean(endpointKeys?.[testSelection.endpointId])
+      : Boolean(keys?.[testSelection.provider]),
   });
   const [testStatus, setTestStatus] = useState<
     | { phase: "idle" }
@@ -879,12 +1039,22 @@ function AutocompleteRow({
   const compatItems = useMemo(
     () =>
       customEndpoints
-        .filter((e) => e.baseURL.trim() && e.modelId.trim())
+        .filter((e) => e && e.baseURL?.trim() && e.modelId?.trim())
         .map((e) =>
           getCompatModelInfo(compatModelIdForEndpoint(e.id), customEndpoints),
         ),
     [customEndpoints],
   );
+
+  const fallbackModel: ModelInfo = eligible[0] ??
+    MODELS[0] ?? {
+      id: "gpt-5.4-mini" as ModelId,
+      provider: "openai",
+      label: "GPT-5.4 Mini",
+      hint: "Fast",
+      description: "Default fast model",
+      capabilities: { intelligence: 4, speed: 5, cost: 5 },
+    };
 
   // Fast cloud tiers + configured local providers + named compat endpoints.
   const items = useMemo(() => {
@@ -900,19 +1070,22 @@ function AutocompleteRow({
     return [...eligible, ...local, ...compatItems];
   }, [eligible, configuredIds, compatItems]);
 
-  const currentModel = useMemo(() => {
+  const currentModel: ModelInfo = useMemo(() => {
     if (provider === "openai-compatible" && isCompatModelId(modelId)) {
       return getCompatModelInfo(modelId, customEndpoints);
     }
     if (isLocalProvider(provider)) {
-      return MODELS.find((m) => m.provider === provider) ?? eligible[0];
+      return (
+        MODELS.find((m) => m.provider === provider) ??
+        fallbackModel
+      );
     }
     return (
       MODELS.find((m) => m.provider === provider && m.id === modelId) ??
       MODELS.find((m) => m.id === modelId) ??
-      eligible[0]
+      fallbackModel
     );
-  }, [eligible, provider, modelId, customEndpoints]);
+  }, [fallbackModel, provider, modelId, customEndpoints]);
 
   const setModel = (id: string, providerId: ProviderId) => {
     void setAutocompleteProvider(providerId);
@@ -925,6 +1098,7 @@ function AutocompleteRow({
   const grouped = useMemo(() => {
     const map = new Map<ProviderId, (typeof items)[number][]>();
     for (const m of items) {
+      if (!m) continue;
       const arr = map.get(m.provider) ?? [];
       arr.push(m);
       map.set(m.provider, arr);
@@ -932,7 +1106,7 @@ function AutocompleteRow({
     return map;
   }, [items]);
 
-  const hasKey = providerNeedsKey(provider) ? !!keys[provider] : true;
+  const hasKey = providerNeedsKey(provider) ? !!keys?.[provider] : true;
 
   const testAutocomplete = async () => {
     const run = ++testRunRef.current;
@@ -1719,7 +1893,11 @@ function VoiceBlock() {
               variant="outline"
               className="h-8 flex-1 justify-between gap-2 px-2.5 text-[11.5px]"
             >
-              <span>{STT_PROVIDER_LABELS[sttProvider]}</span>
+              <span>
+                {(sttProvider && STT_PROVIDER_LABELS[sttProvider]) ||
+                  STT_PROVIDER_LABELS.browser ||
+                  "Browser (built-in, free)"}
+              </span>
               <HugeiconsIcon
                 icon={ArrowDown01Icon}
                 size={11}
