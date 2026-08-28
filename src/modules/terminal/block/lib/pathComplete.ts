@@ -21,7 +21,7 @@ function joinRel(cwd: string, rel: string): string {
 }
 
 function resolveDir(dirPart: string, cwd: string): string | null {
-  if (dirPart.startsWith("~")) return null; // home expansion not handled yet
+  if (dirPart.startsWith("~")) return dirPart;
   if (dirPart.startsWith("/")) return dirPart || "/";
   return joinRel(cwd, dirPart);
 }

@@ -162,25 +162,37 @@ export function isPathOrFileContext(query: string): {
   return { isPath, command, argPrefix, fullPrefix };
 }
 
+type FsCacheEntry = {
+  entries: DirEntry[];
+  timestamp: number;
+};
+
+const FS_CACHE = new Map<string, FsCacheEntry>();
+const FS_CACHE_TTL_MS = 5000;
+
 /**
  * Resolves a relative or absolute directory path against the session cwd
  */
-function resolveDirectory(dirPart: string, cwd: string): string | null {
-  if (dirPart.startsWith("~")) return null;
+export function resolveDirectory(
+  dirPart: string,
+  cwd?: string | null,
+): string | null {
+  if (dirPart.startsWith("~")) return dirPart;
   // Absolute Unix path
-  if (dirPart.startsWith("/")) return dirPart;
+  if (dirPart.startsWith("/")) return dirPart || "/";
   // Absolute Windows path
   if (/^[A-Za-z]:[/\\]/.test(dirPart)) return dirPart;
 
-  const cleanCwd = cwd.replace(/[/\\]+$/, "");
+  const cleanCwd = cwd ? cwd.replace(/[/\\]+$/, "") : "";
   const cleanDir = dirPart.replace(/^[./\\]+/, "").replace(/[/\\]+$/, "");
 
+  if (!cleanCwd) return cleanDir || ".";
   const separator = cleanCwd.includes("\\") ? "\\" : "/";
   return cleanDir ? `${cleanCwd}${separator}${cleanDir}` : cleanCwd;
 }
 
 /**
- * Live filesystem path discovery
+ * Live filesystem path discovery (local, WSL, Docker, and remote SSH)
  */
 async function queryFilesystemPaths(
   command: string,
@@ -201,15 +213,37 @@ async function queryFilesystemPaths(
   const targetDir = resolveDirectory(dirPart, cwd);
   if (!targetDir) return [];
 
+  const envKey = workspaceEnv
+    ? workspaceEnv.kind === "ssh"
+      ? `ssh:${workspaceEnv.connection.host}:${workspaceEnv.connection.user ?? ""}`
+      : workspaceEnv.kind === "docker"
+        ? `docker:${workspaceEnv.connection.containerId}`
+        : workspaceEnv.kind === "wsl"
+          ? `wsl:${workspaceEnv.distro}`
+          : "local"
+    : "local";
+  const showHidden = basePart.startsWith(".");
+  const cacheKey = `${envKey}:${targetDir}:${showHidden}`;
+
   let entries: DirEntry[] = [];
-  try {
-    entries = await invoke<DirEntry[]>("fs_read_dir", {
-      path: targetDir,
-      showHidden: basePart.startsWith("."),
-      workspace: workspaceEnv ?? null,
-    });
-  } catch {
-    return [];
+  const cached = FS_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < FS_CACHE_TTL_MS) {
+    entries = cached.entries;
+  } else {
+    try {
+      entries = await invoke<DirEntry[]>("fs_read_dir", {
+        path: targetDir,
+        showHidden,
+        workspace: workspaceEnv ?? null,
+      });
+      if (FS_CACHE.size > 200) {
+        const oldest = FS_CACHE.keys().next().value;
+        if (oldest) FS_CACHE.delete(oldest);
+      }
+      FS_CACHE.set(cacheKey, { entries, timestamp: Date.now() });
+    } catch {
+      return [];
+    }
   }
 
   const isCd = PATH_ONLY_COMMANDS.has(command);
@@ -271,7 +305,7 @@ async function queryFilesystemPaths(
 
 /**
  * Predicts the most relevant suggestions for the terminal based on:
- * 1. Live filesystem paths (CWD-aware)
+ * 1. Live filesystem paths (CWD-aware, remote SSH / Docker / WSL aware)
  * 2. Cross-platform universal history (normalized to target environment)
  * 3. Command and syntax awareness
  */
@@ -302,14 +336,22 @@ export async function predictTerminalSuggestions(
 
   const realPathItems: TerminalSuggestItem[] = [];
 
-  // 1. Live Filesystem Path Discovery (if in path context and cwd is available)
-  if (isPath && context.cwd) {
+  // 1. Live Filesystem Path Discovery (if in path context)
+  const isPathCandidate =
+    isPath &&
+    (Boolean(context.cwd) ||
+      argPrefix.startsWith("/") ||
+      argPrefix.startsWith("~") ||
+      argPrefix.startsWith(".") ||
+      /^[A-Za-z]:[/\\]/.test(argPrefix));
+
+  if (isPathCandidate) {
     try {
       const paths = await queryFilesystemPaths(
         command,
         argPrefix,
         fullPrefix,
-        context.cwd,
+        context.cwd || ".",
         isUnix,
         context.workspaceEnv,
       );

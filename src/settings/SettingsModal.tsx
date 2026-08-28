@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useTranslation } from "@/modules/i18n";
 import type { SettingsTab } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -346,7 +347,9 @@ export function SettingsModal() {
               <SettingsSearch onSelect={handleSearchSelect} />
               <div data-settings-section={active} className="mt-3.5">
                 <Suspense fallback={<SettingsSectionSkeleton />}>
-                  <ActiveComponent />
+                  <ErrorBoundary name={`Settings Tab: ${active}`}>
+                    <ActiveComponent />
+                  </ErrorBoundary>
                 </Suspense>
               </div>
             </div>
