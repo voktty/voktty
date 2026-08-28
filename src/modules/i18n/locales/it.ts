@@ -65,7 +65,7 @@ const itBase = mergeLocale(en, {
       editor: "Editor",
       themes: "Temi",
       shortcuts: "Scorciatoie",
-      models: "Modelli",
+      models: "Modelli IA",
       agents: "Agenti",
       extensions: "Estensioni",
       ssh: "SSH",
@@ -386,8 +386,15 @@ const itBase = mergeLocale(en, {
       noResults: "Nessuna scorciatoia trovata per '{query}'",
     },
     models: {
-      title: "Modelli e provider",
-      description: "Configura provider AI, chiavi API e parametri del modello.",
+      title: "Modelli IA",
+      description:
+        "Configura provider IA, modelli, agenti personalizzati e istruzioni.",
+      subTabs: {
+        models: "Modelli",
+        agents: "Agenti",
+      },
+      aiInactiveBanner:
+        "L'IA è attualmente disattivata. Connetti e verifica un modello qui sotto, quindi attiva l'interruttore IA per configurare modelli e agenti.",
       providers: "Provider",
       apiKey: "Chiave API",
       keySaved:

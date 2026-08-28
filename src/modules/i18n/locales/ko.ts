@@ -65,7 +65,7 @@ const koBase = mergeLocale(en, {
       editor: "편집기",
       themes: "테마",
       shortcuts: "단축키",
-      models: "모델",
+      models: "AI 모델",
       agents: "에이전트",
       extensions: "확장",
       ssh: "SSH",
@@ -368,8 +368,14 @@ const koBase = mergeLocale(en, {
       noResults: "'{query}'과(와) 일치하는 단축키를 찾을 수 없습니다",
     },
     models: {
-      title: "모델 및 공급자",
-      description: "AI 공급자, API 키 및 모델 매개변수를 구성합니다.",
+      title: "AI 모델",
+      description: "AI 공급자, 모델, 사용자 지정 에이전트 및 지침을 구성합니다.",
+      subTabs: {
+        models: "모델",
+        agents: "에이전트",
+      },
+      aiInactiveBanner:
+        "현재 AI가 비활성화되어 있습니다. 아래에서 모델을 연결하고 확인한 후, AI 스위치를 켜서 모델과 에이전트를 구성하세요.",
       providers: "공급자",
       apiKey: "API 키",
       keySaved: "키가 OS 키체인에 안전하게 저장되었습니다",

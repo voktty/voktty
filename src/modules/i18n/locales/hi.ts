@@ -75,7 +75,7 @@ export const hi: TranslationSchema = {
       editor: "संपादक",
       themes: "थीम्स",
       shortcuts: "शॉर्टकट",
-      models: "मॉडल्स",
+      models: "AI मॉडल्स",
       agents: "एजेंट्स",
       extensions: "एक्सटेंशन",
       ssh: "SSH",
@@ -428,8 +428,14 @@ export const hi: TranslationSchema = {
       noResults: "'{query}' से मेल खाता कोई शॉर्टकट नहीं मिला",
     },
     models: {
-      title: "मॉडल्स और प्रदाता",
-      description: "AI प्रदाता, API कुंजी और मॉडल पैरामीटर कॉन्फ़िगर करें।",
+      title: "AI मॉडल्स",
+      description: "AI प्रदाता, मॉडल्स, कस्टम एजेंट्स और निर्देश कॉन्फ़िगर करें।",
+      subTabs: {
+        models: "मॉडल्स",
+        agents: "एजेंट्स",
+      },
+      aiInactiveBanner:
+        "AI वर्तमान में निष्क्रिय है। नीचे एक मॉडल कनेक्ट करें और सत्यापित करें, फिर मॉडल्स और एजेंट्स कॉन्फ़िगर करने के लिए AI स्विच चालू करें।",
       providers: "प्रदाता",
       apiKey: "API कुंजी",
       configurationRequired: "पहले चयनित मॉडल को कॉन्फ़िगर करें।",

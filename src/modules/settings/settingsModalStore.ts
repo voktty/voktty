@@ -44,11 +44,13 @@ function persistLastTab(tab: SettingsTab) {
 export type SettingsModalState = {
   open: boolean;
   activeTab: SettingsTab;
+  modelsSubTab: "models" | "agents";
   tabScrollPositions: Record<string, number>;
   modalPosition: { x: number; y: number } | null;
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
   setActiveTab: (tab: SettingsTab) => void;
+  setModelsSubTab: (subTab: "models" | "agents") => void;
   setTabScroll: (tab: string, scrollTop: number) => void;
   setModalPosition: (pos: { x: number; y: number } | null) => void;
 };
@@ -56,22 +58,43 @@ export type SettingsModalState = {
 export const useSettingsModalStore = create<SettingsModalState>((set) => ({
   open: false,
   activeTab: getInitialTab(),
+  modelsSubTab: "models",
   tabScrollPositions: {},
   modalPosition: null,
   openSettings: (tab?: SettingsTab) =>
     set((state) => {
-      const nextTab = tab ?? state.activeTab ?? getInitialTab();
+      let nextTab = tab ?? state.activeTab ?? getInitialTab();
+      let nextSubTab: "models" | "agents" = state.modelsSubTab;
+      if (nextTab === "agents") {
+        nextTab = "models";
+        nextSubTab = "agents";
+      } else if (nextTab === "models") {
+        nextSubTab = "models";
+      }
       persistLastTab(nextTab);
       return {
         open: true,
         activeTab: nextTab,
+        modelsSubTab: nextSubTab,
       };
     }),
   closeSettings: () => set({ open: false }),
   setActiveTab: (tab: SettingsTab) => {
-    persistLastTab(tab);
-    set({ activeTab: tab });
+    let nextTab = tab;
+    let nextSubTab: "models" | "agents" | null = null;
+    if (tab === "agents") {
+      nextTab = "models";
+      nextSubTab = "agents";
+    } else if (tab === "models") {
+      nextSubTab = "models";
+    }
+    persistLastTab(nextTab);
+    set({
+      activeTab: nextTab,
+      ...(nextSubTab ? { modelsSubTab: nextSubTab } : {}),
+    });
   },
+  setModelsSubTab: (subTab) => set({ modelsSubTab: subTab }),
   setTabScroll: (tab: string, scrollTop: number) =>
     set((state) => ({
       tabScrollPositions: {
