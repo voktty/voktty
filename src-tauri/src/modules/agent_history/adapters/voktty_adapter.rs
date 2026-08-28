@@ -1,8 +1,9 @@
-﻿use super::{AgentHistoryAdapter, SessionLocation};
+use super::{AgentHistoryAdapter, SessionLocation};
 use crate::modules::agent_history::models::{HistoryMessage, HistorySession};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+#[derive(Default)]
 pub struct VokttyAdapter;
 
 impl VokttyAdapter {

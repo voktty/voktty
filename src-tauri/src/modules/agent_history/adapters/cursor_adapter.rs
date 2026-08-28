@@ -1,7 +1,8 @@
-﻿use super::{AgentHistoryAdapter, SessionLocation};
+use super::{AgentHistoryAdapter, SessionLocation};
 use crate::modules::agent_history::models::{HistoryMessage, HistorySession};
 use std::path::{Path, PathBuf};
 
+#[derive(Default)]
 pub struct CursorAdapter;
 
 impl CursorAdapter {

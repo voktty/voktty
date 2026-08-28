@@ -3,6 +3,7 @@ use crate::modules::agent_history::models::{HistoryMessage, HistorySession};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+#[derive(Default)]
 pub struct ClaudeAdapter;
 
 impl ClaudeAdapter {

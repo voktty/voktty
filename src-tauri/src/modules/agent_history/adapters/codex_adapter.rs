@@ -3,6 +3,7 @@ use crate::modules::agent_history::models::{HistoryMessage, HistorySession};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+#[derive(Default)]
 pub struct CodexAdapter;
 
 impl CodexAdapter {
@@ -166,10 +167,8 @@ impl AgentHistoryAdapter for CodexAdapter {
             };
 
             // Filter out internal env context blocks from title
-            if role == "user" && first_user_prompt.is_empty() && !text_content.is_empty() {
-                if !text_content.starts_with("<environment_context>") {
-                    first_user_prompt = text_content.chars().take(80).collect();
-                }
+            if role == "user" && first_user_prompt.is_empty() && !text_content.is_empty() && !text_content.starts_with("<environment_context>") {
+                first_user_prompt = text_content.chars().take(80).collect();
             }
 
             if !text_content.is_empty() || tool_name.is_some() || tool_output.is_some() {
