@@ -334,8 +334,14 @@ export function AgentHistoryModal() {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0" data-no-drag>
+          <div
+            className="flex items-center gap-1.5 shrink-0"
+            data-no-drag
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             <Button
+              type="button"
+              data-no-drag
               size="sm"
               variant="outline"
               onClick={() => void rescan()}
@@ -352,6 +358,8 @@ export function AgentHistoryModal() {
 
             {/* Maximize / Restore Button */}
             <Button
+              type="button"
+              data-no-drag
               size="icon"
               variant="ghost"
               onClick={toggleMaximize}
@@ -367,11 +375,16 @@ export function AgentHistoryModal() {
 
             {/* Close Button */}
             <Button
+              type="button"
+              data-no-drag
               size="icon"
               variant="ghost"
-              onClick={closeHistory}
+              onClick={(e) => {
+                e.stopPropagation();
+                closeHistory();
+              }}
               className="size-6 text-muted-foreground hover:text-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer rounded-md"
-              title="Close"
+              title="Close (Esc)"
             >
               <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} />
             </Button>
