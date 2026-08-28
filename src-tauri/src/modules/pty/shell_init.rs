@@ -216,7 +216,17 @@ fn apply_common(
 
     let cwd = workspace::native_spawn_dir(cwd.as_deref());
     #[cfg(windows)]
-    let cwd = PathBuf::from(cwd.to_string_lossy().replace('/', "\\"));
+    let cwd = {
+        let s = cwd.to_string_lossy();
+        let cleaned = if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{rest}")
+        } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+            rest.to_string()
+        } else {
+            s.to_string()
+        };
+        PathBuf::from(cleaned.replace('/', "\\"))
+    };
     log::info!("pty cwd: {}", cwd.display());
     cmd.cwd(cwd);
 }

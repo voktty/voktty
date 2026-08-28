@@ -130,6 +130,13 @@ function parseOsc7(data: string): string | null {
   try {
     path = decodeURIComponent(path);
   } catch {}
+  if (IS_WINDOWS) {
+    if (/^\/\?\/UNC\//i.test(path)) {
+      path = `//${path.slice(8)}`;
+    } else if (/^\/\?\/[A-Za-z]:/i.test(path)) {
+      path = path.slice(3);
+    }
+  }
   // /C:/Users/foo -> C:/Users/foo so it's a valid Windows path.
   if (/^\/[A-Za-z]:/.test(path)) {
     path = path.slice(1);

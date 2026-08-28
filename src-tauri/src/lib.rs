@@ -352,6 +352,8 @@ pub fn run() {
             net::ai_http_request,
             net::ai_http_stream,
             api_client::api_client_send_request,
+            api_client::api_client_stream_request,
+            api_client::api_client_cancel_request,
             api_client::api_client_run_scenario,
             api_client::api_client_dispatch_webhook,
             history::history_suggest,

@@ -1,10 +1,28 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
+use futures_util::StreamExt;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use tauri::ipc::{Channel, Response};
+
+// Global cancellation map for in-flight requests
+static ACTIVE_CANCELLATIONS: std::sync::LazyLock<
+    Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<()>>>>,
+> = std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+pub fn cancel_in_flight_request(request_id: &str) -> bool {
+    let mut map = ACTIVE_CANCELLATIONS.lock().unwrap();
+    if let Some(tx) = map.remove(request_id) {
+        let _ = tx.send(());
+        true
+    } else {
+        false
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyValueParam {
@@ -47,6 +65,21 @@ pub enum ApiRequestAuth {
         username: String,
         password: String,
     },
+    OAuth2 {
+        token: String,
+        token_type: Option<String>,
+    },
+    AwsSigV4 {
+        access_key: String,
+        secret_key: String,
+        region: String,
+        service: String,
+        session_token: Option<String>,
+    },
+    Digest {
+        username: String,
+        password: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +100,10 @@ pub struct ApiRequestPayload {
     pub follow_redirects: bool,
     #[serde(default)]
     pub insecure_skip_verify: bool,
+    #[serde(default)]
+    pub variables: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub is_agent_call: bool,
 }
 
 fn default_body_none() -> ApiRequestBody {
@@ -79,6 +116,11 @@ fn default_auth_none() -> ApiRequestAuth {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiTimings {
+    pub dns_lookup_ms: Option<f64>,
+    pub tcp_connect_ms: Option<f64>,
+    pub tls_handshake_ms: Option<f64>,
+    pub first_byte_ms: Option<f64>,
+    pub download_ms: Option<f64>,
     pub total_duration_ms: f64,
 }
 
@@ -96,11 +138,96 @@ pub struct ApiResponsePayload {
     pub error: Option<String>,
 }
 
-pub async fn execute_http_request(req: ApiRequestPayload) -> Result<ApiResponsePayload, String> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum ApiStreamEvent {
+    Status {
+        code: u16,
+        reason: String,
+    },
+    Header {
+        key: String,
+        value: String,
+    },
+    Chunk {
+        data: String,
+        bytes_len: usize,
+    },
+    Done {
+        total_bytes: usize,
+        duration_ms: f64,
+    },
+    Error {
+        message: String,
+    },
+}
+
+/// Simple regex-free variable interpolation for {{ variable_name }}
+pub fn interpolate_variables(input: &str, vars: &HashMap<String, String>) -> String {
+    let mut out = input.to_string();
+    for (k, v) in vars {
+        let pattern1 = format!("{{{{{}}}}}", k.trim());
+        let pattern2 = format!("{{{{ {} }}}}", k.trim());
+        out = out.replace(&pattern1, v).replace(&pattern2, v);
+    }
+    out
+}
+
+pub async fn execute_http_request(
+    mut req: ApiRequestPayload,
+) -> Result<ApiResponsePayload, String> {
+    let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel::<()>();
+    let req_id = req
+        .id
+        .clone()
+        .unwrap_or_else(|| format!("req_{}", Instant::now().elapsed().as_nanos()));
+
+    {
+        let mut map = ACTIVE_CANCELLATIONS.lock().unwrap();
+        map.insert(req_id.clone(), cancel_tx);
+    }
+
+    // Ensure we unregister on return
+    struct CancelGuard(String);
+    impl Drop for CancelGuard {
+        fn drop(&mut self) {
+            let mut map = ACTIVE_CANCELLATIONS.lock().unwrap();
+            map.remove(&self.0);
+        }
+    }
+    let _guard = CancelGuard(req_id.clone());
+
+    // Interpolate environment variables if provided
+    if let Some(ref vars) = req.variables {
+        req.url = interpolate_variables(&req.url, vars);
+        for q in &mut req.query_params {
+            q.key = interpolate_variables(&q.key, vars);
+            q.value = interpolate_variables(&q.value, vars);
+        }
+        let mut new_headers = HashMap::new();
+        for (k, v) in &req.headers {
+            new_headers.insert(
+                interpolate_variables(k, vars),
+                interpolate_variables(v, vars),
+            );
+        }
+        req.headers = new_headers;
+    }
+
     let start_instant = Instant::now();
 
     // 1. Parse URL & Query params
     let mut url = url::Url::parse(&req.url).map_err(|e| format!("Invalid URL: {e}"))?;
+
+    // Agent SSRF Security Guard check if marked as agent call
+    if req.is_agent_call {
+        if let Some(host) = url.host_str() {
+            if host == "169.254.169.254" || host == "metadata.google.internal" || host == "metadata"
+            {
+                return Err("Blocked: Access to cloud metadata service is prohibited".to_string());
+            }
+        }
+    }
 
     for qp in &req.query_params {
         if qp.enabled && !qp.key.trim().is_empty() {
@@ -170,6 +297,17 @@ pub async fn execute_http_request(req: ApiRequestPayload) -> Result<ApiResponseP
         ApiRequestAuth::Bearer { ref token } => {
             if !token.is_empty() {
                 if let Ok(hval) = HeaderValue::from_str(&format!("Bearer {token}")) {
+                    header_map.insert(reqwest::header::AUTHORIZATION, hval);
+                }
+            }
+        }
+        ApiRequestAuth::OAuth2 {
+            ref token,
+            ref token_type,
+        } => {
+            if !token.is_empty() {
+                let prefix = token_type.as_deref().unwrap_or("Bearer");
+                if let Ok(hval) = HeaderValue::from_str(&format!("{prefix} {token}")) {
                     header_map.insert(reqwest::header::AUTHORIZATION, hval);
                 }
             }
@@ -245,13 +383,19 @@ pub async fn execute_http_request(req: ApiRequestPayload) -> Result<ApiResponseP
 
     request_builder = request_builder.headers(header_map);
 
-    // 7. Execute Request
-    let response = request_builder
-        .send()
-        .await
-        .map_err(|e| format!("HTTP Request failed: {e}"))?;
+    // 7. Execute Request with Cancellation Support
+    let send_fut = request_builder.send();
 
-    let elapsed = start_instant.elapsed().as_secs_f64() * 1000.0;
+    let response = tokio::select! {
+        res = send_fut => {
+            res.map_err(|e| format!("HTTP Request failed: {e}"))?
+        }
+        _ = &mut cancel_rx => {
+            return Err("Request was cancelled by user".to_string());
+        }
+    };
+
+    let ttfb_ms = start_instant.elapsed().as_secs_f64() * 1000.0;
     let status = response.status();
     let status_code = status.as_u16();
     let status_text = status.canonical_reason().unwrap_or("").to_string();
@@ -264,10 +408,21 @@ pub async fn execute_http_request(req: ApiRequestPayload) -> Result<ApiResponseP
         ));
     }
 
-    let bytes: Bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read response body: {e}"))?;
+    let download_start = Instant::now();
+    let bytes_fut = response.bytes();
+
+    let bytes: Bytes = tokio::select! {
+        res = bytes_fut => {
+            res.map_err(|e| format!("Failed to read response body: {e}"))?
+        }
+        _ = &mut cancel_rx => {
+            return Err("Response download was cancelled by user".to_string());
+        }
+    };
+
+    let download_ms = download_start.elapsed().as_secs_f64() * 1000.0;
+    let total_elapsed = start_instant.elapsed().as_secs_f64() * 1000.0;
+
     let body_bytes_len = bytes.len();
     let body_str = String::from_utf8_lossy(&bytes).to_string();
 
@@ -284,8 +439,181 @@ pub async fn execute_http_request(req: ApiRequestPayload) -> Result<ApiResponseP
         is_json,
         json_value,
         timings: ApiTimings {
-            total_duration_ms: elapsed,
+            dns_lookup_ms: None,
+            tcp_connect_ms: None,
+            tls_handshake_ms: None,
+            first_byte_ms: Some(ttfb_ms),
+            download_ms: Some(download_ms),
+            total_duration_ms: total_elapsed,
         },
         error: None,
     })
+}
+
+pub async fn stream_http_request(
+    mut req: ApiRequestPayload,
+    on_event: Channel<Response>,
+) -> Result<(), String> {
+    let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel::<()>();
+    let req_id = req
+        .id
+        .clone()
+        .unwrap_or_else(|| format!("req_{}", Instant::now().elapsed().as_nanos()));
+
+    {
+        let mut map = ACTIVE_CANCELLATIONS.lock().unwrap();
+        map.insert(req_id.clone(), cancel_tx);
+    }
+
+    struct CancelGuard(String);
+    impl Drop for CancelGuard {
+        fn drop(&mut self) {
+            let mut map = ACTIVE_CANCELLATIONS.lock().unwrap();
+            map.remove(&self.0);
+        }
+    }
+    let _guard = CancelGuard(req_id.clone());
+
+    if let Some(ref vars) = req.variables {
+        req.url = interpolate_variables(&req.url, vars);
+    }
+
+    let start_instant = Instant::now();
+    let url = url::Url::parse(&req.url).map_err(|e| format!("Invalid URL: {e}"))?;
+
+    let timeout = Duration::from_millis(req.timeout_ms.unwrap_or(60_000).max(100));
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .map_err(|e| format!("Failed to initialize client: {e}"))?;
+
+    let method = match req.method.to_uppercase().as_str() {
+        "POST" => Method::POST,
+        "PUT" => Method::PUT,
+        _ => Method::GET,
+    };
+
+    let mut request_builder = client.request(method, url);
+    let mut header_map = HeaderMap::new();
+    header_map.insert(
+        reqwest::header::ACCEPT,
+        HeaderValue::from_static("text/event-stream"),
+    );
+
+    for (k, v) in &req.headers {
+        if let (Ok(hname), Ok(hval)) = (
+            HeaderName::from_bytes(k.as_bytes()),
+            HeaderValue::from_str(v),
+        ) {
+            header_map.insert(hname, hval);
+        }
+    }
+
+    request_builder = request_builder.headers(header_map);
+
+    let send_fut = request_builder.send();
+    let response = tokio::select! {
+        res = send_fut => res.map_err(|e| format!("Streaming request failed: {e}"))?,
+        _ = &mut cancel_rx => return Err("Streaming cancelled".to_string()),
+    };
+
+    let status = response.status();
+    let status_event = ApiStreamEvent::Status {
+        code: status.as_u16(),
+        reason: status.canonical_reason().unwrap_or("").to_string(),
+    };
+    if let Ok(json) = serde_json::to_vec(&status_event) {
+        let _ = on_event.send(Response::new(json));
+    }
+
+    for (k, v) in response.headers() {
+        let header_event = ApiStreamEvent::Header {
+            key: k.as_str().to_string(),
+            value: v.to_str().unwrap_or("").to_string(),
+        };
+        if let Ok(json) = serde_json::to_vec(&header_event) {
+            let _ = on_event.send(Response::new(json));
+        }
+    }
+
+    let mut stream = response.bytes_stream();
+    let mut total_bytes = 0usize;
+
+    loop {
+        tokio::select! {
+            chunk_opt = stream.next() => {
+                match chunk_opt {
+                    Some(Ok(bytes)) => {
+                        total_bytes += bytes.len();
+                        let text = String::from_utf8_lossy(&bytes).to_string();
+                        let chunk_event = ApiStreamEvent::Chunk {
+                            data: text,
+                            bytes_len: bytes.len(),
+                        };
+                        if let Ok(json) = serde_json::to_vec(&chunk_event) {
+                            let _ = on_event.send(Response::new(json));
+                        }
+                    }
+                    Some(Err(e)) => {
+                        let err_event = ApiStreamEvent::Error {
+                            message: format!("Stream error: {e}"),
+                        };
+                        if let Ok(json) = serde_json::to_vec(&err_event) {
+                            let _ = on_event.send(Response::new(json));
+                        }
+                        break;
+                    }
+                    None => {
+                        let done_event = ApiStreamEvent::Done {
+                            total_bytes,
+                            duration_ms: start_instant.elapsed().as_secs_f64() * 1000.0,
+                        };
+                        if let Ok(json) = serde_json::to_vec(&done_event) {
+                            let _ = on_event.send(Response::new(json));
+                        }
+                        break;
+                    }
+                }
+            }
+            _ = &mut cancel_rx => {
+                let err_event = ApiStreamEvent::Error {
+                    message: "Stream cancelled by user".to_string(),
+                };
+                if let Ok(json) = serde_json::to_vec(&err_event) {
+                    let _ = on_event.send(Response::new(json));
+                }
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interpolate_variables() {
+        let mut vars = HashMap::new();
+        vars.insert("BASE_URL".to_string(), "https://api.voktty.dev".to_string());
+        vars.insert("USER_ID".to_string(), "42".to_string());
+
+        let url = "{{ BASE_URL }}/users/{{USER_ID}}/profile";
+        let res = interpolate_variables(url, &vars);
+        assert_eq!(res, "https://api.voktty.dev/users/42/profile");
+    }
+
+    #[test]
+    fn test_cancellation_registration() {
+        let req_id = "test_cancel_123";
+        let (tx, _rx) = tokio::sync::oneshot::channel();
+        {
+            let mut map = ACTIVE_CANCELLATIONS.lock().unwrap();
+            map.insert(req_id.to_string(), tx);
+        }
+        assert!(cancel_in_flight_request(req_id));
+        assert!(!cancel_in_flight_request(req_id));
+    }
 }

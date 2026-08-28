@@ -5,7 +5,11 @@ export type ApiMethod =
   | "PATCH"
   | "DELETE"
   | "HEAD"
-  | "OPTIONS";
+  | "OPTIONS"
+  | "GQL"
+  | "SSE"
+  | "GRPC"
+  | "WS";
 
 export type KeyValueParam = {
   key: string;
@@ -14,9 +18,22 @@ export type KeyValueParam = {
   description?: string;
 };
 
-export type ApiAuthType = "none" | "bearer" | "apiKey" | "basic";
+export type ApiAuthType =
+  | "none"
+  | "bearer"
+  | "apiKey"
+  | "basic"
+  | "oauth2"
+  | "awsSigV4"
+  | "digest";
 
-export type ApiRequestBodyType = "none" | "json" | "text" | "form-urlencoded" | "raw";
+export type ApiRequestBodyType =
+  | "none"
+  | "json"
+  | "text"
+  | "form-urlencoded"
+  | "raw"
+  | "graphql";
 
 export type ApiRequest = {
   id: string;
@@ -38,12 +55,64 @@ export type ApiRequest = {
     username: string;
     password: string;
   };
+  oauth2?: {
+    token: string;
+    tokenType?: string;
+  };
+  awsSigV4?: {
+    accessKey: string;
+    secretKey: string;
+    region: string;
+    service: string;
+    sessionToken?: string;
+  };
+  digestAuth?: {
+    username: string;
+    password: string;
+  };
   timeoutMs?: number;
+  variables?: Record<string, string>;
+  isDirty?: boolean;
+};
+
+export type ApiFolder = {
+  id: string;
+  name: string;
+  isExpanded?: boolean;
+  requests: ApiRequest[];
+  folders?: ApiFolder[];
+};
+
+export type ApiCollection = {
+  id: string;
+  name: string;
+  description?: string;
+  folders: ApiFolder[];
+  requests: ApiRequest[];
+};
+
+export type ApiEnvironment = {
+  id: string;
+  name: string;
+  color: "red" | "yellow" | "green" | "blue" | "zinc";
+  variables: Record<string, string>;
 };
 
 export type ApiTimings = {
+  dnsLookupMs?: number;
+  tcpConnectMs?: number;
+  tlsHandshakeMs?: number;
+  firstByteMs?: number;
+  downloadMs?: number;
   totalDurationMs: number;
 };
+
+export type ApiStreamEvent =
+  | { type: "Status"; data: { code: number; reason: string } }
+  | { type: "Header"; data: { key: string; value: string } }
+  | { type: "Chunk"; data: { data: string; bytes_len: number } }
+  | { type: "Done"; data: { total_bytes: number; duration_ms: number } }
+  | { type: "Error"; data: { message: string } };
 
 export type ApiResponse = {
   requestId?: string;

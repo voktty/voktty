@@ -6,6 +6,25 @@
 if ($global:__VOKTTY_HOOKS_LOADED) { return }
 $global:__VOKTTY_HOOKS_LOADED = $true
 
+# Clean verbatim UNC / drive prefixes from working directory so child processes (Python, SQLite, Node, etc.)
+# receive clean Win32 paths without Win32 \\?\ verbatim prefix that disables relative path resolution (..)
+try {
+    $curr = (Get-Location -PSProvider FileSystem).ProviderPath
+    if ($curr -match '^\\\\\?\\UNC\\(.*)$') {
+        Set-Location "\\$($Matches[1])"
+        [System.Environment]::CurrentDirectory = "\\$($Matches[1])"
+    } elseif ($curr -match '^\\\\\?\\([A-Za-z]:.*)$') {
+        Set-Location $Matches[1]
+        [System.Environment]::CurrentDirectory = $Matches[1]
+    }
+} catch {}
+
+if ($PROFILE -and (Test-Path -LiteralPath $PROFILE -PathType Leaf)) {
+    try {
+        . $PROFILE
+    } catch {}
+}
+
 if ($env:VOKTTY_CLI -and (Test-Path -LiteralPath $env:VOKTTY_CLI -PathType Leaf)) {
     function global:voktty {
         & $env:VOKTTY_CLI @args
@@ -86,7 +105,13 @@ function global:prompt {
     $loc = Get-Location
     $osc7 = ''
     if ($loc.Provider.Name -eq 'FileSystem') {
-        $cwd = $loc.ProviderPath -replace '\\','/'
+        $rawPath = $loc.ProviderPath
+        if ($rawPath -match '^\\\\\?\\UNC\\(.*)$') {
+            $rawPath = "\\$($Matches[1])"
+        } elseif ($rawPath -match '^\\\\\?\\([A-Za-z]:.*)$') {
+            $rawPath = $Matches[1]
+        }
+        $cwd = $rawPath -replace '\\','/'
         if ($cwd -match '^[A-Za-z]:') { $cwd = "/$cwd" }
         $cwdEnc = __voktty_urlencode $cwd
         $hostName = [System.Environment]::MachineName
