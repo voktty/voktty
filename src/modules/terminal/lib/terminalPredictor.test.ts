@@ -91,5 +91,26 @@ describe("terminalPredictor", () => {
       // Should NOT contain non-directory files like README.md for 'cd'
       expect(res.items).not.toContain("cd README.md");
     });
+
+    it("predicts remote directories on SSH workspace when typing absolute path", async () => {
+      const res = await predictTerminalSuggestions("cd /opt/", {
+        leafId: 3,
+        workspaceEnv: {
+          kind: "ssh",
+          connection: {
+            id: "conn-1",
+            name: "Server",
+            host: "192.168.1.100",
+            user: "ubuntu",
+          },
+          root: "/home/ubuntu",
+        },
+        isUnix: true,
+      });
+
+      expect(res.hasRealPaths).toBe(true);
+      expect(res.items).toContain("cd /opt/scripts/");
+      expect(res.items).toContain("cd /opt/tests/");
+    });
   });
 });

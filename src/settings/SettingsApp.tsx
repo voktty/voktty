@@ -1,5 +1,6 @@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WindowControls } from "@/components/WindowControls";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
 import { t as translate, useTranslation } from "@/modules/i18n";
 import type { SettingsTab } from "@/modules/settings/openSettingsWindow";
@@ -11,6 +12,7 @@ import {
 } from "./settingsSearch";
 import {
   AiScanIcon,
+  ComputerIcon,
   InformationCircleIcon,
   KeyboardIcon,
   Key01Icon,
@@ -60,6 +62,11 @@ const ExtensionsSection = React.lazy(() =>
 const SshSection = React.lazy(() =>
   import("./sections/SshSection").then((m) => ({
     default: m.SshSection,
+  })),
+);
+const RdpSection = React.lazy(() =>
+  import("./sections/RdpSection").then((m) => ({
+    default: m.RdpSection,
   })),
 );
 const DockerSection = React.lazy(() =>
@@ -120,6 +127,11 @@ const TABS: {
     component: SshSection,
   },
   {
+    id: "rdp",
+    icon: ComputerIcon,
+    component: RdpSection,
+  },
+  {
     id: "docker",
     icon: ServerStack03Icon,
     component: DockerSection,
@@ -150,6 +162,7 @@ const VALID_TABS: SettingsTab[] = [
   "agents",
   "extensions",
   "ssh",
+  "rdp",
   "docker",
   "mcp",
   "vault",
@@ -323,7 +336,11 @@ export function SettingsApp() {
           <SettingsSearch onSelect={handleSearchSelect} />
           <div data-settings-section={active} className="mt-5">
             <Suspense fallback={<SettingsSectionSkeleton />}>
-              {ActiveSection && <ActiveSection />}
+              {ActiveSection && (
+                <ErrorBoundary name={`Settings Tab: ${active}`}>
+                  <ActiveSection />
+                </ErrorBoundary>
+              )}
             </Suspense>
           </div>
         </div>
