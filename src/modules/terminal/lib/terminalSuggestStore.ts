@@ -34,17 +34,22 @@ export function extractCurrentPromptInput(
   return text.trimStart();
 }
 
+import type { TerminalSuggestItem } from "./terminalPredictor";
+
 export type TerminalSuggestData = {
   leafId: number;
   open: boolean;
   query: string;
   items: string[];
+  structuredItems?: TerminalSuggestItem[];
   rawItems?: string[];
   selectedIndex: number;
   navigated: boolean;
   searchMode?: boolean;
   searchFilter?: string;
   ghostTail: string;
+  isPathContext?: boolean;
+  hasRealPaths?: boolean;
   cursorX: number;
   cursorY: number;
   cellWidth: number;

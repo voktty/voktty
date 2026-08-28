@@ -1,4 +1,5 @@
 import { ensureMonoFontsLoaded } from "@/lib/fonts";
+import { IS_WINDOWS } from "@/lib/platform";
 import { useDevServerCaptureStore } from "@/modules/preview/devServerStore";
 import {
   beginConnectionAttempt,
@@ -726,6 +727,21 @@ configureRendererPool({
     if (out.cols > 0) s.cols = out.cols;
     if (out.rows > 0) s.rows = out.rows;
     s.altScreenAtRelease = out.altScreen;
+  },
+  getSessionInfo(leafId) {
+    const s = sessions.get(leafId);
+    if (!s) return null;
+    const isUnix =
+      s.workspaceEnv.kind === "ssh" ||
+      s.workspaceEnv.kind === "docker" ||
+      s.workspaceEnv.kind === "wsl" ||
+      !IS_WINDOWS;
+    return {
+      workspaceEnv: s.workspaceEnv,
+      cwd: s.lastCwd || s.initialCwd || null,
+      shellOverride: s.shellOverride,
+      isUnix,
+    };
   },
 });
 

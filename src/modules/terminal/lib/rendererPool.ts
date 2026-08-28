@@ -44,11 +44,21 @@ import {
   extractCurrentPromptInput,
   useTerminalSuggestStore,
 } from "./terminalSuggestStore";
-import { historyList, historyRecord } from "../block/lib/history";
+import { predictTerminalSuggestions } from "./terminalPredictor";
+import { historyRecord } from "../block/lib/history";
 import { SHORTCUTS, matchBinding } from "@/modules/shortcuts";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import { IS_WINDOWS } from "@/lib/platform";
 
 const PTY_RESIZE_DEBOUNCE_MS = 256;
 const SNAPSHOT_SCROLLBACK_CAP = 5_000;
+
+export type LeafSessionInfo = {
+  workspaceEnv: WorkspaceEnv;
+  cwd: string | null;
+  shellOverride?: string;
+  isUnix: boolean;
+};
 
 export type SlotAdapter = {
   resolveLeaf(leafId: number): LeafBridge | null;
@@ -58,6 +68,7 @@ export type SlotAdapter = {
   isLeafBusy(leafId: number): boolean;
   isLeafVisible(leafId: number): boolean;
   storeSnapshot(leafId: number, out: SerializeOutput): void;
+  getSessionInfo?(leafId: number): LeafSessionInfo | null;
 };
 
 export type LeafBridge = {
@@ -291,8 +302,26 @@ function syncTerminalSuggestions(slot: Slot): void {
       return;
     }
 
+    const sessionInfo = adapter?.getSessionInfo?.(leafId);
+    const isUnix =
+      sessionInfo?.isUnix ??
+      (sessionInfo?.workspaceEnv?.kind === "ssh" ||
+        sessionInfo?.workspaceEnv?.kind === "docker" ||
+        sessionInfo?.workspaceEnv?.kind === "wsl" ||
+        !IS_WINDOWS);
+
     try {
-      const list = await historyList(query, undefined, 8);
+      const pred = await predictTerminalSuggestions(
+        query,
+        {
+          leafId,
+          workspaceEnv: sessionInfo?.workspaceEnv,
+          cwd: sessionInfo?.cwd,
+          isUnix,
+        },
+        8,
+      );
+
       if (
         slot.currentLeafId !== leafId ||
         !slot.isDirectTyping ||
@@ -300,12 +329,6 @@ function syncTerminalSuggestions(slot: Slot): void {
       ) {
         return;
       }
-
-      const items = list.map((e) => e.cmd);
-      const top = items.find(
-        (c) => c.startsWith(query) && c.length > query.length,
-      );
-      const ghostTail = top ? top.slice(query.length) : "";
 
       const cols = Math.max(1, term.cols);
       const rows = Math.max(1, term.rows);
@@ -316,12 +339,15 @@ function syncTerminalSuggestions(slot: Slot): void {
 
       useTerminalSuggestStore.getState().setSuggest({
         leafId,
-        open: items.length > 0,
+        open: pred.items.length > 0,
         query,
-        items,
+        items: pred.items,
+        structuredItems: pred.structuredItems,
         selectedIndex: 0,
         navigated: false,
-        ghostTail,
+        ghostTail: pred.ghostTail,
+        isPathContext: pred.isPathContext,
+        hasRealPaths: pred.hasRealPaths,
         cursorX,
         cursorY,
         cellWidth,
@@ -477,7 +503,9 @@ function createSlot(): Slot {
           const lineText = line ? line.translateToString(true) : "";
           const typedCmd = extractCurrentPromptInput(lineText, buf.cursorX).trim();
           if (typedCmd && typedCmd.length > 0) {
-            historyRecord(typedCmd);
+            const sessionInfo = adapter?.getSessionInfo?.(leafId);
+            const shellType = sessionInfo?.isUnix ? "unix" : (IS_WINDOWS ? "powershell" : "unix");
+            historyRecord(typedCmd, shellType, sessionInfo?.workspaceEnv?.kind);
           }
         }
         slot.isDirectTyping = false;
@@ -558,6 +586,24 @@ function createSlot(): Slot {
         !event.metaKey &&
         !event.shiftKey
       ) {
+        const sessionInfo = adapter?.getSessionInfo?.(leafId);
+        const isRemoteWithoutLocalPaths =
+          sessionInfo?.isUnix &&
+          !suggest.hasRealPaths &&
+          sessionInfo?.workspaceEnv?.kind !== "local";
+
+        // In remote/docker/ssh sessions without local filesystem probing,
+        // if user hasn't explicitly navigated the history popup, let Tab pass
+        // directly to the remote PTY so the remote shell's native path completion works!
+        if (isRemoteWithoutLocalPaths && !suggest.navigated && !suggest.searchMode) {
+          if (event.type === "keydown") {
+            bridge.writeToPty("\t");
+            slot.isDirectTyping = false;
+            useTerminalSuggestStore.getState().clear(leafId);
+          }
+          return false;
+        }
+
         event.preventDefault();
         if (event.type === "keydown") {
           const selected =
@@ -579,7 +625,7 @@ function createSlot(): Slot {
       }
 
       if (
-        event.key === "ArrowRight" &&
+        (event.key === "ArrowRight" || event.key === "End") &&
         !event.ctrlKey &&
         !event.altKey &&
         !event.metaKey &&
