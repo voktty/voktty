@@ -1,16 +1,18 @@
 import { create } from "zustand";
+import { getActiveTerminalLeafId } from "../lib/useTerminalSession";
 
 export type HistoryShellFilter = "all" | "powershell" | "unix" | "local";
 
 export type CommandHistoryStore = {
   isOpen: boolean;
+  targetLeafId: number | null;
   searchQuery: string;
   shellFilter: HistoryShellFilter;
   scrollPosition: number;
   modalPosition: { x: number; y: number } | null;
-  openHistory: (initialQuery?: string) => void;
+  openHistory: (initialQuery?: string, targetLeafId?: number | null) => void;
   closeHistory: () => void;
-  toggleHistory: () => void;
+  toggleHistory: (targetLeafId?: number | null) => void;
   setSearchQuery: (query: string) => void;
   setShellFilter: (filter: HistoryShellFilter) => void;
   setScrollPosition: (scroll: number) => void;
@@ -19,14 +21,27 @@ export type CommandHistoryStore = {
 
 export const useCommandHistoryStore = create<CommandHistoryStore>((set) => ({
   isOpen: false,
+  targetLeafId: null,
   searchQuery: "",
   shellFilter: "all",
   scrollPosition: 0,
   modalPosition: null,
-  openHistory: (initialQuery = "") =>
-    set({ isOpen: true, searchQuery: initialQuery }),
-  closeHistory: () => set({ isOpen: false }),
-  toggleHistory: () => set((s) => ({ isOpen: !s.isOpen })),
+  openHistory: (initialQuery = "", targetLeafId) =>
+    set({
+      isOpen: true,
+      searchQuery: initialQuery,
+      targetLeafId: targetLeafId !== undefined ? targetLeafId : getActiveTerminalLeafId(),
+    }),
+  closeHistory: () => set({ isOpen: false, targetLeafId: null }),
+  toggleHistory: (targetLeafId) =>
+    set((s) => ({
+      isOpen: !s.isOpen,
+      targetLeafId: !s.isOpen
+        ? targetLeafId !== undefined
+          ? targetLeafId
+          : getActiveTerminalLeafId()
+        : null,
+    })),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setShellFilter: (shellFilter) => set({ shellFilter }),
   setScrollPosition: (scrollPosition) => set({ scrollPosition }),
