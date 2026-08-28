@@ -65,7 +65,7 @@ const jaBase = mergeLocale(en, {
       editor: "エディター",
       themes: "テーマ",
       shortcuts: "ショートカット",
-      models: "モデル",
+      models: "AI モデル",
       agents: "エージェント",
       extensions: "拡張機能",
       ssh: "SSH",
@@ -372,9 +372,15 @@ const jaBase = mergeLocale(en, {
       noResults: "'{query}' に一致するショートカットは見つかりませんでした",
     },
     models: {
-      title: "モデルとプロバイダー",
+      title: "AI モデル",
       description:
-        "AI プロバイダー、API キー、モデルパラメーターを設定します。",
+        "AI プロバイダー、モデル、カスタムエージェント、指示を設定します。",
+      subTabs: {
+        models: "モデル",
+        agents: "エージェント",
+      },
+      aiInactiveBanner:
+        "AI は現在無効になっています。以下でモデルを接続して確認し、AI スイッチをオンにしてモデルとエージェントを設定してください。",
       providers: "プロバイダー",
       apiKey: "API キー",
       keySaved: "キーは OS のキーチェーンに安全に保存されています",

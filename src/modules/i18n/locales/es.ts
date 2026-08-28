@@ -75,7 +75,7 @@ export const es: TranslationSchema = {
       editor: "Editor",
       themes: "Temas",
       shortcuts: "Atajos",
-      models: "Modelos",
+      models: "Modelos IA",
       agents: "Agentes",
       extensions: "Extensiones",
       ssh: "SSH",
@@ -438,9 +438,15 @@ export const es: TranslationSchema = {
       noResults: "No se encontraron atajos para '{query}'",
     },
     models: {
-      title: "Modelos y Proveedores",
+      title: "Modelos IA",
       description:
-        "Configura proveedores de IA, claves de API y parámetros de modelos.",
+        "Configura proveedores de IA, modelos, agentes personalizados e instrucciones.",
+      subTabs: {
+        models: "Modelos",
+        agents: "Agentes",
+      },
+      aiInactiveBanner:
+        "La IA está desactivada actualmente. Conecta y verifica un modelo abajo, luego activa el interruptor de IA para configurar modelos y agentes.",
       providers: "Proveedores",
       apiKey: "Clave de API",
       configurationRequired: "Configura primero el modelo seleccionado.",

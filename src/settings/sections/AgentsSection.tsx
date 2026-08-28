@@ -48,7 +48,7 @@ const ICON_OPTIONS: AgentIconId[] = [
   "spark",
 ];
 
-export function AgentsSection() {
+export function AgentsSection({ hideHeader }: { hideHeader?: boolean } = {}) {
   const { t } = useTranslation();
   const customInstructions = usePreferencesStore((s) => s.customInstructions);
   const customAgents = useAgentsStore((s) => s.customAgents);
@@ -73,10 +73,12 @@ export function AgentsSection() {
 
   return (
     <div className="flex flex-col gap-7">
-      <SectionHeader
-        title={t("settings.agents.title")}
-        description={t("settings.agents.description")}
-      />
+      {!hideHeader && (
+        <SectionHeader
+          title={t("settings.agents.title")}
+          description={t("settings.agents.description")}
+        />
+      )}
 
       <CustomInstructionsBlock value={customInstructions} />
 
