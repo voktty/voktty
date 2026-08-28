@@ -640,6 +640,18 @@ const ruBase = mergeLocale(en, {
     editor: "Редактор",
     spaces: "Пространства",
     serial: "Последовательный порт",
+    uptime: {
+      title: "Активность терминала",
+      subtitle: "Экранное время и статистика за неделю",
+      activeNow: "Активно сейчас",
+      today: "Сегодня",
+      thisWeek: "На этой неделе",
+      dailyAvg: "В среднем в день",
+      weeklyChart: "Активность за неделю",
+      topPaths: "Самые активные каталоги",
+      takeBreak: "Не забудьте сделать небольшой перерыв, чтобы дать глазам отдохнуть и размяться!",
+      noPaths: "Активность пока не записана",
+    },
     stacks: {
       typescript: "TypeScript",
       javascript: "JavaScript",

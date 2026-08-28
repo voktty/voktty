@@ -636,6 +636,18 @@ const jaBase = mergeLocale(en, {
     editor: "エディター",
     spaces: "スペース",
     serial: "シリアル",
+    uptime: {
+      title: "ターミナル稼働状況",
+      subtitle: "スクリーンタイムと週間統計",
+      activeNow: "現在稼働中",
+      today: "今日",
+      thisWeek: "今週",
+      dailyAvg: "1日平均",
+      weeklyChart: "週間アクティビティ",
+      topPaths: "よく使うディレクトリ",
+      takeBreak: "目を休めたりストレッチするために少し休憩しましょう！",
+      noPaths: "記録されたアクティビティはありません",
+    },
     stacks: {
       typescript: "TypeScript",
       javascript: "JavaScript",

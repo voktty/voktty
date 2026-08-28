@@ -24,7 +24,15 @@ export const useTerminalCopilotStore = create<TerminalCopilotState>(
     toggleCopilot: (leafId = null, initialPrompt = "") => {
       const current = get();
       if (current.isOpen) {
-        set({ isOpen: false, initialPrompt: "" });
+        if (
+          leafId !== null &&
+          current.leafId !== null &&
+          current.leafId !== leafId
+        ) {
+          set({ isOpen: true, leafId, initialPrompt });
+        } else {
+          set({ isOpen: false, initialPrompt: "" });
+        }
       } else {
         set({ isOpen: true, leafId, initialPrompt });
       }

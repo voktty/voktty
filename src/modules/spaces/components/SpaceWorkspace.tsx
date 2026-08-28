@@ -391,7 +391,13 @@ function OccupiedSpaceSlotActions({
         {tab.kind === "terminal" && (
           <button
             type="button"
-            onClick={() => useTerminalCopilotStore.getState().toggleCopilot(tab.id)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              useTerminalCopilotStore
+                .getState()
+                .toggleCopilot(tab.activeLeafId);
+            }}
             aria-label={
               copilotShortcutLabel
                 ? `${t("terminal.copilot.title")} (${copilotShortcutLabel})`
@@ -404,7 +410,12 @@ function OccupiedSpaceSlotActions({
             }
             className="flex size-4.5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-95 cursor-pointer"
           >
-            <HugeiconsIcon icon={SparklesIcon} size={11} strokeWidth={2} className="text-primary" />
+            <HugeiconsIcon
+              icon={SparklesIcon}
+              size={11}
+              strokeWidth={2}
+              className="text-primary"
+            />
           </button>
         )}
         <DropdownMenu>

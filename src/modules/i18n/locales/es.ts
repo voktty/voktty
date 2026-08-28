@@ -1048,6 +1048,18 @@ export const es: TranslationSchema = {
     privateHidden: "Privado: oculto para la IA",
     privateHiddenTooltip:
       "La IA no puede ver la salida de esta terminal. Úsala para secretos, SSH o información que no quieras enviar al modelo.",
+    uptime: {
+      title: "Actividad de Consola",
+      subtitle: "Tiempo en pantalla y estadísticas semanales",
+      activeNow: "Activo ahora",
+      today: "Hoy",
+      thisWeek: "Esta semana",
+      dailyAvg: "Promedio diario",
+      weeklyChart: "Actividad semanal",
+      topPaths: "Rutas más activas",
+      takeBreak: "¡Recuerda tomarte una pausa para descansar la vista y estirar!",
+      noPaths: "Aún no hay rutas registradas",
+    },
     cwd: {
       noDirectory: "sin directorio",
       home: "Inicio",
