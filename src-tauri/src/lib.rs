@@ -434,6 +434,7 @@ pub fn run() {
             git_review::git_review_unmark_range,
             git_review::git_review_reconcile_file,
             git_review::git_review_get_session_overview,
+            git_review::git_review_prune_sessions,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
