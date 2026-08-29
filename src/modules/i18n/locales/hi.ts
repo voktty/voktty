@@ -71,6 +71,7 @@ export const hi: TranslationSchema = mergeLocale(en, {
       noResults: "कोई मेल खाती सेटिंग नहीं मिली",
     },
     tabs: {
+    revealInFileManager: "फ़ाइल एक्सप्लोरर में दिखाएं",
       general: "सामान्य",
       editor: "संपादक",
       themes: "थीम्स",
@@ -874,6 +875,8 @@ export const hi: TranslationSchema = mergeLocale(en, {
     notifications: "सूचनाएं",
   },
   tabs: {
+    revealInSideBar: "साइडबार में दिखाएं",
+    revealInFileManager: "फ़ाइल एक्सप्लोरर में दिखाएं",
     newTab: "नया टैब",
     closeTab: "टैब बंद करें",
     closeOtherTabs: "अन्य टैब बंद करें",

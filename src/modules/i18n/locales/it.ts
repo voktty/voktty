@@ -61,6 +61,7 @@ const itBase = mergeLocale(en, {
       noResults: "Nessuna impostazione corrispondente trovata",
     },
     tabs: {
+    revealInFileManager: "Mostra in Esplora file",
       general: "Generale",
       editor: "Editor",
       themes: "Temi",
@@ -586,6 +587,8 @@ const itBase = mergeLocale(en, {
     notifications: "Notifiche",
   },
   tabs: {
+    revealInSideBar: "Mostra nella barra laterale",
+    revealInFileManager: "Mostra in Esplora file",
     newTab: "Nuova scheda",
     closeTab: "Chiudi scheda",
     closeOtherTabs: "Chiudi le altre schede",

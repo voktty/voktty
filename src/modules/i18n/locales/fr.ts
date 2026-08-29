@@ -61,6 +61,7 @@ const frBase = mergeLocale(en, {
       noResults: "Aucun paramètre correspondant trouvé",
     },
     tabs: {
+    revealInFileManager: "Révéler dans l'explorateur de fichiers",
       general: "Général",
       editor: "Éditeur",
       themes: "Thèmes",
@@ -587,6 +588,8 @@ const frBase = mergeLocale(en, {
     notifications: "Notifications",
   },
   tabs: {
+    revealInSideBar: "Révéler dans la barre latérale",
+    revealInFileManager: "Révéler dans l'explorateur de fichiers",
     newTab: "Nouvel onglet",
     closeTab: "Fermer l'onglet",
     closeOtherTabs: "Fermer les autres onglets",

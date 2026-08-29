@@ -61,6 +61,7 @@ const ruBase = mergeLocale(en, {
       noResults: "Подходящие настройки не найдены",
     },
     tabs: {
+    revealInFileManager: "Показать в проводнике",
       general: "Общие",
       editor: "Редактор",
       themes: "Темы",
@@ -571,6 +572,8 @@ const ruBase = mergeLocale(en, {
     notifications: "Уведомления",
   },
   tabs: {
+    revealInSideBar: "Показать на боковой панели",
+    revealInFileManager: "Показать в проводнике",
     newTab: "Новая вкладка",
     closeTab: "Закрыть вкладку",
     closeOtherTabs: "Закрыть другие вкладки",

@@ -71,6 +71,7 @@ export const ar: TranslationSchema = mergeLocale(en, {
       noResults: "لم يتم العثور على إعدادات مطابقة",
     },
     tabs: {
+    revealInFileManager: "إظهار في مستكشف الملفات",
       general: "عام",
       editor: "المحرر",
       themes: "السمات",
@@ -873,6 +874,8 @@ export const ar: TranslationSchema = mergeLocale(en, {
     notifications: "الإشعارات",
   },
   tabs: {
+    revealInSideBar: "إظهار في الشريط الجانبي",
+    revealInFileManager: "إظهار في مستكشف الملفات",
     newTab: "علامة تبويب جديدة",
     closeTab: "إغلاق علامة التبويب",
     closeOtherTabs: "إغلاق علامات التبويب الأخرى",

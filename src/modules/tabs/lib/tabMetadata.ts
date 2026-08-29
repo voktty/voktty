@@ -42,3 +42,21 @@ export function formatUptime(ms: number): string {
   const remHours = hours % 24;
   return `${days}d ${remHours}h`;
 }
+
+export function getTabPath(tab: unknown): string | null {
+  if (!tab || typeof tab !== "object") return null;
+  const candidate = tab as Record<string, unknown>;
+  if (typeof candidate.path === "string" && candidate.path.trim().length > 0) {
+    return candidate.path;
+  }
+  if (
+    typeof candidate.repoRoot === "string" &&
+    candidate.repoRoot.trim().length > 0
+  ) {
+    return candidate.repoRoot;
+  }
+  if (typeof candidate.cwd === "string" && candidate.cwd.trim().length > 0) {
+    return candidate.cwd;
+  }
+  return null;
+}

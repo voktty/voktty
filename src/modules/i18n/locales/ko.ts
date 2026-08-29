@@ -61,6 +61,7 @@ const koBase = mergeLocale(en, {
       noResults: "일치하는 설정이 없습니다",
     },
     tabs: {
+    revealInFileManager: "파일 탐색기에서 표시",
       general: "일반",
       editor: "편집기",
       themes: "테마",
@@ -563,6 +564,8 @@ const koBase = mergeLocale(en, {
     notifications: "알림",
   },
   tabs: {
+    revealInSideBar: "사이드바에서 표시",
+    revealInFileManager: "파일 탐색기에서 표시",
     newTab: "새 탭",
     closeTab: "탭 닫기",
     closeOtherTabs: "다른 탭 닫기",
