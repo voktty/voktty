@@ -3,7 +3,7 @@ pub(crate) mod launch;
 pub mod modules;
 
 use modules::{
-    agent, agent_history, api_client, collab, control, dap, docker, extensions, fs, git, history, lsp, mcp, net,
+    agent, agent_history, api_client, collab, control, dap, docker, extensions, fs, git, git_review, history, lsp, mcp, net,
     pty, rdp, remote, secrets, serial, shell, tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -218,6 +218,7 @@ pub fn run() {
         .manage(collab::CollabGuestState::default())
         .manage(mcp::McpManagerState::default())
         .manage(agent_history::AgentHistoryState::new())
+        .manage(git_review::GitReviewState::default())
         .invoke_handler(tauri::generate_handler![
             launch::launch_bootstrap,
             launch::launch_frontend_ready,
@@ -427,6 +428,12 @@ pub fn run() {
             agent_history::agent_history_get_resume_command,
             agent_history::agent_history_export_markdown,
             agent_history::agent_history_get_stats,
+            git_review::git_review_open_session,
+            git_review::git_review_mark_file,
+            git_review::git_review_mark_range,
+            git_review::git_review_unmark_range,
+            git_review::git_review_reconcile_file,
+            git_review::git_review_get_session_overview,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
