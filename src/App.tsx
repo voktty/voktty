@@ -694,14 +694,15 @@ export default function App({
   const busySessionIds = busySessionIdsRef.current;
 
   const usageProviders = useMemo(() => {
-    const ids = new Set<"claude" | "codex">();
-    for (const session of sessions) {
-      if (session.harness === "claude" || session.harness === "codex") {
-        ids.add(session.harness);
-      }
+    if (active?.harness === "claude" || active?.harness === "codex") {
+      return [active.harness];
     }
-    return [...ids];
-  }, [sessions]);
+    return [];
+  }, [active?.harness]);
+  const usageSession = useMemo(() => {
+    if (!active) return undefined;
+    return { harness: active.harness };
+  }, [active?.harness]);
 
   const nextApprovalSessionIds = useMemo(() => {
     const ids = new Set<string>();
@@ -4076,7 +4077,9 @@ export default function App({
             }
           />
         ) : null}
-        <UsageFooter providers={usageProviders} />
+        {searchViewOpen || inboxViewOpen || settingsOpen ? null : (
+          <UsageFooter providers={usageProviders} session={usageSession} />
+        )}
       </div>
 
       {filePickerOpen ? (

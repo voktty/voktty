@@ -18,13 +18,20 @@ import {
   type RateLimitProvider,
   type RateLimitWindow,
 } from "../lib/rateLimits";
+import { HARNESS_LABEL, HARNESS_TITLE, type HarnessId } from "../lib/session";
 
 const CLOCK_MS = 30_000;
 
+export type UsageFooterSession = {
+  harness: HarnessId;
+};
+
 export function UsageFooter({
   providers,
+  session,
 }: {
   providers: RateLimitProvider[];
+  session?: UsageFooterSession;
 }) {
   const wantClaude = providers.includes("claude");
   const wantCodex = providers.includes("codex");
@@ -98,30 +105,48 @@ export function UsageFooter({
     return () => window.clearInterval(timer);
   }, []);
 
-  if (!wantClaude && !wantCodex) return null;
+  const showUsage = wantClaude || wantCodex;
 
   return (
     <footer
-      aria-label="Provider usage"
+      aria-label={showUsage ? "Provider usage" : "Session"}
       className="flex h-7 shrink-0 items-center gap-3 overflow-x-auto border-t border-content/10 px-3 text-[11px] text-content/55"
     >
-      {wantClaude ? <ProviderChip limits={claude} now={now} /> : null}
-      {wantCodex ? <ProviderChip limits={codex} now={now} /> : null}
-      <button
-        type="button"
-        className="ml-auto grid size-5 shrink-0 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content disabled:opacity-50"
-        aria-label="Refresh usage"
-        title="Refresh usage"
-        disabled={refreshing}
-        onClick={() => void refresh(true)}
-      >
-        <RefreshCw
-          className={`size-3 ${refreshing ? "animate-spin" : ""}`}
-          strokeWidth={1.75}
-          aria-hidden
-        />
-      </button>
+      {showUsage ? (
+        <>
+          {wantClaude ? <ProviderChip limits={claude} now={now} /> : null}
+          {wantCodex ? <ProviderChip limits={codex} now={now} /> : null}
+          <button
+            type="button"
+            className="ml-auto grid size-5 shrink-0 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content disabled:opacity-50"
+            aria-label="Refresh usage"
+            title="Refresh usage"
+            disabled={refreshing}
+            onClick={() => void refresh(true)}
+          >
+            <RefreshCw
+              className={`size-3 ${refreshing ? "animate-spin" : ""}`}
+              strokeWidth={1.75}
+              aria-hidden
+            />
+          </button>
+        </>
+      ) : session ? (
+        <SessionChip session={session} />
+      ) : null}
     </footer>
+  );
+}
+
+function SessionChip({ session }: { session: UsageFooterSession }) {
+  return (
+    <span
+      className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap"
+      title={HARNESS_TITLE[session.harness]}
+    >
+      <HarnessIcon harness={session.harness} className="size-3 shrink-0" />
+      <span>{HARNESS_LABEL[session.harness]}</span>
+    </span>
   );
 }
 
