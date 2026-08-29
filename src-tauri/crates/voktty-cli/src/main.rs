@@ -1182,8 +1182,9 @@ fn run_jwt(args: &[OsString], as_json: bool) -> Result<ExitCode, CliError> {
     let decode_part = |segment: &str| -> Result<Value, CliError> {
         let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
         let mut unpadded = segment.to_string();
-        while unpadded.len() % 4 != 0 {
-            unpadded.push('=');
+        let rem = unpadded.len() % 4;
+        if rem > 0 {
+            unpadded.push_str(&"===="[rem..]);
         }
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(&unpadded)

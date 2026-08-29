@@ -460,7 +460,7 @@ export function GitReviewQueue({
                         {fileComments.length > 0 ? (
                           <span
                             className="inline-flex items-center gap-0.5 rounded px-1 py-0.2 bg-amber-500/15 text-amber-600 dark:text-amber-400 font-mono text-[9px]"
-                            title={`${fileComments.length} comments`}
+                            title={`${fileComments.length} ${t("git.commentsCount")}`}
                           >
                             <HugeiconsIcon icon={Comment01Icon} size={9} />
                             {fileComments.length}

@@ -366,6 +366,7 @@ impl ReviewDb {
         Ok(deleted)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_comment(
         &self,
         session_id: &str,
