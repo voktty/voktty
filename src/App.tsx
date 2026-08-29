@@ -178,7 +178,12 @@ import {
   rememberProject,
   sameProjectPath,
 } from "./lib/recents";
-import { findTabForProject, filterTabsForProject, workspaceTabCwd } from "./lib/workspaceTabGroups";
+import {
+  filterTabsForProject,
+  findTabForProject,
+  planWorkspaceTabCloseTarget,
+  workspaceTabCwd,
+} from "./lib/workspaceTabGroups";
 import {
   HARNESS_LABEL,
   canReplaceSessionTitle,
@@ -1423,6 +1428,12 @@ export default function App({
       }
 
       const finishClose = () => {
+        const nextActiveTabId = planWorkspaceTabCloseTarget({
+          tabs: current,
+          sessions: sessionsRef.current,
+          closingTabId: id,
+          scope: deckLayout ? "project" : "workspace",
+        });
         const next = current.filter((t) => t.id !== id);
         const gone = new Set(
           leafIds(closing.layout).filter((paneId) =>
@@ -1438,8 +1449,8 @@ export default function App({
           return updated;
         });
         setTabs(next);
-        if (id === activeTabIdRef.current) {
-          activateTab((next[Math.max(0, index - 1)] ?? next[0]).id);
+        if (id === activeTabIdRef.current && nextActiveTabId) {
+          activateTab(nextActiveTabId);
         }
         void refreshHistory(sidebarCwd);
       };
@@ -1454,7 +1465,14 @@ export default function App({
       }
       finishClose();
     },
-    [dirtyFiles, activateTab, persistSession, refreshHistory, sidebarCwd],
+    [
+      dirtyFiles,
+      activateTab,
+      deckLayout,
+      persistSession,
+      refreshHistory,
+      sidebarCwd,
+    ],
   );
 
   const onGroupNewTab = useCallback(

@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Closing a tab in Deck keeps the active tab in the current project when another tab from that project is open.
 - Streamed Markdown keeps headings, blank lines, tables, and repeated characters. Completed Claude/Codex snapshots no longer paste the same reply twice. Diagnosed in #15 by @kinsomicrote.
 
 ## [0.1.13] - 2026-08-27
