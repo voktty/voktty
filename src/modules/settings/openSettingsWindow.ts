@@ -13,6 +13,7 @@ export type SettingsTab =
   | "docker"
   | "mcp"
   | "vault"
+  | "aliases"
   | "about";
 
 export async function openSettingsWindow(tab?: SettingsTab): Promise<void> {

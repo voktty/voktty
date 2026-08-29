@@ -112,6 +112,7 @@ export const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
   section("mcp", "mcp", "settings.tabs.mcp", "settings.mcp.description"),
   row("mcp-add", "mcp", "settings.mcp.addServer", "settings.mcp.empty.description"),
   section("vault", "vault", "settings.tabs.vault", "vault.description"),
+  section("aliases", "aliases", "settings.tabs.aliases", "aliases.description"),
   section("about", "about", "settings.tabs.about", "settings.about.description"),
 ];
 

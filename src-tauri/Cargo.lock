@@ -8112,10 +8112,13 @@ dependencies = [
 name = "voktty-cli"
 version = "1.0.4"
 dependencies = [
+ "base64 0.22.1",
  "dirs 6.0.0",
+ "hex",
  "libc",
  "reqwest 0.12.28",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "voktty-aliases",
  "voktty-control-protocol",
