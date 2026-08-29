@@ -7,10 +7,12 @@ pub mod reconcile;
 use blob_store::BlobStore;
 use db::ReviewDb;
 use models::{
-    Reconciliation, ReviewSession, SessionReviewOverview,
+    AddReviewCommentPayload, Reconciliation, ReviewComment, ReviewSession, SessionReviewOverview,
+    UpdateReviewCommentPayload,
 };
 use std::sync::Arc;
 use tauri::State;
+
 
 pub struct GitReviewState {
     db: Arc<ReviewDb>,
@@ -195,4 +197,90 @@ pub async fn git_review_prune_sessions(
         .prune_sessions_older_than(threshold)
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn git_review_add_comment(
+    payload: AddReviewCommentPayload,
+    state: State<'_, GitReviewState>,
+) -> Result<ReviewComment, String> {
+    let session = state
+        .db
+        .open_session(&payload.repo_root, &payload.target, None, None)
+        .map_err(|e| e.to_string())?;
+
+    let hash = state.blob_store.store(&payload.content)?;
+
+    state
+        .db
+        .add_comment(
+            &session.id,
+            &payload.path,
+            &payload.side,
+            payload.line,
+            payload.end_line,
+            &hash,
+            &payload.comment,
+        )
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn git_review_get_comments(
+    repo_root: String,
+    target: String,
+    path: Option<String>,
+    state: State<'_, GitReviewState>,
+) -> Result<Vec<ReviewComment>, String> {
+    let session = state
+        .db
+        .open_session(&repo_root, &target, None, None)
+        .map_err(|e| e.to_string())?;
+
+    if let Some(p) = path {
+        state
+            .db
+            .get_file_comments(&session.id, &p)
+            .map_err(|e| e.to_string())
+    } else {
+        state
+            .db
+            .get_session_comments(&session.id)
+            .map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn git_review_delete_comment(
+    repo_root: String,
+    target: String,
+    comment_id: String,
+    state: State<'_, GitReviewState>,
+) -> Result<(), String> {
+    let session = state
+        .db
+        .open_session(&repo_root, &target, None, None)
+        .map_err(|e| e.to_string())?;
+
+    state
+        .db
+        .delete_comment(&session.id, &comment_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn git_review_update_comment(
+    payload: UpdateReviewCommentPayload,
+    state: State<'_, GitReviewState>,
+) -> Result<(), String> {
+    let session = state
+        .db
+        .open_session(&payload.repo_root, &payload.target, None, None)
+        .map_err(|e| e.to_string())?;
+
+    state
+        .db
+        .update_comment(&session.id, &payload.comment_id, &payload.comment)
+        .map_err(|e| e.to_string())
+}
+
 

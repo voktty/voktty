@@ -104,3 +104,38 @@ export type WalkthroughDocument = {
   createdAt: number;
 };
 
+export type ReviewComment = {
+  id: string;
+  sessionId: string;
+  path: string;
+  side: "old" | "new";
+  line: number;
+  endLine?: number;
+  snapshotHash: string;
+  comment: string;
+  createdAt: number;
+  updatedAt: number;
+  status: "pending" | "resolved" | "submitted";
+};
+
+export type AddReviewCommentPayload = {
+  repoRoot: string;
+  target: string;
+  path: string;
+  side: "old" | "new";
+  line: number;
+  endLine?: number;
+  content: string;
+  comment: string;
+};
+
+export type ReviewHandoffSummary = {
+  repoRoot: string;
+  target: string;
+  totalReviewedFiles: number;
+  totalChangedFiles: number;
+  comments: ReviewComment[];
+  markdownPrompt: string;
+};
+
+

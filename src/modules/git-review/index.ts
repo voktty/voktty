@@ -5,3 +5,6 @@ export * from "./lib/walkthroughValidator";
 export * from "./lib/walkthroughExport";
 export * from "./lib/walkthroughGenerator";
 export * from "./components/GitWalkthroughDialog";
+export * from "./components/ReviewHandoffDialog";
+export * from "./components/ReviewCommentDialog";
+

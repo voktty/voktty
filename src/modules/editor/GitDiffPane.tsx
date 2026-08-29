@@ -10,10 +10,11 @@ import {
 } from "@/modules/source-control/GitReviewQueue";
 import {
   fileKey,
+  ReviewCommentDialog,
   sessionKey,
   useGitReviewStore,
 } from "@/modules/git-review";
-import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { CheckmarkCircle02Icon, Comment01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { unifiedMergeView } from "@codemirror/merge";
@@ -236,6 +237,13 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   );
   const setViewMode = useGitReviewStore((s) => s.setViewMode);
   const markFile = useGitReviewStore((s) => s.markFile);
+  const comments = useGitReviewStore((s) => s.comments[sKey] ?? []);
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+
+  const fileComments = useMemo(
+    () => comments.filter((c) => c.path === path),
+    [comments, path],
+  );
 
   const fileReview = overview?.files.find((f) => f.path === path);
   const isReviewed = fileReview?.reviewed ?? false;
@@ -382,25 +390,43 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           ) : null}
 
           {source.kind === "working" && !useFallback ? (
-            <Button
-              type="button"
-              size="sm"
-              variant={isReviewed ? "outline" : "secondary"}
-              className="h-7 gap-1.5 px-2 text-[10.5px]"
-              onClick={() => void handleToggleReview()}
-            >
-              <HugeiconsIcon
-                icon={CheckmarkCircle02Icon}
-                size={13}
-                className={isReviewed ? "text-emerald-500" : ""}
-              />
-              <span>
-                {isReviewed ? t("git.reviewed") : t("git.markReviewed")}
-              </span>
-              <kbd className="hidden sm:inline-block rounded border border-border/60 bg-muted/50 px-1 py-0.2 font-mono text-[9px] text-muted-foreground">
-                R
-              </kbd>
-            </Button>
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-7 gap-1.5 px-2 text-[10.5px]"
+                onClick={() => setCommentDialogOpen(true)}
+              >
+                <HugeiconsIcon icon={Comment01Icon} size={13} className="text-amber-500" />
+                <span>{t("git.addComment")}</span>
+                {fileComments.length > 0 ? (
+                  <span className="rounded bg-amber-500/20 px-1 py-0.2 font-mono text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+                    {fileComments.length}
+                  </span>
+                ) : null}
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant={isReviewed ? "outline" : "secondary"}
+                className="h-7 gap-1.5 px-2 text-[10.5px]"
+                onClick={() => void handleToggleReview()}
+              >
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  size={13}
+                  className={isReviewed ? "text-emerald-500" : ""}
+                />
+                <span>
+                  {isReviewed ? t("git.reviewed") : t("git.markReviewed")}
+                </span>
+                <kbd className="hidden sm:inline-block rounded border border-border/60 bg-muted/50 px-1 py-0.2 font-mono text-[9px] text-muted-foreground">
+                  R
+                </kbd>
+              </Button>
+            </>
           ) : null}
 
           <span className="truncate max-w-80 font-mono hidden md:inline-block">
@@ -463,6 +489,18 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           />
         ) : null}
       </div>
+
+      <ReviewCommentDialog
+        open={commentDialogOpen}
+        onOpenChange={setCommentDialogOpen}
+        repoRoot={repoRoot}
+        target="worktree"
+        path={path}
+        line={1}
+        side="new"
+        content={modifiedContent}
+      />
     </div>
   );
 }
+
