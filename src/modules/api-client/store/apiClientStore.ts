@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { t } from "@/modules/i18n";
 import type {
   ApiClientTabMode,
   ApiCollection,
@@ -161,7 +162,7 @@ const DEFAULT_COLLECTIONS: ApiCollection[] = [
   {
     id: "col-pokemon",
     name: "Pokémon API",
-    description: "Pokemon REST, SSE & GraphQL API catalog with environments",
+    description: t("apiClient.discovery.defaultCollectionDescription"),
     requests: [],
     folders: [
       {
@@ -751,7 +752,9 @@ export const useApiClientStore = create<ApiClientStore>()(
           const newCol: ApiCollection = {
             id: `col-postman-${Date.now()}`,
             name: result.collectionName || "Postman Import",
-            description: `Imported with ${result.requests.length} endpoints`,
+            description: t("apiClient.discovery.importedCollectionDescription", {
+              count: result.requests.length,
+            }),
             folders: [
               {
                 id: `folder-imported-${Date.now()}`,

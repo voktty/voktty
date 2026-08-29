@@ -1,63 +1,42 @@
+import { t } from "@/modules/i18n";
 import { sendApiRequest } from "./apiTauriBridge";
 import type { ApiMethod, DiscoveredEndpoint, KeyValueParam } from "../types";
 
 // Common route probe candidates for REST/Microservice APIs
-const COMMON_ROUTE_PROBES: { path: string; method: ApiMethod; description: string }[] = [
-  { path: "ping", method: "GET", description: "Health/Ping check" },
-  { path: "health", method: "GET", description: "Service health probe" },
-  { path: "status", method: "GET", description: "System / runtime status" },
-  { path: "version", method: "GET", description: "API / Server version info" },
-  { path: "info", method: "GET", description: "Service metadata" },
-  { path: "me", method: "GET", description: "Authenticated user profile" },
-  { path: "profile", method: "GET", description: "User profile details" },
-  { path: "clients", method: "GET", description: "Clients / Customers collection" },
-  { path: "clientes", method: "GET", description: "Colección de clientes" },
-  { path: "users", method: "GET", description: "User accounts collection" },
-  { path: "usuarios", method: "GET", description: "Colección de usuarios" },
-  { path: "leads", method: "GET", description: "CRM Leads / Opportunities" },
-  { path: "contacts", method: "GET", description: "Contacts address book" },
-  { path: "tasks", method: "GET", description: "Tasks & To-do queue" },
-  { path: "tareas", method: "GET", description: "Listado de tareas" },
-  { path: "projects", method: "GET", description: "Project catalog" },
-  { path: "items", method: "GET", description: "Inventory items" },
-  { path: "products", method: "GET", description: "Products catalog" },
-  { path: "posts", method: "GET", description: "Blog posts collection" },
-  { path: "todos", method: "GET", description: "To-do list collection" },
-  { path: "comments", method: "GET", description: "Comments collection" },
-  { path: "quotes", method: "GET", description: "Quotes catalog" },
-  { path: "test", method: "GET", description: "API test endpoint" },
-  { path: "orders", method: "GET", description: "Orders collection" },
-  { path: "stats", method: "GET", description: "Analytics & statistics" },
-  { path: "auth", method: "GET", description: "Authentication status" },
-  { path: "auth/check", method: "GET", description: "Session verification" },
-  { path: "config", method: "GET", description: "Public configuration" },
-  { path: "models", method: "GET", description: "AI Models catalog" },
-  { path: "tags", method: "GET", description: "Local model tags" },
+const COMMON_ROUTE_PROBES: { path: string; method: ApiMethod }[] = [
+  { path: "ping", method: "GET" }, { path: "health", method: "GET" }, { path: "status", method: "GET" },
+  { path: "version", method: "GET" }, { path: "info", method: "GET" }, { path: "me", method: "GET" },
+  { path: "profile", method: "GET" }, { path: "clients", method: "GET" }, { path: "clientes", method: "GET" },
+  { path: "users", method: "GET" }, { path: "usuarios", method: "GET" }, { path: "leads", method: "GET" },
+  { path: "contacts", method: "GET" }, { path: "tasks", method: "GET" }, { path: "tareas", method: "GET" },
+  { path: "projects", method: "GET" }, { path: "items", method: "GET" }, { path: "products", method: "GET" },
+  { path: "posts", method: "GET" }, { path: "todos", method: "GET" }, { path: "comments", method: "GET" },
+  { path: "quotes", method: "GET" }, { path: "test", method: "GET" }, { path: "orders", method: "GET" },
+  { path: "stats", method: "GET" }, { path: "auth", method: "GET" }, { path: "auth/check", method: "GET" },
+  { path: "config", method: "GET" }, { path: "models", method: "GET" }, { path: "tags", method: "GET" },
 ];
 
 const KNOWN_SERVICE_FINGERPRINTS: {
   matcher: (url: string) => boolean;
   serviceName: string;
-  endpoints: { path: string; method: ApiMethod; description: string; sampleBody?: string }[];
+  endpoints: { path: string; method: ApiMethod; sampleBody?: string }[];
 }[] = [
   {
     // Ollama Engine
     matcher: (url) => url.includes("11434") || url.includes("/api/tags") || url.includes("/api/generate"),
     serviceName: "Ollama Local LLM",
     endpoints: [
-      { path: "/api/tags", method: "GET", description: "List local downloaded models" },
-      { path: "/api/version", method: "GET", description: "Get Ollama server version" },
-      { path: "/api/ps", method: "GET", description: "List currently active/loaded models in VRAM" },
+      { path: "/api/tags", method: "GET" },
+      { path: "/api/version", method: "GET" },
+      { path: "/api/ps", method: "GET" },
       {
         path: "/api/generate",
         method: "POST",
-        description: "Generate a text completion with a model",
         sampleBody: JSON.stringify({ model: "llama3.2", prompt: "Why is the sky blue?", stream: false }, null, 2),
       },
       {
         path: "/api/chat",
         method: "POST",
-        description: "Generate a chat completion with messages array",
         sampleBody: JSON.stringify({
           model: "llama3.2",
           messages: [{ role: "user", content: "Hello!" }],
@@ -67,19 +46,16 @@ const KNOWN_SERVICE_FINGERPRINTS: {
       {
         path: "/api/embed",
         method: "POST",
-        description: "Generate vector embeddings for input text",
         sampleBody: JSON.stringify({ model: "all-minilm", input: "Here is an article about text embeddings" }, null, 2),
       },
       {
         path: "/api/pull",
         method: "POST",
-        description: "Pull/Download a model from the Ollama library",
         sampleBody: JSON.stringify({ model: "llama3.2:latest" }, null, 2),
       },
       {
         path: "/api/delete",
         method: "DELETE",
-        description: "Delete a local model from disk",
         sampleBody: JSON.stringify({ model: "model-to-delete" }, null, 2),
       },
     ],
@@ -89,13 +65,13 @@ const KNOWN_SERVICE_FINGERPRINTS: {
     matcher: (url) => url.includes(":2375") || url.includes(":2376") || url.includes("/v1."),
     serviceName: "Docker Engine API",
     endpoints: [
-      { path: "/_ping", method: "GET", description: "Ping Docker daemon" },
-      { path: "/version", method: "GET", description: "Show Docker version details" },
-      { path: "/info", method: "GET", description: "Get system-wide Docker info" },
-      { path: "/containers/json?all=1", method: "GET", description: "List all containers" },
-      { path: "/images/json", method: "GET", description: "List all container images" },
-      { path: "/volumes", method: "GET", description: "List all Docker volumes" },
-      { path: "/networks", method: "GET", description: "List all Docker networks" },
+      { path: "/_ping", method: "GET" },
+      { path: "/version", method: "GET" },
+      { path: "/info", method: "GET" },
+      { path: "/containers/json?all=1", method: "GET" },
+      { path: "/images/json", method: "GET" },
+      { path: "/volumes", method: "GET" },
+      { path: "/networks", method: "GET" },
     ],
   },
   {
@@ -103,11 +79,10 @@ const KNOWN_SERVICE_FINGERPRINTS: {
     matcher: (url) => url.includes("/v1/chat") || url.includes("/v1/models") || url.includes("api.openai.com"),
     serviceName: "OpenAI / LocalAI Compatible Server",
     endpoints: [
-      { path: "/v1/models", method: "GET", description: "List available LLM models" },
+      { path: "/v1/models", method: "GET" },
       {
         path: "/v1/chat/completions",
         method: "POST",
-        description: "Standard chat completion endpoint",
         sampleBody: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: "Hello!" }],
@@ -116,7 +91,6 @@ const KNOWN_SERVICE_FINGERPRINTS: {
       {
         path: "/v1/embeddings",
         method: "POST",
-        description: "Generate text embeddings",
         sampleBody: JSON.stringify({ model: "text-embedding-3-small", input: "Sample text" }, null, 2),
       },
     ],
@@ -126,11 +100,11 @@ const KNOWN_SERVICE_FINGERPRINTS: {
     matcher: (url) => url.includes("api.stripe.com") || url.includes("stripe"),
     serviceName: "Stripe API",
     endpoints: [
-      { path: "/v1/customers", method: "GET", description: "List Stripe customers" },
-      { path: "/v1/payment_intents", method: "GET", description: "List payment intents" },
-      { path: "/v1/charges", method: "GET", description: "List credit card charges" },
-      { path: "/v1/balance", method: "GET", description: "Retrieve account balance" },
-      { path: "/v1/invoices", method: "GET", description: "List customer invoices" },
+      { path: "/v1/customers", method: "GET" },
+      { path: "/v1/payment_intents", method: "GET" },
+      { path: "/v1/charges", method: "GET" },
+      { path: "/v1/balance", method: "GET" },
+      { path: "/v1/invoices", method: "GET" },
     ],
   },
 ];
@@ -192,7 +166,7 @@ export async function discoverApiEndpoints(
             path: ep.path,
             fullUrl: epFullUrl,
             method: ep.method,
-            description: ep.description,
+            description: t("apiClient.discovery.knownEndpoint", { path: ep.path }),
             sampleBody: ep.sampleBody,
             source: "fingerprint",
           });
@@ -292,7 +266,7 @@ export async function discoverApiEndpoints(
           status: res.status,
           statusText: res.statusText,
           durationMs: res.timings.totalDurationMs,
-          description: probe.description,
+          description: t("apiClient.discovery.probeEndpoint", { path: `/${probe.path}` }),
           requiresAuth: res.status === 401 || res.status === 403,
           source: "probe" as const,
         };

@@ -3239,7 +3239,540 @@ const deRecent = {
   },
 };
 
-export const de: TranslationSchema = mergeLocale(mergeLocale(deFinal, deRecent), {
+const deI18nBatch1: TranslationSchema = mergeLocale(mergeLocale(deFinal, deRecent), {
   settings: { models: { configurationRequired: "Zuerst das ausgewählte Modell konfigurieren." } },
   terminal: { connection: { connected: "Mit {name} verbunden", connectionFailed: "Verbindung mit {name} fehlgeschlagen" } },
+});
+
+const deI18nBatch2: TranslationSchema = mergeLocale(deI18nBatch1, {
+  settings: {
+    tabs: {
+      mcp: "MCP"
+    },
+    general: {
+      notifications: {
+        agentAvatarTitle: "Agenten-Avatare",
+        agentAvatarDesc: "Zeigen Sie den lokalen animierten Avatar für den aktiven Chat- oder Coding-Agenten an.",
+        agentAvatarSizeTitle: "Avatargröße",
+        agentAvatarSizeDesc: "Passen Sie die visuelle Größe des Avatars in den Chat- und Agenten-Registerkarten an.",
+        agentAvatarSize: {
+          compact: "Kompakt",
+          standard: "Standard",
+          large: "Groß"
+        },
+        agentAvatarIntensityTitle: "Animationsintensität",
+        agentAvatarIntensityDesc: "Steuern Sie die Geschwindigkeit und den Schwerpunkt von Avatar-Animationen.",
+        agentAvatarIntensity: {
+          low: "Niedrig",
+          standard: "Standard",
+          high: "Hoch"
+        },
+        agentAvatarReducedMotionTitle: "Reduzieren Sie die Bewegung des Avatars",
+        agentAvatarReducedMotionDesc: "Deaktivieren Sie kontinuierliche Animationen und behalten Sie nur Statusänderungen bei."
+      }
+    },
+    themes: {
+      background: {
+        vibrancyOpacity: "Oberflächenopazität",
+        vibrancyOpacityDesc: "Passen Sie an, wie stark der native Mica- oder Vibrancy-Hintergrund durch App-Oberflächen scheint."
+      }
+    },
+    models: {
+      autocompleteTestLabel: "Gesundheit",
+      testAutocomplete: "Testen Sie die automatische Vervollständigung",
+      autocompleteTestOk: "Bereit in {latency} ms, Profil {profile}, {attempts} Versuch(e).",
+      autocompleteTestFail: "Test fehlgeschlagen: {reason}",
+      autocompleteProfile: "KI-Profil",
+      autocompleteProfiles: {
+        auto: "Automatische Erkennung",
+        generic: "Generisch OpenAI-kompatibel",
+        openai: "OpenAI",
+        deepseek: "DeepSeek",
+        ollama: "Ollama",
+        lmstudio: "LM Studio"
+      },
+      autocompleteFailure: {
+        authentication: "Authentifizierung oder API-Schlüssel",
+        rate_limit: "Ratenlimit oder Kontingent",
+        unsupported_options: "nicht unterstützte Modelloptionen",
+        unavailable: "Anbieter nicht verfügbar oder Zeitüberschreitung",
+        empty_response: "Das Modell hat keine Fertigstellung zurückgegeben",
+        provider_error: "Anbieterfehler"
+      },
+      localProviderLabel: {
+        ollama: "Ollama ({model})",
+        lmstudio: "LM Studio ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "OpenRouter ({model})"
+      },
+      customEndpoint: "Benutzerdefinierter Endpunkt",
+      browserBuiltIn: "Browser (integriert, kostenlos)"
+    }
+  }
+});
+
+const deI18nBatch3: TranslationSchema = mergeLocale(deI18nBatch2, {
+  settings: {
+    models: {
+      defaultFastModel: "Standardmäßiges schnelles Modell"
+    },
+    mcp: {
+      title: "MCP-Server",
+      description: "Verwalten Sie explizit aktivierte lokale und Remote-Tool-Server. Geheimnisse verbleiben im nativen Anmeldeinformationsspeicher.",
+      addServer: "Server hinzufügen",
+      transport: {
+        stdio: "Lokaler Prozess (stdio)",
+        http: "Streambares HTTP"
+      },
+      auth: {
+        none: "Keine Autorisierung",
+        bearer: "Inhabertoken",
+        oauth: "OAuth mit PKCE"
+      },
+      form: {
+        addTitle: "MCP-Server hinzufügen",
+        editTitle: "Bearbeiten Sie den MCP-Server",
+        description: "Die Konfiguration wird getrennt von den Anmeldeinformationen gespeichert. Ein Server startet erst, nachdem er explizit aktiviert wurde.",
+        name: "Anzeigename",
+        id: "Stabile Server-ID",
+        idPlaceholder: "Arbeitsbereich-Tools",
+        transport: "Transport",
+        executable: "Ausführbar",
+        args: "Argumente",
+        argsHint: "Ein Argument pro Zeile. Befehle werden ohne Shell gestartet.",
+        cwd: "Arbeitsverzeichnis",
+        authorizedRoot: "Autorisierter Arbeitsbereichsstamm",
+        endpoint: "Endpunkt",
+        authMode: "Genehmigung",
+        bearerToken: "Inhabertoken",
+        bearerPlaceholder: "Geben Sie einen Token ein",
+        credentialStored: "Ein Berechtigungsnachweis ist bereits gespeichert",
+        secretHint: "Das Token wird direkt an den nativen Anmeldeinformationsspeicher gesendet und in dieser Form niemals dauerhaft gespeichert.",
+        oauthHint: "Nach der Aktivierung des Servers öffnet Authorize den Anbieter in Ihrem Browser und empfängt den Rückruf auf einem temporären Loopback-Port.",
+        oauthClientId: "OAuth-Client-ID",
+        oauthScopes: "OAuth-Bereiche",
+        privateNetwork: "Privates Netzwerk zulassen",
+        privateNetworkHint: "Erforderlich für Loopback- oder LAN-Endpunkte. Öffentliches Klartext-HTTP bleibt blockiert.",
+        invalid: "Überprüfen Sie vor dem Speichern die erforderlichen Felder und begrenzten Werte."
+      },
+      phase: {
+        disabled: "Deaktiviert",
+        disconnected: "Getrennt",
+        connecting: "Verbinden",
+        connected: "Verbunden",
+        authenticationRequired: "Genehmigung erforderlich",
+        error: "Verbindungsfehler"
+      },
+      errors: {
+        configuration: "Die Serverkonfiguration ist ungültig oder unvollständig.",
+        authentication: "Ein gültiger Berechtigungsnachweis oder eine Anbieterautorisierung sind erforderlich.",
+        spawn: "Der lokale Serverprozess konnte nicht gestartet werden.",
+        io: "Der Server konnte nicht sicher erreicht werden.",
+        protocol: "Der Server hat eine ungültige MCP-Nachricht zurückgegeben.",
+        incompatibleVersion: "Der Server unterstützt keine kompatible MCP-Version.",
+        resourceLimit: "Der Server hat einen konfigurierten Sicherheitsgrenzwert überschritten.",
+        timeout: "Der Server hat vor dem Timeout nicht geantwortet.",
+        busy: "Der Server ist mit einem anderen begrenzten Vorgang beschäftigt.",
+        cancelled: "Der Vorgang wurde abgebrochen.",
+        processExited: "Der lokale Serverprozess wurde unerwartet beendet."
+      }
+    }
+  }
+});
+
+const deI18nBatch4: TranslationSchema = mergeLocale(deI18nBatch3, {
+  settings: {
+    mcp: {
+      errors: {
+        remote: "Der MCP-Server hat die Anfrage abgelehnt."
+      },
+      capabilities: {
+        tools: "Werkzeuge",
+        resources: "Ressourcen",
+        prompts: "Aufforderungen"
+      },
+      effects: {
+        read: "Lesen",
+        write: "Schreiben",
+        process: "Verfahren",
+        network: "Netzwerk",
+        secret: "Geheimnis",
+        publish: "Veröffentlichen",
+        delete: "Löschen"
+      },
+      scope: "Umfang",
+      credentials: {
+        stored: "Anmeldedaten sicher gespeichert",
+        missing: "Anmeldedaten fehlen"
+      },
+      tools: {
+        title: "Erkannte Tools ({count})",
+        automaticRead: "Ohne Genehmigung zulassen"
+      },
+      resources: {
+        title: "Erkannte Ressourcen ({count})"
+      },
+      prompts: {
+        title: "Erkannte Eingabeaufforderungen ({count})"
+      },
+      actions: {
+        enable: "Server aktivieren",
+        connect: "Verbinden",
+        disconnect: "Trennen",
+        restart: "Neustart",
+        revoke: "Anmeldeinformationen widerrufen",
+        authorize: "Autorisieren"
+      },
+      delete: {
+        title: "MCP-Server löschen?",
+        description: "{name} wird getrennt und seine Konfiguration und Anmeldeinformationen werden entfernt."
+      },
+      empty: {
+        title: "Keine MCP-Server konfiguriert",
+        description: "Fügen Sie einen lokalen stdio-Server oder einen streambaren HTTP-Endpunkt hinzu. Es wird nichts gestartet oder eine Verbindung hergestellt, bis Sie es aktivieren."
+      }
+    }
+  },
+  header: {
+    noMatches: "0 Ergebnisse",
+    previousMatch: "Vorheriges Spiel (Umschalt+Eingabetaste)",
+    nextMatch: "Nächstes Spiel (Eingabe)"
+  },
+  tabs: {
+    hoverCard: {
+      apiClient: "API-Client"
+    },
+    subtitles: {
+      apiClient: "API-Client und Sandbox"
+    }
+  },
+  sidebar: {
+    runDebug: "Ausführen und Debuggen"
+  },
+  workbench: {
+    title: "Ausführen und Debuggen",
+    tasks: "Aufgaben",
+    tests: "Tests",
+    debug: "Debuggen",
+    noTasks: "In diesem Arbeitsbereich wurden keine Aufgaben entdeckt.",
+    noTests: "In diesem Arbeitsbereich wurden keine Testaufgaben gefunden.",
+    output: "Ausgabe",
+    outputStatus: "{output} · {status}",
+    passed: "Bestanden",
+    failed: "Fehlgeschlagen",
+    running: "Läuft",
+    error: "Fehler",
+    stop: "Stoppen",
+    clear: "Klare Ausgabe",
+    refresh: "Aufgaben aktualisieren",
+    unnamedTest: "Unbenannter Test"
+  }
+});
+
+const deI18nBatch5: TranslationSchema = mergeLocale(deI18nBatch4, {
+  workbench: {
+    passedMark: "✓",
+    failedMark: "×",
+    skippedMark: "–",
+    launch: "Start",
+    attach: "Befestigen",
+    adapterCommand: "Befehl zum Debuggen des Adapters",
+    debugRequest: "Debug-Anfrage",
+    debugArguments: "Argumente starten oder anhängen (JSON)",
+    debugArgumentsObject: "Debug-Argumente müssen ein JSON-Objekt sein.",
+    startDebugging: "Beginnen Sie mit dem Debuggen",
+    debugStatus: "Status",
+    statusIdle: "Leerlauf",
+    statusStarting: "Beginnt",
+    statusRunning: "Läuft",
+    statusStopped: "Angehalten",
+    statusTerminated: "Beendet",
+    statusError: "Fehler",
+    continue: "Weitermachen",
+    pause: "Pause",
+    stepOver: "Steigen Sie hinüber",
+    stepIn: "Treten Sie ein",
+    stepOut: "Steigen Sie aus",
+    breakpoints: "Haltepunkte",
+    filePath: "Dateipfad",
+    line: "Linie",
+    addBreakpoint: "Haltepunkt hinzufügen",
+    removeBreakpoint: "Haltepunkt entfernen",
+    callStack: "Aufrufstapel",
+    variables: "Variablen",
+    debugConsole: "Debug-Konsole",
+    evaluateExpression: "Ausdruck bewerten",
+    evaluate: "Auswerten"
+  },
+  explorer: {
+    previewType: "Typ",
+    previewFolder: "Ordner",
+    previewFile: "Datei",
+    previewSize: "Größe",
+    previewModified: "Geändert",
+    previewImageTooLarge: "Die Bildvorschau ist nicht verfügbar, da diese Datei zu groß ist.",
+    fileOutsideWorkspace: "Diese Datei befindet sich außerhalb des aktuellen Explorer-Arbeitsbereichs.",
+    openContainingFolder: "Öffnen Sie den enthaltenden Ordner"
+  },
+  git: {
+    reviewComments: "Kommentare",
+    addComment: "Kommentar",
+    addReviewComment: "Bewertungskommentar hinzufügen",
+    editReviewComment: "Bewertungskommentar bearbeiten",
+    deleteComment: "Kommentar löschen",
+    commentAdded: "Kommentar hinzugefügt",
+    commentUpdated: "Kommentar aktualisiert",
+    commentDeleted: "Kommentar gelöscht",
+    commentPlaceholder: "Schreiben Sie Feedback oder Anweisungen für den Agenten...",
+    commentCannotBeEmpty: "Der Kommentar darf nicht leer sein"
+  }
+});
+
+const deI18nBatch6: TranslationSchema = mergeLocale(deI18nBatch5, {
+  git: {
+    pressCtrlEnterToSave: "Strg+Eingabetaste zum Speichern",
+    addedModified: "Hinzugefügt/geändert",
+    original: "Original",
+    noReviewCommentsYet: "Noch keine Bewertungskommentare",
+    addCommentsFromDiffHint: "Verwenden Sie die Schaltfläche „Kommentar“ bei einem beliebigen Diff, um Feedback zu hinterlassen",
+    reviewHandoffTitle: "Übergabe der Codeüberprüfung",
+    reviewHandoffDescription: "Überprüfen Sie Kommentare, die als umsetzbare Eingabeaufforderung für KI-Coding-Agenten formatiert sind.",
+    reviewHandoffCopied: "Übergabeaufforderung in die Zwischenablage kopiert",
+    reviewSentToAgent: "Überprüfungsaufforderung an den aktiven Agenten gesendet",
+    scope: "Umfang",
+    reviewedFiles: "überprüft",
+    commentsCount: "Kommentare",
+    handoffHotkeyHint: "Drücken Sie jederzeit P in der Überprüfungswarteschlange",
+    sendToAgent: "An Agent senden"
+  },
+  commandPalette: {
+    commands: {
+      manageAliases: "Aliase und Befehle verwalten",
+      focusNextSpaceSlot: "Leerzeichen: Nächsten Slot fokussieren",
+      focusPreviousSpaceSlot: "Leerzeichen: Vorherigen Slot fokussieren",
+      toggleSpaceView: "Leerzeichen: Geteilte Ansicht umschalten",
+      extractFocusedSpaceMember: "Leerzeichen: Fokussiertes Mitglied extrahieren",
+      moveFocusedSpaceMember: "Leerzeichen: Fokussiertes Mitglied verschieben...",
+      closeFocusedSpaceMember: "Leerzeichen: Nah fokussiertes Mitglied",
+      commandHistory: "Terminal: Befehlsverlauf",
+      newApiClient: "Neuer API-Client und Sandbox",
+      editorRevealInExplorer: "Editor: Datei im Explorer anzeigen",
+      openRunDebug: "Ansicht: Ausführen und Debuggen"
+    },
+    disabled: {
+      noCompositeSpace: "Kein aktiver komponierter Raum"
+    }
+  },
+  ai: {
+    approvals: {
+      runDevelopmentCheck: "Führen Sie eine Entwicklungsprüfung durch",
+      mcpResponseFailed: "Die MCP-Genehmigungsantwort konnte nicht aufgezeichnet werden",
+      sensitiveValue: "[versteckt]"
+    },
+    planReview: {
+      operationApplied: "Entwicklungsbetrieb angewendet",
+      operationReverted: "Der Entwicklungsvorgang wurde zurückgesetzt",
+      revert: "Betrieb wiederherstellen",
+      provenance: "{model} · {files} Dateien · {commands} Befehle"
+    }
+  },
+  editor: {
+    externalChangeDetected: "Datei {name} wurde extern geändert.",
+    externalChangeConflict: "Datei {name} wurde extern geändert und Sie haben nicht gespeicherte Änderungen.",
+    reloadFile: "Datei neu laden",
+    keepCurrentEdits: "Änderungen beibehalten",
+    fileReloadedSuccess: "{name} wurde von der Festplatte neu geladen",
+    status: {
+      slowRead: "Das Öffnen dieser Datei dauert länger als erwartet.",
+      readCancelled: "Das Laden der Datei wurde abgebrochen.",
+      readOffline: "Der Netzwerkstandort ist nicht verfügbar oder es ist eine Zeitüberschreitung aufgetreten.",
+      readNotFound: "Die Datei oder ihr Pfad existiert nicht mehr.",
+      readPermissionDenied: "Voktty hat keine Berechtigung, diese Datei zu lesen.",
+      readFailed: "Voktty konnte diese Datei nicht lesen."
+    },
+    aiCompletionStatus: {
+      idle: "Komplett mit KI",
+      requesting: "KI-Fertigstellung läuft",
+      ready: "AI-Abschluss bereit, drücken Sie zum Akzeptieren die Tabulatortaste",
+      error: "AI-Abschluss fehlgeschlagen. Klicken Sie, um es erneut zu versuchen",
+      paused: "Die automatische KI-Vervollständigung wurde angehalten. Klicken Sie hier, um es jetzt noch einmal zu versuchen"
+    }
+  },
+  shortcuts: {
+    labels: {
+      tabNewApiClient: "Neuer API-Client und Sandbox"
+    }
+  }
+});
+
+const deI18nBatch7: TranslationSchema = mergeLocale(deI18nBatch6, {
+  workspace: {
+    startingWslDistro: "WSL-Verteilung wird gestartet...",
+    establishingConnection: "Verbindung wird hergestellt..."
+  },
+  feedback: {
+    sessionSaveFailed: "Die Sitzung konnte nicht gespeichert werden. Voktty bleibt geöffnet, sodass Sie es erneut versuchen können."
+  },
+  apiClient: {
+    header: {
+      title: "API-Client und Sandbox",
+      zeroCorsBadge: "Zero-CORS • Native Rust Engine",
+      requestBuilder: "Request Builder",
+      apiBrowser: "API-Browser",
+      sandboxProbes: "Sandbox-Sonden",
+      scenarios: "Szenarien",
+      history: "Geschichte",
+      clearHistory: "Verlauf löschen",
+      noHistory: "Es wurden noch keine Anfragen erfasst."
+    },
+    browser: {
+      urlPlaceholder: "Geben Sie die Basis-URL ein (z. B. https://dummyjson.com oder http://localhost:11434/api).",
+      discovering: "Entdecken...",
+      autoDiscover: "Automatische Erkennung",
+      fastPresets: "Schnellvoreinstellungen:",
+      presets: {
+        dummyJson: "DummyJSON (REST-API)",
+        ollama: "Ollama LLM (11434)",
+        docker: "Docker-Daemon (2375)",
+        openAi: "OpenAI / LocalAI (v1)"
+      },
+      apiService: "API-Dienst",
+      openApiSpec: "OpenAPI / Swagger 3.0",
+      smartRouteProbe: "Intelligente Routensonde",
+      summaryBase: "Basis: {base} • {count} Endpunkte in {duration}ms gefunden",
+      copyMarkdownReport: "Markdown-Bericht kopieren",
+      reportCopied: "Validierungsbericht in Markdown in die Zwischenablage kopiert!",
+      reportCopyFailed: "Der Bericht konnte nicht kopiert werden",
+      all: "ALLE",
+      filterPlaceholder: "Endpunkte filtern...",
+      authRequired: "Authentifizierung erforderlich",
+      testInEditor: "Testen Sie im Editor",
+      loadedInEditor: "{method} {path} in den Editor geladen",
+      noEndpointsFound: "Es wurden keine Endpunkte gefunden, die dem Filter entsprechen.",
+      emptyStateTitle: "API-Erkennung und intelligenter Browser",
+      emptyStateDescription: "Geben Sie die Basis-URL Ihrer API ein (z. B. DummyJSON, Ollama, Docker oder Webdienst) und klicken Sie auf „Automatisch erkennen“, um alle verfügbaren Routen, Methoden und OpenAPI-Spezifikationen automatisch zu erkennen."
+    }
+  },
+  agentHistory: {
+    title: "Betriebsverlauf und Wiederherstellung des Agenten",
+    modalTitle: "Betriebsverlauf des Agenten",
+    shortcutTooltip: "Agenten-Betriebsverlauf ({shortcut})",
+    sessionsCount: "Sitzungen",
+    messagesCount: "Nachrichten",
+    msgs: "Nachrichten",
+    scanningFiles: "Agentdateien werden gescannt...",
+    scanning: "Scannen...",
+    rescan: "Erneut scannen",
+    closeEsc: "Schließen (Esc)",
+    searchPlaceholder: "Suchsitzungen, Eingabeaufforderungen oder Code ...",
+    allFilter: "Alle",
+    searchingSessions: "Sitzungen werden gesucht...",
+    noMatchesFound: "Keine Übereinstimmungen gefunden",
+    noSessionsFound: "Keine Sitzungen gefunden"
+  }
+});
+
+const deI18nFinal: TranslationSchema = mergeLocale(deI18nBatch7, {
+  agentHistory: {
+    tryDifferentSearch: "Versuchen Sie es mit einem anderen Suchbegriff",
+    clickRescan: "Klicken Sie auf „Erneut scannen“, um den Agentenverlauf zu indizieren",
+    clearSearch: "Suche löschen",
+    resumeInTerminal: "Fortsetzen im Terminal",
+    resumeTooltip: "Öffnen Sie den Resume-Befehl im aktiven Terminal und führen Sie ihn aus",
+    copyResumeCommand: "Kopieren Sie den Resume-Befehl",
+    copyTranscript: "Transkript kopieren (Markdown)",
+    copyTranscriptTooltip: "Vollständiges Transkript als Markdown kopieren",
+    deleteSession: "Sitzung aus Index löschen",
+    export: "Export",
+    find: "Finden",
+    findInTranscript: "Im Transkript suchen (Strg+F)",
+    findPlaceholder: "Im Transkript finden...",
+    previousMatch: "Vorheriges Spiel (Umschalt+Eingabetaste)",
+    nextMatch: "Nächstes Spiel (Eingabe)",
+    closeFind: "Schließen Sie die Suche (Esc)",
+    loadingTranscript: "Transkriptnachrichten werden geladen...",
+    noMessages: "In diesem Sitzungsprotokoll sind keine Nachrichten aufgezeichnet",
+    roleUser: "👤 Benutzer",
+    roleTool: "⚙️ Tool-Aufruf",
+    roleAssistant: "🤖 Assistent",
+    secretsRedacted: "Geheimnisse redigiert",
+    tool: "Werkzeug:",
+    error: "Fehler",
+    input: "Eingang:",
+    output: "Ausgabe:",
+    copyMessageContent: "Nachrichteninhalt kopieren",
+    runInTerminal: "Ausführen / Einfügen in das Terminal",
+    selectSessionPrompt: "Wählen Sie eine Sitzung aus, um das Transkript anzuzeigen",
+    emptyDescription: "Durchsuchen Sie Ihre Coding-Agent-Konversationen oder drücken Sie jederzeit {shortcut}.",
+    dragToResize: "Ziehen Sie, um die Größe zu ändern",
+    noResumeAvailable: "Für diese Sitzung ist kein Fortsetzungsbefehl verfügbar.",
+    resumedInTerminal: "Sitzung im aktiven Terminal fortgesetzt",
+    resumeCommandCopiedToast: "Resume-Befehl kopiert (zum Ausführen ein Terminal öffnen)",
+    resumeCommandCopiedClipboard: "Resume-Befehl in die Zwischenablage kopiert!",
+    transcriptCopiedToast: "Transkript-Markdown in Zwischenablage kopiert!",
+    sentToTerminal: "An Terminal gesendet",
+    copiedToClipboard: "In die Zwischenablage kopiert",
+    messageContentCopied: "Nachrichteninhalt kopiert!",
+    agents: {
+      claude: "Claude Code",
+      codex: "Kodex",
+      cursor: "Cursor",
+      voktty: "Voktty-Agent",
+      gemini: "Antigravitation",
+      kimi: "Kimi"
+    }
+  },
+  aliases: {
+    title: "Aliase und Befehle",
+    description: "Verwalten Sie integrierte Werksbefehle und benutzerdefinierte Aliase, die in jedem Terminal verfügbar sind.",
+    newAlias: "Neuer Alias",
+    openFile: "Öffnen Sie aliases.json",
+    refresh: "Aktualisieren"
+  }
+});
+
+export const de: TranslationSchema = mergeLocale(deI18nFinal, {
+  aliases: {
+    reset: "Auf Standard zurücksetzen",
+    noResults: "Zu Ihrer Suche passen keine Aliase.",
+    searchPlaceholder: "Suche nach Name oder Beschreibung...",
+    errorOpeningFile: "Aliases.json konnte nicht geöffnet werden",
+    errorToggling: "Alias ​​konnte nicht umgeschaltet werden",
+    errorResetting: "Alias ​​konnte nicht zurückgesetzt werden",
+    errorDeleting: "Alias ​​konnte nicht gelöscht werden",
+    resetSuccess: "Alias ​​auf Werkseinstellungen zurückgesetzt",
+    deleteSuccess: "Alias ​​gelöscht",
+    badge: {
+      factory: "Fabrik",
+      custom: "Brauch"
+    },
+    filter: {
+      all: "Alle",
+      factory: "Fabrik",
+      custom: "Brauch",
+      enabled: "Ermöglicht",
+      disabled: "Deaktiviert"
+    },
+    dialog: {
+      newTitle: "Neuer Alias",
+      editTitle: "Alias ​​bearbeiten",
+      name: "Name",
+      namePlaceholder: "mein-befehl",
+      description: "Beschreibung",
+      descriptionPlaceholder: "Kurze Beschreibung dieses Alias...",
+      targetKind: "Zieltyp",
+      command: "Externer Befehl",
+      builtin: "Eingebaute Aktion",
+      executable: "Ausführbar",
+      executablePlaceholder: "Git, Docker, Kubectl...",
+      args: "Argumente",
+      argsPlaceholder: "--flag-Wert",
+      builtinAction: "Eingebaute Aktion",
+      enabled: "Ermöglicht",
+      enabledHint: "Alias ​​ist im Terminal-PATH verfügbar",
+      nameRequired: "Aliasname ist erforderlich",
+      saved: "Alias ​​gespeichert",
+      saveError: "Alias ​​konnte nicht gespeichert werden"
+    }
+  }
 });

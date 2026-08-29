@@ -3271,7 +3271,609 @@ const frRecent = {
   },
 };
 
-export const fr: TranslationSchema = mergeLocale(mergeLocale(frFinal, frRecent), {
+const frI18nBatch1: TranslationSchema = mergeLocale(mergeLocale(frFinal, frRecent), {
   settings: { models: { configurationRequired: "Configurez d’abord le modèle sélectionné." } },
   terminal: { connection: { connected: "Connecté à {name}", connectionFailed: "Impossible de se connecter à {name}" } },
+});
+
+const frI18nBatch2: TranslationSchema = mergeLocale(frI18nBatch1, {
+  settings: {
+    tabs: {
+      mcp: "PCM"
+    },
+    general: {
+      notifications: {
+        agentAvatarTitle: "Avatars d'agents",
+        agentAvatarDesc: "Affichez l'avatar animé local du chat ou de l'agent de codage actif.",
+        agentAvatarSizeTitle: "Taille de l'avatar",
+        agentAvatarSizeDesc: "Ajustez la taille visuelle de l'avatar dans les onglets de discussion et d'agent.",
+        agentAvatarSize: {
+          compact: "Compact",
+          standard: "Standard",
+          large: "Grand"
+        },
+        agentAvatarIntensityTitle: "Intensité de l'animation",
+        agentAvatarIntensityDesc: "Contrôlez la vitesse et l'accent des animations des avatars.",
+        agentAvatarIntensity: {
+          low: "Faible",
+          standard: "Standard",
+          high: "Haut"
+        },
+        agentAvatarReducedMotionTitle: "Réduire le mouvement de l'avatar",
+        agentAvatarReducedMotionDesc: "Désactivez les animations continues et conservez uniquement les changements d’état."
+      }
+    },
+    themes: {
+      background: {
+        vibrancyOpacity: "Opacité des surfaces",
+        vibrancyOpacityDesc: "Ajustez la mesure dans laquelle la toile de fond native Mica ou Vibrancy brille à travers les surfaces de l'application."
+      }
+    },
+    models: {
+      autocompleteTestLabel: "Santé",
+      testAutocomplete: "Tester la saisie semi-automatique",
+      autocompleteTestOk: "Prêt dans {latency} ms, profil {profile}, {attempts} tentative(s)."
+    }
+  }
+});
+
+const frI18nBatch3: TranslationSchema = mergeLocale(frI18nBatch2, {
+  settings: {
+    models: {
+      autocompleteTestFail: "Échec du test : {reason}",
+      autocompleteProfile: "Profil IA",
+      autocompleteProfiles: {
+        auto: "Détection automatique",
+        generic: "Compatible OpenAI générique",
+        openai: "OpenAI",
+        deepseek: "Recherche profonde",
+        ollama: "Ollama",
+        lmstudio: "Studio LM"
+      },
+      autocompleteFailure: {
+        authentication: "authentification ou clé API",
+        rate_limit: "limite de taux ou quota",
+        unsupported_options: "options de modèle non prises en charge",
+        unavailable: "fournisseur indisponible ou expiré",
+        empty_response: "le modèle n'a renvoyé aucune achèvement",
+        provider_error: "erreur du fournisseur"
+      },
+      localProviderLabel: {
+        ollama: "Ollama ({model})",
+        lmstudio: "Studio LM ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "OuvrirRouter ({model})"
+      },
+      customEndpoint: "Point de terminaison personnalisé",
+      browserBuiltIn: "Navigateur (intégré, gratuit)"
+    }
+  }
+});
+
+const frI18nBatch4: TranslationSchema = mergeLocale(frI18nBatch3, {
+  settings: {
+    models: {
+      defaultFastModel: "Modèle rapide par défaut"
+    },
+    mcp: {
+      title: "Serveurs MCP",
+      description: "Gérez les serveurs d'outils locaux et distants explicitement activés. Les secrets restent dans le magasin d’informations d’identification natif.",
+      addServer: "Ajouter un serveur",
+      transport: {
+        stdio: "Processus local (stdio)",
+        http: "HTTP diffusable"
+      },
+      auth: {
+        none: "Aucune autorisation",
+        bearer: "Jeton du porteur",
+        oauth: "OAuth avec PKCE"
+      },
+      form: {
+        addTitle: "Ajouter un serveur MCP",
+        editTitle: "Modifier le serveur MCP",
+        description: "La configuration est stockée séparément des informations d'identification. Un serveur démarre uniquement après avoir été explicitement activé.",
+        name: "Nom d'affichage",
+        id: "ID de serveur stable",
+        idPlaceholder: "outils d'espace de travail",
+        transport: "Transport",
+        executable: "Exécutable",
+        args: "Arguments",
+        argsHint: "Un argument par ligne. Les commandes sont lancées sans shell.",
+        cwd: "Répertoire de travail"
+      }
+    }
+  }
+});
+
+const frI18nBatch5: TranslationSchema = mergeLocale(frI18nBatch4, {
+  settings: {
+    mcp: {
+      form: {
+        authorizedRoot: "Racine autorisée de l'espace de travail",
+        endpoint: "Point de terminaison",
+        authMode: "Autorisation",
+        bearerToken: "Jeton du porteur",
+        bearerPlaceholder: "Entrez un jeton",
+        credentialStored: "Un identifiant est déjà stocké",
+        secretHint: "Le jeton est envoyé directement au magasin d’informations d’identification natif et n’est jamais conservé avec ce formulaire.",
+        oauthHint: "Après avoir activé le serveur, Authorize ouvre le fournisseur dans votre navigateur et reçoit le rappel sur un port de bouclage temporaire.",
+        oauthClientId: "ID client OAuth",
+        oauthScopes: "Portées OAuth",
+        privateNetwork: "Autoriser le réseau privé",
+        privateNetworkHint: "Requis pour les points de terminaison de bouclage ou de réseau local. Le HTTP public en clair reste bloqué.",
+        invalid: "Vérifiez les champs obligatoires et les valeurs limites avant d'enregistrer."
+      },
+      phase: {
+        disabled: "Désactivé",
+        disconnected: "Déconnecté",
+        connecting: "De liaison",
+        connected: "Connecté",
+        authenticationRequired: "Autorisation requise",
+        error: "Erreur de connexion"
+      },
+      errors: {
+        configuration: "La configuration du serveur est invalide ou incomplète."
+      }
+    }
+  }
+});
+
+const frI18nBatch6: TranslationSchema = mergeLocale(frI18nBatch5, {
+  settings: {
+    mcp: {
+      errors: {
+        authentication: "Un titre de compétences valide ou une autorisation du fournisseur est requis.",
+        spawn: "Le processus du serveur local n'a pas pu être démarré.",
+        io: "Le serveur n'a pas pu être atteint en toute sécurité.",
+        protocol: "Le serveur a renvoyé un message MCP non valide.",
+        incompatibleVersion: "Le serveur ne prend pas en charge une version MCP compatible.",
+        resourceLimit: "Le serveur a dépassé une limite de sécurité configurée.",
+        timeout: "Le serveur n'a pas répondu avant l'expiration du délai.",
+        busy: "Le serveur est occupé avec une autre opération limitée.",
+        cancelled: "L'opération a été annulée.",
+        processExited: "Le processus du serveur local s'est arrêté de manière inattendue.",
+        remote: "Le serveur MCP a rejeté la demande."
+      },
+      capabilities: {
+        tools: "Outils",
+        resources: "Ressources",
+        prompts: "Invites"
+      },
+      effects: {
+        read: "Lire",
+        write: "Écrire",
+        process: "Processus",
+        network: "Réseau",
+        secret: "Secrète",
+        publish: "Publier"
+      }
+    }
+  }
+});
+
+const frI18nBatch7: TranslationSchema = mergeLocale(frI18nBatch6, {
+  settings: {
+    mcp: {
+      effects: {
+        delete: "Supprimer"
+      },
+      scope: "Portée",
+      credentials: {
+        stored: "Identifiant stocké en toute sécurité",
+        missing: "Identifiant manquant"
+      },
+      tools: {
+        title: "Outils découverts ({count})",
+        automaticRead: "Autoriser sans approbation"
+      },
+      resources: {
+        title: "Ressources découvertes ({count})"
+      },
+      prompts: {
+        title: "Invites découvertes ({count})"
+      },
+      actions: {
+        enable: "Activer le serveur",
+        connect: "Connecter",
+        disconnect: "Déconnecter",
+        restart: "Redémarrage",
+        revoke: "Révoquer les identifiants",
+        authorize: "Autoriser"
+      },
+      delete: {
+        title: "Supprimer le serveur MCP ?",
+        description: "{name} sera déconnecté et sa configuration et ses informations d'identification seront supprimées."
+      },
+      empty: {
+        title: "Aucun serveur MCP configuré",
+        description: "Ajoutez un serveur stdio local ou un point de terminaison HTTP Streamable. Rien ne démarre ou ne se connecte tant que vous ne l'activez pas."
+      }
+    }
+  },
+  header: {
+    noMatches: "0 résultats",
+    previousMatch: "Match précédent (Maj+Entrée)"
+  }
+});
+
+const frI18nBatch8: TranslationSchema = mergeLocale(frI18nBatch7, {
+  header: {
+    nextMatch: "Match suivant (Entrer)"
+  },
+  tabs: {
+    hoverCard: {
+      apiClient: "Client API"
+    },
+    subtitles: {
+      apiClient: "Client API et bac à sable"
+    }
+  },
+  sidebar: {
+    runDebug: "Exécuter et déboguer"
+  },
+  workbench: {
+    title: "Exécuter et déboguer",
+    tasks: "Tâches",
+    tests: "Essais",
+    debug: "Déboguer",
+    noTasks: "Aucune tâche n'a été découverte dans cet espace de travail.",
+    noTests: "Aucune tâche de test n'a été découverte dans cet espace de travail.",
+    output: "Sortir",
+    outputStatus: "{output} · {status}",
+    passed: "Passé",
+    failed: "Échoué",
+    running: "En cours d'exécution",
+    error: "Erreur",
+    stop: "Arrêt",
+    clear: "Effacer la sortie",
+    refresh: "Actualiser les tâches",
+    unnamedTest: "Test sans nom"
+  }
+});
+
+const frI18nBatch9: TranslationSchema = mergeLocale(frI18nBatch8, {
+  workbench: {
+    passedMark: "✓",
+    failedMark: "×",
+    skippedMark: "–",
+    launch: "Lancement",
+    attach: "Attacher",
+    adapterCommand: "Commande de l'adaptateur de débogage",
+    debugRequest: "Demande de débogage",
+    debugArguments: "Lancer ou joindre des arguments (JSON)",
+    debugArgumentsObject: "Les arguments de débogage doivent être un objet JSON.",
+    startDebugging: "Commencer le débogage",
+    debugStatus: "Statut",
+    statusIdle: "Inactif",
+    statusStarting: "Départ",
+    statusRunning: "En cours d'exécution",
+    statusStopped: "En pause",
+    statusTerminated: "Terminé",
+    statusError: "Erreur",
+    continue: "Continuer",
+    pause: "Pause",
+    stepOver: "Enjamber"
+  }
+});
+
+const frI18nBatch10: TranslationSchema = mergeLocale(frI18nBatch9, {
+  workbench: {
+    stepIn: "Entrez dans",
+    stepOut: "Sortir",
+    breakpoints: "Points d'arrêt",
+    filePath: "Chemin du fichier",
+    line: "Doubler",
+    addBreakpoint: "Ajouter un point d'arrêt",
+    removeBreakpoint: "Supprimer le point d'arrêt",
+    callStack: "Pile d'appels",
+    variables: "Variables",
+    debugConsole: "Console de débogage",
+    evaluateExpression: "Évaluer l'expression",
+    evaluate: "Évaluer"
+  },
+  explorer: {
+    previewType: "Taper",
+    previewFolder: "Dossier",
+    previewFile: "Déposer",
+    previewSize: "Taille",
+    previewModified: "Modifié",
+    previewImageTooLarge: "L'aperçu de l'image n'est pas disponible car ce fichier est trop volumineux.",
+    fileOutsideWorkspace: "Ce fichier se trouve en dehors de l'espace de travail actuel de l'explorateur.",
+    openContainingFolder: "Ouvrir le dossier contenant"
+  }
+});
+
+const frI18nBatch11: TranslationSchema = mergeLocale(frI18nBatch10, {
+  git: {
+    reviewComments: "Commentaires",
+    addComment: "Commentaire",
+    addReviewComment: "Ajouter un commentaire",
+    editReviewComment: "Modifier le commentaire de l'avis",
+    deleteComment: "Supprimer le commentaire",
+    commentAdded: "Commentaire ajouté",
+    commentUpdated: "Commentaire mis à jour",
+    commentDeleted: "Commentaire supprimé",
+    commentPlaceholder: "Rédiger des commentaires ou des instructions pour l'agent...",
+    commentCannotBeEmpty: "Le commentaire ne peut pas être vide",
+    pressCtrlEnterToSave: "Ctrl+Entrée pour enregistrer",
+    addedModified: "Ajouté/Modifié",
+    original: "Original",
+    noReviewCommentsYet: "Aucun commentaire pour l'instant",
+    addCommentsFromDiffHint: "Utilisez le bouton Commentaire sur n'importe quelle différence pour laisser des commentaires",
+    reviewHandoffTitle: "Transfert de la révision du code",
+    reviewHandoffDescription: "Examinez les commentaires formatés sous forme d’invite exploitable pour les agents de codage IA.",
+    reviewHandoffCopied: "Invite de transfert copiée dans le presse-papiers",
+    reviewSentToAgent: "Invite de révision envoyée à l'agent actif",
+    scope: "Portée"
+  }
+});
+
+const frI18nBatch12: TranslationSchema = mergeLocale(frI18nBatch11, {
+  git: {
+    reviewedFiles: "examiné",
+    commentsCount: "commentaires",
+    handoffHotkeyHint: "Appuyez sur P depuis la file d'attente de révision à tout moment",
+    sendToAgent: "Envoyer à l'agent"
+  },
+  commandPalette: {
+    commands: {
+      manageAliases: "Gérer les alias et les commandes",
+      focusNextSpaceSlot: "Espaces : concentrez-vous sur l'emplacement suivant",
+      focusPreviousSpaceSlot: "Espaces : concentrez-vous sur l'emplacement précédent",
+      toggleSpaceView: "Espaces : basculer la vue fractionnée",
+      extractFocusedSpaceMember: "Espaces : Extraire le membre ciblé",
+      moveFocusedSpaceMember: "Espaces : déplacer le membre ciblé...",
+      closeFocusedSpaceMember: "Espaces : membre ciblé proche",
+      commandHistory: "Terminal : Historique des commandes",
+      newApiClient: "Nouveau client API et bac à sable",
+      editorRevealInExplorer: "Éditeur : Révéler le fichier dans l'explorateur",
+      openRunDebug: "Vue : Exécuter et déboguer"
+    },
+    disabled: {
+      noCompositeSpace: "Aucun espace composé actif"
+    }
+  },
+  ai: {
+    approvals: {
+      runDevelopmentCheck: "Exécuter une vérification du développement",
+      mcpResponseFailed: "Impossible d'enregistrer la réponse d'approbation MCP",
+      sensitiveValue: "[caché]"
+    },
+    planReview: {
+      operationApplied: "Opération de développement appliquée"
+    }
+  }
+});
+
+const frI18nBatch13: TranslationSchema = mergeLocale(frI18nBatch12, {
+  ai: {
+    planReview: {
+      operationReverted: "Opération de développement annulée",
+      revert: "Opération de retour",
+      provenance: "{model} · Fichiers {files} · Commandes {commands}"
+    }
+  },
+  editor: {
+    externalChangeDetected: "Le fichier {name} a été modifié en externe.",
+    externalChangeConflict: "Le fichier {name} a été modifié en externe et vous avez des modifications non enregistrées.",
+    reloadFile: "Recharger le fichier",
+    keepCurrentEdits: "Conserver les modifications",
+    fileReloadedSuccess: "{name} rechargé à partir du disque",
+    status: {
+      slowRead: "L'ouverture de ce fichier prend plus de temps que prévu.",
+      readCancelled: "Le chargement du fichier a été annulé.",
+      readOffline: "L'emplacement réseau est indisponible ou a expiré.",
+      readNotFound: "Le fichier ou son chemin n'existe plus.",
+      readPermissionDenied: "Voktty n'a pas la permission de lire ce fichier.",
+      readFailed: "Voktty n'a pas pu lire ce fichier."
+    },
+    aiCompletionStatus: {
+      idle: "Complet avec l'IA",
+      requesting: "Achèvement de l'IA en cours",
+      ready: "L'achèvement de l'IA est prêt, appuyez sur Tab pour accepter",
+      error: "Échec de l'achèvement de l'IA, cliquez pour réessayer",
+      paused: "L'achèvement automatique de l'IA a été interrompu, cliquez pour réessayer maintenant"
+    }
+  },
+  shortcuts: {
+    labels: {
+      tabNewApiClient: "Nouveau client API et bac à sable"
+    }
+  }
+});
+
+const frI18nBatch14: TranslationSchema = mergeLocale(frI18nBatch13, {
+  workspace: {
+    startingWslDistro: "Démarrage de la distribution WSL...",
+    establishingConnection: "Établir la connexion..."
+  },
+  feedback: {
+    sessionSaveFailed: "La session n'a pas pu être enregistrée. Voktty reste ouvert, vous pouvez donc réessayer."
+  },
+  apiClient: {
+    header: {
+      title: "Client API et bac à sable",
+      zeroCorsBadge: "Zero-CORS • Moteur Rust natif",
+      requestBuilder: "Générateur de requêtes",
+      apiBrowser: "Navigateur d'API",
+      sandboxProbes: "Sondes de bac à sable",
+      scenarios: "Scénarios",
+      history: "Histoire",
+      clearHistory: "Effacer l'historique",
+      noHistory: "Aucune demande enregistrée pour l'instant."
+    },
+    browser: {
+      urlPlaceholder: "Entrez l'URL de base (par exemple https://dummyjson.com ou http://localhost:11434/api)",
+      discovering: "Découverte...",
+      autoDiscover: "Découverte automatique",
+      fastPresets: "Préréglages rapides :",
+      presets: {
+        dummyJson: "DummyJSON (API REST)",
+        ollama: "Ollama LLM (11434)",
+        docker: "Démon Docker (2375)",
+        openAi: "OpenAI/LocalAI (v1)"
+      }
+    }
+  }
+});
+
+const frI18nBatch15: TranslationSchema = mergeLocale(frI18nBatch14, {
+  apiClient: {
+    browser: {
+      apiService: "Service API",
+      openApiSpec: "OpenAPI/Swagger 3.0",
+      smartRouteProbe: "Sonde d'itinéraire intelligente",
+      summaryBase: "Base : {base} • Points finaux {count} trouvés dans {duration}ms",
+      copyMarkdownReport: "Copier le rapport de démarque",
+      reportCopied: "Rapport de validation copié dans le presse-papiers dans Markdown !",
+      reportCopyFailed: "Échec de la copie du rapport",
+      all: "TOUS",
+      filterPlaceholder: "Filtrer les points de terminaison...",
+      authRequired: "Authentification requise",
+      testInEditor: "Test dans l'éditeur",
+      loadedInEditor: "Chargé {method} {path} dans l'éditeur",
+      noEndpointsFound: "Aucun point de terminaison trouvé correspondant au filtre.",
+      emptyStateTitle: "Découverte d'API et navigateur intelligent",
+      emptyStateDescription: "Entrez l'URL de base de votre API (par exemple, DummyJSON, Ollama, Docker ou service Web) et cliquez sur Découverte automatique pour détecter automatiquement toutes les routes, méthodes et spécifications OpenAPI disponibles."
+    }
+  },
+  agentHistory: {
+    title: "Historique opérationnel et récupération de l'agent",
+    modalTitle: "Historique opérationnel des agents",
+    shortcutTooltip: "Historique opérationnel de l'agent ({shortcut})",
+    sessionsCount: "séances",
+    messagesCount: "messages"
+  }
+});
+
+const frI18nBatch16: TranslationSchema = mergeLocale(frI18nBatch15, {
+  agentHistory: {
+    msgs: "msgs",
+    scanningFiles: "Analyse des fichiers d'agent...",
+    scanning: "Balayage...",
+    rescan: "Nouvelle analyse",
+    closeEsc: "Fermer (Échap)",
+    searchPlaceholder: "Sessions de recherche, invites ou code...",
+    allFilter: "Tous",
+    searchingSessions: "Sessions de recherche...",
+    noMatchesFound: "Aucune correspondance trouvée",
+    noSessionsFound: "Aucune séance trouvée",
+    tryDifferentSearch: "Essayez un autre terme de recherche",
+    clickRescan: "Cliquez sur Réanalyser pour indexer l'historique de l'agent",
+    clearSearch: "Effacer la recherche",
+    resumeInTerminal: "Reprendre dans le terminal",
+    resumeTooltip: "Ouvrir et exécuter la commande de reprise dans le terminal actif",
+    copyResumeCommand: "Copier la commande de reprise",
+    copyTranscript: "Copier la transcription (markdown)",
+    copyTranscriptTooltip: "Copier la transcription complète en tant que Markdown",
+    deleteSession: "Supprimer la session de l'index",
+    export: "Exporter"
+  }
+});
+
+const frI18nBatch17: TranslationSchema = mergeLocale(frI18nBatch16, {
+  agentHistory: {
+    find: "Trouver",
+    findInTranscript: "Rechercher dans la transcription (Ctrl+F)",
+    findPlaceholder: "Retrouvez dans la transcription...",
+    previousMatch: "Match précédent (Maj+Entrée)",
+    nextMatch: "Match suivant (Entrer)",
+    closeFind: "Fermer la recherche (Échap)",
+    loadingTranscript: "Chargement des messages de transcription...",
+    noMessages: "Aucun message enregistré dans cette transcription de session",
+    roleUser: "👤 Utilisateur",
+    roleTool: "⚙️ Invocation d'outil",
+    roleAssistant: "🤖 Assistante",
+    secretsRedacted: "Secrets expurgés",
+    tool: "Outil:",
+    error: "Erreur",
+    input: "Saisir:",
+    output: "Sortir:",
+    copyMessageContent: "Copier le contenu du message",
+    runInTerminal: "Exécuter/Insérer dans le terminal",
+    selectSessionPrompt: "Sélectionnez une session pour afficher la transcription",
+    emptyDescription: "Recherchez dans les conversations de votre agent de codage ou appuyez sur {shortcut} à tout moment."
+  }
+});
+
+const frI18nBatch18: TranslationSchema = mergeLocale(frI18nBatch17, {
+  agentHistory: {
+    dragToResize: "Faites glisser pour redimensionner",
+    noResumeAvailable: "Aucune commande de reprise disponible pour cette session.",
+    resumedInTerminal: "Reprise de session dans le terminal actif",
+    resumeCommandCopiedToast: "Reprendre la commande copiée (ouvrir un terminal pour l'exécuter)",
+    resumeCommandCopiedClipboard: "Reprendre la commande copiée dans le presse-papier !",
+    transcriptCopiedToast: "Démarquage de transcription copié dans le presse-papier !",
+    sentToTerminal: "Envoyé au terminal",
+    copiedToClipboard: "Copié dans le presse-papiers",
+    messageContentCopied: "Contenu du message copié !",
+    agents: {
+      claude: "Claude Code",
+      codex: "Manuscrit",
+      cursor: "Curseur",
+      voktty: "Agent Voktty",
+      gemini: "Antigravité",
+      kimi: "Kimi"
+    }
+  },
+  aliases: {
+    title: "Alias ​​et commandes",
+    description: "Gérez les commandes d'usine intégrées et les alias personnalisés disponibles dans chaque terminal.",
+    newAlias: "Nouveau pseudo",
+    openFile: "Ouvrir alias.json",
+    refresh: "Rafraîchir"
+  }
+});
+
+const frI18nFinal: TranslationSchema = mergeLocale(frI18nBatch18, {
+  aliases: {
+    reset: "Réinitialiser aux valeurs par défaut",
+    noResults: "Aucun alias ne correspond à votre recherche.",
+    searchPlaceholder: "Recherche par nom ou description...",
+    errorOpeningFile: "Impossible d'ouvrir alias.json",
+    errorToggling: "Impossible de changer d'alias",
+    errorResetting: "Impossible de réinitialiser l'alias",
+    errorDeleting: "Impossible de supprimer l'alias",
+    resetSuccess: "Alias ​​réinitialisé aux paramètres d'usine",
+    deleteSuccess: "Alias ​​supprimé",
+    badge: {
+      factory: "Usine",
+      custom: "Coutume"
+    },
+    filter: {
+      all: "Tous",
+      factory: "Usine",
+      custom: "Coutume",
+      enabled: "Activé",
+      disabled: "Désactivé"
+    },
+    dialog: {
+      newTitle: "Nouveau pseudo",
+      editTitle: "Modifier l'alias",
+      name: "Nom",
+      namePlaceholder: "ma-commande"
+    }
+  }
+});
+
+export const fr: TranslationSchema = mergeLocale(frI18nFinal, {
+  aliases: {
+    dialog: {
+      description: "Description",
+      descriptionPlaceholder: "Brève description de cet alias...",
+      targetKind: "Type de cible",
+      command: "Commande externe",
+      builtin: "Action intégrée",
+      executable: "Exécutable",
+      executablePlaceholder: "git, docker, kubectl...",
+      args: "Arguments",
+      argsPlaceholder: "--valeur du drapeau",
+      builtinAction: "Action intégrée",
+      enabled: "Activé",
+      enabledHint: "L'alias est disponible dans le terminal PATH",
+      nameRequired: "Le nom d'alias est requis",
+      saved: "Alias ​​enregistré",
+      saveError: "Échec de l'enregistrement de l'alias"
+    }
+  }
 });

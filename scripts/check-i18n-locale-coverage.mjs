@@ -3,7 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 
 const localesDir = path.join(process.cwd(), "src/modules/i18n/locales");
-const derivedLocales = ["de", "fr", "it", "ja", "ko", "pt", "ru", "zh"];
+const locales = ["ar", "de", "es", "fr", "hi", "it", "ja", "ko", "pt", "ru", "zh"];
 
 function propertyName(node) {
   if (ts.isIdentifier(node) || ts.isStringLiteral(node)) return node.text;
@@ -62,6 +62,26 @@ function collectMergeOverrides(source) {
   return keys;
 }
 
+function collectLocaleKeys(source, locale) {
+  const keys = collectMergeOverrides(source);
+
+  source.forEachChild((node) => {
+    if (!ts.isVariableStatement(node)) return;
+    for (const declaration of node.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === locale &&
+        declaration.initializer &&
+        ts.isObjectLiteralExpression(declaration.initializer)
+      ) {
+        collectObjectKeys(declaration.initializer, "", keys);
+      }
+    }
+  });
+
+  return keys;
+}
+
 function readSource(fileName) {
   const filePath = path.join(localesDir, fileName);
   return ts.createSourceFile(
@@ -95,8 +115,8 @@ const englishKeys = collectObjectKeys(
 );
 
 const incomplete = [];
-for (const locale of derivedLocales) {
-  const explicit = collectMergeOverrides(readSource(`${locale}.ts`));
+for (const locale of locales) {
+  const explicit = collectLocaleKeys(readSource(`${locale}.ts`), locale);
   const missing = [...englishKeys].filter((key) => !explicit.has(key));
   if (missing.length > 0) incomplete.push([locale, missing]);
 }
@@ -109,4 +129,4 @@ if (incomplete.length > 0) {
   process.exit(1);
 }
 
-console.log(`All ${derivedLocales.length} derived locales explicitly cover ${englishKeys.size} English keys.`);
+console.log(`All ${locales.length} locales explicitly cover ${englishKeys.size} English keys.`);
