@@ -369,4 +369,43 @@ describe("createCommandItems", () => {
     item?.run();
     expect(opened).toBe(true);
   });
+
+  it("triggers zoom actions through the palette", () => {
+    let zoomedIn = false;
+    let zoomedOut = false;
+    let zoomedReset = false;
+
+    const items = createCommandItems(
+      baseContext({
+        zoomIn: () => {
+          zoomedIn = true;
+        },
+        zoomOut: () => {
+          zoomedOut = true;
+        },
+        zoomReset: () => {
+          zoomedReset = true;
+        },
+      }),
+    );
+
+    items.find((i) => i.id === "view.zoomIn")?.run();
+    items.find((i) => i.id === "view.zoomOut")?.run();
+    items.find((i) => i.id === "view.zoomReset")?.run();
+
+    expect(zoomedIn).toBe(true);
+    expect(zoomedOut).toBe(true);
+    expect(zoomedReset).toBe(true);
+  });
+
+  it("includes agent operational history and terminal command history commands", () => {
+    const items = createCommandItems(baseContext());
+    const agentHist = items.find((i) => i.id === "agentHistory.open");
+    const termHist = items.find((i) => i.id === "terminal.history");
+
+    expect(agentHist).toBeDefined();
+    expect(agentHist?.shortcutId).toBe("agentHistory.open");
+    expect(termHist).toBeDefined();
+    expect(termHist?.shortcutId).toBe("terminal.history");
+  });
 });

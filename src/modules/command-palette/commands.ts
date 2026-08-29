@@ -3,8 +3,6 @@ import { extensionCommands, useExtensionStore } from "@/modules/extensions";
 import type { SearchTarget } from "@/modules/header";
 import { t } from "@/modules/i18n";
 import { downloadConfiguration } from "@/modules/settings/configExport";
-import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
-import { stopAllSshTunnels } from "@/modules/ssh/tunnels";
 import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
 import { leafIds, useCommandHistoryStore } from "@/modules/terminal";
 import { useVaultStore } from "@/modules/vault";
@@ -23,7 +21,6 @@ import {
   GlobalIcon,
   Globe02Icon,
   IncognitoIcon,
-  Key01Icon,
   KeyboardIcon,
   HierarchyIcon,
   LayoutTwoColumnIcon,
@@ -38,7 +35,6 @@ import {
   SparklesIcon,
   SquareLock01Icon,
   SquareUnlock01Icon,
-  StopIcon,
   TerminalIcon,
   Upload01Icon,
   UsbIcon,
@@ -96,6 +92,9 @@ export type CommandPaletteActionContext = {
   focusExplorerSearch: () => void;
   toggleSidebar: () => void;
   toggleHiddenFiles: () => void;
+  zoomIn?: () => void;
+  zoomOut?: () => void;
+  zoomReset?: () => void;
   toggleAi: () => void;
   askAiSelection: () => void;
   openSettings: () => void;
@@ -233,59 +232,13 @@ export function createCommandItems(
       run: ctx.openSettings,
     },
     {
-      id: "vault.open",
-      title: t("commandPalette.commands.openVault"),
-      group: "General",
-      keywords: [
-        "vault",
-        "keys",
-        "ssh",
-        "passwords",
-        "security",
-        "secrets",
-        "cifrado",
-      ],
-      icon: Key01Icon,
-      run: () => {
-        void openSettingsWindow("vault");
-      },
-    },
-    {
       id: "vault.lock",
       title: t("commandPalette.commands.lockVault"),
       group: "General",
-      keywords: ["vault", "lock", "bloquear", "seguridad"],
+      keywords: ["vault", "lock", "bloquear", "seguridad", "keys", "secrets"],
       icon: LockPasswordIcon,
       run: () => {
         useVaultStore.getState().lockVault();
-      },
-    },
-    {
-      id: "ssh.tunnels.open",
-      title: t("commandPalette.commands.openTunnels"),
-      group: "General",
-      keywords: [
-        "tunnel",
-        "port forwarding",
-        "forward",
-        "ssh",
-        "puerto",
-        "proxy",
-        "socks5",
-      ],
-      icon: GlobalIcon,
-      run: () => {
-        void openSettingsWindow("ssh");
-      },
-    },
-    {
-      id: "ssh.tunnels.stopAll",
-      title: t("commandPalette.commands.stopAllTunnels"),
-      group: "General",
-      keywords: ["tunnel", "stop all", "detener", "forwarding", "ssh"],
-      icon: StopIcon,
-      run: () => {
-        void stopAllSshTunnels();
       },
     },
     {
@@ -949,7 +902,7 @@ export function createCommandItems(
       id: "sidebar.toggle",
       title: t("commandPalette.commands.toggleExplorer"),
       group: "View",
-      keywords: ["sidebar", "files", "explorer"],
+      keywords: ["sidebar", "files", "explorer", "barra lateral", "explorador"],
       icon: SidebarLeftIcon,
       shortcutId: "sidebar.toggle",
       run: ctx.toggleSidebar,
@@ -958,16 +911,43 @@ export function createCommandItems(
       id: "explorer.toggleHidden",
       title: t("commandPalette.commands.toggleHiddenFiles"),
       group: "View",
-      keywords: ["dotfiles", "hidden", "explorer", "gitignore", "env"],
+      keywords: ["dotfiles", "hidden", "explorer", "gitignore", "env", "ocultos"],
       icon: ViewIcon,
       shortcutId: "explorer.toggleHidden",
       run: ctx.toggleHiddenFiles,
     },
     {
+      id: "view.zoomIn",
+      title: t("commandPalette.commands.zoomIn"),
+      group: "View",
+      keywords: ["zoom", "in", "acercar", "ampliar", "scale", "larger", "bigger", "display"],
+      icon: ViewIcon,
+      shortcutId: "view.zoomIn",
+      run: ctx.zoomIn ?? noop,
+    },
+    {
+      id: "view.zoomOut",
+      title: t("commandPalette.commands.zoomOut"),
+      group: "View",
+      keywords: ["zoom", "out", "alejar", "reducir", "scale", "smaller", "display"],
+      icon: ViewIcon,
+      shortcutId: "view.zoomOut",
+      run: ctx.zoomOut ?? noop,
+    },
+    {
+      id: "view.zoomReset",
+      title: t("commandPalette.commands.zoomReset"),
+      group: "View",
+      keywords: ["zoom", "reset", "restablecer", "default", "100%", "scale", "display"],
+      icon: ViewIcon,
+      shortcutId: "view.zoomReset",
+      run: ctx.zoomReset ?? noop,
+    },
+    {
       id: "ai.toggle",
       title: t("commandPalette.commands.toggleAi"),
       group: "AI",
-      keywords: ["assistant", "chat", "agent"],
+      keywords: ["assistant", "chat", "agent", "asistente", "ia"],
       icon: SparklesIcon,
       shortcutId: "ai.toggle",
       run: ctx.toggleAi,
@@ -976,7 +956,7 @@ export function createCommandItems(
       id: "ai.askSelection",
       title: t("commandPalette.commands.askAiSelection"),
       group: "AI",
-      keywords: ["ai", "ask", "selection", "explain", "review"],
+      keywords: ["ai", "ask", "selection", "explain", "review", "preguntar", "explicar", "seleccion"],
       icon: SparklesIcon,
       shortcutId: "ai.askSelection",
       run: ctx.askAiSelection,
@@ -988,15 +968,20 @@ export function createCommandItems(
       keywords: [
         "agent",
         "history",
+        "historial",
         "claude",
         "codex",
         "cursor",
         "transcript",
         "sessions",
+        "sesiones",
         "resume",
         "chat",
+        "antigravity",
+        "gemini",
       ],
       icon: Clock01Icon,
+      shortcutId: "agentHistory.open",
       run: () => useAgentHistoryStore.getState().openHistory(),
     },
   ];

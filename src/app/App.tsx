@@ -32,7 +32,7 @@ import {
   nextAttentionTarget,
   validateAgentLaunchCommand,
 } from "@/modules/agents";
-import { AgentHistoryModal } from "@/modules/agent-history";
+import { AgentHistoryModal, useAgentHistoryStore } from "@/modules/agent-history";
 import {
   AgentRunBridge,
   AiSidebarPanel,
@@ -2343,6 +2343,7 @@ export default function App() {
         togglePanelAndFocus();
       },
       "ai.askSelection": onAskFromSelection,
+      "agentHistory.open": () => useAgentHistoryStore.getState().openHistory(),
       "agent.focusAttention": () => {
         const t = nextAttentionTarget();
         if (t) activateAgentTarget(t.tabId, t.leafId);
@@ -3717,6 +3718,9 @@ export default function App() {
         },
         toggleSidebar,
         toggleHiddenFiles,
+        zoomIn,
+        zoomOut,
+        zoomReset,
         toggleAi: togglePanelAndFocus,
         askAiSelection: onAskFromSelection,
         openSettings: () => void openSettingsWindow(),
