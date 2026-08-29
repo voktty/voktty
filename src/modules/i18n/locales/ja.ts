@@ -3128,7 +3128,668 @@ const jaRecent = {
   },
 };
 
-export const ja: TranslationSchema = mergeLocale(mergeLocale(jaFinal, jaRecent), {
+const jaI18nBatch1: TranslationSchema = mergeLocale(mergeLocale(jaFinal, jaRecent), {
   settings: { models: { configurationRequired: "先に選択したモデルを設定してください。" } },
   terminal: { connection: { connected: "{name} に接続しました", connectionFailed: "{name} に接続できませんでした" } },
+});
+
+const jaI18nBatch2: TranslationSchema = mergeLocale(jaI18nBatch1, {
+  settings: {
+    tabs: {
+      mcp: "MCP"
+    },
+    general: {
+      notifications: {
+        agentAvatarTitle: "エージェントのアバター",
+        agentAvatarDesc: "アクティブなチャットまたはコーディング エージェントのローカルのアニメーション アバターを表示します。",
+        agentAvatarSizeTitle: "アバターのサイズ",
+        agentAvatarSizeDesc: "チャットタブとエージェントタブでアバターの視覚的なサイズを調整します。",
+        agentAvatarSize: {
+          compact: "コンパクト",
+          standard: "標準",
+          large: "大きい"
+        },
+        agentAvatarIntensityTitle: "アニメーションの強度",
+        agentAvatarIntensityDesc: "アバター アニメーションの速度と強調を制御します。",
+        agentAvatarIntensity: {
+          low: "低い",
+          standard: "標準",
+          high: "高い"
+        },
+        agentAvatarReducedMotionTitle: "アバターの動きを減らす",
+        agentAvatarReducedMotionDesc: "連続アニメーションを無効にし、状態の変化のみを保持します。"
+      }
+    },
+    themes: {
+      background: {
+        vibrancyOpacity: "表面の不透明度",
+        vibrancyOpacityDesc: "ネイティブの Mica または Vibrancy の背景がアプリの表面を通してどの程度輝くかを調整します。"
+      }
+    },
+    models: {
+      autocompleteTestLabel: "健康",
+      testAutocomplete: "オートコンプリートのテスト",
+      autocompleteTestOk: "{latency} ミリ秒で準備完了、プロファイル {profile}、{attempts} 試行。"
+    }
+  }
+});
+
+const jaI18nBatch3: TranslationSchema = mergeLocale(jaI18nBatch2, {
+  settings: {
+    models: {
+      autocompleteTestFail: "テストが失敗しました: {reason}",
+      autocompleteProfile: "AIプロファイル",
+      autocompleteProfiles: {
+        auto: "自動検出",
+        generic: "汎用 OpenAI 互換",
+        openai: "OpenAI",
+        deepseek: "ディープシーク",
+        ollama: "オラマ",
+        lmstudio: "LMスタジオ"
+      },
+      autocompleteFailure: {
+        authentication: "認証または API キー",
+        rate_limit: "レート制限またはクォータ",
+        unsupported_options: "サポートされていないモデルオプション",
+        unavailable: "プロバイダーが利用できないかタイムアウトになっています",
+        empty_response: "モデルは完了を返しませんでした",
+        provider_error: "プロバイダーエラー"
+      },
+      localProviderLabel: {
+        ollama: "オラマ ({model})",
+        lmstudio: "LMスタジオ ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "オープンルーター ({model})"
+      },
+      customEndpoint: "カスタムエンドポイント",
+      browserBuiltIn: "ブラウザ（内蔵、無料）"
+    }
+  }
+});
+
+const jaI18nBatch4: TranslationSchema = mergeLocale(jaI18nBatch3, {
+  settings: {
+    models: {
+      defaultFastModel: "デフォルトの高速モデル"
+    },
+    mcp: {
+      title: "MCPサーバー",
+      description: "明示的に有効化されたローカルおよびリモートのツール サーバーを管理します。シークレットはネイティブ資格情報ストアに残ります。",
+      addServer: "サーバーの追加",
+      transport: {
+        stdio: "ローカルプロセス (stdio)",
+        http: "ストリーミング可能なHTTP"
+      },
+      auth: {
+        none: "権限がありません",
+        bearer: "無記名トークン",
+        oauth: "PKCE を使用した OAuth"
+      },
+      form: {
+        addTitle: "MCPサーバーの追加",
+        editTitle: "MCPサーバーの編集",
+        description: "構成は認証情報とは別に保存されます。サーバーは、明示的に有効化された後にのみ起動します。",
+        name: "表示名",
+        id: "安定したサーバーID",
+        idPlaceholder: "ワークスペースツール",
+        transport: "輸送",
+        executable: "実行可能",
+        args: "引数",
+        argsHint: "1 行に 1 つの引数。コマンドはシェルなしで起動されます。",
+        cwd: "作業ディレクトリ"
+      }
+    }
+  }
+});
+
+const jaI18nBatch5: TranslationSchema = mergeLocale(jaI18nBatch4, {
+  settings: {
+    mcp: {
+      form: {
+        authorizedRoot: "承認されたワークスペースのルート",
+        endpoint: "終点",
+        authMode: "認可",
+        bearerToken: "無記名トークン",
+        bearerPlaceholder: "トークンを入力してください",
+        credentialStored: "認証情報はすでに保存されています",
+        secretHint: "トークンはネイティブ資格情報ストアに直接送信され、このフォームで永続化されることはありません。",
+        oauthHint: "サーバーを有効にすると、Authorize はブラウザーでプロバイダーを開き、一時的なループバック ポートでコールバックを受信します。",
+        oauthClientId: "OAuthクライアントID",
+        oauthScopes: "OAuth スコープ",
+        privateNetwork: "プライベートネットワークを許可する",
+        privateNetworkHint: "ループバックまたは LAN エンドポイントに必要です。パブリック平文 HTTP はブロックされたままです。",
+        invalid: "保存する前に、必須フィールドと制限値を確認してください。"
+      },
+      phase: {
+        disabled: "無効",
+        disconnected: "切断されました",
+        connecting: "接続中",
+        connected: "接続済み",
+        authenticationRequired: "許可が必要です",
+        error: "接続エラー"
+      },
+      errors: {
+        configuration: "サーバー構成が無効か不完全です。"
+      }
+    }
+  }
+});
+
+const jaI18nBatch6: TranslationSchema = mergeLocale(jaI18nBatch5, {
+  settings: {
+    mcp: {
+      errors: {
+        authentication: "有効な資格情報またはプロバイダーの承認が必要です。",
+        spawn: "ローカルサーバープロセスを開始できませんでした。",
+        io: "サーバーに安全にアクセスできませんでした。",
+        protocol: "サーバーは無効な MCP メッセージを返しました。",
+        incompatibleVersion: "サーバーは互換性のある MCP バージョンをサポートしていません。",
+        resourceLimit: "サーバーは設定された安全制限を超えました。",
+        timeout: "サーバーはタイムアウト前に応答しませんでした。",
+        busy: "サーバーは別の制限された操作でビジー状態です。",
+        cancelled: "操作はキャンセルされました。",
+        processExited: "ローカルサーバープロセスが予期せず終了しました。",
+        remote: "MCP サーバーは要求を拒否しました。"
+      },
+      capabilities: {
+        tools: "ツール",
+        resources: "リソース",
+        prompts: "プロンプト"
+      },
+      effects: {
+        read: "読む",
+        write: "書く",
+        process: "プロセス",
+        network: "ネットワーク",
+        secret: "秘密",
+        publish: "公開"
+      }
+    }
+  }
+});
+
+const jaI18nBatch7: TranslationSchema = mergeLocale(jaI18nBatch6, {
+  settings: {
+    mcp: {
+      effects: {
+        delete: "消去"
+      },
+      scope: "範囲",
+      credentials: {
+        stored: "認証情報は安全に保管されます",
+        missing: "資格情報がありません"
+      },
+      tools: {
+        title: "発見されたツール ({count})",
+        automaticRead: "承認なしで許可する"
+      },
+      resources: {
+        title: "発見されたリソース ({count})"
+      },
+      prompts: {
+        title: "検出されたプロンプト ({count})"
+      },
+      actions: {
+        enable: "サーバーを有効にする",
+        connect: "接続する",
+        disconnect: "切断する",
+        restart: "再起動",
+        revoke: "資格情報の取り消し",
+        authorize: "承認する"
+      },
+      delete: {
+        title: "MCPサーバーを削除しますか?",
+        description: "{name} は切断され、その構成と資格情報は削除されます。"
+      },
+      empty: {
+        title: "MCP サーバーが構成されていません",
+        description: "ローカルの標準入出力サーバーまたはストリーミング可能な HTTP エンドポイントを追加します。有効にするまでは何も開始または接続されません。"
+      }
+    }
+  },
+  header: {
+    noMatches: "0 件の結果",
+    previousMatch: "前の一致 (Shift+Enter)"
+  }
+});
+
+const jaI18nBatch8: TranslationSchema = mergeLocale(jaI18nBatch7, {
+  header: {
+    nextMatch: "次の試合 (Enter)"
+  },
+  tabs: {
+    hoverCard: {
+      apiClient: "APIクライアント"
+    },
+    subtitles: {
+      apiClient: "APIクライアントとサンドボックス"
+    }
+  },
+  sidebar: {
+    runDebug: "実行とデバッグ"
+  },
+  workbench: {
+    title: "実行とデバッグ",
+    tasks: "タスク",
+    tests: "テスト",
+    debug: "デバッグ",
+    noTasks: "このワークスペースではタスクが見つかりませんでした。",
+    noTests: "このワークスペースではテスト タスクが見つかりませんでした。",
+    output: "出力",
+    outputStatus: "{output} · {status}",
+    passed: "合格した",
+    failed: "失敗した",
+    running: "ランニング",
+    error: "エラー",
+    stop: "停止",
+    clear: "クリアな出力",
+    refresh: "タスクを更新する",
+    unnamedTest: "名前のないテスト"
+  }
+});
+
+const jaI18nBatch9: TranslationSchema = mergeLocale(jaI18nBatch8, {
+  workbench: {
+    passedMark: "✓",
+    failedMark: "×",
+    skippedMark: "–",
+    launch: "打ち上げ",
+    attach: "添付する",
+    adapterCommand: "デバッグアダプターコマンド",
+    debugRequest: "デバッグリクエスト",
+    debugArguments: "起動または引数の添付 (JSON)",
+    debugArgumentsObject: "デバッグ引数は JSON オブジェクトである必要があります。",
+    startDebugging: "デバッグを開始する",
+    debugStatus: "状態",
+    statusIdle: "アイドル状態",
+    statusStarting: "起動",
+    statusRunning: "ランニング",
+    statusStopped: "一時停止中",
+    statusTerminated: "終了しました",
+    statusError: "エラー",
+    continue: "続く",
+    pause: "一時停止",
+    stepOver: "ステップオーバー"
+  }
+});
+
+const jaI18nBatch10: TranslationSchema = mergeLocale(jaI18nBatch9, {
+  workbench: {
+    stepIn: "踏み込む",
+    stepOut: "ステップアウト",
+    breakpoints: "ブレークポイント",
+    filePath: "ファイルパス",
+    line: "ライン",
+    addBreakpoint: "ブレークポイントの追加",
+    removeBreakpoint: "ブレークポイントを削除する",
+    callStack: "コールスタック",
+    variables: "変数",
+    debugConsole: "デバッグコンソール",
+    evaluateExpression: "式を評価する",
+    evaluate: "評価する"
+  },
+  explorer: {
+    previewType: "タイプ",
+    previewFolder: "フォルダ",
+    previewFile: "ファイル",
+    previewSize: "サイズ",
+    previewModified: "修正済み",
+    previewImageTooLarge: "このファイルは大きすぎるため、画像プレビューは使用できません。",
+    fileOutsideWorkspace: "このファイルは現在のエクスプローラーのワークスペースの外にあります。",
+    openContainingFolder: "含まれているフォルダーを開く"
+  }
+});
+
+const jaI18nBatch11: TranslationSchema = mergeLocale(jaI18nBatch10, {
+  git: {
+    reviewComments: "コメント",
+    addComment: "コメント",
+    addReviewComment: "レビューコメントを追加",
+    editReviewComment: "レビューコメントの編集",
+    deleteComment: "コメントの削除",
+    commentAdded: "コメント追加",
+    commentUpdated: "コメントを更新しました",
+    commentDeleted: "コメントが削除されました",
+    commentPlaceholder: "エージェントへのフィードバックや指示を書いてください...",
+    commentCannotBeEmpty: "コメントを空にすることはできません",
+    pressCtrlEnterToSave: "Ctrl+Enter を押して保存します",
+    addedModified: "追加・修正",
+    original: "オリジナル",
+    noReviewCommentsYet: "レビューコメントはまだありません",
+    addCommentsFromDiffHint: "フィードバックを残すには、差分のコメント ボタンを使用してください。",
+    reviewHandoffTitle: "コードレビューのハンドオフ",
+    reviewHandoffDescription: "AI コーディング エージェント向けの実用的なプロンプトとしてフォーマットされたコメントを確認します。",
+    reviewHandoffCopied: "ハンドオフ プロンプトがクリップボードにコピーされました",
+    reviewSentToAgent: "アクティブなエージェントに送信された確認プロンプト",
+    scope: "範囲"
+  }
+});
+
+const jaI18nBatch12: TranslationSchema = mergeLocale(jaI18nBatch11, {
+  git: {
+    reviewedFiles: "レビュー済み",
+    commentsCount: "comments",
+    handoffHotkeyHint: "レビューキューからいつでもPを押します",
+    sendToAgent: "エージェントに送信"
+  },
+  commandPalette: {
+    commands: {
+      manageAliases: "エイリアスとコマンドの管理",
+      focusNextSpaceSlot: "スペース：次のスロットにフォーカス",
+      focusPreviousSpaceSlot: "スペース：前のスロットにフォーカス",
+      toggleSpaceView: "スペース：分割ビューの切り替え",
+      extractFocusedSpaceMember: "スペース:フォーカスされたメンバーを抽出する",
+      moveFocusedSpaceMember: "スペース：フォーカスされたメンバーを移動..."
+    }
+  }
+});
+
+const jaI18nBatch13: TranslationSchema = mergeLocale(jaI18nBatch12, {
+  commandPalette: {
+    commands: {
+      closeFocusedSpaceMember: "スペース：フォーカスされたメンバーを閉じる",
+      commandHistory: "ターミナル：コマンド履歴",
+      newApiClient: "新しいAPIクライアントとサンドボックス",
+      editorRevealInExplorer: "エディター：エクスプローラーでファイルを表示する",
+      openRunDebug: "表示：実行とデバッグ"
+    },
+    disabled: {
+      noCompositeSpace: "有効な構成されたスペースがありません"
+    }
+  },
+  ai: {
+    approvals: {
+      runDevelopmentCheck: "開発チェックを実行する",
+      mcpResponseFailed: "MCP承認応答を記録できませんでした",
+      sensitiveValue: "[非表示]"
+    },
+    planReview: {
+      operationApplied: "開発オペレーションが適用されました"
+    }
+  }
+});
+
+const jaI18nBatch14: TranslationSchema = mergeLocale(jaI18nBatch13, {
+  ai: {
+    planReview: {
+      operationReverted: "開発オペレーションが元に戻りました",
+      revert: "操作を元に戻す",
+      provenance: "__ P 0 __ · __ P 1 __ファイル· __ P 2 __コマンド"
+    }
+  },
+  editor: {
+    externalChangeDetected: "ファイル__ P 0 __は外部で変更されました。",
+    externalChangeConflict: "ファイル__ P 0 __は外部で変更されましたが、保存されていない変更があります。",
+    reloadFile: "ファイルを再読み込み(R)",
+    keepCurrentEdits: "編集内容を保持する",
+    fileReloadedSuccess: "__ P 0 __がディスクから再読み込みされました",
+    status: {
+      slowRead: "このファイルの開くのに予想以上の時間がかかっています。",
+      readCancelled: "ファイルの読み込みがキャンセルされました。"
+    }
+  }
+});
+
+const jaI18nBatch15: TranslationSchema = mergeLocale(jaI18nBatch14, {
+  editor: {
+    status: {
+      readOffline: "ネットワークの場所が利用できないか、タイムアウトしました。",
+      readNotFound: "ファイルまたはそのパスはもう存在しません。",
+      readPermissionDenied: "Vokttyにはこのファイルを読む権限がありません。",
+      readFailed: "Vokttyはこのファイルを読み取れませんでした。"
+    },
+    aiCompletionStatus: {
+      idle: "AIで完了",
+      requesting: "進行中のAI完了",
+      ready: "AI完了の準備ができました。Tabキーを押して承認します",
+      error: "AIの完了に失敗しました。クリックして再試行してください",
+      paused: "自動AI完了が一時停止されました。クリックして今すぐ再試行してください"
+    }
+  },
+  shortcuts: {
+    labels: {
+      tabNewApiClient: "新しいAPIクライアントとサンドボックス"
+    }
+  }
+});
+
+const jaI18nBatch16: TranslationSchema = mergeLocale(jaI18nBatch15, {
+  workspace: {
+    startingWslDistro: "WSL配布を開始しています...",
+    establishingConnection: "接続を確立中"
+  },
+  feedback: {
+    sessionSaveFailed: "セッションを保存できませんでした。Vokttyは開いたままなので、もう一度お試しください。"
+  },
+  apiClient: {
+    header: {
+      title: "APIクライアントとサンドボックス",
+      zeroCorsBadge: "Zero - CORS •ネイティブRustエンジン",
+      requestBuilder: "リクエストビルダー",
+      apiBrowser: "API ブラウザ",
+      sandboxProbes: "サンドボックスプローブ",
+      scenarios: "シナリオ",
+      history: "歴史"
+    }
+  }
+});
+
+const jaI18nBatch17: TranslationSchema = mergeLocale(jaI18nBatch16, {
+  apiClient: {
+    header: {
+      clearHistory: "履歴の消去",
+      noHistory: "リクエストはまだ記録されていません。"
+    },
+    browser: {
+      urlPlaceholder: "ベースURLを入力してください（例： https://dummyjson.comまたはhttp :// localhost: 11434/api ）",
+      discovering: "発見",
+      autoDiscover: "自動検出",
+      fastPresets: "クイックプリセット:",
+      presets: {
+        dummyJson: "DummyJSON (REST API)",
+        ollama: "Ollama LLM (11434)",
+        docker: "Dockerデーモン(2375)",
+        openAi: "OpenAI/LocalAI (v 1)"
+      }
+    }
+  }
+});
+
+const jaI18nBatch18: TranslationSchema = mergeLocale(jaI18nBatch17, {
+  apiClient: {
+    browser: {
+      apiService: "APIサービス",
+      openApiSpec: "OpenAPI/Swagger 3.0",
+      smartRouteProbe: "スマートルートプローブ",
+      summaryBase: "ベース： __ P 0 __ • __ P 1 __エンドポイントは__ P 2 __ミリ秒で見つかりました",
+      copyMarkdownReport: "マークダウンレポートをコピー",
+      reportCopied: "検証レポートがMarkdownのクリップボードにコピーされました！",
+      reportCopyFailed: "レポートのコピーに失敗しました",
+      all: "すべて",
+      filterPlaceholder: "エンドポイントをフィルタリング...",
+      authRequired: "認証が必要です"
+    }
+  }
+});
+
+const jaI18nBatch19: TranslationSchema = mergeLocale(jaI18nBatch18, {
+  apiClient: {
+    browser: {
+      testInEditor: "エディターでテスト",
+      loadedInEditor: "__ P 0 __ __ P 1 __をエディターに読み込みました",
+      noEndpointsFound: "フィルターに一致するエンドポイントが見つかりませんでした。",
+      emptyStateTitle: "API検出とスマートブラウザ",
+      emptyStateDescription: "APIのベースURL （ DummyJSON、Ollama、Docker、Webサービスなど）を入力し、[自動検出]をクリックして、使用可能なすべてのルート、メソッド、OpenAPI仕様を自動的に検出します。"
+    }
+  },
+  agentHistory: {
+    title: "エージェントの運用履歴と復旧",
+    modalTitle: "エージェントの運用履歴",
+    shortcutTooltip: "エージェントの運用履歴（ __ P 0 __ ）",
+    sessionsCount: "セッション",
+    messagesCount: "messages"
+  }
+});
+
+const jaI18nBatch20: TranslationSchema = mergeLocale(jaI18nBatch19, {
+  agentHistory: {
+    msgs: "msgs",
+    scanningFiles: "エージェントファイルをスキャンしています...",
+    scanning: "実行中…",
+    rescan: "再スキャン",
+    closeEsc: "閉じる (Esc)",
+    searchPlaceholder: "セッション、プロンプト、コードを検索...",
+    allFilter: "すべて",
+    searchingSessions: "セッションを検索しています...",
+    noMatchesFound: "一致する項目がありません",
+    noSessionsFound: "セッションが見つかりません"
+  }
+});
+
+const jaI18nBatch21: TranslationSchema = mergeLocale(jaI18nBatch20, {
+  agentHistory: {
+    tryDifferentSearch: "別の検索キーワードをお試しください",
+    clickRescan: "[再スキャン]をクリックしてエージェント履歴をインデックス",
+    clearSearch: "検索履歴を消去",
+    resumeInTerminal: "ターミナルで再開",
+    resumeTooltip: "アクティブな端末で再開コマンドを開いて実行します",
+    copyResumeCommand: "[履歴書のコピー]コマンド",
+    copyTranscript: "トランスクリプトをコピー（マークダウン）",
+    copyTranscriptTooltip: "完全なトランスクリプトをマークダウンとしてコピー",
+    deleteSession: "インデックスからセッションを削除",
+    export: "書き出し"
+  }
+});
+
+const jaI18nBatch22: TranslationSchema = mergeLocale(jaI18nBatch21, {
+  agentHistory: {
+    find: "検索",
+    findInTranscript: "トランスクリプトで検索(Ctrl + F)",
+    findPlaceholder: "トランスクリプトで検索...",
+    previousMatch: "前の試合（ Shift + Enter ）",
+    nextMatch: "次の試合（ Enter ）",
+    closeFind: "検索を閉じる(Esc)",
+    loadingTranscript: "トランスクリプトメッセージを読み込んでいます...",
+    noMessages: "このセッションのトランスクリプトにはメッセージが記録されていません",
+    roleUser: "ユーザー",
+    roleTool: "⚙️ ツール呼び出し"
+  }
+});
+
+const jaI18nBatch23: TranslationSchema = mergeLocale(jaI18nBatch22, {
+  agentHistory: {
+    roleAssistant: "アシスタント",
+    secretsRedacted: "編集された秘密",
+    tool: "ツール:",
+    error: "エラー",
+    input: "入力する。",
+    output: "出力：",
+    copyMessageContent: "メッセージのコンテンツをコピー",
+    runInTerminal: "ターミナルへの実行/挿入",
+    selectSessionPrompt: "トランスクリプトを表示するセッションを選択してください",
+    emptyDescription: "コーディングエージェントの会話を検索するか、いつでも__ P 0 __を押してください。"
+  }
+});
+
+const jaI18nBatch24: TranslationSchema = mergeLocale(jaI18nBatch23, {
+  agentHistory: {
+    dragToResize: "ドラッグしてサイズ変更",
+    noResumeAvailable: "このセッションで使用できる再開コマンドはありません。",
+    resumedInTerminal: "アクティブな端末でセッションを再開しました",
+    resumeCommandCopiedToast: "Resumeコマンドをコピーしました（端末を開いて実行します）",
+    resumeCommandCopiedClipboard: "再開コマンドがクリップボードにコピーされました！",
+    transcriptCopiedToast: "トランスクリプトマークダウンをクリップボードにコピーしました！",
+    sentToTerminal: "ターミナルに送信済み",
+    copiedToClipboard: "クリップボードにコピー",
+    messageContentCopied: "メッセージの内容をコピーしました！",
+    agents: {
+      claude: "クロード・コード"
+    }
+  }
+});
+
+const jaI18nBatch25: TranslationSchema = mergeLocale(jaI18nBatch24, {
+  agentHistory: {
+    agents: {
+      codex: "コデックス",
+      cursor: "カーソル",
+      voktty: "Vokttyエージェント",
+      gemini: "反重力",
+      kimi: "きみ"
+    }
+  },
+  aliases: {
+    title: "エイリアスとコマンド",
+    description: "すべての端末で利用可能な組み込みの工場コマンドとカスタムエイリアスを管理します。",
+    newAlias: "新規エイリアスの追加",
+    openFile: "Aliases.jsonを開きます。",
+    refresh: "再読み込みする"
+  }
+});
+
+const jaI18nBatch26: TranslationSchema = mergeLocale(jaI18nBatch25, {
+  aliases: {
+    reset: "デフォルトにリセット",
+    noResults: "検索に一致するエイリアスはありません。",
+    searchPlaceholder: "名前と詳細で検索",
+    errorOpeningFile: "Aliases.jsonを開けませんでした",
+    errorToggling: "エイリアスを切り替えられませんでした",
+    errorResetting: "エイリアスをリセットできませんでした",
+    errorDeleting: "エイリアスを削除できませんでした",
+    resetSuccess: "エイリアスを工場出荷時のデフォルトにリセット",
+    deleteSuccess: "削除されたエイリアス",
+    badge: {
+      factory: "工場"
+    }
+  }
+});
+
+const jaI18nBatch27: TranslationSchema = mergeLocale(jaI18nBatch26, {
+  aliases: {
+    badge: {
+      custom: "カスタム"
+    },
+    filter: {
+      all: "すべて",
+      factory: "工場",
+      custom: "カスタム",
+      enabled: "有効",
+      disabled: "無効"
+    },
+    dialog: {
+      newTitle: "新規エイリアスの追加",
+      editTitle: "エイリアスを編集",
+      name: "氏名",
+      namePlaceholder: "- ... 我の命令に"
+    }
+  }
+});
+
+const jaI18nBatch28: TranslationSchema = mergeLocale(jaI18nBatch27, {
+  aliases: {
+    dialog: {
+      description: "内容",
+      descriptionPlaceholder: "このエイリアスの簡単な説明...",
+      targetKind: "変換先の型",
+      command: "外部コマンド",
+      builtin: "ビルトインアクション",
+      executable: "実行可能ファイル",
+      executablePlaceholder: "git、docker、kubectl...",
+      args: "引数",
+      argsPlaceholder: "-- flag value",
+      builtinAction: "ビルトインアクション"
+    }
+  }
+});
+
+export const ja: TranslationSchema = mergeLocale(jaI18nBatch28, {
+  aliases: {
+    dialog: {
+      enabled: "有効",
+      enabledHint: "エイリアスはターミナルパスで使用できます",
+      nameRequired: "エイリアス名が必要です",
+      saved: "エイリアスが保存されました",
+      saveError: "エイリアスの保存に失敗しました"
+    }
+  }
 });

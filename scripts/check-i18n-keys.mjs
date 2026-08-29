@@ -68,11 +68,29 @@ for (const fileName of sourceFiles) {
     ts.ScriptTarget.Latest,
     true,
   );
+  const translationFunctions = new Set(["t"]);
+  source.forEachChild((node) => {
+    if (
+      !ts.isImportDeclaration(node) ||
+      !ts.isStringLiteral(node.moduleSpecifier) ||
+      !node.moduleSpecifier.text.includes("/i18n") ||
+      !node.importClause?.namedBindings ||
+      !ts.isNamedImports(node.importClause.namedBindings)
+    ) {
+      return;
+    }
+    for (const element of node.importClause.namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (importedName === "t" || importedName === "translate") {
+        translationFunctions.add(element.name.text);
+      }
+    }
+  });
   const visit = (node) => {
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      node.expression.text === "t" &&
+      translationFunctions.has(node.expression.text) &&
       node.arguments.length > 0 &&
       (ts.isStringLiteral(node.arguments[0]) ||
         ts.isNoSubstitutionTemplateLiteral(node.arguments[0]))

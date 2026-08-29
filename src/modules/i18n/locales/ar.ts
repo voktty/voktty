@@ -1,6 +1,6 @@
 import { en, mergeLocale, type TranslationSchema } from "./en";
 
-export const ar: TranslationSchema = mergeLocale(en, {
+const arLocaleBatch: TranslationSchema = mergeLocale(en, {
   common: {
     textCopied: "تم نسخ النص إلى الحافظة",
     textPasted: "تم لصق النص",
@@ -3482,6 +3482,102 @@ export const ar: TranslationSchema = mergeLocale(en, {
       voktty: "Voktty Agent",
       gemini: "Antigravity",
       kimi: "Kimi",
+    },
+  },
+});
+
+const arLocaleBatch2: TranslationSchema = mergeLocale(arLocaleBatch,
+{
+  "git": {
+    "reviewComments": "تعليقات",
+    "addComment": "تعليق",
+    "addReviewComment": "إضافة تعليق المراجعة",
+    "editReviewComment": "تحرير تعليق المراجعة",
+    "deleteComment": "حذف التعليق",
+    "commentAdded": "تمت إضافة التعليق",
+    "commentUpdated": "تم تحديث التعليق",
+    "commentDeleted": "تم حذف التعليق",
+    "commentPlaceholder": "اكتب ملاحظات أو تعليمات للوكيل...",
+    "commentCannotBeEmpty": "لا يمكن أن يكون التعليق فارغًا",
+    "pressCtrlEnterToSave": "Ctrl+Enter للحفظ",
+    "addedModified": "تمت الإضافة / التعديل",
+    "original": "إبداعي",
+    "noReviewCommentsYet": "لا توجد تعليقات مراجعة حتى الآن",
+    "addCommentsFromDiffHint": "استخدم زر التعليق على أي اختلاف لترك تعليقات",
+    "reviewHandoffTitle": "عملية تسليم مراجعة الكود",
+    "reviewHandoffDescription": "قم بمراجعة التعليقات المنسقة كمطالبة قابلة للتنفيذ لوكلاء ترميز الذكاء الاصطناعي.",
+    "reviewHandoffCopied": "تم نسخ موجه Handoff إلى الحافظة",
+    "reviewSentToAgent": "تم إرسال مطالبة المراجعة إلى الوكيل النشط",
+    "scope": "نِطَاق"
+  }
+}
+);
+
+const arLocaleFinal: TranslationSchema = mergeLocale(arLocaleBatch2, {
+  "git": {
+    "reviewedFiles": "تمت مراجعته",
+    "commentsCount": "تعليقات",
+    "handoffHotkeyHint": "اضغط على P من قائمة انتظار المراجعة في أي وقت",
+    "sendToAgent": "إرسال إلى الوكيل"
+  },
+  "commandPalette": {
+    "commands": {
+      "manageAliases": "إدارة الأسماء المستعارة والأوامر"
+    }
+  },
+  "aliases": {
+    "title": "الأسماء المستعارة والأوامر",
+    "description": "إدارة أوامر المصنع المضمنة والأسماء المستعارة المخصصة المتوفرة في كل محطة طرفية.",
+    "newAlias": "اسم مستعار جديد",
+    "openFile": "افتح الأسماء المستعارة.json",
+    "refresh": "ينعش",
+    "reset": "إعادة التعيين إلى الوضع الافتراضي",
+    "noResults": "لا توجد أسماء مستعارة تطابق بحثك.",
+    "searchPlaceholder": "البحث بالاسم أو الوصف...",
+    "errorOpeningFile": "لا يمكن فتح aliases.json",
+    "errorToggling": "تعذر تبديل الاسم المستعار",
+    "errorResetting": "لا يمكن إعادة تعيين الاسم المستعار",
+    "errorDeleting": "تعذر حذف الاسم المستعار",
+    "resetSuccess": "إعادة تعيين الاسم المستعار إلى إعدادات المصنع الافتراضية",
+    "deleteSuccess": "تم حذف الاسم المستعار",
+    "badge": {
+      "factory": "مصنع"
+    }
+  }
+});
+
+export const ar: TranslationSchema = mergeLocale(arLocaleFinal, {
+  aliases: {
+    badge: {
+      custom: "مخصص",
+    },
+    filter: {
+      all: "الجميع",
+      factory: "مصنع",
+      custom: "مخصص",
+      enabled: "ممكّن",
+      disabled: "معطّل",
+    },
+    dialog: {
+      newTitle: "اسم مستعار جديد",
+      editTitle: "تحرير الاسم المستعار",
+      name: "الاسم",
+      namePlaceholder: "أمري",
+      description: "الوصف",
+      descriptionPlaceholder: "وصف مختصر لهذا الاسم المستعار...",
+      targetKind: "نوع الهدف",
+      command: "أمر خارجي",
+      builtin: "إجراء مضمّن",
+      executable: "ملف قابل للتنفيذ",
+      executablePlaceholder: "git، docker، kubectl...",
+      args: "الوسائط",
+      argsPlaceholder: "--flag value",
+      builtinAction: "إجراء مضمّن",
+      enabled: "مفعّل",
+      enabledHint: "الاسم المستعار متاح في PATH الخاص بالطرفية",
+      nameRequired: "اسم مستعار مطلوب",
+      saved: "تم حفظ الاسم المستعار",
+      saveError: "تعذّر حفظ الاسم المستعار",
     },
   },
 });

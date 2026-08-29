@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/modules/i18n";
 import {
   Add01Icon,
   ArrowDown01Icon,
@@ -40,6 +41,7 @@ export const METHOD_BADGES: Record<
 };
 
 export function ApiCollectionExplorer() {
+  const { t } = useTranslation();
   const {
     collections,
     activeCollectionId,
@@ -99,13 +101,13 @@ export function ApiCollectionExplorer() {
               size="sm"
               className="h-7 max-w-[160px] justify-between gap-1 px-2 text-xs font-semibold hover:bg-muted/40"
             >
-              <span className="truncate">{activeCollection?.name || "Collections"}</span>
+              <span className="truncate">{activeCollection?.name || t("apiClient.collections.title")}</span>
               <HugeiconsIcon icon={ArrowDown01Icon} size={12} className="shrink-0 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56 text-xs">
             <div className="px-2 py-1.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-              Collections
+              {t("apiClient.collections.title")}
             </div>
             {collections.map((col) => (
               <DropdownMenuItem
@@ -126,7 +128,7 @@ export function ApiCollectionExplorer() {
                         deleteCollection(col.id);
                       }}
                       className="hidden size-3.5 items-center justify-center text-muted-foreground/60 hover:text-destructive group-hover/item:flex"
-                      title="Delete Collection"
+                      title={t("apiClient.collections.deleteCollection")}
                     >
                       <HugeiconsIcon icon={Delete02Icon} size={10} />
                     </button>
@@ -137,7 +139,7 @@ export function ApiCollectionExplorer() {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setIsCreatingCol(true)}>
               <HugeiconsIcon icon={Add01Icon} size={13} className="mr-1.5" />
-              <span>New Collection...</span>
+              <span>{t("apiClient.collections.newCollection")}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -146,16 +148,16 @@ export function ApiCollectionExplorer() {
         <div className="flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" className="size-7" title="Add Request or Folder">
+              <Button size="icon" variant="ghost" className="size-7" title={t("apiClient.collections.addRequestOrFolder")}>
                 <HugeiconsIcon icon={Add01Icon} size={13} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40 text-xs">
               <DropdownMenuItem onClick={() => createRequest(activeCollection?.id)}>
-                <span>New Request</span>
+                <span>{t("apiClient.collections.newRequest")}</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsCreatingFolder(true)}>
-                <span>New Folder</span>
+                <span>{t("apiClient.collections.newFolder")}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -168,7 +170,7 @@ export function ApiCollectionExplorer() {
           <Input
             value={newColName}
             onChange={(e) => setNewColName(e.target.value)}
-            placeholder="Collection Name..."
+            placeholder={t("apiClient.collections.collectionNamePlaceholder")}
             className="h-6 text-xs"
             autoFocus
             onKeyDown={(e) => {
@@ -177,7 +179,7 @@ export function ApiCollectionExplorer() {
             }}
           />
           <Button size="sm" onClick={handleCreateCollection} className="h-6 px-2 text-[11px]">
-            Save
+            {t("apiClient.collections.save")}
           </Button>
         </div>
       )}
@@ -188,7 +190,7 @@ export function ApiCollectionExplorer() {
           <Input
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
-            placeholder="Folder Name (e.g. Auth, REST)..."
+            placeholder={t("apiClient.collections.folderNamePlaceholder")}
             className="h-6 text-xs"
             autoFocus
             onKeyDown={(e) => {
@@ -197,7 +199,7 @@ export function ApiCollectionExplorer() {
             }}
           />
           <Button size="sm" onClick={handleCreateFolder} className="h-6 px-2 text-[11px]">
-            Add
+            {t("apiClient.collections.add")}
           </Button>
         </div>
       )}
@@ -212,7 +214,7 @@ export function ApiCollectionExplorer() {
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Filter requests..."
+          placeholder={t("apiClient.collections.filterRequestsPlaceholder")}
           className="h-6 pl-6 text-[11px]"
         />
       </div>
@@ -256,7 +258,7 @@ export function ApiCollectionExplorer() {
                       deleteFolder(activeCollection.id, folder.id);
                     }}
                     className="hidden size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-destructive group-hover:flex"
-                    title="Delete Folder"
+                    title={t("apiClient.collections.deleteFolder")}
                   >
                     <HugeiconsIcon icon={Delete02Icon} size={11} />
                   </button>
@@ -307,7 +309,7 @@ export function ApiCollectionExplorer() {
                               deleteRequest(req.id);
                             }}
                             className="hidden size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-destructive group-hover:flex"
-                            title="Delete Request"
+                            title={t("apiClient.collections.deleteRequest")}
                           >
                             <HugeiconsIcon icon={Delete02Icon} size={11} />
                           </button>
@@ -361,7 +363,7 @@ export function ApiCollectionExplorer() {
                     deleteRequest(req.id);
                   }}
                   className="hidden size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-destructive group-hover:flex"
-                  title="Delete Request"
+                  title={t("apiClient.collections.deleteRequest")}
                 >
                   <HugeiconsIcon icon={Delete02Icon} size={11} />
                 </button>

@@ -3214,7 +3214,668 @@ const itRecent = {
   },
 };
 
-export const it: TranslationSchema = mergeLocale(mergeLocale(itFinal, itRecent), {
+const itI18nBatch1: TranslationSchema = mergeLocale(mergeLocale(itFinal, itRecent), {
   settings: { models: { configurationRequired: "Configura prima il modello selezionato." } },
   terminal: { connection: { connected: "Connesso a {name}", connectionFailed: "Impossibile connettersi a {name}" } },
+});
+
+const itI18nBatch2: TranslationSchema = mergeLocale(itI18nBatch1, {
+  settings: {
+    tabs: {
+      mcp: "MCP"
+    },
+    general: {
+      notifications: {
+        agentAvatarTitle: "Avatar dell'agente",
+        agentAvatarDesc: "Mostra l'avatar animato locale per la chat attiva o l'agente di codifica.",
+        agentAvatarSizeTitle: "Dimensioni dell'avatar",
+        agentAvatarSizeDesc: "Regola la dimensione visiva dell'avatar nelle schede chat e agente.",
+        agentAvatarSize: {
+          compact: "Compatto",
+          standard: "Standard",
+          large: "Grande"
+        },
+        agentAvatarIntensityTitle: "Intensità dell'animazione",
+        agentAvatarIntensityDesc: "Controlla la velocità e l'enfasi delle animazioni degli avatar.",
+        agentAvatarIntensity: {
+          low: "Basso",
+          standard: "Standard",
+          high: "Alto"
+        },
+        agentAvatarReducedMotionTitle: "Riduci il movimento dell'avatar",
+        agentAvatarReducedMotionDesc: "Disabilita le animazioni continue e mantieni solo i cambiamenti di stato."
+      }
+    },
+    themes: {
+      background: {
+        vibrancyOpacity: "Opacità della superficie",
+        vibrancyOpacityDesc: "Regola la quantità di luminosità dello sfondo Mica o Vibrancy nativo attraverso le superfici dell'app."
+      }
+    },
+    models: {
+      autocompleteTestLabel: "Salute",
+      testAutocomplete: "Prova il completamento automatico",
+      autocompleteTestOk: "Pronto in {latency} ms, profilo {profile}, {attempts} tentativo/i."
+    }
+  }
+});
+
+const itI18nBatch3: TranslationSchema = mergeLocale(itI18nBatch2, {
+  settings: {
+    models: {
+      autocompleteTestFail: "Test fallito: {reason}",
+      autocompleteProfile: "Profilo dell'IA",
+      autocompleteProfiles: {
+        auto: "Rilevamento automatico",
+        generic: "Compatibile con OpenAI generico",
+        openai: "OpenAI",
+        deepseek: "DeepSeek",
+        ollama: "Ollama",
+        lmstudio: "Studio LM"
+      },
+      autocompleteFailure: {
+        authentication: "autenticazione o chiave API",
+        rate_limit: "limite tariffario o quota",
+        unsupported_options: "opzioni del modello non supportate",
+        unavailable: "provider non disponibile o in timeout",
+        empty_response: "il modello non ha restituito alcun completamento",
+        provider_error: "errore del fornitore"
+      },
+      localProviderLabel: {
+        ollama: "Ollama ({model})",
+        lmstudio: "Studio LM ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "OpenRouter ({model})"
+      },
+      customEndpoint: "Endpoint personalizzato",
+      browserBuiltIn: "Browser (integrato, gratuito)"
+    }
+  }
+});
+
+const itI18nBatch4: TranslationSchema = mergeLocale(itI18nBatch3, {
+  settings: {
+    models: {
+      defaultFastModel: "Modello veloce predefinito"
+    },
+    mcp: {
+      title: "Server MCP",
+      description: "Gestire server di strumenti locali e remoti esplicitamente abilitati. I segreti rimangono nell'archivio delle credenziali native.",
+      addServer: "Aggiungi server",
+      transport: {
+        stdio: "Processo locale (stdio)",
+        http: "HTTP streaming"
+      },
+      auth: {
+        none: "Nessuna autorizzazione",
+        bearer: "Gettone al portatore",
+        oauth: "OAuth con PKCE"
+      },
+      form: {
+        addTitle: "Aggiungi il server MCP",
+        editTitle: "Modifica il server MCP",
+        description: "La configurazione viene archiviata separatamente dalle credenziali. Un server viene avviato solo dopo essere stato abilitato esplicitamente.",
+        name: "Nome da visualizzare",
+        id: "ID server stabile",
+        idPlaceholder: "strumenti dello spazio di lavoro",
+        transport: "Trasporto",
+        executable: "Eseguibile",
+        args: "Argomenti",
+        argsHint: "Un argomento per riga. I comandi vengono lanciati senza shell.",
+        cwd: "Directory di lavoro"
+      }
+    }
+  }
+});
+
+const itI18nBatch5: TranslationSchema = mergeLocale(itI18nBatch4, {
+  settings: {
+    mcp: {
+      form: {
+        authorizedRoot: "Radice dell'area di lavoro autorizzata",
+        endpoint: "Punto finale",
+        authMode: "Autorizzazione",
+        bearerToken: "Gettone al portatore",
+        bearerPlaceholder: "Inserisci un token",
+        credentialStored: "Una credenziale è già archiviata",
+        secretHint: "Il token viene inviato direttamente all'archivio credenziali nativo e non viene mai reso permanente con questo modulo.",
+        oauthHint: "Dopo aver abilitato il server, Autorizza apre il provider nel tuo browser e riceve la richiamata su una porta di loopback temporanea.",
+        oauthClientId: "ID client OAuth",
+        oauthScopes: "Ambiti OAuth",
+        privateNetwork: "Consenti rete privata",
+        privateNetworkHint: "Necessario per loopback o endpoint LAN. Il testo HTTP pubblico in chiaro rimane bloccato.",
+        invalid: "Esaminare i campi obbligatori e i valori delimitati prima di salvare."
+      },
+      phase: {
+        disabled: "Disabilitato",
+        disconnected: "Disconnesso",
+        connecting: "Connessione",
+        connected: "Collegato",
+        authenticationRequired: "È necessaria l'autorizzazione",
+        error: "Errore di connessione"
+      },
+      errors: {
+        configuration: "La configurazione del server non è valida o è incompleta."
+      }
+    }
+  }
+});
+
+const itI18nBatch6: TranslationSchema = mergeLocale(itI18nBatch5, {
+  settings: {
+    mcp: {
+      errors: {
+        authentication: "È richiesta una credenziale valida o l'autorizzazione del fornitore.",
+        spawn: "Impossibile avviare il processo del server locale.",
+        io: "Non è stato possibile raggiungere il server in modo sicuro.",
+        protocol: "Il server ha restituito un messaggio MCP non valido.",
+        incompatibleVersion: "Il server non supporta una versione MCP compatibile.",
+        resourceLimit: "Il server ha superato un limite di sicurezza configurato.",
+        timeout: "Il server non ha risposto prima del timeout.",
+        busy: "Il server è occupato con un'altra operazione limitata.",
+        cancelled: "L'operazione è stata annullata.",
+        processExited: "Il processo del server locale è terminato in modo imprevisto.",
+        remote: "Il server MCP ha rifiutato la richiesta."
+      },
+      capabilities: {
+        tools: "Utensili",
+        resources: "Risorse",
+        prompts: "Richiede"
+      },
+      effects: {
+        read: "Leggere",
+        write: "Scrivere",
+        process: "Processo",
+        network: "Rete",
+        secret: "Segreto",
+        publish: "Pubblicare"
+      }
+    }
+  }
+});
+
+const itI18nBatch7: TranslationSchema = mergeLocale(itI18nBatch6, {
+  settings: {
+    mcp: {
+      effects: {
+        delete: "Eliminare"
+      },
+      scope: "Ambito",
+      credentials: {
+        stored: "Credenziali archiviate in modo sicuro",
+        missing: "Manca la credenziale"
+      },
+      tools: {
+        title: "Strumenti rilevati ({count})",
+        automaticRead: "Consenti senza approvazione"
+      },
+      resources: {
+        title: "Risorse scoperte ({count})"
+      },
+      prompts: {
+        title: "Prompt rilevati ({count})"
+      },
+      actions: {
+        enable: "Abilita server",
+        connect: "Collegare",
+        disconnect: "Disconnetti",
+        restart: "Ricomincia",
+        revoke: "Revoca credenziali",
+        authorize: "Autorizzare"
+      },
+      delete: {
+        title: "Eliminare il server MCP?",
+        description: "{name} verrà disconnesso e la sua configurazione e credenziali verranno rimosse."
+      },
+      empty: {
+        title: "Nessun server MCP configurato",
+        description: "Aggiungi un server stdio locale o un endpoint HTTP streaming. Niente si avvia o si connette finché non lo abiliti."
+      }
+    }
+  },
+  header: {
+    noMatches: "0 risultati",
+    previousMatch: "Corrispondenza precedente (Maiusc+Invio)"
+  }
+});
+
+const itI18nBatch8: TranslationSchema = mergeLocale(itI18nBatch7, {
+  header: {
+    nextMatch: "Prossima partita (Invio)"
+  },
+  tabs: {
+    hoverCard: {
+      apiClient: "Cliente API"
+    },
+    subtitles: {
+      apiClient: "Client API e sandbox"
+    }
+  },
+  sidebar: {
+    runDebug: "Esegui ed esegui il debug"
+  },
+  workbench: {
+    title: "Esegui ed esegui il debug",
+    tasks: "Compiti",
+    tests: "Test",
+    debug: "Debug",
+    noTasks: "Non è stata rilevata alcuna attività in quest'area di lavoro.",
+    noTests: "Non è stata rilevata alcuna attività di test in quest'area di lavoro.",
+    output: "Produzione",
+    outputStatus: "{output} · {status}",
+    passed: "Superato",
+    failed: "Fallito",
+    running: "Corsa",
+    error: "Errore",
+    stop: "Fermare",
+    clear: "Uscita chiara",
+    refresh: "Aggiorna le attività",
+    unnamedTest: "Prova senza nome"
+  }
+});
+
+const itI18nBatch9: TranslationSchema = mergeLocale(itI18nBatch8, {
+  workbench: {
+    passedMark: "✓",
+    failedMark: "×",
+    skippedMark: "–",
+    launch: "Lancio",
+    attach: "Allegare",
+    adapterCommand: "Comando dell'adattatore di debug",
+    debugRequest: "Richiesta di debug",
+    debugArguments: "Avvia o allega argomenti (JSON)",
+    debugArgumentsObject: "Gli argomenti di debug devono essere un oggetto JSON.",
+    startDebugging: "Inizia il debug",
+    debugStatus: "Stato",
+    statusIdle: "Oziare",
+    statusStarting: "Di partenza",
+    statusRunning: "Corsa",
+    statusStopped: "In pausa",
+    statusTerminated: "Terminato",
+    statusError: "Errore",
+    continue: "Continuare",
+    pause: "Pausa",
+    stepOver: "Fatti avanti"
+  }
+});
+
+const itI18nBatch10: TranslationSchema = mergeLocale(itI18nBatch9, {
+  workbench: {
+    stepIn: "Entra",
+    stepOut: "Esci",
+    breakpoints: "Punti di interruzione",
+    filePath: "Percorso del file",
+    line: "Linea",
+    addBreakpoint: "Aggiungi punto di interruzione",
+    removeBreakpoint: "Rimuovere il punto di interruzione",
+    callStack: "Stack di chiamate",
+    variables: "Variabili",
+    debugConsole: "Console di debug",
+    evaluateExpression: "Valutare l'espressione",
+    evaluate: "Valutare"
+  },
+  explorer: {
+    previewType: "Tipo",
+    previewFolder: "Cartella",
+    previewFile: "File",
+    previewSize: "Misurare",
+    previewModified: "Modificato",
+    previewImageTooLarge: "L'anteprima dell'immagine non è disponibile perché il file è troppo grande.",
+    fileOutsideWorkspace: "Questo file è esterno all'area di lavoro corrente di Explorer.",
+    openContainingFolder: "Apri la cartella contenente"
+  }
+});
+
+const itI18nBatch11: TranslationSchema = mergeLocale(itI18nBatch10, {
+  git: {
+    reviewComments: "Commenti",
+    addComment: "Commento",
+    addReviewComment: "Aggiungi commento di revisione",
+    editReviewComment: "Modifica commento di revisione",
+    deleteComment: "Elimina commento",
+    commentAdded: "Commento aggiunto",
+    commentUpdated: "Commento aggiornato",
+    commentDeleted: "Commento eliminato",
+    commentPlaceholder: "Scrivi feedback o istruzioni per l'agente...",
+    commentCannotBeEmpty: "Il commento non può essere vuoto",
+    pressCtrlEnterToSave: "Ctrl+Invio per salvare",
+    addedModified: "Aggiunto/modificato",
+    original: "Originale",
+    noReviewCommentsYet: "Nessun commento di recensione ancora",
+    addCommentsFromDiffHint: "Utilizza il pulsante Commento su qualsiasi differenza per lasciare un feedback",
+    reviewHandoffTitle: "Trasferimento della revisione del codice",
+    reviewHandoffDescription: "Esamina i commenti formattati come prompt utilizzabili per gli agenti di codifica AI.",
+    reviewHandoffCopied: "Prompt di trasferimento copiato negli appunti",
+    reviewSentToAgent: "Richiesta di revisione inviata all'agente attivo",
+    scope: "Ambito"
+  }
+});
+
+const itI18nBatch12: TranslationSchema = mergeLocale(itI18nBatch11, {
+  git: {
+    reviewedFiles: "rivisto",
+    commentsCount: "commenti",
+    handoffHotkeyHint: "Premi P dalla coda di revisione in qualsiasi momento",
+    sendToAgent: "Al consulente"
+  },
+  commandPalette: {
+    commands: {
+      manageAliases: "Gestisci alias e comandi",
+      focusNextSpaceSlot: "Spazi: Focus slot successivo",
+      focusPreviousSpaceSlot: "Spazi: Focus slot precedente",
+      toggleSpaceView: "Spazi: attiva/disattiva la visualizzazione divisa",
+      extractFocusedSpaceMember: "Spazi: Estrai membro focalizzato",
+      moveFocusedSpaceMember: "Spazi: sposta membro focalizzato..."
+    }
+  }
+});
+
+const itI18nBatch13: TranslationSchema = mergeLocale(itI18nBatch12, {
+  commandPalette: {
+    commands: {
+      closeFocusedSpaceMember: "Spazi: Chiudi membro focalizzato",
+      commandHistory: "Terminale: Cronologia comandi",
+      newApiClient: "Nuovo client API e sandbox",
+      editorRevealInExplorer: "Editor: Rivela file in explorer",
+      openRunDebug: "Visualizza: Esegui ed esegui il debug"
+    },
+    disabled: {
+      noCompositeSpace: "Nessuno spazio composto attivo"
+    }
+  },
+  ai: {
+    approvals: {
+      runDevelopmentCheck: "Controllo svilu…",
+      mcpResponseFailed: "Impossibile registrare la risposta di approvazione MCP",
+      sensitiveValue: "Cieco "
+    },
+    planReview: {
+      operationApplied: "Operazione di sviluppo applicata"
+    }
+  }
+});
+
+const itI18nBatch14: TranslationSchema = mergeLocale(itI18nBatch13, {
+  ai: {
+    planReview: {
+      operationReverted: "Operazione di sviluppo ripristinata",
+      revert: "Ripristina operazione",
+      provenance: "{model} · {files} files · {commands} comandi"
+    }
+  },
+  editor: {
+    externalChangeDetected: "Il file {name} è stato modificato esternamente.",
+    externalChangeConflict: "Il file {name} è stato modificato esternamente e ci sono modifiche non salvate.",
+    reloadFile: "Ricarica il file",
+    keepCurrentEdits: "Mantieni le modifiche",
+    fileReloadedSuccess: "{name} ricaricato da disco",
+    status: {
+      slowRead: "L'apertura di questo file sta richiedendo più tempo del previsto.",
+      readCancelled: "Il caricamento del file è stato annullato."
+    }
+  }
+});
+
+const itI18nBatch15: TranslationSchema = mergeLocale(itI18nBatch14, {
+  editor: {
+    status: {
+      readOffline: "Il percorso di rete non è disponibile o è scaduto.",
+      readNotFound: "Il file o il suo percorso non esiste più.",
+      readPermissionDenied: "Voktty non ha il permesso di leggere questo file.",
+      readFailed: "Voktty non ha potuto leggere questo file."
+    },
+    aiCompletionStatus: {
+      idle: "Completo di IA",
+      requesting: "Completamento AI in corso",
+      ready: "Completamento AI pronto, premi Tab per accettare",
+      error: "Completamento AI non riuscito, fare clic per riprovare",
+      paused: "Completamento automatico dell'IA in pausa, fai clic per riprovare ora"
+    }
+  },
+  shortcuts: {
+    labels: {
+      tabNewApiClient: "Nuovo client API e sandbox"
+    }
+  }
+});
+
+const itI18nBatch16: TranslationSchema = mergeLocale(itI18nBatch15, {
+  workspace: {
+    startingWslDistro: "Avvio della distribuzione WSL in corso...",
+    establishingConnection: "Connessione in corso"
+  },
+  feedback: {
+    sessionSaveFailed: "Impossibile salvare la sessione. Voktty rimane aperto, quindi puoi riprovare."
+  },
+  apiClient: {
+    header: {
+      title: "API Client e Sandbox",
+      zeroCorsBadge: "Zero-CORS • Motore Rust nativo",
+      requestBuilder: "Generatore di richieste",
+      apiBrowser: "Esploratore API",
+      sandboxProbes: "Sonde Sandbox",
+      scenarios: "Scenari",
+      history: "Storia"
+    }
+  }
+});
+
+const itI18nBatch17: TranslationSchema = mergeLocale(itI18nBatch16, {
+  apiClient: {
+    header: {
+      clearHistory: "Browser",
+      noHistory: "Ancora nessuna richiesta registrata."
+    },
+    browser: {
+      urlPlaceholder: "Inserisci l'URL di base (ad es. https://dummyjson.com o http://localhost:11434/api)",
+      discovering: "Scoperta",
+      autoDiscover: "Rilevamento automatico",
+      fastPresets: "Preimpostazioni rapide:",
+      presets: {
+        dummyJson: "DummyJSON (API REST)",
+        ollama: "Ollama LLM (11434)",
+        docker: "Demone Docker (2375)",
+        openAi: "OpenAI / LocalAI (v1)"
+      }
+    }
+  }
+});
+
+const itI18nBatch18: TranslationSchema = mergeLocale(itI18nBatch17, {
+  apiClient: {
+    browser: {
+      apiService: "API Service",
+      openApiSpec: "OpenAPI / Swagger 3.0",
+      smartRouteProbe: "Smart Route Probe",
+      summaryBase: "Base: {base} • {count} endpoint trovati in {duration}ms",
+      copyMarkdownReport: "Copia report ribasso",
+      reportCopied: "Rapporto di convalida copiato negli appunti in Markdown!",
+      reportCopyFailed: "Impossibile copiare il report",
+      all: "TUTTE",
+      filterPlaceholder: "Filtra endpoint...",
+      authRequired: "Autenticazione richiesta"
+    }
+  }
+});
+
+const itI18nBatch19: TranslationSchema = mergeLocale(itI18nBatch18, {
+  apiClient: {
+    browser: {
+      testInEditor: "Test nell'editor",
+      loadedInEditor: "Caricato {method} {path} nell'editor",
+      noEndpointsFound: "Nessun endpoint trovato corrispondente al filtro.",
+      emptyStateTitle: "API Discovery e Smart Browser",
+      emptyStateDescription: "Inserisci l'URL di base della tua API (ad esempio, DummyJSON, Ollama, Docker o servizio web) e fai clic su Auto-Discover per rilevare automaticamente tutti i percorsi, i metodi e le specifiche OpenAPI disponibili."
+    }
+  },
+  agentHistory: {
+    title: "Cronologia operativa e recupero dell'agente",
+    modalTitle: "Cronologia operativa agente",
+    shortcutTooltip: "Cronologia operativa agente ({shortcut})",
+    sessionsCount: "sessioni",
+    messagesCount: "messages"
+  }
+});
+
+const itI18nBatch20: TranslationSchema = mergeLocale(itI18nBatch19, {
+  agentHistory: {
+    msgs: "MSGamor   de menina... que  adoro",
+    scanningFiles: "Scansione dei file dell'agente in corso...",
+    scanning: "Scansione in corso...",
+    rescan: "Nuova scansione",
+    closeEsc: "Chiudi (Esc)",
+    searchPlaceholder: "Cerca sessioni, prompt o codice...",
+    allFilter: "Tutte",
+    searchingSessions: "Ricerca sessioni in corso...",
+    noMatchesFound: "Nessuna corrispondenza trovata",
+    noSessionsFound: "Nessuna seduta trovata"
+  }
+});
+
+const itI18nBatch21: TranslationSchema = mergeLocale(itI18nBatch20, {
+  agentHistory: {
+    tryDifferentSearch: "Prova un termine di ricerca diverso",
+    clickRescan: "Fai clic su Ripeti scansione per indicizzare la cronologia dell'agente",
+    clearSearch: "Cancella ricerca",
+    resumeInTerminal: "Riprendi nel terminale",
+    resumeTooltip: "Apri ed esegui il comando riprendi nel terminale attivo",
+    copyResumeCommand: "Copia comando Riprendi",
+    copyTranscript: "Copia trascrizione (Markdown)",
+    copyTranscriptTooltip: "Copia trascrizione completa come Markdown",
+    deleteSession: "Elimina sessione dall'indice",
+    export: "Esportare"
+  }
+});
+
+const itI18nBatch22: TranslationSchema = mergeLocale(itI18nBatch21, {
+  agentHistory: {
+    find: "Scoperta",
+    findInTranscript: "Trova nella trascrizione (Ctrl+F)",
+    findPlaceholder: "Trova nella trascrizione...",
+    previousMatch: "Corrispondenza precedente (Maiusc+Invio)",
+    nextMatch: "Corrispondenza successiva (Invio)",
+    closeFind: "Chiudi ricerca (Esc)",
+    loadingTranscript: "Caricamento messaggi di trascrizione in corso...",
+    noMessages: "Nessun messaggio registrato in questa trascrizione della sessione",
+    roleUser: "User",
+    roleTool: "Invocazione ⚙️ strumento"
+  }
+});
+
+const itI18nBatch23: TranslationSchema = mergeLocale(itI18nBatch22, {
+  agentHistory: {
+    roleAssistant: "Assistente",
+    secretsRedacted: "Segreti nascosti",
+    tool: "Tool:",
+    error: "Error",
+    input: "Ingresso: **.",
+    output: "Uscita:",
+    copyMessageContent: "Contenuto del Messaggio",
+    runInTerminal: "Esegui / Inserisci nel terminale",
+    selectSessionPrompt: "Seleziona una sessione per visualizzare la trascrizione",
+    emptyDescription: "Cerca tra le conversazioni con l'agente di programmazione o premi {shortcut} in qualsiasi momento."
+  }
+});
+
+const itI18nBatch24: TranslationSchema = mergeLocale(itI18nBatch23, {
+  agentHistory: {
+    dragToResize: "Trascina per ridimensionare",
+    noResumeAvailable: "Nessun comando di ripresa disponibile per questa sessione.",
+    resumedInTerminal: "Sessione ripresa nel terminale attivo",
+    resumeCommandCopiedToast: "Comando di ripresa copiato (aprire un terminale da eseguire)",
+    resumeCommandCopiedClipboard: "Comando di ripresa copiato negli appunti!",
+    transcriptCopiedToast: "Trascrivi il markdown copiato negli appunti!",
+    sentToTerminal: "Terminale destinazione",
+    copiedToClipboard: "Copiato negli appunti",
+    messageContentCopied: "Contenuto del messaggio copiato!",
+    agents: {
+      claude: "Codice Claude"
+    }
+  }
+});
+
+const itI18nBatch25: TranslationSchema = mergeLocale(itI18nBatch24, {
+  agentHistory: {
+    agents: {
+      codex: "Codice",
+      cursor: "Cursore",
+      voktty: "Agente Voktty",
+      gemini: "ANTIGRAVITY",
+      kimi: "Kimi"
+    }
+  },
+  aliases: {
+    title: "Alias e comandi",
+    description: "Gestisci i comandi di fabbrica integrati e gli alias personalizzati disponibili in ogni terminale.",
+    newAlias: "Nuovo alias",
+    openFile: "Apri aliases.json",
+    refresh: "Aggiorna"
+  }
+});
+
+const itI18nBatch26: TranslationSchema = mergeLocale(itI18nBatch25, {
+  aliases: {
+    reset: "Reimposta i valori predefiniti",
+    noResults: "Nessun alias corrisponde alla tua ricerca.",
+    searchPlaceholder: "Cerca per nome o descrizione...",
+    errorOpeningFile: "Impossibile aprire aliases.json",
+    errorToggling: "Impossibile alternare l'alias",
+    errorResetting: "Impossibile reimpostare l'alias",
+    errorDeleting: "Impossibile eliminare l'alias",
+    resetSuccess: "Alias ripristinato ai valori predefiniti di fabbrica",
+    deleteSuccess: "Alias eliminato",
+    badge: {
+      factory: "Stabilitmento/ Factory"
+    }
+  }
+});
+
+const itI18nBatch27: TranslationSchema = mergeLocale(itI18nBatch26, {
+  aliases: {
+    badge: {
+      custom: "Personalizzata"
+    },
+    filter: {
+      all: "Tutte",
+      factory: "Stabilitmento/ Factory",
+      custom: "Personalizzata",
+      enabled: "Enabled",
+      disabled: "Disabilitata"
+    },
+    dialog: {
+      newTitle: "Nuovo alias",
+      editTitle: "Modifica Alias",
+      name: "Nome",
+      namePlaceholder: "mio-comando"
+    }
+  }
+});
+
+const itI18nBatch28: TranslationSchema = mergeLocale(itI18nBatch27, {
+  aliases: {
+    dialog: {
+      description: "Descrizione",
+      descriptionPlaceholder: "Breve descrizione di questo alias...",
+      targetKind: "Tipo di destinazione",
+      command: "Comando esterno",
+      builtin: "Azione integrata",
+      executable: "File eseguibile",
+      executablePlaceholder: "git, docker, kubectl...",
+      args: "Argomenti",
+      argsPlaceholder: "--flag valore",
+      builtinAction: "Azione integrata"
+    }
+  }
+});
+
+export const it: TranslationSchema = mergeLocale(itI18nBatch28, {
+  aliases: {
+    dialog: {
+      enabled: "Enabled",
+      enabledHint: "L'alias è disponibile nel PERCORSO del terminale",
+      nameRequired: "Il nome alias è obbligatorio",
+      saved: "Alias salvato",
+      saveError: "Impossibile salvare l'alias"
+    }
+  }
 });

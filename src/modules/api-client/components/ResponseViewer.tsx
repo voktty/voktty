@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import { useChatStore } from "@/modules/ai/store/chatStore";
+import { useTranslation } from "@/modules/i18n";
 import {
   Clock01Icon,
   Copy01Icon,
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 import { useApiClientStore } from "../store/apiClientStore";
 
 export function ResponseViewer() {
+  const { t } = useTranslation();
   const aiAvailable = useAiAvailable();
   const { activeResponse, activeRequest, isLoading, cancelRequest } = useApiClientStore();
   const [activeTab, setActiveTab] = useState<"body" | "headers" | "timings">("body");
@@ -26,14 +28,14 @@ export function ResponseViewer() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-background/50 p-6 text-muted-foreground">
         <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <span className="text-xs">Executing request via native Rust engine...</span>
+        <span className="text-xs">{t("apiClient.response.executing")}</span>
         <Button
           size="sm"
           variant="outline"
           onClick={() => void cancelRequest()}
           className="h-7 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
         >
-          Cancel Request
+          {t("apiClient.response.cancelRequest")}
         </Button>
       </div>
     );
@@ -43,9 +45,9 @@ export function ResponseViewer() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 bg-background/50 p-6 text-center text-muted-foreground/60">
         <HugeiconsIcon icon={Download01Icon} size={28} strokeWidth={1.5} className="opacity-40" />
-        <span className="text-xs font-medium">No response yet</span>
+        <span className="text-xs font-medium">{t("apiClient.response.noResponse")}</span>
         <span className="max-w-xs text-[11px]">
-          Enter a URL and click Send or press <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px]">Ctrl+Enter</kbd> to inspect the API output.
+          {t("apiClient.response.emptyDescription", { shortcut: "Ctrl+Enter" })}
         </span>
       </div>
     );
@@ -79,7 +81,7 @@ export function ResponseViewer() {
 
   const copyResponse = () => {
     void navigator.clipboard.writeText(formattedJson ?? activeResponse.body);
-    toast.success("Response copied to clipboard");
+    toast.success(t("apiClient.response.copied"));
   };
 
   const handleFixWithAi = () => {
@@ -112,7 +114,7 @@ Please search my workspace for where this route handler or webhook is implemente
       <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className={cn("font-mono text-xs font-semibold", statusColor)}>
-            {status === 0 ? "Network Error" : `${status} ${activeResponse.statusText}`}
+            {status === 0 ? t("apiClient.response.networkError") : `${status} ${activeResponse.statusText}`}
           </Badge>
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <HugeiconsIcon icon={Clock01Icon} size={12} />
@@ -141,7 +143,7 @@ Please search my workspace for where this route handler or webhook is implemente
               )}
             >
               <HugeiconsIcon icon={SparklesIcon} size={11} strokeWidth={2} />
-              <span>{is4xx || is5xx ? "Diagnosticar con IA" : "Investigar con IA"}</span>
+              <span>{is4xx || is5xx ? t("apiClient.response.diagnoseWithAi") : t("apiClient.response.investigateWithAi")}</span>
             </Button>
           )}
 
@@ -150,7 +152,7 @@ Please search my workspace for where this route handler or webhook is implemente
             variant="ghost"
             className="size-6 text-muted-foreground hover:text-foreground"
             onClick={copyResponse}
-            title="Copy Response"
+            title={t("apiClient.response.copyResponse")}
           >
             <HugeiconsIcon icon={Copy01Icon} size={12} />
           </Button>
@@ -166,13 +168,13 @@ Please search my workspace for where this route handler or webhook is implemente
         <div className="flex items-center justify-between border-b border-border/40 px-3">
           <TabsList className="h-7 bg-transparent p-0">
             <TabsTrigger value="body" className="h-6 text-xs data-[state=active]:bg-muted">
-              Body
+              {t("apiClient.response.body")}
             </TabsTrigger>
             <TabsTrigger value="headers" className="h-6 text-xs data-[state=active]:bg-muted">
-              Headers ({activeResponse.headers.length})
+              {t("apiClient.response.headers", { count: activeResponse.headers.length })}
             </TabsTrigger>
             <TabsTrigger value="timings" className="h-6 text-xs data-[state=active]:bg-muted">
-              Timings
+              {t("apiClient.response.timings")}
             </TabsTrigger>
           </TabsList>
 
@@ -186,7 +188,7 @@ Please search my workspace for where this route handler or webhook is implemente
                   viewMode === "pretty" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Pretty
+                {t("apiClient.response.pretty")}
               </button>
               <button
                 type="button"
@@ -196,7 +198,7 @@ Please search my workspace for where this route handler or webhook is implemente
                   viewMode === "raw" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Raw
+                {t("apiClient.response.raw")}
               </button>
             </div>
           )}
@@ -229,7 +231,7 @@ Please search my workspace for where this route handler or webhook is implemente
             {/* Visual Timeline Bar */}
             {activeResponse.timings.firstByteMs && (
               <div className="flex flex-col gap-1.5 rounded-lg border border-border/40 bg-muted/20 p-2.5">
-                <span className="text-[11px] font-semibold text-foreground">Network Phase Breakdown</span>
+                <span className="text-[11px] font-semibold text-foreground">{t("apiClient.response.networkPhaseBreakdown")}</span>
                 <div className="flex h-2.5 w-full overflow-hidden rounded bg-muted/60">
                   <div
                     style={{
@@ -244,7 +246,7 @@ Please search my workspace for where this route handler or webhook is implemente
                       )}%`,
                     }}
                     className="bg-indigo-500"
-                    title={`TTFB: ${(activeResponse.timings.firstByteMs || 0).toFixed(1)}ms`}
+                    title={t("apiClient.response.ttfbTooltip", { value: (activeResponse.timings.firstByteMs || 0).toFixed(1) })}
                   />
                   <div
                     style={{
@@ -259,34 +261,34 @@ Please search my workspace for where this route handler or webhook is implemente
                       )}%`,
                     }}
                     className="bg-emerald-500"
-                    title={`Content Download: ${(activeResponse.timings.downloadMs || 0).toFixed(1)}ms`}
+                    title={t("apiClient.response.contentDownloadTooltip", { value: (activeResponse.timings.downloadMs || 0).toFixed(1) })}
                   />
                 </div>
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-indigo-500" />
-                    <span>TTFB (Server Processing)</span>
+                    <span>{t("apiClient.response.ttfbServerProcessing")}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-emerald-500" />
-                    <span>Content Download</span>
+                    <span>{t("apiClient.response.contentDownload")}</span>
                   </div>
                 </div>
               </div>
             )}
 
             <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-              <span className="text-muted-foreground">Time to First Byte (TTFB):</span>
+              <span className="text-muted-foreground">{t("apiClient.response.timeToFirstByte")}</span>
               <span className="font-mono font-medium text-foreground">
                 {activeResponse.timings.firstByteMs
                   ? `${activeResponse.timings.firstByteMs.toFixed(2)} ms`
-                  : "N/A"}
+                  : t("apiClient.response.notAvailable")}
               </span>
             </div>
 
             {activeResponse.timings.downloadMs && (
               <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-                <span className="text-muted-foreground">Content Download Duration:</span>
+                <span className="text-muted-foreground">{t("apiClient.response.contentDownloadDuration")}</span>
                 <span className="font-mono font-medium text-foreground">
                   {activeResponse.timings.downloadMs.toFixed(2)} ms
                 </span>
@@ -294,20 +296,20 @@ Please search my workspace for where this route handler or webhook is implemente
             )}
 
             <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-              <span className="text-muted-foreground">Total Roundtrip Latency:</span>
+              <span className="text-muted-foreground">{t("apiClient.response.totalRoundtripLatency")}</span>
               <span className="font-mono font-semibold text-emerald-500">
                 {activeResponse.timings.totalDurationMs.toFixed(2)} ms
               </span>
             </div>
 
             <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-              <span className="text-muted-foreground">Payload Size:</span>
-              <span className="font-mono text-foreground">{activeResponse.bodyBytesLen} bytes</span>
+              <span className="text-muted-foreground">{t("apiClient.response.payloadSize")}</span>
+              <span className="font-mono text-foreground">{activeResponse.bodyBytesLen} {t("apiClient.response.bytes")}</span>
             </div>
 
             <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-              <span className="text-muted-foreground">Transport Engine:</span>
-              <span className="font-mono text-emerald-500">Native Rust Async Engine (No CORS restrictions)</span>
+              <span className="text-muted-foreground">{t("apiClient.response.transportEngine")}</span>
+              <span className="font-mono text-emerald-500">{t("apiClient.response.nativeEngine")}</span>
             </div>
           </div>
         </TabsContent>
