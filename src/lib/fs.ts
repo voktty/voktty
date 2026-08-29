@@ -12,6 +12,7 @@ export type ProjectFile = {
   name: string;
   path: string;
   relative: string;
+  isDir?: boolean;
 };
 
 export function listDir(path: string): Promise<FsEntry[]> {

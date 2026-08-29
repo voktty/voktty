@@ -310,11 +310,18 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     };
   }, [id, cwd]);
 
+  // Identity-stable: the callers pass an inline arrow, so depending on the
+  // prop itself would tear down and re-arm the poll — and re-fork `ps` — on
+  // every parent render.
+  const wantsMeta = !!onMetaChange;
+
   useEffect(() => {
-    if (!onMetaChange) return;
+    if (!wantsMeta) return;
     let lastForeground: string | null = null;
     const refresh = () => {
       if (!spawned.current) return;
+      // Each status read forks `ps`; an off-screen window has no title to paint.
+      if (document.hidden) return;
       void getPtyStatus(id)
         .then(({ foreground }) => {
           const fg = foreground?.trim() || null;
@@ -329,8 +336,12 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     };
     refresh();
     const interval = setInterval(refresh, 1000);
-    return () => clearInterval(interval);
-  }, [id, cwd, onMetaChange]);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [id, cwd, wantsMeta]);
 
   useEffect(() => {
     if (!active) return;

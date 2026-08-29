@@ -8,6 +8,7 @@ import {
   mentionTokenAt,
   rankMentionFiles,
   replaceMentionToken,
+  withMentionDirectories,
 } from "./fileMentions";
 
 const files: ProjectFile[] = [
@@ -85,6 +86,37 @@ describe("buildMentionIndex", () => {
     expect(index.labels.get("apps/web/src/App.tsx")).toBe(files[1]);
     expect(index.labels.get("src/chrome/Composer.tsx")).toBe(files[2]);
   });
+
+  it("indexes parent folders so they can be mentioned", () => {
+    const chrome = index.labels.get("src/chrome");
+    expect(chrome).toMatchObject({
+      name: "chrome",
+      relative: "src/chrome",
+      path: "/p/src/chrome",
+      isDir: true,
+    });
+    expect(mentionLabel(chrome!, index)).toBe("src/chrome");
+    expect(index.labels.has("chrome")).toBe(false);
+
+    const src = index.labels.get("src");
+    expect(src).toMatchObject({
+      relative: "src",
+      path: "/p/src",
+      isDir: true,
+    });
+    expect(index.labels.get("apps/web/src")).toMatchObject({
+      relative: "apps/web/src",
+      isDir: true,
+    });
+  });
+
+  it("still mentions a folder when its only file has a space in the name", () => {
+    expect(index.labels.get("docs")).toMatchObject({
+      relative: "docs",
+      path: "/p/docs",
+      isDir: true,
+    });
+  });
 });
 
 describe("fileMentionParts", () => {
@@ -110,6 +142,20 @@ describe("fileMentionParts", () => {
       { text: "see " },
       { text: "@Composer.tsx", file: files[2] },
       { text: ", then" },
+    ]);
+  });
+
+  it("highlights folder mentions, including a trailing slash", () => {
+    const chrome = index.labels.get("src/chrome");
+    expect(fileMentionParts("look in @src/chrome please", index.labels)).toEqual([
+      { text: "look in " },
+      { text: "@src/chrome", file: chrome },
+      { text: " please" },
+    ]);
+    expect(fileMentionParts("look in @src/ next", index.labels)).toEqual([
+      { text: "look in " },
+      { text: "@src", file: index.labels.get("src") },
+      { text: "/ next" },
     ]);
   });
 
@@ -148,5 +194,70 @@ describe("rankMentionFiles", () => {
     const ranked = rankMentionFiles(files, "read", []);
     expect(ranked).toEqual([]);
     expect(rankMentionFiles(files, "compo", [])[0].path).toBe(files[2].path);
+  });
+
+  it("offers folders alongside files", () => {
+    const ranked = rankMentionFiles(files, "chrome", []);
+    expect(ranked[0]).toMatchObject({
+      relative: "src/chrome",
+      isDir: true,
+    });
+    expect(rankMentionFiles(files, "src/", [])[0]).toMatchObject({
+      relative: "src",
+      isDir: true,
+    });
+  });
+
+  it("puts folders first when nothing is typed", () => {
+    const ranked = rankMentionFiles(files, "", []);
+    expect(ranked.filter((file) => file.isDir).map((file) => file.relative)).toEqual(
+      expect.arrayContaining(["apps", "docs", "src", "src/chrome"]),
+    );
+    expect(ranked[0].isDir).toBe(true);
+  });
+});
+
+describe("withMentionDirectories", () => {
+  it("derives unique parent folders from file paths", () => {
+    const entries = withMentionDirectories(files);
+    const dirs = entries.filter((file) => file.isDir);
+    expect(dirs).toEqual(
+      expect.arrayContaining([
+        {
+          name: "src",
+          path: "/p/src",
+          relative: "src",
+          isDir: true,
+        },
+        {
+          name: "chrome",
+          path: "/p/src/chrome",
+          relative: "src/chrome",
+          isDir: true,
+        },
+        {
+          name: "apps",
+          path: "/p/apps",
+          relative: "apps",
+          isDir: true,
+        },
+      ]),
+    );
+    expect(withMentionDirectories(entries)).toEqual(entries);
+  });
+
+  it("rebuilds folder paths on Windows separators", () => {
+    const [dir] = withMentionDirectories([
+      {
+        name: "App.tsx",
+        path: "C:\\p\\apps\\web\\src\\App.tsx",
+        relative: "apps/web/src/App.tsx",
+      },
+    ]).filter((file) => file.relative === "apps/web");
+    expect(dir).toMatchObject({
+      name: "web",
+      path: "C:\\p\\apps\\web",
+      isDir: true,
+    });
   });
 });

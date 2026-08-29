@@ -29,7 +29,19 @@ export type MentionTextPart = {
 };
 
 const MENTION_TOKEN_RE = /(^|\s)@(\S+)/g;
-const TRAILING_PUNCTUATION = new Set([",", ";", ":", "!", "?", ")", "]", "}", '"', "'"]);
+const TRAILING_PUNCTUATION = new Set([
+  ",",
+  ";",
+  ":",
+  "!",
+  "?",
+  ")",
+  "]",
+  "}",
+  '"',
+  "'",
+  "/",
+]);
 const MAX_QUERY = 120;
 const MAX_PICKER = 30;
 
@@ -64,16 +76,18 @@ export function replaceMentionToken(
 }
 
 export function buildMentionIndex(files: ProjectFile[]): MentionIndex {
+  const entries = withMentionDirectories(files);
   const counts = new Map<string, number>();
-  for (const file of files) {
+  for (const file of entries) {
     counts.set(file.name, (counts.get(file.name) ?? 0) + 1);
   }
 
   const labels = new Map<string, ProjectFile>();
   const labelOf = new Map<string, string>();
-  for (const file of files) {
+  for (const file of entries) {
     if (hasSpace(file.relative)) continue;
-    const unique = counts.get(file.name) === 1 && !hasSpace(file.name);
+    const unique =
+      !file.isDir && counts.get(file.name) === 1 && !hasSpace(file.name);
     labelOf.set(file.path, unique ? file.name : file.relative);
     if (!labels.has(file.relative)) labels.set(file.relative, file);
     if (unique && !labels.has(file.name)) labels.set(file.name, file);
@@ -92,8 +106,11 @@ export function rankMentionFiles(
   recents: string[],
   limit = MAX_PICKER,
 ): RankedFile[] {
-  const usable = files.filter((file) => !hasSpace(file.relative));
-  if (query.trim()) return rankProjectFiles(usable, query, recents, limit);
+  const usable = withMentionDirectories(files).filter(
+    (file) => !hasSpace(file.relative),
+  );
+  const needle = query.replace(/\/+$/, "").trim();
+  if (needle) return rankProjectFiles(usable, needle, recents, limit);
 
   const byPath = new Map(usable.map((file) => [file.path, file]));
   const out: RankedFile[] = [];
@@ -109,6 +126,8 @@ export function rankMentionFiles(
   const rest = [...usable].sort((a, b) => {
     const depth = pathDepth(a.relative) - pathDepth(b.relative);
     if (depth !== 0) return depth;
+    const dir = Number(Boolean(b.isDir)) - Number(Boolean(a.isDir));
+    if (dir !== 0) return dir;
     return a.relative.localeCompare(b.relative);
   });
   for (const file of rest) {
@@ -171,7 +190,36 @@ export async function applyFileMentionsToTurn(
     .map((hit) => `- @${hit.label} → ${hit.file.relative}`);
   if (lines.length === 0) return text;
 
-  return [text, "", "---", "Files referenced with @ above:", ...lines].join("\n");
+  return [text, "", "---", "Referenced with @ above:", ...lines].join("\n");
+}
+
+/** Parent folders of indexed files, so `@` can point at a directory. */
+export function withMentionDirectories(files: ProjectFile[]): ProjectFile[] {
+  const dirs = new Map<string, ProjectFile>();
+  for (const file of files) {
+    if (file.isDir) {
+      if (!hasSpace(file.relative)) dirs.set(file.relative, file);
+      continue;
+    }
+    const parts = file.relative.split("/");
+    let rel = "";
+    for (let i = 0; i < parts.length - 1; i++) {
+      const segment = parts[i]!;
+      rel = rel ? `${rel}/${segment}` : segment;
+      if (dirs.has(rel) || hasSpace(rel)) continue;
+      dirs.set(rel, {
+        name: segment,
+        path: mentionDirPath(file, rel),
+        relative: rel,
+        isDir: true,
+      });
+    }
+  }
+  if (dirs.size === 0) return files;
+
+  const seen = new Set(files.map((file) => file.path));
+  const extra = [...dirs.values()].filter((dir) => !seen.has(dir.path));
+  return extra.length === 0 ? files : [...files, ...extra];
 }
 
 function scanMentions(
@@ -216,6 +264,19 @@ function resolveLabel(
 
 function looksMentioned(text: string): boolean {
   return /(^|\s)@\S/.test(text);
+}
+
+function mentionDirPath(file: ProjectFile, relativeDir: string): string {
+  const trail = file.relative.slice(relativeDir.length);
+  if (!trail) return file.path;
+  if (file.path.endsWith(trail)) {
+    return file.path.slice(0, file.path.length - trail.length);
+  }
+  const winTrail = trail.replace(/\//g, "\\");
+  if (file.path.endsWith(winTrail)) {
+    return file.path.slice(0, file.path.length - winTrail.length);
+  }
+  return file.path.slice(0, file.path.length - trail.length);
 }
 
 function pathDepth(relative: string): number {

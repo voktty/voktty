@@ -10,7 +10,14 @@ type ExitHandler = (code: number | null) => void;
 const dataHandlers = new Map<string, DataHandler>();
 const exitHandlers = new Map<string, ExitHandler>();
 const dataBuffer = new Map<string, Uint8Array[]>();
+const dataBufferBytes = new Map<string, number>();
 
+/**
+ * Replay budget for a PTY whose view is not mounted. Chunks arrive at up to
+ * 32KB each, so a count-based cap let one unsubscribed terminal retain
+ * megabytes; bound the bytes instead. Whole chunks are dropped oldest-first.
+ */
+const MAX_BUFFERED_BYTES = 256 * 1024;
 const MAX_BUFFERED = 200;
 let bridge: Promise<UnlistenFn[]> | null = null;
 let users = 0;
@@ -25,13 +32,42 @@ function decodeBase64(data: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * Leading chunks to drop to bring a replay buffer back within budget, and the
+ * byte total that remains. Never drops the newest chunk, even when that chunk
+ * alone exceeds the budget — replaying something beats replaying nothing.
+ */
+export function trimReplay(
+  sizes: number[],
+  bytes: number,
+): { drop: number; bytes: number } {
+  let drop = 0;
+  let left = bytes;
+  while (
+    drop < sizes.length - 1 &&
+    (left > MAX_BUFFERED_BYTES || sizes.length - drop > MAX_BUFFERED)
+  ) {
+    left -= sizes[drop];
+    drop += 1;
+  }
+  return { drop, bytes: left };
+}
+
 function pushBuffered(id: string, chunk: Uint8Array) {
   const queued = dataBuffer.get(id) ?? [];
   queued.push(chunk);
-  if (queued.length > MAX_BUFFERED) {
-    queued.splice(0, queued.length - MAX_BUFFERED);
-  }
+  const trimmed = trimReplay(
+    queued.map((entry) => entry.byteLength),
+    (dataBufferBytes.get(id) ?? 0) + chunk.byteLength,
+  );
+  if (trimmed.drop > 0) queued.splice(0, trimmed.drop);
   dataBuffer.set(id, queued);
+  dataBufferBytes.set(id, trimmed.bytes);
+}
+
+function clearBuffered(id: string) {
+  dataBuffer.delete(id);
+  dataBufferBytes.delete(id);
 }
 
 function ensureBridge() {
@@ -102,7 +138,7 @@ export async function getPtyStatus(
 export async function killPty(id: string): Promise<void> {
   dataHandlers.delete(id);
   exitHandlers.delete(id);
-  dataBuffer.delete(id);
+  clearBuffered(id);
   await invoke("pty_kill", { id }).catch(() => undefined);
 }
 
@@ -110,6 +146,7 @@ export async function killAllPtys(): Promise<void> {
   dataHandlers.clear();
   exitHandlers.clear();
   dataBuffer.clear();
+  dataBufferBytes.clear();
   await invoke("pty_kill_all").catch(() => undefined);
 }
 
@@ -123,7 +160,7 @@ export function subscribePty(
   exitHandlers.set(id, onExit);
   const queued = dataBuffer.get(id);
   if (queued) {
-    dataBuffer.delete(id);
+    clearBuffered(id);
     for (const chunk of queued) onData(chunk);
   }
   return () => {

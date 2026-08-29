@@ -970,7 +970,11 @@ function MentionRuns({
             <span className="relative text-transparent">
               {"@"}
               <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                <FileTypeIcon name={part.file.name} isDir={false} size={13} />
+                <FileTypeIcon
+                  name={part.file.name}
+                  isDir={Boolean(part.file.isDir)}
+                  size={13}
+                />
               </span>
             </span>
             {part.text.slice(1)}

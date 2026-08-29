@@ -62,14 +62,14 @@ export function FileMentionPicker({
           {loading
             ? "Indexing files…"
             : query.trim()
-              ? "No matching files"
-              : "No files found"}
+              ? "No matching files or folders"
+              : "No files or folders found"}
         </p>
       ) : (
         <div
           ref={lockOverscroll}
           role="listbox"
-          aria-label="Files"
+          aria-label="Files and folders"
           onMouseMove={onListMouseMove}
           className="max-h-[min(240px,40vh)] overflow-y-auto overscroll-none px-1 py-1"
         >
@@ -93,7 +93,11 @@ export function FileMentionPicker({
                 }`}
               >
                 <span className="shrink-0">
-                  <FileTypeIcon name={file.name} isDir={false} size={15} />
+                  <FileTypeIcon
+                    name={file.name}
+                    isDir={Boolean(file.isDir)}
+                    size={15}
+                  />
                 </span>
                 <span
                   className={`min-w-0 flex-1 truncate ${
@@ -107,6 +111,7 @@ export function FileMentionPicker({
                       .map((pos) => pos - nameOffset)}
                     active={Boolean(query.trim())}
                   />
+                  {file.isDir ? "/" : null}
                 </span>
                 {dir ? (
                   <span className="min-w-0 max-w-[45%] truncate font-mono text-[11px] text-content/40">
