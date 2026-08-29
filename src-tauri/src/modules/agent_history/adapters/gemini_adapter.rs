@@ -118,7 +118,9 @@ impl AgentHistoryAdapter for GeminiAdapter {
             updated_at = ts;
 
             // Extract project path or prompt
-            if step_type == "USER_INPUT" || v.get("source").and_then(|s| s.as_str()) == Some("USER_EXPLICIT") {
+            if step_type == "USER_INPUT"
+                || v.get("source").and_then(|s| s.as_str()) == Some("USER_EXPLICIT")
+            {
                 let clean_text = if let Some(start) = content_str.find("<USER_REQUEST>") {
                     if let Some(end) = content_str.find("</USER_REQUEST>") {
                         content_str[start + "<USER_REQUEST>".len()..end].trim()
@@ -136,10 +138,14 @@ impl AgentHistoryAdapter for GeminiAdapter {
                 // Look for workspace path in metadata if not yet found
                 if project_path.is_empty() {
                     if let Some(idx_cwd) = content_str.find("C:\\") {
-                        let end_idx = content_str[idx_cwd..].find(['\n', '<', '"', ']']).unwrap_or(30);
+                        let end_idx = content_str[idx_cwd..]
+                            .find(['\n', '<', '"', ']'])
+                            .unwrap_or(30);
                         project_path = content_str[idx_cwd..idx_cwd + end_idx].trim().to_string();
                     } else if let Some(idx_cwd) = content_str.find("/Users/") {
-                        let end_idx = content_str[idx_cwd..].find(['\n', '<', '"', ']']).unwrap_or(30);
+                        let end_idx = content_str[idx_cwd..]
+                            .find(['\n', '<', '"', ']'])
+                            .unwrap_or(30);
                         project_path = content_str[idx_cwd..idx_cwd + end_idx].trim().to_string();
                     }
                 }
@@ -157,19 +163,30 @@ impl AgentHistoryAdapter for GeminiAdapter {
                     is_error: false,
                     redacted: false,
                 });
-            } else if step_type == "PLANNER_RESPONSE" || v.get("source").and_then(|s| s.as_str()) == Some("MODEL") {
+            } else if step_type == "PLANNER_RESPONSE"
+                || v.get("source").and_then(|s| s.as_str()) == Some("MODEL")
+            {
                 let mut tool_name = None;
                 let mut tool_input = None;
 
                 if let Some(tool_calls) = v.get("tool_calls").and_then(|tc| tc.as_array()) {
                     if let Some(first_tc) = tool_calls.first() {
-                        tool_name = first_tc.get("name").and_then(|n| n.as_str()).map(|s| s.to_string());
+                        tool_name = first_tc
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .map(|s| s.to_string());
                         tool_input = first_tc.get("args").map(|a| a.to_string());
 
                         // Check if args contains cwd / path
                         if project_path.is_empty() {
                             if let Some(args) = first_tc.get("args") {
-                                for key in &["Cwd", "DirectoryPath", "SearchPath", "TargetFile", "AbsolutePath"] {
+                                for key in &[
+                                    "Cwd",
+                                    "DirectoryPath",
+                                    "SearchPath",
+                                    "TargetFile",
+                                    "AbsolutePath",
+                                ] {
                                     if let Some(p) = args.get(*key).and_then(|v| v.as_str()) {
                                         if !p.is_empty() {
                                             project_path = p.to_string();
@@ -209,7 +226,10 @@ impl AgentHistoryAdapter for GeminiAdapter {
         let title = if !first_user_prompt.is_empty() {
             first_user_prompt
         } else {
-            format!("Antigravity Task {}", &session_uuid[..session_uuid.len().min(8)])
+            format!(
+                "Antigravity Task {}",
+                &session_uuid[..session_uuid.len().min(8)]
+            )
         };
 
         let session = HistorySession {
@@ -217,8 +237,16 @@ impl AgentHistoryAdapter for GeminiAdapter {
             agent: "gemini".to_string(),
             title,
             project_name,
-            project_path: if project_path.is_empty() { "Local Workspace".to_string() } else { project_path.clone() },
-            cwd: if project_path.is_empty() { None } else { Some(project_path) },
+            project_path: if project_path.is_empty() {
+                "Local Workspace".to_string()
+            } else {
+                project_path.clone()
+            },
+            cwd: if project_path.is_empty() {
+                None
+            } else {
+                Some(project_path)
+            },
             git_branch: None,
             created_at,
             updated_at,
@@ -272,6 +300,9 @@ mod tests {
         };
 
         let cmd = adapter.resume_command(&session);
-        assert_eq!(cmd, Some("agy --conversation=8c9a2f19-8f66-4eb2-9367-1937d9b26e6d".to_string()));
+        assert_eq!(
+            cmd,
+            Some("agy --conversation=8c9a2f19-8f66-4eb2-9367-1937d9b26e6d".to_string())
+        );
     }
 }

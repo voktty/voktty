@@ -48,7 +48,9 @@ impl CodexAdapter {
                     && parts[2].len() == 4
                     && parts[3].len() == 4
                     && parts[4].len() == 12
-                    && parts.iter().all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
+                    && parts
+                        .iter()
+                        .all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
                 {
                     return Some(candidate);
                 }
@@ -82,7 +84,11 @@ impl AgentHistoryAdapter for CodexAdapter {
         }
 
         let sessions_dir = dir.join("sessions");
-        let search_dir = if sessions_dir.exists() { sessions_dir } else { dir };
+        let search_dir = if sessions_dir.exists() {
+            sessions_dir
+        } else {
+            dir
+        };
 
         Self::scan_recursive(&search_dir, &mut list, 0);
         list
@@ -131,43 +137,63 @@ impl AgentHistoryAdapter for CodexAdapter {
             }
 
             // Extract message role and content
-            let (role, text_content, tool_name, tool_input, tool_output, is_err) = if let Some(payload) = v.get("payload") {
-                let role = payload.get("role").and_then(|r| r.as_str()).unwrap_or("assistant").to_string();
-                let mut text = String::new();
+            let (role, text_content, tool_name, tool_input, tool_output, is_err) =
+                if let Some(payload) = v.get("payload") {
+                    let role = payload
+                        .get("role")
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("assistant")
+                        .to_string();
+                    let mut text = String::new();
 
-                if let Some(content_val) = payload.get("content") {
-                    if let Some(s) = content_val.as_str() {
-                        text = s.to_string();
-                    } else if let Some(arr) = content_val.as_array() {
-                        for item in arr {
-                            if let Some(t) = item.get("text").and_then(|t| t.as_str()) {
-                                text.push_str(t);
+                    if let Some(content_val) = payload.get("content") {
+                        if let Some(s) = content_val.as_str() {
+                            text = s.to_string();
+                        } else if let Some(arr) = content_val.as_array() {
+                            for item in arr {
+                                if let Some(t) = item.get("text").and_then(|t| t.as_str()) {
+                                    text.push_str(t);
+                                }
                             }
                         }
                     }
-                }
 
-                // Check for tool call
-                let mut t_name = None;
-                let mut t_input = None;
-                let mut t_output = None;
+                    // Check for tool call
+                    let mut t_name = None;
+                    let mut t_input = None;
+                    let mut t_output = None;
 
-                if let Some(tool_call) = payload.get("tool_call") {
-                    t_name = tool_call.get("name").and_then(|n| n.as_str()).map(|s| s.to_string());
-                    t_input = tool_call.get("arguments").map(|a| a.to_string());
-                } else if let Some(output) = payload.get("tool_output") {
-                    t_output = Some(output.to_string());
-                }
+                    if let Some(tool_call) = payload.get("tool_call") {
+                        t_name = tool_call
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .map(|s| s.to_string());
+                        t_input = tool_call.get("arguments").map(|a| a.to_string());
+                    } else if let Some(output) = payload.get("tool_output") {
+                        t_output = Some(output.to_string());
+                    }
 
-                (role, text, t_name, t_input, t_output, false)
-            } else {
-                let role = v.get("role").and_then(|r| r.as_str()).unwrap_or("assistant").to_string();
-                let content_str = v.get("content").and_then(|c| c.as_str()).unwrap_or("").to_string();
-                (role, content_str, None, None, None, false)
-            };
+                    (role, text, t_name, t_input, t_output, false)
+                } else {
+                    let role = v
+                        .get("role")
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("assistant")
+                        .to_string();
+                    let content_str = v
+                        .get("content")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    (role, content_str, None, None, None, false)
+                };
 
             // Filter out internal env context blocks from title
-            if role == "user" && first_user_prompt.is_empty() && !text_content.is_empty() && !text_content.starts_with("<environment_context>") {
+            if role == "user"
+                && first_user_prompt.is_empty()
+                && !text_content.is_empty()
+                && !text_content.starts_with("<environment_context>")
+            {
                 first_user_prompt = text_content.chars().take(80).collect();
             }
 
@@ -188,7 +214,9 @@ impl AgentHistoryAdapter for CodexAdapter {
             }
         }
 
-        let project_path = cwd.clone().unwrap_or_else(|| "Unknown Directory".to_string());
+        let project_path = cwd
+            .clone()
+            .unwrap_or_else(|| "Unknown Directory".to_string());
         let project_name = if let Some(ref c) = cwd {
             Path::new(c)
                 .file_name()
@@ -260,7 +288,8 @@ mod tests {
         );
 
         let session = HistorySession {
-            id: "codex_rollout-2026-08-27T13-07-30-01a042e7-4d7d-72f2-885c-832fbd15883d".to_string(),
+            id: "codex_rollout-2026-08-27T13-07-30-01a042e7-4d7d-72f2-885c-832fbd15883d"
+                .to_string(),
             agent: "codex".to_string(),
             title: "Test".to_string(),
             project_name: "Test".to_string(),
@@ -274,7 +303,10 @@ mod tests {
             file_path: None,
             source_hash: None,
             can_resume: true,
-            resume_command: Some("codex resume rollout-2026-08-27T13-07-30-01a042e7-4d7d-72f2-885c-832fbd15883d".to_string()),
+            resume_command: Some(
+                "codex resume rollout-2026-08-27T13-07-30-01a042e7-4d7d-72f2-885c-832fbd15883d"
+                    .to_string(),
+            ),
         };
 
         let adapter = CodexAdapter::new();

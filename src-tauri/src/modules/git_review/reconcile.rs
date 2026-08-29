@@ -179,10 +179,7 @@ pub fn split_range_by_claims(
             .filter(|c| c.start <= seg_start && c.end >= seg_end)
             .collect();
 
-        let winner = covering
-            .iter()
-            .max_by_key(|c| c.viewed_at)
-            .copied();
+        let winner = covering.iter().max_by_key(|c| c.viewed_at).copied();
 
         let status = if winner.is_some() {
             "reviewed".to_string()
@@ -276,8 +273,8 @@ pub fn synthesize_reviewed_baseline(
             .collect();
 
         if !removed.is_empty() {
-            let both_reviewed =
-                is_reviewed_at(head_touched_start.saturating_sub(1)) && is_reviewed_at(head_touched_start);
+            let both_reviewed = is_reviewed_at(head_touched_start.saturating_sub(1))
+                && is_reviewed_at(head_touched_start);
             if !both_reviewed {
                 output.extend(removed);
             }
@@ -308,11 +305,7 @@ pub fn synthesize_reviewed_baseline(
     }
 }
 
-pub fn reconcile(
-    base_content: &str,
-    head_content: &str,
-    claims: &[ReviewClaim],
-) -> Reconciliation {
+pub fn reconcile(base_content: &str, head_content: &str, claims: &[ReviewClaim]) -> Reconciliation {
     let base_head_hunks = diff_contents(base_content, head_content);
 
     if claims.is_empty() {
@@ -352,9 +345,9 @@ pub fn reconcile(
         }
     }
 
-    let file_claim_changed = claims.iter().any(|c| {
-        c.ranges.is_none() && c.snapshot_content != head_content
-    });
+    let file_claim_changed = claims
+        .iter()
+        .any(|c| c.ranges.is_none() && c.snapshot_content != head_content);
 
     let reviewed_baseline = Some(synthesize_reviewed_baseline(
         &base_head_hunks,

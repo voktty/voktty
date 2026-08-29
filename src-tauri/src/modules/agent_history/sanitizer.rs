@@ -1,35 +1,31 @@
-﻿use std::sync::LazyLock;
+use std::sync::LazyLock;
 
 /// Saneador de seguridad y redacción de secretos antes de indexar en SQLite FTS5.
 /// Previene la indexación y fuga de API keys, tokens JWT, certificados y contraseñas.
 pub struct Sanitizer;
 
-static RE_BEARER: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(?i)\bBearer\s+([A-Za-z0-9\-\._~\+\/]+=*)").unwrap()
-});
+static RE_BEARER: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?i)\bBearer\s+([A-Za-z0-9\-\._~\+\/]+=*)").unwrap());
 
-static RE_OPENAI_KEY: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\bsk-[a-zA-Z0-9_-]{20,}\b").unwrap()
-});
+static RE_OPENAI_KEY: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\bsk-[a-zA-Z0-9_-]{20,}\b").unwrap());
 
-static RE_ANTHROPIC_KEY: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\bsk-ant-[a-zA-Z0-9_-]{20,}\b").unwrap()
-});
+static RE_ANTHROPIC_KEY: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\bsk-ant-[a-zA-Z0-9_-]{20,}\b").unwrap());
 
 static RE_GITHUB_TOKEN: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\b(ghp|gho|ghu|ghs|ghr|github_pat)_[a-zA-Z0-9_]{16,}\b").unwrap()
 });
 
-static RE_AWS_KEY: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\bAKIA[0-9A-Z]{16}\b").unwrap()
-});
+static RE_AWS_KEY: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\bAKIA[0-9A-Z]{16}\b").unwrap());
 
-static RE_GOOGLE_API_KEY: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\bAIzaSy[a-zA-Z0-9_-]{33}\b").unwrap()
-});
+static RE_GOOGLE_API_KEY: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\bAIzaSy[a-zA-Z0-9_-]{33}\b").unwrap());
 
 static RE_PRIVATE_KEY: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"-----BEGIN [A-Z ]+PRIVATE KEY-----[^-]+-----END [A-Z ]+PRIVATE KEY-----").unwrap()
+    regex::Regex::new(r"-----BEGIN [A-Z ]+PRIVATE KEY-----[^-]+-----END [A-Z ]+PRIVATE KEY-----")
+        .unwrap()
 });
 
 impl Sanitizer {
@@ -44,37 +40,51 @@ impl Sanitizer {
         let mut text = input.to_string();
 
         if RE_PRIVATE_KEY.is_match(&text) {
-            text = RE_PRIVATE_KEY.replace_all(&text, "[REDACTED_PRIVATE_KEY]").into_owned();
+            text = RE_PRIVATE_KEY
+                .replace_all(&text, "[REDACTED_PRIVATE_KEY]")
+                .into_owned();
             redacted = true;
         }
 
         if RE_OPENAI_KEY.is_match(&text) {
-            text = RE_OPENAI_KEY.replace_all(&text, "sk-***[REDACTED_API_KEY]***").into_owned();
+            text = RE_OPENAI_KEY
+                .replace_all(&text, "sk-***[REDACTED_API_KEY]***")
+                .into_owned();
             redacted = true;
         }
 
         if RE_ANTHROPIC_KEY.is_match(&text) {
-            text = RE_ANTHROPIC_KEY.replace_all(&text, "sk-ant-***[REDACTED_API_KEY]***").into_owned();
+            text = RE_ANTHROPIC_KEY
+                .replace_all(&text, "sk-ant-***[REDACTED_API_KEY]***")
+                .into_owned();
             redacted = true;
         }
 
         if RE_GITHUB_TOKEN.is_match(&text) {
-            text = RE_GITHUB_TOKEN.replace_all(&text, "ghp_***[REDACTED_TOKEN]***").into_owned();
+            text = RE_GITHUB_TOKEN
+                .replace_all(&text, "ghp_***[REDACTED_TOKEN]***")
+                .into_owned();
             redacted = true;
         }
 
         if RE_AWS_KEY.is_match(&text) {
-            text = RE_AWS_KEY.replace_all(&text, "AKIA***[REDACTED_AWS_KEY]***").into_owned();
+            text = RE_AWS_KEY
+                .replace_all(&text, "AKIA***[REDACTED_AWS_KEY]***")
+                .into_owned();
             redacted = true;
         }
 
         if RE_GOOGLE_API_KEY.is_match(&text) {
-            text = RE_GOOGLE_API_KEY.replace_all(&text, "AIzaSy***[REDACTED_GOOGLE_KEY]***").into_owned();
+            text = RE_GOOGLE_API_KEY
+                .replace_all(&text, "AIzaSy***[REDACTED_GOOGLE_KEY]***")
+                .into_owned();
             redacted = true;
         }
 
         if RE_BEARER.is_match(&text) {
-            text = RE_BEARER.replace_all(&text, "Bearer [REDACTED_BEARER_TOKEN]").into_owned();
+            text = RE_BEARER
+                .replace_all(&text, "Bearer [REDACTED_BEARER_TOKEN]")
+                .into_owned();
             redacted = true;
         }
 

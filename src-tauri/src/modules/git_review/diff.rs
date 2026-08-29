@@ -14,11 +14,17 @@ pub fn split_lines(content: &str) -> Vec<&str> {
     if content.is_empty() {
         return Vec::new();
     }
-    let trimmed = content.strip_suffix("\r\n").or_else(|| content.strip_suffix('\n')).unwrap_or(content);
+    let trimmed = content
+        .strip_suffix("\r\n")
+        .or_else(|| content.strip_suffix('\n'))
+        .unwrap_or(content);
     if trimmed.is_empty() {
         return Vec::new();
     }
-    trimmed.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect()
+    trimmed
+        .split('\n')
+        .map(|l| l.strip_suffix('\r').unwrap_or(l))
+        .collect()
 }
 
 /// Computes the Longest Common Subsequence edit script between two sets of lines.

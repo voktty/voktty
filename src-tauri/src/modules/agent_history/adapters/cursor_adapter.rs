@@ -13,17 +13,31 @@ impl CursorAdapter {
     fn cursor_storage_dir() -> Option<PathBuf> {
         #[cfg(windows)]
         {
-            std::env::var("APPDATA")
-                .ok()
-                .map(|appdata| PathBuf::from(appdata).join("Cursor").join("User").join("workspaceStorage"))
+            std::env::var("APPDATA").ok().map(|appdata| {
+                PathBuf::from(appdata)
+                    .join("Cursor")
+                    .join("User")
+                    .join("workspaceStorage")
+            })
         }
         #[cfg(target_os = "macos")]
         {
-            dirs::home_dir().map(|h| h.join("Library").join("Application Support").join("Cursor").join("User").join("workspaceStorage"))
+            dirs::home_dir().map(|h| {
+                h.join("Library")
+                    .join("Application Support")
+                    .join("Cursor")
+                    .join("User")
+                    .join("workspaceStorage")
+            })
         }
         #[cfg(target_os = "linux")]
         {
-            dirs::home_dir().map(|h| h.join(".config").join("Cursor").join("User").join("workspaceStorage"))
+            dirs::home_dir().map(|h| {
+                h.join(".config")
+                    .join("Cursor")
+                    .join("User")
+                    .join("workspaceStorage")
+            })
         }
     }
 }
@@ -38,7 +52,9 @@ impl AgentHistoryAdapter for CursorAdapter {
     }
 
     fn is_installed(&self) -> bool {
-        Self::cursor_storage_dir().map(|d| d.exists()).unwrap_or(false)
+        Self::cursor_storage_dir()
+            .map(|d| d.exists())
+            .unwrap_or(false)
     }
 
     fn scan(&self) -> Vec<SessionLocation> {
@@ -77,7 +93,10 @@ impl AgentHistoryAdapter for CursorAdapter {
         let session = HistorySession {
             id: session_id.clone(),
             agent: "cursor".to_string(),
-            title: format!("Cursor Workspace {}", &folder_name[..folder_name.len().min(8)]),
+            title: format!(
+                "Cursor Workspace {}",
+                &folder_name[..folder_name.len().min(8)]
+            ),
             project_name: "Cursor Workspace".to_string(),
             project_path: parent.to_string_lossy().to_string(),
             cwd: None,

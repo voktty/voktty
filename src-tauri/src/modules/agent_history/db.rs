@@ -135,7 +135,8 @@ impl HistoryDb {
 
     pub fn get_source_hash_by_path(&self, file_path: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare_cached("SELECT source_hash FROM sessions WHERE file_path = ?1 LIMIT 1")?;
+        let mut stmt =
+            conn.prepare_cached("SELECT source_hash FROM sessions WHERE file_path = ?1 LIMIT 1")?;
         let mut rows = stmt.query(params![file_path])?;
         if let Some(row) = rows.next()? {
             let hash: Option<String> = row.get(0)?;
@@ -145,13 +146,23 @@ impl HistoryDb {
         }
     }
 
-    pub fn replace_session_messages(&self, session_id: &str, messages: &[HistoryMessage]) -> Result<()> {
+    pub fn replace_session_messages(
+        &self,
+        session_id: &str,
+        messages: &[HistoryMessage],
+    ) -> Result<()> {
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
 
         // Eliminar mensajes previos y registros FTS correspondientes
-        tx.execute("DELETE FROM messages_fts WHERE session_id = ?1;", params![session_id])?;
-        tx.execute("DELETE FROM messages WHERE session_id = ?1;", params![session_id])?;
+        tx.execute(
+            "DELETE FROM messages_fts WHERE session_id = ?1;",
+            params![session_id],
+        )?;
+        tx.execute(
+            "DELETE FROM messages WHERE session_id = ?1;",
+            params![session_id],
+        )?;
 
         {
             let mut insert_msg = tx.prepare(
@@ -254,7 +265,8 @@ impl HistoryDb {
         let offset = filter.offset.unwrap_or(0);
         sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
 
-        let params_slice: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+        let params_slice: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|b| b.as_ref()).collect();
         let mut stmt = conn.prepare(&sql)?;
         let session_iter = stmt.query_map(params_slice.as_slice(), |row| {
             Ok(HistorySession {
@@ -312,7 +324,10 @@ impl HistoryDb {
             ORDER BY s.updated_at DESC
             LIMIT ?5 OFFSET ?6;";
 
-        let agent_param = filter.agent.as_ref().filter(|a| *a != "all" && !a.is_empty());
+        let agent_param = filter
+            .agent
+            .as_ref()
+            .filter(|a| *a != "all" && !a.is_empty());
         let project_param = filter.project.as_ref().filter(|p| !p.is_empty());
         let limit = filter.limit.unwrap_or(50);
         let offset = filter.offset.unwrap_or(0);
@@ -320,7 +335,14 @@ impl HistoryDb {
 
         let mut stmt = conn.prepare(sql)?;
         let session_iter = stmt.query_map(
-            params![safe_query, title_like, agent_param, project_param, limit, offset],
+            params![
+                safe_query,
+                title_like,
+                agent_param,
+                project_param,
+                limit,
+                offset
+            ],
             |row| {
                 Ok(HistorySession {
                     id: row.get(0)?,
@@ -382,7 +404,12 @@ impl HistoryDb {
         }
     }
 
-    pub fn get_messages(&self, session_id: &str, offset: u32, limit: u32) -> Result<Vec<HistoryMessage>> {
+    pub fn get_messages(
+        &self,
+        session_id: &str,
+        offset: u32,
+        limit: u32,
+    ) -> Result<Vec<HistoryMessage>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, session_id, role, content, sequence, timestamp,
@@ -418,8 +445,14 @@ impl HistoryDb {
 
     pub fn delete_session(&self, session_id: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM messages_fts WHERE session_id = ?1;", params![session_id])?;
-        conn.execute("DELETE FROM messages WHERE session_id = ?1;", params![session_id])?;
+        conn.execute(
+            "DELETE FROM messages_fts WHERE session_id = ?1;",
+            params![session_id],
+        )?;
+        conn.execute(
+            "DELETE FROM messages WHERE session_id = ?1;",
+            params![session_id],
+        )?;
         conn.execute("DELETE FROM sessions WHERE id = ?1;", params![session_id])?;
         Ok(())
     }
@@ -435,20 +468,25 @@ impl HistoryDb {
     pub fn get_stats(&self, last_scan: i64) -> Result<HistoryStats> {
         let conn = self.conn.lock().unwrap();
 
-        let total_sessions: u32 = conn.query_row("SELECT COUNT(*) FROM sessions;", [], |r| r.get(0))?;
-        let total_messages: u32 = conn.query_row("SELECT COUNT(*) FROM messages;", [], |r| r.get(0))?;
+        let total_sessions: u32 =
+            conn.query_row("SELECT COUNT(*) FROM sessions;", [], |r| r.get(0))?;
+        let total_messages: u32 =
+            conn.query_row("SELECT COUNT(*) FROM messages;", [], |r| r.get(0))?;
 
         let mut agents_count = HashMap::new();
         let mut stmt_ag = conn.prepare("SELECT agent, COUNT(*) FROM sessions GROUP BY agent;")?;
-        let ag_rows = stmt_ag.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, u32>(1)?)))?;
+        let ag_rows =
+            stmt_ag.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, u32>(1)?)))?;
         for row in ag_rows {
             let (ag, count) = row?;
             agents_count.insert(ag, count);
         }
 
         let mut projects_count = HashMap::new();
-        let mut stmt_pr = conn.prepare("SELECT project_name, COUNT(*) FROM sessions GROUP BY project_name;")?;
-        let pr_rows = stmt_pr.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, u32>(1)?)))?;
+        let mut stmt_pr =
+            conn.prepare("SELECT project_name, COUNT(*) FROM sessions GROUP BY project_name;")?;
+        let pr_rows =
+            stmt_pr.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, u32>(1)?)))?;
         for row in pr_rows {
             let (pr, count) = row?;
             projects_count.insert(pr, count);

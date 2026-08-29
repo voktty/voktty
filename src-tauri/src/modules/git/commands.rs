@@ -345,14 +345,8 @@ pub async fn git_clone(
 ) -> Result<String, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
-        operations::clone(
-            r,
-            &url,
-            &parent_dir,
-            target_name.as_deref(),
-            &workspace,
-        )
-        .map_err(Into::into)
+        operations::clone(r, &url, &parent_dir, target_name.as_deref(), &workspace)
+            .map_err(Into::into)
     })
     .await
 }

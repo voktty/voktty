@@ -135,14 +135,28 @@ impl AgentHistoryAdapter for ClaudeAdapter {
             }
 
             if git_branch.is_none() {
-                if let Some(b) = v.get("git_branch").or_else(|| v.get("branch")).and_then(|b| b.as_str()) {
+                if let Some(b) = v
+                    .get("git_branch")
+                    .or_else(|| v.get("branch"))
+                    .and_then(|b| b.as_str())
+                {
                     git_branch = Some(b.to_string());
                 }
             }
 
-            let tool_name = v.get("tool_name").or_else(|| v.get("tool")).and_then(|t| t.as_str()).map(|s| s.to_string());
-            let tool_input = v.get("tool_input").or_else(|| v.get("input")).map(|i| i.to_string());
-            let tool_output = v.get("tool_output").or_else(|| v.get("output")).map(|o| o.to_string());
+            let tool_name = v
+                .get("tool_name")
+                .or_else(|| v.get("tool"))
+                .and_then(|t| t.as_str())
+                .map(|s| s.to_string());
+            let tool_input = v
+                .get("tool_input")
+                .or_else(|| v.get("input"))
+                .map(|i| i.to_string());
+            let tool_output = v
+                .get("tool_output")
+                .or_else(|| v.get("output"))
+                .map(|o| o.to_string());
             let is_error = v.get("is_error").and_then(|e| e.as_bool()).unwrap_or(false);
 
             if !msg_text.is_empty() || tool_name.is_some() {
@@ -187,8 +201,16 @@ impl AgentHistoryAdapter for ClaudeAdapter {
             project_path: cwd.clone().unwrap_or_default(),
             cwd: cwd.clone(),
             git_branch,
-            created_at: if first_ts > 0 { first_ts } else { loc.last_modified },
-            updated_at: if last_ts > 0 { last_ts } else { loc.last_modified },
+            created_at: if first_ts > 0 {
+                first_ts
+            } else {
+                loc.last_modified
+            },
+            updated_at: if last_ts > 0 {
+                last_ts
+            } else {
+                loc.last_modified
+            },
             message_count: messages.len() as u32,
             is_active: false,
             file_path: Some(path.to_string_lossy().to_string()),
