@@ -13,7 +13,6 @@ use models::{
 use std::sync::Arc;
 use tauri::State;
 
-
 pub struct GitReviewState {
     db: Arc<ReviewDb>,
     blob_store: Arc<BlobStore>,
@@ -55,7 +54,12 @@ pub async fn git_review_open_session(
 ) -> Result<ReviewSession, String> {
     state
         .db
-        .open_session(&repo_root, &target, base_ref.as_deref(), head_ref.as_deref())
+        .open_session(
+            &repo_root,
+            &target,
+            base_ref.as_deref(),
+            head_ref.as_deref(),
+        )
         .map_err(|e| e.to_string())
 }
 
@@ -282,5 +286,3 @@ pub async fn git_review_update_comment(
         .update_comment(&session.id, &payload.comment_id, &payload.comment)
         .map_err(|e| e.to_string())
 }
-
-

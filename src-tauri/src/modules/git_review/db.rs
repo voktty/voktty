@@ -216,12 +216,7 @@ impl ReviewDb {
         Ok(())
     }
 
-    pub fn unmark_range_claim(
-        &self,
-        session_id: &str,
-        path: &str,
-        block_id: &str,
-    ) -> Result<()> {
+    pub fn unmark_range_claim(&self, session_id: &str, path: &str, block_id: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let claim_id = format!("{}_{}_{}", session_id, path, block_id);
 
@@ -298,7 +293,8 @@ impl ReviewDb {
 
     pub fn get_session_overview(&self, session_id: &str) -> Result<Vec<FileReviewState>> {
         let conn = self.conn.lock().unwrap();
-        let mut map: std::collections::HashMap<String, FileReviewState> = std::collections::HashMap::new();
+        let mut map: std::collections::HashMap<String, FileReviewState> =
+            std::collections::HashMap::new();
 
         // 1. Reviewed files
         let mut stmt = conn.prepare(
@@ -588,10 +584,11 @@ mod tests {
         assert_eq!(claims_after_unmark.len(), 1);
 
         // Test pruning
-        let deleted = db.prune_sessions_older_than(session.updated_at + 1000).unwrap();
+        let deleted = db
+            .prune_sessions_older_than(session.updated_at + 1000)
+            .unwrap();
         assert_eq!(deleted, 1);
         let overview_after_prune = db.get_session_overview(&session.id).unwrap();
         assert_eq!(overview_after_prune.len(), 0);
     }
 }
-

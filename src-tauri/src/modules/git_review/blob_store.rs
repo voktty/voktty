@@ -28,7 +28,10 @@ impl BlobStore {
 
     pub fn store(&self, content: &str) -> Result<String, String> {
         if content.len() > MAX_BLOB_BYTES {
-            return Err(format!("Snapshot content exceeds maximum size of {} bytes", MAX_BLOB_BYTES));
+            return Err(format!(
+                "Snapshot content exceeds maximum size of {} bytes",
+                MAX_BLOB_BYTES
+            ));
         }
 
         let hash = Self::compute_hash(content);

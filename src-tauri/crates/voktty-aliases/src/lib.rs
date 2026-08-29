@@ -167,7 +167,8 @@ pub fn preinstalled() -> AliasFile {
     aliases.insert(
         "envdiff".to_string(),
         AliasDefinition {
-            description: "Compare environment files and highlight missing or extra variables".into(),
+            description: "Compare environment files and highlight missing or extra variables"
+                .into(),
             enabled: true,
             disabled_workspaces: Vec::new(),
             disabled_profiles: Vec::new(),
@@ -179,7 +180,8 @@ pub fn preinstalled() -> AliasFile {
     aliases.insert(
         "hash".to_string(),
         AliasDefinition {
-            description: "Compute file or string cryptographic checksums (SHA256, SHA512, MD5, SHA1)".into(),
+            description:
+                "Compute file or string cryptographic checksums (SHA256, SHA512, MD5, SHA1)".into(),
             enabled: true,
             disabled_workspaces: Vec::new(),
             disabled_profiles: Vec::new(),
