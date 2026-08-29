@@ -61,6 +61,7 @@ const jaBase = mergeLocale(en, {
       noResults: "一致する設定がありません",
     },
     tabs: {
+    revealInFileManager: "エクスプローラーで表示",
       general: "一般",
       editor: "エディター",
       themes: "テーマ",
@@ -567,6 +568,8 @@ const jaBase = mergeLocale(en, {
     notifications: "通知",
   },
   tabs: {
+    revealInSideBar: "サイドバーで表示",
+    revealInFileManager: "エクスプローラーで表示",
     newTab: "新しいタブ",
     closeTab: "タブを閉じる",
     closeOtherTabs: "他のタブを閉じる",

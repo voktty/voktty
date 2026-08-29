@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatUptime,
+  getTabPath,
   getTabUptimeMs,
   recordTabCreation,
   removeTabCreation,
@@ -23,5 +24,13 @@ describe("tabMetadata & formatUptime", () => {
     expect(uptime).toBeGreaterThanOrEqual(10000);
 
     removeTabCreation(tabId);
+  });
+
+  it("extracts path from path, repoRoot, and cwd properties", () => {
+    expect(getTabPath({ path: "C:/foo/bar.ts" })).toBe("C:/foo/bar.ts");
+    expect(getTabPath({ repoRoot: "/workspace/repo" })).toBe("/workspace/repo");
+    expect(getTabPath({ cwd: "D:/project" })).toBe("D:/project");
+    expect(getTabPath({})).toBeNull();
+    expect(getTabPath(null)).toBeNull();
   });
 });

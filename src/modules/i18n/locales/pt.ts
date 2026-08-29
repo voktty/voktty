@@ -61,6 +61,7 @@ const ptBase = mergeLocale(en, {
       noResults: "Nenhuma configuração correspondente encontrada",
     },
     tabs: {
+    revealInFileManager: "Revelar no Explorador de Arquivos",
       general: "Geral",
       editor: "Editor",
       themes: "Temas",
@@ -578,6 +579,8 @@ const ptBase = mergeLocale(en, {
     notifications: "Notificações",
   },
   tabs: {
+    revealInSideBar: "Revelar na barra lateral",
+    revealInFileManager: "Revelar no Explorador de Arquivos",
     newTab: "Nova Aba",
     closeTab: "Fechar Aba",
     closeOtherTabs: "Fechar outras abas",
