@@ -88,9 +88,27 @@ function reasonById(over: Partial<CommandPaletteActionContext>, id: string) {
 
 describe("createCommandItems", () => {
   it("removes built-in AI actions when AI is unavailable", () => {
-    const ids = createCommandItems(baseContext({ aiAvailable: false })).map(
-      (item) => item.id,
-    );
+    const noop = () => {};
+    const editorActions = {
+      openSearch: noop,
+      openGotoLine: noop,
+      formatDocument: noop,
+      triggerInlineAi: noop,
+      triggerQuickFix: noop,
+      triggerSignatureHelp: noop,
+      triggerLspNavigation: noop,
+      triggerLspPeek: noop,
+      triggerAiComplete: noop,
+      triggerCodeComplete: noop,
+      runEditCommand: noop,
+      runInlineSuggestionCommand: noop,
+      splitGroup: noop,
+      closeGroup: noop,
+      focusGroup: noop,
+    };
+    const ids = createCommandItems(
+      baseContext({ aiAvailable: false, editorActions }),
+    ).map((item) => item.id);
     expect(ids).not.toContain("ai.toggle");
     expect(ids).not.toContain("ai.askSelection");
     expect(ids).not.toContain("editor.inlineAi");
@@ -145,11 +163,12 @@ describe("createCommandItems", () => {
     ).toBe("Pane limit");
   });
 
-  it("disables split when there is no terminal tab", () => {
+  it("omits terminal pane split when active tab is not a terminal", () => {
     const editorTab = { ...terminalTab(1), kind: "editor" } as unknown as Tab;
-    expect(reasonById({ tabs: [editorTab] }, "pane.splitRight")).toBe(
-      "No terminal tab",
+    const item = createCommandItems(baseContext({ tabs: [editorTab] })).find(
+      (i) => i.id === "pane.splitRight",
     );
+    expect(item).toBeUndefined();
   });
 
   it("disables close on the last tab with a single pane", () => {
@@ -214,14 +233,14 @@ describe("createCommandItems", () => {
     expect(reason).toBe("Current space");
   });
 
-  it("disables editor commands without an active editor", () => {
-    expect(reasonById({}, "editor.gotoLine")).toBe("No active editor");
-    expect(reasonById({}, "editor.formatDocument")).toBe("No active editor");
-    expect(reasonById({}, "editor.quickFix")).toBe("No active editor");
-    expect(reasonById({}, "editor.signatureHelp")).toBe("No active editor");
-    expect(reasonById({}, "editor.goToImplementation")).toBe(
-      "No active editor",
-    );
+  it("omits specific editor commands without an active editor", () => {
+    const items = createCommandItems(baseContext({ editorActions: null }));
+    const ids = items.map((i) => i.id);
+    expect(ids).not.toContain("editor.gotoLine");
+    expect(ids).not.toContain("editor.formatDocument");
+    expect(ids).not.toContain("editor.quickFix");
+    expect(ids).not.toContain("editor.signatureHelp");
+    expect(ids).not.toContain("editor.goToImplementation");
   });
 
   it("runs editor commands through the active editor contract", () => {
@@ -309,16 +328,40 @@ describe("createCommandItems", () => {
     expect(calls).toBe("inline:acceptLine");
   });
 
-  it("enables navigation only when the corresponding history entry exists", () => {
-    expect(reasonById({}, "editor.navigateBack")).toBe(
-      "No previous editor location",
+  it("enables navigation only when the corresponding history entry exists in an editor", () => {
+    const noop = () => {};
+    const editorActions = {
+      openSearch: noop,
+      openGotoLine: noop,
+      formatDocument: noop,
+      triggerInlineAi: noop,
+      triggerQuickFix: noop,
+      triggerSignatureHelp: noop,
+      triggerLspNavigation: noop,
+      triggerLspPeek: noop,
+      triggerAiComplete: noop,
+      triggerCodeComplete: noop,
+      runEditCommand: noop,
+      runInlineSuggestionCommand: noop,
+      splitGroup: noop,
+      closeGroup: noop,
+      focusGroup: noop,
+    };
+    const withoutNav = createCommandItems(baseContext({ editorActions })).map(
+      (i) => i.id,
     );
-    expect(
-      reasonById({ canNavigateBack: true }, "editor.navigateBack"),
-    ).toBeUndefined();
-    expect(reasonById({}, "editor.navigateForward")).toBe(
-      "No next editor location",
-    );
+    expect(withoutNav).not.toContain("editor.navigateBack");
+    expect(withoutNav).not.toContain("editor.navigateForward");
+
+    const withNav = createCommandItems(
+      baseContext({
+        editorActions,
+        canNavigateBack: true,
+        canNavigateForward: true,
+      }),
+    ).map((i) => i.id);
+    expect(withNav).toContain("editor.navigateBack");
+    expect(withNav).toContain("editor.navigateForward");
   });
 
   it("opens Outline through the palette for an active editor", () => {

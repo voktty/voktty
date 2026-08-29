@@ -167,9 +167,6 @@ export function createCommandItems(
     : onlyOneTab && activePaneCount < 2
       ? t("commandPalette.disabled.lastTab")
       : undefined;
-  const editorDisabled = ctx.editorActions
-    ? undefined
-    : t("commandPalette.disabled.noEditorTab");
 
   const items: PaletteItem[] = [
     {
@@ -257,6 +254,7 @@ export function createCommandItems(
       icon: KeyboardIcon,
       run: ctx.openKeyboardShortcuts,
     },
+    // --- Spaces (Global) ---
     {
       id: "spaces.overview",
       title: t("commandPalette.commands.spacesOverview"),
@@ -268,6 +266,7 @@ export function createCommandItems(
         "organize",
         "manage",
         "move",
+        "espacios",
       ],
       icon: DashboardSquare01Icon,
       run: ctx.openSpacesOverview,
@@ -276,83 +275,15 @@ export function createCommandItems(
       id: "spaces.new",
       title: t("commandPalette.commands.newSpace"),
       group: "Spaces",
-      keywords: ["space", "session", "workspace", "group", "create"],
+      keywords: ["space", "session", "workspace", "group", "create", "nuevo espacio"],
       icon: DashboardSquare01Icon,
       run: ctx.newSpace,
-    },
-    {
-      id: "spaces.focusNextSlot",
-      title: t("commandPalette.commands.focusNextSpaceSlot"),
-      group: "Spaces",
-      keywords: ["space", "slot", "view", "focus", "next", "siguiente"],
-      icon: ArrowRight01Icon,
-      disabledReason:
-        ctx.activeViewSpacePresentation === "composite"
-          ? undefined
-          : t("commandPalette.disabled.noCompositeSpace"),
-      run: () => ctx.focusNextSpaceSlot?.(),
-    },
-    {
-      id: "spaces.focusPreviousSlot",
-      title: t("commandPalette.commands.focusPreviousSpaceSlot"),
-      group: "Spaces",
-      keywords: ["space", "slot", "view", "focus", "previous", "anterior"],
-      icon: ArrowLeft01Icon,
-      disabledReason:
-        ctx.activeViewSpacePresentation === "composite"
-          ? undefined
-          : t("commandPalette.disabled.noCompositeSpace"),
-      run: () => ctx.focusPreviousSpaceSlot?.(),
-    },
-    {
-      id: "spaces.toggleView",
-      title: t("commandPalette.commands.toggleSpaceView"),
-      group: "Spaces",
-      keywords: ["space", "view", "split", "expand", "compact"],
-      icon: ViewIcon,
-      disabledReason: ctx.activeViewSpacePresentation
-        ? undefined
-        : t("commandPalette.disabled.noCompositeSpace"),
-      run: () => ctx.toggleFocusedSpaceView?.(),
-    },
-    {
-      id: "spaces.extractFocusedMember",
-      title: t("commandPalette.commands.extractFocusedSpaceMember"),
-      group: "Spaces",
-      keywords: ["space", "member", "extract", "standalone", "sacar"],
-      icon: ArrowRight01Icon,
-      disabledReason: ctx.activeViewSpacePresentation
-        ? undefined
-        : t("commandPalette.disabled.noCompositeSpace"),
-      run: () => ctx.extractFocusedSpaceMember?.(),
-    },
-    {
-      id: "spaces.moveFocusedMember",
-      title: t("commandPalette.commands.moveFocusedSpaceMember"),
-      group: "Spaces",
-      keywords: ["space", "member", "move", "workspace", "mover"],
-      icon: ArrowRight01Icon,
-      disabledReason: ctx.activeViewSpacePresentation
-        ? undefined
-        : t("commandPalette.disabled.noCompositeSpace"),
-      run: () => ctx.moveFocusedSpaceMember?.(),
-    },
-    {
-      id: "spaces.closeFocusedMember",
-      title: t("commandPalette.commands.closeFocusedSpaceMember"),
-      group: "Spaces",
-      keywords: ["space", "member", "close", "delete", "cerrar"],
-      icon: Cancel01Icon,
-      disabledReason: ctx.activeViewSpacePresentation
-        ? undefined
-        : t("commandPalette.disabled.noCompositeSpace"),
-      run: () => ctx.closeFocusedSpaceMember?.(),
     },
     ...ctx.spaces.map((sp) => ({
       id: `spaces.switch.${sp.id}`,
       title: t("commandPalette.commands.switchToSpace", { name: sp.name }),
       group: "Spaces" as const,
-      keywords: ["space", "switch", "session", sp.name],
+      keywords: ["space", "switch", "session", sp.name, "cambiar"],
       icon: DashboardSquare01Icon,
       disabledReason:
         sp.id === ctx.activeSpaceId
@@ -360,11 +291,13 @@ export function createCommandItems(
           : undefined,
       run: () => ctx.switchSpace(sp.id),
     })),
+
+    // --- Tabs & Creation ---
     {
       id: "tab.new",
       title: t("commandPalette.commands.newTerminal"),
       group: "Tabs",
-      keywords: ["shell", "terminal", "new tab"],
+      keywords: ["shell", "terminal", "new tab", "consola", "nueva"],
       icon: TerminalIcon,
       shortcutId: "tab.new",
       run: ctx.openNewTab,
@@ -373,7 +306,7 @@ export function createCommandItems(
       id: "tab.newBlock",
       title: t("commandPalette.commands.newBlockTerminal"),
       group: "Tabs",
-      keywords: ["blocks", "warp", "command blocks", "terminal"],
+      keywords: ["blocks", "warp", "command blocks", "terminal", "bloques"],
       icon: DashboardSquare01Icon,
       run: ctx.openNewBlock,
     },
@@ -381,7 +314,7 @@ export function createCommandItems(
       id: "tab.newPrivate",
       title: t("commandPalette.commands.newPrivateTerminal"),
       group: "Tabs",
-      keywords: ["privacy", "private", "incognito", "hidden from ai"],
+      keywords: ["privacy", "private", "incognito", "hidden from ai", "privada"],
       icon: IncognitoIcon,
       shortcutId: "tab.newPrivate",
       run: ctx.openNewPrivate,
@@ -395,10 +328,13 @@ export function createCommandItems(
         "historial",
         "commands",
         "comandos",
+        "shell",
+        "terminal",
         "ssh",
         "powershell",
         "bash",
         "zsh",
+        "ejecutados",
       ],
       icon: Clock01Icon,
       shortcutId: "terminal.history",
@@ -425,7 +361,7 @@ export function createCommandItems(
       id: "tab.newEditor",
       title: t("commandPalette.commands.newEditorTab"),
       group: "Tabs",
-      keywords: ["file", "editor", "create"],
+      keywords: ["file", "editor", "create", "archivo", "nuevo archivo"],
       icon: FileEditIcon,
       shortcutId: "tab.newEditor",
       disabledReason: noWorkspaceRoot
@@ -437,7 +373,7 @@ export function createCommandItems(
       id: "editor.quickOpen",
       title: t("commandPalette.commands.quickOpen"),
       group: "Tabs",
-      keywords: ["file", "workspace", "quick", "search", "open"],
+      keywords: ["file", "workspace", "quick", "search", "open", "archivo", "buscar"],
       icon: FileSearchIcon,
       shortcutId: "file.quickOpen",
       disabledReason: noWorkspaceRoot
@@ -449,7 +385,7 @@ export function createCommandItems(
       id: "editor.openFile",
       title: t("commandPalette.commands.openFile"),
       group: "Tabs",
-      keywords: ["file", "open", "disk", "editor", "abrir"],
+      keywords: ["file", "open", "disk", "editor", "abrir", "disco"],
       icon: File02Icon,
       shortcutId: "editor.openFile",
       run: () => ctx.openFileFromDisk?.(),
@@ -458,7 +394,7 @@ export function createCommandItems(
       id: "tab.newPreview",
       title: t("commandPalette.commands.newWebPreview"),
       group: "Tabs",
-      keywords: ["browser", "web", "localhost", "preview"],
+      keywords: ["browser", "web", "localhost", "preview", "navegador", "vista previa"],
       icon: Globe02Icon,
       shortcutId: "tab.newPreview",
       run: ctx.openNewPreview,
@@ -477,6 +413,7 @@ export function createCommandItems(
         "postman",
         "fetch",
         "rest",
+        "cliente",
       ],
       icon: GlobalIcon,
       shortcutId: "tab.newApiClient",
@@ -486,7 +423,7 @@ export function createCommandItems(
       id: "tab.close",
       title: t("commandPalette.commands.closeTabOrPane"),
       group: "Tabs",
-      keywords: ["close", "remove", "pane"],
+      keywords: ["close", "remove", "pane", "cerrar"],
       icon: Cancel01Icon,
       shortcutId: "tab.close",
       disabledReason: closeDisabled,
@@ -496,7 +433,7 @@ export function createCommandItems(
       id: "editor.reopenClosed",
       title: t("commandPalette.commands.editorReopenClosed"),
       group: "Tabs",
-      keywords: ["editor", "reopen", "restore", "closed", "file"],
+      keywords: ["editor", "reopen", "restore", "closed", "file", "reabrir"],
       icon: FileEditIcon,
       run: () => ctx.reopenClosedEditor?.(),
     },
@@ -506,7 +443,7 @@ export function createCommandItems(
         ? t("commandPalette.commands.unlockTab")
         : t("commandPalette.commands.lockTab"),
       group: "Tabs",
-      keywords: ["tab", "lock", "unlock", "protect", "freeze"],
+      keywords: ["tab", "lock", "unlock", "protect", "freeze", "bloquear", "pestana"],
       icon: activeTab?.locked ? SquareUnlock01Icon : SquareLock01Icon,
       disabledReason: !activeTab
         ? t("commandPalette.disabled.noActiveTab")
@@ -521,36 +458,18 @@ export function createCommandItems(
       id: "tabs.launchpad",
       title: t("commandPalette.commands.openActiveTabs"),
       group: "Tabs",
-      keywords: ["tabs", "open", "switch", "active"],
+      keywords: ["tabs", "open", "switch", "active", "pestanas", "activas"],
       icon: DashboardSquare01Icon,
       shortcutId: "tabs.launchpad",
       run: ctx.openActiveTabs,
     },
-    {
-      id: "pane.splitRight",
-      title: t("commandPalette.commands.splitPaneRight"),
-      group: "Panes",
-      keywords: ["terminal", "pane", "split", "right", "column"],
-      icon: LayoutTwoColumnIcon,
-      shortcutId: "pane.splitRight",
-      disabledReason: splitDisabled,
-      run: ctx.splitPaneRight,
-    },
-    {
-      id: "pane.splitDown",
-      title: t("commandPalette.commands.splitPaneDown"),
-      group: "Panes",
-      keywords: ["terminal", "pane", "split", "down", "row"],
-      icon: LayoutTwoRowIcon,
-      shortcutId: "pane.splitDown",
-      disabledReason: splitDisabled,
-      run: ctx.splitPaneDown,
-    },
+
+    // --- Git ---
     {
       id: "git.graph",
       title: t("commandPalette.commands.openGitGraph"),
       group: "Git",
-      keywords: ["git", "graph", "history", "log", "commits"],
+      keywords: ["git", "graph", "history", "log", "commits", "grafo", "historial"],
       icon: SourceCodeIcon,
       run: ctx.openGitGraph,
     },
@@ -558,327 +477,27 @@ export function createCommandItems(
       id: "git.source",
       title: t("commandPalette.commands.toggleSourceControl"),
       group: "Git",
-      keywords: ["git", "source control", "changes", "staging", "diff"],
+      keywords: ["git", "source control", "changes", "staging", "diff", "cambios", "control de versiones"],
       icon: SourceCodeIcon,
       shortcutId: "pane.source",
       run: ctx.toggleSourceControl,
     },
+
+    // --- Search ---
     {
       id: "search.content",
       title: t("commandPalette.commands.findInFiles"),
       group: "Search",
-      keywords: ["grep", "ripgrep", "text", "contents", "search in files"],
+      keywords: ["grep", "ripgrep", "text", "contents", "search in files", "buscar en archivos"],
       icon: FileSearchIcon,
       shortcutId: "commandPalette.content",
       run: ctx.openWorkspaceSearch,
     },
     {
-      id: "editor.find",
-      title: t("commandPalette.commands.editorFind"),
-      group: "Editor",
-      keywords: ["find", "replace", "current file", "editor"],
-      icon: Search01Icon,
-      shortcutId: "search.focus",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.openSearch(),
-    },
-    {
-      id: "editor.gotoLine",
-      title: t("commandPalette.commands.editorGotoLine"),
-      group: "Editor",
-      keywords: ["line", "goto", "jump", "editor"],
-      icon: CodeIcon,
-      shortcutId: "editor.gotoLine",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.openGotoLine(),
-    },
-    {
-      id: "editor.revealInExplorer",
-      title: t("commandPalette.commands.editorRevealInExplorer"),
-      group: "Editor",
-      keywords: ["file", "explorer", "reveal", "folder", "workspace"],
-      icon: FileSearchIcon,
-      disabledReason:
-        activeTab?.kind === "editor" || activeTab?.kind === "markdown"
-          ? undefined
-          : t("commandPalette.disabled.noEditorTab"),
-      run: () => ctx.revealActiveFileInExplorer?.(),
-    },
-    {
-      id: "editor.navigateBack",
-      title: t("commandPalette.commands.editorNavigateBack"),
-      group: "Editor",
-      keywords: ["back", "previous", "location", "navigation"],
-      icon: ArrowLeft01Icon,
-      shortcutId: "editor.navigateBack",
-      disabledReason: ctx.canNavigateBack
-        ? undefined
-        : t("commandPalette.disabled.noPreviousLocation"),
-      run: ctx.navigateBack,
-    },
-    {
-      id: "editor.navigateForward",
-      title: t("commandPalette.commands.editorNavigateForward"),
-      group: "Editor",
-      keywords: ["forward", "next", "location", "navigation"],
-      icon: ArrowRight01Icon,
-      shortcutId: "editor.navigateForward",
-      disabledReason: ctx.canNavigateForward
-        ? undefined
-        : t("commandPalette.disabled.noNextLocation"),
-      run: ctx.navigateForward,
-    },
-    {
-      id: "editor.outline",
-      title: t("commandPalette.commands.editorOutline"),
-      group: "Editor",
-      keywords: ["symbols", "outline", "structure", "workspace"],
-      icon: HierarchyIcon,
-      shortcutId: "editor.outline",
-      disabledReason: editorDisabled,
-      run: ctx.openOutline,
-    },
-    {
-      id: "editor.problems",
-      title: t("commandPalette.commands.editorProblems"),
-      group: "Editor",
-      keywords: ["problems", "diagnostics", "errors", "warnings", "lsp"],
-      icon: Alert02Icon,
-      disabledReason: noWorkspaceRoot
-        ? t("commandPalette.disabled.noWorkspaceRoot")
-        : undefined,
-      run: ctx.openProblems,
-    },
-    {
-      id: "workbench.runDebug",
-      title: t("commandPalette.commands.openRunDebug"),
-      group: "View",
-      keywords: ["task", "test", "debug", "dap", "run"],
-      icon: CodeIcon,
-      disabledReason: noWorkspaceRoot
-        ? t("commandPalette.disabled.noWorkspaceRoot")
-        : undefined,
-      run: ctx.openRunDebug ?? noop,
-    },
-    {
-      id: "editor.formatDocument",
-      title: t("commandPalette.commands.editorFormatDocument"),
-      group: "Editor",
-      keywords: ["format", "prettier", "lsp", "document"],
-      icon: FileEditIcon,
-      shortcutId: "editor.formatDocument",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.formatDocument(),
-    },
-    {
-      id: "editor.quickFix",
-      title: t("commandPalette.commands.editorQuickFix"),
-      group: "Editor",
-      keywords: ["fix", "diagnostic", "error", "ai"],
-      icon: SparklesIcon,
-      shortcutId: "editor.quickFix",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerQuickFix(),
-    },
-    {
-      id: "editor.signatureHelp",
-      title: t("commandPalette.commands.editorSignatureHelp"),
-      group: "Editor",
-      keywords: ["signature", "parameters", "overload", "lsp"],
-      icon: CodeIcon,
-      shortcutId: "editor.signatureHelp",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerSignatureHelp(),
-    },
-    {
-      id: "editor.goToDefinition",
-      title: t("commandPalette.commands.editorGoToDefinition"),
-      group: "Editor",
-      keywords: ["definition", "symbol", "navigate", "lsp"],
-      icon: SourceCodeIcon,
-      shortcutId: "editor.goToDefinition",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerLspNavigation("definition"),
-    },
-    {
-      id: "editor.peekDefinition",
-      title: t("commandPalette.commands.editorPeekDefinition"),
-      group: "Editor",
-      keywords: ["peek", "definition", "symbol", "lsp"],
-      icon: SourceCodeIcon,
-      shortcutId: "editor.peekDefinition",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerLspPeek("definition"),
-    },
-    {
-      id: "editor.goToTypeDefinition",
-      title: t("commandPalette.commands.editorGoToTypeDefinition"),
-      group: "Editor",
-      keywords: ["type", "definition", "symbol", "lsp"],
-      icon: SourceCodeIcon,
-      shortcutId: "editor.goToTypeDefinition",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerLspNavigation("typeDefinition"),
-    },
-    {
-      id: "editor.goToImplementation",
-      title: t("commandPalette.commands.editorGoToImplementation"),
-      group: "Editor",
-      keywords: ["implementation", "symbol", "navigate", "lsp"],
-      icon: HierarchyIcon,
-      shortcutId: "editor.goToImplementation",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerLspNavigation("implementation"),
-    },
-    {
-      id: "editor.findReferences",
-      title: t("commandPalette.commands.editorFindReferences"),
-      group: "Editor",
-      keywords: ["references", "usages", "symbol", "lsp"],
-      icon: FileSearchIcon,
-      shortcutId: "editor.findReferences",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerLspPeek("references"),
-    },
-    {
-      id: "editor.inlineAi",
-      title: t("commandPalette.commands.editorInlineAi"),
-      group: "Editor",
-      keywords: ["edit", "refactor", "inline", "ai"],
-      icon: SparklesIcon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerInlineAi(),
-    },
-    {
-      id: "editor.aiComplete",
-      title: t("commandPalette.commands.editorAiComplete"),
-      group: "Editor",
-      keywords: ["autocomplete", "completion", "ghost", "ai"],
-      icon: SparklesIcon,
-      shortcutId: "editor.aiComplete",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerAiComplete(),
-    },
-    {
-      id: "editor.codeComplete",
-      title: t("commandPalette.commands.editorCodeComplete"),
-      group: "Editor",
-      keywords: ["autocomplete", "completion", "lsp", "code"],
-      icon: CodeIcon,
-      shortcutId: "editor.codeComplete",
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.triggerCodeComplete(),
-    },
-    {
-      id: "editor.acceptAiCompletion",
-      title: t("commandPalette.commands.editorAcceptAiCompletion"),
-      group: "Editor",
-      keywords: ["autocomplete", "ghost", "accept", "all"],
-      icon: SparklesIcon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.runInlineSuggestionCommand("accept"),
-    },
-    {
-      id: "editor.acceptAiLine",
-      title: t("commandPalette.commands.editorAcceptAiLine"),
-      group: "Editor",
-      keywords: ["autocomplete", "ghost", "accept", "line"],
-      icon: SparklesIcon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.runInlineSuggestionCommand("acceptLine"),
-    },
-    {
-      id: "editor.acceptAiToken",
-      title: t("commandPalette.commands.editorAcceptAiToken"),
-      group: "Editor",
-      keywords: ["autocomplete", "ghost", "accept", "token"],
-      icon: SparklesIcon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.runInlineSuggestionCommand("acceptToken"),
-    },
-    {
-      id: "editor.dismissAiCompletion",
-      title: t("commandPalette.commands.editorDismissAiCompletion"),
-      group: "Editor",
-      keywords: ["autocomplete", "ghost", "dismiss", "cancel"],
-      icon: Cancel01Icon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.runInlineSuggestionCommand("dismiss"),
-    },
-    ...(
-      [
-        ["editor.addCursorAbove", "editorAddCursorAbove", "addCursorAbove"],
-        ["editor.addCursorBelow", "editorAddCursorBelow", "addCursorBelow"],
-        [
-          "editor.clearMultipleCursors",
-          "editorClearMultipleCursors",
-          "clearMultipleCursors",
-        ],
-        ["editor.moveLineUp", "editorMoveLineUp", "moveLineUp"],
-        ["editor.moveLineDown", "editorMoveLineDown", "moveLineDown"],
-        ["editor.copyLineUp", "editorCopyLineUp", "copyLineUp"],
-        ["editor.copyLineDown", "editorCopyLineDown", "copyLineDown"],
-        ["editor.expandSelection", "editorExpandSelection", "expandSelection"],
-      ] as const
-    ).map(([id, label, command]) => ({
-      id,
-      title: t(`commandPalette.commands.${label}`),
-      group: "Editor" as const,
-      keywords: ["editor", "selection", "cursor", "line", command],
-      icon: CodeIcon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.runEditCommand(command),
-    })),
-    {
-      id: "editor.splitGroupRight",
-      title: t("commandPalette.commands.editorSplitGroupRight"),
-      group: "Editor",
-      keywords: ["editor", "group", "split", "right", "horizontal"],
-      icon: LayoutTwoColumnIcon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.splitGroup("row"),
-    },
-    {
-      id: "editor.splitGroupDown",
-      title: t("commandPalette.commands.editorSplitGroupDown"),
-      group: "Editor",
-      keywords: ["editor", "group", "split", "down", "vertical"],
-      icon: LayoutTwoRowIcon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.splitGroup("col"),
-    },
-    {
-      id: "editor.focusNextGroup",
-      title: t("commandPalette.commands.editorFocusNextGroup"),
-      group: "Editor",
-      keywords: ["editor", "group", "focus", "next"],
-      icon: LayoutTwoColumnIcon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.focusGroup(1),
-    },
-    {
-      id: "editor.closeGroup",
-      title: t("commandPalette.commands.editorCloseGroup"),
-      group: "Editor",
-      keywords: ["editor", "group", "close"],
-      icon: Cancel01Icon,
-      disabledReason: editorDisabled,
-      run: () => ctx.editorActions?.closeGroup(),
-    },
-    {
-      id: "history.open",
-      title: t("commandPalette.commands.searchHistory"),
-      group: "Search",
-      keywords: ["history", "shell", "rerun", "previous commands"],
-      icon: TerminalIcon,
-      trailing: ">",
-      run: noop,
-    },
-    {
       id: "search.focus",
       title: t("commandPalette.commands.findInCurrentTab"),
       group: "Search",
-      keywords: ["find", "terminal", "editor", "current"],
+      keywords: ["find", "terminal", "editor", "current", "buscar"],
       icon: Search01Icon,
       shortcutId: "search.focus",
       disabledReason: ctx.searchTarget
@@ -890,7 +509,7 @@ export function createCommandItems(
       id: "explorer.search",
       title: t("commandPalette.commands.searchFiles"),
       group: "Search",
-      keywords: ["explorer", "workspace", "file", "open"],
+      keywords: ["explorer", "workspace", "file", "open", "explorador"],
       icon: Search01Icon,
       shortcutId: "explorer.search",
       disabledReason: ctx.explorerRoot
@@ -898,6 +517,17 @@ export function createCommandItems(
         : t("commandPalette.disabled.noWorkspaceRoot"),
       run: ctx.focusExplorerSearch,
     },
+    {
+      id: "history.open",
+      title: t("commandPalette.commands.searchHistory"),
+      group: "Search",
+      keywords: ["history", "shell", "rerun", "previous commands"],
+      icon: TerminalIcon,
+      trailing: ">",
+      run: noop,
+    },
+
+    // --- View ---
     {
       id: "sidebar.toggle",
       title: t("commandPalette.commands.toggleExplorer"),
@@ -944,6 +574,30 @@ export function createCommandItems(
       run: ctx.zoomReset ?? noop,
     },
     {
+      id: "workbench.runDebug",
+      title: t("commandPalette.commands.openRunDebug"),
+      group: "View",
+      keywords: ["task", "test", "debug", "dap", "run", "ejecutar", "pruebas"],
+      icon: CodeIcon,
+      disabledReason: noWorkspaceRoot
+        ? t("commandPalette.disabled.noWorkspaceRoot")
+        : undefined,
+      run: ctx.openRunDebug ?? noop,
+    },
+    {
+      id: "editor.problems",
+      title: t("commandPalette.commands.editorProblems"),
+      group: "View",
+      keywords: ["problems", "diagnostics", "errors", "warnings", "lsp", "problemas", "errores"],
+      icon: Alert02Icon,
+      disabledReason: noWorkspaceRoot
+        ? t("commandPalette.disabled.noWorkspaceRoot")
+        : undefined,
+      run: ctx.openProblems,
+    },
+
+    // --- AI ---
+    {
       id: "ai.toggle",
       title: t("commandPalette.commands.toggleAi"),
       group: "AI",
@@ -985,6 +639,351 @@ export function createCommandItems(
       run: () => useAgentHistoryStore.getState().openHistory(),
     },
   ];
+
+  // --- Contextual: Panes (Terminal only) ---
+  if (activeTerminalTab) {
+    items.push(
+      {
+        id: "pane.splitRight",
+        title: t("commandPalette.commands.splitPaneRight"),
+        group: "Panes",
+        keywords: ["terminal", "pane", "split", "right", "column", "dividir", "derecha"],
+        icon: LayoutTwoColumnIcon,
+        shortcutId: "pane.splitRight",
+        disabledReason: splitDisabled,
+        run: ctx.splitPaneRight,
+      },
+      {
+        id: "pane.splitDown",
+        title: t("commandPalette.commands.splitPaneDown"),
+        group: "Panes",
+        keywords: ["terminal", "pane", "split", "down", "row", "dividir", "abajo"],
+        icon: LayoutTwoRowIcon,
+        shortcutId: "pane.splitDown",
+        disabledReason: splitDisabled,
+        run: ctx.splitPaneDown,
+      },
+    );
+  }
+
+  // --- Contextual: Composed Spaces (only when viewing composite spaces) ---
+  if (ctx.activeViewSpacePresentation) {
+    items.push(
+      {
+        id: "spaces.focusNextSlot",
+        title: t("commandPalette.commands.focusNextSpaceSlot"),
+        group: "Spaces",
+        keywords: ["space", "slot", "view", "focus", "next", "siguiente"],
+        icon: ArrowRight01Icon,
+        disabledReason:
+          ctx.activeViewSpacePresentation === "composite"
+            ? undefined
+            : t("commandPalette.disabled.noCompositeSpace"),
+        run: () => ctx.focusNextSpaceSlot?.(),
+      },
+      {
+        id: "spaces.focusPreviousSlot",
+        title: t("commandPalette.commands.focusPreviousSpaceSlot"),
+        group: "Spaces",
+        keywords: ["space", "slot", "view", "focus", "previous", "anterior"],
+        icon: ArrowLeft01Icon,
+        disabledReason:
+          ctx.activeViewSpacePresentation === "composite"
+            ? undefined
+            : t("commandPalette.disabled.noCompositeSpace"),
+        run: () => ctx.focusPreviousSpaceSlot?.(),
+      },
+      {
+        id: "spaces.toggleView",
+        title: t("commandPalette.commands.toggleSpaceView"),
+        group: "Spaces",
+        keywords: ["space", "view", "split", "expand", "compact"],
+        icon: ViewIcon,
+        run: () => ctx.toggleFocusedSpaceView?.(),
+      },
+      {
+        id: "spaces.extractFocusedMember",
+        title: t("commandPalette.commands.extractFocusedSpaceMember"),
+        group: "Spaces",
+        keywords: ["space", "member", "extract", "standalone", "sacar"],
+        icon: ArrowRight01Icon,
+        run: () => ctx.extractFocusedSpaceMember?.(),
+      },
+      {
+        id: "spaces.moveFocusedMember",
+        title: t("commandPalette.commands.moveFocusedSpaceMember"),
+        group: "Spaces",
+        keywords: ["space", "member", "move", "workspace", "mover"],
+        icon: ArrowRight01Icon,
+        run: () => ctx.moveFocusedSpaceMember?.(),
+      },
+      {
+        id: "spaces.closeFocusedMember",
+        title: t("commandPalette.commands.closeFocusedSpaceMember"),
+        group: "Spaces",
+        keywords: ["space", "member", "close", "delete", "cerrar"],
+        icon: Cancel01Icon,
+        run: () => ctx.closeFocusedSpaceMember?.(),
+      },
+    );
+  }
+
+  // --- Contextual: Editor (only when active tab has editorActions) ---
+  if (ctx.editorActions) {
+    const editorActions = ctx.editorActions;
+    const isEditorOrMarkdown =
+      activeTab?.kind === "editor" || activeTab?.kind === "markdown";
+
+    if (isEditorOrMarkdown) {
+      items.push({
+        id: "editor.revealInExplorer",
+        title: t("commandPalette.commands.editorRevealInExplorer"),
+        group: "Editor",
+        keywords: ["file", "explorer", "reveal", "folder", "workspace", "revelar"],
+        icon: FileSearchIcon,
+        run: () => ctx.revealActiveFileInExplorer?.(),
+      });
+    }
+
+    if (ctx.canNavigateBack) {
+      items.push({
+        id: "editor.navigateBack",
+        title: t("commandPalette.commands.editorNavigateBack"),
+        group: "Editor",
+        keywords: ["back", "previous", "location", "navigation", "atras"],
+        icon: ArrowLeft01Icon,
+        shortcutId: "editor.navigateBack",
+        run: ctx.navigateBack,
+      });
+    }
+
+    if (ctx.canNavigateForward) {
+      items.push({
+        id: "editor.navigateForward",
+        title: t("commandPalette.commands.editorNavigateForward"),
+        group: "Editor",
+        keywords: ["forward", "next", "location", "navigation", "adelante"],
+        icon: ArrowRight01Icon,
+        shortcutId: "editor.navigateForward",
+        run: ctx.navigateForward,
+      });
+    }
+
+    items.push(
+      {
+        id: "editor.find",
+        title: t("commandPalette.commands.editorFind"),
+        group: "Editor",
+        keywords: ["find", "replace", "current file", "editor", "buscar", "reemplazar"],
+        icon: Search01Icon,
+        shortcutId: "search.focus",
+        run: () => editorActions.openSearch(),
+      },
+      {
+        id: "editor.gotoLine",
+        title: t("commandPalette.commands.editorGotoLine"),
+        group: "Editor",
+        keywords: ["line", "goto", "jump", "editor", "linea", "ir a linea"],
+        icon: CodeIcon,
+        shortcutId: "editor.gotoLine",
+        run: () => editorActions.openGotoLine(),
+      },
+      {
+        id: "editor.outline",
+        title: t("commandPalette.commands.editorOutline"),
+        group: "Editor",
+        keywords: ["symbols", "outline", "structure", "workspace", "esquema", "simbolos"],
+        icon: HierarchyIcon,
+        shortcutId: "editor.outline",
+        run: ctx.openOutline,
+      },
+      {
+        id: "editor.formatDocument",
+        title: t("commandPalette.commands.editorFormatDocument"),
+        group: "Editor",
+        keywords: ["format", "prettier", "lsp", "document", "formatear"],
+        icon: FileEditIcon,
+        shortcutId: "editor.formatDocument",
+        run: () => editorActions.formatDocument(),
+      },
+      {
+        id: "editor.quickFix",
+        title: t("commandPalette.commands.editorQuickFix"),
+        group: "Editor",
+        keywords: ["fix", "diagnostic", "error", "ai", "corregir"],
+        icon: SparklesIcon,
+        shortcutId: "editor.quickFix",
+        run: () => editorActions.triggerQuickFix(),
+      },
+      {
+        id: "editor.signatureHelp",
+        title: t("commandPalette.commands.editorSignatureHelp"),
+        group: "Editor",
+        keywords: ["signature", "parameters", "overload", "lsp", "firma"],
+        icon: CodeIcon,
+        shortcutId: "editor.signatureHelp",
+        run: () => editorActions.triggerSignatureHelp(),
+      },
+      {
+        id: "editor.goToDefinition",
+        title: t("commandPalette.commands.editorGoToDefinition"),
+        group: "Editor",
+        keywords: ["definition", "symbol", "navigate", "lsp", "definicion"],
+        icon: SourceCodeIcon,
+        shortcutId: "editor.goToDefinition",
+        run: () => editorActions.triggerLspNavigation("definition"),
+      },
+      {
+        id: "editor.peekDefinition",
+        title: t("commandPalette.commands.editorPeekDefinition"),
+        group: "Editor",
+        keywords: ["peek", "definition", "symbol", "lsp"],
+        icon: SourceCodeIcon,
+        shortcutId: "editor.peekDefinition",
+        run: () => editorActions.triggerLspPeek("definition"),
+      },
+      {
+        id: "editor.goToTypeDefinition",
+        title: t("commandPalette.commands.editorGoToTypeDefinition"),
+        group: "Editor",
+        keywords: ["type", "definition", "symbol", "lsp", "tipo"],
+        icon: SourceCodeIcon,
+        shortcutId: "editor.goToTypeDefinition",
+        run: () => editorActions.triggerLspNavigation("typeDefinition"),
+      },
+      {
+        id: "editor.goToImplementation",
+        title: t("commandPalette.commands.editorGoToImplementation"),
+        group: "Editor",
+        keywords: ["implementation", "symbol", "navigate", "lsp", "implementacion"],
+        icon: HierarchyIcon,
+        shortcutId: "editor.goToImplementation",
+        run: () => editorActions.triggerLspNavigation("implementation"),
+      },
+      {
+        id: "editor.findReferences",
+        title: t("commandPalette.commands.editorFindReferences"),
+        group: "Editor",
+        keywords: ["references", "usages", "symbol", "lsp", "referencias"],
+        icon: FileSearchIcon,
+        shortcutId: "editor.findReferences",
+        run: () => editorActions.triggerLspPeek("references"),
+      },
+      {
+        id: "editor.inlineAi",
+        title: t("commandPalette.commands.editorInlineAi"),
+        group: "Editor",
+        keywords: ["edit", "refactor", "inline", "ai", "editar"],
+        icon: SparklesIcon,
+        run: () => editorActions.triggerInlineAi(),
+      },
+      {
+        id: "editor.aiComplete",
+        title: t("commandPalette.commands.editorAiComplete"),
+        group: "Editor",
+        keywords: ["autocomplete", "completion", "ghost", "ai", "completar"],
+        icon: SparklesIcon,
+        shortcutId: "editor.aiComplete",
+        run: () => editorActions.triggerAiComplete(),
+      },
+      {
+        id: "editor.codeComplete",
+        title: t("commandPalette.commands.editorCodeComplete"),
+        group: "Editor",
+        keywords: ["autocomplete", "completion", "lsp", "code"],
+        icon: CodeIcon,
+        shortcutId: "editor.codeComplete",
+        run: () => editorActions.triggerCodeComplete(),
+      },
+      {
+        id: "editor.acceptAiCompletion",
+        title: t("commandPalette.commands.editorAcceptAiCompletion"),
+        group: "Editor",
+        keywords: ["autocomplete", "ghost", "accept", "all", "aceptar"],
+        icon: SparklesIcon,
+        run: () => editorActions.runInlineSuggestionCommand("accept"),
+      },
+      {
+        id: "editor.acceptAiLine",
+        title: t("commandPalette.commands.editorAcceptAiLine"),
+        group: "Editor",
+        keywords: ["autocomplete", "ghost", "accept", "line", "linea"],
+        icon: SparklesIcon,
+        run: () => editorActions.runInlineSuggestionCommand("acceptLine"),
+      },
+      {
+        id: "editor.acceptAiToken",
+        title: t("commandPalette.commands.editorAcceptAiToken"),
+        group: "Editor",
+        keywords: ["autocomplete", "ghost", "accept", "token"],
+        icon: SparklesIcon,
+        run: () => editorActions.runInlineSuggestionCommand("acceptToken"),
+      },
+      {
+        id: "editor.dismissAiCompletion",
+        title: t("commandPalette.commands.editorDismissAiCompletion"),
+        group: "Editor",
+        keywords: ["autocomplete", "ghost", "dismiss", "cancel", "descartar"],
+        icon: Cancel01Icon,
+        run: () => editorActions.runInlineSuggestionCommand("dismiss"),
+      },
+      ...(
+        [
+          ["editor.addCursorAbove", "editorAddCursorAbove", "addCursorAbove"],
+          ["editor.addCursorBelow", "editorAddCursorBelow", "addCursorBelow"],
+          [
+            "editor.clearMultipleCursors",
+            "editorClearMultipleCursors",
+            "clearMultipleCursors",
+          ],
+          ["editor.moveLineUp", "editorMoveLineUp", "moveLineUp"],
+          ["editor.moveLineDown", "editorMoveLineDown", "moveLineDown"],
+          ["editor.copyLineUp", "editorCopyLineUp", "copyLineUp"],
+          ["editor.copyLineDown", "editorCopyLineDown", "copyLineDown"],
+          ["editor.expandSelection", "editorExpandSelection", "expandSelection"],
+        ] as const
+      ).map(([id, label, command]) => ({
+        id,
+        title: t(`commandPalette.commands.${label}`),
+        group: "Editor" as const,
+        keywords: ["editor", "selection", "cursor", "line", command],
+        icon: CodeIcon,
+        run: () => editorActions.runEditCommand(command),
+      })),
+      {
+        id: "editor.splitGroupRight",
+        title: t("commandPalette.commands.editorSplitGroupRight"),
+        group: "Editor",
+        keywords: ["editor", "group", "split", "right", "horizontal", "dividir"],
+        icon: LayoutTwoColumnIcon,
+        run: () => editorActions.splitGroup("row"),
+      },
+      {
+        id: "editor.splitGroupDown",
+        title: t("commandPalette.commands.editorSplitGroupDown"),
+        group: "Editor",
+        keywords: ["editor", "group", "split", "down", "vertical", "dividir"],
+        icon: LayoutTwoRowIcon,
+        run: () => editorActions.splitGroup("col"),
+      },
+      {
+        id: "editor.focusNextGroup",
+        title: t("commandPalette.commands.editorFocusNextGroup"),
+        group: "Editor",
+        keywords: ["editor", "group", "focus", "next"],
+        icon: LayoutTwoColumnIcon,
+        run: () => editorActions.focusGroup(1),
+      },
+      {
+        id: "editor.closeGroup",
+        title: t("commandPalette.commands.editorCloseGroup"),
+        group: "Editor",
+        keywords: ["editor", "group", "close", "cerrar grupo"],
+        icon: Cancel01Icon,
+        run: () => editorActions.closeGroup(),
+      },
+    );
+  }
 
   try {
     const extState = useExtensionStore.getState();
