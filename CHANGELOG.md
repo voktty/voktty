@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-08-29
+
 ### Added
 
 - Second opinion: the scale icon next to Copy on a finished turn sends that work to another provider in a split pane. Hover a provider to pick its model. The reviewing session shows a compact card instead of the review prompt.
@@ -280,7 +282,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.16...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/hardbeat920/monocode/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/hardbeat920/monocode/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/hardbeat920/monocode/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/hardbeat920/monocode/compare/v0.1.13...v0.1.14
