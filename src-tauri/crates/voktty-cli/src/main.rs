@@ -151,6 +151,7 @@ fn parse_args(mut args: Vec<OsString>) -> Result<Config, CliError> {
         Some("capabilities") => request_without_params(args, METHOD_CAPABILITIES)?,
         Some("identify") => request_without_params(args, METHOD_IDENTIFY)?,
         Some("open") => parse_open(args)?,
+        Some("review") => parse_review(args)?,
         Some("alias") => Action::Alias(parse_alias(args)?),
         Some(
             name @ ("ipme"
@@ -372,6 +373,57 @@ fn parse_open(args: Vec<OsString>) -> Result<Action, CliError> {
     Ok(Action::Request {
         method: METHOD_OPEN,
         params,
+    })
+}
+
+fn parse_review(args: Vec<OsString>) -> Result<Action, CliError> {
+    let mut target = "worktree".to_string();
+    let mut base = None;
+    let mut wait = false;
+    let mut path = None;
+    let mut index = 0;
+    while index < args.len() {
+        let arg = &args[index];
+        match arg.to_str() {
+            Some("--unstaged") => target = "unstaged".to_string(),
+            Some("--last-commit") => target = "last-commit".to_string(),
+            Some("--base") => {
+                index += 1;
+                if index < args.len() {
+                    base = args[index].to_str().map(|s| s.to_string());
+                } else {
+                    return Err(usage_error("--base requires a branch or ref argument"));
+                }
+            }
+            Some("--wait") => wait = true,
+            Some(val) if !val.starts_with('-') && path.is_none() => {
+                path = Some(val.to_string());
+            }
+            Some(other) => {
+                return Err(usage_error(format!("unknown review option '{other}'")));
+            }
+            None => return Err(usage_error("review arguments must be valid UTF-8")),
+        }
+        index += 1;
+    }
+
+    let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let target_path = path.map(PathBuf::from).unwrap_or(cwd);
+    let canonical = target_path.canonicalize().unwrap_or(target_path);
+    let path_str = strip_verbatim(&canonical)
+        .into_os_string()
+        .into_string()
+        .map_err(|_| usage_error("review path is not valid UTF-8"))?;
+
+    Ok(Action::Request {
+        method: METHOD_OPEN,
+        params: json!({
+            "path": path_str,
+            "review": true,
+            "target": target,
+            "base": base,
+            "wait": wait,
+        }),
     })
 }
 
@@ -1568,7 +1620,7 @@ fn print_result(method: &str, result: Value, as_json: bool) {
 fn print_help() {
     println!(
         "Voktty command line interface\n\n\
-Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\
+Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\
 Alias execution is tokenized and never evaluated by a shell. Public IP lookup only runs\n\
 when ipme receives --public. App control commands require Voktty to be running."
     );
@@ -1581,6 +1633,21 @@ mod tests {
 
     fn args(values: &[&str]) -> Vec<OsString> {
         values.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn parses_review_command() {
+        let config = parse_args(args(&["review", "--unstaged", "--base", "main"])).expect("parse review");
+        assert!(!config.json);
+        match config.action {
+            Action::Request { method, params } => {
+                assert_eq!(method, METHOD_OPEN);
+                assert_eq!(params.get("review").and_then(Value::as_bool), Some(true));
+                assert_eq!(params.get("target").and_then(Value::as_str), Some("unstaged"));
+                assert_eq!(params.get("base").and_then(Value::as_str), Some("main"));
+            }
+            other => panic!("expected Request action, got {:?}", other),
+        }
     }
 
     #[test]

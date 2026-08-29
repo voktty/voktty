@@ -92,3 +92,42 @@ pub struct SessionReviewOverview {
     pub target: String,
     pub files: Vec<FileReviewState>,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewComment {
+    pub id: String,
+    pub session_id: String,
+    pub path: String,
+    pub side: String, // "old" | "new"
+    pub line: usize,
+    pub end_line: Option<usize>,
+    pub snapshot_hash: String,
+    pub comment: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub status: String, // "pending" | "resolved" | "submitted"
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddReviewCommentPayload {
+    pub repo_root: String,
+    pub target: String,
+    pub path: String,
+    pub side: String, // "old" | "new"
+    pub line: usize,
+    pub end_line: Option<usize>,
+    pub content: String,
+    pub comment: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateReviewCommentPayload {
+    pub repo_root: String,
+    pub target: String,
+    pub comment_id: String,
+    pub comment: String,
+}
+

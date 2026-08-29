@@ -156,6 +156,13 @@ function historyTooltipView(view: EditorView): TooltipView {
     active?.scrollIntoView({ block: "nearest" });
   };
 
+  const onPointerDown = (e: MouseEvent | TouchEvent) => {
+    if (!dom.contains(e.target as Node)) {
+      close(view);
+    }
+  };
+  document.addEventListener("pointerdown", onPointerDown, true);
+
   render();
   return {
     dom,
@@ -164,6 +171,9 @@ function historyTooltipView(view: EditorView): TooltipView {
       if (u.state.field(historyField) !== u.startState.field(historyField)) {
         render();
       }
+    },
+    destroy() {
+      document.removeEventListener("pointerdown", onPointerDown, true);
     },
   };
 }
