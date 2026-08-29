@@ -618,8 +618,10 @@ function UserMessageBlock({
       }
     >
       <div
-        className={`min-w-0 rounded-lg border border-content/10 bg-content/10 px-3 py-2 font-sans text-content ${
-          chat ? "w-fit max-w-xl" : ""
+        className={`min-w-0 bg-content/10 px-3 py-2 font-sans text-content ${
+          chat
+            ? "w-fit max-w-xl rounded-xl"
+            : "rounded-lg border border-content/10"
         }`}
         style={{ zIndex: stickyIndex }}
         onClick={overflows ? toggle : undefined}

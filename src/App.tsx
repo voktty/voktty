@@ -181,7 +181,7 @@ import {
 import {
   filterTabsForProject,
   findTabForProject,
-  planWorkspaceTabCloseTarget,
+  planWorkspaceTabClose,
   workspaceTabCwd,
 } from "./lib/workspaceTabGroups";
 import {
@@ -436,6 +436,7 @@ export default function App({
   const [projectRailOpen, setProjectRailOpen] = useState(loadProjectRailOpen);
   const sidebarLayout = useSidebarLayout();
   const deckLayout = sidebarLayout === "deck";
+  const tabCloseScope = deckLayout ? "project" : "workspace";
   const currentProjectDock = deckLayout
     ? findProjectTerminal(projectTerminals, projectCwd)
     : undefined;
@@ -1413,7 +1414,14 @@ export default function App({
     (id: string, opts?: { confirmedTerminalIds?: string[] }) => {
       const current = tabsRef.current;
       const index = current.findIndex((t) => t.id === id);
-      if (current.length < 2 || index < 0) return;
+      if (index < 0) return;
+      const closePlan = planWorkspaceTabClose({
+        tabs: current,
+        sessions: sessionsRef.current,
+        closingTabId: id,
+        scope: tabCloseScope,
+      });
+      if (closePlan.action === "keep") return;
       const closing = current[index];
       const closingFiles = [
         ...closing.editorPanes.flatMap((pane) => pane.files),
@@ -1428,12 +1436,7 @@ export default function App({
       }
 
       const finishClose = () => {
-        const nextActiveTabId = planWorkspaceTabCloseTarget({
-          tabs: current,
-          sessions: sessionsRef.current,
-          closingTabId: id,
-          scope: deckLayout ? "project" : "workspace",
-        });
+        const nextActiveTabId = closePlan.nextActiveTabId;
         const next = current.filter((t) => t.id !== id);
         const gone = new Set(
           leafIds(closing.layout).filter((paneId) =>
@@ -1468,10 +1471,10 @@ export default function App({
     [
       dirtyFiles,
       activateTab,
-      deckLayout,
       persistSession,
       refreshHistory,
       sidebarCwd,
+      tabCloseScope,
     ],
   );
 
@@ -1630,7 +1633,13 @@ export default function App({
               next.delete(fileId);
               return next;
             });
-            if (tabsRef.current.length > 1) {
+            const closePlan = planWorkspaceTabClose({
+              tabs: tabsRef.current,
+              sessions: sessionsRef.current,
+              closingTabId: tab.id,
+              scope: tabCloseScope,
+            });
+            if (closePlan.action === "close") {
               onCloseTab(
                 tab.id,
                 file.terminal ? { confirmedTerminalIds: [fileId] } : undefined,
@@ -1705,7 +1714,7 @@ export default function App({
       }
       finishClose();
     },
-    [activeTabId, dirtyFiles, onCloseTab, projectCwd],
+    [activeTabId, dirtyFiles, onCloseTab, projectCwd, tabCloseScope],
   );
 
   const onClearTabSession = useCallback(
@@ -1819,7 +1828,13 @@ export default function App({
       if (!sessionIds.includes(closingId)) return;
       const nextTab = closeLeaf(activeTab, closingId);
       if (!nextTab) {
-        if (tabs.length < 2) onClearTabSession(activeTab.id);
+        const closePlan = planWorkspaceTabClose({
+          tabs: tabsRef.current,
+          sessions: sessionsRef.current,
+          closingTabId: activeTab.id,
+          scope: tabCloseScope,
+        });
+        if (closePlan.action === "keep") onClearTabSession(activeTab.id);
         else onCloseTab(activeTab.id);
         return;
       }
@@ -1852,7 +1867,7 @@ export default function App({
       projectTerminalFocused,
       refreshHistory,
       sidebarCwd,
-      tabs.length,
+      tabCloseScope,
     ],
   );
 
