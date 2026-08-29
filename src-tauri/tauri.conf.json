@@ -5,7 +5,7 @@
   "identifier": "dev.voktty",
   "build": {
     "beforeDevCommand": "pnpm build:cli:dev && pnpm dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://127.0.0.1:5173",
     "beforeBuildCommand": "pnpm build:cli && pnpm build",
     "frontendDist": "../dist",
     "removeUnusedCommands": true
