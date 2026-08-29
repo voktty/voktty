@@ -1,17 +1,26 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
 import {
   GitReviewQueue,
   type GitReviewQueueConfig,
 } from "@/modules/source-control/GitReviewQueue";
+import {
+  fileKey,
+  sessionKey,
+  useGitReviewStore,
+} from "@/modules/git-review";
+import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { unifiedMergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   commitDiffKey,
   fetchCommitDiff,
@@ -214,6 +223,59 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   const isBinary = loaded?.isBinary ?? false;
   const fallbackPatch = loaded?.fallbackPatch ?? "";
 
+  const fKey = fileKey(repoRoot, "worktree", path);
+  const sKey = sessionKey(repoRoot, "worktree");
+  const reconciliation = useGitReviewStore((s) => s.reconciliations[fKey]);
+  const overview = useGitReviewStore((s) => s.overviews[sKey]);
+  const viewMode = useGitReviewStore(
+    (s) =>
+      s.viewModes[fKey] ??
+      (reconciliation?.changedSinceReview && reconciliation.reviewedBaseline
+        ? "unreviewed"
+        : "full"),
+  );
+  const setViewMode = useGitReviewStore((s) => s.setViewMode);
+  const markFile = useGitReviewStore((s) => s.markFile);
+
+  const fileReview = overview?.files.find((f) => f.path === path);
+  const isReviewed = fileReview?.reviewed ?? false;
+
+  useEffect(() => {
+    if (active && source.kind === "working" && loaded) {
+      void useGitReviewStore
+        .getState()
+        .reconcileFile(
+          repoRoot,
+          "worktree",
+          path,
+          originalContent,
+          modifiedContent,
+        );
+    }
+  }, [active, loaded, modifiedContent, originalContent, path, repoRoot, source.kind]);
+
+  const hasReviewedBaseline = Boolean(
+    reconciliation?.changedSinceReview &&
+      reconciliation.reviewedBaseline &&
+      reconciliation.reviewedBaseline !== originalContent,
+  );
+
+  const effectiveOriginal =
+    viewMode === "unreviewed" && hasReviewedBaseline
+      ? reconciliation!.reviewedBaseline!
+      : originalContent;
+
+  const handleToggleReview = useCallback(async () => {
+    if (source.kind !== "working" || !loaded) return;
+    await markFile(
+      repoRoot,
+      "worktree",
+      path,
+      modifiedContent,
+      !isReviewed,
+    );
+  }, [isReviewed, loaded, markFile, modifiedContent, path, repoRoot, source.kind]);
+
   const isTooLarge =
     originalContent.length > LARGE_FILE_THRESHOLD ||
     modifiedContent.length > LARGE_FILE_THRESHOLD;
@@ -227,7 +289,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
       languageCompartment.of(langExt ?? []),
       ...READONLY_EXT,
       unifiedMergeView({
-        original: originalContent,
+        original: effectiveOriginal,
         mergeControls: false,
         highlightChanges: true,
         gutter: true,
@@ -236,7 +298,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
       }),
       DIFF_THEME,
     ],
-    [originalContent, langExt],
+    [effectiveOriginal, langExt],
   );
 
   // Cache-hit path only: the diff came from the cache before the language
@@ -285,8 +347,65 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
             {path}
           </span>
         </div>
-        <div className="flex shrink-0 items-center gap-3 text-[10.5px] tabular-nums text-muted-foreground">
-          <span className="truncate max-w-80 font-mono">{repoRoot}</span>
+        <div className="flex shrink-0 items-center gap-2 text-[10.5px] tabular-nums text-muted-foreground">
+          {hasReviewedBaseline ? (
+            <div className="flex items-center rounded-md border border-border/60 bg-muted/30 p-0.5 text-[10px]">
+              <button
+                type="button"
+                onClick={() =>
+                  setViewMode(repoRoot, "worktree", path, "unreviewed")
+                }
+                className={cn(
+                  "rounded px-2 py-0.5 font-medium transition-colors",
+                  viewMode === "unreviewed"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t("git.unreviewedDelta")}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setViewMode(repoRoot, "worktree", path, "full")
+                }
+                className={cn(
+                  "rounded px-2 py-0.5 font-medium transition-colors",
+                  viewMode === "full"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t("git.fullDiff")}
+              </button>
+            </div>
+          ) : null}
+
+          {source.kind === "working" && !useFallback ? (
+            <Button
+              type="button"
+              size="sm"
+              variant={isReviewed ? "outline" : "secondary"}
+              className="h-7 gap-1.5 px-2 text-[10.5px]"
+              onClick={() => void handleToggleReview()}
+            >
+              <HugeiconsIcon
+                icon={CheckmarkCircle02Icon}
+                size={13}
+                className={isReviewed ? "text-emerald-500" : ""}
+              />
+              <span>
+                {isReviewed ? t("git.reviewed") : t("git.markReviewed")}
+              </span>
+              <kbd className="hidden sm:inline-block rounded border border-border/60 bg-muted/50 px-1 py-0.2 font-mono text-[9px] text-muted-foreground">
+                R
+              </kbd>
+            </Button>
+          ) : null}
+
+          <span className="truncate max-w-80 font-mono hidden md:inline-block">
+            {repoRoot}
+          </span>
           {useFallback ? (
             <>
               <span className="text-emerald-600 dark:text-emerald-400">
