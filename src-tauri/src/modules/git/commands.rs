@@ -334,3 +334,52 @@ pub async fn git_init(
     })
     .await
 }
+
+#[tauri::command]
+pub async fn git_clone(
+    url: String,
+    parent_dir: String,
+    target_name: Option<String>,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<String, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::clone(
+            r,
+            &url,
+            &parent_dir,
+            target_name.as_deref(),
+            &workspace,
+        )
+        .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_publish(
+    repo_root: String,
+    remote: Option<String>,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<GitPushResult, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::publish(r, &repo_root, remote.as_deref(), &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_undo_commit(
+    repo_root: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::undo_commit(r, &repo_root, &workspace).map_err(Into::into)
+    })
+    .await
+}

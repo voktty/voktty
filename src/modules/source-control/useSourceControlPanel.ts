@@ -133,6 +133,8 @@ type SourceControlPanelState = {
   headerCheckState: CheckState;
   allClean: boolean;
   canPush: boolean;
+  canUndo: boolean;
+  undoCommit: () => Promise<void>;
   pushHint: string | null;
   canGenerateCommitMessage: boolean;
   generateCommitMessageHint: string;
@@ -1211,6 +1213,23 @@ export function useSourceControlPanel(
     }
   }, [repo, status?.upstream, summary]);
 
+  const undoCommit = useCallback(async () => {
+    if (!repo) return;
+    setActionMessage(null);
+    setActionError(null);
+    setLocalActionBusy("undo");
+    try {
+      await summary.undoCommit();
+      setActionMessage(t("feedback.undoCommitSuccess"));
+    } catch (error) {
+      setActionError(normalizeError(error));
+    } finally {
+      setLocalActionBusy(null);
+    }
+  }, [repo, summary, t]);
+
+  const canUndo = (status?.ahead ?? 0) > 0;
+
   const pendingDiscardView = useMemo<PendingDiscard | null>(() => {
     if (!pendingDiscard) return null;
     if (pendingDiscard.scope === "single") {
@@ -1245,6 +1264,8 @@ export function useSourceControlPanel(
     headerCheckState,
     allClean,
     canPush,
+    canUndo,
+    undoCommit,
     pushHint,
     canGenerateCommitMessage,
     generateCommitMessageHint,

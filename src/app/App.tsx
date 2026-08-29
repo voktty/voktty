@@ -118,6 +118,7 @@ import {
   useSidebarPanel,
 } from "@/modules/sidebar";
 import {
+  GitCloneModal,
   SourceControlPanel,
   useRepositoryTargeting,
   useSourceControlContext,
@@ -1989,6 +1990,7 @@ export default function App() {
   const explorerGitDecorations = usePreferencesStore(
     (s) => s.explorerGitDecorations,
   );
+  const [gitCloneModalOpen, setGitCloneModalOpen] = useState(false);
 
   const openPreviewTab = useCallback(
     (url?: string) => {
@@ -3702,6 +3704,7 @@ export default function App() {
         openNewApiClient: () => newApiClientTab(),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
+        openGitClone: () => setGitCloneModalOpen(true),
         toggleSourceControl,
         closeActiveTabOrPane: handleCloseTabOrPane,
         reopenClosedEditor,
@@ -4425,6 +4428,15 @@ export default function App() {
           <OnboardingWizard
             open={onboardingOpen}
             onOpenChange={setOnboardingOpen}
+          />
+
+          <GitCloneModal
+            open={gitCloneModalOpen}
+            onOpenChange={setGitCloneModalOpen}
+            defaultParentDir={sourceControl.contextPath}
+            onCloned={(clonedPath) => {
+              cdInNewTab(clonedPath);
+            }}
           />
 
           <CloseDialogs

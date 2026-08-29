@@ -1,4 +1,5 @@
 export { SourceControlPanel } from "./SourceControlPanelLazy";
+export { GitCloneModal } from "./GitCloneModal";
 export type { SourceControlRepositoryTarget } from "./repositoryTarget";
 export { useRepositoryTargeting } from "./useRepositoryTargeting";
 export {
@@ -7,3 +8,4 @@ export {
   type SourceControlSummary,
 } from "./useSourceControl";
 export { useSourceControlContext } from "./useSourceControlContext";
+
