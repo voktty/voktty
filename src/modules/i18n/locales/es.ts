@@ -3523,7 +3523,7 @@ export const es: TranslationSchema = {
       codex: "Codex",
       cursor: "Cursor",
       voktty: "Agente Voktty",
-      gemini: "Gemini / CLI",
+      gemini: "Antigravity",
       kimi: "Kimi",
     },
   },
