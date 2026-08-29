@@ -58,11 +58,13 @@ import {
   ComputerScreenShareIcon,
   ComputerTerminal02Icon,
   Copy01Icon,
+  Folder01Icon,
   GitCompareIcon,
   Globe02Icon,
   IncognitoIcon,
   Loading03Icon,
   Message02Icon,
+  PanelLeftOpenIcon,
   PencilEdit02Icon,
   ServerStack01Icon,
   SparklesIcon,
@@ -71,6 +73,8 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { revealInFinder } from "@/modules/explorer/lib/contextActions";
+import { getTabPath } from "./lib/tabMetadata";
 import {
   Fragment,
   type ReactNode,
@@ -148,6 +152,7 @@ type Props = {
     source: WorkspaceDragSource,
     target: WorkspaceDropTarget,
   ) => void;
+  onRevealInExplorer?: (path: string) => void;
   compact?: boolean;
 };
 
@@ -190,6 +195,7 @@ export function TabBar({
   onSetSpaceColor,
   onReorderVisual,
   onWorkspaceDrop,
+  onRevealInExplorer,
   compact,
 }: Props) {
   const { t: translate } = useTranslation();
@@ -857,6 +863,41 @@ export function TabBar({
                       </span>
                     </ContextMenuItem>
                     <ContextMenuSeparator />
+                    {(() => {
+                      const tabPath = getTabPath(t);
+                      if (!tabPath) return null;
+                      return (
+                        <>
+                          <ContextMenuItem
+                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            onSelect={() => onRevealInExplorer?.(tabPath)}
+                          >
+                            <HugeiconsIcon
+                              icon={PanelLeftOpenIcon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {translate("tabs.revealInSideBar")}
+                            </span>
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            onSelect={() => void revealInFinder(tabPath)}
+                          >
+                            <HugeiconsIcon
+                              icon={Folder01Icon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {translate("tabs.revealInFileManager")}
+                            </span>
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                        </>
+                      );
+                    })()}
                     {t.kind === "terminal" && (
                       <>
                         {!t.collaboration && onShareTerminal ? (

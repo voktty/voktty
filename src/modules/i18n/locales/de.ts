@@ -61,6 +61,7 @@ const deBase = mergeLocale(en, {
       noResults: "Keine passenden Einstellungen gefunden",
     },
     tabs: {
+    revealInFileManager: "Im Datei-Explorer anzeigen",
       general: "Allgemein",
       editor: "Editor",
       themes: "Themes",
@@ -576,6 +577,8 @@ const deBase = mergeLocale(en, {
     notifications: "Benachrichtigungen",
   },
   tabs: {
+    revealInSideBar: "In der Seitenleiste anzeigen",
+    revealInFileManager: "Im Datei-Explorer anzeigen",
     newTab: "Neuer Tab",
     closeTab: "Tab schließen",
     closeOtherTabs: "Andere Tabs schließen",

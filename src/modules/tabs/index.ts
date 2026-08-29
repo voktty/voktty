@@ -12,6 +12,7 @@ export {
   type TabProcessStatus,
 } from "./lib/useTabProcessStatus";
 export { labelFor } from "./lib/tabLabel";
+export { getTabPath } from "./lib/tabMetadata";
 export {
   MAX_PANES_PER_TAB,
   DEFAULT_SPACE_ID,

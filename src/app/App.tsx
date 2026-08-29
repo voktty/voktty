@@ -2537,6 +2537,32 @@ export default function App() {
     [updateTab],
   );
 
+  const handleRevealInExplorer = useCallback(
+    (targetPath: string) => {
+      if (!targetPath) return;
+      if (sidebarCollapsed && sidebarRef.current) {
+        sidebarRef.current.resize(`${sidebarWidthRef.current}px`);
+      }
+      if (sidebarView !== "explorer") {
+        persistSidebarView("explorer");
+      }
+      setTimeout(async () => {
+        if (explorerRef.current) {
+          await explorerRef.current.reveal(targetPath);
+          explorerRef.current.focus();
+        }
+      }, 50);
+    },
+    [
+      sidebarCollapsed,
+      sidebarRef,
+      sidebarWidthRef,
+      sidebarView,
+      persistSidebarView,
+      explorerRef,
+    ],
+  );
+
   const handlePrepareExplorerNavigationRoot = useCallback(
     async (rootPath: string): Promise<boolean> => {
       const tab = tabsRef.current.find(
@@ -3865,6 +3891,7 @@ export default function App() {
               onSetSpaceColor={handleSetViewSpaceColor}
               onReorderVisual={handleReorderVisualTabs}
               onWorkspaceDrop={handleWorkspaceDrop}
+              onRevealInExplorer={handleRevealInExplorer}
               onPin={(id) => {
                 const tab = tabs.find((t) => t.id === id);
                 if (tab && (tab.kind === "editor" || tab.kind === "git-diff")) {
@@ -4210,6 +4237,7 @@ export default function App() {
                           onOpenFolder={pickAndOpenFolder}
                           onNewGitGraph={openGitGraphFromContext}
                           onLaunchAgents={launchAgentGroup}
+                          onRevealInExplorer={handleRevealInExplorer}
                         />
                       </div>
                       {aiSidebarMounted && hasComposer && (

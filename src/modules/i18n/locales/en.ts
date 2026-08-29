@@ -69,6 +69,7 @@ export const en = {
       noResults: "No matching settings found",
     },
     tabs: {
+    revealInFileManager: "Reveal in File Explorer",
       general: "General",
       editor: "Editor",
       themes: "Themes",
@@ -877,6 +878,8 @@ export const en = {
     notifications: "Notifications",
   },
   tabs: {
+    revealInSideBar: "Reveal in Side Bar",
+    revealInFileManager: "Reveal in File Explorer",
     newTab: "New Tab",
     closeTab: "Close Tab",
     closeOtherTabs: "Close other tabs",

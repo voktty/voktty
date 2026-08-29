@@ -61,6 +61,7 @@ const zhBase = mergeLocale(en, {
       noResults: "未找到匹配的设置",
     },
     tabs: {
+    revealInFileManager: "在文件资源管理器中显示",
       general: "常规",
       editor: "编辑器",
       themes: "主题",
@@ -532,6 +533,8 @@ const zhBase = mergeLocale(en, {
     notifications: "通知",
   },
   tabs: {
+    revealInSideBar: "在侧边栏中显示",
+    revealInFileManager: "在文件资源管理器中显示",
     newTab: "新建标签页",
     closeTab: "关闭标签页",
     closeOtherTabs: "关闭其他标签页",

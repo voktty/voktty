@@ -71,6 +71,7 @@ export const es: TranslationSchema = {
       noResults: "No se encontraron ajustes coincidentes",
     },
     tabs: {
+    revealInFileManager: "Mostrar en el explorador de archivos",
       general: "General",
       editor: "Editor",
       themes: "Temas",
@@ -904,6 +905,8 @@ export const es: TranslationSchema = {
     notifications: "Notificaciones",
   },
   tabs: {
+    revealInSideBar: "Revelar en la barra lateral",
+    revealInFileManager: "Mostrar en el explorador de archivos",
     newTab: "Nueva pestaña",
     closeTab: "Cerrar pestaña",
     closeOtherTabs: "Cerrar otras pestañas",

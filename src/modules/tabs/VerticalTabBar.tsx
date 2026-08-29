@@ -44,6 +44,7 @@ import {
   GitBranchIcon,
   GitCompareIcon,
   Globe02Icon,
+  PanelLeftOpenIcon,
   PencilEdit02Icon,
   PlusSignIcon,
   Search01Icon,
@@ -53,9 +54,11 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { revealInFinder } from "@/modules/explorer/lib/contextActions";
 import { TabDetailsHoverCard } from "./components/TabDetailsHoverCard";
 import { useTabContextMenuStore } from "./lib/tabContextMenuState";
 import { getTabSubtitle, labelFor } from "./lib/tabLabel";
+import { getTabPath } from "./lib/tabMetadata";
 import type { Tab } from "./lib/useTabs";
 import { NewTabMenu } from "./NewTabMenu";
 import { TabIcon, TabProcessBadge, TabProcessBottomBar } from "./TabBar";
@@ -111,6 +114,7 @@ type Props = {
     source: WorkspaceDragSource,
     target: WorkspaceDropTarget,
   ) => void;
+  onRevealInExplorer?: (path: string) => void;
 };
 
 function tabCategory(t: Tab): "terminals" | "files" | "tools" {
@@ -226,6 +230,7 @@ export function VerticalTabBar({
   onSetSpaceColor,
   onReorderVisual,
   onWorkspaceDrop,
+  onRevealInExplorer,
 }: Props) {
   const { t } = useTranslation();
   const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
@@ -819,6 +824,41 @@ export function VerticalTabBar({
                       </span>
                     </ContextMenuItem>
                     <ContextMenuSeparator />
+                    {(() => {
+                      const tabPath = getTabPath(tab);
+                      if (!tabPath) return null;
+                      return (
+                        <>
+                          <ContextMenuItem
+                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                            onSelect={() => onRevealInExplorer?.(tabPath)}
+                          >
+                            <HugeiconsIcon
+                              icon={PanelLeftOpenIcon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {t("tabs.revealInSideBar")}
+                            </span>
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                            onSelect={() => void revealInFinder(tabPath)}
+                          >
+                            <HugeiconsIcon
+                              icon={Folder01Icon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {t("tabs.revealInFileManager")}
+                            </span>
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                        </>
+                      );
+                    })()}
                     {tab.kind === "terminal" && (
                       <>
                         {!tab.collaboration && onShareTerminal ? (

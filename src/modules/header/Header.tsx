@@ -83,6 +83,7 @@ type Props = {
     source: WorkspaceDragSource,
     target: WorkspaceDropTarget,
   ) => void;
+  onRevealInExplorer?: (path: string) => void;
   onToggleSidebar: () => void;
   sidebarCollapsed: boolean;
   onToggleTabStyle: () => void;
@@ -136,6 +137,7 @@ export function Header({
   onSetSpaceColor,
   onReorderVisual,
   onWorkspaceDrop,
+  onRevealInExplorer,
   onToggleSidebar,
   sidebarCollapsed,
   onToggleTabStyle,
@@ -309,6 +311,7 @@ export function Header({
               onOpenFolder={onOpenFolder}
               onNewGitGraph={onNewGitGraph}
               onLaunchAgents={onLaunchAgents}
+              onRevealInExplorer={onRevealInExplorer}
               compact={compact}
             />
           </>
