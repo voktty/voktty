@@ -45,12 +45,9 @@ type Live = {
   turnFailed: ((error: Error) => void) | null;
   /** turn/completed arrived before runTurn registered turnDone. */
   turnEndPending: boolean;
-  turnWatchdog?: ReturnType<typeof setTimeout>;
   emittedAssistant: string;
   emittedReasoning: string;
 };
-
-const TURN_WATCHDOG_MS = 2_000;
 
 type Resume = {
   threadId: string;
@@ -402,6 +399,10 @@ function handleNotification(
   method: string,
   params: unknown,
 ): void {
+  // A Codex turn is a sequence of items. Completing an agentMessage does not
+  // mean the turn is over — more tools and messages can still arrive. Only
+  // turn/completed (and turn/aborted) settle sendCodexTurn, which is what the
+  // UI uses for busy / stop / "Working for".
   const mapped = mapCodexNotification(method, params);
   const snapshot = method === "item/completed";
   for (const event of mapped.events) {
@@ -417,9 +418,6 @@ function handleNotification(
   }
   if (mapped.activeTurnId !== undefined) {
     live.activeTurnId = mapped.activeTurnId;
-  }
-  if (mapped.scheduleTurnWatchdog) {
-    scheduleTurnWatchdog(live);
   }
   if (mapped.turnCompleted) {
     finishActiveTurn(live);
@@ -446,10 +444,6 @@ function publishCodexText(
 }
 
 function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {
-  if (live.turnWatchdog) {
-    clearTimeout(live.turnWatchdog);
-    live.turnWatchdog = undefined;
-  }
   live.turnEndPending = false;
   live.activeTurnId = null;
   live.emittedAssistant = "";
@@ -473,18 +467,6 @@ function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {
 function settlePendingTurn(live: Live): void {
   if (!live.turnEndPending || !live.turnDone) return;
   finishActiveTurn(live);
-}
-
-function scheduleTurnWatchdog(live: Live): void {
-  if (live.turnWatchdog) clearTimeout(live.turnWatchdog);
-  live.turnWatchdog = setTimeout(() => {
-    live.turnWatchdog = undefined;
-    if (!live.turnDone) return;
-    finishActiveTurn(live, [
-      { type: "message.completed" },
-      { type: "reasoning.completed" },
-    ]);
-  }, TURN_WATCHDOG_MS);
 }
 
 async function handleServerRequest(

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The `@` mention picker in the composer only offered files, so you could not point the agent at a folder. Directories from the project tree are selectable now. In #34.
+- Codex turns looked finished while the agent was still working: “Worked for” froze and the composer stop button went back to send, even though tools and text kept arriving. The turn now stays live until Codex actually completes it.
 
 ## [0.1.17] - 2026-08-29
 

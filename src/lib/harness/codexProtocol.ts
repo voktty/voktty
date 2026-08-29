@@ -185,8 +185,6 @@ export type MappedCodexNotification = {
     error?: string;
   };
   activeTurnId?: string | null;
-  /** Agent message finished but turn/completed has not arrived yet. */
-  scheduleTurnWatchdog?: boolean;
 };
 
 /**
@@ -399,7 +397,10 @@ function mapItemLifecycle(
   }
 
   if (itemType === "agentMessage") {
-    // Prefer deltas; completed agent messages may carry full text for non-streaming.
+    // Prefer deltas; completed agent messages may carry full text for
+    // non-streaming. A turn can still run after this item — Codex often
+    // emits a short message, then tools, then another message — so this
+    // must not be treated as turn completion.
     if (completed) {
       const text = streamTextDelta(item.text);
       const events: HarnessEvent[] = [];
@@ -409,10 +410,7 @@ function mapItemLifecycle(
           { type: "message.completed" },
         );
       }
-      return {
-        events,
-        scheduleTurnWatchdog: true,
-      };
+      return { events };
     }
     return { events: [] };
   }

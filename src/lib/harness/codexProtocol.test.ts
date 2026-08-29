@@ -216,6 +216,22 @@ describe("mapCodexNotification", () => {
     });
   });
 
+  it("does not treat a completed agent message as the end of the turn", () => {
+    const mapped = mapCodexNotification("item/completed", {
+      item: {
+        id: "msg_2",
+        type: "agentMessage",
+        text: "I'll inspect the changelog first.",
+      },
+    });
+    expect(mapped.turnCompleted).toBeUndefined();
+    expect(mapped.activeTurnId).toBeUndefined();
+    expect(mapped.events).toEqual([
+      { type: "message.delta", text: "I'll inspect the changelog first." },
+      { type: "message.completed" },
+    ]);
+  });
+
   it("maps turn completion and clears active turn", () => {
     const mapped = mapCodexNotification("turn/completed", {
       turn: { id: "turn_1", status: "completed" },
