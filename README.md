@@ -43,23 +43,15 @@ The current product captures are maintained in [`docs/images`](docs/images/READM
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/voktty_0stHyTBbyY.png" width="480" alt="Voktty remote workspace and file explorer" /><br/><sub>Remote workspace, tabs, and file explorer</sub></td>
-    <td align="center"><img src="docs/images/voktty_3QD9ekQl5V.png" width="480" alt="Voktty SSH settings" /><br/><sub>Saved SSH connections and port forwarding</sub></td>
+    <td align="center"><img src="docs/images/voktty_6LhZMEZPC6.png" width="480" alt="Voktty API Client and Sandbox" /><br/><sub>API Client and Sandbox with request builder and response inspection</sub></td>
+    <td align="center"><img src="docs/images/voktty_E7ePo9A5ka.png" width="480" alt="Voktty agent operational history" /><br/><sub>Agent history and recovery with searchable sessions and transcripts</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/voktty_7Jmp0UByzr.png" width="480" alt="Voktty editor workspace" /><br/><sub>Editor workspace with a PHP file</sub></td>
-    <td align="center"><img src="docs/images/voktty_kiAdbgrGGj.png" width="480" alt="Voktty Git graph" /><br/><sub>Source control and Git commit graph</sub></td>
+    <td align="center"><img src="docs/images/voktty_k5Xr4AqgSA.png" width="480" alt="Voktty environment selector" /><br/><sub>Local, WSL, SSH, RDP, and serial environment selection</sub></td>
+    <td align="center"><img src="docs/images/voktty_MAZn6eHFXb.png" width="480" alt="Voktty editor and terminal workspace" /><br/><sub>Code editor, terminal, AI panel, and file details on hover</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/voktty_kLd3UCiAji.png" width="480" alt="Voktty themes" /><br/><sub>Theme presets and personalization</sub></td>
-    <td align="center"><img src="docs/images/voktty_ljubKqX22C.png" width="480" alt="Voktty terminal Copilot" /><br/><sub>Natural-language terminal Copilot</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/images/voktty_LSeiFJOfyf.png" width="480" alt="Voktty code editor" /><br/><sub>Code editor and language-aware status</sub></td>
-    <td align="center"><img src="docs/images/voktty_TKT4Mw8Jnc.png" width="480" alt="Voktty extensions" /><br/><sub>Extensions, commands, and AI tools</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/images/voktty_wiRVOca2A5.png" width="720" alt="Voktty terminal" /><br/><sub>Terminal, system information, tabs, and workspace explorer</sub></td>
+    <td colspan="2" align="center"><img src="docs/images/voktty_vPOlZrpa70.png" width="720" alt="Voktty file preview" /><br/><sub>Image preview and file metadata shown from the explorer</sub></td>
   </tr>
 </table>
 

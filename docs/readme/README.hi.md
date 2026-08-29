@@ -24,9 +24,9 @@ Voktty एक हल्का, ओपन-सोर्स, टर्मिनल-
 ## स्क्रीनशॉट
 
 <table>
-  <tr><td align="center"><img src="../images/voktty_0stHyTBbyY.png" alt="वर्कस्पेस" /><br/><sub>फ़ाइलों और टैब वाला Voktty वर्कस्पेस</sub></td><td align="center"><img src="../images/voktty_ljubKqX22C.png" alt="टर्मिनल Copilot" /><br/><sub>प्राकृतिक भाषा वाला टर्मिनल Copilot</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_kLd3UCiAji.png" alt="थीम" style="margin-top: 12px;"/><br/><sub>कस्टम थीम और प्रीसेट</sub></td><td align="center"><img src="../images/voktty_kiAdbgrGGj.png" alt="सोर्स कंट्रोल और Git ग्राफ़" style="margin-top: 12px;"/><br/><sub>Git ग्राफ़ वाला सोर्स कंट्रोल पैनल</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_wiRVOca2A5.png" alt="टर्मिनल" style="border-radius: 4px; margin-top: 12px;" /><br/><sub>सिस्टम जानकारी और एक्सप्लोरर वाला टर्मिनल</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API क्लाइंट और सैंडबॉक्स" /><br/><sub>रिक्वेस्ट बिल्डर और रिस्पॉन्स निरीक्षण वाला API क्लाइंट और सैंडबॉक्स</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="एजेंट ऑपरेशनल हिस्ट्री" /><br/><sub>खोज योग्य सेशन और ट्रांसक्रिप्ट के साथ एजेंट हिस्ट्री और रिकवरी</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="एनवायरनमेंट चयन" /><br/><sub>लोकल, WSL, SSH, RDP और सीरियल एनवायरनमेंट का चयन</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="एडिटर और टर्मिनल" /><br/><sub>कोड एडिटर, टर्मिनल, AI पैनल और होवर पर फ़ाइल जानकारी</sub></td></tr>
+  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="फ़ाइल प्रीव्यू" /><br/><sub>एक्सप्लोरर से दिखाई गई इमेज प्रीव्यू और फ़ाइल मेटाडेटा</sub></td></tr>
 </table>
 
 ## सुविधाएँ

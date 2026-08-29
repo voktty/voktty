@@ -11,22 +11,32 @@ The images are documentation assets. They are not part of the application runtim
 - Add descriptive alt text and update [screenshots.md](../screenshots.md) whenever the official gallery changes.
 - Use these images only for documentation. Runtime visual resources belong in `public/` or in the relevant module.
 
+## Current assets
+
+| File | Feature | Description |
+| --- | --- | --- |
+| `voktty_6LhZMEZPC6.png` | API Client | Request builder, response inspection, headers, and timings. |
+| `voktty_E7ePo9A5ka.png` | Agent history | Searchable sessions, transcripts, recovery actions, and export. |
+| `voktty_k5Xr4AqgSA.png` | Environments | Local, WSL, SSH, RDP, and serial targets. |
+| `voktty_MAZn6eHFXb.png` | Editor and terminal | Code editor, terminal, AI panel, and file details on hover. |
+| `voktty_vPOlZrpa70.png` | File explorer | Image preview and file metadata on hover. |
+
 ## Use from Markdown
 
 From a README in the repository root:
 
 ```md
-![Voktty terminal](docs/images/voktty_wiRVOca2A5.png)
+![Voktty API Client and Sandbox](docs/images/voktty_6LhZMEZPC6.png)
 ```
 
 From a document inside `docs/`:
 
 ```md
-![Voktty terminal](images/voktty_wiRVOca2A5.png)
+![Voktty agent operational history](images/voktty_E7ePo9A5ka.png)
 ```
 
 From a translated README inside `docs/readme/`:
 
 ```md
-![Voktty terminal](../images/voktty_wiRVOca2A5.png)
+![Voktty file preview](../images/voktty_vPOlZrpa70.png)
 ```
