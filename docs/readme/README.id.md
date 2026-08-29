@@ -24,9 +24,9 @@ Voktty adalah lingkungan pengembangan (ADE) ringan, sumber terbuka, berfokus pad
 ## Tangkapan layar
 
 <table>
-  <tr><td align="center"><img src="../images/voktty_0stHyTBbyY.png" alt="Ruang kerja" /><br/><sub>Ruang kerja Voktty dengan berkas dan tab</sub></td><td align="center"><img src="../images/voktty_ljubKqX22C.png" alt="Copilot terminal" /><br/><sub>Copilot terminal dengan bahasa alami</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_kLd3UCiAji.png" alt="Tema" style="margin-top: 12px;"/><br/><sub>Tema kustom dan preset</sub></td><td align="center"><img src="../images/voktty_kiAdbgrGGj.png" alt="Kontrol sumber dan grafik Git" style="margin-top: 12px;"/><br/><sub>Panel kontrol sumber dengan grafik Git</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_wiRVOca2A5.png" alt="Terminal" style="border-radius: 4px; margin-top: 12px;" /><br/><sub>Terminal dengan informasi sistem dan penjelajah berkas</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="Klien API dan sandbox" /><br/><sub>Klien API dan sandbox dengan pembuat permintaan dan pemeriksaan respons</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Riwayat operasional agen" /><br/><sub>Riwayat dan pemulihan agen dengan sesi yang dapat dicari</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Pemilih lingkungan" /><br/><sub>Pemilihan lingkungan lokal, WSL, SSH, RDP, dan serial</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Editor dan terminal" /><br/><sub>Editor kode, terminal, panel AI, dan informasi berkas saat diarahkan</sub></td></tr>
+  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Pratinjau berkas" /><br/><sub>Pratinjau gambar dan metadata berkas dari penjelajah</sub></td></tr>
 </table>
 
 ## Fitur

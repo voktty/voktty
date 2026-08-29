@@ -24,9 +24,9 @@ Voktty представляет собой легковесную среду р�
 ## Снимки экрана
 
 <table>
-  <tr><td align="center"><img src="../images/voktty_0stHyTBbyY.png" alt="Рабочая область" /><br/><sub>Рабочая область Voktty с файлами и вкладками</sub></td><td align="center"><img src="../images/voktty_ljubKqX22C.png" alt="Copilot терминала" /><br/><sub>Copilot терминала с естественным языком</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_kLd3UCiAji.png" alt="Темы" style="margin-top: 12px;"/><br/><sub>Пользовательские темы и пресеты</sub></td><td align="center"><img src="../images/voktty_kiAdbgrGGj.png" alt="Управление кодом и граф Git" style="margin-top: 12px;"/><br/><sub>Панель управления кодом с графом Git</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_wiRVOca2A5.png" alt="Терминал" style="border-radius: 4px; margin-top: 12px;" /><br/><sub>Терминал с системной информацией и проводником файлов</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API-клиент и песочница" /><br/><sub>API-клиент и песочница с конструктором запросов и просмотром ответов</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Операционная история агентов" /><br/><sub>История и восстановление агентов с поиском по сессиям</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Выбор окружения" /><br/><sub>Выбор локального окружения, WSL, SSH, RDP и последовательного порта</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Редактор и терминал" /><br/><sub>Редактор кода, терминал, панель ИИ и сведения о файле при наведении</sub></td></tr>
+  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Предпросмотр файла" /><br/><sub>Предпросмотр изображения и метаданные файла в проводнике</sub></td></tr>
 </table>
 
 ## Возможности

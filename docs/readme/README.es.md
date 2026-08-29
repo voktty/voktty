@@ -39,17 +39,9 @@ Voktty es un entorno de desarrollo (ADE) ligero, de código abierto, centrado en
 ## Capturas de pantalla
 
 <table>
-  <tr>
-    <td align="center"><img src="../images/voktty_0stHyTBbyY.png" alt="Espacio de trabajo" /><br/><sub>Espacio de trabajo de Voktty</sub></td>
-    <td align="center"><img src="../images/voktty_ljubKqX22C.png" alt="Copilot de terminal" /><br/><sub>Copilot de terminal con lenguaje natural</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="../images/voktty_kLd3UCiAji.png" alt="Ajustes y temas" style="margin-top: 12px;"/><br/><sub>Ajustes y personalización de temas</sub></td>
-    <td align="center"><img src="../images/voktty_kiAdbgrGGj.png" alt="Control de código fuente" style="margin-top: 12px;"/><br/><sub>Panel de control de versiones y gráfico Git</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="../images/voktty_wiRVOca2A5.png" alt="Terminal" style="border-radius: 4px; margin-top: 12px;" /><br/><sub>Terminal con información del sistema y explorador</sub></td>
-  </tr>
+  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="Cliente API y sandbox" /><br/><sub>Cliente API y sandbox con constructor de solicitudes y análisis de respuestas</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Historial operativo de agentes" /><br/><sub>Historial y recuperación de agentes con sesiones y transcripciones buscables</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Selector de entornos" /><br/><sub>Selección de entornos locales, WSL, SSH, RDP y serie</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Editor y terminal" /><br/><sub>Editor de código, terminal, panel de IA e información de archivos al pasar el cursor</sub></td></tr>
+  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Vista previa de archivos" /><br/><sub>Vista previa de imágenes y metadatos de archivos desde el explorador</sub></td></tr>
 </table>
 
 ## Funciones
