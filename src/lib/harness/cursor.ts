@@ -18,6 +18,8 @@ import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } fr
 import {
   composeToolTitle,
   extractSearchQuery,
+  extractShellCommand,
+  extractSkillName,
   extractToolPreview,
   isWeakToolTitle,
   mergeToolPreview,
@@ -441,6 +443,20 @@ async function handlePermission(live: Live, id: number, params: unknown) {
     composeToolTitle({
       kind,
       title: toolLabel(tool, subject ?? tool) ?? command ?? stringField(rec ?? {}, "title"),
+      command:
+        command ??
+        extractShellCommand(
+          tool.rawInput,
+          tool.raw_input,
+          tool.input,
+          subject,
+        ),
+      skill: extractSkillName(
+        tool.rawInput,
+        tool.raw_input,
+        tool.input,
+        subject,
+      ),
       path: preview?.path,
       query:
         preview?.query ??
@@ -557,6 +573,22 @@ function handleSessionUpdate(live: Live, params: unknown) {
       composeToolTitle({
         kind: toolKind,
         title: toolLabel(update, tool),
+        command: extractShellCommand(
+          update.rawInput,
+          tool.rawInput,
+          update.raw_input,
+          tool.raw_input,
+          update.input,
+          tool.input,
+        ),
+        skill: extractSkillName(
+          update.rawInput,
+          tool.rawInput,
+          update.raw_input,
+          tool.raw_input,
+          update.input,
+          tool.input,
+        ),
         path: preview?.path,
         query:
           preview?.query ??
@@ -596,7 +628,7 @@ function needsCursorToolEnrichment(
   preview: ReturnType<typeof extractToolPreview>,
 ): boolean {
   const key = (kind ?? "").toLowerCase();
-  if (key === "execute" || key === "think" || key === "fetch") return false;
+  if (key === "execute" || key === "think" || key === "fetch" || key === "skill") return false;
   if (preview?.path || preview?.query) return false;
   if (key === "read" || key === "search" || key === "edit" || key === "write") {
     return true;
@@ -696,6 +728,8 @@ function applyStoredCursorToolCall(
     composeToolTitle({
       kind: mappedKind,
       title: toolLabel(recovered, recovered) ?? stored.toolName,
+      command: extractShellCommand(stored.args),
+      skill: extractSkillName(stored.args),
       path: preview?.path,
       query: preview?.query ?? extractSearchQuery(stored.args),
       previewKind: preview?.kind,
@@ -740,6 +774,7 @@ function kindFromCursorToolName(
     return "edit";
   }
   if (key === "shell" || key === "bash") return "execute";
+  if (key === "skill" || key === "skills") return "skill";
   return fallback;
 }
 
@@ -1040,7 +1075,11 @@ function kindTitle(kind: string | undefined): string | undefined {
     case "search":
       return "Find";
     case "execute":
+    case "shell":
+    case "bash":
       return "Shell";
+    case "skill":
+      return "Skill";
     case "think":
       return "Think";
     case "fetch":

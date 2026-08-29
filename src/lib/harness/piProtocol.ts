@@ -1,7 +1,7 @@
 import type { Attachment, ToolPreview } from "../session";
 import type { AgentModel, ModelSetting } from "../models";
 import type { PiFlavor } from "./piFlavor";
-import { composeToolTitle, extractToolPreview } from "./preview";
+import { extractToolPreview, titleFromToolInput } from "./preview";
 import { streamTextDelta } from "./streamText";
 
 /** Images Pi RPC accepts on `prompt` / `steer`. */
@@ -81,6 +81,33 @@ export function stringField(
   if (!rec) return undefined;
   const value = rec[key];
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function toolArgsFromEvent(
+  rec: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  return (
+    parseArgBag(rec?.args) ??
+    parseArgBag(rec?.arguments) ??
+    parseArgBag(rec?.input) ??
+    {}
+  );
+}
+
+function parseArgBag(value: unknown): Record<string, unknown> | null {
+  if (typeof value === "string" && value.trim()) {
+    return tryParseJsonRecord(value);
+  }
+  return asRecord(value);
+}
+
+/** Later execution updates can be partial; keep keys we already have. */
+export function mergeToolInput(
+  current: Record<string, unknown>,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  if (Object.keys(next).length === 0) return current;
+  return { ...current, ...next };
 }
 
 export function parseJsonLine(line: string): Record<string, unknown> | null {
@@ -411,10 +438,10 @@ export function toolCallEndFromEvent(
     stringField(event, "toolName");
   if (!id || !name) return null;
   const input =
-    asRecord(call?.arguments) ??
-    asRecord(call?.args) ??
-    asRecord(event?.arguments) ??
-    {};
+    parseArgBag(call?.arguments) ??
+    parseArgBag(call?.args) ??
+    parseArgBag(event?.arguments) ??
+    toolArgsFromEvent(call);
   return { id, name, input };
 }
 
@@ -425,12 +452,17 @@ export function toolExecutionStartFromEvent(
   const id = stringField(rec, "toolCallId");
   const name = stringField(rec, "toolName") ?? "tool";
   if (!id) return null;
-  return { id, name, input: asRecord(rec.args) ?? {} };
+  return { id, name, input: toolArgsFromEvent(rec) };
 }
 
 export function toolExecutionUpdateFromEvent(
   rec: Record<string, unknown>,
-): { id: string; name?: string; detail?: string } | null {
+): {
+  id: string;
+  name?: string;
+  detail?: string;
+  input: Record<string, unknown>;
+} | null {
   if (stringField(rec, "type") !== "tool_execution_update") return null;
   const id = stringField(rec, "toolCallId");
   if (!id) return null;
@@ -439,6 +471,7 @@ export function toolExecutionUpdateFromEvent(
     id,
     name: stringField(rec, "toolName"),
     detail: textFromContent(partial?.content) || undefined,
+    input: toolArgsFromEvent(rec),
   };
 }
 
@@ -550,6 +583,7 @@ export function toolKindFromName(toolName: string): string {
   ) {
     return "search";
   }
+  if (normalized === "skill" || normalized === "skills") return "skill";
   return toolName;
 }
 
@@ -557,20 +591,7 @@ export function toolTitle(
   name: string,
   input: Record<string, unknown>,
 ): string {
-  const kind = toolKindFromName(name);
-  const preview = extractToolPreview(
-    { title: name, name, kind, rawInput: input, input },
-    { title: name, name, kind, rawInput: input },
-  );
-  return (
-    composeToolTitle({
-      kind,
-      title: name,
-      path: preview?.path,
-      query: preview?.query,
-      previewKind: preview?.kind,
-    }) || name
-  );
+  return titleFromToolInput(name, toolKindFromName(name), input);
 }
 
 export function previewFromTool(

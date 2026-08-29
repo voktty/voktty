@@ -517,7 +517,11 @@ function kindTitle(kind?: string): string {
     case "search":
       return "Find";
     case "execute":
+    case "shell":
+    case "bash":
       return "Shell";
+    case "skill":
+      return "Skill";
     case "think":
       return "Think";
     case "fetch":

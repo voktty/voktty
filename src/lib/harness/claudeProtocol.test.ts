@@ -20,6 +20,7 @@ import {
   toClaudePermissionResult,
   toolKindFromName,
   toolStartFromEvent,
+  toolTitle,
   turnStatusFromResult,
 } from "./claudeProtocol";
 
@@ -253,6 +254,11 @@ describe("helpers", () => {
 
   it("classifies tools and todo plans", () => {
     expect(toolKindFromName("Bash")).toBe("execute");
+    expect(toolKindFromName("Skill")).toBe("skill");
+    expect(toolTitle("Bash", { command: "ls -la src" })).toBe("ls -la src");
+    expect(toolTitle("Skill", { skill: "code-review" })).toBe(
+      "Skill /code-review",
+    );
     expect(isTodoTool("TodoWrite")).toBe(true);
     expect(
       planTextFromTodos({

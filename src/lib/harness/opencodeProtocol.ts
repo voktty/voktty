@@ -264,6 +264,7 @@ export function toolKindFromName(toolName: string): string {
   ) {
     return "search";
   }
+  if (normalized === "skill" || normalized === "skills") return "skill";
   return toolName;
 }
 

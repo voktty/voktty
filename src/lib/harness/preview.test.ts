@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   composeToolTitle,
   extractSearchQuery,
+  extractShellCommand,
+  extractSkillName,
   extractToolPreview,
+  isWeakToolTitle,
+  titleFromToolInput,
 } from "./preview";
 
 describe("extractToolPreview", () => {
@@ -94,5 +98,76 @@ describe("extractToolPreview", () => {
         previewKind: preview?.kind,
       }),
     ).toBe("Find **/*.{json,md}");
+  });
+});
+
+describe("shell command titles", () => {
+  it("pulls the command out of nested input bags", () => {
+    expect(extractShellCommand({ args: { command: "git status -s" } })).toBe(
+      "git status -s",
+    );
+    expect(extractShellCommand({ cmd: "pwd" })).toBe("pwd");
+    expect(extractShellCommand({ command: ["npm", "test"] })).toBe("npm test");
+    expect(
+      extractShellCommand({}, { rawInput: {} }, { input: { command: "git status" } }),
+    ).toBe("git status");
+  });
+
+  it("labels execute tools with the command, not the tool name", () => {
+    expect(
+      composeToolTitle({
+        kind: "execute",
+        title: "Bash",
+        command: "rm -rf /tmp/build",
+      }),
+    ).toBe("rm -rf /tmp/build");
+    expect(titleFromToolInput("bash", "execute", { command: "ls -la" })).toBe(
+      "ls -la",
+    );
+    expect(
+      titleFromToolInput("Bash", "execute", {
+        description: "List files",
+        command: "ls -la",
+      }),
+    ).toBe("ls -la");
+  });
+
+  it("does not substitute Claude's description for the command", () => {
+    expect(
+      titleFromToolInput("Bash", "execute", { description: "List files" }),
+    ).toBe("Shell");
+    expect(titleFromToolInput("bash", "execute", {})).toBe("Shell");
+  });
+
+  it("treats Bash/bash as a weak placeholder so a later command can replace it", () => {
+    expect(isWeakToolTitle("Bash")).toBe(true);
+    expect(isWeakToolTitle("bash")).toBe(true);
+    expect(isWeakToolTitle("ls")).toBe(false);
+  });
+});
+
+describe("skill titles", () => {
+  it("labels a Skill tool with /name", () => {
+    expect(extractSkillName({ skill: "code-review" })).toBe("code-review");
+    expect(extractSkillName({ args: { skill_name: "commit" } })).toBe("commit");
+    expect(extractSkillName({}, { rawInput: {} }, { skill: "code-review" })).toBe(
+      "code-review",
+    );
+    expect(titleFromToolInput("Skill", "skill", { skill: "code-review" })).toBe(
+      "Skill /code-review",
+    );
+    expect(
+      composeToolTitle({
+        kind: "skill",
+        title: "Skill",
+        skill: "code-review",
+      }),
+    ).toBe("Skill /code-review");
+  });
+
+  it("does not treat a bare Skill placeholder as the name", () => {
+    expect(titleFromToolInput("Skill", "skill", {})).toBe("Skill");
+    expect(isWeakToolTitle("Skill")).toBe(true);
+    expect(isWeakToolTitle("Skill /code-review")).toBe(false);
   });
 });

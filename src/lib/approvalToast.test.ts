@@ -31,7 +31,7 @@ describe("pendingApprovalForSession", () => {
     ];
     const pending = pendingApprovalForSession(session);
     expect(pending?.requestId).toBe(2);
-    expect(pending?.label).toBe("Run command");
+    expect(pending?.label).toBe("Shell");
   });
 });
 

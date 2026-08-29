@@ -12,6 +12,7 @@ import {
   nextTickerIndex,
   proseSummary,
   splitActivityRows,
+  toolCallLabel,
   turnCopyText,
 } from "./transcriptActivity";
 
@@ -382,6 +383,27 @@ describe("lastActivityIndex", () => {
         groupTurnItems([{ id: "a", role: "assistant", text: "Hi." }], true),
       ),
     ).toBe(-1);
+  });
+});
+
+describe("toolCallLabel", () => {
+  it("shows the shell command, not the tool name", () => {
+    expect(
+      toolCallLabel({
+        id: "a",
+        role: "tool",
+        text: "git status -s",
+        tool: { kind: "execute", title: "git status -s" },
+      }),
+    ).toBe("git status -s");
+    expect(
+      toolCallLabel({
+        id: "b",
+        role: "tool",
+        text: "Skill /code-review",
+        tool: { kind: "skill", title: "Skill /code-review" },
+      }),
+    ).toBe("Skill /code-review");
   });
 });
 

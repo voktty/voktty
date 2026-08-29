@@ -10,6 +10,7 @@ import {
   extensionUiResponse,
   extensionUiTitle,
   isAgentSettled,
+  mergeToolInput,
   modelsFromRpcData,
   needsExtensionUiReply,
   parseExtensionUiRequest,
@@ -21,6 +22,7 @@ import {
   providerSessionIdFromState,
   toolCallStartFromEvent,
   toolExecutionEndFromEvent,
+  toolExecutionStartFromEvent,
   toolKindFromName,
   toolTitle,
   turnErrorFromEvent,
@@ -245,6 +247,31 @@ describe("streaming events", () => {
     ).toEqual({ id: "call_1", name: "write", index: 1 });
 
     expect(
+      toolExecutionStartFromEvent({
+        type: "tool_execution_start",
+        toolCallId: "call_1",
+        toolName: "bash",
+        args: { command: "ls -la" },
+      }),
+    ).toEqual({
+      id: "call_1",
+      name: "bash",
+      input: { command: "ls -la" },
+    });
+    expect(
+      toolExecutionStartFromEvent({
+        type: "tool_execution_start",
+        toolCallId: "call_2",
+        toolName: "bash",
+        args: '{"command":"pwd"}',
+      }),
+    ).toEqual({
+      id: "call_2",
+      name: "bash",
+      input: { command: "pwd" },
+    });
+
+    expect(
       toolExecutionEndFromEvent({
         type: "tool_execution_end",
         toolCallId: "call_1",
@@ -269,8 +296,16 @@ describe("tools and models", () => {
   it("titles built-in Pi tools", () => {
     expect(toolKindFromName("bash")).toBe("execute");
     expect(toolKindFromName("edit")).toBe("edit");
+    expect(toolTitle("bash", { command: "git status -s" })).toBe("git status -s");
     expect(toolTitle("read", { path: "src/a.ts" })).toMatch(/src\/a\.ts/);
     expect(previewFromTool("write", { path: "src/a.ts" })?.kind).toBe("write");
+  });
+
+  it("keeps earlier tool args when a later update is partial", () => {
+    expect(
+      mergeToolInput({ command: "git status -s" }, { timeout: 30 }),
+    ).toEqual({ command: "git status -s", timeout: 30 });
+    expect(mergeToolInput({ command: "ls" }, {})).toEqual({ command: "ls" });
   });
 
   it("flattens get_available_models payloads", () => {

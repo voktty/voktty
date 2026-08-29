@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Skill tool rows only said `Skill`. They now show `Skill /name`, the same way reads show the file. In #32.
+- Shell tool rows only showed the tool name (`bash` / `Bash`) for Claude, Pi, and some other providers, so you could not see or cancel the command that was about to run. The activity ticker now shows the command itself, matching Codex. In #32.
 - The `@` mention picker in the composer only offered files, so you could not point the agent at a folder. Directories from the project tree are selectable now. In #34.
 - Codex turns looked finished while the agent was still working: “Worked for” froze and the composer stop button went back to send, even though tools and text kept arriving. The turn now stays live until Codex actually completes it.
 

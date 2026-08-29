@@ -190,4 +190,24 @@ describe("tool enrichment", () => {
     expect(tool?.text).toBe("Read src/App.tsx");
     expect(tool?.tool?.preview?.path).toBe("src/App.tsx");
   });
+
+  it("replaces a bare Bash label with the command once input arrives", () => {
+    let session = newSession("claude", "/repo");
+    session = applyHarnessEvent(session, {
+      type: "tool.started",
+      callId: "call_1",
+      title: "Bash",
+      kind: "execute",
+      status: "pending",
+    });
+    session = applyHarnessEvent(session, {
+      type: "tool.updated",
+      callId: "call_1",
+      title: "ls",
+      kind: "execute",
+      status: "pending",
+    });
+    const tool = session.blocks.find((block) => block.tool?.callId === "call_1");
+    expect(tool?.text).toBe("ls");
+  });
 });

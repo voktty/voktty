@@ -5,6 +5,8 @@ import type { ApprovalDecision, HarnessEvent } from "./types";
 import {
   composeToolTitle,
   extractSearchQuery,
+  extractShellCommand,
+  extractSkillName,
   extractToolPreview,
 } from "./preview";
 import { fxToolInfo, fxToolVerb } from "./fxTool";
@@ -128,6 +130,8 @@ export function permissionRequestFromAcp(
     composeToolTitle({
       kind,
       title: label,
+      command: command ?? extractShellCommand(tool),
+      skill: extractSkillName(tool),
       path: preview?.path,
       query: preview?.query ?? extractSearchQuery(tool),
       previewKind: preview?.kind,
@@ -203,6 +207,24 @@ export function eventsFromAcpUpdate(params: unknown): HarnessEvent[] {
       composeToolTitle({
         kind: toolKind,
         title: fx.title ?? toolLabel(update) ?? toolLabel(tool),
+        command: extractShellCommand(
+          update.rawInput,
+          tool.rawInput,
+          update.raw_input,
+          tool.raw_input,
+          update.input,
+          tool.input,
+          update,
+        ),
+        skill: extractSkillName(
+          update.rawInput,
+          tool.rawInput,
+          update.raw_input,
+          tool.raw_input,
+          update.input,
+          tool.input,
+          update,
+        ),
         path: preview?.path,
         query:
           preview?.query ??

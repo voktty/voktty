@@ -1,5 +1,5 @@
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
-import { composeToolTitle, extractToolPreview } from "./preview";
+import { extractToolPreview, titleFromToolInput } from "./preview";
 import { streamTextDelta } from "./streamText";
 import type { ApprovalDecision, HarnessEvent } from "./types";
 
@@ -640,6 +640,7 @@ export function toolKindFromName(toolName: string): string {
   ) {
     return "search";
   }
+  if (normalized === "skill" || normalized === "skills") return "skill";
   return toolName;
 }
 
@@ -647,20 +648,7 @@ export function toolTitle(
   name: string,
   input: Record<string, unknown>,
 ): string {
-  const kind = toolKindFromName(name);
-  const preview = extractToolPreview(
-    { title: name, name, kind, rawInput: input, input },
-    { title: name, name, kind, rawInput: input },
-  );
-  return (
-    composeToolTitle({
-      kind,
-      title: name,
-      path: preview?.path,
-      query: preview?.query,
-      previewKind: preview?.kind,
-    }) || name
-  );
+  return titleFromToolInput(name, toolKindFromName(name), input);
 }
 
 export function previewFromTool(

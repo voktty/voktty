@@ -21,6 +21,7 @@ import {
   extensionUiTitle,
   isAgentSettled,
   isPiThinkingLevel,
+  mergeToolInput,
   needsExtensionUiReply,
   parseExtensionUiRequest,
   parsePiModelRef,
@@ -506,6 +507,10 @@ function handleFrame(
   if (execUpdate) {
     const tool = live.toolsById.get(execUpdate.id);
     if (tool) {
+      if (Object.keys(execUpdate.input).length > 0) {
+        tool.input = mergeToolInput(tool.input, execUpdate.input);
+        tool.title = toolTitle(tool.name, tool.input);
+      }
       live.onEvent({
         type: "tool.updated",
         callId: tool.id,
@@ -708,16 +713,16 @@ function updateTool(
   tool: InFlightTool,
   input: Record<string, unknown>,
 ): void {
-  tool.input = input;
-  tool.title = toolTitle(tool.name, input);
+  tool.input = mergeToolInput(tool.input, input);
+  tool.title = toolTitle(tool.name, tool.input);
   live.onEvent({
     type: "tool.updated",
     callId: tool.id,
     title: tool.title,
     kind: toolKindFromName(tool.name),
     status: "pending",
-    detail: summarizeToolRequest(tool.name, input),
-    preview: previewFromTool(tool.name, input),
+    detail: summarizeToolRequest(tool.name, tool.input),
+    preview: previewFromTool(tool.name, tool.input),
   });
 }
 

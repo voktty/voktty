@@ -1,15 +1,10 @@
 import {
-  Brain,
   Check,
   ChevronRight,
   Clock,
   CircleDashed,
   Copy,
-  Hammer,
-  Lightbulb,
-  Pencil,
-  Search,
-  Terminal,
+  Minus,
   X,
 } from "lucide-react";
 import {
@@ -32,6 +27,7 @@ import {
   isEditTool,
   isReadTool,
   isSearchTool,
+  isSkillTool,
   stubFilePreview,
 } from "../lib/harness/preview";
 import { copyText } from "../lib/clipboard";
@@ -918,7 +914,7 @@ function ActivityRow({
   if (isProseBlock(block)) {
     return expanded ? (
       <div className="flex min-w-0 gap-1.5 py-1 text-content">
-        <Lightbulb
+        <Minus
           className="mt-[5px] size-3.5 shrink-0 text-content/50"
           strokeWidth={1.75}
         />
@@ -960,7 +956,7 @@ function ActivityThinkingRow({
   const [open, setOpen] = useState(false);
   const text = proseSummary(block.text) || "Thinking";
   const icon = (
-    <Brain
+    <Minus
       className={`size-3.5 shrink-0 text-content/40 ${
         block.streaming ? "zen-thinking-pulse" : ""
       }`}
@@ -1020,7 +1016,7 @@ function ActivityNoteRow({ block }: { block: Block }) {
       aria-label={`Agent said: ${text}`}
       className="flex min-w-0 items-center gap-1.5 py-1"
     >
-      <Lightbulb
+      <Minus
         className="size-3.5 shrink-0 text-content/50"
         strokeWidth={1.75}
       />
@@ -1054,7 +1050,7 @@ function ActivityToolRow({
         aria-label={`Tool call: ${label}`}
         className="flex min-w-0 items-center gap-1.5 py-1"
       >
-        <ActivityToolIcon block={block} state={state} live={live} />
+        <ActivityToolIcon state={state} live={live} />
         <ToolCallSummary
           label={label}
           preview={block.tool?.preview}
@@ -1071,11 +1067,9 @@ function ActivityToolRow({
 }
 
 function ActivityToolIcon({
-  block,
   state,
   live = false,
 }: {
-  block: Block;
   state: ToolCallState;
   live?: boolean;
 }) {
@@ -1088,37 +1082,9 @@ function ActivityToolIcon({
     );
   }
 
-  const kind = block.tool?.preview?.kind ?? block.tool?.kind?.toLowerCase();
-  const label = block.text || block.tool?.title || "";
-  const className = "size-3.5 shrink-0 text-content/50";
-
-  if (
-    kind === "shell" ||
-    /^(run|ran)\s+command/i.test(label) ||
-    /shell|bash|execute/i.test(block.tool?.kind ?? "")
-  ) {
-    return <Terminal className={className} strokeWidth={1.75} />;
-  }
-  if (
-    kind === "write" ||
-    isEditTool(block.tool?.kind, label, block.tool?.preview)
-  ) {
-    return <Pencil className={className} strokeWidth={1.75} />;
-  }
-  if (
-    kind === "read" ||
-    isReadTool(block.tool?.kind, label, block.tool?.preview)
-  ) {
-    return <Hammer className={className} strokeWidth={1.75} />;
-  }
-  if (
-    kind === "search" ||
-    isSearchTool(block.tool?.kind, label, block.tool?.preview)
-  ) {
-    return <Search className={className} strokeWidth={1.75} />;
-  }
-
-  return <Hammer className={className} strokeWidth={1.75} />;
+  return (
+    <Minus className="size-3.5 shrink-0 text-content/50" strokeWidth={1.75} />
+  );
 }
 
 function ToolCallStatusIcon({ state }: { state: ToolCallState }) {
@@ -1299,7 +1265,7 @@ function ToolCallSummary({
   onOpenFile?: (path: string) => void;
   interactive?: boolean;
 }) {
-  const parts = label.match(/^(Read|Find)\s+(.+)$/);
+  const parts = label.match(/^(Read|Find|Skill)\s+(.+)$/);
   // A write preview carries the path itself, so edits get the same verb + file
   // chip as reads rather than falling through to a raw label.
   const writeTarget =
@@ -1315,7 +1281,9 @@ function ToolCallSummary({
       ? "Read"
       : /^find$/i.test(label.trim()) && preview?.query
         ? "Find"
-        : undefined);
+        : /^skill$/i.test(label.trim())
+          ? "Skill"
+          : undefined);
   const target =
     parts?.[2] ??
     writeTarget ??
@@ -1333,7 +1301,7 @@ function ToolCallSummary({
       </span>
     );
   }
-  const isFile = action !== "Find";
+  const isFile = action !== "Find" && action !== "Skill";
   const fileName =
     preview?.fileName ||
     target

@@ -137,6 +137,46 @@ export function isFileTool(
   );
 }
 
+export function isExecuteTool(kind?: string, title?: string): boolean {
+  const key = kind?.trim().toLowerCase() ?? "";
+  if (key === "execute" || key === "shell" || key === "bash") return true;
+  if (key && key !== "other") return false;
+  return /^(bash|shell|run(?:ning)?(?:\s+command)?)\b/i.test(
+    title?.trim() ?? "",
+  );
+}
+
+/** The argv / script a shell tool is about to run, if the harness sent it. */
+export function extractShellCommand(...values: unknown[]): string | undefined {
+  for (const raw of inputRecords(...values)) {
+    for (const key of ["command", "cmd", "script"]) {
+      const found = commandField(raw[key]);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/** The skill a Skill tool is invoking, if the harness sent it. */
+export function extractSkillName(...values: unknown[]): string | undefined {
+  for (const raw of inputRecords(...values)) {
+    for (const key of ["skill", "skill_name", "skillName", "skill_id", "skillId"]) {
+      const found = skillNameField(raw[key]);
+      if (found) return found;
+    }
+    const named = skillNameField(raw.name);
+    if (named && looksLikeSkillName(named)) return named;
+  }
+  return undefined;
+}
+
+export function isSkillTool(kind?: string, title?: string): boolean {
+  const key = kind?.trim().toLowerCase() ?? "";
+  if (key === "skill" || key === "skills") return true;
+  if (key && key !== "other") return false;
+  return /^skill\b/i.test(title?.trim() ?? "");
+}
+
 export function extractSearchQuery(value: unknown): string | undefined {
   const keys = [
     "pattern",
@@ -171,6 +211,8 @@ export function titleFromToolInput(
     composeToolTitle({
       kind,
       title: name,
+      command: extractShellCommand(input),
+      skill: extractSkillName(input),
       path: preview?.path,
       query: preview?.query,
       previewKind: preview?.kind,
@@ -183,6 +225,8 @@ export function composeToolTitle(opts: {
   title?: string;
   path?: string;
   query?: string;
+  command?: string;
+  skill?: string;
   previewKind?: ToolPreviewKind;
 }): string {
   const kind = opts.kind?.trim().toLowerCase() ?? "";
@@ -190,6 +234,35 @@ export function composeToolTitle(opts: {
   const path = opts.path?.trim();
   const query = opts.query?.trim();
   const previewKind = opts.previewKind;
+  const command = firstLine(opts.command);
+  const skill = formatSkillName(opts.skill);
+
+  if (
+    isSkillTool(kind, title) ||
+    (skill &&
+      !isExecuteTool(kind, title) &&
+      !isReadTool(kind, title) &&
+      !isSearchTool(kind, title) &&
+      !isEditTool(kind, title, undefined))
+  ) {
+    if (skill) return `Skill ${skill}`;
+    const rest = title.replace(/^skill\b\s*/i, "").trim();
+    if (rest && !isWeakToolTitle(rest)) {
+      return `Skill ${formatSkillName(rest) || rest}`;
+    }
+    return "Skill";
+  }
+
+  // Shell rows are a one-line ticker. The command has to live in the title
+  // itself: Codex already does this, Claude/Pi used to label the row "Bash"
+  // and hide the argv in detail the activity stack never shows.
+  if (previewKind === "shell" || isExecuteTool(kind, title)) {
+    if (command) return command;
+    const rest = stripExecutePrefix(title);
+    if (rest && !isWeakToolTitle(rest)) return rest;
+    if (title && !isWeakToolTitle(title)) return title;
+    return "Shell";
+  }
 
   // A title that already names a different action is finished; re-prefixing it
   // with "Read" produces nonsense like "Read List ." when only a stale
@@ -229,7 +302,7 @@ export function stubFilePreview(
 }
 
 export function isWeakToolTitle(value: string): boolean {
-  return /^(tool|shell|read|edit|search|find|grep|glob|fetch|other|write|delete|move|think|run|list|working|reading|editing|searching|writing|running|listing|fetching|thinking|deleting|moving|mcp:\s*tool|read file|edit file|write file|unnamed)$/i.test(
+  return /^(tool|shell|bash|execute|command|skill|read|edit|search|find|grep|glob|fetch|other|write|delete|move|think|run|list|working|reading|editing|searching|writing|running|listing|fetching|thinking|deleting|moving|mcp:\s*tool|read file|edit file|write file|run command|ran command|unnamed)$/i.test(
     value.trim(),
   );
 }
@@ -772,6 +845,51 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     return value as Record<string, unknown>;
   }
   return null;
+}
+
+function commandField(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => typeof item === "string")
+  ) {
+    const joined = value.join(" ").trim();
+    if (joined) return joined;
+  }
+  return undefined;
+}
+
+function firstLine(value: string | undefined): string {
+  const text = value?.trim() ?? "";
+  if (!text) return "";
+  return text.split(/\r?\n/)[0]?.trim() ?? "";
+}
+
+function stripExecutePrefix(title: string): string {
+  return title.replace(/^(?:bash|shell|execute)\s*[:\-]\s+/i, "").trim();
+}
+
+function skillNameField(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const text = value.trim().replace(/^\/+/, "");
+  if (!text || isWeakToolTitle(text) || text.length > 80 || /[\n\r]/.test(text)) {
+    return undefined;
+  }
+  return text;
+}
+
+function looksLikeSkillName(value: string): boolean {
+  const text = value.trim().replace(/^\/+/, "");
+  if (!text) return false;
+  if (text.includes("/") || text.includes("\\")) return false;
+  if (/\.[a-z0-9]{1,8}$/i.test(text)) return false;
+  return /^[a-zA-Z][\w.-]*$/.test(text);
+}
+
+function formatSkillName(value: string | undefined): string {
+  const text = value?.trim().replace(/^\/+/, "") ?? "";
+  return text ? `/${text}` : "";
 }
 
 function coerceString(value: unknown): string | undefined {

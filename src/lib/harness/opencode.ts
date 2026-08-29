@@ -34,7 +34,7 @@ import {
   toolKindFromName,
   type OpenCodePart,
 } from "./opencodeProtocol";
-import { composeToolTitle } from "./preview";
+import { composeToolTitle, extractShellCommand, extractSkillName } from "./preview";
 import { streamTextDelta } from "./streamText";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
 
@@ -486,6 +486,10 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
         composeToolTitle({
           kind,
           title: permissionTitle(permission, patterns),
+          command:
+            extractShellCommand(metadata.input) ??
+            (permission === "bash" ? patterns[0] : undefined),
+          skill: extractSkillName(metadata.input),
           path: preview?.path,
           query: preview?.query,
           previewKind: preview?.kind,
@@ -598,6 +602,8 @@ function emitTool(live: Live, part: OpenCodePart): void {
     composeToolTitle({
       kind,
       title: (typeof state.title === "string" && state.title) || tool,
+      command: extractShellCommand(state.input),
+      skill: extractSkillName(state.input),
       path: preview?.path,
       query: preview?.query,
       previewKind: preview?.kind,
