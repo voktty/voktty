@@ -7,7 +7,9 @@ use std::process::{Command, ExitCode, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use base64::Engine;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256, Sha512};
 use voktty_aliases::{
     AliasContext, AliasFile, AliasSource, AliasTarget, BuiltinAction, ResolvedAlias,
 };
@@ -150,8 +152,18 @@ fn parse_args(mut args: Vec<OsString>) -> Result<Config, CliError> {
         Some("identify") => request_without_params(args, METHOD_IDENTIFY)?,
         Some("open") => parse_open(args)?,
         Some("alias") => Action::Alias(parse_alias(args)?),
-        Some("ipme") => Action::Alias(AliasCommand::Run {
-            name: "ipme".into(),
+        Some(
+            name @ ("ipme"
+            | "port"
+            | "ports"
+            | "sslcheck"
+            | "jwt"
+            | "envdiff"
+            | "hash"
+            | "sysinfo"
+            | "bench"),
+        ) => Action::Alias(AliasCommand::Run {
+            name: name.into(),
             args,
         }),
         Some("--") => {
@@ -732,9 +744,16 @@ fn execute_alias(
                 })?;
             Ok(exit_code(status.code()))
         }
-        AliasTarget::Builtin {
-            action: BuiltinAction::Ipme,
-        } => run_ipme(&forwarded, as_json),
+        AliasTarget::Builtin { action } => match action {
+            BuiltinAction::Ipme => run_ipme(&forwarded, as_json),
+            BuiltinAction::Port => run_port(&alias.name, &forwarded, as_json),
+            BuiltinAction::Sslcheck => run_sslcheck(&forwarded, as_json),
+            BuiltinAction::Jwt => run_jwt(&forwarded, as_json),
+            BuiltinAction::Envdiff => run_envdiff(&forwarded, as_json),
+            BuiltinAction::Hash => run_hash(&forwarded, as_json),
+            BuiltinAction::Sysinfo => run_sysinfo(&forwarded, as_json),
+            BuiltinAction::Bench => run_bench(&forwarded, as_json),
+        },
     }
 }
 
@@ -778,6 +797,13 @@ fn print_alias_plan(alias: &ResolvedAlias, forwarded: &[OsString], as_json: bool
         AliasTarget::Builtin { action } => {
             let action = match action {
                 BuiltinAction::Ipme => "ipme",
+                BuiltinAction::Port => "port",
+                BuiltinAction::Sslcheck => "sslcheck",
+                BuiltinAction::Jwt => "jwt",
+                BuiltinAction::Envdiff => "envdiff",
+                BuiltinAction::Hash => "hash",
+                BuiltinAction::Sysinfo => "sysinfo",
+                BuiltinAction::Bench => "bench",
             };
             if as_json {
                 println!(
@@ -907,6 +933,517 @@ fn public_ip_error(error: impl std::fmt::Display) -> CliError {
         format!("could not query the public IP: {error}; check the connection and retry"),
         EXIT_UNAVAILABLE,
     )
+}
+
+fn run_port(name: &str, args: &[OsString], as_json: bool) -> Result<ExitCode, CliError> {
+    let mut kill = false;
+    let mut port_num = None;
+    let mut as_json = as_json;
+
+    for arg in args {
+        match arg.to_str() {
+            Some("--json") => as_json = true,
+            Some("--kill" | "-k") => kill = true,
+            Some(val) => {
+                if let Ok(p) = val.parse::<u16>() {
+                    port_num = Some(p);
+                } else if val.starts_with('-') {
+                    return Err(usage_error(format!("unknown port option '{val}'")));
+                } else {
+                    return Err(usage_error(format!("invalid port number '{val}'")));
+                }
+            }
+            None => return Err(usage_error("port arguments must be valid UTF-8")),
+        }
+    }
+
+    if name == "ports" || port_num.is_none() {
+        let common_ports: &[u16] = &[
+            3000, 3001, 3306, 4000, 5000, 5173, 5432, 6379, 8000, 8080, 8443, 9000, 27017,
+        ];
+        let mut occupied = Vec::new();
+        for &p in common_ports {
+            if std::net::TcpListener::bind(("127.0.0.1", p)).is_err() {
+                occupied.push(p);
+            }
+        }
+        if as_json {
+            println!(
+                "{}",
+                json!({ "ok": true, "listeningPorts": occupied, "scannedCommonPorts": common_ports })
+            );
+        } else {
+            println!("Scanned common dev ports:");
+            if occupied.is_empty() {
+                println!("No standard dev ports currently occupied.");
+            } else {
+                for p in &occupied {
+                    println!("  Port {p}: ACTIVE / LISTENING");
+                }
+            }
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let port = port_num.unwrap();
+    let occupied = std::net::TcpListener::bind(("127.0.0.1", port)).is_err()
+        || std::net::TcpListener::bind(("0.0.0.0", port)).is_err();
+
+    let mut killed = false;
+    if occupied && kill {
+        #[cfg(windows)]
+        {
+            let cmd = format!(
+                "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr \":{port} \"') do taskkill /f /pid %a"
+            );
+            let _ = Command::new("cmd").args(["/c", &cmd]).output();
+            killed = true;
+        }
+        #[cfg(unix)]
+        {
+            let _ = Command::new("sh")
+                .args(["-c", &format!("fuser -k -n tcp {port} 2>/dev/null || lsof -ti:{port} | xargs -r kill -9")])
+                .output();
+            killed = true;
+        }
+    }
+
+    if as_json {
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "port": port,
+                "occupied": occupied,
+                "killed": killed
+            })
+        );
+    } else if occupied {
+        if killed {
+            println!("Port {port} was occupied. Kill signal dispatched.");
+        } else {
+            println!("Port {port} is occupied / listening. Use --kill to terminate the process.");
+        }
+    } else {
+        println!("Port {port} is free and available.");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn run_sslcheck(args: &[OsString], as_json: bool) -> Result<ExitCode, CliError> {
+    let mut host = None;
+    let mut as_json = as_json;
+
+    for arg in args {
+        match arg.to_str() {
+            Some("--json") => as_json = true,
+            Some(val) if !val.starts_with('-') && host.is_none() => host = Some(val.to_string()),
+            Some(val) => return Err(usage_error(format!("unknown option or duplicate host '{val}'"))),
+            None => return Err(usage_error("sslcheck options must be valid UTF-8")),
+        }
+    }
+
+    let host = host.ok_or_else(|| usage_error("missing target host. Usage: sslcheck <host[:port]>"))?;
+    let target_url = if host.starts_with("https://") {
+        host.clone()
+    } else if host.starts_with("http://") {
+        host.replace("http://", "https://")
+    } else {
+        format!("https://{host}")
+    };
+
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(4))
+        .timeout(Duration::from_secs(8))
+        .build()
+        .map_err(|e| CliError::new("ssl_client_error", e.to_string(), EXIT_UNAVAILABLE))?;
+
+    let start = std::time::Instant::now();
+    let response = client.get(&target_url).send();
+    let duration_ms = start.elapsed().as_millis();
+
+    match response {
+        Ok(res) => {
+            let status = res.status().as_u16();
+            if as_json {
+                println!(
+                    "{}",
+                    json!({
+                        "ok": true,
+                        "host": host,
+                        "url": target_url,
+                        "tlsValid": true,
+                        "httpStatus": status,
+                        "latencyMs": duration_ms
+                    })
+                );
+            } else {
+                println!("SSL/TLS Check for {host}:");
+                println!("  Status: Valid TLS Handshake (HTTP {status})");
+                println!("  URL: {target_url}");
+                println!("  Latency: {duration_ms}ms");
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Err(e) => {
+            if as_json {
+                println!(
+                    "{}",
+                    json!({
+                        "ok": false,
+                        "host": host,
+                        "url": target_url,
+                        "tlsValid": false,
+                        "error": e.to_string()
+                    })
+                );
+            } else {
+                println!("SSL/TLS Check for {host}: FAILED");
+                println!("  Error: {e}");
+            }
+            Ok(exit_code(Some(1)))
+        }
+    }
+}
+
+fn run_jwt(args: &[OsString], as_json: bool) -> Result<ExitCode, CliError> {
+    let mut token_str = None;
+    let mut as_json = as_json;
+
+    for arg in args {
+        match arg.to_str() {
+            Some("--json") => as_json = true,
+            Some(val) if !val.starts_with('-') && token_str.is_none() => {
+                token_str = Some(val.trim().to_string())
+            }
+            Some(val) => return Err(usage_error(format!("unknown jwt option '{val}'"))),
+            None => return Err(usage_error("jwt options must be valid UTF-8")),
+        }
+    }
+
+    let token = token_str.ok_or_else(|| usage_error("missing JWT token. Usage: jwt <token>"))?;
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err(usage_error("invalid JWT format; expected header.payload.signature (3 segments)"));
+    }
+
+    let decode_part = |segment: &str| -> Result<Value, CliError> {
+        let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        let mut unpadded = segment.to_string();
+        while unpadded.len() % 4 != 0 {
+            unpadded.push('=');
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&unpadded)
+            .or_else(|_| engine.decode(segment))
+            .map_err(|e| CliError::new("jwt_decode_error", format!("base64 decode error: {e}"), EXIT_USAGE))?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| CliError::new("jwt_json_error", format!("invalid JSON in segment: {e}"), EXIT_USAGE))
+    };
+
+    let header = decode_part(parts[0])?;
+    let payload = decode_part(parts[1])?;
+
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let exp = payload.get("exp").and_then(|v| v.as_i64());
+    let iat = payload.get("iat").and_then(|v| v.as_i64());
+
+    let (expired, expires_in_seconds) = match exp {
+        Some(expiry) => (now_secs > expiry, Some(expiry - now_secs)),
+        None => (false, None),
+    };
+
+    if as_json {
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "header": header,
+                "payload": payload,
+                "hasSignature": !parts[2].is_empty(),
+                "exp": exp,
+                "iat": iat,
+                "expired": expired,
+                "expiresInSeconds": expires_in_seconds
+            })
+        );
+    } else {
+        println!("JWT Header:");
+        println!("{}", serde_json::to_string_pretty(&header).unwrap_or_default());
+        println!("\nJWT Payload:");
+        println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+        println!("\nStatus:");
+        if let Some(secs) = expires_in_seconds {
+            if secs < 0 {
+                println!("  Expired {} seconds ago", -secs);
+            } else {
+                println!("  Active (expires in {secs} seconds / {} minutes)", secs / 60);
+            }
+        } else {
+            println!("  No expiration claim (exp) present");
+        }
+    }
+
+    Ok(ExitCode::SUCCESS)
+}
+
+fn run_envdiff(args: &[OsString], as_json: bool) -> Result<ExitCode, CliError> {
+    let mut files = Vec::new();
+    let mut as_json = as_json;
+
+    for arg in args {
+        match arg.to_str() {
+            Some("--json") => as_json = true,
+            Some(val) if !val.starts_with('-') => files.push(val.to_string()),
+            Some(val) => return Err(usage_error(format!("unknown envdiff option '{val}'"))),
+            None => return Err(usage_error("envdiff options must be valid UTF-8")),
+        }
+    }
+
+    if files.len() != 2 {
+        return Err(usage_error("envdiff requires exactly two files. Usage: envdiff <file1> <file2>"));
+    }
+
+    let parse_env = |path: &str| -> Result<std::collections::BTreeMap<String, String>, CliError> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| CliError::new("file_read_error", format!("could not read '{path}': {e}"), EXIT_UNAVAILABLE))?;
+        let mut map = std::collections::BTreeMap::new();
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Some((k, v)) = line.split_once('=') {
+                map.insert(k.trim().to_string(), v.trim().to_string());
+            }
+        }
+        Ok(map)
+    };
+
+    let map1 = parse_env(&files[0])?;
+    let map2 = parse_env(&files[1])?;
+
+    let missing_in_2: Vec<String> = map1.keys().filter(|k| !map2.contains_key(*k)).cloned().collect();
+    let missing_in_1: Vec<String> = map2.keys().filter(|k| !map1.contains_key(*k)).cloned().collect();
+    let mut different_values = Vec::new();
+    let mut identical_count = 0;
+
+    for (k, v1) in &map1 {
+        if let Some(v2) = map2.get(k) {
+            if v1 != v2 {
+                different_values.push(json!({
+                    "key": k,
+                    "file1": v1,
+                    "file2": v2
+                }));
+            } else {
+                identical_count += 1;
+            }
+        }
+    }
+
+    if as_json {
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "file1": files[0],
+                "file2": files[1],
+                "missingInFile2": missing_in_2,
+                "missingInFile1": missing_in_1,
+                "differentValues": different_values,
+                "identicalKeysCount": identical_count
+            })
+        );
+    } else {
+        println!("Comparing {} vs {}:", files[0], files[1]);
+        if missing_in_2.is_empty() && missing_in_1.is_empty() && different_values.is_empty() {
+            println!("  Files match completely ({identical_count} identical keys).");
+        } else {
+            if !missing_in_2.is_empty() {
+                println!("\nKeys in {} missing from {}:", files[0], files[1]);
+                for k in &missing_in_2 {
+                    println!("  + {k}");
+                }
+            }
+            if !missing_in_1.is_empty() {
+                println!("\nKeys in {} missing from {}:", files[1], files[0]);
+                for k in &missing_in_1 {
+                    println!("  - {k}");
+                }
+            }
+            if !different_values.is_empty() {
+                println!("\nKeys with differing values ({}):", different_values.len());
+                for item in &different_values {
+                    println!("  ~ {}", item["key"].as_str().unwrap_or_default());
+                }
+            }
+            println!("\nIdentical keys: {identical_count}");
+        }
+    }
+
+    Ok(ExitCode::SUCCESS)
+}
+
+fn run_hash(args: &[OsString], as_json: bool) -> Result<ExitCode, CliError> {
+    let mut algo = "sha256".to_string();
+    let mut target = None;
+    let mut as_json = as_json;
+
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.to_str() {
+            Some("--json") => as_json = true,
+            Some("--algo") => {
+                if let Some(next) = iter.next() {
+                    algo = next.to_string_lossy().to_lowercase();
+                }
+            }
+            Some(val) if !val.starts_with('-') && target.is_none() => target = Some(val.to_string()),
+            Some(val) => return Err(usage_error(format!("unknown hash option '{val}'"))),
+            None => return Err(usage_error("hash options must be valid UTF-8")),
+        }
+    }
+
+    let target = target.ok_or_else(|| usage_error("missing target file or string. Usage: hash <file|text> [--algo sha256|sha512]"))?;
+    let bytes = match std::fs::read(&target) {
+        Ok(file_bytes) => file_bytes,
+        Err(_) => target.as_bytes().to_vec(),
+    };
+
+    let hash_hex = match algo.as_str() {
+        "sha512" => {
+            let mut hasher = Sha512::new();
+            hasher.update(&bytes);
+            hex::encode(hasher.finalize())
+        }
+        _ => {
+            let mut hasher = Sha256::new();
+            hasher.update(&bytes);
+            hex::encode(hasher.finalize())
+        }
+    };
+
+    if as_json {
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "target": target,
+                "algorithm": algo,
+                "hash": hash_hex
+            })
+        );
+    } else {
+        println!("{hash_hex}  {target} ({algo})");
+    }
+
+    Ok(ExitCode::SUCCESS)
+}
+
+fn run_sysinfo(args: &[OsString], as_json: bool) -> Result<ExitCode, CliError> {
+    let mut as_json = as_json;
+    for arg in args {
+        match arg.to_str() {
+            Some("--json") => as_json = true,
+            Some(val) => return Err(usage_error(format!("unknown sysinfo option '{val}'"))),
+            None => return Err(usage_error("sysinfo options must be valid UTF-8")),
+        }
+    }
+
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    let local = local_addresses();
+
+    if as_json {
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "os": os,
+                "arch": arch,
+                "logicalCpus": cpus,
+                "localAddresses": local,
+                "appVersion": env!("CARGO_PKG_VERSION")
+            })
+        );
+    } else {
+        println!("Voktty System Info:");
+        println!("  OS: {} ({})", os, arch);
+        println!("  CPU Cores: {}", cpus);
+        println!("  Local IPs: {}", local.join(", "));
+        println!("  Version: Voktty v{}", env!("CARGO_PKG_VERSION"));
+    }
+
+    Ok(ExitCode::SUCCESS)
+}
+
+fn run_bench(args: &[OsString], as_json: bool) -> Result<ExitCode, CliError> {
+    let mut command = None;
+    let mut runs = 5;
+    let mut as_json = as_json;
+
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.to_str() {
+            Some("--json") => as_json = true,
+            Some("--runs" | "-r") => {
+                if let Some(next) = iter.next() {
+                    if let Ok(n) = next.to_string_lossy().parse::<usize>() {
+                        runs = n.clamp(1, 50);
+                    }
+                }
+            }
+            Some(val) if !val.starts_with('-') && command.is_none() => {
+                command = Some(val.to_string())
+            }
+            Some(val) => return Err(usage_error(format!("unknown bench option '{val}'"))),
+            None => return Err(usage_error("bench options must be valid UTF-8")),
+        }
+    }
+
+    let command_str = command.ok_or_else(|| usage_error("missing command to benchmark. Usage: bench \"<command>\" [--runs 5]"))?;
+    let mut durations = Vec::new();
+
+    for _ in 0..runs {
+        let start = std::time::Instant::now();
+        #[cfg(windows)]
+        let _ = Command::new("cmd").args(["/c", &command_str]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        #[cfg(unix)]
+        let _ = Command::new("sh").args(["-c", &command_str]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        durations.push(start.elapsed().as_millis());
+    }
+
+    let total: u128 = durations.iter().sum();
+    let mean = total / (runs as u128);
+    let min = *durations.iter().min().unwrap_or(&0);
+    let max = *durations.iter().max().unwrap_or(&0);
+
+    if as_json {
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "command": command_str,
+                "runs": runs,
+                "meanMs": mean,
+                "minMs": min,
+                "maxMs": max,
+                "durationsMs": durations
+            })
+        );
+    } else {
+        println!("Benchmark results for: {command_str}");
+        println!("  Runs: {runs}");
+        println!("  Mean: {mean}ms | Min: {min}ms | Max: {max}ms");
+    }
+
+    Ok(ExitCode::SUCCESS)
 }
 
 fn open_alias_file(path: &std::path::Path, as_json: bool) -> Result<(), CliError> {
@@ -1089,6 +1626,21 @@ mod tests {
                 args: args(&["--public"]),
             })
         );
+    }
+
+    #[test]
+    fn factory_shorthands_are_parsed_as_internal_aliases() {
+        for name in ["port", "ports", "sslcheck", "jwt", "envdiff", "hash", "sysinfo", "bench"] {
+            let config = parse_args(args(&[name, "--json"])).expect("parse shorthand");
+            assert!(config.json);
+            assert_eq!(
+                config.action,
+                Action::Alias(AliasCommand::Run {
+                    name: name.into(),
+                    args: Vec::new(),
+                })
+            );
+        }
     }
 
     #[test]

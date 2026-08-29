@@ -73,6 +73,7 @@ const ruBase = mergeLocale(en, {
       rdp: "RDP",
       docker: "Docker",
       vault: "Хранилище",
+      aliases: "Псевдонимы",
       about: "О программе",
     },
     general: {

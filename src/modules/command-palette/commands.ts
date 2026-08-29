@@ -3,6 +3,7 @@ import { extensionCommands, useExtensionStore } from "@/modules/extensions";
 import type { SearchTarget } from "@/modules/header";
 import { t } from "@/modules/i18n";
 import { downloadConfiguration } from "@/modules/settings/configExport";
+import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
 import { leafIds, useCommandHistoryStore } from "@/modules/terminal";
 import { useVaultStore } from "@/modules/vault";
@@ -13,6 +14,7 @@ import {
   ArrowRight01Icon,
   Clock01Icon,
   CodeIcon,
+  CommandLineIcon,
   DashboardSquare01Icon,
   Download01Icon,
   File02Icon,
@@ -194,6 +196,28 @@ export function createCommandItems(
       icon: Settings01Icon,
       shortcutId: "settings.open",
       run: ctx.openSettings,
+    },
+    {
+      id: "aliases.manage",
+      title: t("commandPalette.commands.manageAliases"),
+      group: "General",
+      keywords: [
+        "alias",
+        "aliases",
+        "commands",
+        "cmd",
+        "shorthand",
+        "port",
+        "ipme",
+        "sslcheck",
+        "jwt",
+        "sysinfo",
+        "bench",
+        "envdiff",
+        "hash",
+      ],
+      icon: CommandLineIcon,
+      run: () => void openSettingsWindow("aliases"),
     },
     {
       id: "preferences.export",

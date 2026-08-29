@@ -73,6 +73,7 @@ const zhBase = mergeLocale(en, {
       rdp: "RDP",
       docker: "Docker",
       vault: "密码库",
+      aliases: "别名",
       about: "关于",
     },
     general: {

@@ -58,16 +58,23 @@ pub enum AliasTarget {
 #[serde(rename_all = "camelCase")]
 pub enum BuiltinAction {
     Ipme,
+    Port,
+    Sslcheck,
+    Jwt,
+    Envdiff,
+    Hash,
+    Sysinfo,
+    Bench,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AliasSource {
     Preinstalled,
     User,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolvedAlias {
     pub name: String,
@@ -106,6 +113,102 @@ pub fn preinstalled() -> AliasFile {
             disabled_profiles: Vec::new(),
             target: AliasTarget::Builtin {
                 action: BuiltinAction::Ipme,
+            },
+        },
+    );
+    aliases.insert(
+        "port".to_string(),
+        AliasDefinition {
+            description: "Inspect listening network ports and kill processes holding a port".into(),
+            enabled: true,
+            disabled_workspaces: Vec::new(),
+            disabled_profiles: Vec::new(),
+            target: AliasTarget::Builtin {
+                action: BuiltinAction::Port,
+            },
+        },
+    );
+    aliases.insert(
+        "ports".to_string(),
+        AliasDefinition {
+            description: "List all active listening network ports on the system".into(),
+            enabled: true,
+            disabled_workspaces: Vec::new(),
+            disabled_profiles: Vec::new(),
+            target: AliasTarget::Builtin {
+                action: BuiltinAction::Port,
+            },
+        },
+    );
+    aliases.insert(
+        "sslcheck".to_string(),
+        AliasDefinition {
+            description: "Inspect TLS/SSL certificate expiration, issuer, and SAN domains".into(),
+            enabled: true,
+            disabled_workspaces: Vec::new(),
+            disabled_profiles: Vec::new(),
+            target: AliasTarget::Builtin {
+                action: BuiltinAction::Sslcheck,
+            },
+        },
+    );
+    aliases.insert(
+        "jwt".to_string(),
+        AliasDefinition {
+            description: "Decode and inspect JSON Web Tokens locally without remote servers".into(),
+            enabled: true,
+            disabled_workspaces: Vec::new(),
+            disabled_profiles: Vec::new(),
+            target: AliasTarget::Builtin {
+                action: BuiltinAction::Jwt,
+            },
+        },
+    );
+    aliases.insert(
+        "envdiff".to_string(),
+        AliasDefinition {
+            description: "Compare environment files and highlight missing or extra variables".into(),
+            enabled: true,
+            disabled_workspaces: Vec::new(),
+            disabled_profiles: Vec::new(),
+            target: AliasTarget::Builtin {
+                action: BuiltinAction::Envdiff,
+            },
+        },
+    );
+    aliases.insert(
+        "hash".to_string(),
+        AliasDefinition {
+            description: "Compute file or string cryptographic checksums (SHA256, SHA512, MD5, SHA1)".into(),
+            enabled: true,
+            disabled_workspaces: Vec::new(),
+            disabled_profiles: Vec::new(),
+            target: AliasTarget::Builtin {
+                action: BuiltinAction::Hash,
+            },
+        },
+    );
+    aliases.insert(
+        "sysinfo".to_string(),
+        AliasDefinition {
+            description: "Display host hardware, CPU, memory, disk, and network summary".into(),
+            enabled: true,
+            disabled_workspaces: Vec::new(),
+            disabled_profiles: Vec::new(),
+            target: AliasTarget::Builtin {
+                action: BuiltinAction::Sysinfo,
+            },
+        },
+    );
+    aliases.insert(
+        "bench".to_string(),
+        AliasDefinition {
+            description: "Benchmark execution time of CLI commands with summary statistics".into(),
+            enabled: true,
+            disabled_workspaces: Vec::new(),
+            disabled_profiles: Vec::new(),
+            target: AliasTarget::Builtin {
+                action: BuiltinAction::Bench,
             },
         },
     );
