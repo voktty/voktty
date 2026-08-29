@@ -529,7 +529,7 @@ function createSlot(): Slot {
 
     // Terminal inline suggestions / ghost interception
     const suggest = useTerminalSuggestStore.getState().getSuggest(leafId);
-    if (suggest && suggest.open && suggest.items.length > 0) {
+    if (suggest && suggest.open) {
       const isSearchFilterKey =
         (event.altKey && (event.key === "f" || event.key === "F" || event.code === "KeyF")) ||
         ((IS_MAC ? event.metaKey : event.ctrlKey) &&

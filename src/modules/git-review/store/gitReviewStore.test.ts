@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as bridge from "../lib/gitReviewBridge";
+import type { ReviewComment } from "../types";
 import { fileKey, sessionKey, useGitReviewStore } from "./gitReviewStore";
 
 vi.mock("../lib/gitReviewBridge", () => ({
@@ -9,6 +10,10 @@ vi.mock("../lib/gitReviewBridge", () => ({
   unmarkRangeClaim: vi.fn(),
   reconcileFileReview: vi.fn(),
   getSessionReviewOverview: vi.fn(),
+  addReviewComment: vi.fn(),
+  getReviewComments: vi.fn(),
+  deleteReviewComment: vi.fn(),
+  updateReviewComment: vi.fn(),
 }));
 
 describe("gitReviewStore", () => {
@@ -18,6 +23,7 @@ describe("gitReviewStore", () => {
       overviews: {},
       reconciliations: {},
       viewModes: {},
+      comments: {},
       isLoading: false,
     });
   });
@@ -102,4 +108,62 @@ describe("gitReviewStore", () => {
     const fKey = fileKey("C:\\Repo", "worktree", "src/lib.rs");
     expect(useGitReviewStore.getState().viewModes[fKey]).toBe("unreviewed");
   });
+
+  it("manages review comments and builds handoff prompt", async () => {
+    const mockComment: ReviewComment = {
+      id: "comment-1",
+      sessionId: "s1",
+      path: "src/lib.rs",
+      side: "new",
+      line: 42,
+      endLine: 45,
+      snapshotHash: "hash123",
+      comment: "Please add unit tests for this function",
+      createdAt: 1000,
+      updatedAt: 1000,
+      status: "pending",
+    };
+
+    vi.mocked(bridge.addReviewComment).mockResolvedValueOnce(mockComment);
+    vi.mocked(bridge.getReviewComments).mockResolvedValueOnce([mockComment]);
+    vi.mocked(bridge.updateReviewComment).mockResolvedValueOnce(true);
+    vi.mocked(bridge.deleteReviewComment).mockResolvedValueOnce(true);
+
+    // Add comment
+    const added = await useGitReviewStore.getState().addComment({
+      repoRoot: "C:\\Repo",
+      target: "worktree",
+      path: "src/lib.rs",
+      side: "new",
+      line: 42,
+      endLine: 45,
+      content: "fn test() {}",
+      comment: "Please add unit tests for this function",
+    });
+    expect(added).toEqual(mockComment);
+    expect(useGitReviewStore.getState().comments["C:\\Repo#worktree"]).toHaveLength(1);
+
+    // Build handoff prompt
+    const prompt = useGitReviewStore.getState().buildHandoffPrompt("C:\\Repo", "worktree");
+    expect(prompt).toContain("Code Review Feedback");
+    expect(prompt).toContain("src/lib.rs:42-45");
+    expect(prompt).toContain("Please add unit tests for this function");
+
+    // Update comment
+    const updated = await useGitReviewStore
+      .getState()
+      .updateComment("C:\\Repo", "worktree", "comment-1", "Updated comment text");
+    expect(updated).toBe(true);
+    expect(useGitReviewStore.getState().comments["C:\\Repo#worktree"][0].comment).toBe(
+      "Updated comment text",
+    );
+
+    // Delete comment
+    const deleted = await useGitReviewStore
+      .getState()
+      .deleteComment("C:\\Repo", "worktree", "comment-1");
+    expect(deleted).toBe(true);
+    expect(useGitReviewStore.getState().comments["C:\\Repo#worktree"]).toHaveLength(0);
+  });
 });
+

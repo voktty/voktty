@@ -1345,6 +1345,30 @@ export const en = {
     noUpstream: "No upstream configured",
     alreadyUpToDate: "Already up to date",
     unknownSourceControlError: "Unknown source control error",
+    reviewComments: "Comments",
+    addComment: "Comment",
+    addReviewComment: "Add Review Comment",
+    editReviewComment: "Edit Review Comment",
+    deleteComment: "Delete comment",
+    commentAdded: "Comment added",
+    commentUpdated: "Comment updated",
+    commentDeleted: "Comment deleted",
+    commentPlaceholder: "Write feedback or instructions for the agent...",
+    commentCannotBeEmpty: "Comment cannot be empty",
+    pressCtrlEnterToSave: "Ctrl+Enter to save",
+    addedModified: "Added / Modified",
+    original: "Original",
+    noReviewCommentsYet: "No review comments yet",
+    addCommentsFromDiffHint: "Use the Comment button on any diff to leave feedback",
+    reviewHandoffTitle: "Code Review Handoff",
+    reviewHandoffDescription: "Review comments formatted as actionable prompt for AI coding agents.",
+    reviewHandoffCopied: "Handoff prompt copied to clipboard",
+    reviewSentToAgent: "Review prompt sent to active agent",
+    scope: "Scope",
+    reviewedFiles: "reviewed",
+    commentsCount: "comments",
+    handoffHotkeyHint: "Press P from review queue anytime",
+    sendToAgent: "Send to Agent",
   },
   activeTabs: {
     title: "Active Tabs Launchpad",
@@ -3540,6 +3564,7 @@ export const en = {
 };
 
 export type TranslationSchema = typeof en;
+
 
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];

@@ -27,6 +27,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
   const data = useTerminalSuggestStore((s) => s.suggestByLeaf[leafId]);
   const listRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   const handleSelect = useCallback(
     (cmd: string, execute = false) => {
@@ -47,6 +48,41 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
     },
     [data, leafId],
   );
+
+  const isOpen = visible && Boolean(data?.open && (data.items.length > 0 || data.searchMode));
+
+  // Close on Escape or click outside
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (e: PointerEvent | MouseEvent) => {
+      const target = e.target as Node | null;
+      if (popoverRef.current && target && !popoverRef.current.contains(target)) {
+        useTerminalSuggestStore.getState().clear(leafId);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+        if (data?.searchMode) {
+          useTerminalSuggestStore.getState().toggleSearch(leafId, false);
+        } else {
+          useTerminalSuggestStore.getState().clear(leafId);
+        }
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [isOpen, data?.searchMode, leafId]);
 
   // Auto-focus search input when searchMode opens
   useEffect(() => {
@@ -99,7 +135,12 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
-      useTerminalSuggestStore.getState().toggleSearch(leafId, false);
+      e.stopPropagation();
+      if (data.searchFilter) {
+        useTerminalSuggestStore.getState().setSearchFilter(leafId, "");
+      } else {
+        useTerminalSuggestStore.getState().toggleSearch(leafId, false);
+      }
     } else if (e.key === "Tab") {
       e.preventDefault();
       const item = data.items[data.selectedIndex] ?? data.items[0];
@@ -109,7 +150,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
     }
   };
 
-  if (!visible || !data || !data.open || (data.items.length === 0 && !data.searchMode)) {
+  if (!isOpen) {
     return null;
   }
 
@@ -126,7 +167,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
     containerHeight,
     searchMode,
     searchFilter,
-  } = data;
+  } = data!;
 
   // Ensure popover doesn't overflow container bounds
   const popoverWidth = Math.min(540, Math.max(320, containerWidth - 40));
@@ -163,6 +204,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
 
       {/* Suggestion popover list */}
       <div
+        ref={popoverRef}
         className="pointer-events-auto absolute flex flex-col rounded-lg border border-border/80 bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-md animate-in fade-in-0 zoom-in-95 duration-100"
         style={{
           left: `${popoverLeft}px`,
@@ -253,7 +295,7 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
               const termLower = highlightTerm.toLowerCase();
               const cmdLower = cmd.toLowerCase();
               const matchIdx = termLower ? cmdLower.indexOf(termLower) : -1;
-              const struct = data.structuredItems?.[idx];
+              const struct = data?.structuredItems?.[idx];
 
               const kind = struct?.kind ?? "history";
               const KindIcon =

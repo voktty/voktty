@@ -1,11 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AddReviewCommentPayload,
   LineRange,
   MarkRangePayload,
   Reconciliation,
+  ReviewComment,
   ReviewSession,
   SessionReviewOverview,
 } from "../types";
+
 
 export async function openReviewSession(
   repoRoot: string,
@@ -146,4 +149,73 @@ export async function pruneReviewSessions(
     return 0;
   }
 }
+
+export async function addReviewComment(
+  payload: AddReviewCommentPayload,
+): Promise<ReviewComment | null> {
+  try {
+    return await invoke<ReviewComment>("git_review_add_comment", { payload });
+  } catch (err) {
+    console.error("git_review_add_comment error:", err);
+    return null;
+  }
+}
+
+export async function getReviewComments(
+  repoRoot: string,
+  target = "worktree",
+  path?: string,
+): Promise<ReviewComment[]> {
+  try {
+    return await invoke<ReviewComment[]>("git_review_get_comments", {
+      repoRoot,
+      target,
+      path: path ?? null,
+    });
+  } catch (err) {
+    console.error("git_review_get_comments error:", err);
+    return [];
+  }
+}
+
+export async function deleteReviewComment(
+  repoRoot: string,
+  target: string,
+  commentId: string,
+): Promise<boolean> {
+  try {
+    await invoke("git_review_delete_comment", {
+      repoRoot,
+      target,
+      commentId,
+    });
+    return true;
+  } catch (err) {
+    console.error("git_review_delete_comment error:", err);
+    return false;
+  }
+}
+
+export async function updateReviewComment(
+  repoRoot: string,
+  target: string,
+  commentId: string,
+  comment: string,
+): Promise<boolean> {
+  try {
+    await invoke("git_review_update_comment", {
+      payload: {
+        repoRoot,
+        target,
+        commentId,
+        comment,
+      },
+    });
+    return true;
+  } catch (err) {
+    console.error("git_review_update_comment error:", err);
+    return false;
+  }
+}
+
 

@@ -443,6 +443,10 @@ pub fn run() {
             git_review::git_review_reconcile_file,
             git_review::git_review_get_session_overview,
             git_review::git_review_prune_sessions,
+            git_review::git_review_add_comment,
+            git_review::git_review_get_comments,
+            git_review::git_review_delete_comment,
+            git_review::git_review_update_comment,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

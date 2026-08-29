@@ -1,5 +1,5 @@
 use super::models::{
-    FileReviewState, LineRange, ReviewClaim, ReviewSession, ReviewSource,
+    FileReviewState, LineRange, ReviewClaim, ReviewComment, ReviewSession, ReviewSource,
 };
 use rusqlite::{params, Connection, Result};
 use std::path::{Path, PathBuf};
@@ -79,8 +79,24 @@ impl ReviewDb {
                  FOREIGN KEY (session_id) REFERENCES review_sessions(id) ON DELETE CASCADE
              );
 
+             CREATE TABLE IF NOT EXISTS review_comments (
+                 id TEXT PRIMARY KEY,
+                 session_id TEXT NOT NULL,
+                 path TEXT NOT NULL,
+                 side TEXT NOT NULL,
+                 line INTEGER NOT NULL,
+                 end_line INTEGER,
+                 snapshot_hash TEXT NOT NULL,
+                 comment TEXT NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL,
+                 status TEXT NOT NULL,
+                 FOREIGN KEY (session_id) REFERENCES review_sessions(id) ON DELETE CASCADE
+             );
+
              CREATE INDEX IF NOT EXISTS idx_reviewed_files_session ON reviewed_files(session_id);
-             CREATE INDEX IF NOT EXISTS idx_review_range_claims_session_path ON review_range_claims(session_id, path);",
+             CREATE INDEX IF NOT EXISTS idx_review_range_claims_session_path ON review_range_claims(session_id, path);
+             CREATE INDEX IF NOT EXISTS idx_review_comments_session_path ON review_comments(session_id, path);",
         )?;
 
         Ok(())
@@ -349,6 +365,129 @@ impl ReviewDb {
         )?;
         Ok(deleted)
     }
+
+    pub fn add_comment(
+        &self,
+        session_id: &str,
+        path: &str,
+        side: &str,
+        line: usize,
+        end_line: Option<usize>,
+        snapshot_hash: &str,
+        comment: &str,
+    ) -> Result<ReviewComment> {
+        let conn = self.conn.lock().unwrap();
+        let id = format!("rc_{}", uuid_v4());
+        let now = chrono::Utc::now().timestamp_millis();
+        let status = "pending";
+
+        conn.execute(
+            "INSERT INTO review_comments (id, session_id, path, side, line, end_line, snapshot_hash, comment, created_at, updated_at, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                id,
+                session_id,
+                path,
+                side,
+                line as i64,
+                end_line.map(|l| l as i64),
+                snapshot_hash,
+                comment,
+                now,
+                now,
+                status
+            ],
+        )?;
+
+        Ok(ReviewComment {
+            id,
+            session_id: session_id.to_string(),
+            path: path.to_string(),
+            side: side.to_string(),
+            line,
+            end_line,
+            snapshot_hash: snapshot_hash.to_string(),
+            comment: comment.to_string(),
+            created_at: now,
+            updated_at: now,
+            status: status.to_string(),
+        })
+    }
+
+    pub fn get_session_comments(&self, session_id: &str) -> Result<Vec<ReviewComment>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, session_id, path, side, line, end_line, snapshot_hash, comment, created_at, updated_at, status
+             FROM review_comments WHERE session_id = ?1 ORDER BY path ASC, line ASC, created_at ASC",
+        )?;
+
+        let rows = stmt.query_map(params![session_id], |row| {
+            let line_i64: i64 = row.get(4)?;
+            let end_line_i64: Option<i64> = row.get(5)?;
+            Ok(ReviewComment {
+                id: row.get(0)?,
+                session_id: row.get(1)?,
+                path: row.get(2)?,
+                side: row.get(3)?,
+                line: line_i64 as usize,
+                end_line: end_line_i64.map(|l| l as usize),
+                snapshot_hash: row.get(6)?,
+                comment: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
+                status: row.get(10)?,
+            })
+        })?;
+
+        Ok(rows.flatten().collect())
+    }
+
+    pub fn get_file_comments(&self, session_id: &str, path: &str) -> Result<Vec<ReviewComment>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, session_id, path, side, line, end_line, snapshot_hash, comment, created_at, updated_at, status
+             FROM review_comments WHERE session_id = ?1 AND path = ?2 ORDER BY line ASC, created_at ASC",
+        )?;
+
+        let rows = stmt.query_map(params![session_id, path], |row| {
+            let line_i64: i64 = row.get(4)?;
+            let end_line_i64: Option<i64> = row.get(5)?;
+            Ok(ReviewComment {
+                id: row.get(0)?,
+                session_id: row.get(1)?,
+                path: row.get(2)?,
+                side: row.get(3)?,
+                line: line_i64 as usize,
+                end_line: end_line_i64.map(|l| l as usize),
+                snapshot_hash: row.get(6)?,
+                comment: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
+                status: row.get(10)?,
+            })
+        })?;
+
+        Ok(rows.flatten().collect())
+    }
+
+    pub fn delete_comment(&self, session_id: &str, comment_id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM review_comments WHERE session_id = ?1 AND id = ?2",
+            params![session_id, comment_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_comment(&self, session_id: &str, comment_id: &str, comment: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        conn.execute(
+            "UPDATE review_comments SET comment = ?1, updated_at = ?2 WHERE session_id = ?3 AND id = ?4",
+            params![comment, now, session_id, comment_id],
+        )?;
+        Ok(())
+    }
 }
 
 fn uuid_v4() -> String {
@@ -407,6 +546,40 @@ mod tests {
         assert!(overview[0].reviewed);
         assert_eq!(overview[0].claims_count, 2);
 
+        // Add review comment
+        let comment = db
+            .add_comment(
+                &session.id,
+                "src/main.rs",
+                "new",
+                15,
+                Some(18),
+                "hash_abc",
+                "Check potential panic on unwrap here",
+            )
+            .unwrap();
+        assert_eq!(comment.line, 15);
+        assert_eq!(comment.end_line, Some(18));
+        assert_eq!(comment.comment, "Check potential panic on unwrap here");
+
+        let file_comments = db.get_file_comments(&session.id, "src/main.rs").unwrap();
+        assert_eq!(file_comments.len(), 1);
+        assert_eq!(file_comments[0].id, comment.id);
+
+        let all_comments = db.get_session_comments(&session.id).unwrap();
+        assert_eq!(all_comments.len(), 1);
+
+        // Update comment
+        db.update_comment(&session.id, &comment.id, "Updated comment")
+            .unwrap();
+        let updated = db.get_file_comments(&session.id, "src/main.rs").unwrap();
+        assert_eq!(updated[0].comment, "Updated comment");
+
+        // Delete comment
+        db.delete_comment(&session.id, &comment.id).unwrap();
+        let comments_after_del = db.get_file_comments(&session.id, "src/main.rs").unwrap();
+        assert_eq!(comments_after_del.len(), 0);
+
         // Unmark range
         db.unmark_range_claim(&session.id, "src/main.rs", "block_1")
             .unwrap();
@@ -420,3 +593,4 @@ mod tests {
         assert_eq!(overview_after_prune.len(), 0);
     }
 }
+
