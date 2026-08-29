@@ -3,7 +3,7 @@ pub(crate) mod launch;
 pub mod modules;
 
 use modules::{
-    agent, agent_history, api_client, collab, control, dap, docker, extensions, fs, git, git_review, history, lsp, mcp, net,
+    agent, agent_history, aliases, api_client, collab, control, dap, docker, extensions, fs, git, git_review, history, lsp, mcp, net,
     pty, rdp, remote, secrets, serial, shell, tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -328,6 +328,11 @@ pub fn run() {
             workspace::workspace_current_dir,
             control::control_frontend_ready,
             control::control_respond,
+            aliases::aliases_get_config_path,
+            aliases::aliases_get_state,
+            aliases::aliases_save_user,
+            aliases::aliases_toggle_alias,
+            aliases::aliases_reset_alias,
             open_settings_window,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,

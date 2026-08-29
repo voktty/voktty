@@ -73,6 +73,7 @@ const koBase = mergeLocale(en, {
       rdp: "RDP",
       docker: "Docker",
       vault: "보관함",
+      aliases: "별칭",
       about: "정보",
     },
     general: {

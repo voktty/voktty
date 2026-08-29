@@ -11,6 +11,7 @@ import {
 import {
   AiScanIcon,
   Cancel01Icon,
+  CommandLineIcon,
   ComputerIcon,
   InformationCircleIcon,
   KeyboardIcon,
@@ -83,6 +84,11 @@ const VaultSection = React.lazy(() =>
     default: m.VaultSection,
   })),
 );
+const AliasesSection = React.lazy(() =>
+  import("./sections/AliasesSection").then((m) => ({
+    default: m.AliasesSection,
+  })),
+);
 const AboutSection = React.lazy(() =>
   import("./sections/AboutSection").then((m) => ({
     default: m.AboutSection,
@@ -105,6 +111,7 @@ const TABS: {
   { id: "docker", icon: ServerStack03Icon, component: DockerSection },
   { id: "mcp", icon: ServerStack03Icon, component: McpSection },
   { id: "vault", icon: Key01Icon, component: VaultSection },
+  { id: "aliases", icon: CommandLineIcon, component: AliasesSection },
   { id: "about", icon: InformationCircleIcon, component: AboutSection },
 ];
 

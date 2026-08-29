@@ -73,6 +73,7 @@ const ptBase = mergeLocale(en, {
       rdp: "RDP",
       docker: "Docker",
       vault: "Cofre",
+      aliases: "Aliases",
       about: "Sobre",
     },
     general: {

@@ -84,6 +84,7 @@ export const ar: TranslationSchema = mergeLocale(en, {
       docker: "Docker",
       mcp: "MCP",
       vault: "الخزنة",
+      aliases: "الاختصارات",
       about: "حول",
     },
     general: {

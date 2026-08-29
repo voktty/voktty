@@ -73,6 +73,7 @@ const itBase = mergeLocale(en, {
       rdp: "RDP",
       docker: "Docker",
       vault: "Cassaforte",
+      aliases: "Alias",
       about: "Informazioni",
     },
     general: {

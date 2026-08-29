@@ -73,6 +73,7 @@ const jaBase = mergeLocale(en, {
       rdp: "RDP",
       docker: "Docker",
       vault: "保管庫",
+      aliases: "エイリアス",
       about: "情報",
     },
     general: {

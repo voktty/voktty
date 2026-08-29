@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod agent_history;
+pub mod aliases;
 pub mod api_client;
 pub mod collab;
 pub mod control;

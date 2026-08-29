@@ -566,7 +566,7 @@ fn generate_token() -> Result<String, String> {
     Ok(token)
 }
 
-fn descriptor_path() -> Result<PathBuf, String> {
+pub(crate) fn descriptor_path() -> Result<PathBuf, String> {
     let cache =
         dirs::cache_dir().ok_or_else(|| "could not resolve user cache directory".to_string())?;
     let dir = cache.join("voktty");
@@ -765,7 +765,7 @@ fn prepare_cli_launcher(descriptor: &Path, cli_path: &Path) -> Result<PathBuf, S
     Ok(bin_dir)
 }
 
-fn prepare_alias_launchers(bin_dir: &Path) -> Result<(), String> {
+pub(crate) fn prepare_alias_launchers(bin_dir: &Path) -> Result<(), String> {
     let user = match voktty_aliases::config_path().and_then(|path| voktty_aliases::load_user(&path))
     {
         Ok(user) => user,
