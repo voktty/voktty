@@ -82,6 +82,7 @@ export type CommandPaletteActionContext = {
   openNewApiClient?: () => void;
   openActiveTabs: () => void;
   openGitGraph: () => void;
+  openGitClone?: () => void;
   toggleSourceControl: () => void;
   closeActiveTabOrPane: () => void;
   reopenClosedEditor?: () => number | null;
@@ -472,6 +473,14 @@ export function createCommandItems(
       keywords: ["git", "graph", "history", "log", "commits", "grafo", "historial"],
       icon: SourceCodeIcon,
       run: ctx.openGitGraph,
+    },
+    {
+      id: "git.clone",
+      title: t("commandPalette.commands.cloneRepo"),
+      group: "Git",
+      keywords: ["git", "clone", "repository", "github", "clonar", "repositorio"],
+      icon: SourceCodeIcon,
+      run: ctx.openGitClone ?? noop,
     },
     {
       id: "git.source",

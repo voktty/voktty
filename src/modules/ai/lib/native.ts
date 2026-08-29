@@ -610,4 +610,31 @@ export const native = {
       cwd,
       workspace: resolveGitWorkspace(cwd, workspace),
     }),
+  gitClone: (
+    url: string,
+    parentDir: string,
+    targetName?: string,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<string>("git_clone", {
+      url,
+      parentDir,
+      targetName: targetName ?? null,
+      workspace: resolveGitWorkspace(parentDir, workspace),
+    }),
+  gitPublish: (
+    repoRoot: string,
+    remote?: string,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<GitPushResult>("git_publish", {
+      repoRoot,
+      remote: remote ?? null,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitUndoCommit: (repoRoot: string, workspace?: WorkspaceEnv) =>
+    invoke<void>("git_undo_commit", {
+      repoRoot,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
 };

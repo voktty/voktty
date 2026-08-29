@@ -56,7 +56,7 @@ describe("resolveDisplayName", () => {
     });
     const tree = syntaxTree(state).toString();
     expect(tree).toContain("IfBlock");
-    expect(tree).toContain("DirectiveOn");
+    expect(tree).toContain("IfBlockOpen");
   });
 
   // The prefix fallback must not let extension languages capture lookalike

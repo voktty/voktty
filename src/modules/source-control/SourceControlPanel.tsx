@@ -59,6 +59,7 @@ import {
   AiContentGenerator02Icon,
   Alert02Icon,
   ArrowDown01Icon,
+  ArrowLeft01Icon,
   ArrowRight01Icon,
   ArrowUp01Icon,
   Cancel01Icon,
@@ -77,6 +78,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { GitCloneModal } from "./GitCloneModal";
 import {
   memo,
   useCallback,
@@ -540,6 +542,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
     () => new Set(),
   );
+  const [cloneModalOpen, setCloneModalOpen] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -1068,24 +1071,36 @@ export const SourceControlPanel = memo(function SourceControlPanel({
             title={t("git.noRepoTitle")}
             body={t("git.noRepoDesc")}
             action={
-              <Button
-                size="sm"
-                className="gap-1.5 font-medium shadow-xs"
-                disabled={isRefreshing || !!scm.actionBusy}
-                onClick={async () => {
-                  try {
-                    await scm.initRepository(
-                      sourceControl.contextPath ?? undefined,
-                    );
-                    toast.success(t("git.initRepoSuccess"));
-                  } catch (err) {
-                    toast.error(String(err));
-                  }
-                }}
-              >
-                <HugeiconsIcon icon={FolderGitTwoIcon} size={14} />
-                {t("git.initializeRepo")}
-              </Button>
+              <div className="flex flex-col gap-2 w-full max-w-xs">
+                <Button
+                  size="sm"
+                  className="gap-1.5 font-medium shadow-xs"
+                  disabled={isRefreshing || !!scm.actionBusy}
+                  onClick={async () => {
+                    try {
+                      await scm.initRepository(
+                        sourceControl.contextPath ?? undefined,
+                      );
+                      toast.success(t("git.initRepoSuccess"));
+                    } catch (err) {
+                      toast.error(String(err));
+                    }
+                  }}
+                >
+                  <HugeiconsIcon icon={FolderGitTwoIcon} size={14} />
+                  {t("git.initializeRepo")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 font-medium"
+                  disabled={isRefreshing || !!scm.actionBusy}
+                  onClick={() => setCloneModalOpen(true)}
+                >
+                  <HugeiconsIcon icon={GitBranchIcon} size={14} />
+                  {t("git.cloneRepo")}
+                </Button>
+              </div>
             }
           />
         ) : null}
@@ -1268,36 +1283,102 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                     {commitHint}
                   </TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="xs"
-                      variant="secondary"
-                      className="h-7 cursor-pointer text-[11.5px] font-medium disabled:cursor-not-allowed"
-                      disabled={
-                        !scm.canPush || fixedTargetPending || !!scm.actionBusy
-                      }
-                      onClick={() => void scm.push()}
+                {!hasUpstream && !scm.status?.isDetached ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="xs"
+                        variant="secondary"
+                        className="h-7 cursor-pointer text-[11.5px] font-medium disabled:cursor-not-allowed"
+                        disabled={
+                          fixedTargetPending ||
+                          !!scm.actionBusy ||
+                          !!sourceControl.busyAction
+                        }
+                        onClick={() => void sourceControl.runRemoteAction("publish")}
+                      >
+                        {sourceControl.busyAction === "publish"
+                          ? `${t("git.publishing")}…`
+                          : t("git.publishBranch")}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      className={cn(
+                        SOURCE_CONTROL_TOOLTIP_CLASS,
+                        "max-w-64 text-[10.5px]",
+                      )}
                     >
-                      {scm.actionBusy === "push"
-                        ? `${t("git.push")}…`
-                        : t("git.push")}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="bottom"
-                    className={cn(
-                      SOURCE_CONTROL_TOOLTIP_CLASS,
-                      "max-w-64 text-[10.5px]",
-                    )}
-                  >
-                    {pushDisabledReason}
-                  </TooltipContent>
-                </Tooltip>
+                      {t("git.publishBranchTooltip")}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : scm.status && scm.status.behind > 0 && !isDiverged ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="xs"
+                        variant="secondary"
+                        className="h-7 cursor-pointer text-[11.5px] font-medium disabled:cursor-not-allowed"
+                        disabled={
+                          !canPull || fixedTargetPending || !!scm.actionBusy
+                        }
+                        onClick={() => void sourceControl.runRemoteAction("pull")}
+                      >
+                        {sourceControl.busyAction === "pull"
+                          ? `${t("git.pulling")}…`
+                          : t("git.pullCommits", {
+                              count: scm.status.behind,
+                            })}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      className={cn(
+                        SOURCE_CONTROL_TOOLTIP_CLASS,
+                        "max-w-64 text-[10.5px]",
+                      )}
+                    >
+                      {t("git.pullTooltip", {
+                        count: scm.status.behind,
+                      })}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="xs"
+                        variant="secondary"
+                        className="h-7 cursor-pointer text-[11.5px] font-medium disabled:cursor-not-allowed"
+                        disabled={
+                          !scm.canPush || fixedTargetPending || !!scm.actionBusy
+                        }
+                        onClick={() => void scm.push()}
+                      >
+                        {scm.actionBusy === "push"
+                          ? `${t("git.push")}…`
+                          : (scm.status?.ahead ?? 0) > 0
+                            ? t("git.pushCommits", {
+                                count: scm.status?.ahead ?? 0,
+                              })
+                            : t("git.push")}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      className={cn(
+                        SOURCE_CONTROL_TOOLTIP_CLASS,
+                        "max-w-64 text-[10.5px]",
+                      )}
+                    >
+                      {pushDisabledReason}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
 
-              <div className="flex items-center justify-between pt-0.5">
-                <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10.5px] text-muted-foreground/80 hover:text-foreground transition-colors">
+              <div className="flex items-center justify-between pt-0.5 gap-2">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10.5px] text-muted-foreground/80 hover:text-foreground transition-colors min-w-0">
                   <input
                     type="checkbox"
                     checked={gitCommitMessageUseEditorLanguage}
@@ -1306,7 +1387,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                         e.target.checked,
                       );
                     }}
-                    className="size-3.5 rounded border-border/70 accent-primary cursor-pointer"
+                    className="size-3.5 rounded border-border/70 accent-primary cursor-pointer shrink-0"
                   />
                   <span className="truncate">
                     {t("git.generateInEditorLanguage", {
@@ -1314,6 +1395,37 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                     })}
                   </span>
                 </label>
+                {scm.canUndo ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="h-5 px-1.5 text-[10.5px] text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                        disabled={!!scm.actionBusy}
+                        onClick={() => void scm.undoCommit()}
+                      >
+                        <HugeiconsIcon
+                          icon={ArrowLeft01Icon}
+                          size={12}
+                          className="mr-1"
+                        />
+                        {scm.actionBusy === "undo"
+                          ? `${t("git.undoingCommit")}…`
+                          : t("git.undoCommit")}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      className={cn(
+                        SOURCE_CONTROL_TOOLTIP_CLASS,
+                        "text-[10.5px]",
+                      )}
+                    >
+                      {t("git.undoCommitTooltip")}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
               </div>
 
               <CommitFeedback feedback={footerFeedback} />
@@ -1428,6 +1540,15 @@ export const SourceControlPanel = memo(function SourceControlPanel({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GitCloneModal
+        open={cloneModalOpen}
+        onOpenChange={setCloneModalOpen}
+        defaultParentDir={sourceControl.contextPath}
+        onCloned={(path) => {
+          onNavigateToPath?.(path);
+        }}
+      />
     </TooltipProvider>
   );
 });
