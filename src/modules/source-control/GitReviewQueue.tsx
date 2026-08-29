@@ -21,10 +21,16 @@ import {
   Refresh01Icon,
   RemoveSquareIcon,
   Tick02Icon,
+  CheckmarkCircle02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { fetchWorkingDiff } from "@/modules/editor/lib/diffCache";
+import {
+  sessionKey,
+  useGitReviewStore,
+} from "@/modules/git-review";
 import {
   buildGitReviewEntries,
   type GitReviewEntry,
@@ -198,6 +204,105 @@ export function GitReviewQueue({
     t,
   ]);
 
+  const overview = useGitReviewStore(
+    (state) => state.overviews[sessionKey(repoRoot, "worktree")],
+  );
+  const loadOverview = useGitReviewStore((state) => state.loadOverview);
+  const markFile = useGitReviewStore((state) => state.markFile);
+
+  useEffect(() => {
+    if (matchesRepository && repoRoot) {
+      void loadOverview(repoRoot, "worktree");
+    }
+  }, [loadOverview, matchesRepository, repoRoot]);
+
+  const selectedReview = selected
+    ? overview?.files.find((f) => f.path === selected.path)
+    : null;
+  const isSelectedReviewed = selectedReview?.reviewed ?? false;
+
+  const toggleReview = useCallback(
+    async (entry: GitReviewEntry) => {
+      if (busy) return;
+      const fileReview = overview?.files.find((f) => f.path === entry.path);
+      const currentlyReviewed = fileReview?.reviewed ?? false;
+      setBusy(`review:${entry.path}`);
+      try {
+        const diffData = await fetchWorkingDiff(
+          repoRoot,
+          entry.path,
+          entry.unstaged ? "-" : "+",
+          entry.originalPath,
+        );
+        await markFile(
+          repoRoot,
+          "worktree",
+          entry.path,
+          diffData.modifiedContent,
+          !currentlyReviewed,
+        );
+        if (!currentlyReviewed) {
+          // Advance to next unreviewed file
+          const currentIndex = entries.findIndex((e) => e.path === entry.path);
+          const next =
+            entries.slice(currentIndex + 1).find((e) => {
+              const rev = overview?.files.find((f) => f.path === e.path);
+              return !rev?.reviewed;
+            }) ??
+            entries.find((e) => {
+              const rev = overview?.files.find((f) => f.path === e.path);
+              return !rev?.reviewed && e.path !== entry.path;
+            });
+          if (next) {
+            openEntry(repoRoot, next, onOpenDiff);
+          }
+        }
+      } catch (error) {
+        toast.error(errorMessage(error));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [busy, entries, markFile, onOpenDiff, overview, repoRoot],
+  );
+
+  // Global review shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+      if (!selected || busy) return;
+
+      if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        void toggleReview(selected);
+      } else if (e.key === "u" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        void toggleReview(selected);
+      } else if ((e.key === "j" || e.key === "ArrowDown") && !e.ctrlKey && !e.metaKey) {
+        const currentIndex = entries.findIndex((item) => item.path === currentPath);
+        if (currentIndex < entries.length - 1) {
+          e.preventDefault();
+          openEntry(repoRoot, entries[currentIndex + 1], onOpenDiff);
+        }
+      } else if ((e.key === "k" || e.key === "ArrowUp") && !e.ctrlKey && !e.metaKey) {
+        const currentIndex = entries.findIndex((item) => item.path === currentPath);
+        if (currentIndex > 0) {
+          e.preventDefault();
+          openEntry(repoRoot, entries[currentIndex - 1], onOpenDiff);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [busy, currentPath, entries, onOpenDiff, repoRoot, selected, toggleReview]);
+
   return (
     <aside className="flex h-full w-64 min-w-52 max-w-[38%] shrink-0 flex-col border-l border-border/60 bg-card/35">
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-border/50 px-2.5">
@@ -241,6 +346,9 @@ export function GitReviewQueue({
           {entries.map((entry) => {
             const active = entry.path === currentPath;
             const entryBusy = busy?.endsWith(`:${entry.path}`) ?? false;
+            const fileReview = overview?.files.find((f) => f.path === entry.path);
+            const isReviewed = fileReview?.reviewed ?? false;
+
             return (
               <button
                 key={entry.key}
@@ -272,15 +380,29 @@ export function GitReviewQueue({
                   )}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span
-                    className="block truncate font-mono text-[10.5px]"
-                    title={entry.path}
-                  >
-                    {entry.path}
+                  <span className="flex items-center justify-between gap-1">
+                    <span
+                      className="block truncate font-mono text-[10.5px]"
+                      title={entry.path}
+                    >
+                      {entry.path}
+                    </span>
+                    {isReviewed ? (
+                      <HugeiconsIcon
+                        icon={CheckmarkCircle02Icon}
+                        size={12}
+                        className="text-emerald-500 shrink-0"
+                      />
+                    ) : null}
                   </span>
                   <span className="mt-0.5 flex items-center gap-1 text-[9.5px] opacity-70">
                     <span className="truncate">{entry.statusLabel}</span>
                     {entry.staged ? <span>{t("git.stagedChanges")}</span> : null}
+                    {isReviewed ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        • {t("git.reviewed")}
+                      </span>
+                    ) : null}
                   </span>
                 </span>
               </button>
@@ -295,39 +417,66 @@ export function GitReviewQueue({
       </ScrollArea>
 
       {selected ? (
-        <div className="grid shrink-0 grid-cols-2 gap-1.5 border-t border-border/50 p-2">
+        <div className="flex flex-col gap-1.5 border-t border-border/50 p-2 shrink-0">
           <Button
             type="button"
             size="sm"
-            variant="secondary"
-            className="h-8 min-w-0 gap-1.5 px-2 text-[10.5px]"
+            variant={isSelectedReviewed ? "outline" : "default"}
+            className="h-7 w-full gap-1.5 px-2 text-[10.5px]"
             disabled={!!busy}
-            onClick={() => void toggleStage(selected)}
+            onClick={() => void toggleReview(selected)}
           >
-            {busy === `stage:${selected.path}` ? (
+            {busy === `review:${selected.path}` ? (
               <Spinner className="size-3" />
             ) : (
-              <HugeiconsIcon icon={Tick02Icon} size={13} strokeWidth={2} />
+              <HugeiconsIcon
+                icon={CheckmarkCircle02Icon}
+                size={13}
+                className={isSelectedReviewed ? "text-emerald-500" : ""}
+              />
             )}
             <span className="truncate">
-              {selected.unstaged ? t("git.stage") : t("git.unstage")}
+              {isSelectedReviewed ? t("git.markUnreviewed") : t("git.markReviewed")}
             </span>
+            <kbd className="ml-auto hidden rounded border border-border/60 bg-muted/50 px-1 py-0.2 font-mono text-[9px] text-muted-foreground sm:inline-block">
+              R
+            </kbd>
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-8 min-w-0 gap-1.5 px-2 text-[10.5px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-            disabled={!!busy || !selected.unstaged}
-            onClick={() => requestDiscard(selected)}
-          >
-            <HugeiconsIcon
-              icon={RemoveSquareIcon}
-              size={13}
-              strokeWidth={1.9}
-            />
-            <span className="truncate">{t("git.discard")}</span>
-          </Button>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-7 min-w-0 gap-1.5 px-2 text-[10.5px]"
+              disabled={!!busy}
+              onClick={() => void toggleStage(selected)}
+            >
+              {busy === `stage:${selected.path}` ? (
+                <Spinner className="size-3" />
+              ) : (
+                <HugeiconsIcon icon={Tick02Icon} size={13} strokeWidth={2} />
+              )}
+              <span className="truncate">
+                {selected.unstaged ? t("git.stage") : t("git.unstage")}
+              </span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 min-w-0 gap-1.5 px-2 text-[10.5px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={!!busy || !selected.unstaged}
+              onClick={() => requestDiscard(selected)}
+            >
+              <HugeiconsIcon
+                icon={RemoveSquareIcon}
+                size={13}
+                strokeWidth={1.9}
+              />
+              <span className="truncate">{t("git.discard")}</span>
+            </Button>
+          </div>
         </div>
       ) : null}
 

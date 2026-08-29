@@ -1315,6 +1315,13 @@ export const es: TranslationSchema = {
     diffLargeFile: "Archivo grande / vista patch",
     diffUnavailable:
       "La vista previa del diff no está disponible para este archivo.",
+    markReviewed: "Marcar como revisado",
+    markUnreviewed: "Desmarcar revisión",
+    reviewed: "Revisado",
+    changesSinceReview: "Cambios posteriores a la revisión",
+    unreviewedDelta: "Delta sin revisar",
+    fullDiff: "Diff completo",
+    incrementalReview: "Revisión Incremental",
     viewMode: "Vista de cambios",
     listView: "Vista de lista",
     treeView: "Vista de árbol",

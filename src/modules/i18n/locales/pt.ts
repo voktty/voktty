@@ -837,6 +837,13 @@ const ptBase = mergeLocale(en, {
     diffLargeFile: "Arquivo grande / visualização de patch",
     diffUnavailable:
       "A pré-visualização do diff não está disponível para este arquivo.",
+    markReviewed: "Marcar como revisado",
+    markUnreviewed: "Desmarcar revisão",
+    reviewed: "Revisado",
+    changesSinceReview: "Alterações após a revisão",
+    unreviewedDelta: "Delta não revisado",
+    fullDiff: "Diff completo",
+    incrementalReview: "Revisão incremental",
     viewMode: "Visualização das alterações",
     listView: "Visualização em lista",
     treeView: "Visualização em árvore",
