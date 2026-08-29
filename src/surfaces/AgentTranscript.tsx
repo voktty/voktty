@@ -27,7 +27,6 @@ import {
   isEditTool,
   isReadTool,
   isSearchTool,
-  isSkillTool,
   stubFilePreview,
 } from "../lib/harness/preview";
 import { copyText } from "../lib/clipboard";
@@ -295,6 +294,7 @@ export function AgentTranscript({
                     }
                     onApproval={onApproval}
                     onOpenFile={onOpenFile}
+                    onOpenDiff={onOpenDiff}
                   />
                 ) : (
                   <TranscriptBlock
@@ -659,6 +659,7 @@ function ActivityGroup({
   startedAt,
   onApproval,
   onOpenFile,
+  onOpenDiff,
 }: {
   blocks: Block[];
   cwd?: string;
@@ -668,6 +669,7 @@ function ActivityGroup({
   startedAt?: number;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
 }) {
   // Live "+N previous" and the settled zen fold are independent. Sharing one
   // flag kept expanded history from folding when a turn settled.
@@ -726,6 +728,7 @@ function ActivityGroup({
                 expanded
                 onApproval={onApproval}
                 onOpenFile={onOpenFile}
+                onOpenDiff={onOpenDiff}
               />
             ))}
           </div>
@@ -783,6 +786,7 @@ function ActivityGroup({
               cwd={cwd}
               expanded
               onOpenFile={onOpenFile}
+              onOpenDiff={onOpenDiff}
             />
           ))
         : null}
@@ -792,6 +796,7 @@ function ActivityGroup({
           cwd={cwd}
           rolling={rolling}
           onOpenFile={onOpenFile}
+          onOpenDiff={onOpenDiff}
         />
       ) : null}
       {pending.map((block) => (
@@ -801,6 +806,7 @@ function ActivityGroup({
           cwd={cwd}
           onApproval={onApproval}
           onOpenFile={onOpenFile}
+          onOpenDiff={onOpenDiff}
         />
       ))}
     </div>
@@ -817,11 +823,13 @@ function ActivityTicker({
   cwd,
   rolling,
   onOpenFile,
+  onOpenDiff,
 }: {
   block: Block;
   cwd?: string;
   rolling: boolean;
   onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
 }) {
   const [state, setState] = useState<{
     current: Block;
@@ -851,7 +859,14 @@ function ActivityTicker({
   }, [state.leaving, state.roll]);
 
   if (!rolling) {
-    return <ActivityRow block={block} cwd={cwd} onOpenFile={onOpenFile} />;
+    return (
+      <ActivityRow
+        block={block}
+        cwd={cwd}
+        onOpenFile={onOpenFile}
+        onOpenDiff={onOpenDiff}
+      />
+    );
   }
 
   // The incoming row stays in flow so the viewport is exactly one row tall,
@@ -876,6 +891,7 @@ function ActivityTicker({
           cwd={cwd}
           live
           onOpenFile={onOpenFile}
+          onOpenDiff={onOpenDiff}
         />
       </div>
     </div>
@@ -893,6 +909,7 @@ function ActivityRow({
   live = false,
   onApproval,
   onOpenFile,
+  onOpenDiff,
 }: {
   block: Block;
   cwd?: string;
@@ -900,6 +917,7 @@ function ActivityRow({
   live?: boolean;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
 }) {
   if (isThinkingBlock(block)) {
     return (
@@ -933,6 +951,7 @@ function ActivityRow({
       live={live}
       onApproval={onApproval}
       onOpenFile={onOpenFile}
+      onOpenDiff={onOpenDiff}
     />
   );
 }
@@ -1033,16 +1052,25 @@ function ActivityToolRow({
   live = false,
   onApproval,
   onOpenFile,
+  onOpenDiff,
 }: {
   block: Block;
   cwd?: string;
   live?: boolean;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
 }) {
   const label = toolCallLabel(block, cwd);
   const state = toolCallState(block);
   const pending = needsApproval(block);
+  const openFile = isEditTool(
+    block.tool?.kind,
+    block.text || block.tool?.title,
+    block.tool?.preview,
+  )
+    ? (onOpenDiff ?? onOpenFile)
+    : onOpenFile;
 
   return (
     <div className="flex min-w-0 flex-col">
@@ -1055,7 +1083,7 @@ function ActivityToolRow({
           label={label}
           preview={block.tool?.preview}
           cwd={cwd}
-          onOpenFile={onOpenFile}
+          onOpenFile={openFile}
         />
         {pending ? null : <ToolCallStatusIcon state={state} />}
       </div>
