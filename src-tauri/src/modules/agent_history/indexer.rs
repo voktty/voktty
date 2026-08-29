@@ -1,7 +1,6 @@
 use super::adapters::{
-    claude_adapter::ClaudeAdapter, codex_adapter::CodexAdapter,
-    cursor_adapter::CursorAdapter, gemini_adapter::GeminiAdapter,
-    voktty_adapter::VokttyAdapter, AgentHistoryAdapter,
+    claude_adapter::ClaudeAdapter, codex_adapter::CodexAdapter, cursor_adapter::CursorAdapter,
+    gemini_adapter::GeminiAdapter, voktty_adapter::VokttyAdapter, AgentHistoryAdapter,
 };
 use super::db::HistoryDb;
 use super::models::{HistorySession, HistoryStats};
@@ -56,10 +55,10 @@ impl HistoryIndexer {
 
                 // Parse session from file
                 if let Some((mut session, mut messages)) = adapter.parse_session(&loc.path) {
-
                     // Saneamiento de secretos y tokens en los mensajes
                     for msg in &mut messages {
-                        let (sanitized_content, was_redacted) = Sanitizer::sanitize_text(&msg.content);
+                        let (sanitized_content, was_redacted) =
+                            Sanitizer::sanitize_text(&msg.content);
                         msg.content = sanitized_content;
                         msg.redacted = was_redacted;
 

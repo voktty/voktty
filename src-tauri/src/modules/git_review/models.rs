@@ -130,4 +130,3 @@ pub struct UpdateReviewCommentPayload {
     pub comment_id: String,
     pub comment: String,
 }
-

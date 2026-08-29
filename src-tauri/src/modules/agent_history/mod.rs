@@ -24,12 +24,15 @@ impl Default for AgentHistoryState {
 
 impl AgentHistoryState {
     pub fn new() -> Self {
-        let db_path = HistoryDb::default_db_path().unwrap_or_else(|| std::path::PathBuf::from("agent_history.db"));
+        let db_path = HistoryDb::default_db_path()
+            .unwrap_or_else(|| std::path::PathBuf::from("agent_history.db"));
         if let Some(parent) = db_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
 
-        let db = Arc::new(HistoryDb::open(&db_path).unwrap_or_else(|_| HistoryDb::open_in_memory().unwrap()));
+        let db = Arc::new(
+            HistoryDb::open(&db_path).unwrap_or_else(|_| HistoryDb::open_in_memory().unwrap()),
+        );
         let indexer = Arc::new(HistoryIndexer::new(db.clone()));
 
         Self {
@@ -66,7 +69,10 @@ pub async fn agent_history_get_messages(
 ) -> Result<Vec<HistoryMessage>, String> {
     let off = offset.unwrap_or(0);
     let lim = limit.unwrap_or(200);
-    state.db.get_messages(&session_id, off, lim).map_err(|e| e.to_string())
+    state
+        .db
+        .get_messages(&session_id, off, lim)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -74,11 +80,9 @@ pub async fn agent_history_rescan(
     state: State<'_, AgentHistoryState>,
 ) -> Result<HistoryStats, String> {
     let indexer = state.indexer.clone();
-    tokio::task::spawn_blocking(move || {
-        indexer.rescan_all()
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || indexer.rescan_all())
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -86,13 +90,14 @@ pub async fn agent_history_delete_session(
     session_id: String,
     state: State<'_, AgentHistoryState>,
 ) -> Result<(), String> {
-    state.db.delete_session(&session_id).map_err(|e| e.to_string())
+    state
+        .db
+        .delete_session(&session_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn agent_history_clear_all(
-    state: State<'_, AgentHistoryState>,
-) -> Result<(), String> {
+pub async fn agent_history_clear_all(state: State<'_, AgentHistoryState>) -> Result<(), String> {
     state.db.clear_all().map_err(|e| e.to_string())
 }
 
@@ -101,7 +106,10 @@ pub async fn agent_history_get_resume_command(
     session_id: String,
     state: State<'_, AgentHistoryState>,
 ) -> Result<Option<String>, String> {
-    let session = state.db.get_session(&session_id).map_err(|e| e.to_string())?;
+    let session = state
+        .db
+        .get_session(&session_id)
+        .map_err(|e| e.to_string())?;
     let Some(s) = session else {
         return Ok(None);
     };
@@ -113,8 +121,15 @@ pub async fn agent_history_export_markdown(
     session_id: String,
     state: State<'_, AgentHistoryState>,
 ) -> Result<String, String> {
-    let session = state.db.get_session(&session_id).map_err(|e| e.to_string())?.ok_or("Session not found")?;
-    let messages = state.db.get_messages(&session_id, 0, 1000).map_err(|e| e.to_string())?;
+    let session = state
+        .db
+        .get_session(&session_id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Session not found")?;
+    let messages = state
+        .db
+        .get_messages(&session_id, 0, 1000)
+        .map_err(|e| e.to_string())?;
 
     let mut md = format!(
         "# {} Transcript\n\n- **Agent:** {}\n- **Project:** {}\n- **Date:** {}\n- **Messages:** {}\n\n---\n\n",
@@ -126,7 +141,11 @@ pub async fn agent_history_export_markdown(
     );
 
     for m in messages {
-        md.push_str(&format!("### {}\n\n{}\n\n", m.role.to_uppercase(), m.content));
+        md.push_str(&format!(
+            "### {}\n\n{}\n\n",
+            m.role.to_uppercase(),
+            m.content
+        ));
         if let Some(tool) = m.tool_name {
             md.push_str(&format!("> **Tool Call:** `{}`\n", tool));
             if let Some(inp) = m.tool_input {

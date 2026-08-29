@@ -76,22 +76,55 @@ impl AgentHistoryAdapter for VokttyAdapter {
             .unwrap_or("")
             .to_string();
 
-        let cwd = json.get("cwd").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let git_branch = json.get("git_branch").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let cwd = json
+            .get("cwd")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let git_branch = json
+            .get("git_branch")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
         let created_at = json.get("created_at").and_then(|v| v.as_i64()).unwrap_or(0);
-        let updated_at = json.get("updated_at").and_then(|v| v.as_i64()).unwrap_or(created_at);
+        let updated_at = json
+            .get("updated_at")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(created_at);
 
         let mut messages = Vec::new();
         if let Some(arr) = json.get("messages").and_then(|v| v.as_array()) {
             for (idx, m) in arr.iter().enumerate() {
-                let m_id = m.get("id").and_then(|v| v.as_str()).unwrap_or(&format!("{}_{}", id, idx)).to_string();
-                let role = m.get("role").and_then(|v| v.as_str()).unwrap_or("assistant").to_string();
-                let content_str = m.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let timestamp = m.get("timestamp").and_then(|v| v.as_i64()).unwrap_or(created_at);
-                let tool_name = m.get("tool_name").and_then(|v| v.as_str()).map(|s| s.to_string());
-                let tool_input = m.get("tool_input").and_then(|v| v.as_str()).map(|s| s.to_string());
-                let tool_output = m.get("tool_output").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let m_id = m
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&format!("{}_{}", id, idx))
+                    .to_string();
+                let role = m
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("assistant")
+                    .to_string();
+                let content_str = m
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let timestamp = m
+                    .get("timestamp")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(created_at);
+                let tool_name = m
+                    .get("tool_name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let tool_input = m
+                    .get("tool_input")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let tool_output = m
+                    .get("tool_output")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 let is_error = m.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
 
                 messages.push(HistoryMessage {
