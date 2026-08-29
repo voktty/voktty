@@ -179,3 +179,20 @@ pub async fn git_review_get_session_overview(
         files,
     })
 }
+
+#[tauri::command]
+pub async fn git_review_prune_sessions(
+    older_than_days: u32,
+    state: State<'_, GitReviewState>,
+) -> Result<usize, String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis() as i64;
+    let threshold = now - (older_than_days as i64 * 86_400_000);
+    state
+        .db
+        .prune_sessions_older_than(threshold)
+        .map_err(|e| e.to_string())
+}
+

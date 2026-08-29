@@ -133,3 +133,17 @@ export async function getSessionReviewOverview(
     return null;
   }
 }
+
+export async function pruneReviewSessions(
+  olderThanDays = 30,
+): Promise<number> {
+  try {
+    return await invoke<number>("git_review_prune_sessions", {
+      olderThanDays,
+    });
+  } catch (err) {
+    console.error("git_review_prune_sessions error:", err);
+    return 0;
+  }
+}
+

@@ -22,6 +22,7 @@ import {
   RemoveSquareIcon,
   Tick02Icon,
   CheckmarkCircle02Icon,
+  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -31,6 +32,7 @@ import {
   sessionKey,
   useGitReviewStore,
 } from "@/modules/git-review";
+import { GitWalkthroughDialog } from "@/modules/git-review/components/GitWalkthroughDialog";
 import {
   buildGitReviewEntries,
   type GitReviewEntry,
@@ -204,6 +206,8 @@ export function GitReviewQueue({
     t,
   ]);
 
+  const [walkthroughOpen, setWalkthroughOpen] = useState(false);
+
   const overview = useGitReviewStore(
     (state) => state.overviews[sessionKey(repoRoot, "worktree")],
   );
@@ -321,6 +325,16 @@ export function GitReviewQueue({
         >
           {entries.length}
         </Badge>
+        <button
+          type="button"
+          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          disabled={sourceControl.isLoading || !!busy || entries.length === 0}
+          aria-label={t("git.walkthrough")}
+          title={t("git.generateWalkthrough")}
+          onClick={() => setWalkthroughOpen(true)}
+        >
+          <HugeiconsIcon icon={SparklesIcon} size={13} strokeWidth={1.9} />
+        </button>
         <button
           type="button"
           className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
@@ -503,6 +517,19 @@ export function GitReviewQueue({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GitWalkthroughDialog
+        open={walkthroughOpen}
+        onOpenChange={setWalkthroughOpen}
+        repoRoot={repoRoot}
+        changedFiles={entries.map((e) => e.path)}
+        onNavigateReference={(path) => {
+          const entry = entries.find((e) => e.path === path);
+          if (entry) {
+            openEntry(repoRoot, entry, onOpenDiff);
+          }
+        }}
+      />
     </aside>
   );
 }

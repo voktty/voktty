@@ -331,6 +331,24 @@ impl ReviewDb {
 
         Ok(map.into_values().collect())
     }
+
+    pub fn delete_session(&self, session_id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM review_sessions WHERE id = ?1",
+            params![session_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn prune_sessions_older_than(&self, timestamp: i64) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let deleted = conn.execute(
+            "DELETE FROM review_sessions WHERE updated_at < ?1",
+            params![timestamp],
+        )?;
+        Ok(deleted)
+    }
 }
 
 fn uuid_v4() -> String {
@@ -394,5 +412,11 @@ mod tests {
             .unwrap();
         let claims_after_unmark = db.get_file_claims(&session.id, "src/main.rs").unwrap();
         assert_eq!(claims_after_unmark.len(), 1);
+
+        // Test pruning
+        let deleted = db.prune_sessions_older_than(session.updated_at + 1000).unwrap();
+        assert_eq!(deleted, 1);
+        let overview_after_prune = db.get_session_overview(&session.id).unwrap();
+        assert_eq!(overview_after_prune.len(), 0);
     }
 }

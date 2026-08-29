@@ -71,3 +71,36 @@ export type MarkRangePayload = {
   content: string;
   ranges: LineRange[];
 };
+
+export type WalkthroughReferenceStatus = "valid" | "invalid" | "unverified";
+
+export type WalkthroughReference = {
+  path: string;
+  startLine: number;
+  endLine: number;
+  label?: string;
+  status: WalkthroughReferenceStatus;
+  invalidReason?: string;
+};
+
+export type WalkthroughSection = {
+  id: string;
+  title: string;
+  intent: string;
+  description: string;
+  references: WalkthroughReference[];
+  risks?: string[];
+};
+
+export type WalkthroughDocument = {
+  id: string;
+  title: string;
+  summary: string;
+  sections: WalkthroughSection[];
+  unmentionedFiles: string[];
+  totalChangedFiles: number;
+  coverageRatio: number;
+  isValid: boolean;
+  createdAt: number;
+};
+
