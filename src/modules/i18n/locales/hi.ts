@@ -3436,7 +3436,7 @@ export const hi: TranslationSchema = mergeLocale(en, {
       codex: "Codex",
       cursor: "Cursor",
       voktty: "Voktty Agent",
-      gemini: "Gemini / CLI",
+      gemini: "Antigravity",
       kimi: "Kimi",
     },
   },

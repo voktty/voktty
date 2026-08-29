@@ -14,15 +14,16 @@ impl GeminiAdapter {
     fn gemini_brain_dirs() -> Vec<PathBuf> {
         let mut dirs_list = Vec::new();
         if let Some(h) = dirs::home_dir() {
-            let base = h.join(".gemini");
-            if base.exists() {
-                let ag = base.join("antigravity").join("brain");
-                if ag.is_dir() {
-                    dirs_list.push(ag);
-                }
-                let ag_cli = base.join("antigravity-cli").join("brain");
-                if ag_cli.is_dir() {
-                    dirs_list.push(ag_cli);
+            let candidates = [
+                h.join(".gemini").join("antigravity-cli").join("brain"),
+                h.join(".gemini").join("antigravity").join("brain"),
+                h.join(".gemini").join("brain"),
+                h.join(".antigravity").join("brain"),
+                h.join(".antigravity-cli").join("brain"),
+            ];
+            for dir in candidates {
+                if dir.is_dir() {
+                    dirs_list.push(dir);
                 }
             }
         }
@@ -36,7 +37,7 @@ impl AgentHistoryAdapter for GeminiAdapter {
     }
 
     fn name(&self) -> &str {
-        "Gemini / Antigravity"
+        "Antigravity"
     }
 
     fn is_installed(&self) -> bool {
@@ -80,6 +81,7 @@ impl AgentHistoryAdapter for GeminiAdapter {
             .unwrap_or_else(|| "gemini_session".to_string());
 
         let session_id = format!("gemini_{}", session_uuid);
+        let resume_cmd = Some(format!("agy --conversation={}", session_uuid));
 
         let mut messages = Vec::new();
         let mut first_user_prompt = String::new();
@@ -207,7 +209,7 @@ impl AgentHistoryAdapter for GeminiAdapter {
         let title = if !first_user_prompt.is_empty() {
             first_user_prompt
         } else {
-            format!("Gemini Task {}", &session_uuid[..session_uuid.len().min(8)])
+            format!("Antigravity Task {}", &session_uuid[..session_uuid.len().min(8)])
         };
 
         let session = HistorySession {
@@ -224,14 +226,52 @@ impl AgentHistoryAdapter for GeminiAdapter {
             is_active: false,
             file_path: Some(path.to_string_lossy().to_string()),
             source_hash: Some(loc.source_hash),
-            can_resume: false,
-            resume_command: None,
+            can_resume: true,
+            resume_command: resume_cmd,
         };
 
         Some((session, messages))
     }
 
-    fn resume_command(&self, _session: &HistorySession) -> Option<String> {
-        None
+    fn resume_command(&self, session: &HistorySession) -> Option<String> {
+        let clean_uuid = session.id.strip_prefix("gemini_").unwrap_or(&session.id);
+        Some(format!("agy --conversation={}", clean_uuid))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gemini_adapter_name_and_id() {
+        let adapter = GeminiAdapter::new();
+        assert_eq!(adapter.id(), "gemini");
+        assert_eq!(adapter.name(), "Antigravity");
+    }
+
+    #[test]
+    fn test_gemini_resume_command_generation() {
+        let adapter = GeminiAdapter::new();
+        let session = HistorySession {
+            id: "gemini_8c9a2f19-8f66-4eb2-9367-1937d9b26e6d".to_string(),
+            agent: "gemini".to_string(),
+            title: "Test Antigravity Task".to_string(),
+            project_name: "Test".to_string(),
+            project_path: "C:\\test".to_string(),
+            cwd: Some("C:\\test".to_string()),
+            git_branch: None,
+            created_at: 0,
+            updated_at: 0,
+            message_count: 1,
+            is_active: false,
+            file_path: None,
+            source_hash: None,
+            can_resume: true,
+            resume_command: None,
+        };
+
+        let cmd = adapter.resume_command(&session);
+        assert_eq!(cmd, Some("agy --conversation=8c9a2f19-8f66-4eb2-9367-1937d9b26e6d".to_string()));
     }
 }
