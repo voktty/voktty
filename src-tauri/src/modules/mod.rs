@@ -8,6 +8,7 @@ pub mod docker;
 pub mod extensions;
 pub mod fs;
 pub mod git;
+pub mod git_review;
 pub mod history;
 pub mod lsp;
 pub mod mcp;
