@@ -24,9 +24,9 @@ Voktty는 Tauri 2 + Rust와 React 19로 만든 가볍고 오픈 소스이며 터
 ## 스크린샷
 
 <table>
-  <tr><td align="center"><img src="../images/voktty_0stHyTBbyY.png" alt="워크스페이스" /><br/><sub>파일과 탭이 있는 Voktty 워크스페이스</sub></td><td align="center"><img src="../images/voktty_ljubKqX22C.png" alt="터미널 Copilot" /><br/><sub>자연어를 지원하는 터미널 Copilot</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_kLd3UCiAji.png" alt="테마" style="margin-top: 12px;"/><br/><sub>사용자 지정 테마와 프리셋</sub></td><td align="center"><img src="../images/voktty_kiAdbgrGGj.png" alt="소스 제어와 Git 그래프" style="margin-top: 12px;"/><br/><sub>Git 그래프가 포함된 소스 제어 패널</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_wiRVOca2A5.png" alt="터미널" style="border-radius: 4px; margin-top: 12px;" /><br/><sub>시스템 정보와 파일 탐색기가 있는 터미널</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API 클라이언트 및 샌드박스" /><br/><sub>요청 빌더와 응답 검사를 제공하는 API 클라이언트 및 샌드박스</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="에이전트 운영 기록" /><br/><sub>검색 가능한 세션과 트랜스크립트를 제공하는 에이전트 기록 및 복구</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="환경 선택기" /><br/><sub>로컬, WSL, SSH, RDP 및 직렬 환경 선택</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="에디터와 터미널" /><br/><sub>코드 에디터, 터미널, AI 패널 및 마우스를 올렸을 때의 파일 정보</sub></td></tr>
+  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="파일 미리보기" /><br/><sub>탐색기에서 표시되는 이미지 미리보기와 파일 메타데이터</sub></td></tr>
 </table>
 
 ## 기능

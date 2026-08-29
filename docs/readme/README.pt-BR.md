@@ -24,9 +24,9 @@ Voktty é um ambiente de desenvolvimento (ADE) leve, de código aberto, focado n
 ## Capturas de tela
 
 <table>
-  <tr><td align="center"><img src="../images/voktty_0stHyTBbyY.png" alt="Workspace" /><br/><sub>Workspace do Voktty com arquivos e abas</sub></td><td align="center"><img src="../images/voktty_ljubKqX22C.png" alt="Copilot do terminal" /><br/><sub>Copilot do terminal com linguagem natural</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_kLd3UCiAji.png" alt="Temas" style="margin-top: 12px;"/><br/><sub>Temas personalizados e predefinições</sub></td><td align="center"><img src="../images/voktty_kiAdbgrGGj.png" alt="Controle de versão e gráfico Git" style="margin-top: 12px;"/><br/><sub>Painel de controle de versão com gráfico Git</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_wiRVOca2A5.png" alt="Terminal" style="border-radius: 4px; margin-top: 12px;" /><br/><sub>Terminal com informações do sistema e explorador de arquivos</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="Cliente API e sandbox" /><br/><sub>Cliente API e sandbox com construtor de requisições e inspeção de respostas</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Histórico operacional de agentes" /><br/><sub>Histórico e recuperação de agentes com sessões pesquisáveis</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Seletor de ambientes" /><br/><sub>Seleção de ambientes local, WSL, SSH, RDP e serial</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Editor e terminal" /><br/><sub>Editor de código, terminal, painel de IA e informações do arquivo ao passar o cursor</sub></td></tr>
+  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Visualização de arquivo" /><br/><sub>Visualização de imagens e metadados de arquivos no explorador</sub></td></tr>
 </table>
 
 ## Recursos

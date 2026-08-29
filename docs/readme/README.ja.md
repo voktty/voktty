@@ -24,9 +24,9 @@ Voktty は、Tauri 2 + Rust と React 19 で構築された、軽量かつオー
 ## スクリーンショット
 
 <table>
-  <tr><td align="center"><img src="../images/voktty_0stHyTBbyY.png" alt="ワークスペース" /><br/><sub>ファイルとタブを備えた Voktty ワークスペース</sub></td><td align="center"><img src="../images/voktty_ljubKqX22C.png" alt="ターミナル Copilot" /><br/><sub>自然言語で使えるターミナル Copilot</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_kLd3UCiAji.png" alt="テーマ" style="margin-top: 12px;"/><br/><sub>カスタムテーマとプリセット</sub></td><td align="center"><img src="../images/voktty_kiAdbgrGGj.png" alt="ソース管理と Git グラフ" style="margin-top: 12px;"/><br/><sub>Git グラフを備えたソース管理パネル</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_wiRVOca2A5.png" alt="ターミナル" style="border-radius: 4px; margin-top: 12px;" /><br/><sub>システム情報とファイルエクスプローラーを備えたターミナル</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API クライアントとサンドボックス" /><br/><sub>リクエストビルダーとレスポンス確認に対応した API クライアントとサンドボックス</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="エージェントの操作履歴" /><br/><sub>検索可能なセッションとトランスクリプトによるエージェント履歴と復元</sub></td></tr>
+  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="環境セレクター" /><br/><sub>ローカル、WSL、SSH、RDP、シリアル環境の選択</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="エディターとターミナル" /><br/><sub>コードエディター、ターミナル、AI パネル、ホバー時のファイル情報</sub></td></tr>
+  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="ファイルプレビュー" /><br/><sub>エクスプローラーに表示される画像プレビューとファイルメタデータ</sub></td></tr>
 </table>
 
 ## 機能

@@ -4,12 +4,8 @@ These captures show the current Voktty interface and are maintained as project d
 
 | Capture | Area | What it shows |
 | --- | --- | --- |
-| ![Voktty remote workspace](images/voktty_0stHyTBbyY.png) | Spaces and files | A remote workspace with tabs and a file explorer. |
-| ![Voktty SSH settings](images/voktty_3QD9ekQl5V.png) | SSH | Saved SSH connections, configuration import, and port forwarding. |
-| ![Voktty editor](images/voktty_7Jmp0UByzr.png) | Editor | An open file with tab and workspace navigation. |
-| ![Voktty Git graph](images/voktty_kiAdbgrGGj.png) | Git | Source changes, commit graph, and remote file editing. |
-| ![Voktty themes](images/voktty_kLd3UCiAji.png) | Customization | Theme presets and visual personalization. |
-| ![Voktty terminal Copilot](images/voktty_ljubKqX22C.png) | Terminal AI | Terminal Copilot turning a natural-language request into a command. |
-| ![Voktty PHP editor](images/voktty_LSeiFJOfyf.png) | IDE | Code editing with explorer, symbols, and language status. |
-| ![Voktty extensions](images/voktty_TKT4Mw8Jnc.png) | Extensions | Extensions, commands, and AI tools. |
-| ![Voktty terminal](images/voktty_wiRVOca2A5.png) | Terminal | A shell with system information, tabs, and workspace explorer. |
+| ![Voktty API Client and Sandbox](images/voktty_6LhZMEZPC6.png) | API Client | Request building, API responses, headers, timings, and AI-assisted investigation. |
+| ![Voktty agent operational history](images/voktty_E7ePo9A5ka.png) | Agent history | Searchable agent sessions, transcripts, recovery actions, and export. |
+| ![Voktty environment selector](images/voktty_k5Xr4AqgSA.png) | Environments | Local, WSL, SSH, RDP, and serial connection targets. |
+| ![Voktty editor and terminal](images/voktty_MAZn6eHFXb.png) | Editor and terminal | Code editing beside a terminal and AI panel, with file details on hover. |
+| ![Voktty file preview](images/voktty_vPOlZrpa70.png) | File explorer | Image preview and file metadata shown from the explorer. |
