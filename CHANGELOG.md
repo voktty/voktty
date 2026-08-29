@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Closing a tab in Deck keeps the active tab in the current project when another tab from that project is open. In #22 by @kinsomicrote.
 - Unused provider CLIs no longer start at launch. Catalog probes run only for harnesses in the restored workspace, or when you open that provider in the model picker. Pi/omp probes skip extensions so a leftover `pi` process cannot sit at ~1GB while you work in Codex or Claude. Diagnosed in #19.
 
 ## [0.1.16] - 2026-08-28
@@ -64,7 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Closing a tab in Deck keeps the active tab in the current project when another tab from that project is open.
 - Streamed Markdown keeps headings, blank lines, tables, and repeated characters. Completed Claude/Codex snapshots no longer paste the same reply twice. Diagnosed in #15 by @kinsomicrote.
 
 ## [0.1.13] - 2026-08-27
