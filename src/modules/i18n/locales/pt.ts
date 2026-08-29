@@ -3200,7 +3200,550 @@ const ptRecent = {
   },
 };
 
-export const pt: TranslationSchema = mergeLocale(mergeLocale(ptFinal, ptRecent), {
+const ptI18nBatch1: TranslationSchema = mergeLocale(mergeLocale(ptFinal, ptRecent), {
   settings: { models: { configurationRequired: "Configure primeiro o modelo selecionado." } },
   terminal: { connection: { connected: "Conectado a {name}", connectionFailed: "Não foi possível conectar a {name}" } },
+});
+
+const ptI18nBatch2: TranslationSchema = mergeLocale(ptI18nBatch1, {
+  settings: {
+    tabs: {
+      mcp: "PCM"
+    },
+    general: {
+      notifications: {
+        agentAvatarTitle: "Avatares de agente",
+        agentAvatarDesc: "Mostre o avatar animado local do chat ativo ou do agente de codificação.",
+        agentAvatarSizeTitle: "Tamanho do avatar",
+        agentAvatarSizeDesc: "Ajuste o tamanho visual do avatar nas guias de chat e agente.",
+        agentAvatarSize: {
+          compact: "Compactar",
+          standard: "Padrão",
+          large: "Grande"
+        },
+        agentAvatarIntensityTitle: "Intensidade da animação",
+        agentAvatarIntensityDesc: "Controle a velocidade e a ênfase das animações do avatar.",
+        agentAvatarIntensity: {
+          low: "Baixo",
+          standard: "Padrão",
+          high: "Alto"
+        },
+        agentAvatarReducedMotionTitle: "Reduzir o movimento do avatar",
+        agentAvatarReducedMotionDesc: "Desative as animações contínuas e mantenha apenas as alterações de estado."
+      }
+    },
+    themes: {
+      background: {
+        vibrancyOpacity: "Opacidade da superfície",
+        vibrancyOpacityDesc: "Ajuste o quanto o cenário nativo de Mica ou Vibrancy brilha nas superfícies do aplicativo."
+      }
+    },
+    models: {
+      autocompleteTestLabel: "Saúde",
+      testAutocomplete: "Testar preenchimento automático",
+      autocompleteTestOk: "Pronto em {latency} ms, perfil {profile}, tentativa(s) {attempts}."
+    }
+  }
+});
+
+const ptI18nBatch3: TranslationSchema = mergeLocale(ptI18nBatch2, {
+  settings: {
+    models: {
+      autocompleteTestFail: "Falha no teste: {reason}",
+      autocompleteProfile: "Perfil de IA",
+      autocompleteProfiles: {
+        auto: "Detecção automática",
+        generic: "Compatível com OpenAI genérico",
+        openai: "OpenAI",
+        deepseek: "DeepSeek",
+        ollama: "Ollama",
+        lmstudio: "Estúdio LM"
+      },
+      autocompleteFailure: {
+        authentication: "autenticação ou chave API",
+        rate_limit: "limite de taxa ou cota",
+        unsupported_options: "opções de modelo não suportadas",
+        unavailable: "provedor indisponível ou expirou",
+        empty_response: "o modelo não retornou nenhuma conclusão",
+        provider_error: "erro do provedor"
+      },
+      localProviderLabel: {
+        ollama: "Ollama ({model})",
+        lmstudio: "Estúdio LM ({model})",
+        mlx: "MLX ({model})",
+        openrouter: "OpenRouter ({model})"
+      },
+      customEndpoint: "Ponto final personalizado",
+      browserBuiltIn: "Navegador (integrado, gratuito)"
+    }
+  }
+});
+
+const ptI18nBatch4: TranslationSchema = mergeLocale(ptI18nBatch3, {
+  settings: {
+    models: {
+      defaultFastModel: "Modelo rápido padrão"
+    },
+    mcp: {
+      title: "Servidores MCP",
+      description: "Gerencie servidores de ferramentas locais e remotos habilitados explicitamente. Os segredos permanecem no armazenamento de credenciais nativo.",
+      addServer: "Adicionar servidor",
+      transport: {
+        stdio: "Processo local (stdio)",
+        http: "HTTP streamável"
+      },
+      auth: {
+        none: "Sem autorização",
+        bearer: "Token do portador",
+        oauth: "OAuth com PKCE"
+      },
+      form: {
+        addTitle: "Adicionar servidor MCP",
+        editTitle: "Editar servidor MCP",
+        description: "A configuração é armazenada separadamente das credenciais. Um servidor inicia somente depois de ser explicitamente ativado.",
+        name: "Nome de exibição",
+        id: "ID do servidor estável",
+        idPlaceholder: "ferramentas de espaço de trabalho",
+        transport: "Transporte",
+        executable: "Executável",
+        args: "Argumentos",
+        argsHint: "Um argumento por linha. Os comandos são iniciados sem shell.",
+        cwd: "Diretório de trabalho"
+      }
+    }
+  }
+});
+
+const ptI18nBatch5: TranslationSchema = mergeLocale(ptI18nBatch4, {
+  settings: {
+    mcp: {
+      form: {
+        authorizedRoot: "Raiz do espaço de trabalho autorizado",
+        endpoint: "Ponto final",
+        authMode: "Autorização",
+        bearerToken: "Token do portador",
+        bearerPlaceholder: "Insira um token",
+        credentialStored: "Uma credencial já está armazenada",
+        secretHint: "O token é enviado diretamente para o armazenamento de credenciais nativo e nunca é persistido com este formulário.",
+        oauthHint: "Após habilitar o servidor, Authorize abre o provedor em seu navegador e recebe o retorno de chamada em uma porta de loopback temporária.",
+        oauthClientId: "ID do cliente OAuth",
+        oauthScopes: "Escopos OAuth",
+        privateNetwork: "Permitir rede privada",
+        privateNetworkHint: "Necessário para pontos de extremidade de loopback ou LAN. O HTTP de texto simples público permanece bloqueado.",
+        invalid: "Revise os campos obrigatórios e os valores limitados antes de salvar."
+      },
+      phase: {
+        disabled: "Desabilitado",
+        disconnected: "Desconectado",
+        connecting: "Conectando",
+        connected: "Conectado",
+        authenticationRequired: "Autorização necessária",
+        error: "Erro de conexão"
+      },
+      errors: {
+        configuration: "A configuração do servidor é inválida ou incompleta."
+      }
+    }
+  }
+});
+
+const ptI18nBatch6: TranslationSchema = mergeLocale(ptI18nBatch5, {
+  settings: {
+    mcp: {
+      errors: {
+        authentication: "É necessária uma credencial válida ou autorização do fornecedor.",
+        spawn: "O processo do servidor local não pôde ser iniciado.",
+        io: "O servidor não pôde ser acessado com segurança.",
+        protocol: "O servidor retornou uma mensagem MCP inválida.",
+        incompatibleVersion: "O servidor não suporta uma versão MCP compatível.",
+        resourceLimit: "O servidor excedeu um limite de segurança configurado.",
+        timeout: "O servidor não respondeu antes do tempo limite.",
+        busy: "O servidor está ocupado com outra operação limitada.",
+        cancelled: "A operação foi cancelada.",
+        processExited: "O processo do servidor local foi encerrado inesperadamente.",
+        remote: "O servidor MCP rejeitou a solicitação."
+      },
+      capabilities: {
+        tools: "Ferramentas",
+        resources: "Recursos",
+        prompts: "Solicitações"
+      },
+      effects: {
+        read: "Ler",
+        write: "Escrever",
+        process: "Processo",
+        network: "Rede",
+        secret: "Segredo",
+        publish: "Publicar"
+      }
+    }
+  }
+});
+
+const ptI18nBatch7: TranslationSchema = mergeLocale(ptI18nBatch6, {
+  settings: {
+    mcp: {
+      effects: {
+        delete: "Excluir"
+      },
+      scope: "Escopo",
+      credentials: {
+        stored: "Credencial armazenada com segurança",
+        missing: "Credencial ausente"
+      },
+      tools: {
+        title: "Ferramentas descobertas ({count})",
+        automaticRead: "Permitir sem aprovação"
+      },
+      resources: {
+        title: "Recursos descobertos ({count})"
+      },
+      prompts: {
+        title: "Prompts descobertos ({count})"
+      },
+      actions: {
+        enable: "Habilitar servidor",
+        connect: "Conectar",
+        disconnect: "Desconectar",
+        restart: "Reiniciar",
+        revoke: "Revogar credenciais",
+        authorize: "Autorizar"
+      },
+      delete: {
+        title: "Excluir servidor MCP?",
+        description: "{name} será desconectado e sua configuração e credenciais serão removidas."
+      },
+      empty: {
+        title: "Nenhum servidor MCP configurado",
+        description: "Adicione um servidor stdio local ou um endpoint HTTP Streamable. Nada inicia ou se conecta até que você o habilite."
+      }
+    }
+  },
+  header: {
+    noMatches: "0 resultados",
+    previousMatch: "Partida anterior (Shift+Enter)"
+  }
+});
+
+const ptI18nBatch8: TranslationSchema = mergeLocale(ptI18nBatch7, {
+  header: {
+    nextMatch: "Próxima partida (entrar)"
+  },
+  tabs: {
+    hoverCard: {
+      apiClient: "Cliente API"
+    },
+    subtitles: {
+      apiClient: "Cliente API e Sandbox"
+    }
+  },
+  sidebar: {
+    runDebug: "Executar e depurar"
+  },
+  workbench: {
+    title: "Executar e depurar",
+    tasks: "Tarefas",
+    tests: "Testes",
+    debug: "Depurar",
+    noTasks: "Nenhuma tarefa foi descoberta neste espaço de trabalho.",
+    noTests: "Nenhuma tarefa de teste foi descoberta neste espaço de trabalho.",
+    output: "Saída",
+    outputStatus: "{output} · {status}",
+    passed: "Aprovado",
+    failed: "Fracassado",
+    running: "Correndo",
+    error: "Erro",
+    stop: "Parar",
+    clear: "Limpar saída",
+    refresh: "Atualizar tarefas",
+    unnamedTest: "Teste sem nome"
+  }
+});
+
+const ptI18nBatch9: TranslationSchema = mergeLocale(ptI18nBatch8, {
+  workbench: {
+    passedMark: "✓",
+    failedMark: "×",
+    skippedMark: "–",
+    launch: "Lançar",
+    attach: "Anexar",
+    adapterCommand: "Comando do adaptador de depuração",
+    debugRequest: "Solicitação de depuração",
+    debugArguments: "Iniciar ou anexar argumentos (JSON)",
+    debugArgumentsObject: "Os argumentos de depuração devem ser um objeto JSON.",
+    startDebugging: "Comece a depuração",
+    debugStatus: "Status",
+    statusIdle: "Parado",
+    statusStarting: "Começando",
+    statusRunning: "Correndo",
+    statusStopped: "Pausado",
+    statusTerminated: "Terminado",
+    statusError: "Erro",
+    continue: "Continuar",
+    pause: "Pausa",
+    stepOver: "Passar por cima"
+  }
+});
+
+const ptI18nBatch10: TranslationSchema = mergeLocale(ptI18nBatch9, {
+  workbench: {
+    stepIn: "Entre",
+    stepOut: "Saia",
+    breakpoints: "Pontos de interrupção",
+    filePath: "Caminho do arquivo",
+    line: "Linha",
+    addBreakpoint: "Adicionar ponto de interrupção",
+    removeBreakpoint: "Remover ponto de interrupção",
+    callStack: "Pilha de chamadas",
+    variables: "Variáveis",
+    debugConsole: "Console de depuração",
+    evaluateExpression: "Avaliar expressão",
+    evaluate: "Avaliar"
+  },
+  explorer: {
+    previewType: "Tipo",
+    previewFolder: "Pasta",
+    previewFile: "Arquivo",
+    previewSize: "Tamanho",
+    previewModified: "Modificado",
+    previewImageTooLarge: "A visualização da imagem não está disponível porque o arquivo é muito grande.",
+    fileOutsideWorkspace: "Este arquivo está fora do espaço de trabalho atual do Explorer.",
+    openContainingFolder: "Abra a pasta que contém"
+  }
+});
+
+const ptI18nBatch11: TranslationSchema = mergeLocale(ptI18nBatch10, {
+  git: {
+    reviewComments: "Comentários",
+    addComment: "Comentário",
+    addReviewComment: "Adicionar comentário de revisão",
+    editReviewComment: "Editar comentário de revisão",
+    deleteComment: "Excluir comentário",
+    commentAdded: "Comentário adicionado",
+    commentUpdated: "Comentário atualizado",
+    commentDeleted: "Comentário excluído",
+    commentPlaceholder: "Escreva comentários ou instruções para o agente...",
+    commentCannotBeEmpty: "O comentário não pode ficar vazio",
+    pressCtrlEnterToSave: "Ctrl+Enter para salvar",
+    addedModified: "Adicionado/Modificado",
+    original: "Original",
+    noReviewCommentsYet: "Ainda não há comentários de revisão",
+    addCommentsFromDiffHint: "Use o botão Comentário em qualquer comparação para deixar comentários",
+    reviewHandoffTitle: "Transferência de revisão de código",
+    reviewHandoffDescription: "Revise os comentários formatados como prompt acionável para agentes de codificação de IA.",
+    reviewHandoffCopied: "Prompt de transferência copiado para a área de transferência",
+    reviewSentToAgent: "Solicitação de revisão enviada ao agente ativo",
+    scope: "Escopo"
+  }
+});
+
+const ptI18nBatch12: TranslationSchema = mergeLocale(ptI18nBatch11, {
+  git: {
+    reviewedFiles: "revisto",
+    commentsCount: "comentários",
+    handoffHotkeyHint: "Pressione P da fila de revisão a qualquer momento",
+    sendToAgent: "Enviar para o Corretor"
+  },
+  commandPalette: {
+    commands: {
+      manageAliases: "Gerir pseudónimos e comandos",
+      focusNextSpaceSlot: "Espaços: Foco no próximo slot",
+      focusPreviousSpaceSlot: "Espaços: Focar slot anterior",
+      toggleSpaceView: "Espaços: Alternar visualização dividida",
+      extractFocusedSpaceMember: "Espaços: Extrair membro focado",
+      moveFocusedSpaceMember: "Espaços: Mover membro focado..."
+    }
+  }
+});
+
+const ptI18nBatch13: TranslationSchema = mergeLocale(ptI18nBatch12, {
+  commandPalette: {
+    commands: {
+      closeFocusedSpaceMember: "Espaços: Membro com foco próximo",
+      commandHistory: "Terminal: Histórico de Comandos",
+      newApiClient: "Novo cliente de API e Sandbox",
+      editorRevealInExplorer: "Editor: Revelar ficheiro no explorer",
+      openRunDebug: "Visualização: Executar e Depurar"
+    },
+    disabled: {
+      noCompositeSpace: "Nenhum espaço composto ativo"
+    }
+  },
+  ai: {
+    approvals: {
+      runDevelopmentCheck: "Executar verificação de desenvolvimento",
+      mcpResponseFailed: "Não foi possível gravar a resposta de aprovação do MCP",
+      sensitiveValue: "[oculto]"
+    },
+    planReview: {
+      operationApplied: "Operação de desenvolvimento aplicada"
+    }
+  }
+});
+
+const ptI18nBatch14: TranslationSchema = mergeLocale(ptI18nBatch13, {
+  ai: {
+    planReview: {
+      operationReverted: "Operação de desenvolvimento revertida",
+      revert: "Reverter operação",
+      provenance: "{model} · {files} arquivos · {commands} comandos"
+    }
+  },
+  editor: {
+    externalChangeDetected: "O ficheiro {name} foi modificado externamente.",
+    externalChangeConflict: "O ficheiro {name} foi modificado externamente e tem alterações não guardadas.",
+    reloadFile: "Volta a carregar o ficheiro.",
+    keepCurrentEdits: "Manter edições",
+    fileReloadedSuccess: "{name} recarregado do disco",
+    status: {
+      slowRead: "Este ficheiro está a demorar mais do que o esperado para abrir.",
+      readCancelled: "O carregamento do ficheiro foi cancelado."
+    }
+  }
+});
+
+const ptI18nBatch15: TranslationSchema = mergeLocale(ptI18nBatch14, {
+  editor: {
+    status: {
+      readOffline: "A localização da rede está indisponível ou expirou.",
+      readNotFound: "O ficheiro ou o seu caminho já não existe.",
+      readPermissionDenied: "Voktty não tem permissão para ler este ficheiro.",
+      readFailed: "Voktty não conseguiu ler este arquivo."
+    },
+    aiCompletionStatus: {
+      idle: "Completo, com",
+      requesting: "Conclusão de IA em andamento",
+      ready: "Conclusão da IA pronta, pressione Tab para aceitar",
+      error: "Falha na conclusão da IA, clique para tentar novamente",
+      paused: "Conclusão automática da IA pausada, clique para tentar novamente agora"
+    }
+  },
+  shortcuts: {
+    labels: {
+      tabNewApiClient: "Novo cliente de API e Sandbox"
+    }
+  }
+});
+
+const ptI18nBatch16: TranslationSchema = mergeLocale(ptI18nBatch15, {
+  workspace: {
+    startingWslDistro: "A iniciar a distribuição WSL...",
+    establishingConnection: "Estabelecendo uma conexão"
+  },
+  feedback: {
+    sessionSaveFailed: "Não foi possível guardar a sessão. Voktty permanece aberto para que possa tentar novamente."
+  },
+  apiClient: {
+    header: {
+      title: "Cliente de API e Sandbox",
+      zeroCorsBadge: "Zero-CORS • Motor Nativo de Ferrugem",
+      requestBuilder: "Construtor de Pedidos",
+      apiBrowser: "Navegador de API",
+      sandboxProbes: "Sondas Sandbox",
+      scenarios: "Cenários",
+      history: "História"
+    }
+  }
+});
+
+const ptI18nBatch17: TranslationSchema = mergeLocale(ptI18nBatch16, {
+  apiClient: {
+    header: {
+      clearHistory: "Limpar histórico",
+      noHistory: "Nenhum pedido registado ainda."
+    },
+    browser: {
+      urlPlaceholder: "Insira o URL base (por exemplo, https://dummyjson.com ou http://localhost:11434/api)",
+      discovering: "Descobrindo",
+      autoDiscover: "Descoberta Automática",
+      fastPresets: "Predefinições Rápidas:",
+      presets: {
+        dummyJson: "DummyJSON (API REST)",
+        ollama: "Ollama LLM (11434)",
+        docker: "Docker Daemon (2375)",
+        openAi: "OpenAI / LocalAI (v1)"
+      }
+    }
+  }
+});
+
+const ptI18nBatch18: TranslationSchema = mergeLocale(ptI18nBatch17, {
+  apiClient: {
+    browser: {
+      apiService: "Nome do serviço",
+      openApiSpec: "OpenAPI / Swagger 3.0",
+      smartRouteProbe: "Sonda de Rota Inteligente",
+      summaryBase: "Base: {base} • {count} endpoints encontrados em {duration}ms",
+      copyMarkdownReport: "Copiar relatório de remarcação",
+      reportCopied: "Relatório de validação copiado para a área de transferência no Markdown!",
+      reportCopyFailed: "Falha ao copiar relatório",
+      all: "TODOS",
+      filterPlaceholder: "Filtrar pontos de extremidade...",
+      authRequired: "Autenticação necessária"
+    }
+  }
+});
+
+const ptI18nBatch19: TranslationSchema = mergeLocale(ptI18nBatch18, {
+  apiClient: {
+    browser: {
+      testInEditor: "Teste no Editor",
+      loadedInEditor: "Carregado {method} {path} no editor",
+      noEndpointsFound: "Nenhum ponto de extremidade encontrado correspondente ao filtro.",
+      emptyStateTitle: "Descoberta de API e Navegador Inteligente",
+      emptyStateDescription: "Digite a URL base da sua API (por exemplo, DummyJSON, Ollama, Docker ou serviço web) e clique em Descoberta Automática para detectar automaticamente todas as rotas, métodos e especificações OpenAPI disponíveis."
+    }
+  },
+  agentHistory: {
+    title: "Histórico Operacional e Recuperação do Agente",
+    modalTitle: "Histórico Operacional do Agente",
+    shortcutTooltip: "Histórico Operacional do Agente ({shortcut})",
+    sessionsCount: "sessões",
+    messagesCount: "mensagens"
+  }
+});
+
+const ptI18nBatch20: TranslationSchema = mergeLocale(ptI18nBatch19, {
+  agentHistory: {
+    msgs: "msgs",
+    scanningFiles: "A verificar ficheiros de agente...",
+    scanning: "A procurar…",
+    rescan: "Voltar a digitalizar",
+    closeEsc: "Fechar (Esc)",
+    searchPlaceholder: "Pesquisar sessões, prompts ou código...",
+    allFilter: "All",
+    searchingSessions: "A pesquisar sessões...",
+    noMatchesFound: "Nenhuma correspondência encontrada",
+    noSessionsFound: "Nenhuma sessão encontrada"
+  }
+});
+
+const ptI18nBatch21: TranslationSchema = mergeLocale(ptI18nBatch20, {
+  agentHistory: {
+    tryDifferentSearch: "Tente uma procura diferente",
+    clickRescan: "Clique em Verificar novamente para indexar o histórico do agente",
+    clearSearch: "Limpar a pesquisa",
+    resumeInTerminal: "Retomar no terminal",
+    resumeTooltip: "Abrir e executar o comando retomar no terminal ativo",
+    copyResumeCommand: "Comando Copiar Currículo",
+    copyTranscript: "Copiar transcrição (Markdown)",
+    copyTranscriptTooltip: "Copiar Transcrição Completa como Markdown",
+    deleteSession: "Excluir sessão do índice",
+    export: "Exportar"
+  }
+});
+
+export const pt: TranslationSchema = mergeLocale(ptI18nBatch21, {
+  agentHistory: {
+    find: "Localizar",
+    findInTranscript: "Localizar na transcrição (Ctrl+F)",
+    findPlaceholder: "Localizar na transcrição...",
+    previousMatch: "Correspondência anterior (Shift+Enter)",
+    nextMatch: "Próxima partida (Enter)",
+    closeFind: "Fechar localização (Esc)",
+    loadingTranscript: "A carregar mensagens de transcrição...",
+    noMessages: "Nenhuma mensagem gravada nesta transcrição de sessão",
+    roleUser: "Utilizador ",
+    roleTool: "Invocação ⚙️ de ferramenta"
+  }
 });

@@ -104,7 +104,7 @@ export function RequestEditor() {
   const handleImportCurl = () => {
     const parsed = parseCurlCommand(curlImportText);
     if (!parsed || !parsed.url) {
-      toast.error(t("common.error") || "Invalid cURL command");
+      toast.error(t("apiClient.request.invalidCurlCommand"));
       return;
     }
     if (parsed.url) setUrl(parsed.url);
@@ -118,21 +118,21 @@ export function RequestEditor() {
     if (parsed.bodyContent) setBodyContent(parsed.bodyContent);
     setCurlImportOpen(false);
     setCurlImportText("");
-    toast.success("cURL command imported successfully!");
+    toast.success(t("apiClient.request.curlImported"));
   };
 
   const handleImportPostman = () => {
     try {
       const { count, name } = importPostman(postmanImportText);
       if (count === 0) {
-        toast.error("No valid requests found in Postman JSON");
+        toast.error(t("apiClient.request.noValidPostmanRequests"));
         return;
       }
       setPostmanImportOpen(false);
       setPostmanImportText("");
-      toast.success(`Imported ${count} requests from collection "${name}"`);
+      toast.success(t("apiClient.request.postmanImported", { count, name }));
     } catch (e) {
-      toast.error("Failed to parse Postman collection");
+      toast.error(t("apiClient.request.postmanImportFailed"));
     }
   };
 
@@ -181,7 +181,7 @@ export function RequestEditor() {
           <Input
             value={activeRequest.url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://api.example.com/v1/resource"
+            placeholder={t("apiClient.request.urlPlaceholder")}
             className="font-mono text-xs"
           />
         </div>
@@ -193,14 +193,14 @@ export function RequestEditor() {
           className="h-8 gap-1.5 px-3.5 text-xs font-semibold"
         >
           <HugeiconsIcon icon={PlayIcon} size={13} strokeWidth={2} />
-          <span>{isLoading ? "Sending..." : "Send"}</span>
+          <span>{isLoading ? t("apiClient.request.sending") : t("apiClient.request.send")}</span>
         </Button>
 
         <Button
           size="sm"
           variant="outline"
           className="h-8 gap-1 px-2.5 text-xs text-primary hover:bg-primary/10"
-          title="Auto-Discover routes from this Base URL"
+          title={t("apiClient.request.discoverTitle")}
           onClick={() => {
             setDiscoveryUrl(activeRequest.url);
             setActiveTab("browser");
@@ -208,14 +208,14 @@ export function RequestEditor() {
           }}
         >
           <HugeiconsIcon icon={FlashIcon} size={13} />
-          <span>Discover</span>
+          <span>{t("apiClient.request.discover")}</span>
         </Button>
 
         <Button
           size="icon"
           variant="outline"
           className="size-8"
-          title="Import cURL"
+          title={t("apiClient.request.importCurl")}
           onClick={() => {
             setCurlImportOpen(!curlImportOpen);
             setPostmanImportOpen(false);
@@ -228,7 +228,7 @@ export function RequestEditor() {
           size="sm"
           variant="outline"
           className="h-8 px-2 text-xs font-medium"
-          title="Import Postman Collection"
+          title={t("apiClient.request.importPostman")}
           onClick={() => {
             setPostmanImportOpen(!postmanImportOpen);
             setCurlImportOpen(false);
@@ -241,19 +241,19 @@ export function RequestEditor() {
       {/* cURL Import Drawer */}
       {curlImportOpen && (
         <div className="flex flex-col gap-2 border-b border-border/60 bg-muted/20 p-2.5 text-xs">
-          <span className="font-semibold text-muted-foreground">Import from cURL Command:</span>
+          <span className="font-semibold text-muted-foreground">{t("apiClient.request.importCurlCommand")}</span>
           <textarea
             value={curlImportText}
             onChange={(e) => setCurlImportText(e.target.value)}
-            placeholder="curl -X POST https://api.example.com -H 'Content-Type: application/json' -d '{...}'"
+            placeholder={t("apiClient.request.curlPlaceholder")}
             className="h-16 w-full rounded border border-border/60 bg-background p-2 font-mono text-[11px] outline-none"
           />
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setCurlImportOpen(false)} className="h-6 text-xs">
-              Cancel
+              {t("apiClient.request.cancel")}
             </Button>
             <Button size="sm" onClick={handleImportCurl} className="h-6 text-xs font-medium">
-              Import
+              {t("apiClient.request.import")}
             </Button>
           </div>
         </div>
@@ -262,19 +262,19 @@ export function RequestEditor() {
       {/* Postman Import Drawer */}
       {postmanImportOpen && (
         <div className="flex flex-col gap-2 border-b border-border/60 bg-muted/20 p-2.5 text-xs">
-          <span className="font-semibold text-muted-foreground">Import Postman Collection JSON (v2.0 / v2.1):</span>
+          <span className="font-semibold text-muted-foreground">{t("apiClient.request.importPostmanJson")}</span>
           <textarea
             value={postmanImportText}
             onChange={(e) => setPostmanImportText(e.target.value)}
-            placeholder='Paste your collection.json exported from Postman here...'
+            placeholder={t("apiClient.request.postmanPlaceholder")}
             className="h-20 w-full rounded border border-border/60 bg-background p-2 font-mono text-[11px] outline-none"
           />
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setPostmanImportOpen(false)} className="h-6 text-xs">
-              Cancel
+              {t("apiClient.request.cancel")}
             </Button>
             <Button size="sm" onClick={handleImportPostman} className="h-6 text-xs font-medium">
-              Import Collection
+              {t("apiClient.request.importCollection")}
             </Button>
           </div>
         </div>
@@ -289,19 +289,19 @@ export function RequestEditor() {
         <div className="border-b border-border/40 px-2 pt-1">
           <TabsList className="h-8 bg-transparent p-0">
             <TabsTrigger value="params" className="h-7 text-xs data-[state=active]:bg-muted">
-              Params {activeRequest.queryParams.filter((q) => q.enabled && q.key).length > 0 && `(${activeRequest.queryParams.filter((q) => q.enabled && q.key).length})`}
+              {t("apiClient.request.params")} {activeRequest.queryParams.filter((q) => q.enabled && q.key).length > 0 && `(${activeRequest.queryParams.filter((q) => q.enabled && q.key).length})`}
             </TabsTrigger>
             <TabsTrigger value="headers" className="h-7 text-xs data-[state=active]:bg-muted">
-              Headers {activeRequest.headers.filter((h) => h.enabled && h.key).length > 0 && `(${activeRequest.headers.filter((h) => h.enabled && h.key).length})`}
+              {t("apiClient.request.headers")} {activeRequest.headers.filter((h) => h.enabled && h.key).length > 0 && `(${activeRequest.headers.filter((h) => h.enabled && h.key).length})`}
             </TabsTrigger>
             <TabsTrigger value="auth" className="h-7 text-xs data-[state=active]:bg-muted">
-              Auth {activeRequest.authType !== "none" && "•"}
+              {t("apiClient.request.auth")} {activeRequest.authType !== "none" && "•"}
             </TabsTrigger>
             <TabsTrigger value="body" className="h-7 text-xs data-[state=active]:bg-muted">
-              Body {activeRequest.bodyType !== "none" && "•"}
+              {t("apiClient.request.body")} {activeRequest.bodyType !== "none" && "•"}
             </TabsTrigger>
             <TabsTrigger value="code" className="h-7 text-xs data-[state=active]:bg-muted">
-              Code
+              {t("apiClient.request.code")}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -309,14 +309,14 @@ export function RequestEditor() {
         {/* PARAMS TAB */}
         <TabsContent value="params" className="m-0 flex min-h-0 flex-1 flex-col overflow-y-auto p-2">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">Query Parameters</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t("apiClient.request.queryParameters")}</span>
             <Button size="sm" variant="ghost" onClick={addQueryParam} className="h-6 gap-1 text-[10.5px]">
-              <HugeiconsIcon icon={Add01Icon} size={11} /> Add Param
+              <HugeiconsIcon icon={Add01Icon} size={11} /> {t("apiClient.request.addParam")}
             </Button>
           </div>
           {activeRequest.queryParams.length === 0 ? (
             <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground/60">
-              No query parameters. Click Add Param to append parameters to the URL.
+              {t("apiClient.request.noQueryParameters")}
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
@@ -331,13 +331,13 @@ export function RequestEditor() {
                   <Input
                     value={qp.key}
                     onChange={(e) => updateQueryParam(idx, { key: e.target.value })}
-                    placeholder="Key"
+                    placeholder={t("apiClient.request.key")}
                     className="h-7 flex-1 font-mono text-xs"
                   />
                   <Input
                     value={qp.value}
                     onChange={(e) => updateQueryParam(idx, { value: e.target.value })}
-                    placeholder="Value"
+                    placeholder={t("apiClient.request.value")}
                     className="h-7 flex-1 font-mono text-xs"
                   />
                   <Button
@@ -357,9 +357,9 @@ export function RequestEditor() {
         {/* HEADERS TAB */}
         <TabsContent value="headers" className="m-0 flex min-h-0 flex-1 flex-col overflow-y-auto p-2">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground">HTTP Headers</span>
+            <span className="text-[11px] font-medium text-muted-foreground">{t("apiClient.request.httpHeaders")}</span>
             <Button size="sm" variant="ghost" onClick={addHeader} className="h-6 gap-1 text-[10.5px]">
-              <HugeiconsIcon icon={Add01Icon} size={11} /> Add Header
+              <HugeiconsIcon icon={Add01Icon} size={11} /> {t("apiClient.request.addHeader")}
             </Button>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -374,13 +374,13 @@ export function RequestEditor() {
                 <Input
                   value={h.key}
                   onChange={(e) => updateHeader(idx, { key: e.target.value })}
-                  placeholder="Header Name"
+                  placeholder={t("apiClient.request.headerName")}
                   className="h-7 flex-1 font-mono text-xs"
                 />
                 <Input
                   value={h.value}
                   onChange={(e) => updateHeader(idx, { value: e.target.value })}
-                  placeholder="Value"
+                  placeholder={t("apiClient.request.value")}
                   className="h-7 flex-1 font-mono text-xs"
                 />
                 <Button
@@ -399,7 +399,7 @@ export function RequestEditor() {
         {/* AUTH TAB */}
         <TabsContent value="auth" className="m-0 flex min-h-0 flex-1 flex-col p-3">
           <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Auth Type:</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("apiClient.request.authType")}</span>
             <Select
               value={activeRequest.authType}
               onValueChange={(val) => setAuthType(val as typeof activeRequest.authType)}
@@ -408,20 +408,20 @@ export function RequestEditor() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No Auth</SelectItem>
-                <SelectItem value="bearer">Bearer Token</SelectItem>
-                <SelectItem value="apiKey">API Key</SelectItem>
-                <SelectItem value="basic">Basic Auth</SelectItem>
-                <SelectItem value="oauth2">OAuth 2.0 Token</SelectItem>
-                <SelectItem value="awsSigV4">AWS Signature V4</SelectItem>
-                <SelectItem value="digest">Digest Auth</SelectItem>
+                <SelectItem value="none">{t("apiClient.request.noAuth")}</SelectItem>
+                <SelectItem value="bearer">{t("apiClient.request.bearerToken")}</SelectItem>
+                <SelectItem value="apiKey">{t("apiClient.request.apiKey")}</SelectItem>
+                <SelectItem value="basic">{t("apiClient.request.basicAuth")}</SelectItem>
+                <SelectItem value="oauth2">{t("apiClient.request.oauth2Token")}</SelectItem>
+                <SelectItem value="awsSigV4">{t("apiClient.request.awsSignatureV4")}</SelectItem>
+                <SelectItem value="digest">{t("apiClient.request.digestAuth")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {activeRequest.authType === "bearer" && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] text-muted-foreground">Token:</span>
+              <span className="text-[11px] text-muted-foreground">{t("apiClient.request.token")}</span>
               <Input
                 type="password"
                 value={activeRequest.bearerToken ?? ""}
@@ -435,7 +435,7 @@ export function RequestEditor() {
           {activeRequest.authType === "oauth2" && (
             <div className="flex flex-col gap-2">
               <div>
-                <span className="text-[11px] text-muted-foreground">Access Token:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.accessToken")}</span>
                 <Input
                   type="password"
                   value={activeRequest.oauth2?.token ?? ""}
@@ -445,7 +445,7 @@ export function RequestEditor() {
                 />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground">Token Prefix (optional):</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.tokenPrefix")}</span>
                 <Input
                   value={activeRequest.oauth2?.tokenType ?? "Bearer"}
                   onChange={(e) => setOAuth2(activeRequest.oauth2?.token ?? "", e.target.value)}
@@ -459,7 +459,7 @@ export function RequestEditor() {
           {activeRequest.authType === "awsSigV4" && (
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <span className="text-[11px] text-muted-foreground">Access Key ID:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.accessKeyId")}</span>
                 <Input
                   value={activeRequest.awsSigV4?.accessKey ?? ""}
                   onChange={(e) =>
@@ -476,7 +476,7 @@ export function RequestEditor() {
                 />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground">Secret Access Key:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.secretAccessKey")}</span>
                 <Input
                   type="password"
                   value={activeRequest.awsSigV4?.secretKey ?? ""}
@@ -489,12 +489,12 @@ export function RequestEditor() {
                       sessionToken: activeRequest.awsSigV4?.sessionToken,
                     })
                   }
-                  placeholder="Secret key"
+                  placeholder={t("apiClient.request.secretKeyPlaceholder")}
                   className="font-mono text-xs"
                 />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground">AWS Region:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.awsRegion")}</span>
                 <Input
                   value={activeRequest.awsSigV4?.region ?? "us-east-1"}
                   onChange={(e) =>
@@ -511,7 +511,7 @@ export function RequestEditor() {
                 />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground">AWS Service:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.awsService")}</span>
                 <Input
                   value={activeRequest.awsSigV4?.service ?? "s3"}
                   onChange={(e) =>
@@ -533,7 +533,7 @@ export function RequestEditor() {
           {activeRequest.authType === "digest" && (
             <div className="flex flex-col gap-2">
               <div>
-                <span className="text-[11px] text-muted-foreground">Username:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.username")}</span>
                 <Input
                   value={activeRequest.digestAuth?.username ?? ""}
                   onChange={(e) => setDigestAuth(e.target.value, activeRequest.digestAuth?.password ?? "")}
@@ -542,7 +542,7 @@ export function RequestEditor() {
                 />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground">Password:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.password")}</span>
                 <Input
                   type="password"
                   value={activeRequest.digestAuth?.password ?? ""}
@@ -557,7 +557,7 @@ export function RequestEditor() {
           {activeRequest.authType === "apiKey" && (
             <div className="flex flex-col gap-2">
               <div>
-                <span className="text-[11px] text-muted-foreground">Key:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.key")}:</span>
                 <Input
                   value={activeRequest.apiKey?.key ?? ""}
                   onChange={(e) => setApiKey(e.target.value, activeRequest.apiKey?.value ?? "", activeRequest.apiKey?.inHeader ?? true)}
@@ -566,7 +566,7 @@ export function RequestEditor() {
                 />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground">Value:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.value")}:</span>
                 <Input
                   type="password"
                   value={activeRequest.apiKey?.value ?? ""}
@@ -581,7 +581,7 @@ export function RequestEditor() {
           {activeRequest.authType === "basic" && (
             <div className="flex flex-col gap-2">
               <div>
-                <span className="text-[11px] text-muted-foreground">Username:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.username")}</span>
                 <Input
                   value={activeRequest.basicAuth?.username ?? ""}
                   onChange={(e) => setBasicAuth(e.target.value, activeRequest.basicAuth?.password ?? "")}
@@ -590,7 +590,7 @@ export function RequestEditor() {
                 />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground">Password:</span>
+                <span className="text-[11px] text-muted-foreground">{t("apiClient.request.password")}</span>
                 <Input
                   type="password"
                   value={activeRequest.basicAuth?.password ?? ""}
@@ -606,7 +606,7 @@ export function RequestEditor() {
         {/* BODY TAB */}
         <TabsContent value="body" className="m-0 flex min-h-0 flex-1 flex-col p-2">
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Content Type:</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("apiClient.request.contentType")}</span>
             <Select
               value={activeRequest.bodyType}
               onValueChange={(val) => setBodyType(val as typeof activeRequest.bodyType)}
@@ -615,11 +615,11 @@ export function RequestEditor() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="none">{t("apiClient.request.none")}</SelectItem>
                 <SelectItem value="json">JSON (application/json)</SelectItem>
                 <SelectItem value="graphql">GraphQL (application/json)</SelectItem>
-                <SelectItem value="text">Text (text/plain)</SelectItem>
-                <SelectItem value="form-urlencoded">Form URL-encoded</SelectItem>
+                <SelectItem value="text">{t("apiClient.request.text")}</SelectItem>
+                <SelectItem value="form-urlencoded">{t("apiClient.request.formUrlEncoded")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -651,7 +651,7 @@ export function RequestEditor() {
                   onClick={() => setCodeLanguage(lang)}
                   className="cursor-pointer text-[10px] capitalize"
                 >
-                  {lang === "fetch" ? "JavaScript fetch" : lang}
+                  {lang === "fetch" ? t("apiClient.request.javascriptFetch") : lang}
                 </Badge>
               ))}
             </div>
@@ -660,11 +660,11 @@ export function RequestEditor() {
               variant="ghost"
               onClick={() => {
                 void navigator.clipboard.writeText(generatedCode);
-                toast.success("Snippet copied to clipboard!");
+                toast.success(t("apiClient.request.snippetCopied"));
               }}
               className="h-6 gap-1 text-[10.5px]"
             >
-              <HugeiconsIcon icon={Copy01Icon} size={11} /> Copy
+              <HugeiconsIcon icon={Copy01Icon} size={11} /> {t("apiClient.request.copy")}
             </Button>
           </div>
           <pre className="flex-1 overflow-auto rounded border border-border/60 bg-muted/30 p-2.5 font-mono text-[11px] text-foreground">
@@ -684,12 +684,12 @@ export function RequestEditor() {
               icon={variablesOpen ? ArrowDown01Icon : ArrowRight01Icon}
               size={12}
             />
-            <span className="tracking-wider uppercase">Variables</span>
+            <span className="tracking-wider uppercase">{t("apiClient.request.variables")}</span>
           </div>
           <span className="text-[10px] font-mono text-muted-foreground/60">
             {Object.keys(activeRequest.variables || {}).length > 0
-              ? `${Object.keys(activeRequest.variables || {}).length} variables`
-              : "None"}
+              ? t("apiClient.request.variablesCount", { count: Object.keys(activeRequest.variables || {}).length })
+              : t("apiClient.request.none")}
           </span>
         </div>
 

@@ -17,7 +17,6 @@ const sourceFiles = parsed.fileNames.filter((fileName) => {
   return (
     normalized.startsWith(root.replaceAll("\\", "/")) &&
     !normalized.includes("/modules/i18n/locales/") &&
-    !normalized.includes("/modules/api-client/") &&
     !/\.(?:test|spec)\.[jt]sx?$/.test(normalized)
   );
 });
@@ -59,15 +58,19 @@ const internalMetadataPaths = [
   /\/modules\/ai\/config\.ts$/,
   /\/modules\/ai\/lib\/agents\.ts$/,
   /\/modules\/ai\/tools\//,
-  /\/modules\/api-client\//,
   /\/modules\/editor\/lib\/externalFormat\.ts$/,
   /\/modules\/i18n\/types\.ts$/,
   /\/modules\/terminal\/scripts\/discoverProjectScripts\.ts$/,
+  /\/modules\/api-client\/lib\/presets\.ts$/,
   /\/modules\/theme\//,
 ];
 
 const technicalPatterns = [
   /^(?:Voktty|Git|GitHub|SSH|RDP|Docker|Redis|LSP|AI|CPU|RAM|MEM|DISK|NET|NETWORK|SHA|URL|Shell|WSL|Windows|DTR|RTS|TCP EST|cwd|exit|ping|binary)$/i,
+  /^(?:Postman|gRPC|GraphQL|JSON|Bearer|AKIA\.\.\.|sk_test_\.\.\.|oauth2_access_token\.\.\.|whsec_\.\.\.|X-API-Key|us-east-1|s3 \/ execute-api|user|password|Value)$/i,
+  /^(?:text|bg|border|from|to|dark:text|hover:text)-[a-z]+-\d+(?:\/\d+)?$/,
+  /^(?:JSON|GraphQL) \(application\/json\)$/,
+  /^(?:\{…\} (?:B|KB)|\{…\} ms|\{ "limit": \d+, "offset": \d+, "type": "[a-z]+" \})$/,
   /^(?:(?:Ctrl|Alt|Shift|Esc|Enter|Tab|Win)(?:\s*\+?\s*(?:Ctrl|Alt|Shift|Esc|Enter|Tab|Win|Del|Home|Insert|Break|Fin|[A-Z]))*)$/i,
   /^(?:https?|wss?):\/\//i,
   /^(?:[A-Z]:[\\/]|[.~]?[\\/]|--?[a-z\d-]+\b)/i,

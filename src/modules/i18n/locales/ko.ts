@@ -3052,7 +3052,668 @@ const koRecent = {
   },
 };
 
-export const ko: TranslationSchema = mergeLocale(mergeLocale(koFinal, koRecent), {
+const koI18nBatch1: TranslationSchema = mergeLocale(mergeLocale(koFinal, koRecent), {
   settings: { models: { configurationRequired: "먼저 선택한 모델을 구성하세요." } },
   terminal: { connection: { connected: "{name}에 연결됨", connectionFailed: "{name}에 연결할 수 없습니다" } },
+});
+
+const koI18nBatch2: TranslationSchema = mergeLocale(koI18nBatch1, {
+  settings: {
+    tabs: {
+      mcp: "MCP"
+    },
+    general: {
+      notifications: {
+        agentAvatarTitle: "에이전트 아바타",
+        agentAvatarDesc: "활성 채팅 또는 코딩 에이전트에 대한 로컬 애니메이션 아바타를 표시합니다.",
+        agentAvatarSizeTitle: "아바타 크기",
+        agentAvatarSizeDesc: "채팅 및 상담원 탭에서 아바타의 시각적 크기를 조정합니다.",
+        agentAvatarSize: {
+          compact: "콤팩트",
+          standard: "기준",
+          large: "크기가 큰"
+        },
+        agentAvatarIntensityTitle: "애니메이션 강도",
+        agentAvatarIntensityDesc: "아바타 애니메이션의 속도와 강조를 제어합니다.",
+        agentAvatarIntensity: {
+          low: "낮은",
+          standard: "기준",
+          high: "높은"
+        },
+        agentAvatarReducedMotionTitle: "아바타 모션 줄이기",
+        agentAvatarReducedMotionDesc: "연속 애니메이션을 비활성화하고 상태 변경만 유지합니다."
+      }
+    },
+    themes: {
+      background: {
+        vibrancyOpacity: "표면 불투명도",
+        vibrancyOpacityDesc: "네이티브 Mica 또는 Vibrancy 배경화면이 앱 표면을 통해 얼마나 빛나는지 조정하세요."
+      }
+    },
+    models: {
+      autocompleteTestLabel: "건강",
+      testAutocomplete: "자동 완성 테스트",
+      autocompleteTestOk: "{latency}ms 안에 준비되었으며 프로필 {profile}, {attempts} 시도가 완료되었습니다."
+    }
+  }
+});
+
+const koI18nBatch3: TranslationSchema = mergeLocale(koI18nBatch2, {
+  settings: {
+    models: {
+      autocompleteTestFail: "테스트 실패: {reason}",
+      autocompleteProfile: "AI 프로필",
+      autocompleteProfiles: {
+        auto: "자동 감지",
+        generic: "일반 OpenAI 호환",
+        openai: "오픈AI",
+        deepseek: "DeepSeek",
+        ollama: "올라마",
+        lmstudio: "LM 스튜디오"
+      },
+      autocompleteFailure: {
+        authentication: "인증 또는 API 키",
+        rate_limit: "비율 제한 또는 할당량",
+        unsupported_options: "지원되지 않는 모델 옵션",
+        unavailable: "공급자를 사용할 수 없거나 시간이 초과되었습니다.",
+        empty_response: "모델이 완료되지 않은 상태를 반환했습니다.",
+        provider_error: "공급자 오류"
+      },
+      localProviderLabel: {
+        ollama: "올라마 ({model})",
+        lmstudio: "LM 스튜디오({model})",
+        mlx: "MLX ({model})",
+        openrouter: "오픈라우터({model})"
+      },
+      customEndpoint: "커스텀 엔드포인트",
+      browserBuiltIn: "브라우저(내장, 무료)"
+    }
+  }
+});
+
+const koI18nBatch4: TranslationSchema = mergeLocale(koI18nBatch3, {
+  settings: {
+    models: {
+      defaultFastModel: "기본 빠른 모델"
+    },
+    mcp: {
+      title: "MCP 서버",
+      description: "명시적으로 활성화된 로컬 및 원격 도구 서버를 관리합니다. 비밀은 기본 자격 증명 저장소에 남아 있습니다.",
+      addServer: "서버 추가",
+      transport: {
+        stdio: "로컬 프로세스(stdio)",
+        http: "스트리밍 가능한 HTTP"
+      },
+      auth: {
+        none: "승인 없음",
+        bearer: "무기명 토큰",
+        oauth: "PKCE를 사용한 OAuth"
+      },
+      form: {
+        addTitle: "MCP 서버 추가",
+        editTitle: "MCP 서버 편집",
+        description: "구성은 자격 증명과 별도로 저장됩니다. 서버는 명시적으로 활성화된 후에만 시작됩니다.",
+        name: "표시 이름",
+        id: "안정적인 서버 ID",
+        idPlaceholder: "작업 공간 도구",
+        transport: "수송",
+        executable: "실행 가능",
+        args: "인수",
+        argsHint: "한 줄에 인수가 하나씩 있습니다. 명령은 셸 없이 실행됩니다.",
+        cwd: "작업 디렉토리"
+      }
+    }
+  }
+});
+
+const koI18nBatch5: TranslationSchema = mergeLocale(koI18nBatch4, {
+  settings: {
+    mcp: {
+      form: {
+        authorizedRoot: "승인된 작업공간 루트",
+        endpoint: "엔드포인트",
+        authMode: "권한 부여",
+        bearerToken: "무기명 토큰",
+        bearerPlaceholder: "토큰을 입력하세요",
+        credentialStored: "자격 증명이 이미 저장되어 있습니다.",
+        secretHint: "토큰은 기본 자격 증명 저장소로 직접 전송되며 이 양식으로 유지되지 않습니다.",
+        oauthHint: "서버를 활성화한 후 Authorize는 브라우저에서 공급자를 열고 임시 루프백 포트에서 콜백을 받습니다.",
+        oauthClientId: "OAuth 클라이언트 ID",
+        oauthScopes: "OAuth 범위",
+        privateNetwork: "개인 네트워크 허용",
+        privateNetworkHint: "루프백 또는 LAN 엔드포인트에 필요합니다. 공개 일반 텍스트 HTTP는 계속 차단됩니다.",
+        invalid: "저장하기 전에 필수 필드와 제한 값을 검토하세요."
+      },
+      phase: {
+        disabled: "장애가 있는",
+        disconnected: "연결이 끊김",
+        connecting: "연결 중",
+        connected: "연결됨",
+        authenticationRequired: "승인이 필요합니다",
+        error: "연결 오류"
+      },
+      errors: {
+        configuration: "서버 구성이 잘못되었거나 불완전합니다."
+      }
+    }
+  }
+});
+
+const koI18nBatch6: TranslationSchema = mergeLocale(koI18nBatch5, {
+  settings: {
+    mcp: {
+      errors: {
+        authentication: "유효한 자격 증명 또는 공급자 승인이 필요합니다.",
+        spawn: "로컬 서버 프로세스를 시작할 수 없습니다.",
+        io: "서버에 안전하게 접근할 수 없습니다.",
+        protocol: "서버가 잘못된 MCP 메시지를 반환했습니다.",
+        incompatibleVersion: "서버가 호환되는 MCP 버전을 지원하지 않습니다.",
+        resourceLimit: "서버가 구성된 안전 제한을 초과했습니다.",
+        timeout: "시간 초과 전에 서버가 응답하지 않았습니다.",
+        busy: "서버가 다른 제한된 작업으로 인해 사용 중입니다.",
+        cancelled: "작업이 취소되었습니다.",
+        processExited: "로컬 서버 프로세스가 예기치 않게 종료되었습니다.",
+        remote: "MCP 서버가 요청을 거부했습니다."
+      },
+      capabilities: {
+        tools: "도구",
+        resources: "자원",
+        prompts: "프롬프트"
+      },
+      effects: {
+        read: "읽다",
+        write: "쓰다",
+        process: "프로세스",
+        network: "회로망",
+        secret: "비밀",
+        publish: "게시"
+      }
+    }
+  }
+});
+
+const koI18nBatch7: TranslationSchema = mergeLocale(koI18nBatch6, {
+  settings: {
+    mcp: {
+      effects: {
+        delete: "삭제"
+      },
+      scope: "범위",
+      credentials: {
+        stored: "안전하게 저장된 자격 증명",
+        missing: "자격증명 누락"
+      },
+      tools: {
+        title: "발견된 도구({count})",
+        automaticRead: "승인 없이 허용"
+      },
+      resources: {
+        title: "발견된 리소스({count})"
+      },
+      prompts: {
+        title: "발견된 프롬프트({count})"
+      },
+      actions: {
+        enable: "서버 활성화",
+        connect: "연결하다",
+        disconnect: "연결 끊기",
+        restart: "다시 시작",
+        revoke: "자격 증명 취소",
+        authorize: "승인하다"
+      },
+      delete: {
+        title: "MCP 서버를 삭제하시겠습니까?",
+        description: "{name}의 연결이 끊어지고 해당 구성 및 자격 증명이 제거됩니다."
+      },
+      empty: {
+        title: "MCP 서버가 구성되지 않았습니다.",
+        description: "로컬 stdio 서버 또는 Streamable HTTP 엔드포인트를 추가합니다. 활성화할 때까지 아무것도 시작되거나 연결되지 않습니다."
+      }
+    }
+  },
+  header: {
+    noMatches: "0개의 결과",
+    previousMatch: "이전 일치(Shift+Enter)"
+  }
+});
+
+const koI18nBatch8: TranslationSchema = mergeLocale(koI18nBatch7, {
+  header: {
+    nextMatch: "다음 경기(Enter)"
+  },
+  tabs: {
+    hoverCard: {
+      apiClient: "API 클라이언트"
+    },
+    subtitles: {
+      apiClient: "API 클라이언트 및 샌드박스"
+    }
+  },
+  sidebar: {
+    runDebug: "실행 및 디버그"
+  },
+  workbench: {
+    title: "실행 및 디버그",
+    tasks: "작업",
+    tests: "테스트",
+    debug: "디버그",
+    noTasks: "이 작업공간에서 검색된 작업이 없습니다.",
+    noTests: "이 작업공간에서는 테스트 작업이 발견되지 않았습니다.",
+    output: "산출",
+    outputStatus: "{output} · {status}",
+    passed: "합격",
+    failed: "실패한",
+    running: "달리기",
+    error: "오류",
+    stop: "멈추다",
+    clear: "출력 지우기",
+    refresh: "작업 새로 고침",
+    unnamedTest: "이름 없는 테스트"
+  }
+});
+
+const koI18nBatch9: TranslationSchema = mergeLocale(koI18nBatch8, {
+  workbench: {
+    passedMark: "✓",
+    failedMark: "×",
+    skippedMark: "–",
+    launch: "시작하다",
+    attach: "붙이다",
+    adapterCommand: "디버그 어댑터 명령",
+    debugRequest: "디버그 요청",
+    debugArguments: "인수 실행 또는 연결(JSON)",
+    debugArgumentsObject: "디버그 인수는 JSON 객체여야 합니다.",
+    startDebugging: "디버깅 시작",
+    debugStatus: "상태",
+    statusIdle: "게으른",
+    statusStarting: "시작",
+    statusRunning: "달리기",
+    statusStopped: "일시중지됨",
+    statusTerminated: "종료됨",
+    statusError: "오류",
+    continue: "계속하다",
+    pause: "정지시키다",
+    stepOver: "넘어서"
+  }
+});
+
+const koI18nBatch10: TranslationSchema = mergeLocale(koI18nBatch9, {
+  workbench: {
+    stepIn: "안으로 들어가다",
+    stepOut: "밖으로 나가다",
+    breakpoints: "중단점",
+    filePath: "파일 경로",
+    line: "선",
+    addBreakpoint: "중단점 추가",
+    removeBreakpoint: "중단점 제거",
+    callStack: "호출 스택",
+    variables: "변수",
+    debugConsole: "디버그 콘솔",
+    evaluateExpression: "표현 평가",
+    evaluate: "평가하다"
+  },
+  explorer: {
+    previewType: "유형",
+    previewFolder: "접는 사람",
+    previewFile: "파일",
+    previewSize: "크기",
+    previewModified: "수정됨",
+    previewImageTooLarge: "파일이 너무 커서 이미지 미리보기를 사용할 수 없습니다.",
+    fileOutsideWorkspace: "이 파일은 현재 탐색기 작업 영역 외부에 있습니다.",
+    openContainingFolder: "포함된 폴더 열기"
+  }
+});
+
+const koI18nBatch11: TranslationSchema = mergeLocale(koI18nBatch10, {
+  git: {
+    reviewComments: "댓글",
+    addComment: "논평",
+    addReviewComment: "리뷰 코멘트 추가",
+    editReviewComment: "리뷰 댓글 편집",
+    deleteComment: "댓글 삭제",
+    commentAdded: "댓글이 추가되었습니다.",
+    commentUpdated: "댓글이 업데이트되었습니다.",
+    commentDeleted: "댓글이 삭제되었습니다.",
+    commentPlaceholder: "상담원을 위한 피드백이나 지침을 작성하세요...",
+    commentCannotBeEmpty: "댓글은 비워둘 수 없습니다.",
+    pressCtrlEnterToSave: "저장하려면 Ctrl+Enter",
+    addedModified: "추가/수정됨",
+    original: "원래의",
+    noReviewCommentsYet: "아직 리뷰 댓글이 없습니다.",
+    addCommentsFromDiffHint: "피드백을 남기려면 차이점에 대해 댓글 버튼을 사용하세요.",
+    reviewHandoffTitle: "코드 검토 핸드오프",
+    reviewHandoffDescription: "AI 코딩 에이전트에 대한 실행 가능한 프롬프트 형식의 댓글을 검토하세요.",
+    reviewHandoffCopied: "핸드오프 메시지가 클립보드에 복사되었습니다.",
+    reviewSentToAgent: "활성 상담원에게 검토 메시지가 전송됨",
+    scope: "범위"
+  }
+});
+
+const koI18nBatch12: TranslationSchema = mergeLocale(koI18nBatch11, {
+  git: {
+    reviewedFiles: "검수완료",
+    commentsCount: "댓글",
+    handoffHotkeyHint: "언제든지 검토 대기열에서 P를 누르십시오",
+    sendToAgent: "상담원에게 보내기"
+  },
+  commandPalette: {
+    commands: {
+      manageAliases: "별칭 및 명령 관리",
+      focusNextSpaceSlot: "공간: 다음 슬롯에 집중",
+      focusPreviousSpaceSlot: "공간: 이전 슬롯에 초점 맞추기",
+      toggleSpaceView: "스페이스: 분할 보기 토글",
+      extractFocusedSpaceMember: "공간: 집중된 구성원 추출",
+      moveFocusedSpaceMember: "공간: 집중된 구성원 이동..."
+    }
+  }
+});
+
+const koI18nBatch13: TranslationSchema = mergeLocale(koI18nBatch12, {
+  commandPalette: {
+    commands: {
+      closeFocusedSpaceMember: "공간: 집중된 구성원 닫기",
+      commandHistory: "터미널: 명령 기록",
+      newApiClient: "새 API 클라이언트 및 샌드박스",
+      editorRevealInExplorer: "에디터: 탐색기에서 파일 공개",
+      openRunDebug: "보기: 실행 및 디버그"
+    },
+    disabled: {
+      noCompositeSpace: "활성 컴포지트 스페이스 없음"
+    }
+  },
+  ai: {
+    approvals: {
+      runDevelopmentCheck: "개발 점검 실행",
+      mcpResponseFailed: "MCP 승인 응답을 기록할 수 없습니다",
+      sensitiveValue: "숨김"
+    },
+    planReview: {
+      operationApplied: "개발 작업 적용됨"
+    }
+  }
+});
+
+const koI18nBatch14: TranslationSchema = mergeLocale(koI18nBatch13, {
+  ai: {
+    planReview: {
+      operationReverted: "개발 작업 되돌림",
+      revert: "작업 되돌리기",
+      provenance: "__ P0 __ · __ P1 __ 파일 · __ P2 __ 명령"
+    }
+  },
+  editor: {
+    externalChangeDetected: "파일 __ P0 __ 이 (가) 외부에서 수정되었습니다.",
+    externalChangeConflict: "파일 __ P0 __ 이 (가) 외부에서 수정되었으며 저장되지 않은 변경 사항이 있습니다.",
+    reloadFile: "파일 새로 고침( R)",
+    keepCurrentEdits: "수정 사항 유지",
+    fileReloadedSuccess: "__ P0 __ 디스크에서 다시 로드됨",
+    status: {
+      slowRead: "이 파일을 여는 데 예상보다 오래 걸립니다.",
+      readCancelled: "파일 로딩이 취소되었습니다."
+    }
+  }
+});
+
+const koI18nBatch15: TranslationSchema = mergeLocale(koI18nBatch14, {
+  editor: {
+    status: {
+      readOffline: "네트워크 위치를 사용할 수 없거나 시간이 초과되었습니다.",
+      readNotFound: "파일 또는 해당 경로가 더 이상 존재하지 않습니다.",
+      readPermissionDenied: "Voktty는 이 파일을 읽을 수 있는 권한이 없습니다.",
+      readFailed: "Voktty가 이 파일을 읽을 수 없습니다."
+    },
+    aiCompletionStatus: {
+      idle: "AI로 완성",
+      requesting: "AI 완료 진행 중",
+      ready: "AI 완료 준비 완료, Tab 키를 눌러 수락",
+      error: "AI 완료에 실패했습니다. 클릭하여 다시 시도하십시오.",
+      paused: "자동 AI 완료가 일시 중지되었습니다. 지금 다시 시도하려면 클릭하세요."
+    }
+  },
+  shortcuts: {
+    labels: {
+      tabNewApiClient: "새 API 클라이언트 및 샌드박스"
+    }
+  }
+});
+
+const koI18nBatch16: TranslationSchema = mergeLocale(koI18nBatch15, {
+  workspace: {
+    startingWslDistro: "WSL 배포 시작 중...",
+    establishingConnection: "연결 설정중 "
+  },
+  feedback: {
+    sessionSaveFailed: "세션을 저장할 수 없습니다. Voktty는 열려 있으므로 다시 시도할 수 있습니다."
+  },
+  apiClient: {
+    header: {
+      title: "API 클라이언트 및 샌드박스",
+      zeroCorsBadge: "Zero-CORS • 네이티브 러스트 엔진",
+      requestBuilder: "Builder 요청",
+      apiBrowser: "API 탐색기",
+      sandboxProbes: "샌드박스 프로브",
+      scenarios: "시나리오",
+      history: "기록"
+    }
+  }
+});
+
+const koI18nBatch17: TranslationSchema = mergeLocale(koI18nBatch16, {
+  apiClient: {
+    header: {
+      clearHistory: "명확한 기록",
+      noHistory: "아직 기록된 요청이 없습니다."
+    },
+    browser: {
+      urlPlaceholder: "기본 URL 입력 (예: https://dummyjson.com 또는 http://localhost: 11434/api)",
+      discovering: "발견",
+      autoDiscover: "자동 검색",
+      fastPresets: "빠른 사전 설정:",
+      presets: {
+        dummyJson: "DummyJSON (REST API)",
+        ollama: "Ollama LLM (11434)",
+        docker: "Docker 데몬 (2375)",
+        openAi: "OpenAI/LocalAI (v1)"
+      }
+    }
+  }
+});
+
+const koI18nBatch18: TranslationSchema = mergeLocale(koI18nBatch17, {
+  apiClient: {
+    browser: {
+      apiService: "API 서비스",
+      openApiSpec: "OpenAPI/Swagger 3.0",
+      smartRouteProbe: "스마트 경로 프로브",
+      summaryBase: "베이스: __ P0 __ • __ P1 __ __ P2 __ ms에서 발견된 엔드포인트",
+      copyMarkdownReport: "마크다운 보고서 복사",
+      reportCopied: "유효성 검사 보고서가 마크다운의 클립보드에 복사되었습니다!",
+      reportCopyFailed: "보고서를 복사하지 못했습니다",
+      all: "전체",
+      filterPlaceholder: "엔드포인트 필터링...",
+      authRequired: "인증 필요"
+    }
+  }
+});
+
+const koI18nBatch19: TranslationSchema = mergeLocale(koI18nBatch18, {
+  apiClient: {
+    browser: {
+      testInEditor: "편집기에서 테스트",
+      loadedInEditor: "__ P0 __ __ P1 __ 을 (를) 편집기에 로드했습니다.",
+      noEndpointsFound: "필터와 일치하는 엔드포인트를 찾을 수 없습니다.",
+      emptyStateTitle: "API 검색 및 스마트 브라우저",
+      emptyStateDescription: "API의 기본 URL (예: DummyJSON, Ollama, Docker 또는 웹 서비스) 을 입력하고 자동 검색을 클릭하여 사용 가능한 모든 경로, 방법 및 OpenAPI 사양을 자동으로 감지합니다."
+    }
+  },
+  agentHistory: {
+    title: "상담원 운영 내역 및 복구",
+    modalTitle: "상담원 운영 내역",
+    shortcutTooltip: "상담원 운영 기록 (__ P0 __)",
+    sessionsCount: "세션",
+    messagesCount: "messages"
+  }
+});
+
+const koI18nBatch20: TranslationSchema = mergeLocale(koI18nBatch19, {
+  agentHistory: {
+    msgs: "msgs",
+    scanningFiles: "에이전트 파일 검사 중...",
+    scanning: "스캔 중...",
+    rescan: "다시 검색",
+    closeEsc: "닫기 (ESC)",
+    searchPlaceholder: "세션, 프롬프트 또는 코드 검색...",
+    allFilter: "All",
+    searchingSessions: "세션 검색 중...",
+    noMatchesFound: "일치하는 결과가 없습니다",
+    noSessionsFound: "세션 없음"
+  }
+});
+
+const koI18nBatch21: TranslationSchema = mergeLocale(koI18nBatch20, {
+  agentHistory: {
+    tryDifferentSearch: "try with a different search term.",
+    clickRescan: "다시 스캔하여 상담원 내역 색인 생성 을 클릭하세요",
+    clearSearch: "검색 지우기",
+    resumeInTerminal: "터미널에서 다시 시작",
+    resumeTooltip: "활성 터미널에서 resume 명령 열기 및 실행",
+    copyResumeCommand: "재개 명령 복사",
+    copyTranscript: "대화록 복사 (마크다운)",
+    copyTranscriptTooltip: "전체 대화록을 마크다운으로 복사",
+    deleteSession: "색인에서 세션 삭제",
+    export: "내보내기"
+  }
+});
+
+const koI18nBatch22: TranslationSchema = mergeLocale(koI18nBatch21, {
+  agentHistory: {
+    find: "찾기",
+    findInTranscript: "대화록에서 찾기 (Ctrl + F)",
+    findPlaceholder: "대화록에서 찾기...",
+    previousMatch: "이전 경기 (Shift + Enter)",
+    nextMatch: "다음 경기 (Enter)",
+    closeFind: "찾기 닫기 (Esc)",
+    loadingTranscript: "대화록 메시지 로드 중...",
+    noMessages: "이 세션 대화록에 기록된 메시지가 없습니다",
+    roleUser: "사용자",
+    roleTool: "⚙️ 도구 호출"
+  }
+});
+
+const koI18nBatch23: TranslationSchema = mergeLocale(koI18nBatch22, {
+  agentHistory: {
+    roleAssistant: "（간",
+    secretsRedacted: "수정된 비밀",
+    tool: "공구",
+    error: "오류",
+    input: "활용 자료:",
+    output: "생산량:",
+    copyMessageContent: "메시지 내용 복사",
+    runInTerminal: "터미널에 실행/삽입",
+    selectSessionPrompt: "대화록을 보려면 세션을 선택하세요",
+    emptyDescription: "코딩 에이전트 대화를 검색하거나 언제든지 __ P0 __ 을 (를) 누르세요."
+  }
+});
+
+const koI18nBatch24: TranslationSchema = mergeLocale(koI18nBatch23, {
+  agentHistory: {
+    dragToResize: "드래그하여 크기 조정",
+    noResumeAvailable: "이 세션에 사용할 수 있는 재개 명령이 없습니다.",
+    resumedInTerminal: "활성 터미널에서 세션 재개됨",
+    resumeCommandCopiedToast: "명령 복사 재개 (터미널을 열어 실행)",
+    resumeCommandCopiedClipboard: "다시 시작 명령이 클립보드에 복사되었습니다!",
+    transcriptCopiedToast: "스크립트 마크다운이 클립보드에 복사되었습니다!",
+    sentToTerminal: "터미널로 전송됨",
+    copiedToClipboard: "클립보드에 복사되었습니다",
+    messageContentCopied: "메시지 내용이 복사되었습니다!",
+    agents: {
+      claude: "클로드 코드"
+    }
+  }
+});
+
+const koI18nBatch25: TranslationSchema = mergeLocale(koI18nBatch24, {
+  agentHistory: {
+    agents: {
+      codex: "코덱스",
+      cursor: "커서",
+      voktty: "복티 에이전트",
+      gemini: "반중력",
+      kimi: "키미"
+    }
+  },
+  aliases: {
+    title: "별칭 및 명령",
+    description: "모든 터미널에서 사용할 수 있는 기본 제공 출하 시 명령 및 사용자 지정 별칭을 관리합니다.",
+    newAlias: "새 별명 추가",
+    openFile: "Aliases.json 열기",
+    refresh: "새로 고침"
+  }
+});
+
+const koI18nBatch26: TranslationSchema = mergeLocale(koI18nBatch25, {
+  aliases: {
+    reset: "기본값으로 초기화",
+    noResults: "검색 조건에 일치하는 별칭이 없습니다.",
+    searchPlaceholder: "이름 또는 설명으로 검색...",
+    errorOpeningFile: "Aliases.json을 열 수 없습니다",
+    errorToggling: "별칭을 전환할 수 없습니다",
+    errorResetting: "별칭을 재설정할 수 없습니다",
+    errorDeleting: "별칭을 삭제할 수 없습니다",
+    resetSuccess: "별칭이 공장 기본값으로 재설정됨",
+    deleteSuccess: "별칭 삭제됨",
+    badge: {
+      factory: "공장"
+    }
+  }
+});
+
+const koI18nBatch27: TranslationSchema = mergeLocale(koI18nBatch26, {
+  aliases: {
+    badge: {
+      custom: "커스텀"
+    },
+    filter: {
+      all: "All",
+      factory: "공장",
+      custom: "커스텀",
+      enabled: "활성화됨",
+      disabled: "비활성화됨"
+    },
+    dialog: {
+      newTitle: "새 별명 추가",
+      editTitle: "별명 편집",
+      name: "이름",
+      namePlaceholder: "my-command"
+    }
+  }
+});
+
+const koI18nBatch28: TranslationSchema = mergeLocale(koI18nBatch27, {
+  aliases: {
+    dialog: {
+      description: "설명",
+      descriptionPlaceholder: "이 별칭에 대한 간략한 설명...",
+      targetKind: "유형 대상",
+      command: "외부 명령",
+      builtin: "내장 액션",
+      executable: "실행 가능 파일",
+      executablePlaceholder: "git, docker, kubectl...",
+      args: "인자",
+      argsPlaceholder: "--플래그 값",
+      builtinAction: "내장 액션"
+    }
+  }
+});
+
+export const ko: TranslationSchema = mergeLocale(koI18nBatch28, {
+  aliases: {
+    dialog: {
+      enabled: "활성화됨",
+      enabledHint: "별칭은 터미널 경로에서 사용할 수 있습니다",
+      nameRequired: "별칭 이름이 필요합니다",
+      saved: "별칭 저장됨",
+      saveError: "별칭을 저장하지 못했습니다"
+    }
+  }
 });

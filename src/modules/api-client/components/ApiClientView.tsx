@@ -70,7 +70,7 @@ export function ApiClientView() {
             variant="ghost"
             onClick={toggleSidebar}
             className="size-7 text-muted-foreground hover:text-foreground"
-            title="Toggle Collections Sidebar"
+            title={t("apiClient.header.toggleCollectionsSidebar")}
           >
             <HugeiconsIcon icon={Menu01Icon} size={14} />
           </Button>
@@ -164,13 +164,13 @@ export function ApiClientView() {
                     envColorMap[activeEnv?.color || "blue"]?.split(" ")[0] || "bg-blue-500",
                   )}
                 />
-                <span>{activeEnv?.name || "Environment"}</span>
+                <span>{activeEnv?.name || t("apiClient.header.environment")}</span>
                 <HugeiconsIcon icon={ArrowDown01Icon} size={11} className="text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44 text-xs">
               <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase">
-                Environments
+                {t("apiClient.header.environments")}
               </div>
               {environments.map((env) => (
                 <DropdownMenuItem
@@ -188,7 +188,7 @@ export function ApiClientView() {
                     <span>{env.name}</span>
                   </div>
                   {env.id === activeEnvironmentId && (
-                    <span className="text-[10px] text-primary">Active</span>
+                    <span className="text-[10px] text-primary">{t("apiClient.header.active")}</span>
                   )}
                 </DropdownMenuItem>
               ))}

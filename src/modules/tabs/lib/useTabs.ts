@@ -901,7 +901,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           ...createTabIdentity(activeSpaceIdRef.current),
           kind: "terminal",
           spaceId: activeSpaceIdRef.current,
-          title: translate("tabs.subtitles.terminalBlocks"),
+          title: translate("tabs.hoverCard.terminalBlocks"),
           cwd,
           paneTree: { kind: "leaf", id: leafId, cwd },
           activeLeafId: leafId,
@@ -1560,7 +1560,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         ...createTabIdentity(targetSpace),
         kind: "api-client",
         spaceId: targetSpace,
-        title: translate("tabs.titles.apiClient"),
+        title: translate("tabs.hoverCard.apiClient"),
       },
     ];
     tabsRef.current = nextTabs;
