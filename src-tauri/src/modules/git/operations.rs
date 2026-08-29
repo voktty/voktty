@@ -1187,6 +1187,159 @@ pub fn init(registry: &WorkspaceRegistry, cwd: &str, workspace: &WorkspaceEnv) -
     Ok(())
 }
 
+pub fn clone(
+    registry: &WorkspaceRegistry,
+    url: &str,
+    parent_dir: &str,
+    target_name: Option<&str>,
+    workspace: &WorkspaceEnv,
+) -> Result<String> {
+    let parent = canonical_dir(registry, parent_dir, workspace)?;
+    if !registry.is_authorized(&parent.local_path) {
+        return Err(GitError::PathOutsideWorkspace(parent.local_path));
+    }
+    ensure_git_available(&parent.workspace)?;
+
+    let trimmed_url = url.trim();
+    if trimmed_url.is_empty()
+        || trimmed_url.starts_with('-')
+        || trimmed_url.contains('\n')
+        || trimmed_url.contains('\r')
+    {
+        return Err(GitError::command("git clone", "invalid repository URL"));
+    }
+
+    let mut args: Vec<&OsStr> = vec![
+        OsStr::new("clone"),
+        OsStr::new("--progress"),
+        OsStr::new(trimmed_url),
+    ];
+    if let Some(target) = target_name {
+        let clean = target.trim();
+        if !clean.is_empty()
+            && !clean.starts_with('-')
+            && !clean.contains('/')
+            && !clean.contains('\\')
+        {
+            args.push(OsStr::new(clean));
+        }
+    }
+
+    let output = run_git(
+        &parent.workspace,
+        Some(&parent.git_path),
+        args,
+        NETWORK_TIMEOUT_SECS,
+    )?;
+    if output.timed_out {
+        return Err(GitError::TimedOut("git clone"));
+    }
+    ensure_success(&output, "git clone failed")?;
+
+    let repo_dir_name = if let Some(target) = target_name.filter(|t| !t.trim().is_empty()) {
+        target.trim().to_string()
+    } else {
+        let raw_name = trimmed_url
+            .trim_end_matches('/')
+            .trim_end_matches(".git")
+            .rsplit('/')
+            .next()
+            .or_else(|| trimmed_url.rsplit(':').next())
+            .unwrap_or("repo");
+        raw_name.to_string()
+    };
+    let cloned_path = Path::new(&parent.local_path).join(&repo_dir_name);
+    let _ = registry.authorize(&cloned_path);
+    Ok(cloned_path.to_string_lossy().to_string())
+}
+
+pub fn publish(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    remote: Option<&str>,
+    workspace: &WorkspaceEnv,
+) -> Result<GitPushResult> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+
+    let remote_name = remote.unwrap_or("origin");
+    if !remote_name.chars().all(is_remote_name_char) {
+        return Err(GitError::command("git publish", "invalid remote name"));
+    }
+
+    let head = git_stdout_line_opt(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        ["rev-parse", "--abbrev-ref", "HEAD"],
+    )?
+    .ok_or_else(|| GitError::command("git publish", "failed to resolve HEAD"))?;
+
+    if head == "HEAD" {
+        return Err(GitError::command(
+            "git publish",
+            "cannot publish detached HEAD",
+        ));
+    }
+
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        [
+            OsStr::new("push"),
+            OsStr::new("-u"),
+            OsStr::new(remote_name),
+            OsStr::new(&head),
+        ],
+        NETWORK_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git publish failed")?;
+
+    Ok(GitPushResult {
+        remote: Some(remote_name.to_string()),
+        branch: Some(head),
+        pushed: true,
+    })
+}
+
+pub fn undo_commit(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+
+    let upstream = git_stdout_line_opt(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+    )?;
+    if let Some(_u) = upstream {
+        let ahead_count = git_stdout_line_opt(
+            &repo_root.workspace,
+            &repo_root.git_path,
+            ["rev-list", "@{u}..HEAD", "--count"],
+        )?
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+        if ahead_count == 0 {
+            return Err(GitError::command(
+                "git undo",
+                "cannot undo pushed commit; only unpushed commits can be safely undone",
+            ));
+        }
+    }
+
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["reset", "--soft", "HEAD~1"],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git reset --soft failed")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

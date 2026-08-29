@@ -15,7 +15,7 @@ const FOCUS_REFRESH_MIN_INTERVAL_MS = 1500;
 const SC_STATUS_TTL_MS = 2000;
 
 export type SourceControlRefreshMode = "auto" | "always" | "never";
-export type SourceControlRemoteAction = "fetch" | "pull" | "push";
+export type SourceControlRemoteAction = "fetch" | "pull" | "push" | "publish";
 export type SourceControlRemoteActionMode =
   | "contextual"
   | SourceControlRemoteAction;
@@ -49,6 +49,7 @@ export type SourceControlSummary = {
   }) => Promise<void>;
   trustRepository: (path?: string) => Promise<void>;
   initRepository: (path?: string) => Promise<void>;
+  undoCommit: () => Promise<void>;
   runRemoteAction: (
     mode?: SourceControlRemoteActionMode,
   ) => Promise<SourceControlRemoteActionResult>;
@@ -162,7 +163,10 @@ function normalizeError(error: unknown): string {
 function getContextualAction(
   status: GitStatusSnapshot | null,
 ): SourceControlRemoteAction | null {
-  if (!status?.upstream) return null;
+  if (!status) return null;
+  if (!status.upstream) {
+    return status.isDetached ? null : "publish";
+  }
   if (status.ahead > 0 && status.behind > 0) return null;
   if (status.behind > 0) return "pull";
   if (status.ahead > 0) return "push";
@@ -172,11 +176,20 @@ function getContextualAction(
 export function getSourceControlRemoteIndicator(
   summary: Pick<
     SourceControlSummary,
-    "hasRepo" | "upstream" | "ahead" | "behind" | "busyAction"
+    "hasRepo" | "upstream" | "ahead" | "behind" | "busyAction" | "status"
   >,
 ): SourceControlRemoteIndicator {
-  if (!summary.hasRepo || !summary.upstream) {
+  if (!summary.hasRepo) {
     return { visible: false, label: "", title: "", disabled: true, action: null };
+  }
+  if (!summary.upstream && !summary.status?.isDetached) {
+    return {
+      visible: true,
+      label: translate("git.remoteIndicator.publish"),
+      title: translate("git.remoteIndicator.publishTooltip"),
+      disabled: summary.busyAction !== null,
+      action: "publish",
+    };
   }
   if (summary.ahead > 0 && summary.behind > 0) {
     return {
@@ -261,70 +274,54 @@ export function useSourceControl(
   });
   const stateRef = useRef(state);
   const requestIdRef = useRef(0);
-  const inflightRef = useRef<InflightRefresh | null>(null);
-  const autoFetchByRepoRef = useRef(new Map<string, number>());
-  const enabledRef = useRef(enabled);
   const lastRefreshAtRef = useRef(0);
-  const resetWorkspaceKeyRef = useRef(workspaceKey);
-  const contextKey = sourceControlContextKey(workspaceKey, contextPath);
+  const autoFetchByRepoRef = useRef<Map<string, number>>(new Map());
+  const inflightRef = useRef<InflightRefresh | null>(null);
+
+  const contextKey = useMemo(
+    () => sourceControlContextKey(workspaceKey, contextPath),
+    [workspaceKey, contextPath],
+  );
   const contextKeyRef = useRef(contextKey);
-  contextKeyRef.current = contextKey;
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
   useEffect(() => {
-    enabledRef.current = enabled;
-  }, [enabled]);
-
-  useEffect(() => {
-    if (resetWorkspaceKeyRef.current === workspaceKey) return;
-    resetWorkspaceKeyRef.current = workspaceKey;
-    requestIdRef.current++;
-    inflightRef.current = null;
-    autoFetchByRepoRef.current.clear();
-    setState({
-      contextPath: null,
-      repo: null,
-      status: null,
-      hasRepo: false,
-      isLoading: false,
-      localError: null,
-      dubiousOwnershipPath: null,
-      busyAction: null,
-      lastRemoteError: null,
-    });
-  }, [workspaceKey]);
+    contextKeyRef.current = contextKey;
+  }, [contextKey]);
 
   const applyStatus = useCallback(
     (updater: (status: GitStatusSnapshot) => GitStatusSnapshot) => {
       setState((current) => {
         if (!current.status) return current;
-        const next = updater(current.status);
-        if (next === current.status) return current;
-        return { ...current, status: next };
+        const nextStatus = updater(current.status);
+        return {
+          ...current,
+          status: nextStatus,
+          repo: current.repo
+            ? {
+                ...current.repo,
+                branch: nextStatus.branch,
+                upstream: nextStatus.upstream,
+                isDetached: nextStatus.isDetached,
+              }
+            : null,
+        };
       });
     },
     [],
   );
 
   const doRefresh = useCallback(
-    async (remoteMode: SourceControlRefreshMode): Promise<void> => {
-      const refreshContextKey = contextKey;
-      if (
-        !enabledRef.current ||
-        refreshContextKey !== contextKeyRef.current
-      ) {
-        return;
-      }
+    async (remoteMode: SourceControlRefreshMode = "auto") => {
+      const activeContextPath = contextPath;
+      const activeContextKey = contextKey;
       const requestId = ++requestIdRef.current;
-      const isCurrentRequest = () =>
-        requestId === requestIdRef.current &&
-        refreshContextKey === contextKeyRef.current;
 
-      if (!contextPath) {
-        if (!isCurrentRequest()) return;
+      if (!enabled || !activeContextPath) {
+        inflightRef.current = null;
         setState({
           contextPath: null,
           repo: null,
@@ -339,164 +336,162 @@ export function useSourceControl(
         return;
       }
 
-      const activeRoot = stateRef.current.repo?.repoRoot ?? null;
-      const reusableRoot = repositoryContainsContext(activeRoot, contextPath)
-        ? activeRoot
-        : null;
+      if (
+        inflightRef.current &&
+        inflightRef.current.contextKey === activeContextKey
+      ) {
+        if (
+          inflightRef.current.mode === "always" ||
+          inflightRef.current.mode === remoteMode
+        ) {
+          return inflightRef.current.promise;
+        }
+      }
 
-      setState((current) =>
-        beginSourceControlRefresh(current, contextPath, !!reusableRoot),
+      const current = stateRef.current;
+      const canReuseRepo = repositoryContainsContext(
+        current.repo?.repoRoot ?? null,
+        activeContextPath,
       );
 
-      try {
-        let repo: GitRepoInfo | null;
-        let status: GitStatusSnapshot | null;
+      setState((s) => beginSourceControlRefresh(s, activeContextPath, canReuseRepo));
 
-        if (reusableRoot) {
-          try {
-            repo = stateRef.current.repo ?? null;
-            status = await native.gitStatus(reusableRoot);
-            if (!isCurrentRequest()) return;
-            if (!repo || repo.repoRoot !== reusableRoot) {
-              repo = {
-                repoRoot: reusableRoot,
-                branch: status.branch,
-                upstream: status.upstream,
-                isDetached: status.isDetached,
-              };
+      const isCurrentContext = () =>
+        requestId === requestIdRef.current &&
+        activeContextKey === contextKeyRef.current;
+
+      const refreshPromise = (async () => {
+        try {
+          let repo: GitRepoInfo | null = null;
+          let status: GitStatusSnapshot | null = null;
+
+          if (canReuseRepo && current.repo) {
+            const reusableRoot = current.repo.repoRoot;
+            if (remoteMode === "always") {
+              try {
+                await native.gitFetch(reusableRoot, workspaceEnv);
+                touchAutoFetch(autoFetchByRepoRef.current, reusableRoot);
+              } catch (err) {
+                if (isCurrentContext()) {
+                  setState((s) => ({
+                    ...s,
+                    lastRemoteError: normalizeError(err),
+                  }));
+                }
+              }
             }
-          } catch {
-            const snapshot = await native.gitPanelSnapshot(contextPath);
-            if (!isCurrentRequest()) return;
-            if (!snapshot.repo) {
-              setState((current) => ({
-                ...current,
-                repo: null,
-                status: null,
-                hasRepo: false,
-                isLoading: false,
-                localError: null,
-              }));
+            status = await native.gitStatus(reusableRoot, workspaceEnv);
+            repo = repositoryInfoFromStatus(status);
+          } else {
+            const resolved = await native.gitResolveRepo(
+              activeContextPath,
+              workspaceEnv,
+            );
+            if (!resolved) {
+              if (isCurrentContext()) {
+                setState((s) => ({
+                  ...s,
+                  contextPath: activeContextPath,
+                  repo: null,
+                  status: null,
+                  hasRepo: false,
+                  isLoading: false,
+                  localError: null,
+                  dubiousOwnershipPath: null,
+                }));
+                lastRefreshAtRef.current = Date.now();
+              }
               return;
             }
-            repo = snapshot.repo;
-            status = snapshot.status ?? null;
+            repo = resolved;
+
+            const shouldAutoFetch =
+              remoteMode === "always" ||
+              (remoteMode === "auto" &&
+                repo.upstream !== null &&
+                Date.now() -
+                  (autoFetchByRepoRef.current.get(repo.repoRoot) ?? 0) >=
+                  AUTO_FETCH_THROTTLE_MS);
+
+            if (shouldAutoFetch) {
+              try {
+                await native.gitFetch(repo.repoRoot, workspaceEnv);
+                touchAutoFetch(autoFetchByRepoRef.current, repo.repoRoot);
+              } catch (err) {
+                if (isCurrentContext()) {
+                  setState((s) => ({
+                    ...s,
+                    lastRemoteError: normalizeError(err),
+                  }));
+                }
+              }
+            }
+
+            status = await native.gitStatus(repo.repoRoot, workspaceEnv);
+            repo = repositoryInfoFromStatus(status);
           }
-        } else {
-          const snapshot = await native.gitPanelSnapshot(contextPath);
-          if (!isCurrentRequest()) return;
-          if (!snapshot.repo) {
-            setState((current) => ({
-              ...current,
-              repo: null,
-              status: null,
-              hasRepo: false,
+
+          if (isCurrentContext()) {
+            setState((s) => ({
+              ...s,
+              contextPath: activeContextPath,
+              repo,
+              status,
+              hasRepo: true,
               isLoading: false,
               localError: null,
+              dubiousOwnershipPath: null,
             }));
-            return;
+            lastRefreshAtRef.current = Date.now();
           }
-          repo = snapshot.repo;
-          status = snapshot.status ?? null;
-        }
-
-        if (!repo) {
-          setState((current) => ({
-            ...current,
+        } catch (error) {
+          if (!isCurrentContext()) return;
+          const msg = normalizeError(error);
+          const dubiousPath = extractDubiousOwnershipPath(
+            error,
+            activeContextPath,
+          );
+          setState((s) => ({
+            ...s,
+            contextPath: activeContextPath,
             repo: null,
             status: null,
             hasRepo: false,
             isLoading: false,
-            localError: null,
+            localError: dubiousPath ? null : msg,
+            dubiousOwnershipPath: dubiousPath,
           }));
-          return;
-        }
-
-        let nextRemoteError = stateRef.current.lastRemoteError;
-        const shouldAutoFetch =
-          repo.upstream &&
-          remoteMode !== "never" &&
-          (remoteMode === "always" ||
-            Date.now() -
-              (autoFetchByRepoRef.current.get(repo.repoRoot) ?? 0) >=
-              AUTO_FETCH_THROTTLE_MS);
-
-        if (shouldAutoFetch) {
-          try {
-            await native.gitFetch(repo.repoRoot);
-            touchAutoFetch(autoFetchByRepoRef.current, repo.repoRoot);
-            nextRemoteError = null;
-            if (!isCurrentRequest()) return;
-            status = await native.gitStatus(repo.repoRoot);
-            if (!isCurrentRequest()) return;
-          } catch (error) {
-            nextRemoteError = normalizeError(error);
+          lastRefreshAtRef.current = Date.now();
+        } finally {
+          if (inflightRef.current?.contextKey === activeContextKey) {
+            inflightRef.current = null;
           }
         }
+      })();
 
-        if (!isCurrentRequest()) return;
-        setState((current) => ({
-          ...current,
-          repo,
-          status,
-          hasRepo: true,
-          isLoading: false,
-          localError: null,
-          dubiousOwnershipPath: null,
-          lastRemoteError: nextRemoteError,
-        }));
-      } catch (error) {
-        if (!isCurrentRequest()) return;
-        const normalized = normalizeError(error);
-        const dubiousPath = extractDubiousOwnershipPath(error, contextPath);
-        setState((current) => ({
-          ...current,
-          repo: null,
-          hasRepo: false,
-          status: null,
-          isLoading: false,
-          localError: normalized,
-          dubiousOwnershipPath: dubiousPath,
-        }));
-      } finally {
-        if (isCurrentRequest()) {
-          lastRefreshAtRef.current = Date.now();
-        }
-      }
+      inflightRef.current = {
+        contextKey: activeContextKey,
+        mode: remoteMode,
+        promise: refreshPromise,
+      };
+
+      return refreshPromise;
     },
-    [contextKey, contextPath],
+    [contextPath, contextKey, enabled, workspaceEnv],
   );
 
   const refresh = useCallback(
     async (options?: { remote?: SourceControlRefreshMode }) => {
-      const remoteMode = options?.remote ?? "never";
-      const inflight = inflightRef.current;
-      if (inflight?.contextKey === contextKey) {
-        const cur = inflight.mode;
-        const upgrade =
-          (cur === "never" && remoteMode !== "never") ||
-          (cur === "auto" && remoteMode === "always");
-        if (!upgrade) return inflight.promise;
-      }
-      const run = doRefresh(remoteMode).finally(() => {
-        if (inflightRef.current?.promise === run) {
-          inflightRef.current = null;
-        }
-      });
-      inflightRef.current = { contextKey, mode: remoteMode, promise: run };
-      return run;
+      await doRefresh(options?.remote ?? "auto");
     },
-    [contextKey, doRefresh],
+    [doRefresh],
   );
 
   const trustRepository = useCallback(
-    async (targetPath?: string) => {
-      const pathToTrust =
-        targetPath ??
-        stateRef.current.dubiousOwnershipPath ??
-        contextPath;
+    async (path?: string) => {
+      const pathToTrust = path ?? stateRef.current.dubiousOwnershipPath;
       if (!pathToTrust) return;
-      const trustedContextKey = contextKey;
+      const trustedContextKey = contextKeyRef.current;
       await native.gitAddSafeDirectory(pathToTrust, workspaceEnv);
       if (trustedContextKey !== contextKeyRef.current) return;
 
@@ -513,9 +508,6 @@ export function useSourceControl(
         dubiousOwnershipPath: null,
       }));
 
-      // Trusting the repository is complete once git config succeeds. On slow
-      // network shares, status enumeration can take seconds; keep it detached
-      // from the button so the rest of Voktty remains immediately usable.
       void native
         .gitStatus(pathToTrust, workspaceEnv)
         .then((status) => {
@@ -568,6 +560,14 @@ export function useSourceControl(
     [contextPath, doRefresh],
   );
 
+  const undoCommit = useCallback(async () => {
+    const { repo } = stateRef.current;
+    if (!repo) return;
+    await native.gitUndoCommit(repo.repoRoot);
+    window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
+    await doRefresh("never");
+  }, [doRefresh]);
+
   useEffect(() => {
     const onGitRefresh = () => {
       void doRefresh("never");
@@ -584,12 +584,12 @@ export function useSourceControl(
       if (!repo || !status) {
         return { ok: false, action: null, blocked: "no-repo" };
       }
-      if (!status.upstream) {
-        return { ok: false, action: null, blocked: "missing-upstream" };
-      }
 
       const action = mode === "contextual" ? getContextualAction(status) : mode;
       if (!action) {
+        if (!status.upstream) {
+          return { ok: false, action: null, blocked: "missing-upstream" };
+        }
         return { ok: false, action: null, blocked: "diverged" };
       }
 
@@ -606,6 +606,8 @@ export function useSourceControl(
           await native.gitFetch(repo.repoRoot);
           touchAutoFetch(autoFetchByRepoRef.current, repo.repoRoot);
           await native.gitPullFfOnly(repo.repoRoot);
+        } else if (action === "publish") {
+          await native.gitPublish(repo.repoRoot);
         } else {
           await native.gitPush(repo.repoRoot);
         }
@@ -714,8 +716,17 @@ export function useSourceControl(
       refresh,
       trustRepository,
       initRepository,
+      undoCommit,
       runRemoteAction,
     }),
-    [state, applyStatus, refresh, trustRepository, initRepository, runRemoteAction],
+    [
+      state,
+      applyStatus,
+      refresh,
+      trustRepository,
+      initRepository,
+      undoCommit,
+      runRemoteAction,
+    ],
   );
 }
