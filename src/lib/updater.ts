@@ -2,6 +2,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
+import { announceUpdateAvailable } from "./sounds";
 
 export type UpdaterPhase =
   | "idle"
@@ -32,6 +33,7 @@ export async function readAppVersion(): Promise<string> {
 export async function probeForUpdate(): Promise<Update | null> {
   const update = await check();
   pendingUpdate = update;
+  if (update) announceUpdateAvailable(update.version);
   return update;
 }
 
@@ -56,6 +58,7 @@ export async function runUpdateFlow(
     }
 
     pendingUpdate = update;
+    announceUpdateAvailable(update.version);
     const available: UpdaterSnapshot = {
       phase: "available",
       currentVersion,

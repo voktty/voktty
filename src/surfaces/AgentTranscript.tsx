@@ -30,6 +30,7 @@ import {
   stubFilePreview,
 } from "../lib/harness/preview";
 import { copyText } from "../lib/clipboard";
+import { playCue } from "../lib/sounds";
 import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import { harnessForTurn } from "../lib/secondOpinion";
 import { Shimmer } from "./Shimmer";
@@ -456,6 +457,7 @@ function CopyTurnButton({ text }: { text: string }) {
       aria-label={copied ? "Copied" : "Copy response"}
       className="-ml-1 rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
       onClick={() => {
+        playCue("copy");
         void copyText(text).then(
           () => {
             setCopied(true);

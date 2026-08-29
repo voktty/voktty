@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useDragResize } from "../hooks/useDragResize";
-import { useInboxUnseen } from "../hooks/useInboxUnseen";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSortable } from "../hooks/useSortable";
@@ -93,6 +92,7 @@ function projectMenuExtraItems(
 type Props = {
   cwd: string;
   recents: RecentProject[];
+  inboxUnseen?: boolean;
   busyPaths?: Iterable<string>;
   canGoBack?: boolean;
   canGoForward?: boolean;
@@ -116,6 +116,7 @@ type Props = {
 export function ProjectRail({
   cwd,
   recents,
+  inboxUnseen = false,
   busyPaths,
   canGoBack = false,
   canGoForward = false,
@@ -161,7 +162,6 @@ export function ProjectRail({
     path: string;
     name: string;
   } | null>(null);
-  const inboxUnseen = useInboxUnseen(recents, cwd);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupLogos = useTabGroupLogos();

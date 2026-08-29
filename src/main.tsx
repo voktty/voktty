@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
 import App from "./App";
 import { initAppearance } from "./lib/appearance";
+import { initSounds } from "./lib/sounds";
 import { loadWindowTransfer } from "./lib/windowTransferBootstrap";
 import {
   handleQuitRequested,
@@ -11,6 +12,7 @@ import {
 import "./index.css";
 
 initAppearance();
+initSounds();
 
 function dismissBootSplash() {
   const splash = document.getElementById("boot-splash");

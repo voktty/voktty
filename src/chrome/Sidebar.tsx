@@ -48,6 +48,7 @@ import type { SettingsSectionId } from "../lib/settings";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useDragResize } from "../hooks/useDragResize";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
+import { useInboxUnseen } from "../hooks/useInboxUnseen";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSessionDiffStats } from "../hooks/useSessionDiffStats";
@@ -196,6 +197,7 @@ function SidebarComponent({
   onCloseSettings,
 }: Props) {
   const gitRoot = gitCwd || cwd;
+  const inboxUnseen = useInboxUnseen(recents, cwd);
   const resize = useDragResize({
     min: MIN_WIDTH,
     max: () => Math.min(MAX_WIDTH, Math.floor(window.innerWidth * 0.5)),
@@ -897,6 +899,7 @@ function SidebarComponent({
         <ProjectRail
           cwd={cwd}
           recents={recents}
+          inboxUnseen={inboxUnseen}
           busyPaths={busyProjectPaths}
           canGoBack={canGoBack}
           canGoForward={canGoForward}

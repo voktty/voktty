@@ -217,6 +217,7 @@ import {
 import { syncDockBadge } from "./lib/dockBadge";
 import { hiddenApprovalNotices } from "./lib/approvalToast";
 import { nextUnseenFinishedSessions } from "./lib/sessionDone";
+import { playCue } from "./lib/sounds";
 import { tabCommand } from "./lib/tabKeys";
 import {
   canTabVisitBack,
@@ -3146,6 +3147,7 @@ export default function App({
           setSessions((prev) =>
             prev.map((s) => (s.id === sessionId ? stopStreaming(s) : s)),
           );
+          playCue("turnFinished");
           await syncSessionCheckpoint(sessionId, workCwd).catch(
             () => undefined,
           );

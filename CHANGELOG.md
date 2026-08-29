@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sounds in Settings → General: a short cue when a turn finishes, when a new inbox item lights the project-rail dot, or when an update is available. Switches click, and Copy on a finished turn plays a scan. Off mutes every cue.
+
 ### Fixed
 
 - Skill tool rows only said `Skill`. They now show `Skill /name`, the same way reads show the file. In #32.
