@@ -4,11 +4,29 @@
   ni colisionar con la instancia activa (evita single-instance lock y conflicto de puertos).
 #>
 param(
-  [int]$Port = 6625,
+  [int]$Port = 5173,
   [string]$Identifier = "dev.voktty.runner"
 )
 
 $ErrorActionPreference = "Stop"
+
+# Auto-detect an available port if the specified one is blocked by Windows Hyper-V / EACCES
+$availablePort = node -e "
+const net = require('net');
+const candidates = [$Port, 5173, 3000, 8080, 9527, 4321];
+function check(idx) {
+  if (idx >= candidates.length) { process.stdout.write(String(5173)); process.exit(0); }
+  const p = candidates[idx];
+  const s = net.createServer();
+  s.once('error', () => check(idx + 1));
+  s.listen(p, '127.0.0.1', () => { s.close(() => { process.stdout.write(String(p)); process.exit(0); }); });
+}
+check(0);
+"
+
+if ($availablePort -and $availablePort -ne "") {
+  $Port = [int]$availablePort
+}
 
 Write-Host "🚀 Iniciando Voktty Dev Runner aislado..." -ForegroundColor Cyan
 Write-Host "   • Identifier: $Identifier" -ForegroundColor DarkGray
@@ -22,8 +40,8 @@ $configJson = @"
 {
   "identifier": "$Identifier",
   "build": {
-    "devUrl": "http://localhost:$Port",
-    "beforeDevCommand": "pnpm vite --port $Port"
+    "devUrl": "http://127.0.0.1:$Port",
+    "beforeDevCommand": "pnpm vite --port $Port --host 127.0.0.1"
   }
 }
 "@
