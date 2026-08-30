@@ -1,8 +1,8 @@
 import { LoaderCircle, Plus, Search, File, Trash2 } from "../chrome/icons";
 import {
+  Fragment,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -683,31 +683,43 @@ function NoteSource({
   onChange: (value: string) => void;
   autoFocus?: boolean;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = `${Math.max(el.scrollHeight, 448)}px`;
-  }, [value]);
+  const lines = value.split("\n");
+  const gutterWidth = `calc(${Math.max(String(lines.length).length, 2)}ch + 0.75rem)`;
+  const textOffset = `calc(${gutterWidth} + 0.75rem)`;
 
   return (
-    <div className="relative">
-      <pre
+    <div className="relative min-h-[448px]">
+      <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre-wrap wrap-break-word font-mono text-[13px] leading-5 text-content/85"
+        className="pointer-events-none grid font-mono text-[13px] leading-5 text-content/85"
+        style={{
+          gridTemplateColumns: `${gutterWidth} minmax(0, 1fr)`,
+        }}
       >
-        <MarkdownSourceHighlight text={value} />
-      </pre>
+        {lines.map((line, index) => (
+          <Fragment key={index}>
+            <div className="select-none pr-2 text-right tabular-nums whitespace-nowrap text-content/40">
+              {index + 1}
+            </div>
+            <div className="min-h-5 min-w-0 pl-3 whitespace-pre-wrap wrap-break-word">
+              {line ? <MarkdownSourceHighlight text={line} /> : "\u00a0"}
+            </div>
+          </Fragment>
+        ))}
+      </div>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 w-px bg-content/10"
+        style={{ left: gutterWidth }}
+      />
       <textarea
-        ref={ref}
         value={value}
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
         spellCheck={false}
         placeholder="Write markdown…"
-        className="markdown-source-field relative w-full resize-none overflow-hidden bg-transparent font-mono text-[13px] leading-5 outline-none"
+        className="markdown-source-field absolute inset-0 h-full w-full resize-none overflow-hidden border-0 bg-transparent py-0 pr-0 font-mono text-[13px] leading-5 whitespace-pre-wrap wrap-break-word outline-none"
+        style={{ paddingLeft: textOffset }}
       />
     </div>
   );
