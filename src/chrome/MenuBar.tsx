@@ -18,6 +18,7 @@ type Props = {
   onFindInProject?: () => void;
   onSearch?: () => void;
   onOpenInbox?: () => void;
+  onOpenNotes?: () => void;
 };
 
 export function MenuBar({
@@ -32,6 +33,7 @@ export function MenuBar({
   onFindInProject,
   onSearch,
   onOpenInbox,
+  onOpenNotes,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
@@ -116,6 +118,9 @@ export function MenuBar({
         case "open_inbox":
           onOpenInbox?.();
           break;
+        case "open_notes":
+          onOpenNotes?.();
+          break;
         case "go_to_file":
           onGoToFile?.();
           break;
@@ -150,6 +155,7 @@ export function MenuBar({
       onPickProject,
       onSearch,
       onOpenInbox,
+      onOpenNotes,
       onShowSourceControl,
       onToggleSidebar,
     ],
@@ -175,6 +181,9 @@ export function MenuBar({
           { kind: "item", id: "toggle_sidebar", label: "Toggle Sidebar", shortcut: `${MOD}B` },
           { kind: "item", id: "toggle_zen", label: "Toggle Zen Mode", shortcut: `${MOD}${ALT}Z` },
           { kind: "item", id: "open_inbox", label: "Inbox" },
+          ...(onOpenNotes
+            ? [{ kind: "item" as const, id: "open_notes", label: "Notes" }]
+            : []),
           { kind: "item", id: "toggle_terminal", label: "Toggle Terminal", shortcut: `${MOD}J` },
           { kind: "item", id: "open_model_picker", label: "Switch Model…", shortcut: `${MOD}.` },
           { kind: "item", id: "toggle_diff", label: "Toggle Changes" },

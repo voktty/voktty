@@ -54,6 +54,12 @@ impl SessionStore {
             conn: Mutex::new(conn),
         })
     }
+
+    pub(crate) fn lock_conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+        self.conn
+            .lock()
+            .map_err(|_| "Session store is locked".into())
+    }
 }
 
 pub fn init(app: &AppHandle) -> Result<(), String> {
@@ -490,6 +496,13 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             params![now_millis()],
         )?;
     }
+    if current < 10 {
+        crate::notes::ensure_notes_table(conn)?;
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (10, ?1)",
+            params![now_millis()],
+        )?;
+    }
     // Create even when a version row already exists (another build may have
     // used the same numbers, or a previous run recorded the version without
     // the table). Restore writes into these; missing tables look like a
@@ -506,6 +519,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
            updated_at INTEGER NOT NULL
          );",
     )?;
+    crate::notes::ensure_notes_table(conn)?;
     Ok(())
 }
 
@@ -1045,7 +1059,7 @@ fn get_workspace_snapshot(conn: &Connection) -> rusqlite::Result<Option<String>>
     .optional()
 }
 
-fn validate_id(value: &str, label: &str) -> Result<(), String> {
+pub(crate) fn validate_id(value: &str, label: &str) -> Result<(), String> {
     if value.is_empty()
         || !value
             .bytes()
@@ -1056,7 +1070,7 @@ fn validate_id(value: &str, label: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn now_millis() -> i64 {
+pub(crate) fn now_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as i64)

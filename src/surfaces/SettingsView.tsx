@@ -120,8 +120,10 @@ import {
   KEYBINDINGS,
   loadClaudeHooks,
   loadComposerRunner,
+  loadNotesEnabled,
   saveClaudeHooks,
   saveComposerRunner,
+  saveNotesEnabled,
   settingsSectionDescription,
   settingsSectionLabel,
   type SettingsSectionId,
@@ -254,6 +256,7 @@ function GeneralPage() {
   );
   const [transcriptZen, setTranscriptZen] = useState(loadTranscriptZen);
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
+  const [notesEnabled, setNotesEnabled] = useState(loadNotesEnabled);
   const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
   const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
 
@@ -284,6 +287,11 @@ function GeneralPage() {
   const onComposerRunner = (next: boolean) => {
     saveComposerRunner(next);
     setComposerRunner(next);
+  };
+
+  const onNotesEnabled = (next: boolean) => {
+    saveNotesEnabled(next);
+    setNotesEnabled(next);
   };
 
   const onSoundsEnabled = (next: boolean) => {
@@ -344,6 +352,16 @@ function GeneralPage() {
           label="Composer mascot"
           on={composerRunner}
           onChange={onComposerRunner}
+        />
+      </Row>
+      <Row
+        label="Notes"
+        description="A global markdown notebook on the project rail. Save a finished turn from the transcript, then mention it later with @note or add it to chat. Turn this off to hide Notes from the UI."
+      >
+        <Toggle
+          label="Notes"
+          on={notesEnabled}
+          onChange={onNotesEnabled}
         />
       </Row>
       <Row

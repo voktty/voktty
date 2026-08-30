@@ -65,6 +65,20 @@ describe("consumeQuoteRequest", () => {
       consumeQuoteRequest("", 1, { id: 2, text: "selected" }),
     ).toMatchObject({ consumedId: 2, changed: true });
   });
+
+  it("inserts plain text without quoting", () => {
+    expect(
+      consumeQuoteRequest("draft", null, {
+        id: 3,
+        text: "Note: Auth\n\nUse a cookie.",
+        mode: "plain",
+      }),
+    ).toEqual({
+      draft: "draft\n\nNote: Auth\n\nUse a cookie.\n\n",
+      consumedId: 3,
+      changed: true,
+    });
+  });
 });
 
 describe("acknowledgeQuoteRequest", () => {

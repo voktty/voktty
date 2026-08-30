@@ -4,6 +4,7 @@ import {
   Clock,
   CircleDashed,
   Copy,
+  FilePlusCorner,
   Minus,
   X,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { PlanPreview } from "../chrome/PlanPreview";
 import { SecondOpinionButton } from "../chrome/SecondOpinionButton";
 import { SecondOpinionCard } from "../chrome/SecondOpinionCard";
+import { NoteMiniCard } from "../chrome/NoteMiniCard";
 import { TerminalSpinner } from "../chrome/TerminalSpinner";
 import type { ApprovalDecision } from "../lib/harness";
 import {
@@ -84,6 +86,7 @@ type Props = {
   harness?: HarnessId;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onAddToChat?: (text: string) => void;
+  onSaveNote?: (text: string) => void;
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
@@ -99,6 +102,7 @@ export function AgentTranscript({
   harness,
   onApproval,
   onAddToChat,
+  onSaveNote,
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
@@ -325,6 +329,7 @@ export function AgentTranscript({
                     startedAt != null ? startedAt + durationMs : undefined
                   }
                   copyText={turnCopyText(turn)}
+                  onSaveNote={onSaveNote}
                   fromHarness={
                     harness ? harnessForTurn(blocks, turn, harness) : undefined
                   }
@@ -375,6 +380,7 @@ function TurnDuration({
   showElapsed = true,
   completedAt,
   copyText: output,
+  onSaveNote,
   fromHarness,
   onSecondOpinion,
 }: {
@@ -385,6 +391,7 @@ function TurnDuration({
   showElapsed?: boolean;
   completedAt?: number;
   copyText?: string;
+  onSaveNote?: (text: string) => void;
   fromHarness?: HarnessId;
   onSecondOpinion?: (harness: HarnessId, model: string) => void;
 }) {
@@ -403,7 +410,12 @@ function TurnDuration({
       {done ? (
         <span className="flex items-center gap-2">
           {output ? (
-            <CopyTurnButton text={output} />
+            <>
+              <CopyTurnButton text={output} />
+              {onSaveNote ? (
+                <SaveNoteButton text={output} onSave={onSaveNote} />
+              ) : null}
+            </>
           ) : (
             <Check className="size-3.5" strokeWidth={1.75} />
           )}
@@ -472,6 +484,46 @@ function CopyTurnButton({ text }: { text: string }) {
         <Check className="size-3.5" strokeWidth={1.75} />
       ) : (
         <Copy className="size-3.5" strokeWidth={1.75} />
+      )}
+    </button>
+  );
+}
+
+function SaveNoteButton({
+  text,
+  onSave,
+}: {
+  text: string;
+  onSave: (text: string) => void;
+}) {
+  const [saved, setSaved] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setSaved(false);
+    return () => {
+      if (timer.current != null) window.clearTimeout(timer.current);
+    };
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      title={saved ? "Saved to Notes" : "Save as note"}
+      aria-label={saved ? "Saved to Notes" : "Save as note"}
+      className="rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
+      onClick={() => {
+        playCue("copy");
+        onSave(text);
+        setSaved(true);
+        if (timer.current != null) window.clearTimeout(timer.current);
+        timer.current = window.setTimeout(() => setSaved(false), 2000);
+      }}
+    >
+      {saved ? (
+        <Check className="size-3.5" strokeWidth={1.75} />
+      ) : (
+        <FilePlusCorner className="size-3.5" strokeWidth={1.75} />
       )}
     </button>
   );
@@ -592,6 +644,7 @@ function UserMessageBlock({
   const [overflows, setOverflows] = useState(false);
   const textRef = useRef<HTMLPreElement>(null);
   const card = block.secondOpinion;
+  const note = block.noteCard;
   const text = card ? "" : block.text;
   const chat = layout === "chat";
 
@@ -626,11 +679,16 @@ function UserMessageBlock({
       >
         {block.attachments?.length ? (
           <div
-            className={`flex flex-wrap gap-1.5 ${text || card ? "mb-2" : ""}`}
+            className={`flex flex-wrap gap-1.5 ${text || card || note ? "mb-2" : ""}`}
           >
             {block.attachments.map((file) => (
               <AttachmentChip key={file.id} attachment={file} />
             ))}
+          </div>
+        ) : null}
+        {note ? (
+          <div className={text || card ? "mb-2" : ""}>
+            <NoteMiniCard card={note} embedded />
           </div>
         ) : null}
         {card ? <SecondOpinionCard card={card} /> : null}

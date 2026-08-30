@@ -8,6 +8,7 @@ mod linear;
 #[cfg(target_os = "macos")]
 mod macos;
 mod menu;
+mod notes;
 mod project_logo;
 mod pty;
 mod rate_limits;
@@ -245,6 +246,10 @@ pub fn run() {
             session_store::session_take_in_flight,
             session_store::workspace_set_snapshot,
             session_store::workspace_get_snapshot,
+            notes::notes_list,
+            notes::notes_get,
+            notes::notes_upsert,
+            notes::notes_delete,
             checkpoint::session_checkpoint_ensure,
             checkpoint::session_checkpoint_capture,
             checkpoint::session_checkpoint_sync,

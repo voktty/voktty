@@ -1,5 +1,7 @@
+import { StickyNote } from "lucide-react";
 import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import type { RankedFile } from "../lib/fileIndex";
+import { isNoteMentionPath } from "../lib/notes";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { MatchText } from "./MatchText";
@@ -9,6 +11,7 @@ type Props = {
   query: string;
   active: number;
   loading?: boolean;
+  includeNotes?: boolean;
   onActive: (index: number) => void;
   onPick: (file: RankedFile) => void;
 };
@@ -18,6 +21,7 @@ export function FileMentionPicker({
   query,
   active,
   loading,
+  includeNotes = false,
   onActive,
   onPick,
 }: Props) {
@@ -59,25 +63,35 @@ export function FileMentionPicker({
     >
       {files.length === 0 ? (
         <p className="px-3 py-2.5 text-[12px] text-content/50">
-          {loading
-            ? "Indexing files…"
-            : query.trim()
-              ? "No matching files or folders"
-              : "No files or folders found"}
+            {loading
+              ? "Indexing files…"
+              : query.trim()
+                ? includeNotes
+                  ? "No matching files or notes"
+                  : "No matching files or folders"
+                : includeNotes
+                  ? "No files or notes found"
+                  : "No files or folders found"}
         </p>
       ) : (
         <div
           ref={lockOverscroll}
           role="listbox"
-          aria-label="Files and folders"
+          aria-label={includeNotes ? "Files and notes" : "Files and folders"}
           onMouseMove={onListMouseMove}
           className="max-h-[min(240px,40vh)] overflow-y-auto overscroll-none px-1 py-1"
         >
           {files.map((file, index) => {
             const highlighted = index === active;
+            const note = isNoteMentionPath(file.path);
             const slash = file.relative.lastIndexOf("/");
-            const dir = slash === -1 ? "" : file.relative.slice(0, slash);
+            const dir = note ? "" : slash === -1 ? "" : file.relative.slice(0, slash);
             const nameOffset = slash === -1 ? 0 : slash + 1;
+            const namePositions = note
+              ? file.positions
+              : file.positions
+                  .filter((pos) => pos >= nameOffset)
+                  .map((pos) => pos - nameOffset);
             return (
               <button
                 key={file.path}
@@ -93,11 +107,15 @@ export function FileMentionPicker({
                 }`}
               >
                 <span className="shrink-0">
-                  <FileTypeIcon
-                    name={file.name}
-                    isDir={Boolean(file.isDir)}
-                    size={15}
-                  />
+                  {isNoteMentionPath(file.path) ? (
+                    <StickyNote className="size-3.5" strokeWidth={1.75} />
+                  ) : (
+                    <FileTypeIcon
+                      name={file.name}
+                      isDir={Boolean(file.isDir)}
+                      size={15}
+                    />
+                  )}
                 </span>
                 <span
                   className={`min-w-0 flex-1 truncate ${
@@ -106,14 +124,16 @@ export function FileMentionPicker({
                 >
                   <MatchText
                     text={file.name}
-                    positions={file.positions
-                      .filter((pos) => pos >= nameOffset)
-                      .map((pos) => pos - nameOffset)}
+                    positions={namePositions}
                     active={Boolean(query.trim())}
                   />
                   {file.isDir ? "/" : null}
                 </span>
-                {dir ? (
+                {note ? (
+                  <span className="shrink-0 font-mono text-[11px] text-content/40">
+                    Note
+                  </span>
+                ) : dir ? (
                   <span className="min-w-0 max-w-[45%] truncate font-mono text-[11px] text-content/40">
                     <MatchText
                       text={dir}

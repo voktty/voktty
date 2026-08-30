@@ -7,6 +7,7 @@ import {
   Plus,
   Search,
   Settings,
+  StickyNote,
   Terminal,
   X,
 } from "lucide-react";
@@ -115,6 +116,7 @@ type Props = {
   projectTerminalActive?: boolean;
   onOpenSettings?: () => void;
   onOpenInbox?: () => void;
+  onOpenNotes?: () => void;
   onClose: (id: string) => void;
   onReorder: (ids: string[], movedId?: string) => void;
   onGoToFile?: () => void;
@@ -838,6 +840,7 @@ function TitleBarComponent({
   projectTerminalActive = false,
   onOpenSettings,
   onOpenInbox,
+  onOpenNotes,
   onClose,
   onReorder,
   onGoToFile,
@@ -1197,6 +1200,11 @@ function TitleBarComponent({
         {deckLayout && railClosed && onOpenInbox ? (
           <IconButton label="Inbox" onClick={onOpenInbox}>
             <Inbox className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
+        {deckLayout && railClosed && onOpenNotes ? (
+          <IconButton label="Notes" onClick={onOpenNotes}>
+            <StickyNote className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
         {railClosed && !projectless ? (

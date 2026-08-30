@@ -85,11 +85,23 @@ export function applyHarnessEvent(
   }
 }
 
+type UserTurnExtra = {
+  secondOpinion?: Block["secondOpinion"];
+  noteCard?: Block["noteCard"];
+};
+
+function userTurnFields(extra?: UserTurnExtra) {
+  return {
+    ...(extra?.secondOpinion ? { secondOpinion: extra.secondOpinion } : {}),
+    ...(extra?.noteCard ? { noteCard: extra.noteCard } : {}),
+  };
+}
+
 export function appendUser(
   session: Session,
   text: string,
   attachments: Attachment[] = [],
-  extra?: { secondOpinion?: Block["secondOpinion"] },
+  extra?: UserTurnExtra,
 ): Session {
   return appendBlock(
     { ...session, busy: true },
@@ -99,7 +111,7 @@ export function appendUser(
       text,
       startedAt: Date.now(),
       ...(attachments.length > 0 ? { attachments } : {}),
-      ...(extra?.secondOpinion ? { secondOpinion: extra.secondOpinion } : {}),
+      ...userTurnFields(extra),
     },
   );
 }
@@ -109,6 +121,7 @@ export function appendSteerUser(
   session: Session,
   text: string,
   attachments: Attachment[] = [],
+  extra?: UserTurnExtra,
 ): Session {
   return {
     ...session,
@@ -120,6 +133,7 @@ export function appendSteerUser(
         role: "user",
         text,
         ...(attachments.length > 0 ? { attachments } : {}),
+        ...userTurnFields(extra),
       },
     ],
   };

@@ -1,10 +1,11 @@
-import { ArrowUp, Plus, Square } from "lucide-react";
+import { ArrowUp, Plus, Square, StickyNote } from "lucide-react";
 import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ClipboardEvent,
   type KeyboardEvent,
   type ReactNode,
@@ -64,6 +65,7 @@ import { CwdPicker } from "./CwdPicker";
 import { FileMentionPicker } from "./FileMentionPicker";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { InboxMiniCard } from "./InboxMiniCard";
+import { NoteMiniCard } from "./NoteMiniCard";
 import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
 import { SkillPicker } from "./SkillPicker";
@@ -73,7 +75,18 @@ import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import {
   COMPOSER_RUNNER_CHANGE_EVENT,
   loadComposerRunner,
+  loadNotesEnabled,
+  subscribeNotesEnabled,
 } from "../lib/settings";
+import {
+  isNoteMentionPath,
+  loadNotes,
+  peekNotes,
+  rankNoteFiles,
+  notesAsProjectFiles,
+  type Note,
+  type NoteComposerCard,
+} from "../lib/notes";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 
 type Props = {
@@ -92,6 +105,7 @@ type Props = {
   quoteRequest?: QuoteRequest;
   initialDraft?: string;
   inboxCard?: InboxComposerCard;
+  noteCard?: NoteComposerCard;
   busy?: boolean;
   hotkeys?: boolean;
   onFocus: () => void;
@@ -103,6 +117,7 @@ type Props = {
   onRuntimeModeChange: (mode: RuntimeMode) => void;
   onQuoteRequestConsumed?: (id: number) => void;
   onInboxCardDismiss?: () => void;
+  onNoteCardDismiss?: () => void;
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop?: () => void;
   onOpenFile?: (path: string) => void;
@@ -157,6 +172,7 @@ export function Composer({
   quoteRequest,
   initialDraft,
   inboxCard,
+  noteCard,
   busy = false,
   onFocus,
   onCwdChange,
@@ -167,6 +183,7 @@ export function Composer({
   onRuntimeModeChange,
   onQuoteRequestConsumed,
   onInboxCardDismiss,
+  onNoteCardDismiss,
   onSubmit,
   onStop,
   onOpenFile,
@@ -181,7 +198,7 @@ export function Composer({
   const mentionRef = useRef<MentionToken | null>(null);
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [hasValue, setHasValue] = useState(
-    () => (initialDraft ?? "").trim().length > 0 || !!inboxCard,
+    () => (initialDraft ?? "").trim().length > 0 || !!inboxCard || !!noteCard,
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fileDrag, setFileDrag] = useState(false);
@@ -196,6 +213,12 @@ export function Composer({
   const [files, setFiles] = useState<ProjectFile[]>(
     () => peekProjectFiles(cwd) ?? [],
   );
+  const notesEnabled = useSyncExternalStore(
+    subscribeNotesEnabled,
+    loadNotesEnabled,
+    () => true,
+  );
+  const [notes, setNotes] = useState<Note[]>(() => peekNotes() ?? []);
   const [mention, setMention] = useState<MentionToken | null>(null);
   const [mentionActive, setMentionActive] = useState(0);
   const [runnerEnabled, setRunnerEnabled] = useState(loadComposerRunner);
@@ -211,36 +234,49 @@ export function Composer({
   attachmentsRef.current = attachments;
 
   const rankedSkills = rankSkills(skills, slash?.query ?? "");
-  const mentionOpen = mention !== null && looksLikeProject(cwd);
+  const mentionOpen =
+    mention !== null && (looksLikeProject(cwd) || notesEnabled);
   const pickerOpen = creatingSkill || slash !== null;
   const attachmentsSupported = harnessSupportsAttachments(harness);
   const skillNames = useMemo(
     () => new Set(skills.map((skill) => skill.name)),
     [skills],
   );
-  const mentionIndex = useMemo(() => buildMentionIndex(files), [files]);
+  const mentionFiles = useMemo(
+    () =>
+      notesEnabled ? [...files, ...notesAsProjectFiles(notes)] : files,
+    [files, notes, notesEnabled],
+  );
+  const mentionIndex = useMemo(
+    () => buildMentionIndex(mentionFiles),
+    [mentionFiles],
+  );
   const mentionIndexRef = useRef<MentionIndex>(mentionIndex);
   mentionIndexRef.current = mentionIndex;
-  const rankedFiles = useMemo(
-    () =>
-      mentionOpen
-        ? rankMentionFiles(files, mention?.query ?? "", recentOpenedFiles(cwd))
-        : [],
-    [files, mention?.query, mentionOpen, cwd],
-  );
+  const rankedFiles = useMemo(() => {
+    if (!mentionOpen) return [];
+    const fileHits = looksLikeProject(cwd)
+      ? rankMentionFiles(files, mention?.query ?? "", recentOpenedFiles(cwd))
+      : [];
+    const noteHits = notesEnabled
+      ? rankNoteFiles(notes, mention?.query ?? "")
+      : [];
+    const seen = new Set(noteHits.map((file) => file.path));
+    return [...noteHits, ...fileHits.filter((file) => !seen.has(file.path))];
+  }, [cwd, files, mention?.query, mentionOpen, notes, notesEnabled]);
 
   const syncHasValue = useCallback(
     (text: string, files: Attachment[]) => {
       setHasValue(
-        text.trim().length > 0 || files.length > 0 || !!inboxCard,
+        text.trim().length > 0 || files.length > 0 || !!inboxCard || !!noteCard,
       );
     },
-    [inboxCard],
+    [inboxCard, noteCard],
   );
 
   useEffect(() => {
     syncHasValue(ref.current?.value ?? "", attachmentsRef.current);
-  }, [inboxCard, syncHasValue]);
+  }, [inboxCard, noteCard, syncHasValue]);
 
   const addAttachments = useCallback(
     (incoming: Attachment[]) => {
@@ -331,6 +367,17 @@ export function Composer({
       cancelled = true;
     };
   }, [cwd, mentionOpen]);
+
+  useEffect(() => {
+    if (!mentionOpen || !notesEnabled) return;
+    let cancelled = false;
+    void loadNotes().then((next) => {
+      if (!cancelled) setNotes(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mentionOpen, notesEnabled]);
 
   useEffect(() => {
     setMentionActive(0);
@@ -426,7 +473,9 @@ export function Composer({
         setMention(null);
         return;
       }
-      const label = mentionLabel(file, mentionIndexRef.current);
+      const label = isNoteMentionPath(file.path)
+        ? file.relative
+        : mentionLabel(file, mentionIndexRef.current);
       const next = replaceMentionToken(el.value, token, label);
       el.value = next;
       resizeTextarea(el);
@@ -554,7 +603,7 @@ export function Composer({
   const submit = (value: string) => {
     const text = composeInboxMessage(inboxCard, value);
     const files = attachments;
-    if (!text && files.length === 0) return;
+    if (!text && files.length === 0 && !noteCard) return;
     onSubmit(text, files);
     if (!ref.current) return;
     ref.current.value = "";
@@ -741,7 +790,10 @@ export function Composer({
               files={rankedFiles}
               query={mention?.query ?? ""}
               active={mentionActive}
-              loading={peekProjectFiles(cwd) == null}
+              loading={
+                looksLikeProject(cwd) && peekProjectFiles(cwd) == null
+              }
+              includeNotes={notesEnabled}
               onActive={setMentionActive}
               onPick={pickMention}
             />
@@ -801,6 +853,10 @@ export function Composer({
             <InboxMiniCard card={inboxCard} onDismiss={onInboxCardDismiss} />
           ) : null}
 
+          {noteCard ? (
+            <NoteMiniCard card={noteCard} onDismiss={onNoteCardDismiss} />
+          ) : null}
+
           <div className="relative">
             <div
               ref={highlightRef}
@@ -823,9 +879,11 @@ export function Composer({
               placeholder={
                 inboxCard
                   ? "Add a note, or send to start…"
-                  : shell
-                    ? "How can I help you today?"
-                    : "Ask, build, / for skills, @ for references... "
+                  : noteCard
+                    ? "Add a message, or send…"
+                    : shell
+                      ? "How can I help you today?"
+                      : "Ask, build, / for skills, @ for references... "
               }
               className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
                 shell ? "py-4" : "py-3"
@@ -970,11 +1028,15 @@ function MentionRuns({
             <span className="relative text-transparent">
               {"@"}
               <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                <FileTypeIcon
-                  name={part.file.name}
-                  isDir={Boolean(part.file.isDir)}
-                  size={13}
-                />
+                {part.file && isNoteMentionPath(part.file.path) ? (
+                  <StickyNote className="size-3.5" strokeWidth={1.75} />
+                ) : (
+                  <FileTypeIcon
+                    name={part.file.name}
+                    isDir={Boolean(part.file.isDir)}
+                    size={13}
+                  />
+                )}
               </span>
             </span>
             {part.text.slice(1)}

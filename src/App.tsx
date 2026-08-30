@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Sidebar } from "./chrome/Sidebar";
 import { ApprovalToasts } from "./chrome/ApprovalToasts";
 import { TitleBar, type Tab as TitleTab } from "./chrome/TitleBar";
@@ -232,6 +232,13 @@ import {
 import { applySkillsToTurn } from "./lib/skills";
 import { applyFileMentionsToTurn } from "./lib/fileMentions";
 import {
+  applyNotesToTurn,
+  ADD_NOTE_TO_CHAT_EVENT,
+  composeNoteMessage,
+  noteCardMeta,
+  type NoteComposerCard,
+} from "./lib/notes";
+import {
   SECOND_OPINION_TITLE,
   buildSecondOpinionCard,
   buildSecondOpinionPrompt,
@@ -246,14 +253,17 @@ import { DiffPane } from "./surfaces/DiffPane";
 import { SearchView } from "./surfaces/SearchView";
 import { SettingsView } from "./surfaces/SettingsView";
 import { InboxView, InboxDetailPane } from "./surfaces/InboxView";
+import { NotesView } from "./surfaces/NotesView";
 import { inboxComposerCard, type InboxItem } from "./lib/githubTasks";
 import {
   linearIssueDetails,
   peekLinearIssueDetails,
 } from "./lib/linear";
 import {
+  loadNotesEnabled,
   loadSettingsSection,
   saveSettingsSection,
+  subscribeNotesEnabled,
   type SettingsSectionId,
 } from "./lib/settings";
 import {
@@ -315,9 +325,23 @@ function scheduleHarnessFlush(run: () => void): ScheduledFlush {
   return { kind: "raf", id: requestAnimationFrame(run) };
 }
 
-/** Expand the composer's `@file` and `/skill` tokens for the harness. */
+/** Expand the composer's `@file`, `@note`, and `/skill` tokens for the harness. */
 async function preparePrompt(text: string, cwd: string): Promise<string> {
-  return applySkillsToTurn(await applyFileMentionsToTurn(text, cwd), cwd);
+  return applySkillsToTurn(
+    await applyNotesToTurn(await applyFileMentionsToTurn(text, cwd)),
+    cwd,
+  );
+}
+
+function userTurnCards(
+  noteCard: NoteComposerCard | undefined,
+  secondOpinion?: SecondOpinionMeta,
+) {
+  if (!noteCard && !secondOpinion) return undefined;
+  return {
+    ...(secondOpinion ? { secondOpinion } : {}),
+    ...(noteCard ? { noteCard: noteCardMeta(noteCard) } : {}),
+  };
 }
 
 function withHarnessChoice(
@@ -451,6 +475,12 @@ export default function App({
   const [searchViewOpen, setSearchViewOpen] = useState(false);
   const [searchViewFocusToken, setSearchViewFocusToken] = useState(0);
   const [inboxViewOpen, setInboxViewOpen] = useState(false);
+  const [notesViewOpen, setNotesViewOpen] = useState(false);
+  const notesEnabled = useSyncExternalStore(
+    subscribeNotesEnabled,
+    loadNotesEnabled,
+    () => true,
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] =
     useState<SettingsSectionId>(loadSettingsSection);
@@ -494,6 +524,13 @@ export default function App({
   searchViewOpenRef.current = searchViewOpen;
   const inboxViewOpenRef = useRef(inboxViewOpen);
   inboxViewOpenRef.current = inboxViewOpen;
+  const notesViewOpenRef = useRef(notesViewOpen);
+  notesViewOpenRef.current = notesViewOpen;
+
+  useEffect(() => {
+    if (!notesEnabled) setNotesViewOpen(false);
+  }, [notesEnabled]);
+
   const deckLayoutRef = useRef(deckLayout);
   deckLayoutRef.current = deckLayout;
   const tabVisitRef = useRef(emptyTabVisitHistory(activeTabId));
@@ -1070,6 +1107,7 @@ export default function App({
   const onNew = useCallback(() => {
     setSearchViewOpen(false);
     setInboxViewOpen(false);
+    setNotesViewOpen(false);
     const cwd = active?.cwd ?? sessionDefaults?.cwd ?? projectCwd;
     const session = newDefaultSession(cwd, sessionDefaults?.runtimeMode);
     const tab = newTab(session.id);
@@ -1089,6 +1127,7 @@ export default function App({
     async (item: InboxItem, body?: string) => {
       const start = (description?: string) => {
         setInboxViewOpen(false);
+        setNotesViewOpen(false);
         setSidebarTab("sessions");
         const cwd =
           item.projectPath ||
@@ -1139,11 +1178,66 @@ export default function App({
     ],
   );
 
+  const onAddNoteToChat = useCallback(
+    (card: NoteComposerCard) => {
+      if (!card.id) return;
+      setSearchViewOpen(false);
+      setInboxViewOpen(false);
+      setNotesViewOpen(false);
+      setSidebarTab("sessions");
+      const cwd =
+        (card.sourceCwd && looksLikeProject(card.sourceCwd)
+          ? card.sourceCwd
+          : undefined) ||
+        active?.cwd ||
+        sessionDefaults?.cwd ||
+        projectCwd;
+      const title = card.title.trim();
+      const session = {
+        ...newDefaultSession(cwd, sessionDefaults?.runtimeMode),
+        ...(title ? { title } : {}),
+        noteCard: card,
+      };
+      const tab = newTab(session.id);
+      setSessions((prev) => [...prev, session]);
+      appendTab(tab, cwd);
+      setActiveTabId(tab.id);
+      setComposerFocused(true);
+    },
+    [
+      active?.cwd,
+      appendTab,
+      sessionDefaults?.cwd,
+      sessionDefaults?.runtimeMode,
+      projectCwd,
+    ],
+  );
+
+  useEffect(() => {
+    const onAdd = (event: Event) => {
+      const card = (event as CustomEvent<NoteComposerCard>).detail;
+      if (!card?.id) return;
+      onAddNoteToChat(card);
+    };
+    window.addEventListener(ADD_NOTE_TO_CHAT_EVENT, onAdd);
+    return () => window.removeEventListener(ADD_NOTE_TO_CHAT_EVENT, onAdd);
+  }, [onAddNoteToChat]);
+
   const onInboxCardDismiss = useCallback((sessionId: string) => {
     setSessions((prev) =>
       prev.map((session) =>
         session.id === sessionId && session.inboxCard
           ? { ...session, inboxCard: undefined }
+          : session,
+      ),
+    );
+  }, []);
+
+  const onNoteCardDismiss = useCallback((sessionId: string) => {
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === sessionId && session.noteCard
+          ? { ...session, noteCard: undefined }
           : session,
       ),
     );
@@ -2501,6 +2595,7 @@ export default function App({
     (path: string) => {
       setSearchViewOpen(false);
       setInboxViewOpen(false);
+      setNotesViewOpen(false);
       const normalized = normalizeProjectPath(path);
       if (!looksLikeProject(normalized)) return;
 
@@ -2885,9 +2980,11 @@ export default function App({
     ) => {
       const current = sessionsRef.current.find((s) => s.id === sessionId);
       if (!current) return;
-      if (!text.trim() && attachments.length === 0) return;
+      const noteCard = current.noteCard;
+      if (!text.trim() && attachments.length === 0 && !noteCard) return;
       if (isPreparingHandoff(current)) return;
       const workCwd = sessionWorkCwd(current);
+      const harnessText = composeNoteMessage(noteCard, text);
 
       const pendingSwitch =
         current.pendingSwitch && current.pendingSwitch.from !== current.harness
@@ -2909,17 +3006,23 @@ export default function App({
           return;
         }
         const visible = displayAttachments(attachments);
+        const cards = userTurnCards(noteCard);
         setSessions((prev) =>
           prev.map((s) =>
             s.id === sessionId
-              ? appendSteerUser({ ...s, inboxCard: undefined }, text, visible)
+              ? appendSteerUser(
+                  { ...s, inboxCard: undefined, noteCard: undefined },
+                  text,
+                  visible,
+                  cards,
+                )
               : s,
           ),
         );
         void (async () => {
           try {
             const prepared = await prepareAttachments(attachments);
-            const prompt = await preparePrompt(text, workCwd);
+            const prompt = await preparePrompt(harnessText, workCwd);
             await steerHarnessTurn({
               harness: current.harness,
               sessionId,
@@ -2953,12 +3056,13 @@ export default function App({
         HARNESS_LABEL[current.harness],
       );
       const titleSeed =
-        isFirstTurn && !current.inboxCard && placeholderTitle
+        isFirstTurn && !current.inboxCard && !current.noteCard && placeholderTitle
           ? titleFromPrompt(text, current.harness, attachments)
           : current.title;
       const visible = displayAttachments(attachments);
       const card = options?.secondOpinion;
       const visibleText = card ? SECOND_OPINION_TITLE : text;
+      const cards = userTurnCards(noteCard, card);
       const live = isLiveHarness(current.harness);
       const queuedHandoff =
         live && !pendingSwitch ? pendingHandoff(current) : null;
@@ -2971,7 +3075,7 @@ export default function App({
         prev.map((s) => {
           if (s.id !== sessionId) return s;
           const titled = isFirstTurn ? titleSeed : s.title;
-          const next = { ...s, inboxCard: undefined };
+          const next = { ...s, inboxCard: undefined, noteCard: undefined };
           if (!live) {
             return {
               ...next,
@@ -2985,7 +3089,7 @@ export default function App({
                   role: "user",
                   text: visibleText,
                   ...(visible.length > 0 ? { attachments: visible } : {}),
-                  ...(card ? { secondOpinion: card } : {}),
+                  ...cards,
                 },
                 {
                   id: crypto.randomUUID(),
@@ -3005,14 +3109,14 @@ export default function App({
               appendPreparingHandoff(sealed, pendingSwitch.from, next.harness),
               visibleText,
               visible,
-              card ? { secondOpinion: card } : undefined,
+              cards,
             );
           }
           return appendUser(
             { ...next, title: titled },
             visibleText,
             visible,
-            card ? { secondOpinion: card } : undefined,
+            cards,
           );
         }),
       );
@@ -3021,7 +3125,7 @@ export default function App({
         void generateHarnessTitle(current.harness, {
           sessionId,
           cwd: workCwd,
-          message: text || attachments.map((file) => file.name).join(", "),
+          message: harnessText || attachments.map((file) => file.name).join(", "),
         })
           .then((title) => {
             if (!title) return;
@@ -3090,7 +3194,7 @@ export default function App({
         if (turnGen.current.get(sessionId) !== gen) return;
         try {
           const prepared = await prepareAttachments(attachments);
-          const prompt = await preparePrompt(text, workCwd);
+          const prompt = await preparePrompt(harnessText, workCwd);
           const earlier = queuedHandoff
             ? userMessagesAfterHandoff(current)
             : [];
@@ -3364,12 +3468,14 @@ export default function App({
   const onGoToFile = useCallback(() => {
     setSearchViewOpen(false);
     setInboxViewOpen(false);
+    setNotesViewOpen(false);
     setFilePickerOpen(true);
   }, []);
 
   const onFindInProject = useCallback(() => {
     setSearchViewOpen(false);
     setInboxViewOpen(false);
+    setNotesViewOpen(false);
     setSidebarOpen(true);
     saveSidebarOpen(true);
     setSidebarTab("files");
@@ -3381,6 +3487,7 @@ export default function App({
     setFilePickerOpen(false);
     setSettingsOpen(false);
     setInboxViewOpen(false);
+    setNotesViewOpen(false);
     setSearchViewOpen(true);
     setSearchViewFocusToken((token) => token + 1);
   }, []);
@@ -3393,6 +3500,7 @@ export default function App({
     setFilePickerOpen(false);
     setSettingsOpen(false);
     setSearchViewOpen(false);
+    setNotesViewOpen(false);
     if (deckLayout) {
       setInboxViewOpen(true);
       return;
@@ -3407,10 +3515,24 @@ export default function App({
     setInboxViewOpen(false);
   }, []);
 
+  const onOpenNotes = useCallback(() => {
+    if (!loadNotesEnabled()) return;
+    setFilePickerOpen(false);
+    setSettingsOpen(false);
+    setSearchViewOpen(false);
+    setInboxViewOpen(false);
+    setNotesViewOpen(true);
+  }, []);
+
+  const onLeaveNotes = useCallback(() => {
+    setNotesViewOpen(false);
+  }, []);
+
   const openSettings = useCallback((section?: SettingsSectionId) => {
     setFilePickerOpen(false);
     setSearchViewOpen(false);
     setInboxViewOpen(false);
+    setNotesViewOpen(false);
     if (section) {
       setSettingsSection(section);
       saveSettingsSection(section);
@@ -3450,13 +3572,18 @@ export default function App({
       setInboxViewOpen(false);
       return;
     }
+    if (notesViewOpen) {
+      setNotesViewOpen(false);
+      return;
+    }
     onVisitBack();
-  }, [onVisitBack, searchViewOpen, settingsOpen, inboxViewOpen]);
+  }, [onVisitBack, searchViewOpen, settingsOpen, inboxViewOpen, notesViewOpen]);
 
   const onRailForward = useCallback(() => {
     setSearchViewOpen(false);
     setSettingsOpen(false);
     setInboxViewOpen(false);
+    setNotesViewOpen(false);
     onVisitForward();
   }, [onVisitForward]);
 
@@ -3537,6 +3664,7 @@ export default function App({
     onFindInProject,
     onOpenSearch,
     onOpenInbox,
+    onOpenNotes,
     pickProject,
     onNewTerminal,
     onNewTerminalTab,
@@ -3558,6 +3686,7 @@ export default function App({
     onFindInProject,
     onOpenSearch,
     onOpenInbox,
+    onOpenNotes,
     pickProject,
     onNewTerminal,
     onNewTerminalTab,
@@ -3629,7 +3758,7 @@ export default function App({
         else run(`activate-${cmd.activate}`, () => a.onActivate(cmd.activate));
         return;
       }
-      if (!searchViewOpenRef.current && !inboxViewOpenRef.current && handleEditorFindKey(e)) {
+      if (!searchViewOpenRef.current && !inboxViewOpenRef.current && !notesViewOpenRef.current && handleEditorFindKey(e)) {
         e.stopPropagation();
         return;
       }
@@ -3725,6 +3854,7 @@ export default function App({
       listen("go_to_file", () => actions.current.onGoToFile()),
       listen("open_search", () => actions.current.onOpenSearch()),
       listen("open_inbox", () => actions.current.onOpenInbox()),
+      listen("open_notes", () => actions.current.onOpenNotes()),
       listen("open_settings", () => actions.current.openSettings()),
       listen("sidebar_opacity", () => {
         actions.current.openSettings("appearance");
@@ -3800,7 +3930,7 @@ export default function App({
         onOpenTerminal={(cwd) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
         onFileDeleted={onFileDeleted}
-        canGoBack={tabVisitNav.canBack || searchViewOpen || settingsOpen || inboxViewOpen}
+        canGoBack={tabVisitNav.canBack || searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen}
         canGoForward={tabVisitNav.canForward}
         onGoBack={onRailBack}
         onGoForward={onRailForward}
@@ -3820,9 +3950,12 @@ export default function App({
         onNew={deckLayout ? onNew : undefined}
         onSearch={onOpenSearch}
         onOpenInbox={onOpenInbox}
+        onOpenNotes={notesEnabled ? onOpenNotes : undefined}
         onGoToFile={deckLayout ? onGoToFile : undefined}
         searchActive={searchViewOpen}
         inboxActive={inboxViewOpen}
+        notesActive={notesViewOpen}
+        notesEnabled={notesEnabled}
         projectRailOpen={projectRailOpen}
         onToggleProjectRail={onToggleProjectRail}
         unseenFinishedIds={unseenFinishedIds}
@@ -3836,12 +3969,12 @@ export default function App({
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           className={
-            searchViewOpen || settingsOpen || inboxViewOpen
+            searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen
               ? "hidden"
               : "flex min-h-0 min-w-0 flex-1 flex-col"
           }
-          aria-hidden={searchViewOpen || settingsOpen || inboxViewOpen}
-          inert={searchViewOpen || settingsOpen || inboxViewOpen || undefined}
+          aria-hidden={searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen}
+          inert={searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen || undefined}
         >
         {!IS_MAC ? (
           <MenuBar
@@ -3858,6 +3991,7 @@ export default function App({
             onFindInProject={onFindInProject}
             onSearch={onOpenSearch}
             onOpenInbox={onOpenInbox}
+            onOpenNotes={notesEnabled ? onOpenNotes : undefined}
           />
         ) : null}
         <TitleBar
@@ -3888,6 +4022,7 @@ export default function App({
           }
           onOpenSettings={onOpenSettings}
           onOpenInbox={onOpenInbox}
+          onOpenNotes={notesEnabled ? onOpenNotes : undefined}
           onClose={onCloseTab}
           onReorder={onReorderTabs}
           onGoToFile={onGoToFile}
@@ -4007,6 +4142,7 @@ export default function App({
                       onSubmit={onSubmit}
                       onStop={onStop}
                       onInboxCardDismiss={onInboxCardDismiss}
+                      onNoteCardDismiss={onNoteCardDismiss}
                       onApproval={onApproval}
                       onOpenFile={onOpenFile}
                       editorNavigation={editorNavigation}
@@ -4061,6 +4197,13 @@ export default function App({
             onStart={onStartInboxItem}
           />
         ) : null}
+        {notesViewOpen ? (
+          <NotesView
+            besideRail={deckLayout && projectRailOpen}
+            cwd={projectCwd}
+            onClose={onLeaveNotes}
+          />
+        ) : null}
         {settingsOpen ? (
           <SettingsView
             section={settingsSection}
@@ -4077,7 +4220,7 @@ export default function App({
             }
           />
         ) : null}
-        {searchViewOpen || inboxViewOpen || settingsOpen ? null : (
+        {searchViewOpen || inboxViewOpen || notesViewOpen || settingsOpen ? null : (
           <UsageFooter providers={usageProviders} session={usageSession} />
         )}
       </div>

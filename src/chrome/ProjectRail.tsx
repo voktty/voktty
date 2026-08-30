@@ -5,6 +5,7 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
+  File,
   Plus,
   Search,
   Settings,
@@ -102,6 +103,9 @@ type Props = {
   searchActive?: boolean;
   onOpenInbox?: () => void;
   inboxActive?: boolean;
+  notesEnabled?: boolean;
+  onOpenNotes?: () => void;
+  notesActive?: boolean;
   onTogglePanel?: () => void;
   onSelectProject: (path: string) => void;
   onOpenProject: () => void;
@@ -126,6 +130,9 @@ export function ProjectRail({
   searchActive = false,
   onOpenInbox,
   inboxActive = false,
+  notesEnabled = true,
+  onOpenNotes,
+  notesActive = false,
   onTogglePanel,
   onSelectProject,
   onOpenProject,
@@ -374,6 +381,16 @@ export function ProjectRail({
               ariaLabel={inboxUnseen ? "Inbox, new items" : "Inbox"}
               isNavButton
             />
+            {notesEnabled ? (
+              <RailAction
+                label="Notes"
+                icon={File}
+                onClick={onOpenNotes}
+                active={notesActive}
+                ariaLabel="Notes"
+                isNavButton
+              />
+            ) : null}
           </div>
 
           <div
@@ -391,7 +408,7 @@ export function ProjectRail({
                 busy={busy}
                 sortable={pinnedSortable}
                 pinned
-                searchActive={searchActive || inboxActive}
+                searchActive={searchActive || inboxActive || notesActive}
                 onSelect={onSelectProject}
                 onTogglePin={onTogglePin}
                 onContextMenu={onProjectContextMenu}
@@ -413,7 +430,7 @@ export function ProjectRail({
               busy={busy}
               sortable={projectSortable}
               pinned={false}
-              searchActive={searchActive || inboxActive}
+              searchActive={searchActive || inboxActive || notesActive}
               onSelect={onSelectProject}
               onTogglePin={onTogglePin}
               onContextMenu={onProjectContextMenu}

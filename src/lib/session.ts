@@ -1,5 +1,6 @@
 import type { ContextUsage } from "./contextUsage";
 import type { InboxComposerCard } from "./githubTasks";
+import type { NoteCardMeta, NoteComposerCard } from "./notes";
 import {
   defaultSessionChoice,
   preferredModelId,
@@ -111,6 +112,8 @@ export type Block = {
   };
   handoff?: HandoffMeta;
   secondOpinion?: SecondOpinionMeta;
+  /** Note chip shown on this user turn. Body is not stored; the harness already received it. */
+  noteCard?: NoteCardMeta;
 };
 
 export type RuntimeMode =
@@ -171,6 +174,8 @@ export type Session = {
   composerSeed?: string;
   /** Inbox issue/PR chip shown above the composer. In-memory, one-shot. */
   inboxCard?: InboxComposerCard;
+  /** Note chip shown above the composer. In-memory, one-shot. */
+  noteCard?: NoteComposerCard;
 };
 
 export type PendingHarnessSwitch = {

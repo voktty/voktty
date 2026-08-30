@@ -130,9 +130,12 @@ type Props = {
   onNew?: () => void;
   onSearch?: () => void;
   onOpenInbox?: () => void;
+  onOpenNotes?: () => void;
   onGoToFile?: () => void;
   searchActive?: boolean;
   inboxActive?: boolean;
+  notesActive?: boolean;
+  notesEnabled?: boolean;
   onToggleProjectRail?: () => void;
   projectRailOpen?: boolean;
   unseenFinishedIds?: Set<string>;
@@ -184,9 +187,12 @@ function SidebarComponent({
   onNew,
   onSearch,
   onOpenInbox,
+  onOpenNotes,
   onGoToFile,
   searchActive = false,
   inboxActive = false,
+  notesActive = false,
+  notesEnabled = true,
   onToggleProjectRail,
   projectRailOpen = true,
   unseenFinishedIds: unseenFinishedIdsProp,
@@ -298,6 +304,7 @@ function SidebarComponent({
     open &&
     !searchActive &&
     !inboxActive &&
+    !notesActive &&
     (classicSettings || (!settingsOpen && !(deckLayout && !inProject)));
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
   const changeStats = useProjectDiffStats(gitRoot, open);
@@ -909,6 +916,9 @@ function SidebarComponent({
           searchActive={searchActive}
           onOpenInbox={onOpenInbox}
           inboxActive={inboxActive}
+          notesEnabled={notesEnabled}
+          onOpenNotes={onOpenNotes}
+          notesActive={notesActive}
           onTogglePanel={onToggleProjectRail}
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}

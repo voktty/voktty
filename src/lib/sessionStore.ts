@@ -265,6 +265,8 @@ function sanitizeBlock(block: Block): Block | null {
   else if (block.role === "handoff") return null;
   const secondOpinion = sanitizeSecondOpinion(block.secondOpinion);
   if (secondOpinion) next.secondOpinion = secondOpinion;
+  const noteCard = sanitizeNoteCard(block.noteCard);
+  if (noteCard) next.noteCard = noteCard;
   return next;
 }
 
@@ -371,6 +373,22 @@ function sanitizeSecondOpinion(
     to: value.to,
     ...(request ? { request } : {}),
     ...(files > 0 ? { files } : {}),
+  };
+}
+
+function sanitizeNoteCard(value: Block["noteCard"]): Block["noteCard"] {
+  if (!value || typeof value !== "object") return undefined;
+  const id = typeof value.id === "string" ? value.id.trim() : "";
+  if (!id) return undefined;
+  const slug = typeof value.slug === "string" ? value.slug.trim() : "";
+  const title = typeof value.title === "string" ? value.title.trim() : "";
+  const sourceCwd =
+    typeof value.sourceCwd === "string" ? value.sourceCwd.trim() : "";
+  return {
+    id,
+    slug,
+    title,
+    ...(sourceCwd ? { sourceCwd } : {}),
   };
 }
 

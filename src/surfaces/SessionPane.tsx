@@ -2,8 +2,10 @@ import { ChevronDown, GripVertical, X } from "lucide-react";
 import {
   memo,
   useCallback,
+  useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Composer } from "../chrome/Composer";
@@ -22,7 +24,12 @@ import {
 import { AgentTranscript } from "./AgentTranscript";
 import { EmptySession } from "./EmptySession";
 import { MOD } from "../lib/platform";
-import { acknowledgeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
+import { acknowledgeQuoteRequest, ADD_TO_CHAT_EVENT, type AddToChatRequest, type QuoteRequest } from "../lib/quoteDraft";
+import { createNote, noteTitle } from "../lib/notes";
+import {
+  loadNotesEnabled,
+  subscribeNotesEnabled,
+} from "../lib/settings";
 
 type Props = {
   session: Session;
@@ -49,6 +56,7 @@ type Props = {
   ) => void;
   onStop: (sessionId: string) => void;
   onInboxCardDismiss?: (sessionId: string) => void;
+  onNoteCardDismiss?: (sessionId: string) => void;
   onApproval: (
     sessionId: string,
     requestId: number,
@@ -85,6 +93,7 @@ export const SessionPane = memo(function SessionPane({
   onSubmit,
   onStop,
   onInboxCardDismiss,
+  onNoteCardDismiss,
   onApproval,
   onOpenFile,
   onOpenDiff,
@@ -110,13 +119,44 @@ export const SessionPane = memo(function SessionPane({
   const onJumpToBottomReady = useCallback((jump: () => void) => {
     jumpToBottomRef.current = jump;
   }, []);
-  const addSelectionToChat = useCallback((text: string) => {
+  const addSelectionToChat = useCallback((text: string, mode?: QuoteRequest["mode"]) => {
     quoteRequestId.current += 1;
-    setQuoteRequest({ id: quoteRequestId.current, text });
+    setQuoteRequest({ id: quoteRequestId.current, text, mode });
   }, []);
   const acknowledgeQuote = useCallback((handledId: number) => {
     setQuoteRequest((current) => acknowledgeQuoteRequest(current, handledId));
   }, []);
+  const notesEnabled = useSyncExternalStore(
+    subscribeNotesEnabled,
+    loadNotesEnabled,
+    () => true,
+  );
+  const saveNote = useCallback(
+    (text: string) => {
+      const sessionTitle = sessionDisplayTitle(session.title, session.harness);
+      void createNote({
+        title:
+          sessionTitle && sessionTitle !== "New session"
+            ? sessionTitle
+            : noteTitle(text),
+        body: text,
+        sourceSessionId: session.id,
+        sourceCwd: session.cwd,
+      });
+    },
+    [session.cwd, session.harness, session.id, session.title],
+  );
+
+  useEffect(() => {
+    if (!focused) return;
+    const onAdd = (event: Event) => {
+      const detail = (event as CustomEvent<AddToChatRequest>).detail;
+      if (!detail?.text) return;
+      addSelectionToChat(detail.text, detail.mode);
+    };
+    window.addEventListener(ADD_TO_CHAT_EVENT, onAdd);
+    return () => window.removeEventListener(ADD_TO_CHAT_EVENT, onAdd);
+  }, [addSelectionToChat, focused]);
   const workCwd = sessionWorkCwd(session);
   const isEmpty = session.blocks.length === 0;
   const showDeckProjectPicker = isEmpty && !looksLikeProject(session.cwd);
@@ -136,10 +176,14 @@ export const SessionPane = memo(function SessionPane({
       hideProjectPicker={hideProjectPicker ? !showDeckProjectPicker : false}
       context={session.context}
       quoteRequest={quoteRequest}
-      initialDraft={session.inboxCard ? undefined : session.composerSeed}
+      initialDraft={
+        session.inboxCard || session.noteCard ? undefined : session.composerSeed
+      }
       inboxCard={session.inboxCard}
+      noteCard={session.noteCard}
       onQuoteRequestConsumed={acknowledgeQuote}
       onInboxCardDismiss={() => onInboxCardDismiss?.(session.id)}
+      onNoteCardDismiss={() => onNoteCardDismiss?.(session.id)}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}
       onBranchChange={() => onBranchChange(session.id)}
@@ -234,6 +278,7 @@ export const SessionPane = memo(function SessionPane({
               harness={session.harness}
               onApproval={approve}
               onAddToChat={addSelectionToChat}
+              onSaveNote={notesEnabled ? saveNote : undefined}
               onOpenFile={onOpenFile}
               onOpenDiff={onOpenDiff}
               onOpenPlan={openPlan}

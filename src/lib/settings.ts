@@ -109,6 +109,42 @@ export function saveComposerRunner(value: boolean) {
   );
 }
 
+const NOTES_ENABLED_KEY = "monocode.notesEnabled";
+
+export const NOTES_ENABLED_DEFAULT = true;
+
+/** Fired on `window` when the Notes UI setting flips. */
+export const NOTES_ENABLED_CHANGE_EVENT = "monocode:notes-enabled-change";
+
+export function loadNotesEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(NOTES_ENABLED_KEY);
+    if (raw == null) return NOTES_ENABLED_DEFAULT;
+    return raw === "1" || raw === "true";
+  } catch {
+    return NOTES_ENABLED_DEFAULT;
+  }
+}
+
+export function saveNotesEnabled(value: boolean) {
+  try {
+    localStorage.setItem(NOTES_ENABLED_KEY, value ? "1" : "0");
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<boolean>(NOTES_ENABLED_CHANGE_EVENT, { detail: value }),
+  );
+}
+
+export function subscribeNotesEnabled(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(NOTES_ENABLED_CHANGE_EVENT, onStoreChange);
+  return () =>
+    window.removeEventListener(NOTES_ENABLED_CHANGE_EVENT, onStoreChange);
+}
+
 const CLAUDE_HOOKS_KEY = "monocode.claudeHooks";
 
 export const CLAUDE_HOOKS_DEFAULT = true;

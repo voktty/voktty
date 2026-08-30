@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   COMPOSER_RUNNER_DEFAULT,
   loadComposerRunner,
+  loadNotesEnabled,
+  NOTES_ENABLED_DEFAULT,
   saveComposerRunner,
+  saveNotesEnabled,
 } from "./settings";
 
 const KEY = "monocode.composerRunner";
+const NOTES_KEY = "monocode.notesEnabled";
 
 function mockLocalStorage() {
   const data = new Map<string, string>();
@@ -48,5 +52,25 @@ describe("composer runner setting", () => {
     expect(loadComposerRunner()).toBe(false);
     saveComposerRunner(true);
     expect(loadComposerRunner()).toBe(true);
+  });
+});
+
+describe("notes enabled setting", () => {
+  beforeEach(mockLocalStorage);
+  afterEach(() => {
+    localStorage.removeItem(NOTES_KEY);
+  });
+
+  it("defaults to on", () => {
+    expect(NOTES_ENABLED_DEFAULT).toBe(true);
+    expect(loadNotesEnabled()).toBe(true);
+  });
+
+  it("persists an off switch", () => {
+    saveNotesEnabled(false);
+    expect(localStorage.getItem(NOTES_KEY)).toBe("0");
+    expect(loadNotesEnabled()).toBe(false);
+    saveNotesEnabled(true);
+    expect(loadNotesEnabled()).toBe(true);
   });
 });

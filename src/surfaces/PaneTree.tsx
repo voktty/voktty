@@ -64,6 +64,7 @@ type Shared = {
   ) => void;
   onStop: (sessionId: string) => void;
   onInboxCardDismiss?: (sessionId: string) => void;
+  onNoteCardDismiss?: (sessionId: string) => void;
   onApproval: (
     sessionId: string,
     requestId: number,
@@ -132,6 +133,7 @@ function PaneTreeComponent({
   onSubmit,
   onStop,
   onInboxCardDismiss,
+  onNoteCardDismiss,
   onApproval,
   onOpenFile,
   editorNavigation,
@@ -313,6 +315,7 @@ function PaneTreeComponent({
                 onSubmit={onSubmit}
                 onStop={onStop}
                 onInboxCardDismiss={onInboxCardDismiss}
+                onNoteCardDismiss={onNoteCardDismiss}
                 onApproval={onApproval}
                 onOpenFile={onOpenFile}
                 onOpenDiff={onOpenDiff}
