@@ -277,17 +277,22 @@ export function BranchPicker({
     }
   };
 
-  if (!inProject) return null;
-  // A settled lookup with no branch really has none, and collapses. While one
-  // is still out we keep the control mounted so the composer's toolbar does
-  // not resize under it — but only the label's *content* may differ, never its
-  // box: the placeholder rides inside the same `text-[12px]` span so the line
-  // box (and with it the toolbar's height) is identical either way.
-  const awaitingBranch = !current && !branchesSettled;
-  if (!current && !awaitingBranch) return null;
-
-  const label = current ? (detached ? `detached ${current}` : current) : "";
-  const title = awaitingBranch ? "Loading branch…" : label;
+  // Always keep the control mounted so the composer's toolbar does not resize
+  // when a folder isn't a git repo. The loading skeleton, "No repo" label, and
+  // real branch all share the same icon + 12px mono line box.
+  const awaitingBranch = inProject && !current && !branchesSettled;
+  const missingGit = !current && !awaitingBranch;
+  const label = current
+    ? detached
+      ? `detached ${current}`
+      : current
+    : "No repo";
+  const title = awaitingBranch
+    ? "Loading branch…"
+    : missingGit
+      ? "No git repository"
+      : label;
+  const interactive = enabled && !awaitingBranch && !missingGit;
 
   return (
     <div className="flex max-w-[45%] shrink-0 items-center gap-2.5">
@@ -295,13 +300,19 @@ export function BranchPicker({
         <button
           type="button"
           title={title}
-          aria-label={awaitingBranch ? "Loading branch" : `Branch ${label}`}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-          disabled={!enabled || awaitingBranch}
+          aria-label={
+            awaitingBranch
+              ? "Loading branch"
+              : missingGit
+                ? "No git repository"
+                : `Branch ${label}`
+          }
+          aria-expanded={missingGit ? undefined : open}
+          aria-haspopup={missingGit ? undefined : "dialog"}
+          disabled={!interactive}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            if (!enabled || blocked) return;
+            if (!interactive || blocked) return;
             if (open) {
               dismiss(true);
               return;
@@ -310,9 +321,13 @@ export function BranchPicker({
             if (rect) setMenu(menuStyle(rect));
             setOpen(true);
           }}
-          className={`flex min-w-0 items-center gap-1.5 ${
-            open ? "text-content" : "text-content/50 hover:text-content"
-          } disabled:opacity-40 disabled:hover:text-content/50`}
+          className={
+            missingGit
+              ? "flex min-w-0 cursor-default items-center gap-1.5 text-content/50"
+              : `flex min-w-0 items-center gap-1.5 ${
+                  open ? "text-content" : "text-content/50 hover:text-content"
+                } disabled:opacity-40 disabled:hover:text-content/50`
+          }
         >
           <GitBranch className="size-3.5 shrink-0" strokeWidth={1.5} />
           <span className="relative truncate font-mono text-[12px]">
