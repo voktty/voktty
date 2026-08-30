@@ -274,6 +274,7 @@ export const SessionPane = memo(function SessionPane({
             <AgentTranscript
               blocks={session.blocks}
               busy={!!session.busy}
+              visible={visible}
               cwd={workCwd}
               harness={session.harness}
               onApproval={approve}

@@ -134,6 +134,15 @@ html.is-mac .sidebar-glass {
   content-visibility: visible;
 }
 
+/*
+ * After a send, the live turn fills the transcript viewport so the prompt sits
+ * at the top. Opening a conversation does not use this, so the true bottom
+ * (latest reply on the composer) is what you see.
+ */
+.transcript-turn-anchor {
+  min-height: var(--transcript-viewport, 0px);
+}
+
 html.is-mac.glass-body .body-glass {
   background: color-mix(
     in srgb,

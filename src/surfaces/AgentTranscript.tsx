@@ -96,6 +96,8 @@ type Props = {
   onSecondOpinion?: (harness: HarnessId, turn: Block[], model: string) => void;
   onJumpToBottomChange?: (show: boolean) => void;
   onJumpToBottomReady?: (jump: () => void) => void;
+  /** False while the pane is `display: none` (another tab). */
+  visible?: boolean;
 };
 
 export function AgentTranscript({
@@ -112,6 +114,7 @@ export function AgentTranscript({
   onSecondOpinion,
   onJumpToBottomChange,
   onJumpToBottomReady,
+  visible = true,
 }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scroller = useRef<HTMLDivElement>(null);
@@ -119,8 +122,13 @@ export function AgentTranscript({
   const showJumpRef = useRef(false);
   const distanceFromBottom = useRef(0);
   const prependHeight = useRef<number | null>(null);
+  const wasVisible = useRef(false);
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
   const [visibleTurnCount, setVisibleTurnCount] = useState(INITIAL_TURNS);
+  // Stretch the last turn only after a send in this visit. Opening a
+  // conversation uses the true transcript height so the latest reply sits
+  // on the composer instead of a hole of empty space.
+  const [anchorTurn, setAnchorTurn] = useState(!!busy);
   const { selection, dismissSelection } = useTranscriptSelection(
     scrollerEl,
     onAddToChat !== undefined,
@@ -128,6 +136,13 @@ export function AgentTranscript({
   const transcriptLayout = useTranscriptLayout();
   const zen = useTranscriptZen();
   const lastUserId = lastUserBlockId(blocks);
+  const seenUserId = useRef(lastUserId);
+  if (!visible) {
+    if (anchorTurn) setAnchorTurn(false);
+  } else if (lastUserId !== seenUserId.current) {
+    seenUserId.current = lastUserId;
+    if (lastUserId && !anchorTurn) setAnchorTurn(true);
+  }
   const liveStartedAt = turnUserBlock(blocks)?.startedAt;
   const waitingForApproval = hasPendingApproval(blocks);
   const preparingHandoff = blocks.some(
@@ -159,7 +174,9 @@ export function AgentTranscript({
     stickToBottom.current = true;
     distanceFromBottom.current = 0;
     setShowJump(false);
-    pinToBottom(scroller.current);
+    const el = scroller.current;
+    syncTranscriptViewport(el);
+    pinToBottom(el);
   }, [setShowJump]);
 
   const setScroller = useCallback(
@@ -196,19 +213,37 @@ export function AgentTranscript({
   useLayoutEffect(() => {
     stickToBottom.current = true;
     setShowJump(false);
-    pinToBottom(scroller.current);
+    const el = scroller.current;
+    syncTranscriptViewport(el);
+    pinToBottom(el);
   }, [lastUserId, setShowJump]);
 
   useLayoutEffect(() => {
+    const opened = visible && !wasVisible.current;
+    wasVisible.current = visible;
+    if (!opened) return;
+    if (!busy) setAnchorTurn(false);
+    const el = scroller.current;
+    if (!el) return;
+    syncTranscriptViewport(el);
+    stickToBottom.current = true;
+    setShowJump(false);
+    pinToBottom(el);
+  }, [visible, busy, setShowJump]);
+
+  useLayoutEffect(() => {
     if (!stickToBottom.current) return;
-    pinToBottom(scroller.current);
+    const el = scroller.current;
+    syncTranscriptViewport(el);
+    pinToBottom(el);
   }, [blocks, busy]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollerEl;
     const inner = el?.firstElementChild;
     if (!el || !inner) return;
-    const observer = new ResizeObserver(() => {
+    const onResize = () => {
+      syncTranscriptViewport(el);
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
       if (stickToBottom.current) {
         pinToBottom(el);
@@ -217,8 +252,11 @@ export function AgentTranscript({
       }
       distanceFromBottom.current = distance;
       setShowJump(!isNearBottom(el));
-    });
+    };
+    const observer = new ResizeObserver(onResize);
     observer.observe(inner);
+    observer.observe(el);
+    onResize();
     return () => observer.disconnect();
   }, [scrollerEl, setShowJump]);
 
@@ -264,13 +302,14 @@ export function AgentTranscript({
         ) : null}
         {visibleTurns.map((turn, turnIndex) => {
           const isLastTurn = firstVisibleTurn + turnIndex === turns.length - 1;
-          const durationMs = turnUserBlock(turn)?.durationMs;
+          const userBlock = turnUserBlock(turn);
+          const durationMs = userBlock?.durationMs;
           const settled = !(busy && isLastTurn);
           const items = groupTurnItems(turn, zen);
           // Where the work ends and the answer begins, in zen: the last group
           // of activity in the turn.
           const foldedAt = zen ? lastActivityIndex(items) : -1;
-          const startedAt = turnUserBlock(turn)?.startedAt;
+          const startedAt = userBlock?.startedAt;
           // The agent starting its answer is the end of the work: fold the
           // groups then, not when the turn finally settles, so the collapse
           // never lands under the text you have already started reading.
@@ -286,6 +325,10 @@ export function AgentTranscript({
               key={turn[0].id}
               className={`transcript-turn flex min-w-0 flex-col gap-1${
                 isLastTurn ? " transcript-turn-live" : ""
+              }${
+                anchorTurn && isLastTurn && userBlock
+                  ? " transcript-turn-anchor"
+                  : ""
               }`}
             >
               {items.map((item, itemIndex) =>
@@ -1722,4 +1765,16 @@ function isNearBottom(el: HTMLElement): boolean {
 function pinToBottom(el: HTMLElement | null) {
   if (!el) return;
   el.scrollTop = el.scrollHeight;
+}
+
+/** Keep the live turn's min-height in lockstep with the visible transcript. */
+function syncTranscriptViewport(el: HTMLElement | null) {
+  if (!el || el.clientHeight <= 0) return;
+  const inner = el.firstElementChild as HTMLElement | null;
+  const pad = inner
+    ? Number.parseFloat(getComputedStyle(inner).paddingBottom) || 0
+    : 0;
+  const next = `${Math.max(0, el.clientHeight - pad)}px`;
+  if (el.style.getPropertyValue("--transcript-viewport") === next) return;
+  el.style.setProperty("--transcript-viewport", next);
 }
