@@ -407,15 +407,19 @@ function NoteCard({
       }`}
     >
       <span className="flex items-center gap-2">
-        <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          <File
-            className="size-3.5 shrink-0 text-content/45"
-            strokeWidth={1.75}
-          />
-          <span className="min-w-0 truncate text-[11px] text-content/50">
-            Note
+        {project ? (
+          <span className="min-w-0 flex-1 text-[11px] text-content/50">
+            <NoteProjectMark
+              project={project}
+              logos={logos}
+              mascots={mascots}
+              colors={colors}
+              customColors={customColors}
+            />
           </span>
-        </span>
+        ) : (
+          <span className="min-w-0 flex-1" />
+        )}
         {time ? (
           <span className="shrink-0 text-[11px] tabular-nums text-content/45">
             {time}
@@ -428,17 +432,6 @@ function NoteCard({
       {preview ? (
         <span className="mt-1 line-clamp-1 text-[12px] leading-snug text-content/45">
           {preview}
-        </span>
-      ) : null}
-      {project ? (
-        <span className="mt-1 text-[11px] text-content/45">
-          <NoteProjectMark
-            project={project}
-            logos={logos}
-            mascots={mascots}
-            colors={colors}
-            customColors={customColors}
-          />
         </span>
       ) : null}
     </button>
