@@ -30,6 +30,7 @@
   --link-color: #7dd3fc;
   --color-skill: #e8c547;
   --color-mention: #38bdf8;
+  --color-markdown-heading: #f9a8c9;
 }
 
 html {
@@ -42,6 +43,7 @@ html.theme-light {
   --link-color: hsl(211 92% 40%);
   --color-skill: #a07c10;
   --color-mention: #0284c7;
+  --color-markdown-heading: #be185d;
   color-scheme: light;
 }
 
@@ -182,6 +184,25 @@ html.is-resizing * {
   -webkit-text-fill-color: color-mix(
     in srgb,
     var(--color-content) 40%,
+    transparent
+  );
+}
+
+.markdown-source-heading {
+  color: var(--color-markdown-heading);
+}
+
+.markdown-source-field {
+  color: transparent;
+  caret-color: var(--color-content);
+  -webkit-text-fill-color: transparent;
+}
+
+.markdown-source-field::placeholder {
+  color: color-mix(in srgb, var(--color-content) 35%, transparent);
+  -webkit-text-fill-color: color-mix(
+    in srgb,
+    var(--color-content) 35%,
     transparent
   );
 }

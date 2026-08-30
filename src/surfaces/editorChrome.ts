@@ -174,11 +174,21 @@ const HIGHLIGHT_TAGS = {
   comment: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment],
   property: [tags.propertyName, tags.attributeName],
   meta: [tags.meta, tags.processingInstruction, tags.annotation],
+  heading: [
+    tags.heading,
+    tags.heading1,
+    tags.heading2,
+    tags.heading3,
+    tags.heading4,
+    tags.heading5,
+    tags.heading6,
+  ],
 };
 
 // Pastel-on-dark palette.
 const HIGHLIGHT_DARK = HighlightStyle.define([
   { tag: HIGHLIGHT_TAGS.keyword, color: "#ff8ffd" },
+  { tag: HIGHLIGHT_TAGS.heading, color: "var(--color-markdown-heading)" },
   { tag: HIGHLIGHT_TAGS.callable, color: "#a5d5fe" },
   { tag: HIGHLIGHT_TAGS.string, color: "#b4fa72" },
   { tag: HIGHLIGHT_TAGS.type, color: "#ff8272" },
@@ -192,6 +202,7 @@ const HIGHLIGHT_DARK = HighlightStyle.define([
 // One-Light-family palette tuned for a near-white canvas.
 const HIGHLIGHT_LIGHT = HighlightStyle.define([
   { tag: HIGHLIGHT_TAGS.keyword, color: "#a626a4" },
+  { tag: HIGHLIGHT_TAGS.heading, color: "var(--color-markdown-heading)" },
   { tag: HIGHLIGHT_TAGS.callable, color: "#4078f2" },
   { tag: HIGHLIGHT_TAGS.string, color: "#50a14f" },
   { tag: HIGHLIGHT_TAGS.type, color: "#c18401" },

@@ -22,6 +22,7 @@ import type { PluggableList } from "unified";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { createLazyMermaidPlugin } from "./mermaidPlugin";
 import { resolveWorkspacePath } from "../lib/paths";
+import { isAtxHeadingLine } from "../lib/markdownSource";
 import { useColorScheme } from "../hooks/useColorScheme";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 
@@ -304,11 +305,30 @@ export const MarkdownSource = memo(function MarkdownSource({
       className="markdown-preview h-full overflow-y-auto overscroll-none [overflow-anchor:none]"
     >
       <pre className="min-h-full min-w-0 whitespace-pre-wrap wrap-break-word px-4 py-3 font-mono text-[13px] leading-5 text-content/85">
-        {text}
+        <MarkdownSourceHighlight text={text} />
       </pre>
     </div>
   );
 });
+
+export function MarkdownSourceHighlight({ text }: { text: string }) {
+  if (!text) return null;
+  return (
+    <>
+      {text.split(/(\n)/).map((part, index) =>
+        part === "\n" ? (
+          "\n"
+        ) : isAtxHeadingLine(part) ? (
+          <span key={index} className="markdown-source-heading">
+            {part}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
 
 function MermaidBlock({
   code,

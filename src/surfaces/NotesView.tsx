@@ -37,7 +37,7 @@ import {
   resolveTabGroupLogo,
   resolveTabGroupMascot,
 } from "../lib/tabGroups";
-import { AgentMarkdown } from "./AgentMarkdown";
+import { AgentMarkdown, MarkdownSourceHighlight } from "./AgentMarkdown";
 
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 420;
@@ -700,14 +700,22 @@ function NoteSource({
   }, [value]);
 
   return (
-    <textarea
-      ref={ref}
-      value={value}
-      autoFocus={autoFocus}
-      onChange={(event) => onChange(event.target.value)}
-      spellCheck={false}
-      placeholder="Write markdown…"
-      className="w-full resize-none overflow-hidden bg-transparent font-mono text-[13px] leading-5 text-content/85 outline-none placeholder:text-content/35"
-    />
+    <div className="relative">
+      <pre
+        aria-hidden
+        className="pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre-wrap wrap-break-word font-mono text-[13px] leading-5 text-content/85"
+      >
+        <MarkdownSourceHighlight text={value} />
+      </pre>
+      <textarea
+        ref={ref}
+        value={value}
+        autoFocus={autoFocus}
+        onChange={(event) => onChange(event.target.value)}
+        spellCheck={false}
+        placeholder="Write markdown…"
+        className="markdown-source-field relative w-full resize-none overflow-hidden bg-transparent font-mono text-[13px] leading-5 outline-none"
+      />
+    </div>
   );
 }
