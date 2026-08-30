@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-08-30
+
+### Added
+
+- Working agents on the project rail. When two or more chats are in flight — including parked ones from other projects — a card above Check for updates lists them so you can jump across. Finished turns stay until you open that session. Settings → General has a Working agents toggle (on by default) to hide the card.
+
 ## [0.1.20] - 2026-08-30
 
 ### Added
@@ -327,7 +333,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.20...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.21...HEAD
+[0.1.21]: https://github.com/hardbeat920/monocode/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/hardbeat920/monocode/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/hardbeat920/monocode/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/hardbeat920/monocode/compare/v0.1.17...v0.1.18
