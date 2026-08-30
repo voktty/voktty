@@ -190,16 +190,11 @@ export function SettingsView({
       className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
     >
       <div
-        className="flex h-10 shrink-0 items-center border-b border-content/10"
-        data-tauri-drag-region
+        className="flex h-10 shrink-0 select-none items-center border-b border-content/10"
+        data-tauri-drag-region="deep"
       >
-        {IS_MAC && !besideRail ? (
-          <div className="w-[78px] shrink-0" data-tauri-drag-region />
-        ) : null}
-        <div
-          className="flex min-w-0 flex-1 items-center gap-2 px-3 text-[13px]"
-          data-tauri-drag-region
-        >
+        {IS_MAC && !besideRail ? <div className="w-[78px] shrink-0" /> : null}
+        <div className="flex min-w-0 flex-1 items-center gap-2 px-3 text-[13px]">
           <span className="shrink-0 text-content/45">Settings</span>
           <span aria-hidden className="shrink-0 text-content/25">
             /
