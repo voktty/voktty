@@ -38,7 +38,9 @@ export function toolCallState(block: Block): ToolCallState {
   ) {
     return "pending";
   }
-  if (decided === "allow" || !status) return "accepted";
+  if (decided === "allow" || decided === "cancelled" || !status) {
+    return "accepted";
+  }
   return "pending";
 }
 

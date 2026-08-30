@@ -38,7 +38,8 @@ export type HarnessEvent =
   | {
       type: "approval.resolved";
       requestId: number;
-      decision: "allow" | "deny";
+      /** "cancelled" = a PermissionRequest hook decided before the user could. */
+      decision: "allow" | "deny" | "cancelled";
     }
   | { type: "plan"; text: string }
   /** Context-window level after the harness's latest request. */

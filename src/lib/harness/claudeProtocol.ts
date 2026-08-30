@@ -217,11 +217,12 @@ export function buildClaudeSpawnArgs(input: {
   if (input.includePartialMessages !== false) {
     args.push("--include-partial-messages");
   }
-  // PermissionRequest hooks run in parallel with the stdio prompt and dismiss
-  // it when they return allow/deny. MonoCode is the approval UI, so hooks
-  const settings = {
-    disableAllHooks: true,
+  // Isolated spawns are MonoCode's own helper calls (titles, summaries); the
+  // user's hooks have no business firing there. Interactive sessions inherit
+  // whatever the caller decided so `~/.claude` hooks keep working.
+  const settings: ClaudeCliSettings = {
     ...input.settings,
+    ...(input.isolated ? { disableAllHooks: true } : {}),
   };
   if (input.isolated) {
     args.push("--no-session-persistence");
@@ -699,6 +700,7 @@ export function claudeSettingsKey(input: {
   thinking?: string;
   context?: string;
   runtimeMode: RuntimeMode;
+  hooks?: boolean;
 }): string {
   return [
     input.model,
@@ -707,6 +709,7 @@ export function claudeSettingsKey(input: {
     input.thinking ?? "",
     input.context ?? "",
     input.runtimeMode,
+    input.hooks === false ? "nohooks" : "hooks",
   ].join("|");
 }
 

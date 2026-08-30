@@ -88,6 +88,12 @@ describe("buildClaudeSpawnArgs", () => {
     );
     expect(args).toEqual(expect.arrayContaining(["--session-id", "sess-1"]));
     const settings = args[args.indexOf("--settings") + 1];
+    expect(JSON.parse(settings).disableAllHooks).toBeUndefined();
+  });
+
+  it("only disables hooks for interactive sessions when asked", () => {
+    const args = buildClaudeSpawnArgs({ settings: { disableAllHooks: true } });
+    const settings = args[args.indexOf("--settings") + 1];
     expect(JSON.parse(settings)).toMatchObject({ disableAllHooks: true });
   });
 

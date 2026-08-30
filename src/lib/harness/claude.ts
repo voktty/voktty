@@ -1,5 +1,6 @@
 import { nativeModelId } from "../models";
 import type { RuntimeMode } from "../session";
+import { loadClaudeHooks } from "../settings";
 import {
   killChild,
   resolveClaudeBinary,
@@ -51,11 +52,18 @@ import {
 import { joinStreamText, snapshotRemainder } from "./streamText";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
 
+/**
+ * A PermissionRequest hook can decide before the user touches the prompt; Claude
+ * then cancels the control request out from under us. That is not a rejection,
+ * so it gets its own outcome instead of being folded into "deny".
+ */
+type ApprovalOutcome = ApprovalDecision | "cancelled";
+
 type PendingApproval = {
   requestId: string;
   input: Record<string, unknown>;
   kind: "permission" | "question";
-  resolve: (decision: ApprovalDecision) => void;
+  resolve: (decision: ApprovalOutcome) => void;
 };
 
 type InFlightTool = {
@@ -370,7 +378,7 @@ function handleLine(sessionId: string, live: Live, line: string): void {
   if (cancelId) {
     for (const [uiId, pending] of live.approvals) {
       if (pending.requestId === cancelId) {
-        pending.resolve("deny");
+        pending.resolve("cancelled");
         live.approvals.delete(uiId);
       }
     }
@@ -600,6 +608,7 @@ async function handleControlRequest(
     });
     const decision = await waitApproval(live, uiId, control.requestId, input, "question");
     live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
+    if (decision === "cancelled") return;
     const response =
       decision === "allow"
         ? { behavior: "allow", updatedInput: askUserQuestionAllowInput(input) }
@@ -652,6 +661,7 @@ async function handleControlRequest(
   });
   const decision = await waitApproval(live, uiId, control.requestId, input, "permission");
   live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
+  if (decision === "cancelled") return;
   await writeJson(
     sessionId,
     buildControlResponse(
@@ -689,7 +699,7 @@ function waitApproval(
   requestId: string,
   input: Record<string, unknown>,
   kind: "permission" | "question",
-): Promise<ApprovalDecision> {
+): Promise<ApprovalOutcome> {
   return new Promise((resolve) => {
     live.approvals.set(uiId, { requestId, input, kind, resolve });
   });
@@ -766,6 +776,7 @@ function settingsKeyFor(input: SendTurnInput): string {
     thinking: input.modelSettings?.thinking,
     context: input.modelSettings?.context,
     runtimeMode: input.runtimeMode,
+    hooks: loadClaudeHooks(),
   });
 }
 
@@ -793,6 +804,9 @@ function launchOptions(
   }
   if (isClaudeUltracodeEffort(effortRaw)) {
     settings.ultracode = true;
+  }
+  if (!loadClaudeHooks()) {
+    settings.disableAllHooks = true;
   }
   return {
     model: resolveClaudeApiModelId(native, context),

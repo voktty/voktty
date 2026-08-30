@@ -109,6 +109,28 @@ export function saveComposerRunner(value: boolean) {
   );
 }
 
+const CLAUDE_HOOKS_KEY = "monocode.claudeHooks";
+
+export const CLAUDE_HOOKS_DEFAULT = true;
+
+export function loadClaudeHooks(): boolean {
+  try {
+    const raw = localStorage.getItem(CLAUDE_HOOKS_KEY);
+    if (raw == null) return CLAUDE_HOOKS_DEFAULT;
+    return raw === "1" || raw === "true";
+  } catch {
+    return CLAUDE_HOOKS_DEFAULT;
+  }
+}
+
+export function saveClaudeHooks(value: boolean) {
+  try {
+    localStorage.setItem(CLAUDE_HOOKS_KEY, value ? "1" : "0");
+  } catch {
+    // private mode / quota
+  }
+}
+
 const CTRL = IS_MAC ? "⌃" : "Ctrl+";
 
 export type KeybindingRow = {
