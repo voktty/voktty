@@ -489,6 +489,7 @@ function finalToolLabel(
       path,
       query: preview?.query,
       previewKind: preview?.kind,
+      cwd: session.cwd,
     }) ||
     title?.trim() ||
     kindTitle(kind)

@@ -130,6 +130,37 @@ describe("shell command titles", () => {
         command: "ls -la",
       }),
     ).toBe("ls -la");
+    expect(
+      titleFromToolInput("bash", "execute", {
+        command: "cat src/lib/harness/preview.ts",
+      }),
+    ).toBe("Read src/lib/harness/preview.ts");
+    expect(
+      titleFromToolInput("Bash", "execute", {
+        command:
+          "sed -n '713,1200p' src/surfaces/AgentTranscript.tsx",
+      }),
+    ).toBe("Read src/surfaces/AgentTranscript.tsx");
+    expect(
+      titleFromToolInput("bash", "execute", {
+        command: 'grep -n "isReadTool" src/lib/harness/preview.ts',
+      }),
+    ).toBe("Find isReadTool");
+    expect(
+      titleFromToolInput("bash", "execute", {
+        command: "git diff src/surfaces/AgentTranscript.tsx",
+      }),
+    ).toBe("git diff src/surfaces/AgentTranscript.tsx");
+    expect(
+      titleFromToolInput("bash", "execute", {
+        command: "sed -i 's/a/b/' src/app.ts",
+      }),
+    ).toBe("Edit src/app.ts");
+    expect(
+      titleFromToolInput("bash", "execute", {
+        command: "cat package.json > out.json",
+      }),
+    ).toBe("Write out.json");
   });
 
   it("does not substitute Claude's description for the command", () => {

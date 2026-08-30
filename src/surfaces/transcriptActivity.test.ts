@@ -531,6 +531,31 @@ describe("toolCallLabel", () => {
       }),
     ).toBe("Skill /code-review");
   });
+
+  it("renders file-reading bash as a Read/Find label", () => {
+    expect(
+      toolCallLabel({
+        id: "c",
+        role: "tool",
+        text: "cat src/lib/appearance.ts",
+        tool: { kind: "execute", title: "cat src/lib/appearance.ts" },
+      }),
+    ).toBe("Read src/lib/appearance.ts");
+    expect(
+      toolCallLabel(
+        {
+          id: "d",
+          role: "tool",
+          text: "cat /Users/me/proj/src/lib/appearance.ts",
+          tool: {
+            kind: "execute",
+            title: "cat /Users/me/proj/src/lib/appearance.ts",
+          },
+        },
+        "/Users/me/proj",
+      ),
+    ).toBe("Read src/lib/appearance.ts");
+  });
 });
 
 describe("editVerb", () => {

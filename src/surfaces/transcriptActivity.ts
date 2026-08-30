@@ -60,6 +60,7 @@ export function toolCallLabel(block: Block, cwd?: string): string {
       path,
       query: preview?.query,
       previewKind: preview?.kind,
+      cwd,
     }) || "Working"
   );
 }

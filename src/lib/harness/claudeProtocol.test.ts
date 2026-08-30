@@ -261,7 +261,7 @@ describe("helpers", () => {
   it("classifies tools and todo plans", () => {
     expect(toolKindFromName("Bash")).toBe("execute");
     expect(toolKindFromName("Skill")).toBe("skill");
-    expect(toolTitle("Bash", { command: "ls -la src" })).toBe("ls -la src");
+    expect(toolTitle("Bash", { command: "ls -la src" })).toBe("List src");
     expect(toolTitle("Skill", { skill: "code-review" })).toBe(
       "Skill /code-review",
     );

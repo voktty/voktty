@@ -1,4 +1,10 @@
 import type { ToolPreview, ToolPreviewKind, ToolPreviewLine } from "../session";
+import { displayPath } from "../paths";
+import {
+  formatShellIntent,
+  inferShellIntent,
+  rewriteReadableTitle,
+} from "./shellIntent";
 
 export const MAX_PREVIEW_LINES = 6;
 export const MAX_LINE_CHARS = 120;
@@ -50,7 +56,7 @@ export function extractToolPreview(
     };
   }
 
-  if (kind === "shell") return undefined;
+  if (kind === "shell") return shellPreview(title, update, tool);
 
   const fileName = path ? basename(path) : undefined;
 
@@ -88,6 +94,34 @@ export function extractToolPreview(
     path,
     fileName,
     startLine,
+  };
+}
+
+function shellPreview(
+  title: string | undefined,
+  update: Record<string, unknown>,
+  tool: Record<string, unknown>,
+): ToolPreview | undefined {
+  const command = extractShellCommand(update, tool);
+  const inferred = command ? inferShellIntent(command) : undefined;
+  if (!inferred) return undefined;
+  const inferredPath = inferred.path ? normalizePath(inferred.path) : undefined;
+  if (inferred.verb === "Find" && inferred.query) {
+    return {
+      kind: "shell",
+      title,
+      path: inferredPath,
+      fileName: inferredPath ? basename(inferredPath) : undefined,
+      query: inferred.query,
+    };
+  }
+  if (!inferredPath) return undefined;
+  return {
+    kind: "shell",
+    title,
+    path: inferredPath,
+    fileName: basename(inferredPath),
+    startLine: inferred.startLine,
   };
 }
 
@@ -228,6 +262,7 @@ export function composeToolTitle(opts: {
   command?: string;
   skill?: string;
   previewKind?: ToolPreviewKind;
+  cwd?: string;
 }): string {
   const kind = opts.kind?.trim().toLowerCase() ?? "";
   const title = opts.title?.trim() ?? "";
@@ -257,6 +292,19 @@ export function composeToolTitle(opts: {
   // itself: Codex already does this, Claude/Pi used to label the row "Bash"
   // and hide the argv in detail the activity stack never shows.
   if (previewKind === "shell" || isExecuteTool(kind, title)) {
+    const rewritten = rewriteReadableTitle(title, path, query);
+    if (rewritten) return rewritten;
+    const script = command || stripExecutePrefix(title);
+    const inferred = inferShellIntent(script);
+    if (inferred) {
+      const inferredPath =
+        path ||
+        (inferred.path
+          ? displayPath(inferred.path, opts.cwd)
+          : undefined);
+      const readable = formatShellIntent(inferred, inferredPath, query);
+      if (readable) return readable;
+    }
     if (command) return command;
     const rest = stripExecutePrefix(title);
     if (rest && !isWeakToolTitle(rest)) return rest;

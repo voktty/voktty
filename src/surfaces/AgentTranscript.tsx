@@ -1563,7 +1563,7 @@ function ToolCallSummary({
   /** Sets the file off in a chip, for rows that lean on a rail for structure. */
   chip?: boolean;
 }) {
-  const parts = label.match(/^(Read|Find|Skill)\s+(.+)$/);
+  const parts = label.match(/^(Read|Find|Skill|List|Edit|Write)\s+(.+)$/);
   // A write preview carries the path itself, so edits get the same verb + file
   // chip as reads rather than falling through to a raw label.
   const writeTarget =
@@ -1579,13 +1579,18 @@ function ToolCallSummary({
       ? "Read"
       : /^find$/i.test(label.trim()) && preview?.query
         ? "Find"
-        : /^skill$/i.test(label.trim())
-          ? "Skill"
-          : undefined);
+        : /^list$/i.test(label.trim()) && (preview?.path || preview?.fileName)
+          ? "List"
+          : /^skill$/i.test(label.trim())
+            ? "Skill"
+            : undefined);
   const target =
     parts?.[2] ??
     writeTarget ??
-    (action === "Read"
+    (action === "Read" ||
+    action === "List" ||
+    action === "Edit" ||
+    action === "Write"
       ? preview?.path
         ? displayPath(preview.path, cwd)
         : preview?.fileName
@@ -1635,7 +1640,7 @@ function ToolCallSummary({
               onOpenFile?.(filePath);
             }}
           >
-            <FileTypeIcon name={fileName} isDir={false} />
+            <FileTypeIcon name={fileName} isDir={action === "List"} />
             <span className="min-w-0 truncate">{target}</span>
           </button>
         ) : (
@@ -1647,7 +1652,7 @@ function ToolCallSummary({
             }`}
             title={preview?.path || target}
           >
-            <FileTypeIcon name={fileName} isDir={false} />
+            <FileTypeIcon name={fileName} isDir={action === "List"} />
             <span className="min-w-0 truncate">{target}</span>
           </span>
         )
