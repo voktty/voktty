@@ -1328,6 +1328,7 @@ function ActivityToolRow({
           preview={block.tool?.preview}
           cwd={cwd}
           chip={bare}
+          failed={state === "rejected"}
           onOpenFile={openFile}
         />
         {pending ? null : (
@@ -1364,9 +1365,9 @@ function ActivityToolIcon({
 
 /**
  * The right-hand mark on a step. In a phase it also carries the running state,
- * since the rail took the row's leading icon: the ring turns where the check
- * will land, and an abandoned turn's leftovers sit still rather than spinning
- * forever.
+ * since the rail took the row's leading icon: the ring turns while the step
+ * is in flight, and an abandoned turn's leftovers sit still rather than
+ * spinning forever. Success is silent; only a failure keeps a mark.
  */
 function ToolCallStatusIcon({
   state,
@@ -1375,19 +1376,13 @@ function ToolCallStatusIcon({
   state: ToolCallState;
   running?: boolean;
 }) {
-  const className = "size-3.5 shrink-0";
-  if (state === "accepted") {
-    return (
-      <Check className={`${className} text-content/35`} strokeWidth={2.25} />
-    );
-  }
   if (state === "rejected") {
-    return <X className={`${className} text-red-400`} strokeWidth={2} />;
+    return <X className="size-3.5 shrink-0 text-red-400" strokeWidth={2} />;
   }
   if (running) {
     return (
       <CircleDashed
-        className={`${className} zen-tool-spin text-content/35`}
+        className="size-3.5 shrink-0 zen-tool-spin text-content/35"
         strokeWidth={1.75}
       />
     );
@@ -1516,6 +1511,7 @@ function ToolCall({
             label={label}
             preview={preview}
             cwd={cwd}
+            failed={state === "rejected"}
             onOpenFile={onOpenFile}
           />
           <ChevronRight
@@ -1533,6 +1529,7 @@ function ToolCall({
             label={label}
             preview={preview}
             cwd={cwd}
+            failed={state === "rejected"}
             onOpenFile={onOpenFile}
           />
         </div>
@@ -1554,6 +1551,7 @@ function ToolCallSummary({
   onOpenFile,
   interactive = true,
   chip = false,
+  failed = false,
 }: {
   label: string;
   preview?: ToolPreview;
@@ -1562,6 +1560,7 @@ function ToolCallSummary({
   interactive?: boolean;
   /** Sets the file off in a chip, for rows that lean on a rail for structure. */
   chip?: boolean;
+  failed?: boolean;
 }) {
   const parts = label.match(/^(Read|Find|Skill|List|Edit|Write)\s+(.+)$/);
   // A write preview carries the path itself, so edits get the same verb + file
@@ -1601,7 +1600,11 @@ function ToolCallSummary({
     return (
       <span
         className={`min-w-0 flex-1 truncate font-mono text-[13px] ${
-          chip ? "text-content/65" : "text-content/80"
+          failed
+            ? "text-red-400"
+            : chip
+              ? "text-content/65"
+              : "text-content/80"
         }`}
       >
         {label}
@@ -1619,10 +1622,16 @@ function ToolCallSummary({
     "file";
   const filePath = resolveWorkspacePath(preview?.path || target, cwd);
   const canOpen = interactive && !!onOpenFile && !!filePath;
+  const actionTone = failed ? "text-red-400" : "text-content/50";
+  const targetTone = failed
+    ? "text-red-400"
+    : chip
+      ? "text-content/70"
+      : "text-content/85";
 
   return (
     <span className="flex min-w-0 flex-1 items-center gap-1.5 font-mono text-[13px]">
-      <span className="shrink-0 text-content/50 font-sans text-sm">
+      <span className={`shrink-0 font-sans text-sm ${actionTone}`}>
         {action}
       </span>
       {isFile ? (
@@ -1631,8 +1640,8 @@ function ToolCallSummary({
             type="button"
             className={`-my-0.5 flex min-w-0 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-left hover:text-sky-300 ${
               chip
-                ? "max-w-full bg-content/6 text-content/70 hover:bg-content/10"
-                : "flex-1 text-content/85 hover:underline"
+                ? `max-w-full bg-content/6 hover:bg-content/10 ${targetTone}`
+                : `flex-1 hover:underline ${targetTone}`
             }`}
             title={preview?.path || target}
             onClick={(event) => {
@@ -1647,8 +1656,8 @@ function ToolCallSummary({
           <span
             className={`flex min-w-0 items-center gap-1 rounded px-1 ${
               chip
-                ? "max-w-full bg-content/6 text-content/70"
-                : "flex-1 text-content/85"
+                ? `max-w-full bg-content/6 ${targetTone}`
+                : `flex-1 ${targetTone}`
             }`}
             title={preview?.path || target}
           >
@@ -1658,9 +1667,7 @@ function ToolCallSummary({
         )
       ) : (
         <span
-          className={`flex min-w-0 flex-1 items-center gap-1.5 pl-1 ${
-            chip ? "text-content/70" : "text-content/85"
-          }`}
+          className={`flex min-w-0 flex-1 items-center gap-1.5 pl-1 ${targetTone}`}
           title={target}
         >
           <span className="min-w-0 truncate">{target}</span>
@@ -1671,21 +1678,18 @@ function ToolCallSummary({
 }
 
 function ToolCallIcon({ state }: { state: ToolCallState }) {
-  const className = "size-3.5 shrink-0";
-  if (state === "accepted") {
+  if (state === "rejected") {
+    return <X className="size-3.5 shrink-0 text-red-400" strokeWidth={2} />;
+  }
+  if (state === "pending") {
     return (
-      <Check className={`${className} text-teal-400`} strokeWidth={2.25} />
+      <CircleDashed
+        className="size-3.5 shrink-0 text-content/40"
+        strokeWidth={1.75}
+      />
     );
   }
-  if (state === "rejected") {
-    return <X className={`${className} text-red-400`} strokeWidth={2} />;
-  }
-  return (
-    <CircleDashed
-      className={`${className} text-content/40`}
-      strokeWidth={1.75}
-    />
-  );
+  return null;
 }
 
 function ApprovalControls({

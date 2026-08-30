@@ -1,4 +1,4 @@
-import { Check, CircleDashed, X } from "./icons";
+import { CircleDashed, X } from "./icons";
 import { MAX_PREVIEW_LINES } from "../lib/harness/preview";
 import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import type { ToolPreview, ToolPreviewLine } from "../lib/session";
@@ -181,20 +181,18 @@ function PreviewLine({
 }
 
 function StatusIcon({ status }: { status: Status }) {
-  if (status === "accepted") {
-    return (
-      <Check className="size-3.5 shrink-0 text-teal-400" strokeWidth={2.25} />
-    );
-  }
   if (status === "rejected") {
     return <X className="size-3.5 shrink-0 text-red-400" strokeWidth={2} />;
   }
-  return (
-    <CircleDashed
-      className="size-3.5 shrink-0 text-content/40"
-      strokeWidth={1.75}
-    />
-  );
+  if (status === "pending") {
+    return (
+      <CircleDashed
+        className="size-3.5 shrink-0 text-content/40"
+        strokeWidth={1.75}
+      />
+    );
+  }
+  return null;
 }
 
 function highlight(text: string, dimmed: boolean) {
