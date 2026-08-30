@@ -1,8 +1,12 @@
 import {
   composeToolTitle,
   isEditTool,
+  isExecuteTool,
+  isReadTool,
+  isSearchTool,
   isWeakToolTitle,
 } from "../lib/harness/preview";
+import { leafName } from "../lib/fileName";
 import { displayPath } from "../lib/paths";
 import type { Block } from "../lib/session";
 
@@ -171,42 +175,6 @@ export function editVerb(label: string): string {
   return "Edit";
 }
 
-/** "14 tool calls · 5 files edited", for the collapsed zen row. */
-export function activitySummary(blocks: Block[]): string {
-  const tools = blocks.filter(isToolBlock);
-  const calls = tools.length;
-  if (calls === 0) {
-    // A turn that only thought before answering still gets an honest label.
-    const thoughts = blocks.filter(isThinkingBlock).length;
-    if (thoughts > 0 && thoughts === blocks.length) {
-      return `${thoughts} ${thoughts === 1 ? "thought" : "thoughts"}`;
-    }
-    const notes = blocks.length;
-    return `${notes} earlier ${notes === 1 ? "message" : "messages"}`;
-  }
-  const files = new Set(
-    tools
-      .filter((block) =>
-        isEditTool(
-          block.tool?.kind,
-          block.text || block.tool?.title,
-          block.tool?.preview,
-        ),
-      )
-      .map(
-        (block) =>
-          block.tool?.preview?.path ??
-          block.tool?.preview?.fileName ??
-          block.id,
-      ),
-  );
-  const parts = [`${calls} tool ${calls === 1 ? "call" : "calls"}`];
-  if (files.size > 0) {
-    parts.push(`${files.size} ${files.size === 1 ? "file" : "files"} edited`);
-  }
-  return parts.join(" · ");
-}
-
 /** User turns, with handoff dividers sitting on their own row. */
 export function groupTurns(blocks: Block[]): Block[][] {
   const turns: Block[][] = [];
@@ -262,8 +230,8 @@ export function groupTurnItems(blocks: Block[], zen = false): TurnItem[] {
 }
 
 function isIgnoredTurnBlock(block: Block, zen: boolean): boolean {
-  // Zen keeps thinking as a ticker line, so a long think does not read as the
-  // agent having stalled. Everywhere else it stays out of the transcript.
+  // Zen keeps thinking as a step in the group, so a long think does not read
+  // as the agent having stalled. Everywhere else it stays out of the transcript.
   if (block.role === "reasoning") return !zen || !block.text.trim();
   return block.role === "assistant" && !block.text.trim();
 }
@@ -278,57 +246,27 @@ export function turnCopyText(blocks: Block[]): string {
 }
 
 /**
- * Rows for the live stack, split around the line the ticker is holding:
- * `hidden` is what it has already rolled past, `latest` is on screen now.
- * The index defaults to the newest row; the ticker passes its own while it
- * catches up, so a burst of fast tool calls still reads one line at a time.
+ * Rows for the live stack: the newest finished call holds the line, anything
+ * waiting on you sits under it, and the rest waits behind the disclosure.
  */
-export function splitActivityRows(
-  blocks: Block[],
-  index?: number,
-): {
+export function splitActivityRows(blocks: Block[]): {
   latest?: Block;
   pending: Block[];
   hidden: Block[];
-  completed: Block[];
 } {
   const pending = blocks.filter(needsApproval);
   const completed = blocks.filter((block) => !needsApproval(block));
-  const at = Math.max(
-    0,
-    Math.min(index ?? completed.length - 1, completed.length - 1),
-  );
-  const latest = completed[at];
+  const latest = completed[completed.length - 1];
   return {
     latest,
     pending,
-    hidden: latest ? completed.slice(0, at) : completed,
-    completed,
+    hidden: latest ? completed.slice(0, -1) : [],
   };
-}
-
-/** How long a ticker line holds before the next one rolls up. */
-export const TICKER_DWELL_MS = 700;
-
-/** How far behind the ticker may fall before it skips straight to the live row. */
-export const TICKER_MAX_LAG = 3;
-
-/**
- * Where the ticker moves next: one line at a time so every tool call and note
- * gets a beat on screen, or a jump to the front when the agent has run away
- * from it.
- */
-export function nextTickerIndex(index: number, count: number): number {
-  const last = count - 1;
-  if (last < 0) return 0;
-  if (index >= last) return last;
-  if (last - index > TICKER_MAX_LAG) return last;
-  return index + 1;
 }
 
 /**
  * The activity group a settled zen turn hangs its "Worked for" line on: the
- * last one, which sits where the ticker was, right above the final answer.
+ * last one, which sits right above the final answer.
  */
 export function lastActivityIndex(items: TurnItem[]): number {
   for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -337,42 +275,228 @@ export function lastActivityIndex(items: TurnItem[]): number {
   return -1;
 }
 
-export type ActivityGroupView = "summary" | "zen-expanded" | "live";
-
-/**
- * How many "previous" rows the live disclosure claims. Zen keeps that chrome
- * on from the first step so Working does not sit under a hole and then jump
- * when the ticker finally has something behind it; the live row still counts
- * as one so the label is never "+0".
- */
-export function activityPreviousCount(
-  hidden: number,
-  hasLatest: boolean,
-  fromFirstStep = false,
-): number {
-  if (hidden > 0) return hidden;
-  return fromFirstStep && hasLatest ? 1 : 0;
-}
-
-export function activityPreviousLabel(count: number, zen: boolean): string {
-  if (zen) {
-    return `+${count} previous ${count === 1 ? "step" : "steps"}`;
-  }
+export function activityPreviousLabel(count: number): string {
   return `+${count} previous ${count === 1 ? "tool call" : "tool calls"}`;
 }
 
 /**
- * Zen's settled summary is gated on its own open flag, not the live
- * "+N previous" disclosure. Sharing that flag kept expanded history
- * from folding when a turn settled or zen was turned on.
+ * What a run of tool calls was for. Reads and searches are one thing — looking
+ * around — so a grep followed by the file it turned up stays one group.
  */
-export function activityGroupView(
-  collapsed: boolean,
-  pendingCount: number,
-  zenOpen: boolean,
-): ActivityGroupView {
-  if (!collapsed) return "live";
-  if (zenOpen) return "zen-expanded";
-  if (pendingCount > 0) return "live";
-  return "summary";
+export type ActivityWorkKind = "research" | "edit" | "run" | "other";
+
+/** A work kind, or a group the agent only narrated: a thought, or a note. */
+export type ActivityPhaseKind = ActivityWorkKind | "think" | "note";
+
+/**
+ * One chunk of a turn: the line the agent wrote before it started ("now I need
+ * to find the theme provider"), and the calls that line introduced.
+ */
+export type ActivityPhase = {
+  id: string;
+  kind: ActivityPhaseKind;
+  /** The agent's own words for this run, when it wrote some. */
+  headline?: Block;
+  steps: Block[];
+};
+
+/** Ties break towards the kind that changed the most: an edit outranks a read. */
+const WORK_KIND_ORDER: ActivityWorkKind[] = [
+  "edit",
+  "run",
+  "research",
+  "other",
+];
+
+export function toolCategory(block: Block): ActivityWorkKind {
+  const kind = block.tool?.kind;
+  const title = block.text || block.tool?.title;
+  const preview = block.tool?.preview;
+  if (isEditTool(kind, title, preview)) return "edit";
+  if (isSearchTool(kind, title, preview)) return "research";
+  if (isReadTool(kind, title, preview)) return "research";
+  if (isExecuteTool(kind, title)) return "run";
+  return "other";
+}
+
+/**
+ * Splits a turn's activity into labelled groups. Two things start a new one:
+ * the agent saying what it is about to do, and it switching from one kind of
+ * work to another. Everything else piles into the group already open.
+ */
+export function buildActivityPhases(blocks: Block[]): ActivityPhase[] {
+  const phases: ActivityPhase[] = [];
+  let current: ActivityPhase | undefined;
+
+  const open = (kind: ActivityPhaseKind, headline?: Block) => {
+    current = { id: headline?.id ?? "", kind, headline, steps: [] };
+    phases.push(current);
+    return current;
+  };
+
+  for (const block of blocks) {
+    // Reasoning is a step, never a header. The agent's own words title a
+    // group; the thinking behind them belongs inside it, where it reads as
+    // working out rather than as another thing the agent said.
+    if (isThinkingBlock(block)) {
+      if (!current) current = open("think");
+      current.steps.push(block);
+      if (!current.id) current.id = block.id;
+      continue;
+    }
+    if (isProseBlock(block)) {
+      const narrating = current?.kind === "think" || current?.kind === "note";
+      // A line after work has started is the title of what comes next, not a
+      // footnote to what just happened.
+      if (!current || !narrating) {
+        current = open("note", block);
+      } else if (!current.headline) {
+        // A group that opened on a thought takes the agent's words as its
+        // title, keeping the id it already has so the group is not remounted.
+        current.headline = block;
+        current.kind = "note";
+      } else {
+        current.steps.push(block);
+      }
+      continue;
+    }
+    const kind = toolCategory(block);
+    if (!current) {
+      current = open(kind);
+    } else if (current.kind === "think" || current.kind === "note") {
+      // The group the agent announced takes the shape of the work it announced.
+      current.kind = kind;
+    } else if (current.kind !== kind) {
+      // A thought at the end of a group was about what came next: it moves
+      // into the group it introduced.
+      const trailing = takeTrailingNarration(current);
+      current = open(kind);
+      current.steps.push(...trailing);
+      if (trailing[0]) current.id = trailing[0].id;
+    }
+    current.steps.push(block);
+    if (!current.id) current.id = block.id;
+  }
+
+  return absorbStrayPhases(phases);
+}
+
+/** The run of thinking a group ends on, lifted out of it. */
+function takeTrailingNarration(phase: ActivityPhase): Block[] {
+  let cut = phase.steps.length;
+  while (cut > 0 && !isToolBlock(phase.steps[cut - 1])) cut -= 1;
+  return phase.steps.splice(cut);
+}
+
+/**
+ * A single call the agent never introduced — the read wedged between two edits,
+ * the test run after them — folds back into the group before it rather than
+ * taking a header of its own.
+ */
+function absorbStrayPhases(phases: ActivityPhase[]): ActivityPhase[] {
+  const kept: ActivityPhase[] = [];
+  for (const phase of phases) {
+    const previous = kept[kept.length - 1];
+    const stray =
+      !phase.headline && phase.steps.filter(isToolBlock).length === 1;
+    if (previous && stray && previous.steps.length > 0) {
+      previous.steps.push(...phase.steps);
+      previous.kind = dominantWorkKind(previous.steps) ?? previous.kind;
+      continue;
+    }
+    kept.push(phase);
+  }
+  return kept;
+}
+
+function dominantWorkKind(steps: Block[]): ActivityWorkKind | undefined {
+  const counts = new Map<ActivityWorkKind, number>();
+  for (const block of steps) {
+    if (!isToolBlock(block)) continue;
+    const kind = toolCategory(block);
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  }
+  let best: ActivityWorkKind | undefined;
+  for (const kind of WORK_KIND_ORDER) {
+    const count = counts.get(kind) ?? 0;
+    if (count > 0 && (!best || count > (counts.get(best) ?? 0))) best = kind;
+  }
+  return best;
+}
+
+type PhaseTally = {
+  reads: Set<string>;
+  edits: Set<string>;
+  searches: number;
+  runs: number;
+  others: number;
+};
+
+function tallySteps(steps: Block[]): PhaseTally {
+  const tally: PhaseTally = {
+    reads: new Set(),
+    edits: new Set(),
+    searches: 0,
+    runs: 0,
+    others: 0,
+  };
+  for (const block of steps) {
+    if (!isToolBlock(block)) continue;
+    const kind = block.tool?.kind;
+    const title = block.text || block.tool?.title;
+    const preview = block.tool?.preview;
+    const target = preview?.path ?? preview?.fileName ?? block.id;
+    if (isEditTool(kind, title, preview)) tally.edits.add(target);
+    else if (isSearchTool(kind, title, preview)) tally.searches += 1;
+    else if (isReadTool(kind, title, preview)) tally.reads.add(target);
+    else if (isExecuteTool(kind, title)) tally.runs += 1;
+    else tally.others += 1;
+  }
+  return tally;
+}
+
+function fileLabel(paths: Set<string>): string {
+  const [first] = paths;
+  if (paths.size === 1 && first) return leafName(first) || first;
+  return `${paths.size} files`;
+}
+
+/**
+ * The group's header. The agent's own line if it wrote one, otherwise what the
+ * calls add up to — in the present tense while the group is still running, so
+ * "Reading 3 files" becomes "Read 3 files" the moment it folds.
+ */
+export function activityPhaseTitle(phase: ActivityPhase, live = false): string {
+  if (phase.headline) {
+    const summary = proseSummary(phase.headline.text);
+    if (summary) return summary;
+    return phase.headline.role === "reasoning" ? "Thinking" : "Working";
+  }
+  const tally = tallySteps(phase.steps);
+  switch (phase.kind) {
+    case "edit":
+      return `${live ? "Editing" : "Edited"} ${fileLabel(tally.edits)}`;
+    case "research":
+      if (tally.reads.size > 0 && tally.searches === 0) {
+        return `${live ? "Reading" : "Read"} ${fileLabel(tally.reads)}`;
+      }
+      if (tally.reads.size === 0) {
+        return live ? "Searching the project" : "Searched the project";
+      }
+      return live ? "Exploring the project" : "Explored the project";
+    case "run":
+      return tally.runs === 1
+        ? live
+          ? "Running a command"
+          : "Ran a command"
+        : `${live ? "Running" : "Ran"} ${tally.runs} commands`;
+    case "think":
+      return live ? "Thinking" : "Thought";
+    default:
+      return tally.others === 1
+        ? live
+          ? "Running a tool"
+          : "Ran a tool"
+        : `${live ? "Running" : "Ran"} ${tally.others} tools`;
+  }
 }

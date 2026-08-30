@@ -621,14 +621,84 @@ html.is-resizing * {
 }
 
 /*
- * Zen mode's activity ticker: one line at a time, the old row rolling up and
- * out of the viewport as the new one rises into it.
+ * Zen mode's activity phases: a run of related tool calls under the line the
+ * agent wrote to introduce it, on a rail, folding back to that line when the
+ * agent moves on.
  */
-@keyframes zen-ticker-in {
+.zen-phase-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease;
+}
+
+.zen-phase-body[data-open="false"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.zen-phase-body > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+ * The rail: a spine down the group with a step branching off it on a curve,
+ * drawn on the step itself so it follows however tall that step turns out to
+ * be. The curve is a quarter circle, tangent to the spine at the top and to
+ * the row at the bottom, so nothing turns a hard corner.
+ */
+.zen-phase-step {
+  position: relative;
+  padding-left: 20px;
+  /*
+   * Opaque, not translucent: the curve leaves the spine on a tangent, so the
+   * two run along each other for a pixel or two. A translucent rail stacks
+   * there and lights up; the same colour painted twice does not.
+   */
+  --zen-rail: color-mix(
+    in srgb,
+    var(--color-content) 14%,
+    var(--color-background-base)
+  );
+}
+
+.zen-phase-step::before,
+.zen-phase-step::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+}
+
+.zen-phase-step::before {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--zen-rail);
+}
+
+/* The last step is where the spine leaves off, curve and all. */
+.zen-phase-step:last-child::before {
+  bottom: auto;
+  height: 7px;
+}
+
+.zen-phase-step::after {
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-left: 1px solid var(--zen-rail);
+  border-bottom: 1px solid var(--zen-rail);
+  border-bottom-left-radius: 8px;
+}
+
+/* Each step rises into the group as the agent takes it. */
+@keyframes zen-step-in {
   from {
     opacity: 0;
-    transform: translateY(100%);
-    filter: blur(2px);
+    transform: translateY(4px);
+    filter: blur(1px);
   }
   to {
     opacity: 1;
@@ -637,26 +707,8 @@ html.is-resizing * {
   }
 }
 
-@keyframes zen-ticker-out {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-100%);
-    filter: blur(2px);
-  }
-}
-
-.zen-ticker-in {
-  animation: zen-ticker-in 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  contain: paint;
-}
-
-.zen-ticker-out {
-  animation: zen-ticker-out 300ms cubic-bezier(0.4, 0, 0.6, 1) both;
+.zen-step-in {
+  animation: zen-step-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes zen-thinking-pulse {
@@ -681,19 +733,18 @@ html.is-resizing * {
 }
 
 /* The dashed ring on a running tool turns slowly, so the line reads as live. */
-.zen-ticker-live {
+.zen-tool-spin {
   animation: zen-spin 3.6s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .zen-ticker-in,
-  .zen-ticker-live,
+  .zen-step-in,
+  .zen-tool-spin,
   .zen-thinking-pulse {
     animation: none;
   }
 
-  .zen-ticker-out {
-    animation: none;
-    opacity: 0;
+  .zen-phase-body {
+    transition: none;
   }
 }

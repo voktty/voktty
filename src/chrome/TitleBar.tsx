@@ -282,8 +282,6 @@ function TitleTabItem({
   onContextMenu,
   dropTarget,
   groupPosition,
-  showLeftBorder: showLeftBorderProp,
-  showRightBorder = false,
   itemRef,
   deckLayout = false,
 }: {
@@ -298,8 +296,6 @@ function TitleTabItem({
   onContextMenu?: (event: ReactMouseEvent<HTMLDivElement>) => void;
   dropTarget?: TabDropTarget | null;
   groupPosition?: TabGroupPosition;
-  showLeftBorder?: boolean;
-  showRightBorder?: boolean;
   itemRef?: (el: HTMLDivElement | null) => void;
   deckLayout?: boolean;
 }) {
@@ -319,11 +315,6 @@ function TitleTabItem({
     sortable.toIndex === index &&
     sortable.fromIndex !== null &&
     sortable.toIndex > sortable.fromIndex;
-  const showLeftBorder =
-    showLeftBorderProp ??
-    (inGroup
-      ? groupPosition !== "first" && groupPosition !== "only"
-      : index > 0);
 
   return (
     <div
@@ -331,13 +322,11 @@ function TitleTabItem({
         sortable.setItemRef(tab.id, el);
         itemRef?.(el);
       }}
-      className={`group @container relative flex h-full touch-none self-stretch ${
+      className={`group @container relative flex h-full touch-none items-center self-stretch ${
         deckLayout ? "min-w-56 shrink-0 grow basis-56" : "w-56 min-w-28 shrink"
-      } ${
-        showLeftBorder ? "border-l border-content/10" : ""
-      } ${showRightBorder ? "border-r border-content/10" : ""} ${
-        dragging ? "opacity-40" : ""
-      } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
+      } ${dragging ? "opacity-40" : ""} ${
+        canDrag ? "cursor-grab active:cursor-grabbing" : ""
+      }`}
       data-tauri-drag-region="false"
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -354,14 +343,14 @@ function TitleTabItem({
       }}
     >
       {showStart ? (
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-0.5 bg-accent" />
+        <div className="pointer-events-none absolute inset-y-1.5 left-0 z-20 w-0.5 rounded-full bg-accent" />
       ) : null}
       {showEnd ? (
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-0.5 bg-accent" />
+        <div className="pointer-events-none absolute inset-y-1.5 right-0 z-20 w-0.5 rounded-full bg-accent" />
       ) : null}
       {dropTarget ? (
         <div
-          className={`pointer-events-none absolute inset-0 z-10 ${dropTargetTint(dropTarget)}`}
+          className={`pointer-events-none absolute inset-x-0 inset-y-1.5 z-10 rounded-md ${dropTargetTint(dropTarget)}`}
         />
       ) : null}
       <button
@@ -373,7 +362,7 @@ function TitleTabItem({
           if (sortable.consumeClick()) return;
           onSelect(tab.id);
         }}
-        className={`relative flex h-full min-w-0 flex-1 items-center gap-1.5 px-2.5 text-left ${
+        className={`relative flex h-7.5 min-w-0 flex-1 items-center gap-1.5 self-center rounded-md px-2.5 text-left ${
           closable ? "pr-7" : "pr-2.5"
         } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${
           active
@@ -495,21 +484,16 @@ function GroupLabel({
       }}
       onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
-      className={`relative sticky left-0 z-20 flex h-full max-w-36 shrink-0 items-center gap-1.5 border-r border-content/10 px-4 pr-5 text-[11px] font-medium hover:brightness-110 ${
+      className={`relative sticky left-0 z-20 flex h-7.5 max-w-36 shrink-0 items-center gap-1.5 self-center rounded-md px-2.5 pr-3 text-[11px] font-medium hover:brightness-110 ${
         canDrag ? "cursor-grab touch-none active:cursor-grabbing" : ""
       }`}
       style={{
         background: `color-mix(in srgb, ${color} 20%, var(--color-background-base, #1a1a1a) 80%)`,
       }}
     >
-      <span
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
-        style={{ background: color }}
-        aria-hidden
-      />
       {dropTarget ? (
         <span
-          className={`pointer-events-none absolute inset-0 ${dropTargetTint(dropTarget)}`}
+          className={`pointer-events-none absolute inset-0 rounded-md ${dropTargetTint(dropTarget)}`}
         />
       ) : null}
       {logoPath ? (
@@ -622,18 +606,16 @@ function TabGroupBlock({
   return (
     <div
       ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-      className={`relative flex h-full items-stretch ${
+      className={`relative flex h-full items-center gap-0.5 ${
         deckLayout ? "min-w-0 flex-1" : "shrink-0"
-      } ${
-        segment.startIndex > 0 ? "border-l border-content/10" : ""
       } ${draggingGroup ? "opacity-40" : ""}`}
       data-tauri-drag-region="false"
     >
       {showSegmentStart ? (
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-30 w-0.5 bg-accent" />
+        <div className="pointer-events-none absolute inset-y-1.5 left-0 z-30 w-0.5 rounded-full bg-accent" />
       ) : null}
       {showSegmentEnd ? (
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-30 w-0.5 bg-accent" />
+        <div className="pointer-events-none absolute inset-y-1.5 right-0 z-30 w-0.5 rounded-full bg-accent" />
       ) : null}
       <GroupLabel
         color={displayColor}
@@ -681,7 +663,6 @@ function TabGroupBlock({
                 onContextMenu={(event) => onTabContextMenu(tab, event)}
                 dropTarget={dropTargetFor(sortable.dropTarget, "tab", tab.id)}
                 groupPosition={position}
-                showLeftBorder={offset > 0}
                 deckLayout={deckLayout}
                 itemRef={
                   tab.id === activeId
@@ -696,7 +677,7 @@ function TabGroupBlock({
         </>
       )}
       <span
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-px"
+        className="pointer-events-none absolute inset-x-1 bottom-1 z-20 h-0.5 rounded-full"
         style={{ background: displayColor }}
         aria-hidden
       />
@@ -1353,7 +1334,7 @@ function TitleBarComponent({
           ) : null}
           <div
             ref={setTabStripRef}
-            className="scrollbar-none flex h-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden overscroll-none"
+            className="scrollbar-none flex h-full min-w-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden overscroll-none px-1.5"
           >
             {segments.map((segment, segmentIndex) => {
               const showSegmentStart =
@@ -1425,16 +1406,16 @@ function TitleBarComponent({
                 <div
                   key={tab.id}
                   ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-                  className={`relative flex h-full shrink-0 items-stretch ${
+                  className={`relative flex h-full shrink-0 items-center ${
                     draggingSegment ? "opacity-40" : ""
                   }`}
                   data-tauri-drag-region="false"
                 >
                   {showSegmentStart ? (
-                    <div className="pointer-events-none absolute inset-y-0 left-0 z-30 w-0.5 bg-accent" />
+                    <div className="pointer-events-none absolute inset-y-1.5 left-0 z-30 w-0.5 rounded-full bg-accent" />
                   ) : null}
                   {showSegmentEnd ? (
-                    <div className="pointer-events-none absolute inset-y-0 right-0 z-30 w-0.5 bg-accent" />
+                    <div className="pointer-events-none absolute inset-y-1.5 right-0 z-30 w-0.5 rounded-full bg-accent" />
                   ) : null}
                   <TitleTabItem
                     tab={tab}
@@ -1452,9 +1433,6 @@ function TitleBarComponent({
                       tab.id,
                     )}
                     deckLayout={deckLayout}
-                    showRightBorder={
-                      deckLayout && segmentIndex === segments.length - 1
-                    }
                     itemRef={
                       tab.id === activeId
                         ? (el) => {

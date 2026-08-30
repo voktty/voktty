@@ -1,11 +1,15 @@
 import {
   Check,
   ChevronRight,
-  Clock,
   CircleDashed,
   Copy,
   FilePlusCorner,
   Minus,
+  PenLine,
+  Search,
+  Sparkles,
+  Terminal,
+  Wrench,
   X,
 } from "lucide-react";
 import {
@@ -13,6 +17,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -47,16 +52,14 @@ import { HarnessIcon } from "../chrome/HarnessIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
 import { useTranscriptZen } from "../hooks/useTranscriptZen";
-import { useActivityTicker } from "../hooks/useActivityTicker";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import type { TranscriptLayout } from "../lib/appearance";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { TranscriptSelectionMenu } from "./TranscriptSelectionMenu";
 import {
-  activityGroupView,
-  activityPreviousCount,
+  activityPhaseTitle,
   activityPreviousLabel,
-  activitySummary,
+  buildActivityPhases,
   editVerb,
   groupTurnItems,
   groupTurns,
@@ -70,12 +73,12 @@ import {
   toolCallLabel,
   toolCallState,
   turnCopyText,
+  type ActivityPhase,
+  type ActivityPhaseKind,
   type ToolCallState,
 } from "./transcriptActivity";
 
 const NEAR_BOTTOM_PX = 16;
-/** Matches the .zen-ticker-out animation, after which the old row is dropped. */
-const TICKER_EXIT_MS = 300;
 const INITIAL_TURNS = 20;
 const TURN_PAGE_SIZE = 20;
 
@@ -264,12 +267,12 @@ export function AgentTranscript({
           const durationMs = turnUserBlock(turn)?.durationMs;
           const settled = !(busy && isLastTurn);
           const items = groupTurnItems(turn, zen);
-          // Zen hangs the turn's "Worked for" line on the fold that replaced
-          // the ticker, so the footer under the answer keeps the clock only.
+          // Where the work ends and the answer begins, in zen: the last group
+          // of activity in the turn.
           const foldedAt = zen ? lastActivityIndex(items) : -1;
           const startedAt = turnUserBlock(turn)?.startedAt;
           // The agent starting its answer is the end of the work: fold the
-          // stack then, not when the turn finally settles, so the collapse
+          // groups then, not when the turn finally settles, so the collapse
           // never lands under the text you have already started reading.
           const answering =
             foldedAt >= 0 &&
@@ -287,20 +290,26 @@ export function AgentTranscript({
             >
               {items.map((item, itemIndex) =>
                 item.type === "activity" ? (
-                  <ActivityGroup
-                    key={item.blocks[0].id}
-                    blocks={item.blocks}
-                    cwd={cwd}
-                    collapsed={zen && (settled || answering)}
-                    zen={zen}
-                    durationMs={itemIndex === foldedAt ? durationMs : undefined}
-                    startedAt={
-                      itemIndex === foldedAt && !settled ? startedAt : undefined
-                    }
-                    onApproval={onApproval}
-                    onOpenFile={onOpenFile}
-                    onOpenDiff={onOpenDiff}
-                  />
+                  zen ? (
+                    <ActivityPhases
+                      key={item.blocks[0].id}
+                      blocks={item.blocks}
+                      cwd={cwd}
+                      done={settled || answering}
+                      onApproval={onApproval}
+                      onOpenFile={onOpenFile}
+                      onOpenDiff={onOpenDiff}
+                    />
+                  ) : (
+                    <ActivityGroup
+                      key={item.blocks[0].id}
+                      blocks={item.blocks}
+                      cwd={cwd}
+                      onApproval={onApproval}
+                      onOpenFile={onOpenFile}
+                      onOpenDiff={onOpenDiff}
+                    />
+                  )
                 ) : (
                   <TranscriptBlock
                     key={item.block.id}
@@ -324,7 +333,6 @@ export function AgentTranscript({
                 <TurnDuration
                   elapsedMs={durationMs}
                   done
-                  showElapsed={foldedAt < 0}
                   completedAt={
                     startedAt != null ? startedAt + durationMs : undefined
                   }
@@ -340,7 +348,7 @@ export function AgentTranscript({
                   }
                 />
               ) : null}
-              {busy && !preparingHandoff && isLastTurn && !answering ? (
+              {busy && !preparingHandoff && isLastTurn ? (
                 <LiveWorking
                   startedAt={liveStartedAt}
                   paused={waitingForApproval}
@@ -377,7 +385,6 @@ function TurnDuration({
   live = false,
   done = false,
   waiting = false,
-  showElapsed = true,
   completedAt,
   copyText: output,
   onSaveNote,
@@ -388,7 +395,6 @@ function TurnDuration({
   live?: boolean;
   done?: boolean;
   waiting?: boolean;
-  showElapsed?: boolean;
   completedAt?: number;
   copyText?: string;
   onSaveNote?: (text: string) => void;
@@ -398,6 +404,12 @@ function TurnDuration({
   const label = waiting
     ? "Waiting for approval"
     : formatWorkingDuration(elapsedMs, done);
+  const dot = (
+    <span
+      aria-hidden
+      className="size-[3px] shrink-0 rounded-full bg-content/25"
+    />
+  );
   return (
     <div
       role={live ? "status" : undefined}
@@ -427,17 +439,21 @@ function TurnDuration({
         <TerminalSpinner />
       )}
 
+      {done ? dot : null}
+
       {live && !done ? (
         <Shimmer duration={1}>{label}</Shimmer>
-      ) : showElapsed ? (
+      ) : (
         <span>{label}</span>
-      ) : null}
+      )}
 
       {completedAt != null ? (
-        <span className="flex items-center gap-1 text-content/35">
-          <Clock className="size-3.5 shrink-0" strokeWidth={1.75} />
-          {formatClockTime(completedAt)}
-        </span>
+        <>
+          {dot}
+          <span className="text-content/35">
+            {formatClockTime(completedAt)}
+          </span>
+        </>
       ) : null}
     </div>
   );
@@ -710,120 +726,39 @@ const ACTIVITY_ROW_HEIGHT = "h-7";
 
 const DISCLOSURE_ROW = "flex w-fit items-center gap-1.5 py-1 font-sans text-sm";
 
+/**
+ * The default transcript's tool stack: the call the agent is on holds the
+ * line, and everything it has already finished waits behind a disclosure.
+ */
 function ActivityGroup({
   blocks,
   cwd,
-  collapsed,
-  zen,
-  durationMs,
-  startedAt,
   onApproval,
   onOpenFile,
   onOpenDiff,
 }: {
   blocks: Block[];
   cwd?: string;
-  collapsed?: boolean;
-  zen?: boolean;
-  durationMs?: number;
-  startedAt?: number;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
 }) {
-  // Live "+N previous" and the settled zen fold are independent. Sharing one
-  // flag kept expanded history from folding when a turn settled.
   const [showPrevious, setShowPrevious] = useState(false);
-  const [zenOpen, setZenOpen] = useState(false);
-  const rolling = !!zen && !collapsed;
-  const tickerIndex = useActivityTicker(
-    blocks.filter((block) => !needsApproval(block)).length,
-    rolling,
-  );
-  const { latest, pending, hidden } = splitActivityRows(blocks, tickerIndex);
-  // Only the fold that carries the turn's clock ticks; everything else is
-  // paused, so historical turns are not re-rendering once a second.
-  const elapsedMs = useElapsedFrom(
-    startedAt,
-    durationMs != null || startedAt == null,
-  );
-  const view = activityGroupView(!!collapsed, pending.length, zenOpen);
-  const previousCount = activityPreviousCount(hidden.length, !!latest, !!zen);
-  const canRevealPrevious = hidden.length > 0;
+  const { latest, pending, hidden } = splitActivityRows(blocks);
 
-  // Zen mode: once a turn settles the ticker folds into one line, and the whole
-  // run — tool calls, notes, thinking — waits behind it.
-  if (view === "summary" || view === "zen-expanded") {
-    const open = view === "zen-expanded";
-    const summary =
-      durationMs != null
-        ? formatWorkingDuration(durationMs, true)
-        : startedAt != null
-          ? formatWorkingDuration(elapsedMs, false)
-          : activitySummary(blocks);
-    return (
-      <div className="flex min-w-0 flex-col gap-0 px-4">
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-label={open ? "Hide the work" : `Show ${summary}`}
-          onClick={() => setZenOpen(!open)}
-          className={`${DISCLOSURE_ROW} text-content/40 transition-colors duration-200 hover:text-content/70`}
-        >
-          <ChevronRight
-            className={`size-3.5 shrink-0 transition-transform duration-200 ${
-              open ? "rotate-90" : ""
-            }`}
-            strokeWidth={1.75}
-          />
-          <span>{summary}</span>
-        </button>
-        {open ? (
-          <div className="flex min-w-0 flex-col gap-0.5">
-            {blocks.map((block) => (
-              <ActivityRow
-                key={block.id}
-                block={block}
-                cwd={cwd}
-                expanded
-                onApproval={onApproval}
-                onOpenFile={onOpenFile}
-                onOpenDiff={onOpenDiff}
-              />
-            ))}
-          </div>
-        ) : (
-          <div aria-hidden className="pt-2">
-            <div className="h-px w-full bg-content/10" />
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Zen leaves the running turn as nothing but the ticker. The "+N previous"
-  // row is on from the first step — not an empty spacer — so Working only
-  // moves once, to sit under the step.
   return (
     <div className="flex min-w-0 flex-col gap-0.5 px-4">
-      {previousCount > 0 ? (
+      {hidden.length > 0 ? (
         <button
           type="button"
-          aria-expanded={canRevealPrevious ? showPrevious : undefined}
-          aria-disabled={!canRevealPrevious}
+          aria-expanded={showPrevious}
           aria-label={
             showPrevious
-              ? "Hide previous steps"
-              : `Show ${previousCount} previous steps`
+              ? "Hide previous tool calls"
+              : `Show ${hidden.length} previous tool calls`
           }
-          onClick={
-            canRevealPrevious
-              ? () => setShowPrevious((open) => !open)
-              : undefined
-          }
-          className={`${DISCLOSURE_ROW} ${ACTIVITY_ROW_HEIGHT} shrink-0 text-content/40 transition-colors duration-200 ${
-            canRevealPrevious ? "hover:text-content/70" : "cursor-default"
-          }`}
+          onClick={() => setShowPrevious((open) => !open)}
+          className={`${DISCLOSURE_ROW} ${ACTIVITY_ROW_HEIGHT} shrink-0 text-content/40 transition-colors duration-200 hover:text-content/70`}
         >
           <ChevronRight
             className={`size-3.5 shrink-0 transition-transform duration-200 ${
@@ -834,11 +769,11 @@ function ActivityGroup({
           <span>
             {showPrevious
               ? "Hide previous"
-              : activityPreviousLabel(previousCount, !!zen)}
+              : activityPreviousLabel(hidden.length)}
           </span>
         </button>
       ) : null}
-      {showPrevious && canRevealPrevious
+      {showPrevious
         ? hidden.map((block) => (
             <ActivityRow
               key={block.id}
@@ -851,10 +786,10 @@ function ActivityGroup({
           ))
         : null}
       {latest ? (
-        <ActivityTicker
+        <ActivityRow
           block={latest}
           cwd={cwd}
-          rolling={rolling}
+          live
           onOpenFile={onOpenFile}
           onOpenDiff={onOpenDiff}
         />
@@ -874,99 +809,233 @@ function ActivityGroup({
 }
 
 /**
- * The live line, as a ticker: the row the agent has moved on from rolls up out
- * of a one-line viewport while the new one rises into it. Zen only — without
- * it the row just swaps, the way it always has.
+ * Zen's activity view: the turn's work as phases. A phase is a run of related
+ * calls under the line the agent wrote to introduce it — "now I need to find
+ * the theme provider", then the searches and reads that followed. The phase
+ * the agent is in stays open and grows a row at a time; the moment it moves on
+ * the phase folds back to its header, so a long turn ends up as a handful of
+ * labelled groups sitting above the answer.
  */
-function ActivityTicker({
-  block,
+function ActivityPhases({
+  blocks,
   cwd,
-  rolling,
+  done,
+  onApproval,
   onOpenFile,
   onOpenDiff,
 }: {
-  block: Block;
+  blocks: Block[];
   cwd?: string;
-  rolling: boolean;
+  done?: boolean;
+  onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
 }) {
-  const [state, setState] = useState<{
-    current: Block;
-    leaving: Block | null;
-    roll: number;
-  }>({ current: block, leaving: null, roll: 0 });
+  const phases = useMemo(() => buildActivityPhases(blocks), [blocks]);
 
-  // Adjusting during render keeps the swap in one frame: no flash of the old
-  // row sitting in the new row's place.
-  if (state.current.id !== block.id) {
-    setState((prev) => ({
-      current: block,
-      leaving: rolling ? prev.current : null,
-      roll: prev.roll + 1,
-    }));
-  } else if (state.current !== block) {
-    setState((prev) => ({ ...prev, current: block }));
-  }
-
-  useEffect(() => {
-    if (!state.leaving) return;
-    const timer = window.setTimeout(
-      () => setState((prev) => ({ ...prev, leaving: null })),
-      TICKER_EXIT_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, [state.leaving, state.roll]);
-
-  if (!rolling) {
-    return (
-      <ActivityRow
-        block={block}
-        cwd={cwd}
-        onOpenFile={onOpenFile}
-        onOpenDiff={onOpenDiff}
-      />
-    );
-  }
-
-  // The incoming row stays in flow so the viewport is exactly one row tall,
-  // whatever that row turns out to be; only the outgoing one is lifted out.
   return (
-    <div className="relative min-w-0 overflow-clip">
-      {state.leaving ? (
-        <div
-          key={`out-${state.roll}`}
-          aria-hidden
-          className="zen-ticker-out pointer-events-none absolute inset-x-0 top-0"
-        >
-          <ActivityRow block={state.leaving} cwd={cwd} />
-        </div>
-      ) : null}
-      <div
-        key={`in-${state.roll}`}
-        className={state.roll > 0 ? "zen-ticker-in" : undefined}
-      >
-        <ActivityRow
-          block={state.current}
+    <div className="flex min-w-0 flex-col gap-1 px-4">
+      {phases.map((phase, index) => (
+        <ActivityPhaseGroup
+          key={phase.id}
+          phase={phase}
           cwd={cwd}
-          live
+          active={!done && index === phases.length - 1}
+          onApproval={onApproval}
           onOpenFile={onOpenFile}
           onOpenDiff={onOpenDiff}
         />
-      </div>
+      ))}
     </div>
   );
 }
 
 /**
- * The live stack is a ticker: whatever the agent did last holds the line,
- * whether that was a tool call or a paragraph of prose.
+ * One phase: a header the whole group hangs off, and the steps under it on a
+ * rail. Folding is automatic — the group opens while it is the live one and
+ * closes when the agent moves on — until you click, after which it stays where
+ * you put it. A step still waiting on you keeps the group open regardless.
+ */
+function ActivityPhaseGroup({
+  phase,
+  cwd,
+  active,
+  onApproval,
+  onOpenFile,
+  onOpenDiff,
+}: {
+  phase: ActivityPhase;
+  cwd?: string;
+  active: boolean;
+  onApproval?: (requestId: number, decision: ApprovalDecision) => void;
+  onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
+}) {
+  const [override, setOverride] = useState<boolean | null>(null);
+  const waiting = phase.steps.some(needsApproval);
+  const open = waiting || (override ?? active);
+  const title = activityPhaseTitle(phase, active);
+  // Opening a group on purpose is also how you read the line that titled it,
+  // whole. The auto-open while it runs is a live view, not a reading one, and
+  // a one-line note the header already shows in full has nothing to add.
+  const headline =
+    override === true && phase.headline && headlineHasMore(phase.headline)
+      ? phase.headline
+      : undefined;
+  const inert = phase.steps.length === 0 && !headlineHasMore(phase.headline);
+
+  // A lone call the agent never introduced is not a group: a header repeating
+  // the single row under it says nothing twice.
+  if (!phase.headline && phase.steps.length === 1) {
+    return (
+      <div className="flex min-w-0 items-start gap-1.5">
+        <ActivityPhaseIcon kind={phase.kind} className="mt-[7px]" />
+        <div className="min-w-0 flex-1">
+          <ActivityRow
+            block={phase.steps[0]}
+            cwd={cwd}
+            variant="phase"
+            live={active}
+            onApproval={onApproval}
+            onOpenFile={onOpenFile}
+            onOpenDiff={onOpenDiff}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const label = active ? (
+    <Shimmer
+      className="min-w-0 flex-1 truncate font-sans text-sm"
+      duration={1.6}
+    >
+      {title}
+    </Shimmer>
+  ) : (
+    // Dimmed to sit with the icons: the work is chrome around the answer, and
+    // only the answer reads at full strength.
+    <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/50 transition-colors duration-200 group-hover:text-content/80">
+      {title}
+    </span>
+  );
+
+  // A line the agent wrote with nothing under it is just that line.
+  if (inert) {
+    return (
+      <div className="flex min-w-0 items-center gap-1.5 py-1">
+        <ActivityPhaseIcon kind={phase.kind} />
+        {label}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={
+          open ? `Hide the steps for ${title}` : `Show the steps for ${title}`
+        }
+        onClick={() => setOverride(!open)}
+        className="group flex w-full min-w-0 items-center gap-1.5 py-1 text-left"
+      >
+        {/*
+         * The two icons share one 14px box, so the swap is instant: fading
+         * between them leaves both half-drawn on top of each other.
+         */}
+        <span className="relative flex size-3.5 shrink-0 items-center justify-center">
+          <ActivityPhaseIcon
+            kind={phase.kind}
+            className="group-hover:opacity-0"
+          />
+          <ChevronRight
+            className={`absolute size-3.5 text-content/45 opacity-0 transition-transform duration-200 group-hover:opacity-100 ${
+              open ? "rotate-90" : ""
+            }`}
+            strokeWidth={1.75}
+          />
+        </span>
+        {label}
+      </button>
+      <div className="zen-phase-body" data-open={open}>
+        <div>
+          <div className="flex min-w-0 flex-col">
+            {headline ? (
+              <div className="zen-phase-step py-1">
+                <AgentMarkdown
+                  className={
+                    headline.role === "reasoning"
+                      ? "agent-reasoning"
+                      : undefined
+                  }
+                  text={headline.text}
+                  cwd={cwd}
+                  onOpenFile={onOpenFile}
+                />
+              </div>
+            ) : null}
+            {phase.steps.map((block) => (
+              <div
+                key={block.id}
+                className={`zen-phase-step${active ? " zen-step-in" : ""}`}
+              >
+                <ActivityRow
+                  block={block}
+                  cwd={cwd}
+                  variant="phase"
+                  live={active}
+                  onApproval={onApproval}
+                  onOpenFile={onOpenFile}
+                  onOpenDiff={onOpenDiff}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Whether the line that titled a group has more in it than the header shows. */
+function headlineHasMore(block?: Block): boolean {
+  if (!block) return false;
+  return block.role === "reasoning" || /\n\s*\n/.test(block.text.trim());
+}
+
+/** What the group was for, at a glance: look, change, run, think. */
+function ActivityPhaseIcon({
+  kind,
+  className = "",
+}: {
+  kind: ActivityPhaseKind;
+  className?: string;
+}) {
+  const props = {
+    className: `size-3.5 shrink-0 text-content/45 ${className}`,
+    strokeWidth: 1.75,
+  };
+  if (kind === "edit") return <PenLine {...props} />;
+  if (kind === "research") return <Search {...props} />;
+  if (kind === "run") return <Terminal {...props} />;
+  if (kind === "think") return <Sparkles {...props} />;
+  if (kind === "other") return <Wrench {...props} />;
+  return <Minus {...props} />;
+}
+
+/**
+ * One step of the agent's work, whatever that step was: a tool call, a thought,
+ * a paragraph. In a phase the rail draws the bullet, so the row drops its own
+ * leading icon and leans on the rail instead.
  */
 function ActivityRow({
   block,
   cwd,
   expanded = false,
   live = false,
+  variant = "stack",
   onApproval,
   onOpenFile,
   onOpenDiff,
@@ -975,21 +1044,35 @@ function ActivityRow({
   cwd?: string;
   expanded?: boolean;
   live?: boolean;
+  variant?: "stack" | "phase";
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
 }) {
+  const railed = variant === "phase";
   if (isThinkingBlock(block)) {
     return (
       <ActivityThinkingRow
         block={block}
         cwd={cwd}
-        expandable={expanded}
+        expandable={expanded || railed}
+        bare={railed}
         onOpenFile={onOpenFile}
       />
     );
   }
   if (isProseBlock(block)) {
+    if (railed) {
+      return (
+        <ActivityNoteRow
+          block={block}
+          cwd={cwd}
+          bare
+          expandable
+          onOpenFile={onOpenFile}
+        />
+      );
+    }
     return expanded ? (
       <div className="flex min-w-0 gap-1.5 py-1 text-content">
         <Minus
@@ -1009,6 +1092,7 @@ function ActivityRow({
       block={block}
       cwd={cwd}
       live={live}
+      bare={railed}
       onApproval={onApproval}
       onOpenFile={onOpenFile}
       onOpenDiff={onOpenDiff}
@@ -1025,25 +1109,32 @@ function ActivityThinkingRow({
   block,
   cwd,
   expandable = false,
+  bare = false,
   onOpenFile,
 }: {
   block: Block;
   cwd?: string;
   expandable?: boolean;
+  bare?: boolean;
   onOpenFile?: (path: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const text = proseSummary(block.text) || "Thinking";
-  const icon = (
+  // In a group the rail is the bullet, so there is nothing to breathe while
+  // reasoning streams in — the line itself does.
+  const pulse = block.streaming ? "zen-thinking-pulse" : "";
+  const icon = bare ? null : (
     <Minus
-      className={`size-3.5 shrink-0 text-content/40 ${
-        block.streaming ? "zen-thinking-pulse" : ""
-      }`}
+      className={`size-3.5 shrink-0 text-content/40 ${pulse}`}
       strokeWidth={1.75}
     />
   );
   const label = (
-    <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/50">
+    <span
+      className={`min-w-0 flex-1 truncate font-sans text-sm text-content/50 ${
+        bare ? pulse : ""
+      }`}
+    >
       {text}
     </span>
   );
@@ -1070,12 +1161,16 @@ function ActivityThinkingRow({
         className="group flex min-w-0 items-center gap-1.5 py-1 text-left"
       >
         {icon}
-        <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/50 transition-colors duration-200 group-hover:text-content/75">
+        <span
+          className={`min-w-0 flex-1 truncate font-sans text-sm text-content/50 transition-colors duration-200 group-hover:text-content/75 ${
+            bare ? pulse : ""
+          }`}
+        >
           {text}
         </span>
       </button>
       {open ? (
-        <div className="min-w-0 pb-2 pl-5">
+        <div className={`min-w-0 pb-2 ${bare ? "" : "pl-5"}`}>
           <AgentMarkdown
             className="agent-reasoning"
             text={block.text}
@@ -1088,20 +1183,62 @@ function ActivityThinkingRow({
   );
 }
 
-function ActivityNoteRow({ block }: { block: Block }) {
+/**
+ * A line the agent wrote mid-run, kept to one line. It opens on click, so
+ * folding the work never costs you a paragraph you wanted to read.
+ */
+function ActivityNoteRow({
+  block,
+  cwd,
+  bare = false,
+  expandable = false,
+  onOpenFile,
+}: {
+  block: Block;
+  cwd?: string;
+  bare?: boolean;
+  expandable?: boolean;
+  onOpenFile?: (path: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
   const text = proseSummary(block.text);
+  const icon = bare ? null : (
+    <Minus className="size-3.5 shrink-0 text-content/50" strokeWidth={1.75} />
+  );
+
+  if (!expandable) {
+    return (
+      <div
+        aria-label={`Agent said: ${text}`}
+        className="flex min-w-0 items-center gap-1.5 py-1"
+      >
+        {icon}
+        <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/70">
+          {text}
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <div
-      aria-label={`Agent said: ${text}`}
-      className="flex min-w-0 items-center gap-1.5 py-1"
-    >
-      <Minus
-        className="size-3.5 shrink-0 text-content/50"
-        strokeWidth={1.75}
-      />
-      <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/70">
-        {text}
-      </span>
+    <div className="flex min-w-0 flex-col">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={open ? "Hide the full note" : `Agent said: ${text}`}
+        onClick={() => setOpen((value) => !value)}
+        className="group flex min-w-0 items-center gap-1.5 py-1 text-left"
+      >
+        {icon}
+        <span className="min-w-0 flex-1 truncate font-sans text-sm text-content/70 transition-colors duration-200 group-hover:text-content">
+          {text}
+        </span>
+      </button>
+      {open ? (
+        <div className="min-w-0 pb-2">
+          <AgentMarkdown text={block.text} cwd={cwd} onOpenFile={onOpenFile} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1110,6 +1247,7 @@ function ActivityToolRow({
   block,
   cwd,
   live = false,
+  bare = false,
   onApproval,
   onOpenFile,
   onOpenDiff,
@@ -1117,6 +1255,7 @@ function ActivityToolRow({
   block: Block;
   cwd?: string;
   live?: boolean;
+  bare?: boolean;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
@@ -1138,14 +1277,17 @@ function ActivityToolRow({
         aria-label={`Tool call: ${label}`}
         className="flex min-w-0 items-center gap-1.5 py-1"
       >
-        <ActivityToolIcon state={state} live={live} />
+        {bare ? null : <ActivityToolIcon state={state} live={live} />}
         <ToolCallSummary
           label={label}
           preview={block.tool?.preview}
           cwd={cwd}
+          chip={bare}
           onOpenFile={openFile}
         />
-        {pending ? null : <ToolCallStatusIcon state={state} />}
+        {pending ? null : (
+          <ToolCallStatusIcon state={state} running={bare && live} />
+        )}
       </div>
       {pending ? (
         <ApprovalControls block={block} onApproval={onApproval} />
@@ -1164,7 +1306,7 @@ function ActivityToolIcon({
   if (state === "pending") {
     return (
       <CircleDashed
-        className={`size-3.5 shrink-0 text-content/40 ${live ? "zen-ticker-live" : ""}`}
+        className={`size-3.5 shrink-0 text-content/40 ${live ? "zen-tool-spin" : ""}`}
         strokeWidth={1.75}
       />
     );
@@ -1175,7 +1317,19 @@ function ActivityToolIcon({
   );
 }
 
-function ToolCallStatusIcon({ state }: { state: ToolCallState }) {
+/**
+ * The right-hand mark on a step. In a phase it also carries the running state,
+ * since the rail took the row's leading icon: the ring turns where the check
+ * will land, and an abandoned turn's leftovers sit still rather than spinning
+ * forever.
+ */
+function ToolCallStatusIcon({
+  state,
+  running = false,
+}: {
+  state: ToolCallState;
+  running?: boolean;
+}) {
   const className = "size-3.5 shrink-0";
   if (state === "accepted") {
     return (
@@ -1184,6 +1338,14 @@ function ToolCallStatusIcon({ state }: { state: ToolCallState }) {
   }
   if (state === "rejected") {
     return <X className={`${className} text-red-400`} strokeWidth={2} />;
+  }
+  if (running) {
+    return (
+      <CircleDashed
+        className={`${className} zen-tool-spin text-content/35`}
+        strokeWidth={1.75}
+      />
+    );
   }
   return null;
 }
@@ -1346,12 +1508,15 @@ function ToolCallSummary({
   cwd,
   onOpenFile,
   interactive = true,
+  chip = false,
 }: {
   label: string;
   preview?: ToolPreview;
   cwd?: string;
   onOpenFile?: (path: string) => void;
   interactive?: boolean;
+  /** Sets the file off in a chip, for rows that lean on a rail for structure. */
+  chip?: boolean;
 }) {
   const parts = label.match(/^(Read|Find|Skill)\s+(.+)$/);
   // A write preview carries the path itself, so edits get the same verb + file
@@ -1384,7 +1549,11 @@ function ToolCallSummary({
         : undefined);
   if (!action || !target) {
     return (
-      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-content/80">
+      <span
+        className={`min-w-0 flex-1 truncate font-mono text-[13px] ${
+          chip ? "text-content/65" : "text-content/80"
+        }`}
+      >
         {label}
       </span>
     );
@@ -1410,7 +1579,11 @@ function ToolCallSummary({
         canOpen ? (
           <button
             type="button"
-            className="-my-0.5 flex min-w-0 flex-1 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-left text-content/85 hover:text-sky-300 hover:underline"
+            className={`-my-0.5 flex min-w-0 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-left hover:text-sky-300 ${
+              chip
+                ? "max-w-full bg-content/6 text-content/70 hover:bg-content/10"
+                : "flex-1 text-content/85 hover:underline"
+            }`}
             title={preview?.path || target}
             onClick={(event) => {
               event.stopPropagation();
@@ -1422,7 +1595,11 @@ function ToolCallSummary({
           </button>
         ) : (
           <span
-            className="flex min-w-0 flex-1 items-center gap-1 px-1 text-content/85"
+            className={`flex min-w-0 items-center gap-1 rounded px-1 ${
+              chip
+                ? "max-w-full bg-content/6 text-content/70"
+                : "flex-1 text-content/85"
+            }`}
             title={preview?.path || target}
           >
             <FileTypeIcon name={fileName} isDir={false} />
@@ -1431,7 +1608,9 @@ function ToolCallSummary({
         )
       ) : (
         <span
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-content/85 pl-1"
+          className={`flex min-w-0 flex-1 items-center gap-1.5 pl-1 ${
+            chip ? "text-content/70" : "text-content/85"
+          }`}
           title={target}
         >
           <span className="min-w-0 truncate">{target}</span>

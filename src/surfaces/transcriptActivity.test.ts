@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Block } from "../lib/session";
 import {
-  activityGroupView,
-  activityPreviousCount,
+  activityPhaseTitle,
   activityPreviousLabel,
-  activitySummary,
+  buildActivityPhases,
   editVerb,
   groupTurnItems,
   groupTurns,
   lastActivityIndex,
-  nextTickerIndex,
   proseSummary,
   splitActivityRows,
   toolCallLabel,
@@ -30,18 +28,56 @@ function shell(
   };
 }
 
-function edit(id: string): Block {
+function edit(id: string, path = "src/App.tsx"): Block {
+  const fileName = path.split("/").pop() ?? path;
   return {
     id,
     role: "tool",
-    text: "Edited src/App.tsx",
+    text: `Edited ${path}`,
     tool: {
       kind: "edit",
-      title: "Edited src/App.tsx",
+      title: `Edited ${path}`,
       status: "completed",
-      preview: { kind: "write", path: "src/App.tsx", fileName: "App.tsx" },
+      preview: { kind: "write", path, fileName },
     },
   };
+}
+
+function read(id: string, path = "src/App.tsx"): Block {
+  const fileName = path.split("/").pop() ?? path;
+  return {
+    id,
+    role: "tool",
+    text: `Read ${path}`,
+    tool: {
+      kind: "read",
+      title: `Read ${path}`,
+      status: "completed",
+      preview: { kind: "read", path, fileName },
+    },
+  };
+}
+
+function search(id: string, query = "color tokens"): Block {
+  return {
+    id,
+    role: "tool",
+    text: `Find ${query}`,
+    tool: {
+      kind: "search",
+      title: `Find ${query}`,
+      status: "completed",
+      preview: { kind: "search", query },
+    },
+  };
+}
+
+function note(id: string, text: string): Block {
+  return { id, role: "assistant", text };
+}
+
+function thought(id: string, text = "Weighing the options."): Block {
+  return { id, role: "reasoning", text };
 }
 
 describe("groupTurnItems", () => {
@@ -120,35 +156,6 @@ describe("splitActivityRows", () => {
     expect(rows.latest).toBeUndefined();
     expect(rows.pending.map((block) => block.id)).toEqual(["read", "run"]);
     expect(rows.hidden).toEqual([]);
-  });
-});
-
-describe("ticker", () => {
-  it("holds the row the ticker is on and counts the rest as passed", () => {
-    const rows = splitActivityRows([shell("a"), shell("b"), shell("c")], 1);
-    expect(rows.latest?.id).toBe("b");
-    expect(rows.hidden.map((block) => block.id)).toEqual(["a"]);
-    expect(rows.completed).toHaveLength(3);
-  });
-
-  it("clamps an index the stack has outgrown", () => {
-    const rows = splitActivityRows([shell("a")], 4);
-    expect(rows.latest?.id).toBe("a");
-    expect(rows.hidden).toEqual([]);
-  });
-
-  it("steps forward one row at a time", () => {
-    expect(nextTickerIndex(0, 3)).toBe(1);
-    expect(nextTickerIndex(2, 3)).toBe(2);
-  });
-
-  it("skips to the live row when it falls too far behind", () => {
-    expect(nextTickerIndex(0, 9)).toBe(8);
-  });
-
-  it("snaps back when the stack shrinks under it", () => {
-    expect(nextTickerIndex(6, 2)).toBe(1);
-    expect(nextTickerIndex(3, 0)).toBe(0);
   });
 });
 
@@ -310,55 +317,174 @@ describe("zen mode grouping", () => {
     if (items[0]?.type !== "activity") return;
     expect(items[0].blocks.map((block) => block.id)).toEqual(["a"]);
   });
+});
 
-  it("does not count thinking as a tool call", () => {
-    expect(
-      activitySummary([
-        { id: "r", role: "reasoning", text: "thinking" },
-        shell("a"),
-      ]),
-    ).toBe("1 tool call");
-  });
-
-  it("summarises calls and distinct edited files", () => {
-    expect(activitySummary([shell("a"), edit("b"), edit("c")])).toBe(
-      "3 tool calls · 1 file edited",
-    );
-    expect(activitySummary([shell("a")])).toBe("1 tool call");
-  });
-
-  it("counts only tool calls, and falls back to messages without them", () => {
-    const note: Block = { id: "a1", role: "assistant", text: "Looking now." };
-    expect(activitySummary([note, shell("a"), edit("b")])).toBe(
-      "2 tool calls · 1 file edited",
-    );
-    expect(activitySummary([note])).toBe("1 earlier message");
-    expect(
-      activitySummary([{ id: "r", role: "reasoning", text: "thinking" }]),
-    ).toBe("1 thought");
-  });
-
-  it("folds to the summary even if live previous-tools were expanded", () => {
-    expect(activityGroupView(true, 0, false)).toBe("summary");
-    expect(activityGroupView(true, 0, true)).toBe("zen-expanded");
-    expect(activityGroupView(false, 0, false)).toBe("live");
-    expect(activityGroupView(true, 2, false)).toBe("live");
+describe("activityPreviousLabel", () => {
+  it("counts what is waiting behind the disclosure", () => {
+    expect(activityPreviousLabel(1)).toBe("+1 previous tool call");
+    expect(activityPreviousLabel(4)).toBe("+4 previous tool calls");
   });
 });
 
-describe("activityPreviousCount", () => {
-  it("keeps zen's disclosure on from the first live step", () => {
-    expect(activityPreviousCount(0, true, true)).toBe(1);
-    expect(activityPreviousCount(0, true, false)).toBe(0);
-    expect(activityPreviousCount(0, false, true)).toBe(0);
-    expect(activityPreviousCount(3, true, true)).toBe(3);
+describe("buildActivityPhases", () => {
+  it("groups a run of calls under the line that introduced it", () => {
+    const phases = buildActivityPhases([
+      note("n1", "Now I need to find the theme provider."),
+      search("s1"),
+      read("r1", "src/globals.css"),
+      read("r2", "src/layout.tsx"),
+      note("n2", "Updating the dark mode tokens."),
+      edit("e1", "src/globals.css"),
+      edit("e2", "src/theme.ts"),
+    ]);
+    expect(phases).toHaveLength(2);
+    expect(phases[0]).toMatchObject({
+      kind: "research",
+      headline: { id: "n1" },
+    });
+    expect(phases[0].steps.map((block) => block.id)).toEqual([
+      "s1",
+      "r1",
+      "r2",
+    ]);
+    expect(phases[1]).toMatchObject({ kind: "edit", headline: { id: "n2" } });
+    expect(phases[1].steps.map((block) => block.id)).toEqual(["e1", "e2"]);
   });
 
-  it("labels the disclosure as steps in zen and tool calls otherwise", () => {
-    expect(activityPreviousLabel(1, true)).toBe("+1 previous step");
-    expect(activityPreviousLabel(2, true)).toBe("+2 previous steps");
-    expect(activityPreviousLabel(1, false)).toBe("+1 previous tool call");
-    expect(activityPreviousLabel(4, false)).toBe("+4 previous tool calls");
+  it("starts a group when the work changes shape, narrated or not", () => {
+    const phases = buildActivityPhases([
+      read("r1", "a.ts"),
+      read("r2", "b.ts"),
+      edit("e1", "a.ts"),
+      edit("e2", "b.ts"),
+    ]);
+    expect(phases.map((phase) => phase.kind)).toEqual(["research", "edit"]);
+  });
+
+  it("folds a lone uninvited call into the group before it", () => {
+    const phases = buildActivityPhases([
+      edit("e1", "a.ts"),
+      read("r1", "a.ts"),
+      edit("e2", "b.ts"),
+    ]);
+    expect(phases).toHaveLength(1);
+    expect(phases[0].kind).toBe("edit");
+    expect(phases[0].steps.map((block) => block.id)).toEqual([
+      "e1",
+      "r1",
+      "e2",
+    ]);
+  });
+
+  it("keeps a group the agent announced out of that fold", () => {
+    const phases = buildActivityPhases([
+      read("r1"),
+      note("n1", "Now the edit."),
+      edit("e1"),
+    ]);
+    expect(phases).toHaveLength(2);
+    expect(phases[1]).toMatchObject({ kind: "edit", headline: { id: "n1" } });
+  });
+
+  it("keeps a second paragraph as a step rather than a group of its own", () => {
+    const phases = buildActivityPhases([
+      note("n1", "First."),
+      note("n2", "Second."),
+      read("r1"),
+    ]);
+    expect(phases).toHaveLength(1);
+    expect(phases[0]).toMatchObject({
+      kind: "research",
+      headline: { id: "n1" },
+    });
+    expect(phases[0].steps.map((block) => block.id)).toEqual(["n2", "r1"]);
+  });
+
+  it("gives a turn that only thought a group to sit in", () => {
+    const phases = buildActivityPhases([thought("r")]);
+    expect(phases).toHaveLength(1);
+    expect(phases[0]).toMatchObject({ kind: "think", headline: undefined });
+    expect(phases[0].steps.map((block) => block.id)).toEqual(["r"]);
+  });
+
+  it("keeps reasoning inside the group instead of titling it", () => {
+    const phases = buildActivityPhases([
+      thought("t1"),
+      search("s1"),
+      thought("t2"),
+      search("s2"),
+    ]);
+    expect(phases).toHaveLength(1);
+    expect(phases[0]).toMatchObject({ kind: "research", headline: undefined });
+    expect(phases[0].steps.map((block) => block.id)).toEqual([
+      "t1",
+      "s1",
+      "t2",
+      "s2",
+    ]);
+  });
+
+  it("moves a thought at the end of a group into the group it introduced", () => {
+    const phases = buildActivityPhases([
+      read("r1", "a.ts"),
+      read("r2", "b.ts"),
+      thought("t1", "Now to apply the change."),
+      edit("e1", "a.ts"),
+      edit("e2", "b.ts"),
+    ]);
+    expect(phases.map((phase) => phase.kind)).toEqual(["research", "edit"]);
+    expect(phases[0].steps.map((block) => block.id)).toEqual(["r1", "r2"]);
+    expect(phases[1].steps.map((block) => block.id)).toEqual([
+      "t1",
+      "e1",
+      "e2",
+    ]);
+  });
+
+  it("lets the agent's own words title a group that opened on a thought", () => {
+    const phases = buildActivityPhases([
+      thought("t1"),
+      note("n1", "Looking for the theme provider."),
+      search("s1"),
+    ]);
+    expect(phases).toHaveLength(1);
+    expect(phases[0]).toMatchObject({
+      kind: "research",
+      headline: { id: "n1" },
+      id: "t1",
+    });
+    expect(phases[0].steps.map((block) => block.id)).toEqual(["t1", "s1"]);
+  });
+});
+
+describe("activityPhaseTitle", () => {
+  const title = (blocks: Block[], live = false) =>
+    activityPhaseTitle(buildActivityPhases(blocks)[0], live);
+
+  it("uses the agent's own line when it wrote one", () => {
+    expect(
+      title([
+        note("n1", "**Found it** — the tokens live in `globals.css`."),
+        read("r1"),
+      ]),
+    ).toBe("Found it — the tokens live in globals.css.");
+  });
+
+  it("says what the calls add up to, in the tense of the moment", () => {
+    expect(title([read("r1", "a.ts"), read("r2", "b.ts")], true)).toBe(
+      "Reading 2 files",
+    );
+    expect(title([read("r1", "a.ts"), read("r2", "b.ts")])).toBe(
+      "Read 2 files",
+    );
+    expect(title([read("r1", "src/index.css")])).toBe("Read index.css");
+    expect(title([search("s1"), search("s2")])).toBe("Searched the project");
+    expect(title([search("s1"), read("r1")])).toBe("Explored the project");
+    expect(title([edit("e1", "a.ts"), edit("e2", "b.ts")])).toBe(
+      "Edited 2 files",
+    );
+    expect(title([shell("a"), shell("b")])).toBe("Ran 2 commands");
+    expect(title([shell("a")], true)).toBe("Running a command");
   });
 });
 

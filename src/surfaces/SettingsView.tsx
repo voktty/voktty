@@ -336,7 +336,7 @@ function GeneralPage() {
       </Row>
       <Row
         label="Zen mode"
-        description={`While a turn runs, tool calls, thinking, and the notes the agent drops between them roll through a one-line ticker. Once the turn settles, the whole working process folds behind the turn's 'Worked for' line, leaving only the agent's final answer; expand it to read everything back. Edits waiting on approval still show their diff. ${MOD}${ALT}Z toggles it.`}
+        description={`The agent's work reads as groups: a run of related tool calls under the line the agent wrote to introduce it. The group it is in stays open and grows a step at a time — tool calls, thinking, the notes it drops between them — and folds back to its header the moment it moves on, leaving a labelled outline above the final answer. Click any group to read it back. Edits waiting on approval still show their diff. ${MOD}${ALT}Z toggles it.`}
       >
         <Toggle
           label="Zen mode"

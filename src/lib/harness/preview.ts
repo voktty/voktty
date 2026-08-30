@@ -253,7 +253,7 @@ export function composeToolTitle(opts: {
     return "Skill";
   }
 
-  // Shell rows are a one-line ticker. The command has to live in the title
+  // Shell rows are one line. The command has to live in the title
   // itself: Codex already does this, Claude/Pi used to label the row "Bash"
   // and hide the argv in detail the activity stack never shows.
   if (previewKind === "shell" || isExecuteTool(kind, title)) {
