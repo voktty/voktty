@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-08-30
+
+### Added
+
+- Pi sessions load skills from Pi itself instead of scanning skill folders. The slash picker lists `/skill:name` the way Pi expects, and typing that prefix still finds the row. In #35 by @kinsomicrote.
+- Settings → General: Anchor prompts to top. When you send, the new prompt sits at the top of the transcript and the reply grows into the space below. Off keeps the classic layout, with the latest message on the composer.
+- Line numbers in the notes markdown source editor.
+
+### Changed
+
+- Shell tool rows that are really a read, search, or listing (`cat`, `grep`, `ls`, and similar) now show as `Read path`, `Find query`, or `List path` instead of the raw command.
+- Icons across the chrome and transcript use a single stroke catalog. Fold/unfold marks are stroke-only so they match the rest of the set.
+
 ## [0.1.19] - 2026-08-30
 
 ### Added
@@ -314,7 +327,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.19...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.20...HEAD
+[0.1.20]: https://github.com/hardbeat920/monocode/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/hardbeat920/monocode/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/hardbeat920/monocode/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/hardbeat920/monocode/compare/v0.1.16...v0.1.17
