@@ -1,4 +1,4 @@
-import { File, X } from "lucide-react";
+import { File, X } from "./icons";
 import { useState } from "react";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";

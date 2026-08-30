@@ -11,7 +11,7 @@ import {
   Terminal,
   Wrench,
   X,
-} from "lucide-react";
+} from "../chrome/icons";
 import {
   memo,
   useCallback,

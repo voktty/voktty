@@ -5,15 +5,15 @@ import {
   Keyboard,
   Palette,
   SlidersHorizontal,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "./icons";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   SETTINGS_SECTIONS,
   type SettingsSectionId,
 } from "../lib/settings";
 
-const SECTION_ICONS: Record<SettingsSectionId, LucideIcon> = {
+const SECTION_ICONS: Record<SettingsSectionId, IconComponent> = {
   general: SlidersHorizontal,
   appearance: Palette,
   keybindings: Keyboard,
@@ -62,7 +62,7 @@ function NavRow({
   onClick,
 }: {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   active?: boolean;
   onClick: () => void;
 }) {

@@ -1,4 +1,4 @@
-import { Check, CircleDot, GitPullRequest } from "lucide-react";
+import { Check, CircleDot, GitPullRequest } from "./icons";
 import {
   useEffect,
   useLayoutEffect,

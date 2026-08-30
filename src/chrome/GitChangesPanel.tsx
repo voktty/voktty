@@ -13,7 +13,7 @@ import {
   RefreshCw,
   Undo2,
   WandSparkles,
-} from "lucide-react";
+} from "./icons";
 import {
   useCallback,
   useEffect,

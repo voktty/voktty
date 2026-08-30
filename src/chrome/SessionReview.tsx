@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "./icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   keepSessionChanges,

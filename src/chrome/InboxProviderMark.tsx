@@ -1,4 +1,4 @@
-import { Inbox } from "lucide-react";
+import { Inbox } from "./icons";
 import type { InboxProvider } from "../lib/githubTasks";
 
 export function InboxProviderMark({

@@ -3,7 +3,7 @@ import {
   ChevronRight,
   FoldVertical,
   UnfoldVertical,
-} from "lucide-react";
+} from "../chrome/icons";
 import { useMemo, useState } from "react";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { basename } from "../lib/fs";

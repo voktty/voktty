@@ -1,4 +1,4 @@
-import { LoaderCircle, Plus, Search, File, Trash2 } from "lucide-react";
+import { LoaderCircle, Plus, Search, File, Trash2 } from "../chrome/icons";
 import {
   useCallback,
   useEffect,

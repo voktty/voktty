@@ -6,7 +6,7 @@ import {
   FoldVertical,
   GitCompare,
   Search,
-} from "lucide-react";
+} from "./icons";
 import {
   createContext,
   useContext,

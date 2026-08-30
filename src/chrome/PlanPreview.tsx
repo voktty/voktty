@@ -1,4 +1,4 @@
-import { CircleDashed, PanelRight } from "lucide-react";
+import { CircleDashed, PanelRight } from "./icons";
 import { planMeta, planSummary, planTitle } from "../lib/plan";
 import { FileTypeIcon } from "./FileTypeIcon";
 

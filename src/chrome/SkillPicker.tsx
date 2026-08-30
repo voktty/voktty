@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "./icons";
 import {
   useEffect,
   useRef,

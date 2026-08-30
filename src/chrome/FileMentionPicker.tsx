@@ -1,4 +1,4 @@
-import { StickyNote } from "lucide-react";
+import { StickyNote } from "./icons";
 import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import type { RankedFile } from "../lib/fileIndex";
 import { isNoteMentionPath } from "../lib/notes";

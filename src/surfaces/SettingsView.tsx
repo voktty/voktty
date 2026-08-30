@@ -5,7 +5,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-} from "lucide-react";
+} from "../chrome/icons";
 import {
   useCallback,
   useEffect,

@@ -6,7 +6,8 @@ import {
   Trash2,
   Ungroup,
   X,
-} from "lucide-react";
+  type IconComponent,
+} from "./icons";
 import {
   Fragment,
   useEffect,
@@ -36,7 +37,7 @@ export type TabGroupMenuAction =
 export type TabGroupMenuExtraItem = {
   id: string;
   label: string;
-  icon: typeof SquarePlus;
+  icon: IconComponent;
   danger?: boolean;
   sepBefore?: boolean;
 };
@@ -75,7 +76,7 @@ type MenuItem = {
   label: string;
   shortcut?: string;
   danger?: boolean;
-  icon: typeof SquarePlus;
+  icon: IconComponent;
 };
 
 const ITEMS: MenuItem[] = [

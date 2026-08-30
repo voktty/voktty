@@ -1,4 +1,4 @@
-import { CircleAlert } from "lucide-react";
+import { CircleAlert } from "./icons";
 import { createPortal } from "react-dom";
 import type { ApprovalDecision } from "../lib/harness";
 import type { PendingApprovalNotice } from "../lib/approvalToast";

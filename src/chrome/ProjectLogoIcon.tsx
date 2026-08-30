@@ -1,4 +1,4 @@
-import { Folder, type LucideIcon } from "lucide-react";
+import { Folder, type IconComponent } from "./icons";
 import { useEffect, useState } from "react";
 import { projectLogoSrc } from "../lib/projectLogos";
 import {
@@ -10,7 +10,7 @@ type Props = {
   path?: string | null;
   className?: string;
   imageClassName?: string;
-  fallback?: LucideIcon;
+  fallback?: IconComponent;
   fallbackStrokeWidth?: number;
 };
 

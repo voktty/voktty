@@ -1,4 +1,4 @@
-import { ArrowDownCircle, Loader, RefreshCw } from "lucide-react";
+import { ArrowDownCircle, Loader, RefreshCw } from "./icons";
 import { useCallback, useEffect, useState } from "react";
 import {
   installPendingUpdate,

@@ -1,4 +1,4 @@
-import { CircleDot, GitPullRequest, X } from "lucide-react";
+import { CircleDot, GitPullRequest, X } from "./icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { GithubLabel, InboxComposerCard } from "../lib/githubTasks";
 import { InboxProviderMark } from "./InboxProviderMark";

@@ -1,4 +1,4 @@
-import { Loader, WandSparkles } from "lucide-react";
+import { Loader, WandSparkles } from "./icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { generateCommitMessage } from "../lib/harness";

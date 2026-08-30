@@ -8,7 +8,7 @@ import {
   PanelRight,
   PanelTop,
   Plus,
-} from "lucide-react";
+} from "../chrome/icons";
 import {
   useEffect,
   useRef,

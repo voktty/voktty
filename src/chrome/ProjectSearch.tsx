@@ -4,7 +4,7 @@ import {
   LoaderCircle,
   Regex,
   WholeWord,
-} from "lucide-react";
+} from "./icons";
 import {
   useEffect,
   useMemo,

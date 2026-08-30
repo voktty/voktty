@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus } from "../chrome/icons";
 import {
   useEffect,
   useLayoutEffect,

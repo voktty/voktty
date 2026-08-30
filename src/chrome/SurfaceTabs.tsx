@@ -1,4 +1,4 @@
-import { GripVertical, Terminal, X } from "lucide-react";
+import { GripVertical, Terminal, X } from "./icons";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { basename } from "../lib/fs";

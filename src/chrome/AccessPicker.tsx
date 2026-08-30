@@ -1,4 +1,4 @@
-import { ChevronDown, Lock, LockOpen, Pencil, Sparkles } from "lucide-react";
+import { ChevronDown, Lock, LockOpen, Pencil, Sparkles } from "./icons";
 import {
   useEffect,
   useLayoutEffect,

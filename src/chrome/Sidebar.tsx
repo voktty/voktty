@@ -6,7 +6,7 @@ import {
   Plus,
   Search,
   Settings,
-} from "lucide-react";
+} from "./icons";
 import {
   memo,
   useEffect,

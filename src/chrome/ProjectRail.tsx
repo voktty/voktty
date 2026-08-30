@@ -10,7 +10,7 @@ import {
   Search,
   Settings,
   Trash2,
-} from "lucide-react";
+} from "./icons";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";

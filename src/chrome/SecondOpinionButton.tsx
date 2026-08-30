@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Scale } from "lucide-react";
+import { Check, ChevronRight, Scale } from "./icons";
 import {
   useEffect,
   useLayoutEffect,

@@ -1,4 +1,4 @@
-import { ChevronDown, GripVertical, X } from "lucide-react";
+import { ChevronDown, GripVertical, X } from "../chrome/icons";
 import {
   memo,
   useCallback,

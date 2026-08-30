@@ -1,4 +1,4 @@
-import { Check, CircleDashed, X } from "lucide-react";
+import { Check, CircleDashed, X } from "./icons";
 import { MAX_PREVIEW_LINES } from "../lib/harness/preview";
 import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import type { ToolPreview, ToolPreviewLine } from "../lib/session";

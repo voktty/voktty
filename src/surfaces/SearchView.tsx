@@ -1,4 +1,4 @@
-import { Folder, LoaderCircle, MessageSquare, Search } from "lucide-react";
+import { Folder, LoaderCircle, MessageSquare, Search } from "../chrome/icons";
 import {
   useEffect,
   useMemo,

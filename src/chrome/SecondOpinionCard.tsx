@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "./icons";
 import { HARNESS_TITLE, type SecondOpinionMeta } from "../lib/session";
 import { HarnessIcon } from "./HarnessIcon";
 

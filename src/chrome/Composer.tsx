@@ -1,4 +1,4 @@
-import { ArrowUp, Plus, Square, StickyNote } from "lucide-react";
+import { ArrowUp, Plus, Square, StickyNote } from "./icons";
 import {
   useCallback,
   useEffect,

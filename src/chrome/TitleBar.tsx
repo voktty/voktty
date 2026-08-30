@@ -10,7 +10,7 @@ import {
   StickyNote,
   Terminal,
   X,
-} from "lucide-react";
+} from "./icons";
 import {
   memo,
   useCallback,

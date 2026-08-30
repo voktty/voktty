@@ -1,4 +1,4 @@
-import { ChevronDown, Search, Star } from "lucide-react";
+import { ChevronDown, Search, Star } from "./icons";
 import {
   useEffect,
   useLayoutEffect,

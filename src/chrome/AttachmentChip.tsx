@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "./icons";
 import { attachmentPreviewSrc } from "../lib/attachments";
 import type { Attachment } from "../lib/session";
 import { FileTypeIcon } from "./FileTypeIcon";

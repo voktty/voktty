@@ -26,7 +26,7 @@ import {
   keymap,
   lineNumbers,
 } from "@codemirror/view";
-import { AlertCircle, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronUp, RotateCcw } from "../chrome/icons";
 import { minimalSetup } from "codemirror";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {

@@ -7,7 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check } from "lucide-react";
+import { Check } from "./icons";
 
 export type ExplorerMenuItem =
   | { kind: "sep" }

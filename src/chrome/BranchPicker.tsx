@@ -1,4 +1,4 @@
-import { Check, GitBranch, Plus, Search } from "lucide-react";
+import { Check, GitBranch, Plus, Search } from "./icons";
 import {
   useEffect,
   useLayoutEffect,

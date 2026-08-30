@@ -9,7 +9,7 @@ import {
   LoaderCircle,
   RefreshCw,
   Search,
-} from "lucide-react";
+} from "../chrome/icons";
 import {
   useEffect,
   useMemo,

@@ -1,4 +1,4 @@
-import { Brain, ChevronDown, Gauge, Maximize2, Zap } from "lucide-react";
+import { Brain, ChevronDown, Gauge, Maximize2, Zap } from "./icons";
 import {
   useEffect,
   useLayoutEffect,

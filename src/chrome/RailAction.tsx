@@ -1,8 +1,8 @@
-import type { LucideIcon } from "lucide-react";
+import type { IconComponent } from "./icons";
 
 type Props = {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   onClick?: () => void;
   active?: boolean;
   badge?: number;
@@ -68,7 +68,7 @@ export function RailSearch({
   ariaLabel,
 }: {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   onClick?: () => void;
   active?: boolean;
   shortcut?: string;
