@@ -37,6 +37,7 @@ import {
   loadThemeSaturation,
   loadTranscriptLayout,
   loadTranscriptZen,
+  loadTranscriptAnchor,
   saveBodyGlass,
   saveColorScheme,
   saveSidebarBlur,
@@ -46,7 +47,9 @@ import {
   saveThemeSaturation,
   saveTranscriptLayout,
   saveTranscriptZen,
+  saveTranscriptAnchor,
   TRANSCRIPT_ZEN_CHANGE_EVENT,
+  TRANSCRIPT_ANCHOR_CHANGE_EVENT,
   SIDEBAR_BLUR_DEFAULT,
   SIDEBAR_BLUR_MAX,
   SIDEBAR_BLUR_MIN,
@@ -255,18 +258,27 @@ function GeneralPage() {
     loadTranscriptLayout,
   );
   const [transcriptZen, setTranscriptZen] = useState(loadTranscriptZen);
+  const [transcriptAnchor, setTranscriptAnchor] = useState(
+    loadTranscriptAnchor,
+  );
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
   const [notesEnabled, setNotesEnabled] = useState(loadNotesEnabled);
   const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
   const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
 
   useEffect(() => {
-    const onChange = (event: Event) => {
+    const onZen = (event: Event) => {
       setTranscriptZen((event as CustomEvent<boolean>).detail === true);
     };
-    window.addEventListener(TRANSCRIPT_ZEN_CHANGE_EVENT, onChange);
-    return () =>
-      window.removeEventListener(TRANSCRIPT_ZEN_CHANGE_EVENT, onChange);
+    const onAnchor = (event: Event) => {
+      setTranscriptAnchor((event as CustomEvent<boolean>).detail === true);
+    };
+    window.addEventListener(TRANSCRIPT_ZEN_CHANGE_EVENT, onZen);
+    window.addEventListener(TRANSCRIPT_ANCHOR_CHANGE_EVENT, onAnchor);
+    return () => {
+      window.removeEventListener(TRANSCRIPT_ZEN_CHANGE_EVENT, onZen);
+      window.removeEventListener(TRANSCRIPT_ANCHOR_CHANGE_EVENT, onAnchor);
+    };
   }, []);
 
   const onLayout = (next: SidebarLayout) => {
@@ -282,6 +294,11 @@ function GeneralPage() {
   const onTranscriptLayout = (next: TranscriptLayout) => {
     saveTranscriptLayout(next);
     setTranscriptLayout(next);
+  };
+
+  const onTranscriptAnchor = (next: boolean) => {
+    saveTranscriptAnchor(next);
+    setTranscriptAnchor(next);
   };
 
   const onComposerRunner = (next: boolean) => {
@@ -332,6 +349,16 @@ function GeneralPage() {
             { value: "chat", label: "Chat" },
           ]}
           onChange={onTranscriptLayout}
+        />
+      </Row>
+      <Row
+        label="Anchor prompts to top"
+        description="When you send, the new prompt sits at the top of the transcript and the reply grows into the space below. Turn this off to keep the classic layout, with the latest message resting on the composer."
+      >
+        <Toggle
+          label="Anchor prompts to top"
+          on={transcriptAnchor}
+          onChange={onTranscriptAnchor}
         />
       </Row>
       <Row

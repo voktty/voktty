@@ -7,10 +7,14 @@ import {
   toggleTranscriptZen,
   TRANSCRIPT_LAYOUT_DEFAULT,
   TRANSCRIPT_ZEN_DEFAULT,
+  loadTranscriptAnchor,
+  saveTranscriptAnchor,
+  TRANSCRIPT_ANCHOR_DEFAULT,
 } from "./appearance";
 
 const KEY = "monocode.transcriptLayout";
 const ZEN_KEY = "monocode.transcriptZen";
+const ANCHOR_KEY = "monocode.transcriptAnchor";
 
 function mockLocalStorage() {
   const data = new Map<string, string>();
@@ -84,5 +88,24 @@ describe("zen mode setting", () => {
     expect(loadTranscriptZen()).toBe(false);
     expect(toggleTranscriptZen()).toBe(true);
     expect(loadTranscriptZen()).toBe(true);
+  });
+});
+
+describe("transcript prompt-to-top setting", () => {
+  beforeEach(mockLocalStorage);
+  afterEach(() => {
+    localStorage.removeItem(ANCHOR_KEY);
+  });
+
+  it("defaults to on", () => {
+    expect(TRANSCRIPT_ANCHOR_DEFAULT).toBe(true);
+    expect(loadTranscriptAnchor()).toBe(true);
+  });
+
+  it("persists across loads", () => {
+    saveTranscriptAnchor(true);
+    expect(loadTranscriptAnchor()).toBe(true);
+    saveTranscriptAnchor(false);
+    expect(loadTranscriptAnchor()).toBe(false);
   });
 });

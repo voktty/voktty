@@ -14,6 +14,7 @@ const PROJECT_RAIL_WIDTH_KEY = "monocode.projectRailWidth";
 const SIDEBAR_LAYOUT_KEY = "monocode.sidebarLayout";
 const TRANSCRIPT_LAYOUT_KEY = "monocode.transcriptLayout";
 const TRANSCRIPT_ZEN_KEY = "monocode.transcriptZen";
+const TRANSCRIPT_ANCHOR_KEY = "monocode.transcriptAnchor";
 
 export type ColorScheme = "dark" | "light";
 export type SidebarLayout = "classic" | "deck";
@@ -33,8 +34,13 @@ export const TRANSCRIPT_LAYOUT_DEFAULT: TranscriptLayout = "full";
 
 export const TRANSCRIPT_ZEN_DEFAULT = true;
 
+export const TRANSCRIPT_ANCHOR_DEFAULT = true;
+
 /** Fired on `window` whenever zen mode flips (detail: boolean). */
 export const TRANSCRIPT_ZEN_CHANGE_EVENT = "monocode:transcriptzenchange";
+
+/** Fired on `window` whenever prompt-to-top anchoring flips (detail: boolean). */
+export const TRANSCRIPT_ANCHOR_CHANGE_EVENT = "monocode:transcriptanchorchange";
 
 /** Fired on `window` whenever the transcript layout flips (detail: TranscriptLayout). */
 export const TRANSCRIPT_LAYOUT_CHANGE_EVENT = "monocode:transcriptlayoutchange";
@@ -395,4 +401,18 @@ export function toggleTranscriptZen(): boolean {
   const next = !loadTranscriptZen();
   saveTranscriptZen(next);
   return next;
+}
+
+export function loadTranscriptAnchor(): boolean {
+  return readFlag(TRANSCRIPT_ANCHOR_KEY) ?? TRANSCRIPT_ANCHOR_DEFAULT;
+}
+
+export function saveTranscriptAnchor(value: boolean) {
+  writeFlag(TRANSCRIPT_ANCHOR_KEY, value);
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<boolean>(TRANSCRIPT_ANCHOR_CHANGE_EVENT, {
+      detail: value,
+    }),
+  );
 }

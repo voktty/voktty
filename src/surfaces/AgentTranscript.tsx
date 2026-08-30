@@ -52,6 +52,7 @@ import { HarnessIcon } from "../chrome/HarnessIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
 import { useTranscriptZen } from "../hooks/useTranscriptZen";
+import { useTranscriptAnchor } from "../hooks/useTranscriptAnchor";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import type { TranscriptLayout } from "../lib/appearance";
 import { AgentMarkdown } from "./AgentMarkdown";
@@ -135,6 +136,7 @@ export function AgentTranscript({
   );
   const transcriptLayout = useTranscriptLayout();
   const zen = useTranscriptZen();
+  const promptAnchor = useTranscriptAnchor();
   const lastUserId = lastUserBlockId(blocks);
   const seenUserId = useRef(lastUserId);
   if (!visible) {
@@ -326,7 +328,7 @@ export function AgentTranscript({
               className={`transcript-turn flex min-w-0 flex-col gap-1${
                 isLastTurn ? " transcript-turn-live" : ""
               }${
-                anchorTurn && isLastTurn && userBlock
+                promptAnchor && anchorTurn && isLastTurn && userBlock
                   ? " transcript-turn-anchor"
                   : ""
               }`}
