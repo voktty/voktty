@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Scale } from "./icons";
+import { Check, ChevronRight, Split } from "./icons";
 import {
   useEffect,
   useLayoutEffect,
@@ -271,7 +271,7 @@ export function SecondOpinionButton({ from, onPick }: Props) {
           setOpen((value) => !value);
         }}
       >
-        <Scale className="size-3.5" strokeWidth={1.75} />
+        <Split className="size-3.5" strokeWidth={1.75} />
       </button>
       {open
         ? createPortal(
