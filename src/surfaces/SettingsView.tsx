@@ -123,9 +123,11 @@ import {
   KEYBINDINGS,
   loadClaudeHooks,
   loadComposerRunner,
+  loadLiveAgentsEnabled,
   loadNotesEnabled,
   saveClaudeHooks,
   saveComposerRunner,
+  saveLiveAgentsEnabled,
   saveNotesEnabled,
   settingsSectionDescription,
   settingsSectionLabel,
@@ -263,6 +265,9 @@ function GeneralPage() {
   );
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
   const [notesEnabled, setNotesEnabled] = useState(loadNotesEnabled);
+  const [liveAgentsEnabled, setLiveAgentsEnabled] = useState(
+    loadLiveAgentsEnabled,
+  );
   const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
   const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
 
@@ -309,6 +314,11 @@ function GeneralPage() {
   const onNotesEnabled = (next: boolean) => {
     saveNotesEnabled(next);
     setNotesEnabled(next);
+  };
+
+  const onLiveAgentsEnabled = (next: boolean) => {
+    saveLiveAgentsEnabled(next);
+    setLiveAgentsEnabled(next);
   };
 
   const onSoundsEnabled = (next: boolean) => {
@@ -389,6 +399,16 @@ function GeneralPage() {
           label="Notes"
           on={notesEnabled}
           onChange={onNotesEnabled}
+        />
+      </Row>
+      <Row
+        label="Working agents"
+        description="When two or more chats are in flight, a card on the project rail lists them so you can jump across projects. Finished turns stay until you open that session. Turn this off to hide the card."
+      >
+        <Toggle
+          label="Working agents"
+          on={liveAgentsEnabled}
+          onChange={onLiveAgentsEnabled}
         />
       </Row>
       <Row

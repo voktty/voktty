@@ -215,6 +215,7 @@ import {
   type SessionSummary,
 } from "./lib/sessionStore";
 import { syncDockBadge } from "./lib/dockBadge";
+import { liveAgentsFromSessions } from "./lib/liveAgents";
 import { hiddenApprovalNotices } from "./lib/approvalToast";
 import { nextUnseenFinishedSessions } from "./lib/sessionDone";
 import { playCue } from "./lib/sounds";
@@ -260,9 +261,11 @@ import {
   peekLinearIssueDetails,
 } from "./lib/linear";
 import {
+  loadLiveAgentsEnabled,
   loadNotesEnabled,
   loadSettingsSection,
   saveSettingsSection,
+  subscribeLiveAgentsEnabled,
   subscribeNotesEnabled,
   type SettingsSectionId,
 } from "./lib/settings";
@@ -471,6 +474,11 @@ export default function App({
   const notesEnabled = useSyncExternalStore(
     subscribeNotesEnabled,
     loadNotesEnabled,
+    () => true,
+  );
+  const liveAgentsEnabled = useSyncExternalStore(
+    subscribeLiveAgentsEnabled,
+    loadLiveAgentsEnabled,
     () => true,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -775,6 +783,14 @@ export default function App({
   }
   const unseenFinishedIds = unseenFinishedRef.current;
 
+  const liveAgents = useMemo(
+    () =>
+      liveAgentsEnabled
+        ? liveAgentsFromSessions(sessions, unseenFinishedIds)
+        : [],
+    [liveAgentsEnabled, sessions, unseenFinishedIds],
+  );
+
   const hiddenApprovalToasts = useMemo(
     () => hiddenApprovalNotices(sessions, activeTabId, tabs, composerFocused),
     [sessions, activeTabId, tabs, composerFocused],
@@ -1028,8 +1044,12 @@ export default function App({
   // then parks it and resumes on the next prompt.
   useEffect(() => {
     const visibleIds = openSessionIds(tabs);
+    const keepUnseen = liveAgentsEnabled;
     const idleDetached = sessions.filter(
-      (session) => !visibleIds.has(session.id) && !session.busy,
+      (session) =>
+        !visibleIds.has(session.id) &&
+        !session.busy &&
+        !(keepUnseen && unseenFinishedRef.current.has(session.id)),
     );
     if (idleDetached.length === 0) return;
     for (const session of idleDetached) {
@@ -1044,10 +1064,11 @@ export default function App({
         (session) =>
           visibleIds.has(session.id) ||
           session.busy ||
+          (keepUnseen && unseenFinishedRef.current.has(session.id)) ||
           skipForgetSessionIds.current.has(session.id),
       ),
     );
-  }, [sessions, tabs, persistSession]);
+  }, [sessions, tabs, persistSession, liveAgentsEnabled]);
 
   const activateTab = useCallback((id: string) => {
     setActiveTabId(id);
@@ -3416,6 +3437,16 @@ export default function App({
     [focusOpenSession, onSelectHistorySession],
   );
 
+  const onSelectLiveAgent = useCallback(
+    (sessionId: string) => {
+      setSearchViewOpen(false);
+      setInboxViewOpen(false);
+      setNotesViewOpen(false);
+      onOpenApprovalSession(sessionId);
+    },
+    [onOpenApprovalSession],
+  );
+
   const nextTitleTabs: TitleTab[] = deckProjectTabs.map((tab) =>
     toTitleTab(tab, sessions, dirtyFiles),
   );
@@ -3952,6 +3983,8 @@ export default function App({
         busyProjectPaths={sessions.flatMap((session) =>
           session.busy && session.cwd ? [session.cwd] : [],
         )}
+        liveAgents={liveAgents}
+        onSelectAgent={onSelectLiveAgent}
         onSelectProject={deckLayout ? onSelectProject : undefined}
         onOpenProject={deckLayout ? pickProject : undefined}
         onRemoveProject={deckLayout ? onRemoveProject : undefined}

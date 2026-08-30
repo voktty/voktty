@@ -145,6 +145,45 @@ export function subscribeNotesEnabled(onStoreChange: () => void) {
     window.removeEventListener(NOTES_ENABLED_CHANGE_EVENT, onStoreChange);
 }
 
+const LIVE_AGENTS_ENABLED_KEY = "monocode.liveAgentsEnabled";
+
+export const LIVE_AGENTS_ENABLED_DEFAULT = true;
+
+/** Fired on `window` when the working-agents rail card setting flips. */
+export const LIVE_AGENTS_ENABLED_CHANGE_EVENT =
+  "monocode:live-agents-enabled-change";
+
+export function loadLiveAgentsEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(LIVE_AGENTS_ENABLED_KEY);
+    if (raw == null) return LIVE_AGENTS_ENABLED_DEFAULT;
+    return raw === "1" || raw === "true";
+  } catch {
+    return LIVE_AGENTS_ENABLED_DEFAULT;
+  }
+}
+
+export function saveLiveAgentsEnabled(value: boolean) {
+  try {
+    localStorage.setItem(LIVE_AGENTS_ENABLED_KEY, value ? "1" : "0");
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<boolean>(LIVE_AGENTS_ENABLED_CHANGE_EVENT, {
+      detail: value,
+    }),
+  );
+}
+
+export function subscribeLiveAgentsEnabled(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(LIVE_AGENTS_ENABLED_CHANGE_EVENT, onStoreChange);
+  return () =>
+    window.removeEventListener(LIVE_AGENTS_ENABLED_CHANGE_EVENT, onStoreChange);
+}
+
 const CLAUDE_HOOKS_KEY = "monocode.claudeHooks";
 
 export const CLAUDE_HOOKS_DEFAULT = true;

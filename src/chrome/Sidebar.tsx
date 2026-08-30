@@ -43,6 +43,7 @@ import {
   type SessionSidebarFilters,
 } from "../lib/sessionFilters";
 import type { HarnessId } from "../lib/session";
+import type { LiveAgent } from "../lib/liveAgents";
 import type { SessionSummary } from "../lib/sessionStore";
 import type { SettingsSectionId } from "../lib/settings";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
@@ -124,6 +125,8 @@ type Props = {
   onShowSourceControl?: () => void;
   recents?: RecentProject[];
   busyProjectPaths?: Iterable<string>;
+  liveAgents?: LiveAgent[];
+  onSelectAgent?: (sessionId: string) => void;
   onSelectProject?: (path: string) => void;
   onOpenProject?: () => void;
   onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
@@ -181,6 +184,8 @@ function SidebarComponent({
   onShowSourceControl,
   recents = [],
   busyProjectPaths,
+  liveAgents = [],
+  onSelectAgent,
   onSelectProject,
   onOpenProject,
   onRemoveProject,
@@ -906,6 +911,9 @@ function SidebarComponent({
           recents={recents}
           inboxUnseen={inboxUnseen}
           busyPaths={busyProjectPaths}
+          liveAgents={liveAgents}
+          activeSessionId={activeSessionId}
+          onSelectAgent={onSelectAgent}
           canGoBack={canGoBack}
           canGoForward={canGoForward}
           onGoBack={onGoBack}
