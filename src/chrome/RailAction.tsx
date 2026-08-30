@@ -9,7 +9,6 @@ type Props = {
   dot?: boolean;
   shortcut?: string;
   ariaLabel?: string;
-  isNavButton?: boolean;
 };
 
 export function RailAction({
@@ -21,7 +20,6 @@ export function RailAction({
   dot = false,
   shortcut,
   ariaLabel,
-  isNavButton = false,
 }: Props) {
   return (
     <button
@@ -29,12 +27,10 @@ export function RailAction({
       onClick={onClick}
       disabled={!onClick}
       aria-label={ariaLabel ?? label}
-      className={`relative flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${
+      className={`relative flex w-full items-center gap-2 rounded-md px-2 h-8  text-left ${
         active
           ? "bg-content/10 text-content"
-          : isNavButton
-            ? "text-content/50 hover:bg-content/10 hover:text-content"
-            : "text-content/50 hover:bg-content/10 hover:text-content"
+          : "text-content/50 hover:bg-content/10 hover:text-content"
       } disabled:cursor-default disabled:opacity-40`}
     >
       {badge != null ? (
@@ -55,6 +51,46 @@ export function RailAction({
       {dot ? (
         <span aria-hidden className="size-2 shrink-0 rounded-full bg-accent" />
       ) : shortcut ? (
+        <span aria-hidden className="shrink-0 text-[11px] text-content/40">
+          {shortcut}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+export function RailSearch({
+  label,
+  icon: Icon,
+  onClick,
+  active = false,
+  shortcut,
+  ariaLabel,
+}: {
+  label: string;
+  icon: LucideIcon;
+  onClick?: () => void;
+  active?: boolean;
+  shortcut?: string;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      aria-label={ariaLabel ?? label}
+      className={`relative flex w-full items-center gap-2 rounded-md border border-content/8 px-1.5 shadow-xl h-8 text-left ${
+        active
+          ? "bg-content/10 text-content"
+          : "text-content/50 hover:bg-content/10 hover:text-content"
+      } disabled:cursor-default disabled:opacity-40`}
+    >
+      <Icon className="size-4 shrink-0 opacity-70" strokeWidth={1.75} />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
+        {label}
+      </span>
+      {shortcut ? (
         <span aria-hidden className="shrink-0 text-[11px] text-content/40">
           {shortcut}
         </span>

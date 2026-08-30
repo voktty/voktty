@@ -56,7 +56,7 @@ import {
 } from "../lib/tabGroups";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
-import { RailAction } from "./RailAction";
+import { RailAction, RailSearch } from "./RailAction";
 import { RemoveProjectDialog } from "./RemoveProjectDialog";
 import { TabVisitNav } from "./TitleBar";
 import { SidebarUpdate } from "./SidebarUpdate";
@@ -362,16 +362,16 @@ export function ProjectRail({
         />
       ) : (
         <>
-          <div className="flex shrink-0 flex-col gap-px px-2 pb-2">
-            <RailAction
+          <div className="flex shrink-0 flex-col gap-px px-2 pb-2 pt-0.5">
+            <RailSearch
               label="Search"
               icon={Search}
               onClick={onSearch}
               active={searchActive}
               shortcut={`${MOD}K`}
               ariaLabel={`Search (${MOD}K)`}
-              isNavButton
             />
+            <div className="mt-0.5" />
             <RailAction
               label="Inbox"
               icon={Inbox}
@@ -379,7 +379,6 @@ export function ProjectRail({
               active={inboxActive}
               dot={inboxUnseen}
               ariaLabel={inboxUnseen ? "Inbox, new items" : "Inbox"}
-              isNavButton
             />
             {notesEnabled ? (
               <RailAction
@@ -388,7 +387,6 @@ export function ProjectRail({
                 onClick={onOpenNotes}
                 active={notesActive}
                 ariaLabel="Notes"
-                isNavButton
               />
             ) : null}
           </div>
@@ -452,7 +450,6 @@ export function ProjectRail({
               onClick={onOpenSettings}
               shortcut={`${MOD},`}
               ariaLabel={`Settings (${MOD},)`}
-              isNavButton
             />
           </div>
         </>
@@ -690,7 +687,7 @@ function ProjectCard({
   return (
     <div
       ref={(el) => sortable.setItemRef(item.path, el)}
-      className={`group relative flex touch-none items-stretch rounded-md px-2 py-2 ${
+      className={`group relative flex touch-none items-stretch rounded-md px-2 h-8 ${
         selected
           ? "bg-content/12 text-content"
           : "opacity-65 hover:bg-content/5 hover:text-content"

@@ -853,7 +853,6 @@ function SidebarComponent({
               onClick={onOpenSettings}
               shortcut={`${MOD},`}
               ariaLabel={`Settings (${MOD},)`}
-              isNavButton
             />
           </div>
         </>
