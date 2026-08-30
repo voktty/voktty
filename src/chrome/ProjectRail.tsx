@@ -350,7 +350,7 @@ export function ProjectRail({
       className="sidebar-glass relative flex shrink-0 flex-col border-r border-content/10"
     >
       <div
-        className="flex h-10 shrink-0 items-center pr-1.5"
+        className="flex h-10 shrink-0 select-none items-center pr-1.5"
         data-tauri-drag-region="deep"
       >
         {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}

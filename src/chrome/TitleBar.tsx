@@ -1220,7 +1220,7 @@ function TitleBarComponent({
   // exempts buttons, links and inputs on its own.
   return (
     <header
-      className="flex h-10 shrink-0 items-stretch border-b border-content/10"
+      className="flex h-10 shrink-0 select-none items-stretch border-b border-content/10"
       data-tauri-drag-region="deep"
     >
       {/* Both the rail and the sidebar step aside without a project, so the

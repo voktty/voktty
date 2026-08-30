@@ -566,7 +566,7 @@ function SidebarComponent({
       {deckLayout && railVisible ? (
         <>
           <div
-            className="flex h-10 shrink-0 items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
+            className="flex h-10 shrink-0 select-none items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
             data-tauri-drag-region="deep"
           >
             <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
@@ -586,7 +586,7 @@ function SidebarComponent({
         <>
           {deckLayout ? (
             <div
-              className="flex h-10 shrink-0 items-center border-b border-content/10 pr-1.5"
+              className="flex h-10 shrink-0 select-none items-center border-b border-content/10 pr-1.5"
               data-tauri-drag-region="deep"
             >
               {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
@@ -602,7 +602,7 @@ function SidebarComponent({
             </div>
           ) : (
             <div
-              className="flex h-9.75 shrink-0 items-center justify-end pr-1.5"
+              className="flex h-9.75 shrink-0 select-none items-center justify-end pr-1.5"
               data-tauri-drag-region="deep"
             >
               <TabVisitNav
