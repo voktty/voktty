@@ -7,11 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-08-30
+
 ### Added
 
-- Claude Code hooks now run. MonoCode used to launch the CLI with `disableAllHooks`, so every hook in your `settings.json` — command rewrites, blocks, notifications — was silently skipped. Settings → General has a "Claude Code hooks" toggle (on by default) to turn them back off if one misbehaves. MonoCode's own helper spawns, like title generation, stay hook-free.
+- Notes: a markdown notebook on the project rail. Save a finished turn from the transcript, write your own, then mention it later with `@note` or add it to chat — the note shows as a card, the same way Inbox issues do. Settings → General has a Notes toggle (on by default) to hide it from the UI.
+- Claude Code hooks now run. MonoCode used to launch the CLI with `disableAllHooks`, so every hook in your `settings.json` — command rewrites, blocks, notifications — was silently skipped. Settings → General has a "Claude Code hooks" toggle (on by default) to turn them back off if one misbehaves. MonoCode's own helper spawns, like title generation, stay hook-free. In #25.
 
 ### Changed
+
+- Zen mode no longer ticks through one tool at a time. Related tool calls fold under the line the agent wrote to introduce them — a phase that stays open while it runs and collapses to a labelled header once the agent moves on, leaving an outline above the final answer. Click any group to read it back.
+- The usage footer only shows on a session, and only polls the provider that session is using. Search, Inbox, and Settings hide it.
+- Non-git folders keep the branch picker in the composer toolbar, labelled "No repo", so the bar does not jump when you open a plain directory.
+- Title bar tabs are rounded pills without dividers. The project rail's search field and project cards share a fixed height.
+- `#` headings are coloured in the notes editor and in markdown source preview.
+
+### Fixed
 
 - A permission prompt that a `PermissionRequest` hook resolves before you do is no longer labelled "Rejected" in the transcript.
 
@@ -303,7 +314,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/hardbeat920/monocode/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/hardbeat920/monocode/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/hardbeat920/monocode/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/hardbeat920/monocode/compare/v0.1.15...v0.1.16
