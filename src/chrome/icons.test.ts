@@ -1,7 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { FilePlus, FoldVertical, UnfoldVertical } from "./icons";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 const CATALOG = "chrome/icons.tsx";
@@ -38,5 +41,13 @@ describe("hugeicons imports", () => {
     }
 
     expect(violations).toEqual([]);
+  });
+
+  it("draws fold/unfold as strokes, not filled chevrons", () => {
+    for (const Icon of [FoldVertical, UnfoldVertical, FilePlus]) {
+      const html = renderToStaticMarkup(createElement(Icon));
+      expect(html, Icon.displayName).not.toMatch(/fill="currentColor"/);
+      expect(html, Icon.displayName).toMatch(/stroke="currentColor"/);
+    }
   });
 });

@@ -33,7 +33,6 @@ import FileAddIcon from "@hugeicons/core-free-icons/FileAddIcon";
 import FilePlusCornerIcon from "@hugeicons/core-free-icons/FilePlusCornerIcon";
 import FilterIcon from "@hugeicons/core-free-icons/FilterIcon";
 import FlashIcon from "@hugeicons/core-free-icons/FlashIcon";
-import FoldVerticalIcon from "@hugeicons/core-free-icons/FoldVerticalIcon";
 import Folder01Icon from "@hugeicons/core-free-icons/Folder01Icon";
 import FolderAddIcon from "@hugeicons/core-free-icons/FolderAddIcon";
 import FolderOpenIcon from "@hugeicons/core-free-icons/FolderOpenIcon";
@@ -74,7 +73,6 @@ import StarIcon from "@hugeicons/core-free-icons/StarIcon";
 import TerminalIcon from "@hugeicons/core-free-icons/TerminalIcon";
 import Tick02Icon from "@hugeicons/core-free-icons/Tick02Icon";
 import UndoIcon from "@hugeicons/core-free-icons/UndoIcon";
-import UnfoldVerticalIcon from "@hugeicons/core-free-icons/UnfoldVerticalIcon";
 import UngroupItemsIcon from "@hugeicons/core-free-icons/UngroupItemsIcon";
 import WholeWordIcon from "@hugeicons/core-free-icons/WholeWordIcon";
 import Wrench01Icon from "@hugeicons/core-free-icons/Wrench01Icon";
@@ -102,6 +100,33 @@ function wrap(icon: IconSvgElement, name: string) {
   Component.displayName = name;
   return Component;
 }
+
+const stroke = {
+  stroke: "currentColor",
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  strokeWidth: "1.5",
+} as const;
+
+/** Catalog FoldVertical/UnfoldVertical use filled chevrons; keep these stroke-only. */
+const foldDashes: IconSvgElement = [
+  ["path", { d: "M2 12H4", ...stroke, key: "0" }],
+  ["path", { d: "M8 12H10", ...stroke, key: "1" }],
+  ["path", { d: "M14 12H16", ...stroke, key: "2" }],
+  ["path", { d: "M20 12H22", ...stroke, key: "3" }],
+];
+
+const FoldVerticalIcon: IconSvgElement = [
+  ...foldDashes,
+  ["path", { d: "M7 2L12 7L17 2", ...stroke, key: "4" }],
+  ["path", { d: "M7 22L12 17L17 22", ...stroke, key: "5" }],
+];
+
+const UnfoldVerticalIcon: IconSvgElement = [
+  ...foldDashes,
+  ["path", { d: "M7 7L12 2L17 7", ...stroke, key: "4" }],
+  ["path", { d: "M7 17L12 22L17 17", ...stroke, key: "5" }],
+];
 
 export const AlertCircle = wrap(AlertCircleIcon, "AlertCircle");
 export const AppWindow = wrap(AppWindowIcon, "AppWindow");
