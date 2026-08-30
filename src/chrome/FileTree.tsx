@@ -73,7 +73,6 @@ type Props = {
   gitStatuses?: GitStatusMap;
   onShowSourceControl?: () => void;
   sourceControlActive?: boolean;
-  deckLayout?: boolean;
 };
 
 type Creating = { id: number; parent: string; isDir: boolean };
@@ -223,7 +222,6 @@ export function FileTree({
   gitStatuses,
   sourceControlActive = false,
   onShowSourceControl,
-  deckLayout = false,
 }: Props) {
   const [expanded, setExpanded] = useState(() => loadExpanded(cwd));
   const [selectedPath, setSelectedPath] = useState(() => loadSelected(cwd));
@@ -619,23 +617,13 @@ export function FileTree({
         onContextMenu={onBackgroundMenu}
       >
         <div
-          className={`flex shrink-0 items-center overflow-visible border-b border-content/10 ${
-            deckLayout ? "h-9" : ""
-          }`}
+          className="flex h-9 shrink-0 items-center gap-px overflow-visible border-b border-content/10 px-2"
           onContextMenu={(e) => e.stopPropagation()}
         >
-          <HeaderIcon
-            label="New File"
-            onClick={() => startCreate(false)}
-            deckLayout={deckLayout}
-          >
+          <HeaderIcon label="New File" onClick={() => startCreate(false)}>
             <FilePlus className="size-3.5" strokeWidth={1.75} />
           </HeaderIcon>
-          <HeaderIcon
-            label="New Folder"
-            onClick={() => startCreate(true)}
-            deckLayout={deckLayout}
-          >
+          <HeaderIcon label="New Folder" onClick={() => startCreate(true)}>
             <FolderPlus className="size-3.5" strokeWidth={1.75} />
           </HeaderIcon>
           <HeaderIcon
@@ -647,7 +635,6 @@ export function FileTree({
               saveExpanded(cwd, next);
               setExpanded(next);
             }}
-            deckLayout={deckLayout}
           >
             <FoldVertical className="size-3.5" strokeWidth={1.75} />
           </HeaderIcon>
@@ -655,7 +642,6 @@ export function FileTree({
             <HeaderIcon
               label={`Search in files (${MOD}Shift+F)`}
               onClick={onSearch}
-              deckLayout={deckLayout}
             >
               <Search className="size-3.5" strokeWidth={1.75} />
             </HeaderIcon>
@@ -665,7 +651,6 @@ export function FileTree({
               cwd={cwd}
               active={sourceControlActive}
               onClick={onShowSourceControl}
-              deckLayout={deckLayout}
             />
           ) : null}
         </div>
@@ -744,13 +729,11 @@ function HeaderIcon({
   label,
   onClick,
   active = false,
-  deckLayout = false,
   children,
 }: {
   label: string;
   onClick?: () => void;
   active?: boolean;
-  deckLayout?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -761,9 +744,11 @@ function HeaderIcon({
       aria-pressed={active || undefined}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center place-items-center text-content/50 hover:bg-content/10 hover:text-content ${
-        deckLayout ? "h-9" : "h-8"
-      } ${active ? "bg-content/10 text-content" : ""}`}
+      className={`flex h-6 min-w-0 flex-1 items-center justify-center self-center rounded-md ${
+        active
+          ? "bg-content/10 text-content"
+          : "text-content/50 hover:bg-content/5 hover:text-content"
+      }`}
     >
       {children}
     </button>
@@ -774,12 +759,10 @@ function FileTreeDiffButton({
   cwd,
   active,
   onClick,
-  deckLayout = false,
 }: {
   cwd: string;
   active: boolean;
   onClick: () => void;
-  deckLayout?: boolean;
 }) {
   const enabled = Boolean(cwd) && cwd !== "~";
   const stats = useProjectDiffStats(cwd, enabled);
@@ -808,16 +791,20 @@ function FileTreeDiffButton({
       aria-pressed={active}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      className={`relative flex flex-1 shrink-0 items-center justify-center text-content/50 hover:bg-content/10 hover:text-content ${
-        deckLayout ? "h-9" : "h-8"
-      } ${active ? "bg-content/10 text-content" : ""}`}
+      className={`relative flex h-6 min-w-0 flex-1 items-center justify-center self-center rounded-md ${
+        active
+          ? "bg-content/10 text-content"
+          : "text-content/50 hover:bg-content/5 hover:text-content"
+      }`}
     >
-      <GitCompare className="size-3.5" strokeWidth={1.75} />
-      {files > 0 ? (
-        <span className="pointer-events-none absolute top-3.5 left-7 grid min-h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[7px] font-semibold leading-none text-white tabular-nums">
-          {badge}
-        </span>
-      ) : null}
+      <span className="relative">
+        <GitCompare className="size-3.5" strokeWidth={1.75} />
+        {files > 0 ? (
+          <span className="pointer-events-none absolute -top-1.5 -right-2 grid min-h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[7px] font-semibold leading-none text-white tabular-nums">
+            {badge}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 }

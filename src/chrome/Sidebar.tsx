@@ -650,7 +650,6 @@ function SidebarComponent({
             <FileTree
               key={gitRoot}
               cwd={gitRoot}
-              deckLayout={deckLayout}
               onOpenFile={onOpenFile}
               onOpenTerminal={onOpenTerminal}
               onFileMoved={onFileMoved}
