@@ -179,6 +179,7 @@ import {
   sameProjectPath,
 } from "./lib/recents";
 import {
+  applyDeletedSessionToWorkspace,
   filterTabsForProject,
   findTabForProject,
   planWorkspaceTabClose,
@@ -2429,11 +2430,9 @@ export default function App({
       lastPersisted.current.delete(sessionId);
       await deleteSession(sessionId).catch(() => undefined);
 
-      const affectedTabs = tabsRef.current.filter((tab) =>
-        leafIds(tab.layout).includes(sessionId),
-      );
-
-      if (affectedTabs.length === 0) {
+      if (
+        !tabsRef.current.some((tab) => leafIds(tab.layout).includes(sessionId))
+      ) {
         setSessions((prev) =>
           prev.filter((session) => session.id !== sessionId),
         );
@@ -2441,57 +2440,30 @@ export default function App({
         return;
       }
 
-      let nextTabs = [...tabsRef.current];
-      let nextSessions = sessionsRef.current.filter(
-        (session) => session.id !== sessionId,
-      );
-      let nextActiveTabId = activeTabIdRef.current;
-
-      for (const tab of affectedTabs) {
-        const tabIndex = nextTabs.findIndex((entry) => entry.id === tab.id);
-        const nextTab = closeLeaf(tab, sessionId);
-        if (nextTab) {
-          nextTabs[tabIndex] = nextTab;
-          continue;
-        }
-
-        if (nextTabs.length > 1) {
-          nextTabs = nextTabs.filter((entry) => entry.id !== tab.id);
-          if (tab.id === nextActiveTabId) {
-            nextActiveTabId =
-              (nextTabs[Math.max(0, tabIndex - 1)] ?? nextTabs[0])?.id ??
-              nextActiveTabId;
-          }
-          continue;
-        }
-
-        const replacement = newSession(
-          open?.harness ?? harness,
-          open?.cwd ?? summary?.cwd ?? sidebarCwd,
-          open?.model ?? summary?.model,
-          open?.runtimeMode ?? summary?.runtimeMode,
-          open?.modelSettings,
-        );
-        nextSessions = [
-          ...nextSessions.filter((session) => session.id !== sessionId),
-          replacement,
-        ];
-        nextTabs[0] = {
-          ...(tab as Extract<WorkspaceTab, { kind: "session" }>),
-          layout: leaf(replacement.id),
-          focusedId: replacement.id,
-          editorPanes: [],
-          terminalPanes: [],
-          diffOpen: false,
-          diffFocused: false,
-        };
-        nextActiveTabId = tab.id;
-      }
+      const {
+        tabs: nextTabs,
+        sessions: nextSessions,
+        activeTabId: nextActiveTabId,
+      } = applyDeletedSessionToWorkspace({
+        tabs: tabsRef.current,
+        sessions: sessionsRef.current,
+        sessionId,
+        activeTabId: activeTabIdRef.current,
+        scope: tabCloseScope,
+        createReplacement: (seed) =>
+          newSession(
+            seed?.harness ?? harness,
+            seed?.cwd ?? summary?.cwd ?? sidebarCwd,
+            seed?.model ?? summary?.model,
+            seed?.runtimeMode ?? summary?.runtimeMode,
+            seed?.modelSettings,
+          ),
+      });
 
       setSessions(nextSessions);
       setTabs(nextTabs);
       if (nextActiveTabId !== activeTabIdRef.current) {
-        setActiveTabId(nextActiveTabId);
+        activateTab(nextActiveTabId);
       }
       setComposerFocused(
         nextSessions.some((session) => {
@@ -2501,7 +2473,7 @@ export default function App({
       );
       void refreshHistory(sidebarCwd);
     },
-    [history, refreshHistory, sidebarCwd],
+    [activateTab, history, refreshHistory, sidebarCwd, tabCloseScope],
   );
 
   const onFocusDir = useCallback(
