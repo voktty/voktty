@@ -1137,21 +1137,50 @@ fn parse_helper_probe(output: &str) -> Result<HelperProbe, String> {
 
 fn helper_path(app: &AppHandle, architecture: &str) -> Result<PathBuf, String> {
     if let Ok(path) = std::env::var("VOKTTY_REMOTE_HELPER_PATH") {
-        return Ok(PathBuf::from(path));
+        let pb = PathBuf::from(path);
+        if pb.is_file() {
+            return Ok(pb);
+        }
     }
-    let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
-    let bundled = resource_dir
-        .join("remote")
-        .join(format!("{REMOTE_OS}-{architecture}"))
-        .join("voktty-remote");
-    if bundled.exists() {
-        return Ok(bundled);
+
+    let subpath = format!("{REMOTE_OS}-{architecture}/voktty-remote");
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // 1. Tauri resource directory (with and without "resources" wrapper directory)
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join("resources").join("remote").join(&subpath));
+        candidates.push(resource_dir.join("remote").join(&subpath));
     }
-    Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("resources")
-        .join("remote")
-        .join(format!("{REMOTE_OS}-{architecture}"))
-        .join("voktty-remote"))
+
+    // 2. Current executable directory and ancestors (handles runner subfolders, portable, and custom installs)
+    if let Ok(current_exe) = std::env::current_exe() {
+        let mut curr = current_exe.parent();
+        for _ in 0..5 {
+            if let Some(dir) = curr {
+                candidates.push(dir.join("resources").join("remote").join(&subpath));
+                candidates.push(dir.join("remote").join(&subpath));
+                candidates.push(dir.join("src-tauri").join("resources").join("remote").join(&subpath));
+                curr = dir.parent();
+            } else {
+                break;
+            }
+        }
+    }
+
+    // 3. Cargo manifest dir (development / testing fallback)
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    candidates.push(manifest_dir.join("resources").join("remote").join(&subpath));
+    candidates.push(manifest_dir.join("..").join("src-tauri").join("resources").join("remote").join(&subpath));
+
+    for path in &candidates {
+        if path.is_file() {
+            return Ok(path.clone());
+        }
+    }
+
+    Err(format!(
+        "remote helper binary 'voktty-remote' for {architecture} was not found on local system (checked resource directory and application paths)"
+    ))
 }
 
 fn read_bundled_helper(helper_path: &Path, architecture: &str) -> Result<BundledHelper, String> {
