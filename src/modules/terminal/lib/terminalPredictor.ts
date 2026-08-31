@@ -388,18 +388,15 @@ export async function predictTerminalSuggestions(
     const normalized = normalizeCommandForEnv(entry.cmd, isUnix);
     const normLower = normalized.toLowerCase();
 
-    // Check if it matches query
-    if (!normLower.includes(queryLower)) continue;
+    // Check if it strictly matches query from the first character
+    if (!normLower.startsWith(queryLower)) continue;
 
     const recencyBonus = entry.last
       ? Math.max(0, 5_000 - Math.min(5_000, Math.floor((Date.now() / 1000 - entry.last) / 3600)))
       : 0;
     const countBonus = Math.min(5_000, (entry.count || 1) * 50);
-    let score = recencyBonus + countBonus;
+    let score = recencyBonus + countBonus + 10_000;
 
-    if (normLower.startsWith(queryLower)) {
-      score += 10_000;
-    }
     if (normalized === trimmed) {
       score += 20_000;
     }
@@ -443,12 +440,22 @@ export async function predictTerminalSuggestions(
 
   // 4. Ghost Tail Calculation
   let ghostTail = "";
+  const queryLowerPrefix = query.toLowerCase();
+  const trimmedLowerPrefix = trimmed.toLowerCase();
   const top =
-    rankedItems.find((i) => i.text.startsWith(query) && i.text.length > query.length) ??
-    rankedItems.find((i) => i.text.startsWith(trimmed) && i.text.length > trimmed.length);
+    rankedItems.find(
+      (i) =>
+        i.text.toLowerCase().startsWith(queryLowerPrefix) &&
+        i.text.length > query.length,
+    ) ??
+    rankedItems.find(
+      (i) =>
+        i.text.toLowerCase().startsWith(trimmedLowerPrefix) &&
+        i.text.length > trimmed.length,
+    );
 
   if (top) {
-    if (top.text.startsWith(query)) {
+    if (top.text.toLowerCase().startsWith(queryLowerPrefix)) {
       ghostTail = top.text.slice(query.length);
     } else {
       ghostTail = top.text.slice(trimmed.length).trimStart();
