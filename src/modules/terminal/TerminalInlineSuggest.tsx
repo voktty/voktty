@@ -252,11 +252,11 @@ export const TerminalInlineSuggest = memo(function TerminalInlineSuggest({
           </span>
           <span className="flex items-center gap-1 text-[10px] text-muted-foreground/80 pl-0.5">
             <kbd className="rounded border border-border/50 bg-muted/60 px-1 py-0.2 text-[9px] font-sans text-muted-foreground">
-              Tab ⇥
+              Tab
             </kbd>
             {items.length > 1 && (
               <span className="rounded-full bg-primary/15 text-primary px-1.5 py-0.2 text-[9.5px] font-medium flex items-center gap-0.5">
-                +{items.length - 1} <span className="text-[8px]">▼</span>
+                +{items.length - 1} <span className="text-[9px]">↓</span>
               </span>
             )}
           </span>
