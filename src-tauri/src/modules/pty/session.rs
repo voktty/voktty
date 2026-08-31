@@ -368,7 +368,7 @@ pub fn spawn(
     };
 
     #[cfg(not(target_os = "android"))]
-    let (master_box, killer, mut reader, writer, shell_pid, mut child, job) = {
+    let (master_box, killer, mut reader, writer, shell_pid, mut child, _job) = {
         let pty_system = native_pty_system();
         let pair = {
             #[cfg(windows)]
@@ -391,7 +391,7 @@ pub fn spawn(
         let shell_pid = child.process_id().unwrap_or(0);
 
         #[cfg(windows)]
-        let job = match child.process_id() {
+        let _job = match child.process_id() {
             Some(pid) => match crate::modules::proc::job::ProcessJob::create_for(pid) {
                 Ok(j) => Some(j),
                 Err(e) => {
@@ -402,9 +402,9 @@ pub fn spawn(
             None => None,
         };
         #[cfg(not(windows))]
-        let job = ();
+        let _job = ();
 
-        (pair.master, killer, reader, writer, shell_pid, child, job)
+        (pair.master, killer, reader, writer, shell_pid, child, _job)
     };
 
     let exited = Arc::new(AtomicBool::new(false));
@@ -412,7 +412,7 @@ pub fn spawn(
 
     let session = Arc::new(Session {
         #[cfg(windows)]
-        _job: job,
+        _job,
         shell_pid,
         killer: Mutex::new(killer),
         writer: writer.clone(),
