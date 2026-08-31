@@ -2,14 +2,7 @@
 //!
 //! - macOS: macOS Keychain (via `keyring` crate)
 //! - Windows: Credential Manager (via `keyring` crate)
-//! - Linux: a file in the app's local data dir, mode 0600. The default
-//!   `keyring` backend on Linux is the Secret Service over D-Bus, which
-//!   silently fails on systems without gnome-keyring/kwallet (and on the
-//!   "login" collection not being created). For an open-source desktop
-//!   app shipped via AppImage/deb/rpm, we cannot assume a keyring daemon
-//!   exists. The file backend is the same approach Brave/Chromium fall
-//!   back to in that scenario; user-only file permissions provide the
-//!   isolation the secret-service collection would have otherwise.
+//! - Linux / Android: a file in the app's local data dir, mode 0600.
 //!
 //! The frontend talks to `secrets_get`, `secrets_set`, `secrets_delete`,
 //! and `secrets_get_all` — no platform branching in JS.
@@ -22,41 +15,41 @@ use std::sync::Mutex;
 use crate::identity::{KEYRING_SERVICE, LEGACY_KEYRING_SERVICE};
 use tauri::AppHandle;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 use std::collections::HashMap;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 use std::fs;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 use std::path::PathBuf;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 use tauri::Manager;
 
 #[derive(Default)]
 pub struct SecretsState {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     cache: Mutex<Option<HashMap<String, String>>>,
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     _phantom: Mutex<()>,
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) fn key(service: &str, account: &str) -> String {
     format!("{}::{}", service, account)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn store_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("secrets.json"))
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn read_store(app: &AppHandle) -> Result<HashMap<String, String>, String> {
     read_store_at(&store_path(app)?)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) fn read_store_at(path: &std::path::Path) -> Result<HashMap<String, String>, String> {
     if !path.exists() {
         return Ok(HashMap::new());
@@ -65,12 +58,12 @@ pub(crate) fn read_store_at(path: &std::path::Path) -> Result<HashMap<String, St
     serde_json::from_slice::<HashMap<String, String>>(&bytes).map_err(|e| e.to_string())
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn write_store(app: &AppHandle, map: &HashMap<String, String>) -> Result<(), String> {
     write_store_at(&store_path(app)?, map)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) fn write_store_at(
     path: &std::path::Path,
     map: &HashMap<String, String>,
@@ -95,7 +88,7 @@ pub(crate) fn write_store_at(
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn with_store<F, R>(app: &AppHandle, state: &SecretsState, f: F) -> Result<R, String>
 where
     F: FnOnce(&mut HashMap<String, String>) -> R,
@@ -108,7 +101,7 @@ where
     Ok(f(map))
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
 fn entry(service: &str, account: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(service, account).map_err(|e| e.to_string())
 }
@@ -119,7 +112,7 @@ pub(crate) fn get_secret(
     service: &str,
     account: &str,
 ) -> Result<Option<String>, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         let current = with_store(app, state, |map| map.get(&key(service, account)).cloned())?;
         if current.is_some() || service != KEYRING_SERVICE {
@@ -129,7 +122,7 @@ pub(crate) fn get_secret(
             map.get(&key(LEGACY_KEYRING_SERVICE, account)).cloned()
         })
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
         let _ = (app, state);
         match entry(service, account)?.get_password() {
@@ -154,7 +147,7 @@ pub(crate) fn set_secret(
     account: &str,
     password: &str,
 ) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         with_store(app, state, |map| {
             map.insert(key(service, account), password.into());
@@ -165,7 +158,7 @@ pub(crate) fn set_secret(
         };
         write_store(app, &snapshot)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
         let _ = (app, state);
         entry(service, account)?
@@ -180,7 +173,7 @@ pub(crate) fn delete_secret(
     service: &str,
     account: &str,
 ) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         with_store(app, state, |map| {
             map.remove(&key(service, account));
@@ -194,7 +187,7 @@ pub(crate) fn delete_secret(
         };
         write_store(app, &snapshot)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
         let _ = (app, state);
         match entry(service, account)?.delete_credential() {
@@ -332,7 +325,7 @@ pub async fn secrets_get_all(
     service: String,
     accounts: Vec<String>,
 ) -> Result<Vec<Option<String>>, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         with_store(&app, &state, |m| {
             accounts
@@ -347,7 +340,7 @@ pub async fn secrets_get_all(
                 .collect()
         })
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
         let _ = (app, state);
         Ok(accounts

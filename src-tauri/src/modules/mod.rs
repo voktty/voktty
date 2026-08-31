@@ -2,6 +2,8 @@ pub mod agent;
 pub mod agent_history;
 pub mod aliases;
 pub mod api_client;
+#[cfg(target_os = "android")]
+pub mod bootstrap;
 pub mod collab;
 pub mod control;
 pub mod dap;

@@ -1,11 +1,16 @@
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::{
     menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, Runtime,
 };
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use tauri::AppHandle;
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 const TRAY_ID: &str = "main-tray";
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[derive(Clone, Copy)]
 struct TrayLabels {
     show_hide: &'static str,
@@ -15,6 +20,7 @@ struct TrayLabels {
     tooltip: &'static str,
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn tray_labels(language: &str) -> TrayLabels {
     match language {
         "es" => TrayLabels {
@@ -61,98 +67,65 @@ fn tray_labels(language: &str) -> TrayLabels {
         },
         "ja" => TrayLabels {
             show_hide: "Voktty を表示 / 非表示",
-            new_terminal: "新しいターミナル",
-            new_preview: "新しい Web プレビュー",
+            new_terminal: "新規ターミナル",
+            new_preview: "新規 Web プレビュー",
             quit: "Voktty を終了",
             tooltip: "Voktty - AI ターミナルとワークスペース",
-        },
-        "ko" => TrayLabels {
-            show_hide: "Voktty 표시 / 숨기기",
-            new_terminal: "새 터미널",
-            new_preview: "새 웹 미리보기",
-            quit: "Voktty 종료",
-            tooltip: "Voktty - AI 터미널 및 작업 공간",
         },
         "ru" => TrayLabels {
             show_hide: "Показать / скрыть Voktty",
             new_terminal: "Новый терминал",
-            new_preview: "Новое веб-превью",
+            new_preview: "Новый веб-просмотр",
             quit: "Выйти из Voktty",
             tooltip: "Voktty - ИИ-терминал и рабочее пространство",
         },
-        "hi" => TrayLabels {
-            show_hide: "Voktty दिखाएं / छिपाएं",
-            new_terminal: "नया टर्मिनल",
-            new_preview: "नया वेब प्रीव्यू",
-            quit: "Voktty से बाहर निकलें",
-            tooltip: "Voktty - AI टर्मिनल और कार्यक्षेत्र",
-        },
-        "ar" => TrayLabels {
-            show_hide: "إظهار / إخفاء Voktty",
-            new_terminal: "طرفية جديدة",
-            new_preview: "معاينة ويب جديدة",
-            quit: "الخروج من Voktty",
-            tooltip: "Voktty - طرفية ومساحة عمل بالذكاء الاصطناعي",
-        },
         _ => TrayLabels {
             show_hide: "Show / Hide Voktty",
-            new_terminal: "New terminal",
-            new_preview: "New web preview",
+            new_terminal: "New Terminal",
+            new_preview: "New Web Preview",
             quit: "Quit Voktty",
-            tooltip: "Voktty - AI Terminal and Workspace",
+            tooltip: "Voktty - AI Terminal & Workspace",
         },
     }
 }
 
-fn build_menu<R: Runtime>(app: &AppHandle<R>, labels: TrayLabels) -> tauri::Result<Menu<R>> {
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn build_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    labels: TrayLabels,
+) -> Result<Menu<R>, tauri::Error> {
     let show_hide = MenuItemBuilder::with_id("show_hide", labels.show_hide).build(app)?;
-    let sep1 = PredefinedMenuItem::separator(app)?;
     let new_terminal = MenuItemBuilder::with_id("new_terminal", labels.new_terminal).build(app)?;
     let new_preview = MenuItemBuilder::with_id("new_preview", labels.new_preview).build(app)?;
-    let sep2 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItemBuilder::with_id("quit", labels.quit).build(app)?;
+    let separator = PredefinedMenuItem::separator(app)?;
 
     MenuBuilder::new(app)
-        .item(&show_hide)
-        .item(&sep1)
-        .item(&new_terminal)
-        .item(&new_preview)
-        .item(&sep2)
-        .item(&quit)
+        .items(&[
+            &show_hide,
+            &new_terminal,
+            &new_preview,
+            &separator,
+            &quit,
+        ])
         .build()
 }
 
-pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn setup_tray(app: &AppHandle) -> Result<(), tauri::Error> {
     let labels = tray_labels("en");
     let menu = build_menu(app, labels)?;
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         .tooltip(labels.tooltip)
-        .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "show_hide" => {
-                toggle_window(app);
-            }
-            "new_terminal" => {
-                show_and_focus(app);
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.emit("tray-new-terminal", ());
-                }
-            }
-            "new_preview" => {
-                show_and_focus(app);
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.emit("tray-new-preview", ());
-                }
-            }
-            "quit" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.emit("voktty:request-app-close", ());
-                }
-            }
-            _ => {}
-        })
+        .show_menu_on_left_click(false);
+
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+
+    builder
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
@@ -160,34 +133,55 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                 ..
             } = event
             {
-                let app = tray.app_handle();
-                toggle_window(app);
+                toggle_window(tray.app_handle());
             }
-        });
+        })
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show_hide" => toggle_window(app),
+            "new_terminal" => {
+                show_and_focus(app);
+                let _ = app.emit("tray:new_terminal", ());
+            }
+            "new_preview" => {
+                show_and_focus(app);
+                let _ = app.emit("tray:new_preview", ());
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .build(app)?;
 
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
+    Ok(())
+}
 
-    builder.build(app)?;
-
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn setup_tray(_app: &AppHandle) -> Result<(), tauri::Error> {
     Ok(())
 }
 
 #[tauri::command]
 pub async fn tray_set_language(app: AppHandle, language: String) -> Result<(), String> {
-    let labels = tray_labels(&language);
-    let menu = build_menu(&app, labels).map_err(|error| error.to_string())?;
-    let tray = app
-        .tray_by_id(TRAY_ID)
-        .ok_or_else(|| "system tray is not available".to_string())?;
-    tray.set_menu(Some(menu))
-        .map_err(|error| error.to_string())?;
-    tray.set_tooltip(Some(labels.tooltip))
-        .map_err(|error| error.to_string())?;
-    Ok(())
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let labels = tray_labels(&language);
+        let menu = build_menu(&app, labels).map_err(|error| error.to_string())?;
+        let tray = app
+            .tray_by_id(TRAY_ID)
+            .ok_or_else(|| "system tray is not available".to_string())?;
+        tray.set_menu(Some(menu))
+            .map_err(|error| error.to_string())?;
+        tray.set_tooltip(Some(labels.tooltip))
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = (app, language);
+        Ok(())
+    }
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn toggle_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
         let is_visible = window.is_visible().unwrap_or(false);
@@ -202,6 +196,7 @@ pub fn toggle_window<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn show_and_focus<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -212,20 +207,29 @@ pub fn show_and_focus<R: Runtime>(app: &AppHandle<R>) {
 
 #[tauri::command]
 pub async fn tray_toggle_window(app: AppHandle) -> Result<(), String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     toggle_window(&app);
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let _ = app;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn tray_hide_window(app: AppHandle) -> Result<(), String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if let Some(window) = app.get_webview_window("main") {
         window.hide().map_err(|e| e.to_string())?;
     }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let _ = app;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn tray_show_window(app: AppHandle) -> Result<(), String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     show_and_focus(&app);
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let _ = app;
     Ok(())
 }

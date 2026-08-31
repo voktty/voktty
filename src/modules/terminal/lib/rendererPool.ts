@@ -165,6 +165,15 @@ export function poolSize(): number {
   return slots.length;
 }
 
+export function scrollVisibleTerminal(lines: number): void {
+  for (const s of slots) {
+    if (s.currentLeafId !== null && !s.parked) {
+      s.term.scrollLines(lines);
+      return;
+    }
+  }
+}
+
 export type PoolSlotStat = {
   id: number;
   leafId: number | null;

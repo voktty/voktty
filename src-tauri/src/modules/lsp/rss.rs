@@ -17,7 +17,7 @@ pub fn rss_bytes(pid: u32) -> Option<u64> {
     Some(unsafe { info.assume_init() }.pti_resident_size)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub fn rss_bytes(pid: u32) -> Option<u64> {
     let statm = std::fs::read_to_string(format!("/proc/{pid}/statm")).ok()?;
     let pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;

@@ -1,0 +1,2 @@
+# Keep directory tracked in git.
+# Bootstrap zips (bootstrap-*.zip) are downloaded on build/CI or during development.
