@@ -10,7 +10,10 @@ use modules::{
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]
 use tauri::PhysicalPosition;
-use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{Emitter, Manager, WindowEvent};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use tauri::{WebviewUrl, WebviewWindowBuilder};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri_plugin_window_state::StateFlags;
 
 #[derive(Default)]
@@ -23,6 +26,20 @@ fn app_exit_after_flush(app: tauri::AppHandle, state: tauri::State<'_, ExitCoord
 }
 
 #[tauri::command]
+#[cfg(target_os = "android")]
+fn bootstrap_status() -> bool {
+    let marker = modules::bootstrap::rootfs_dir().join(".voktty_bootstrapped");
+    marker.exists()
+}
+
+#[tauri::command]
+#[cfg(not(target_os = "android"))]
+fn bootstrap_status() -> bool {
+    true
+}
+
+#[tauri::command]
+#[cfg(not(target_os = "android"))]
 async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Result<(), String> {
     let url_path = match tab.as_deref() {
         Some(t) if !t.is_empty() => format!("settings.html?tab={}", t),
@@ -78,15 +95,12 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
 
     #[cfg(target_os = "macos")]
     if let Some(main) = app.get_webview_window("main") {
-        if let (Ok(main_pos), Ok(main_size), Ok(settings_size)) = (
-            main.outer_position(),
-            main.outer_size(),
-            window.outer_size(),
-        ) {
-            let x = main_pos.x
-                + ((main_size.width as i32).saturating_sub(settings_size.width as i32)) / 2;
-            let y = main_pos.y
-                + ((main_size.height as i32).saturating_sub(settings_size.height as i32)) / 2;
+        let main_pos = main.outer_position().unwrap_or_default();
+        let main_size = main.outer_size().unwrap_or_default();
+        let settings_size = window.outer_size().unwrap_or_default();
+        let x = main_pos.x + ((main_size.width as i32 - settings_size.width as i32) / 2);
+        let y = main_pos.y + ((main_size.height as i32 - settings_size.height as i32) / 2);
+        if x > 0 && y > 0 {
             let _ = window.set_position(PhysicalPosition::new(x, y));
         } else {
             let _ = window.center();
@@ -96,6 +110,15 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     let _ = window;
 
+    Ok(())
+}
+
+#[tauri::command]
+#[cfg(target_os = "android")]
+async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Result<(), String> {
+    if let Some(t) = tab.as_deref().filter(|s| !s.is_empty()) {
+        let _ = app.emit("voktty:settings-tab", t);
+    }
     Ok(())
 }
 
@@ -142,18 +165,18 @@ pub fn run() {
     }));
     #[cfg(target_os = "linux")]
     let builder = builder.plugin(tauri_plugin_clipboard_manager::init());
-    builder
-        .plugin(tauri_plugin_process::init())
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        // Skip restoring VISIBLE — frontend calls window.show() after first
-        // paint so the user never sees a transparent window-shadow flash on
-        // Windows/Linux.
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
                 .build(),
         )
-        .plugin(tauri_plugin_autostart::Builder::new().build())
+        .plugin(tauri_plugin_autostart::Builder::new().build());
+
+    builder
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
@@ -185,6 +208,15 @@ pub fn run() {
                         if let Some(settings) = handle.get_webview_window("settings") {
                             let _ = settings.close();
                         }
+                    }
+                });
+            }
+            #[cfg(target_os = "android")]
+            {
+                let app_handle = _app.handle().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    if let Err(e) = modules::bootstrap::ensure_bootstrapped(Some(&app_handle)) {
+                        log::error!("bootstrap failed: {e}");
                     }
                 });
             }
@@ -221,6 +253,7 @@ pub fn run() {
         .manage(agent_history::AgentHistoryState::new())
         .manage(git_review::GitReviewState::default())
         .invoke_handler(tauri::generate_handler![
+            bootstrap_status,
             launch::launch_bootstrap,
             launch::launch_frontend_ready,
             launch::launch_acknowledge,

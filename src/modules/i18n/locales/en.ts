@@ -10,6 +10,7 @@ export const en = {
     close: "Close",
     copy: "Copy",
     copied: "Copied",
+    paste: "Paste",
     open: "Open",
     back: "Back",
     search: "Search",

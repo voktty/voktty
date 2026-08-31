@@ -216,30 +216,38 @@ fn resolve_extension_entry(path: &Path, extension_dir: &Path) -> Result<PathBuf,
 #[tauri::command]
 pub async fn extensions_open_dir() -> Result<(), String> {
     let dir = get_extensions_dir()?;
-    let path_str = dir.to_string_lossy().to_string();
-
-    #[cfg(target_os = "windows")]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        std::process::Command::new("explorer.exe")
-            .arg(&path_str)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let path_str = dir.to_string_lossy().to_string();
+
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("explorer.exe")
+                .arg(&path_str)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg(&path_str)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            std::process::Command::new("xdg-open")
+                .arg(&path_str)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     {
-        std::process::Command::new("open")
-            .arg(&path_str)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&path_str)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let _ = dir;
     }
 
     Ok(())

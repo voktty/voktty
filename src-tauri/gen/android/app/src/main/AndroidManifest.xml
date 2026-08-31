@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Storage access for file explorer and terminal -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- Keep screen on during terminal use -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Vibration for keyboard haptic feedback -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Notification permission for background processes -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- AndroidTV support -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+
+    <application
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.voktty"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
+        android:requestLegacyExternalStorage="true"
+        android:extractNativeLibs="true">
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:launchMode="singleTask"
+            android:label="@string/main_activity_title"
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- AndroidTV support -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <!-- tauri-file-associations. AUTO-GENERATED. DO NOT REMOVE. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="text/plain" />
+                <data android:pathPattern=".*\\.json" />
+                <data android:pathPattern=".*\\.jsonc" />
+                <data android:pathPattern=".*\\.txt" />
+                <data android:pathPattern=".*\\.log" />
+                <data android:pathPattern=".*\\.csv" />
+                <data android:pathPattern=".*\\.tsv" />
+                <data android:pathPattern=".*\\.md" />
+                <data android:pathPattern=".*\\.markdown" />
+                <data android:pathPattern=".*\\.mdx" />
+                <data android:pathPattern=".*\\.js" />
+                <data android:pathPattern=".*\\.mjs" />
+                <data android:pathPattern=".*\\.cjs" />
+                <data android:pathPattern=".*\\.jsx" />
+                <data android:pathPattern=".*\\.ts" />
+                <data android:pathPattern=".*\\.tsx" />
+                <data android:pathPattern=".*\\.mts" />
+                <data android:pathPattern=".*\\.cts" />
+                <data android:pathPattern=".*\\.java" />
+                <data android:pathPattern=".*\\.kt" />
+                <data android:pathPattern=".*\\.kts" />
+                <data android:pathPattern=".*\\.gradle" />
+                <data android:pathPattern=".*\\.py" />
+                <data android:pathPattern=".*\\.rb" />
+                <data android:pathPattern=".*\\.php" />
+                <data android:pathPattern=".*\\.go" />
+                <data android:pathPattern=".*\\.rs" />
+                <data android:pathPattern=".*\\.swift" />
+                <data android:pathPattern=".*\\.dart" />
+                <data android:pathPattern=".*\\.lua" />
+                <data android:pathPattern=".*\\.c" />
+                <data android:pathPattern=".*\\.h" />
+                <data android:pathPattern=".*\\.cpp" />
+                <data android:pathPattern=".*\\.cc" />
+                <data android:pathPattern=".*\\.hpp" />
+                <data android:pathPattern=".*\\.hh" />
+                <data android:pathPattern=".*\\.cs" />
+                <data android:pathPattern=".*\\.html" />
+                <data android:pathPattern=".*\\.htm" />
+                <data android:pathPattern=".*\\.css" />
+                <data android:pathPattern=".*\\.scss" />
+                <data android:pathPattern=".*\\.sass" />
+                <data android:pathPattern=".*\\.less" />
+                <data android:pathPattern=".*\\.vue" />
+                <data android:pathPattern=".*\\.svelte" />
+                <data android:pathPattern=".*\\.xml" />
+                <data android:pathPattern=".*\\.yaml" />
+                <data android:pathPattern=".*\\.yml" />
+                <data android:pathPattern=".*\\.toml" />
+                <data android:pathPattern=".*\\.ini" />
+                <data android:pathPattern=".*\\.cfg" />
+                <data android:pathPattern=".*\\.conf" />
+                <data android:pathPattern=".*\\.properties" />
+                <data android:pathPattern=".*\\.sh" />
+                <data android:pathPattern=".*\\.bash" />
+                <data android:pathPattern=".*\\.zsh" />
+                <data android:pathPattern=".*\\.sql" />
+                <data android:pathPattern=".*\\.graphql" />
+                <data android:pathPattern=".*\\.proto" />
+            </intent-filter>
+            
+            <!-- tauri-file-associations. AUTO-GENERATED. DO NOT REMOVE. -->
+        </activity>
+
+        <provider
+          android:name="androidx.core.content.FileProvider"
+          android:authorities="${applicationId}.fileprovider"
+          android:exported="false"
+          android:grantUriPermissions="true">
+          <meta-data
+            android:name="android.support.FILE_PROVIDER_PATHS"
+            android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>

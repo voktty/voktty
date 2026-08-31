@@ -220,6 +220,7 @@ import {
   WorkspaceSearchPanel,
 } from "@/modules/workspace-search";
 import { SettingsModal } from "@/settings/SettingsModal";
+import { BootstrapLoader } from "@/modules/mobile";
 import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -326,6 +327,7 @@ export default function App() {
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
   // (e.g. cdInNewTab) read the latest pane state instead of a stale closure.
   const { t } = useTranslation();
+  const [androidBootstrapped, setAndroidBootstrapped] = useState(false);
   const tabsRef = useRef(tabs);
   const activeIdRef = useRef(activeId);
   const activeSpaceId = useSpaces((s) => s.activeId);
@@ -4545,6 +4547,10 @@ export default function App() {
             onCancelAppClose={cancelAppClose}
             onConfirmAppClose={confirmAppClose}
           />
+
+          {!androidBootstrapped && (
+            <BootstrapLoader onComplete={() => setAndroidBootstrapped(true)} />
+          )}
         </div>
       </TooltipProvider>
     </ThemeProvider>

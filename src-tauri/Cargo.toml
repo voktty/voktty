@@ -55,6 +55,7 @@ tauri = { version = "2", features = ["macos-private-api", "protocol-asset", "tra
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+anyhow = "1"
 jsonschema = { version = "0.50", default-features = false }
 getrandom = "0.3"
 voktty-control-protocol = { path = "crates/voktty-control-protocol" }
@@ -63,7 +64,6 @@ voktty-collab-protocol = { path = "crates/voktty-collab-protocol" }
 voktty-remote-protocol = { path = "crates/voktty-remote-protocol" }
 voktty-tool-policy = { path = "crates/voktty-tool-policy" }
 voktty-workspace-edit = { path = "crates/voktty-workspace-edit" }
-portable-pty = "0.9"
 dirs = "6"
 log = "0.4"
 ignore = "0.4"
@@ -98,12 +98,12 @@ notify = "8.2.0"
 which = "8.0.4"
 base64 = "0.22"
 hex = "0.4"
+portable-pty = "0.9"
 sha2 = "0.10"
 hmac = "0.12"
 ring = "0.17"
 tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
 url = "2.5"
-rfd = "0.15"
 serialport = "4.7"
 bollard = "0.18"
 ironrdp-pdu = "0.9"
@@ -156,7 +156,12 @@ windows-sys = { version = "0.61", features = [
 	"Win32_System_Diagnostics_ToolHelp",
 ] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+nix = { version = "0.30", features = ["term", "process", "signal", "fs"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+rfd = "0.15"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2.4.3"
 tauri-plugin-updater = "2"

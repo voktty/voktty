@@ -89,6 +89,15 @@ export function useWorkspaceSwitcher({
     homeDir()
       .then(async (p) => {
         const normalized = p.replace(/\\/g, "/");
+        if (
+          normalized === "/data/user/0" ||
+          normalized === "/data/data" ||
+          normalized === "/" ||
+          normalized === "/data" ||
+          normalized.endsWith("/0")
+        ) {
+          return;
+        }
         setLocalHome(normalized);
         setHome((current) => current ?? normalized);
         try {
@@ -106,6 +115,8 @@ export function useWorkspaceSwitcher({
       .then((cwd) => {
         setLocalLaunchCwd(cwd);
         setLaunchCwd((current) => current ?? cwd);
+        setLocalHome((current) => current ?? cwd);
+        setHome((current) => current ?? cwd);
       })
       .catch(() => setLaunchCwd(null))
       .finally(() => setLaunchCwdResolved(true));

@@ -39,6 +39,10 @@ impl CursorAdapter {
                     .join("workspaceStorage")
             })
         }
+        #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+        {
+            None
+        }
     }
 }
 

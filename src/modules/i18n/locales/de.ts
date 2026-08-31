@@ -12,6 +12,7 @@ const deBase = mergeLocale(en, {
     close: "Schließen",
     copy: "Kopieren",
     copied: "Kopiert",
+    paste: "Einfügen",
     open: "Öffnen",
     back: "Zurück",
     search: "Suchen",

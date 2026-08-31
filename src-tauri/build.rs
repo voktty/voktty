@@ -7,6 +7,19 @@ fn configure_sidecar() {
     let Ok(target) = std::env::var("TARGET") else {
         return;
     };
+
+    if target.contains("android") || target.contains("ios") {
+        let mut config = std::env::var("TAURI_CONFIG")
+            .map(|value| serde_json::from_str(&value).expect("parse TAURI_CONFIG"))
+            .unwrap_or_else(|_| serde_json::json!({}));
+        config["bundle"]["externalBin"] = serde_json::json!([]);
+        std::env::set_var(
+            "TAURI_CONFIG",
+            serde_json::to_string(&config).expect("serialize TAURI_CONFIG"),
+        );
+        return;
+    }
+
     let extension = if target.contains("windows") {
         ".exe"
     } else {

@@ -38,6 +38,11 @@ import { ProjectScriptsHud } from "./scripts/ProjectScriptsHud";
 import { TerminalScrollBottomHud } from "./TerminalScrollBottomHud";
 import { TerminalInlineSuggest } from "./TerminalInlineSuggest";
 import { useShortcutLabel } from "@/modules/shortcuts/lib/useShortcutLabel";
+import {
+  ExtraKeysBar,
+  useResponsiveLayout,
+  useTerminalTouch,
+} from "@/modules/mobile";
 
 function ConnectionStatusBadge({
   workspaceEnv,
@@ -210,6 +215,10 @@ export const TerminalPane = memo(
     const { resolvedMode, activeTheme } = useTheme();
     const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
     const vibrancyOpacity = usePreferencesStore((s) => s.vibrancyOpacity);
+    const { isTouch, isTablet } = useResponsiveLayout();
+    const [selectionMode, setSelectionMode] = useState(false);
+
+    useTerminalTouch(containerRef, selectionMode, leafId, isTouch);
 
     const [currentCwd, setCurrentCwd] = useState<string | null>(
       initialCwd ?? leafCwd(leafId) ?? null,
@@ -464,6 +473,15 @@ export const TerminalPane = memo(
             onCancel={session.cancelConnection}
           />
         </div>
+        {isTouch && (
+          <ExtraKeysBar
+            visible={visible}
+            isTablet={isTablet}
+            activeLeafId={leafId}
+            selectionMode={selectionMode}
+            onToggleSelectionMode={() => setSelectionMode((prev) => !prev)}
+          />
+        )}
       </div>
     );
   }),

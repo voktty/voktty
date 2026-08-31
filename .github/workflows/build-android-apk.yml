@@ -1,0 +1,182 @@
+name: Build Android APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust_target: aarch64-linux-android
+            tauri_target: aarch64
+            ndk_prefix: aarch64-linux-android
+            abi: arm64-v8a
+            bootstrap_arch: aarch64
+            apk_suffix: arm64
+          - rust_target: x86_64-linux-android
+            tauri_target: x86_64
+            ndk_prefix: x86_64-linux-android
+            abi: x86_64
+            bootstrap_arch: x86_64
+            apk_suffix: x64
+          - rust_target: armv7-linux-androideabi
+            tauri_target: armv7
+            ndk_prefix: armv7a-linux-androideabi
+            abi: armeabi-v7a
+            bootstrap_arch: arm
+            apk_suffix: arm32
+          - rust_target: i686-linux-android
+            tauri_target: i686
+            ndk_prefix: i686-linux-android
+            abi: x86
+            bootstrap_arch: i686
+            apk_suffix: x86
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android NDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;28.2.13676358" || true
+          NDK_DIR="$ANDROID_HOME/ndk/28.2.13676358"
+          if [ ! -d "$NDK_DIR" ]; then
+            LATEST_NDK=$(ls -1d $ANDROID_HOME/ndk/* 2>/dev/null | sort -V | tail -n 1)
+            if [ -n "$LATEST_NDK" ]; then
+              NDK_DIR="$LATEST_NDK"
+            fi
+          fi
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+          echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+          TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "$TOOLCHAIN" >> $GITHUB_PATH
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-${{ runner.os }}-${{ matrix.rust_target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-${{ matrix.rust_target }}-
+
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          PNPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS: "true"
+
+      - name: Download bootstrap zip if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p src-tauri/bootstrap-zips
+          mkdir -p src-tauri/gen/android/app/src/main/jniLibs/${{ matrix.abi }}
+          ZIP_FILE="src-tauri/bootstrap-zips/bootstrap-${{ matrix.bootstrap_arch }}.zip"
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "Downloading bootstrap zip for ${{ matrix.bootstrap_arch }}..."
+            gh release download bootstrap-v15 \
+              --repo zico20047/terax-ai-android \
+              --pattern "bootstrap-${{ matrix.bootstrap_arch }}.zip" \
+              --dir src-tauri/bootstrap-zips \
+              --clobber
+          fi
+          SIZE=$(stat -c%s "$ZIP_FILE")
+          echo "Bootstrap zip size: $SIZE bytes"
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "ERROR: Bootstrap zip too small ($SIZE bytes)!"
+            exit 1
+          fi
+          echo "OK: bootstrap zip verified ($SIZE bytes)"
+
+      - name: Compile LD_PRELOAD library
+        run: |
+          TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
+          $TOOLCHAIN/${{ matrix.ndk_prefix }}28-clang \
+            -shared -fPIC -O2 \
+            -o src-tauri/gen/android/app/src/main/jniLibs/${{ matrix.abi }}/libvoktty-path-translate.so \
+            src-tauri/src/modules/path-translate/path-translate.c
+
+      - name: Configure Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.VOKTTY_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.VOKTTY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VOKTTY_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VOKTTY_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            KEYSTORE_PATH="src-tauri/gen/android/app/voktty-release.keystore"
+            echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+            cat > src-tauri/gen/android/local.properties << EOF
+          VOKTTY_STORE_PASSWORD=$STORE_PASSWORD
+          VOKTTY_KEY_ALIAS=$KEY_ALIAS
+          VOKTTY_KEY_PASSWORD=$KEY_PASSWORD
+          EOF
+          fi
+
+      - name: Build APK
+        run: pnpm tauri android build --apk --target ${{ matrix.tauri_target }}
+
+      - name: Rename APK
+        run: |
+          APK_DIR="src-tauri/gen/android/app/build/outputs/apk/universal"
+          APK=$(find "$APK_DIR" -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then
+            APK_DIR="src-tauri/gen/android/app/build/outputs/apk"
+            APK=$(find "$APK_DIR" -name "*.apk" | head -1)
+          fi
+          cp "$APK" \
+            voktty-android-${{ github.ref_name || 'testing' }}-${{ matrix.apk_suffix }}.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voktty-android-${{ matrix.apk_suffix }}
+          path: voktty-android-*.apk
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/voktty-android-*.apk
+          generate_release_notes: true
+          tag_name: ${{ github.ref_name || 'testing' }}
+          prerelease: ${{ contains(github.ref_name, 'testing') || contains(github.ref_name, 'beta') || github.event_name == 'workflow_dispatch' }}

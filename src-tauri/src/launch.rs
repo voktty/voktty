@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "android", allow(dead_code))]
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -353,6 +355,7 @@ pub fn enqueue_and_emit(app: &AppHandle, request: LaunchRequest) -> bool {
 pub fn focus_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
