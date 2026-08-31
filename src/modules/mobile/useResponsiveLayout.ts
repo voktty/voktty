@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IS_MOBILE_OS } from "@/lib/platform";
 
 export interface ResponsiveLayout {
   isMobile: boolean;
@@ -27,14 +28,13 @@ function getLayoutState(): ResponsiveLayout {
 
   const width = window.innerWidth;
   const height = window.innerHeight;
-  const isTouch =
-    navigator.maxTouchPoints > 0 ||
-    window.matchMedia("(pointer: coarse)").matches;
   const isPortrait = height >= width;
   const isLandscape = width > height;
-  const isMobile = width < 768;
-  const isTablet = width >= 768 && (width < 1024 || (isTouch && width < 1366));
-  const isDesktop = !isMobile && !isTablet;
+
+  const isMobile = IS_MOBILE_OS && width < 768;
+  const isTablet = IS_MOBILE_OS && width >= 768;
+  const isDesktop = !IS_MOBILE_OS;
+  const isTouch = IS_MOBILE_OS;
 
   return {
     isMobile,
