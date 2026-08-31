@@ -185,6 +185,7 @@ pub fn run() {
             fs::git_github_repo,
             fs::git_github_work_items,
             fs::git_github_work_item_details,
+            fs::git_github_work_item_thread,
             fs::git_github_pr_diff,
             linear::linear_status,
             linear::linear_set_token,

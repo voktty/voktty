@@ -156,10 +156,31 @@ input,
 .agent-transcript,
 .markdown-preview,
 .inbox-pr-diff,
+.inbox-comment-md,
 .monocode-terminal,
 .monocode-terminal .xterm,
 .monocode-terminal .xterm-viewport {
   user-select: text;
+}
+
+.inbox-comment-md.agent-markdown p:first-child,
+.inbox-comment-md.agent-markdown li:first-child,
+.inbox-comment-md.agent-markdown blockquote:first-child {
+  margin-top: 0;
+}
+
+.inbox-comment-md.agent-markdown p:last-child,
+.inbox-comment-md.agent-markdown li:last-child,
+.inbox-comment-md.agent-markdown blockquote:last-child {
+  margin-bottom: 0;
+}
+
+.inbox-comment-md.agent-markdown blockquote {
+  margin: 0.4em 0;
+  padding: 0.15em 0 0.15em 0.75em;
+  border-left: 2px solid
+    color-mix(in srgb, var(--color-content) 16%, transparent);
+  color: color-mix(in srgb, var(--color-content) 55%, transparent);
 }
 
 html.is-reordering,

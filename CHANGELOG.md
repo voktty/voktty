@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Inbox pull request and issue details load the conversation (comments, reviews, and review threads) in the background, so the description still appears first.
 - Grok Build joins the provider list. Install it with `curl -fsSL https://x.ai/cli/install.sh | bash` and run `grok login` (or set `XAI_API_KEY`). MonoCode runs `grok agent stdio` like the other ACP harnesses: live turns, supervised approvals, model catalog, reasoning effort, context usage, skills from `.grok/skills`, and titles / commit / PR text.
 
 ## [0.1.22] - 2026-08-31

@@ -57,6 +57,32 @@ export type GithubWorkItemDetails = {
   body: string;
   author: string;
   authorAvatarUrl?: string;
+  baseRefName?: string;
+  headRefName?: string;
+  reviewDecision?: string;
+};
+
+export type GithubWorkItemComment = {
+  id: string;
+  kind: string;
+  author: string;
+  authorAvatarUrl?: string;
+  body: string;
+  createdAt: string;
+  url: string;
+  state: string;
+  path: string;
+  line: number | null;
+  resolved: boolean;
+  replies: GithubWorkItemComment[];
+};
+
+export type GithubWorkItemThread = {
+  comments: GithubWorkItemComment[];
+  truncated: boolean;
+  reviewDecision: string;
+  baseRefName: string;
+  headRefName: string;
 };
 
 export type GithubPrFile = {
@@ -102,6 +128,8 @@ let inboxListCache: InboxListCache | null = null;
 const inboxListInflight = new Map<string, Promise<InboxListResult>>();
 const repoByPath = new Map<string, string>();
 const detailsByKey = new Map<string, GithubWorkItemDetails>();
+const threadByKey = new Map<string, GithubWorkItemThread>();
+const threadInflight = new Map<string, Promise<GithubWorkItemThread>>();
 const prDiffByKey = new Map<string, GithubPrDiff>();
 const prDiffInflight = new Map<string, Promise<GithubPrDiff>>();
 
@@ -110,6 +138,8 @@ export function clearInboxCache() {
   inboxListInflight.clear();
   repoByPath.clear();
   detailsByKey.clear();
+  threadByKey.clear();
+  threadInflight.clear();
   prDiffByKey.clear();
   prDiffInflight.clear();
 }
@@ -267,6 +297,66 @@ export async function githubWorkItemDetails(
   );
   detailsByKey.set(detailsCacheKey(cwd, kind, number), details);
   return details;
+}
+
+export function peekGithubWorkItemThread(
+  cwd: string,
+  kind: GithubTaskKind,
+  number: number,
+): GithubWorkItemThread | null {
+  return threadByKey.get(detailsCacheKey(cwd, kind, number)) ?? null;
+}
+
+export async function githubWorkItemThread(
+  cwd: string,
+  kind: GithubTaskKind,
+  number: number,
+): Promise<GithubWorkItemThread> {
+  const key = detailsCacheKey(cwd, kind, number);
+  const pending = threadInflight.get(key);
+  if (pending) return pending;
+  const promise = invoke<GithubWorkItemThread>("git_github_work_item_thread", {
+    cwd,
+    kind,
+    number,
+  })
+    .then((thread) => {
+      threadByKey.set(key, thread);
+      return thread;
+    })
+    .finally(() => {
+      if (threadInflight.get(key) === promise) threadInflight.delete(key);
+    });
+  threadInflight.set(key, promise);
+  return promise;
+}
+
+export function githubReviewDecisionLabel(decision: string): string {
+  switch (decision.trim().toUpperCase()) {
+    case "APPROVED":
+      return "Approved";
+    case "CHANGES_REQUESTED":
+      return "Changes requested";
+    case "REVIEW_REQUIRED":
+      return "Review required";
+    default:
+      return "";
+  }
+}
+
+export function githubReviewStateLabel(state: string): string {
+  switch (state.trim().toUpperCase()) {
+    case "APPROVED":
+      return "Approved";
+    case "CHANGES_REQUESTED":
+      return "Requested changes";
+    case "DISMISSED":
+      return "Dismissed";
+    case "COMMENTED":
+      return "Commented";
+    default:
+      return "";
+  }
 }
 
 export function prDiffCacheKey(cwd: string, number: number): string {

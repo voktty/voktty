@@ -7,6 +7,8 @@ import {
   formatGithubQuery,
   formatRelativeTime,
   githubAvatarUrl,
+  githubReviewDecisionLabel,
+  githubReviewStateLabel,
   groupProjectsByRepo,
   inboxComposerCard,
   inboxItemKey,
@@ -111,6 +113,25 @@ describe("formatRelativeTime", () => {
 
   it("returns empty for an unreadable timestamp", () => {
     expect(formatRelativeTime("not-a-date")).toBe("");
+  });
+});
+
+describe("githubReviewDecisionLabel", () => {
+  it("labels GitHub review rollups", () => {
+    expect(githubReviewDecisionLabel("APPROVED")).toBe("Approved");
+    expect(githubReviewDecisionLabel("changes_requested")).toBe(
+      "Changes requested",
+    );
+    expect(githubReviewDecisionLabel("REVIEW_REQUIRED")).toBe("Review required");
+    expect(githubReviewDecisionLabel("")).toBe("");
+  });
+});
+
+describe("githubReviewStateLabel", () => {
+  it("labels a submitted review", () => {
+    expect(githubReviewStateLabel("APPROVED")).toBe("Approved");
+    expect(githubReviewStateLabel("COMMENTED")).toBe("Commented");
+    expect(githubReviewStateLabel("PENDING")).toBe("");
   });
 });
 

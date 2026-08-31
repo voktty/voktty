@@ -499,6 +499,9 @@ pub struct GitHubWorkItemDetails {
     pub body: String,
     pub author: String,
     pub author_avatar_url: String,
+    pub base_ref_name: String,
+    pub head_ref_name: String,
+    pub review_decision: String,
 }
 
 /// Issue or pull request body for the inbox detail pane.
@@ -510,6 +513,47 @@ pub async fn git_github_work_item_details(
 ) -> Result<GitHubWorkItemDetails, String> {
     tauri::async_runtime::spawn_blocking(move || {
         git_github_work_item_details_for(&expand_home(&cwd), &kind, number)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubWorkItemComment {
+    pub id: String,
+    pub kind: String,
+    pub author: String,
+    pub author_avatar_url: String,
+    pub body: String,
+    pub created_at: String,
+    pub url: String,
+    pub state: String,
+    pub path: String,
+    pub line: Option<i64>,
+    pub resolved: bool,
+    pub replies: Vec<GitHubWorkItemComment>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubWorkItemThread {
+    pub comments: Vec<GitHubWorkItemComment>,
+    pub truncated: bool,
+    pub review_decision: String,
+    pub base_ref_name: String,
+    pub head_ref_name: String,
+}
+
+/// Conversation for the inbox detail pane: comments, reviews, and review threads.
+#[tauri::command]
+pub async fn git_github_work_item_thread(
+    cwd: String,
+    kind: String,
+    number: i64,
+) -> Result<GitHubWorkItemThread, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git_github_work_item_thread_for(&expand_home(&cwd), &kind, number)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1213,7 +1257,12 @@ fn git_github_work_item_details_for(
         return Err("Unknown GitHub task kind".into());
     }
     let number = number.to_string();
-    let json = gh_checked(root, &[kind, "view", &number, "--json", "body,author"])?;
+    let fields = if kind == "pr" {
+        "body,author,baseRefName,headRefName,reviewDecision"
+    } else {
+        "body,author"
+    };
+    let json = gh_checked(root, &[kind, "view", &number, "--json", fields])?;
     parse_github_work_item_details(&json)
 }
 
@@ -1224,11 +1273,18 @@ fn parse_github_work_item_details(json: &str) -> Result<GitHubWorkItemDetails, S
         login: String,
     }
     #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
     struct Row {
         #[serde(default)]
         body: String,
         #[serde(default)]
         author: Option<Author>,
+        #[serde(default)]
+        base_ref_name: String,
+        #[serde(default)]
+        head_ref_name: String,
+        #[serde(default)]
+        review_decision: Option<String>,
     }
     let row: Row = serde_json::from_str(json).map_err(|error| error.to_string())?;
     let author = row.author.map(|author| author.login).unwrap_or_default();
@@ -1237,7 +1293,439 @@ fn parse_github_work_item_details(json: &str) -> Result<GitHubWorkItemDetails, S
         body: row.body,
         author,
         author_avatar_url,
+        base_ref_name: row.base_ref_name,
+        head_ref_name: row.head_ref_name,
+        review_decision: row.review_decision.unwrap_or_default(),
     })
+}
+
+const GITHUB_ISSUE_THREAD_QUERY: &str = r#"
+query InboxIssueThread($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      comments(last: 40) {
+        totalCount
+        nodes {
+          id
+          author { login }
+          body
+          createdAt
+          url
+          isMinimized
+        }
+      }
+    }
+  }
+}
+"#;
+
+const GITHUB_PR_THREAD_QUERY: &str = r#"
+query InboxPullRequestThread($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewDecision
+      baseRefName
+      headRefName
+      comments(last: 40) {
+        totalCount
+        nodes {
+          id
+          author { login }
+          body
+          createdAt
+          url
+          isMinimized
+        }
+      }
+      reviews(last: 40) {
+        totalCount
+        nodes {
+          id
+          author { login }
+          body
+          state
+          submittedAt
+          url
+        }
+      }
+      reviewThreads(last: 20) {
+        totalCount
+        nodes {
+          isResolved
+          path
+          comments(first: 8) {
+            totalCount
+            nodes {
+              id
+              author { login }
+              body
+              createdAt
+              url
+              path
+              line
+              originalLine
+              isMinimized
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"#;
+
+fn git_github_work_item_thread_for(
+    root: &Path,
+    kind: &str,
+    number: i64,
+) -> Result<GitHubWorkItemThread, String> {
+    let kind = kind.trim();
+    if kind != "issue" && kind != "pr" {
+        return Err("Unknown GitHub task kind".into());
+    }
+    if number <= 0 {
+        return Err("Invalid GitHub item number".into());
+    }
+    let repo = git_github_repo_for(root)?;
+    let (owner, name) = split_github_repo(&repo)?;
+    let query = if kind == "pr" {
+        GITHUB_PR_THREAD_QUERY
+    } else {
+        GITHUB_ISSUE_THREAD_QUERY
+    };
+    let owner_field = format!("owner={owner}");
+    let name_field = format!("name={name}");
+    let number_field = format!("number={number}");
+    let json = gh_checked(
+        root,
+        &[
+            "api",
+            "graphql",
+            "-f",
+            &format!("query={query}"),
+            "-F",
+            &owner_field,
+            "-F",
+            &name_field,
+            "-F",
+            &number_field,
+        ],
+    )?;
+    parse_github_work_item_thread(&json, kind)
+}
+
+fn split_github_repo(slug: &str) -> Result<(String, String), String> {
+    let slug = slug.trim();
+    let Some((owner, name)) = slug.split_once('/') else {
+        return Err("GitHub did not return a repository".into());
+    };
+    let owner = owner.trim();
+    let name = name.trim();
+    if owner.is_empty()
+        || name.is_empty()
+        || name.contains('/')
+        || owner.chars().any(char::is_whitespace)
+        || name.chars().any(char::is_whitespace)
+    {
+        return Err("GitHub did not return a repository".into());
+    }
+    Ok((owner.to_string(), name.to_string()))
+}
+
+#[derive(Deserialize)]
+struct GithubGraphqlEnvelope {
+    #[serde(default)]
+    data: Option<GithubGraphqlData>,
+    #[serde(default)]
+    errors: Vec<GithubGraphqlError>,
+}
+
+#[derive(Deserialize)]
+struct GithubGraphqlError {
+    #[serde(default)]
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct GithubGraphqlData {
+    repository: Option<GithubGraphqlRepository>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubGraphqlRepository {
+    issue: Option<GithubGraphqlIssue>,
+    pull_request: Option<GithubGraphqlPullRequest>,
+}
+
+#[derive(Deserialize)]
+struct GithubGraphqlIssue {
+    #[serde(default)]
+    comments: GithubGraphqlNodes<GithubGraphqlComment>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubGraphqlPullRequest {
+    #[serde(default)]
+    review_decision: Option<String>,
+    #[serde(default)]
+    base_ref_name: String,
+    #[serde(default)]
+    head_ref_name: String,
+    #[serde(default)]
+    comments: GithubGraphqlNodes<GithubGraphqlComment>,
+    #[serde(default)]
+    reviews: GithubGraphqlNodes<GithubGraphqlReview>,
+    #[serde(default)]
+    review_threads: GithubGraphqlNodes<GithubGraphqlReviewThread>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubGraphqlNodes<T> {
+    total_count: i64,
+    nodes: Vec<T>,
+}
+
+impl<T> Default for GithubGraphqlNodes<T> {
+    fn default() -> Self {
+        Self {
+            total_count: 0,
+            nodes: Vec::new(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubGraphqlComment {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    author: Option<GithubGraphqlActor>,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    created_at: String,
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    is_minimized: bool,
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    line: Option<i64>,
+    #[serde(default)]
+    original_line: Option<i64>,
+}
+
+#[derive(Deserialize)]
+struct GithubGraphqlReview {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    author: Option<GithubGraphqlActor>,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    state: String,
+    #[serde(default, rename = "submittedAt")]
+    submitted_at: Option<String>,
+    #[serde(default)]
+    url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubGraphqlReviewThread {
+    #[serde(default)]
+    is_resolved: bool,
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    comments: GithubGraphqlNodes<GithubGraphqlComment>,
+}
+
+#[derive(Deserialize)]
+struct GithubGraphqlActor {
+    #[serde(default)]
+    login: String,
+}
+
+fn parse_github_work_item_thread(json: &str, kind: &str) -> Result<GitHubWorkItemThread, String> {
+    let envelope: GithubGraphqlEnvelope =
+        serde_json::from_str(json).map_err(|error| error.to_string())?;
+    let graphql_error = envelope
+        .errors
+        .iter()
+        .map(|error| error.message.trim())
+        .find(|message| !message.is_empty())
+        .map(str::to_string);
+    let Some(repository) = envelope.data.and_then(|data| data.repository) else {
+        return Err(graphql_error.unwrap_or_else(|| "GitHub item not found".into()));
+    };
+
+    let mut comments = Vec::new();
+    let mut truncated = false;
+    let mut review_decision = String::new();
+    let mut base_ref_name = String::new();
+    let mut head_ref_name = String::new();
+
+    if kind == "pr" {
+        let Some(pull) = repository.pull_request else {
+            return Err(graphql_error.unwrap_or_else(|| "GitHub pull request not found".into()));
+        };
+        review_decision = pull.review_decision.unwrap_or_default();
+        base_ref_name = pull.base_ref_name;
+        head_ref_name = pull.head_ref_name;
+        truncated |= github_nodes_truncated(&pull.comments);
+        comments.extend(
+            pull.comments
+                .nodes
+                .into_iter()
+                .filter_map(github_issue_comment),
+        );
+        truncated |= github_nodes_truncated(&pull.reviews);
+        comments.extend(
+            pull.reviews
+                .nodes
+                .into_iter()
+                .filter_map(github_review_comment),
+        );
+        truncated |= github_nodes_truncated(&pull.review_threads);
+        comments.extend(
+            pull.review_threads
+                .nodes
+                .into_iter()
+                .filter_map(github_review_thread),
+        );
+    } else {
+        let Some(issue) = repository.issue else {
+            return Err(graphql_error.unwrap_or_else(|| "GitHub issue not found".into()));
+        };
+        truncated |= github_nodes_truncated(&issue.comments);
+        comments.extend(
+            issue
+                .comments
+                .nodes
+                .into_iter()
+                .filter_map(github_issue_comment),
+        );
+    }
+
+    comments.sort_by(|a, b| {
+        a.created_at
+            .cmp(&b.created_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    Ok(GitHubWorkItemThread {
+        comments,
+        truncated,
+        review_decision,
+        base_ref_name,
+        head_ref_name,
+    })
+}
+
+fn github_nodes_truncated<T>(nodes: &GithubGraphqlNodes<T>) -> bool {
+    (nodes.nodes.len() as i64) < nodes.total_count
+}
+
+fn github_actor_login(author: Option<GithubGraphqlActor>) -> String {
+    author
+        .map(|author| author.login)
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
+fn github_comment_id(kind: &str, id: &str, author: &str, created_at: &str) -> String {
+    let id = id.trim();
+    if !id.is_empty() {
+        return id.to_string();
+    }
+    format!("{kind}:{author}:{created_at}")
+}
+
+fn github_issue_comment(comment: GithubGraphqlComment) -> Option<GitHubWorkItemComment> {
+    github_mapped_comment(comment, "comment", "", false)
+}
+
+fn github_mapped_comment(
+    comment: GithubGraphqlComment,
+    kind: &str,
+    fallback_path: &str,
+    resolved: bool,
+) -> Option<GitHubWorkItemComment> {
+    if comment.is_minimized {
+        return None;
+    }
+    let author = github_actor_login(comment.author);
+    let created_at = comment.created_at.trim().to_string();
+    let path = if comment.path.trim().is_empty() {
+        fallback_path.trim().to_string()
+    } else {
+        comment.path.trim().to_string()
+    };
+    Some(GitHubWorkItemComment {
+        id: github_comment_id(kind, &comment.id, &author, &created_at),
+        kind: kind.to_string(),
+        author_avatar_url: github_avatar_url(&author),
+        author,
+        body: comment.body,
+        created_at,
+        url: comment.url,
+        state: String::new(),
+        path,
+        line: comment.line.or(comment.original_line),
+        resolved,
+        replies: Vec::new(),
+    })
+}
+
+fn github_review_comment(review: GithubGraphqlReview) -> Option<GitHubWorkItemComment> {
+    let state = review.state.trim().to_uppercase();
+    if state.is_empty() || state == "PENDING" {
+        return None;
+    }
+    let body = review.body.trim();
+    if state == "COMMENTED" && body.is_empty() {
+        return None;
+    }
+    let created_at = review
+        .submitted_at
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if created_at.is_empty() {
+        return None;
+    }
+    let author = github_actor_login(review.author);
+    Some(GitHubWorkItemComment {
+        id: github_comment_id("review", &review.id, &author, &created_at),
+        kind: "review".into(),
+        author_avatar_url: github_avatar_url(&author),
+        author,
+        body: review.body,
+        created_at,
+        url: review.url,
+        state,
+        path: String::new(),
+        line: None,
+        resolved: false,
+        replies: Vec::new(),
+    })
+}
+
+fn github_review_thread(thread: GithubGraphqlReviewThread) -> Option<GitHubWorkItemComment> {
+    let mut mapped = thread.comments.nodes.into_iter().filter_map(|comment| {
+        github_mapped_comment(comment, "review_comment", &thread.path, thread.is_resolved)
+    });
+    let mut first = mapped.next()?;
+    first.replies = mapped.collect();
+    Some(first)
 }
 
 fn github_avatar_url(login: &str) -> String {
@@ -3592,6 +4080,180 @@ mod tests {
             details.author_avatar_url,
             "https://avatars.githubusercontent.com/maya?s=64"
         );
+        assert_eq!(details.base_ref_name, "");
+        assert_eq!(details.review_decision, "");
+    }
+
+    #[test]
+    fn parse_github_work_item_details_reads_pr_review_meta() {
+        let json = r#"{
+            "body": "Move the banner",
+            "author": {"login": "ayush-porwal"},
+            "baseRefName": "main",
+            "headRefName": "agent-terminal",
+            "reviewDecision": "REVIEW_REQUIRED"
+        }"#;
+        let details = parse_github_work_item_details(json).unwrap();
+        assert_eq!(details.base_ref_name, "main");
+        assert_eq!(details.head_ref_name, "agent-terminal");
+        assert_eq!(details.review_decision, "REVIEW_REQUIRED");
+    }
+
+    #[test]
+    fn split_github_repo_reads_owner_and_name() {
+        assert_eq!(
+            split_github_repo(" hardbeat920/monocode ").unwrap(),
+            ("hardbeat920".into(), "monocode".into())
+        );
+        assert!(split_github_repo("monocode").is_err());
+        assert!(split_github_repo("acme/web extra").is_err());
+    }
+
+    #[test]
+    fn parse_github_work_item_thread_merges_conversation() {
+        let json = r#"{
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewDecision": "APPROVED",
+                        "baseRefName": "main",
+                        "headRefName": "agent-terminal",
+                        "comments": {
+                            "totalCount": 50,
+                            "nodes": [
+                                {
+                                    "id": "IC_1",
+                                    "author": {"login": "maya"},
+                                    "body": "Looks good",
+                                    "createdAt": "2026-08-31T10:00:00Z",
+                                    "url": "https://github.com/acme/web/pull/1#issuecomment-1",
+                                    "isMinimized": false
+                                },
+                                {
+                                    "id": "IC_hidden",
+                                    "author": {"login": "bot"},
+                                    "body": "hidden",
+                                    "createdAt": "2026-08-31T10:05:00Z",
+                                    "isMinimized": true
+                                }
+                            ]
+                        },
+                        "reviews": {
+                            "totalCount": 2,
+                            "nodes": [
+                                {
+                                    "id": "PRR_empty",
+                                    "author": {"login": "ada"},
+                                    "body": "",
+                                    "state": "COMMENTED",
+                                    "submittedAt": "2026-08-31T11:00:00Z"
+                                },
+                                {
+                                    "id": "PRR_2",
+                                    "author": {"login": "ada"},
+                                    "body": "Ship it",
+                                    "state": "APPROVED",
+                                    "submittedAt": "2026-08-31T12:00:00Z",
+                                    "url": "https://github.com/acme/web/pull/1#pullrequestreview-2"
+                                }
+                            ]
+                        },
+                        "reviewThreads": {
+                            "totalCount": 1,
+                            "nodes": [
+                                {
+                                    "isResolved": true,
+                                    "path": "src/app.ts",
+                                    "comments": {
+                                        "totalCount": 2,
+                                        "nodes": [
+                                            {
+                                                "id": "PRRC_1",
+                                                "author": {"login": "lin"},
+                                                "body": "Nit: name",
+                                                "createdAt": "2026-08-31T11:30:00Z",
+                                                "url": "https://github.com/acme/web/pull/1#discussion_r1",
+                                                "path": "src/app.ts",
+                                                "line": 12,
+                                                "isMinimized": false
+                                            },
+                                            {
+                                                "id": "PRRC_2",
+                                                "author": {"login": "maya"},
+                                                "body": "Fixed",
+                                                "createdAt": "2026-08-31T11:40:00Z",
+                                                "path": "src/app.ts",
+                                                "line": 12,
+                                                "isMinimized": false
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }"#;
+        let thread = parse_github_work_item_thread(json, "pr").unwrap();
+        assert!(thread.truncated);
+        assert_eq!(thread.review_decision, "APPROVED");
+        assert_eq!(thread.base_ref_name, "main");
+        assert_eq!(thread.head_ref_name, "agent-terminal");
+        assert_eq!(
+            thread
+                .comments
+                .iter()
+                .map(|comment| comment.id.as_str())
+                .collect::<Vec<_>>(),
+            ["IC_1", "PRRC_1", "PRR_2"]
+        );
+        assert_eq!(thread.comments[1].kind, "review_comment");
+        assert_eq!(thread.comments[1].path, "src/app.ts");
+        assert_eq!(thread.comments[1].line, Some(12));
+        assert!(thread.comments[1].resolved);
+        assert_eq!(thread.comments[1].replies.len(), 1);
+        assert_eq!(thread.comments[1].replies[0].author, "maya");
+        assert_eq!(thread.comments[2].kind, "review");
+        assert_eq!(thread.comments[2].state, "APPROVED");
+    }
+
+    #[test]
+    fn parse_github_work_item_thread_reads_issue_comments() {
+        let json = r#"{
+            "data": {
+                "repository": {
+                    "issue": {
+                        "comments": {
+                            "totalCount": 1,
+                            "nodes": [
+                                {
+                                    "id": "IC_9",
+                                    "author": {"login": "maya"},
+                                    "body": "Still happens",
+                                    "createdAt": "2026-08-31T09:00:00Z"
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }"#;
+        let thread = parse_github_work_item_thread(json, "issue").unwrap();
+        assert!(!thread.truncated);
+        assert_eq!(thread.comments.len(), 1);
+        assert_eq!(thread.comments[0].author, "maya");
+        assert_eq!(thread.comments[0].body, "Still happens");
+    }
+
+    #[test]
+    fn parse_github_work_item_thread_reads_graphql_errors() {
+        let json = r#"{
+            "data": {"repository": null},
+            "errors": [{"message": "Could not resolve to a Repository"}]
+        }"#;
+        let error = parse_github_work_item_thread(json, "pr").unwrap_err();
+        assert!(error.contains("Could not resolve to a Repository"));
     }
 
     #[test]
