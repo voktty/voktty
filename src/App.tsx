@@ -4196,6 +4196,7 @@ export default function App({
             focusToken={searchViewFocusToken}
             besideRail={deckLayout && projectRailOpen}
             onClose={onLeaveSearch}
+            onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
             onOpenFile={onOpenFile}
             onOpenSession={onSelectHistorySession}
             onOpenProject={onSelectProject}
@@ -4207,6 +4208,7 @@ export default function App({
             recents={recents}
             besideRail={deckLayout && projectRailOpen}
             onClose={onLeaveInbox}
+            onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
             onStart={onStartInboxItem}
           />
         ) : null}
@@ -4215,6 +4217,7 @@ export default function App({
             besideRail={deckLayout && projectRailOpen}
             cwd={projectCwd}
             onClose={onLeaveNotes}
+            onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
           />
         ) : null}
         {settingsOpen ? (

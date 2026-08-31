@@ -801,6 +801,34 @@ export function TabVisitNav({
   );
 }
 
+/** Back + rail toggle for overlay surfaces when the project rail is closed. */
+export function OverlayNav({
+  onBack,
+  onToggleSidebar,
+}: {
+  onBack?: () => void;
+  onToggleSidebar?: () => void;
+}) {
+  if (!onBack && !onToggleSidebar) return null;
+  return (
+    <div className="flex shrink-0 items-center px-1.5">
+      {onBack ? (
+        <IconButton label={`Back (${MOD}[)`} onClick={onBack}>
+          <ChevronLeft className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      ) : null}
+      {onToggleSidebar ? (
+        <IconButton
+          label={`Toggle Sidebar (${MOD}B)`}
+          onClick={onToggleSidebar}
+        >
+          <PanelLeft className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      ) : null}
+    </div>
+  );
+}
+
 function TitleBarComponent({
   tabs,
   activeId,

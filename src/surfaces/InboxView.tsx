@@ -24,6 +24,7 @@ import {
 import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { ProjectLogoIcon } from "../chrome/ProjectLogoIcon";
 import { ProjectMascot } from "../chrome/ProjectMascot";
+import { OverlayNav } from "../chrome/TitleBar";
 import { WindowControls } from "../chrome/WindowControls";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
@@ -229,6 +230,7 @@ type Props = {
   besideRail?: boolean;
   variant?: "overlay" | "sidebar";
   onClose?: () => void;
+  onToggleSidebar?: () => void;
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
 };
 
@@ -238,6 +240,7 @@ export function InboxView({
   besideRail = false,
   variant = "overlay",
   onClose,
+  onToggleSidebar,
   onStart,
 }: Props) {
   const sidebar = variant === "sidebar";
@@ -610,6 +613,9 @@ export function InboxView({
         data-tauri-drag-region="deep"
       >
         {IS_MAC && !besideRail ? <div className="w-[78px] shrink-0" /> : null}
+        {besideRail ? null : (
+          <OverlayNav onBack={onClose} onToggleSidebar={onToggleSidebar} />
+        )}
         <div className="flex min-w-0 flex-1 items-center gap-2 px-3 text-[13px]">
           <Inbox
             className="size-3.5 shrink-0 text-content/45"
