@@ -401,6 +401,8 @@ pub fn spawn(
             },
             None => None,
         };
+        #[cfg(not(windows))]
+        let job = ();
 
         (pair.master, killer, reader, writer, shell_pid, child, job)
     };
