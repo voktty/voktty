@@ -11,6 +11,9 @@ const PLATFORM = (() => {
 export const IS_MAC = PLATFORM === "macos";
 export const IS_LINUX = PLATFORM === "linux";
 export const IS_WINDOWS = PLATFORM === "windows";
+export const IS_ANDROID = PLATFORM === "android";
+export const IS_IOS = PLATFORM === "ios";
+export const IS_MOBILE_OS = IS_ANDROID || IS_IOS;
 
 /** Custom window controls (min/max/close) are rendered by us only on
  * non-macOS platforms — macOS keeps the native traffic lights via the
