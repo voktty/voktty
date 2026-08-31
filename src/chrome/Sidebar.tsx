@@ -16,6 +16,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import {
@@ -30,6 +31,12 @@ import { resolveModel } from "../lib/models";
 import { projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
+import {
+  paneDropFromPoint,
+  setExternalPaneDrop,
+} from "../lib/paneDrop";
+import type { PaneEdge } from "../lib/layout";
+import { suppressTextSelection } from "../lib/drag";
 import {
   filterSessionsByArchive,
   filterSessionsByQuery,
@@ -130,6 +137,11 @@ type Props = {
   /** First listing for this project has not arrived yet. */
   pending: boolean;
   onSelectSession: (sessionId: string) => void;
+  onPlaceSessionOnPane?: (
+    sessionId: string,
+    targetId: string,
+    edge: PaneEdge,
+  ) => void;
   onRenameSession?: (sessionId: string, title: string) => void;
   onArchiveSession?: (sessionId: string, archived: boolean) => void;
   onDeleteSession?: (sessionId: string) => void;
@@ -190,6 +202,7 @@ function SidebarComponent({
   status,
   pending,
   onSelectSession,
+  onPlaceSessionOnPane,
   onRenameSession,
   onArchiveSession,
   onDeleteSession,
@@ -846,6 +859,7 @@ function SidebarComponent({
                             additions={sessionDiffs[session.id]?.additions ?? 0}
                             deletions={sessionDiffs[session.id]?.deletions ?? 0}
                             onSelect={onSelectSession}
+                            onPlaceOnPane={onPlaceSessionOnPane}
                             onContextMenu={
                               onRenameSession ||
                               onArchiveSession ||
@@ -1171,6 +1185,7 @@ function SessionCard({
   additions,
   deletions,
   onSelect,
+  onPlaceOnPane,
   onContextMenu,
   onRename,
   onDelete,
@@ -1184,10 +1199,13 @@ function SessionCard({
   additions: number;
   deletions: number;
   onSelect: (sessionId: string) => void;
+  onPlaceOnPane?: (sessionId: string, targetId: string, edge: PaneEdge) => void;
   onContextMenu?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
   onRename?: () => void;
   onDelete?: () => void;
 }) {
+  const skipClickUntil = useRef(0);
+  const [dragging, setDragging] = useState(false);
   const title = sessionDisplayTitle(session.title, session.harness);
   const gitLabel = formatGitLabel(session.repo, session.branch);
   const time = formatRelative(session.updatedAt, now);
@@ -1205,15 +1223,98 @@ function SessionCard({
     }
   };
 
+  const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!onPlaceOnPane || event.button !== 0) return;
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let active = false;
+    let lastX = startX;
+    let lastY = startY;
+    handle.setPointerCapture(pointerId);
+    const restoreSelection = suppressTextSelection();
+
+    const onMove = (ev: PointerEvent) => {
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+      if (!active) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;
+        active = true;
+        setDragging(true);
+        setExternalPaneDrop({
+          fromId: session.id,
+          overId: null,
+          edge: "left",
+        });
+      }
+      const over = paneDropFromPoint(ev.clientX, ev.clientY);
+      if (!over || over.id === session.id) {
+        setExternalPaneDrop({
+          fromId: session.id,
+          overId: over?.id === session.id ? session.id : null,
+          edge: over?.edge ?? "left",
+        });
+        return;
+      }
+      setExternalPaneDrop({
+        fromId: session.id,
+        overId: over.id,
+        edge: over.edge,
+      });
+    };
+
+    const onUp = () => finish(true);
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      finish(false);
+    };
+
+    function finish(commit: boolean) {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("keydown", onKey);
+      restoreSelection();
+      setDragging(false);
+      setExternalPaneDrop(null);
+      try {
+        handle.releasePointerCapture(pointerId);
+      } catch {
+        /* already released */
+      }
+      if (!active) return;
+      skipClickUntil.current = performance.now() + 400;
+      if (!commit) return;
+      const over = paneDropFromPoint(lastX, lastY);
+      if (over && over.id !== session.id) {
+        onPlaceOnPane?.(session.id, over.id, over.edge);
+      }
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("keydown", onKey);
+  };
+
   return (
     <button
       type="button"
       title={title}
       aria-current={isActive ? "true" : undefined}
-      onClick={() => onSelect(session.id)}
+      data-tauri-drag-region="false"
+      onPointerDown={onPointerDown}
+      onClick={() => {
+        if (performance.now() < skipClickUntil.current) return;
+        onSelect(session.id);
+      }}
       onContextMenu={onContextMenu}
       onKeyDown={onKeyDown}
-      className={`border flex w-full flex-col rounded-md px-2.5 py-2 text-left ${
+      className={`border flex w-full touch-none flex-col rounded-md px-2.5 py-2 text-left ${
+        dragging ? "opacity-40" : ""
+      } ${
         needsApproval
           ? "bg-content/20 text-content border-content/30 border-dashed"
           : isActive

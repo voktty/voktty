@@ -180,6 +180,7 @@ import {
 } from "./lib/recents";
 import {
   applyDeletedSessionToWorkspace,
+  applyPlaceSessionOnPane,
   filterTabsForProject,
   findTabForProject,
   planWorkspaceTabClose,
@@ -2287,25 +2288,17 @@ export default function App({
     return true;
   }, []);
 
-  const onSelectHistorySession = useCallback(
-    async (sessionId: string) => {
-      if (focusOpenSession(sessionId)) return;
+  const ensureOpenSession = useCallback(
+    async (sessionId: string): Promise<Session | null> => {
       const open = sessionsRef.current.find(
         (session) => session.id === sessionId,
       );
-      if (open) {
-        if (replaceBlankPaneWithSession(open)) return;
-        const tab = newTab(open.id);
-        appendTab(tab, open.cwd);
-        setActiveTabId(tab.id);
-        setComposerFocused(true);
-        return;
-      }
+      if (open) return open;
 
       const loaded = await getSession(sessionId).catch(() => null);
       if (!loaded) {
         void refreshHistory(sidebarCwd);
-        return;
+        return null;
       }
       const restored = await restoreSessionCheckout(loaded);
       if (restored.providerSessionId && isLiveHarness(restored.harness)) {
@@ -2317,24 +2310,87 @@ export default function App({
         );
       }
       lastPersisted.current.set(restored.id, persistFingerprint(restored));
-      if (replaceBlankPaneWithSession(restored)) return;
-      const tab = newTab(restored.id);
-      setSessions((prev) =>
-        prev.some((session) => session.id === restored.id)
-          ? prev
-          : [...prev, restored],
-      );
-      appendTab(tab, restored.cwd);
+      if (!sessionsRef.current.some((session) => session.id === restored.id)) {
+        const next = [...sessionsRef.current, restored];
+        sessionsRef.current = next;
+        setSessions(next);
+      }
+      return restored;
+    },
+    [refreshHistory, sidebarCwd],
+  );
+
+  const onSelectHistorySession = useCallback(
+    async (sessionId: string) => {
+      if (focusOpenSession(sessionId)) return;
+      const session = await ensureOpenSession(sessionId);
+      if (!session) return;
+      if (replaceBlankPaneWithSession(session)) return;
+      const tab = newTab(session.id);
+      appendTab(tab, session.cwd);
       setActiveTabId(tab.id);
       setComposerFocused(true);
     },
     [
       appendTab,
+      ensureOpenSession,
       focusOpenSession,
-      refreshHistory,
       replaceBlankPaneWithSession,
-      sidebarCwd,
     ],
+  );
+
+  const onPlaceSessionOnPane = useCallback(
+    async (sessionId: string, targetId: string, edge: PaneEdge) => {
+      if (sessionId === targetId) return;
+      const targetTab = tabsRef.current.find((tab) =>
+        leafIds(tab.layout).includes(targetId),
+      );
+      if (!targetTab) return;
+
+      const alreadyHere = leafIds(targetTab.layout).includes(sessionId);
+      if (!alreadyHere) {
+        const session = await ensureOpenSession(sessionId);
+        if (!session) return;
+      }
+
+      const tab = tabsRef.current.find((entry) => entry.id === targetTab.id);
+      if (!tab || !leafIds(tab.layout).includes(targetId)) return;
+
+      const replaceTarget =
+        !leafIds(tab.layout).includes(sessionId) &&
+        isBlankSession(sessionsRef.current.find((entry) => entry.id === targetId));
+
+      if (replaceTarget) {
+        lastPersisted.current.delete(targetId);
+        const blank = sessionsRef.current.find((entry) => entry.id === targetId);
+        if (blank) void forgetHarnessSession(blank.harness, targetId);
+      }
+
+      const result = applyPlaceSessionOnPane({
+        tabs: tabsRef.current,
+        sessions: sessionsRef.current,
+        sessionId,
+        targetId,
+        edge,
+        replaceTarget,
+        scope: tabCloseScope,
+        createReplacement: (seed) =>
+          newDefaultSession(
+            seed?.cwd ?? projectCwdRef.current,
+            seed?.runtimeMode,
+          ),
+      });
+      if (!result) return;
+
+      sessionsRef.current = result.sessions;
+      tabsRef.current = result.tabs;
+      setSessions(result.sessions);
+      setTabs(result.tabs);
+      setActiveTabId(result.activeTabId);
+      setProjectTerminalFocused(false);
+      setComposerFocused(true);
+    },
+    [ensureOpenSession, tabCloseScope],
   );
 
   const onRenameHistorySession = useCallback(
@@ -3934,6 +3990,7 @@ export default function App({
         status={historyFailed ? "error" : "idle"}
         pending={historyPending}
         onSelectSession={onSelectHistorySession}
+        onPlaceSessionOnPane={onPlaceSessionOnPane}
         onRenameSession={onRenameHistorySession}
         onArchiveSession={onArchiveHistorySession}
         onDeleteSession={onDeleteHistorySession}

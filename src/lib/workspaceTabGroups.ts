@@ -3,6 +3,9 @@ import {
   focusedFileTab,
   leaf,
   leafIds,
+  placePane,
+  replaceLeafId,
+  type PaneEdge,
   type WorkspaceTab,
 } from "./layout";
 import { projectName } from "./paths";
@@ -183,6 +186,94 @@ export function applyDeletedSessionToWorkspace({
     sessions: nextSessions,
     activeTabId: nextActiveTabId,
   };
+}
+
+/**
+ * Drop a session onto a pane edge in the tab that owns `targetId`.
+ * Already-open chats move; a blank target is replaced; a chat open
+ * in another tab is relocated (that tab closes when it was the last leaf).
+ */
+export function applyPlaceSessionOnPane({
+  tabs,
+  sessions,
+  sessionId,
+  targetId,
+  edge,
+  replaceTarget,
+  scope,
+  createReplacement,
+}: {
+  tabs: WorkspaceTab[];
+  sessions: Session[];
+  sessionId: string;
+  targetId: string;
+  edge: PaneEdge;
+  replaceTarget: boolean;
+  scope: WorkspaceTabCloseScope;
+  createReplacement: (seed: Session | undefined) => Session;
+}): {
+  tabs: WorkspaceTab[];
+  sessions: Session[];
+  activeTabId: string;
+} | null {
+  if (sessionId === targetId) return null;
+  const targetIndex = tabs.findIndex((tab) =>
+    leafIds(tab.layout).includes(targetId),
+  );
+  if (targetIndex < 0) return null;
+
+  let nextSessions = replaceTarget
+    ? sessions.filter((session) => session.id !== targetId)
+    : sessions;
+  const targetTabId = tabs[targetIndex]!.id;
+
+  let nextTabs = tabs.map((tab, index) => {
+    if (index !== targetIndex) return tab;
+    const layout = replaceTarget
+      ? replaceLeafId(tab.layout, targetId, sessionId)
+      : placePane(tab.layout, sessionId, targetId, edge);
+    return { ...tab, layout, focusedId: sessionId, diffFocused: false };
+  });
+
+  for (const tab of [...nextTabs]) {
+    if (tab.id === targetTabId) continue;
+    if (!leafIds(tab.layout).includes(sessionId)) continue;
+    const tabIndex = nextTabs.findIndex((entry) => entry.id === tab.id);
+    if (tabIndex < 0) continue;
+
+    const closed = closeLeaf(tab, sessionId);
+    if (closed) {
+      nextTabs[tabIndex] = closed;
+      continue;
+    }
+
+    const closePlan = planWorkspaceTabClose({
+      tabs: nextTabs,
+      sessions: nextSessions,
+      closingTabId: tab.id,
+      scope,
+    });
+    if (closePlan.action === "close") {
+      nextTabs = nextTabs.filter((entry) => entry.id !== tab.id);
+      continue;
+    }
+
+    const replacement = createReplacement(
+      nextSessions.find((session) => session.id === sessionId),
+    );
+    nextSessions = [...nextSessions, replacement];
+    nextTabs[tabIndex] = {
+      ...tab,
+      layout: leaf(replacement.id),
+      focusedId: replacement.id,
+      editorPanes: [],
+      terminalPanes: [],
+      diffOpen: false,
+      diffFocused: false,
+    };
+  }
+
+  return { tabs: nextTabs, sessions: nextSessions, activeTabId: targetTabId };
 }
 
 export function isGroupableProject(

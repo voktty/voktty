@@ -17,6 +17,7 @@ import {
   openEditorTab,
   openTerminalTab,
   paneEdgeFromPoint,
+  placePane,
   splitPane,
   splitSizesAtBoundary,
 } from "./layout";
@@ -282,5 +283,49 @@ describe("movePane", () => {
     expect(leaves[0]?.rect).toEqual({ x: 0, y: 0, w: 1, h: 0.25 });
     expect(leaves[1]?.rect).toEqual({ x: 0, y: 0.25, w: 1, h: 0.25 });
     expect(leaves[2]?.rect).toEqual({ x: 0, y: 0.5, w: 1, h: 0.5 });
+  });
+});
+
+describe("placePane", () => {
+  it("splits a lone pane toward the drop edge", () => {
+    const right = layoutLeaves(placePane(leaf("a"), "b", "a", "right"));
+    expect(right.map((pane) => pane.id)).toEqual(["a", "b"]);
+    expect(right[0]?.rect).toEqual({ x: 0, y: 0, w: 0.5, h: 1 });
+    expect(right[1]?.rect).toEqual({ x: 0.5, y: 0, w: 0.5, h: 1 });
+
+    const left = layoutLeaves(placePane(leaf("a"), "b", "a", "left"));
+    expect(left.map((pane) => pane.id)).toEqual(["b", "a"]);
+
+    const below = layoutLeaves(placePane(leaf("a"), "b", "a", "bottom"));
+    expect(below.map((pane) => pane.id)).toEqual(["a", "b"]);
+    expect(below[1]?.rect).toEqual({ x: 0, y: 0.5, w: 1, h: 0.5 });
+  });
+
+  it("inserts into an existing row on a matching edge", () => {
+    const row = splitPane(leaf("a"), "a", "right", "b");
+    const next = placePane(row, "c", "a", "right");
+    expect(layoutLeaves(next).map((pane) => pane.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("nests onto one column of a row", () => {
+    const row = splitPane(leaf("a"), "a", "right", "b");
+    const next = placePane(row, "c", "a", "bottom");
+    const leaves = layoutLeaves(next);
+    expect(leaves.map((pane) => pane.id)).toEqual(["a", "c", "b"]);
+    expect(leaves[0]?.rect).toEqual({ x: 0, y: 0, w: 0.5, h: 0.5 });
+    expect(leaves[1]?.rect).toEqual({ x: 0, y: 0.5, w: 0.5, h: 0.5 });
+    expect(leaves[2]?.rect).toEqual({ x: 0.5, y: 0, w: 0.5, h: 1 });
+  });
+
+  it("moves an existing pane instead of duplicating it", () => {
+    const row = splitPane(leaf("a"), "a", "right", "b");
+    const next = placePane(row, "a", "b", "right");
+    expect(layoutLeaves(next).map((pane) => pane.id)).toEqual(["b", "a"]);
+  });
+
+  it("ignores a missing target or a drop onto itself", () => {
+    const tree = leaf("a");
+    expect(placePane(tree, "b", "missing", "right")).toBe(tree);
+    expect(placePane(tree, "a", "a", "right")).toBe(tree);
   });
 });

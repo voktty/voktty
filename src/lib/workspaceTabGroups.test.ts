@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { leaf, newTab, type WorkspaceTab } from "./layout";
+import { leaf, leafIds, newTab, type WorkspaceTab } from "./layout";
 import type { Session } from "./session";
 import {
   applyDeletedSessionToWorkspace,
+  applyPlaceSessionOnPane,
   filterTabsForProject,
   findTabForProject,
   planWorkspaceTabClose,
@@ -262,6 +263,85 @@ describe("applyDeletedSessionToWorkspace", () => {
     expect(next.tabs).toHaveLength(2);
     expect(next.tabs[0]?.focusedId).toBe("m2");
     expect(next.sessions.map((entry) => entry.id)).toEqual(["r1", "m2"]);
+  });
+});
+
+describe("applyPlaceSessionOnPane", () => {
+  const sessions = [
+    session("m1", "/projects/monocode"),
+    session("m2", "/projects/monocode"),
+    session("r1", "/projects/ruler"),
+  ];
+
+  function replacementFrom(seed: Session | undefined): Session {
+    return session("replacement", seed?.cwd ?? "/tmp/fallback");
+  }
+
+  it("splits the target pane toward the drop edge", () => {
+    const next = applyPlaceSessionOnPane({
+      tabs: [tab("tm1", "m1")],
+      sessions,
+      sessionId: "m2",
+      targetId: "m1",
+      edge: "right",
+      replaceTarget: false,
+      scope: "workspace",
+      createReplacement: replacementFrom,
+    });
+    expect(next?.activeTabId).toBe("tm1");
+    expect(next?.tabs[0]?.focusedId).toBe("m2");
+    expect(leafIds(next!.tabs[0]!.layout)).toEqual(["m1", "m2"]);
+  });
+
+  it("replaces a blank target instead of splitting it", () => {
+    const blank = session("blank", "/projects/monocode");
+    const next = applyPlaceSessionOnPane({
+      tabs: [tab("tm1", "blank")],
+      sessions: [...sessions, blank],
+      sessionId: "m2",
+      targetId: "blank",
+      edge: "right",
+      replaceTarget: true,
+      scope: "workspace",
+      createReplacement: replacementFrom,
+    });
+    expect(leafIds(next!.tabs[0]!.layout)).toEqual(["m2"]);
+    expect(next?.sessions.map((entry) => entry.id)).toEqual([
+      "m1",
+      "m2",
+      "r1",
+    ]);
+  });
+
+  it("relocates a session from another tab and closes that tab", () => {
+    const next = applyPlaceSessionOnPane({
+      tabs: [tab("tm1", "m1"), tab("tm2", "m2")],
+      sessions,
+      sessionId: "m2",
+      targetId: "m1",
+      edge: "left",
+      replaceTarget: false,
+      scope: "workspace",
+      createReplacement: replacementFrom,
+    });
+    expect(next?.tabs.map((entry) => entry.id)).toEqual(["tm1"]);
+    expect(leafIds(next!.tabs[0]!.layout)).toEqual(["m2", "m1"]);
+  });
+
+  it("keeps the last tab of a project and fills it with a replacement", () => {
+    const next = applyPlaceSessionOnPane({
+      tabs: [tab("tr1", "r1"), tab("tm1", "m1")],
+      sessions,
+      sessionId: "m1",
+      targetId: "r1",
+      edge: "right",
+      replaceTarget: false,
+      scope: "project",
+      createReplacement: replacementFrom,
+    });
+    expect(next?.tabs.map((entry) => entry.id)).toEqual(["tr1", "tm1"]);
+    expect(leafIds(next!.tabs[0]!.layout)).toEqual(["r1", "m1"]);
+    expect(next?.tabs[1]?.focusedId).toBe("replacement");
   });
 });
 

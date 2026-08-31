@@ -7,12 +7,15 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { setGrabbing, suppressTextSelection } from "../lib/drag";
+import {
+  paneDropFromPoint,
+  useExternalPaneDrop,
+} from "../lib/paneDrop";
 import type { ApprovalDecision } from "../lib/harness";
 import type { EditorNavigationTarget } from "../lib/search";
 import {
   layoutLeaves,
   layoutSashes,
-  paneEdgeFromPoint,
   setSplitRatio,
   type EditorPane,
   type LayoutNode,
@@ -95,17 +98,6 @@ type PaneDrag = {
 
 const DRAG_THRESHOLD = 5;
 
-function dropFromPoint(
-  x: number,
-  y: number,
-): { id: string; edge: PaneEdge } | null {
-  const el = document.elementFromPoint(x, y);
-  const pane = el?.closest("[data-pane-id]") as HTMLElement | null;
-  const id = pane?.dataset.paneId;
-  if (!id || !pane) return null;
-  return { id, edge: paneEdgeFromPoint(x, y, pane.getBoundingClientRect()) };
-}
-
 function PaneTreeComponent({
   visible,
   layout,
@@ -149,6 +141,8 @@ function PaneTreeComponent({
   layoutRef.current = layout;
   const [draft, setDraft] = useState<LayoutNode | null>(null);
   const [paneDrag, setPaneDrag] = useState<PaneDrag | null>(null);
+  const externalDrop = useExternalPaneDrop(visible);
+  const drop = paneDrag ?? externalDrop;
   const onMovePaneRef = useRef(onMovePane);
   onMovePaneRef.current = onMovePane;
   const onFocusRef = useRef(onFocus);
@@ -207,7 +201,7 @@ function PaneTreeComponent({
           onFocusRef.current(fromId);
           setPaneDrag({ fromId, overId: null, edge: "left" });
         }
-        const over = dropFromPoint(ev.clientX, ev.clientY);
+        const over = paneDropFromPoint(ev.clientX, ev.clientY);
         if (!over || over.id === fromId) {
           setPaneDrag({
             fromId,
@@ -240,7 +234,7 @@ function PaneTreeComponent({
           /* already released */
         }
         if (!active || !commit) return;
-        const over = dropFromPoint(lastX, lastY);
+        const over = paneDropFromPoint(lastX, lastY);
         if (over && over.id !== fromId) {
           onMovePaneRef.current(fromId, over.id, over.edge);
         }
@@ -259,7 +253,7 @@ function PaneTreeComponent({
       {leaves.map((leaf) => {
         const editorPane = editorPanes.find((pane) => pane.id === leaf.id);
         const session = sessions.find((entry) => entry.id === leaf.id);
-        const dragging = paneDrag?.fromId === leaf.id;
+        const dragging = drop?.fromId === leaf.id;
         const onPaneDragStart = inSplit ? paneDragStartFor(leaf.id) : undefined;
         return (
           <div
@@ -273,10 +267,8 @@ function PaneTreeComponent({
               height: `${leaf.rect.h * 100}%`,
             }}
           >
-            {paneDrag &&
-            paneDrag.overId === leaf.id &&
-            paneDrag.fromId !== leaf.id ? (
-              <PaneDropHint edge={paneDrag.edge} />
+            {drop && drop.overId === leaf.id && drop.fromId !== leaf.id ? (
+              <PaneDropHint edge={drop.edge} />
             ) : null}
             {editorPane ? (
               <FilePane

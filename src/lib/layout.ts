@@ -5,9 +5,10 @@ import { defaultTerminalTitle } from "./terminalTab";
  * new panes divide space equally until the user drags a sash.
  * Panes can be dragged onto another pane's edge: same-axis
  * siblings reorder, a perpendicular edge nests a new split, and
- * a drop in another group relocates the leaf there. cmd-d
- * splits right, shift-cmd-d splits down, cmd-opt-arrows move
- * focus to the adjacent pane.
+ * a drop in another group relocates the leaf there. Session cards
+ * from the sidebar use the same edges to open or move a chat into
+ * that pane. cmd-d splits right, shift-cmd-d splits down,
+ * cmd-opt-arrows move focus to the adjacent pane.
  */
 
 export type SplitDir = "right" | "down";
@@ -898,4 +899,28 @@ export function movePane(
     return insertBeside(extracted.tree, toId, extracted.leaf, place);
   }
   return wrapBeside(extracted.tree, toId, extracted.leaf, dir, place);
+}
+
+/**
+ * Open `sessionId` on `toId`'s edge, or move it there when it is
+ * already a leaf in this tree.
+ */
+export function placePane(
+  node: LayoutNode,
+  sessionId: string,
+  toId: string,
+  edge: PaneEdge,
+): LayoutNode {
+  if (sessionId === toId) return node;
+  const ids = leafIds(node);
+  if (!ids.includes(toId)) return node;
+  if (ids.includes(sessionId)) return movePane(node, sessionId, toId, edge);
+
+  const { dir, place } = edgeSplit(edge);
+  const incoming = leaf(sessionId);
+  const targetAt = leafParent(node, toId);
+  if (targetAt?.dir === dir) {
+    return insertBeside(node, toId, incoming, place);
+  }
+  return wrapBeside(node, toId, incoming, dir, place);
 }
