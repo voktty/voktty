@@ -5,12 +5,15 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use portable_pty::{native_pty_system, ChildKiller, MasterPty, PtySize};
+#[cfg(not(target_os = "android"))]
+use portable_pty::native_pty_system;
+use portable_pty::{ChildKiller, MasterPty, PtySize};
 use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::agent_detect::AgentDetector;
 use super::da_filter::DaFilter;
+#[cfg(not(target_os = "android"))]
 use super::shell_init;
 use crate::modules::workspace::WorkspaceEnv;
 
@@ -121,10 +124,12 @@ impl Drop for PtyMaster {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 struct ChildKillGuard {
     killer: Option<Box<dyn ChildKiller + Send + Sync>>,
 }
 
+#[cfg(not(target_os = "android"))]
 impl ChildKillGuard {
     fn new(killer: Box<dyn ChildKiller + Send + Sync>) -> Self {
         Self {
@@ -137,10 +142,200 @@ impl ChildKillGuard {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 impl Drop for ChildKillGuard {
     fn drop(&mut self) {
         if let Some(mut k) = self.killer.take() {
             let _ = k.kill();
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+#[derive(Debug)]
+struct AndroidChildKiller {
+    pid: nix::unistd::Pid,
+}
+
+#[cfg(target_os = "android")]
+impl ChildKiller for AndroidChildKiller {
+    fn kill(&mut self) -> std::io::Result<()> {
+        let _ = nix::sys::signal::kill(self.pid, nix::sys::signal::Signal::SIGKILL);
+        Ok(())
+    }
+    fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
+        Box::new(AndroidChildKiller { pid: self.pid })
+    }
+}
+
+#[cfg(target_os = "android")]
+struct AndroidMasterPty {
+    master_fd: std::os::fd::RawFd,
+}
+
+#[cfg(target_os = "android")]
+impl MasterPty for AndroidMasterPty {
+    fn resize(&self, size: PtySize) -> anyhow::Result<()> {
+        let win = nix::pty::Winsize {
+            ws_row: size.rows,
+            ws_col: size.cols,
+            ws_xpixel: size.pixel_width,
+            ws_ypixel: size.pixel_height,
+        };
+        unsafe {
+            let rc = libc::ioctl(self.master_fd, libc::TIOCSWINSZ, &win);
+            if rc < 0 {
+                log::debug!("ioctl TIOCSWINSZ returned {rc}");
+            }
+        }
+        Ok(())
+    }
+    fn get_size(&self) -> anyhow::Result<portable_pty::PtySize> {
+        Ok(portable_pty::PtySize::default())
+    }
+    fn try_clone_reader(&self) -> anyhow::Result<Box<dyn std::io::Read + Send>> {
+        use std::os::fd::FromRawFd;
+        let fd = unsafe { libc::dup(self.master_fd) };
+        if fd < 0 {
+            anyhow::bail!("dup failed");
+        }
+        Ok(Box::new(unsafe { std::fs::File::from_raw_fd(fd) }))
+    }
+    fn take_writer(&self) -> anyhow::Result<Box<dyn std::io::Write + Send>> {
+        use std::os::fd::FromRawFd;
+        let fd = unsafe { libc::dup(self.master_fd) };
+        if fd < 0 {
+            anyhow::bail!("dup failed");
+        }
+        Ok(Box::new(unsafe { std::fs::File::from_raw_fd(fd) }))
+    }
+    fn process_group_leader(&self) -> Option<i32> {
+        None
+    }
+    fn as_raw_fd(&self) -> Option<i32> {
+        Some(self.master_fd)
+    }
+    fn tty_name(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+}
+
+#[cfg(target_os = "android")]
+impl Drop for AndroidMasterPty {
+    fn drop(&mut self) {
+        unsafe { libc::close(self.master_fd); }
+    }
+}
+
+#[cfg(target_os = "android")]
+fn spawn_android(
+    _id: u32,
+    cols: u16,
+    rows: u16,
+    cwd: Option<String>,
+) -> Result<
+    (
+        Box<dyn MasterPty + Send>,
+        Box<dyn ChildKiller + Send + Sync>,
+        Box<dyn Read + Send>,
+        Arc<Mutex<Box<dyn Write + Send>>>,
+        u32,
+        nix::unistd::Pid,
+    ),
+    String,
+> {
+    use nix::pty::{openpty, OpenptyResult, Winsize};
+    use nix::unistd::{self, ForkResult, setsid};
+    use std::os::fd::{FromRawFd, IntoRawFd};
+
+    let win = Winsize {
+        ws_row: rows,
+        ws_col: cols,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
+
+    let OpenptyResult { master, slave } =
+        openpty(Some(&win), None).map_err(|e| format!("openpty: {e}"))?;
+
+    let master_raw = master.into_raw_fd();
+    let slave_raw = slave.into_raw_fd();
+
+    match unsafe { unistd::fork() }.map_err(|e| format!("fork: {e}"))? {
+        ForkResult::Child => {
+            unsafe {
+                libc::close(master_raw);
+                let _ = setsid();
+                libc::ioctl(slave_raw, libc::TIOCSCTTY as _, 0);
+                libc::dup2(slave_raw, 0);
+                libc::dup2(slave_raw, 1);
+                libc::dup2(slave_raw, 2);
+                if slave_raw > 2 {
+                    libc::close(slave_raw);
+                }
+            }
+
+            let home = crate::modules::bootstrap::home_dir();
+            let prefix = crate::modules::bootstrap::prefix_dir();
+            let termux_path = crate::modules::bootstrap::shell_path();
+            let lib_dir = crate::modules::bootstrap::lib_dir();
+            let bash = crate::modules::bootstrap::bash_path();
+
+            if let Some(ref dir) = cwd {
+                if std::env::set_current_dir(dir).is_err() {
+                    let _ = std::env::set_current_dir(&home);
+                }
+            } else {
+                let _ = std::env::set_current_dir(&home);
+            }
+
+            std::env::set_var("TERM", "xterm-256color");
+            std::env::set_var("COLORTERM", "truecolor");
+            std::env::set_var("HOME", &home);
+            std::env::set_var("PREFIX", &prefix);
+            std::env::set_var("TMPDIR", crate::modules::bootstrap::tmp_dir());
+            std::env::set_var("PATH", &termux_path);
+            std::env::set_var("SHELL", &bash);
+            std::env::set_var("EDITOR", "vi");
+            std::env::set_var("LD_LIBRARY_PATH", &lib_dir);
+            let path_translate = lib_dir.join("libvoktty-path-translate.so");
+            if path_translate.exists() {
+                std::env::set_var("LD_PRELOAD", &path_translate);
+            }
+            std::env::set_var("LANG", "en_US.UTF-8");
+            std::env::set_var("LC_ALL", "en_US.UTF-8");
+            std::env::set_var("VOKTTY_TERMINAL", "1");
+            std::env::set_var("TERAX_TERMINAL", "1");
+
+            let (shell_bin, shell_args) = if bash.exists() {
+                (bash.to_string_lossy().to_string(), vec!["bash".to_string(), "-l".to_string()])
+            } else {
+                ("/system/bin/sh".to_string(), vec!["sh".to_string()])
+            };
+
+            let shell_c = std::ffi::CString::new(shell_bin).unwrap();
+            let argv: Vec<std::ffi::CString> = shell_args
+                .iter()
+                .map(|s| std::ffi::CString::new(s.as_str()).unwrap())
+                .collect();
+            let argv_refs: Vec<&std::ffi::CString> = argv.iter().collect();
+            let _ = unistd::execvp(&shell_c, &argv_refs);
+            unsafe { libc::_exit(1); }
+        }
+        ForkResult::Parent { child } => {
+            unsafe { libc::close(slave_raw); }
+            let reader_fd = unsafe { libc::dup(master_raw) };
+            let writer_fd = unsafe { libc::dup(master_raw) };
+            if reader_fd < 0 || writer_fd < 0 {
+                let _ = nix::sys::signal::kill(child, nix::sys::signal::Signal::SIGKILL);
+                return Err("dup master fd failed".to_string());
+            }
+            let reader: Box<dyn Read + Send> = Box::new(unsafe { std::fs::File::from_raw_fd(reader_fd) });
+            let writer: Arc<Mutex<Box<dyn Write + Send>>> =
+                Arc::new(Mutex::new(Box::new(unsafe { std::fs::File::from_raw_fd(writer_fd) })));
+            let master: Box<dyn MasterPty + Send> = Box::new(AndroidMasterPty { master_fd: master_raw });
+            let killer: Box<dyn ChildKiller + Send + Sync> = Box::new(AndroidChildKiller { pid: child });
+            Ok((master, killer, reader, writer, child.as_raw() as u32, child))
         }
     }
 }
@@ -159,47 +354,55 @@ pub fn spawn(
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<(Arc<Session>, PtySize), String> {
-    let pty_system = native_pty_system();
     let size = PtySize {
         rows,
         cols,
         pixel_width: 0,
         pixel_height: 0,
     };
-    // Hold the lock only around CreatePseudoConsole (openpty), not for the
-    // entire spawn which includes slow conda/shell startup.
-    let pair = {
-        #[cfg(windows)]
-        let _spawn_guard = CONPTY_LIFECYCLE_LOCK.lock().unwrap();
-        pty_system.openpty(size).map_err(|e| e.to_string())?
+
+    #[cfg(target_os = "android")]
+    let (master_box, killer, mut reader, writer, shell_pid, child_pid) = {
+        let _ = (&workspace, blocks, &shell, &control);
+        spawn_android(id, cols, rows, cwd)?
     };
 
-    let cmd = shell_init::build_command(cwd, workspace, blocks, shell, control)?;
-    let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
-    drop(pair.slave);
+    #[cfg(not(target_os = "android"))]
+    let (master_box, killer, mut reader, writer, shell_pid, mut child, job) = {
+        let pty_system = native_pty_system();
+        let pair = {
+            #[cfg(windows)]
+            let _spawn_guard = CONPTY_LIFECYCLE_LOCK.lock().unwrap();
+            pty_system.openpty(size).map_err(|e| e.to_string())?
+        };
 
-    // Kill the child if any of the pipe setup below fails so the spawned shell
-    // can't outlive an aborted pty_open.
-    let mut guard = ChildKillGuard::new(child.clone_killer());
-    let killer = child.clone_killer();
-    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(
-        pair.master.take_writer().map_err(|e| e.to_string())?,
-    ));
-    guard.disarm();
+        let cmd = shell_init::build_command(cwd, workspace, blocks, shell, control)?;
+        let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+        drop(pair.slave);
 
-    let shell_pid = child.process_id().unwrap_or(0);
+        let mut guard = ChildKillGuard::new(child.clone_killer());
+        let killer = child.clone_killer();
+        let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+        let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(
+            pair.master.take_writer().map_err(|e| e.to_string())?,
+        ));
+        guard.disarm();
 
-    #[cfg(windows)]
-    let job = match child.process_id() {
-        Some(pid) => match crate::modules::proc::job::ProcessJob::create_for(pid) {
-            Ok(j) => Some(j),
-            Err(e) => {
-                log::warn!("pty job-object setup failed for pid={pid}: {e}");
-                None
-            }
-        },
-        None => None,
+        let shell_pid = child.process_id().unwrap_or(0);
+
+        #[cfg(windows)]
+        let job = match child.process_id() {
+            Some(pid) => match crate::modules::proc::job::ProcessJob::create_for(pid) {
+                Ok(j) => Some(j),
+                Err(e) => {
+                    log::warn!("pty job-object setup failed for pid={pid}: {e}");
+                    None
+                }
+            },
+            None => None,
+        };
+
+        (pair.master, killer, reader, writer, shell_pid, child, job)
     };
 
     let exited = Arc::new(AtomicBool::new(false));
@@ -211,7 +414,7 @@ pub fn spawn(
         shell_pid,
         killer: Mutex::new(killer),
         writer: writer.clone(),
-        master: PtyMaster::new(pair.master),
+        master: PtyMaster::new(master_box),
         output_gate: output_gate.clone(),
         on_data: on_data.clone(),
         exited: exited.clone(),
@@ -333,6 +536,14 @@ pub fn spawn(
     thread::Builder::new()
         .name("voktty-pty-waiter".into())
         .spawn(move || {
+            #[cfg(target_os = "android")]
+            let code = match nix::sys::wait::waitpid(child_pid, None) {
+                Ok(nix::sys::wait::WaitStatus::Exited(_, code)) => code,
+                Ok(nix::sys::wait::WaitStatus::Signaled(_, sig, _)) => sig as i32,
+                Ok(_) => 0,
+                Err(_) => -1,
+            };
+            #[cfg(not(target_os = "android"))]
             let code = match child.wait() {
                 Ok(status) => status.exit_code() as i32,
                 Err(e) => {

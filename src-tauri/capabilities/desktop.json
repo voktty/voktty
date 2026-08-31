@@ -11,8 +11,10 @@
   ],
   "permissions": [
     "autostart:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
     "window-state:default",
-    "updater:default",
-    "process:default"
+    "updater:default"
   ]
 }

@@ -905,6 +905,24 @@ pub fn host_local_metrics() -> Result<SshServerMetrics, String> {
             ping_ms: Some(0),
         })
     }
+
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        Ok(SshServerMetrics {
+            os_name: "Android Local".to_string(),
+            cpu_percent: 0.0,
+            mem_used_bytes: 0,
+            mem_total_bytes: 0,
+            disk_used_bytes: 0,
+            disk_total_bytes: 0,
+            net_rx_bytes: 0,
+            net_tx_bytes: 0,
+            tcp_connections: 0,
+            users_count: 1,
+            load_avg: vec![],
+            ping_ms: Some(0),
+        })
+    }
 }
 
 #[cfg(windows)]

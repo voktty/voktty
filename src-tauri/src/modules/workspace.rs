@@ -167,7 +167,21 @@ pub fn user_spawn_cwd_or_home(
 }
 
 pub fn bootstrap_registry(registry: &WorkspaceRegistry) {
+    #[cfg(target_os = "android")]
+    {
+        let home = crate::modules::bootstrap::home_dir();
+        let _ = std::fs::create_dir_all(&home);
+        let _ = registry.authorize(&home);
+
+        for storage_path in &["/sdcard", "/storage/emulated/0", "/storage/self/primary"] {
+            let p = std::path::Path::new(storage_path);
+            if p.exists() {
+                let _ = registry.authorize(p);
+            }
+        }
+    }
     let _ = registry.authorize(resolve_launch_dir());
+    #[cfg(not(target_os = "android"))]
     if let Some(home) = dirs::home_dir() {
         let _ = registry.authorize(home);
     }
@@ -217,16 +231,25 @@ pub fn launch_cwd_snapshot() -> Option<PathBuf> {
 }
 
 fn resolve_launch_dir() -> PathBuf {
-    if let Some(cwd) = launch_cwd_snapshot() {
-        return cwd;
-    }
-    if let Some(cwd) = std::env::current_dir()
-        .ok()
-        .filter(|p| is_usable_launch_dir(p))
+    #[cfg(target_os = "android")]
     {
-        return cwd;
+        let home = crate::modules::bootstrap::home_dir();
+        let _ = std::fs::create_dir_all(&home);
+        return home;
     }
-    dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
+    #[cfg(not(target_os = "android"))]
+    {
+        if let Some(cwd) = launch_cwd_snapshot() {
+            return cwd;
+        }
+        if let Some(cwd) = std::env::current_dir()
+            .ok()
+            .filter(|p| is_usable_launch_dir(p))
+        {
+            return cwd;
+        }
+        dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
+    }
 }
 
 pub(crate) fn native_spawn_dir(explicit: Option<&str>) -> PathBuf {
@@ -238,30 +261,39 @@ pub(crate) fn native_spawn_dir(explicit: Option<&str>) -> PathBuf {
     {
         return path;
     }
-    if let Some(home) = dirs::home_dir().filter(|path| path.is_dir()) {
+    #[cfg(target_os = "android")]
+    {
+        let home = crate::modules::bootstrap::home_dir();
+        let _ = std::fs::create_dir_all(&home);
         return home;
     }
-    if let Some(launch) = launch_cwd_snapshot().filter(|path| is_usable_launch_dir(path)) {
-        return launch;
-    }
-    if let Some(current) = std::env::current_dir()
-        .ok()
-        .filter(|path| is_usable_launch_dir(path))
+    #[cfg(not(target_os = "android"))]
     {
-        return current;
-    }
-    let temporary = std::env::temp_dir();
-    if temporary.is_dir() {
-        return temporary;
-    }
-    #[cfg(windows)]
-    {
-        let drive = std::env::var_os("SystemDrive").unwrap_or_else(|| "C:".into());
-        windows_system_drive_root(&drive)
-    }
-    #[cfg(not(windows))]
-    {
-        PathBuf::from("/")
+        if let Some(home) = dirs::home_dir().filter(|path| path.is_dir()) {
+            return home;
+        }
+        if let Some(launch) = launch_cwd_snapshot().filter(|path| is_usable_launch_dir(path)) {
+            return launch;
+        }
+        if let Some(current) = std::env::current_dir()
+            .ok()
+            .filter(|path| is_usable_launch_dir(path))
+        {
+            return current;
+        }
+        let temporary = std::env::temp_dir();
+        if temporary.is_dir() {
+            return temporary;
+        }
+        #[cfg(windows)]
+        {
+            let drive = std::env::var_os("SystemDrive").unwrap_or_else(|| "C:".into());
+            windows_system_drive_root(&drive)
+        }
+        #[cfg(not(windows))]
+        {
+            PathBuf::from("/")
+        }
     }
 }
 

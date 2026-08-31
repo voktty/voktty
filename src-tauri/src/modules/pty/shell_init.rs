@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "android", allow(dead_code))]
+
 #[cfg(windows)]
 use std::path::PathBuf;
 
@@ -214,6 +216,27 @@ fn apply_common(
     }
     ensure_utf8_locale(cmd);
 
+    #[cfg(target_os = "android")]
+    {
+        let home = crate::modules::bootstrap::home_dir();
+        let prefix = crate::modules::bootstrap::prefix_dir();
+        let lib_dir = crate::modules::bootstrap::lib_dir();
+        let termux_path = crate::modules::bootstrap::shell_path();
+        let bash = crate::modules::bootstrap::bash_path();
+
+        cmd.env("HOME", home.to_string_lossy().to_string());
+        cmd.env("PREFIX", prefix.to_string_lossy().to_string());
+        cmd.env("TMPDIR", crate::modules::bootstrap::tmp_dir().to_string_lossy().to_string());
+        cmd.env("PATH", termux_path);
+        cmd.env("SHELL", bash.to_string_lossy().to_string());
+        cmd.env("LD_LIBRARY_PATH", lib_dir.to_string_lossy().to_string());
+
+        let path_translate = lib_dir.join("libvoktty-path-translate.so");
+        if path_translate.exists() {
+            cmd.env("LD_PRELOAD", path_translate.to_string_lossy().to_string());
+        }
+    }
+
     let cwd = workspace::native_spawn_dir(cwd.as_deref());
     #[cfg(windows)]
     let cwd = {
@@ -422,11 +445,22 @@ mod unix {
         }
 
         pub fn detect() -> (Shell, String) {
-            let path = login_shell()
-                .or_else(|| std::env::var("SHELL").ok())
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| "/bin/zsh".into());
-            (Self::classify(&path), path)
+            #[cfg(target_os = "android")]
+            {
+                let bash = crate::modules::bootstrap::bash_path();
+                if bash.exists() {
+                    return (Shell::Bash, bash.to_string_lossy().to_string());
+                }
+                return (Shell::Other, "/system/bin/sh".into());
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                let path = login_shell()
+                    .or_else(|| std::env::var("SHELL").ok())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "/bin/zsh".into());
+                (Self::classify(&path), path)
+            }
         }
 
         // A configured override wins only when it points at a real file;
@@ -570,7 +604,11 @@ mod unix {
     }
 
     fn integration_root() -> Result<PathBuf, String> {
+        #[cfg(target_os = "android")]
+        let home = crate::modules::bootstrap::home_dir();
+        #[cfg(not(target_os = "android"))]
         let home = dirs::home_dir().ok_or_else(|| "could not resolve home dir".to_string())?;
+
         let root = home.join(".cache").join("voktty").join("shell-integration");
         fs::create_dir_all(&root).map_err(|e| format!("create {}: {e}", root.display()))?;
         Ok(root)
@@ -595,7 +633,11 @@ mod unix {
     }
 
     fn prepare_fish_conf_d() -> Result<(), String> {
+        #[cfg(target_os = "android")]
+        let home = crate::modules::bootstrap::home_dir();
+        #[cfg(not(target_os = "android"))]
         let home = dirs::home_dir().ok_or_else(|| "could not resolve home dir".to_string())?;
+
         let dir = home.join(".config").join("fish").join("conf.d");
         fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
         write_if_changed(&dir.join("voktty.fish"), FISH_INIT)?;

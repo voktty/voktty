@@ -12,6 +12,7 @@ export const es: TranslationSchema = {
     close: "Cerrar",
     copy: "Copiar",
     copied: "Copiado",
+    paste: "Pegar",
     open: "Abrir",
     back: "Atrás",
     search: "Buscar",

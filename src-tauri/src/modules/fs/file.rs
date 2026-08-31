@@ -56,22 +56,38 @@ pub(super) fn mtime_millis(meta: &fs::Metadata) -> u64 {
 
 #[tauri::command]
 pub async fn fs_pick_file(default_path: Option<String>) -> Result<Option<String>, String> {
-    let mut dialog = rfd::AsyncFileDialog::new();
-    if let Some(ref p) = default_path {
-        dialog = dialog.set_directory(p);
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let mut dialog = rfd::AsyncFileDialog::new();
+        if let Some(ref p) = default_path {
+            dialog = dialog.set_directory(p);
+        }
+        let handle = dialog.pick_file().await;
+        Ok(handle.map(|h| h.path().to_string_lossy().into_owned()))
     }
-    let handle = dialog.pick_file().await;
-    Ok(handle.map(|h| h.path().to_string_lossy().into_owned()))
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = default_path;
+        Ok(None)
+    }
 }
 
 #[tauri::command]
 pub async fn fs_pick_folder(default_path: Option<String>) -> Result<Option<String>, String> {
-    let mut dialog = rfd::AsyncFileDialog::new();
-    if let Some(ref p) = default_path {
-        dialog = dialog.set_directory(p);
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let mut dialog = rfd::AsyncFileDialog::new();
+        if let Some(ref p) = default_path {
+            dialog = dialog.set_directory(p);
+        }
+        let handle = dialog.pick_folder().await;
+        Ok(handle.map(|h| h.path().to_string_lossy().into_owned()))
     }
-    let handle = dialog.pick_folder().await;
-    Ok(handle.map(|h| h.path().to_string_lossy().into_owned()))
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = default_path;
+        Ok(None)
+    }
 }
 
 #[tauri::command]
