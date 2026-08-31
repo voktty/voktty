@@ -1177,7 +1177,12 @@ fn helper_path(app: &AppHandle, architecture: &str) -> Result<PathBuf, String> {
             if let Some(dir) = curr {
                 candidates.push(dir.join("resources").join("remote").join(&subpath));
                 candidates.push(dir.join("remote").join(&subpath));
-                candidates.push(dir.join("src-tauri").join("resources").join("remote").join(&subpath));
+                candidates.push(
+                    dir.join("src-tauri")
+                        .join("resources")
+                        .join("remote")
+                        .join(&subpath),
+                );
                 curr = dir.parent();
             } else {
                 break;
@@ -1188,7 +1193,14 @@ fn helper_path(app: &AppHandle, architecture: &str) -> Result<PathBuf, String> {
     // 3. Cargo manifest dir (development / testing fallback)
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     candidates.push(manifest_dir.join("resources").join("remote").join(&subpath));
-    candidates.push(manifest_dir.join("..").join("src-tauri").join("resources").join("remote").join(&subpath));
+    candidates.push(
+        manifest_dir
+            .join("..")
+            .join("src-tauri")
+            .join("resources")
+            .join("remote")
+            .join(&subpath),
+    );
 
     for path in &candidates {
         if path.is_file() {

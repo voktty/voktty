@@ -226,7 +226,12 @@ fn apply_common(
 
         cmd.env("HOME", home.to_string_lossy().to_string());
         cmd.env("PREFIX", prefix.to_string_lossy().to_string());
-        cmd.env("TMPDIR", crate::modules::bootstrap::tmp_dir().to_string_lossy().to_string());
+        cmd.env(
+            "TMPDIR",
+            crate::modules::bootstrap::tmp_dir()
+                .to_string_lossy()
+                .to_string(),
+        );
         cmd.env("PATH", termux_path);
         cmd.env("SHELL", bash.to_string_lossy().to_string());
         cmd.env("LD_LIBRARY_PATH", lib_dir.to_string_lossy().to_string());

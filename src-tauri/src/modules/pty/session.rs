@@ -223,7 +223,9 @@ impl MasterPty for AndroidMasterPty {
 #[cfg(target_os = "android")]
 impl Drop for AndroidMasterPty {
     fn drop(&mut self) {
-        unsafe { libc::close(self.master_fd); }
+        unsafe {
+            libc::close(self.master_fd);
+        }
     }
 }
 
@@ -245,7 +247,7 @@ fn spawn_android(
     String,
 > {
     use nix::pty::{openpty, OpenptyResult, Winsize};
-    use nix::unistd::{self, ForkResult, setsid};
+    use nix::unistd::{self, setsid, ForkResult};
     use std::os::fd::{FromRawFd, IntoRawFd};
 
     let win = Winsize {
@@ -308,7 +310,10 @@ fn spawn_android(
             std::env::set_var("TERAX_TERMINAL", "1");
 
             let (shell_bin, shell_args) = if bash.exists() {
-                (bash.to_string_lossy().to_string(), vec!["bash".to_string(), "-l".to_string()])
+                (
+                    bash.to_string_lossy().to_string(),
+                    vec!["bash".to_string(), "-l".to_string()],
+                )
             } else {
                 ("/system/bin/sh".to_string(), vec!["sh".to_string()])
             };
@@ -320,21 +325,31 @@ fn spawn_android(
                 .collect();
             let argv_refs: Vec<&std::ffi::CString> = argv.iter().collect();
             let _ = unistd::execvp(&shell_c, &argv_refs);
-            unsafe { libc::_exit(1); }
+            unsafe {
+                libc::_exit(1);
+            }
         }
         ForkResult::Parent { child } => {
-            unsafe { libc::close(slave_raw); }
+            unsafe {
+                libc::close(slave_raw);
+            }
             let reader_fd = unsafe { libc::dup(master_raw) };
             let writer_fd = unsafe { libc::dup(master_raw) };
             if reader_fd < 0 || writer_fd < 0 {
                 let _ = nix::sys::signal::kill(child, nix::sys::signal::Signal::SIGKILL);
                 return Err("dup master fd failed".to_string());
             }
-            let reader: Box<dyn Read + Send> = Box::new(unsafe { std::fs::File::from_raw_fd(reader_fd) });
+            let reader: Box<dyn Read + Send> =
+                Box::new(unsafe { std::fs::File::from_raw_fd(reader_fd) });
             let writer: Arc<Mutex<Box<dyn Write + Send>>> =
-                Arc::new(Mutex::new(Box::new(unsafe { std::fs::File::from_raw_fd(writer_fd) })));
-            let master: Box<dyn MasterPty + Send> = Box::new(AndroidMasterPty { master_fd: master_raw });
-            let killer: Box<dyn ChildKiller + Send + Sync> = Box::new(AndroidChildKiller { pid: child });
+                Arc::new(Mutex::new(Box::new(unsafe {
+                    std::fs::File::from_raw_fd(writer_fd)
+                })));
+            let master: Box<dyn MasterPty + Send> = Box::new(AndroidMasterPty {
+                master_fd: master_raw,
+            });
+            let killer: Box<dyn ChildKiller + Send + Sync> =
+                Box::new(AndroidChildKiller { pid: child });
             Ok((master, killer, reader, writer, child.as_raw() as u32, child))
         }
     }
