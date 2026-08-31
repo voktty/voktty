@@ -309,6 +309,10 @@ export function resolveFxBinary(): Promise<{ path: string }> {
   return invoke("harness_resolve_fx");
 }
 
+export function resolveGrokBinary(): Promise<{ path: string }> {
+  return invoke("harness_resolve_grok");
+}
+
 export function freeHarnessPort(): Promise<number> {
   return invoke("harness_free_port");
 }

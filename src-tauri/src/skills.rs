@@ -62,6 +62,7 @@ pub(crate) fn list_skills_from(project: &Path, home: Option<&Path>) -> Vec<Disco
         (".pi/skills", "pi"),
         (".omp/skills", "omp"),
         (".fx/skills", "fx"),
+        (".grok/skills", "grok"),
     ] {
         add_root(project.join(dir), "project", source);
         if let Some(home) = home {
@@ -409,6 +410,30 @@ mod tests {
         assert_eq!(project_skill.scope, "project");
         let user_skill = skills.iter().find(|s| s.name == "fx-global").unwrap();
         assert_eq!(user_skill.source, "fx");
+        assert_eq!(user_skill.scope, "user");
+    }
+
+    #[test]
+    fn discovers_grok_project_and_user_skills() {
+        let project = tmp("proj-grok");
+        let home = tmp("home-grok");
+        write_skill(
+            &project.0.join(".grok/skills"),
+            "grok-review",
+            "---\nname: grok-review\ndescription: grok project skill\n---\n",
+        );
+        write_skill(
+            &home.0.join(".grok/skills"),
+            "grok-global",
+            "---\nname: grok-global\ndescription: grok user skill\n---\n",
+        );
+
+        let skills = list_skills_from(&project.0, Some(&home.0));
+        let project_skill = skills.iter().find(|s| s.name == "grok-review").unwrap();
+        assert_eq!(project_skill.source, "grok");
+        assert_eq!(project_skill.scope, "project");
+        let user_skill = skills.iter().find(|s| s.name == "grok-global").unwrap();
+        assert_eq!(user_skill.source, "grok");
         assert_eq!(user_skill.scope, "user");
     }
 

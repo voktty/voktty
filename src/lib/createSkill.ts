@@ -11,7 +11,7 @@ description: Create a MonoCode skill as a SKILL.md in .agents/skills. Use when t
 
 # Create a MonoCode skill
 
-Write a portable Agent Skill so every harness (Claude, Cursor, Codex, OpenCode, Pi, fx) can load it.
+Write a portable Agent Skill so every harness (Claude, Cursor, Codex, Grok Build, OpenCode, Pi, omp, fx) can load it.
 
 ## Storage (required)
 

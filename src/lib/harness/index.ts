@@ -56,11 +56,20 @@ export {
   forgetFxSession,
   bindFxSession,
 } from "./fx";
+export {
+  sendGrokTurn,
+  cancelGrokTurn,
+  respondGrokApproval,
+  stopGrokSession,
+  forgetGrokSession,
+  bindGrokSession,
+} from "./grok";
 export { generateCursorSessionTitle } from "./cursorTitle";
 export { generateCodexSessionTitle } from "./codexTitle";
 export { generateOpenCodeSessionTitle } from "./opencodeTitle";
 export { generateClaudeSessionTitle } from "./claudeTitle";
 export { generatePiSessionTitle, generateOmpSessionTitle } from "./piTitle";
+export { generateGrokSessionTitle } from "./grokTitle";
 export {
   generateCursorCommitMessage,
   generateCursorPrContent,
@@ -79,6 +88,10 @@ export {
   generateClaudePrContent,
 } from "./claudeGit";
 export {
+  generateGrokCommitMessage,
+  generateGrokPrContent,
+} from "./grokGit";
+export {
   generateCommitMessage,
   generatePrContent,
   pickTextHarness,
@@ -88,12 +101,14 @@ export { warmupCursorText } from "./cursorText";
 export { warmupOpenCodeText } from "./opencodeText";
 export { warmupClaudeText } from "./claudeText";
 export { warmupPiText, warmupOmpText } from "./piText";
+export { warmupGrokText } from "./grokText";
 export { refreshCursorCatalog } from "./cursorCatalog";
 export { refreshCodexCatalog } from "./codexCatalog";
 export { refreshOpenCodeCatalog } from "./opencodeCatalog";
 export { refreshClaudeCatalog } from "./claudeCatalog";
 export { refreshPiCatalog, refreshOmpCatalog } from "./piCatalog";
 export { refreshFxCatalog } from "./fxCatalog";
+export { refreshGrokCatalog } from "./grokCatalog";
 export { registerBuiltinHarnesses } from "./register";
 export {
   getHarnessAvailabilitySnapshot,

@@ -362,6 +362,7 @@ fn apply_path(cmd: &mut std::process::Command) {
         parts.push(format!("{home}/.claude/local"));
         parts.push(format!("{home}/.local/share/claude"));
         parts.push(format!("{home}/.opencode/bin"));
+        parts.push(format!("{home}/.grok/bin"));
         parts.push(format!("{home}/.npm-global/bin"));
     }
     parts.push("/opt/homebrew/bin".into());

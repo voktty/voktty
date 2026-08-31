@@ -33,6 +33,7 @@ export type DiscoveredSkill = {
     | "pi"
     | "omp"
     | "fx"
+    | "grok"
     | "monocode";
 };
 

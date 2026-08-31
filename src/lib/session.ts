@@ -9,12 +9,13 @@ import {
 } from "./models";
 
 export type HarnessId =
-  "claude" | "codex" | "cursor" | "opencode" | "pi" | "omp" | "fx";
+  "claude" | "codex" | "cursor" | "grok" | "opencode" | "pi" | "omp" | "fx";
 
 export const HARNESSES: HarnessId[] = [
   "claude",
   "codex",
   "cursor",
+  "grok",
   "opencode",
   "pi",
   "omp",
@@ -189,6 +190,7 @@ export const HARNESS_LABEL: Record<HarnessId, string> = {
   claude: "claude",
   codex: "codex",
   cursor: "cursor",
+  grok: "grok",
   opencode: "opencode",
   pi: "pi",
   omp: "omp",
@@ -199,15 +201,16 @@ export const HARNESS_TITLE: Record<HarnessId, string> = {
   claude: "Claude Code",
   codex: "Codex",
   cursor: "Cursor",
+  grok: "Grok Build",
   opencode: "OpenCode",
   pi: "Pi",
   omp: "omp",
   fx: "fx",
 };
 
-/** fx ACP rejects image and audio blocks; other live harnesses accept files. */
+/** fx and Grok Build ACP reject image and audio blocks. */
 export function harnessSupportsAttachments(id: HarnessId): boolean {
-  return id !== "fx";
+  return id !== "fx" && id !== "grok";
 }
 
 export function newSession(

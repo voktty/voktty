@@ -34,6 +34,7 @@ describe("fx protocol", () => {
 
   it("does not support attachments", () => {
     expect(harnessSupportsAttachments("fx")).toBe(false);
+    expect(harnessSupportsAttachments("grok")).toBe(false);
     expect(harnessSupportsAttachments("cursor")).toBe(true);
   });
 

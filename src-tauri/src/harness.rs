@@ -240,6 +240,18 @@ pub fn harness_resolve_fx() -> Result<CursorBinary, String> {
         })
 }
 
+/// Resolve xAI Grok Build (`grok`).
+#[tauri::command(async)]
+pub fn harness_resolve_grok() -> Result<CursorBinary, String> {
+    resolve_grok()
+        .map(|path| CursorBinary {
+            path: path.to_string_lossy().into_owned(),
+        })
+        .ok_or_else(|| {
+            "Grok Build CLI not found. Install it with `curl -fsSL https://x.ai/cli/install.sh | bash` and run `grok login`, then retry.".into()
+        })
+}
+
 /// Bind an ephemeral loopback port for `opencode serve`.
 #[tauri::command]
 pub fn harness_free_port() -> Result<u16, String> {
@@ -550,6 +562,7 @@ const EXEC_ALLOWED_ARGS: &[&[&str]] = &[
     &["--list-models"],
     &["models", "--verbose"],
     &["models", "--json"],
+    &["models"],
     &["status", "--json"],
     &["agent", "list"],
 ];
@@ -572,6 +585,7 @@ fn is_resolved_harness_binary(command: &str) -> bool {
         resolve_pi(),
         resolve_omp(),
         resolve_fx(),
+        resolve_grok(),
     ]
     .into_iter()
     .flatten()
@@ -905,6 +919,29 @@ fn resolve_fx() -> Option<PathBuf> {
     candidates.into_iter().find(|path| is_fx_agent(path))
 }
 
+fn resolve_grok() -> Option<PathBuf> {
+    let home = dirs_home().map(PathBuf::from);
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Some(home) = &home {
+        candidates.push(home.join(".grok/bin/grok"));
+        candidates.push(home.join(".local/bin/grok"));
+        candidates.push(home.join(".npm-global/bin/grok"));
+        candidates.push(home.join(".cargo/bin/grok"));
+        candidates.push(home.join("n/bin/grok"));
+    }
+    #[cfg(target_os = "macos")]
+    candidates.push(PathBuf::from("/opt/homebrew/bin/grok"));
+    candidates.push(PathBuf::from("/usr/local/bin/grok"));
+    candidates.push(PathBuf::from("/usr/bin/grok"));
+    candidates.push(PathBuf::from("/snap/bin/grok"));
+    if let Some(from_shell) = which_via_login_shell("grok") {
+        candidates.push(from_shell);
+    }
+
+    candidates.into_iter().find(|path| is_grok_agent(path))
+}
+
 fn is_pi_coding_agent(path: &Path) -> bool {
     if !path.is_file() {
         return false;
@@ -980,6 +1017,21 @@ fn is_fx_agent(path: &Path) -> bool {
     file_mentions_fx_agent(path) || fx_help_mentions_acp(path)
 }
 
+fn is_grok_agent(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if name != "grok" {
+        return false;
+    }
+    // Official installer: ~/.grok/bin/grok
+    if path.to_string_lossy().contains("/.grok/") {
+        return true;
+    }
+    file_mentions_grok_agent(path) || grok_help_mentions_agent(path)
+}
+
 /// The fx markers sit megabytes into the compiled binary, so a small head-read
 /// never matched and every resolve fell through to spawning `fx --help`. Scan
 /// the whole file in chunks instead, overlapping enough to catch a marker that
@@ -1039,6 +1091,67 @@ fn fx_help_mentions_acp(path: &Path) -> bool {
             )
             .to_ascii_lowercase();
             text.contains("acp") && (text.contains("ask") || text.contains("gateway"))
+        }
+        _ => {
+            terminate(pid);
+            false
+        }
+    }
+}
+
+fn file_mentions_grok_agent(path: &Path) -> bool {
+    const MARKERS: [&str; 4] = ["xai-grok", "Grok Build", "docs.x.ai/build", "grok agent"];
+    const CHUNK: usize = 1024 * 1024;
+    const OVERLAP: usize = 64;
+
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut reader = BufReader::new(file);
+    let mut buf = vec![0u8; CHUNK + OVERLAP];
+    let mut carry = 0usize;
+    loop {
+        let Ok(n) = reader.read(&mut buf[carry..]) else {
+            return false;
+        };
+        if n == 0 {
+            return false;
+        }
+        let filled = carry + n;
+        let text = String::from_utf8_lossy(&buf[..filled]);
+        if MARKERS.iter().any(|marker| text.contains(marker)) {
+            return true;
+        }
+        carry = filled.min(OVERLAP);
+        buf.copy_within(filled - carry..filled, 0);
+    }
+}
+
+fn grok_help_mentions_agent(path: &Path) -> bool {
+    let mut cmd = Command::new(path);
+    cmd.arg("--help")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    apply_gui_env(&mut cmd);
+    isolate_child(&mut cmd);
+    let Ok(child) = cmd.spawn() else {
+        return false;
+    };
+    let pid = child.id();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(child.wait_with_output());
+    });
+    match rx.recv_timeout(Duration::from_secs(2)) {
+        Ok(Ok(output)) => {
+            let text = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .to_ascii_lowercase();
+            text.contains("grok build") || (text.contains("agent") && text.contains("stdio"))
         }
         _ => {
             terminate(pid);
@@ -1131,6 +1244,7 @@ fn gui_search_path_from(
         parts.push(format!("{home}/.claude/local"));
         parts.push(format!("{home}/.local/share/claude"));
         parts.push(format!("{home}/.opencode/bin"));
+        parts.push(format!("{home}/.grok/bin"));
         parts.push(format!("{home}/.npm-global/bin"));
     }
     parts.push("/opt/homebrew/bin".into());
@@ -1174,6 +1288,9 @@ fn prepare_child(cmd: &mut Command, command: &str) {
     if command_basename(command) == "fx" {
         apply_fx_env(cmd);
     }
+    if command_basename(command) == "grok" {
+        apply_grok_env(cmd);
+    }
     isolate_child(cmd);
 }
 
@@ -1197,15 +1314,28 @@ fn apply_fx_env(cmd: &mut Command) {
     }
 }
 
+fn apply_grok_env(cmd: &mut Command) {
+    for key in ["XAI_API_KEY", "GROK_CODE_XAI_API_KEY"] {
+        if std::env::var_os(key).is_some() {
+            continue;
+        }
+        if let Some(value) = login_shell_env(key) {
+            cmd.env(key, value);
+        }
+    }
+}
+
 static LOGIN_SHELL_ENV: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 /// Keys worth keeping out of `printenv`. PATH is the important one: a
 /// Finder-launched app inherits only launchd's bare PATH.
-const LOGIN_SHELL_KEYS: [&str; 4] = [
+const LOGIN_SHELL_KEYS: [&str; 6] = [
     "PATH",
     "AI_GATEWAY_API_KEY",
     "FX_AI_GATEWAY_API_KEY",
     "VERCEL_OIDC_TOKEN",
+    "XAI_API_KEY",
+    "GROK_CODE_XAI_API_KEY",
 ];
 
 fn login_shell_path() -> Option<String> {
@@ -1388,6 +1518,7 @@ mod tests {
         let parts: Vec<&str> = path.split(':').collect();
         assert_eq!(parts[0], "/custom/gh-dir");
         assert!(parts.contains(&"/tmp/home/.local/bin"));
+        assert!(parts.contains(&"/tmp/home/.grok/bin"));
         assert!(parts.contains(&"/opt/homebrew/bin"));
         assert!(parts.contains(&"/usr/local/bin"));
         assert_eq!(*parts.last().unwrap(), "/bin");
@@ -1531,9 +1662,33 @@ mod tests {
     }
 
     #[test]
+    fn grok_accepts_official_install_path_and_markers() {
+        let dir = std::env::temp_dir().join(format!("monocode-grok-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let home = dir.join(".grok/bin");
+        std::fs::create_dir_all(&home).unwrap();
+
+        let agent = home.join("grok");
+        std::fs::write(&agent, b"#!/bin/sh\necho other grok\n").unwrap();
+        assert!(is_grok_agent(&agent));
+
+        let marked = dir.join("grok");
+        std::fs::write(&marked, b"#!/bin/sh\n# Grok Build\n# xai-grok\n").unwrap();
+        assert!(is_grok_agent(&marked));
+
+        let other = dir.join("grok-cli");
+        std::fs::write(&other, b"#!/bin/sh\necho not grok\n").unwrap();
+        assert!(!is_grok_agent(&other));
+
+        assert!(!is_grok_agent(&dir.join("missing")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn command_basename_strips_path() {
         assert_eq!(command_basename("/Users/me/.local/bin/fx"), "fx");
         assert_eq!(command_basename("fx"), "fx");
+        assert_eq!(command_basename("/Users/me/.grok/bin/grok"), "grok");
     }
 
     #[test]
@@ -1558,6 +1713,7 @@ mod exec_allowlist_tests {
         assert!(exec_args_allowed(&args(&["--list-models"])));
         assert!(exec_args_allowed(&args(&["models", "--verbose"])));
         assert!(exec_args_allowed(&args(&["models", "--json"])));
+        assert!(exec_args_allowed(&args(&["models"])));
         assert!(exec_args_allowed(&args(&["status", "--json"])));
         assert!(exec_args_allowed(&args(&["agent", "list"])));
     }
@@ -1567,7 +1723,6 @@ mod exec_allowlist_tests {
         assert!(!exec_args_allowed(&args(&[])));
         assert!(!exec_args_allowed(&args(&["--help"])));
         assert!(!exec_args_allowed(&args(&["--version", "--json"])));
-        assert!(!exec_args_allowed(&args(&["models"])));
         assert!(!exec_args_allowed(&args(&["-c", "id"])));
         assert!(!exec_args_allowed(&args(&["agent", "list", "--json"])));
     }

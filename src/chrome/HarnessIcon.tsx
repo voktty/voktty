@@ -3,6 +3,7 @@ import claude from "../assets/providers/claude.svg";
 import codex from "../assets/providers/codex.svg";
 import cursor from "../assets/providers/cursor.svg";
 import fx from "../assets/providers/fx.svg";
+import grok from "../assets/providers/grok.svg";
 import omp from "../assets/providers/omp.svg";
 import opencode from "../assets/providers/opencode.svg";
 import pi from "../assets/providers/pi.svg";
@@ -12,6 +13,7 @@ export const HARNESS_ICONS: Record<HarnessId, string> = {
   claude,
   codex,
   cursor,
+  grok,
   opencode,
   pi,
   omp,
@@ -21,6 +23,7 @@ export const HARNESS_ICONS: Record<HarnessId, string> = {
 /** White marks that must follow `currentColor` so they stay visible in light mode. */
 export const MONOCHROME_HARNESSES = new Set<HarnessId>([
   "cursor",
+  "grok",
   "opencode",
   "pi",
   "omp",
@@ -30,13 +33,15 @@ export const MONOCHROME_HARNESSES = new Set<HarnessId>([
 function MonoIcon({
   className,
   children,
+  viewBox = "-4 -4 37 37",
 }: {
   className: string;
   children: ReactNode;
+  viewBox?: string;
 }) {
   return (
     <svg
-      viewBox="-4 -4 37 37"
+      viewBox={viewBox}
       fill="currentColor"
       aria-hidden
       className={`block ${className}`}
@@ -67,6 +72,14 @@ export function HarnessIcon({
     return (
       <MonoIcon className={className}>
         <path d="M13.3315 0C14.3158 0 15.4694 0.264398 16.1485 0.571621L16.5318 0.746645L15.5996 3.46883L15.1531 3.30498C14.6358 3.11319 14.0851 2.94189 13.4432 2.94189C12.7901 2.94189 12.3826 3.0834 12.0644 3.41111C11.7202 3.76674 11.4225 4.40167 11.162 5.54119L10.9592 6.48892H14.0348L17.5254 6.50754H17.5738L17.6017 6.54851L20.9527 11.4752L24.2814 6.50754H28.7711L23.3399 14.2887L29 22.2969H24.7633L24.7354 22.2597L13.9362 7.53721L13.6032 9.19807H10.388L7.34024 23.686C7.01277 25.2686 6.50295 26.5962 5.68241 27.5328C4.84326 28.4898 3.71384 29 2.25138 29C1.47735 29 0.83915 28.8808 0.310727 28.6946L0 28.5848V25.5423L0.1228 25.5833L0.612151 25.7472C1.10522 25.911 1.52015 26.0302 2.0281 26.0302C2.28673 26.0302 2.50443 25.9799 2.69607 25.8775C2.88772 25.7751 3.0589 25.6205 3.21519 25.4046C3.54639 24.9484 3.8106 24.2297 4.03015 23.213L6.98114 9.19807H4.3967L4.74836 7.34356L4.80046 7.32681L7.55049 6.41817L7.79796 5.33265C8.23893 3.39063 8.84364 2.03698 9.7628 1.17676C10.6987 0.299775 11.8877 0 13.3315 0ZM20.0484 18.4483L17.4584 22.39H12.7082L17.6315 15.2718L20.0484 18.4483Z" />
+      </MonoIcon>
+    );
+  }
+  if (harness === "grok") {
+    return (
+      <MonoIcon className={className} viewBox="0 0 35 33">
+        <path d="M13.2371 21.0407L24.3186 12.8506C24.8619 12.4491 25.6384 12.6057 25.8973 13.2294C27.2597 16.5185 26.651 20.4712 23.9403 23.1851C21.2297 25.8989 17.4581 26.4941 14.0108 25.1386L10.2449 26.8843C15.6463 30.5806 22.2053 29.6665 26.304 25.5601C29.5551 22.3051 30.562 17.8683 29.6205 13.8673L29.629 13.8758C28.2637 7.99809 29.9647 5.64871 33.449 0.844576C33.5314 0.730667 33.6139 0.616757 33.6964 0.5L29.1113 5.09055V5.07631L13.2343 21.0436" />
+        <path d="M10.9503 23.0313C7.07343 19.3235 7.74185 13.5853 11.0498 10.2763C13.4959 7.82722 17.5036 6.82767 21.0021 8.2971L24.7595 6.55998C24.0826 6.07017 23.215 5.54334 22.2195 5.17313C17.7198 3.31926 12.3326 4.24192 8.67479 7.90126C5.15635 11.4239 4.0499 16.8403 5.94992 21.4622C7.36924 24.9165 5.04257 27.3598 2.69884 29.826C1.86829 30.7002 1.0349 31.5745 0.36364 32.5L10.9474 23.0341" />
       </MonoIcon>
     );
   }

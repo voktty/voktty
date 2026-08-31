@@ -94,6 +94,48 @@ export const MODELS: AgentModel[] = [
     nativeId: "grok-4.6",
   },
 
+  {
+    id: "grok:grok-4.6",
+    harness: "grok",
+    name: "Grok 4.6",
+    nativeId: "grok-4.6",
+    contextWindow: 500_000,
+    settings: [
+      {
+        id: "effort",
+        label: "Reasoning",
+        kind: "select",
+        value: "high",
+        options: [
+          { value: "xhigh", label: "Extra High" },
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "grok:grok-4.5",
+    harness: "grok",
+    name: "Grok 4.5",
+    nativeId: "grok-4.5",
+    contextWindow: 500_000,
+    settings: [
+      {
+        id: "effort",
+        label: "Reasoning",
+        kind: "select",
+        value: "high",
+        options: [
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ],
+      },
+    ],
+  },
+
   { id: "opencode:glm-5", harness: "opencode", name: "GLM 5" },
   { id: "opencode:minimax-m2.5", harness: "opencode", name: "MiniMax M2.5" },
   { id: "opencode:kimi-k2.5", harness: "opencode", name: "Kimi K2.5" },
@@ -134,6 +176,7 @@ export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
   claude: "claude:sonnet-5",
   codex: "",
   cursor: "cursor:composer-2.5",
+  grok: "grok:grok-4.6",
   opencode: "opencode:glm-5",
   pi: "pi:default",
   omp: "omp:default",
@@ -158,6 +201,7 @@ const HARNESS_ORDER: HarnessId[] = [
   "claude",
   "codex",
   "cursor",
+  "grok",
   "opencode",
   "pi",
   "omp",
@@ -637,6 +681,14 @@ function pickDefaultId(harness: HarnessId, models: AgentModel[]): string {
   }
   if (harness === "codex") {
     return models[0]?.id ?? "";
+  }
+  if (harness === "grok") {
+    return (
+      models.find((model) => model.nativeId === "grok-4.6")?.id ??
+      models.find((model) => model.id === DEFAULT_MODEL_ID.grok)?.id ??
+      models[0]?.id ??
+      DEFAULT_MODEL_ID.grok
+    );
   }
   if (harness === "fx") {
     const preferred = [

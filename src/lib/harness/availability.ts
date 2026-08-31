@@ -5,6 +5,7 @@ import {
   resolveCodexBinary,
   resolveCursorBinary,
   resolveFxBinary,
+  resolveGrokBinary,
   resolveOmpBinary,
   resolveOpenCodeBinary,
   resolvePiBinary,
@@ -21,6 +22,10 @@ const CLI: Record<HarnessId, { name: string; install?: string }> = {
   claude: { name: "Claude Code CLI" },
   codex: { name: "Codex CLI" },
   cursor: { name: "Cursor CLI" },
+  grok: {
+    name: "Grok Build CLI",
+    install: "curl -fsSL https://x.ai/cli/install.sh | bash",
+  },
   opencode: { name: "OpenCode CLI" },
   pi: { name: "Pi CLI", install: "npm i -g @earendil-works/pi-coding-agent" },
   omp: { name: "omp CLI", install: "curl -fsSL https://omp.sh/install | sh" },
@@ -31,6 +36,7 @@ let availability: HarnessAvailability = {
   claude: false,
   codex: false,
   cursor: false,
+  grok: false,
   opencode: false,
   pi: false,
   omp: false,
@@ -42,7 +48,7 @@ let probedAt = 0;
 const listeners = new Set<() => void>();
 
 /**
- * A probe stats ~100 paths across seven resolvers. The model picker and the
+ * A probe stats ~100 paths across eight resolvers. The model picker and the
  * providers pane both probe on open, so without a TTL every open pays for it
  * again to learn what it already knows. Installing a CLI mid-session is rare,
  * and `force` covers it.
@@ -140,6 +146,14 @@ export function probeHarnessAvailability(
       if (id === "fx") {
         try {
           await resolveFxBinary();
+          return [id, true] as const;
+        } catch {
+          return [id, false] as const;
+        }
+      }
+      if (id === "grok") {
+        try {
+          await resolveGrokBinary();
           return [id, true] as const;
         } catch {
           return [id, false] as const;
