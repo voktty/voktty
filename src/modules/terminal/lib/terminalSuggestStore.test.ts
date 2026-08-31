@@ -113,5 +113,14 @@ describe("useTerminalSuggestStore", () => {
     expect(s?.items).toEqual(["cd /home/juan_peres"]);
     expect(s?.selectedIndex).toBe(0);
     expect(s?.navigated).toBe(true);
+
+    // Test setNavigated collapse/expand
+    store.setNavigated(2, false);
+    s = useTerminalSuggestStore.getState().getSuggest(2);
+    expect(s?.navigated).toBe(false);
+
+    store.setNavigated(2, true);
+    s = useTerminalSuggestStore.getState().getSuggest(2);
+    expect(s?.navigated).toBe(true);
   });
 });
