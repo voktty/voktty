@@ -57,6 +57,7 @@ type Props = {
   onStop: (sessionId: string) => void;
   onInboxCardDismiss?: (sessionId: string) => void;
   onNoteCardDismiss?: (sessionId: string) => void;
+  onHandoffCardDismiss?: (sessionId: string) => void;
   onApproval: (
     sessionId: string,
     requestId: number,
@@ -66,6 +67,12 @@ type Props = {
   onOpenDiff: (path?: string) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
   onSecondOpinion?: (
+    sessionId: string,
+    harness: HarnessId,
+    turn: Block[],
+    model: string,
+  ) => void;
+  onHandoff?: (
     sessionId: string,
     harness: HarnessId,
     turn: Block[],
@@ -94,11 +101,13 @@ export const SessionPane = memo(function SessionPane({
   onStop,
   onInboxCardDismiss,
   onNoteCardDismiss,
+  onHandoffCardDismiss,
   onApproval,
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
   onSecondOpinion,
+  onHandoff,
   onNewTerminal,
   onPaneDragStart,
 }: Props) {
@@ -178,13 +187,17 @@ export const SessionPane = memo(function SessionPane({
       context={session.context}
       quoteRequest={quoteRequest}
       initialDraft={
-        session.inboxCard || session.noteCard ? undefined : session.composerSeed
+        session.inboxCard || session.noteCard || session.handoffCard
+          ? undefined
+          : session.composerSeed
       }
       inboxCard={session.inboxCard}
       noteCard={session.noteCard}
+      handoffCard={session.handoffCard}
       onQuoteRequestConsumed={acknowledgeQuote}
       onInboxCardDismiss={() => onInboxCardDismiss?.(session.id)}
       onNoteCardDismiss={() => onNoteCardDismiss?.(session.id)}
+      onHandoffCardDismiss={() => onHandoffCardDismiss?.(session.id)}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}
       onBranchChange={() => onBranchChange(session.id)}
@@ -288,6 +301,12 @@ export const SessionPane = memo(function SessionPane({
                 onSecondOpinion
                   ? (harness, turn, model) =>
                       onSecondOpinion(session.id, harness, turn, model)
+                  : undefined
+              }
+              onHandoff={
+                onHandoff
+                  ? (harness, turn, model) =>
+                      onHandoff(session.id, harness, turn, model)
                   : undefined
               }
               onJumpToBottomChange={setShowJumpToBottom}

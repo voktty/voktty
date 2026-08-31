@@ -68,6 +68,7 @@ type Shared = {
   onStop: (sessionId: string) => void;
   onInboxCardDismiss?: (sessionId: string) => void;
   onNoteCardDismiss?: (sessionId: string) => void;
+  onHandoffCardDismiss?: (sessionId: string) => void;
   onApproval: (
     sessionId: string,
     requestId: number,
@@ -78,6 +79,12 @@ type Shared = {
   onOpenDiff: (path?: string) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
   onSecondOpinion?: (
+    sessionId: string,
+    harness: HarnessId,
+    turn: Block[],
+    model: string,
+  ) => void;
+  onHandoff?: (
     sessionId: string,
     harness: HarnessId,
     turn: Block[],
@@ -126,12 +133,14 @@ function PaneTreeComponent({
   onStop,
   onInboxCardDismiss,
   onNoteCardDismiss,
+  onHandoffCardDismiss,
   onApproval,
   onOpenFile,
   editorNavigation,
   onOpenDiff,
   onOpenPlan,
   onSecondOpinion,
+  onHandoff,
   onMovePane,
   onNewTerminal,
   onTerminalMetaChange,
@@ -308,11 +317,13 @@ function PaneTreeComponent({
                 onStop={onStop}
                 onInboxCardDismiss={onInboxCardDismiss}
                 onNoteCardDismiss={onNoteCardDismiss}
+                onHandoffCardDismiss={onHandoffCardDismiss}
                 onApproval={onApproval}
                 onOpenFile={onOpenFile}
                 onOpenDiff={onOpenDiff}
                 onOpenPlan={onOpenPlan}
                 onSecondOpinion={onSecondOpinion}
+                onHandoff={onHandoff}
                 onNewTerminal={onNewTerminal}
                 onPaneDragStart={onPaneDragStart}
               />

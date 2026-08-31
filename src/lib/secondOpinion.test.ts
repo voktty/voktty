@@ -198,4 +198,22 @@ describe("buildSecondOpinionCard", () => {
       }),
     ).toEqual({ from: "cursor", to: "pi" });
   });
+
+  it("marks a split-pane continue as a handoff", () => {
+    expect(
+      buildSecondOpinionCard({
+        from: "claude",
+        to: "codex",
+        userRequest: "fix the footer",
+        files: ["a.ts"],
+        kind: "handoff",
+      }),
+    ).toEqual({
+      from: "claude",
+      to: "codex",
+      request: "fix the footer",
+      files: 1,
+      kind: "handoff",
+    });
+  });
 });

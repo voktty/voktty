@@ -1,4 +1,10 @@
-import { Check, ChevronRight, Split } from "./icons";
+import {
+  CardExchange,
+  Check,
+  ChevronRight,
+  Split,
+  type IconComponent,
+} from "./icons";
 import {
   useEffect,
   useMemo,
@@ -34,6 +40,11 @@ import { Popover } from "./Popover";
 type Props = {
   from: HarnessId;
   onPick: (harness: HarnessId, model: string) => void;
+  icon?: IconComponent;
+  title?: string;
+  disabledTitle?: string;
+  description?: string;
+  menuLabel?: string;
 };
 
 const MENU_WIDTH = 240;
@@ -42,9 +53,31 @@ const SUBMENU_MAX_HEIGHT = 288;
 /** The flyout tucks under the parent menu's edge rather than floating free. */
 const SUBMENU_OVERLAP = -4;
 /** Neither menu is inside the other, so a click in one is not a click away. */
-const SELF = "[data-second-opinion]";
+const SELF = "[data-provider-target]";
 
-export function SecondOpinionButton({ from, onPick }: Props) {
+export function HandoffButton({ from, onPick }: Pick<Props, "from" | "onPick">) {
+  return (
+    <SecondOpinionButton
+      from={from}
+      onPick={onPick}
+      icon={CardExchange}
+      title="Handoff"
+      disabledTitle="Install another provider to hand off"
+      description="Hand this session to another agent to continue the work."
+      menuLabel="Hand this session to another agent"
+    />
+  );
+}
+
+export function SecondOpinionButton({
+  from,
+  onPick,
+  icon: Icon = Split,
+  title = "Second opinion",
+  disabledTitle = "Install another provider for a second opinion",
+  description = "Send this turn to another agent to review the work.",
+  menuLabel = "Send this turn to another agent",
+}: Props) {
   const availabilityVersion = useSyncExternalStore(
     subscribeHarnessAvailability,
     getHarnessAvailabilitySnapshot,
@@ -124,9 +157,7 @@ export function SecondOpinionButton({ from, onPick }: Props) {
   };
 
   const disabled = targets.length === 0;
-  const title = disabled
-    ? "Install another provider for a second opinion"
-    : "Second opinion";
+  const label = disabled ? disabledTitle : title;
 
   const pick = (harness: HarnessId, model: string) => {
     setOpen(false);
@@ -190,8 +221,8 @@ export function SecondOpinionButton({ from, onPick }: Props) {
       <button
         ref={button}
         type="button"
-        title={title}
-        aria-label={title}
+        title={label}
+        aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
@@ -205,7 +236,7 @@ export function SecondOpinionButton({ from, onPick }: Props) {
           setOpen((value) => !value);
         }}
       >
-        <Split className="size-3.5" strokeWidth={1.75} />
+        <Icon className="size-3.5" strokeWidth={1.75} />
       </button>
       {open ? (
         <>
@@ -219,20 +250,20 @@ export function SecondOpinionButton({ from, onPick }: Props) {
             onDismiss={(reason) => dismiss(reason === "escape")}
             role="menu"
             tabIndex={-1}
-            aria-label="Send this turn to another agent"
+            aria-label={menuLabel}
             onKeyDown={onMenuKey}
-            data-second-opinion
+            data-provider-target
             className="p-1 font-sans"
           >
             <div className="px-1.5 pb-2 pt-1.5">
               <p className="text-[11px] leading-3 text-content/50 text-balance">
-                Send this turn to another agent to review the work.
+                {description}
               </p>
             </div>
             <div className="mx-1 mb-1 h-px bg-content/10" />
             {targets.length === 0 ? (
               <div className="px-2.5 py-2 text-[12px] leading-4 text-content/50">
-                Install another provider to send this turn over.
+                {disabledTitle}
               </div>
             ) : (
               targets.map((harness, index) => {
@@ -295,7 +326,7 @@ export function SecondOpinionButton({ from, onPick }: Props) {
               role="menu"
               aria-label={`${HARNESS_TITLE[activeHarness]} models`}
               onMouseEnter={() => setInSubmenu(true)}
-              data-second-opinion
+              data-provider-target
               className="overflow-y-auto overscroll-none p-1"
             >
               {models.map((model, index) => {

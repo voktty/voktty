@@ -1,4 +1,5 @@
 import type { ContextUsage } from "./contextUsage";
+import type { HandoffComposerCard } from "./handoff";
 import type { InboxComposerCard } from "./githubTasks";
 import type { NoteCardMeta, NoteComposerCard } from "./notes";
 import {
@@ -42,12 +43,14 @@ export type HandoffMeta = {
   pending?: boolean;
 };
 
-/** Compact transcript card for a second-opinion turn. The agent still gets the full prompt. */
+/** Compact transcript card for a second-opinion or split-pane handoff turn. */
 export type SecondOpinionMeta = {
   from: HarnessId;
   to: HarnessId;
   request?: string;
   files?: number;
+  /** Split-pane continue. Default is a second-opinion review. */
+  kind?: "handoff";
 };
 
 export type ToolPreviewKind = "read" | "write" | "shell" | "search";
@@ -177,6 +180,8 @@ export type Session = {
   inboxCard?: InboxComposerCard;
   /** Note chip shown above the composer. In-memory, one-shot. */
   noteCard?: NoteComposerCard;
+  /** Handoff chip shown above the composer. In-memory, one-shot. */
+  handoffCard?: HandoffComposerCard;
 };
 
 export type PendingHarnessSwitch = {

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Handoff: a card-exchange icon next to Copy and Second opinion on a finished turn opens another provider in a split pane. A composer card holds the recap so you can add context before sending. The original session keeps its model.
+
 ## [0.1.23] - 2026-08-31
 
 ### Added

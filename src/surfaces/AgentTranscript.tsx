@@ -25,7 +25,7 @@ import { AttachmentChip } from "../chrome/AttachmentChip";
 import { FilePreview } from "../chrome/FilePreview";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { PlanPreview } from "../chrome/PlanPreview";
-import { SecondOpinionButton } from "../chrome/SecondOpinionButton";
+import { HandoffButton, SecondOpinionButton } from "../chrome/SecondOpinionButton";
 import { SecondOpinionCard } from "../chrome/SecondOpinionCard";
 import { NoteMiniCard } from "../chrome/NoteMiniCard";
 import { TerminalSpinner } from "../chrome/TerminalSpinner";
@@ -96,6 +96,7 @@ type Props = {
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
   onSecondOpinion?: (harness: HarnessId, turn: Block[], model: string) => void;
+  onHandoff?: (harness: HarnessId, turn: Block[], model: string) => void;
   onJumpToBottomChange?: (show: boolean) => void;
   onJumpToBottomReady?: (jump: () => void) => void;
   /** False while the pane is `display: none` (another tab). */
@@ -114,6 +115,7 @@ export function AgentTranscript({
   onOpenDiff,
   onOpenPlan,
   onSecondOpinion,
+  onHandoff,
   onJumpToBottomChange,
   onJumpToBottomReady,
   visible = true,
@@ -392,6 +394,11 @@ export function AgentTranscript({
                       ? (target, model) => onSecondOpinion(target, turn, model)
                       : undefined
                   }
+                  onHandoff={
+                    onHandoff
+                      ? (target, model) => onHandoff(target, turn, model)
+                      : undefined
+                  }
                 />
               ) : null}
               {busy && !preparingHandoff && isLastTurn ? (
@@ -436,6 +443,7 @@ function TurnDuration({
   onSaveNote,
   fromHarness,
   onSecondOpinion,
+  onHandoff,
 }: {
   elapsedMs: number | null;
   live?: boolean;
@@ -446,6 +454,7 @@ function TurnDuration({
   onSaveNote?: (text: string) => void;
   fromHarness?: HarnessId;
   onSecondOpinion?: (harness: HarnessId, model: string) => void;
+  onHandoff?: (harness: HarnessId, model: string) => void;
 }) {
   const label = waiting
     ? "Waiting for approval"
@@ -477,6 +486,9 @@ function TurnDuration({
           ) : (
             <Check className="size-3.5" strokeWidth={1.75} />
           )}
+          {fromHarness && onHandoff ? (
+            <HandoffButton from={fromHarness} onPick={onHandoff} />
+          ) : null}
           {fromHarness && onSecondOpinion ? (
             <SecondOpinionButton from={fromHarness} onPick={onSecondOpinion} />
           ) : null}
@@ -707,7 +719,7 @@ function UserMessageBlock({
   const textRef = useRef<HTMLPreElement>(null);
   const card = block.secondOpinion;
   const note = block.noteCard;
-  const text = card ? "" : block.text;
+  const text = card && card.kind !== "handoff" ? "" : block.text;
   const chat = layout === "chat";
 
   useLayoutEffect(() => {
@@ -753,7 +765,11 @@ function UserMessageBlock({
             <NoteMiniCard card={note} embedded />
           </div>
         ) : null}
-        {card ? <SecondOpinionCard card={card} /> : null}
+        {card ? (
+          <div className={text ? "mb-1.5" : undefined}>
+            <SecondOpinionCard card={card} />
+          </div>
+        ) : null}
         {text ? (
           <pre
             ref={textRef}

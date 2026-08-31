@@ -81,6 +81,27 @@ describe("sanitizeSessionForPersist", () => {
     });
   });
 
+  it("keeps a handoff card kind on the user turn", () => {
+    const session = newSession("codex", "/tmp/project");
+    session.blocks = [
+      {
+        id: "u1",
+        role: "user",
+        text: "Handoff",
+        secondOpinion: {
+          from: "claude",
+          to: "codex",
+          kind: "handoff",
+        },
+      },
+    ];
+    expect(sanitizeSessionForPersist(session).blocks[0]).toMatchObject({
+      role: "user",
+      text: "Handoff",
+      secondOpinion: { from: "claude", to: "codex", kind: "handoff" },
+    });
+  });
+
   it("keeps a note card on the user turn without the note body", () => {
     const session = newSession("codex", "/tmp/project");
     session.blocks = [

@@ -3,14 +3,17 @@ import {
   appendPreparingHandoff,
   appendReadyHandoff,
   buildDeterministicHandoff,
+  buildHandoffComposerCard,
   buildOutgoingHandoffPrompt,
   chooseHandoffBrief,
   completeHandoff,
   consumeHandoff,
+  handoffTurnCard,
   hasSessionEdits,
   pendingHandoff,
   planComposerSwitch,
   sessionChildHarnesses,
+  sessionThroughTurn,
   shouldAskOutgoingAgent,
   userMessagesAfterHandoff,
   wrapHandoffPrompt,
@@ -254,6 +257,60 @@ describe("handoff block lifecycle", () => {
       "claude",
       "cursor",
     ]);
+  });
+});
+
+describe("sessionThroughTurn", () => {
+  it("keeps blocks through the chosen turn and drops later ones", () => {
+    const first: Block[] = [
+      { id: "u1", role: "user", text: "go" },
+      { id: "a1", role: "assistant", text: "working" },
+    ];
+    const later: Block[] = [{ id: "u2", role: "user", text: "keep going" }];
+    const session = sessionWith([...first, ...later]);
+    expect(sessionThroughTurn(session, first).blocks).toEqual(first);
+  });
+
+  it("returns the session when the turn is not in the transcript", () => {
+    const session = sessionWith([{ id: "u1", role: "user", text: "go" }]);
+    expect(
+      sessionThroughTurn(session, [{ id: "missing", role: "user", text: "go" }])
+        .blocks,
+    ).toEqual(session.blocks);
+  });
+});
+
+describe("handoff composer card", () => {
+  it("keeps the recap and a short request for the chip", () => {
+    expect(
+      buildHandoffComposerCard({
+        from: "claude",
+        to: "codex",
+        brief: "Session so far: footer",
+        userRequest: "  fix the footer\nplease  ",
+        files: ["a.ts", "b.ts"],
+      }),
+    ).toEqual({
+      from: "claude",
+      to: "codex",
+      brief: "Session so far: footer",
+      request: "fix the footer please",
+      files: 2,
+    });
+  });
+
+  it("drops empty request and file fields on the transcript card", () => {
+    expect(
+      handoffTurnCard(
+        buildHandoffComposerCard({
+          from: "cursor",
+          to: "pi",
+          brief: "hello",
+          userRequest: "   ",
+          files: [],
+        }),
+      ),
+    ).toEqual({ from: "cursor", to: "pi", kind: "handoff" });
   });
 });
 

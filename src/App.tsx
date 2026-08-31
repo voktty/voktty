@@ -130,13 +130,17 @@ import {
 import {
   appendPreparingHandoff,
   buildDeterministicHandoff,
+  buildHandoffComposerCard,
   chooseHandoffBrief,
   completeHandoff,
   consumeHandoff,
+  HANDOFF_TITLE,
+  handoffTurnCard,
   isPreparingHandoff,
   pendingHandoff,
   planComposerSwitch,
   sessionChildHarnesses,
+  sessionThroughTurn,
   shouldAskOutgoingAgent,
   userMessagesAfterHandoff,
   wrapHandoffPrompt,
@@ -1263,6 +1267,16 @@ export default function App({
       prev.map((session) =>
         session.id === sessionId && session.noteCard
           ? { ...session, noteCard: undefined }
+          : session,
+      ),
+    );
+  }, []);
+
+  const onHandoffCardDismiss = useCallback((sessionId: string) => {
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === sessionId && session.handoffCard
+          ? { ...session, handoffCard: undefined }
           : session,
       ),
     );
@@ -3032,7 +3046,15 @@ export default function App({
       const current = sessionsRef.current.find((s) => s.id === sessionId);
       if (!current) return;
       const noteCard = current.noteCard;
-      if (!text.trim() && attachments.length === 0 && !noteCard) return;
+      const handoffCard = current.handoffCard;
+      if (
+        !text.trim() &&
+        attachments.length === 0 &&
+        !noteCard &&
+        !handoffCard
+      ) {
+        return;
+      }
       if (isPreparingHandoff(current)) return;
       const workCwd = sessionWorkCwd(current);
       const harnessText = composeNoteMessage(noteCard, text);
@@ -3062,7 +3084,12 @@ export default function App({
           prev.map((s) =>
             s.id === sessionId
               ? appendSteerUser(
-                  { ...s, inboxCard: undefined, noteCard: undefined },
+                  {
+                    ...s,
+                    inboxCard: undefined,
+                    noteCard: undefined,
+                    handoffCard: undefined,
+                  },
                   text,
                   visible,
                   cards,
@@ -3114,8 +3141,11 @@ export default function App({
           ? titleFromPrompt(text, current.harness, attachments)
           : current.title;
       const visible = displayAttachments(attachments);
-      const card = options?.secondOpinion;
-      const visibleText = card ? SECOND_OPINION_TITLE : text;
+      const card =
+        options?.secondOpinion ??
+        (handoffCard ? handoffTurnCard(handoffCard) : undefined);
+      const visibleText =
+        card?.kind === "handoff" ? text : card ? SECOND_OPINION_TITLE : text;
       const cards = userTurnCards(noteCard, card);
       const live = isLiveHarness(current.harness);
       const queuedHandoff =
@@ -3129,7 +3159,12 @@ export default function App({
         prev.map((s) => {
           if (s.id !== sessionId) return s;
           const titled = isFirstTurn ? titleSeed : s.title;
-          const next = { ...s, inboxCard: undefined, noteCard: undefined };
+          const next = {
+            ...s,
+            inboxCard: undefined,
+            noteCard: undefined,
+            handoffCard: undefined,
+          };
           if (!live) {
             return {
               ...next,
@@ -3204,7 +3239,13 @@ export default function App({
       }
 
       void (async () => {
-        let wrap = queuedHandoff;
+        let wrap = handoffCard
+          ? {
+              from: handoffCard.from,
+              to: current.harness,
+              text: handoffCard.brief,
+            }
+          : queuedHandoff;
         if (pendingSwitch) {
           let agentText = "";
           if (
@@ -3263,7 +3304,12 @@ export default function App({
             modelSettings: current.modelSettings,
             runtimeMode: current.runtimeMode,
             text: wrap
-              ? wrapHandoffPrompt(wrap.text, wrap.from, prompt, earlier)
+              ? wrapHandoffPrompt(
+                  wrap.text,
+                  wrap.from,
+                  prompt.trim() || CONTINUE_PROMPT,
+                  earlier,
+                )
               : prompt,
             attachments: prepared,
             onEvent: (event) => {
@@ -3324,26 +3370,8 @@ export default function App({
     [enqueueHarnessEvent, flushHarnessEvents],
   );
 
-  const onSecondOpinion = useCallback(
-    (sourceId: string, harness: HarnessId, turn: Block[], model: string) => {
-      const source = sessionsRef.current.find(
-        (session) => session.id === sourceId,
-      );
-      if (!source) return;
-      const cwd = sessionWorkCwd(source);
-      const from = harnessForTurn(source.blocks, turn, source.harness);
-      const userRequest = turnUserRequest(turn);
-      const files = turnEditedFiles(turn, cwd);
-      const prompt = buildSecondOpinionPrompt({
-        from,
-        userRequest,
-        report: turnReport(turn),
-        files,
-      });
-      const session = {
-        ...newSession(harness, cwd, model, source.runtimeMode),
-        title: formatSessionTitle(harness, SECOND_OPINION_TITLE),
-      };
+  const openSessionBeside = useCallback(
+    (sourceId: string, session: Session, cwd: string, focusComposer = false) => {
       const nextSessions = [...sessionsRef.current, session];
       sessionsRef.current = nextSessions;
       setSessions(nextSessions);
@@ -3372,7 +3400,32 @@ export default function App({
       }
 
       setProjectTerminalFocused(false);
-      setComposerFocused(false);
+      setComposerFocused(focusComposer);
+    },
+    [appendTab],
+  );
+
+  const onSecondOpinion = useCallback(
+    (sourceId: string, harness: HarnessId, turn: Block[], model: string) => {
+      const source = sessionsRef.current.find(
+        (session) => session.id === sourceId,
+      );
+      if (!source) return;
+      const cwd = sessionWorkCwd(source);
+      const from = harnessForTurn(source.blocks, turn, source.harness);
+      const userRequest = turnUserRequest(turn);
+      const files = turnEditedFiles(turn, cwd);
+      const prompt = buildSecondOpinionPrompt({
+        from,
+        userRequest,
+        report: turnReport(turn),
+        files,
+      });
+      const session = {
+        ...newSession(harness, cwd, model, source.runtimeMode),
+        title: formatSessionTitle(harness, SECOND_OPINION_TITLE),
+      };
+      openSessionBeside(sourceId, session, cwd);
       onSubmit(session.id, prompt, [], {
         secondOpinion: buildSecondOpinionCard({
           from,
@@ -3382,7 +3435,38 @@ export default function App({
         }),
       });
     },
-    [appendTab, onSubmit],
+    [onSubmit, openSessionBeside],
+  );
+
+  const onHandoff = useCallback(
+    (sourceId: string, harness: HarnessId, turn: Block[], model: string) => {
+      const source = sessionsRef.current.find(
+        (session) => session.id === sourceId,
+      );
+      if (!source) return;
+      const cwd = sessionWorkCwd(source);
+      const from = harnessForTurn(source.blocks, turn, source.harness);
+      const sliced = sessionThroughTurn(source, turn);
+      const userRequest = turnUserRequest(turn);
+      const files = turnEditedFiles(sliced.blocks, cwd);
+      const display = sessionDisplayTitle(source.title, source.harness);
+      const session = {
+        ...newSession(harness, cwd, model, source.runtimeMode),
+        title: formatSessionTitle(
+          harness,
+          display === "New session" ? HANDOFF_TITLE : display,
+        ),
+        handoffCard: buildHandoffComposerCard({
+          from,
+          to: harness,
+          brief: buildDeterministicHandoff(sliced),
+          userRequest,
+          files,
+        }),
+      };
+      openSessionBeside(sourceId, session, cwd, true);
+    },
+    [openSessionBeside],
   );
 
   const autoContinueKey = sessions
@@ -4214,12 +4298,14 @@ export default function App({
                       onStop={onStop}
                       onInboxCardDismiss={onInboxCardDismiss}
                       onNoteCardDismiss={onNoteCardDismiss}
+                      onHandoffCardDismiss={onHandoffCardDismiss}
                       onApproval={onApproval}
                       onOpenFile={onOpenFile}
                       editorNavigation={editorNavigation}
                       onOpenDiff={onOpenDiff}
                       onOpenPlan={onOpenPlan}
                       onSecondOpinion={onSecondOpinion}
+                      onHandoff={onHandoff}
                       onMovePane={onMovePane}
                       onNewTerminal={onNewTerminalInSession}
                       onTerminalMetaChange={onTerminalMetaChange}

@@ -15,7 +15,7 @@ export function SecondOpinionCard({ card }: Props) {
   return (
     <div className="min-w-0 font-sans">
       <div className="text-[13px] font-medium leading-snug text-content">
-        Second opinion
+        {card.kind === "handoff" ? "Handoff" : "Second opinion"}
       </div>
       <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-content/50">
         <HarnessIcon harness={card.from} className="size-3 shrink-0" />

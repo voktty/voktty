@@ -130,6 +130,7 @@ export function buildSecondOpinionCard(input: {
   to: HarnessId;
   userRequest: string;
   files: string[];
+  kind?: "handoff";
 }): SecondOpinionMeta {
   const request = input.userRequest.replace(/\s+/g, " ").trim();
   return {
@@ -137,5 +138,6 @@ export function buildSecondOpinionCard(input: {
     to: input.to,
     ...(request ? { request: request.slice(0, 240) } : {}),
     ...(input.files.length > 0 ? { files: input.files.length } : {}),
+    ...(input.kind ? { kind: input.kind } : {}),
   };
 }

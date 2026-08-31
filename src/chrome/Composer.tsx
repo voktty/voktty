@@ -41,6 +41,7 @@ import {
   composeInboxMessage,
   type InboxComposerCard,
 } from "../lib/githubTasks";
+import type { HandoffComposerCard } from "../lib/handoff";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import type { Attachment, HarnessId, RuntimeMode } from "../lib/session";
 import { harnessSupportsAttachments } from "../lib/session";
@@ -63,6 +64,7 @@ import { FileMentionPicker } from "./FileMentionPicker";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { InboxMiniCard } from "./InboxMiniCard";
 import { NoteMiniCard } from "./NoteMiniCard";
+import { HandoffMiniCard } from "./HandoffMiniCard";
 import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
 import { SkillPicker } from "./SkillPicker";
@@ -105,6 +107,7 @@ type Props = {
   initialDraft?: string;
   inboxCard?: InboxComposerCard;
   noteCard?: NoteComposerCard;
+  handoffCard?: HandoffComposerCard;
   busy?: boolean;
   hotkeys?: boolean;
   onFocus: () => void;
@@ -117,6 +120,7 @@ type Props = {
   onQuoteRequestConsumed?: (id: number) => void;
   onInboxCardDismiss?: () => void;
   onNoteCardDismiss?: () => void;
+  onHandoffCardDismiss?: () => void;
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop?: () => void;
   onOpenFile?: (path: string) => void;
@@ -173,6 +177,7 @@ export function Composer({
   initialDraft,
   inboxCard,
   noteCard,
+  handoffCard,
   busy = false,
   onFocus,
   onCwdChange,
@@ -184,6 +189,7 @@ export function Composer({
   onQuoteRequestConsumed,
   onInboxCardDismiss,
   onNoteCardDismiss,
+  onHandoffCardDismiss,
   onSubmit,
   onStop,
   onOpenFile,
@@ -198,7 +204,11 @@ export function Composer({
   const mentionRef = useRef<MentionToken | null>(null);
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [hasValue, setHasValue] = useState(
-    () => (initialDraft ?? "").trim().length > 0 || !!inboxCard || !!noteCard,
+    () =>
+      (initialDraft ?? "").trim().length > 0 ||
+      !!inboxCard ||
+      !!noteCard ||
+      !!handoffCard,
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fileDrag, setFileDrag] = useState(false);
@@ -277,15 +287,19 @@ export function Composer({
   const syncHasValue = useCallback(
     (text: string, files: Attachment[]) => {
       setHasValue(
-        text.trim().length > 0 || files.length > 0 || !!inboxCard || !!noteCard,
+        text.trim().length > 0 ||
+          files.length > 0 ||
+          !!inboxCard ||
+          !!noteCard ||
+          !!handoffCard,
       );
     },
-    [inboxCard, noteCard],
+    [inboxCard, noteCard, handoffCard],
   );
 
   useEffect(() => {
     syncHasValue(ref.current?.value ?? "", attachmentsRef.current);
-  }, [inboxCard, noteCard, syncHasValue]);
+  }, [inboxCard, noteCard, handoffCard, syncHasValue]);
 
   const addAttachments = useCallback(
     (incoming: Attachment[]) => {
@@ -602,7 +616,7 @@ export function Composer({
   const submit = (value: string) => {
     const text = composeInboxMessage(inboxCard, value);
     const files = attachments;
-    if (!text && files.length === 0 && !noteCard) return;
+    if (!text && files.length === 0 && !noteCard && !handoffCard) return;
     onSubmit(text, files);
     if (!ref.current) return;
     ref.current.value = "";
@@ -858,6 +872,13 @@ export function Composer({
             <NoteMiniCard card={noteCard} onDismiss={onNoteCardDismiss} />
           ) : null}
 
+          {handoffCard ? (
+            <HandoffMiniCard
+              card={handoffCard}
+              onDismiss={onHandoffCardDismiss}
+            />
+          ) : null}
+
           <div className="relative">
             <div
               ref={highlightRef}
@@ -882,9 +903,11 @@ export function Composer({
                   ? "Add a note, or send to start…"
                   : noteCard
                     ? "Add a message, or send…"
-                    : shell
-                      ? "How can I help you today?"
-                      : "Ask, build, / for skills, @ for references... "
+                    : handoffCard
+                      ? "Add context, or send to continue…"
+                      : shell
+                        ? "How can I help you today?"
+                        : "Ask, build, / for skills, @ for references... "
               }
               className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
                 shell ? "py-4" : "py-3"

@@ -373,6 +373,7 @@ function sanitizeSecondOpinion(
     to: value.to,
     ...(request ? { request } : {}),
     ...(files > 0 ? { files } : {}),
+    ...(value.kind === "handoff" ? { kind: "handoff" as const } : {}),
   };
 }
 

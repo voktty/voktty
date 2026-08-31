@@ -7,8 +7,47 @@ import {
   type HarnessId,
   type HandoffMeta,
   type PendingHarnessSwitch,
+  type SecondOpinionMeta,
   type Session,
 } from "./session";
+
+export const HANDOFF_TITLE = "Handoff";
+
+/** Composer chip: recap is injected on send so the user can add context first. */
+export type HandoffComposerCard = {
+  from: HarnessId;
+  to: HarnessId;
+  brief: string;
+  request?: string;
+  files?: number;
+};
+
+export function buildHandoffComposerCard(input: {
+  from: HarnessId;
+  to: HarnessId;
+  brief: string;
+  userRequest: string;
+  files: string[];
+}): HandoffComposerCard {
+  const request = input.userRequest.replace(/\s+/g, " ").trim();
+  return {
+    from: input.from,
+    to: input.to,
+    brief: input.brief,
+    ...(request ? { request: request.slice(0, 240) } : {}),
+    ...(input.files.length > 0 ? { files: input.files.length } : {}),
+  };
+}
+
+export function handoffTurnCard(card: HandoffComposerCard): SecondOpinionMeta {
+  return {
+    from: card.from,
+    to: card.to,
+    kind: "handoff",
+    ...(card.request ? { request: card.request } : {}),
+    ...(card.files != null && card.files > 0 ? { files: card.files } : {}),
+  };
+}
 
 const USER_LINE_LIMIT = 240;
 const ASSISTANT_LIMIT = 500;
@@ -60,6 +99,15 @@ export function sessionChildHarnesses(session: Session): HarnessId[] {
   const last = lastHandoffBlock(session.blocks)?.handoff;
   if (last?.status === "preparing") ids.add(last.from);
   return [...ids];
+}
+
+/** Session as of the end of this turn, so a later turn is not in the recap. */
+export function sessionThroughTurn(session: Session, turn: Block[]): Session {
+  const lastId = turn[turn.length - 1]?.id;
+  if (!lastId) return session;
+  const end = session.blocks.findIndex((block) => block.id === lastId);
+  if (end < 0) return session;
+  return { ...session, blocks: session.blocks.slice(0, end + 1) };
 }
 
 export function lastHandoffBlock(blocks: Block[]): Block | undefined {
