@@ -17,20 +17,16 @@ const MARKER_VERSION: &str = "voktty-android-bootstrap-termux-v1";
 // The correct architecture-specific zip is selected via cfg(target_arch).
 // IMPORTANT: Store outside gen/ - Tauri regenerates gen/ on each build!
 #[cfg(target_arch = "aarch64")]
-const BOOTSTRAP_ZIP: &[u8] =
-    include_bytes!("../../bootstrap-zips/bootstrap-aarch64.zip");
+const BOOTSTRAP_ZIP: &[u8] = include_bytes!("../../bootstrap-zips/bootstrap-aarch64.zip");
 
 #[cfg(target_arch = "x86_64")]
-const BOOTSTRAP_ZIP: &[u8] =
-    include_bytes!("../../bootstrap-zips/bootstrap-x86_64.zip");
+const BOOTSTRAP_ZIP: &[u8] = include_bytes!("../../bootstrap-zips/bootstrap-x86_64.zip");
 
 #[cfg(target_arch = "arm")]
-const BOOTSTRAP_ZIP: &[u8] =
-    include_bytes!("../../bootstrap-zips/bootstrap-arm.zip");
+const BOOTSTRAP_ZIP: &[u8] = include_bytes!("../../bootstrap-zips/bootstrap-arm.zip");
 
 #[cfg(target_arch = "x86")]
-const BOOTSTRAP_ZIP: &[u8] =
-    include_bytes!("../../bootstrap-zips/bootstrap-i686.zip");
+const BOOTSTRAP_ZIP: &[u8] = include_bytes!("../../bootstrap-zips/bootstrap-i686.zip");
 
 /// The original Termux prefix path baked into all bootstrap binaries.
 /// ELF binaries keep this path - we translate at runtime via LD_PRELOAD.
@@ -97,7 +93,10 @@ pub fn ensure_bootstrapped(app: Option<&tauri::AppHandle>) -> Result<(), String>
 
     log::info!("bootstrap: rootfs = {}", rootfs.display());
     log::info!("bootstrap: prefix = {}", prefix_dir().display());
-    log::info!("bootstrap: embedded zip size = {} bytes", BOOTSTRAP_ZIP.len());
+    log::info!(
+        "bootstrap: embedded zip size = {} bytes",
+        BOOTSTRAP_ZIP.len()
+    );
     emit_progress(app, "Checking...", 0, 0);
 
     let need_bootstrap = match fs::read_to_string(&marker) {
@@ -110,7 +109,8 @@ pub fn ensure_bootstrapped(app: Option<&tauri::AppHandle>) -> Result<(), String>
     if !need_bootstrap && !bash_exists {
         log::warn!(
             "bootstrap: marker says v{} but bash not found at {} - re-bootstrapping",
-            MARKER_VERSION, bash.display()
+            MARKER_VERSION,
+            bash.display()
         );
     }
     let need_bootstrap = need_bootstrap || !bash_exists;
@@ -119,7 +119,8 @@ pub fn ensure_bootstrapped(app: Option<&tauri::AppHandle>) -> Result<(), String>
         emit_progress(app, "Setting up directories...", 0, 1);
         log::info!(
             "bootstrap: setting up Termux environment v{} at {}",
-            MARKER_VERSION, rootfs.display()
+            MARKER_VERSION,
+            rootfs.display()
         );
 
         for dir in &[&rootfs, &home_dir(), &prefix_dir(), &tmp_dir()] {
@@ -134,7 +135,10 @@ pub fn ensure_bootstrapped(app: Option<&tauri::AppHandle>) -> Result<(), String>
         emit_progress(app, "Extracting bootstrap archive...", 0, 3650);
         log::info!("bootstrap: starting extraction...");
         extract_bootstrap(app)?;
-        log::info!("bootstrap: extraction complete, bash exists = {}", bash_path().exists());
+        log::info!(
+            "bootstrap: extraction complete, bash exists = {}",
+            bash_path().exists()
+        );
 
         emit_progress(app, "Creating symlinks...", 0, 0);
         for sub in &[
@@ -168,8 +172,7 @@ pub fn ensure_bootstrapped(app: Option<&tauri::AppHandle>) -> Result<(), String>
         write_shell_profile()?;
         install_path_translator()?;
 
-        fs::write(&marker, MARKER_VERSION)
-            .map_err(|e| format!("write marker: {e}"))?;
+        fs::write(&marker, MARKER_VERSION).map_err(|e| format!("write marker: {e}"))?;
     } else {
         log::info!("bootstrap: already done (marker exists)");
     }
@@ -191,7 +194,14 @@ fn emit_progress(app: Option<&tauri::AppHandle>, message: &str, current: usize, 
         total: usize,
     }
     if let Some(handle) = app {
-        let _ = handle.emit("voktty:bootstrap-progress", Progress { message, current, total });
+        let _ = handle.emit(
+            "voktty:bootstrap-progress",
+            Progress {
+                message,
+                current,
+                total,
+            },
+        );
     }
 }
 
@@ -203,7 +213,10 @@ fn extract_bootstrap(app: Option<&tauri::AppHandle>) -> Result<(), String> {
         zip::ZipArchive::new(cursor).map_err(|e| format!("open bootstrap zip: {e}"))?;
 
     let total_files = archive.len();
-    log::info!("bootstrap: extracting {total_files} files to {}", prefix.display());
+    log::info!(
+        "bootstrap: extracting {total_files} files to {}",
+        prefix.display()
+    );
 
     let mut extracted = 0usize;
     for i in 0..total_files {
@@ -241,8 +254,8 @@ fn extract_bootstrap(app: Option<&tauri::AppHandle>) -> Result<(), String> {
         file.read_to_end(&mut buffer)
             .map_err(|e| format!("read {}: {e}", name))?;
 
-        let mut f = fs::File::create(&outpath)
-            .map_err(|e| format!("create {}: {e}", outpath.display()))?;
+        let mut f =
+            fs::File::create(&outpath).map_err(|e| format!("create {}: {e}", outpath.display()))?;
         f.write_all(&buffer)
             .map_err(|e| format!("write {}: {e}", outpath.display()))?;
         f.sync_all().ok();
@@ -405,7 +418,12 @@ fn patch_text_files(dir: &Path, our_rootfs: &str, count: &mut usize) {
         };
 
         // Skip ELF binaries (handled by LD_PRELOAD)
-        if data.len() >= 4 && data[0] == 0x7f && data[1] == b'E' && data[2] == b'L' && data[3] == b'F' {
+        if data.len() >= 4
+            && data[0] == 0x7f
+            && data[1] == b'E'
+            && data[2] == b'L'
+            && data[3] == b'F'
+        {
             continue;
         }
 
@@ -487,8 +505,10 @@ fn patch_elf_runpath(data: &mut Vec<u8>) -> bool {
         let p_type = u32::from_le_bytes(data[off..off + 4].try_into().unwrap());
         if p_type == 2 {
             // PT_DYNAMIC
-            dyn_off = Some(u64::from_le_bytes(data[off + 8..off + 16].try_into().unwrap()) as usize);
-            dyn_sz = Some(u64::from_le_bytes(data[off + 32..off + 40].try_into().unwrap()) as usize);
+            dyn_off =
+                Some(u64::from_le_bytes(data[off + 8..off + 16].try_into().unwrap()) as usize);
+            dyn_sz =
+                Some(u64::from_le_bytes(data[off + 32..off + 40].try_into().unwrap()) as usize);
             break;
         }
     }
@@ -532,8 +552,7 @@ fn patch_elf_runpath(data: &mut Vec<u8>) -> bool {
 fn write_apt_config() -> Result<(), String> {
     let prefix = prefix_dir().display().to_string();
     let conf_dir = prefix_dir().join("etc/apt/apt.conf.d");
-    fs::create_dir_all(&conf_dir)
-        .map_err(|e| format!("mkdir apt.conf.d: {e}"))?;
+    fs::create_dir_all(&conf_dir).map_err(|e| format!("mkdir apt.conf.d: {e}"))?;
 
     let conf = format!(
         r#"// Voktty apt config overrides
@@ -543,8 +562,7 @@ Acquire::AllowDowngradeToInsecureRepositories "true";
 "#,
     );
     let conf_path = conf_dir.join("99voktty");
-    fs::write(&conf_path, conf)
-        .map_err(|e| format!("write apt config: {e}"))?;
+    fs::write(&conf_path, conf).map_err(|e| format!("write apt config: {e}"))?;
 
     log::info!("bootstrap: wrote apt config override");
     Ok(())
@@ -583,11 +601,9 @@ fn cleanup_gpg_keyrings() -> Result<(), String> {
 fn write_sources_list() -> Result<(), String> {
     let sources_path = prefix_dir().join("etc/apt/sources.list");
 
-    let content =
-        "deb [trusted=yes] https://packages-cf.termux.dev/apt/termux-main stable main\n";
+    let content = "deb [trusted=yes] https://packages-cf.termux.dev/apt/termux-main stable main\n";
 
-    fs::write(&sources_path, content)
-        .map_err(|e| format!("write sources.list: {e}"))?;
+    fs::write(&sources_path, content).map_err(|e| format!("write sources.list: {e}"))?;
 
     log::info!("bootstrap: wrote sources.list with [trusted=yes]");
     Ok(())
@@ -613,8 +629,7 @@ fn patch_pkg_script() -> Result<(), String> {
         .replace("'deb ", "'deb [trusted=yes] ");
 
     if patched != content {
-        fs::write(&pkg_path, &patched)
-            .map_err(|e| format!("patch pkg: {e}"))?;
+        fs::write(&pkg_path, &patched).map_err(|e| format!("patch pkg: {e}"))?;
         log::info!("bootstrap: patched pkg script with [trusted=yes]");
     }
 
@@ -718,8 +733,7 @@ fi
     );
 
     let profile = home_dir().join(".profile");
-    fs::write(&profile, &profile_content)
-        .map_err(|e| format!("write .profile: {e}"))?;
+    fs::write(&profile, &profile_content).map_err(|e| format!("write .profile: {e}"))?;
 
     let bashrc = home_dir().join(".bashrc");
     if !bashrc.exists() {
@@ -851,10 +865,8 @@ fn install_path_translator() -> Result<(), String> {
     if let Some(ref dir) = native_dir {
         let src = dir.join("libvoktty-path-translate.so");
         if src.exists() {
-            fs::create_dir_all(lib_dir())
-                .map_err(|e| format!("mkdir lib: {e}"))?;
-            fs::copy(&src, &dest)
-                .map_err(|e| format!("copy path-translate.so: {e}"))?;
+            fs::create_dir_all(lib_dir()).map_err(|e| format!("mkdir lib: {e}"))?;
+            fs::copy(&src, &dest).map_err(|e| format!("copy path-translate.so: {e}"))?;
             log::info!("bootstrap: installed path translator to {}", dest.display());
 
             #[cfg(unix)]
