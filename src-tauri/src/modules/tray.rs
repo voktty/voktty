@@ -1,11 +1,11 @@
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use tauri::AppHandle;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::{
     menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, Runtime,
 };
-#[cfg(any(target_os = "android", target_os = "ios"))]
-use tauri::AppHandle;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 const TRAY_ID: &str = "main-tray";
@@ -90,10 +90,7 @@ fn tray_labels(language: &str) -> TrayLabels {
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn build_menu<R: Runtime>(
-    app: &AppHandle<R>,
-    labels: TrayLabels,
-) -> Result<Menu<R>, tauri::Error> {
+fn build_menu<R: Runtime>(app: &AppHandle<R>, labels: TrayLabels) -> Result<Menu<R>, tauri::Error> {
     let show_hide = MenuItemBuilder::with_id("show_hide", labels.show_hide).build(app)?;
     let new_terminal = MenuItemBuilder::with_id("new_terminal", labels.new_terminal).build(app)?;
     let new_preview = MenuItemBuilder::with_id("new_preview", labels.new_preview).build(app)?;
@@ -101,13 +98,7 @@ fn build_menu<R: Runtime>(
     let separator = PredefinedMenuItem::separator(app)?;
 
     MenuBuilder::new(app)
-        .items(&[
-            &show_hide,
-            &new_terminal,
-            &new_preview,
-            &separator,
-            &quit,
-        ])
+        .items(&[&show_hide, &new_terminal, &new_preview, &separator, &quit])
         .build()
 }
 
