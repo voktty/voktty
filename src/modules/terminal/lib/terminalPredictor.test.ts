@@ -112,5 +112,27 @@ describe("terminalPredictor", () => {
       expect(res.items).toContain("cd /opt/scripts/");
       expect(res.items).toContain("cd /opt/tests/");
     });
+
+    it("rejects history recommendations in the middle of sentences or non-prefix inputs", async () => {
+      const res = await predictTerminalSuggestions("hola esto es una pru", {
+        leafId: 4,
+        isUnix: true,
+      });
+
+      // Does not recommend history commands that merely contain 'pru' or match mid-sentence
+      expect(res.items).toHaveLength(0);
+      expect(res.ghostTail).toBe("");
+    });
+
+    it("only matches history commands strictly from the first character prefix", async () => {
+      const res = await predictTerminalSuggestions("py", {
+        leafId: 5,
+        isUnix: true,
+      });
+
+      expect(res.items.some((item) => item.startsWith("python"))).toBe(true);
+      // Non-prefix commands must never be included
+      expect(res.items.some((item) => !item.toLowerCase().startsWith("py"))).toBe(false);
+    });
   });
 });
