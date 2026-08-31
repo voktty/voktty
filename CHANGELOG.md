@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-08-31
+
+### Added
+
+- Settings → Appearance: System theme. The picker was Dark and Light only, so the app never followed the OS. System tracks the appearance while MonoCode is open; Dark stays the default, so existing installs do not flip. In #36 by @emircan-sahin.
+- Search, Inbox, and Notes show Back and a sidebar toggle in the title bar when the project rail is closed, so you can get the rail back without leaving the overlay.
+
+### Changed
+
+- Deck layout: the project picker — label, logo or mascot, and switcher — lives in the sidebar header instead of the title bar. Inbox and Notes actions move there too when a project is open. The title bar picker remains only when Deck has no project.
+- Live zen tool calls stay in a short autoscrolling window. A long research run no longer grows the transcript without bound; the open phase stays pinned to the newest step, then expands again when you reopen the group after the turn settles.
+- Successful tool calls no longer show a checkmark. Failed and rejected rows stay marked, in red.
+- Working-agent titles on the project rail are plain text instead of a shimmer, and idle status is muted.
+
+### Fixed
+
+- Drag the window from any empty spot in the header — title bar, sidebar, project rail, and the Inbox, Notes, Search, and Settings rows. Labels and gaps were dead zones, and a double click highlighted tab text instead of maximizing. In #37 by @emircan-sahin.
+- Deleting a session in Deck stays on that project: a sibling tab opens if one exists, otherwise the emptied tab is replaced instead of jumping to another project's tab.
+- Deck title bar tabs fill the available width instead of growing to a fixed size, and labels stay 13px until the tab is wide enough for the meta text.
+
 ## [0.1.21] - 2026-08-30
 
 ### Added
@@ -333,7 +353,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.21...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.22...HEAD
+[0.1.22]: https://github.com/hardbeat920/monocode/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/hardbeat920/monocode/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/hardbeat920/monocode/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/hardbeat920/monocode/compare/v0.1.18...v0.1.19
