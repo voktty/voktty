@@ -350,13 +350,11 @@ export function ProjectRail({
       className="sidebar-glass relative flex shrink-0 flex-col border-r border-content/10"
     >
       <div
-        className="flex h-10 shrink-0 items-center pr-1.5"
-        data-tauri-drag-region
+        className="flex h-10 shrink-0 select-none items-center pr-1.5"
+        data-tauri-drag-region="deep"
       >
-        {IS_MAC ? (
-          <div className="w-[78px] shrink-0" data-tauri-drag-region />
-        ) : null}
-        <div className="min-w-0 flex-1" data-tauri-drag-region />
+        {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
+        <div className="min-w-0 flex-1" />
         <TabVisitNav
           canGoBack={canGoBack}
           canGoForward={canGoForward}

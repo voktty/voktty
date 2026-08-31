@@ -1108,17 +1108,6 @@ function TitleBarComponent({
     syncTabOverflow();
   }, [activeId, collapsedGroups, syncTabOverflow, tabs]);
 
-  const onTitleBarDoubleClick = useCallback((e: ReactMouseEvent) => {
-    if (
-      e.target instanceof HTMLElement &&
-      e.target.hasAttribute("data-tauri-drag-region")
-    ) {
-      try {
-        void getCurrentWindow().toggleMaximize();
-      } catch {}
-    }
-  }, []);
-
   const activeTab = useMemo(
     () => tabs.find((t) => t.id === activeId),
     [activeId, tabs],
@@ -1228,16 +1217,18 @@ function TitleBarComponent({
     </div>
   );
 
+  // "deep" drags from anywhere in the subtree. The bare attribute only drags
+  // on a direct hit, which left every label and spacer dead. Tauri still
+  // exempts buttons, links and inputs on its own.
   return (
     <header
-      className="flex h-10 shrink-0 items-stretch border-b border-content/10"
-      data-tauri-drag-region
-      onDoubleClick={onTitleBarDoubleClick}
+      className="flex h-10 shrink-0 select-none items-stretch border-b border-content/10"
+      data-tauri-drag-region="deep"
     >
       {/* Both the rail and the sidebar step aside without a project, so the
           title bar takes over the traffic lights and the rail toggle. */}
       {(projectless && railClosed) || (!sidebarOpen && IS_MAC) ? (
-        <div className="w-[78px] shrink-0" data-tauri-drag-region />
+        <div className="w-[78px] shrink-0" />
       ) : null}
       {projectless && railClosed ? (
         <div className="flex shrink-0 items-center px-1.5">
@@ -1318,7 +1309,6 @@ function TitleBarComponent({
           className={`relative h-full min-w-0 overflow-hidden ${
             deckLayout ? "flex-1" : "shrink"
           }`}
-          data-tauri-drag-region="false"
           onWheel={(event) => {
             const el = tabStripRef.current;
             if (!el || el.scrollWidth <= el.clientWidth) return;
@@ -1521,15 +1511,9 @@ function TitleBarComponent({
         )}
 
         {deckLayout && IS_MAC ? null : (
-          <div
-            className="flex min-w-0 flex-1 items-center justify-center px-4"
-            data-tauri-drag-region
-          >
+          <div className="flex min-w-0 flex-1 items-center justify-center px-4">
             {!IS_MAC ? (
-              <span
-                className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none"
-                data-tauri-drag-region
-              >
+              <span className="pointer-events-none truncate text-[11.5px] font-medium text-content/40 select-none">
                 {systemTitle}
               </span>
             ) : null}

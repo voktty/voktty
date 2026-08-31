@@ -566,8 +566,8 @@ function SidebarComponent({
       {deckLayout && railVisible ? (
         <>
           <div
-            className="flex h-10 shrink-0 items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
-            data-tauri-drag-region
+            className="flex h-10 shrink-0 select-none items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
+            data-tauri-drag-region="deep"
           >
             <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
               Workspace
@@ -586,13 +586,11 @@ function SidebarComponent({
         <>
           {deckLayout ? (
             <div
-              className="flex h-10 shrink-0 items-center border-b border-content/10 pr-1.5"
-              data-tauri-drag-region
+              className="flex h-10 shrink-0 select-none items-center border-b border-content/10 pr-1.5"
+              data-tauri-drag-region="deep"
             >
-              {IS_MAC ? (
-                <div className="w-[78px] shrink-0" data-tauri-drag-region />
-              ) : null}
-              <div className="min-w-0 flex-1" data-tauri-drag-region />
+              {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
+              <div className="min-w-0 flex-1" />
               <TabVisitNav
                 canGoBack={canGoBack}
                 canGoForward={canGoForward}
@@ -604,8 +602,8 @@ function SidebarComponent({
             </div>
           ) : (
             <div
-              className="flex h-9.75 shrink-0 items-center justify-end pr-1.5"
-              data-tauri-drag-region
+              className="flex h-9.75 shrink-0 select-none items-center justify-end pr-1.5"
+              data-tauri-drag-region="deep"
             >
               <TabVisitNav
                 canGoBack={canGoBack}
