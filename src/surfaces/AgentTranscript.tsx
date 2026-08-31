@@ -69,6 +69,7 @@ import {
   lastActivityIndex,
   isProseBlock,
   needsApproval,
+  nestedScrollAbsorbsWheel,
   proseSummary,
   splitActivityRows,
   toolCallLabel,
@@ -857,9 +858,9 @@ function ActivityGroup({
  * Zen's activity view: the turn's work as phases. A phase is a run of related
  * calls under the line the agent wrote to introduce it — "now I need to find
  * the theme provider", then the searches and reads that followed. The phase
- * the agent is in stays open and grows a row at a time; the moment it moves on
- * the phase folds back to its header, so a long turn ends up as a handful of
- * labelled groups sitting above the answer.
+ * the agent is in stays open, with new steps scrolling inside a short window;
+ * the moment it moves on the phase folds back to its header, so a long turn
+ * ends up as a handful of labelled groups sitting above the answer.
  */
 function ActivityPhases({
   blocks,
@@ -896,10 +897,67 @@ function ActivityPhases({
 }
 
 /**
+ * Keep a live phase body on its newest step. Pinning happens in layout
+ * before paint so the window follows without a visible hitch; only a real
+ * wheel away from the bottom pauses that.
+ */
+function useLivePhaseScroll(
+  el: HTMLDivElement | null,
+  enabled: boolean,
+  steps: Block[],
+) {
+  const stickToBottom = useRef(true);
+  const wasEnabled = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!enabled) {
+      wasEnabled.current = false;
+      return;
+    }
+    if (!wasEnabled.current) {
+      stickToBottom.current = true;
+      wasEnabled.current = true;
+    }
+    if (!el || !stickToBottom.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [el, enabled, steps]);
+
+  useEffect(() => {
+    if (!el || !enabled) return;
+
+    const pin = () => {
+      if (stickToBottom.current) el.scrollTop = el.scrollHeight;
+    };
+    const onScroll = () => {
+      if (isNearBottom(el)) stickToBottom.current = true;
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (!nestedScrollAbsorbsWheel(el, e.deltaY)) return;
+      if (e.deltaY < 0) stickToBottom.current = false;
+      e.stopPropagation();
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    el.addEventListener("wheel", onWheel, { passive: true });
+    const inner = el.firstElementChild;
+    const observer = new ResizeObserver(pin);
+    if (inner) observer.observe(inner);
+    pin();
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("wheel", onWheel);
+      observer.disconnect();
+    };
+  }, [el, enabled]);
+}
+
+/**
  * One phase: a header the whole group hangs off, and the steps under it on a
  * rail. Folding is automatic — the group opens while it is the live one and
  * closes when the agent moves on — until you click, after which it stays where
  * you put it. A step still waiting on you keeps the group open regardless.
+ * While live, the open body stays a short scrolling window pinned to the
+ * newest step; after the turn settles an opened group is full height again.
  */
 function ActivityPhaseGroup({
   phase,
@@ -919,6 +977,8 @@ function ActivityPhaseGroup({
   const [override, setOverride] = useState<boolean | null>(null);
   const waiting = phase.steps.some(needsApproval);
   const open = waiting || (override ?? active);
+  const [liveScroller, setLiveScroller] = useState<HTMLDivElement | null>(null);
+  useLivePhaseScroll(liveScroller, active && open, phase.steps);
   const title = activityPhaseTitle(phase, active);
   // Opening a group on purpose is also how you read the line that titled it,
   // whole. The auto-open while it runs is a live view, not a reading one, and
@@ -1005,7 +1065,10 @@ function ActivityPhaseGroup({
         {label}
       </button>
       <div className="zen-phase-body" data-open={open}>
-        <div>
+        <div
+          ref={setLiveScroller}
+          className={active || !open ? "zen-phase-live" : undefined}
+        >
           <div className="flex min-w-0 flex-col">
             {headline ? (
               <div className="zen-phase-step py-1">

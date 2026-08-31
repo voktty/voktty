@@ -8,6 +8,7 @@ import {
   groupTurnItems,
   groupTurns,
   lastActivityIndex,
+  nestedScrollAbsorbsWheel,
   proseSummary,
   splitActivityRows,
   toolCallLabel,
@@ -570,6 +571,37 @@ describe("editVerb", () => {
   it("falls back to Edit for unknown phrasing", () => {
     expect(editVerb("Patching src/App.tsx")).toBe("Edit");
     expect(editVerb("")).toBe("Edit");
+  });
+});
+
+describe("nestedScrollAbsorbsWheel", () => {
+  const overflowing = {
+    scrollTop: 40,
+    scrollHeight: 200,
+    clientHeight: 80,
+  };
+
+  it("lets the parent handle the wheel when the list does not overflow", () => {
+    expect(
+      nestedScrollAbsorbsWheel(
+        { scrollTop: 0, scrollHeight: 80, clientHeight: 80 },
+        -20,
+      ),
+    ).toBe(false);
+  });
+
+  it("consumes scrolling that still has room inside the list", () => {
+    expect(nestedScrollAbsorbsWheel(overflowing, -20)).toBe(true);
+    expect(nestedScrollAbsorbsWheel(overflowing, 20)).toBe(true);
+  });
+
+  it("releases the wheel at the edges so the transcript can take over", () => {
+    expect(
+      nestedScrollAbsorbsWheel({ ...overflowing, scrollTop: 0 }, -20),
+    ).toBe(false);
+    expect(
+      nestedScrollAbsorbsWheel({ ...overflowing, scrollTop: 120 }, 20),
+    ).toBe(false);
   });
 });
 

@@ -501,3 +501,14 @@ export function activityPhaseTitle(phase: ActivityPhase, live = false): string {
         : `${live ? "Running" : "Ran"} ${tally.others} tools`;
   }
 }
+
+/** True when a nested scroller should consume this wheel, not the parent. */
+export function nestedScrollAbsorbsWheel(
+  el: { scrollTop: number; scrollHeight: number; clientHeight: number },
+  deltaY: number,
+): boolean {
+  if (el.scrollHeight <= el.clientHeight + 1) return false;
+  const atTop = el.scrollTop <= 0;
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+  return (deltaY < 0 && !atTop) || (deltaY > 0 && !atBottom);
+}

@@ -653,6 +653,23 @@ html.is-resizing * {
 }
 
 /*
+ * Live phase: a short window so a long run does not push the turn off
+ * the screen. `overflow: auto` must override the hidden shorthand above —
+ * WebKit will not scroll if overflow-x stays hidden and only overflow-y
+ * flips to auto. The class stays on while the group is closed so settling
+ * a turn collapses from the window, not a flash of the full list.
+ */
+.zen-phase-body > .zen-phase-live {
+  max-height: min(17.5rem, 45vh);
+}
+
+.zen-phase-body[data-open="true"] > .zen-phase-live {
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+}
+
+/*
  * The rail: a spine down the group with a step branching off it on a curve,
  * drawn on the step itself so it follows however tall that step turns out to
  * be. The curve is a quarter circle, tangent to the spine at the top and to
@@ -702,22 +719,18 @@ html.is-resizing * {
   border-bottom-left-radius: 8px;
 }
 
-/* Each step rises into the group as the agent takes it. */
+/* Live steps fade in place. A slide or blur hitch the autoscroll. */
 @keyframes zen-step-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
-    filter: blur(1px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
   }
 }
 
 .zen-step-in {
-  animation: zen-step-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: zen-step-in 180ms ease-out both;
 }
 
 @keyframes zen-thinking-pulse {
