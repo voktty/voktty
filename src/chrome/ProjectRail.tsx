@@ -598,7 +598,7 @@ function LiveAgentsPreview({
         aria-label="Working agents"
         className="overflow-hidden rounded-lg bg-content/5"
       >
-        <div className="flex items-center gap-1.5 px-3 py-1.5">
+        <div className="flex items-center gap-2 px-3.5 py-1.5">
           <span
             aria-hidden
             className="size-1.5 shrink-0 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent)] animate-pulse"
@@ -716,13 +716,9 @@ function LiveAgentCard({
           active={live}
         />
         {live ? (
-          <Shimmer
-            as="span"
-            duration={1.4}
-            className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug"
-          >
+          <p className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug">
             {agent.title}
-          </Shimmer>
+          </p>
         ) : (
           <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug">
             {agent.title}
@@ -735,7 +731,7 @@ function LiveAgentCard({
             ? "text-amber-400"
             : agent.done
               ? "text-emerald-400"
-              : "text-content"
+              : "text-content/50"
         }`}
       >
         {agent.needsApproval ? (
