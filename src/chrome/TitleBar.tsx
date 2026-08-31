@@ -323,7 +323,7 @@ function TitleTabItem({
         itemRef?.(el);
       }}
       className={`group @container relative flex h-full touch-none items-center self-stretch ${
-        deckLayout ? "min-w-56 shrink-0 grow basis-56" : "w-56 min-w-28 shrink"
+        deckLayout ? "min-w-0 w-full" : "w-56 min-w-28 shrink"
       } ${dragging ? "opacity-40" : ""} ${
         canDrag ? "cursor-grab active:cursor-grabbing" : ""
       }`}
@@ -392,7 +392,9 @@ function TitleTabItem({
           <span className="flex min-w-0 items-center gap-1">
             <span
               className={`min-w-0 truncate leading-none ${
-                meta ? "text-[10px] font-medium" : "text-[13px]"
+                meta
+                  ? "text-[13px] @min-[11rem]:text-[10px] @min-[11rem]:font-medium"
+                  : "text-[13px]"
               }`}
             >
               {headline}
@@ -1311,7 +1313,6 @@ function TitleBarComponent({
         {/*
           Strip sizes to its tabs (w-56 each), sits left; + follows.
           When crowded, tabs shrink to min-w-28 then the strip scrolls.
-          Deck mode grows tabs evenly; once each hits w-56 the strip scrolls.
         */}
         <div
           className={`relative h-full min-w-0 overflow-hidden ${
@@ -1406,9 +1407,9 @@ function TitleBarComponent({
                 <div
                   key={tab.id}
                   ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-                  className={`relative flex h-full shrink-0 items-center ${
-                    draggingSegment ? "opacity-40" : ""
-                  }`}
+                  className={`relative flex h-full items-center ${
+                    deckLayout ? "w-56 min-w-28 shrink" : "shrink-0"
+                  } ${draggingSegment ? "opacity-40" : ""}`}
                   data-tauri-drag-region="false"
                 >
                   {showSegmentStart ? (
