@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-08-31
+
 ### Added
 
 - Inbox pull request and issue details load the conversation (comments, reviews, and review threads) in the background, so the description still appears first.
 - Grok Build joins the provider list. Install it with `curl -fsSL https://x.ai/cli/install.sh | bash` and run `grok login` (or set `XAI_API_KEY`). MonoCode runs `grok agent stdio` like the other ACP harnesses: live turns, supervised approvals, model catalog, reasoning effort, context usage, skills from `.grok/skills`, and titles / commit / PR text.
+- Search sits next to Inbox and Notes in the sidebar project picker, with the same ⌘K / Ctrl+K hint.
 
 ## [0.1.22] - 2026-08-31
 
@@ -358,7 +361,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.22...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.23...HEAD
+[0.1.23]: https://github.com/hardbeat920/monocode/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/hardbeat920/monocode/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/hardbeat920/monocode/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/hardbeat920/monocode/compare/v0.1.19...v0.1.20
