@@ -3961,6 +3961,7 @@ export default function App({
         onOpenProject={deckLayout ? pickProject : undefined}
         onRemoveProject={deckLayout ? onRemoveProject : undefined}
         onNew={deckLayout ? onNew : undefined}
+        onNewTerminal={deckLayout ? onNewTerminal : undefined}
         onSearch={onOpenSearch}
         onOpenInbox={onOpenInbox}
         onOpenNotes={notesEnabled ? onOpenNotes : undefined}

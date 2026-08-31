@@ -2,10 +2,12 @@ import {
   Check,
   CircleAlert,
   GitBranch,
+  Inbox,
   ListFilter,
   Plus,
   Search,
   Settings,
+  StickyNote,
 } from "./icons";
 import {
   memo,
@@ -46,7 +48,16 @@ import type { HarnessId } from "../lib/session";
 import type { LiveAgent } from "../lib/liveAgents";
 import type { SessionSummary } from "../lib/sessionStore";
 import type { SettingsSectionId } from "../lib/settings";
-import { resolveTabGroupLogo } from "../lib/tabGroups";
+import {
+  loadTabGroupColors,
+  loadTabGroupCustomColors,
+  loadTabGroupLabels,
+  loadTabGroupMascots,
+  resolveTabGroupColor,
+  resolveTabGroupLabel,
+  resolveTabGroupLogo,
+  resolveTabGroupMascot,
+} from "../lib/tabGroups";
 import { useDragResize } from "../hooks/useDragResize";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
 import { useInboxUnseen } from "../hooks/useInboxUnseen";
@@ -55,7 +66,12 @@ import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSessionDiffStats } from "../hooks/useSessionDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
-import { looksLikeProject, type RecentProject } from "../lib/recents";
+import {
+  looksLikeProject,
+  sameProjectPath,
+  type RecentProject,
+} from "../lib/recents";
+import { CwdPicker } from "./CwdPicker";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTree } from "./FileTree";
 import { FileTypeIcon } from "./FileTypeIcon";
@@ -67,6 +83,7 @@ import { TerminalSpinner } from "./TerminalSpinner";
 import { IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
+import { ProjectMascot } from "./ProjectMascot";
 import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SessionsEmpty } from "./SessionsEmpty";
 import { SidebarUpdate } from "./SidebarUpdate";
@@ -87,6 +104,17 @@ const TAB_LABELS: Record<SidebarTab, string> = {
   files: "Explorer",
   changes: "Changes",
 };
+
+function projectPathBusy(
+  paths: Iterable<string> | undefined,
+  cwd: string,
+): boolean {
+  if (!paths) return false;
+  for (const path of paths) {
+    if (sameProjectPath(path, cwd)) return true;
+  }
+  return false;
+}
 
 type Props = {
   cwd: string;
@@ -131,6 +159,7 @@ type Props = {
   onOpenProject?: () => void;
   onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
   onNew?: () => void;
+  onNewTerminal?: () => void;
   onSearch?: () => void;
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
@@ -190,6 +219,7 @@ function SidebarComponent({
   onOpenProject,
   onRemoveProject,
   onNew,
+  onNewTerminal,
   onSearch,
   onOpenInbox,
   onOpenNotes,
@@ -546,10 +576,7 @@ function SidebarComponent({
           } ${canDragTabs ? "cursor-grab active:cursor-grabbing" : ""}`}
         >
           {isChangesTab && hasChangeStats ? (
-            <DiffStat
-              additions={changeAdditions}
-              deletions={changeDeletions}
-            />
+            <DiffStat additions={changeAdditions} deletions={changeDeletions} />
           ) : (
             <span className="block truncate">{TAB_LABELS[itemId]}</span>
           )}
@@ -613,6 +640,20 @@ function SidebarComponent({
               />
             </div>
           )}
+          {deckLayout && onSelectProject ? (
+            <SidebarProjectPicker
+              cwd={cwd}
+              recents={recents}
+              busy={projectPathBusy(busyProjectPaths, cwd)}
+              onSelectProject={onSelectProject}
+              onNewTerminal={onNewTerminal}
+              onOpenInbox={onOpenInbox}
+              onOpenNotes={notesEnabled ? onOpenNotes : undefined}
+              inboxActive={inboxActive}
+              notesActive={notesActive}
+              inboxUnseen={inboxUnseen}
+            />
+          ) : null}
           {classicSettings ? null : (
             <div
               role="tablist"
@@ -636,70 +677,95 @@ function SidebarComponent({
         />
       ) : (
         <>
-      <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
-          tab === "files" ? "" : "hidden"
-        }`}
-      >
-        {filesSearchOpen ? (
-          <ProjectSearch
-            cwd={gitRoot}
-            focusToken={searchFocusToken}
-            onOpenFile={onOpenFile}
-            onClose={() => onFilesSearchOpenChange(false)}
-          />
-        ) : cwd && cwd !== "~" ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <FileTree
-              key={gitRoot}
-              cwd={gitRoot}
-              onOpenFile={onOpenFile}
-              onOpenTerminal={onOpenTerminal}
-              onFileMoved={onFileMoved}
-              onFileDeleted={onFileDeleted}
-              onSearch={onOpenFilesSearch}
-              gitStatuses={gitStatuses}
-              sourceControlActive={open && tab === "changes"}
-              onShowSourceControl={onShowSourceControl}
-            />
-          </div>
-        ) : (
-          <p className="px-3 py-2 text-[12px] text-content/50">
-            No project folder
-          </p>
-        )}
-      </div>
-      {!deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
-        <div className="shrink-0 border-b border-content/10">
-          <div className="flex h-9 items-center px-2 pr-1.5">
-            <div
-              title={cwd}
-              className="flex h-full min-w-0 flex-1 items-center gap-1.5"
-            >
-              {projectLogoPath ? (
-                <ProjectLogoIcon
-                  path={projectLogoPath}
-                  className="size-4 shrink-0 rounded-sm ml-1.5"
-                  imageClassName="size-4"
+          <div
+            className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
+              tab === "files" ? "" : "hidden"
+            }`}
+          >
+            {filesSearchOpen ? (
+              <ProjectSearch
+                cwd={gitRoot}
+                focusToken={searchFocusToken}
+                onOpenFile={onOpenFile}
+                onClose={() => onFilesSearchOpenChange(false)}
+              />
+            ) : cwd && cwd !== "~" ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <FileTree
+                  key={gitRoot}
+                  cwd={gitRoot}
+                  onOpenFile={onOpenFile}
+                  onOpenTerminal={onOpenTerminal}
+                  onFileMoved={onFileMoved}
+                  onFileDeleted={onFileDeleted}
+                  onSearch={onOpenFilesSearch}
+                  gitStatuses={gitStatuses}
+                  sourceControlActive={open && tab === "changes"}
+                  onShowSourceControl={onShowSourceControl}
                 />
-              ) : (
-                <span className="grid size-6 shrink-0 place-items-center">
-                  <FileTypeIcon name={basename(cwd)} isDir isRoot />
-                </span>
-              )}
-              <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
-                {basename(cwd)}
-              </span>
+              </div>
+            ) : (
+              <p className="px-3 py-2 text-[12px] text-content/50">
+                No project folder
+              </p>
+            )}
+          </div>
+          {!deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
+            <div className="shrink-0 border-b border-content/10">
+              <div className="flex h-9 items-center px-2 pr-1.5">
+                <div
+                  title={cwd}
+                  className="flex h-full min-w-0 flex-1 items-center gap-1.5"
+                >
+                  {projectLogoPath ? (
+                    <ProjectLogoIcon
+                      path={projectLogoPath}
+                      className="size-4 shrink-0 rounded-sm ml-1.5"
+                      imageClassName="size-4"
+                    />
+                  ) : (
+                    <span className="grid size-6 shrink-0 place-items-center">
+                      <FileTypeIcon name={basename(cwd)} isDir isRoot />
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
+                    {basename(cwd)}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-px">
+                  <SessionsHeaderButton
+                    label="Search conversations"
+                    active={searchOpen}
+                    open={searchOpen}
+                    onClick={onToggleSessionSearch}
+                  >
+                    <Search className="size-3" strokeWidth={1.75} />
+                  </SessionsHeaderButton>
+                  <SessionsHeaderButton
+                    label="Filter sessions"
+                    active={filtersActive}
+                    open={!!filterMenu}
+                    hasPopup
+                    onClick={onFilterButtonClick}
+                  >
+                    <ListFilter className="size-3" strokeWidth={1.75} />
+                  </SessionsHeaderButton>
+                </div>
+              </div>
+              {searchOpen ? (
+                <div className="relative flex items-center border-t border-content/10 pl-3.5">
+                  <Search className="size-3 opacity-50" />
+                  {sessionSearchInput}
+                </div>
+              ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-px">
-              <SessionsHeaderButton
-                label="Search conversations"
-                active={searchOpen}
-                open={searchOpen}
-                onClick={onToggleSessionSearch}
-              >
-                <Search className="size-3" strokeWidth={1.75} />
-              </SessionsHeaderButton>
+          ) : null}
+          {deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
+            <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
+              <div className="relative flex h-7 min-w-0 flex-1 items-center">
+                <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
+                {sessionSearchInput}
+              </div>
               <SessionsHeaderButton
                 label="Filter sessions"
                 active={filtersActive}
@@ -710,155 +776,132 @@ function SidebarComponent({
                 <ListFilter className="size-3" strokeWidth={1.75} />
               </SessionsHeaderButton>
             </div>
-          </div>
-          {searchOpen ? (
-            <div className="relative flex items-center border-t border-content/10 pl-3.5">
-              <Search className="size-3 opacity-50" />
-              {sessionSearchInput}
-            </div>
           ) : null}
-        </div>
-      ) : null}
-      {deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
-        <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
-          <div className="relative flex h-7 min-w-0 flex-1 items-center">
-            <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
-            {sessionSearchInput}
-          </div>
-          <SessionsHeaderButton
-            label="Filter sessions"
-            active={filtersActive}
-            open={!!filterMenu}
-            hasPopup
-            onClick={onFilterButtonClick}
+          <div
+            ref={(el) => {
+              sessionsLock(el);
+              sessionsScrollRef.current = el;
+            }}
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-none ${
+              tab === "sessions" ? "" : "hidden"
+            }`}
           >
-            <ListFilter className="size-3" strokeWidth={1.75} />
-          </SessionsHeaderButton>
-        </div>
-      ) : null}
-      <div
-        ref={(el) => {
-          sessionsLock(el);
-          sessionsScrollRef.current = el;
-        }}
-        className={`min-h-0 flex-1 overflow-y-auto overscroll-none ${
-          tab === "sessions" ? "" : "hidden"
-        }`}
-      >
-        {!cwd || cwd === "~" ? (
-          <p className="px-3 py-2 text-[12px] text-content/50">
-            No project folder
-          </p>
-        ) : (
-          <div>
-            {/*
+            {!cwd || cwd === "~" ? (
+              <p className="px-3 py-2 text-[12px] text-content/50">
+                No project folder
+              </p>
+            ) : (
+              <div>
+                {/*
               A project's first load stays deliberately blank. The listing is
               served from a covering index and resolves within a frame or two,
               so a placeholder only ever flashed — reading as a glitch rather
               than as progress. This is checked before the empty state so that
               cannot claim "No sessions yet" before the rows have landed.
             */}
-            {pendingFirstLoad ? null : status === "error" &&
-              sessions.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-content/50">
-                Couldn’t load sessions
-              </p>
-            ) : visibleSessions.length === 0 ? (
-              // A narrowed-down result is a transient answer to what the user
-              // just typed, so it stays a quiet line of text. Only the genuine
-              // "this project has nothing in it" case earns the illustration.
-              narrowedByUser ? (
-                <p className="px-3 py-2 text-[12px] text-content/50">
-                  {searchNarrowed
-                    ? "No matching sessions"
-                    : "No sessions match these filters"}
-                </p>
-              ) : (
-                <SessionsEmpty message="Sessions you start will show up here" />
-              )
-            ) : (
-              <ul className="flex flex-col gap-0.5 p-1.5">
-                {visibleSessions.map((session) => (
-                  <li key={session.id}>
-                    {renamingSessionId === session.id && onRenameSession ? (
-                      <SessionRenameRow
-                        session={session}
-                        isActive={session.id === activeSessionId}
-                        busy={busySessionIds.has(session.id)}
-                        needsApproval={approvalSessionIds.has(session.id)}
-                        onCommit={(title) => {
-                          onRenameSession(session.id, title);
-                          setRenamingSessionId(null);
-                        }}
-                        onCancel={() => setRenamingSessionId(null)}
-                      />
-                    ) : (
-                      <SessionCard
-                        session={session}
-                        isActive={session.id === activeSessionId}
-                        busy={busySessionIds.has(session.id)}
-                        done={unseenFinishedIds.has(session.id)}
-                        needsApproval={approvalSessionIds.has(session.id)}
-                        now={now}
-                        additions={sessionDiffs[session.id]?.additions ?? 0}
-                        deletions={sessionDiffs[session.id]?.deletions ?? 0}
-                        onSelect={onSelectSession}
-                        onContextMenu={
-                          onRenameSession || onArchiveSession || onDeleteSession
-                            ? (e) => onSessionContextMenu(session.id, e)
-                            : undefined
-                        }
-                        onRename={
-                          onRenameSession
-                            ? () => setRenamingSessionId(session.id)
-                            : undefined
-                        }
-                        onDelete={
-                          onDeleteSession
-                            ? () => onDeleteSession(session.id)
-                            : undefined
-                        }
-                      />
-                    )}
-                  </li>
-                ))}
-              </ul>
+                {pendingFirstLoad ? null : status === "error" &&
+                  sessions.length === 0 ? (
+                  <p className="px-3 py-2 text-[12px] text-content/50">
+                    Couldn’t load sessions
+                  </p>
+                ) : visibleSessions.length === 0 ? (
+                  // A narrowed-down result is a transient answer to what the user
+                  // just typed, so it stays a quiet line of text. Only the genuine
+                  // "this project has nothing in it" case earns the illustration.
+                  narrowedByUser ? (
+                    <p className="px-3 py-2 text-[12px] text-content/50">
+                      {searchNarrowed
+                        ? "No matching sessions"
+                        : "No sessions match these filters"}
+                    </p>
+                  ) : (
+                    <SessionsEmpty message="Sessions you start will show up here" />
+                  )
+                ) : (
+                  <ul className="flex flex-col gap-0.5 p-1.5">
+                    {visibleSessions.map((session) => (
+                      <li key={session.id}>
+                        {renamingSessionId === session.id && onRenameSession ? (
+                          <SessionRenameRow
+                            session={session}
+                            isActive={session.id === activeSessionId}
+                            busy={busySessionIds.has(session.id)}
+                            needsApproval={approvalSessionIds.has(session.id)}
+                            onCommit={(title) => {
+                              onRenameSession(session.id, title);
+                              setRenamingSessionId(null);
+                            }}
+                            onCancel={() => setRenamingSessionId(null)}
+                          />
+                        ) : (
+                          <SessionCard
+                            session={session}
+                            isActive={session.id === activeSessionId}
+                            busy={busySessionIds.has(session.id)}
+                            done={unseenFinishedIds.has(session.id)}
+                            needsApproval={approvalSessionIds.has(session.id)}
+                            now={now}
+                            additions={sessionDiffs[session.id]?.additions ?? 0}
+                            deletions={sessionDiffs[session.id]?.deletions ?? 0}
+                            onSelect={onSelectSession}
+                            onContextMenu={
+                              onRenameSession ||
+                              onArchiveSession ||
+                              onDeleteSession
+                                ? (e) => onSessionContextMenu(session.id, e)
+                                : undefined
+                            }
+                            onRename={
+                              onRenameSession
+                                ? () => setRenamingSessionId(session.id)
+                                : undefined
+                            }
+                            onDelete={
+                              onDeleteSession
+                                ? () => onDeleteSession(session.id)
+                                : undefined
+                            }
+                          />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
-      {deckLayout && tab === "changes" ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <SourceControl
-            cwd={gitRoot}
-            enabled={open}
-            textHarness={textHarness}
-            selectedPath={selectedDiffPath}
-            onOpenFile={onOpenDiff ?? onOpenFile}
-          />
-        </div>
-      ) : null}
-      {!deckLayout && tab === "inbox" ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <InboxView cwd={cwd} recents={recents} variant="sidebar" />
-        </div>
-      ) : null}
-      {showSidebarFooter ? (
-        <>
-          <div className="p-2 pb-1">
-            <SidebarUpdate />
-          </div>
-          <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
-            <RailAction
-              label="Settings"
-              icon={Settings}
-              onClick={onOpenSettings}
-              shortcut={`${MOD},`}
-              ariaLabel={`Settings (${MOD},)`}
-            />
-          </div>
-        </>
-      ) : null}
+          {deckLayout && tab === "changes" ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <SourceControl
+                cwd={gitRoot}
+                enabled={open}
+                textHarness={textHarness}
+                selectedPath={selectedDiffPath}
+                onOpenFile={onOpenDiff ?? onOpenFile}
+              />
+            </div>
+          ) : null}
+          {!deckLayout && tab === "inbox" ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <InboxView cwd={cwd} recents={recents} variant="sidebar" />
+            </div>
+          ) : null}
+          {showSidebarFooter ? (
+            <>
+              <div className="p-2 pb-1">
+                <SidebarUpdate />
+              </div>
+              <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
+                <RailAction
+                  label="Settings"
+                  icon={Settings}
+                  onClick={onOpenSettings}
+                  shortcut={`${MOD},`}
+                  ariaLabel={`Settings (${MOD},)`}
+                />
+              </div>
+            </>
+          ) : null}
         </>
       )}
       {sessionMenu ? (
@@ -940,6 +983,108 @@ function SidebarComponent({
 }
 
 export const Sidebar = memo(SidebarComponent);
+
+function SidebarProjectPicker({
+  cwd,
+  recents,
+  busy,
+  onSelectProject,
+  onNewTerminal,
+  onOpenInbox,
+  onOpenNotes,
+  inboxActive = false,
+  notesActive = false,
+  inboxUnseen = false,
+}: {
+  cwd: string;
+  recents: RecentProject[];
+  busy: boolean;
+  onSelectProject: (path: string) => void;
+  onNewTerminal?: () => void;
+  onOpenInbox?: () => void;
+  onOpenNotes?: () => void;
+  inboxActive?: boolean;
+  notesActive?: boolean;
+  inboxUnseen?: boolean;
+}) {
+  const [groupLabels] = useState(loadTabGroupLabels);
+  const [groupColors] = useState(loadTabGroupColors);
+  const [groupCustomColors] = useState(loadTabGroupCustomColors);
+  const [groupMascots] = useState(loadTabGroupMascots);
+  const groupLogos = useTabGroupLogos();
+  const projectKey = projectName(cwd);
+  const label = resolveTabGroupLabel(
+    projectKey,
+    groupLabels,
+    basename(cwd) || projectKey,
+  );
+  const logoPath = resolveTabGroupLogo(projectKey, groupLogos);
+  const color = resolveTabGroupColor(
+    projectKey,
+    groupColors,
+    groupCustomColors,
+    projectKey,
+  );
+
+  return (
+    <div
+      className="flex h-9 items-center gap-0.5 border-b border-content/10 px-2"
+      data-tauri-drag-region="deep"
+    >
+      <CwdPicker
+        cwd={cwd}
+        recents={recents}
+        placement="below"
+        chevron
+        onCwdChange={onSelectProject}
+        onNewTerminal={onNewTerminal}
+        className="min-w-0 items-center"
+        buttonClassName="flex h-6.5 w-full items-center gap-1.5 rounded-md px-2 text-[12px] leading-none text-content/50 hover:text-content"
+      >
+        {logoPath ? (
+          <ProjectLogoIcon
+            path={logoPath}
+            className="size-3.5 shrink-0 rounded-sm"
+            imageClassName="size-3.5"
+          />
+        ) : (
+          <ProjectMascot
+            project={projectKey}
+            color={color}
+            name={resolveTabGroupMascot(projectKey, groupMascots)}
+            className="size-3 shrink-0"
+            active={busy}
+          />
+        )}
+        <span className="min-w-0 truncate">{label}</span>
+      </CwdPicker>
+      <div className="flex items-center ml-auto">
+        {onOpenInbox ? (
+          <IconButton
+            label={inboxUnseen ? "Inbox, new items" : "Inbox"}
+            active={inboxActive}
+            onClick={onOpenInbox}
+          >
+            <span className="relative">
+              <Inbox className="size-3.5" strokeWidth={1.75} />
+              {inboxUnseen ? (
+                <span
+                  aria-hidden
+                  className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-accent"
+                />
+              ) : null}
+            </span>
+          </IconButton>
+        ) : null}
+        {onOpenNotes ? (
+          <IconButton label="Notes" active={notesActive} onClick={onOpenNotes}>
+            <StickyNote className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 function WorkspaceTitleActions({
   onSearch,

@@ -1,4 +1,4 @@
-import { ChevronRight } from "./icons";
+import { ChevronDown, ChevronRight } from "./icons";
 import {
   useEffect,
   useLayoutEffect,
@@ -26,7 +26,10 @@ type Props = {
   projectLogoPath?: string | null;
   enabled?: boolean;
   placement?: "above" | "below";
+  className?: string;
   buttonClassName?: string;
+  /** Chevron on the trailing edge; flips when the menu is open. */
+  chevron?: boolean;
   children?: ReactNode;
   onCwdChange: (path: string) => void;
   onNewTerminal?: () => void;
@@ -99,7 +102,9 @@ export function CwdPicker({
   projectLogoPath,
   enabled = true,
   placement = "above",
+  className,
   buttonClassName,
+  chevron = false,
   children,
   onCwdChange,
   onNewTerminal,
@@ -278,7 +283,10 @@ export function CwdPicker({
   const moreIndex = hasMore ? previewRecents.length : -1;
 
   return (
-    <div ref={root} className="relative flex h-full min-w-0">
+    <div
+      ref={root}
+      className={`relative flex h-full min-w-0${className ? ` ${className}` : ""}`}
+    >
       <button
         type="button"
         title={cwd}
@@ -301,7 +309,7 @@ export function CwdPicker({
         className={
           buttonClassName
             ? `${buttonClassName} ${
-                open ? "bg-content/8 text-content" : "hover:bg-content/5"
+                open ? "bg-content/10 text-content" : "hover:bg-content/5"
               } disabled:opacity-40`
             : `flex min-w-0 items-center gap-1.5 ${
                 open ? "text-content" : "text-content/50 hover:text-content"
@@ -317,6 +325,14 @@ export function CwdPicker({
             <span className="truncate font-mono text-[12px]">{label}</span>
           </>
         )}
+        {chevron ? (
+          <ChevronDown
+            className={`size-3 shrink-0 text-content/50 ${
+              open ? "rotate-180" : ""
+            }`}
+            strokeWidth={1.75}
+          />
+        ) : null}
       </button>
       {open && menu ? (
         <div

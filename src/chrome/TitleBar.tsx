@@ -24,7 +24,6 @@ import {
   type ReactNode,
 } from "react";
 import { basename } from "../lib/fs";
-import { projectName } from "../lib/paths";
 import { looksLikeProject } from "../lib/recents";
 import type { HarnessId } from "../lib/session";
 import {
@@ -1164,29 +1163,14 @@ function TitleBarComponent({
   }, [systemTitle]);
 
   const railClosed = deckLayout && !projectRailOpen;
-  const currentProjectKey = projectName(cwd);
-  const currentProjectLabel = resolveTabGroupLabel(
-    currentProjectKey,
-    groupLabels,
-    basename(cwd) || currentProjectKey,
-  );
-  const currentProjectLogo = resolveTabGroupLogo(currentProjectKey, groupLogos);
-  const currentProjectBusy = tabs.some(
-    (tab) => tab.project === currentProjectKey && tab.busyHarnesses.length > 0,
-  );
-  const currentProjectColor = resolveTabGroupColor(
-    currentProjectKey,
-    groupColors,
-    groupCustomColors,
-    currentProjectKey,
-  );
   const showCurrentProject = looksLikeProject(cwd);
   // Until a project is picked, deck mode hides the rail and the sidebar, so
   // nothing project-scoped is actionable and the window controls need room.
   const projectless = deckLayout && !showCurrentProject;
-  // With the rail closed the sidebar header carries no actions, so the project
-  // button and its shortcuts ride in the title bar's single row.
-  const showProjectButton = railClosed && Boolean(onSelectProject);
+  // An open project is labeled in the sidebar, above Sessions / Explorer /
+  // Changes. Without a project that sidebar is gone, so the picker stays here.
+  const showProjectButton =
+    railClosed && Boolean(onSelectProject) && !showCurrentProject;
   const trailingControls = (
     <div className="flex h-full shrink-0 items-stretch">
       <div className="flex items-center gap-0.5 px-2">
@@ -1197,12 +1181,12 @@ function TitleBarComponent({
             onClick={onShowSourceControl}
           />
         ) : null}
-        {deckLayout && railClosed && onOpenInbox ? (
+        {projectless && railClosed && onOpenInbox ? (
           <IconButton label="Inbox" onClick={onOpenInbox}>
             <Inbox className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
-        {deckLayout && railClosed && onOpenNotes ? (
+        {projectless && railClosed && onOpenNotes ? (
           <IconButton label="Notes" onClick={onOpenNotes}>
             <StickyNote className="size-3.5" strokeWidth={1.75} />
           </IconButton>
@@ -1299,28 +1283,7 @@ function TitleBarComponent({
           onNewTerminal={onNewTerminal}
           buttonClassName="flex h-full min-w-0 max-w-64 shrink items-center gap-2 px-6 text-left text-sm font-medium leading-tight"
         >
-          {showCurrentProject ? (
-            <>
-              {currentProjectLogo ? (
-                <ProjectLogoIcon
-                  path={currentProjectLogo}
-                  className="size-4 shrink-0 rounded-sm"
-                  imageClassName="size-4"
-                />
-              ) : (
-                <ProjectMascot
-                  project={currentProjectKey}
-                  color={currentProjectColor}
-                  name={resolveTabGroupMascot(currentProjectKey, groupMascots)}
-                  className="size-3 shrink-0"
-                  active={currentProjectBusy}
-                />
-              )}
-              <span className="min-w-0 truncate">{currentProjectLabel}</span>
-            </>
-          ) : (
-            <span className="min-w-0 truncate text-content/50">No project</span>
-          )}
+          <span className="min-w-0 truncate text-content/50">No project</span>
         </CwdPicker>
       ) : null}
 
