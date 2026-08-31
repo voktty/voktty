@@ -2,6 +2,7 @@ import { CircleAlert } from "./icons";
 import { createPortal } from "react-dom";
 import type { ApprovalDecision } from "../lib/harness";
 import type { PendingApprovalNotice } from "../lib/approvalToast";
+import { LAYER } from "../lib/layers";
 import {
   HARNESS_TITLE,
   sessionDisplayTitle,
@@ -27,7 +28,8 @@ export function ApprovalToasts({ notices, onFocusSession, onApproval }: Props) {
   return createPortal(
     <div
       aria-live="polite"
-      className="pointer-events-none fixed right-3 top-3 z-80 flex w-[min(360px,calc(100vw-24px))] flex-col gap-2"
+      style={{ zIndex: LAYER.toast }}
+      className="pointer-events-none fixed right-3 top-3 flex w-[min(360px,calc(100vw-24px))] flex-col gap-2"
     >
       {notices.map((notice) => (
         <ApprovalToastCard

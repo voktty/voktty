@@ -2,6 +2,7 @@ import { Loader, WandSparkles } from "./icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { generateCommitMessage } from "../lib/harness";
+import { LAYER } from "../lib/layers";
 import { MOD } from "../lib/platform";
 
 type Busy = "stash" | "commit" | null;
@@ -69,7 +70,7 @@ export function SwitchBranchDialog({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-80">
+    <div className="fixed inset-0" style={{ zIndex: LAYER.dialog }}>
       <div
         className="absolute inset-0 bg-black/30"
         onMouseDown={() => {

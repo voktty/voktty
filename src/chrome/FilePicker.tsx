@@ -15,6 +15,7 @@ import {
   recentOpenedFiles,
   type RankedFile,
 } from "../lib/fileIndex";
+import { LAYER } from "../lib/layers";
 import { looksLikeProject } from "../lib/recents";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { FileTypeIcon } from "./FileTypeIcon";
@@ -156,7 +157,7 @@ export function FilePicker({
   });
 
   return createPortal(
-    <div className="fixed inset-0 z-80">
+    <div className="fixed inset-0" style={{ zIndex: LAYER.dialog }}>
       <div className="absolute inset-0" onMouseDown={onClose} />
       <div
         role="dialog"

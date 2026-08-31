@@ -1,13 +1,12 @@
 import { Brain, ChevronDown, Gauge, Maximize2, Zap } from "./icons";
 import {
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { Popover } from "./Popover";
 import {
   getModelSnapshot,
   resolveModel,
@@ -24,20 +23,7 @@ type Props = {
   onClose?: () => void;
 };
 
-function menuStyle(anchor: DOMRect, width = 220): CSSProperties {
-  const w = Math.min(width, window.innerWidth - 16);
-  const left = Math.min(
-    Math.max(8, anchor.left),
-    window.innerWidth - w - 8,
-  );
-  return {
-    position: "fixed",
-    left,
-    bottom: window.innerHeight - anchor.top + 6,
-    width: w,
-    zIndex: 50,
-  };
-}
+const MENU_WIDTH = 220;
 
 export function ModelSettings({
   harness,
@@ -144,9 +130,7 @@ function SelectSetting({
       setting.options.findIndex((option) => option.value === value),
     ),
   );
-  const [menu, setMenu] = useState<CSSProperties>();
   const root = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const current =
@@ -168,40 +152,6 @@ function SelectSetting({
       ),
     );
   }, [open, setting.options, value]);
-
-  useLayoutEffect(() => {
-    if (!open || !root.current) return;
-    const place = () => {
-      const rect = root.current?.getBoundingClientRect();
-      if (rect) setMenu(menuStyle(rect));
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) list.current?.focus();
-  }, [open, menu]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) dismiss(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      dismiss(true);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [open]);
 
   const pick = (next: string) => {
     onChange(next);
@@ -240,8 +190,6 @@ function SelectSetting({
             dismiss(true);
             return;
           }
-          const rect = root.current?.getBoundingClientRect();
-          if (rect) setMenu(menuStyle(rect));
           setOpen(true);
         }}
         className={`flex h-6.5 max-w-36 items-center gap-1 rounded-md px-1.5 ${
@@ -259,16 +207,19 @@ function SelectSetting({
           strokeWidth={1.75}
         />
       </button>
-      {open && menu ? (
-        <div
-          ref={list}
+      {open ? (
+        <Popover
+          anchor={root}
+          side="top"
+          width={MENU_WIDTH}
+          autoFocus
+          onDismiss={(reason) => dismiss(reason === "escape")}
           role="listbox"
           aria-label={setting.label}
           data-model-settings
           tabIndex={-1}
-          style={menu}
           onKeyDown={onMenuKey}
-          className="rounded-xl border border-content/10 bg-content/10 p-1 shadow-xl backdrop-blur-xl outline-none"
+          className="p-1"
         >
           {setting.options.map((option, index) => {
             const selected = option.value === value;
@@ -292,7 +243,7 @@ function SelectSetting({
               </button>
             );
           })}
-        </div>
+        </Popover>
       ) : null}
     </div>
   );

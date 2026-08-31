@@ -1,10 +1,8 @@
 import { ChevronDown, Lock, LockOpen, Pencil, Sparkles } from "./icons";
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
@@ -13,6 +11,7 @@ import {
   RUNTIME_MODES,
   type RuntimeMode,
 } from "../lib/session";
+import { Popover } from "./Popover";
 
 type Props = {
   value: RuntimeMode;
@@ -29,29 +28,12 @@ const ICONS: Record<RuntimeMode, typeof Lock> = {
   "full-access": LockOpen,
 };
 
-function menuStyle(anchor: DOMRect): CSSProperties {
-  const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
-  const left = Math.min(
-    Math.max(8, anchor.left),
-    window.innerWidth - width - 8,
-  );
-  return {
-    position: "fixed",
-    left,
-    bottom: window.innerHeight - anchor.top + 6,
-    width,
-    zIndex: 50,
-  };
-}
-
 export function AccessPicker({ value, onChange, onClose }: Props) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(() =>
     Math.max(0, RUNTIME_MODES.indexOf(value)),
   );
-  const [menu, setMenu] = useState<CSSProperties>();
   const root = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const Icon = ICONS[value];
@@ -65,40 +47,6 @@ export function AccessPicker({ value, onChange, onClose }: Props) {
     if (!open) return;
     setActive(Math.max(0, RUNTIME_MODES.indexOf(value)));
   }, [open, value]);
-
-  useLayoutEffect(() => {
-    if (!open || !root.current) return;
-    const place = () => {
-      const rect = root.current?.getBoundingClientRect();
-      if (rect) setMenu(menuStyle(rect));
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) list.current?.focus();
-  }, [open, menu]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) dismiss(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      dismiss(true);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [open]);
 
   const pick = (mode: RuntimeMode) => {
     onChange(mode);
@@ -137,8 +85,6 @@ export function AccessPicker({ value, onChange, onClose }: Props) {
             dismiss(true);
             return;
           }
-          const rect = root.current?.getBoundingClientRect();
-          if (rect) setMenu(menuStyle(rect));
           setOpen(true);
         }}
         className={`flex h-6.5 max-w-52 items-center gap-1 rounded-md px-1.5 ${
@@ -156,16 +102,19 @@ export function AccessPicker({ value, onChange, onClose }: Props) {
           strokeWidth={1.75}
         />
       </button>
-      {open && menu ? (
-        <div
-          ref={list}
+      {open ? (
+        <Popover
+          anchor={root}
+          side="top"
+          width={MENU_WIDTH}
+          autoFocus
+          onDismiss={(reason) => dismiss(reason === "escape")}
           role="listbox"
           aria-label="Access"
           data-access-picker
           tabIndex={-1}
-          style={menu}
           onKeyDown={onMenuKey}
-          className="rounded-xl border border-content/10 bg-content/10 p-1 shadow-xl backdrop-blur-xl outline-none"
+          className="p-1"
         >
           {RUNTIME_MODES.map((mode, index) => {
             const ModeIcon = ICONS[mode];
@@ -201,7 +150,7 @@ export function AccessPicker({ value, onChange, onClose }: Props) {
               </button>
             );
           })}
-        </div>
+        </Popover>
       ) : null}
     </div>
   );

@@ -1,11 +1,8 @@
 import { ChevronDown, ChevronRight } from "./icons";
 import {
-  useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
@@ -17,6 +14,8 @@ import {
   type RecentProject,
 } from "../lib/recents";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { LAYER } from "../lib/layers";
+import { Popover } from "./Popover";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { MOD } from "../lib/platform";
 
@@ -37,64 +36,18 @@ type Props = {
 };
 
 const MENU_WIDTH = 288;
+const MENU_MAX_HEIGHT = 360;
+const SUBMENU_MAX_HEIGHT = 320;
 const PREVIEW = 5;
 const SUBMENU_GAP = 4;
 const HOVER_CLOSE_MS = 100;
+/* Both menus sit outside the trigger, so neither counts as a click-away. */
+const SELF = "[data-cwd-picker],[data-cwd-submenu]";
 
 type Row =
   | { kind: "recent"; path: string }
   | { kind: "more" }
   | { kind: "new-terminal" };
-
-function menuStyle(
-  anchor: DOMRect,
-  placement: "above" | "below",
-): CSSProperties {
-  const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
-  const left = Math.min(
-    Math.max(8, anchor.left),
-    window.innerWidth - width - 8,
-  );
-  if (placement === "below") {
-    return {
-      position: "fixed",
-      left,
-      top: anchor.bottom + 6,
-      width,
-      maxHeight: Math.min(360, window.innerHeight - anchor.bottom - 12),
-      zIndex: 50,
-    };
-  }
-  return {
-    position: "fixed",
-    left,
-    bottom: window.innerHeight - anchor.top + 6,
-    width,
-    maxHeight: Math.min(360, anchor.top - 12),
-    zIndex: 50,
-  };
-}
-
-function submenuStyle(anchor: DOMRect): CSSProperties {
-  const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
-  let left = anchor.right + SUBMENU_GAP;
-  if (left + width > window.innerWidth - 8) {
-    left = anchor.left - width - SUBMENU_GAP;
-  }
-  const maxHeight = Math.min(320, window.innerHeight - 16);
-  let top = anchor.top - 4;
-  if (top + maxHeight > window.innerHeight - 8) {
-    top = window.innerHeight - maxHeight - 8;
-  }
-  return {
-    position: "fixed",
-    left: Math.max(8, left),
-    top: Math.max(8, top),
-    width,
-    maxHeight,
-    zIndex: 51,
-  };
-}
 
 export function CwdPicker({
   cwd,
@@ -113,8 +66,6 @@ export function CwdPicker({
   const [open, setOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const [menu, setMenu] = useState<CSSProperties>();
-  const [submenu, setSubmenu] = useState<CSSProperties>();
   const root = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const closeMoreTimer = useRef<number | null>(null);
@@ -171,58 +122,6 @@ export function CwdPicker({
     }, HOVER_CLOSE_MS);
   };
 
-  const openMenu = (anchor: DOMRect) => {
-    setMenu(menuStyle(anchor, placement));
-    setOpen(true);
-  };
-
-  useLayoutEffect(() => {
-    if (!open || !root.current) return;
-    const place = () => {
-      const rect = root.current?.getBoundingClientRect();
-      if (rect) setMenu(menuStyle(rect, placement));
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [open, placement]);
-
-  useLayoutEffect(() => {
-    if (!moreOpen || !moreRef.current) {
-      setSubmenu(undefined);
-      return;
-    }
-    const place = () => {
-      const rect = moreRef.current?.getBoundingClientRect();
-      if (rect) setSubmenu(submenuStyle(rect));
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [moreOpen]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node | null;
-      if (root.current?.contains(target)) return;
-      if ((target as HTMLElement | null)?.closest("[data-cwd-submenu]")) return;
-      dismiss(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      dismiss(true);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [open]);
-
   const pick = (row: Row) => {
     if (row.kind === "more") return;
     dismiss(true);
@@ -238,8 +137,7 @@ export function CwdPicker({
     if (!open) {
       if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        const rect = root.current?.getBoundingClientRect();
-        if (rect) openMenu(rect);
+        setOpen(true);
       }
       return;
     }
@@ -302,8 +200,7 @@ export function CwdPicker({
             dismiss(true);
             return;
           }
-          const rect = root.current?.getBoundingClientRect();
-          if (rect) openMenu(rect);
+          setOpen(true);
         }}
         onKeyDown={onKeyDown}
         className={
@@ -334,13 +231,18 @@ export function CwdPicker({
           />
         ) : null}
       </button>
-      {open && menu ? (
-        <div
+      {open ? (
+        <Popover
+          anchor={root}
+          side={placement === "below" ? "bottom" : "top"}
+          width={MENU_WIDTH}
+          maxHeight={MENU_MAX_HEIGHT}
+          ignore={SELF}
+          onDismiss={(reason) => dismiss(reason === "escape")}
           role="menu"
           aria-label="Project picker"
           data-cwd-picker
-          style={menu}
-          className="flex flex-col overflow-hidden rounded-lg border border-content/10 bg-content/10 shadow-xl backdrop-blur-xl"
+          className="flex flex-col overflow-hidden"
         >
           <div
             ref={lockOverscroll}
@@ -449,15 +351,20 @@ export function CwdPicker({
               </button>
             </div>
           ) : null}
-        </div>
+        </Popover>
       ) : null}
-      {open && moreOpen && submenu ? (
-        <div
+      {open && moreOpen ? (
+        <Popover
+          anchor={moreRef}
+          side="right"
+          gap={SUBMENU_GAP}
+          width={MENU_WIDTH}
+          maxHeight={SUBMENU_MAX_HEIGHT}
+          layer={LAYER.submenu}
           role="menu"
           aria-label="More projects"
           data-cwd-submenu
-          style={submenu}
-          className="overflow-y-auto overscroll-none rounded-lg border border-content/10 bg-content/10 py-1 shadow-xl backdrop-blur-xl"
+          className="overflow-y-auto overscroll-none py-1"
           onMouseEnter={openMore}
           onMouseLeave={scheduleCloseMore}
         >
@@ -479,7 +386,7 @@ export function CwdPicker({
               </span>
             </button>
           ))}
-        </div>
+        </Popover>
       ) : null}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { LAYER } from "../lib/layers";
 import { prettyCwd } from "../lib/paths";
 import { projectSessionCount } from "../lib/projectData";
 
@@ -44,7 +45,7 @@ export function RemoveProjectDialog({ name, path, onCancel, onConfirm }: Props) 
   }, [onCancel]);
 
   return createPortal(
-    <div className="fixed inset-0 z-80">
+    <div className="fixed inset-0" style={{ zIndex: LAYER.dialog }}>
       <div className="absolute inset-0 bg-black/30" onMouseDown={onCancel} />
       <div
         role="dialog"

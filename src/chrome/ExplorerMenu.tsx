@@ -1,13 +1,10 @@
 import {
-  useEffect,
-  useLayoutEffect,
   useMemo,
-  useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import { createPortal } from "react-dom";
 import { Check } from "./icons";
+import { Popover } from "./Popover";
 
 export type ExplorerMenuItem =
   | { kind: "sep" }
@@ -50,11 +47,7 @@ export function ExplorerMenu({
   onPick,
   onClose,
 }: Props) {
-  const menu = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
   const [active, setActive] = useState(() => itemIndexAt(items, 0, 1));
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
 
   const ids = useMemo(
     () =>
@@ -63,47 +56,6 @@ export function ExplorerMenu({
       ),
     [items],
   );
-
-  useLayoutEffect(() => {
-    const el = menu.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const pad = 8;
-    let left = x;
-    let top = y;
-    if (left + rect.width > window.innerWidth - pad) {
-      left = window.innerWidth - rect.width - pad;
-    }
-    if (top + rect.height > window.innerHeight - pad) {
-      top = window.innerHeight - rect.height - pad;
-    }
-    setPos({
-      left: Math.max(pad, left),
-      top: Math.max(pad, top),
-    });
-  }, [x, y, items]);
-
-  useEffect(() => {
-    menu.current?.focus();
-  }, [pos]);
-
-  useEffect(() => {
-    const onPointerDown = (e: PointerEvent) => {
-      if (!menu.current?.contains(e.target as Node)) onCloseRef.current();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onCloseRef.current();
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, []);
 
   const move = (dir: 1 | -1) => {
     const from = ids.findIndex((item) => item.index === active);
@@ -129,22 +81,19 @@ export function ExplorerMenu({
     }
   };
 
-  return createPortal(
-    <div
-      ref={menu}
+  return (
+    <Popover
+      anchor={{ x, y }}
+      gap={0}
+      width={MENU_WIDTH}
+      autoFocus
+      onDismiss={onClose}
       role="menu"
       tabIndex={-1}
       aria-label={ariaLabel}
       onKeyDown={onMenuKey}
       onContextMenu={(e) => e.preventDefault()}
-      style={{
-        position: "fixed",
-        left: pos.left,
-        top: pos.top,
-        width: MENU_WIDTH,
-        zIndex: 80,
-      }}
-      className="rounded-xl border border-content/10 bg-content/10 p-1 shadow-xl backdrop-blur-xl outline-none"
+      className="overflow-y-auto overscroll-none p-1"
     >
       {items.map((item, index) => {
         if (item.kind === "sep") {
@@ -192,7 +141,6 @@ export function ExplorerMenu({
           </button>
         );
       })}
-    </div>,
-    document.body,
+    </Popover>
   );
 }

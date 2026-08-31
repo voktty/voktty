@@ -11,18 +11,17 @@ import {
 import {
   Fragment,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import { normalizeHex } from "../lib/colorUtils";
 import { clearProjectLogo, pickAndSetProjectLogo } from "../lib/projectLogos";
 import { PROJECT_MASCOTS, projectMascot } from "../lib/projectMascots";
 import { TAB_GROUP_COLORS } from "../lib/tabGroups";
 import { ColorPickerPopover } from "./ColorPickerPopover";
+import { Popover } from "./Popover";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { MOD } from "../lib/platform";
@@ -133,54 +132,13 @@ export function TabGroupMenu({
   extraItems,
   onExtraPick,
 }: Props) {
-  const menu = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
   const [name, setName] = useState(label);
   const [customPickerOpen, setCustomPickerOpen] = useState(false);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useLayoutEffect(() => {
-    const el = menu.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const pad = 8;
-    let left = x;
-    let top = y;
-    if (left + rect.width > window.innerWidth - pad) {
-      left = window.innerWidth - rect.width - pad;
-    }
-    if (top + rect.height > window.innerHeight - pad) {
-      top = window.innerHeight - rect.height - pad;
-    }
-    setPos({
-      left: Math.max(pad, left),
-      top: Math.max(pad, top),
-    });
-  }, [x, y, customPickerOpen]);
 
   useEffect(() => {
     input.current?.focus();
     input.current?.select();
-  }, [pos]);
-
-  useEffect(() => {
-    const onPointerDown = (e: PointerEvent) => {
-      if (!menu.current?.contains(e.target as Node)) onCloseRef.current();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onCloseRef.current();
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
   }, []);
 
   const shownMascot = projectMascot(mascotProject, mascotName).name;
@@ -197,22 +155,18 @@ export function TabGroupMenu({
     }
   };
 
-  return createPortal(
-    <div
-      ref={menu}
+  return (
+    <Popover
+      anchor={{ x, y }}
+      gap={0}
+      width={MENU_WIDTH}
+      onDismiss={onClose}
       role="menu"
       tabIndex={-1}
       aria-label="Tab group actions"
       onKeyDown={onMenuKey}
       onContextMenu={(e) => e.preventDefault()}
-      style={{
-        position: "fixed",
-        left: pos.left,
-        top: pos.top,
-        width: MENU_WIDTH,
-        zIndex: 80,
-      }}
-      className="rounded-xl border border-content/10 bg-content/10 p-2 shadow-xl backdrop-blur-xl outline-none"
+      className="overflow-y-auto overscroll-none p-2"
     >
       <input
         ref={input}
@@ -403,8 +357,7 @@ export function TabGroupMenu({
           ))}
         </>
       ) : null}
-    </div>,
-    document.body,
+    </Popover>
   );
 }
 

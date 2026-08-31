@@ -1,16 +1,7 @@
 import { MessageSquarePlus } from "../chrome/icons";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
-import { createPortal } from "react-dom";
-import {
-  placeSelectionMenu,
-  type TranscriptSelection,
-} from "../lib/transcriptSelection";
+import { useEffect, useRef } from "react";
+import { Popover } from "../chrome/Popover";
+import { type TranscriptSelection } from "../lib/transcriptSelection";
 
 type Props = {
   selection: TranscriptSelection | null;
@@ -23,47 +14,17 @@ export function TranscriptSelectionMenu({
   onAddToChat,
   onDismiss,
 }: Props) {
-  const menu = useRef<HTMLDivElement>(null);
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
-  const [pos, setPos] = useState<CSSProperties>({
-    left: 0,
-    top: 0,
-    visibility: "hidden",
-  });
 
-  useLayoutEffect(() => {
-    const el = menu.current;
-    if (!selection || !el) return;
-    const rect = el.getBoundingClientRect();
-    const next = placeSelectionMenu(
-      selection.rect,
-      { width: rect.width, height: rect.height },
-      { width: window.innerWidth, height: window.innerHeight },
-    );
-    setPos({ left: next.left, top: next.top, visibility: "visible" });
-  }, [selection]);
-
+  // Scrolling or resizing moves the text out from under the menu, so the
+  // selection it acts on is gone; drop it rather than chase the range.
   useEffect(() => {
     if (!selection) return;
     const dismiss = () => onDismissRef.current();
-    const onPointerDown = (event: PointerEvent) => {
-      if (!menu.current?.contains(event.target as Node)) dismiss();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      window.getSelection()?.removeAllRanges();
-      dismiss();
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("scroll", dismiss, true);
     window.addEventListener("resize", dismiss);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("scroll", dismiss, true);
       window.removeEventListener("resize", dismiss);
     };
@@ -71,13 +32,18 @@ export function TranscriptSelectionMenu({
 
   if (!selection) return null;
 
-  return createPortal(
-    <div
-      ref={menu}
+  return (
+    <Popover
+      anchor={selection.rect}
+      side="top"
+      align="center"
+      onDismiss={(reason) => {
+        if (reason === "escape") window.getSelection()?.removeAllRanges();
+        onDismiss();
+      }}
       role="toolbar"
       aria-label="Selected text actions"
-      style={{ position: "fixed", ...pos, zIndex: 80 }}
-      className="rounded-lg border border-content/10 bg-content/10 p-1 shadow-xl outline-none backdrop-blur-xl"
+      className="p-1"
     >
       <button
         type="button"
@@ -96,7 +62,6 @@ export function TranscriptSelectionMenu({
         />
         Add to chat
       </button>
-    </div>,
-    document.body,
+    </Popover>
   );
 }

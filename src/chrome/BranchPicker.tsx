@@ -1,11 +1,9 @@
 import { Check, GitBranch, Plus, Search } from "./icons";
 import {
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
@@ -20,6 +18,7 @@ import {
 } from "../lib/fs";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectBranchesState } from "../hooks/useProjectBranches";
+import { Popover } from "./Popover";
 import { SwitchBranchDialog } from "./SwitchBranchDialog";
 
 type Props = {
@@ -40,21 +39,8 @@ type PendingSwitch =
   | { kind: "create"; name: string }
   | { kind: "checkout"; name: string; remote: string | null };
 
-function menuStyle(anchor: DOMRect): CSSProperties {
-  const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
-  const left = Math.min(
-    Math.max(8, anchor.left),
-    window.innerWidth - width - 8,
-  );
-  return {
-    position: "fixed",
-    left,
-    bottom: window.innerHeight - anchor.top + 6,
-    width,
-    height: Math.max(180, Math.min(280, anchor.top - 12)),
-    zIndex: 50,
-  };
-}
+const MENU_MIN_HEIGHT = 180;
+const MENU_MAX_HEIGHT = 280;
 
 export function BranchPicker({
   cwd,
@@ -73,7 +59,6 @@ export function BranchPicker({
   const [blockedBusy, setBlockedBusy] = useState<"stash" | "commit" | null>(
     null,
   );
-  const [menu, setMenu] = useState<CSSProperties>();
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
@@ -106,39 +91,9 @@ export function BranchPicker({
     setActive(0);
   }, [open]);
 
-  useLayoutEffect(() => {
-    if (!open || !root.current) return;
-    const place = () => {
-      const rect = root.current?.getBoundingClientRect();
-      if (rect) setMenu(menuStyle(rect));
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) dismiss(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      dismiss(true);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [open]);
-
   useEffect(() => {
     if (open) search.current?.focus();
-  }, [open, menu]);
+  }, [open]);
 
   useEffect(() => {
     if (enabled) return;
@@ -317,8 +272,6 @@ export function BranchPicker({
               dismiss(true);
               return;
             }
-            const rect = root.current?.getBoundingClientRect();
-            if (rect) setMenu(menuStyle(rect));
             setOpen(true);
           }}
           className={
@@ -373,13 +326,18 @@ export function BranchPicker({
             }}
           />
         ) : null}
-        {open && menu ? (
-          <div
+        {open ? (
+          <Popover
+            anchor={root}
+            side="top"
+            width={MENU_WIDTH}
+            minHeight={MENU_MIN_HEIGHT}
+            maxHeight={MENU_MAX_HEIGHT}
+            onDismiss={(reason) => dismiss(reason === "escape")}
             role="dialog"
             aria-label="Branch picker"
             data-branch-picker
-            style={menu}
-            className="flex flex-col overflow-hidden rounded-lg border border-content/10 bg-content/10 shadow-xl backdrop-blur-xl"
+            className="flex flex-col overflow-hidden"
           >
             <label className="flex shrink-0 items-center gap-2 border-b border-content/10 px-2 py-2.5 text-content/50">
               <Search className="size-3.5 shrink-0" strokeWidth={1.75} />
@@ -416,7 +374,7 @@ export function BranchPicker({
                 {error}
               </p>
             ) : null}
-          </div>
+          </Popover>
         ) : null}
       </div>
     </div>

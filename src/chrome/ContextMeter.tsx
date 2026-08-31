@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   contextRatio,
   contextTooltip,
   type ContextUsage,
 } from "../lib/contextUsage";
+import { Popover } from "./Popover";
 
 const SIZE = 14;
 const STROKE = 2;
@@ -26,6 +27,7 @@ function ringClass(ratio: number): string {
  */
 export function ContextMeter({ usage }: { usage?: ContextUsage }) {
   const [hovered, setHovered] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
   const ratio = contextRatio(usage);
   if (!usage || ratio === null) return null;
 
@@ -33,6 +35,7 @@ export function ContextMeter({ usage }: { usage?: ContextUsage }) {
 
   return (
     <div
+      ref={root}
       className="relative shrink-0"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -68,10 +71,15 @@ export function ContextMeter({ usage }: { usage?: ContextUsage }) {
         />
       </svg>
       {hovered ? (
-        <div className="pointer-events-none absolute right-0 bottom-full z-40 mb-1.5 w-max rounded-lg border border-content/10 bg-content/10 px-2.5 py-1.5 shadow-xl backdrop-blur-xl">
+        <Popover
+          anchor={root}
+          side="top"
+          align="end"
+          className="pointer-events-none w-max px-2.5 py-1.5"
+        >
           <div className="text-[12px] leading-4 text-content">{headline}</div>
           <div className="text-[11px] leading-4 text-content/50">{detail}</div>
-        </div>
+        </Popover>
       ) : null}
     </div>
   );

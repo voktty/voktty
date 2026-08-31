@@ -1,12 +1,5 @@
 import { Check, CircleDot, GitPullRequest } from "./icons";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { createPortal } from "react-dom";
+import { type ReactNode } from "react";
 import type { InboxKind } from "../lib/githubTasks";
 import {
   DEFAULT_INBOX_FILTERS,
@@ -15,6 +8,7 @@ import {
   type InboxSource,
   type InboxTimeFilter,
 } from "../lib/inboxFilters";
+import { Popover } from "./Popover";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 
 export const INBOX_FILTER_MENU_WIDTH = 228;
@@ -68,49 +62,8 @@ export function InboxFiltersMenu({
   onChange,
   onClose,
 }: Props) {
-  const menu = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const hiddenProjects = new Set(filters.hiddenProjects);
   const hiddenKinds = new Set(filters.hiddenKinds);
-
-  useLayoutEffect(() => {
-    const el = menu.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const pad = 8;
-    let left = x;
-    let top = y;
-    if (left + rect.width > window.innerWidth - pad) {
-      left = window.innerWidth - rect.width - pad;
-    }
-    if (top + rect.height > window.innerHeight - pad) {
-      top = window.innerHeight - rect.height - pad;
-    }
-    setPos({
-      left: Math.max(pad, left),
-      top: Math.max(pad, top),
-    });
-  }, [x, y, projects.length, filters]);
-
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (!menu.current?.contains(event.target as Node)) onCloseRef.current();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      onCloseRef.current();
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, []);
 
   const toggleAssigned = () => {
     onChange({ ...filters, assignedToMe: !filters.assignedToMe });
@@ -141,20 +94,17 @@ export function InboxFiltersMenu({
     });
   };
 
-  return createPortal(
-    <div
-      ref={menu}
+  return (
+    <Popover
+      anchor={{ x, y }}
+      gap={0}
+      width={INBOX_FILTER_MENU_WIDTH}
+      maxHeight={480}
+      onDismiss={onClose}
       role="menu"
       aria-label="Filter inbox"
       onContextMenu={(event) => event.preventDefault()}
-      style={{
-        position: "fixed",
-        left: pos.left,
-        top: pos.top,
-        width: INBOX_FILTER_MENU_WIDTH,
-        zIndex: 80,
-      }}
-      className="max-h-[min(70vh,480px)] overflow-y-auto rounded-lg border border-content/10 bg-content/10 p-1 shadow-xl backdrop-blur-xl outline-none"
+      className="overflow-y-auto overscroll-none p-1"
     >
       <FilterItem
         label="Assigned to me"
@@ -250,8 +200,7 @@ export function InboxFiltersMenu({
           </button>
         </>
       ) : null}
-    </div>,
-    document.body,
+    </Popover>
   );
 }
 
