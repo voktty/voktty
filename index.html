@@ -23,7 +23,13 @@
             var o = Math.max(0.15, Math.min(1, Number(opacity) || 0.85));
             root.style.setProperty("--sidebar-opacity", String(o));
           }
-          if (localStorage.getItem("monocode.colorScheme") === "light") {
+          var scheme = localStorage.getItem("monocode.colorScheme");
+          if (scheme === "system") {
+            scheme = window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+          }
+          if (scheme === "light") {
             root.classList.add("theme-light");
           }
           var bodyGlass = localStorage.getItem("monocode.bodyGlass");

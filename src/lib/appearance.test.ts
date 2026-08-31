@@ -10,9 +10,14 @@ import {
   loadTranscriptAnchor,
   saveTranscriptAnchor,
   TRANSCRIPT_ANCHOR_DEFAULT,
+  loadThemePreference,
+  saveThemePreference,
+  resolveColorScheme,
+  THEME_PREFERENCE_DEFAULT,
 } from "./appearance";
 
 const KEY = "monocode.transcriptLayout";
+const SCHEME_KEY = "monocode.colorScheme";
 const ZEN_KEY = "monocode.transcriptZen";
 const ANCHOR_KEY = "monocode.transcriptAnchor";
 
@@ -107,5 +112,60 @@ describe("transcript prompt-to-top setting", () => {
     expect(loadTranscriptAnchor()).toBe(true);
     saveTranscriptAnchor(false);
     expect(loadTranscriptAnchor()).toBe(false);
+  });
+});
+
+function mockSystemScheme(scheme: "dark" | "light") {
+  Object.defineProperty(globalThis, "window", {
+    value: {
+      matchMedia: (query: string) => ({
+        matches: query.includes("light") && scheme === "light",
+      }),
+    },
+    configurable: true,
+  });
+}
+
+describe("theme preference setting", () => {
+  beforeEach(mockLocalStorage);
+  afterEach(() => {
+    localStorage.removeItem(SCHEME_KEY);
+    Reflect.deleteProperty(globalThis, "window");
+  });
+
+  it("defaults to dark", () => {
+    expect(THEME_PREFERENCE_DEFAULT).toBe("dark");
+    expect(loadThemePreference()).toBe("dark");
+  });
+
+  it("persists each preference", () => {
+    for (const value of ["system", "light", "dark"] as const) {
+      saveThemePreference(value);
+      expect(localStorage.getItem(SCHEME_KEY)).toBe(value);
+      expect(loadThemePreference()).toBe(value);
+    }
+  });
+
+  it("ignores unknown stored values", () => {
+    localStorage.setItem(SCHEME_KEY, "solarized");
+    expect(loadThemePreference()).toBe(THEME_PREFERENCE_DEFAULT);
+  });
+
+  it("resolves system against the OS appearance", () => {
+    mockSystemScheme("light");
+    expect(resolveColorScheme("system")).toBe("light");
+    mockSystemScheme("dark");
+    expect(resolveColorScheme("system")).toBe("dark");
+  });
+
+  it("keeps explicit picks regardless of the OS appearance", () => {
+    mockSystemScheme("light");
+    expect(resolveColorScheme("dark")).toBe("dark");
+    mockSystemScheme("dark");
+    expect(resolveColorScheme("light")).toBe("light");
+  });
+
+  it("falls back to dark without matchMedia", () => {
+    expect(resolveColorScheme("system")).toBe("dark");
   });
 });

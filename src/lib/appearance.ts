@@ -17,10 +17,11 @@ const TRANSCRIPT_ZEN_KEY = "monocode.transcriptZen";
 const TRANSCRIPT_ANCHOR_KEY = "monocode.transcriptAnchor";
 
 export type ColorScheme = "dark" | "light";
+export type ThemePreference = ColorScheme | "system";
 export type SidebarLayout = "classic" | "deck";
 export type TranscriptLayout = "full" | "chat";
 
-export const COLOR_SCHEME_DEFAULT: ColorScheme = "dark";
+export const THEME_PREFERENCE_DEFAULT: ThemePreference = "dark";
 
 /** Fired on `window` whenever the color scheme flips (detail: ColorScheme). */
 export const SCHEME_CHANGE_EVENT = "monocode:schemechange";
@@ -169,21 +170,27 @@ export function applyThemeTint(hue: number, saturation: number) {
 export function initAppearance() {
   document.documentElement.classList.toggle("is-mac", IS_MAC);
   applyThemeTint(loadThemeHue(), loadThemeSaturation());
-  applyColorScheme(loadColorScheme());
+  applyThemePreference(loadThemePreference());
+  watchSystemColorScheme();
   applySidebarOpacity(loadSidebarOpacity());
   applySidebarBlur(loadSidebarBlur());
   applyBodyGlass(loadBodyGlass());
 }
 
-export function loadColorScheme(): ColorScheme {
+function isThemePreference(value: unknown): value is ThemePreference {
+  return value === "dark" || value === "light" || value === "system";
+}
+
+export function loadThemePreference(): ThemePreference {
   try {
-    return localStorage.getItem(SCHEME_KEY) === "light" ? "light" : "dark";
+    const raw = localStorage.getItem(SCHEME_KEY);
+    return isThemePreference(raw) ? raw : THEME_PREFERENCE_DEFAULT;
   } catch {
-    return COLOR_SCHEME_DEFAULT;
+    return THEME_PREFERENCE_DEFAULT;
   }
 }
 
-export function saveColorScheme(value: ColorScheme) {
+export function saveThemePreference(value: ThemePreference) {
   try {
     localStorage.setItem(SCHEME_KEY, value);
   } catch {
@@ -191,17 +198,40 @@ export function saveColorScheme(value: ColorScheme) {
   }
 }
 
+function systemQuery(): MediaQueryList | null {
+  if (typeof window === "undefined" || !window.matchMedia) return null;
+  return window.matchMedia("(prefers-color-scheme: light)");
+}
+
+function systemColorScheme(): ColorScheme {
+  return systemQuery()?.matches ? "light" : "dark";
+}
+
+export function resolveColorScheme(value: ThemePreference): ColorScheme {
+  return value === "system" ? systemColorScheme() : value;
+}
+
 export function isLightScheme(): boolean {
   return document.documentElement.classList.contains("theme-light");
 }
 
-export function applyColorScheme(value: ColorScheme): ColorScheme {
-  const next = value === "light" ? "light" : "dark";
+export function applyThemePreference(value: ThemePreference): ColorScheme {
+  const next = resolveColorScheme(value);
   document.documentElement.classList.toggle("theme-light", next === "light");
   window.dispatchEvent(
     new CustomEvent<ColorScheme>(SCHEME_CHANGE_EVENT, { detail: next }),
   );
   return next;
+}
+
+/** Keeps the "system" preference in sync when the OS flips appearance. */
+export function watchSystemColorScheme() {
+  const query = systemQuery();
+  if (!query) return;
+  query.addEventListener("change", () => {
+    const preference = loadThemePreference();
+    if (preference === "system") applyThemePreference(preference);
+  });
 }
 
 export function loadSidebarOpacity(): number {

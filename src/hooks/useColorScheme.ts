@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import {
-  loadColorScheme,
+  loadThemePreference,
+  resolveColorScheme,
   SCHEME_CHANGE_EVENT,
   type ColorScheme,
 } from "../lib/appearance";
 
-/** Subscribes to color scheme changes triggered by applyColorScheme(). */
+/** Subscribes to color scheme changes triggered by applyThemePreference(). */
 export function useColorScheme(): ColorScheme {
-  const [scheme, setScheme] = useState<ColorScheme>(loadColorScheme);
+  const [scheme, setScheme] = useState<ColorScheme>(() =>
+    resolveColorScheme(loadThemePreference()),
+  );
   useEffect(() => {
     const onChange = (event: Event) => {
       const detail = (event as CustomEvent<ColorScheme>).detail;

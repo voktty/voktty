@@ -22,14 +22,14 @@ import { WindowControls } from "../chrome/WindowControls";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   applyBodyGlass,
-  applyColorScheme,
+  applyThemePreference,
   applySidebarBlur,
   applySidebarOpacity,
   applyThemeTint,
   BODY_GLASS_DEFAULT,
-  COLOR_SCHEME_DEFAULT,
+  THEME_PREFERENCE_DEFAULT,
   loadBodyGlass,
-  loadColorScheme,
+  loadThemePreference,
   loadSidebarBlur,
   loadSidebarLayout,
   loadSidebarOpacity,
@@ -39,7 +39,7 @@ import {
   loadTranscriptZen,
   loadTranscriptAnchor,
   saveBodyGlass,
-  saveColorScheme,
+  saveThemePreference,
   saveSidebarBlur,
   saveSidebarLayout,
   saveSidebarOpacity,
@@ -62,7 +62,7 @@ import {
   THEME_SATURATION_DEFAULT,
   THEME_SATURATION_MAX,
   THEME_SATURATION_MIN,
-  type ColorScheme,
+  type ThemePreference,
   type SidebarLayout,
   type TranscriptLayout,
 } from "../lib/appearance";
@@ -664,17 +664,18 @@ function UpdateRow() {
 type AppearanceSettings = ReturnType<typeof useAppearanceSettings>;
 
 function useAppearanceSettings() {
-  const [colorScheme, setColorScheme] = useState<ColorScheme>(loadColorScheme);
+  const [themePreference, setThemePreference] =
+    useState<ThemePreference>(loadThemePreference);
   const [opacity, setOpacity] = useState(loadSidebarOpacity);
   const [blur, setBlur] = useState(loadSidebarBlur);
   const [themeHue, setThemeHue] = useState(loadThemeHue);
   const [themeSaturation, setThemeSaturation] = useState(loadThemeSaturation);
   const [bodyGlass, setBodyGlass] = useState(loadBodyGlass);
 
-  const onColorScheme = useCallback((next: ColorScheme) => {
-    applyColorScheme(next);
-    saveColorScheme(next);
-    setColorScheme(next);
+  const onThemePreference = useCallback((next: ThemePreference) => {
+    applyThemePreference(next);
+    saveThemePreference(next);
+    setThemePreference(next);
   }, []);
 
   const onOpacity = useCallback((percent: number) => {
@@ -704,21 +705,21 @@ function useAppearanceSettings() {
   }, []);
 
   const restoreDefaults = useCallback(() => {
-    onColorScheme(COLOR_SCHEME_DEFAULT);
+    onThemePreference(THEME_PREFERENCE_DEFAULT);
     onOpacity(Math.round(SIDEBAR_OPACITY_DEFAULT * 100));
     onBlur(SIDEBAR_BLUR_DEFAULT);
     onTint(THEME_HUE_DEFAULT, THEME_SATURATION_DEFAULT);
     onBodyGlass(BODY_GLASS_DEFAULT);
-  }, [onBlur, onBodyGlass, onColorScheme, onOpacity, onTint]);
+  }, [onBlur, onBodyGlass, onThemePreference, onOpacity, onTint]);
 
   return {
-    colorScheme,
+    themePreference,
     opacity,
     blur,
     themeHue,
     themeSaturation,
     bodyGlass,
-    onColorScheme,
+    onThemePreference,
     onOpacity,
     onBlur,
     onTint,
@@ -734,16 +735,17 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
     <>
       <Row
         label="Theme"
-        description="Dark and light share the same tint, so the hue below applies to both."
+        description="System follows the OS appearance. Dark and light share the same tint, so the hue below applies to both."
       >
         <Segmented
           label="Theme"
-          value={appearance.colorScheme}
+          value={appearance.themePreference}
           options={[
+            { value: "system", label: "System" },
             { value: "dark", label: "Dark" },
             { value: "light", label: "Light" },
           ]}
-          onChange={appearance.onColorScheme}
+          onChange={appearance.onThemePreference}
         />
       </Row>
       <Row
