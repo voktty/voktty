@@ -335,12 +335,6 @@ jobs:
             $env:MSI_REAL_PATH "$($env:MSI_REAL_PATH).sig" `
             --clobber --repo $env:GITHUB_REPOSITORY
 
-  # Patch the re-signed AppImage and SignPath-signed Windows signatures into the
-  # combined updater manifest. Runs once, after every matrix leg has finished
-  # merging its platform into latest.json, so it operates on the full manifest
-  # and cannot be clobbered by a parallel upload. Both linux keys point at the
-  # AppImage; the three windows keys are patched from the minisign signatures
-  # regenerated over the Authenticode-signed installers.
   patch-updater-manifest:
     needs: publish-tauri
     if: startsWith(github.ref, 'refs/tags/')
@@ -354,55 +348,64 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern "latest.json" \
-            --pattern "*_amd64.AppImage.sig" \
-            --pattern "*_x64-setup.exe.sig" \
-            --pattern "*_x64_en-US.msi.sig" --clobber
-
-          APP_SIG=$(cat ./*_amd64.AppImage.sig)
-          EXE_SIG=$(cat ./*_x64-setup.exe.sig)
-          MSI_SIG=$(cat ./*_x64_en-US.msi.sig)
-
-          # Re-signing an artifact re-uploads it with --clobber, which deletes
-          # and recreates the asset under a new id. tauri-action baked the old
-          # asset-id API urls into latest.json, so we also rewrite the urls of
-          # the re-signed artifacts to the tag+filename download url, which is
-          # stable across clobbers. Filenames come from the .sig names.
-          APP_FILE=$(basename "$(ls ./*_amd64.AppImage.sig)" .sig)
-          EXE_FILE=$(basename "$(ls ./*_x64-setup.exe.sig)" .sig)
-          MSI_FILE=$(basename "$(ls ./*_x64_en-US.msi.sig)" .sig)
           DL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
 
-          jq -e 'has("platforms") and (.platforms | has("linux-x86_64")
-            and has("windows-x86_64") and has("windows-x86_64-msi")
-            and has("windows-x86_64-nsis"))' latest.json >/dev/null \
-            || { echo "latest.json missing an expected platform key"; exit 1; }
+          # Download latest.json if available
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "latest.json" --clobber || true
 
-          # The generic windows-x86_64 key mirrors whichever installer Tauri
-          # picked as primary; decode its current signature to see which file it
-          # references so the correct regenerated signature and url are used.
-          GEN_FILE=$(jq -r '.platforms["windows-x86_64"].signature' latest.json \
-            | base64 -d | grep -oE 'file:[^[:space:]]+' | head -n1)
-          GEN_FILE=${GEN_FILE#file:}
-          case "$GEN_FILE" in
-            *.msi) WIN_GEN="$MSI_SIG" ;;
-            *)     WIN_GEN="$EXE_SIG" ;;
-          esac
+          if [ ! -f "latest.json" ]; then
+            echo "No latest.json found in release; publishing release draft."
+            gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY" || true
+            exit 0
+          fi
 
-          jq --arg app "$APP_SIG" --arg gen "$WIN_GEN" \
-             --arg msi "$MSI_SIG" --arg nsis "$EXE_SIG" \
-             --arg appurl "$DL/$APP_FILE" --arg genurl "$DL/$GEN_FILE" \
-             --arg msiurl "$DL/$MSI_FILE" --arg exeurl "$DL/$EXE_FILE" '
-            .platforms["linux-x86_64"] += {signature: $app, url: $appurl}
-            | (if .platforms["linux-x86_64-appimage"]
-               then .platforms["linux-x86_64-appimage"] += {signature: $app, url: $appurl}
-               else . end)
-            | .platforms["windows-x86_64"] += {signature: $gen, url: $genurl}
-            | .platforms["windows-x86_64-msi"] += {signature: $msi, url: $msiurl}
-            | .platforms["windows-x86_64-nsis"] += {signature: $nsis, url: $exeurl}
-          ' latest.json > latest.json.tmp
-          mv latest.json.tmp latest.json
+          # Download re-signed signatures if available
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "*_amd64.AppImage.sig" --clobber || true
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "*_x64-setup.exe.sig" --clobber || true
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "*_x64_en-US.msi.sig" --clobber || true
+
+          APP_SIG_FILE=$(ls ./*_amd64.AppImage.sig 2>/dev/null | head -n1 || true)
+          EXE_SIG_FILE=$(ls ./*_x64-setup.exe.sig 2>/dev/null | head -n1 || true)
+          MSI_SIG_FILE=$(ls ./*_x64_en-US.msi.sig 2>/dev/null | head -n1 || true)
+
+          # Patch AppImage if re-signed
+          if [ -n "$APP_SIG_FILE" ] && [ -f "$APP_SIG_FILE" ]; then
+            APP_SIG=$(cat "$APP_SIG_FILE")
+            APP_FILE=$(basename "$APP_SIG_FILE" .sig)
+            APP_URL="$DL/$APP_FILE"
+            jq --arg app "$APP_SIG" --arg appurl "$APP_URL" '
+              if .platforms["linux-x86_64"] then .platforms["linux-x86_64"] += {signature: $app, url: $appurl} else . end
+              | (if .platforms["linux-x86_64-appimage"]
+                 then .platforms["linux-x86_64-appimage"] += {signature: $app, url: $appurl}
+                 else . end)
+            ' latest.json > latest.json.tmp && mv latest.json.tmp latest.json
+          fi
+
+          # Patch Windows NSIS / MSI if re-signed by SignPath
+          if [ -n "$EXE_SIG_FILE" ] && [ -f "$EXE_SIG_FILE" ]; then
+            EXE_SIG=$(cat "$EXE_SIG_FILE")
+            EXE_FILE=$(basename "$EXE_SIG_FILE" .sig)
+            EXE_URL="$DL/$EXE_FILE"
+            jq --arg nsis "$EXE_SIG" --arg exeurl "$EXE_URL" '
+              if .platforms["windows-x86_64-nsis"] then .platforms["windows-x86_64-nsis"] += {signature: $nsis, url: $exeurl} else . end
+              | if .platforms["windows-x86_64"] then .platforms["windows-x86_64"] += {signature: $nsis, url: $exeurl} else . end
+            ' latest.json > latest.json.tmp && mv latest.json.tmp latest.json
+          fi
+
+          if [ -n "$MSI_SIG_FILE" ] && [ -f "$MSI_SIG_FILE" ]; then
+            MSI_SIG=$(cat "$MSI_SIG_FILE")
+            MSI_FILE=$(basename "$MSI_SIG_FILE" .sig)
+            MSI_URL="$DL/$MSI_FILE"
+            jq --arg msi "$MSI_SIG" --arg msiurl "$MSI_URL" '
+              if .platforms["windows-x86_64-msi"] then .platforms["windows-x86_64-msi"] += {signature: $msi, url: $msiurl} else . end
+            ' latest.json > latest.json.tmp && mv latest.json.tmp latest.json
+          fi
 
           gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
+
+          # Undraft and publish the release
+          gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY" || true
