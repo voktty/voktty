@@ -647,8 +647,10 @@ function SidebarComponent({
               busy={projectPathBusy(busyProjectPaths, cwd)}
               onSelectProject={onSelectProject}
               onNewTerminal={onNewTerminal}
+              onSearch={onSearch}
               onOpenInbox={onOpenInbox}
               onOpenNotes={notesEnabled ? onOpenNotes : undefined}
+              searchActive={searchActive}
               inboxActive={inboxActive}
               notesActive={notesActive}
               inboxUnseen={inboxUnseen}
@@ -990,8 +992,10 @@ function SidebarProjectPicker({
   busy,
   onSelectProject,
   onNewTerminal,
+  onSearch,
   onOpenInbox,
   onOpenNotes,
+  searchActive = false,
   inboxActive = false,
   notesActive = false,
   inboxUnseen = false,
@@ -1001,8 +1005,10 @@ function SidebarProjectPicker({
   busy: boolean;
   onSelectProject: (path: string) => void;
   onNewTerminal?: () => void;
+  onSearch?: () => void;
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
+  searchActive?: boolean;
   inboxActive?: boolean;
   notesActive?: boolean;
   inboxUnseen?: boolean;
@@ -1059,6 +1065,15 @@ function SidebarProjectPicker({
         <span className="min-w-0 truncate">{label}</span>
       </CwdPicker>
       <div className="flex items-center ml-auto">
+        {onSearch ? (
+          <IconButton
+            label={`Search (${MOD}K)`}
+            active={searchActive}
+            onClick={onSearch}
+          >
+            <Search className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
         {onOpenInbox ? (
           <IconButton
             label={inboxUnseen ? "Inbox, new items" : "Inbox"}
