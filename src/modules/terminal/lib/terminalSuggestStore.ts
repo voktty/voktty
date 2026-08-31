@@ -67,6 +67,7 @@ type TerminalSuggestStore = {
   selectNext: (leafId: number) => void;
   selectPrev: (leafId: number) => void;
   setSelectedIndex: (leafId: number, index: number) => void;
+  setNavigated: (leafId: number, navigated: boolean) => void;
   toggleSearch: (leafId: number, open?: boolean) => void;
   setSearchFilter: (leafId: number, filter: string, items?: string[]) => void;
   getSuggest: (leafId: number) => TerminalSuggestData | undefined;
@@ -160,6 +161,21 @@ export const useTerminalSuggestStore = create<TerminalSuggestStore>(
               selectedIndex: bounded,
               navigated: true,
               ghostTail,
+            },
+          },
+        };
+      }),
+
+    setNavigated: (leafId, navigated) =>
+      set((state) => {
+        const cur = state.suggestByLeaf[leafId];
+        if (!cur) return state;
+        return {
+          suggestByLeaf: {
+            ...state.suggestByLeaf,
+            [leafId]: {
+              ...cur,
+              navigated,
             },
           },
         };

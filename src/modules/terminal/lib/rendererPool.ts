@@ -679,6 +679,8 @@ function createSlot(): Slot {
           slot.isDirectTyping = false;
           if (suggest.searchMode) {
             useTerminalSuggestStore.getState().toggleSearch(leafId, false);
+          } else if (suggest.navigated) {
+            useTerminalSuggestStore.getState().setNavigated(leafId, false);
           } else {
             useTerminalSuggestStore.getState().clear(leafId);
           }
