@@ -887,6 +887,7 @@ export const en = {
     closeOtherTabs: "Close other tabs",
     closeTabsToRight: "Close tabs to the right",
     duplicateTab: "Duplicate terminal",
+    reconnectSsh: "Reconnect SSH",
     renameTab: "Rename",
     convertToAgenticTerminal: "Convert to Agentic Terminal",
     convertToNormalTerminal: "Convert to Standard Terminal",

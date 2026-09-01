@@ -541,6 +541,7 @@ const zhBase = mergeLocale(en, {
     closeOtherTabs: "关闭其他标签页",
     closeTabsToRight: "关闭右侧标签页",
     duplicateTab: "复制终端",
+    reconnectSsh: "重新连接 SSH",
     renameTab: "重命名",
     convertToAgenticTerminal: "转换为智能体终端",
     convertToNormalTerminal: "转换为标准终端",

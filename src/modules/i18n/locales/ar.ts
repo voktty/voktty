@@ -882,6 +882,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
     closeOtherTabs: "إغلاق علامات التبويب الأخرى",
     closeTabsToRight: "إغلاق علامات التبويب إلى اليمين",
     duplicateTab: "تكرار الطرفية",
+    reconnectSsh: "إعادة اتصال SSH",
     renameTab: "إعادة تسمية",
     convertToAgenticTerminal: "تحويل إلى طرفية وكيلة",
     convertToNormalTerminal: "تحويل إلى طرفية قياسية",

@@ -580,6 +580,7 @@ const ruBase = mergeLocale(en, {
     closeOtherTabs: "Закрыть другие вкладки",
     closeTabsToRight: "Закрыть вкладки справа",
     duplicateTab: "Дублировать терминал",
+    reconnectSsh: "Переподключить SSH",
     renameTab: "Переименовать",
     convertToAgenticTerminal: "Преобразовать в агентский терминал",
     convertToNormalTerminal: "Преобразовать в стандартный терминал",

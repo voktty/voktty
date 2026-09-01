@@ -1,5 +1,22 @@
 import { t as translate } from "@/modules/i18n";
+import type { WorkspaceEnv } from "@/modules/workspace";
 import type { Tab } from "./useTabs";
+
+export function isSshTab(
+  tab: Tab,
+  currentWorkspaceEnv?: WorkspaceEnv,
+): boolean {
+  if (tab.kind === "terminal") {
+    if (tab.workspaceEnv?.kind === "ssh") return true;
+    if (currentWorkspaceEnv?.kind === "ssh") return true;
+    if (isSshOrRemoteSession(tab)) return true;
+  }
+  if (tab.kind === "editor" || tab.kind === "markdown") {
+    if (tab.workspaceEnv?.kind === "ssh") return true;
+    if (currentWorkspaceEnv?.kind === "ssh") return true;
+  }
+  return false;
+}
 
 /**
  * The label shown on a tab. Non-terminal tabs use their stored title; terminal

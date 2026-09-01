@@ -586,6 +586,7 @@ const deBase = mergeLocale(en, {
     closeOtherTabs: "Andere Tabs schließen",
     closeTabsToRight: "Tabs rechts schließen",
     duplicateTab: "Duplizieren",
+    reconnectSsh: "SSH neu verbinden",
     renameTab: "Umbenennen",
     convertToAgenticTerminal: "In Agentic-Terminal konvertieren",
     convertToNormalTerminal: "In Standard-Terminal konvertieren",
