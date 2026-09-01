@@ -95,6 +95,7 @@ import {
   type TabProcessStatus,
   useTabProcessStatus,
 } from "./lib/useTabProcessStatus";
+import { detectAgentFromName } from "@/modules/terminal";
 import type { EditorTab, Tab } from "./lib/useTabs";
 import { NewTabMenu } from "./NewTabMenu";
 import { TabColorBubbles } from "./TabColorBubbles";
@@ -1484,6 +1485,12 @@ export function TabIcon({
           strokeWidth={2}
           className="shrink-0 text-sky-400"
         />
+      );
+    }
+    const agentFromTitle = detectAgentFromName(tab.title);
+    if (agentFromTitle) {
+      return (
+        <AgentIcon agent={agentFromTitle} size={14} className="shrink-0" />
       );
     }
     const techIcon = resolveTerminalTechIcon(tab.title);

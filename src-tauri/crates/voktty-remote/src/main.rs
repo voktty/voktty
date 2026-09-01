@@ -825,8 +825,56 @@ impl RemoteServer {
             .ok()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| "/bin/sh".to_string());
-        let mut command = CommandBuilder::new(shell);
-        command.arg("-l");
+
+        let mux_mode = params
+            .multiplexer_mode
+            .as_deref()
+            .unwrap_or("auto");
+
+        let mut command = if mux_mode == "none" {
+            let mut cmd = CommandBuilder::new(shell);
+            cmd.arg("-l");
+            cmd
+        } else {
+            let session_name = params
+                .tmux_session_name
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or("voktty");
+            let sanitized_name: String = session_name
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+                .collect();
+            let session_name = if sanitized_name.is_empty() {
+                "voktty".to_string()
+            } else {
+                sanitized_name
+            };
+
+            let action = params
+                .multiplexer_action
+                .as_deref()
+                .unwrap_or("auto");
+
+            let tmux_args = match action {
+                "attach_force" => format!("tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session -s '{session_name}'"),
+                "new" => format!("tmux new-session -s '{session_name}'"),
+                _ => format!("tmux new-session -A -s '{session_name}'"),
+            };
+
+            let screen_args = match action {
+                "attach_force" => format!("screen -d -r '{session_name}' 2>/dev/null || screen -S '{session_name}'"),
+                _ => format!("screen -xRR -S '{session_name}'"),
+            };
+
+            let script = format!(
+                "if command -v tmux >/dev/null 2>&1; then exec {tmux_args}; elif command -v screen >/dev/null 2>&1; then exec {screen_args}; else exec \"$SHELL\" -l; fi"
+            );
+
+            let mut cmd = CommandBuilder::new("/bin/sh");
+            cmd.args(["-c", &script]);
+            cmd
+        };
         command.cwd(cwd.clone());
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
@@ -1178,6 +1226,12 @@ struct PtyOpenParams {
     rows: u16,
     cwd: Option<String>,
     blocks: Option<bool>,
+    #[serde(rename = "multiplexerMode")]
+    multiplexer_mode: Option<String>,
+    #[serde(rename = "tmuxSessionName")]
+    tmux_session_name: Option<String>,
+    #[serde(rename = "multiplexerAction")]
+    multiplexer_action: Option<String>,
 }
 
 #[derive(Deserialize)]

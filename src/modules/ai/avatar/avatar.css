@@ -174,8 +174,8 @@
 }
 
 .voktty-agent-tab-face {
-  right: 0;
-  bottom: 0;
+  right: -2.5px;
+  bottom: -2.5px;
   box-sizing: border-box;
   border: 1px solid var(--voktty-agent-tab-face-color);
   border-radius: 999px;
@@ -184,10 +184,17 @@
   z-index: 1;
   transform-origin: center;
   animation: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0.5px;
 }
 
 .voktty-agent-tab-face svg {
   display: block;
+  width: 100%;
+  height: 100%;
   overflow: visible;
 }
 

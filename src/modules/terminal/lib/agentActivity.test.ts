@@ -10,6 +10,9 @@ import {
 describe("detectAgentFromName", () => {
   it("recognizes the supported external console agents", () => {
     expect(detectAgentFromName("antigravity.exe")).toBe("antigravity");
+    expect(detectAgentFromName("agy")).toBe("antigravity");
+    expect(detectAgentFromName("agy.exe")).toBe("antigravity");
+    expect(detectAgentFromName("agy --boost")).toBe("antigravity");
     expect(detectAgentFromName("npx @deepseek/cli")).toBe("deepseek");
     expect(detectAgentFromName("kimi-code")).toBe("kimi");
   });
