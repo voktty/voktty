@@ -11,6 +11,10 @@ import {
   sameProjectPath,
 } from "./recents";
 import type { Session } from "./session";
+import {
+  applyTerminalMeta,
+  type TerminalMetaPatch,
+} from "./terminalTab";
 import { workspaceTabCwd } from "./workspaceTabGroups";
 
 export type DockSide = "top" | "bottom" | "left" | "right";
@@ -147,16 +151,14 @@ export function reorderDockTerminals(
 export function patchDockTerminal(
   dock: ProjectTerminalDock,
   fileId: string,
-  patch: { title?: string; cwd?: string },
+  patch: TerminalMetaPatch,
 ): ProjectTerminalDock {
   let changed = false;
   const files = dock.pane.files.map((file) => {
     if (!file.terminal || file.id !== fileId) return file;
-    const path = patch.title ?? file.path;
-    const cwd = patch.cwd ?? file.cwd;
-    if (path === file.path && cwd === file.cwd) return file;
-    changed = true;
-    return { ...file, path, cwd };
+    const next = applyTerminalMeta(file, patch);
+    if (next !== file) changed = true;
+    return next;
   });
   if (!changed) return dock;
   return { ...dock, pane: { ...dock.pane, files } };
@@ -165,7 +167,7 @@ export function patchDockTerminal(
 export function patchProjectTerminals(
   docks: ProjectTerminalDock[],
   fileId: string,
-  patch: { title?: string; cwd?: string },
+  patch: TerminalMetaPatch,
 ): ProjectTerminalDock[] {
   let changed = false;
   const next = docks.map((dock) => {

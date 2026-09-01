@@ -1410,9 +1410,7 @@ function ActivityToolRow({
           failed={state === "rejected"}
           onOpenFile={openFile}
         />
-        {pending ? null : (
-          <ToolCallStatusIcon state={state} running={bare && live} />
-        )}
+        {pending ? null : <ToolCallStatusIcon state={state} />}
       </div>
       {pending ? (
         <ApprovalControls block={block} onApproval={onApproval} />
@@ -1442,29 +1440,10 @@ function ActivityToolIcon({
   );
 }
 
-/**
- * The right-hand mark on a step. In a phase it also carries the running state,
- * since the rail took the row's leading icon: the ring turns while the step
- * is in flight, and an abandoned turn's leftovers sit still rather than
- * spinning forever. Success is silent; only a failure keeps a mark.
- */
-function ToolCallStatusIcon({
-  state,
-  running = false,
-}: {
-  state: ToolCallState;
-  running?: boolean;
-}) {
+/** Failure stays marked. Running and success do not get a trailing icon. */
+function ToolCallStatusIcon({ state }: { state: ToolCallState }) {
   if (state === "rejected") {
     return <X className="size-3.5 shrink-0 text-red-400" strokeWidth={2} />;
-  }
-  if (running) {
-    return (
-      <CircleDashed
-        className="size-3.5 shrink-0 zen-tool-spin text-content/35"
-        strokeWidth={1.75}
-      />
-    );
   }
   return null;
 }

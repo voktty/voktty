@@ -20,6 +20,7 @@ import {
   placePane,
   splitPane,
   splitSizesAtBoundary,
+  updateTerminalTab,
 } from "./layout";
 
 describe("splitSizesAtBoundary", () => {
@@ -197,6 +198,22 @@ describe("newTerminalWorkspaceTab", () => {
     expect(tab.focusedId).toBe(tab.terminalPanes[0]?.id);
     expect(tab.editorPanes).toEqual([]);
     expect(tab.terminalPanes[0]?.files).toEqual([file]);
+  });
+});
+
+describe("updateTerminalTab", () => {
+  it("stores the foreground process on the matching terminal", () => {
+    const file = newTerminalFile("/repo");
+    const tab = openTerminalTab(newTab("session-a"), file);
+    const next = updateTerminalTab(tab, file.id, {
+      title: "vite",
+      foreground: "vite",
+    });
+    expect(next.terminalPanes[0]?.files[0]).toMatchObject({
+      path: "vite",
+      foreground: "vite",
+    });
+    expect(updateTerminalTab(next, file.id, { foreground: "vite" })).toBe(next);
   });
 });
 

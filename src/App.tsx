@@ -104,7 +104,11 @@ import {
   confirmCloseTerminal,
   confirmCloseTerminals,
 } from "./lib/terminalClose";
-import { terminalTabLabel } from "./lib/terminalTab";
+import {
+  listRunningTerminals,
+  terminalTabLabel,
+  type TerminalMetaPatch,
+} from "./lib/terminalTab";
 import {
   applyHarnessEvent,
   appendUser,
@@ -756,6 +760,28 @@ export default function App({
     if (!active) return undefined;
     return { harness: active.harness };
   }, [active?.harness]);
+  const runningTerminals = useMemo(() => {
+    const files: FilePaneTab[] = [];
+    const dock = findProjectTerminal(projectTerminals, projectCwd);
+    if (dock) files.push(...dock.pane.files);
+    for (const tab of tabs) {
+      for (const pane of tab.terminalPanes ?? []) {
+        files.push(...pane.files);
+      }
+    }
+    return listRunningTerminals(files);
+  }, [projectCwd, projectTerminals, tabs]);
+  const runningTerminalOpen = useMemo(() => {
+    const ids = new Set(runningTerminals.map((terminal) => terminal.id));
+    if (
+      currentProjectDock?.open &&
+      currentProjectDock.pane.files.some((file) => ids.has(file.id))
+    ) {
+      return true;
+    }
+    const focused = activeTab ? focusedFileTab(activeTab) : undefined;
+    return !!focused && ids.has(focused.id);
+  }, [activeTab, currentProjectDock, runningTerminals]);
 
   const nextApprovalSessionIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1530,7 +1556,7 @@ export default function App({
   }, []);
 
   const onTerminalMetaChange = useCallback(
-    (fileId: string, patch: { title?: string; cwd?: string }) => {
+    (fileId: string, patch: TerminalMetaPatch) => {
       setProjectTerminals((prev) =>
         patchProjectTerminals(prev, fileId, patch),
       );
@@ -1539,6 +1565,65 @@ export default function App({
       );
     },
     [],
+  );
+
+  const onToggleRunningTerminal = useCallback(
+    (fileId: string) => {
+      const dock = projectTerminalsRef.current.find((entry) =>
+        entry.pane.files.some((file) => file.id === fileId),
+      );
+      if (dock) {
+        if (dock.open) {
+          setProjectTerminals((prev) =>
+            mapProjectTerminal(prev, dock.projectPath, (entry) =>
+              withDockOpen(entry, false),
+            ),
+          );
+          setProjectTerminalFocused(false);
+          return;
+        }
+        setProjectTerminals((prev) =>
+          mapProjectTerminal(prev, dock.projectPath, (entry) =>
+            withDockOpen(selectDockTerminal(entry, fileId), true),
+          ),
+        );
+        focusProjectTerminal();
+        return;
+      }
+      for (const tab of tabsRef.current) {
+        for (const pane of tab.terminalPanes ?? []) {
+          if (!pane.files.some((file) => file.id === fileId)) continue;
+          const showing =
+            activeTabIdRef.current === tab.id &&
+            tab.focusedId === pane.id &&
+            pane.activeFileId === fileId;
+          if (showing) {
+            setComposerFocused(true);
+            setProjectTerminalFocused(false);
+            return;
+          }
+          setActiveTabId(tab.id);
+          setTabs((prev) =>
+            prev.map((entry) => {
+              if (entry.id !== tab.id) return entry;
+              return withSurfacePanes(
+                { ...entry, focusedId: pane.id },
+                "terminal",
+                (entry.terminalPanes ?? []).map((item) =>
+                  item.id === pane.id
+                    ? { ...item, activeFileId: fileId }
+                    : item,
+                ),
+              );
+            }),
+          );
+          setProjectTerminalFocused(false);
+          setComposerFocused(false);
+          return;
+        }
+      }
+    },
+    [focusProjectTerminal],
   );
 
   const onNewTerminalTab = useCallback(() => {
@@ -4381,7 +4466,13 @@ export default function App({
           />
         ) : null}
         {searchViewOpen || inboxViewOpen || notesViewOpen || settingsOpen ? null : (
-          <UsageFooter providers={usageProviders} session={usageSession} />
+          <UsageFooter
+            providers={usageProviders}
+            session={usageSession}
+            terminals={runningTerminals}
+            terminalOpen={runningTerminalOpen}
+            onToggleTerminal={onToggleRunningTerminal}
+          />
         )}
       </div>
 

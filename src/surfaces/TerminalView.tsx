@@ -329,7 +329,9 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
           if (fg === lastForeground) return;
           lastForeground = fg;
           onMetaChangeRef.current?.(
-            fg ? { title: fg } : { title: defaultTerminalTitle(cwd) },
+            fg
+              ? { title: fg, foreground: fg }
+              : { title: defaultTerminalTitle(cwd), foreground: null },
           );
         })
         .catch(() => undefined);

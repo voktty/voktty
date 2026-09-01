@@ -121,6 +121,23 @@ describe("patchProjectTerminals", () => {
     expect(next[1]?.pane.files[0]?.path).toBe("other");
     expect(selectDockTerminal(next[0]!, other.id)).toBe(next[0]);
   });
+
+  it("records a foreground process without renaming other docks", () => {
+    const file = newTerminalFile("/tmp/a", "zsh");
+    const docks = [createProjectTerminal("/tmp/a", file)];
+    const next = patchProjectTerminals(docks, file.id, {
+      title: "vite",
+      foreground: "vite",
+    });
+    expect(next[0]?.pane.files[0]).toMatchObject({
+      path: "vite",
+      foreground: "vite",
+    });
+    expect(
+      patchProjectTerminals(next, file.id, { foreground: null })[0]?.pane
+        .files[0]?.foreground,
+    ).toBeUndefined();
+  });
 });
 
 describe("clampDockSize", () => {

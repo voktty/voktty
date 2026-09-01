@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Handoff: a card-exchange icon next to Copy and Second opinion on a finished turn opens another provider in a split pane. A composer card holds the recap so you can add context before sending. The original session keeps its model.
+- Status bar: when a terminal is running a command (a dev server, tests, …) a chip on the right shows three orange bars lighting in sequence, plus the process name. Click it to show or hide that terminal.
 
 ## [0.1.23] - 2026-08-31
 

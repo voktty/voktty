@@ -1,4 +1,8 @@
-import { defaultTerminalTitle } from "./terminalTab";
+import {
+  applyTerminalMeta,
+  defaultTerminalTitle,
+  type TerminalMetaPatch,
+} from "./terminalTab";
 
 /**
  * Split tree for a tab. Same-direction splits share a group so
@@ -37,6 +41,8 @@ export type FilePaneTab = {
   plan?: PlanTabSource;
   review?: boolean;
   terminal?: boolean;
+  /** Foreground command when it isn't the shell. Live only — not persisted. */
+  foreground?: string;
 };
 
 export type EditorPane = {
@@ -150,18 +156,16 @@ export function nextTerminalTitle(tab: WorkspaceTab, cwd: string): string {
 export function updateTerminalTab(
   tab: WorkspaceTab,
   fileId: string,
-  patch: { title?: string; cwd?: string },
+  patch: TerminalMetaPatch,
 ): WorkspaceTab {
   const panes = tab.terminalPanes ?? [];
   let changed = false;
   const terminalPanes = panes.map((pane) => {
     const files = pane.files.map((file) => {
       if (!file.terminal || file.id !== fileId) return file;
-      const path = patch.title ?? file.path;
-      const cwd = patch.cwd ?? file.cwd;
-      if (path === file.path && cwd === file.cwd) return file;
-      changed = true;
-      return { ...file, path, cwd };
+      const next = applyTerminalMeta(file, patch);
+      if (next !== file) changed = true;
+      return next;
     });
     return files === pane.files ? pane : { ...pane, files };
   });

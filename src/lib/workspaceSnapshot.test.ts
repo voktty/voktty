@@ -174,7 +174,7 @@ describe("hydrateWorkspaceSnapshot", () => {
   });
 
   it("restores a project terminal dock", () => {
-    const term = newTerminalFile("/tmp/a");
+    const term = { ...newTerminalFile("/tmp/a"), foreground: "vite" };
     const dock = {
       ...createProjectTerminal("/tmp/a", term),
       side: "left" as const,
@@ -200,5 +200,8 @@ describe("hydrateWorkspaceSnapshot", () => {
     expect(workspace?.projectTerminals?.[0]?.pane.files[0]?.terminal).toBe(
       true,
     );
+    expect(
+      workspace?.projectTerminals?.[0]?.pane.files[0]?.foreground,
+    ).toBeUndefined();
   });
 });

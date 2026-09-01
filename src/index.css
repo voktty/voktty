@@ -834,3 +834,76 @@ html.is-resizing * {
     animation: none;
   }
 }
+
+/* Status-bar mark for a running terminal: three orange bars that light
+   one after another. */
+.terminal-live {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+}
+
+.terminal-live-bar {
+  display: block;
+  width: 4px;
+  height: 10px;
+  border-radius: 0;
+  background: #e39b4a;
+  opacity: 0.4;
+}
+
+.terminal-live-bar:nth-child(1) {
+  animation: terminal-live-bar-1 3.2s linear infinite;
+}
+
+.terminal-live-bar:nth-child(2) {
+  animation: terminal-live-bar-2 3.2s linear infinite;
+}
+
+.terminal-live-bar:nth-child(3) {
+  animation: terminal-live-bar-3 3.2s linear infinite;
+}
+
+@keyframes terminal-live-bar-1 {
+  0%,
+  24.99%,
+  100% {
+    opacity: 0.4;
+  }
+  25%,
+  99.99% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes terminal-live-bar-2 {
+  0%,
+  49.99%,
+  100% {
+    opacity: 0.4;
+  }
+  50%,
+  99.99% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes terminal-live-bar-3 {
+  0%,
+  74.99%,
+  100% {
+    opacity: 0.4;
+  }
+  75%,
+  99.99% {
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-live-bar {
+    animation: none;
+    opacity: 0.7;
+  }
+}
