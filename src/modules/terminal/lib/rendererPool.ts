@@ -605,6 +605,7 @@ function createSlot(): Slot {
         // if user hasn't explicitly navigated the history popup, let Tab pass
         // directly to the remote PTY so the remote shell's native path completion works!
         if (isRemoteWithoutLocalPaths && !suggest.navigated && !suggest.searchMode) {
+          event.preventDefault();
           if (event.type === "keydown") {
             bridge.writeToPty("\t");
             slot.isDirectTyping = false;
