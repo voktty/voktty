@@ -153,7 +153,13 @@ import type {
   WorkspaceDragSource,
   WorkspaceDropTarget,
 } from "@/modules/spaces/lib/workspaceDrag";
-import { type SshConnection, SshConnectionDialog } from "@/modules/ssh";
+import {
+  probeSshMultiplexer,
+  type RemoteMultiplexerProbe,
+  type SshConnection,
+  SshConnectionDialog,
+  SshSessionPickerModal,
+} from "@/modules/ssh";
 import { StatusBar } from "@/modules/statusbar";
 import {
   ActiveTabsLaunchpad,
@@ -1325,6 +1331,9 @@ export default function App() {
   }, [contextualInsertionTarget]);
 
   const [newSshDialogOpen, setNewSshDialogOpen] = useState(false);
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
+  const [sessionPickerConn, setSessionPickerConn] = useState<SshConnection | null>(null);
+  const [sessionPickerProbe, setSessionPickerProbe] = useState<RemoteMultiplexerProbe | null>(null);
   const [serialDialogOpen, setSerialDialogOpen] = useState(false);
   const [guestConnectOpen, setGuestConnectOpen] = useState(false);
   const [hostShareOpen, setHostShareOpen] = useState(false);
@@ -1355,7 +1364,7 @@ export default function App() {
     };
   }, []);
 
-  const handleConnectSsh = useCallback(
+  const startSshConnection = useCallback(
     async (conn: SshConnection) => {
       const toastId = `ssh-${conn.id}`;
       const targetLabel =
@@ -1394,6 +1403,26 @@ export default function App() {
       }
     },
     [activateWorkspaceEnv, activeSpaceId, newSshTab, t],
+  );
+
+  const handleConnectSsh = useCallback(
+    async (conn: SshConnection) => {
+      if (conn.multiplexerMode === "ask") {
+        try {
+          const probe = await probeSshMultiplexer(conn);
+          if (probe.supported && probe.sessions.length > 0) {
+            setSessionPickerConn(conn);
+            setSessionPickerProbe(probe);
+            setSessionPickerOpen(true);
+            return;
+          }
+        } catch {
+          // If probe fails (e.g. host down or auth required in PTY), proceed to startSshConnection
+        }
+      }
+      await startSshConnection(conn);
+    },
+    [startSshConnection],
   );
 
   const handleConnectDocker = useCallback(
@@ -4503,6 +4532,23 @@ export default function App() {
             onOpenChange={setNewSshDialogOpen}
             onSaved={(conn, autoConnect) => {
               if (autoConnect) handleConnectSsh(conn);
+            }}
+          />
+
+          <SshSessionPickerModal
+            open={sessionPickerOpen}
+            onOpenChange={setSessionPickerOpen}
+            connection={sessionPickerConn}
+            probe={sessionPickerProbe}
+            onSelect={(action, sessionName) => {
+              if (!sessionPickerConn) return;
+              const modifiedConn: SshConnection = {
+                ...sessionPickerConn,
+                multiplexerMode: action === "none" ? "none" : sessionPickerConn.multiplexerMode || "auto",
+                activeMultiplexerSession: sessionName,
+                multiplexerAction: action === "none" ? undefined : action,
+              };
+              void startSshConnection(modifiedConn);
             }}
           />
 
