@@ -321,11 +321,9 @@ function TitleTabItem({
         sortable.setItemRef(tab.id, el);
         itemRef?.(el);
       }}
-      className={`group @container relative flex h-full touch-none items-center self-stretch ${
+      className={`group @container relative flex h-full cursor-default touch-none items-center self-stretch ${
         deckLayout ? "min-w-0 w-full" : "w-56 min-w-28 shrink"
-      } ${dragging ? "opacity-40" : ""} ${
-        canDrag ? "cursor-grab active:cursor-grabbing" : ""
-      }`}
+      } ${dragging ? "opacity-40" : ""}`}
       data-tauri-drag-region="false"
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -361,9 +359,9 @@ function TitleTabItem({
           if (sortable.consumeClick()) return;
           onSelect(tab.id);
         }}
-        className={`relative flex h-7.5 min-w-0 flex-1 items-center gap-1.5 self-center rounded-md px-2.5 text-left ${
+        className={`relative flex h-7.5 min-w-0 flex-1 cursor-default items-center gap-1.5 self-center rounded-md px-2.5 text-left ${
           closable ? "pr-7" : "pr-2.5"
-        } ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${
+        } ${
           active
             ? "bg-content/10 text-content"
             : "text-content/50 hover:bg-content/5 hover:text-content"
@@ -485,8 +483,8 @@ function GroupLabel({
       }}
       onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
-      className={`relative sticky left-0 z-20 flex h-7.5 max-w-36 shrink-0 items-center gap-1.5 self-center rounded-md px-2.5 pr-3 text-[11px] font-medium hover:brightness-110 ${
-        canDrag ? "cursor-grab touch-none active:cursor-grabbing" : ""
+      className={`relative sticky left-0 z-20 flex h-7.5 max-w-36 shrink-0 cursor-default items-center gap-1.5 self-center rounded-md px-2.5 pr-3 text-[11px] font-medium hover:brightness-110 ${
+        canDrag ? "touch-none" : ""
       }`}
       style={{
         background: `color-mix(in srgb, ${color} 20%, var(--color-background-base, #1a1a1a) 80%)`,
@@ -607,7 +605,7 @@ function TabGroupBlock({
   return (
     <div
       ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-      className={`relative flex h-full items-center gap-0.5 ${
+      className={`relative flex h-full cursor-default items-center gap-0.5 ${
         deckLayout ? "min-w-0 flex-1" : "shrink-0"
       } ${draggingGroup ? "opacity-40" : ""}`}
       data-tauri-drag-region="false"
@@ -1316,7 +1314,7 @@ function TitleBarComponent({
           ) : null}
           <div
             ref={setTabStripRef}
-            className="scrollbar-none flex h-full min-w-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden overscroll-none px-1.5"
+            className="scrollbar-none flex h-full min-w-0 cursor-default items-center gap-0.5 overflow-x-auto overflow-y-hidden overscroll-none px-1.5"
           >
             {segments.map((segment, segmentIndex) => {
               const showSegmentStart =
@@ -1388,7 +1386,7 @@ function TitleBarComponent({
                 <div
                   key={tab.id}
                   ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-                  className={`relative flex h-full items-center ${
+                  className={`relative flex h-full cursor-default items-center ${
                     deckLayout ? "w-56 min-w-28 shrink" : "shrink-0"
                   } ${draggingSegment ? "opacity-40" : ""}`}
                   data-tauri-drag-region="false"

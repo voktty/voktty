@@ -184,6 +184,11 @@ input,
   color: color-mix(in srgb, var(--color-content) 55%, transparent);
 }
 
+.workspace-surface[aria-hidden="true"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 html.is-reordering,
 html.is-reordering * {
   -webkit-user-select: none !important;
@@ -255,6 +260,13 @@ html.is-resizing * {
 [data-tauri-drag-region="false"] {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* Window drag regions use a grab cursor; keep title-bar controls on the arrow. */
+header[data-tauri-drag-region] [data-tauri-drag-region="false"],
+header[data-tauri-drag-region] [data-tauri-drag-region="false"] *,
+header[data-tauri-drag-region] button {
+  cursor: default !important;
 }
 
 .material-icon svg {
