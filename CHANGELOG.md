@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-09-01
+
 ### Added
 
 - Sidebar: group sessions into folders. Folders sit above pinned chats. Right-click a session to create a folder or add it to one, drag a session onto another to make a folder, or drag into an existing folder. Drag folders to reorder them. An open folder has a New session button that starts a chat in that folder.
@@ -430,7 +432,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.27...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.28...HEAD
+[0.1.28]: https://github.com/hardbeat920/monocode/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/hardbeat920/monocode/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/hardbeat920/monocode/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/hardbeat920/monocode/compare/v0.1.24...v0.1.25
