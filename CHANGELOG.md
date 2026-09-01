@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-09-01
+
+### Changed
+
+- Opening a project is faster. Session cards no longer compute +N/−N diffs on first paint, and the sidebar mounts a page of chats then loads more as you scroll.
+- Session history is on the rail when the window appears. Recently opened chats stay cached so clicking a card paints without waiting on disk.
+
+### Fixed
+
+- Switching tabs keeps the transcript where you left it — the turn you were reading and the scroll position.
+- Title bar tabs and window controls use the arrow pointer instead of a grab cursor.
+
 ## [0.1.26] - 2026-09-01
 
 ### Changed
@@ -410,7 +422,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.26...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.27...HEAD
+[0.1.27]: https://github.com/hardbeat920/monocode/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/hardbeat920/monocode/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/hardbeat920/monocode/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/hardbeat920/monocode/compare/v0.1.23...v0.1.24
