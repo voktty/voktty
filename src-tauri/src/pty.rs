@@ -291,27 +291,18 @@ fn spawn_unix(
                     }
                     Err(_) => break,
                 }
-            } else if pty_should_flush(acc.len(), last_emit.elapsed()) {
+            } else if pty_should_flush(acc.len(), last_emit.elapsed())
+                || !wait_readable(fd, PTY_COALESCE.saturating_sub(last_emit.elapsed()))
+            {
                 emit_pty_data(&data_app, &data_id, &acc);
                 acc.clear();
                 last_emit = Instant::now();
-                continue;
-            } else if !wait_readable(fd, PTY_COALESCE.saturating_sub(last_emit.elapsed())) {
-                emit_pty_data(&data_app, &data_id, &acc);
-                acc.clear();
-                last_emit = Instant::now();
-                continue;
             } else {
                 match file.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => acc.extend_from_slice(&buf[..n]),
                     Err(_) => break,
                 }
-            }
-            if pty_should_flush(acc.len(), last_emit.elapsed()) {
-                emit_pty_data(&data_app, &data_id, &acc);
-                acc.clear();
-                last_emit = Instant::now();
             }
         }
         emit_pty_data(&data_app, &data_id, &acc);
