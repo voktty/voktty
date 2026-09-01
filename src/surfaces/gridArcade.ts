@@ -501,6 +501,11 @@ export function createSnakeArcade() {
       };
     },
 
+    /** 0 → 1 over the first paint after mount or resize. */
+    fade() {
+      return bootAlpha();
+    },
+
     stamp(out: Float32Array, stampCols: number, stampRows: number) {
       for (let i = 0; i < body.length; i++) {
         const cell = body[i];

@@ -1,9 +1,14 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::time::Duration;
 
+use tauri::window::Color;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow, WebviewWindowBuilder};
 
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 static ALLOW_EXIT: AtomicBool = AtomicBool::new(false);
+static PAGE_REVEALED: AtomicBool = AtomicBool::new(false);
+
+const REVEAL_FALLBACK_MS: u64 = 1500;
 
 const QUIT_REQUESTED: &str = "quit_requested";
 
@@ -34,8 +39,44 @@ pub fn open_new_window(app: &AppHandle) -> Result<(), String> {
         let _ = window.set_shadow(true);
     }
 
-    window.set_focus().map_err(|err| err.to_string())?;
+    schedule_reveal_fallback(&window);
+    let _ = window.set_focus();
     Ok(())
+}
+
+/// Show after the splash has painted. Do not call this from page-load —
+/// that reveals a clear glass pane a frame before the logo is composited.
+#[tauri::command]
+pub fn reveal_launch_window(window: WebviewWindow, r: u8, g: u8, b: u8) {
+    PAGE_REVEALED.store(true, Ordering::Relaxed);
+    let _ = window.set_background_color(Some(Color(r, g, b, 255)));
+    #[cfg(target_os = "macos")]
+    crate::macos::set_launch_background(&window, r, g, b);
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+/// Desktop blur goes on only after the splash is leaving.
+#[tauri::command]
+pub fn enable_window_glass(window: WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = window.set_background_color(Some(Color(0, 0, 0, 3)));
+        crate::macos::enable_glass(&window);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+    }
+}
+
+pub fn schedule_reveal_fallback(window: &WebviewWindow) {
+    let window = window.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(REVEAL_FALLBACK_MS));
+        PAGE_REVEALED.store(true, Ordering::Relaxed);
+        let _ = window.show();
+    });
 }
 
 /// Close with a running chat hides the webview so the harness child keeps going.
@@ -71,6 +112,9 @@ pub fn show_hidden_or_open_new(app: &AppHandle) -> Result<(), String> {
 
 /// window-state can restore a window as hidden after a quit-while-hidden.
 pub fn ensure_launch_window_visible(app: &AppHandle) {
+    if !PAGE_REVEALED.load(Ordering::Relaxed) {
+        return;
+    }
     let windows: Vec<WebviewWindow> = app.webview_windows().into_values().collect();
     if windows.is_empty() {
         return;

@@ -64,8 +64,9 @@ unsafe extern "C" {
 }
 
 pub fn install(window: &WebviewWindow) {
-    prepare_glass(window);
-    apply_blur(window, BLUR_RADIUS.load(Ordering::Relaxed));
+    // Stay opaque until the splash has painted. Glass here makes the first
+    // visible frame a clear desktop smear, then the logo pops on afterwards.
+    prepare_launch(window);
     let _ = pin(window);
 
     let event_window = window.clone();
@@ -148,6 +149,37 @@ pub fn set_background_blur_radius(window: &WebviewWindow, radius: u8) {
     let radius = radius.clamp(BLUR_MIN, BLUR_MAX);
     BLUR_RADIUS.store(radius, Ordering::Relaxed);
     apply_blur(window, radius);
+}
+
+/// Solid field that matches the HTML splash, so a premature show is still
+/// the same colour as the logo screen — not a frosted desktop.
+fn prepare_launch(window: &WebviewWindow) {
+    set_launch_background(window, 23, 23, 23);
+    let Some(ns_window) = ns_window(window) else {
+        return;
+    };
+    ns_window.setHasShadow(true);
+    ns_window.invalidateShadow();
+    ns_window.setTitlebarSeparatorStyle(NSTitlebarSeparatorStyle::None);
+}
+
+pub fn set_launch_background(window: &WebviewWindow, r: u8, g: u8, b: u8) {
+    let Some(ns_window) = ns_window(window) else {
+        return;
+    };
+    ns_window.setOpaque(true);
+    ns_window.setBackgroundColor(Some(&NSColor::colorWithRed_green_blue_alpha(
+        r as f64 / 255.0,
+        g as f64 / 255.0,
+        b as f64 / 255.0,
+        1.0,
+    )));
+}
+
+/// Turn on desktop blur after the splash is gone.
+pub fn enable_glass(window: &WebviewWindow) {
+    prepare_glass(window);
+    apply_blur(window, BLUR_RADIUS.load(Ordering::Relaxed));
 }
 
 fn prepare_glass(window: &WebviewWindow) {

@@ -193,6 +193,17 @@ describe("snake arcade", () => {
     }
   });
 
+  it("fades the board in instead of painting at full strength", () => {
+    const arcade = createSnakeArcade();
+    arcade.resize(COLS, ROWS);
+    expect(arcade.fade()).toBe(0);
+    arcade.step(FRAME_MS);
+    expect(arcade.fade()).toBeGreaterThan(0);
+    expect(arcade.fade()).toBeLessThan(1);
+    arcade.step(500);
+    expect(arcade.fade()).toBe(1);
+  });
+
   it("reboots cleanly when the window is resized", () => {
     const arcade = createSnakeArcade();
     for (const [cols, rows] of [

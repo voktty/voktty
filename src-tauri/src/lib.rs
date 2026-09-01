@@ -133,7 +133,14 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .build(),
+        )
         .manage(harness::HarnessHost::new())
         .manage(pty::PtyHost::new())
         .manage(window_transfer::WindowTransferState::new())
@@ -146,6 +153,7 @@ pub fn run() {
                 macos::install_dock_menu(app.handle());
                 if let Some(window) = app.get_webview_window("main") {
                     macos::install(&window);
+                    window::schedule_reveal_fallback(&window);
                 }
             }
             #[cfg(not(target_os = "macos"))]
@@ -153,6 +161,7 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.set_decorations(false);
                     let _ = window.set_shadow(true);
+                    window::schedule_reveal_fallback(&window);
                 }
             }
             Ok(())
@@ -266,6 +275,8 @@ pub fn run() {
             window::hide_window,
             window::destroy_window,
             window::confirm_quit,
+            window::reveal_launch_window,
+            window::enable_window_glass,
             window_transfer::stage_window_transfer,
             window_transfer::take_window_transfer,
             project_logo::save_project_logo,

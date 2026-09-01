@@ -60,8 +60,15 @@
         --background-lightness: 97%;
       }
 
-      /* Match .body-glass before index.css loads, so the window is not a
-         clear pane over the desktop while the bundle is still arriving. */
+      html,
+      body {
+        margin: 0;
+        background: var(--color-background-base);
+      }
+
+      /* Opaque cover until React paints. A glass tint here showed the
+         desktop through the splash, then sat on top of the app after
+         the logo faded. */
       #boot-splash {
         position: fixed;
         inset: 0;
@@ -71,19 +78,11 @@
         justify-content: center;
         pointer-events: none;
         background: var(--color-background-base);
+        transition: opacity 0.16s ease;
       }
 
-      html.glass-body #boot-splash {
-        background: color-mix(
-          in srgb,
-          var(--color-background-base) calc(var(--sidebar-opacity) * 100%),
-          transparent
-        );
-      }
-
-      #boot-splash.boot-splash-out img {
+      #boot-splash.boot-splash-out {
         opacity: 0;
-        transition: opacity 0.12s ease;
       }
 
       #boot-splash img {
@@ -91,7 +90,6 @@
         height: 72px;
         object-fit: contain;
         display: block;
-        transition: opacity 0.12s ease;
       }
     </style>
   </head>
@@ -100,6 +98,41 @@
       <img src="/monocode.png" alt="" />
     </div>
     <div id="root"></div>
+    <script>
+      (function () {
+        var splash = document.getElementById("boot-splash");
+        var img = splash && splash.querySelector("img");
+        function color() {
+          var bg = splash
+            ? getComputedStyle(splash).backgroundColor
+            : "rgb(23, 23, 23)";
+          var parts = bg.match(/\d+/g);
+          if (!parts || parts.length < 3) return { r: 23, g: 23, b: 23 };
+          return {
+            r: Number(parts[0]),
+            g: Number(parts[1]),
+            b: Number(parts[2]),
+          };
+        }
+        function reveal() {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              var internals = window.__TAURI_INTERNALS__;
+              if (internals && internals.invoke) {
+                var rgb = color();
+                internals.invoke("reveal_launch_window", rgb);
+              }
+            });
+          });
+        }
+        if (img && !img.complete) {
+          img.addEventListener("load", reveal, { once: true });
+          img.addEventListener("error", reveal, { once: true });
+        } else {
+          reveal();
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

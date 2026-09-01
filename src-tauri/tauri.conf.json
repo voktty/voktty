@@ -21,8 +21,9 @@
         "minHeight": 520,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
+        "visible": false,
         "transparent": true,
-        "backgroundColor": "#00000003",
+        "backgroundColor": "#171717",
         "backgroundThrottling": "throttle",
         "shadow": true
       }

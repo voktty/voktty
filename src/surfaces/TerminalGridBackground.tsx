@@ -116,7 +116,7 @@ export function TerminalGridBackground() {
       cells = Array.from({ length: needed }, (_, index) => {
         const existing = prev[index];
         if (existing) return existing;
-        return { intensity: Math.random() < 0.12 ? Math.random() * 0.35 : 0 };
+        return { intensity: 0 };
       });
       arcade.resize(cols, rows);
     };
@@ -158,9 +158,10 @@ export function TerminalGridBackground() {
       const stamp = new Float32Array(cols * rows);
       arcade.stamp(stamp, cols, rows);
 
+      const fade = arcade.fade();
       ctx.clearRect(0, 0, width, height);
       ctx.lineWidth = 1;
-      ctx.strokeStyle = `rgba(${rgb}, ${BORDER_OPACITY})`;
+      ctx.strokeStyle = `rgba(${rgb}, ${BORDER_OPACITY * fade})`;
 
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
@@ -183,7 +184,7 @@ export function TerminalGridBackground() {
                 ? PLAY_PEAK_OPACITY
                 : GAME_PEAK_OPACITY
               : PEAK_OPACITY;
-          const fillOpacity = Math.max(cell.intensity, game) * peak;
+          const fillOpacity = Math.max(cell.intensity * fade, game) * peak;
           const px = x * PITCH;
           const py = y * PITCH;
           if (fillOpacity > 0.02) {
