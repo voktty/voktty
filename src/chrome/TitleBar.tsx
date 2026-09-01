@@ -752,7 +752,7 @@ export function IconButton({
   );
 }
 
-function DevModeLabel() {
+export function DevModeLabel() {
   if (!import.meta.env.DEV) return null;
   return (
     <span
@@ -761,6 +761,15 @@ function DevModeLabel() {
     >
       Development
     </span>
+  );
+}
+
+/** Flex spacer that keeps the Development badge next to the visit arrows. */
+export function DevModeSlot() {
+  return (
+    <div className="flex min-w-0 flex-1 items-center justify-end">
+      <DevModeLabel />
+    </div>
   );
 }
 
@@ -782,33 +791,30 @@ export function TabVisitNav({
   panelLabel?: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center">
-      <DevModeLabel />
-      <div className="flex shrink-0 items-center">
+    <div className="flex shrink-0 items-center">
+      <IconButton
+        label={`Back (${MOD}[)`}
+        disabled={!canGoBack}
+        onClick={onGoBack}
+      >
+        <ChevronLeft className="size-3.5" strokeWidth={1.75} />
+      </IconButton>
+      <IconButton
+        label={`Forward (${MOD}])`}
+        disabled={!canGoForward}
+        onClick={onGoForward}
+      >
+        <ChevronRight className="size-3.5" strokeWidth={1.75} />
+      </IconButton>
+      {onTogglePanel ? (
         <IconButton
-          label={`Back (${MOD}[)`}
-          disabled={!canGoBack}
-          onClick={onGoBack}
+          label={panelLabel}
+          active={panelActive}
+          onClick={onTogglePanel}
         >
-          <ChevronLeft className="size-3.5" strokeWidth={1.75} />
+          <PanelLeft className="size-3.5" strokeWidth={1.75} />
         </IconButton>
-        <IconButton
-          label={`Forward (${MOD}])`}
-          disabled={!canGoForward}
-          onClick={onGoForward}
-        >
-          <ChevronRight className="size-3.5" strokeWidth={1.75} />
-        </IconButton>
-        {onTogglePanel ? (
-          <IconButton
-            label={panelLabel}
-            active={panelActive}
-            onClick={onTogglePanel}
-          >
-            <PanelLeft className="size-3.5" strokeWidth={1.75} />
-          </IconButton>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   );
 }
