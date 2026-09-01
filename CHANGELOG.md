@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Check for Updates lives in the app menu — next to Settings on macOS and in the File menu elsewhere — so you can check anytime; Settings → General has it too.
+- Sidebar: pin a session from the context menu to keep it at the top until you unpin it.
 
 ### Changed
 

@@ -3,6 +3,7 @@ import {
   historyWithLiveSessions,
   filterSessionsByArchive,
   filterSessionsByQuery,
+  mergeHistorySummary,
   mergeProjectHistorySummary,
   replaceProjectHistory,
 } from "./sessionHistory";
@@ -234,5 +235,52 @@ describe("mergeProjectHistorySummary", () => {
     );
     expect(next.map((row) => row.id).sort()).toEqual(["a1", "b1"]);
     expect(next.find((row) => row.id === "a1")?.cwd).toBe("/tmp/project-b");
+  });
+});
+
+describe("pinned sessions", () => {
+  it("keeps pinned sessions above newer unpinned ones", () => {
+    const current = [
+      summary("new", "/tmp/project-a", 20),
+      { ...summary("pin", "/tmp/project-a", 5), pinned: true },
+    ];
+    const next = mergeHistorySummary(
+      current,
+      summary("new", "/tmp/project-a", 30),
+    );
+    expect(next.map((row) => row.id)).toEqual(["pin", "new"]);
+  });
+
+  it("preserves pin when an incoming summary omits it", () => {
+    const current = [
+      { ...summary("pin", "/tmp/project-a", 5), pinned: true },
+    ];
+    const next = mergeHistorySummary(
+      current,
+      summary("pin", "/tmp/project-a", 9),
+    );
+    expect(next[0]).toMatchObject({ id: "pin", pinned: true, updatedAt: 9 });
+  });
+
+  it("returns an unpinned session to recency order", () => {
+    const current = [
+      { ...summary("pin", "/tmp/project-a", 5), pinned: true },
+      summary("new", "/tmp/project-a", 20),
+    ];
+    const next = mergeHistorySummary(current, {
+      ...summary("pin", "/tmp/project-a", 5),
+      pinned: false,
+    });
+    expect(next.map((row) => row.id)).toEqual(["new", "pin"]);
+    expect(next.find((row) => row.id === "pin")?.pinned).toBe(false);
+  });
+
+  it("sorts pinned history to the top even without a live inject", () => {
+    const history = [
+      summary("new", "/tmp/project-a", 20),
+      { ...summary("pin", "/tmp/project-a", 5), pinned: true },
+    ];
+    const rows = historyWithLiveSessions(history, [], "/tmp/project-a");
+    expect(rows.map((row) => row.id)).toEqual(["pin", "new"]);
   });
 });

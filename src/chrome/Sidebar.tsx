@@ -4,12 +4,14 @@ import {
   GitBranch,
   Inbox,
   ListFilter,
+  Pin,
   Plus,
   Search,
   Settings,
   StickyNote,
 } from "./icons";
 import {
+  Fragment,
   memo,
   useEffect,
   useRef,
@@ -38,6 +40,7 @@ import {
 import type { PaneEdge } from "../lib/layout";
 import { suppressTextSelection } from "../lib/drag";
 import {
+  compareSessionSummaries,
   filterSessionsByArchive,
   filterSessionsByQuery,
 } from "../lib/sessionHistory";
@@ -144,6 +147,7 @@ type Props = {
   ) => void;
   onRenameSession?: (sessionId: string, title: string) => void;
   onArchiveSession?: (sessionId: string, archived: boolean) => void;
+  onPinSession?: (sessionId: string, pinned: boolean) => void;
   onDeleteSession?: (sessionId: string) => void;
   onOpenFile: (path: string) => void;
   onOpenTerminal?: (cwd: string) => void;
@@ -205,6 +209,7 @@ function SidebarComponent({
   onPlaceSessionOnPane,
   onRenameSession,
   onArchiveSession,
+  onPinSession,
   onDeleteSession,
   onOpenFile,
   onOpenTerminal,
@@ -304,23 +309,25 @@ function SidebarComponent({
   // Revisits render straight from cache, so this is only ever true the first
   // time a project is opened.
   const pendingFirstLoad = pending && sessions.length === 0;
-  const visibleSessions = filterSessionsByQuery(
-    filterSessionsByStatus(
-      filterSessionsByTime(
-        filterSessionsByHarness(
-          filterSessionsByArchive(sessions, sessionFilters.showArchived),
-          sessionFilters.hiddenHarnesses,
+  const visibleSessions = [
+    ...filterSessionsByQuery(
+      filterSessionsByStatus(
+        filterSessionsByTime(
+          filterSessionsByHarness(
+            filterSessionsByArchive(sessions, sessionFilters.showArchived),
+            sessionFilters.hiddenHarnesses,
+          ),
+          sessionFilters.time,
+          now,
         ),
-        sessionFilters.time,
-        now,
+        sessionFilters.status,
+        busySessionIds,
+        approvalSessionIds,
+        unseenFinishedIds,
       ),
-      sessionFilters.status,
-      busySessionIds,
-      approvalSessionIds,
-      unseenFinishedIds,
+      deckLayout || searchOpen ? searchQuery : "",
     ),
-    deckLayout || searchOpen ? searchQuery : "",
-  );
+  ].sort(compareSessionSummaries);
   const sessionHarnesses = harnessesInSessions(sessions);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
   const searchNarrowed = Boolean(
@@ -393,6 +400,15 @@ function SidebarComponent({
     ? sessions.find((session) => session.id === sessionMenu.sessionId)
     : undefined;
   const sessionMenuItems: ExplorerMenuItem[] = [
+    ...(onPinSession
+      ? [
+          {
+            kind: "item" as const,
+            id: "pin",
+            label: menuSession?.pinned ? "Unpin" : "Pin",
+          },
+        ]
+      : []),
     ...(onRenameSession
       ? [
           {
@@ -405,7 +421,7 @@ function SidebarComponent({
       : []),
     ...(onArchiveSession || onDeleteSession
       ? [
-          ...(onRenameSession ? [{ kind: "sep" as const }] : []),
+          ...(onPinSession || onRenameSession ? [{ kind: "sep" as const }] : []),
           ...(onArchiveSession
             ? [
                 {
@@ -434,7 +450,14 @@ function SidebarComponent({
     sessionId: string,
     e: ReactMouseEvent<HTMLButtonElement>,
   ) => {
-    if (!onRenameSession && !onArchiveSession && !onDeleteSession) return;
+    if (
+      !onPinSession &&
+      !onRenameSession &&
+      !onArchiveSession &&
+      !onDeleteSession
+    ) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     setFilterMenu(null);
@@ -445,7 +468,12 @@ function SidebarComponent({
     if (!sessionMenu) return;
     const sessionId = sessionMenu.sessionId;
     const archived = !!menuSession?.archived;
+    const pinned = !!menuSession?.pinned;
     setSessionMenu(null);
+    if (id === "pin") {
+      onPinSession?.(sessionId, !pinned);
+      return;
+    }
     if (id === "rename") {
       setRenamingSessionId(sessionId);
       return;
@@ -834,53 +862,75 @@ function SidebarComponent({
                   )
                 ) : (
                   <ul className="flex flex-col gap-0.5 p-1.5">
-                    {visibleSessions.map((session) => (
-                      <li key={session.id}>
-                        {renamingSessionId === session.id && onRenameSession ? (
-                          <SessionRenameRow
-                            session={session}
-                            isActive={session.id === activeSessionId}
-                            busy={busySessionIds.has(session.id)}
-                            needsApproval={approvalSessionIds.has(session.id)}
-                            onCommit={(title) => {
-                              onRenameSession(session.id, title);
-                              setRenamingSessionId(null);
-                            }}
-                            onCancel={() => setRenamingSessionId(null)}
-                          />
-                        ) : (
-                          <SessionCard
-                            session={session}
-                            isActive={session.id === activeSessionId}
-                            busy={busySessionIds.has(session.id)}
-                            done={unseenFinishedIds.has(session.id)}
-                            needsApproval={approvalSessionIds.has(session.id)}
-                            now={now}
-                            additions={sessionDiffs[session.id]?.additions ?? 0}
-                            deletions={sessionDiffs[session.id]?.deletions ?? 0}
-                            onSelect={onSelectSession}
-                            onPlaceOnPane={onPlaceSessionOnPane}
-                            onContextMenu={
-                              onRenameSession ||
-                              onArchiveSession ||
-                              onDeleteSession
-                                ? (e) => onSessionContextMenu(session.id, e)
-                                : undefined
-                            }
-                            onRename={
-                              onRenameSession
-                                ? () => setRenamingSessionId(session.id)
-                                : undefined
-                            }
-                            onDelete={
-                              onDeleteSession
-                                ? () => onDeleteSession(session.id)
-                                : undefined
-                            }
-                          />
-                        )}
-                      </li>
-                    ))}
+                    {visibleSessions.map((session, index) => {
+                      const prev = visibleSessions[index - 1];
+                      const splitPinned = !!prev?.pinned && !session.pinned;
+                      return (
+                        <Fragment key={session.id}>
+                          {splitPinned ? (
+                            <li aria-hidden className="mx-1 my-1 list-none">
+                              <div className="h-px bg-content/10" />
+                            </li>
+                          ) : null}
+                          <li>
+                            {renamingSessionId === session.id &&
+                            onRenameSession ? (
+                              <SessionRenameRow
+                                session={session}
+                                isActive={session.id === activeSessionId}
+                                busy={busySessionIds.has(session.id)}
+                                needsApproval={approvalSessionIds.has(
+                                  session.id,
+                                )}
+                                onCommit={(title) => {
+                                  onRenameSession(session.id, title);
+                                  setRenamingSessionId(null);
+                                }}
+                                onCancel={() => setRenamingSessionId(null)}
+                              />
+                            ) : (
+                              <SessionCard
+                                session={session}
+                                isActive={session.id === activeSessionId}
+                                busy={busySessionIds.has(session.id)}
+                                done={unseenFinishedIds.has(session.id)}
+                                needsApproval={approvalSessionIds.has(
+                                  session.id,
+                                )}
+                                now={now}
+                                additions={
+                                  sessionDiffs[session.id]?.additions ?? 0
+                                }
+                                deletions={
+                                  sessionDiffs[session.id]?.deletions ?? 0
+                                }
+                                onSelect={onSelectSession}
+                                onPlaceOnPane={onPlaceSessionOnPane}
+                                onContextMenu={
+                                  onPinSession ||
+                                  onRenameSession ||
+                                  onArchiveSession ||
+                                  onDeleteSession
+                                    ? (e) =>
+                                        onSessionContextMenu(session.id, e)
+                                    : undefined
+                                }
+                                onRename={
+                                  onRenameSession
+                                    ? () => setRenamingSessionId(session.id)
+                                    : undefined
+                                }
+                                onDelete={
+                                  onDeleteSession
+                                    ? () => onDeleteSession(session.id)
+                                    : undefined
+                                }
+                              />
+                            )}
+                          </li>
+                        </Fragment>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -1363,8 +1413,16 @@ function SessionCard({
           )}
         </span>
       </span>
-      <span className="mt-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
-        {title}
+      <span className="mt-1 flex min-w-0 items-center gap-1.5">
+        {session.pinned ? (
+          <Pin
+            className="size-3 shrink-0 text-content/45"
+            strokeWidth={1.75}
+          />
+        ) : null}
+        <span className="min-w-0 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
+          {title}
+        </span>
       </span>
       <span className="mt-1 flex items-center gap-2">
         {gitLabel ? (

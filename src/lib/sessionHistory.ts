@@ -9,6 +9,15 @@ export type SessionGitHint = {
   branch?: string;
 };
 
+export function compareSessionSummaries(
+  a: SessionSummary,
+  b: SessionSummary,
+): number {
+  const pin = Number(!!b.pinned) - Number(!!a.pinned);
+  if (pin !== 0) return pin;
+  return b.updatedAt - a.updatedAt || a.id.localeCompare(b.id);
+}
+
 export function mergeHistorySummary(
   current: SessionSummary[],
   summary: SessionSummary,
@@ -17,9 +26,10 @@ export function mergeHistorySummary(
   const next = {
     ...summary,
     archived: summary.archived ?? previous?.archived,
+    pinned: summary.pinned ?? previous?.pinned,
   };
   return [next, ...current.filter((entry) => entry.id !== summary.id)].sort(
-    (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id),
+    compareSessionSummaries,
   );
 }
 
@@ -138,5 +148,5 @@ export function historyWithLiveSessions(
     };
     rows = mergeHistorySummary(rows, summaryFromSession(session, sessionHint));
   }
-  return rows;
+  return [...rows].sort(compareSessionSummaries);
 }

@@ -114,6 +114,8 @@ pub struct SessionSummary {
     pub updated_at: i64,
     #[serde(default)]
     pub archived: bool,
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,6 +253,17 @@ pub fn session_set_archived(
     validate_id(&session_id, "session")?;
     let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
     set_archived(&conn, &session_id, archived).map_err(|e| e.to_string())
+}
+
+#[tauri::command(async)]
+pub fn session_set_pinned(
+    store: State<'_, SessionStore>,
+    session_id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    validate_id(&session_id, "session")?;
+    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    set_pinned(&conn, &session_id, pinned).map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -467,6 +480,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         ("archived", "INTEGER NOT NULL DEFAULT 0"),
         ("worktree_cwd", "TEXT"),
         ("has_user_message", "INTEGER NOT NULL DEFAULT 0"),
+        ("pinned", "INTEGER NOT NULL DEFAULT 0"),
     ] {
         ensure_session_column(conn, column, decl)?;
     }
@@ -500,6 +514,23 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         crate::notes::ensure_notes_table(conn)?;
         conn.execute(
             "INSERT INTO schema_migrations (version, applied_at) VALUES (10, ?1)",
+            params![now_millis()],
+        )?;
+    }
+    if current < 11 {
+        // Pinning is a listing column, so it has to live in the covering
+        // index with `archived`. Selecting it off the table would walk past
+        // `blocks_json` on every project switch.
+        ensure_column(conn, "pinned", "INTEGER NOT NULL DEFAULT 0")?;
+        conn.execute_batch(
+            "DROP INDEX IF EXISTS sessions_cwd_cover_idx;
+             CREATE INDEX IF NOT EXISTS sessions_cwd_cover_idx
+               ON sessions (cwd, has_user_message, updated_at DESC, id, harness,
+                            model, runtime_mode, title, provider_session_id,
+                            created_at, branch, archived, pinned);",
+        )?;
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (11, ?1)",
             params![now_millis()],
         )?;
     }
@@ -549,26 +580,30 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
 
     let has_user_message = has_user_block(&session.blocks);
 
-    let existing: Option<(i64, i64, String, i64)> = conn
+    let existing: Option<(i64, i64, String, i64, i64)> = conn
         .query_row(
-            "SELECT created_at, updated_at, blocks_json, archived FROM sessions WHERE id = ?1",
+            "SELECT created_at, updated_at, blocks_json, archived, pinned FROM sessions WHERE id = ?1",
             params![session.id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
         )
         .optional()?;
     let created_at = existing
         .as_ref()
-        .map(|(value, _, _, _)| *value)
+        .map(|(value, _, _, _, _)| *value)
         .unwrap_or(now);
     let updated_at = match &existing {
-        Some((_, prev_updated, prev_blocks, _)) if json_eq(prev_blocks, &session.blocks) => {
+        Some((_, prev_updated, prev_blocks, _, _)) if json_eq(prev_blocks, &session.blocks) => {
             *prev_updated
         }
         _ => now,
     };
     let archived = existing
         .as_ref()
-        .map(|(_, _, _, value)| *value != 0)
+        .map(|(_, _, _, value, _)| *value != 0)
+        .unwrap_or(false);
+    let pinned = existing
+        .as_ref()
+        .map(|(_, _, _, _, value)| *value != 0)
         .unwrap_or(false);
 
     conn.execute(
@@ -627,6 +662,7 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         created_at,
         updated_at,
         archived,
+        pinned,
     })
 }
 
@@ -880,7 +916,7 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
     let git = crate::fs::git_info_for(&crate::fs::expand_home(cwd));
     let mut statement = conn.prepare(
         "SELECT id, cwd, harness, model, runtime_mode, title, provider_session_id,
-                created_at, updated_at, branch, archived
+                created_at, updated_at, branch, archived, pinned
          FROM sessions
          WHERE cwd = ?1
            AND has_user_message = 1
@@ -889,6 +925,7 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
     let rows = statement.query_map(params![cwd], |row| {
         let stored_branch: Option<String> = row.get(9)?;
         let archived: i64 = row.get(10)?;
+        let pinned: i64 = row.get(11)?;
         Ok(SessionSummary {
             id: row.get(0)?,
             cwd: row.get(1)?,
@@ -904,6 +941,7 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
             additions: 0,
             deletions: 0,
             archived: archived != 0,
+            pinned: pinned != 0,
         })
     })?;
     rows.collect()
@@ -939,6 +977,14 @@ fn set_archived(conn: &Connection, session_id: &str, archived: bool) -> rusqlite
     conn.execute(
         "UPDATE sessions SET archived = ?1 WHERE id = ?2",
         params![if archived { 1 } else { 0 }, session_id],
+    )?;
+    Ok(())
+}
+
+fn set_pinned(conn: &Connection, session_id: &str, pinned: bool) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE sessions SET pinned = ?1 WHERE id = ?2",
+        params![if pinned { 1 } else { 0 }, session_id],
     )?;
     Ok(())
 }
@@ -1113,7 +1159,7 @@ mod tests {
             .query_row(
                 "EXPLAIN QUERY PLAN
                  SELECT id, cwd, harness, model, runtime_mode, title, provider_session_id,
-                        created_at, updated_at, branch, archived
+                        created_at, updated_at, branch, archived, pinned
                  FROM sessions
                  WHERE cwd = ?1
                    AND has_user_message = 1
@@ -1364,6 +1410,49 @@ mod tests {
         set_archived(&conn, "s1", false).unwrap();
         let listed = list_by_project(&conn, "/tmp/a").unwrap();
         assert!(!listed[0].archived);
+    }
+
+    #[test]
+    fn migration_v11_adds_pinned_column() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM schema_migrations WHERE version = 11",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+        let pinned: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'pinned'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(pinned, 1);
+    }
+
+    #[test]
+    fn pin_round_trips_and_survives_upsert() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let conn = store.conn.lock().unwrap();
+        upsert_session(&conn, &sample("s1", "/tmp/a", "First")).unwrap();
+        set_pinned(&conn, "s1", true).unwrap();
+        let listed = list_by_project(&conn, "/tmp/a").unwrap();
+        assert!(listed[0].pinned);
+        let mut next = sample("s1", "/tmp/a", "Updated");
+        next.blocks = json!([
+            { "id": "b1", "role": "user", "text": "hello" },
+            { "id": "b2", "role": "assistant", "text": "world" }
+        ]);
+        let summary = upsert_session(&conn, &next).unwrap();
+        assert!(summary.pinned);
+        assert_eq!(summary.title, "Updated");
+        set_pinned(&conn, "s1", false).unwrap();
+        let listed = list_by_project(&conn, "/tmp/a").unwrap();
+        assert!(!listed[0].pinned);
     }
 
     #[test]

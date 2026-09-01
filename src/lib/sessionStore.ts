@@ -28,6 +28,7 @@ export type SessionSummary = {
   createdAt: number;
   updatedAt: number;
   archived?: boolean;
+  pinned?: boolean;
 };
 
 type SessionRecord = {
@@ -199,6 +200,13 @@ export async function setSessionArchived(
   await invoke<void>("session_set_archived", { sessionId, archived });
 }
 
+export async function setSessionPinned(
+  sessionId: string,
+  pinned: boolean,
+): Promise<void> {
+  await invoke<void>("session_set_pinned", { sessionId, pinned });
+}
+
 export async function replaceInFlightSessions(
   refs: { sessionId: string; cwd: string }[],
 ): Promise<void> {
@@ -282,7 +290,8 @@ function normalizeSummary(summary: SessionSummary): SessionSummary {
     ...(summary.repo ? { repo: summary.repo } : {}),
     additions: summary.additions ?? 0,
     deletions: summary.deletions ?? 0,
-    ...(summary.archived ? { archived: true } : {}),
+    archived: summary.archived || undefined,
+    pinned: summary.pinned || undefined,
   };
 }
 

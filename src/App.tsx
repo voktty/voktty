@@ -221,6 +221,7 @@ import {
   replaceInFlightSessions,
   saveWorkspaceSnapshot,
   setSessionArchived,
+  setSessionPinned,
   shouldPersistSession,
   upsertSession,
   type SessionSummary,
@@ -2552,6 +2553,30 @@ export default function App({
     [],
   );
 
+  const onPinHistorySession = useCallback(
+    async (sessionId: string, pinned: boolean) => {
+      const open = sessionsRef.current.find(
+        (session) => session.id === sessionId,
+      );
+      if (open && shouldPersistSession(open)) {
+        await upsertSession(open).catch(() => undefined);
+      }
+      await setSessionPinned(sessionId, pinned).catch(() => undefined);
+      setHistory((current) => {
+        const existing = current.find((entry) => entry.id === sessionId);
+        if (existing) {
+          return mergeProjectHistorySummary(current, { ...existing, pinned });
+        }
+        if (!open) return current;
+        return mergeProjectHistorySummary(current, {
+          ...summaryFromSession(open),
+          pinned,
+        });
+      });
+    },
+    [],
+  );
+
   const onDeleteHistorySession = useCallback(
     async (sessionId: string) => {
       const open = sessionsRef.current.find(
@@ -4166,6 +4191,7 @@ export default function App({
         onPlaceSessionOnPane={onPlaceSessionOnPane}
         onRenameSession={onRenameHistorySession}
         onArchiveSession={onArchiveHistorySession}
+        onPinSession={onPinHistorySession}
         onDeleteSession={onDeleteHistorySession}
         onOpenFile={onOpenFile}
         onOpenTerminal={(cwd) => onOpenTerminal(cwd)}
