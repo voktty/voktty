@@ -80,6 +80,7 @@ struct RemoteSession {
     child: Mutex<Child>,
     stdin: Mutex<BufWriter<ChildStdin>>,
     routing: Arc<RemoteRouting>,
+    connection: RemoteSshConnection,
 }
 
 #[derive(Clone)]
@@ -324,7 +325,10 @@ pub async fn remote_pty_open(
             "cols": cols,
             "rows": rows,
             "cwd": cwd,
-            "blocks": blocks.unwrap_or(false)
+            "blocks": blocks.unwrap_or(false),
+            "multiplexerMode": session.connection.multiplexer_mode,
+            "tmuxSessionName": session.connection.active_multiplexer_session.as_deref().or(session.connection.tmux_session_name.as_deref()),
+            "multiplexerAction": session.connection.multiplexer_action,
         }),
     };
     let request_session = session.clone();
@@ -1572,6 +1576,7 @@ fn start_helper(
         child: Mutex::new(child),
         stdin: Mutex::new(BufWriter::new(stdin)),
         routing,
+        connection: connection.clone(),
     })
 }
 

@@ -16,11 +16,20 @@ const DEFAULT_AGENTS: &[&str] = &[
     "aider",
     "cursor",
     "antigravity",
+    "agy",
     "deepseek",
     "qwen",
     "mistral",
     "perplexity",
 ];
+
+fn normalize_agent_name(name: &str) -> &str {
+    if name == "agy" {
+        "antigravity"
+    } else {
+        name
+    }
+}
 use crate::identity::{LEGACY_AGENT_MARKER, VOKTTY_AGENT_MARKER};
 
 // OSC 777 marker our agent hooks emit. Legacy 3-field `notify;Voktty;<event>`
@@ -207,7 +216,7 @@ impl AgentDetector {
                     if !self.agents.iter().any(|a| a == name) {
                         return;
                     }
-                    (name, &tail[i + 1..])
+                    (normalize_agent_name(name), &tail[i + 1..])
                 }
                 None => ("claude", tail),
             };
@@ -309,7 +318,7 @@ impl AgentDetector {
                     || clean_base.ends_with(&format!("-{a_low}"))
                     || clean_base.ends_with(&format!("_{a_low}"))
             }) {
-                return Some(agent.clone());
+                return Some(normalize_agent_name(agent).to_string());
             }
         }
         None
@@ -363,6 +372,16 @@ mod tests {
                 vec![started(agent)]
             );
         }
+        let mut d_agy = AgentDetector::new();
+        assert_eq!(
+            run(&mut d_agy, &osc("133;C;agy.exe")),
+            vec![started("antigravity")]
+        );
+        let mut d_agy_raw = AgentDetector::new();
+        assert_eq!(
+            run(&mut d_agy_raw, &osc("133;C;agy --help")),
+            vec![started("antigravity")]
+        );
     }
 
     #[test]

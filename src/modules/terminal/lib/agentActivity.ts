@@ -27,6 +27,7 @@ export const KNOWN_AGENTS = [
   "aider",
   "cursor",
   "antigravity",
+  "agy",
   "deepseek",
   "qwen",
   "mistral",
@@ -41,6 +42,20 @@ export function detectAgentFromName(raw: string): string | null {
     const clean = w
       .replace(/\.(cmd|exe|ps1|bat|js|mjs|cjs|sh|py)$/, "")
       .replace(/^[_-]+|[_-]+$/g, "");
+    if (
+      clean === "agy" ||
+      clean.startsWith("agy-") ||
+      clean.startsWith("agy_") ||
+      clean.endsWith("-agy") ||
+      clean.endsWith("_agy") ||
+      clean === "antigravity" ||
+      clean.startsWith("antigravity-") ||
+      clean.startsWith("antigravity_") ||
+      clean.endsWith("-antigravity") ||
+      clean.endsWith("_antigravity")
+    ) {
+      return "antigravity";
+    }
     for (const known of KNOWN_AGENTS) {
       if (
         clean === known ||
@@ -49,7 +64,7 @@ export function detectAgentFromName(raw: string): string | null {
         clean.endsWith(`-${known}`) ||
         clean.endsWith(`_${known}`)
       ) {
-        return known;
+        return known === "agy" ? "antigravity" : known;
       }
     }
   }

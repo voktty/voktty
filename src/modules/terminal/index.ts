@@ -1,6 +1,7 @@
 export * from "./copilot";
 export {
   type AgentTabStatus,
+  detectAgentFromName,
   tabAgentStatus,
   useAgentActivityStore,
 } from "./lib/agentActivity";

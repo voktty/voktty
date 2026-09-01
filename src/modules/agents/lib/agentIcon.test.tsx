@@ -6,6 +6,8 @@ describe("agentIconKind", () => {
     ["Claude Code", "claude"],
     ["codex.exe", "codex"],
     ["antigravity", "antigravity"],
+    ["agy", "antigravity"],
+    ["agy.exe", "antigravity"],
     ["kimi-code", "kimi"],
     ["deepseek-cli", "deepseek"],
     ["qwen", "qwen"],
