@@ -2750,7 +2750,18 @@ export const es: TranslationSchema = {
       port: "Puerto",
       user: "Usuario",
       identityFile: "Clave Privada (Identity File)",
-      extraArgs: "Argumentos adicionales",
+      extraArgs: "Parámetros y Opciones Avanzadas SSH",
+      extraArgsHint: "OpenSSH -o y flags",
+      extraArgsPlaceholder:
+        "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o HostKeyAlias=mihost -o LogLevel=ERROR",
+      extraArgsDescription:
+        "Flags y opciones -o de OpenSSH (ej. para contenedores Docker en el mismo host, proxies o claves personalizadas).",
+      quickPresets: "Opciones rápidas:",
+      presetBypassHostKey: "Bypass Host Check",
+      presetHostKeyAlias: "HostKeyAlias",
+      presetLogLevelError: "Silencioso (LogLevel ERROR)",
+      presetForwardAgent: "Reenviar agente (-A)",
+      presetCompression: "Compresión (-C)",
       initialDirectory: "Directorio remoto inicial",
       initialDirectoryDescription:
         "Inicia el espacio, el explorador y el terminal en este directorio. Déjalo vacío para usar el directorio personal remoto.",

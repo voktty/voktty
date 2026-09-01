@@ -5,6 +5,21 @@ export function parseSshConfig(content: string): SshConnection[] {
   const lines = content.split(/\r?\n/);
 
   let current: Partial<SshConnection> | null = null;
+  let currentExtraOpts: string[] = [];
+
+  const finalize = () => {
+    if (current && (current.host || current.name)) {
+      if (currentExtraOpts.length > 0) {
+        const combined = current.extraArgs
+          ? `${current.extraArgs} ${currentExtraOpts.join(" ")}`
+          : currentExtraOpts.join(" ");
+        current.extraArgs = combined.trim();
+      }
+      connections.push(finalizeConnection(current));
+    }
+    current = null;
+    currentExtraOpts = [];
+  };
 
   for (let rawLine of lines) {
     const commentIdx = rawLine.indexOf("#");
@@ -14,48 +29,77 @@ export function parseSshConfig(content: string): SshConnection[] {
     const line = rawLine.trim();
     if (!line) continue;
 
-    const parts = line.split(/\s+/);
-    if (parts.length < 2) continue;
+    // Parse key and value, supporting both space and '=' separators
+    let key = "";
+    let value = "";
+    const eqIdx = line.indexOf("=");
+    const spaceIdx = line.search(/\s/);
 
-    const key = parts[0].toLowerCase();
-    const value = parts.slice(1).join(" ").trim();
+    if (eqIdx !== -1 && (spaceIdx === -1 || eqIdx < spaceIdx)) {
+      key = line.slice(0, eqIdx).trim();
+      value = line.slice(eqIdx + 1).trim();
+    } else if (spaceIdx !== -1) {
+      key = line.slice(0, spaceIdx).trim();
+      value = line.slice(spaceIdx + 1).trim().replace(/^=\s*/, "");
+    } else {
+      continue;
+    }
 
-    if (key === "host") {
+    if (!key || !value) continue;
+
+    // Strip surrounding quotes from value if present
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    const keyLower = key.toLowerCase();
+
+    if (keyLower === "host") {
       // Ignore wildcards
       if (value === "*" || value.includes("*") || value.includes("?")) {
-        if (current?.host) {
-          connections.push(finalizeConnection(current));
-        }
-        current = null;
+        finalize();
         continue;
       }
 
-      if (current && (current.host || current.name)) {
-        connections.push(finalizeConnection(current));
-      }
+      finalize();
 
+      const hostAlias = value.split(/\s+/)[0];
       current = {
-        id: `ssh-config-${value}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        name: value,
-        host: value,
+        id: `ssh-config-${hostAlias}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: hostAlias,
+        host: hostAlias,
       };
+      currentExtraOpts = [];
+    } else if (keyLower === "match") {
+      // Ignore match blocks
+      finalize();
     } else if (current) {
-      if (key === "hostname") {
+      if (keyLower === "hostname") {
         current.host = value;
-      } else if (key === "user") {
+      } else if (keyLower === "user") {
         current.user = value;
-      } else if (key === "port") {
+      } else if (keyLower === "port") {
         const p = parseInt(value, 10);
         if (!Number.isNaN(p) && p > 0) current.port = p;
-      } else if (key === "identityfile") {
+      } else if (keyLower === "identityfile") {
         current.identityFile = value;
+      } else if (keyLower === "extraargs" || keyLower === "extra_args") {
+        currentExtraOpts.push(value);
+      } else {
+        // Any other SSH config directive (HostKeyAlias, StrictHostKeyChecking, UserKnownHostsFile, LogLevel, ProxyJump, etc.)
+        if (value.includes(" ") && !value.startsWith('"')) {
+          currentExtraOpts.push(`-o "${key}=${value}"`);
+        } else {
+          currentExtraOpts.push(`-o ${key}=${value}`);
+        }
       }
     }
   }
 
-  if (current && (current.host || current.name)) {
-    connections.push(finalizeConnection(current));
-  }
+  finalize();
 
   return connections;
 }
@@ -69,5 +113,6 @@ function finalizeConnection(c: Partial<SshConnection>): SshConnection {
     port: c.port,
     identityFile: c.identityFile,
     extraArgs: c.extraArgs,
+    initialDirectory: c.initialDirectory,
   };
 }
