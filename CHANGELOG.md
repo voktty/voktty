@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-09-01
+
 ### Added
 
 - Handoff: a card-exchange icon next to Copy and Second opinion on a finished turn opens another provider in a split pane. A composer card holds the recap so you can add context before sending. The original session keeps its model.
@@ -374,7 +376,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.23...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.24...HEAD
+[0.1.24]: https://github.com/hardbeat920/monocode/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/hardbeat920/monocode/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/hardbeat920/monocode/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/hardbeat920/monocode/compare/v0.1.20...v0.1.21
