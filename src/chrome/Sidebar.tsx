@@ -1,6 +1,9 @@
 import {
   Check,
+  ChevronDown,
+  ChevronRight,
   CircleAlert,
+  Folder,
   GitBranch,
   Inbox,
   ListFilter,
@@ -11,7 +14,6 @@ import {
   StickyNote,
 } from "./icons";
 import {
-  Fragment,
   memo,
   useEffect,
   useRef,
@@ -33,10 +35,7 @@ import { resolveModel } from "../lib/models";
 import { projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
-import {
-  paneDropFromPoint,
-  setExternalPaneDrop,
-} from "../lib/paneDrop";
+import { paneDropFromPoint, setExternalPaneDrop } from "../lib/paneDrop";
 import type { PaneEdge } from "../lib/layout";
 import { suppressTextSelection } from "../lib/drag";
 import {
@@ -44,6 +43,28 @@ import {
   filterSessionsByArchive,
   filterSessionsByQuery,
 } from "../lib/sessionHistory";
+import {
+  addSessionToFolder,
+  applySessionListDrop,
+  buildSessionList,
+  createFolderWithSessions,
+  dissolveFolder,
+  folderAccent,
+  folderContaining,
+  folderShellFill,
+  loadSessionFolders,
+  mergeFolderSessionSummaries,
+  pruneSessionFolders,
+  removeSessionFromFolder,
+  renameFolder,
+  reorderSessionFolders,
+  saveSessionFolders,
+  setFolderCollapsed,
+  setFolderColor,
+  ungroupedSessions,
+  type SessionFolder,
+  type SessionListDropTarget,
+} from "../lib/sessionFolders";
 import { SESSION_LIST_PAGE, sessionListWindow } from "../lib/sessionListWindow";
 import {
   filterSessionsByHarness,
@@ -69,6 +90,7 @@ import {
   resolveTabGroupLabel,
   resolveTabGroupLogo,
   resolveTabGroupMascot,
+  TAB_GROUP_COLORS,
 } from "../lib/tabGroups";
 import { useDragResize } from "../hooks/useDragResize";
 import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
@@ -137,6 +159,8 @@ type Props = {
   busySessionIds: Set<string>;
   approvalSessionIds: Set<string>;
   activeSessionId?: string;
+  /** Open tabs, including blank ones not yet in history. */
+  openSessions?: readonly SessionSummary[];
   status: "idle" | "error";
   /** First listing for this project has not arrived yet. */
   pending: boolean;
@@ -176,7 +200,7 @@ type Props = {
   onSelectProject?: (path: string) => void;
   onOpenProject?: () => void;
   onRemoveProject?: (path: string, options: { purgeData: boolean }) => void;
-  onNew?: () => void;
+  onNew?: () => string | void;
   onNewTerminal?: () => void;
   onSearch?: () => void;
   onOpenInbox?: () => void;
@@ -208,6 +232,7 @@ function SidebarComponent({
   busySessionIds,
   approvalSessionIds,
   activeSessionId,
+  openSessions = [],
   status,
   pending,
   onSelectSession,
@@ -284,7 +309,19 @@ function SidebarComponent({
     y: number;
     sessionId: string;
   } | null>(null);
+  const [folderMenu, setFolderMenu] = useState<{
+    x: number;
+    y: number;
+    folderId: string;
+  } | null>(null);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
+    null,
+  );
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
+  const [sessionFolders, setSessionFolders] = useState<SessionFolder[]>(() =>
+    loadSessionFolders(cwd),
+  );
+  const [sessionDrop, setSessionDrop] = useState<SessionListDropTarget | null>(
     null,
   );
   const [sessionFilters, setSessionFilters] = useState(
@@ -298,6 +335,7 @@ function SidebarComponent({
   const [sessionListLimit, setSessionListLimit] = useState(SESSION_LIST_PAGE);
   const loadMoreRef = useRef<HTMLLIElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingFolderSessionIds = useRef(new Set<string>());
   const deckLayout = layout === "deck";
   const busyIdsRef = useRef(busySessionIds);
   const focusedSessionIdRef = useRef(activeSessionId);
@@ -320,12 +358,20 @@ function SidebarComponent({
   // Revisits render straight from cache, so this is only ever true the first
   // time a project is opened.
   const pendingFirstLoad = pending && sessions.length === 0;
+  const listedSessions = mergeFolderSessionSummaries(
+    sessions,
+    openSessions,
+    sessionFolders,
+  );
   const visibleSessions = [
     ...filterSessionsByQuery(
       filterSessionsByStatus(
         filterSessionsByTime(
           filterSessionsByHarness(
-            filterSessionsByArchive(sessions, sessionFilters.showArchived),
+            filterSessionsByArchive(
+              listedSessions,
+              sessionFilters.showArchived,
+            ),
             sessionFilters.hiddenHarnesses,
           ),
           sessionFilters.time,
@@ -340,17 +386,24 @@ function SidebarComponent({
     ),
   ].sort(compareSessionSummaries);
   // Summaries for the whole project stay in `sessions` so filters still work.
-  // Only a page of cards mounts; the sentinel below asks for the next page.
-  const activeHistoryIndex = visibleSessions.findIndex(
+  // Folders sit above the ungrouped list. Only a page of ungrouped cards
+  // mounts; the sentinel below asks for the next page.
+  const ungroupedVisible = ungroupedSessions(visibleSessions, sessionFolders);
+  const activeUngroupedIndex = ungroupedVisible.findIndex(
     (session) => session.id === activeSessionId,
   );
-  const shownCount = sessionListWindow(
-    visibleSessions.length,
+  const shownUngroupedCount = sessionListWindow(
+    ungroupedVisible.length,
     sessionListLimit,
-    activeHistoryIndex,
+    activeUngroupedIndex,
   );
-  const shownSessions = visibleSessions.slice(0, shownCount);
-  const hasMoreSessions = shownCount < visibleSessions.length;
+  const shownUngrouped = ungroupedVisible.slice(0, shownUngroupedCount);
+  const sessionListEntries = buildSessionList(
+    visibleSessions,
+    sessionFolders,
+    shownUngrouped,
+  );
+  const hasMoreSessions = shownUngroupedCount < ungroupedVisible.length;
   const sessionListKey = `${cwd}\0${sessionFilters.showArchived}\0${sessionFilters.time}\0${sessionFilters.hiddenHarnesses.join(",")}\0${sessionFilters.status.working}\0${sessionFilters.status.needsApproval}\0${sessionFilters.status.done}\0${deckLayout || searchOpen ? searchQuery : ""}`;
   const sessionHarnesses = harnessesInSessions(sessions);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
@@ -364,6 +417,21 @@ function SidebarComponent({
     saveSidebarTabOrder(next);
     if (next[0]) onTabChange(next[0]);
   });
+  const visibleFolderIds = sessionListEntries.flatMap((entry) =>
+    entry.kind === "folder" ? [entry.folder.id] : [],
+  );
+  const folderSortable = useSortable(
+    visibleFolderIds,
+    (ids) => {
+      setSessionFolders((current) => {
+        const next = reorderSessionFolders(current, ids);
+        if (next === current) return current;
+        saveSessionFolders(cwd, next);
+        return next;
+      });
+    },
+    { axis: "y" },
+  );
   const visibleTabs = deckLayout
     ? tabOrder.filter((itemId) => itemId !== "inbox")
     : tabOrder.filter((itemId) => itemId !== "changes");
@@ -410,7 +478,37 @@ function SidebarComponent({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [tab, hasMoreSessions, shownCount]);
+  }, [tab, hasMoreSessions, shownUngroupedCount]);
+
+  useEffect(() => {
+    setSessionFolders(loadSessionFolders(cwd));
+    setRenamingFolderId(null);
+    setFolderMenu(null);
+    setSessionDrop(null);
+    pendingFolderSessionIds.current.clear();
+  }, [cwd]);
+
+  useEffect(() => {
+    if (pending || status === "error") return;
+    const known = new Set(sessions.map((session) => session.id));
+    for (const session of openSessions) known.add(session.id);
+    if (activeSessionId) known.add(activeSessionId);
+    for (const id of pendingFolderSessionIds.current) {
+      known.add(id);
+      if (
+        sessions.some((session) => session.id === id) ||
+        openSessions.some((session) => session.id === id)
+      ) {
+        pendingFolderSessionIds.current.delete(id);
+      }
+    }
+    setSessionFolders((current) => {
+      const next = pruneSessionFolders(current, known);
+      if (next === current) return current;
+      saveSessionFolders(cwd, next);
+      return next;
+    });
+  }, [activeSessionId, cwd, openSessions, pending, sessions, status]);
 
   useEffect(() => {
     if (tab !== "sessions") return;
@@ -427,19 +525,53 @@ function SidebarComponent({
   }, [tab]);
 
   useEffect(() => {
-    if (!sessionMenu && !filterMenu) return;
+    if (!sessionMenu && !folderMenu && !filterMenu) return;
     const onScroll = () => {
       setSessionMenu(null);
+      setFolderMenu(null);
       setFilterMenu(null);
     };
     const scrollParent = sessionsScrollRef.current ?? window;
     scrollParent.addEventListener("scroll", onScroll, true);
     return () => scrollParent.removeEventListener("scroll", onScroll, true);
-  }, [sessionMenu, filterMenu]);
+  }, [sessionMenu, folderMenu, filterMenu]);
+
+  const commitSessionFolders = (next: SessionFolder[]) => {
+    setSessionFolders(next);
+    saveSessionFolders(cwd, next);
+  };
+
+  const onNewInFolder = (folderId: string) => {
+    const sessionId = onNew?.();
+    if (!sessionId) return;
+    pendingFolderSessionIds.current.add(sessionId);
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSessionFolders((current) => {
+      const next = setFolderCollapsed(
+        addSessionToFolder(current, folderId, sessionId),
+        folderId,
+        false,
+      );
+      saveSessionFolders(cwd, next);
+      return next;
+    });
+  };
 
   const menuSession = sessionMenu
     ? sessions.find((session) => session.id === sessionMenu.sessionId)
     : undefined;
+  const menuSessionFolder = sessionMenu
+    ? folderContaining(sessionFolders, sessionMenu.sessionId)
+    : undefined;
+  const menuFolder = folderMenu
+    ? sessionFolders.find((folder) => folder.id === folderMenu.folderId)
+    : undefined;
+  const folderMenuItems: ExplorerMenuItem[] = [
+    { kind: "item", id: "rename", label: "Rename", shortcut: "F2" },
+    { kind: "sep" },
+    { kind: "item", id: "ungroup", label: "Ungroup" },
+  ];
   const sessionMenuItems: ExplorerMenuItem[] = [
     ...(onPinSession
       ? [
@@ -460,9 +592,27 @@ function SidebarComponent({
           },
         ]
       : []),
+    { kind: "sep" as const },
+    { kind: "item" as const, id: "folder-new", label: "New folder" },
+    ...(sessionFolders.length > 0 ? [{ kind: "sep" as const }] : []),
+    ...sessionFolders.map((folder) => ({
+      kind: "item" as const,
+      id: `folder-add:${folder.id}`,
+      label: `Add to ${folder.name}`,
+      checked: menuSessionFolder?.id === folder.id,
+    })),
+    ...(menuSessionFolder
+      ? [
+          {
+            kind: "item" as const,
+            id: "folder-remove",
+            label: "Remove from folder",
+          },
+        ]
+      : []),
     ...(onArchiveSession || onDeleteSession
       ? [
-          ...(onPinSession || onRenameSession ? [{ kind: "sep" as const }] : []),
+          { kind: "sep" as const },
           ...(onArchiveSession
             ? [
                 {
@@ -491,18 +641,22 @@ function SidebarComponent({
     sessionId: string,
     e: ReactMouseEvent<HTMLButtonElement>,
   ) => {
-    if (
-      !onPinSession &&
-      !onRenameSession &&
-      !onArchiveSession &&
-      !onDeleteSession
-    ) {
-      return;
-    }
     e.preventDefault();
     e.stopPropagation();
     setFilterMenu(null);
+    setFolderMenu(null);
     setSessionMenu({ x: e.clientX, y: e.clientY, sessionId });
+  };
+
+  const onFolderContextMenu = (
+    folderId: string,
+    e: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFilterMenu(null);
+    setSessionMenu(null);
+    setFolderMenu({ x: e.clientX, y: e.clientY, folderId });
   };
 
   const onSessionMenuPick = (id: string) => {
@@ -519,12 +673,112 @@ function SidebarComponent({
       setRenamingSessionId(sessionId);
       return;
     }
+    if (id === "folder-new") {
+      const { folders, id: createdId } = createFolderWithSessions(
+        sessionFolders,
+        [sessionId],
+      );
+      if (!createdId) return;
+      commitSessionFolders(folders);
+      setRenamingFolderId(createdId);
+      return;
+    }
+    if (id.startsWith("folder-add:")) {
+      const folderId = id.slice("folder-add:".length);
+      commitSessionFolders(
+        setFolderCollapsed(
+          addSessionToFolder(sessionFolders, folderId, sessionId),
+          folderId,
+          false,
+        ),
+      );
+      return;
+    }
+    if (id === "folder-remove") {
+      commitSessionFolders(removeSessionFromFolder(sessionFolders, sessionId));
+      return;
+    }
     if (id === "archive") {
       onArchiveSession?.(sessionId, !archived);
       return;
     }
     if (id === "delete") onDeleteSession?.(sessionId);
   };
+
+  const onFolderMenuPick = (id: string) => {
+    if (!folderMenu) return;
+    const folderId = folderMenu.folderId;
+    setFolderMenu(null);
+    if (id === "rename") {
+      setRenamingFolderId(folderId);
+      return;
+    }
+    if (id === "ungroup") {
+      commitSessionFolders(dissolveFolder(sessionFolders, folderId));
+    }
+  };
+
+  const onFolderColorChange = (colorIndex: number | null) => {
+    if (!folderMenu) return;
+    commitSessionFolders(
+      setFolderColor(sessionFolders, folderMenu.folderId, colorIndex),
+    );
+  };
+
+  const onSessionListDrop = (
+    draggedId: string,
+    target: SessionListDropTarget,
+  ) => {
+    const { folders, createdId } = applySessionListDrop(
+      sessionFolders,
+      draggedId,
+      target,
+    );
+    if (folders === sessionFolders) return;
+    commitSessionFolders(folders);
+    if (createdId) setRenamingFolderId(createdId);
+  };
+
+  const isSessionDrop = (kind: "folder" | "session", id: string) =>
+    sessionDrop?.kind === kind && sessionDrop.id === id;
+
+  const renderSessionCard = (session: SessionSummary, compact = false) =>
+    renamingSessionId === session.id && onRenameSession ? (
+      <SessionRenameRow
+        session={session}
+        isActive={session.id === activeSessionId}
+        busy={busySessionIds.has(session.id)}
+        needsApproval={approvalSessionIds.has(session.id)}
+        onCommit={(title) => {
+          onRenameSession(session.id, title);
+          setRenamingSessionId(null);
+        }}
+        onCancel={() => setRenamingSessionId(null)}
+      />
+    ) : (
+      <SessionCard
+        session={session}
+        isActive={session.id === activeSessionId}
+        busy={busySessionIds.has(session.id)}
+        done={unseenFinishedIds.has(session.id)}
+        needsApproval={approvalSessionIds.has(session.id)}
+        dropTarget={isSessionDrop("session", session.id)}
+        compact={compact}
+        now={now}
+        onSelect={onSelectSession}
+        onPrefetch={onPrefetchSession}
+        onPlaceOnPane={onPlaceSessionOnPane}
+        onListDrop={onSessionListDrop}
+        onListDropTargetChange={setSessionDrop}
+        onContextMenu={(e) => onSessionContextMenu(session.id, e)}
+        onRename={
+          onRenameSession ? () => setRenamingSessionId(session.id) : undefined
+        }
+        onDelete={
+          onDeleteSession ? () => onDeleteSession(session.id) : undefined
+        }
+      />
+    );
 
   const onSessionFiltersChange = (next: SessionSidebarFilters) => {
     setSessionFilters(next);
@@ -546,6 +800,7 @@ function SidebarComponent({
     }
     const rect = event.currentTarget.getBoundingClientRect();
     setSessionMenu(null);
+    setFolderMenu(null);
     setFilterMenu({
       x: rect.right - 228,
       y: rect.bottom + 2,
@@ -904,68 +1159,173 @@ function SidebarComponent({
                   )
                 ) : (
                   <ul className="flex flex-col gap-0.5 p-1.5">
-                    {shownSessions.map((session, index) => {
-                      const prev = shownSessions[index - 1];
-                      const splitPinned = !!prev?.pinned && !session.pinned;
-                      return (
-                        <Fragment key={session.id}>
-                          {splitPinned ? (
-                            <li aria-hidden className="mx-1 my-1 list-none">
-                              <div className="h-px bg-content/10" />
-                            </li>
-                          ) : null}
-                          <li>
-                            {renamingSessionId === session.id &&
-                            onRenameSession ? (
-                              <SessionRenameRow
-                                session={session}
-                                isActive={session.id === activeSessionId}
-                                busy={busySessionIds.has(session.id)}
-                                needsApproval={approvalSessionIds.has(
-                                  session.id,
-                                )}
-                                onCommit={(title) => {
-                                  onRenameSession(session.id, title);
-                                  setRenamingSessionId(null);
-                                }}
-                                onCancel={() => setRenamingSessionId(null)}
-                              />
-                            ) : (
-                              <SessionCard
-                                session={session}
-                                isActive={session.id === activeSessionId}
-                                busy={busySessionIds.has(session.id)}
-                                done={unseenFinishedIds.has(session.id)}
-                                needsApproval={approvalSessionIds.has(
-                                  session.id,
-                                )}
-                                now={now}
-                                onSelect={onSelectSession}
-                                onPrefetch={onPrefetchSession}
-                                onPlaceOnPane={onPlaceSessionOnPane}
-                                onContextMenu={
-                                  onPinSession ||
-                                  onRenameSession ||
-                                  onArchiveSession ||
-                                  onDeleteSession
-                                    ? (e) =>
-                                        onSessionContextMenu(session.id, e)
-                                    : undefined
-                                }
-                                onRename={
-                                  onRenameSession
-                                    ? () => setRenamingSessionId(session.id)
-                                    : undefined
-                                }
-                                onDelete={
-                                  onDeleteSession
-                                    ? () => onDeleteSession(session.id)
-                                    : undefined
-                                }
-                              />
-                            )}
+                    {sessionListEntries.map((entry, index) => {
+                      if (entry.kind === "divider") {
+                        return (
+                          <li
+                            key={`divider-${index}`}
+                            aria-hidden
+                            className="mx-1 my-1 list-none"
+                          >
+                            <div className="h-px bg-content/10" />
                           </li>
-                        </Fragment>
+                        );
+                      }
+                      if (entry.kind === "folder") {
+                        const expanded =
+                          searchNarrowed || !entry.folder.collapsed;
+                        const shellFill = folderShellFill(
+                          entry.folder.colorIndex,
+                        );
+                        const folderIndex = visibleFolderIds.indexOf(
+                          entry.folder.id,
+                        );
+                        const draggingFolder =
+                          folderSortable.draggingId === entry.folder.id;
+                        const showFolderDropStart =
+                          folderSortable.draggingId &&
+                          folderSortable.toIndex === folderIndex &&
+                          folderSortable.fromIndex !== null &&
+                          folderSortable.toIndex < folderSortable.fromIndex;
+                        const showFolderDropEnd =
+                          folderSortable.draggingId &&
+                          folderSortable.toIndex === folderIndex &&
+                          folderSortable.fromIndex !== null &&
+                          folderSortable.toIndex > folderSortable.fromIndex;
+                        return (
+                          <li
+                            key={entry.folder.id}
+                            ref={(el) =>
+                              folderSortable.setItemRef(entry.folder.id, el)
+                            }
+                            data-session-folder={entry.folder.id}
+                            className={`relative ${
+                              expanded ? "mb-1.5" : ""
+                            } ${draggingFolder ? "opacity-40" : ""}`}
+                          >
+                            {showFolderDropStart ? (
+                              <div className="pointer-events-none absolute inset-x-1 top-0 z-20 h-0.5 rounded-full bg-accent" />
+                            ) : null}
+                            {showFolderDropEnd ? (
+                              <div className="pointer-events-none absolute inset-x-1 bottom-0 z-20 h-0.5 rounded-full bg-accent" />
+                            ) : null}
+                            <div
+                              className={`overflow-hidden rounded-md ${
+                                shellFill ? "" : "bg-content/5"
+                              }`}
+                              style={
+                                shellFill
+                                  ? { background: shellFill }
+                                  : undefined
+                              }
+                            >
+                              {renamingFolderId === entry.folder.id ? (
+                                <FolderRenameRow
+                                  folder={entry.folder}
+                                  memberCount={entry.sessions.length}
+                                  dropTarget={isSessionDrop(
+                                    "folder",
+                                    entry.folder.id,
+                                  )}
+                                  onCommit={(name) => {
+                                    commitSessionFolders(
+                                      renameFolder(
+                                        sessionFolders,
+                                        entry.folder.id,
+                                        name,
+                                      ),
+                                    );
+                                    setRenamingFolderId(null);
+                                  }}
+                                  onCancel={() => setRenamingFolderId(null)}
+                                />
+                              ) : (
+                                <FolderRow
+                                  folder={entry.folder}
+                                  sessions={entry.sessions}
+                                  expanded={expanded}
+                                  dropTarget={isSessionDrop(
+                                    "folder",
+                                    entry.folder.id,
+                                  )}
+                                  canReorder={visibleFolderIds.length > 1}
+                                  busy={entry.sessions.some((session) =>
+                                    busySessionIds.has(session.id),
+                                  )}
+                                  done={entry.sessions.some((session) =>
+                                    unseenFinishedIds.has(session.id),
+                                  )}
+                                  needsApproval={entry.sessions.some(
+                                    (session) =>
+                                      approvalSessionIds.has(session.id),
+                                  )}
+                                  onPointerDown={(event) =>
+                                    folderSortable.onItemPointerDown(
+                                      entry.folder.id,
+                                      event,
+                                    )
+                                  }
+                                  onToggle={() => {
+                                    if (folderSortable.consumeClick()) return;
+                                    if (searchNarrowed) return;
+                                    commitSessionFolders(
+                                      setFolderCollapsed(
+                                        sessionFolders,
+                                        entry.folder.id,
+                                        !entry.folder.collapsed,
+                                      ),
+                                    );
+                                  }}
+                                  onContextMenu={(event) =>
+                                    onFolderContextMenu(entry.folder.id, event)
+                                  }
+                                  onRename={() =>
+                                    setRenamingFolderId(entry.folder.id)
+                                  }
+                                />
+                              )}
+                              {expanded ? (
+                                <>
+                                  <ul className="flex flex-col gap-px p-1">
+                                    {entry.sessions.map((session) => (
+                                      <li key={session.id}>
+                                        {renderSessionCard(session, true)}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  {onNew ? (
+                                    <div className="border-t border-content/10 p-1">
+                                      <button
+                                        type="button"
+                                        data-no-drag
+                                        data-tauri-drag-region="false"
+                                        title="New session"
+                                        aria-label="New session"
+                                        onClick={() =>
+                                          onNewInFolder(entry.folder.id)
+                                        }
+                                        className="relative flex w-full items-center gap-1 rounded-md border border-transparent px-2.5 py-1.5 text-left text-content/45 hover:bg-content/10 hover:text-content"
+                                      >
+                                        <Plus
+                                          className="size-3 shrink-0"
+                                          strokeWidth={1.75}
+                                        />
+                                        <span className="text-[13px] font-semibold leading-snug">
+                                          New session
+                                        </span>
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : null}
+                            </div>
+                          </li>
+                        );
+                      }
+                      return (
+                        <li key={entry.session.id}>
+                          {renderSessionCard(entry.session)}
+                        </li>
                       );
                     })}
                     {hasMoreSessions ? (
@@ -1024,6 +1384,22 @@ function SidebarComponent({
           ariaLabel="Session actions"
           onPick={onSessionMenuPick}
           onClose={() => setSessionMenu(null)}
+        />
+      ) : null}
+      {folderMenu ? (
+        <ExplorerMenu
+          x={folderMenu.x}
+          y={folderMenu.y}
+          items={folderMenuItems}
+          ariaLabel="Folder actions"
+          header={
+            <FolderColorSwatches
+              colorIndex={menuFolder?.colorIndex}
+              onChange={onFolderColorChange}
+            />
+          }
+          onPick={onFolderMenuPick}
+          onClose={() => setFolderMenu(null)}
         />
       ) : null}
       {filterMenu ? (
@@ -1274,16 +1650,250 @@ function SessionsHeaderButton({
   );
 }
 
+function sessionListDropFromPoint(
+  x: number,
+  y: number,
+  draggedId: string,
+): SessionListDropTarget | null {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  const card = el.closest("[data-session-card]") as HTMLElement | null;
+  const cardId = card?.dataset.sessionCard;
+  if (cardId === draggedId) return null;
+  const folder = el.closest("[data-session-folder]") as HTMLElement | null;
+  const folderId = folder?.dataset.sessionFolder;
+  if (folderId && cardId && card && folder.contains(card)) {
+    return { kind: "folder", id: folderId };
+  }
+  if (cardId) return { kind: "session", id: cardId };
+  if (folderId) return { kind: "folder", id: folderId };
+  return null;
+}
+
+function FolderColorSwatches({
+  colorIndex,
+  onChange,
+}: {
+  colorIndex: number | undefined;
+  onChange: (index: number | null) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-0.5 px-1 py-1">
+      {TAB_GROUP_COLORS.map((color, index) => {
+        const selected =
+          (colorIndex == null && index === 0) || colorIndex === index;
+        return (
+          <button
+            key={color}
+            type="button"
+            title={`Color ${index + 1}`}
+            aria-label={`Color ${index + 1}`}
+            aria-pressed={selected}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onChange(index === 0 ? null : index)}
+            className="grid size-5 place-items-center rounded-full"
+          >
+            <span
+              className={`size-3.5 rounded-full ${
+                selected
+                  ? "ring-2 ring-content/80 ring-offset-1 ring-offset-transparent"
+                  : ""
+              }`}
+              style={{ background: color }}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FolderRow({
+  folder,
+  sessions,
+  expanded,
+  dropTarget,
+  canReorder = false,
+  busy,
+  done,
+  needsApproval,
+  onPointerDown,
+  onToggle,
+  onContextMenu,
+  onRename,
+}: {
+  folder: SessionFolder;
+  sessions: SessionSummary[];
+  expanded: boolean;
+  dropTarget: boolean;
+  canReorder?: boolean;
+  busy: boolean;
+  done: boolean;
+  needsApproval: boolean;
+  onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onToggle: () => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onRename: () => void;
+}) {
+  const count = sessions.length;
+  const accent = folderAccent(folder.colorIndex);
+  return (
+    <button
+      type="button"
+      title={folder.name}
+      aria-expanded={expanded}
+      data-tauri-drag-region="false"
+      onPointerDown={onPointerDown}
+      onClick={onToggle}
+      onContextMenu={onContextMenu}
+      onKeyDown={(event) => {
+        if (event.key === "F2") {
+          event.preventDefault();
+          onRename();
+        }
+      }}
+      className={`group relative flex w-full touch-none items-center gap-1.5 px-2 h-8 text-left ${
+        expanded ? "rounded-md" : ""
+      } ${canReorder ? "cursor-grab active:cursor-grabbing" : ""} ${
+        dropTarget
+          ? "text-content"
+          : expanded
+            ? "text-content hover:bg-content/10"
+            : "text-content/80 hover:bg-content/10 hover:text-content"
+      }`}
+    >
+      {dropTarget ? (
+        <div className="pointer-events-none absolute inset-0 rounded-md bg-accent/20" />
+      ) : null}
+      <span
+        className={`relative grid size-4 shrink-0 place-items-center ${
+          accent ? "" : "text-content/50"
+        }`}
+        style={accent ? { color: accent } : undefined}
+      >
+        {expanded ? (
+          <ChevronDown className="size-3.5" strokeWidth={1.75} />
+        ) : (
+          <>
+            <Folder
+              className="size-3.5 group-hover:hidden group-focus-visible:hidden"
+              strokeWidth={1.75}
+            />
+            <ChevronRight
+              className="hidden size-3.5 group-hover:block group-focus-visible:block"
+              strokeWidth={1.75}
+            />
+          </>
+        )}
+      </span>
+      <span className="relative min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug text-content">
+        {folder.name}
+      </span>
+      <span className="relative flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-content/45">
+        {!expanded && needsApproval ? (
+          <CircleAlert className="size-3 text-amber-400" strokeWidth={1.75} />
+        ) : !expanded && busy ? (
+          <TerminalSpinner className="inline-block w-3 select-none text-center text-[11px] leading-none text-accent" />
+        ) : !expanded && done ? (
+          <Check className="size-3 text-emerald-400" strokeWidth={2.25} />
+        ) : null}
+        <span>{count}</span>
+      </span>
+    </button>
+  );
+}
+
+function FolderRenameRow({
+  folder,
+  memberCount,
+  dropTarget,
+  onCommit,
+  onCancel,
+}: {
+  folder: SessionFolder;
+  memberCount: number;
+  dropTarget: boolean;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const finished = useRef(false);
+  const [value, setValue] = useState(folder.name);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+  }, []);
+
+  const finish = (success: boolean) => {
+    if (finished.current) return;
+    if (success) {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        onCancel();
+        return;
+      }
+      finished.current = true;
+      onCommit(trimmed);
+      return;
+    }
+    finished.current = true;
+    onCancel();
+  };
+
+  return (
+    <div
+      className={`relative flex w-full items-center gap-1.5 px-2 py-1.5 ${
+        dropTarget ? "" : "text-content"
+      }`}
+    >
+      {dropTarget ? (
+        <div className="pointer-events-none absolute inset-0 rounded-md bg-accent/20" />
+      ) : null}
+      <span className="relative grid size-4 shrink-0 place-items-center text-content/50">
+        <ChevronDown className="size-3.5" strokeWidth={1.75} />
+      </span>
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => finish(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            finish(true);
+            return;
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            finish(false);
+          }
+        }}
+        className="relative min-w-0 flex-1 rounded bg-content/10 px-2 py-0.5 text-[13px] font-semibold leading-snug text-content outline-none ring-1 ring-accent/40"
+      />
+      <span className="relative shrink-0 text-[11px] tabular-nums text-content/45">
+        {memberCount}
+      </span>
+    </div>
+  );
+}
+
 function SessionCard({
   session,
   isActive,
   busy,
   done,
   needsApproval,
+  dropTarget,
+  compact = false,
   now,
   onSelect,
   onPrefetch,
   onPlaceOnPane,
+  onListDrop,
+  onListDropTargetChange,
   onContextMenu,
   onRename,
   onDelete,
@@ -1293,10 +1903,14 @@ function SessionCard({
   busy: boolean;
   done: boolean;
   needsApproval: boolean;
+  dropTarget?: boolean;
+  compact?: boolean;
   now: number;
   onSelect: (sessionId: string) => void;
   onPrefetch?: (sessionId: string) => void;
   onPlaceOnPane?: (sessionId: string, targetId: string, edge: PaneEdge) => void;
+  onListDrop?: (draggedId: string, target: SessionListDropTarget) => void;
+  onListDropTargetChange?: (target: SessionListDropTarget | null) => void;
   onContextMenu?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
   onRename?: () => void;
   onDelete?: () => void;
@@ -1306,7 +1920,40 @@ function SessionCard({
   const title = sessionDisplayTitle(session.title, session.harness);
   const gitLabel = formatGitLabel(session.repo, session.branch);
   const time = formatRelative(session.updatedAt, now);
-  const model = resolveModel(session.harness, session.model).name;
+  const model = compact
+    ? null
+    : resolveModel(session.harness, session.model).name;
+  const statusClass = needsApproval
+    ? "text-amber-400"
+    : busy
+      ? "text-accent"
+      : done
+        ? "text-emerald-400"
+        : "text-content/45";
+  const status = (
+    <span
+      className={`flex shrink-0 items-center gap-1 text-[11px] tabular-nums ${statusClass}`}
+    >
+      {needsApproval ? (
+        <>
+          <CircleAlert className="size-3" strokeWidth={1.75} />
+          <span>Need approval</span>
+        </>
+      ) : busy ? (
+        <>
+          <TerminalSpinner className="inline-block w-3 select-none text-center text-[11px] leading-none text-accent" />
+          <span>Working...</span>
+        </>
+      ) : done ? (
+        <>
+          <Check className="size-3" strokeWidth={2.25} />
+          <span>Done</span>
+        </>
+      ) : (
+        <span>{time}</span>
+      )}
+    </span>
+  );
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (e.key === "F2" && onRename) {
@@ -1325,7 +1972,7 @@ function SessionCard({
     // Warm the transcript during the press. Opening stays on click so a
     // drag-to-pane gesture does not switch conversations.
     onPrefetch?.(session.id);
-    if (!onPlaceOnPane) return;
+    if (!onPlaceOnPane && !onListDrop) return;
     const handle = event.currentTarget;
     const pointerId = event.pointerId;
     const startX = event.clientX;
@@ -1333,8 +1980,15 @@ function SessionCard({
     let active = false;
     let lastX = startX;
     let lastY = startY;
+    let lastList: SessionListDropTarget | null = null;
     handle.setPointerCapture(pointerId);
     const restoreSelection = suppressTextSelection();
+
+    const setListTarget = (next: SessionListDropTarget | null) => {
+      if (lastList?.kind === next?.kind && lastList?.id === next?.id) return;
+      lastList = next;
+      onListDropTargetChange?.(next);
+    };
 
     const onMove = (ev: PointerEvent) => {
       lastX = ev.clientX;
@@ -1343,12 +1997,18 @@ function SessionCard({
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;
         active = true;
         setDragging(true);
-        setExternalPaneDrop({
-          fromId: session.id,
-          overId: null,
-          edge: "left",
-        });
+        if (onPlaceOnPane) {
+          setExternalPaneDrop({
+            fromId: session.id,
+            overId: null,
+            edge: "left",
+          });
+        }
       }
+      setListTarget(
+        sessionListDropFromPoint(ev.clientX, ev.clientY, session.id),
+      );
+      if (!onPlaceOnPane) return;
       const over = paneDropFromPoint(ev.clientX, ev.clientY);
       if (!over || over.id === session.id) {
         setExternalPaneDrop({
@@ -1380,6 +2040,7 @@ function SessionCard({
       restoreSelection();
       setDragging(false);
       setExternalPaneDrop(null);
+      setListTarget(null);
       try {
         handle.releasePointerCapture(pointerId);
       } catch {
@@ -1388,6 +2049,11 @@ function SessionCard({
       if (!active) return;
       skipClickUntil.current = performance.now() + 400;
       if (!commit) return;
+      const listOver = sessionListDropFromPoint(lastX, lastY, session.id);
+      if (listOver) {
+        onListDrop?.(session.id, listOver);
+        return;
+      }
       const over = paneDropFromPoint(lastX, lastY);
       if (over && over.id !== session.id) {
         onPlaceOnPane?.(session.id, over.id, over.edge);
@@ -1405,6 +2071,7 @@ function SessionCard({
       type="button"
       title={title}
       aria-current={isActive ? "true" : undefined}
+      data-session-card={session.id}
       data-tauri-drag-region="false"
       onPointerDown={onPointerDown}
       onPointerEnter={() => onPrefetch?.(session.id)}
@@ -1414,69 +2081,49 @@ function SessionCard({
       }}
       onContextMenu={onContextMenu}
       onKeyDown={onKeyDown}
-      className={`border flex w-full touch-none flex-col rounded-md px-2.5 py-2 text-left ${
-        dragging ? "opacity-40" : ""
-      } ${
-        needsApproval
-          ? "bg-content/20 text-content border-content/30 border-dashed"
-          : isActive
-            ? "bg-content/10 text-content border-transparent"
-            : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
+      className={`relative border flex w-full touch-none flex-col rounded-md px-2.5 text-left ${
+        compact ? "py-1.5" : "py-2"
+      } ${dragging ? "opacity-40" : ""} ${
+        dropTarget
+          ? "text-content border-transparent"
+          : needsApproval
+            ? "bg-content/20 text-content border-content/30 border-dashed"
+            : isActive
+              ? "bg-content/10 text-content border-transparent"
+              : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
       }`}
     >
-      <span className="flex items-center gap-2">
-        <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          <HarnessIcon
-            harness={session.harness}
-            className="size-3.5 shrink-0"
-          />
-          <span className="min-w-0 truncate text-[11px] text-content/50">
-            {model}
+      {dropTarget ? (
+        <div className="pointer-events-none absolute inset-0 rounded-md bg-accent/20" />
+      ) : null}
+      {compact ? null : (
+        <span className="relative flex items-center gap-2">
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            <HarnessIcon
+              harness={session.harness}
+              className="size-3.5 shrink-0"
+            />
+            <span className="min-w-0 truncate text-[11px] text-content/50">
+              {model}
+            </span>
           </span>
+          {status}
         </span>
-        <span
-          className={`flex shrink-0 items-center gap-1 text-[11px] tabular-nums ${
-            needsApproval
-              ? "text-amber-400"
-              : busy
-                ? "text-accent"
-                : done
-                  ? "text-emerald-400"
-                  : "text-content/45"
-          }`}
-        >
-          {needsApproval ? (
-            <>
-              <CircleAlert className="size-3" strokeWidth={1.75} />
-              <span>Need approval</span>
-            </>
-          ) : busy ? (
-            <>
-              <TerminalSpinner className="inline-block w-3 select-none text-center text-[11px] leading-none text-accent" />
-              <span>Working...</span>
-            </>
-          ) : done ? (
-            <>
-              <Check className="size-3" strokeWidth={2.25} />
-              <span>Done</span>
-            </>
-          ) : (
-            <span>{time}</span>
-          )}
-        </span>
-      </span>
-      <span className="mt-1 flex min-w-0 items-center gap-1.5">
+      )}
+      <span
+        className={`relative flex min-w-0 items-center gap-1.5 ${
+          compact ? "" : "mt-1"
+        }`}
+      >
         {session.pinned ? (
-          <Pin
-            className="size-3 shrink-0 text-content/45"
-            strokeWidth={1.75}
-          />
+          <Pin className="size-3 shrink-0 text-content/45" strokeWidth={1.75} />
         ) : null}
-        <span className="min-w-0 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
+        <span className="min-w-0 flex-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
           {title}
         </span>
+        {compact ? status : null}
       </span>
-      <span className="mt-1 flex items-center gap-2">
+      <span className="relative mt-1 flex items-center gap-2">
         {gitLabel ? (
           <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-content/45">
             <GitBranch className="size-3 shrink-0" strokeWidth={1.75} />

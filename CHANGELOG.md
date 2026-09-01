@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sidebar: group sessions into folders. Folders sit above pinned chats. Right-click a session to create a folder or add it to one, drag a session onto another to make a folder, or drag into an existing folder. Drag folders to reorder them. An open folder has a New session button that starts a chat in that folder.
+
 ## [0.1.27] - 2026-09-01
 
 ### Changed
