@@ -280,6 +280,7 @@ pub fn run() {
             remote::ssh_fetch_metrics,
             remote::ssh_upload_files,
             remote::ssh_download_files,
+            remote::ssh_list_multiplexer_sessions,
             remote::host_local_metrics,
             fs::tree::list_subdirs,
             fs::tree::fs_read_dir,

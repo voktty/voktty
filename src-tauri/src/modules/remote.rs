@@ -28,7 +28,7 @@ const REMOTE_ZLOGIN: &str = include_str!("pty/scripts/zlogin.zsh");
 const REMOTE_ZSHRC: &str = include_str!("pty/scripts/zshrc.zsh");
 const REMOTE_FISH_INIT: &str = include_str!("pty/scripts/init.fish");
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RemoteSshConnection {
     pub host: String,
     #[serde(default)]
@@ -39,6 +39,14 @@ pub struct RemoteSshConnection {
     pub identity_file: Option<String>,
     #[serde(rename = "extraArgs", default)]
     pub extra_args: Option<String>,
+    #[serde(rename = "multiplexerMode", default)]
+    pub multiplexer_mode: Option<String>,
+    #[serde(rename = "tmuxSessionName", default)]
+    pub tmux_session_name: Option<String>,
+    #[serde(rename = "activeMultiplexerSession", default)]
+    pub active_multiplexer_session: Option<String>,
+    #[serde(rename = "multiplexerAction", default)]
+    pub multiplexer_action: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -634,6 +642,87 @@ pub fn parse_metrics_line(line: &str, ping_ms: Option<u64>) -> Option<SshServerM
     })
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteMultiplexerSession {
+    pub name: String,
+    pub windows_count: u32,
+    pub attached_count: u32,
+    pub created_at: Option<u64>,
+    pub last_activity: Option<u64>,
+    pub is_attached: bool,
+    pub multiplexer: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteMultiplexerProbe {
+    pub supported: bool,
+    pub multiplexer: Option<String>,
+    pub sessions: Vec<RemoteMultiplexerSession>,
+}
+
+pub const MULTIPLEXER_PROBE_SCRIPT: &str = r#"sh -c '
+if command -v tmux >/dev/null 2>&1; then
+    printf "VOKTTY_MUX|tmux\n"
+    tmux list-sessions -F "VOKTTY_SES|#{session_name}|#{session_windows}|#{session_attached}|#{session_created}|#{session_activity}" 2>/dev/null || true
+elif command -v screen >/dev/null 2>&1; then
+    printf "VOKTTY_MUX|screen\n"
+    screen -ls 2>/dev/null | grep -E "^[[:space:]]*[0-9]+\." | while read -r line; do
+        name=$(echo "$line" | awk "{print \$1}" | cut -d"." -f2-)
+        [ -z "$name" ] && name=$(echo "$line" | awk "{print \$1}")
+        att=0
+        echo "$line" | grep -qi "Attached" && att=1
+        printf "VOKTTY_SES|%s|1|%d|0|0\n" "$name" "$att"
+    done || true
+else
+    printf "VOKTTY_MUX|none\n"
+fi
+'"#;
+
+pub fn parse_multiplexer_probe(output: &str) -> RemoteMultiplexerProbe {
+    let mut multiplexer = None;
+    let mut sessions = Vec::new();
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if let Some(mux_type) = trimmed.strip_prefix("VOKTTY_MUX|") {
+            let clean = mux_type.trim();
+            if clean != "none" && !clean.is_empty() {
+                multiplexer = Some(clean.to_string());
+            }
+        } else if let Some(ses_payload) = trimmed.strip_prefix("VOKTTY_SES|") {
+            let parts: Vec<&str> = ses_payload.split('|').collect();
+            if parts.is_empty() || parts[0].trim().is_empty() {
+                continue;
+            }
+            let name = parts[0].trim().to_string();
+            let windows_count = parts.get(1).and_then(|s| s.parse::<u32>().ok()).unwrap_or(1);
+            let attached_count = parts.get(2).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+            let created_at = parts.get(3).and_then(|s| s.parse::<u64>().ok()).filter(|v| *v > 0);
+            let last_activity = parts.get(4).and_then(|s| s.parse::<u64>().ok()).filter(|v| *v > 0);
+            let is_attached = attached_count > 0;
+            let mux = multiplexer.clone().unwrap_or_else(|| "tmux".to_string());
+
+            sessions.push(RemoteMultiplexerSession {
+                name,
+                windows_count,
+                attached_count,
+                created_at,
+                last_activity,
+                is_attached,
+                multiplexer: mux,
+            });
+        }
+    }
+
+    RemoteMultiplexerProbe {
+        supported: multiplexer.is_some(),
+        multiplexer,
+        sessions,
+    }
+}
+
 #[tauri::command]
 pub async fn ssh_ping(host: String, port: Option<u16>) -> Result<SshPingResult, String> {
     let p = port.unwrap_or(22);
@@ -842,6 +931,21 @@ pub async fn ssh_download_files(
         }
 
         Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn ssh_list_multiplexer_sessions(
+    connection: RemoteSshConnection,
+) -> Result<RemoteMultiplexerProbe, String> {
+    validate_connection(&connection)?;
+    let conn_clone = connection.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let output = run_ssh_capture(&conn_clone, MULTIPLEXER_PROBE_SCRIPT)?;
+        Ok(parse_multiplexer_probe(&output))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1580,6 +1684,10 @@ mod tests {
             port: Some(2222),
             identity_file: Some("C:/keys/id_ed25519".to_string()),
             extra_args: Some("-o ConnectTimeout=5".to_string()),
+            multiplexer_mode: None,
+            tmux_session_name: None,
+            active_multiplexer_session: None,
+            multiplexer_action: None,
         }
     }
 
@@ -1618,6 +1726,10 @@ mod tests {
             port: Some(9194),
             identity_file: Some("~/.ssh/id_ed25519".to_string()),
             extra_args: Some("-o HostKeyAlias=forgenex-code4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR".to_string()),
+            multiplexer_mode: None,
+            tmux_session_name: None,
+            active_multiplexer_session: None,
+            multiplexer_action: None,
         };
         let args = ssh_args(&conn);
         assert!(!args.iter().any(|a| a == "StrictHostKeyChecking=accept-new"));
@@ -1709,5 +1821,30 @@ mod tests {
         assert!(parsed.mem_total_bytes > 0);
         assert!(parsed.disk_total_bytes > 0);
         assert!(parsed.cpu_percent > 0.0);
+    }
+
+    #[test]
+    fn parses_remote_multiplexer_probe_output() {
+        let sample = "welcome to server\nVOKTTY_MUX|tmux\nVOKTTY_SES|voktty-main|2|0|1725181200|1725181250\nVOKTTY_SES|voktty-dev|1|1|1725180000|1725181200\n";
+        let parsed = parse_multiplexer_probe(sample);
+        assert!(parsed.supported);
+        assert_eq!(parsed.multiplexer.as_deref(), Some("tmux"));
+        assert_eq!(parsed.sessions.len(), 2);
+        assert_eq!(parsed.sessions[0].name, "voktty-main");
+        assert_eq!(parsed.sessions[0].windows_count, 2);
+        assert_eq!(parsed.sessions[0].attached_count, 0);
+        assert!(!parsed.sessions[0].is_attached);
+        assert_eq!(parsed.sessions[0].created_at, Some(1725181200));
+        assert_eq!(parsed.sessions[0].last_activity, Some(1725181250));
+
+        assert_eq!(parsed.sessions[1].name, "voktty-dev");
+        assert_eq!(parsed.sessions[1].attached_count, 1);
+        assert!(parsed.sessions[1].is_attached);
+
+        let none_sample = "VOKTTY_MUX|none\n";
+        let none_parsed = parse_multiplexer_probe(none_sample);
+        assert!(!none_parsed.supported);
+        assert_eq!(none_parsed.multiplexer, None);
+        assert!(none_parsed.sessions.is_empty());
     }
 }

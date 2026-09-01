@@ -318,7 +318,7 @@ fn build_remote_ssh(
         .map(|user| format!("{user}@{}", connection.host.trim()))
         .unwrap_or_else(|| connection.host.trim().to_string());
     cmd.arg(destination);
-    cmd.arg(remote_shell_command(cwd.as_deref(), blocks)?);
+    cmd.arg(remote_shell_command(cwd.as_deref(), blocks, Some(&connection))?);
     Ok(cmd)
 }
 
@@ -395,38 +395,102 @@ fn validate_remote_connection(
     Ok(())
 }
 
-fn remote_shell_command(cwd: Option<&str>, blocks: bool) -> Result<String, String> {
+fn remote_shell_command(
+    cwd: Option<&str>,
+    blocks: bool,
+    connection: Option<&crate::modules::remote::RemoteSshConnection>,
+) -> Result<String, String> {
     if cwd.is_some_and(|path| path.chars().any(char::is_control)) {
         return Err("remote cwd contains control characters".to_string());
     }
-    let mut command = String::new();
+    let mut base_cmd = String::new();
     if let Some(cwd) = cwd.filter(|path| !path.trim().is_empty()) {
-        command.push_str("cd -- ");
-        command.push_str(&shell_quote(cwd));
-        command.push_str(" && ");
+        base_cmd.push_str("cd -- ");
+        base_cmd.push_str(&shell_quote(cwd));
+        base_cmd.push_str(" && ");
     }
     if blocks {
-        command.push_str("export VOKTTY_BLOCKS=1; ");
+        base_cmd.push_str("export VOKTTY_BLOCKS=1; ");
     }
-    command.push_str("export VOKTTY_TERMINAL=1; ");
-    command.push_str("_voktty_shell=\"${SHELL:-/bin/sh}\"; ");
-    command.push_str(&format!(
+    base_cmd.push_str("export VOKTTY_TERMINAL=1; ");
+    base_cmd.push_str("_voktty_shell=\"${SHELL:-/bin/sh}\"; ");
+    base_cmd.push_str(&format!(
         "_voktty_integration=\"$HOME/.voktty/shell-integration/{}\"; ",
         crate::modules::remote::REMOTE_SHELL_INTEGRATION_VERSION
     ));
-    command.push_str("case \"${_voktty_shell##*/}\" in ");
-    command.push_str(
+    base_cmd.push_str("case \"${_voktty_shell##*/}\" in ");
+    base_cmd.push_str(
         "bash) if [ -r \"$_voktty_integration/bashrc\" ]; then exec \"$_voktty_shell\" --rcfile \"$_voktty_integration/bashrc\" -i; fi ;; ",
     );
-    command.push_str(
+    base_cmd.push_str(
         "zsh) if [ -r \"$_voktty_integration/zsh/.zshrc\" ]; then export VOKTTY_USER_ZDOTDIR=\"${ZDOTDIR:-$HOME}\" ZDOTDIR=\"$_voktty_integration/zsh\"; exec \"$_voktty_shell\" -l; fi ;; ",
     );
-    command.push_str(&format!(
+    base_cmd.push_str(&format!(
         "fish) if [ -r \"$_voktty_integration/init.fish\" ]; then export fish_features=no-mark-prompt; exec \"$_voktty_shell\" -i -C 'functions -q __voktty_install_prompt; or source \"$HOME/.voktty/shell-integration/{}/init.fish\"; functions -q __voktty_install_prompt; and __voktty_install_prompt'; fi ;; ",
         crate::modules::remote::REMOTE_SHELL_INTEGRATION_VERSION
     ));
-    command.push_str("esac; exec \"$_voktty_shell\" -l");
-    Ok(command)
+    base_cmd.push_str("esac; exec \"$_voktty_shell\" -l");
+
+    let mux_mode = connection
+        .and_then(|c| c.multiplexer_mode.as_deref())
+        .unwrap_or("none");
+    let has_active_session = connection
+        .and_then(|c| c.active_multiplexer_session.as_deref())
+        .is_some();
+
+    if (mux_mode == "none" || mux_mode.trim().is_empty()) && !has_active_session {
+        return Ok(base_cmd);
+    }
+
+    let session_name = connection
+        .and_then(|c| {
+            c.active_multiplexer_session
+                .as_deref()
+                .or(c.tmux_session_name.as_deref())
+        })
+        .filter(|s| !s.trim().is_empty())
+        .map(sanitize_session_name)
+        .unwrap_or_else(|| "voktty".to_string());
+
+    let action = connection
+        .and_then(|c| c.multiplexer_action.as_deref())
+        .unwrap_or("auto");
+
+    let s = shell_quote(&session_name);
+    let tmux_cmd = match action {
+        "attach_force" => format!("tmux attach -d -t {s} 2>/dev/null || tmux new-session -s {s}"),
+        "new" => format!("tmux new-session -s {s}"),
+        _ => format!("tmux new-session -A -s {s}"),
+    };
+
+    let screen_cmd = match action {
+        "attach_force" => format!("screen -d -r {s} 2>/dev/null || screen -S {s}"),
+        _ => format!("screen -xRR -S {s}"),
+    };
+
+    let full_command = format!(
+        "if command -v tmux >/dev/null 2>&1; then exec {tmux_cmd}; elif command -v screen >/dev/null 2>&1; then exec {screen_cmd}; else {base_cmd}; fi"
+    );
+
+    Ok(full_command)
+}
+
+fn sanitize_session_name(raw: &str) -> String {
+    let sanitized: String = raw
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if sanitized.trim().is_empty() {
+        "voktty".to_string()
+    } else {
+        sanitized
+    }
 }
 
 fn shell_quote(value: &str) -> String {
@@ -1388,7 +1452,7 @@ mod tests {
 
     #[test]
     fn remote_shell_command_quotes_cwd_and_preserves_blocks() {
-        let command = remote_shell_command(Some("/srv/user's project"), true).unwrap();
+        let command = remote_shell_command(Some("/srv/user's project"), true, None).unwrap();
         assert!(command.starts_with(
             "cd -- '/srv/user'\\''s project' && export VOKTTY_BLOCKS=1; export VOKTTY_TERMINAL=1;"
         ));
@@ -1399,6 +1463,25 @@ mod tests {
     }
 
     #[test]
+    fn remote_shell_command_wraps_in_tmux_when_configured() {
+        let conn = RemoteSshConnection {
+            host: "server.example".into(),
+            user: Some("ubuntu".into()),
+            port: Some(22),
+            identity_file: None,
+            extra_args: None,
+            multiplexer_mode: Some("auto".into()),
+            tmux_session_name: Some("my-work".into()),
+            active_multiplexer_session: None,
+            multiplexer_action: Some("attach_force".into()),
+        };
+        let command = remote_shell_command(Some("/srv/work"), false, Some(&conn)).unwrap();
+        assert!(command.contains("if command -v tmux >/dev/null 2>&1; then exec tmux attach -d -t 'my-work' 2>/dev/null || tmux new-session -s 'my-work'"));
+        assert!(command.contains("elif command -v screen >/dev/null 2>&1; then exec screen -d -r 'my-work' 2>/dev/null || screen -S 'my-work'"));
+        assert!(command.contains("else cd -- '/srv/work' && export VOKTTY_TERMINAL=1;"));
+    }
+
+    #[test]
     fn remote_ssh_command_keeps_connection_values_as_arguments() {
         let connection = RemoteSshConnection {
             host: "server.example".into(),
@@ -1406,6 +1489,10 @@ mod tests {
             port: Some(2222),
             identity_file: Some("C:/keys/id_ed25519".into()),
             extra_args: Some("-o ConnectTimeout=5".into()),
+            multiplexer_mode: None,
+            tmux_session_name: None,
+            active_multiplexer_session: None,
+            multiplexer_action: None,
         };
         let command = build_remote_ssh(Some("/srv/project".into()), connection, false).unwrap();
         let args: Vec<String> = command
