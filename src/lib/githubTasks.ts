@@ -74,6 +74,7 @@ export type GithubWorkItemComment = {
   path: string;
   line: number | null;
   resolved: boolean;
+  threadId: string;
   replies: GithubWorkItemComment[];
 };
 
@@ -311,8 +312,13 @@ export async function githubWorkItemThread(
   cwd: string,
   kind: GithubTaskKind,
   number: number,
+  options?: { force?: boolean },
 ): Promise<GithubWorkItemThread> {
   const key = detailsCacheKey(cwd, kind, number);
+  if (options?.force) {
+    threadByKey.delete(key);
+    threadInflight.delete(key);
+  }
   const pending = threadInflight.get(key);
   if (pending) return pending;
   const promise = invoke<GithubWorkItemThread>("git_github_work_item_thread", {
@@ -329,6 +335,26 @@ export async function githubWorkItemThread(
     });
   threadInflight.set(key, promise);
   return promise;
+}
+
+export async function githubWorkItemComment(
+  cwd: string,
+  kind: GithubTaskKind,
+  number: number,
+  body: string,
+  options?: { inReplyTo?: string },
+): Promise<string> {
+  const url = await invoke<string>("git_github_work_item_comment", {
+    cwd,
+    kind,
+    number,
+    body: body.trim(),
+    inReplyTo: options?.inReplyTo?.trim() ?? "",
+  });
+  const key = detailsCacheKey(cwd, kind, number);
+  threadByKey.delete(key);
+  threadInflight.delete(key);
+  return url;
 }
 
 export function githubReviewDecisionLabel(decision: string): string {
@@ -614,7 +640,8 @@ function preferInboxItem(
   rank: Map<string, number>,
 ): boolean {
   const nextRank =
-    rank.get(normalizeProjectPath(next.projectPath)) ?? Number.POSITIVE_INFINITY;
+    rank.get(normalizeProjectPath(next.projectPath)) ??
+    Number.POSITIVE_INFINITY;
   const currentRank =
     rank.get(normalizeProjectPath(current.projectPath)) ??
     Number.POSITIVE_INFINITY;
@@ -624,7 +651,8 @@ function preferInboxItem(
 
 export function sortInboxItems(items: InboxItem[]): InboxItem[] {
   return [...items].sort((a, b) => {
-    const updated = (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0);
+    const updated =
+      (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0);
     if (updated !== 0) return updated;
     if (a.projectPath !== b.projectPath) {
       return a.projectPath.localeCompare(b.projectPath);
@@ -718,7 +746,11 @@ export function inboxStartDraft(item: InboxItem, body?: string): string {
   }
   const kind = item.kind === "pr" ? "pull request" : "issue";
   const title = item.title.trim() || `GitHub ${kind} #${item.number}`;
-  const lines = [`Work on this GitHub ${kind}:`, "", `#${item.number} ${title}`];
+  const lines = [
+    `Work on this GitHub ${kind}:`,
+    "",
+    `#${item.number} ${title}`,
+  ];
   const url = item.url.trim();
   if (url) lines.push(url);
   return `${lines.join("\n")}\n`;

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Inbox: comment on GitHub pull requests and issues, and on Linear issues, from the detail pane. Reply stays in a GitHub review thread or Linear comment thread.
 - Check for Updates lives in the app menu — next to Settings on macOS and in the File menu elsewhere — so you can check anytime; Settings → General has it too.
 - Sidebar: pin a session from the context menu to keep it at the top until you unpin it.
 - Settings → General: Empty session games. Turn it off to hide pac-man and snake from the empty pane. On by default.

@@ -33,6 +33,7 @@ import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import {
   githubPrDiff,
   githubReviewDecisionLabel,
+  githubWorkItemComment,
   githubWorkItemDetails,
   githubWorkItemThread,
   inboxItemKey,
@@ -78,9 +79,13 @@ import {
 } from "../lib/inboxSeen";
 import {
   LINEAR_CHANGE_EVENT,
+  linearIssueComment,
   linearIssueDetails,
+  linearIssueThread,
   loadHiddenLinearTeamIds,
   peekLinearIssueDetails,
+  peekLinearIssueThread,
+  type LinearIssueThread,
 } from "../lib/linear";
 import {
   loadTabGroupColors,
@@ -91,7 +96,11 @@ import {
   resolveTabGroupMascot,
 } from "../lib/tabGroups";
 import { AgentMarkdown } from "./AgentMarkdown";
-import { InboxComments } from "./InboxComments";
+import {
+  InboxComments,
+  InboxCommentForm,
+  type InboxReplyTarget,
+} from "./InboxComments";
 import { InboxPrDiff } from "./InboxPrDiff";
 
 const MIN_WIDTH = 240;
@@ -847,8 +856,9 @@ function InboxDetail({
   const cachedDiff = isPr
     ? peekGithubPrDiff(item.projectPath, item.number)
     : null;
-  const cachedThread =
-    !linear && githubKind
+  const cachedThread = linear
+    ? peekLinearIssueThread(item.id ?? "")
+    : githubKind
       ? peekGithubWorkItemThread(item.projectPath, githubKind, item.number)
       : null;
   const [details, setDetails] = useState<GithubWorkItemDetails | null>(cached);
@@ -858,13 +868,14 @@ function InboxDetail({
   const [prDiff, setPrDiff] = useState<GithubPrDiff | null>(cachedDiff);
   const [diffLoading, setDiffLoading] = useState(isPr && cachedDiff == null);
   const [diffError, setDiffError] = useState<string | null>(null);
-  const [thread, setThread] = useState<GithubWorkItemThread | null>(
-    cachedThread,
-  );
-  const [threadLoading, setThreadLoading] = useState(
-    !linear && githubKind != null && cachedThread == null,
-  );
+  const [thread, setThread] = useState<
+    GithubWorkItemThread | LinearIssueThread | null
+  >(cachedThread);
+  const [threadLoading, setThreadLoading] = useState(cachedThread == null);
   const [threadError, setThreadError] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<InboxReplyTarget | null>(null);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const defaultProject =
     projects.find((project) => sameProjectPath(project.path, cwd))?.path ??
     projects[0]?.path ??
@@ -895,7 +906,8 @@ function InboxDetail({
       !authorName ||
       person.login.trim().toLowerCase() !== authorName.toLowerCase(),
   );
-  const showAssignment = extraAssignees.length > 0 || item.assignees.length === 0;
+  const showAssignment =
+    extraAssignees.length > 0 || item.assignees.length === 0;
   const reviewDecision =
     details?.reviewDecision?.trim() || thread?.reviewDecision?.trim() || "";
   const reviewLabel = githubReviewDecisionLabel(reviewDecision);
@@ -953,8 +965,38 @@ function InboxDetail({
   }, [githubKind, item.id, item.number, item.projectPath, linear, revision]);
 
   useEffect(() => {
-    if (linear || !githubKind) return;
     let cancelled = false;
+    if (linear) {
+      const id = item.id ?? "";
+      const cachedThread = peekLinearIssueThread(id);
+      if (cachedThread) {
+        setThread(cachedThread);
+        setThreadLoading(false);
+        setThreadError(null);
+      } else {
+        setThreadLoading(true);
+        setThreadError(null);
+        setThread(null);
+      }
+      void linearIssueThread(id)
+        .then((next) => {
+          if (cancelled) return;
+          setThread(next);
+          setThreadError(null);
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          if (cachedThread) return;
+          setThreadError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => {
+          if (!cancelled) setThreadLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!githubKind) return;
     const cachedThread = peekGithubWorkItemThread(
       item.projectPath,
       githubKind,
@@ -986,7 +1028,7 @@ function InboxDetail({
     return () => {
       cancelled = true;
     };
-  }, [githubKind, item.number, item.projectPath, linear, revision]);
+  }, [githubKind, item.id, item.number, item.projectPath, linear, revision]);
 
   useEffect(() => {
     if (!isPr) return;
@@ -1019,6 +1061,52 @@ function InboxDetail({
       cancelled = true;
     };
   }, [isPr, item.number, item.projectPath, revision]);
+
+  const postComment = async (body: string) => {
+    setPosting(true);
+    setPostError(null);
+    try {
+      if (linear) {
+        const id = item.id ?? "";
+        await linearIssueComment(id, body, { parentId: replyTo?.id });
+        setReplyTo(null);
+        try {
+          setThread(await linearIssueThread(id, { force: true }));
+        } catch (err: unknown) {
+          setPostError(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
+      if (!githubKind) throw new Error("Unknown inbox item");
+      await githubWorkItemComment(
+        item.projectPath,
+        githubKind,
+        item.number,
+        body,
+        { inReplyTo: replyTo?.threadId },
+      );
+      setReplyTo(null);
+      try {
+        setThread(
+          await githubWorkItemThread(
+            item.projectPath,
+            githubKind,
+            item.number,
+            {
+              force: true,
+            },
+          ),
+        );
+      } catch (err: unknown) {
+        setPostError(err instanceof Error ? err.message : String(err));
+      }
+    } catch (err: unknown) {
+      setPostError(err instanceof Error ? err.message : String(err));
+      throw err;
+    } finally {
+      setPosting(false);
+    }
+  };
 
   return (
     <div className={`mx-auto flex w-full flex-col gap-5 px-8 py-8 max-w-5xl`}>
@@ -1212,14 +1300,25 @@ function InboxDetail({
           ) : (
             <p className="text-[13px] text-content/45">No description</p>
           )}
-          {!linear ? (
-            <InboxComments
-              thread={thread}
-              loading={threadLoading}
-              error={threadError}
-              cwd={markdownCwd}
-            />
-          ) : null}
+          <InboxComments
+            thread={thread}
+            loading={threadLoading}
+            error={threadError}
+            cwd={markdownCwd}
+            provider={item.provider}
+            replyMode={linear ? "parent" : "thread"}
+            onReply={setReplyTo}
+          />
+          <InboxCommentForm
+            replyTo={replyTo}
+            posting={posting}
+            error={postError}
+            onCancelReply={() => {
+              setReplyTo(null);
+              setPostError(null);
+            }}
+            onSubmit={postComment}
+          />
         </>
       )}
     </div>

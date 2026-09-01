@@ -532,6 +532,7 @@ pub struct GitHubWorkItemComment {
     pub path: String,
     pub line: Option<i64>,
     pub resolved: bool,
+    pub thread_id: String,
     pub replies: Vec<GitHubWorkItemComment>,
 }
 
@@ -554,6 +555,22 @@ pub async fn git_github_work_item_thread(
 ) -> Result<GitHubWorkItemThread, String> {
     tauri::async_runtime::spawn_blocking(move || {
         git_github_work_item_thread_for(&expand_home(&cwd), &kind, number)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Post a conversation comment, or a reply on a review thread.
+#[tauri::command]
+pub async fn git_github_work_item_comment(
+    cwd: String,
+    kind: String,
+    number: i64,
+    body: String,
+    in_reply_to: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git_github_work_item_comment_for(&expand_home(&cwd), &kind, number, &body, &in_reply_to)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1351,6 +1368,7 @@ query InboxPullRequestThread($owner: String!, $name: String!, $number: Int!) {
       reviewThreads(last: 20) {
         totalCount
         nodes {
+          id
           isResolved
           path
           comments(first: 8) {
@@ -1370,6 +1388,17 @@ query InboxPullRequestThread($owner: String!, $name: String!, $number: Int!) {
         }
       }
     }
+  }
+}
+"#;
+
+const GITHUB_REVIEW_REPLY_MUTATION: &str = r#"
+mutation InboxReviewReply($threadId: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: {
+    pullRequestReviewThreadId: $threadId
+    body: $body
+  }) {
+    comment { url }
   }
 }
 "#;
@@ -1412,6 +1441,133 @@ fn git_github_work_item_thread_for(
         ],
     )?;
     parse_github_work_item_thread(&json, kind)
+}
+
+fn github_comment_input<'a>(
+    kind: &'a str,
+    number: i64,
+    body: &'a str,
+) -> Result<(&'a str, &'a str), String> {
+    let kind = kind.trim();
+    if kind != "issue" && kind != "pr" {
+        return Err("Unknown GitHub task kind".into());
+    }
+    if number <= 0 {
+        return Err("Invalid GitHub item number".into());
+    }
+    let body = body.trim();
+    if body.is_empty() {
+        return Err("Comment cannot be empty".into());
+    }
+    Ok((kind, body))
+}
+
+fn git_github_work_item_comment_for(
+    root: &Path,
+    kind: &str,
+    number: i64,
+    body: &str,
+    in_reply_to: &str,
+) -> Result<String, String> {
+    let (kind, body) = github_comment_input(kind, number, body)?;
+    let reply = in_reply_to.trim();
+    if !reply.is_empty() {
+        return git_github_review_reply_for(root, reply, body);
+    }
+    let number = number.to_string();
+    with_temp_markdown(body, |path| {
+        let output = gh_checked(root, &[kind, "comment", &number, "--body-file", path])?;
+        github_url_from_output(&output, "GitHub did not return a comment URL")
+    })
+}
+
+fn git_github_review_reply_for(root: &Path, thread_id: &str, body: &str) -> Result<String, String> {
+    if !valid_github_node_id(thread_id) {
+        return Err("Invalid review thread".into());
+    }
+    let thread_field = format!("threadId={thread_id}");
+    with_temp_markdown(body, |path| {
+        let body_field = format!("body=@{path}");
+        let json = gh_checked(
+            root,
+            &[
+                "api",
+                "graphql",
+                "-f",
+                &format!("query={GITHUB_REVIEW_REPLY_MUTATION}"),
+                "-F",
+                &thread_field,
+                "-F",
+                &body_field,
+            ],
+        )?;
+        parse_github_review_reply_url(&json)
+    })
+}
+
+fn with_temp_markdown(
+    body: &str,
+    run: impl FnOnce(&str) -> Result<String, String>,
+) -> Result<String, String> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let path = std::env::temp_dir().join(format!("monocode-comment-{stamp}.md"));
+    std::fs::write(&path, body).map_err(|error| error.to_string())?;
+    let path_str = path.to_string_lossy().into_owned();
+    let result = run(&path_str);
+    let _ = std::fs::remove_file(&path);
+    result
+}
+
+fn valid_github_node_id(id: &str) -> bool {
+    let id = id.trim();
+    !id.is_empty()
+        && id.len() < 256
+        && id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '='))
+}
+
+fn github_url_from_output(output: &str, missing: &str) -> Result<String, String> {
+    output
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| line.starts_with("http://") || line.starts_with("https://"))
+        .map(str::to_string)
+        .ok_or_else(|| {
+            if output.trim().is_empty() {
+                missing.to_string()
+            } else {
+                output.trim().to_string()
+            }
+        })
+}
+
+fn parse_github_review_reply_url(json: &str) -> Result<String, String> {
+    let value: serde_json::Value = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    if let Some(message) = value
+        .get("errors")
+        .and_then(|errors| errors.as_array())
+        .and_then(|errors| errors.first())
+        .and_then(|error| error.get("message"))
+        .and_then(|message| message.as_str())
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
+    {
+        return Err(message.to_string());
+    }
+    let url = value
+        .pointer("/data/addPullRequestReviewThreadReply/comment/url")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .trim();
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return Ok(url.to_string());
+    }
+    Err("GitHub did not return a comment URL".into())
 }
 
 fn split_github_repo(slug: &str) -> Result<(String, String), String> {
@@ -1539,6 +1695,8 @@ struct GithubGraphqlReview {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GithubGraphqlReviewThread {
+    #[serde(default)]
+    id: String,
     #[serde(default)]
     is_resolved: bool,
     #[serde(default)]
@@ -1680,6 +1838,7 @@ fn github_mapped_comment(
         path,
         line: comment.line.or(comment.original_line),
         resolved,
+        thread_id: String::new(),
         replies: Vec::new(),
     })
 }
@@ -1715,16 +1874,24 @@ fn github_review_comment(review: GithubGraphqlReview) -> Option<GitHubWorkItemCo
         path: String::new(),
         line: None,
         resolved: false,
+        thread_id: String::new(),
         replies: Vec::new(),
     })
 }
 
 fn github_review_thread(thread: GithubGraphqlReviewThread) -> Option<GitHubWorkItemComment> {
+    let thread_id = thread.id.trim().to_string();
     let mut mapped = thread.comments.nodes.into_iter().filter_map(|comment| {
         github_mapped_comment(comment, "review_comment", &thread.path, thread.is_resolved)
     });
     let mut first = mapped.next()?;
-    first.replies = mapped.collect();
+    first.thread_id = thread_id.clone();
+    first.replies = mapped
+        .map(|mut reply| {
+            reply.thread_id = thread_id.clone();
+            reply
+        })
+        .collect();
     Some(first)
 }
 
@@ -4162,6 +4329,7 @@ mod tests {
                             "totalCount": 1,
                             "nodes": [
                                 {
+                                    "id": "PRRT_1",
                                     "isResolved": true,
                                     "path": "src/app.ts",
                                     "comments": {
@@ -4211,9 +4379,11 @@ mod tests {
         assert_eq!(thread.comments[1].kind, "review_comment");
         assert_eq!(thread.comments[1].path, "src/app.ts");
         assert_eq!(thread.comments[1].line, Some(12));
+        assert_eq!(thread.comments[1].thread_id, "PRRT_1");
         assert!(thread.comments[1].resolved);
         assert_eq!(thread.comments[1].replies.len(), 1);
         assert_eq!(thread.comments[1].replies[0].author, "maya");
+        assert_eq!(thread.comments[1].replies[0].thread_id, "PRRT_1");
         assert_eq!(thread.comments[2].kind, "review");
         assert_eq!(thread.comments[2].state, "APPROVED");
     }
@@ -4244,6 +4414,62 @@ mod tests {
         assert_eq!(thread.comments.len(), 1);
         assert_eq!(thread.comments[0].author, "maya");
         assert_eq!(thread.comments[0].body, "Still happens");
+    }
+
+    #[test]
+    fn github_comment_input_rejects_empty_or_unknown() {
+        assert_eq!(
+            github_comment_input("issue", 12, "Looks good").unwrap(),
+            ("issue", "Looks good")
+        );
+        assert!(github_comment_input("issue", 12, "  ").is_err());
+        assert!(github_comment_input("gist", 12, "Hi").is_err());
+        assert!(github_comment_input("pr", 0, "Hi").is_err());
+    }
+
+    #[test]
+    fn valid_github_node_id_allows_graphql_ids() {
+        assert!(valid_github_node_id("PRRT_kwDOBQfyJc5nX8x-"));
+        assert!(valid_github_node_id("IC_kwDOA=="));
+        assert!(!valid_github_node_id(""));
+        assert!(!valid_github_node_id("thread id"));
+        assert!(!valid_github_node_id("id\nPRRT_1"));
+    }
+
+    #[test]
+    fn github_url_from_output_reads_the_last_http_line() {
+        assert_eq!(
+            github_url_from_output(
+                "Posted\nhttps://github.com/acme/web/issues/1#issuecomment-9\n",
+                "missing"
+            )
+            .unwrap(),
+            "https://github.com/acme/web/issues/1#issuecomment-9"
+        );
+        assert_eq!(
+            github_url_from_output("", "GitHub did not return a comment URL").unwrap_err(),
+            "GitHub did not return a comment URL"
+        );
+    }
+
+    #[test]
+    fn parse_github_review_reply_url_reads_graphql() {
+        let json = r#"{
+            "data": {
+                "addPullRequestReviewThreadReply": {
+                    "comment": { "url": "https://github.com/acme/web/pull/1#discussion_r9" }
+                }
+            }
+        }"#;
+        assert_eq!(
+            parse_github_review_reply_url(json).unwrap(),
+            "https://github.com/acme/web/pull/1#discussion_r9"
+        );
+        let error = parse_github_review_reply_url(
+            r#"{"data":null,"errors":[{"message":"Could not resolve to a node"}]}"#,
+        )
+        .unwrap_err();
+        assert!(error.contains("Could not resolve to a node"));
     }
 
     #[test]
