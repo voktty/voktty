@@ -1,4 +1,4 @@
-import { CardExchange, ChevronRight, X } from "./icons";
+import { ChevronRight, Replace, X } from "./icons";
 import { HARNESS_TITLE, type HarnessId } from "../lib/session";
 import { HarnessIcon } from "./HarnessIcon";
 
@@ -29,7 +29,7 @@ export function HandoffMiniCard({ card, onDismiss }: Props) {
       >
         <div className="flex w-full flex-col text-left">
           <span className="flex min-w-0 items-center gap-1.5">
-            <CardExchange
+            <Replace
               className="size-3.5 shrink-0 text-content/45"
               strokeWidth={1.75}
             />

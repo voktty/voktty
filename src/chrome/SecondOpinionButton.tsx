@@ -1,7 +1,7 @@
 import {
-  CardExchange,
   Check,
   ChevronRight,
+  Replace,
   Split,
   type IconComponent,
 } from "./icons";
@@ -60,7 +60,7 @@ export function HandoffButton({ from, onPick }: Pick<Props, "from" | "onPick">) 
     <SecondOpinionButton
       from={from}
       onPick={onPick}
-      icon={CardExchange}
+      icon={Replace}
       title="Handoff"
       disabledTitle="Install another provider to hand off"
       description="Hand this session to another agent to continue the work."
