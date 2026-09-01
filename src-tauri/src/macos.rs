@@ -64,8 +64,8 @@ unsafe extern "C" {
 }
 
 pub fn install(window: &WebviewWindow) {
-    // Stay opaque until the splash has painted. Glass here makes the first
-    // visible frame a clear desktop smear, then the logo pops on afterwards.
+    // Opaque for the dock bounce so the first frames are a solid field,
+    // not a frosted desktop. Glass turns on after the first UI paint.
     prepare_launch(window);
     let _ = pin(window);
 
@@ -151,8 +151,7 @@ pub fn set_background_blur_radius(window: &WebviewWindow, radius: u8) {
     apply_blur(window, radius);
 }
 
-/// Solid field that matches the HTML splash, so a premature show is still
-/// the same colour as the logo screen — not a frosted desktop.
+/// Solid field behind the dock bounce. Same colour as the HTML sheet.
 fn prepare_launch(window: &WebviewWindow) {
     set_launch_background(window, 23, 23, 23);
     let Some(ns_window) = ns_window(window) else {
@@ -163,7 +162,7 @@ fn prepare_launch(window: &WebviewWindow) {
     ns_window.setTitlebarSeparatorStyle(NSTitlebarSeparatorStyle::None);
 }
 
-pub fn set_launch_background(window: &WebviewWindow, r: u8, g: u8, b: u8) {
+fn set_launch_background(window: &WebviewWindow, r: u8, g: u8, b: u8) {
     let Some(ns_window) = ns_window(window) else {
         return;
     };
@@ -176,7 +175,7 @@ pub fn set_launch_background(window: &WebviewWindow, r: u8, g: u8, b: u8) {
     )));
 }
 
-/// Turn on desktop blur after the splash is gone.
+/// Turn on desktop blur after the first UI paint.
 pub fn enable_glass(window: &WebviewWindow) {
     prepare_glass(window);
     apply_blur(window, BLUR_RADIUS.load(Ordering::Relaxed));

@@ -38,11 +38,19 @@ import {
   hydrateWorkspaceSnapshot,
   parseWorkspaceSnapshot,
 } from "./workspaceSnapshot";
+import { loadWindowTransfer } from "./windowTransferBootstrap";
+import type { WindowTransferPayload } from "./windowTransfer";
 
 export type { ResumedWorkspace };
 export { hasInFlightSessions };
 
+export type BootWorkspace = {
+  windowTransfer: WindowTransferPayload | null;
+  resumed: ResumedWorkspace | null;
+};
+
 let resumedPromise: Promise<ResumedWorkspace | null> | null = null;
+let bootPromise: Promise<BootWorkspace> | null = null;
 let quitting = false;
 let quitDialogOpen = false;
 let bootingResumed: ResumedWorkspace | null = null;
@@ -93,10 +101,12 @@ export async function handleQuitRequested(): Promise<void> {
     );
     return;
   }
-  if (bootingResumed) {
+  const { resumed } = await loadBootWorkspace();
+  const pending = resumed ?? bootingResumed;
+  if (pending) {
     quitting = true;
     try {
-      await persistBootingResume(bootingResumed);
+      await persistBootingResume(pending);
       await invoke("confirm_quit");
     } catch {
       quitting = false;
@@ -109,6 +119,18 @@ export async function handleQuitRequested(): Promise<void> {
 export function loadResumedWorkspace(): Promise<ResumedWorkspace | null> {
   if (!resumedPromise) resumedPromise = loadResumedWorkspaceOnce();
   return resumedPromise;
+}
+
+/** Transfer and restore run once; callers share the same promise. */
+export function loadBootWorkspace(): Promise<BootWorkspace> {
+  if (!bootPromise) {
+    bootPromise = (async () => {
+      const windowTransfer = await loadWindowTransfer();
+      const resumed = windowTransfer ? null : await loadResumedWorkspace();
+      return { windowTransfer, resumed };
+    })();
+  }
+  return bootPromise;
 }
 
 async function loadResumedWorkspaceOnce(): Promise<ResumedWorkspace | null> {

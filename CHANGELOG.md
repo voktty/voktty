@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Launch holds the logo until the restored workspace is ready, then fades to that first paint. The window stays up through the Dock bounce so the mark is visible instead of a blank or shifting chrome.
+
 ## [0.1.24] - 2026-09-01
 
 ### Added
