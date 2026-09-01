@@ -123,10 +123,12 @@ import {
   KEYBINDINGS,
   loadClaudeHooks,
   loadComposerRunner,
+  loadGridArcadeEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   saveClaudeHooks,
   saveComposerRunner,
+  saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
   settingsSectionDescription,
@@ -251,14 +253,15 @@ export function SettingsView({
 
 function GeneralPage() {
   const [layout, setLayout] = useState<SidebarLayout>(loadSidebarLayout);
-  const [transcriptLayout, setTranscriptLayout] = useState<TranscriptLayout>(
-    loadTranscriptLayout,
-  );
+  const [transcriptLayout, setTranscriptLayout] =
+    useState<TranscriptLayout>(loadTranscriptLayout);
   const [transcriptZen, setTranscriptZen] = useState(loadTranscriptZen);
-  const [transcriptAnchor, setTranscriptAnchor] = useState(
-    loadTranscriptAnchor,
-  );
+  const [transcriptAnchor, setTranscriptAnchor] =
+    useState(loadTranscriptAnchor);
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
+  const [gridArcadeEnabled, setGridArcadeEnabled] = useState(
+    loadGridArcadeEnabled,
+  );
   const [notesEnabled, setNotesEnabled] = useState(loadNotesEnabled);
   const [liveAgentsEnabled, setLiveAgentsEnabled] = useState(
     loadLiveAgentsEnabled,
@@ -304,6 +307,11 @@ function GeneralPage() {
   const onComposerRunner = (next: boolean) => {
     saveComposerRunner(next);
     setComposerRunner(next);
+  };
+
+  const onGridArcadeEnabled = (next: boolean) => {
+    saveGridArcadeEnabled(next);
+    setGridArcadeEnabled(next);
   };
 
   const onNotesEnabled = (next: boolean) => {
@@ -387,14 +395,20 @@ function GeneralPage() {
         />
       </Row>
       <Row
+        label="Empty session games"
+        description="Pac-man and snake idle on the empty-session grid. Hover the band to take control of whichever is on screen. Turn this off to keep the pane still."
+      >
+        <Toggle
+          label="Empty session games"
+          on={gridArcadeEnabled}
+          onChange={onGridArcadeEnabled}
+        />
+      </Row>
+      <Row
         label="Notes"
         description="A global markdown notebook on the project rail. Save a finished turn from the transcript, then mention it later with @note or add it to chat. Turn this off to hide Notes from the UI."
       >
-        <Toggle
-          label="Notes"
-          on={notesEnabled}
-          onChange={onNotesEnabled}
-        />
+        <Toggle label="Notes" on={notesEnabled} onChange={onNotesEnabled} />
       </Row>
       <Row
         label="Working agents"
@@ -410,11 +424,7 @@ function GeneralPage() {
         label="Sounds"
         description="Short cues when a turn finishes, a new inbox item appears on the project rail, or an update is available. Switches and Copy on a finished turn also play."
       >
-        <Toggle
-          label="Sounds"
-          on={soundsEnabled}
-          onChange={onSoundsEnabled}
-        />
+        <Toggle label="Sounds" on={soundsEnabled} onChange={onSoundsEnabled} />
       </Row>
       <Row
         label="Claude Code hooks"

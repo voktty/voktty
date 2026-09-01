@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   COMPOSER_RUNNER_DEFAULT,
+  GRID_ARCADE_ENABLED_DEFAULT,
   LIVE_AGENTS_ENABLED_DEFAULT,
   loadComposerRunner,
+  loadGridArcadeEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   NOTES_ENABLED_DEFAULT,
   saveComposerRunner,
+  saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
 } from "./settings";
@@ -14,6 +17,7 @@ import {
 const KEY = "monocode.composerRunner";
 const NOTES_KEY = "monocode.notesEnabled";
 const LIVE_AGENTS_KEY = "monocode.liveAgentsEnabled";
+const GRID_ARCADE_KEY = "monocode.gridArcadeEnabled";
 
 function mockLocalStorage() {
   const data = new Map<string, string>();
@@ -96,5 +100,25 @@ describe("live agents enabled setting", () => {
     expect(loadLiveAgentsEnabled()).toBe(false);
     saveLiveAgentsEnabled(true);
     expect(loadLiveAgentsEnabled()).toBe(true);
+  });
+});
+
+describe("grid arcade enabled setting", () => {
+  beforeEach(mockLocalStorage);
+  afterEach(() => {
+    localStorage.removeItem(GRID_ARCADE_KEY);
+  });
+
+  it("defaults to on", () => {
+    expect(GRID_ARCADE_ENABLED_DEFAULT).toBe(true);
+    expect(loadGridArcadeEnabled()).toBe(true);
+  });
+
+  it("persists an off switch", () => {
+    saveGridArcadeEnabled(false);
+    expect(localStorage.getItem(GRID_ARCADE_KEY)).toBe("0");
+    expect(loadGridArcadeEnabled()).toBe(false);
+    saveGridArcadeEnabled(true);
+    expect(loadGridArcadeEnabled()).toBe(true);
   });
 });

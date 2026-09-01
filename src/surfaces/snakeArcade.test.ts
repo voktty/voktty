@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HARNESSES } from "../lib/session";
-import { LOGO_CELLS, createSnakeArcade } from "./gridArcade";
+import { LOGO_CELLS, createSnakeArcade } from "./snakeArcade";
 
 /** Roughly what a normal window gives us: 6px cells, a 192px-tall band. */
 const COLS = 172;
@@ -34,10 +34,11 @@ function run(cols: number, rows: number, ms: number) {
       expect(HARNESSES).toContain(pickup.harness);
       expect(pickup.alpha).toBeGreaterThanOrEqual(0);
       expect(pickup.alpha).toBeLessThanOrEqual(1);
+      expect(pickup.cells).toBe(LOGO_CELLS);
       expect(pickup.x).toBeGreaterThanOrEqual(0);
       expect(pickup.y).toBeGreaterThanOrEqual(0);
-      expect(pickup.x + LOGO_CELLS).toBeLessThanOrEqual(cols);
-      expect(pickup.y + LOGO_CELLS).toBeLessThanOrEqual(playRows);
+      expect(pickup.x + pickup.cells).toBeLessThanOrEqual(cols);
+      expect(pickup.y + pickup.cells).toBeLessThanOrEqual(playRows);
       onBoardFor += FRAME_MS;
     } else if (onBoardFor) {
       // Gone well before its lifetime ran out means the snake got it.
@@ -218,6 +219,13 @@ describe("snake arcade", () => {
       expect(() => arcade.stamp(stamp, cols, rows)).not.toThrow();
     }
   });
+
+  it("has no sprites of its own — the body is stamped onto the grid", () => {
+    const arcade = createSnakeArcade();
+    arcade.resize(COLS, ROWS);
+    arcade.step(FRAME_MS);
+    expect(arcade.sprites()).toEqual([]);
+  });
 });
 
 /** Matches mid-mode's player tick. */
@@ -257,7 +265,7 @@ function stampHead(
   return { x: at % cols, y: Math.floor(at / cols), value: best };
 }
 
-describe("player control", () => {
+describe("snake player control", () => {
   it("steers the snake instead of thinking for itself", () => {
     const arcade = createSnakeArcade();
     arcade.resize(COLS, ROWS);
@@ -334,7 +342,7 @@ describe("player control", () => {
     arcade.takeControl();
     expect(arcade.mode()).toBe("mid");
 
-    const run = (mode: "low" | "mid" | "hard") => {
+    const runMode = (mode: "low" | "mid" | "hard") => {
       const next = createSnakeArcade();
       next.resize(COLS, ROWS);
       next.setMode(mode);
@@ -344,9 +352,9 @@ describe("player control", () => {
     };
 
     const spawnX = Math.max(2, Math.floor(COLS / 4));
-    expect(run("low")).toBeGreaterThan(spawnX);
-    expect(run("mid")).toBeGreaterThan(run("low"));
-    expect(run("hard")).toBeGreaterThan(run("mid"));
+    expect(runMode("low")).toBeGreaterThan(spawnX);
+    expect(runMode("mid")).toBeGreaterThan(runMode("low"));
+    expect(runMode("hard")).toBeGreaterThan(runMode("mid"));
   });
 
   it("keeps a live game when the pane is resized", () => {

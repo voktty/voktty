@@ -3,11 +3,7 @@ import { ALT, IS_MAC, MOD, SHIFT } from "./platform";
 const SECTION_KEY = "monocode.settingsSection";
 
 export type SettingsSectionId =
-  | "general"
-  | "appearance"
-  | "keybindings"
-  | "providers"
-  | "archive";
+  "general" | "appearance" | "keybindings" | "providers" | "archive";
 
 export const SETTINGS_SECTIONS: {
   id: SettingsSectionId;
@@ -182,6 +178,45 @@ export function subscribeLiveAgentsEnabled(onStoreChange: () => void) {
   window.addEventListener(LIVE_AGENTS_ENABLED_CHANGE_EVENT, onStoreChange);
   return () =>
     window.removeEventListener(LIVE_AGENTS_ENABLED_CHANGE_EVENT, onStoreChange);
+}
+
+const GRID_ARCADE_ENABLED_KEY = "monocode.gridArcadeEnabled";
+
+export const GRID_ARCADE_ENABLED_DEFAULT = true;
+
+/** Fired on `window` when the empty-session games setting flips. */
+export const GRID_ARCADE_ENABLED_CHANGE_EVENT =
+  "monocode:grid-arcade-enabled-change";
+
+export function loadGridArcadeEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(GRID_ARCADE_ENABLED_KEY);
+    if (raw == null) return GRID_ARCADE_ENABLED_DEFAULT;
+    return raw === "1" || raw === "true";
+  } catch {
+    return GRID_ARCADE_ENABLED_DEFAULT;
+  }
+}
+
+export function saveGridArcadeEnabled(value: boolean) {
+  try {
+    localStorage.setItem(GRID_ARCADE_ENABLED_KEY, value ? "1" : "0");
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<boolean>(GRID_ARCADE_ENABLED_CHANGE_EVENT, {
+      detail: value,
+    }),
+  );
+}
+
+export function subscribeGridArcadeEnabled(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(GRID_ARCADE_ENABLED_CHANGE_EVENT, onStoreChange);
+  return () =>
+    window.removeEventListener(GRID_ARCADE_ENABLED_CHANGE_EVENT, onStoreChange);
 }
 
 const CLAUDE_HOOKS_KEY = "monocode.claudeHooks";
