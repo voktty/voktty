@@ -15,6 +15,10 @@ export type SshConnectionConfig = {
   identityFile?: string;
   extraArgs?: string;
   initialDirectory?: string;
+  multiplexerMode?: "none" | "auto" | "tmux" | "screen" | "ask";
+  tmuxSessionName?: string;
+  activeMultiplexerSession?: string;
+  multiplexerAction?: "auto" | "attach" | "attach_force" | "grouped" | "new";
 };
 
 export type SshWorkspaceConnection = SshConnectionConfig & {

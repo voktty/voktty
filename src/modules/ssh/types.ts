@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { SshConnectionConfig } from "@/modules/workspace";
 
+export type { SshConnectionConfig };
+
 export type SshConnection = SshConnectionConfig & {
   id: string;
   name: string;
@@ -53,6 +55,30 @@ export async function fetchSshServerMetrics(
 
 export async function fetchLocalHostMetrics(): Promise<SshServerMetrics> {
   return invoke<SshServerMetrics>("host_local_metrics");
+}
+
+export type RemoteMultiplexerSession = {
+  name: string;
+  windowsCount: number;
+  attachedCount: number;
+  createdAt?: number;
+  lastActivity?: number;
+  isAttached: boolean;
+  multiplexer: string;
+};
+
+export type RemoteMultiplexerProbe = {
+  supported: boolean;
+  multiplexer?: string;
+  sessions: RemoteMultiplexerSession[];
+};
+
+export async function probeSshMultiplexer(
+  connection: SshConnectionConfig,
+): Promise<RemoteMultiplexerProbe> {
+  return invoke<RemoteMultiplexerProbe>("ssh_list_multiplexer_sessions", {
+    connection,
+  });
 }
 
 export function buildSshCommand(conn: SshConnection): string {

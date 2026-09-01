@@ -145,5 +145,24 @@ Host forgenex-code4
       expect(typeof useSshPing).toBe("function");
     });
   });
+
+  describe("Multiplexer session probe & configuration", () => {
+    it("supports multiplexerMode and tmuxSessionName in SshConnection", () => {
+      const conn: SshConnection = {
+        id: "mux-1",
+        name: "Mux Server",
+        host: "10.0.0.5",
+        multiplexerMode: "auto",
+        tmuxSessionName: "dev-session",
+        activeMultiplexerSession: "dev-session",
+        multiplexerAction: "attach_force",
+      };
+
+      expect(conn.multiplexerMode).toBe("auto");
+      expect(conn.tmuxSessionName).toBe("dev-session");
+      expect(conn.activeMultiplexerSession).toBe("dev-session");
+      expect(conn.multiplexerAction).toBe("attach_force");
+    });
+  });
 });
 

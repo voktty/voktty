@@ -40,6 +40,8 @@ export function SshConnectionDialog({
   const [identityFile, setIdentityFile] = useState("");
   const [extraArgs, setExtraArgs] = useState("");
   const [initialDirectory, setInitialDirectory] = useState("");
+  const [multiplexerMode, setMultiplexerMode] = useState<"none" | "auto" | "ask">("none");
+  const [tmuxSessionName, setTmuxSessionName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const hostInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,6 +59,12 @@ export function SshConnectionDialog({
       setIdentityFile(connection.identityFile ?? "");
       setExtraArgs(connection.extraArgs ?? "");
       setInitialDirectory(connection.initialDirectory ?? "");
+      setMultiplexerMode(
+        connection.multiplexerMode === "ask" || connection.multiplexerMode === "auto"
+          ? connection.multiplexerMode
+          : "none",
+      );
+      setTmuxSessionName(connection.tmuxSessionName ?? "");
     } else {
       setName("");
       setHost("");
@@ -65,6 +73,8 @@ export function SshConnectionDialog({
       setIdentityFile("");
       setExtraArgs("");
       setInitialDirectory("");
+      setMultiplexerMode("none");
+      setTmuxSessionName("");
     }
     setError(null);
     setTimeout(() => hostInputRef.current?.focus(), 50);
@@ -92,6 +102,8 @@ export function SshConnectionDialog({
       identityFile: identityFile.trim() || undefined,
       extraArgs: sanitizedExtraArgs,
       initialDirectory: initialDirectory.trim() || undefined,
+      multiplexerMode: multiplexerMode !== "none" ? multiplexerMode : undefined,
+      tmuxSessionName: tmuxSessionName.trim() || undefined,
     };
 
     try {
@@ -334,6 +346,69 @@ export function SshConnectionDialog({
             <span className="text-[10px] leading-relaxed text-muted-foreground">
               {t("ssh.dialog.extraArgsDescription")}
             </span>
+          </div>
+
+          <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-medium text-foreground">
+                {t("ssh.dialog.multiplexerTitle")}
+              </Label>
+              <span className="text-[10px] font-mono text-muted-foreground/70">
+                {t("ssh.dialog.multiplexerBadge")}
+              </span>
+            </div>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              {t("ssh.dialog.multiplexerDescription")}
+            </p>
+            <div className="grid grid-cols-3 gap-1 pt-1">
+              <button
+                type="button"
+                onClick={() => setMultiplexerMode("none")}
+                className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
+                  multiplexerMode === "none"
+                    ? "bg-secondary text-secondary-foreground border-border shadow-xs"
+                    : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
+                }`}
+              >
+                {t("ssh.dialog.multiplexerDisabled")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMultiplexerMode("auto")}
+                className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
+                  multiplexerMode === "auto"
+                    ? "bg-secondary text-secondary-foreground border-border shadow-xs"
+                    : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
+                }`}
+              >
+                {t("ssh.dialog.multiplexerAuto")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMultiplexerMode("ask")}
+                className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
+                  multiplexerMode === "ask"
+                    ? "bg-secondary text-secondary-foreground border-border shadow-xs"
+                    : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
+                }`}
+              >
+                {t("ssh.dialog.multiplexerAsk")}
+              </button>
+            </div>
+            {multiplexerMode !== "none" && (
+              <div className="flex flex-col gap-1 pt-1">
+                <Label htmlFor="ssh-tmux-name" className="text-[10.5px] text-muted-foreground">
+                  {t("ssh.dialog.tmuxSessionName")}
+                </Label>
+                <Input
+                  id="ssh-tmux-name"
+                  value={tmuxSessionName}
+                  onChange={(e) => setTmuxSessionName(e.target.value)}
+                  placeholder={name.trim() ? name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_") : "voktty"}
+                  className="h-7 text-xs font-mono"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-1">
