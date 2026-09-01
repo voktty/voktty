@@ -418,10 +418,14 @@ export default function App({
   windowTransfer = null,
   resumed = null,
   installedUpdate = null,
+  history: bootHistory = [],
+  historyCwd: bootHistoryCwd = null,
 }: {
   windowTransfer?: WindowTransferPayload | null;
   resumed?: ResumedWorkspace | null;
   installedUpdate?: InstalledUpdate | null;
+  history?: SessionSummary[];
+  historyCwd?: string | null;
 }) {
   const [projectCwd, setProjectCwd] = useState(
     () =>
@@ -519,14 +523,19 @@ export default function App({
   const [fileErrorCounts, setFileErrorCounts] = useState<Map<string, number>>(
     () => new Map(),
   );
-  const [history, setHistory] = useState<SessionSummary[]>([]);
+  const [history, setHistory] = useState<SessionSummary[]>(
+    () => bootHistory,
+  );
   /**
    * Projects whose rows are already in `history`. This has to be state, not a
    * ref: `sidebarCwd` is derived during render, so the frame that first shows
    * a new project must already know the listing has not arrived yet.
    */
   const [loadedProjects, setLoadedProjects] = useState<ReadonlySet<string>>(
-    () => new Set(),
+    () =>
+      bootHistoryCwd
+        ? new Set([normalizeProjectPath(bootHistoryCwd)])
+        : new Set(),
   );
   const loadedProjectsRef = useRef(loadedProjects);
   loadedProjectsRef.current = loadedProjects;
