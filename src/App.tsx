@@ -237,7 +237,12 @@ import { liveAgentsFromSessions } from "./lib/liveAgents";
 import { hiddenApprovalNotices } from "./lib/approvalToast";
 import { nextUnseenFinishedSessions } from "./lib/sessionDone";
 import { playCue } from "./lib/sounds";
-import { tabCommand } from "./lib/tabKeys";
+import {
+  deferUnhandledEscape,
+  focusedBusyAgentSessionId,
+  shouldStopFocusedTurnOnEscape,
+  tabCommand,
+} from "./lib/tabKeys";
 import {
   canTabVisitBack,
   canTabVisitForward,
@@ -548,6 +553,8 @@ export default function App({
   tabsRef.current = tabs;
   const projectTerminalsRef = useRef(projectTerminals);
   projectTerminalsRef.current = projectTerminals;
+  const projectTerminalFocusedRef = useRef(projectTerminalFocused);
+  projectTerminalFocusedRef.current = projectTerminalFocused;
   const activeTabIdRef = useRef(activeTabId);
   activeTabIdRef.current = activeTabId;
   const projectCwdRef = useRef(projectCwd);
@@ -3676,6 +3683,50 @@ export default function App({
     },
     [flushHarnessEvents],
   );
+
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const inTerminal = Boolean(target?.closest(".monocode-terminal"));
+      const activeTabId = activeTabIdRef.current;
+      const sessionId = focusedBusyAgentSessionId(
+        activeTabId,
+        tabsRef.current,
+        sessionsRef.current,
+        projectTerminalFocusedRef.current,
+      );
+      if (
+        !sessionId ||
+        !shouldStopFocusedTurnOnEscape(event, {
+          inTerminal,
+          focusedSessionBusy: true,
+        })
+      ) {
+        return;
+      }
+
+      // Other surfaces (drag/reorder included) can claim Escape later in the
+      // same keydown dispatch. Defer the destructive stop until every handler
+      // has had a chance to preventDefault, then verify focus did not move.
+      deferUnhandledEscape(event, () => {
+        const stillFocusedSessionId = focusedBusyAgentSessionId(
+          activeTabIdRef.current,
+          tabsRef.current,
+          sessionsRef.current,
+          projectTerminalFocusedRef.current,
+        );
+        if (
+          activeTabIdRef.current !== activeTabId ||
+          stillFocusedSessionId !== sessionId
+        ) {
+          return;
+        }
+        onStop(sessionId);
+      });
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [onStop]);
 
   const onApproval = useCallback(
     (sessionId: string, requestId: number, decision: ApprovalDecision) => {
