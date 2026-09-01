@@ -883,6 +883,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
     closeOtherTabs: "अन्य टैब बंद करें",
     closeTabsToRight: "दाईं ओर के टैब बंद करें",
     duplicateTab: "डुप्लिकेट टर्मिनल",
+    reconnectSsh: "SSH पुनः कनेक्ट करें",
     renameTab: "नाम बदलें",
     convertToAgenticTerminal: "एजेंटिक टर्मिनल में बदलें",
     convertToNormalTerminal: "मानक टर्मिनल में बदलें",

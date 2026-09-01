@@ -3,6 +3,7 @@ import {
   extractRemoteHostLabel,
   getTabSubtitle,
   isSshOrRemoteSession,
+  isSshTab,
   labelFor,
 } from "./tabLabel";
 import type { TerminalTab } from "./useTabs";
@@ -186,5 +187,39 @@ describe("getTabSubtitle", () => {
       icon: "remote",
       text: "serial · COM3",
     });
+  });
+});
+
+describe("isSshTab", () => {
+  it("identifies terminal tabs with SSH workspaceEnv", () => {
+    const tab = terminalTab({
+      workspaceEnv: {
+        kind: "ssh",
+        connection: { id: "c1", name: "test", host: "192.168.1.4", user: "abc" },
+        root: "/home/abc",
+      },
+    });
+    expect(isSshTab(tab)).toBe(true);
+  });
+
+  it("identifies terminal tabs inside an active SSH workspace", () => {
+    const tab = terminalTab();
+    expect(
+      isSshTab(tab, {
+        kind: "ssh",
+        connection: { id: "c1", name: "test", host: "192.168.1.4", user: "abc" },
+        root: "/home/abc",
+      }),
+    ).toBe(true);
+  });
+
+  it("identifies terminal tabs running ssh command from title", () => {
+    const tab = terminalTab({ title: "ssh root@server" });
+    expect(isSshTab(tab)).toBe(true);
+  });
+
+  it("returns false for local non-ssh terminal tabs", () => {
+    const tab = terminalTab({ title: "powershell" });
+    expect(isSshTab(tab)).toBe(false);
   });
 });

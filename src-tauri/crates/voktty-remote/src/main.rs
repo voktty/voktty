@@ -507,10 +507,19 @@ impl RemoteServer {
             Ok(path) => path,
             Err(error) => return RemoteResponse::failure(request.id, "invalid_path", error),
         };
+        let link_meta = fs::symlink_metadata(&path).ok();
+        let is_symlink = link_meta
+            .as_ref()
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false);
         let metadata = match fs::metadata(&path) {
             Ok(metadata) => metadata,
             Err(error) => {
-                return RemoteResponse::failure(request.id, "stat_failed", error.to_string())
+                if let Some(meta) = link_meta {
+                    meta
+                } else {
+                    return RemoteResponse::failure(request.id, "stat_failed", error.to_string());
+                }
             }
         };
         RemoteResponse::success(
@@ -518,7 +527,8 @@ impl RemoteServer {
             json!({
                 "size": metadata.len(),
                 "mtime": modified_millis(&metadata),
-                "kind": if metadata.is_dir() { "dir" } else { "file" }
+                "kind": if metadata.is_dir() { "dir" } else { "file" },
+                "isSymlink": is_symlink
             }),
         )
     }
@@ -754,17 +764,21 @@ impl RemoteServer {
         let root = self.root.as_ref().ok_or("handshake is required")?;
         let raw = Path::new(path);
         let candidate = if raw.is_absolute() {
-            raw.to_path_buf()
+            let canonical_raw = fs::canonicalize(raw).map_err(|e| e.to_string())?;
+            if !canonical_raw.starts_with(root) {
+                return Err("path is outside the workspace root".to_string());
+            }
+            canonical_raw
         } else {
             root.join(safe_relative_path(path)?)
         };
         if let Ok(canonical) = fs::canonicalize(&candidate) {
-            return ensure_within_root(root, canonical);
+            return Ok(canonical);
         }
         if must_exist {
             return Err("watch path does not exist".to_string());
         }
-        ensure_within_root(root, candidate)
+        Ok(candidate)
     }
 
     fn open_pty(&self, request: RemoteRequest, output: SharedOutput) -> RemoteResponse {
@@ -966,65 +980,49 @@ impl RemoteServer {
         let requested = cwd.filter(|value| !value.trim().is_empty());
         let candidate = match requested {
             None => root.clone(),
-            Some(value) if Path::new(value).is_absolute() => PathBuf::from(value),
+            Some(value) if Path::new(value).is_absolute() => {
+                let canonical_p = fs::canonicalize(value).map_err(|e| e.to_string())?;
+                if !canonical_p.starts_with(root) {
+                    return Err("path is outside the workspace root".to_string());
+                }
+                canonical_p
+            }
             Some(value) => root.join(safe_relative_path(value)?),
         };
-        let canonical = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
-        let canonical = ensure_within_root(root, canonical)?;
-        if !canonical.is_dir() {
+        if !candidate.is_dir() {
             return Err("PTY working directory is not a directory".to_string());
         }
-        Ok(canonical)
+        Ok(candidate)
     }
 
     fn resolve_existing(&self, path: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
         let relative = safe_relative_path(path.unwrap_or("."))?;
         let candidate = root.join(relative);
-        let canonical = fs::canonicalize(&candidate).map_err(|error| error.to_string())?;
-        ensure_within_root(root, canonical)
+        if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
+            return Err("path does not exist".to_string());
+        }
+        Ok(candidate)
     }
 
     fn resolve_for_write(&self, path: &str) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
         let relative = safe_relative_path(path)?;
         let candidate = root.join(relative);
-        if candidate
-            .symlink_metadata()
-            .map(|metadata| metadata.file_type().is_symlink())
-            .unwrap_or(false)
-        {
-            return Err("writing through symlinks is not allowed".to_string());
-        }
-        if candidate.exists() {
-            return ensure_within_root(
-                root,
-                fs::canonicalize(&candidate).map_err(|e| e.to_string())?,
-            );
-        }
         let parent = candidate.parent().ok_or("path has no parent")?;
-        let parent =
-            ensure_within_root(root, fs::canonicalize(parent).map_err(|e| e.to_string())?)?;
-        let name = candidate.file_name().ok_or("path has no file name")?;
-        Ok(parent.join(name))
+        if !parent.exists() {
+            return Err("parent directory does not exist".to_string());
+        }
+        Ok(candidate)
     }
 
     fn resolve_entry(&self, path: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
         let relative = safe_relative_path(path.unwrap_or("."))?;
         let candidate = root.join(relative);
-        let metadata = fs::symlink_metadata(&candidate).map_err(|e| e.to_string())?;
-        let parent = candidate.parent().ok_or("path has no parent")?;
-        let parent =
-            ensure_within_root(root, fs::canonicalize(parent).map_err(|e| e.to_string())?)?;
-        let name = candidate.file_name().ok_or("path has no file name")?;
-        if metadata.file_type().is_symlink() {
-            return Ok(parent.join(name));
+        if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
+            return Err("path does not exist".to_string());
         }
-        ensure_within_root(
-            root,
-            fs::canonicalize(&candidate).map_err(|e| e.to_string())?,
-        )?;
         Ok(candidate)
     }
 
@@ -1036,12 +1034,13 @@ impl RemoteServer {
             return Err("path must not be the workspace root".to_string());
         }
         let parent = candidate.parent().ok_or("path has no parent")?;
-        let parent =
-            ensure_within_root(root, fs::canonicalize(parent).map_err(|e| e.to_string())?)?;
+        if !parent.exists() {
+            return Err("parent directory does not exist".to_string());
+        }
         if fs::symlink_metadata(&candidate).is_ok() {
             return Err("path already exists".to_string());
         }
-        Ok(parent.join(candidate.file_name().ok_or("path has no file name")?))
+        Ok(candidate)
     }
 }
 
@@ -1081,12 +1080,14 @@ struct RemoteWorkspaceEdit {
 impl RemoteWorkspaceEdit {
     fn resolve_file(&self, relative: &str) -> Result<PathBuf, String> {
         let candidate = self.root.join(safe_relative_path(relative)?);
-        let link_metadata = fs::symlink_metadata(&candidate).map_err(|error| error.to_string())?;
-        if link_metadata.file_type().is_symlink() || !link_metadata.is_file() {
+        if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
+            return Err("replacement target does not exist".to_string());
+        }
+        let metadata = fs::metadata(&candidate).map_err(|error| error.to_string())?;
+        if !metadata.is_file() {
             return Err("replacement target must be a regular file".to_string());
         }
-        let candidate = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
-        ensure_within_root(&self.root, candidate)
+        Ok(candidate)
     }
 }
 
@@ -1242,14 +1243,6 @@ fn safe_relative_path(path: &str) -> Result<PathBuf, String> {
     Ok(path.to_path_buf())
 }
 
-fn ensure_within_root(root: &Path, path: PathBuf) -> Result<PathBuf, String> {
-    if path.starts_with(root) {
-        Ok(path)
-    } else {
-        Err("path is outside the workspace root".to_string())
-    }
-}
-
 fn read_directory(path: &Path) -> Result<Vec<Value>, String> {
     let mut entries = fs::read_dir(path)
         .map_err(|error| error.to_string())?
@@ -1261,12 +1254,23 @@ fn read_directory(path: &Path) -> Result<Vec<Value>, String> {
 }
 
 fn directory_entry(entry: &fs::DirEntry) -> Result<Value, String> {
-    let metadata = entry.metadata().map_err(|error| error.to_string())?;
     let link_metadata = fs::symlink_metadata(entry.path()).map_err(|error| error.to_string())?;
-    let kind = if link_metadata.file_type().is_symlink() {
-        "symlink"
-    } else if metadata.is_dir() {
+    let is_symlink = link_metadata.file_type().is_symlink();
+    let (metadata, is_dir) = if is_symlink {
+        match fs::metadata(entry.path()) {
+            Ok(target_meta) => {
+                let is_dir = target_meta.is_dir();
+                (target_meta, is_dir)
+            }
+            Err(_) => (link_metadata.clone(), false),
+        }
+    } else {
+        (link_metadata.clone(), link_metadata.is_dir())
+    };
+    let kind = if is_dir {
         "directory"
+    } else if is_symlink {
+        "symlink"
     } else {
         "file"
     };
@@ -1274,6 +1278,7 @@ fn directory_entry(entry: &fs::DirEntry) -> Result<Value, String> {
     Ok(json!({
         "name": name,
         "kind": kind,
+        "isSymlink": is_symlink,
         "size": metadata.len(),
         "mtime": modified_millis(&metadata)
     }))
@@ -1860,5 +1865,84 @@ mod tests {
             .next()
             .expect("changed path")
             .ends_with("changed.txt"));
+    }
+
+    #[test]
+    fn handles_directory_and_file_symlinks() {
+        let workspace = tempdir().expect("workspace");
+        let external_target = tempdir().expect("external target");
+        let ext_file = external_target.path().join("external_file.txt");
+        fs::write(&ext_file, "external content").expect("external file write");
+
+        let symlink_dir_path = workspace.path().join("linked_folder");
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(external_target.path(), &symlink_dir_path).expect("symlink dir");
+        }
+        #[cfg(windows)]
+        {
+            let _ = std::os::windows::fs::symlink_dir(external_target.path(), &symlink_dir_path);
+        }
+
+        // Only run assertions if symlink creation succeeded (some Windows test environments lack SeCreateSymbolicLinkPrivilege)
+        if fs::symlink_metadata(&symlink_dir_path).is_ok() {
+            let mut server = RemoteServer::new();
+            assert!(
+                server
+                    .handle(RemoteRequest {
+                        protocol: PROTOCOL_VERSION,
+                        id: "1".to_string(),
+                        method: METHOD_HANDSHAKE.to_string(),
+                        params: json!({ "workspaceRoot": workspace.path() }),
+                    })
+                    .ok
+            );
+
+            // 1. List directory should identify the symlink folder as "directory"
+            let list_root = server.handle(RemoteRequest {
+                protocol: PROTOCOL_VERSION,
+                id: "2".to_string(),
+                method: METHOD_LIST_DIR.to_string(),
+                params: json!({}),
+            });
+            assert!(list_root.ok);
+            let entries = list_root.result.expect("entries")["entries"].as_array().cloned().unwrap();
+            let link_entry = entries.iter().find(|e| e["name"] == "linked_folder").expect("entry found");
+            assert_eq!(link_entry["kind"], "directory");
+            assert_eq!(link_entry["isSymlink"], true);
+
+            // 2. Listing inside the symlinked folder should return its contents
+            let list_sub = server.handle(RemoteRequest {
+                protocol: PROTOCOL_VERSION,
+                id: "3".to_string(),
+                method: METHOD_LIST_DIR.to_string(),
+                params: json!({ "path": "linked_folder" }),
+            });
+            assert!(list_sub.ok);
+            let sub_entries = list_sub.result.expect("sub_entries")["entries"].as_array().cloned().unwrap();
+            assert!(sub_entries.iter().any(|e| e["name"] == "external_file.txt"));
+
+            // 3. Reading a file through the symlinked folder should work
+            let read_sub = server.handle(RemoteRequest {
+                protocol: PROTOCOL_VERSION,
+                id: "4".to_string(),
+                method: METHOD_READ_FILE.to_string(),
+                params: json!({ "path": "linked_folder/external_file.txt" }),
+            });
+            assert!(read_sub.ok);
+            assert_eq!(read_sub.result.expect("content")["content"], "external content");
+
+            // 4. Stat should report directory for linked folder
+            let stat_dir = server.handle(RemoteRequest {
+                protocol: PROTOCOL_VERSION,
+                id: "5".to_string(),
+                method: METHOD_STAT.to_string(),
+                params: json!({ "path": "linked_folder" }),
+            });
+            assert!(stat_dir.ok);
+            let stat_res = stat_dir.result.expect("stat");
+            assert_eq!(stat_res["kind"], "dir");
+            assert_eq!(stat_res["isSymlink"], true);
+        }
     }
 }

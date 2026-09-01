@@ -595,6 +595,7 @@ const itBase = mergeLocale(en, {
     closeOtherTabs: "Chiudi le altre schede",
     closeTabsToRight: "Chiudi le schede a destra",
     duplicateTab: "Duplica terminale",
+    reconnectSsh: "Riconnetti SSH",
     renameTab: "Rinomina",
     convertToAgenticTerminal: "Converti in terminale agentico",
     convertToNormalTerminal: "Converti in terminale standard",
