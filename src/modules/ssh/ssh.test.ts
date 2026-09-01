@@ -104,6 +104,31 @@ Host staging
       expect(result[1].host).toBe("staging.domain.com");
       expect(result[1].user).toBe("deploy");
     });
+
+    it("parses extra options and directives like HostKeyAlias, StrictHostKeyChecking, etc.", () => {
+      const sample = `
+Host forgenex-code4
+    HostName 192.168.1.4
+    User abc
+    Port 9194
+    HostKeyAlias forgenex-code4
+    IdentityFile ~/.ssh/id_ed25519
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+`;
+      const result = parseSshConfig(sample);
+      expect(result).toHaveLength(1);
+      const conn = result[0];
+      expect(conn.name).toBe("forgenex-code4");
+      expect(conn.host).toBe("192.168.1.4");
+      expect(conn.user).toBe("abc");
+      expect(conn.port).toBe(9194);
+      expect(conn.identityFile).toBe("~/.ssh/id_ed25519");
+      expect(conn.extraArgs).toBe(
+        "-o HostKeyAlias=forgenex-code4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR",
+      );
+    });
   });
 
   describe("SshPing & Metrics types", () => {

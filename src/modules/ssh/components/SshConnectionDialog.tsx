@@ -80,6 +80,9 @@ export function SshConnectionDialog({
     const parsedPort = parseInt(port.trim(), 10);
     const finalPort = !Number.isNaN(parsedPort) && parsedPort > 0 ? parsedPort : 22;
     const finalName = name.trim() || (user.trim() ? `${user.trim()}@${trimmedHost}` : trimmedHost);
+    const sanitizedExtraArgs = extraArgs.trim()
+      ? extraArgs.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
+      : undefined;
 
     const payload: Omit<SshConnection, "id"> = {
       name: finalName,
@@ -87,7 +90,7 @@ export function SshConnectionDialog({
       user: user.trim() || undefined,
       port: finalPort,
       identityFile: identityFile.trim() || undefined,
-      extraArgs: extraArgs.trim() || undefined,
+      extraArgs: sanitizedExtraArgs,
       initialDirectory: initialDirectory.trim() || undefined,
     };
 
@@ -106,9 +109,47 @@ export function SshConnectionDialog({
     }
   };
 
+  const toggleOrAppendArg = (arg: string) => {
+    setExtraArgs((prev) => {
+      const current = prev.trim();
+      if (!current) return arg;
+      if (current.includes(arg)) {
+        return current.replace(arg, "").replace(/\s+/g, " ").trim();
+      }
+      return `${current} ${arg}`.trim();
+    });
+  };
+
+  const handleToggleBypassHostKey = () => {
+    const bypassFlags = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null";
+    setExtraArgs((prev) => {
+      const current = prev.trim();
+      if (current.includes("StrictHostKeyChecking=no")) {
+        return current
+          .replace(/-o\s+StrictHostKeyChecking=no/g, "")
+          .replace(/-o\s+UserKnownHostsFile=\/dev\/null/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+      return current ? `${current} ${bypassFlags}` : bypassFlags;
+    });
+  };
+
+  const handleAddHostKeyAlias = () => {
+    const alias = name.trim() || host.trim() || "alias";
+    const flag = `-o HostKeyAlias=${alias}`;
+    setExtraArgs((prev) => {
+      const current = prev.trim();
+      if (current.includes("HostKeyAlias=")) {
+        return current.replace(/-o\s+HostKeyAlias=[^\s]+/g, flag).trim();
+      }
+      return current ? `${current} ${flag}` : flag;
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <HugeiconsIcon icon={ServerStack03Icon} size={18} strokeWidth={1.75} />
@@ -212,17 +253,87 @@ export function SshConnectionDialog({
             )}
           </div>
 
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="ssh-args" className="text-[11px] text-muted-foreground">
-              {t("ssh.dialog.extraArgs")}
-            </Label>
-            <Input
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="ssh-args" className="text-[11px] text-muted-foreground">
+                {t("ssh.dialog.extraArgs")}
+              </Label>
+              <span className="text-[10px] text-muted-foreground/70">
+                {t("ssh.dialog.extraArgsHint")}
+              </span>
+            </div>
+            <textarea
               id="ssh-args"
               value={extraArgs}
               onChange={(e) => setExtraArgs(e.target.value)}
-              placeholder="-X -C"
-              className="h-8 text-xs font-mono"
+              placeholder={t("ssh.dialog.extraArgsPlaceholder")}
+              rows={2}
+              className="w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs font-mono shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
+            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+              <span className="text-[10px] text-muted-foreground">
+                {t("ssh.dialog.quickPresets")}
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleBypassHostKey}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                  extraArgs.includes("StrictHostKeyChecking=no")
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                    : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+                title="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+              >
+                {t("ssh.dialog.presetBypassHostKey")}
+              </button>
+              <button
+                type="button"
+                onClick={handleAddHostKeyAlias}
+                className="rounded bg-muted/70 hover:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                title={`-o HostKeyAlias=${name.trim() || host.trim() || "alias"}`}
+              >
+                +{t("ssh.dialog.presetHostKeyAlias")}
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleOrAppendArg("-o LogLevel=ERROR")}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                  extraArgs.includes("LogLevel=ERROR")
+                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                    : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+                title="-o LogLevel=ERROR"
+              >
+                {t("ssh.dialog.presetLogLevelError")}
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleOrAppendArg("-A")}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                  extraArgs.split(/\s+/).includes("-A")
+                    ? "bg-primary/20 text-primary border border-primary/40"
+                    : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+                title="-A (ForwardAgent yes)"
+              >
+                -A
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleOrAppendArg("-C")}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                  extraArgs.split(/\s+/).includes("-C")
+                    ? "bg-primary/20 text-primary border border-primary/40"
+                    : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+                title="-C (Compression yes)"
+              >
+                -C
+              </button>
+            </div>
+            <span className="text-[10px] leading-relaxed text-muted-foreground">
+              {t("ssh.dialog.extraArgsDescription")}
+            </span>
           </div>
 
           <div className="flex flex-col gap-1">

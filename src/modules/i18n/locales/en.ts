@@ -2678,7 +2678,18 @@ export const en = {
       port: "Port",
       user: "User",
       identityFile: "Private Key (Identity File)",
-      extraArgs: "Extra Arguments",
+      extraArgs: "Extra Parameters & SSH Options",
+      extraArgsHint: "OpenSSH -o & flags",
+      extraArgsPlaceholder:
+        "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o HostKeyAlias=myhost -o LogLevel=ERROR",
+      extraArgsDescription:
+        "Additional SSH flags and OpenSSH -o options (e.g. for Docker containers, proxies, custom keys).",
+      quickPresets: "Quick options:",
+      presetBypassHostKey: "Bypass Host Check",
+      presetHostKeyAlias: "HostKeyAlias",
+      presetLogLevelError: "Quiet (LogLevel ERROR)",
+      presetForwardAgent: "Forward Agent (-A)",
+      presetCompression: "Compression (-C)",
       initialDirectory: "Initial remote directory",
       initialDirectoryDescription:
         "Start the workspace, explorer, and terminal in this directory. Leave empty to use the remote home directory.",

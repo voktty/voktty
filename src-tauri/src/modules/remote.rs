@@ -729,10 +729,24 @@ pub async fn ssh_upload_files(
     tokio::task::spawn_blocking(move || {
         let mut cmd = std::process::Command::new("scp");
         cmd.arg("-r");
-        cmd.arg("-o").arg("BatchMode=yes");
-        cmd.arg("-o").arg("ServerAliveInterval=15");
-        cmd.arg("-o").arg("ServerAliveCountMax=3");
-        cmd.arg("-o").arg("StrictHostKeyChecking=accept-new");
+        let user_extra = connection
+            .extra_args
+            .as_deref()
+            .map(parse_extra_args)
+            .unwrap_or_default();
+
+        if !has_ssh_option(&user_extra, "BatchMode") {
+            cmd.arg("-o").arg("BatchMode=yes");
+        }
+        if !has_ssh_option(&user_extra, "ServerAliveInterval") {
+            cmd.arg("-o").arg("ServerAliveInterval=15");
+        }
+        if !has_ssh_option(&user_extra, "ServerAliveCountMax") {
+            cmd.arg("-o").arg("ServerAliveCountMax=3");
+        }
+        if !has_ssh_option(&user_extra, "StrictHostKeyChecking") {
+            cmd.arg("-o").arg("StrictHostKeyChecking=accept-new");
+        }
 
         if let Some(port) = connection.port.filter(|p| *p != 22) {
             cmd.arg("-P").arg(port.to_string());
@@ -743,13 +757,11 @@ pub async fn ssh_upload_files(
             .as_deref()
             .filter(|p| !p.trim().is_empty())
         {
-            cmd.arg("-i").arg(identity_file.trim());
+            cmd.arg("-i").arg(expand_tilde(identity_file));
         }
 
-        if let Some(extra_args) = connection.extra_args.as_deref() {
-            for arg in extra_args.split_whitespace() {
-                cmd.arg(arg);
-            }
+        for arg in user_extra {
+            cmd.arg(arg);
         }
 
         for source in &sources {
@@ -1052,6 +1064,42 @@ fn has_control_or_space(value: &str) -> bool {
         .any(|char| char.is_control() || char.is_whitespace())
 }
 
+pub fn parse_extra_args(extra_args: &str) -> Vec<String> {
+    shlex::split(extra_args).unwrap_or_else(|| {
+        extra_args.split_whitespace().map(str::to_string).collect()
+    })
+}
+
+pub fn has_ssh_option(args: &[String], opt_name: &str) -> bool {
+    let opt_lower = opt_name.to_lowercase();
+    let prefix = format!("{}=", opt_lower);
+    for (i, arg) in args.iter().enumerate() {
+        let lower = arg.to_lowercase();
+        if lower.starts_with(&prefix) {
+            return true;
+        }
+        if lower == "-o" {
+            if let Some(next) = args.get(i + 1) {
+                if next.to_lowercase().starts_with(&prefix) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+pub fn expand_tilde(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.starts_with("~/") || trimmed.starts_with("~\\") {
+        if let Some(home) = dirs::home_dir() {
+            let rest = &trimmed[2..];
+            return format!("{}/{}", home.to_string_lossy().replace('\\', "/"), rest);
+        }
+    }
+    trimmed.to_string()
+}
+
 fn ssh_destination(connection: &RemoteSshConnection) -> String {
     match connection.user.as_deref().filter(|user| !user.is_empty()) {
         Some(user) => format!("{user}@{}", connection.host.trim()),
@@ -1060,21 +1108,32 @@ fn ssh_destination(connection: &RemoteSshConnection) -> String {
 }
 
 fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
-    let mut args = vec![
-        "-T".to_string(),
-        "-o".to_string(),
-        "BatchMode=yes".to_string(),
-        "-o".to_string(),
-        "ServerAliveInterval=15".to_string(),
-        "-o".to_string(),
-        "ServerAliveCountMax=3".to_string(),
-        "-o".to_string(),
-        "TCPKeepAlive=yes".to_string(),
-        "-o".to_string(),
-        "ConnectTimeout=10".to_string(),
-        "-o".to_string(),
-        "StrictHostKeyChecking=accept-new".to_string(),
-    ];
+    let mut args = vec!["-T".to_string()];
+    let user_extra = connection
+        .extra_args
+        .as_deref()
+        .map(parse_extra_args)
+        .unwrap_or_default();
+
+    if !has_ssh_option(&user_extra, "BatchMode") {
+        args.extend(["-o".to_string(), "BatchMode=yes".to_string()]);
+    }
+    if !has_ssh_option(&user_extra, "ServerAliveInterval") {
+        args.extend(["-o".to_string(), "ServerAliveInterval=15".to_string()]);
+    }
+    if !has_ssh_option(&user_extra, "ServerAliveCountMax") {
+        args.extend(["-o".to_string(), "ServerAliveCountMax=3".to_string()]);
+    }
+    if !has_ssh_option(&user_extra, "TCPKeepAlive") {
+        args.extend(["-o".to_string(), "TCPKeepAlive=yes".to_string()]);
+    }
+    if !has_ssh_option(&user_extra, "ConnectTimeout") {
+        args.extend(["-o".to_string(), "ConnectTimeout=10".to_string()]);
+    }
+    if !has_ssh_option(&user_extra, "StrictHostKeyChecking") {
+        args.extend(["-o".to_string(), "StrictHostKeyChecking=accept-new".to_string()]);
+    }
+
     if let Some(port) = connection.port.filter(|port| *port != 22) {
         args.extend(["-p".to_string(), port.to_string()]);
     }
@@ -1083,11 +1142,9 @@ fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
         .as_deref()
         .filter(|path| !path.trim().is_empty())
     {
-        args.extend(["-i".to_string(), identity_file.trim().to_string()]);
+        args.extend(["-i".to_string(), expand_tilde(identity_file)]);
     }
-    if let Some(extra_args) = connection.extra_args.as_deref() {
-        args.extend(extra_args.split_whitespace().map(str::to_string));
-    }
+    args.extend(user_extra);
     args.push(ssh_destination(connection));
     args
 }
@@ -1541,8 +1598,6 @@ mod tests {
                 "-o",
                 "TCPKeepAlive=yes",
                 "-o",
-                "ConnectTimeout=10",
-                "-o",
                 "StrictHostKeyChecking=accept-new",
                 "-p",
                 "2222",
@@ -1553,6 +1608,24 @@ mod tests {
                 "ubuntu@server.example"
             ]
         );
+    }
+
+    #[test]
+    fn preserves_user_strict_host_key_checking_and_options() {
+        let conn = RemoteSshConnection {
+            host: "192.168.1.4".to_string(),
+            user: Some("abc".to_string()),
+            port: Some(9194),
+            identity_file: Some("~/.ssh/id_ed25519".to_string()),
+            extra_args: Some("-o HostKeyAlias=forgenex-code4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR".to_string()),
+        };
+        let args = ssh_args(&conn);
+        assert!(!args.iter().any(|a| a == "StrictHostKeyChecking=accept-new"));
+        assert!(args.iter().any(|a| a == "HostKeyAlias=forgenex-code4"));
+        assert!(args.iter().any(|a| a == "StrictHostKeyChecking=no"));
+        assert!(args.iter().any(|a| a == "UserKnownHostsFile=/dev/null"));
+        assert!(args.iter().any(|a| a == "LogLevel=ERROR"));
+        assert_eq!(args.last().map(String::as_str), Some("abc@192.168.1.4"));
     }
 
     #[test]

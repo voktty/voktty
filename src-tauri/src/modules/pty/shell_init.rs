@@ -268,16 +268,34 @@ fn build_remote_ssh(
     let mut cmd = CommandBuilder::new("ssh");
     apply_common(&mut cmd, None, blocks, None);
     cmd.arg("-tt");
-    cmd.arg("-o");
-    cmd.arg("ServerAliveInterval=15");
-    cmd.arg("-o");
-    cmd.arg("ServerAliveCountMax=3");
-    cmd.arg("-o");
-    cmd.arg("TCPKeepAlive=yes");
-    cmd.arg("-o");
-    cmd.arg("ConnectTimeout=10");
-    cmd.arg("-o");
-    cmd.arg("StrictHostKeyChecking=accept-new");
+
+    let user_extra = connection
+        .extra_args
+        .as_deref()
+        .map(crate::modules::remote::parse_extra_args)
+        .unwrap_or_default();
+
+    if !crate::modules::remote::has_ssh_option(&user_extra, "ServerAliveInterval") {
+        cmd.arg("-o");
+        cmd.arg("ServerAliveInterval=15");
+    }
+    if !crate::modules::remote::has_ssh_option(&user_extra, "ServerAliveCountMax") {
+        cmd.arg("-o");
+        cmd.arg("ServerAliveCountMax=3");
+    }
+    if !crate::modules::remote::has_ssh_option(&user_extra, "TCPKeepAlive") {
+        cmd.arg("-o");
+        cmd.arg("TCPKeepAlive=yes");
+    }
+    if !crate::modules::remote::has_ssh_option(&user_extra, "ConnectTimeout") {
+        cmd.arg("-o");
+        cmd.arg("ConnectTimeout=10");
+    }
+    if !crate::modules::remote::has_ssh_option(&user_extra, "StrictHostKeyChecking") {
+        cmd.arg("-o");
+        cmd.arg("StrictHostKeyChecking=accept-new");
+    }
+
     if let Some(port) = connection.port.filter(|port| *port != 22) {
         cmd.arg("-p");
         cmd.arg(port.to_string());
@@ -288,12 +306,10 @@ fn build_remote_ssh(
         .filter(|path| !path.trim().is_empty())
     {
         cmd.arg("-i");
-        cmd.arg(identity_file.trim());
+        cmd.arg(crate::modules::remote::expand_tilde(identity_file));
     }
-    if let Some(extra_args) = connection.extra_args.as_deref() {
-        for arg in extra_args.split_whitespace() {
-            cmd.arg(arg);
-        }
+    for arg in user_extra {
+        cmd.arg(arg);
     }
     let destination = connection
         .user
