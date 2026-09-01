@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
+#[cfg(target_os = "macos")]
 use tauri::window::Color;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow, WebviewWindowBuilder};
 
