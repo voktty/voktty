@@ -847,7 +847,7 @@ html.is-resizing * {
 .terminal-live-bar {
   display: block;
   width: 4px;
-  height: 10px;
+  height: 8px;
   border-radius: 0;
   background: #e39b4a;
   opacity: 0.4;
