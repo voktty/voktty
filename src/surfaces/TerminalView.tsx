@@ -318,10 +318,13 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
   useEffect(() => {
     if (!wantsMeta) return;
     let lastForeground: string | null = null;
+    let inFlight = false;
     const refresh = () => {
       if (!spawned.current) return;
       // Each status read forks `ps`; an off-screen window has no title to paint.
       if (document.hidden) return;
+      if (inFlight) return;
+      inFlight = true;
       void getPtyStatus(id)
         .then(({ foreground }) => {
           const fg = foreground?.trim() || null;
@@ -334,7 +337,10 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
               : { title: defaultTerminalTitle(cwd), foreground: null },
           );
         })
-        .catch(() => undefined);
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = false;
+        });
     };
     refresh();
     const interval = setInterval(refresh, 1000);

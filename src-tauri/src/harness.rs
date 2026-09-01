@@ -3,7 +3,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -72,45 +72,96 @@ struct LiveSse {
     stop: Arc<AtomicBool>,
 }
 
+struct HarnessInner {
+    children: HashMap<String, Arc<LiveChild>>,
+    epochs: HashMap<String, u64>,
+}
+
 pub struct HarnessHost {
-    children: Mutex<HashMap<String, Arc<LiveChild>>>,
+    inner: Mutex<HarnessInner>,
     sse: Mutex<HashMap<String, Arc<LiveSse>>>,
+    /// Bumped by `kill_all` so a spawn that started before quit cannot reinsert.
+    kill_all_gen: AtomicU64,
 }
 
 impl HarnessHost {
     pub fn new() -> Self {
         Self {
-            children: Mutex::new(HashMap::new()),
+            inner: Mutex::new(HarnessInner {
+                children: HashMap::new(),
+                epochs: HashMap::new(),
+            }),
             sse: Mutex::new(HashMap::new()),
+            kill_all_gen: AtomicU64::new(0),
         }
     }
 
-    fn insert(&self, session_id: String, live: Arc<LiveChild>) -> Option<Arc<LiveChild>> {
-        self.children
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(session_id, live)
+    fn lock_inner(&self) -> std::sync::MutexGuard<'_, HarnessInner> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn get(&self, session_id: &str) -> Option<Arc<LiveChild>> {
-        self.children
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(session_id)
-            .cloned()
+        self.lock_inner().children.get(session_id).cloned()
     }
 
-    fn remove(&self, session_id: &str) -> Option<Arc<LiveChild>> {
-        self.children
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(session_id)
+    /// Stamp this spawn and drop any child already registered under the id.
+    fn begin_spawn(&self, session_id: &str) -> (u64, u64, Option<Arc<LiveChild>>) {
+        let mut inner = self.lock_inner();
+        let kill_all = self.kill_all_gen.load(Ordering::SeqCst);
+        let epoch = inner.epochs.entry(session_id.to_string()).or_insert(0);
+        *epoch += 1;
+        let epoch = *epoch;
+        let prev = inner.children.remove(session_id);
+        (epoch, kill_all, prev)
+    }
+
+    #[cfg(test)]
+    fn spawn_stamp_current(&self, session_id: &str, epoch: u64, kill_all: u64) -> bool {
+        let inner = self.lock_inner();
+        self.kill_all_gen.load(Ordering::SeqCst) == kill_all
+            && inner.epochs.get(session_id) == Some(&epoch)
+    }
+
+    /// Keep the child only if nothing cancelled this spawn while it was forking.
+    fn install_spawn(
+        &self,
+        session_id: String,
+        epoch: u64,
+        kill_all: u64,
+        live: Arc<LiveChild>,
+    ) -> Option<Arc<LiveChild>> {
+        let mut inner = self.lock_inner();
+        if self.kill_all_gen.load(Ordering::SeqCst) != kill_all {
+            return Some(live);
+        }
+        if inner.epochs.get(&session_id) != Some(&epoch) {
+            return Some(live);
+        }
+        if let Some(prev) = inner.children.insert(session_id, live) {
+            terminate(prev.pid);
+        }
+        None
+    }
+
+    fn kill_session(&self, session_id: &str) -> Option<Arc<LiveChild>> {
+        let mut inner = self.lock_inner();
+        *inner.epochs.entry(session_id.to_string()).or_insert(0) += 1;
+        inner.children.remove(session_id)
+    }
+
+    fn remove_if_pid(&self, session_id: &str, pid: u32) -> Option<Arc<LiveChild>> {
+        let mut inner = self.lock_inner();
+        if inner.children.get(session_id).map(|live| live.pid) != Some(pid) {
+            return None;
+        }
+        inner.children.remove(session_id)
     }
 
     pub(crate) fn kill_all(&self) {
         let kids: Vec<Arc<LiveChild>> = {
-            let mut map = self.children.lock().unwrap_or_else(|e| e.into_inner());
-            map.drain().map(|(_, child)| child).collect()
+            let mut inner = self.lock_inner();
+            self.kill_all_gen.fetch_add(1, Ordering::SeqCst);
+            inner.children.drain().map(|(_, child)| child).collect()
         };
         for live in kids {
             terminate(live.pid);
@@ -261,16 +312,20 @@ pub fn harness_free_port() -> Result<u16, String> {
         .map_err(|e| format!("Failed to reserve a local port: {e}"))
 }
 
-#[tauri::command]
+/// Off the main thread: fork/exec, and `apply_gui_env` can wait on the first
+/// login-shell read. Callers await this before writing to the child. Kill can
+/// still race the fork, so a cancelled spawn must not reinsert the child.
+#[tauri::command(async)]
 pub fn harness_spawn(
     app: AppHandle,
-    host: State<HarnessHost>,
+    host: State<'_, HarnessHost>,
     session_id: String,
     command: String,
     args: Vec<String>,
     cwd: String,
 ) -> Result<u32, String> {
-    if let Some(prev) = host.remove(&session_id) {
+    let (epoch, kill_all, prev) = host.begin_spawn(&session_id);
+    if let Some(prev) = prev {
         terminate(prev.pid);
     }
 
@@ -312,7 +367,17 @@ pub fn harness_spawn(
         stdin: Mutex::new(stdin),
         pid,
     });
-    host.insert(session_id.clone(), live);
+    if let Some(rejected) = host.install_spawn(session_id.clone(), epoch, kill_all, live) {
+        // A kill, or a newer spawn, won the race while this one was forking.
+        // Returning `Ok` here would hand the caller a dead pid to store as the
+        // session's live child, and this child's stdout would be parsed as the
+        // stream that replaced it. Reap it without emitting anything.
+        terminate(rejected.pid);
+        thread::spawn(move || {
+            let _ = child.wait();
+        });
+        return Err(SPAWN_CANCELLED.to_string());
+    }
 
     let stdout_app = app.clone();
     let stdout_id = session_id.clone();
@@ -350,8 +415,9 @@ pub fn harness_spawn(
     thread::spawn(move || {
         let code = child.wait().ok().and_then(|status| status.code());
         if let Some(host) = wait_app.try_state::<HarnessHost>() {
-            host.stop_sse(&wait_id);
-            host.remove(&wait_id);
+            if host.remove_if_pid(&wait_id, wait_pid).is_some() {
+                host.stop_sse(&wait_id);
+            }
         }
         let _ = wait_app.emit(
             EXIT_EVENT,
@@ -386,7 +452,7 @@ pub fn harness_write(
 #[tauri::command]
 pub fn harness_kill(host: State<HarnessHost>, session_id: String) -> Result<(), String> {
     host.stop_sse(&session_id);
-    if let Some(live) = host.remove(&session_id) {
+    if let Some(live) = host.kill_session(&session_id) {
         terminate(live.pid);
     }
     Ok(())
@@ -657,6 +723,10 @@ const KILL_ESCALATE: Duration = Duration::from_secs(2);
 /// An interactive shell has to source the user's whole rc file; nvm alone can
 /// take a second.
 const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// A spawn that was cancelled mid-fork. The session it was starting is already
+/// gone or already replaced, so callers must not register this child.
+const SPAWN_CANCELLED: &str = "Harness start was cancelled";
 
 fn isolate_child(cmd: &mut Command) {
     #[cfg(unix)]
@@ -1435,6 +1505,98 @@ mod tests {
             thread::sleep(Duration::from_millis(50));
         }
         false
+    }
+
+    /// A real child so `install_spawn` can be exercised directly, rather than
+    /// through a helper that re-states its condition.
+    fn live_child() -> (Arc<LiveChild>, std::process::Child) {
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn test process");
+        let pid = child.id();
+        let stdin = child.stdin.take().expect("test child stdin");
+        (
+            Arc::new(LiveChild {
+                stdin: Mutex::new(stdin),
+                pid,
+            }),
+            child,
+        )
+    }
+
+    fn reap(mut child: std::process::Child) {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    #[test]
+    fn install_spawn_keeps_a_child_nothing_cancelled() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        let (live, child) = live_child();
+        let pid = live.pid;
+        assert!(host
+            .install_spawn("s1".into(), epoch, kill_all, live)
+            .is_none());
+        assert_eq!(host.get("s1").map(|live| live.pid), Some(pid));
+        reap(child);
+    }
+
+    #[test]
+    fn install_spawn_rejects_a_child_killed_mid_spawn() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        host.kill_session("s1");
+        let (live, child) = live_child();
+        assert!(host
+            .install_spawn("s1".into(), epoch, kill_all, live)
+            .is_some());
+        assert!(host.get("s1").is_none());
+        reap(child);
+    }
+
+    #[test]
+    fn install_spawn_rejects_a_child_after_kill_all() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        host.kill_all();
+        let (live, child) = live_child();
+        assert!(host
+            .install_spawn("s1".into(), epoch, kill_all, live)
+            .is_some());
+        assert!(host.get("s1").is_none());
+        reap(child);
+    }
+
+    #[test]
+    fn kill_during_spawn_invalidates_the_stamp() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, prev) = host.begin_spawn("s1");
+        assert!(prev.is_none());
+        assert!(host.spawn_stamp_current("s1", epoch, kill_all));
+        host.kill_session("s1");
+        assert!(!host.spawn_stamp_current("s1", epoch, kill_all));
+    }
+
+    #[test]
+    fn overlapping_spawn_invalidates_the_earlier_one() {
+        let host = HarnessHost::new();
+        let first = host.begin_spawn("s1");
+        let second = host.begin_spawn("s1");
+        assert!(!host.spawn_stamp_current("s1", first.0, first.1));
+        assert!(host.spawn_stamp_current("s1", second.0, second.1));
+    }
+
+    #[test]
+    fn kill_all_rejects_an_in_flight_spawn() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        host.kill_all();
+        assert!(!host.spawn_stamp_current("s1", epoch, kill_all));
     }
 
     #[test]

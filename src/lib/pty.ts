@@ -11,6 +11,10 @@ const dataHandlers = new Map<string, DataHandler>();
 const exitHandlers = new Map<string, ExitHandler>();
 const dataBuffer = new Map<string, Uint8Array[]>();
 const dataBufferBytes = new Map<string, number>();
+/** PTYs this window opened. Global `pty-data` still fires for every terminal
+ * in the process; decoding those in a window that never mounted them was
+ * megabytes of base64 work and a 256KB replay buffer per stranger id. */
+const openedPtys = new Set<string>();
 
 /**
  * Replay budget for a PTY whose view is not mounted. Chunks arrive at up to
@@ -75,8 +79,9 @@ function ensureBridge() {
   bridge = Promise.all([
     listen<DataPayload>("pty-data", (event) => {
       const { id, data } = event.payload;
-      const chunk = decodeBase64(data);
       const handler = dataHandlers.get(id);
+      if (!handler && !openedPtys.has(id)) return;
+      const chunk = decodeBase64(data);
       if (handler) handler(chunk);
       else pushBuffered(id, chunk);
     }),
@@ -138,6 +143,7 @@ export async function getPtyStatus(
 export async function killPty(id: string): Promise<void> {
   dataHandlers.delete(id);
   exitHandlers.delete(id);
+  openedPtys.delete(id);
   clearBuffered(id);
   await invoke("pty_kill", { id }).catch(() => undefined);
 }
@@ -145,6 +151,7 @@ export async function killPty(id: string): Promise<void> {
 export async function killAllPtys(): Promise<void> {
   dataHandlers.clear();
   exitHandlers.clear();
+  openedPtys.clear();
   dataBuffer.clear();
   dataBufferBytes.clear();
   await invoke("pty_kill_all").catch(() => undefined);
@@ -156,6 +163,7 @@ export function subscribePty(
   onExit: ExitHandler,
 ): () => void {
   retain();
+  openedPtys.add(id);
   dataHandlers.set(id, onData);
   exitHandlers.set(id, onExit);
   const queued = dataBuffer.get(id);

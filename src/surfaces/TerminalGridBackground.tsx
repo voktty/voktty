@@ -325,6 +325,10 @@ export function TerminalGridBackground() {
     };
 
     const draw = (time: number) => {
+      if (document.hidden) {
+        raf = 0;
+        return;
+      }
       raf = requestAnimationFrame(draw);
       if (time - lastFrame < FRAME_MS) return;
       const dt = lastFrame ? time - lastFrame : FRAME_MS;
@@ -364,6 +368,13 @@ export function TerminalGridBackground() {
     layout();
     raf = requestAnimationFrame(draw);
 
+    const onVisible = () => {
+      if (document.hidden || raf) return;
+      lastFrame = 0;
+      raf = requestAnimationFrame(draw);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     const resizeObserver = new ResizeObserver(layout);
     resizeObserver.observe(root);
 
@@ -378,6 +389,7 @@ export function TerminalGridBackground() {
 
     return () => {
       cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVisible);
       resizeObserver.disconnect();
       themeObserver.disconnect();
       boardsRef.current = null;
@@ -422,6 +434,7 @@ export function TerminalGridBackground() {
     if (playing || hovered || GRID_GAMES.length < 2) return;
 
     const id = window.setInterval(() => {
+      if (document.hidden) return;
       setSlide((current) =>
         stepSlider(current.index, current.dir, GRID_GAMES.length),
       );

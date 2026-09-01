@@ -97,7 +97,7 @@ pub struct LinearIssueThread {
     pub head_ref_name: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn linear_status(app: AppHandle) -> Result<LinearStatus, String> {
     Ok(LinearStatus {
         connected: read_token(&app)?.is_some(),

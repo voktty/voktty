@@ -77,9 +77,9 @@ export function isPersistableId(value: string): boolean {
   return /^[A-Za-z0-9_-]+$/.test(value);
 }
 
-export function sanitizeSessionForPersist(
+function persistableMeta(
   session: Session,
-): SessionUpsertPayload {
+): Omit<SessionUpsertPayload, "blocks"> {
   return {
     id: session.id,
     cwd: normalizeProjectPath(session.cwd),
@@ -91,15 +91,23 @@ export function sanitizeSessionForPersist(
     ...(session.providerSessionId && isPersistableId(session.providerSessionId)
       ? { providerSessionId: session.providerSessionId }
       : {}),
-    blocks: session.blocks
-      .map(sanitizeBlock)
-      .filter((block): block is Block => block != null),
     ...(session.context ? { contextUsed: session.context.used } : {}),
     ...(session.context?.window
       ? { contextWindow: session.context.window }
       : {}),
     ...(session.branch ? { branch: session.branch } : {}),
     ...(session.worktreeCwd ? { worktreeCwd: session.worktreeCwd } : {}),
+  };
+}
+
+export function sanitizeSessionForPersist(
+  session: Session,
+): SessionUpsertPayload {
+  return {
+    ...persistableMeta(session),
+    blocks: session.blocks
+      .map(sanitizeBlock)
+      .filter((block): block is Block => block != null),
   };
 }
 
@@ -128,8 +136,28 @@ export async function upsertSession(
   }
 }
 
+/**
+ * Blocks are replaced, never mutated in place, so identity stands in for
+ * content. Serializing the session here instead meant a full deep copy and a
+ * `JSON.stringify` of the whole transcript — megabytes on a long chat — on the
+ * main thread every time a save was considered. Header fields go through
+ * `persistableMeta` so a new persisted column cannot be forgotten here.
+ */
+const blockTokens = new WeakMap<Block, number>();
+let lastBlockToken = 0;
+
+function blockToken(block: Block): number {
+  const seen = blockTokens.get(block);
+  if (seen !== undefined) return seen;
+  const token = ++lastBlockToken;
+  blockTokens.set(block, token);
+  return token;
+}
+
 export function persistFingerprint(session: Session): string {
-  return JSON.stringify(sanitizeSessionForPersist(session));
+  return `${JSON.stringify(persistableMeta(session))}|${session.blocks
+    .map(blockToken)
+    .join(",")}`;
 }
 
 export async function listSessionsByProject(
@@ -207,15 +235,27 @@ export async function setSessionPinned(
   await invoke<void>("session_set_pinned", { sessionId, pinned });
 }
 
+/**
+ * `session_set_in_flight` runs off the main thread, so two replaces could
+ * otherwise land in either order and restore a stale busy snapshot.
+ */
+let inFlightWrite: Promise<unknown> = Promise.resolve();
+
 export async function replaceInFlightSessions(
   refs: { sessionId: string; cwd: string }[],
 ): Promise<void> {
-  await invoke("session_set_in_flight", {
-    sessions: refs.map((ref) => ({
-      sessionId: ref.sessionId,
-      cwd: normalizeProjectPath(ref.cwd),
-    })),
-  });
+  const run = inFlightWrite
+    .catch(() => undefined)
+    .then(() =>
+      invoke("session_set_in_flight", {
+        sessions: refs.map((ref) => ({
+          sessionId: ref.sessionId,
+          cwd: normalizeProjectPath(ref.cwd),
+        })),
+      }),
+    );
+  inFlightWrite = run;
+  await run;
 }
 
 /** Kept across Vite reloads; boot must not delete the only copy. */
@@ -238,8 +278,18 @@ export async function takeInFlightSessions(): Promise<
   return Array.isArray(rows) ? rows : [];
 }
 
+/**
+ * `workspace_set_snapshot` runs off the main thread, so two saves could
+ * otherwise finish out of order and keep an older layout.
+ */
+let workspaceWrite: Promise<unknown> = Promise.resolve();
+
 export async function saveWorkspaceSnapshot(snapshot: unknown): Promise<void> {
-  await invoke("workspace_set_snapshot", { snapshot });
+  const run = workspaceWrite
+    .catch(() => undefined)
+    .then(() => invoke("workspace_set_snapshot", { snapshot }));
+  workspaceWrite = run;
+  await run;
 }
 
 export async function loadWorkspaceSnapshot(): Promise<unknown | null> {

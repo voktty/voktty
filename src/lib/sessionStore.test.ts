@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { newSession } from "./session";
-import { isPersistableId, sanitizeSessionForPersist } from "./sessionStore";
+import { newSession, type Block, type Session } from "./session";
+import {
+  isPersistableId,
+  persistFingerprint,
+  sanitizeSessionForPersist,
+} from "./sessionStore";
 
 describe("isPersistableId", () => {
   it("accepts alphanumeric ids with hyphens and underscores", () => {
@@ -128,5 +132,100 @@ describe("sanitizeSessionForPersist", () => {
         sourceCwd: "/tmp/project",
       },
     });
+  });
+});
+
+describe("persistFingerprint", () => {
+  const user: Block = { id: "u1", role: "user", text: "hi" };
+  const answer: Block = { id: "a1", role: "assistant", text: "done" };
+
+  // One base session: `newSession` mints a fresh id, and the id is part of the
+  // fingerprint, so variants have to be spread off a single session.
+  const base = (blocks: Block[] = [user, answer]): Session => ({
+    ...newSession("codex", "/tmp/project"),
+    blocks,
+  });
+
+  it("is stable while nothing changes", () => {
+    const session = base();
+    expect(persistFingerprint(session)).toBe(persistFingerprint(session));
+  });
+
+  it("matches a copy holding the same blocks", () => {
+    const session = base();
+    expect(persistFingerprint({ ...session })).toBe(
+      persistFingerprint(session),
+    );
+  });
+
+  it("changes when a block in the middle is replaced", () => {
+    const tool: Block = {
+      id: "t1",
+      role: "tool",
+      text: "run",
+      tool: { status: "running" },
+    };
+    const before = base([user, tool, answer]);
+    const after = {
+      ...before,
+      blocks: [user, { ...tool, tool: { status: "completed" } }, answer],
+    };
+    expect(persistFingerprint(after)).not.toBe(persistFingerprint(before));
+  });
+
+  it("changes when an approval is decided", () => {
+    const approval: Block = {
+      id: "p1",
+      role: "approval",
+      text: "allow?",
+      approval: { requestId: 1 },
+    };
+    const before = base([user, approval]);
+    const after = {
+      ...before,
+      blocks: [
+        user,
+        { ...approval, approval: { requestId: 1, decided: "allow" as const } },
+      ],
+    };
+    expect(persistFingerprint(after)).not.toBe(persistFingerprint(before));
+  });
+
+  it("changes when a block is appended", () => {
+    const before = base([user]);
+    expect(persistFingerprint({ ...before, blocks: [user, answer] })).not.toBe(
+      persistFingerprint(before),
+    );
+  });
+
+  it("changes when a persisted field changes", () => {
+    const before = base();
+    expect(persistFingerprint({ ...before, title: "Renamed" })).not.toBe(
+      persistFingerprint(before),
+    );
+  });
+
+  it("ignores state that is never written", () => {
+    const before = base();
+    expect(persistFingerprint({ ...before, busy: true })).toBe(
+      persistFingerprint(before),
+    );
+  });
+
+  it("treats a path-like provider session id as absent", () => {
+    const session = base();
+    expect(
+      persistFingerprint({
+        ...session,
+        providerSessionId: "/Users/me/.pi/agent/sessions/abc.jsonl",
+      }),
+    ).toBe(persistFingerprint(session));
+  });
+
+  it("matches persist for a zero context window", () => {
+    const session = base();
+    expect(
+      persistFingerprint({ ...session, context: { used: 10, window: 0 } }),
+    ).toBe(persistFingerprint({ ...session, context: { used: 10 } }));
   });
 });

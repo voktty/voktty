@@ -273,7 +273,7 @@ pub struct InFlightSession {
     pub cwd: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_set_in_flight(
     store: State<'_, SessionStore>,
     sessions: Vec<InFlightSession>,
@@ -299,7 +299,7 @@ pub fn session_list_in_flight(
 }
 
 /// Read and clear the quit snapshot so a restored window cannot take it twice.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn session_take_in_flight(
     store: State<'_, SessionStore>,
 ) -> Result<Vec<InFlightSession>, String> {
@@ -309,7 +309,7 @@ pub fn session_take_in_flight(
 
 const WORKSPACE_SNAPSHOT_MAX_BYTES: usize = 2_000_000;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn workspace_set_snapshot(
     store: State<'_, SessionStore>,
     snapshot: Value,

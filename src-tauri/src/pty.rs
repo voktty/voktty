@@ -2,11 +2,13 @@ use std::collections::HashMap;
 #[cfg(unix)]
 use std::io::Read;
 use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
 use std::sync::{Arc, Mutex};
 #[cfg(unix)]
 use std::thread;
 #[cfg(unix)]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -18,6 +20,10 @@ const DATA_EVENT: &str = "pty-data";
 const EXIT_EVENT: &str = "pty-exit";
 #[cfg(unix)]
 const READ_CHUNK: usize = 32 * 1024;
+/// Cap how often a busy PTY hops the webview. Each `emit` is a JS eval; a
+/// flood of small reads was thousands per second and froze input.
+#[cfg(unix)]
+const PTY_COALESCE: Duration = Duration::from_millis(8);
 #[cfg(unix)]
 const KILL_ESCALATE: Duration = Duration::from_secs(1);
 
@@ -163,8 +169,10 @@ pub(crate) struct PtyStatus {
     foreground: Option<String>,
 }
 
-#[tauri::command]
-pub fn pty_status(host: State<PtyHost>, id: String) -> Result<PtyStatus, String> {
+/// Off the main thread: this forks `ps`, and the title poll calls it once a
+/// second for every open terminal.
+#[tauri::command(async)]
+pub fn pty_status(host: State<'_, PtyHost>, id: String) -> Result<PtyStatus, String> {
     let live = host
         .get(&id)
         .ok_or_else(|| "Terminal is not running".to_string())?;
@@ -269,26 +277,44 @@ fn spawn_unix(
     let data_id = id.clone();
     thread::spawn(move || {
         let mut file = reader;
+        let fd = file.as_raw_fd();
         let mut buf = vec![0_u8; READ_CHUNK];
+        let mut acc = Vec::with_capacity(READ_CHUNK);
+        let mut last_emit = Instant::now();
         loop {
-            match file.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    let data = base64::Engine::encode(
-                        &base64::engine::general_purpose::STANDARD,
-                        &buf[..n],
-                    );
-                    let _ = data_app.emit(
-                        DATA_EVENT,
-                        PtyData {
-                            id: data_id.clone(),
-                            data,
-                        },
-                    );
+            if acc.is_empty() {
+                match file.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        acc.extend_from_slice(&buf[..n]);
+                        last_emit = Instant::now();
+                    }
+                    Err(_) => break,
                 }
-                Err(_) => break,
+            } else if pty_should_flush(acc.len(), last_emit.elapsed()) {
+                emit_pty_data(&data_app, &data_id, &acc);
+                acc.clear();
+                last_emit = Instant::now();
+                continue;
+            } else if !wait_readable(fd, PTY_COALESCE.saturating_sub(last_emit.elapsed())) {
+                emit_pty_data(&data_app, &data_id, &acc);
+                acc.clear();
+                last_emit = Instant::now();
+                continue;
+            } else {
+                match file.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => acc.extend_from_slice(&buf[..n]),
+                    Err(_) => break,
+                }
+            }
+            if pty_should_flush(acc.len(), last_emit.elapsed()) {
+                emit_pty_data(&data_app, &data_id, &acc);
+                acc.clear();
+                last_emit = Instant::now();
             }
         }
+        emit_pty_data(&data_app, &data_id, &acc);
     });
 
     let wait_app = app;
@@ -508,6 +534,40 @@ fn os_err(ctx: &str) -> String {
 }
 
 #[cfg(unix)]
+fn emit_pty_data(app: &AppHandle, id: &str, bytes: &[u8]) {
+    if bytes.is_empty() {
+        return;
+    }
+    let data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes);
+    let _ = app.emit(
+        DATA_EVENT,
+        PtyData {
+            id: id.to_string(),
+            data,
+        },
+    );
+}
+
+#[cfg(unix)]
+fn pty_should_flush(buffered: usize, since: Duration) -> bool {
+    buffered >= READ_CHUNK || since >= PTY_COALESCE
+}
+
+#[cfg(unix)]
+fn wait_readable(fd: i32, timeout: Duration) -> bool {
+    if timeout.is_zero() {
+        return false;
+    }
+    let mut pollfd = libc::pollfd {
+        fd,
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let ms = timeout.as_millis().min(i32::MAX as u128) as i32;
+    unsafe { libc::poll(&mut pollfd, 1, ms) > 0 }
+}
+
+#[cfg(unix)]
 fn foreground_label(master_fd: i32, shell_pid: u32) -> Option<String> {
     let mut pgrp: libc::pid_t = 0;
     if unsafe { libc::ioctl(master_fd, libc::TIOCGPGRP, &mut pgrp) } != 0 {
@@ -614,6 +674,13 @@ mod tests {
         assert_eq!(login_args("/bin/bash"), &["-l"]);
         assert_eq!(login_args("/usr/bin/fish"), &["-l"]);
         assert_eq!(login_args("/usr/local/bin/nu"), &[] as &[&str]);
+    }
+
+    #[test]
+    fn pty_flush_waits_for_a_full_chunk_or_the_coalesce_window() {
+        assert!(!pty_should_flush(1, Duration::from_millis(1)));
+        assert!(pty_should_flush(READ_CHUNK, Duration::from_millis(1)));
+        assert!(pty_should_flush(1, PTY_COALESCE));
     }
 
     #[test]
