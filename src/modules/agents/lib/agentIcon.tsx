@@ -54,7 +54,16 @@ export function agentIconKind(agent: string): AgentIconKind {
   if (a.includes("gemini")) return "gemini";
   if (a.includes("opencode")) return "opencode";
   if (a.includes("grok")) return "grok";
-  if (a.includes("antigravity")) return "antigravity";
+  if (
+    a.includes("antigravity") ||
+    a === "agy" ||
+    a.startsWith("agy.") ||
+    a.startsWith("agy-") ||
+    a.startsWith("agy_") ||
+    a.includes("agy.exe") ||
+    a.includes("antigravity-cli")
+  )
+    return "antigravity";
   if (a.includes("kimi")) return "kimi";
   if (a.includes("deepseek")) return "deepseek";
   if (a.includes("qwen")) return "qwen";

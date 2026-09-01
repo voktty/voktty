@@ -29,11 +29,11 @@ describe("AnimatedAgentIcon", () => {
   });
 
   it.each([
-    ["idle", "M5 8c2 1 4 1 6 0"],
-    ["thinking", "M5 8h6"],
-    ["awaiting-approval", "M5 9h6"],
-    ["success", "M4 7c2 3 6 3 8 0"],
-    ["error", "M4 9c2-2 6-2 8 0"],
+    ["idle", "M8 14c1.5 2 6.5 2 8 0"],
+    ["thinking", "M9 14.5h6"],
+    ["awaiting-approval", "M9 15h6"],
+    ["success", "M7.5 13.5c1.5 3 7.5 3 9 0"],
+    ["error", "M7.5 16c1.5-2.5 7.5-2.5 9 0"],
   ] as const)("renders a distinct face for %s", (state, mouth) => {
     const markup = renderToStaticMarkup(
       <AnimatedAgentIcon agent="kimi" presence={state} />,

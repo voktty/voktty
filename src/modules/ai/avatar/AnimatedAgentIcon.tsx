@@ -35,17 +35,17 @@ function asPresence(value: AnimatedAgentIconProps["presence"]): AvatarPresence {
 function facePath(state: AvatarPresenceState): string {
   switch (state) {
     case "success":
-      return "M4 7c2 3 6 3 8 0";
+      return "M7.5 13.5c1.5 3 7.5 3 9 0";
     case "error":
     case "cancelled":
-      return "M4 9c2-2 6-2 8 0";
+      return "M7.5 16c1.5-2.5 7.5-2.5 9 0";
     case "thinking":
     case "planning":
-      return "M5 8h6";
+      return "M9 14.5h6";
     case "awaiting-approval":
-      return "M5 9h6";
+      return "M9 15h6";
     default:
-      return "M5 8c2 1 4 1 6 0";
+      return "M8 14c1.5 2 6.5 2 8 0";
   }
 }
 
@@ -110,7 +110,7 @@ export function AnimatedAgentIcon({
     );
   }
 
-  const faceSize = Math.max(8, Math.round(size * 0.62));
+  const faceSize = Math.max(9, Math.round(size * 0.65));
   const style: AnimatedAgentIconStyle = {
     width: size,
     height: size,
@@ -142,21 +142,21 @@ export function AnimatedAgentIcon({
         style={{ width: faceSize, height: faceSize }}
       >
         <svg
-          viewBox="0 0 16 12"
-          width={faceSize}
-          height={faceSize}
+          viewBox="0 0 24 24"
+          width="100%"
+          height="100%"
           aria-hidden="true"
         >
           <g className="voktty-agent-tab-eyes">
-            <circle cx="4.5" cy="4.5" r="1.1" fill="currentColor" />
-            <circle cx="11.5" cy="4.5" r="1.1" fill="currentColor" />
+            <circle cx="8" cy="9.5" r="1.75" fill="currentColor" />
+            <circle cx="16" cy="9.5" r="1.75" fill="currentColor" />
           </g>
           <path
             className="voktty-agent-tab-mouth"
             d={facePath(resolvedPresence.state)}
             fill="none"
             stroke="currentColor"
-            strokeWidth="1.25"
+            strokeWidth="1.6"
             strokeLinecap="round"
           />
         </svg>
