@@ -26,7 +26,12 @@ import {
   keymap,
   lineNumbers,
 } from "@codemirror/view";
-import { AlertCircle, ChevronDown, ChevronUp, RotateCcw } from "../chrome/icons";
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+} from "../chrome/icons";
 import { minimalSetup } from "codemirror";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -50,8 +55,9 @@ import { syncWatchedMtime, watchFile } from "../lib/fileWatch";
 import { displayPath } from "../lib/paths";
 import type { EditorNavigation } from "../lib/search";
 import { MarkdownPreview } from "./AgentMarkdown";
-import { languageForPath, schemeExtensions } from "./editorChrome";
 import { editorAutocomplete } from "./editorAutocomplete";
+import { languageForPath, schemeExtensions } from "./editorChrome";
+import { preserveEditorViewport, replaceEditorDoc } from "./editorDoc";
 import { editorMatching, editorTyping, tryExpandEmmet } from "./editorEditing";
 import {
   diffActiveChunkIndex,
@@ -127,33 +133,36 @@ export function FileEditor({
     setDraft(content);
   }, []);
 
-  const reloadFromDisk = useCallback(async (force = false) => {
-    const generation = ++loadGeneration.current;
-    try {
-      const content = await readTextFile(path);
-      if (generation !== loadGeneration.current) return;
-      if (dirtyRef.current && !force) {
-        pendingDiskRef.current = true;
-        return;
+  const reloadFromDisk = useCallback(
+    async (force = false) => {
+      const generation = ++loadGeneration.current;
+      try {
+        const content = await readTextFile(path);
+        if (generation !== loadGeneration.current) return;
+        if (dirtyRef.current && !force) {
+          pendingDiskRef.current = true;
+          return;
+        }
+        pendingDiskRef.current = false;
+        if (force && dirtyRef.current) {
+          dirtyRef.current = false;
+          onDirtyChangeRef.current(path, false);
+        }
+        applyDiskContent(content);
+      } catch (error: unknown) {
+        if (generation !== loadGeneration.current) return;
+        if (dirtyRef.current && !force) {
+          pendingDiskRef.current = true;
+          return;
+        }
+        setLoadState({
+          status: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
-      pendingDiskRef.current = false;
-      if (force && dirtyRef.current) {
-        dirtyRef.current = false;
-        onDirtyChangeRef.current(path, false);
-      }
-      applyDiskContent(content);
-    } catch (error: unknown) {
-      if (generation !== loadGeneration.current) return;
-      if (dirtyRef.current && !force) {
-        pendingDiskRef.current = true;
-        return;
-      }
-      setLoadState({
-        status: "error",
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, [applyDiskContent, path]);
+    },
+    [applyDiskContent, path],
+  );
 
   useEffect(() => {
     dirtyRef.current = false;
@@ -220,7 +229,7 @@ export function FileEditor({
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         load();
-        void reloadFromDisk(true);
+        void reloadFromDisk();
       }, 50);
     };
     window.addEventListener("focus", onFocus);
@@ -243,20 +252,20 @@ export function FileEditor({
     if (loadState.status !== "ready") return;
     let timer = 0;
     const stop = watchFile(path, () => {
-      if (dirtyRef.current && !showDiff) {
+      if (dirtyRef.current) {
         pendingDiskRef.current = true;
         return;
       }
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        void reloadFromDisk(showDiff);
+        void reloadFromDisk();
       }, 50);
     });
     return () => {
       window.clearTimeout(timer);
       stop();
     };
-  }, [loadState.status, path, reloadFromDisk, showDiff]);
+  }, [loadState.status, path, reloadFromDisk]);
 
   const save = useCallback(
     async (content: string) => {
@@ -484,7 +493,16 @@ function CodeMirrorEditor({
     const positions = diffNavigablePositions(view);
     const { additions, deletions } = diffLineStatsForView(view);
     if (positions.length === 0) {
-      setChunkNav(null);
+      setChunkNav((current) =>
+        current && current.positions.length === 0
+          ? current
+          : {
+              positions: [],
+              index: 0,
+              additions: 0,
+              deletions: 0,
+            },
+      );
       chunkNavPinnedRef.current = null;
       return;
     }
@@ -498,13 +516,25 @@ function CodeMirrorEditor({
       index = diffActiveChunkIndex(view, positions);
     }
     chunkNavPinnedRef.current = index;
-    setChunkNav({ positions, index, additions, deletions });
+    setChunkNav((current) => {
+      if (
+        current &&
+        current.index === index &&
+        current.additions === additions &&
+        current.deletions === deletions &&
+        current.positions.length === positions.length &&
+        current.positions.every((pos, i) => pos === positions[i])
+      ) {
+        return current;
+      }
+      return { positions, index, additions, deletions };
+    });
   }, []);
 
   const stepChunkNav = useCallback(
     (delta: number) => {
       const view = viewRef.current;
-      if (!view || !chunkNav) return;
+      if (!view || !chunkNav || chunkNav.positions.length === 0) return;
       const next = Math.min(
         chunkNav.positions.length - 1,
         Math.max(0, chunkNav.index + delta),
@@ -558,28 +588,14 @@ function CodeMirrorEditor({
           result.formatted !== before &&
           view.state.doc.toString() === before
         ) {
-          const { scrollTop, scrollLeft } = view.scrollDOM;
-          view.dispatch({
-            changes: {
-              from: 0,
-              to: view.state.doc.length,
-              insert: result.formatted,
-            },
+          replaceEditorDoc(view, result.formatted, {
             selection: {
               anchor: Math.min(
                 Math.max(0, result.cursorOffset),
                 result.formatted.length,
               ),
             },
-            scrollIntoView: false,
           });
-          const restoreScroll = () => {
-            if (disposed) return;
-            view.scrollDOM.scrollTop = scrollTop;
-            view.scrollDOM.scrollLeft = scrollLeft;
-          };
-          restoreScroll();
-          requestAnimationFrame(restoreScroll);
         }
 
         const document = view.state.doc;
@@ -669,7 +685,12 @@ function CodeMirrorEditor({
       }
       syncChunkNav(view);
     } else {
-      setChunkNav(null);
+      setChunkNav({
+        positions: [],
+        index: 0,
+        additions: 0,
+        deletions: 0,
+      });
     }
     if (activeRef.current) view.focus();
 
@@ -701,10 +722,13 @@ function CodeMirrorEditor({
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !showDiff) return;
-    setGitOriginal(view, gitOriginal);
+    let changed = false;
+    preserveEditorViewport(view, () => {
+      changed = setGitOriginal(view, gitOriginal);
+    });
+    if (!changed) return;
     chunkNavPinnedRef.current = null;
     syncChunkNav(view);
-    view.requestMeasure();
   }, [gitOriginal, showDiff, syncChunkNav]);
 
   useEffect(() => {
@@ -720,31 +744,16 @@ function CodeMirrorEditor({
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || (dirtyRef.current && !showDiff)) return;
+    if (!view || dirtyRef.current) return;
     if (view.state.doc.toString() === value) return;
-    const { scrollTop, scrollLeft } = view.scrollDOM;
-    const selection = view.state.selection.main;
-    view.dispatch({
-      changes: {
-        from: 0,
-        to: view.state.doc.length,
-        insert: value,
-      },
-      selection: {
-        anchor: Math.min(selection.anchor, value.length),
-        head: Math.min(selection.head, value.length),
-      },
+    replaceEditorDoc(view, value, {
       annotations: [Transaction.addToHistory.of(false), diskReload.of(true)],
-      scrollIntoView: false,
     });
-    view.scrollDOM.scrollTop = scrollTop;
-    view.scrollDOM.scrollLeft = scrollLeft;
     savedDocumentRef.current = view.state.doc;
     setDirty(false);
     if (showDiff) {
       chunkNavPinnedRef.current = null;
       syncChunkNav(view);
-      view.requestMeasure();
     }
   }, [showDiff, syncChunkNav, value]);
 
@@ -788,12 +797,12 @@ function CodeMirrorEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {showDiff && chunkNav ? (
+      {showDiff ? (
         <DiffChunkNav
-          index={chunkNav.index}
-          total={chunkNav.positions.length}
-          additions={chunkNav.additions}
-          deletions={chunkNav.deletions}
+          index={chunkNav?.index ?? 0}
+          total={chunkNav?.positions.length ?? 0}
+          additions={chunkNav?.additions ?? 0}
+          deletions={chunkNav?.deletions ?? 0}
           onPrev={() => stepChunkNav(-1)}
           onNext={() => stepChunkNav(1)}
         />
@@ -830,7 +839,7 @@ function DiffChunkNav({
           type="button"
           title="Previous change"
           aria-label="Previous change"
-          disabled={index <= 0}
+          disabled={total === 0 || index <= 0}
           onMouseDown={(event) => event.preventDefault()}
           onClick={onPrev}
           className="grid size-6 place-items-center rounded text-content/70 hover:bg-content/10 hover:text-content disabled:opacity-35"
@@ -838,13 +847,13 @@ function DiffChunkNav({
           <ChevronUp className="size-3.5" strokeWidth={1.75} />
         </button>
         <span className="min-w-10 px-0.5 text-center font-mono text-[10.5px] font-medium tabular-nums text-content/55 select-none">
-          {index + 1}/{total}
+          {total === 0 ? "0/0" : `${index + 1}/${total}`}
         </span>
         <button
           type="button"
           title="Next change"
           aria-label="Next change"
-          disabled={index >= total - 1}
+          disabled={total === 0 || index >= total - 1}
           onMouseDown={(event) => event.preventDefault()}
           onClick={onNext}
           className="grid size-6 place-items-center rounded text-content/70 hover:bg-content/10 hover:text-content disabled:opacity-35"

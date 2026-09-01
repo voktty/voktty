@@ -245,11 +245,15 @@ export function diffLineStatsFromState(state: EditorState): {
   );
 }
 
-export function setGitOriginal(view: EditorView, original: string | null) {
+export function setGitOriginal(
+  view: EditorView,
+  original: string | null,
+): boolean {
   const current = view.state.field(originalField);
   const next = original == null ? null : textFromString(original);
-  if (sameText(current, next)) return;
+  if (sameText(current, next)) return false;
   view.dispatch({ effects: setOriginalEffect.of(original) });
+  return true;
 }
 
 export function stateWithGitDoc(state: EditorState, doc: string): EditorState {

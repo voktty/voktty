@@ -43,7 +43,7 @@ export function handleEditorFindKey(event: KeyboardEvent): boolean {
     return false;
   }
 
-  const view = focusedEditorView();
+  const view = editorViewForFind();
   const mod = event.metaKey || event.ctrlKey;
   const key = event.key.toLowerCase();
 
@@ -55,8 +55,9 @@ export function handleEditorFindKey(event: KeyboardEvent): boolean {
   }
 
   if (mod && !event.altKey && !event.shiftKey && key === "f") {
+    if (!view) return false;
     event.preventDefault();
-    if (view) openSearchPanel(view);
+    openSearchPanel(view);
     return true;
   }
 
@@ -77,36 +78,53 @@ export function handleEditorFindKey(event: KeyboardEvent): boolean {
   return false;
 }
 
-function focusedEditorView(): EditorView | null {
+function isUsableEditorElement(node: Element): boolean {
+  if (!(node instanceof HTMLElement)) return false;
+  return !isHiddenEditorHost(node);
+}
+
+export function isHiddenEditorHost(node: {
+  closest: (selector: string) => unknown;
+  checkVisibility?: () => boolean;
+}): boolean {
+  if (node.closest(".hidden, .invisible, [hidden], [aria-hidden='true']")) {
+    return true;
+  }
+  if (typeof node.checkVisibility === "function" && !node.checkVisibility()) {
+    return true;
+  }
+  return false;
+}
+
+function editorElementForFind(): HTMLElement | null {
+  const focused = focusedEditorElement();
+  if (focused && isUsableEditorElement(focused)) return focused;
+  for (const node of document.querySelectorAll(".cm-editor")) {
+    if (node instanceof HTMLElement && isUsableEditorElement(node)) return node;
+  }
+  return null;
+}
+
+function focusedEditorElement(): HTMLElement | null {
   const active = document.activeElement;
   if (active instanceof Element) {
     const fromActive = active.closest(".cm-editor");
-    if (fromActive instanceof HTMLElement) {
-      return EditorView.findFromDOM(fromActive);
-    }
+    if (fromActive instanceof HTMLElement) return fromActive;
   }
   const focused = document.querySelector(".cm-editor.cm-focused");
-  if (focused instanceof HTMLElement) {
-    return EditorView.findFromDOM(focused);
-  }
-  return null;
+  return focused instanceof HTMLElement ? focused : null;
+}
+
+function editorViewForFind(): EditorView | null {
+  const el = editorElementForFind();
+  return el ? EditorView.findFromDOM(el) : null;
 }
 
 export function openFindInActiveEditor(): boolean {
-  const view = focusedEditorView() ?? firstVisibleEditorView();
+  const view = editorViewForFind();
   if (!view) return false;
   openSearchPanel(view);
   return true;
-}
-
-function firstVisibleEditorView(): EditorView | null {
-  for (const node of document.querySelectorAll(".cm-editor")) {
-    if (!(node instanceof HTMLElement)) continue;
-    if (node.closest(".invisible")) continue;
-    const view = EditorView.findFromDOM(node);
-    if (view) return view;
-  }
-  return null;
 }
 
 function openReplacePanel(view: EditorView): boolean {
@@ -212,23 +230,37 @@ class FindPanel implements Panel {
       svgIcon("M4.5 4.5l7 7M11.5 4.5l-7 7"),
     );
 
-    this.replaceRow = elt("div", { class: "cm-find-row cm-find-replace-row" },
+    this.replaceRow = elt(
+      "div",
+      { class: "cm-find-row cm-find-replace-row" },
       elt("div", { class: "cm-find-query" }, this.replaceField),
-      elt("div", { class: "cm-find-replace-actions" },
+      elt(
+        "div",
+        { class: "cm-find-replace-actions" },
         textButton("Replace", () => replaceNext(this.view)),
         textButton("All", () => replaceAll(this.view)),
       ),
     );
 
-    this.dom = elt("div", { class: "cm-find", onkeydown: (event) => this.onKeyDown(event) },
+    this.dom = elt(
+      "div",
+      { class: "cm-find", onkeydown: (event) => this.onKeyDown(event) },
       this.expandButton,
-      elt("div", { class: "cm-find-fields" },
-        elt("div", { class: "cm-find-row" },
-          elt("div", { class: "cm-find-query cm-find-search" },
+      elt(
+        "div",
+        { class: "cm-find-fields" },
+        elt(
+          "div",
+          { class: "cm-find-row" },
+          elt(
+            "div",
+            { class: "cm-find-query cm-find-search" },
             this.searchField,
             this.count,
           ),
-          elt("div", { class: "cm-find-toggles" },
+          elt(
+            "div",
+            { class: "cm-find-toggles" },
             this.caseButton,
             this.wordButton,
             this.regexButton,
@@ -250,7 +282,9 @@ class FindPanel implements Panel {
       if (!this.composing) this.commit(true);
     });
     this.replaceField.addEventListener("input", () => this.commit(false));
-    this.caseButton.addEventListener("click", () => this.toggle("caseSensitive"));
+    this.caseButton.addEventListener("click", () =>
+      this.toggle("caseSensitive"),
+    );
     this.wordButton.addEventListener("click", () => this.toggle("wholeWord"));
     this.regexButton.addEventListener("click", () => this.toggle("regexp"));
     this.expandButton.addEventListener("click", () =>
@@ -310,8 +344,12 @@ class FindPanel implements Panel {
     this.query = new SearchQuery({
       search: this.searchField.value,
       replace: this.replaceField.value,
-      caseSensitive: flag === "caseSensitive" ? !this.query.caseSensitive : this.query.caseSensitive,
-      wholeWord: flag === "wholeWord" ? !this.query.wholeWord : this.query.wholeWord,
+      caseSensitive:
+        flag === "caseSensitive"
+          ? !this.query.caseSensitive
+          : this.query.caseSensitive,
+      wholeWord:
+        flag === "wholeWord" ? !this.query.wholeWord : this.query.wholeWord,
       regexp: flag === "regexp" ? !this.query.regexp : this.query.regexp,
       literal: true,
     });
@@ -339,6 +377,7 @@ class FindPanel implements Panel {
   }
 
   private reveal() {
+    if (this.view.root.activeElement === this.view.contentDOM) return;
     const query = getSearchQuery(this.view.state);
     if (!query.valid) return;
     const selection = this.view.state.selection.main;
@@ -399,7 +438,12 @@ class FindPanel implements Panel {
       keyEvent.preventDefault();
       return;
     }
-    if (keyEvent.altKey && !keyEvent.metaKey && !keyEvent.ctrlKey && !keyEvent.shiftKey) {
+    if (
+      keyEvent.altKey &&
+      !keyEvent.metaKey &&
+      !keyEvent.ctrlKey &&
+      !keyEvent.shiftKey
+    ) {
       if (keyEvent.code === "KeyC") {
         keyEvent.preventDefault();
         this.toggle("caseSensitive");
@@ -471,14 +515,18 @@ function inputField(
 }
 
 function toggleButton(label: string, title: string, shortcut: string) {
-  const button = elt("button", {
-    type: "button",
-    class: "cm-find-toggle",
-    title: `${title} (${shortcut})`,
-    "aria-label": title,
-    "aria-pressed": "false",
-    tabindex: "-1",
-  }, label);
+  const button = elt(
+    "button",
+    {
+      type: "button",
+      class: "cm-find-toggle",
+      title: `${title} (${shortcut})`,
+      "aria-label": title,
+      "aria-pressed": "false",
+      tabindex: "-1",
+    },
+    label,
+  );
   return button;
 }
 
@@ -488,22 +536,30 @@ function iconButton(
   shortcut: string,
   icon: Node,
 ) {
-  return elt("button", {
-    type: "button",
-    class: className,
-    title: `${title} (${shortcut})`,
-    "aria-label": title,
-    tabindex: "-1",
-  }, icon);
+  return elt(
+    "button",
+    {
+      type: "button",
+      class: className,
+      title: `${title} (${shortcut})`,
+      "aria-label": title,
+      tabindex: "-1",
+    },
+    icon,
+  );
 }
 
 function textButton(label: string, onClick: () => void) {
-  return elt("button", {
-    type: "button",
-    class: "cm-find-text",
-    tabindex: "-1",
-    onclick: onClick,
-  }, label);
+  return elt(
+    "button",
+    {
+      type: "button",
+      class: "cm-find-text",
+      tabindex: "-1",
+      onclick: onClick,
+    },
+    label,
+  );
 }
 
 function setPressed(button: HTMLButtonElement, pressed: boolean) {
@@ -576,10 +632,12 @@ const findTheme = EditorView.theme(
       right: "16px",
       left: "auto",
       width: "auto",
+      minWidth: "min(360px, calc(100% - 24px))",
       maxWidth: "calc(100% - 24px)",
-      zIndex: "20",
+      zIndex: "40",
       backgroundColor: "transparent",
       border: "none",
+      pointerEvents: "auto",
     },
     ".cm-panel.cm-find": {
       display: "flex",
@@ -731,14 +789,10 @@ const findTheme = EditorView.theme(
 function scrollToSearchMatch(range: SelectionRange, view: EditorView) {
   const coords = view.coordsAtPos(range.from);
   const scroller = view.scrollDOM;
-  const margin = Math.max(64, Math.floor(scroller.clientHeight * 0.28));
   if (coords) {
     const rect = scroller.getBoundingClientRect();
-    if (
-      coords.top >= rect.top + margin &&
-      coords.bottom <= rect.bottom - margin
-    ) {
-      return EditorView.scrollIntoView(range, { y: "nearest", yMargin: margin });
+    if (coords.top >= rect.top && coords.bottom <= rect.bottom) {
+      return EditorView.scrollIntoView(range, { y: "nearest", yMargin: 24 });
     }
   }
   return EditorView.scrollIntoView(range, { y: "center" });
