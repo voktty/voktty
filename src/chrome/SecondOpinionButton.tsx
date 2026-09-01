@@ -1,8 +1,8 @@
 import {
   Check,
   ChevronRight,
+  MessageMultiple,
   Replace,
-  Split,
   type IconComponent,
 } from "./icons";
 import {
@@ -72,7 +72,7 @@ export function HandoffButton({ from, onPick }: Pick<Props, "from" | "onPick">) 
 export function SecondOpinionButton({
   from,
   onPick,
-  icon: Icon = Split,
+  icon: Icon = MessageMultiple,
   title = "Second opinion",
   disabledTitle = "Install another provider for a second opinion",
   description = "Send this turn to another agent to review the work.",
