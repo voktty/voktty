@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-09-01
+
 ### Added
 
 - Inbox: comment on GitHub pull requests and issues, and on Linear issues, from the detail pane. Reply stays in a GitHub review thread or Linear comment thread.
 - Check for Updates lives in the app menu — next to Settings on macOS and in the File menu elsewhere — so you can check anytime; Settings → General has it too.
 - Sidebar: pin a session from the context menu to keep it at the top until you unpin it.
 - Settings → General: Empty session games. Turn it off to hide pac-man and snake from the empty pane. On by default.
+- GitHub Releases ship a `.deb` and an AppImage for Linux (x86_64).
 
 ### Changed
 
@@ -21,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The empty-session grid now slides between pac-man and snake on its own. Pac-man is chased by four project mascots through a maze that runs edge to edge; snake still hunts pellets and provider logos. Hover pauses the slider, the dots jump to a game, and take control plays whichever is on screen — three lives on pac-man, the same low/mid/hard speeds on both. The grid's random cell flicker is gone.
 
 - Launch holds the logo until the restored workspace is ready, then fades to that first paint. The window stays up through the Dock bounce so the mark is visible instead of a blank or shifting chrome.
+
+### Fixed
+
+- Reloading a file keeps the editor's scroll position and selection instead of swapping the whole document. Find and replace run in the visible editor, not a hidden tab.
 
 ## [0.1.24] - 2026-09-01
 
@@ -391,7 +398,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.24...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.25...HEAD
+[0.1.25]: https://github.com/hardbeat920/monocode/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/hardbeat920/monocode/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/hardbeat920/monocode/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/hardbeat920/monocode/compare/v0.1.21...v0.1.22
