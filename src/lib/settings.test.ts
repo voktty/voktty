@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   COMPOSER_RUNNER_DEFAULT,
   GRID_ARCADE_ENABLED_DEFAULT,
+  KEYBINDINGS,
   LIVE_AGENTS_ENABLED_DEFAULT,
   loadComposerRunner,
   loadGridArcadeEnabled,
@@ -120,5 +121,24 @@ describe("grid arcade enabled setting", () => {
     expect(loadGridArcadeEnabled()).toBe(false);
     saveGridArcadeEnabled(true);
     expect(loadGridArcadeEnabled()).toBe(true);
+  });
+});
+
+describe("workspace navigation keybindings", () => {
+  it("documents session and project cycling in the shortcut list", () => {
+    const rows = KEYBINDINGS.filter(
+      (row) =>
+        row.command.startsWith("Session:") ||
+        row.command.startsWith("Project:"),
+    );
+    expect(rows.map((row) => row.command)).toEqual([
+      "Session: Previous",
+      "Session: Next",
+      "Project: Previous",
+      "Project: Next",
+    ]);
+    expect(rows.every((row) => row.when === "!textFocus && !overlay")).toBe(
+      true,
+    );
   });
 });

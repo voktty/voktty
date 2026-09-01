@@ -59,6 +59,7 @@ import {
   renameFolder,
   reorderSessionFolders,
   saveSessionFolders,
+  sessionListNavigationIds,
   setFolderCollapsed,
   setFolderColor,
   ungroupedSessions,
@@ -165,6 +166,7 @@ type Props = {
   /** First listing for this project has not arrived yet. */
   pending: boolean;
   onSelectSession: (sessionId: string) => void;
+  onSessionNavigationOrder?: (ids: readonly string[]) => void;
   onPrefetchSession?: (sessionId: string) => void;
   onPlaceSessionOnPane?: (
     sessionId: string,
@@ -236,6 +238,7 @@ function SidebarComponent({
   status,
   pending,
   onSelectSession,
+  onSessionNavigationOrder,
   onPrefetchSession,
   onPlaceSessionOnPane,
   onRenameSession,
@@ -385,6 +388,10 @@ function SidebarComponent({
       deckLayout || searchOpen ? searchQuery : "",
     ),
   ].sort(compareSessionSummaries);
+  const filtersActive = hasActiveSessionFilters(sessionFilters);
+  const searchNarrowed = Boolean(
+    (deckLayout || searchOpen) && searchQuery.trim(),
+  );
   // Summaries for the whole project stay in `sessions` so filters still work.
   // Folders sit above the ungrouped list. Only a page of ungrouped cards
   // mounts; the sentinel below asks for the next page.
@@ -398,18 +405,27 @@ function SidebarComponent({
     activeUngroupedIndex,
   );
   const shownUngrouped = ungroupedVisible.slice(0, shownUngroupedCount);
+  const fullSessionListEntries = buildSessionList(
+    visibleSessions,
+    sessionFolders,
+    ungroupedVisible,
+  );
   const sessionListEntries = buildSessionList(
     visibleSessions,
     sessionFolders,
     shownUngrouped,
   );
+  const sessionNavigationIds = sessionListNavigationIds(
+    fullSessionListEntries,
+    searchNarrowed,
+  );
+  const sessionNavigationKey = sessionNavigationIds.join("\0");
+  useEffect(() => {
+    onSessionNavigationOrder?.(sessionNavigationIds);
+  }, [onSessionNavigationOrder, sessionNavigationKey]);
   const hasMoreSessions = shownUngroupedCount < ungroupedVisible.length;
   const sessionListKey = `${cwd}\0${sessionFilters.showArchived}\0${sessionFilters.time}\0${sessionFilters.hiddenHarnesses.join(",")}\0${sessionFilters.status.working}\0${sessionFilters.status.needsApproval}\0${sessionFilters.status.done}\0${deckLayout || searchOpen ? searchQuery : ""}`;
   const sessionHarnesses = harnessesInSessions(sessions);
-  const filtersActive = hasActiveSessionFilters(sessionFilters);
-  const searchNarrowed = Boolean(
-    (deckLayout || searchOpen) && searchQuery.trim(),
-  );
   const narrowedByUser = searchNarrowed || filtersActive;
   const sortable = useSortable(tabOrder, (ids) => {
     const next = ids as SidebarTab[];
