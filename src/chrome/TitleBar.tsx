@@ -752,6 +752,18 @@ export function IconButton({
   );
 }
 
+function DevModeLabel() {
+  if (!import.meta.env.DEV) return null;
+  return (
+    <span
+      title="Development build"
+      className="mr-1 min-w-0 truncate rounded-md bg-skill/15 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-skill"
+    >
+      Development
+    </span>
+  );
+}
+
 export function TabVisitNav({
   canGoBack = false,
   canGoForward = false,
@@ -770,30 +782,33 @@ export function TabVisitNav({
   panelLabel?: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center">
-      <IconButton
-        label={`Back (${MOD}[)`}
-        disabled={!canGoBack}
-        onClick={onGoBack}
-      >
-        <ChevronLeft className="size-3.5" strokeWidth={1.75} />
-      </IconButton>
-      <IconButton
-        label={`Forward (${MOD}])`}
-        disabled={!canGoForward}
-        onClick={onGoForward}
-      >
-        <ChevronRight className="size-3.5" strokeWidth={1.75} />
-      </IconButton>
-      {onTogglePanel ? (
+    <div className="flex min-w-0 items-center">
+      <DevModeLabel />
+      <div className="flex shrink-0 items-center">
         <IconButton
-          label={panelLabel}
-          active={panelActive}
-          onClick={onTogglePanel}
+          label={`Back (${MOD}[)`}
+          disabled={!canGoBack}
+          onClick={onGoBack}
         >
-          <PanelLeft className="size-3.5" strokeWidth={1.75} />
+          <ChevronLeft className="size-3.5" strokeWidth={1.75} />
         </IconButton>
-      ) : null}
+        <IconButton
+          label={`Forward (${MOD}])`}
+          disabled={!canGoForward}
+          onClick={onGoForward}
+        >
+          <ChevronRight className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+        {onTogglePanel ? (
+          <IconButton
+            label={panelLabel}
+            active={panelActive}
+            onClick={onTogglePanel}
+          >
+            <PanelLeft className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1253,12 +1268,15 @@ function TitleBarComponent({
       {deckLayout ? null : (
         <div className="flex shrink-0 items-center gap-0.5 px-2">
           {sidebarOpen ? null : (
-            <TabVisitNav
-              canGoBack={canGoBack}
-              canGoForward={canGoForward}
-              onGoBack={onGoBack}
-              onGoForward={onGoForward}
-            />
+            <>
+              <DevModeLabel />
+              <TabVisitNav
+                canGoBack={canGoBack}
+                canGoForward={canGoForward}
+                onGoBack={onGoBack}
+                onGoForward={onGoForward}
+              />
+            </>
           )}
           <IconButton
             label={`Toggle Sidebar (${MOD}B)`}

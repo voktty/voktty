@@ -64,7 +64,7 @@ import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { RailAction, RailSearch } from "./RailAction";
 import { RemoveProjectDialog } from "./RemoveProjectDialog";
-import { TabVisitNav } from "./TitleBar";
+import { DevModeSlot, TabVisitNav } from "./TitleBar";
 import { SidebarUpdateFooter } from "./SidebarUpdate";
 import type { InstalledUpdate } from "../lib/updateNotice";
 import { SettingsNav } from "./SettingsRail";
@@ -361,7 +361,7 @@ export function ProjectRail({
         data-tauri-drag-region="deep"
       >
         {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
-        <div className="min-w-0 flex-1" />
+        <DevModeSlot />
         <TabVisitNav
           canGoBack={canGoBack}
           canGoForward={canGoForward}

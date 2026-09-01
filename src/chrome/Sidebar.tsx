@@ -91,7 +91,7 @@ import { ProjectRail } from "./ProjectRail";
 import { RailAction } from "./RailAction";
 import { SettingsNav } from "./SettingsRail";
 import { TerminalSpinner } from "./TerminalSpinner";
-import { IconButton, TabVisitNav } from "./TitleBar";
+import { DevModeLabel, DevModeSlot, IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
@@ -699,7 +699,7 @@ function SidebarComponent({
               data-tauri-drag-region="deep"
             >
               {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
-              <div className="min-w-0 flex-1" />
+              <DevModeSlot />
               <TabVisitNav
                 canGoBack={canGoBack}
                 canGoForward={canGoForward}
@@ -711,9 +711,10 @@ function SidebarComponent({
             </div>
           ) : (
             <div
-              className="flex h-9.75 shrink-0 select-none items-center justify-end pr-1.5"
+              className="flex h-9.75 shrink-0 select-none items-center justify-end gap-1 pr-1.5"
               data-tauri-drag-region="deep"
             >
+              <DevModeLabel />
               <TabVisitNav
                 canGoBack={canGoBack}
                 canGoForward={canGoForward}
