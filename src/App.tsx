@@ -5,7 +5,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Sidebar } from "./chrome/Sidebar";
 import { ApprovalToasts } from "./chrome/ApprovalToasts";
-import { UpdateToast } from "./chrome/UpdateToast";
+import { WhatsNewDialog } from "./chrome/WhatsNewDialog";
 import { TitleBar, type Tab as TitleTab } from "./chrome/TitleBar";
 import { MenuBar } from "./chrome/MenuBar";
 import { FilePicker } from "./chrome/FilePicker";
@@ -47,7 +47,6 @@ import {
   neighborLeafId,
   newFileTab,
   newPlanTab,
-  newReleaseNotesWorkspaceTab,
   newTab,
   newTerminalFile,
   newTerminalWorkspaceTab,
@@ -73,10 +72,6 @@ import {
   releaseNotesForVersion,
   releaseNotesTitle,
 } from "./lib/releaseNotes";
-import {
-  focusReleaseNotesTarget,
-  planReleaseNotesOpen,
-} from "./lib/releaseNotesWorkspace";
 import { orderByIds } from "./lib/reorder";
 import {
   addTerminalToDock,
@@ -509,6 +504,7 @@ export default function App({
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateNotice, setUpdateNotice] = useState(installedUpdate);
+  const [whatsNewVersion, setWhatsNewVersion] = useState<string | null>(null);
   const [settingsSection, setSettingsSection] =
     useState<SettingsSectionId>(loadSettingsSection);
   const [editorNavigation, setEditorNavigation] =
@@ -1176,37 +1172,17 @@ export default function App({
     [projectOfTab],
   );
 
-  const onOpenWhatsNew = useCallback(
-    (version: string) => {
-      const document = releaseNotesForVersion(version);
-      if (!document) {
-        void message(
-          "Release notes for this version are not available in this build.",
-          { title: "MonoCode" },
-        );
-        return;
-      }
-
-      setFilePickerOpen(false);
-      setSearchViewOpen(false);
-      setInboxViewOpen(false);
-      setNotesViewOpen(false);
-      setSettingsOpen(false);
-
-      const plan = planReleaseNotesOpen(tabsRef.current, version);
-      if (plan.kind === "focus") {
-        setTabs((current) => focusReleaseNotesTarget(current, plan));
-        setActiveTabId(plan.tabId);
-      } else {
-        const tab = newReleaseNotesWorkspaceTab(document.source);
-        appendTab(tab);
-        setActiveTabId(tab.id);
-      }
-      setComposerFocused(false);
-      setUpdateNotice(null);
-    },
-    [appendTab],
-  );
+  const onOpenWhatsNew = useCallback((version: string) => {
+    const document = releaseNotesForVersion(version);
+    if (!document) {
+      void message(
+        "Release notes for this version are not available in this build.",
+        { title: "MonoCode" },
+      );
+      return;
+    }
+    setWhatsNewVersion(document.source.version);
+  }, []);
 
   const onNew = useCallback(() => {
     setSearchViewOpen(false);
@@ -4283,6 +4259,9 @@ export default function App({
         onOpenSettings={onOpenSettings}
         onSelectSettingsSection={onSelectSettingsSection}
         onCloseSettings={onCloseSettings}
+        updateNotice={updateNotice}
+        onOpenWhatsNew={onOpenWhatsNew}
+        onDismissUpdate={() => setUpdateNotice(null)}
       />
 
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
@@ -4571,11 +4550,12 @@ export default function App({
         onFocusSession={onOpenApprovalSession}
         onApproval={onApproval}
       />
-      <UpdateToast
-        update={updateNotice}
-        onOpen={onOpenWhatsNew}
-        onDismiss={() => setUpdateNotice(null)}
-      />
+      {whatsNewVersion ? (
+        <WhatsNewDialog
+          version={whatsNewVersion}
+          onClose={() => setWhatsNewVersion(null)}
+        />
+      ) : null}
     </div>
   );
 }

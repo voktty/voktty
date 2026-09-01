@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatReleaseDate,
+  presentReleaseNotes,
   releaseNotesForVersion,
   releaseNotesMarkdown,
   releaseNotesTitle,
@@ -84,4 +86,39 @@ describe("releaseNotesMarkdown", () => {
       release?.markdown,
     );
   });
+});
+
+describe("presentReleaseNotes", () => {
+  it("drops the version heading and keeps the dated body", () => {
+    expect(presentReleaseNotes("0.1.2", fixture)).toEqual({
+      version: "0.1.2",
+      date: "2026-08-31",
+      markdown: "### Added\n- Requested feature.",
+    });
+  });
+
+  it("keeps undated releases without a date", () => {
+    expect(presentReleaseNotes("0.1.1", fixture)).toEqual({
+      version: "0.1.1",
+      date: null,
+      markdown: "### Fixed\n- Older fix.",
+    });
+  });
+
+  it("returns null when the version is missing", () => {
+    expect(presentReleaseNotes("9.9.9", fixture)).toBeNull();
+  });
+});
+
+describe("formatReleaseDate", () => {
+  it("formats a changelog ISO date", () => {
+    expect(formatReleaseDate("2026-09-01")).toBe("1 Sep 2026");
+  });
+
+  it.each(["soon", "2026-13-01", "2026-09-1"])(
+    "leaves invalid date %j alone",
+    (value) => {
+      expect(formatReleaseDate(value)).toBe(value);
+    },
+  );
 });

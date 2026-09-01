@@ -45,3 +45,58 @@ export function releaseNotesMarkdown(
 ): string | null {
   return releaseNotesForVersion(source.version, changelog)?.markdown ?? null;
 }
+
+export type ReleaseNotesPresentation = {
+  version: string;
+  date: string | null;
+  markdown: string;
+};
+
+/** Changelog body for the What's new modal: version heading lives in the chrome. */
+export function presentReleaseNotes(
+  version: string,
+  changelog: string = bundledChangelog,
+): ReleaseNotesPresentation | null {
+  const release = releaseNotesForVersion(version, changelog);
+  if (!release) return null;
+
+  const escapedVersion = release.source.version.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&",
+  );
+  const heading = new RegExp(
+    `^## \\[${escapedVersion}\\](?: - (\\d{4}-\\d{2}-\\d{2}))?\\r?\\n*`,
+  );
+  const match = heading.exec(release.markdown);
+
+  return {
+    version: release.source.version,
+    date: match?.[1] ?? null,
+    markdown: match
+      ? release.markdown.slice(match[0].length).trimStart()
+      : release.markdown,
+  };
+}
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+export function formatReleaseDate(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return iso;
+  const month = MONTHS[Number(match[2]) - 1];
+  if (!month) return iso;
+  return `${Number(match[3])} ${month} ${match[1]}`;
+}

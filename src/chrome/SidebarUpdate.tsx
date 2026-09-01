@@ -7,6 +7,31 @@ import {
   runUpdateFlow,
   type UpdaterSnapshot,
 } from "../lib/updater";
+import type { InstalledUpdate } from "../lib/updateNotice";
+import { UpdateRailCard } from "./UpdateRailCard";
+
+export function SidebarUpdateFooter({
+  update,
+  onOpenWhatsNew,
+  onDismissUpdate,
+}: {
+  update?: InstalledUpdate | null;
+  onOpenWhatsNew?: (version: string) => void;
+  onDismissUpdate?: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 p-2 pb-1">
+      {update && onOpenWhatsNew && onDismissUpdate ? (
+        <UpdateRailCard
+          update={update}
+          onOpen={onOpenWhatsNew}
+          onDismiss={onDismissUpdate}
+        />
+      ) : null}
+      <SidebarUpdate />
+    </div>
+  );
+}
 
 export function SidebarUpdate() {
   const [snapshot, setSnapshot] = useState<UpdaterSnapshot>({

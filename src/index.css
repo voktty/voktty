@@ -155,6 +155,7 @@ textarea,
 input,
 .agent-transcript,
 .markdown-preview,
+.whats-new-md,
 .inbox-pr-diff,
 .inbox-comment-md,
 .monocode-terminal,
@@ -363,6 +364,24 @@ html.is-resizing * {
 
 .agent-markdown [data-streamdown="heading-2"] {
   font-size: 18px;
+}
+
+.whats-new-md.agent-markdown [data-streamdown="heading-3"] {
+  margin-top: 1.15rem;
+  margin-bottom: 0.35rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-content) 55%, transparent);
+}
+
+.whats-new-md.agent-markdown [data-streamdown="heading-3"]:first-child {
+  margin-top: 0;
+}
+
+.whats-new-md.agent-markdown ul {
+  margin-top: 0.15rem;
 }
 
 .agent-markdown [data-streamdown="code-block-header"] {
@@ -831,6 +850,43 @@ html.is-resizing * {
 
 @media (prefers-reduced-motion: reduce) {
   .popover-open {
+    animation: none;
+  }
+}
+
+/* Centered modals: a short lift rather than a fade. Glass already sits on
+   its own compositor layer, so opacity alone barely reads. */
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.modal-backdrop {
+  animation: modal-backdrop-in 160ms ease-out both;
+}
+
+.modal-panel {
+  animation: modal-panel-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop,
+  .modal-panel {
     animation: none;
   }
 }

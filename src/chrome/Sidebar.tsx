@@ -58,6 +58,7 @@ import type { HarnessId } from "../lib/session";
 import type { LiveAgent } from "../lib/liveAgents";
 import type { SessionSummary } from "../lib/sessionStore";
 import type { SettingsSectionId } from "../lib/settings";
+import type { InstalledUpdate } from "../lib/updateNotice";
 import {
   loadTabGroupColors,
   loadTabGroupCustomColors,
@@ -96,7 +97,7 @@ import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SessionsEmpty } from "./SessionsEmpty";
-import { SidebarUpdate } from "./SidebarUpdate";
+import { SidebarUpdateFooter } from "./SidebarUpdate";
 import { SourceControl } from "./SourceControl";
 import { InboxView } from "../surfaces/InboxView";
 
@@ -192,6 +193,9 @@ type Props = {
   onOpenSettings?: () => void;
   onSelectSettingsSection?: (section: SettingsSectionId) => void;
   onCloseSettings?: () => void;
+  updateNotice?: InstalledUpdate | null;
+  onOpenWhatsNew?: (version: string) => void;
+  onDismissUpdate?: () => void;
 };
 
 function SidebarComponent({
@@ -254,6 +258,9 @@ function SidebarComponent({
   onOpenSettings,
   onSelectSettingsSection,
   onCloseSettings,
+  updateNotice = null,
+  onOpenWhatsNew,
+  onDismissUpdate,
 }: Props) {
   const gitRoot = gitCwd || cwd;
   const inboxUnseen = useInboxUnseen(recents, cwd);
@@ -954,9 +961,11 @@ function SidebarComponent({
           ) : null}
           {showSidebarFooter ? (
             <>
-              <div className="p-2 pb-1">
-                <SidebarUpdate />
-              </div>
+              <SidebarUpdateFooter
+                update={updateNotice}
+                onOpenWhatsNew={onOpenWhatsNew}
+                onDismissUpdate={onDismissUpdate}
+              />
               <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
                 <RailAction
                   label="Settings"
@@ -1041,6 +1050,9 @@ function SidebarComponent({
           onOpenSettings={onOpenSettings}
           onSelectSettingsSection={onSelectSettingsSection}
           onCloseSettings={onCloseSettings}
+          updateNotice={updateNotice}
+          onOpenWhatsNew={onOpenWhatsNew}
+          onDismissUpdate={onDismissUpdate}
         />
       ) : null}
       {sidebarVisible ? sidebarContent : null}
