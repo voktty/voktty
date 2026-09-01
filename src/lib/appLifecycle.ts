@@ -27,11 +27,13 @@ import { sessionChildHarnesses } from "./handoff";
 import {
   getSession,
   listInFlightSessions,
+  listSessionsByProject,
   loadWorkspaceSnapshot,
   replaceInFlightSessions,
   saveWorkspaceSnapshot,
   shouldPersistSession,
   upsertSession,
+  type SessionSummary,
 } from "./sessionStore";
 import {
   collectWorkspaceSnapshot,
@@ -40,6 +42,7 @@ import {
 } from "./workspaceSnapshot";
 import { loadWindowTransfer } from "./windowTransferBootstrap";
 import type { WindowTransferPayload } from "./windowTransfer";
+import { lastProjectPath, normalizeProjectPath, sameProjectPath } from "./recents";
 
 export type { ResumedWorkspace };
 export { hasInFlightSessions };
@@ -47,6 +50,9 @@ export { hasInFlightSessions };
 export type BootWorkspace = {
   windowTransfer: WindowTransferPayload | null;
   resumed: ResumedWorkspace | null;
+  /** Sidebar rows listed before first paint, so the rail is not empty. */
+  history: SessionSummary[];
+  historyCwd: string | null;
 };
 
 let resumedPromise: Promise<ResumedWorkspace | null> | null = null;
@@ -125,12 +131,62 @@ export function loadResumedWorkspace(): Promise<ResumedWorkspace | null> {
 export function loadBootWorkspace(): Promise<BootWorkspace> {
   if (!bootPromise) {
     bootPromise = (async () => {
+      const hintedCwd = lastProjectPath();
+      const historyHint = listProjectHistory(hintedCwd);
       const windowTransfer = await loadWindowTransfer();
-      const resumed = windowTransfer ? null : await loadResumedWorkspace();
-      return { windowTransfer, resumed };
+      if (windowTransfer) {
+        const listed = await historyForCwd(
+          windowTransfer.projectCwd,
+          hintedCwd,
+          historyHint,
+        );
+        return {
+          windowTransfer,
+          resumed: null,
+          history: listed?.rows ?? [],
+          historyCwd: listed?.cwd ?? null,
+        };
+      }
+      const [resumed, hinted] = await Promise.all([
+        loadResumedWorkspace(),
+        historyHint,
+      ]);
+      const listed = await historyForCwd(
+        resumed?.projectCwd ?? hintedCwd,
+        hintedCwd,
+        Promise.resolve(hinted),
+      );
+      return {
+        windowTransfer: null,
+        resumed,
+        history: listed?.rows ?? [],
+        historyCwd: listed?.cwd ?? null,
+      };
     })();
   }
   return bootPromise;
+}
+
+async function listProjectHistory(
+  cwd: string | null | undefined,
+): Promise<{ cwd: string; rows: SessionSummary[] } | null> {
+  if (!cwd || cwd === "~") return null;
+  try {
+    const rows = await listSessionsByProject(cwd);
+    return { cwd: normalizeProjectPath(cwd), rows };
+  } catch {
+    return null;
+  }
+}
+
+async function historyForCwd(
+  cwd: string | null | undefined,
+  hintedCwd: string | null | undefined,
+  hinted: Promise<{ cwd: string; rows: SessionSummary[] } | null>,
+): Promise<{ cwd: string; rows: SessionSummary[] } | null> {
+  if (!cwd || cwd === "~") return null;
+  if (hintedCwd && sameProjectPath(cwd, hintedCwd)) return hinted;
+  return listProjectHistory(cwd);
 }
 
 async function loadResumedWorkspaceOnce(): Promise<ResumedWorkspace | null> {

@@ -141,6 +141,7 @@ type Props = {
   /** First listing for this project has not arrived yet. */
   pending: boolean;
   onSelectSession: (sessionId: string) => void;
+  onPrefetchSession?: (sessionId: string) => void;
   onPlaceSessionOnPane?: (
     sessionId: string,
     targetId: string,
@@ -210,6 +211,7 @@ function SidebarComponent({
   status,
   pending,
   onSelectSession,
+  onPrefetchSession,
   onPlaceSessionOnPane,
   onRenameSession,
   onArchiveSession,
@@ -938,6 +940,7 @@ function SidebarComponent({
                                 )}
                                 now={now}
                                 onSelect={onSelectSession}
+                                onPrefetch={onPrefetchSession}
                                 onPlaceOnPane={onPlaceSessionOnPane}
                                 onContextMenu={
                                   onPinSession ||
@@ -1278,6 +1281,7 @@ function SessionCard({
   needsApproval,
   now,
   onSelect,
+  onPrefetch,
   onPlaceOnPane,
   onContextMenu,
   onRename,
@@ -1290,6 +1294,7 @@ function SessionCard({
   needsApproval: boolean;
   now: number;
   onSelect: (sessionId: string) => void;
+  onPrefetch?: (sessionId: string) => void;
   onPlaceOnPane?: (sessionId: string, targetId: string, edge: PaneEdge) => void;
   onContextMenu?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
   onRename?: () => void;
@@ -1315,7 +1320,11 @@ function SessionCard({
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!onPlaceOnPane || event.button !== 0) return;
+    if (event.button !== 0) return;
+    // Warm the transcript during the press. Opening stays on click so a
+    // drag-to-pane gesture does not switch conversations.
+    onPrefetch?.(session.id);
+    if (!onPlaceOnPane) return;
     const handle = event.currentTarget;
     const pointerId = event.pointerId;
     const startX = event.clientX;
@@ -1397,6 +1406,7 @@ function SessionCard({
       aria-current={isActive ? "true" : undefined}
       data-tauri-drag-region="false"
       onPointerDown={onPointerDown}
+      onPointerEnter={() => onPrefetch?.(session.id)}
       onClick={() => {
         if (performance.now() < skipClickUntil.current) return;
         onSelect(session.id);

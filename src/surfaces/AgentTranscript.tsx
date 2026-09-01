@@ -99,7 +99,7 @@ type Props = {
   onHandoff?: (harness: HarnessId, turn: Block[], model: string) => void;
   onJumpToBottomChange?: (show: boolean) => void;
   onJumpToBottomReady?: (jump: () => void) => void;
-  /** False while the pane is `display: none` (another tab). Used to restore scroll. */
+  /** False while another tab is in front. Hidden tabs stay laid out. */
   visible?: boolean;
 };
 
@@ -225,14 +225,16 @@ export function AgentTranscript({
     const opened = visible && !wasVisible.current;
     wasVisible.current = visible;
     if (!opened) return;
-    // `display: none` zeros scroll. Pin to the live end so coming back to
-    // an open tab does not land at the top of the transcript.
     const el = scroller.current;
     if (!el) return;
     syncTranscriptViewport(el);
-    stickToBottom.current = true;
-    setShowJump(false);
-    pinToBottom(el);
+    // Hidden tabs stay laid out, so scroll is already correct. Only pin when
+    // the scroller looks empty (a leftover from `display: none`).
+    if (el.scrollHeight <= el.clientHeight + NEAR_BOTTOM_PX) {
+      stickToBottom.current = true;
+      setShowJump(false);
+      pinToBottom(el);
+    }
   }, [visible, setShowJump]);
 
   useLayoutEffect(() => {
