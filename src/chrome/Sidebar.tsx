@@ -44,6 +44,7 @@ import {
   filterSessionsByArchive,
   filterSessionsByQuery,
 } from "../lib/sessionHistory";
+import { SESSION_LIST_PAGE, sessionListWindow } from "../lib/sessionListWindow";
 import {
   filterSessionsByHarness,
   filterSessionsByStatus,
@@ -74,7 +75,6 @@ import { useGitFileStatuses } from "../hooks/useGitFileStatuses";
 import { useInboxUnseen } from "../hooks/useInboxUnseen";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
-import { useSessionDiffStats } from "../hooks/useSessionDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import {
@@ -293,6 +293,8 @@ function SidebarComponent({
   );
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sessionListLimit, setSessionListLimit] = useState(SESSION_LIST_PAGE);
+  const loadMoreRef = useRef<HTMLLIElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const deckLayout = layout === "deck";
   const busyIdsRef = useRef(busySessionIds);
@@ -335,6 +337,19 @@ function SidebarComponent({
       deckLayout || searchOpen ? searchQuery : "",
     ),
   ].sort(compareSessionSummaries);
+  // Summaries for the whole project stay in `sessions` so filters still work.
+  // Only a page of cards mounts; the sentinel below asks for the next page.
+  const activeHistoryIndex = visibleSessions.findIndex(
+    (session) => session.id === activeSessionId,
+  );
+  const shownCount = sessionListWindow(
+    visibleSessions.length,
+    sessionListLimit,
+    activeHistoryIndex,
+  );
+  const shownSessions = visibleSessions.slice(0, shownCount);
+  const hasMoreSessions = shownCount < visibleSessions.length;
+  const sessionListKey = `${cwd}\0${sessionFilters.showArchived}\0${sessionFilters.time}\0${sessionFilters.hiddenHarnesses.join(",")}\0${sessionFilters.status.working}\0${sessionFilters.status.needsApproval}\0${sessionFilters.status.done}\0${deckLayout || searchOpen ? searchQuery : ""}`;
   const sessionHarnesses = harnessesInSessions(sessions);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
   const searchNarrowed = Boolean(
@@ -372,11 +387,28 @@ function SidebarComponent({
   const changeStats = useProjectDiffStats(gitRoot, open);
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
-  const sessionDiffs = useSessionDiffStats(
-    cwd,
-    sessions.map((session) => session.id),
-    open && tab === "sessions",
-  );
+
+  useEffect(() => {
+    setSessionListLimit(SESSION_LIST_PAGE);
+    const scroller = sessionsScrollRef.current;
+    if (scroller) scroller.scrollTop = 0;
+  }, [sessionListKey]);
+
+  useEffect(() => {
+    if (tab !== "sessions" || !hasMoreSessions) return;
+    const sentinel = loadMoreRef.current;
+    const root = sessionsScrollRef.current;
+    if (!sentinel || !root) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setSessionListLimit((current) => current + SESSION_LIST_PAGE);
+      },
+      { root, rootMargin: "240px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [tab, hasMoreSessions, shownCount]);
 
   useEffect(() => {
     if (tab !== "sessions") return;
@@ -869,8 +901,8 @@ function SidebarComponent({
                   )
                 ) : (
                   <ul className="flex flex-col gap-0.5 p-1.5">
-                    {visibleSessions.map((session, index) => {
-                      const prev = visibleSessions[index - 1];
+                    {shownSessions.map((session, index) => {
+                      const prev = shownSessions[index - 1];
                       const splitPinned = !!prev?.pinned && !session.pinned;
                       return (
                         <Fragment key={session.id}>
@@ -905,12 +937,6 @@ function SidebarComponent({
                                   session.id,
                                 )}
                                 now={now}
-                                additions={
-                                  sessionDiffs[session.id]?.additions ?? 0
-                                }
-                                deletions={
-                                  sessionDiffs[session.id]?.deletions ?? 0
-                                }
                                 onSelect={onSelectSession}
                                 onPlaceOnPane={onPlaceSessionOnPane}
                                 onContextMenu={
@@ -938,6 +964,13 @@ function SidebarComponent({
                         </Fragment>
                       );
                     })}
+                    {hasMoreSessions ? (
+                      <li
+                        ref={loadMoreRef}
+                        aria-hidden
+                        className="h-px list-none"
+                      />
+                    ) : null}
                   </ul>
                 )}
               </div>
@@ -1244,8 +1277,6 @@ function SessionCard({
   done,
   needsApproval,
   now,
-  additions,
-  deletions,
   onSelect,
   onPlaceOnPane,
   onContextMenu,
@@ -1258,8 +1289,6 @@ function SessionCard({
   done: boolean;
   needsApproval: boolean;
   now: number;
-  additions: number;
-  deletions: number;
   onSelect: (sessionId: string) => void;
   onPlaceOnPane?: (sessionId: string, targetId: string, edge: PaneEdge) => void;
   onContextMenu?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
@@ -1446,7 +1475,6 @@ function SessionCard({
           <span className="min-w-0 flex-1" />
         )}
         <span className="flex shrink-0 items-center gap-1.5">
-          <DiffStat additions={additions} deletions={deletions} />
           <HarnessIcon
             harness={session.harness}
             className="size-3.5 shrink-0"

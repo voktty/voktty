@@ -1,12 +1,16 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+#[cfg(test)]
+use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
+#[cfg(test)]
+use crate::fs::GitDiffStats;
 use crate::fs::{
     expand_home, git_checked, git_diff_files_for, resolve_repo_path, GitChangedFile, GitDiffIndex,
-    GitDiffStats, MAX_TEXT_FILE_BYTES,
+    MAX_TEXT_FILE_BYTES,
 };
 
 const MAX_SNAPSHOT_FILES: usize = 500;
@@ -164,6 +168,7 @@ impl CheckpointStore {
     }
 
     /// Remaining git line counts for each session, using one working-tree index.
+    #[cfg(test)]
     fn stats_for_sessions(
         &self,
         cwd: &str,
@@ -380,21 +385,6 @@ pub async fn session_checkpoint_status(
 }
 
 #[tauri::command]
-pub async fn session_checkpoint_stats(
-    store: State<'_, CheckpointStore>,
-    cwd: String,
-    session_ids: Vec<String>,
-) -> Result<HashMap<String, GitDiffStats>, String> {
-    for session_id in &session_ids {
-        validate_id(session_id, "session")?;
-    }
-    let store = store.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || store.stats_for_sessions(&cwd, &session_ids))
-        .await
-        .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
 pub async fn session_checkpoint_undo(
     store: State<'_, CheckpointStore>,
     session_id: String,
@@ -455,6 +445,7 @@ fn diff_from_manifest_with(
     CheckpointStatus { files }
 }
 
+#[cfg(test)]
 fn stats_from_status(status: &CheckpointStatus) -> GitDiffStats {
     let mut additions = 0i64;
     let mut deletions = 0i64;

@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { GitDiffStats } from "./fs";
 
 export type CheckpointFile = {
   path: string;
@@ -76,17 +75,6 @@ export function sessionCheckpointStatus(
   return invoke<CheckpointStatus>("session_checkpoint_status", {
     sessionId,
     cwd,
-  });
-}
-
-export function sessionCheckpointStats(
-  cwd: string,
-  sessionIds: string[],
-): Promise<Record<string, GitDiffStats>> {
-  if (!cwd || cwd === "~" || sessionIds.length === 0) return Promise.resolve({});
-  return invoke<Record<string, GitDiffStats>>("session_checkpoint_stats", {
-    cwd,
-    sessionIds,
   });
 }
 
