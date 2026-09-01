@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-09-01
+
+### Changed
+
+- After an in-app update, a card on the project rail above Check for updates names the version. Click it for a What's new modal with the changelog. Settings → General still has What's new.
+
+### Fixed
+
+- A busy terminal could freeze the window. Output is batched before it reaches the UI, hidden windows skip extra work, and a killed agent cannot keep spawning.
+- Installed Claude Code plugin skills now show up in the skill list. In #43.
+
 ## [0.1.25] - 2026-09-01
 
 ### Added
@@ -399,7 +410,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.25...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.26...HEAD
+[0.1.26]: https://github.com/hardbeat920/monocode/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/hardbeat920/monocode/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/hardbeat920/monocode/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/hardbeat920/monocode/compare/v0.1.22...v0.1.23
