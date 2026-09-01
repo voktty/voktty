@@ -1772,15 +1772,15 @@ function FolderRow({
         style={accent ? { color: accent } : undefined}
       >
         {expanded ? (
-          <ChevronDown className="size-3.5" strokeWidth={1.75} />
+          <ChevronDown className="size-3.5 text-content" strokeWidth={1.75} />
         ) : (
           <>
             <Folder
-              className="size-3.5 group-hover:hidden group-focus-visible:hidden"
+              className="size-3.5 group-hover:hidden group-focus-visible:hidden text-content"
               strokeWidth={1.75}
             />
             <ChevronRight
-              className="hidden size-3.5 group-hover:block group-focus-visible:block"
+              className="hidden size-3.5 group-hover:block group-focus-visible:block text-content"
               strokeWidth={1.75}
             />
           </>
