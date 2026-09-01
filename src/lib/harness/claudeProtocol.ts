@@ -93,6 +93,18 @@ export function runtimeModeToPermission(
   }
 }
 
+/** Older model ids that reject `xhigh` and want `max` instead. */
+const LEGACY_XHIGH_AS_MAX = new Set([
+  "claude-opus-4-6",
+  "claude-sonnet-4-6",
+  "claude-opus-4-5",
+  "claude-haiku-4-5",
+  "claude-opus-4-1",
+  "claude-opus-4-0",
+  "claude-sonnet-4-0",
+  "claude-sonnet-4-5",
+]);
+
 /**
  * Normalize a resolved Claude effort for `--effort`.
  * `ultracode` pairs with `xhigh`; `ultrathink` is a prompt prefix, not a CLI effort.
@@ -103,13 +115,7 @@ export function normalizeClaudeCliEffort(
 ): string | undefined {
   if (!effort || effort === "ultrathink") return undefined;
   if (effort === "ultracode") return "xhigh";
-  if (
-    effort === "xhigh" &&
-    model !== "claude-fable-5" &&
-    model !== "claude-opus-5" &&
-    model !== "claude-opus-4-8" &&
-    model !== "claude-sonnet-5"
-  ) {
+  if (effort === "xhigh" && model && LEGACY_XHIGH_AS_MAX.has(model)) {
     return "max";
   }
   if (effort === "max" && model === "claude-sonnet-4-6") return "high";
@@ -270,6 +276,57 @@ export function buildControlResponse(
       response,
     },
   };
+}
+
+export type ClaudeControlResponse = {
+  requestId: string;
+  ok: boolean;
+  payload: Record<string, unknown> | null;
+  error?: string;
+};
+
+export function parseControlResponse(
+  rec: Record<string, unknown>,
+): ClaudeControlResponse | null {
+  if (stringField(rec, "type") !== "control_response") return null;
+  const nested = asRecord(rec.response);
+  const requestId =
+    stringField(nested, "request_id") ?? stringField(rec, "request_id") ?? "";
+  if (!requestId) return null;
+  const subtype = stringField(nested, "subtype") ?? "";
+  if (subtype === "error") {
+    return {
+      requestId,
+      ok: false,
+      payload: null,
+      error: stringField(nested, "error") ?? "control request failed",
+    };
+  }
+  if (subtype && subtype !== "success") return null;
+  return {
+    requestId,
+    ok: true,
+    payload: asRecord(nested?.response) ?? {},
+  };
+}
+
+/** Rows from a `list_models` control response, or null if this line is something else. */
+export function listModelsFromControlResponse(
+  rec: Record<string, unknown>,
+  requestId: string,
+): unknown[] | null {
+  const parsed = parseControlResponse(rec);
+  if (!parsed || parsed.requestId !== requestId) return null;
+  if (!parsed.ok) return [];
+  return Array.isArray(parsed.payload?.models) ? parsed.payload.models : [];
+}
+
+export function isClaudeInitMessage(rec: Record<string, unknown>): boolean {
+  const type = stringField(rec, "type");
+  const subtype = stringField(rec, "subtype");
+  return (
+    type === "system" && (subtype === "init" || subtype === "initialized")
+  );
 }
 
 export function toClaudePermissionResult(

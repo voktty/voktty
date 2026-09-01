@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modelsForClaudeVersion } from "./claudeCatalog";
+import { modelsForClaudeVersion, modelsFromClaudeListModels } from "./claudeCatalog";
 import {
   applyClaudePromptEffortPrefix,
   askUserQuestionAllowInput,
@@ -8,10 +8,13 @@ import {
   contextFromResult,
   contextUsedFromAssistant,
   extractExitPlanModePlan,
+  isClaudeInitMessage,
   isTodoTool,
+  listModelsFromControlResponse,
   normalizeClaudeCliEffort,
   parseClaudeVersion,
   parseControlRequest,
+  parseControlResponse,
   planTextFromTodos,
   resolveClaudeApiModelId,
   runtimeModeToPermission,
@@ -42,6 +45,7 @@ describe("normalizeClaudeCliEffort", () => {
   it("maps xhigh to max on older models", () => {
     expect(normalizeClaudeCliEffort("xhigh", "claude-opus-4-6")).toBe("max");
     expect(normalizeClaudeCliEffort("xhigh", "claude-opus-5")).toBe("xhigh");
+    expect(normalizeClaudeCliEffort("xhigh", "sonnet")).toBe("xhigh");
   });
 
   it("maps max to high on sonnet 4.6", () => {
@@ -250,6 +254,162 @@ describe("modelsForClaudeVersion", () => {
     expect(next).toContain("claude-opus-5");
     expect(next).toContain("claude-fable-5");
     expect(next).toContain("claude-sonnet-5");
+  });
+});
+
+describe("list_models catalog", () => {
+  const listed = {
+    type: "control_response",
+    response: {
+      subtype: "success",
+      request_id: "list_1",
+      response: {
+        models: [
+          {
+            value: "default",
+            resolvedModel: "claude-sonnet-5",
+            displayName: "Default (recommended)",
+            description: "Sonnet 5 · Efficient for routine tasks",
+            supportsEffort: true,
+            supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
+          },
+          {
+            value: "sonnet",
+            resolvedModel: "claude-sonnet-5",
+            displayName: "Sonnet",
+            description: "Sonnet 5 · Efficient for routine tasks",
+            supportsEffort: true,
+            supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
+            supportsAdaptiveThinking: true,
+          },
+          {
+            value: "claude-fable-5[1m]",
+            resolvedModel: "claude-fable-5",
+            displayName: "Fable",
+            description: "Fable 5 · Most capable for your hardest tasks",
+            supportsEffort: true,
+            supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
+          },
+          {
+            value: "opus",
+            resolvedModel: "claude-opus-5",
+            displayName: "Opus",
+            description: "Opus 5 · Best for everyday, complex tasks",
+            supportsEffort: true,
+            supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
+            supportsFastMode: true,
+          },
+          {
+            value: "haiku",
+            resolvedModel: "claude-haiku-4-5-20251001",
+            displayName: "Haiku",
+            description: "Haiku 4.5 · Fastest for quick answers",
+          },
+          {
+            value: "cc-update-required-1",
+            resolvedModel: "cc-update-required-1",
+            displayName: "Fable 5.1 (disabled)",
+            description: "Update to 2.1.255+ to use Fable 5.1",
+            disabled: true,
+          },
+        ],
+      },
+    },
+  };
+
+  it("reads rows from the matching control response", () => {
+    expect(listModelsFromControlResponse(listed, "list_1")).toHaveLength(6);
+    expect(listModelsFromControlResponse(listed, "other")).toBeNull();
+    expect(
+      listModelsFromControlResponse(
+        {
+          type: "control_response",
+          response: {
+            subtype: "success",
+            request_id: "init_1",
+            response: { commands: [], models: [] },
+          },
+        },
+        "list_1",
+      ),
+    ).toBeNull();
+  });
+
+  it("maps the picker catalog and drops default/disabled rows", () => {
+    const models = modelsFromClaudeListModels(
+      listModelsFromControlResponse(listed, "list_1"),
+    );
+    expect(models.map((model) => model.nativeId)).toEqual([
+      "sonnet",
+      "claude-fable-5",
+      "opus",
+      "haiku",
+    ]);
+    expect(models.map((model) => model.id)).toEqual([
+      "claude:sonnet",
+      "claude:fable-5",
+      "claude:opus",
+      "claude:haiku",
+    ]);
+    expect(models.map((model) => model.name)).toEqual([
+      "Sonnet 5",
+      "Fable 5",
+      "Opus 5",
+      "Haiku 4.5",
+    ]);
+
+    const sonnet = models[0];
+    expect(sonnet?.settings?.find((setting) => setting.id === "effort")?.options.map((option) => option.value)).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultracode",
+      "ultrathink",
+    ]);
+    expect(sonnet?.settings?.some((setting) => setting.id === "fast")).toBe(false);
+
+    const fable = models[1];
+    expect(fable?.settings?.find((setting) => setting.id === "context")).toMatchObject({
+      value: "1m",
+    });
+
+    const opus = models[2];
+    expect(opus?.settings?.some((setting) => setting.id === "fast")).toBe(true);
+
+    const haiku = models[3];
+    expect(haiku?.settings).toBeUndefined();
+  });
+
+  it("parses success and error control responses", () => {
+    expect(
+      parseControlResponse({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: "init_1",
+          response: { pid: 12 },
+        },
+      }),
+    ).toEqual({
+      requestId: "init_1",
+      ok: true,
+      payload: { pid: 12 },
+    });
+    expect(
+      parseControlResponse({
+        type: "control_response",
+        response: { subtype: "error", request_id: "list_1", error: "nope" },
+      }),
+    ).toEqual({
+      requestId: "list_1",
+      ok: false,
+      payload: null,
+      error: "nope",
+    });
+    expect(isClaudeInitMessage({ type: "system", subtype: "init" })).toBe(true);
+    expect(isClaudeInitMessage({ type: "assistant", subtype: "init" })).toBe(false);
   });
 });
 

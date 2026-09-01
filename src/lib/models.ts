@@ -664,6 +664,7 @@ function pickDefaultId(harness: HarnessId, models: AgentModel[]): string {
   if (harness === "claude") {
     return (
       models.find((model) => model.nativeId === "claude-sonnet-5")?.id ??
+      models.find((model) => model.nativeId === "sonnet")?.id ??
       models.find((model) => model.id === DEFAULT_MODEL_ID.claude)?.id ??
       models[0]?.id ??
       DEFAULT_MODEL_ID.claude
