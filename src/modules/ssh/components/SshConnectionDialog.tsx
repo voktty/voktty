@@ -40,7 +40,7 @@ export function SshConnectionDialog({
   const [identityFile, setIdentityFile] = useState("");
   const [extraArgs, setExtraArgs] = useState("");
   const [initialDirectory, setInitialDirectory] = useState("");
-  const [multiplexerMode, setMultiplexerMode] = useState<"none" | "auto" | "ask">("none");
+  const [multiplexerMode, setMultiplexerMode] = useState<"none" | "auto" | "ask">("auto");
   const [tmuxSessionName, setTmuxSessionName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const hostInputRef = useRef<HTMLInputElement>(null);
@@ -60,9 +60,9 @@ export function SshConnectionDialog({
       setExtraArgs(connection.extraArgs ?? "");
       setInitialDirectory(connection.initialDirectory ?? "");
       setMultiplexerMode(
-        connection.multiplexerMode === "ask" || connection.multiplexerMode === "auto"
+        connection.multiplexerMode === "none" || connection.multiplexerMode === "ask" || connection.multiplexerMode === "auto"
           ? connection.multiplexerMode
-          : "none",
+          : "auto",
       );
       setTmuxSessionName(connection.tmuxSessionName ?? "");
     } else {
@@ -73,7 +73,7 @@ export function SshConnectionDialog({
       setIdentityFile("");
       setExtraArgs("");
       setInitialDirectory("");
-      setMultiplexerMode("none");
+      setMultiplexerMode("auto");
       setTmuxSessionName("");
     }
     setError(null);
@@ -102,7 +102,7 @@ export function SshConnectionDialog({
       identityFile: identityFile.trim() || undefined,
       extraArgs: sanitizedExtraArgs,
       initialDirectory: initialDirectory.trim() || undefined,
-      multiplexerMode: multiplexerMode !== "none" ? multiplexerMode : undefined,
+      multiplexerMode,
       tmuxSessionName: tmuxSessionName.trim() || undefined,
     };
 

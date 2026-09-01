@@ -432,7 +432,7 @@ fn remote_shell_command(
     base_cmd.push_str("esac; exec \"$_voktty_shell\" -l");
 
     let mux_mode = connection
-        .and_then(|c| c.multiplexer_mode.as_deref())
+        .map(|c| c.multiplexer_mode.as_deref().unwrap_or("auto"))
         .unwrap_or("none");
     let has_active_session = connection
         .and_then(|c| c.active_multiplexer_session.as_deref())
@@ -1489,7 +1489,7 @@ mod tests {
             port: Some(2222),
             identity_file: Some("C:/keys/id_ed25519".into()),
             extra_args: Some("-o ConnectTimeout=5".into()),
-            multiplexer_mode: None,
+            multiplexer_mode: Some("none".into()),
             tmux_session_name: None,
             active_multiplexer_session: None,
             multiplexer_action: None,
