@@ -66,6 +66,7 @@ import {
   Message02Icon,
   PanelLeftOpenIcon,
   PencilEdit02Icon,
+  Refresh01Icon,
   ServerStack01Icon,
   SparklesIcon,
   SquareLock01Icon,
@@ -74,6 +75,8 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { revealInFinder } from "@/modules/explorer/lib/contextActions";
+import { leafIds } from "@/modules/terminal/lib/panes";
+import { respawnSession } from "@/modules/terminal";
 import { getTabPath } from "./lib/tabMetadata";
 import {
   Fragment,
@@ -87,7 +90,7 @@ import {
 } from "react";
 import { TabDetailsHoverCard } from "./components/TabDetailsHoverCard";
 import { useTabContextMenuStore } from "./lib/tabContextMenuState";
-import { isSshOrRemoteSession, labelFor } from "./lib/tabLabel";
+import { isSshOrRemoteSession, isSshTab, labelFor } from "./lib/tabLabel";
 import {
   type TabProcessStatus,
   useTabProcessStatus,
@@ -153,6 +156,7 @@ type Props = {
     target: WorkspaceDropTarget,
   ) => void;
   onRevealInExplorer?: (path: string) => void;
+  onReconnectTab?: (tab: Tab) => void;
   compact?: boolean;
 };
 
@@ -186,6 +190,7 @@ export function TabBar({
   onToggleLock,
   onToggleBlocks,
   onShareTerminal,
+  onReconnectTab,
   stripEntries,
   viewSpaces,
   activeStripItem,
@@ -900,6 +905,30 @@ export function TabBar({
                     })()}
                     {t.kind === "terminal" && (
                       <>
+                        {isSshTab(t, workspaceEnv) && (
+                          <ContextMenuItem
+                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            onSelect={() => {
+                              if (onReconnectTab) {
+                                onReconnectTab(t);
+                              } else {
+                                const ids = leafIds(t.paneTree);
+                                for (const leafId of ids) {
+                                  void respawnSession(leafId);
+                                }
+                              }
+                            }}
+                          >
+                            <HugeiconsIcon
+                              icon={Refresh01Icon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {translate("tabs.reconnectSsh")}
+                            </span>
+                          </ContextMenuItem>
+                        )}
                         {!t.collaboration && onShareTerminal ? (
                           <ContextMenuItem
                             className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"

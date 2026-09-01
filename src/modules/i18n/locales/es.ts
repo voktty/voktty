@@ -914,6 +914,7 @@ export const es: TranslationSchema = {
     closeOtherTabs: "Cerrar otras pestañas",
     closeTabsToRight: "Cerrar pestañas a la derecha",
     duplicateTab: "Duplicar terminal",
+    reconnectSsh: "Reconectar SSH",
     renameTab: "Renombrar",
     convertToAgenticTerminal: "Convertir a Terminal Agéntica",
     convertToNormalTerminal: "Convertir a Terminal Normal",

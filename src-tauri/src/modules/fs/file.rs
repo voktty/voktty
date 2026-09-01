@@ -254,14 +254,13 @@ pub async fn fs_stat(path: String, workspace: Option<WorkspaceEnv>) -> Result<Fi
     let network_path = is_network_path(&p);
     blocking_fs(network_path, move || {
         let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
-        // fs::metadata follows symlinks, so the link check needs symlink_metadata.
-        let kind = if std::fs::symlink_metadata(&p)
+        let kind = if meta.is_dir() {
+            StatKind::Dir
+        } else if std::fs::symlink_metadata(&p)
             .map(|m| m.file_type().is_symlink())
             .unwrap_or(false)
         {
             StatKind::Symlink
-        } else if meta.is_dir() {
-            StatKind::Dir
         } else {
             StatKind::File
         };

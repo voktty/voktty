@@ -572,6 +572,7 @@ const koBase = mergeLocale(en, {
     closeOtherTabs: "다른 탭 닫기",
     closeTabsToRight: "오른쪽 탭 닫기",
     duplicateTab: "터미널 복제",
+    reconnectSsh: "SSH 재연결",
     renameTab: "이름 바꾸기",
     convertToAgenticTerminal: "에이전트 터미널로 변환",
     convertToNormalTerminal: "표준 터미널로 변환",

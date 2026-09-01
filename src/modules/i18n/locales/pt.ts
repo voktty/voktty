@@ -587,6 +587,7 @@ const ptBase = mergeLocale(en, {
     closeOtherTabs: "Fechar outras abas",
     closeTabsToRight: "Fechar abas à direita",
     duplicateTab: "Duplicar terminal",
+    reconnectSsh: "Reconectar SSH",
     renameTab: "Renomear",
     convertToAgenticTerminal: "Converter para Terminal Agêntico",
     convertToNormalTerminal: "Converter para Terminal Padrão",

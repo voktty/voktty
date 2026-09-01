@@ -576,6 +576,7 @@ const jaBase = mergeLocale(en, {
     closeOtherTabs: "他のタブを閉じる",
     closeTabsToRight: "右側のタブを閉じる",
     duplicateTab: "ターミナルを複製",
+    reconnectSsh: "SSH を再接続",
     renameTab: "名前の変更",
     convertToAgenticTerminal: "エージェント端末に変換",
     convertToNormalTerminal: "標準端末に変換",

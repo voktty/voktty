@@ -164,7 +164,7 @@ async fn read_ssh_dir(
     let target_path = path.to_string();
     tokio::task::spawn_blocking(move || {
         let script = format!(
-            r#"sh -c 'P="${{1:-.}}"; if [ -d "$P" ]; then cd "$P" 2>/dev/null && for f in .* *; do [ "$f" = "." ] || [ "$f" = ".." ] && continue; [ ! -e "$f" ] && [ ! -L "$f" ] && continue; if [ -L "$f" ]; then echo "l|$f"; elif [ -d "$f" ]; then echo "d|$f"; else echo "f|$f"; fi; done; fi' _ "{}""#,
+            r#"sh -c 'P="${{1:-.}}"; if [ -d "$P" ]; then cd "$P" 2>/dev/null && for f in .* *; do [ "$f" = "." ] || [ "$f" = ".." ] && continue; [ ! -e "$f" ] && [ ! -L "$f" ] && continue; if [ -d "$f" ]; then echo "d|$f"; elif [ -f "$f" ]; then echo "f|$f"; elif [ -L "$f" ]; then echo "l|$f"; else echo "f|$f"; fi; done; fi' _ "{}""#,
             target_path.replace('"', "\\\"")
         );
         let output = crate::modules::remote::run_ssh_capture(&conn, &script)?;
@@ -216,7 +216,7 @@ async fn read_docker_dir(
     let target_path = path.to_string();
     tokio::task::spawn_blocking(move || {
         let script = format!(
-            r#"sh -c 'P="${{1:-.}}"; if [ -d "$P" ]; then cd "$P" 2>/dev/null && for f in .* *; do [ "$f" = "." ] || [ "$f" = ".." ] && continue; [ ! -e "$f" ] && [ ! -L "$f" ] && continue; if [ -L "$f" ]; then echo "l|$f"; elif [ -d "$f" ]; then echo "d|$f"; else echo "f|$f"; fi; done; fi' _ "{}""#,
+            r#"sh -c 'P="${{1:-.}}"; if [ -d "$P" ]; then cd "$P" 2>/dev/null && for f in .* *; do [ "$f" = "." ] || [ "$f" = ".." ] && continue; [ ! -e "$f" ] && [ ! -L "$f" ] && continue; if [ -d "$f" ]; then echo "d|$f"; elif [ -f "$f" ]; then echo "f|$f"; elif [ -L "$f" ]; then echo "l|$f"; else echo "f|$f"; fi; done; fi' _ "{}""#,
             target_path.replace('"', "\\\"")
         );
         let mut cmd = std::process::Command::new("docker");

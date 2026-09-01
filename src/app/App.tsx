@@ -183,6 +183,7 @@ import {
   type PaneBounds,
   markLeafFocused,
   ptyIdForLeaf,
+  respawnSession,
   type TerminalPaneHandle,
   useAgentActivityStore,
   useTerminalCopilotStore,
@@ -2179,6 +2180,15 @@ export default function App() {
     [duplicateTab, setActiveId, setWorkspaceEnv, spaceViewLimit, t],
   );
 
+  const handleReconnectTab = useCallback((tab: Tab) => {
+    if (tab.kind === "terminal") {
+      const ids = leafIds(tab.paneTree);
+      for (const leafId of ids) {
+        void respawnSession(leafId);
+      }
+    }
+  }, []);
+
   const splitActivePaneInActiveTab = useCallback(
     (_dir: "row" | "col") => {
       const activeTab = tabsRef.current.find((x) => x.id === effectiveActiveId);
@@ -3927,6 +3937,7 @@ export default function App() {
               onCloseTabsToRight={handleCloseTabsToRight}
               onCloseOtherTabs={handleCloseOtherTabs}
               onDuplicate={handleDuplicateTab}
+              onReconnectTab={handleReconnectTab}
               onRename={handleRenameTab}
               onReorder={reorderTabByGap}
               onToggleSidebar={toggleSidebar}
@@ -4261,6 +4272,7 @@ export default function App() {
                           onCloseTabsToRight={handleCloseTabsToRight}
                           onCloseOtherTabs={handleCloseOtherTabs}
                           onDuplicate={handleDuplicateTab}
+                          onReconnectTab={handleReconnectTab}
                           onPin={(id) => {
                             const tab = tabs.find((t) => t.id === id);
                             if (

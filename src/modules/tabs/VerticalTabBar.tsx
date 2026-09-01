@@ -37,7 +37,6 @@ import {
 import { useWorkspaceEnvStore } from "@/modules/workspace";
 import {
   Cancel01Icon,
-  Clock01Icon,
   ComputerScreenShareIcon,
   Copy01Icon,
   Folder01Icon,
@@ -47,6 +46,7 @@ import {
   PanelLeftOpenIcon,
   PencilEdit02Icon,
   PlusSignIcon,
+  Refresh01Icon,
   Search01Icon,
   SparklesIcon,
   SquareLock01Icon,
@@ -55,9 +55,11 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { revealInFinder } from "@/modules/explorer/lib/contextActions";
+import { leafIds } from "@/modules/terminal/lib/panes";
+import { respawnSession } from "@/modules/terminal";
 import { TabDetailsHoverCard } from "./components/TabDetailsHoverCard";
 import { useTabContextMenuStore } from "./lib/tabContextMenuState";
-import { getTabSubtitle, labelFor } from "./lib/tabLabel";
+import { getTabSubtitle, isSshTab, labelFor } from "./lib/tabLabel";
 import { getTabPath } from "./lib/tabMetadata";
 import type { Tab } from "./lib/useTabs";
 import { NewTabMenu } from "./NewTabMenu";
@@ -115,6 +117,7 @@ type Props = {
     target: WorkspaceDropTarget,
   ) => void;
   onRevealInExplorer?: (path: string) => void;
+  onReconnectTab?: (tab: Tab) => void;
 };
 
 function tabCategory(t: Tab): "terminals" | "files" | "tools" {
@@ -140,43 +143,13 @@ function TabBadgeIcon({ tab }: { tab: Tab }) {
   if (tab.kind === "editor" || tab.kind === "markdown") {
     return <TabIcon tab={tab} />;
   }
-  if (tab.kind === "git-diff" || tab.kind === "git-commit-file") {
-    return (
-      <HugeiconsIcon
-        icon={GitCompareIcon}
-        size={14}
-        strokeWidth={1.75}
-        className="text-violet-400"
-      />
-    );
-  }
-  if (tab.kind === "git-history") {
-    return (
-      <HugeiconsIcon
-        icon={Clock01Icon}
-        size={14}
-        strokeWidth={1.75}
-        className="text-cyan-400"
-      />
-    );
-  }
   if (tab.kind === "preview") {
     return (
       <HugeiconsIcon
         icon={Globe02Icon}
         size={14}
         strokeWidth={1.75}
-        className="text-sky-400"
-      />
-    );
-  }
-  if (tab.kind === "api-client") {
-    return (
-      <HugeiconsIcon
-        icon={Globe02Icon}
-        size={14}
-        strokeWidth={1.75}
-        className="text-emerald-400"
+        className="text-muted-foreground"
       />
     );
   }
@@ -187,6 +160,20 @@ function TabBadgeIcon({ tab }: { tab: Tab }) {
         size={14}
         strokeWidth={1.75}
         className="text-amber-400"
+      />
+    );
+  }
+  if (
+    tab.kind === "git-diff" ||
+    tab.kind === "git-history" ||
+    tab.kind === "git-commit-file"
+  ) {
+    return (
+      <HugeiconsIcon
+        icon={GitCompareIcon}
+        size={14}
+        strokeWidth={1.75}
+        className="text-muted-foreground"
       />
     );
   }
@@ -221,6 +208,7 @@ export function VerticalTabBar({
   onNewGitGraph,
   onLaunchAgents,
   onShareTerminal,
+  onReconnectTab,
   stripEntries,
   viewSpaces,
   activeStripItem,
@@ -861,6 +849,30 @@ export function VerticalTabBar({
                     })()}
                     {tab.kind === "terminal" && (
                       <>
+                        {isSshTab(tab, workspaceEnv) && (
+                          <ContextMenuItem
+                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                            onSelect={() => {
+                              if (onReconnectTab) {
+                                onReconnectTab(tab);
+                              } else {
+                                const ids = leafIds(tab.paneTree);
+                                for (const leafId of ids) {
+                                  void respawnSession(leafId);
+                                }
+                              }
+                            }}
+                          >
+                            <HugeiconsIcon
+                              icon={Refresh01Icon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {t("tabs.reconnectSsh")}
+                            </span>
+                          </ContextMenuItem>
+                        )}
                         {!tab.collaboration && onShareTerminal ? (
                           <ContextMenuItem
                             className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"

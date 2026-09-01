@@ -84,6 +84,7 @@ type Props = {
     target: WorkspaceDropTarget,
   ) => void;
   onRevealInExplorer?: (path: string) => void;
+  onReconnectTab?: (tab: Tab) => void;
   onToggleSidebar: () => void;
   sidebarCollapsed: boolean;
   onToggleTabStyle: () => void;
@@ -138,6 +139,7 @@ export function Header({
   onReorderVisual,
   onWorkspaceDrop,
   onRevealInExplorer,
+  onReconnectTab,
   onToggleSidebar,
   sidebarCollapsed,
   onToggleTabStyle,
@@ -307,6 +309,7 @@ export function Header({
               onNewRdp={onNewRdp}
               onConnectRemote={onConnectRemote}
               onShareTerminal={onShareTerminal}
+              onReconnectTab={onReconnectTab}
               onOpenFile={onOpenFile}
               onOpenFolder={onOpenFolder}
               onNewGitGraph={onNewGitGraph}
