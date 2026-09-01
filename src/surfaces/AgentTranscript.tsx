@@ -99,7 +99,7 @@ type Props = {
   onHandoff?: (harness: HarnessId, turn: Block[], model: string) => void;
   onJumpToBottomChange?: (show: boolean) => void;
   onJumpToBottomReady?: (jump: () => void) => void;
-  /** False while the pane is `display: none` (another tab). */
+  /** False while the pane is `display: none` (another tab). Used to restore scroll. */
   visible?: boolean;
 };
 
@@ -129,9 +129,9 @@ export function AgentTranscript({
   const wasVisible = useRef(false);
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
   const [visibleTurnCount, setVisibleTurnCount] = useState(INITIAL_TURNS);
-  // Stretch the last turn only after a send in this visit. Opening a
-  // conversation uses the true transcript height so the latest reply sits
-  // on the composer instead of a hole of empty space.
+  // Stretch the last turn after a send while this tab stays open. Closing
+  // the tab is a new visit: the remount uses the true transcript height so
+  // the latest reply sits on the composer instead of a hole of empty space.
   const [anchorTurn, setAnchorTurn] = useState(!!busy);
   const { selection, dismissSelection } = useTranscriptSelection(
     scrollerEl,
@@ -142,9 +142,7 @@ export function AgentTranscript({
   const promptAnchor = useTranscriptAnchor();
   const lastUserId = lastUserBlockId(blocks);
   const seenUserId = useRef(lastUserId);
-  if (!visible) {
-    if (anchorTurn) setAnchorTurn(false);
-  } else if (lastUserId !== seenUserId.current) {
+  if (lastUserId !== seenUserId.current) {
     seenUserId.current = lastUserId;
     if (lastUserId && !anchorTurn) setAnchorTurn(true);
   }
@@ -227,14 +225,15 @@ export function AgentTranscript({
     const opened = visible && !wasVisible.current;
     wasVisible.current = visible;
     if (!opened) return;
-    if (!busy) setAnchorTurn(false);
+    // `display: none` zeros scroll. Pin to the live end so coming back to
+    // an open tab does not land at the top of the transcript.
     const el = scroller.current;
     if (!el) return;
     syncTranscriptViewport(el);
     stickToBottom.current = true;
     setShowJump(false);
     pinToBottom(el);
-  }, [visible, busy, setShowJump]);
+  }, [visible, setShowJump]);
 
   useLayoutEffect(() => {
     if (!stickToBottom.current) return;
