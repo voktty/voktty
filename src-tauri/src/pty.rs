@@ -94,11 +94,17 @@ impl PtyHost {
             let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
             map.drain().map(|(_, live)| live).collect()
         };
+        let pids: Vec<u32> = kids.iter().map(|live| live.pid).collect();
         for live in kids {
-            terminate(live.pid);
+            #[cfg(unix)]
+            hangup(live.pid);
             #[cfg(unix)]
             close_fd(live.master_fd);
         }
+        // Quit and `Drop` both exit the process, so the SIGKILL has to land
+        // before this returns. `terminate`'s detached escalate thread never gets
+        // to run, and every shell is its own `setsid` session that outlives us.
+        crate::harness::terminate_all(&pids);
     }
 }
 
@@ -198,8 +204,10 @@ pub fn pty_kill(host: State<PtyHost>, id: String) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn pty_kill_all(host: State<PtyHost>) -> Result<(), String> {
+/// Off the main thread: `kill_all` waits for the shells to die before it
+/// returns, and a window close calls this while the app keeps running.
+#[tauri::command(async)]
+pub fn pty_kill_all(host: State<'_, PtyHost>) -> Result<(), String> {
     host.kill_all();
     Ok(())
 }
@@ -391,6 +399,19 @@ fn apply_path(cmd: &mut std::process::Command) {
         parts.push(existing);
     }
     cmd.env("PATH", parts.join(":"));
+}
+
+/// The hangup a closing shell expects, without `terminate`'s escalation.
+#[cfg(unix)]
+fn hangup(pid: u32) {
+    if pid == 0 || pid == 1 {
+        return;
+    }
+    let ipid = pid as i32;
+    unsafe {
+        libc::kill(ipid, libc::SIGHUP);
+        libc::kill(-ipid, libc::SIGHUP);
+    }
 }
 
 fn terminate(pid: u32) {

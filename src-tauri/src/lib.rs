@@ -138,6 +138,7 @@ pub fn run() {
         .manage(pty::PtyHost::new())
         .manage(window_transfer::WindowTransferState::new())
         .setup(|app| {
+            harness::reap_orphaned_harness_processes();
             session_store::init(app.handle())?;
             checkpoint::init(app.handle())?;
             menu::install(app.handle())?;

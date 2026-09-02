@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Claude's AskUserQuestion (and the same clarifying-question flow on Cursor, Grok, and OpenCode) now opens a form above the composer. Questions come one at a time — answer or skip, then the next — instead of an Allow/Deny prompt that silently chose the first option.
+- Agent CLIs no longer leak after a quit or a crash. `cursor-agent` survived as orphaned `node` processes because quit sent SIGTERM and exited before the delayed SIGKILL could land. Quit now waits for those trees to die, and the next launch reaps leftover agent processes from a previous run. Terminals close with the app; programs you started from a terminal are left alone.
 
 ## [0.1.28] - 2026-09-01
 

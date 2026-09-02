@@ -130,5 +130,14 @@ pub fn confirm_quit(app: AppHandle) {
     for window in app.webview_windows().values() {
         let _ = window.show();
     }
+    // Belt and braces. `RunEvent::Exit` reaps too, and it also runs before the
+    // process is gone, but a macOS terminate that skips the run loop would not
+    // reach it — and `kill_all`'s SIGKILL wait only works while we're alive.
+    if let Some(host) = app.try_state::<crate::harness::HarnessHost>() {
+        host.kill_all();
+    }
+    if let Some(host) = app.try_state::<crate::pty::PtyHost>() {
+        host.kill_all();
+    }
     app.exit(0);
 }
