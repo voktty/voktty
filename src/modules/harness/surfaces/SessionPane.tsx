@@ -80,6 +80,7 @@ type Props = {
   ) => void;
   onNewTerminal: (sessionId: string) => void;
   onPaneDragStart?: (event: ReactPointerEvent<HTMLElement>) => void;
+  showHeader?: boolean;
 };
 
 export const SessionPane = memo(function SessionPane({
@@ -87,6 +88,7 @@ export const SessionPane = memo(function SessionPane({
   visible,
   focused,
   inSplit,
+  showHeader,
   composerFocused,
   recents,
   hideProjectPicker,
@@ -230,7 +232,7 @@ export const SessionPane = memo(function SessionPane({
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
       onMouseDown={() => onFocus(session.id)}
     >
-      {inSplit ? (
+      {showHeader ?? inSplit ? (
         <div
           className={`flex h-9 shrink-0 touch-none items-center gap-1.5 border-b border-content/10 px-2 select-none ${
             onPaneDragStart ? "cursor-grab active:cursor-grabbing" : ""
@@ -252,7 +254,7 @@ export const SessionPane = memo(function SessionPane({
             />
           ) : null}
           <span
-            className={`size-2 shrink-0 rounded-full ${focused ? "bg-accent" : "bg-transparent"}`}
+            className={`size-2 shrink-0 rounded-full ${focused ? "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]" : "bg-transparent"}`}
           />
           <span
             className="min-w-0 flex-1 truncate text-xs text-content"

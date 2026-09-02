@@ -1460,10 +1460,13 @@ function ActivityToolIcon({
   );
 }
 
-/** Failure stays marked. Running and success do not get a trailing icon. */
+/** Failure stays marked. Completed tools get a trailing muted checkmark. */
 function ToolCallStatusIcon({ state }: { state: ToolCallState }) {
   if (state === "rejected") {
     return <X className="size-3.5 shrink-0 text-red-400" strokeWidth={2} />;
+  }
+  if (state === "accepted") {
+    return <Check className="size-3.5 shrink-0 text-content/40" strokeWidth={1.75} />;
   }
   return null;
 }
@@ -1793,17 +1796,17 @@ function ApprovalControls({
   const approval = block.approval;
   if (!approval || approval.decided) return null;
   return (
-    <div className="mt-1.5 flex gap-2">
+    <div className="mt-2 flex items-center gap-2">
       <button
         type="button"
-        className="rounded-md bg-content px-2.5 py-0.5 text-[11px] hover:bg-content/80     text-background-base"
+        className="rounded-md bg-white text-zinc-900 px-3 py-1 font-sans text-[11.5px] font-medium hover:bg-zinc-200 transition-colors shadow-sm"
         onClick={() => onApproval?.(approval.requestId, "allow")}
       >
         Allow
       </button>
       <button
         type="button"
-        className="rounded-md bg-content/10 px-2.5 py-0.5 text-[11px] text-content/70 hover:bg-content/20"
+        className="rounded-md bg-white/10 text-zinc-300 border border-white/10 px-3 py-1 font-sans text-[11.5px] font-medium hover:bg-white/15 hover:text-white transition-colors"
         onClick={() => onApproval?.(approval.requestId, "deny")}
       >
         Deny
