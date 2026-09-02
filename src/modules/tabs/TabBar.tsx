@@ -238,15 +238,19 @@ export function TabBar({
   const projectionEnabled =
     stripEntries !== undefined && viewSpaces !== undefined;
   const projectedItems = useMemo<ProjectedStripItem[]>(
-    () =>
-      projectionEnabled
+    () => {
+      const items = projectionEnabled
         ? projectStripEntries({ tabs, viewSpaces, stripEntries })
         : tabs.map((tab) => ({
             kind: "tab" as const,
             tab,
             tabKey: tab.tabKey,
             spaceId: null,
-          })),
+          }));
+      return items.filter(
+        (item) => item.kind !== "tab" || item.tab.kind !== "harness",
+      );
+    },
     [projectionEnabled, stripEntries, tabs, viewSpaces],
   );
   const visibleTabs = useMemo(
