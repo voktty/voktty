@@ -1,4 +1,5 @@
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
+import type { UserQuestion } from "../userQuestion";
 
 export type HarnessEvent =
   | { type: "session.started" }
@@ -40,6 +41,18 @@ export type HarnessEvent =
       requestId: number;
       /** "cancelled" = a PermissionRequest hook decided before the user could. */
       decision: "allow" | "deny" | "cancelled";
+    }
+  | {
+      type: "question.asked";
+      requestId: number;
+      title?: string;
+      questions: UserQuestion[];
+      callId?: string;
+    }
+  | {
+      type: "question.resolved";
+      requestId: number;
+      decision: "answered" | "skipped" | "cancelled";
     }
   | { type: "plan"; text: string }
   /** Context-window level after the harness's latest request. */

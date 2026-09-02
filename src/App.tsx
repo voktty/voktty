@@ -130,6 +130,7 @@ import {
   refreshHarnessCatalogs,
   registerBuiltinHarnesses,
   respondHarnessApproval,
+  respondHarnessQuestion,
   sendHarnessTurn,
   steerHarnessTurn,
   startHarnessBridge,
@@ -137,6 +138,7 @@ import {
   pickTextHarness,
   type ApprovalDecision,
   type HarnessEvent,
+  type UserQuestionReply,
 } from "./lib/harness";
 import {
   appendPreparingHandoff,
@@ -205,7 +207,7 @@ import {
   HARNESS_LABEL,
   canReplaceSessionTitle,
   formatSessionTitle,
-  hasPendingApproval,
+  sessionNeedsInput,
   newDefaultSession,
   newSession,
   sessionDisplayTitle,
@@ -643,7 +645,9 @@ export default function App({
     (sessionId: string, event: HarnessEvent) => {
       if (
         event.type === "approval.requested" ||
-        event.type === "approval.resolved"
+        event.type === "approval.resolved" ||
+        event.type === "question.asked" ||
+        event.type === "question.resolved"
       ) {
         applyApprovalEvent(sessionId, event);
         return;
@@ -808,7 +812,7 @@ export default function App({
   const nextApprovalSessionIds = useMemo(() => {
     const ids = new Set<string>();
     for (const session of sessions) {
-      if (hasPendingApproval(session.blocks)) ids.add(session.id);
+      if (sessionNeedsInput(session)) ids.add(session.id);
     }
     return ids;
   }, [sessions]);
@@ -3686,6 +3690,15 @@ export default function App({
     [],
   );
 
+  const onQuestionReply = useCallback(
+    (sessionId: string, requestId: number, reply: UserQuestionReply) => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!session) return;
+      respondHarnessQuestion(session.harness, sessionId, requestId, reply);
+    },
+    [],
+  );
+
   const onOpenApprovalSession = useCallback(
     (sessionId: string) => {
       if (!focusOpenSession(sessionId)) {
@@ -4470,6 +4483,7 @@ export default function App({
                       onNoteCardDismiss={onNoteCardDismiss}
                       onHandoffCardDismiss={onHandoffCardDismiss}
                       onApproval={onApproval}
+                      onQuestionReply={onQuestionReply}
                       onOpenFile={onOpenFile}
                       editorNavigation={editorNavigation}
                       onOpenDiff={onOpenDiff}
@@ -4652,7 +4666,7 @@ function toTitleTab(
   for (const session of ordered) {
     if (
       session.busy &&
-      !hasPendingApproval(session.blocks) &&
+      !sessionNeedsInput(session) &&
       !busySeen.has(session.harness)
     ) {
       busySeen.add(session.harness);

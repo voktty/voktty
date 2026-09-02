@@ -56,6 +56,19 @@ export function applyHarnessEvent(
       );
       return { ...session, blocks };
     }
+    case "question.asked":
+      return {
+        ...session,
+        pendingQuestion: {
+          requestId: event.requestId,
+          questions: event.questions,
+          ...(event.title ? { title: event.title } : {}),
+        },
+      };
+    case "question.resolved":
+      return session.pendingQuestion?.requestId === event.requestId
+        ? { ...session, pendingQuestion: undefined }
+        : session;
     case "context":
       return {
         ...session,
@@ -143,6 +156,7 @@ export function stopStreaming(session: Session): Session {
   return {
     ...session,
     busy: false,
+    pendingQuestion: undefined,
     blocks: stampTurnDuration(
       session.blocks.map((block) =>
         block.streaming ? { ...block, streaming: false } : block,

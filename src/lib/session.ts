@@ -1,4 +1,5 @@
 import type { ContextUsage } from "./contextUsage";
+import type { UserQuestionPrompt } from "./userQuestion";
 import type { HandoffComposerCard } from "./handoff";
 import type { InboxComposerCard } from "./githubTasks";
 import type { NoteCardMeta, NoteComposerCard } from "./notes";
@@ -182,6 +183,11 @@ export type Session = {
   noteCard?: NoteComposerCard;
   /** Handoff chip shown above the composer. In-memory, one-shot. */
   handoffCard?: HandoffComposerCard;
+  /**
+   * Live clarifying questions from AskUserQuestion / ask_question / etc.
+   * In-memory; request ids do not survive restarts.
+   */
+  pendingQuestion?: UserQuestionPrompt;
 };
 
 export type PendingHarnessSwitch = {
@@ -290,6 +296,10 @@ export function canReplaceSessionTitle(
 
 export function hasPendingApproval(blocks: Block[]): boolean {
   return blocks.some((block) => block.approval && !block.approval.decided);
+}
+
+export function sessionNeedsInput(session: Session): boolean {
+  return hasPendingApproval(session.blocks) || session.pendingQuestion != null;
 }
 
 /** Title without the harness prefix stored for the tab strip. */

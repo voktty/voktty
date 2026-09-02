@@ -45,6 +45,7 @@ import type { HandoffComposerCard } from "../lib/handoff";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import type { Attachment, HarnessId, RuntimeMode } from "../lib/session";
 import { harnessSupportsAttachments } from "../lib/session";
+import type { UserQuestionPrompt, UserQuestionReply } from "../lib/userQuestion";
 import {
   createBlankSkill,
   rankSkills,
@@ -67,6 +68,7 @@ import { NoteMiniCard } from "./NoteMiniCard";
 import { HandoffMiniCard } from "./HandoffMiniCard";
 import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
+import { QuestionForm } from "./QuestionForm";
 import { SkillPicker } from "./SkillPicker";
 import { projectName } from "../lib/paths";
 import { consumeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
@@ -108,6 +110,7 @@ type Props = {
   inboxCard?: InboxComposerCard;
   noteCard?: NoteComposerCard;
   handoffCard?: HandoffComposerCard;
+  question?: UserQuestionPrompt;
   busy?: boolean;
   hotkeys?: boolean;
   onFocus: () => void;
@@ -121,6 +124,7 @@ type Props = {
   onInboxCardDismiss?: () => void;
   onNoteCardDismiss?: () => void;
   onHandoffCardDismiss?: () => void;
+  onQuestionReply?: (requestId: number, reply: UserQuestionReply) => void;
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop?: () => void;
   onOpenFile?: (path: string) => void;
@@ -178,6 +182,7 @@ export function Composer({
   inboxCard,
   noteCard,
   handoffCard,
+  question,
   busy = false,
   onFocus,
   onCwdChange,
@@ -190,6 +195,7 @@ export function Composer({
   onInboxCardDismiss,
   onNoteCardDismiss,
   onHandoffCardDismiss,
+  onQuestionReply,
   onSubmit,
   onStop,
   onOpenFile,
@@ -739,6 +745,9 @@ export function Composer({
       className={`relative shrink-0 ${shell ? "" : "p-1.5 pt-0"}`}
       onMouseDown={onFocus}
     >
+      {question && onQuestionReply ? (
+        <QuestionForm prompt={question} onReply={onQuestionReply} />
+      ) : null}
       {children}
       <div className="relative overflow-visible">
         {pickerOpen ? (

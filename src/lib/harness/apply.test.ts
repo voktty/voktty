@@ -223,3 +223,60 @@ describe("tool enrichment", () => {
     expect(tool?.text).toBe("ls");
   });
 });
+
+describe("clarifying questions", () => {
+  const questions = [
+    {
+      id: "Which file?",
+      prompt: "Which file?",
+      multiSelect: false,
+      allowCustom: true,
+      options: [
+        { id: "a.ts", label: "a.ts" },
+        { id: "b.ts", label: "b.ts" },
+      ],
+    },
+  ];
+
+  it("parks the prompt on the session instead of an Allow/Deny row", () => {
+    let session = newSession("claude", "/repo");
+    session = applyHarnessEvent(session, {
+      type: "question.asked",
+      requestId: 3,
+      title: "Which file?",
+      questions,
+    });
+    expect(session.pendingQuestion).toEqual({
+      requestId: 3,
+      title: "Which file?",
+      questions,
+    });
+    expect(session.blocks).toEqual([]);
+  });
+
+  it("clears the prompt when the user answers or skips", () => {
+    let session = newSession("claude", "/repo");
+    session = applyHarnessEvent(session, {
+      type: "question.asked",
+      requestId: 3,
+      questions,
+    });
+    session = applyHarnessEvent(session, {
+      type: "question.resolved",
+      requestId: 3,
+      decision: "answered",
+    });
+    expect(session.pendingQuestion).toBeUndefined();
+  });
+
+  it("drops a parked prompt when the turn stops", () => {
+    let session = newSession("claude", "/repo");
+    session = applyHarnessEvent(session, {
+      type: "question.asked",
+      requestId: 3,
+      questions,
+    });
+    session = stopStreaming(session);
+    expect(session.pendingQuestion).toBeUndefined();
+  });
+});

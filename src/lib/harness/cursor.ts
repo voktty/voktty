@@ -16,6 +16,13 @@ import {
 import { stopCursorTitleGeneration } from "./cursorTitle";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
 import {
+  CUSTOM_OPTION_ID,
+  questionPromptTitle,
+  questionsFromUnknown,
+  type UserQuestion,
+  type UserQuestionReply,
+} from "../userQuestion";
+import {
   composeToolTitle,
   extractSearchQuery,
   extractShellCommand,
@@ -52,6 +59,7 @@ type Live = {
   runtimeMode: RuntimeMode;
   onEvent: (event: HarnessEvent) => void;
   approvals: Map<number, (decision: ApprovalDecision) => void>;
+  questions: Map<number, (reply: UserQuestionReply) => void>;
   enrichedTools: Set<string>;
   pendingToolEnrichments: Map<string, PendingToolEnrichment>;
   toolEnrichmentTimer?: ReturnType<typeof setTimeout>;
@@ -129,6 +137,14 @@ export function respondCursorApproval(
   liveByThread.get(sessionId)?.approvals.get(requestId)?.(decision);
 }
 
+export function respondCursorQuestion(
+  sessionId: string,
+  requestId: number,
+  reply: UserQuestionReply,
+) {
+  liveByThread.get(sessionId)?.questions.get(requestId)?.(reply);
+}
+
 /** Abort the in-flight prompt without tearing down the ACP session. */
 export async function cancelCursorTurn(sessionId: string): Promise<void> {
   const live = liveByThread.get(sessionId);
@@ -142,6 +158,8 @@ export async function cancelCursorTurn(sessionId: string): Promise<void> {
   live.toolEnrichmentTimer = undefined;
   for (const [, resolve] of live.approvals) resolve("deny");
   live.approvals.clear();
+  for (const [, resolve] of live.questions) resolve({ kind: "skipped" });
+  live.questions.clear();
   await live.acp
     .notify("session/cancel", { sessionId: live.acpSessionId })
     .catch(() => undefined);
@@ -157,6 +175,10 @@ export async function stopCursorSession(sessionId: string): Promise<void> {
     live.muteUpdates = true;
     if (live.toolEnrichmentTimer) clearTimeout(live.toolEnrichmentTimer);
     live.pendingToolEnrichments.clear();
+    for (const [, resolve] of live.approvals) resolve("deny");
+    live.approvals.clear();
+    for (const [, resolve] of live.questions) resolve({ kind: "skipped" });
+    live.questions.clear();
   }
   live?.acp.close();
   unwatchChild(sessionId);
@@ -282,6 +304,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       runtimeMode: input.runtimeMode,
       onEvent: input.onEvent,
       approvals: new Map(),
+      questions: new Map(),
       enrichedTools: new Set(),
       pendingToolEnrichments: new Map(),
       toolEnrichmentRunning: false,
@@ -409,9 +432,7 @@ async function handleRequest(
     return;
   }
   if (method === "cursor/ask_question") {
-    await live.acp.respond(id, {
-      outcome: { outcome: "skipped", reason: "MonoCode does not collect answers yet" },
-    });
+    await handleAskQuestion(live, id, params);
     return;
   }
   if (method === "cursor/create_plan") {
@@ -422,6 +443,65 @@ async function handleRequest(
     return;
   }
   await live.acp.respond(id, {}).catch(() => undefined);
+}
+
+async function handleAskQuestion(
+  live: Live,
+  id: number,
+  params: unknown,
+) {
+  const rec = asRecord(params);
+  const questions = questionsFromUnknown(params);
+  const title =
+    (typeof rec?.title === "string" && rec.title.trim()) ||
+    questionPromptTitle(questions);
+  const callId =
+    typeof rec?.toolCallId === "string"
+      ? rec.toolCallId
+      : typeof rec?.tool_call_id === "string"
+        ? rec.tool_call_id
+        : undefined;
+  live.onEvent({
+    type: "question.asked",
+    requestId: id,
+    title,
+    questions,
+    ...(callId ? { callId } : {}),
+  });
+
+  const reply = await new Promise<UserQuestionReply>((resolve) => {
+    live.questions.set(id, resolve);
+  });
+  live.questions.delete(id);
+  live.onEvent({
+    type: "question.resolved",
+    requestId: id,
+    decision: reply.kind,
+  });
+
+  await live.acp
+    .respond(id, cursorAskQuestionResponse(reply, questions))
+    .catch(() => undefined);
+}
+
+function cursorAskQuestionResponse(
+  reply: UserQuestionReply,
+  questions: UserQuestion[],
+): Record<string, unknown> {
+  if (reply.kind !== "answered") {
+    return { outcome: { outcome: "skipped", reason: "User skipped" } };
+  }
+  return {
+    outcome: {
+      outcome: "answered",
+      answers: questions.map((question) => ({
+        questionId: question.id,
+        selectedOptionIds: (reply.answers[question.id] ?? []).filter(
+          (optionId) => optionId !== CUSTOM_OPTION_ID,
+        ),
+      })),
+    },
+  };
 }
 
 async function handlePermission(live: Live, id: number, params: unknown) {

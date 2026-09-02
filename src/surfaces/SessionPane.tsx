@@ -10,7 +10,7 @@ import {
 } from "react";
 import { Composer } from "../chrome/Composer";
 import { SessionReview } from "../chrome/SessionReview";
-import type { ApprovalDecision } from "../lib/harness";
+import type { ApprovalDecision, UserQuestionReply } from "../lib/harness";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import {
   sessionDisplayTitle,
@@ -63,6 +63,11 @@ type Props = {
     requestId: number,
     decision: ApprovalDecision,
   ) => void;
+  onQuestionReply: (
+    sessionId: string,
+    requestId: number,
+    reply: UserQuestionReply,
+  ) => void;
   onOpenFile: (path: string) => void;
   onOpenDiff: (path?: string) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
@@ -103,6 +108,7 @@ export const SessionPane = memo(function SessionPane({
   onNoteCardDismiss,
   onHandoffCardDismiss,
   onApproval,
+  onQuestionReply,
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
@@ -116,6 +122,11 @@ export const SessionPane = memo(function SessionPane({
     (requestId: number, decision: ApprovalDecision) =>
       onApproval(session.id, requestId, decision),
     [onApproval, session.id],
+  );
+  const replyQuestion = useCallback(
+    (requestId: number, reply: UserQuestionReply) =>
+      onQuestionReply(session.id, requestId, reply),
+    [onQuestionReply, session.id],
   );
   const openPlan = useCallback(
     (blockId: string) => onOpenPlan(session.id, blockId),
@@ -194,10 +205,12 @@ export const SessionPane = memo(function SessionPane({
       inboxCard={session.inboxCard}
       noteCard={session.noteCard}
       handoffCard={session.handoffCard}
+      question={session.pendingQuestion}
       onQuoteRequestConsumed={acknowledgeQuote}
       onInboxCardDismiss={() => onInboxCardDismiss?.(session.id)}
       onNoteCardDismiss={() => onNoteCardDismiss?.(session.id)}
       onHandoffCardDismiss={() => onHandoffCardDismiss?.(session.id)}
+      onQuestionReply={replyQuestion}
       onFocus={() => onFocus(session.id)}
       onCwdChange={(cwd) => onCwdChange(session.id, cwd)}
       onBranchChange={() => onBranchChange(session.id)}
@@ -291,6 +304,7 @@ export const SessionPane = memo(function SessionPane({
               visible={visible}
               cwd={workCwd}
               harness={session.harness}
+              pendingQuestion={!!session.pendingQuestion}
               onApproval={approve}
               onAddToChat={addSelectionToChat}
               onSaveNote={notesEnabled ? saveNote : undefined}

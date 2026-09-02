@@ -1,4 +1,10 @@
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
+import {
+  questionPromptTitle,
+  questionsFromUnknown,
+  selectedAnswerLabels,
+  type UserQuestionReply,
+} from "../userQuestion";
 import { extractToolPreview, titleFromToolInput } from "./preview";
 import { streamTextDelta } from "./streamText";
 import type { ApprovalDecision, HarnessEvent } from "./types";
@@ -613,28 +619,23 @@ export function extractExitPlanModePlan(value: unknown): string | undefined {
 export function extractAskUserQuestionTitle(
   input: Record<string, unknown>,
 ): string {
-  const questions = Array.isArray(input.questions) ? input.questions : [];
-  const first = asRecord(questions[0]);
-  return (
-    stringField(first, "header") ??
-    stringField(first, "question") ??
-    "Claude question"
-  );
+  return questionPromptTitle(questionsFromUnknown(input)) || "Claude question";
 }
 
 export function askUserQuestionAllowInput(
   input: Record<string, unknown>,
+  reply?: UserQuestionReply,
 ): Record<string, unknown> {
-  const questions = Array.isArray(input.questions) ? input.questions : [];
+  const questions = questionsFromUnknown(input);
   const answers: Record<string, string> = {};
-  for (const question of questions) {
-    const rec = asRecord(question);
-    const prompt =
-      stringField(rec, "question") ?? stringField(rec, "header") ?? "";
-    const options = Array.isArray(rec?.options) ? rec.options : [];
-    const first = asRecord(options[0]);
-    const label = stringField(first, "label");
-    if (prompt && label) answers[prompt] = label;
+  if (reply?.kind === "answered") {
+    for (const question of questions) {
+      const labels = selectedAnswerLabels(question, reply);
+      if (labels.length === 0) continue;
+      answers[question.prompt] = question.multiSelect
+        ? labels.join(", ")
+        : (labels[0] ?? "");
+    }
   }
   return { questions: input.questions, answers };
 }

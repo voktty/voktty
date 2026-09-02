@@ -127,6 +127,7 @@ export {
   canSteerHarness,
   cancelHarnessTurn,
   respondHarnessApproval,
+  respondHarnessQuestion,
   stopHarnessSession,
   forgetHarnessSession,
   bindHarnessSession,
@@ -136,4 +137,5 @@ export {
   generateHarnessPrContent,
 } from "./registry";
 export type { ApprovalDecision, HarnessEvent, SteerTurnInput } from "./types";
+export type { UserQuestion, UserQuestionPrompt, UserQuestionReply } from "../userQuestion";
 export type { HarnessAdapter } from "./registry";

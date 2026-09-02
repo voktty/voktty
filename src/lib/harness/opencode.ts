@@ -37,11 +37,23 @@ import {
 import { composeToolTitle, extractShellCommand, extractSkillName } from "./preview";
 import { streamTextDelta } from "./streamText";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
+import {
+  questionPromptTitle,
+  questionsFromUnknown,
+  selectedAnswerLabels,
+  type UserQuestion,
+  type UserQuestionReply,
+} from "../userQuestion";
 
 type PendingApproval = {
   id: string;
-  kind: "permission" | "question";
   resolve: (decision: ApprovalDecision) => void;
+};
+
+type PendingQuestion = {
+  id: string;
+  questions: UserQuestion[];
+  resolve: (reply: UserQuestionReply) => void;
 };
 
 type Live = {
@@ -51,6 +63,7 @@ type Live = {
   runtimeMode: RuntimeMode;
   onEvent: (event: HarnessEvent) => void;
   approvals: Map<number, PendingApproval>;
+  questions: Map<number, PendingQuestion>;
   nextApprovalUiId: number;
   partById: Map<string, OpenCodePart>;
   emittedTextByPartId: Map<string, string>;
@@ -148,6 +161,17 @@ export function respondOpenCodeApproval(
   pending.resolve(decision);
 }
 
+export function respondOpenCodeQuestion(
+  sessionId: string,
+  requestId: number,
+  reply: UserQuestionReply,
+): void {
+  const live = liveByThread.get(sessionId);
+  const pending = live?.questions.get(requestId);
+  if (!pending) return;
+  pending.resolve(reply);
+}
+
 export async function cancelOpenCodeTurn(sessionId: string): Promise<void> {
   const live = liveByThread.get(sessionId);
   if (!live) {
@@ -158,6 +182,8 @@ export async function cancelOpenCodeTurn(sessionId: string): Promise<void> {
   live.muteUpdates = true;
   for (const [, pending] of live.approvals) pending.resolve("deny");
   live.approvals.clear();
+  for (const [, pending] of live.questions) pending.resolve({ kind: "skipped" });
+  live.questions.clear();
   await live.client.abortSession(live.openCodeSessionId);
   finishActiveTurn(live, [
     { type: "message.completed" },
@@ -173,6 +199,8 @@ export async function stopOpenCodeSession(sessionId: string): Promise<void> {
     live.muteUpdates = true;
     for (const [, pending] of live.approvals) pending.resolve("deny");
     live.approvals.clear();
+    for (const [, pending] of live.questions) pending.resolve({ kind: "skipped" });
+    live.questions.clear();
     live.activeTurn = false;
     live.turnDone?.();
     live.turnDone = null;
@@ -275,6 +303,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       runtimeMode: input.runtimeMode,
       onEvent: input.onEvent,
       approvals: new Map(),
+      questions: new Map(),
       nextApprovalUiId: 1,
       partById: new Map(),
       emittedTextByPartId: new Map(),
@@ -511,28 +540,21 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
         callId,
         preview,
       });
-      void waitApproval(live, uiId, id, "permission");
+      void waitApproval(live, uiId, id);
       break;
     }
     case "question.asked": {
       const id = stringField(properties, "id") ?? stringField(properties, "requestID");
       if (!id) break;
-      const questions = Array.isArray(properties.questions)
-        ? properties.questions
-        : [];
-      const first = asRecord(questions[0]);
-      const title =
-        stringField(first, "header") ??
-        stringField(first, "question") ??
-        "OpenCode question";
+      const questions = questionsFromUnknown(properties);
       const uiId = live.nextApprovalUiId++;
       live.onEvent({
-        type: "approval.requested",
+        type: "question.asked",
         requestId: uiId,
-        title,
-        kind: "other",
+        title: questionPromptTitle(questions) || "OpenCode question",
+        questions,
       });
-      void waitApproval(live, uiId, id, "question", questions);
+      void waitQuestion(live, uiId, id, questions);
       break;
     }
     case "session.status": {
@@ -642,31 +664,39 @@ async function waitApproval(
   live: Live,
   uiId: number,
   id: string,
-  kind: "permission" | "question",
-  questions?: unknown[],
 ): Promise<void> {
   const decision = await new Promise<ApprovalDecision>((resolve) => {
-    live.approvals.set(uiId, { id, kind, resolve });
+    live.approvals.set(uiId, { id, resolve });
   });
   live.approvals.delete(uiId);
   live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
-  if (kind === "permission") {
-    await live.client
-      .replyPermission(id, toOpenCodePermissionReply(decision))
-      .catch(() => undefined);
-    return;
-  }
-  if (decision === "deny") {
+  await live.client
+    .replyPermission(id, toOpenCodePermissionReply(decision))
+    .catch(() => undefined);
+}
+
+async function waitQuestion(
+  live: Live,
+  uiId: number,
+  id: string,
+  questions: UserQuestion[],
+): Promise<void> {
+  const reply = await new Promise<UserQuestionReply>((resolve) => {
+    live.questions.set(uiId, { id, questions, resolve });
+  });
+  live.questions.delete(uiId);
+  live.onEvent({
+    type: "question.resolved",
+    requestId: uiId,
+    decision: reply.kind,
+  });
+  if (reply.kind !== "answered") {
     await live.client.rejectQuestion(id).catch(() => undefined);
     return;
   }
-  const answers = (questions ?? []).map((question) => {
-    const rec = asRecord(question);
-    const options = Array.isArray(rec?.options) ? rec.options : [];
-    const first = asRecord(options[0]);
-    const label = stringField(first, "label");
-    return label ? [label] : [];
-  });
+  const answers = questions.map((question) =>
+    selectedAnswerLabels(question, reply),
+  );
   await live.client.replyQuestion(id, answers).catch(() => undefined);
 }
 

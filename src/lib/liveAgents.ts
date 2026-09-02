@@ -50,6 +50,7 @@ function toLiveAgent(session: Session, unseenFinished: boolean): LiveAgent {
   const pending = session.blocks.find(
     (block) => block.approval && !block.approval.decided,
   );
+  const pendingQuestion = session.pendingQuestion;
   const done = unseenFinished && !isInFlightSession(session);
   const activityBlock = pending ?? lastActivityBlock(session.blocks);
   return {
@@ -57,10 +58,16 @@ function toLiveAgent(session: Session, unseenFinished: boolean): LiveAgent {
     cwd: session.cwd,
     title: sessionDisplayTitle(session.title, session.harness),
     harness: session.harness,
-    activity: done ? "Done" : activityLabel(activityBlock, session.cwd),
+    activity: done
+      ? "Done"
+      : pendingQuestion
+        ? pendingQuestion.title ||
+          pendingQuestion.questions[0]?.prompt ||
+          "Question"
+        : activityLabel(activityBlock, session.cwd),
     startedAt: turnStartedAt(session.blocks),
     durationMs: done ? turnDurationMs(session.blocks) : undefined,
-    needsApproval: Boolean(pending),
+    needsApproval: Boolean(pending) || Boolean(pendingQuestion),
     done,
   };
 }

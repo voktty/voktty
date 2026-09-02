@@ -1,7 +1,7 @@
 import { fuzzyMatch } from "./fuzzy";
 import { projectName } from "./paths";
 import { sameProjectPath } from "./recents";
-import { hasPendingApproval, sessionDisplayTitle, type Session } from "./session";
+import { sessionDisplayTitle, sessionNeedsInput, type Session } from "./session";
 import { shouldPersistSession, type SessionSummary } from "./sessionStore";
 
 export type SessionGitHint = {
@@ -139,7 +139,7 @@ export function historyWithLiveSessions(
   const hint = projectGitHint(rows, gitOverlayForCwd(cwd, git));
   for (const session of sessions) {
     if (!sameProjectPath(session.cwd, cwd)) continue;
-    const live = session.busy || hasPendingApproval(session.blocks);
+    const live = session.busy || sessionNeedsInput(session);
     if (!shouldPersistSession(session) && !live) continue;
     if (rows.some((row) => row.id === session.id)) continue;
     const sessionHint: SessionGitHint = {

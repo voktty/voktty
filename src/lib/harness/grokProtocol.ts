@@ -2,6 +2,8 @@ import type { PromptContentBlock } from "../attachments";
 import type { AgentModel, ModelSetting, ModelSettingChoice } from "../models";
 import type { RuntimeMode, ToolPreview } from "../session";
 import type { ApprovalDecision, HarnessEvent } from "./types";
+import type { UserQuestion, UserQuestionReply } from "../userQuestion";
+import { questionsFromUnknown, selectedAnswerLabels } from "../userQuestion";
 import {
   composeToolTitle,
   extractSearchQuery,
@@ -49,11 +51,25 @@ export type GrokPermissionRequest = {
   optionIds: string[];
 };
 
-export type GrokAskQuestion = {
-  question: string;
-  multiSelect: boolean;
-  options: string[];
-};
+export type GrokAskQuestion = UserQuestion;
+
+export function askQuestionsFromAcp(params: unknown): UserQuestion[] {
+  return questionsFromUnknown(params);
+}
+
+export function askQuestionResponse(
+  reply: UserQuestionReply,
+  questions: UserQuestion[],
+): Record<string, unknown> {
+  if (reply.kind !== "answered") return { outcome: "skip_interview" };
+  const answers: Record<string, string | string[]> = {};
+  for (const question of questions) {
+    const labels = selectedAnswerLabels(question, reply);
+    if (labels.length === 0) continue;
+    answers[question.prompt] = question.multiSelect ? labels : (labels[0] ?? "");
+  }
+  return { outcome: "accepted", answers };
+}
 
 /** ACP prompt blocks: Grok rejects image and audio. */
 export function grokPromptBlocks(text: string): PromptContentBlock[] {
@@ -249,44 +265,6 @@ export function permissionRequestFromAcp(
     preview: mergePreview(preview, grok.path, grok.query, kind),
     optionIds,
   };
-}
-
-export function askQuestionsFromAcp(params: unknown): GrokAskQuestion[] {
-  const rec = asRecord(params);
-  const questions = Array.isArray(rec?.questions) ? rec.questions : [];
-  return questions.flatMap((item) => {
-    const q = asRecord(item);
-    const question = String(q?.question ?? q?.text ?? "").trim();
-    if (!question) return [];
-    const options = Array.isArray(q?.options)
-      ? q.options.flatMap((option) => {
-          const rec = asRecord(option);
-          const label = String(rec?.label ?? rec?.value ?? "").trim();
-          return label ? [label] : [];
-        })
-      : [];
-    return [
-      {
-        question,
-        multiSelect: q?.multiSelect === true,
-        options,
-      },
-    ];
-  });
-}
-
-export function askQuestionResponse(
-  decision: ApprovalDecision,
-  questions: GrokAskQuestion[],
-): Record<string, unknown> {
-  if (decision !== "allow") return { outcome: "skip_interview" };
-  const answers: Record<string, string | string[]> = {};
-  for (const question of questions) {
-    const first = question.options[0];
-    if (!first) continue;
-    answers[question.question] = question.multiSelect ? [first] : first;
-  }
-  return { outcome: "accepted", answers };
 }
 
 export function planFromExitPlan(params: unknown): string {

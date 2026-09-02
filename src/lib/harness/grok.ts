@@ -27,7 +27,6 @@ import {
   pickAutoOption,
   planFromExitPlan,
   sessionIdFromResult,
-  type GrokAskQuestion,
 } from "./grokProtocol";
 import type {
   ApprovalDecision,
@@ -35,6 +34,10 @@ import type {
   SendTurnInput,
   SteerTurnInput,
 } from "./types";
+import {
+  questionPromptTitle,
+  type UserQuestionReply,
+} from "../userQuestion";
 
 type Live = {
   acp: AcpClient;
@@ -48,7 +51,7 @@ type Live = {
   runtimeMode: RuntimeMode;
   onEvent: (event: HarnessEvent) => void;
   approvals: Map<number, (decision: ApprovalDecision) => void>;
-  askQuestions: Map<number, GrokAskQuestion[]>;
+  questions: Map<number, (reply: UserQuestionReply) => void>;
   turns: Promise<void>;
 };
 
@@ -124,6 +127,14 @@ export function respondGrokApproval(
   liveByThread.get(sessionId)?.approvals.get(requestId)?.(decision);
 }
 
+export function respondGrokQuestion(
+  sessionId: string,
+  requestId: number,
+  reply: UserQuestionReply,
+) {
+  liveByThread.get(sessionId)?.questions.get(requestId)?.(reply);
+}
+
 export async function cancelGrokTurn(sessionId: string): Promise<void> {
   const live = liveByThread.get(sessionId);
   if (!live) {
@@ -134,6 +145,8 @@ export async function cancelGrokTurn(sessionId: string): Promise<void> {
   live.muteUpdates = true;
   for (const [, resolve] of live.approvals) resolve("deny");
   live.approvals.clear();
+  for (const [, resolve] of live.questions) resolve({ kind: "skipped" });
+  live.questions.clear();
   await live.acp
     .notify("session/cancel", { sessionId: live.acpSessionId })
     .catch(() => undefined);
@@ -148,6 +161,8 @@ export async function stopGrokSession(sessionId: string): Promise<void> {
     live.muteUpdates = true;
     for (const [, resolve] of live.approvals) resolve("deny");
     live.approvals.clear();
+    for (const [, resolve] of live.questions) resolve({ kind: "skipped" });
+    live.questions.clear();
   }
   live?.acp.close();
   unwatchChild(sessionId);
@@ -340,7 +355,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       runtimeMode: input.runtimeMode,
       onEvent: input.onEvent,
       approvals: new Map(),
-      askQuestions: new Map(),
+      questions: new Map(),
       turns: Promise.resolve(),
     };
     liveRef.current = live;
@@ -544,23 +559,24 @@ async function handleAskQuestion(
   params: unknown,
 ) {
   const questions = askQuestionsFromAcp(params);
-  const title = questions[0]?.question || "Question";
-  live.askQuestions.set(id, questions);
   live.onEvent({
-    type: "approval.requested",
+    type: "question.asked",
     requestId: id,
-    title,
-    kind: "other",
+    title: questionPromptTitle(questions),
+    questions,
   });
 
-  const decision = await new Promise<ApprovalDecision>((resolve) => {
-    live.approvals.set(id, resolve);
+  const reply = await new Promise<UserQuestionReply>((resolve) => {
+    live.questions.set(id, resolve);
   });
-  live.approvals.delete(id);
-  live.askQuestions.delete(id);
-  live.onEvent({ type: "approval.resolved", requestId: id, decision });
+  live.questions.delete(id);
+  live.onEvent({
+    type: "question.resolved",
+    requestId: id,
+    decision: reply.kind,
+  });
 
   await live.acp
-    .respond(id, askQuestionResponse(decision, questions))
+    .respond(id, askQuestionResponse(reply, questions))
     .catch(() => undefined);
 }

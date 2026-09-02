@@ -2,6 +2,7 @@ import { buildOutgoingHandoffPrompt } from "./handoff";
 import {
   cancelHarnessTurn,
   respondHarnessApproval,
+  respondHarnessQuestion,
   sendHarnessTurn,
 } from "./harness/registry";
 import { mergeStream } from "./harness/streamText";
@@ -40,6 +41,14 @@ export async function requestOutgoingHandoff(input: {
             input.sessionId,
             event.requestId,
             "deny",
+          );
+        }
+        if (event.type === "question.asked") {
+          respondHarnessQuestion(
+            input.harness,
+            input.sessionId,
+            event.requestId,
+            { kind: "skipped" },
           );
         }
       },

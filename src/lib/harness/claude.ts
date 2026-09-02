@@ -50,6 +50,11 @@ import {
   type ClaudeControlRequest,
 } from "./claudeProtocol";
 import { joinStreamText, snapshotRemainder } from "./streamText";
+import {
+  questionPromptTitle,
+  questionsFromUnknown,
+  type UserQuestionReply,
+} from "../userQuestion";
 import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
 
 /**
@@ -62,8 +67,12 @@ type ApprovalOutcome = ApprovalDecision | "cancelled";
 type PendingApproval = {
   requestId: string;
   input: Record<string, unknown>;
-  kind: "permission" | "question";
   resolve: (decision: ApprovalOutcome) => void;
+};
+
+type PendingQuestion = {
+  requestId: string;
+  resolve: (reply: UserQuestionReply | "cancelled") => void;
 };
 
 type InFlightTool = {
@@ -81,6 +90,7 @@ type Live = {
   settingsKey: string;
   onEvent: (event: HarnessEvent) => void;
   approvals: Map<number, PendingApproval>;
+  questions: Map<number, PendingQuestion>;
   nextApprovalUiId: number;
   nextControlId: number;
   toolsByIndex: Map<number, InFlightTool>;
@@ -169,6 +179,17 @@ export function respondClaudeApproval(
   pending.resolve(decision);
 }
 
+export function respondClaudeQuestion(
+  sessionId: string,
+  requestId: number,
+  reply: UserQuestionReply,
+): void {
+  const live = liveByThread.get(sessionId);
+  const pending = live?.questions.get(requestId);
+  if (!pending) return;
+  pending.resolve(reply);
+}
+
 export async function cancelClaudeTurn(sessionId: string): Promise<void> {
   const live = liveByThread.get(sessionId);
   if (!live) {
@@ -179,6 +200,8 @@ export async function cancelClaudeTurn(sessionId: string): Promise<void> {
   live.muteUpdates = true;
   for (const [, pending] of live.approvals) pending.resolve("deny");
   live.approvals.clear();
+  for (const [, pending] of live.questions) pending.resolve({ kind: "skipped" });
+  live.questions.clear();
   await writeJson(
     sessionId,
     buildControlRequest(nextControlId(live), { subtype: "interrupt" }),
@@ -197,6 +220,8 @@ export async function stopClaudeSession(sessionId: string): Promise<void> {
     live.muteUpdates = true;
     for (const [, pending] of live.approvals) pending.resolve("deny");
     live.approvals.clear();
+    for (const [, pending] of live.questions) pending.resolve({ kind: "skipped" });
+    live.questions.clear();
     live.activeTurn = false;
     live.turnDone?.();
     live.turnDone = null;
@@ -258,6 +283,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
     settingsKey,
     onEvent: input.onEvent,
     approvals: new Map(),
+    questions: new Map(),
     nextApprovalUiId: 1,
     nextControlId: 1,
     toolsByIndex: new Map(),
@@ -380,6 +406,12 @@ function handleLine(sessionId: string, live: Live, line: string): void {
       if (pending.requestId === cancelId) {
         pending.resolve("cancelled");
         live.approvals.delete(uiId);
+      }
+    }
+    for (const [uiId, pending] of live.questions) {
+      if (pending.requestId === cancelId) {
+        pending.resolve("cancelled");
+        live.questions.delete(uiId);
       }
     }
     return;
@@ -598,20 +630,27 @@ async function handleControlRequest(
   }
 
   if (toolName === "AskUserQuestion") {
+    const questions = questionsFromUnknown(input);
     const uiId = live.nextApprovalUiId++;
     live.onEvent({
-      type: "approval.requested",
+      type: "question.asked",
       requestId: uiId,
-      title: extractAskUserQuestionTitle(input),
-      kind: "other",
+      title: questionPromptTitle(questions) || extractAskUserQuestionTitle(input),
+      questions,
       callId: control.toolUseId,
     });
-    const decision = await waitApproval(live, uiId, control.requestId, input, "question");
-    live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
-    if (decision === "cancelled") return;
+    const outcome = await waitQuestion(live, uiId, control.requestId);
+    const decision =
+      outcome === "cancelled"
+        ? "cancelled"
+        : outcome.kind === "answered"
+          ? "answered"
+          : "skipped";
+    live.onEvent({ type: "question.resolved", requestId: uiId, decision });
+    if (outcome === "cancelled") return;
     const response =
-      decision === "allow"
-        ? { behavior: "allow", updatedInput: askUserQuestionAllowInput(input) }
+      outcome.kind === "answered"
+        ? { behavior: "allow", updatedInput: askUserQuestionAllowInput(input, outcome) }
         : {
             behavior: "deny",
             message: "User cancelled tool execution.",
@@ -659,7 +698,7 @@ async function handleControlRequest(
     callId: control.toolUseId,
     preview: previewFromTool(toolName, input),
   });
-  const decision = await waitApproval(live, uiId, control.requestId, input, "permission");
+  const decision = await waitApproval(live, uiId, control.requestId, input);
   live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
   if (decision === "cancelled") return;
   await writeJson(
@@ -698,10 +737,19 @@ function waitApproval(
   uiId: number,
   requestId: string,
   input: Record<string, unknown>,
-  kind: "permission" | "question",
 ): Promise<ApprovalOutcome> {
   return new Promise((resolve) => {
-    live.approvals.set(uiId, { requestId, input, kind, resolve });
+    live.approvals.set(uiId, { requestId, input, resolve });
+  });
+}
+
+function waitQuestion(
+  live: Live,
+  uiId: number,
+  requestId: string,
+): Promise<UserQuestionReply | "cancelled"> {
+  return new Promise((resolve) => {
+    live.questions.set(uiId, { requestId, resolve });
   });
 }
 

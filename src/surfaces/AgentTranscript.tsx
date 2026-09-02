@@ -89,6 +89,7 @@ type Props = {
   busy?: boolean;
   cwd?: string;
   harness?: HarnessId;
+  pendingQuestion?: boolean;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onAddToChat?: (text: string) => void;
   onSaveNote?: (text: string) => void;
@@ -108,6 +109,7 @@ export function AgentTranscript({
   busy,
   cwd,
   harness,
+  pendingQuestion = false,
   onApproval,
   onAddToChat,
   onSaveNote,
@@ -147,7 +149,7 @@ export function AgentTranscript({
     if (lastUserId && !anchorTurn) setAnchorTurn(true);
   }
   const liveStartedAt = turnUserBlock(blocks)?.startedAt;
-  const waitingForApproval = hasPendingApproval(blocks);
+  const waitingForApproval = hasPendingApproval(blocks) || pendingQuestion;
   const preparingHandoff = blocks.some(
     (block) =>
       block.role === "handoff" && block.handoff?.status === "preparing",
@@ -406,6 +408,9 @@ export function AgentTranscript({
                 <LiveWorking
                   startedAt={liveStartedAt}
                   paused={waitingForApproval}
+                  waitingLabel={
+                    pendingQuestion ? "Waiting for answers" : undefined
+                  }
                 />
               ) : null}
             </div>
@@ -426,12 +431,21 @@ export function AgentTranscript({
 function LiveWorking({
   startedAt,
   paused,
+  waitingLabel,
 }: {
   startedAt?: number;
   paused: boolean;
+  waitingLabel?: string;
 }) {
   const elapsedMs = useElapsedFrom(startedAt, paused);
-  return <TurnDuration elapsedMs={elapsedMs} live waiting={paused} />;
+  return (
+    <TurnDuration
+      elapsedMs={elapsedMs}
+      live
+      waiting={paused}
+      waitingLabel={waitingLabel}
+    />
+  );
 }
 
 function TurnDuration({
@@ -439,6 +453,7 @@ function TurnDuration({
   live = false,
   done = false,
   waiting = false,
+  waitingLabel,
   completedAt,
   copyText: output,
   onSaveNote,
@@ -450,6 +465,7 @@ function TurnDuration({
   live?: boolean;
   done?: boolean;
   waiting?: boolean;
+  waitingLabel?: string;
   completedAt?: number;
   copyText?: string;
   onSaveNote?: (text: string) => void;
@@ -458,7 +474,7 @@ function TurnDuration({
   onHandoff?: (harness: HarnessId, model: string) => void;
 }) {
   const label = waiting
-    ? "Waiting for approval"
+    ? waitingLabel ?? "Waiting for approval"
     : formatWorkingDuration(elapsedMs, done);
   const dot = (
     <span
@@ -471,7 +487,7 @@ function TurnDuration({
       role={live ? "status" : undefined}
       aria-live={live ? "polite" : undefined}
       aria-label={
-        waiting ? "Waiting for approval" : live ? "Agent is working" : label
+        waiting ? label : live ? "Agent is working" : label
       }
       className="flex items-center gap-3 px-4 pt-1 pb-3 font-sans text-sm text-content/40"
     >

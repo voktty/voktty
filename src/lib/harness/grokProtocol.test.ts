@@ -283,7 +283,7 @@ describe("grok protocol", () => {
     expect(grokEffort({})).toBeUndefined();
   });
 
-  it("answers ask-user questions from the approval decision", () => {
+  it("answers ask-user questions from the form reply", () => {
     const questions = askQuestionsFromAcp({
       questions: [
         {
@@ -292,12 +292,20 @@ describe("grok protocol", () => {
         },
       ],
     });
-    expect(questions[0]?.question).toBe("Which colour?");
-    expect(askQuestionResponse("allow", questions)).toEqual({
+    expect(questions[0]?.prompt).toBe("Which colour?");
+    expect(
+      askQuestionResponse(
+        {
+          kind: "answered",
+          answers: { "Which colour?": ["Blue"] },
+        },
+        questions,
+      ),
+    ).toEqual({
       outcome: "accepted",
-      answers: { "Which colour?": "Red" },
+      answers: { "Which colour?": "Blue" },
     });
-    expect(askQuestionResponse("deny", questions)).toEqual({
+    expect(askQuestionResponse({ kind: "skipped" }, questions)).toEqual({
       outcome: "skip_interview",
     });
   });

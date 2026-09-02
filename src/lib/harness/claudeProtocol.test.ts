@@ -437,18 +437,22 @@ describe("helpers", () => {
     expect(extractExitPlanModePlan({ plan: "# Plan" })).toBe("# Plan");
   });
 
-  it("answers AskUserQuestion with the first option", () => {
+  it("answers AskUserQuestion with the selected options", () => {
+    const input = {
+      questions: [
+        {
+          question: "Which file?",
+          options: [{ label: "a.ts" }, { label: "b.ts" }],
+        },
+      ],
+    };
     expect(
-      askUserQuestionAllowInput({
-        questions: [
-          {
-            question: "Which file?",
-            options: [{ label: "a.ts" }, { label: "b.ts" }],
-          },
-        ],
+      askUserQuestionAllowInput(input, {
+        kind: "answered",
+        answers: { "Which file?": ["b.ts"] },
       }),
     ).toMatchObject({
-      answers: { "Which file?": "a.ts" },
+      answers: { "Which file?": "b.ts" },
     });
   });
 

@@ -1,6 +1,6 @@
 import { leafIds, newTab, type WorkspaceTab } from "./layout";
 import type { ProjectTerminalDock } from "./projectTerminal";
-import { hasPendingApproval, type Session } from "./session";
+import { sessionNeedsInput, type Session } from "./session";
 import { stopStreaming } from "./harness/apply";
 
 export const INTERRUPT_MESSAGE =
@@ -23,7 +23,7 @@ export type ResumedWorkspace = {
 
 /** A turn or approval that would be lost if this webview died. */
 export function isInFlightSession(session: Session): boolean {
-  return !!session.busy || hasPendingApproval(session.blocks);
+  return !!session.busy || sessionNeedsInput(session);
 }
 
 export function hasInFlightSessions(sessions: Session[]): boolean {

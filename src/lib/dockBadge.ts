@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { hasPendingApproval, type Session } from "./session";
+import { sessionNeedsInput, type Session } from "./session";
 
 let lastCount = -1;
 
@@ -7,7 +7,7 @@ let lastCount = -1;
 export function syncDockBadge(sessions: Session[]): void {
   let count = 0;
   for (const session of sessions) {
-    if (hasPendingApproval(session.blocks)) count++;
+    if (sessionNeedsInput(session)) count++;
   }
   if (count === lastCount) return;
   lastCount = count;

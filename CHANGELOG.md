@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Claude's AskUserQuestion (and the same clarifying-question flow on Cursor, Grok, and OpenCode) now opens a form above the composer. Questions come one at a time — answer or skip, then the next — instead of an Allow/Deny prompt that silently chose the first option.
+
 ## [0.1.28] - 2026-09-01
 
 ### Added

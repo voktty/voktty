@@ -32,6 +32,29 @@ describe("pendingApprovalForSession", () => {
     const pending = pendingApprovalForSession(session);
     expect(pending?.requestId).toBe(2);
     expect(pending?.label).toBe("Shell");
+    expect(pending?.kind).toBe("approval");
+  });
+
+  it("prefers a parked clarifying question over a tool approval", () => {
+    const session = newSession();
+    session.blocks = [block("tool", { requestId: 2 })];
+    session.pendingQuestion = {
+      requestId: 9,
+      title: "Which file?",
+      questions: [
+        {
+          id: "q1",
+          prompt: "Which file?",
+          multiSelect: false,
+          allowCustom: true,
+          options: [{ id: "a.ts", label: "a.ts" }],
+        },
+      ],
+    };
+    const pending = pendingApprovalForSession(session);
+    expect(pending?.requestId).toBe(9);
+    expect(pending?.kind).toBe("question");
+    expect(pending?.label).toBe("Which file?");
   });
 });
 

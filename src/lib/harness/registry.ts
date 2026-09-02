@@ -1,6 +1,7 @@
 import type { HarnessId } from "../session";
 import type { PrContent } from "../gitText";
 import { hasLiveCatalog } from "../models";
+import type { UserQuestionReply } from "../userQuestion";
 import type { ApprovalDecision, SendTurnInput, SteerTurnInput } from "./types";
 
 export type TitleInput = {
@@ -26,6 +27,11 @@ export type HarnessAdapter = {
     sessionId: string,
     requestId: number,
     decision: ApprovalDecision,
+  ): void;
+  respondQuestion?(
+    sessionId: string,
+    requestId: number,
+    reply: UserQuestionReply,
   ): void;
   /** Kill the child but keep resume state for later rebind. */
   stopSession(sessionId: string): Promise<void>;
@@ -157,6 +163,15 @@ export function respondHarnessApproval(
   decision: ApprovalDecision,
 ): void {
   getHarness(harness)?.respondApproval(sessionId, requestId, decision);
+}
+
+export function respondHarnessQuestion(
+  harness: HarnessId,
+  sessionId: string,
+  requestId: number,
+  reply: UserQuestionReply,
+): void {
+  getHarness(harness)?.respondQuestion?.(sessionId, requestId, reply);
 }
 
 export async function stopHarnessSession(
