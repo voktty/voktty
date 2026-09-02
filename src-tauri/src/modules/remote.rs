@@ -701,10 +701,22 @@ pub fn parse_multiplexer_probe(output: &str) -> RemoteMultiplexerProbe {
                 continue;
             }
             let name = parts[0].trim().to_string();
-            let windows_count = parts.get(1).and_then(|s| s.parse::<u32>().ok()).unwrap_or(1);
-            let attached_count = parts.get(2).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-            let created_at = parts.get(3).and_then(|s| s.parse::<u64>().ok()).filter(|v| *v > 0);
-            let last_activity = parts.get(4).and_then(|s| s.parse::<u64>().ok()).filter(|v| *v > 0);
+            let windows_count = parts
+                .get(1)
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(1);
+            let attached_count = parts
+                .get(2)
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
+            let created_at = parts
+                .get(3)
+                .and_then(|s| s.parse::<u64>().ok())
+                .filter(|v| *v > 0);
+            let last_activity = parts
+                .get(4)
+                .and_then(|s| s.parse::<u64>().ok())
+                .filter(|v| *v > 0);
             let is_attached = attached_count > 0;
             let mux = multiplexer.clone().unwrap_or_else(|| "tmux".to_string());
 
@@ -1173,9 +1185,8 @@ fn has_control_or_space(value: &str) -> bool {
 }
 
 pub fn parse_extra_args(extra_args: &str) -> Vec<String> {
-    shlex::split(extra_args).unwrap_or_else(|| {
-        extra_args.split_whitespace().map(str::to_string).collect()
-    })
+    shlex::split(extra_args)
+        .unwrap_or_else(|| extra_args.split_whitespace().map(str::to_string).collect())
 }
 
 pub fn has_ssh_option(args: &[String], opt_name: &str) -> bool {
@@ -1239,7 +1250,10 @@ fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
         args.extend(["-o".to_string(), "ConnectTimeout=10".to_string()]);
     }
     if !has_ssh_option(&user_extra, "StrictHostKeyChecking") {
-        args.extend(["-o".to_string(), "StrictHostKeyChecking=accept-new".to_string()]);
+        args.extend([
+            "-o".to_string(),
+            "StrictHostKeyChecking=accept-new".to_string(),
+        ]);
     }
 
     if let Some(port) = connection.port.filter(|port| *port != 22) {

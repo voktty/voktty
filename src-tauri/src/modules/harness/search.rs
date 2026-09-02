@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
@@ -69,7 +68,7 @@ fn search_project_sync(options: &SearchOptions) -> Result<SearchResult, String> 
 }
 
 fn git_grep(root: &Path, options: &SearchOptions, query: &str) -> Option<SearchResult> {
-    let mut cmd = Command::new("git");
+    let mut cmd = super::fs::git_cmd();
     cmd.arg("-C").arg(root).arg("grep").arg("-z").arg("-n");
     if !options.case_sensitive {
         cmd.arg("-i");

@@ -391,6 +391,7 @@ const HARNESS_ORDER: HarnessId[] = [
   "claude",
   "codex",
   "cursor",
+  "gemini",
   "grok",
   "opencode",
   "pi",

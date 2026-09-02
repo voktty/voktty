@@ -12,15 +12,20 @@ import {
   buildThreadStartParams,
   buildTurnStartParams,
   buildTurnSteerParams,
+  type CodexApprovalKind,
   isRecoverableThreadResumeError,
   mapApprovalRequest,
   mapCodexNotification,
   toCodexApprovalDecision,
-  type CodexApprovalKind,
 } from "./codexProtocol";
 import { JsonRpcClient, type JsonRpcId } from "./jsonRpc";
 import { joinStreamText, snapshotRemainder } from "./streamText";
-import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
+import type {
+  ApprovalDecision,
+  HarnessEvent,
+  SendTurnInput,
+  SteerTurnInput,
+} from "./types";
 
 type PendingApproval = {
   rpcId: JsonRpcId;
@@ -58,7 +63,8 @@ const liveByThread = new Map<string, Live>();
 const resumeByThread = new Map<string, Resume>();
 const cancelledThreads = new Set<string>();
 
-let resolveCodexBinaryImpl: () => Promise<{ path: string }> = resolveCodexBinary;
+let resolveCodexBinaryImpl: () => Promise<{ path: string }> =
+  resolveCodexBinary;
 
 /** Test seam. */
 export function setCodexBinaryResolver(
@@ -79,16 +85,18 @@ export async function sendCodexTurn(input: SendTurnInput): Promise<void> {
 
   live.onEvent = input.onEvent;
   live.runtimeMode = input.runtimeMode;
-  live.turns = live.turns.catch(() => undefined).then(async () => {
-    live.cancelled = false;
-    live.muteUpdates = false;
-    try {
-      await runTurn(live, input);
-    } catch (error) {
-      if (live.cancelled) return;
-      throw error;
-    }
-  });
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      try {
+        await runTurn(live, input);
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
   await live.turns;
 }
 
@@ -217,6 +225,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
 
   const { path } = await resolveCodexBinaryImpl();
   const liveRef: { current: Live | null } = { current: null };
+  const stderr: string[] = [];
 
   const rpc = new JsonRpcClient(
     input.sessionId,
@@ -239,15 +248,27 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
     input.sessionId,
     (line) => rpc.pushLine(line),
     (code) => {
-      rpc.close(new Error("Codex app-server exited"));
+      const detail = stderr[stderr.length - 1]?.trim();
+      const error = new Error(
+        detail
+          ? `Codex app-server exited: ${detail}`
+          : "Codex app-server exited",
+      );
+      rpc.close(error);
       liveByThread.delete(input.sessionId);
       input.onEvent({ type: "session.ended", code });
       const live = liveRef.current;
-      live?.turnFailed?.(new Error("Codex app-server exited"));
+      live?.turnFailed?.(error);
       if (live) {
         live.turnDone = null;
         live.turnFailed = null;
       }
+    },
+    (line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      stderr.push(trimmed);
+      if (stderr.length > 8) stderr.shift();
     },
   );
 
@@ -408,11 +429,7 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
   }
 }
 
-function handleNotification(
-  live: Live,
-  method: string,
-  params: unknown,
-): void {
+function handleNotification(live: Live, method: string, params: unknown): void {
   // A Codex turn is a sequence of items. Completing an agentMessage does not
   // mean the turn is over — more tools and messages can still arrive. Only
   // turn/completed (and turn/aborted) settle sendCodexTurn, which is what the

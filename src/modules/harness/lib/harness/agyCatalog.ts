@@ -1,5 +1,10 @@
-import { setHarnessModels, type AgentModel, type ModelSetting } from "../models";
-import { execChild } from "./child";
+import { homeDir } from "../fs";
+import {
+  type AgentModel,
+  type ModelSetting,
+  setHarnessModels,
+} from "../models";
+import { execChild, resolveGeminiBinary } from "./child";
 
 const REASONING_EFFORT_HIGH: ModelSetting = {
   id: "effort",
@@ -97,8 +102,15 @@ export function refreshAgyCatalog(): Promise<void> {
 
 export async function discoverAgyModels(): Promise<AgentModel[]> {
   try {
-    const raw = await execChild("agy", ["models"]);
-    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    const [{ path }, cwd] = await Promise.all([
+      resolveGeminiBinary(),
+      homeDir(),
+    ]);
+    const raw = await execChild(path, ["models"], cwd);
+    const lines = raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     const parsed: AgentModel[] = [];
     for (const line of lines) {
       if (line.startsWith("Fetching")) continue;

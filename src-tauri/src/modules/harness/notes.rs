@@ -256,8 +256,8 @@ fn unique_slug(conn: &Connection, title: &str) -> rusqlite::Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::session_store::SessionStore;
+    use super::*;
 
     fn upsert(store: &SessionStore, id: &str, title: &str, body: &str) -> Note {
         let conn = store.lock_conn().unwrap();

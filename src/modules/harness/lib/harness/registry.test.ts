@@ -1,17 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetHarnessModelOverlays, setHarnessModels } from "../models";
 import {
-  resetHarnessModelOverlays,
-  setHarnessModels,
-} from "../models";
-import {
+  cancelHarnessTurn,
+  forgetHarnessSession,
   HARNESS_IDLE_PARK_MS,
+  type HarnessAdapter,
   isLiveHarness,
   listHarnesses,
   refreshHarnessCatalogs,
   registerHarness,
   resetHarnessIdlePark,
   sendHarnessTurn,
-  type HarnessAdapter,
 } from "./registry";
 import type { SendTurnInput, SteerTurnInput } from "./types";
 
@@ -113,5 +112,122 @@ describe("harness registry", () => {
     expect(stopSession).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(stopSession).toHaveBeenCalledWith("s1");
+  });
+
+  it("forgets the previous provider before another provider claims the child", async () => {
+    const order: string[] = [];
+    registerHarness(
+      stub("codex", {
+        async sendTurn() {
+          order.push("codex:send");
+        },
+        async forgetSession() {
+          order.push("codex:forget");
+        },
+      }),
+    );
+    registerHarness(
+      stub("claude", {
+        async sendTurn() {
+          order.push("claude:send");
+        },
+      }),
+    );
+
+    const input = {
+      sessionId: "shared",
+      cwd: "/tmp",
+      text: "hi",
+      runtimeMode: "supervised" as const,
+      onEvent: () => undefined,
+    };
+    await sendHarnessTurn({ ...input, harness: "codex", model: "codex:x" });
+    await sendHarnessTurn({ ...input, harness: "claude", model: "claude:y" });
+
+    expect(order).toEqual(["codex:send", "codex:forget", "claude:send"]);
+  });
+
+  it("ignores stale cleanup after a new provider owns the session", async () => {
+    const cancelCodex = vi.fn(async () => undefined);
+    const forgetCodex = vi.fn(async () => undefined);
+    const cancelClaude = vi.fn(async () => undefined);
+    registerHarness(
+      stub("codex", {
+        cancelTurn: cancelCodex,
+        forgetSession: forgetCodex,
+      }),
+    );
+    registerHarness(stub("claude", { cancelTurn: cancelClaude }));
+
+    const input = {
+      sessionId: "shared",
+      cwd: "/tmp",
+      text: "hi",
+      runtimeMode: "supervised" as const,
+      onEvent: () => undefined,
+    };
+    await sendHarnessTurn({ ...input, harness: "codex", model: "codex:x" });
+    await sendHarnessTurn({ ...input, harness: "claude", model: "claude:y" });
+    forgetCodex.mockClear();
+
+    await cancelHarnessTurn("codex", "shared");
+    await forgetHarnessSession("codex", "shared");
+
+    expect(cancelCodex).not.toHaveBeenCalled();
+    expect(forgetCodex).not.toHaveBeenCalled();
+    expect(cancelClaude).not.toHaveBeenCalled();
+  });
+
+  it("releases a failed provider so another provider can recover the session", async () => {
+    const stopCodex = vi.fn(async () => undefined);
+    const sendClaude = vi.fn(async () => undefined);
+    registerHarness(
+      stub("codex", {
+        async sendTurn() {
+          throw new Error("startup failed");
+        },
+        stopSession: stopCodex,
+      }),
+    );
+    registerHarness(stub("claude", { sendTurn: sendClaude }));
+    const input = {
+      sessionId: "recover",
+      cwd: "/tmp",
+      text: "hi",
+      runtimeMode: "supervised" as const,
+      onEvent: () => undefined,
+    };
+
+    await expect(
+      sendHarnessTurn({ ...input, harness: "codex", model: "codex:x" }),
+    ).rejects.toThrow("startup failed");
+    await sendHarnessTurn({ ...input, harness: "claude", model: "claude:y" });
+
+    expect(stopCodex).toHaveBeenCalledWith("recover");
+    expect(sendClaude).toHaveBeenCalledOnce();
+  });
+
+  it("lets the next provider start even when stale cleanup reports an error", async () => {
+    const sendClaude = vi.fn(async () => undefined);
+    registerHarness(
+      stub("codex", {
+        async forgetSession() {
+          throw new Error("already exited");
+        },
+      }),
+    );
+    registerHarness(stub("claude", { sendTurn: sendClaude }));
+    const input = {
+      sessionId: "recover-cleanup",
+      cwd: "/tmp",
+      text: "hi",
+      runtimeMode: "supervised" as const,
+      onEvent: () => undefined,
+    };
+
+    await sendHarnessTurn({ ...input, harness: "codex", model: "codex:x" });
+    await sendHarnessTurn({ ...input, harness: "claude", model: "claude:y" });
+
+    expect(sendClaude).toHaveBeenCalledOnce();
   });
 });

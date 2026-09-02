@@ -1,146 +1,74 @@
+import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { message } from "@tauri-apps/plugin-dialog";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Sidebar } from "../chrome/Sidebar";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { ApprovalToasts } from "../chrome/ApprovalToasts";
-import { UpdateToast } from "../chrome/UpdateToast";
-import { TitleBar, type Tab as TitleTab } from "../chrome/TitleBar";
 import { FilePicker } from "../chrome/FilePicker";
+import { Sidebar } from "../chrome/Sidebar";
+import { TitleBar, type Tab as TitleTab } from "../chrome/TitleBar";
+import { UpdateToast } from "../chrome/UpdateToast";
 import { UsageFooter } from "../chrome/UsageFooter";
-import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { useProjectBranches } from "../hooks/useProjectBranches";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
 import {
   LAYOUT_CHANGE_EVENT,
-  loadSidebarOpen,
   loadProjectRailOpen,
+  loadSidebarOpen,
   loadSidebarTabOrder,
-  saveSidebarOpen,
-  saveProjectRailOpen,
-  toggleTranscriptZen,
   type SidebarLayout,
   type SidebarTabId,
+  saveProjectRailOpen,
+  saveSidebarOpen,
+  toggleTranscriptZen,
 } from "../lib/appearance";
-import { IS_MAC } from "../lib/platform";
-import { runUpdateFlow } from "../lib/updater";
+import {
+  bindResumedSessions,
+  closeCurrentWindow,
+  hasInFlightSessions,
+  hideCurrentWindow,
+  isAppQuitting,
+  persistLiveTranscripts,
+  persistQuitState,
+  type ResumedWorkspace,
+  reapWindowRuntime,
+  setQuitWorkspace,
+} from "../lib/appLifecycle";
+import { hiddenApprovalNotices } from "../lib/approvalToast";
 import { displayAttachments, prepareAttachments } from "../lib/attachments";
-import { basename, notifyGitChanged, pickFolder, restoreSessionCheckout } from "../lib/fs";
+import {
+  beginSessionTurn,
+  captureSessionCheckpoint,
+  keepSessionChanges,
+  notifyReviewChanged,
+  syncSessionCheckpoint,
+} from "../lib/checkpoint";
+import { dropContextWindow } from "../lib/contextUsage";
+import { syncDockBadge } from "../lib/dockBadge";
 import {
   invalidateProjectFiles,
   prefetchProjectFiles,
   rememberOpenedFile,
   resolveOpenablePath,
 } from "../lib/fileIndex";
+import { notifyDirsChanged } from "../lib/fileTree";
+import { nudgeWatchedFiles } from "../lib/fileWatch";
 import {
-  closeLeaf,
-  findSurfacePane,
-  firstLeafId,
-  focusedFileTab,
-  isolateTerminalPanes,
-  isFilesystemTab,
-  isTerminalTab,
-  leaf,
-  leafIds,
-  movePane,
-  neighborLeafId,
-  newFileTab,
-  newPlanTab,
-  newReleaseNotesWorkspaceTab,
-  newTab,
-  newTerminalFile,
-  openEditorTab,
-  removePane,
-  replaceLeafId,
-  setSplitRatio,
-  siblingLeafId,
-  splitPane,
-  surfacePanes,
-  updateTerminalTab,
-  withSurfacePanes,
-  type EditorPane,
-  type FilePaneTab,
-  type FocusDir,
-  type PaneEdge,
-  type SplitDir,
-  type WorkspaceTab,
-} from "../lib/layout";
-import {
-  releaseNotesForVersion,
-  releaseNotesTitle,
-} from "../lib/releaseNotes";
-import {
-  focusReleaseNotesTarget,
-  planReleaseNotesOpen,
-} from "../lib/releaseNotesWorkspace";
-import { orderByIds } from "../lib/reorder";
-import {
-  addTerminalToDock,
-  applyDockGridStyle,
-  closeTerminalInDock,
-  createProjectTerminal,
-  findProjectTerminal,
-  mapProjectTerminal,
-  nextDockTerminalTitle,
-  patchProjectTerminals,
-  reorderDockTerminals,
-  selectDockTerminal,
-  splitProjectTerminalsForMove,
-  withDockOpen,
-  withDockSide,
-  withDockSize,
-  type DockSide,
-  type ProjectTerminalDock as ProjectTerminal,
-} from "../lib/projectTerminal";
-import {
-  addTabsToNewGroup,
-  addTabToGroup,
-  applyGroupedReorder,
-  insertTabBesideActive,
-  insertTabInGroup,
-  joinTabOnto,
-  newTabGroupId,
-  removeTabFromGroup,
-  tabGroupProject,
-  ungroupTabs,
-} from "../lib/tabGroups";
-import {
-  collectWindowTransfer,
-  type WindowTransferPayload,
-} from "../lib/windowTransfer";
-import {
-  confirmCloseTerminal,
-  confirmCloseTerminals,
-} from "../lib/terminalClose";
-import {
-  listRunningTerminals,
-  terminalTabLabel,
-  type TerminalMetaPatch,
-} from "../lib/terminalTab";
-import {
-  applyHarnessEvent,
-  appendUser,
-  appendSteerUser,
-  bindHarnessSession,
-  cancelHarnessTurn,
-  canSteerHarness,
-  forgetHarnessSession,
-  generateHarnessTitle,
-  isLiveHarness,
-  probeHarnessAvailability,
-  refreshHarnessCatalogs,
-  registerBuiltinHarnesses,
-  respondHarnessApproval,
-  sendHarnessTurn,
-  steerHarnessTurn,
-  startHarnessBridge,
-  stopStreaming,
-  pickTextHarness,
-  updateHarnessRuntimeMode,
-  type ApprovalDecision,
-  type HarnessEvent,
-} from "../lib/harness";
+  basename,
+  notifyGitChanged,
+  pickFolder,
+  restoreSessionCheckout,
+} from "../lib/fs";
+import { type InboxItem, inboxComposerCard } from "../lib/githubTasks";
 import {
   appendPreparingHandoff,
   buildDeterministicHandoff,
@@ -160,24 +88,84 @@ import {
   wrapHandoffPrompt,
 } from "../lib/handoff";
 import { requestOutgoingHandoff } from "../lib/handoffTurn";
+import {
+  type ApprovalDecision,
+  appendSteerUser,
+  appendUser,
+  applyHarnessEvent,
+  bindHarnessSession,
+  cancelHarnessTurn,
+  canSteerHarness,
+  forgetHarnessSession,
+  generateHarnessTitle,
+  type HarnessEvent,
+  isLiveHarness,
+  pickTextHarness,
+  probeHarnessAvailability,
+  refreshHarnessCatalogs,
+  registerBuiltinHarnesses,
+  respondHarnessApproval,
+  sendHarnessTurn,
+  startHarnessBridge,
+  steerHarnessTurn,
+  stopStreaming,
+  updateHarnessRuntimeMode,
+} from "../lib/harness";
 import { isEditTool } from "../lib/harness/preview";
 import {
-  beginSessionTurn,
-  captureSessionCheckpoint,
-  keepSessionChanges,
-  notifyReviewChanged,
-  syncSessionCheckpoint,
-} from "../lib/checkpoint";
-import { notifyDirsChanged } from "../lib/fileTree";
-import { nudgeWatchedFiles } from "../lib/fileWatch";
-import { type EditorNavigationTarget, type OpenFileFn } from "../lib/search";
+  CONTINUE_PROMPT,
+  canAutoContinue,
+  inFlightRefs,
+  inFlightSnapshotKey,
+  shouldWriteInFlightSnapshot,
+} from "../lib/inFlight";
+import {
+  closeLeaf,
+  type EditorPane,
+  type FilePaneTab,
+  type FocusDir,
+  findSurfacePane,
+  firstLeafId,
+  focusedFileTab,
+  isFilesystemTab,
+  isolateTerminalPanes,
+  isTerminalTab,
+  leaf,
+  leafIds,
+  movePane,
+  neighborLeafId,
+  newFileTab,
+  newPlanTab,
+  newReleaseNotesWorkspaceTab,
+  newTab,
+  newTerminalFile,
+  openEditorTab,
+  type PaneEdge,
+  removePane,
+  replaceLeafId,
+  type SplitDir,
+  setSplitRatio,
+  siblingLeafId,
+  splitPane,
+  surfacePanes,
+  updateTerminalTab,
+  type WorkspaceTab,
+  withSurfacePanes,
+} from "../lib/layout";
+import { linearIssueDetails, peekLinearIssueDetails } from "../lib/linear";
+import { liveAgentsFromSessions } from "../lib/liveAgents";
 import {
   mergeModelSettings,
   preferredModelSettings,
   resolveModel,
   saveLastModelSettings,
 } from "../lib/models";
-import { planTitle } from "../lib/plan";
+import {
+  ADD_NOTE_TO_CHAT_EVENT,
+  composeNoteMessage,
+  type NoteComposerCard,
+  noteCardMeta,
+} from "../lib/notes";
 import {
   displayPath,
   isEqualOrInside,
@@ -185,7 +173,28 @@ import {
   rebasePath,
   resolveWorkspacePath,
 } from "../lib/paths";
+import { planTitle } from "../lib/plan";
+import { IS_MAC } from "../lib/platform";
 import { removeProjectData } from "../lib/projectData";
+import {
+  addTerminalToDock,
+  applyDockGridStyle,
+  closeTerminalInDock,
+  createProjectTerminal,
+  type DockSide,
+  findProjectTerminal,
+  mapProjectTerminal,
+  nextDockTerminalTitle,
+  type ProjectTerminalDock as ProjectTerminal,
+  patchProjectTerminals,
+  reorderDockTerminals,
+  selectDockTerminal,
+  splitProjectTerminalsForMove,
+  withDockOpen,
+  withDockSide,
+  withDockSize,
+} from "../lib/projectTerminal";
+import { preparePrompt } from "../lib/promptPreparation";
 import {
   archiveProject,
   forgetProject,
@@ -196,6 +205,114 @@ import {
   rememberProject,
   sameProjectPath,
 } from "../lib/recents";
+import { releaseNotesForVersion, releaseNotesTitle } from "../lib/releaseNotes";
+import {
+  focusReleaseNotesTarget,
+  planReleaseNotesOpen,
+} from "../lib/releaseNotesWorkspace";
+import { orderByIds } from "../lib/reorder";
+import type { EditorNavigationTarget, OpenFileFn } from "../lib/search";
+import {
+  buildSecondOpinionCard,
+  buildSecondOpinionPrompt,
+  harnessForTurn,
+  SECOND_OPINION_TITLE,
+  turnEditedFiles,
+  turnReport,
+  turnUserRequest,
+} from "../lib/secondOpinion";
+import {
+  type Attachment,
+  type Block,
+  canReplaceSessionTitle,
+  formatSessionTitle,
+  HARNESS_LABEL,
+  type HarnessId,
+  hasPendingApproval,
+  newDefaultSession,
+  newSession,
+  type RuntimeMode,
+  type SecondOpinionMeta,
+  type Session,
+  sessionDisplayTitle,
+  sessionWorkCwd,
+  titleFromPrompt,
+} from "../lib/session";
+import { nextUnseenFinishedSessions } from "../lib/sessionDone";
+import {
+  historyWithLiveSessions,
+  mergeHistorySummary,
+  mergeProjectHistorySummary,
+  replaceProjectHistory,
+  summaryFromSession,
+} from "../lib/sessionHistory";
+import { piSkillContextForSession } from "../lib/sessionSkills";
+import {
+  deleteSession,
+  getSession,
+  listSessionsByProject,
+  persistFingerprint,
+  replaceInFlightSessions,
+  type SessionSummary,
+  saveWorkspaceSnapshot,
+  setSessionArchived,
+  setSessionPinned,
+  shouldPersistSession,
+  upsertSession,
+} from "../lib/sessionStore";
+import {
+  loadLiveAgentsEnabled,
+  loadNotesEnabled,
+  loadSettingsSection,
+  type SettingsSectionId,
+  saveSettingsSection,
+  subscribeLiveAgentsEnabled,
+  subscribeNotesEnabled,
+} from "../lib/settings";
+import { warmPiSkills } from "../lib/skills";
+import { playCue } from "../lib/sounds";
+import {
+  addTabsToNewGroup,
+  addTabToGroup,
+  applyGroupedReorder,
+  insertTabBesideActive,
+  insertTabInGroup,
+  joinTabOnto,
+  newTabGroupId,
+  removeTabFromGroup,
+  tabGroupProject,
+  ungroupTabs,
+} from "../lib/tabGroups";
+import { tabCommand } from "../lib/tabKeys";
+import {
+  canTabVisitBack,
+  canTabVisitForward,
+  emptyTabVisitHistory,
+  pruneTabVisitHistory,
+  recordTabVisit,
+  type TabVisitHistory,
+  tabVisitBack,
+  tabVisitForward,
+} from "../lib/tabVisitHistory";
+import {
+  confirmCloseTerminal,
+  confirmCloseTerminals,
+} from "../lib/terminalClose";
+import {
+  listRunningTerminals,
+  type TerminalMetaPatch,
+  terminalTabLabel,
+} from "../lib/terminalTab";
+import type { InstalledUpdate } from "../lib/updateNotice";
+import { runUpdateFlow } from "../lib/updater";
+import {
+  collectWindowTransfer,
+  type WindowTransferPayload,
+} from "../lib/windowTransfer";
+import {
+  collectWorkspaceSnapshot,
+  workspaceSnapshotKey,
+} from "../lib/workspaceSnapshot";
 import {
   applyDeletedSessionToWorkspace,
   applyPlaceSessionOnPane,
@@ -204,128 +321,17 @@ import {
   planWorkspaceTabClose,
   workspaceTabCwd,
 } from "../lib/workspaceTabGroups";
-import {
-  HARNESS_LABEL,
-  canReplaceSessionTitle,
-  formatSessionTitle,
-  hasPendingApproval,
-  newDefaultSession,
-  newSession,
-  sessionDisplayTitle,
-  sessionWorkCwd,
-  titleFromPrompt,
-  type Attachment,
-  type Block,
-  type HarnessId,
-  type RuntimeMode,
-  type SecondOpinionMeta,
-  type Session,
-} from "../lib/session";
-import { dropContextWindow } from "../lib/contextUsage";
-import {
-  deleteSession,
-  getSession,
-  listSessionsByProject,
-  persistFingerprint,
-  replaceInFlightSessions,
-  saveWorkspaceSnapshot,
-  setSessionArchived,
-  setSessionPinned,
-  shouldPersistSession,
-  upsertSession,
-  type SessionSummary,
-} from "../lib/sessionStore";
-import { syncDockBadge } from "../lib/dockBadge";
-import { liveAgentsFromSessions } from "../lib/liveAgents";
-import { hiddenApprovalNotices } from "../lib/approvalToast";
-import { nextUnseenFinishedSessions } from "../lib/sessionDone";
-import { playCue } from "../lib/sounds";
-import { tabCommand } from "../lib/tabKeys";
-import {
-  canTabVisitBack,
-  canTabVisitForward,
-  emptyTabVisitHistory,
-  pruneTabVisitHistory,
-  recordTabVisit,
-  tabVisitBack,
-  tabVisitForward,
-  type TabVisitHistory,
-} from "../lib/tabVisitHistory";
-import { preparePrompt } from "../lib/promptPreparation";
-import { warmPiSkills } from "../lib/skills";
-import { piSkillContextForSession } from "../lib/sessionSkills";
-import {
-  ADD_NOTE_TO_CHAT_EVENT,
-  composeNoteMessage,
-  noteCardMeta,
-  type NoteComposerCard,
-} from "../lib/notes";
-import {
-  SECOND_OPINION_TITLE,
-  buildSecondOpinionCard,
-  buildSecondOpinionPrompt,
-  harnessForTurn,
-  turnEditedFiles,
-  turnReport,
-  turnUserRequest,
-} from "../lib/secondOpinion";
-import { PaneTree } from "../surfaces/PaneTree";
-import { ProjectTerminalDock } from "../surfaces/ProjectTerminalDock";
 import { DiffPane } from "../surfaces/DiffPane";
-import { SearchView } from "../surfaces/SearchView";
-import { SettingsView } from "../surfaces/SettingsView";
-import { InboxView, InboxDetailPane } from "../surfaces/InboxView";
-import { NotesView } from "../surfaces/NotesView";
-import { inboxComposerCard, type InboxItem } from "../lib/githubTasks";
-import {
-  linearIssueDetails,
-  peekLinearIssueDetails,
-} from "../lib/linear";
-import {
-  loadLiveAgentsEnabled,
-  loadNotesEnabled,
-  loadSettingsSection,
-  saveSettingsSection,
-  subscribeLiveAgentsEnabled,
-  subscribeNotesEnabled,
-  type SettingsSectionId,
-} from "../lib/settings";
 import {
   handleEditorFindKey,
   openFindInActiveEditor,
 } from "../surfaces/editorSearch";
-
-import {
-  mergeHistorySummary,
-  mergeProjectHistorySummary,
-  replaceProjectHistory,
-  historyWithLiveSessions,
-  summaryFromSession,
-} from "../lib/sessionHistory";
-import {
-  CONTINUE_PROMPT,
-  canAutoContinue,
-  inFlightRefs,
-  inFlightSnapshotKey,
-  shouldWriteInFlightSnapshot,
-} from "../lib/inFlight";
-import {
-  collectWorkspaceSnapshot,
-  workspaceSnapshotKey,
-} from "../lib/workspaceSnapshot";
-import type { InstalledUpdate } from "../lib/updateNotice";
-import {
-  bindResumedSessions,
-  hasInFlightSessions,
-  hideCurrentWindow,
-  closeCurrentWindow,
-  isAppQuitting,
-  persistLiveTranscripts,
-  persistQuitState,
-  reapWindowRuntime,
-  setQuitWorkspace,
-  type ResumedWorkspace,
-} from "../lib/appLifecycle";
+import { InboxDetailPane, InboxView } from "../surfaces/InboxView";
+import { NotesView } from "../surfaces/NotesView";
+import { PaneTree } from "../surfaces/PaneTree";
+import { ProjectTerminalDock } from "../surfaces/ProjectTerminalDock";
+import { SearchView } from "../surfaces/SearchView";
+import { SettingsView } from "../surfaces/SettingsView";
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
@@ -450,11 +456,8 @@ export function HarnessApp({
   const [tabs, setTabs] = useState<WorkspaceTab[]>(
     () => windowTransfer?.tabs ?? resumed?.tabs ?? [seed.tab],
   );
-  const [projectTerminals, setProjectTerminals] = useState<
-    ProjectTerminal[]
-  >(
-    () =>
-      windowTransfer?.projectTerminals ?? resumed?.projectTerminals ?? [],
+  const [projectTerminals, setProjectTerminals] = useState<ProjectTerminal[]>(
+    () => windowTransfer?.projectTerminals ?? resumed?.projectTerminals ?? [],
   );
   const [projectTerminalFocused, setProjectTerminalFocused] = useState(false);
   const [activeTabId, setActiveTabId] = useState(
@@ -467,7 +470,8 @@ export function HarnessApp({
       resumed.tabs.find((entry: any) => entry.id === resumed.activeTabId) ??
       resumed.tabs[0];
     return (
-      !!tab && resumed.sessions.some((session: any) => session.id === tab.focusedId)
+      !!tab &&
+      resumed.sessions.some((session: any) => session.id === tab.focusedId)
     );
   });
   /** Tab id -> project name, kept in sync with the rendered title tabs. */
@@ -589,7 +593,10 @@ export function HarnessApp({
           let updated = [...prev];
           let changed = false;
           for (const p of paths) {
-            if (looksLikeProject(p) && !updated.some((r) => sameProjectPath(r.path, p))) {
+            if (
+              looksLikeProject(p) &&
+              !updated.some((r) => sameProjectPath(r.path, p))
+            ) {
               updated = rememberProject(p);
               changed = true;
             }
@@ -742,9 +749,7 @@ export function HarnessApp({
       (session) => activeTab && leafIds(activeTab.layout).includes(session.id),
     );
   const sessionDefaults = active ?? sessions[0];
-  const activeSkillContext = active
-    ? piSkillContextForSession(active)
-    : null;
+  const activeSkillContext = active ? piSkillContextForSession(active) : null;
   const activeSkillCwd = activeSkillContext?.cwd;
 
   useEffect(() => {
@@ -760,7 +765,8 @@ export function HarnessApp({
   sidebarCwdRef.current = sidebarCwd;
   const sidebarCwdKey =
     sidebarCwd && sidebarCwd !== "~" ? normalizeProjectPath(sidebarCwd) : null;
-  const historyFailed = sidebarCwdKey != null && historyErrorCwd === sidebarCwdKey;
+  const historyFailed =
+    sidebarCwdKey != null && historyErrorCwd === sidebarCwdKey;
   // True from the very first frame that shows a project we have never listed,
   // so the sidebar can stay blank instead of flashing "No sessions yet".
   const historyPending =
@@ -981,9 +987,7 @@ export function HarnessApp({
         if (!summary) return;
         lastPersisted.current.set(session.id, fingerprint);
         if (summary.cwd === sidebarCwdRef.current) {
-          setHistory((current) =>
-            mergeProjectHistorySummary(current, summary),
-          );
+          setHistory((current) => mergeProjectHistorySummary(current, summary));
         }
       })
       .catch(() => undefined);
@@ -1085,7 +1089,14 @@ export function HarnessApp({
       void saveWorkspaceSnapshot(snapshot).catch(() => undefined);
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [tabs, sessions, activeTabId, projectCwd, projectTerminals, windowTransfer]);
+  }, [
+    tabs,
+    sessions,
+    activeTabId,
+    projectCwd,
+    projectTerminals,
+    windowTransfer,
+  ]);
 
   useEffect(() => {
     if (lastProjectPath()) return;
@@ -1093,7 +1104,9 @@ export function HarnessApp({
       .then((cwd) => {
         if (!looksLikeProject(cwd)) return;
         setProjectCwd(cwd);
-        setRecents((prev: any) => (prev.length > 0 ? prev : rememberProject(cwd)));
+        setRecents((prev: any) =>
+          prev.length > 0 ? prev : rememberProject(cwd),
+        );
         setSessions((prev: any) =>
           prev.map((s: any) => (s.cwd === "~" ? { ...s, cwd } : s)),
         );
@@ -1144,24 +1157,29 @@ export function HarnessApp({
     );
   }, [sessions, tabs, persistSession, liveAgentsEnabled]);
 
-  const activateTab = useCallback((id: string) => {
-    setActiveTabId(id);
-    const tab = tabsRef.current.find((entry: any) => entry.id === id);
-    if (deckLayout && tab) {
-      const cwd = workspaceTabCwd(tab, sessionsRef.current);
-      if (cwd && looksLikeProject(cwd)) {
-        const normalized = normalizeProjectPath(cwd);
-        if (!sameProjectPath(normalized, projectCwdRef.current)) {
-          setProjectCwd(normalized);
-          setRecents(rememberProject(normalized));
+  const activateTab = useCallback(
+    (id: string) => {
+      setActiveTabId(id);
+      const tab = tabsRef.current.find((entry: any) => entry.id === id);
+      if (deckLayout && tab) {
+        const cwd = workspaceTabCwd(tab, sessionsRef.current);
+        if (cwd && looksLikeProject(cwd)) {
+          const normalized = normalizeProjectPath(cwd);
+          if (!sameProjectPath(normalized, projectCwdRef.current)) {
+            setProjectCwd(normalized);
+            setRecents(rememberProject(normalized));
+          }
         }
       }
-    }
-    setComposerFocused(
-      !!tab &&
-        sessionsRef.current.some((session: any) => session.id === tab.focusedId),
-    );
-  }, [deckLayout]);
+      setComposerFocused(
+        !!tab &&
+          sessionsRef.current.some(
+            (session: any) => session.id === tab.focusedId,
+          ),
+      );
+    },
+    [deckLayout],
+  );
 
   const commitTabVisit = useCallback((history: TabVisitHistory) => {
     tabVisitRef.current = history;
@@ -1259,10 +1277,7 @@ export function HarnessApp({
         setNotesViewOpen(false);
         setSidebarTab("sessions");
         const cwd =
-          item.projectPath ||
-          active?.cwd ||
-          sessionDefaults?.cwd ||
-          projectCwd;
+          item.projectPath || active?.cwd || sessionDefaults?.cwd || projectCwd;
         const ref =
           item.provider === "linear"
             ? item.identifier?.trim() || `#${item.number}`
@@ -1402,12 +1417,7 @@ export function HarnessApp({
       );
       setComposerFocused(true);
     },
-    [
-      activeTab,
-      projectCwd,
-      sessionDefaults?.cwd,
-      sessionDefaults?.runtimeMode,
-    ],
+    [activeTab, projectCwd, sessionDefaults?.cwd, sessionDefaults?.runtimeMode],
   );
 
   const focusProjectTerminal = useCallback(() => {
@@ -1424,9 +1434,7 @@ export function HarnessApp({
         const existing = findProjectTerminal(prev, projectPath);
         const file = newTerminalFile(
           workdir,
-          existing
-            ? nextDockTerminalTitle(existing, workdir)
-            : undefined,
+          existing ? nextDockTerminalTitle(existing, workdir) : undefined,
         );
         if (!existing) {
           return [...prev, createProjectTerminal(projectPath, file)];
@@ -1467,10 +1475,7 @@ export function HarnessApp({
       onOpenTerminal(active?.cwd ?? projectCwd);
       return;
     }
-    const dock = findProjectTerminal(
-      projectTerminalsRef.current,
-      projectPath,
-    );
+    const dock = findProjectTerminal(projectTerminalsRef.current, projectPath);
     if (dock && dock.pane.files.length > 0) {
       const nextOpen = !dock.open;
       setProjectTerminals((prev: any) =>
@@ -1498,7 +1503,9 @@ export function HarnessApp({
       const session = sessionsRef.current.find(
         (entry) => entry.id === sessionId,
       );
-      const cwd = session ? sessionWorkCwd(session) : (active?.cwd ?? projectCwd);
+      const cwd = session
+        ? sessionWorkCwd(session)
+        : (active?.cwd ?? projectCwd);
       openProjectTerminal(cwd);
     },
     [active?.cwd, openProjectTerminal, projectCwd],
@@ -1528,10 +1535,7 @@ export function HarnessApp({
 
   const onToggleProjectTerminal = useCallback(() => {
     if (!deckLayout || !looksLikeProject(projectCwd)) return;
-    const dock = findProjectTerminal(
-      projectTerminalsRef.current,
-      projectCwd,
-    );
+    const dock = findProjectTerminal(projectTerminalsRef.current, projectCwd);
     if (!dock) {
       openProjectTerminal(active?.cwd ?? projectCwd);
       return;
@@ -1583,14 +1587,17 @@ export function HarnessApp({
     );
   }, []);
 
-  const onSelectProjectTerminal = useCallback((fileId: string) => {
-    setProjectTerminals((prev: any) =>
-      mapProjectTerminal(prev, projectCwdRef.current, (dock: any) =>
-        selectDockTerminal(dock, fileId),
-      ),
-    );
-    focusProjectTerminal();
-  }, [focusProjectTerminal]);
+  const onSelectProjectTerminal = useCallback(
+    (fileId: string) => {
+      setProjectTerminals((prev: any) =>
+        mapProjectTerminal(prev, projectCwdRef.current, (dock: any) =>
+          selectDockTerminal(dock, fileId),
+        ),
+      );
+      focusProjectTerminal();
+    },
+    [focusProjectTerminal],
+  );
 
   const onReorderProjectTerminals = useCallback((ids: string[]) => {
     setProjectTerminals((prev: any) =>
@@ -1728,7 +1735,9 @@ export function HarnessApp({
           ),
         );
         for (const sessionId of gone) {
-          persistSession(sessionsRef.current.find((s: any) => s.id === sessionId));
+          persistSession(
+            sessionsRef.current.find((s: any) => s.id === sessionId),
+          );
         }
         setDirtyFiles((prev: Set<string>) => {
           const updated = new Set(prev);
@@ -1747,7 +1756,9 @@ export function HarnessApp({
         (file: any) => file.terminal && !confirmed.has(file.id),
       );
       if (terminals.length > 0) {
-        void confirmCloseTerminals(terminals).then((ok: any) => ok && finishClose());
+        void confirmCloseTerminals(terminals).then(
+          (ok: any) => ok && finishClose(),
+        );
         return;
       }
       finishClose();
@@ -1764,7 +1775,9 @@ export function HarnessApp({
 
   const onGroupNewTab = useCallback(
     (groupId: string) => {
-      const groupTab = tabsRef.current.find((tab: any) => tab.groupId === groupId);
+      const groupTab = tabsRef.current.find(
+        (tab: any) => tab.groupId === groupId,
+      );
       const sessionInTab = groupTab
         ? sessionsRef.current.find((session: any) =>
             leafIds(groupTab.layout).includes(session.id),
@@ -1778,11 +1791,7 @@ export function HarnessApp({
       setActiveTabId(tab.id);
       setComposerFocused(true);
     },
-    [
-      active?.cwd,
-      projectCwd,
-      sessionDefaults?.runtimeMode,
-    ],
+    [active?.cwd, projectCwd, sessionDefaults?.runtimeMode],
   );
 
   const onGroupCloseTabs = useCallback(
@@ -1817,7 +1826,9 @@ export function HarnessApp({
       );
       if (!payload) return;
 
-      const sessionIds = new Set((payload.sessions as any[]).map((session: any) => String(session.id)));
+      const sessionIds = new Set(
+        (payload.sessions as any[]).map((session: any) => String(session.id)),
+      );
       for (const id of sessionIds) skipForgetSessionIds.current.add(String(id));
 
       try {
@@ -1826,7 +1837,8 @@ export function HarnessApp({
         });
         await invoke("open_new_window");
       } catch {
-        for (const id of sessionIds) skipForgetSessionIds.current.delete(String(id));
+        for (const id of sessionIds)
+          skipForgetSessionIds.current.delete(String(id));
         return;
       }
 
@@ -1868,7 +1880,8 @@ export function HarnessApp({
         return next;
       });
 
-      for (const id of sessionIds) skipForgetSessionIds.current.delete(String(id));
+      for (const id of sessionIds)
+        skipForgetSessionIds.current.delete(String(id));
     },
     [activateTab, dirtyFiles, projectCwd],
   );
@@ -1986,7 +1999,9 @@ export function HarnessApp({
         });
         if (tab.id === activeTabId && files.length === 0) {
           setComposerFocused(
-            sessionsRef.current.some((session: any) => session.id === nextFocus),
+            sessionsRef.current.some(
+              (session: any) => session.id === nextFocus,
+            ),
           );
         }
       };
@@ -2066,11 +2081,7 @@ export function HarnessApp({
 
   const onClosePane = useCallback(
     (sessionId?: string) => {
-      if (
-        sessionId === undefined &&
-        deckLayout &&
-        projectTerminalFocused
-      ) {
+      if (sessionId === undefined && deckLayout && projectTerminalFocused) {
         const dock = findProjectTerminal(
           projectTerminalsRef.current,
           projectCwdRef.current,
@@ -2416,8 +2427,9 @@ export function HarnessApp({
 
   const replaceBlankPaneWithSession = useCallback((session: Session) => {
     const tab =
-      tabsRef.current.find((entry: any) => entry.id === activeTabIdRef.current) ??
-      tabsRef.current[0];
+      tabsRef.current.find(
+        (entry: any) => entry.id === activeTabIdRef.current,
+      ) ?? tabsRef.current[0];
     if (!tab) return false;
 
     const paneId = isBlankSession(
@@ -2425,13 +2437,17 @@ export function HarnessApp({
     )
       ? tab.focusedId
       : leafIds(tab.layout).find((id) =>
-          isBlankSession(sessionsRef.current.find((entry: any) => entry.id === id)),
+          isBlankSession(
+            sessionsRef.current.find((entry: any) => entry.id === id),
+          ),
         );
     if (!paneId || paneId === session.id) return false;
 
     lastPersisted.current.delete(paneId);
     {
-      const blank = sessionsRef.current.find((entry: any) => entry.id === paneId);
+      const blank = sessionsRef.current.find(
+        (entry: any) => entry.id === paneId,
+      );
       if (blank) void forgetHarnessSession(blank.harness, paneId);
     }
     setSessions((prev: any) => {
@@ -2482,8 +2498,12 @@ export function HarnessApp({
         );
       }
       lastPersisted.current.set(restored.id, persistFingerprint(restored));
-      const next = sessionsRef.current.some((session: any) => session.id === restored.id)
-        ? sessionsRef.current.map((s: any) => (s.id === restored.id ? restored : s))
+      const next = sessionsRef.current.some(
+        (session: any) => session.id === restored.id,
+      )
+        ? sessionsRef.current.map((s: any) =>
+            s.id === restored.id ? restored : s,
+          )
         : [...sessionsRef.current, restored];
       sessionsRef.current = next;
       setSessions(next);
@@ -2527,16 +2547,22 @@ export function HarnessApp({
         if (!session) return;
       }
 
-      const tab = tabsRef.current.find((entry: any) => entry.id === targetTab.id);
+      const tab = tabsRef.current.find(
+        (entry: any) => entry.id === targetTab.id,
+      );
       if (!tab || !leafIds(tab.layout).includes(targetId)) return;
 
       const replaceTarget =
         !leafIds(tab.layout).includes(sessionId) &&
-        isBlankSession(sessionsRef.current.find((entry: any) => entry.id === targetId));
+        isBlankSession(
+          sessionsRef.current.find((entry: any) => entry.id === targetId),
+        );
 
       if (replaceTarget) {
         lastPersisted.current.delete(targetId);
-        const blank = sessionsRef.current.find((entry: any) => entry.id === targetId);
+        const blank = sessionsRef.current.find(
+          (entry: any) => entry.id === targetId,
+        );
         if (blank) void forgetHarnessSession(blank.harness, targetId);
       }
 
@@ -2579,7 +2605,9 @@ export function HarnessApp({
         const title = formatSessionTitle(open.harness, trimmed);
         const updated = { ...open, title };
         setSessions((prev: any) =>
-          prev.map((session: any) => (session.id === sessionId ? updated : session)),
+          prev.map((session: any) =>
+            session.id === sessionId ? updated : session,
+          ),
         );
         persistSession(updated);
       } else {
@@ -2685,7 +2713,9 @@ export function HarnessApp({
       await deleteSession(sessionId).catch(() => undefined);
 
       if (
-        !tabsRef.current.some((tab: any) => leafIds(tab.layout).includes(sessionId))
+        !tabsRef.current.some((tab: any) =>
+          leafIds(tab.layout).includes(sessionId),
+        )
       ) {
         setSessions((prev: any) =>
           prev.filter((session: any) => session.id !== sessionId),
@@ -2721,7 +2751,9 @@ export function HarnessApp({
       }
       setComposerFocused(
         nextSessions.some((session: any) => {
-          const tab = nextTabs.find((entry: any) => entry.id === nextActiveTabId);
+          const tab = nextTabs.find(
+            (entry: any) => entry.id === nextActiveTabId,
+          );
           return !!tab && session.id === tab.focusedId;
         }),
       );
@@ -2792,12 +2824,23 @@ export function HarnessApp({
       setProjectCwd(normalized);
       setRecents(rememberProject(normalized));
       setSessions((prev: any) =>
-        prev.map((s: any) => (s.id === sessionId ? { ...s, cwd: normalized, branch: undefined, worktreeCwd: undefined } : s)),
+        prev.map((s: any) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                cwd: normalized,
+                branch: undefined,
+                worktreeCwd: undefined,
+              }
+            : s,
+        ),
       );
       // The session's project just moved in place; a group only holds tabs that
       // share one project, so drop this tab out if it no longer matches.
       setTabs((prev: any) => {
-        const tab = prev.find((t: any) => leafIds(t.layout).includes(sessionId));
+        const tab = prev.find((t: any) =>
+          leafIds(t.layout).includes(sessionId),
+        );
         // The tab's visible project follows its focused pane; a background
         // pane changing project doesn't change what the group check should see.
         if (!tab?.groupId || tab.focusedId !== sessionId) return prev;
@@ -2990,7 +3033,9 @@ export function HarnessApp({
         return updated;
       });
       setProjectTerminals((prev: any) =>
-        prev.filter((dock: any) => !sameProjectPath(dock.projectPath, normalized)),
+        prev.filter(
+          (dock: any) => !sameProjectPath(dock.projectPath, normalized),
+        ),
       );
 
       if (wasCurrent) {
@@ -3065,7 +3110,9 @@ export function HarnessApp({
         const resolved =
           (await resolveOpenablePath(gitCwdRef.current, path)) ?? path;
         rememberOpenedFile(sidebarCwdRef.current, resolved);
-        const tab = tabsRef.current.find((entry: any) => entry.id === activeTabId);
+        const tab = tabsRef.current.find(
+          (entry: any) => entry.id === activeTabId,
+        );
         if (!tab) return;
         const file = newFileTab(resolved, sidebarCwdRef.current);
         setTabs((prev: any) =>
@@ -3089,7 +3136,9 @@ export function HarnessApp({
 
   const onOpenPlan = useCallback(
     (sessionId: string, blockId: string) => {
-      const tab = tabsRef.current.find((entry: any) => entry.id === activeTabId);
+      const tab = tabsRef.current.find(
+        (entry: any) => entry.id === activeTabId,
+      );
       const session = sessionsRef.current.find(
         (entry) => entry.id === sessionId,
       );
@@ -3204,7 +3253,9 @@ export function HarnessApp({
     (sessionId: string, modelSettings: Record<string, string>) => {
       saveLastModelSettings(modelSettings);
       setSessions((prev: any) =>
-        prev.map((s: any) => (s.id === sessionId ? { ...s, modelSettings } : s)),
+        prev.map((s: any) =>
+          s.id === sessionId ? { ...s, modelSettings } : s,
+        ),
       );
     },
     [],
@@ -3324,7 +3375,10 @@ export function HarnessApp({
         HARNESS_LABEL[current.harness],
       );
       const titleSeed =
-        isFirstTurn && !current.inboxCard && !current.noteCard && placeholderTitle
+        isFirstTurn &&
+        !current.inboxCard &&
+        !current.noteCard &&
+        placeholderTitle
           ? titleFromPrompt(text, current.harness, attachments)
           : current.title;
       const visible = displayAttachments(attachments);
@@ -3337,10 +3391,6 @@ export function HarnessApp({
       const live = isLiveHarness(current.harness);
       const queuedHandoff =
         live && !pendingSwitch ? pendingHandoff(current) : null;
-
-      if (pendingSwitch && current.busy) {
-        void cancelHarnessTurn(pendingSwitch.from, sessionId);
-      }
 
       setSessions((prev: any) =>
         prev.map((s: any) => {
@@ -3401,7 +3451,8 @@ export function HarnessApp({
         void generateHarnessTitle(current.harness, {
           sessionId,
           cwd: workCwd,
-          message: harnessText || attachments.map((file: any) => file.name).join(", "),
+          message:
+            harnessText || attachments.map((file: any) => file.name).join(", "),
         })
           .then((title: any) => {
             if (!title) return;
@@ -3433,36 +3484,6 @@ export function HarnessApp({
               text: handoffCard.brief,
             }
           : queuedHandoff;
-        if (pendingSwitch) {
-          let agentText = "";
-          if (
-            shouldAskOutgoingAgent(current) &&
-            isLiveHarness(pendingSwitch.from)
-          ) {
-            try {
-              agentText = await requestOutgoingHandoff({
-                harness: pendingSwitch.from,
-                sessionId,
-                cwd: workCwd,
-                model: pendingSwitch.fromModel,
-                modelSettings: pendingSwitch.fromSettings,
-                userRequest: text,
-              });
-            } catch {
-              agentText = "";
-            }
-          }
-          if (turnGen.current.get(sessionId) !== gen) return;
-          const latest = sessionsRef.current.find((s: any) => s.id === sessionId);
-          const brief = chooseHandoffBrief(
-            agentText,
-            buildDeterministicHandoff(latest ?? current, text),
-          );
-          await forgetHarnessSession(pendingSwitch.from, sessionId);
-          if (turnGen.current.get(sessionId) !== gen) return;
-          wrap = { from: pendingSwitch.from, to: current.harness, text: brief };
-        }
-
         const revealHandoff = (brief: string) => {
           setSessions((prev: any) =>
             prev.map((s: any) => {
@@ -3471,10 +3492,44 @@ export function HarnessApp({
             }),
           );
         };
-
-        await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
-        if (turnGen.current.get(sessionId) !== gen) return;
         try {
+          if (pendingSwitch) {
+            if (current.busy) {
+              await cancelHarnessTurn(pendingSwitch.from, sessionId);
+            }
+            let agentText = "";
+            if (
+              shouldAskOutgoingAgent(current) &&
+              isLiveHarness(pendingSwitch.from)
+            ) {
+              agentText = await requestOutgoingHandoff({
+                harness: pendingSwitch.from,
+                sessionId,
+                cwd: workCwd,
+                model: pendingSwitch.fromModel,
+                modelSettings: pendingSwitch.fromSettings,
+                userRequest: text,
+              });
+            }
+            if (turnGen.current.get(sessionId) !== gen) return;
+            const latest = sessionsRef.current.find(
+              (s: any) => s.id === sessionId,
+            );
+            const brief = chooseHandoffBrief(
+              agentText,
+              buildDeterministicHandoff(latest ?? current, text),
+            );
+            await forgetHarnessSession(pendingSwitch.from, sessionId);
+            if (turnGen.current.get(sessionId) !== gen) return;
+            wrap = {
+              from: pendingSwitch.from,
+              to: current.harness,
+              text: brief,
+            };
+          }
+
+          await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
+          if (turnGen.current.get(sessionId) !== gen) return;
           const prepared = await prepareAttachments(attachments);
           const prompt = await preparePrompt(harnessText, {
             harness: current.harness,
@@ -3515,11 +3570,12 @@ export function HarnessApp({
           });
           if (turnGen.current.get(sessionId) !== gen) return;
           if (wrap) {
+            const completedBrief = wrap.text;
             setSessions((prev: any) =>
               prev.map((s: any) => {
                 if (s.id !== sessionId) return s;
                 const ready = isPreparingHandoff(s)
-                  ? completeHandoff(s, wrap.text)
+                  ? completeHandoff(s, completedBrief)
                   : s;
                 return consumeHandoff(ready);
               }),
@@ -3527,30 +3583,42 @@ export function HarnessApp({
           }
         } catch (error: unknown) {
           if (turnGen.current.get(sessionId) !== gen) return;
-          if (wrap) revealHandoff(wrap.text);
+          if (pendingSwitch || wrap) {
+            const brief =
+              wrap?.text ?? buildDeterministicHandoff(current, text);
+            setSessions((prev: any) =>
+              prev.map((s: any) => {
+                if (s.id !== sessionId || !isPreparingHandoff(s)) return s;
+                return consumeHandoff(completeHandoff(s, brief));
+              }),
+            );
+          }
           const message =
             error instanceof Error
               ? error.message
-              : `${current.harness} adapter failed`;
+              : String(error || `${current.harness} adapter failed`);
           enqueueHarnessEvent(sessionId, {
             type: "session.error",
             message,
           });
         } finally {
-          if (turnGen.current.get(sessionId) !== gen) return;
-          flushHarnessEvents();
-          setSessions((prev: any) =>
-            prev.map((s: any) => (s.id === sessionId ? stopStreaming(s) : s)),
-          );
-          playCue("turnFinished");
-          await syncSessionCheckpoint(sessionId, workCwd).catch(
-            () => undefined,
-          );
-          notifyReviewChanged(sessionId);
-          notifyGitChanged();
-          nudgeWorkspace(workCwd);
-          nudgeWatchedFiles();
-          window.setTimeout(() => nudgeWatchedFiles(), 150);
+          if (turnGen.current.get(sessionId) === gen) {
+            flushHarnessEvents();
+            setSessions((prev: any) =>
+              prev.map((s: any) =>
+                s.id === sessionId ? stopStreaming(s) : s,
+              ),
+            );
+            playCue("turnFinished");
+            await syncSessionCheckpoint(sessionId, workCwd).catch(
+              () => undefined,
+            );
+            notifyReviewChanged(sessionId);
+            notifyGitChanged();
+            nudgeWorkspace(workCwd);
+            nudgeWatchedFiles();
+            window.setTimeout(() => nudgeWatchedFiles(), 150);
+          }
         }
       })();
     },
@@ -3558,7 +3626,12 @@ export function HarnessApp({
   );
 
   const openSessionBeside = useCallback(
-    (sourceId: string, session: Session, cwd: string, focusComposer = false) => {
+    (
+      sourceId: string,
+      session: Session,
+      cwd: string,
+      focusComposer = false,
+    ) => {
       const nextSessions = [...sessionsRef.current, session];
       sessionsRef.current = nextSessions;
       setSessions(nextSessions);
@@ -3670,7 +3743,9 @@ export function HarnessApp({
     // against a discarded tree (sessionStorage also survives Vite reloads).
     const timer = window.setTimeout(() => {
       for (const id of ids) {
-        const session = sessionsRef.current.find((entry: any) => entry.id === id);
+        const session = sessionsRef.current.find(
+          (entry: any) => entry.id === id,
+        );
         if (
           !session ||
           !canAutoContinue(session) ||
@@ -3698,9 +3773,10 @@ export function HarnessApp({
         prev.map((s: any) => {
           if (s.id !== sessionId) return s;
           const stopped = stopStreaming(s);
-          return isPreparingHandoff(stopped)
-            ? completeHandoff(stopped, buildDeterministicHandoff(stopped))
-            : stopped;
+          if (!isPreparingHandoff(stopped)) return stopped;
+          return consumeHandoff(
+            completeHandoff(stopped, buildDeterministicHandoff(stopped)),
+          );
         }),
       );
       if (session) {
@@ -3931,7 +4007,11 @@ export function HarnessApp({
     const onLayoutChange = (event: Event) => {
       const layout = (event as CustomEvent<SidebarLayout>).detail;
       setTabs((prev: any) =>
-        prev.map((tab: any) => ({ ...tab, diffOpen: false, diffFocused: false })),
+        prev.map((tab: any) => ({
+          ...tab,
+          diffOpen: false,
+          diffFocused: false,
+        })),
       );
       if (layout === "classic") {
         setSidebarTab((tab) =>
@@ -3952,7 +4032,8 @@ export function HarnessApp({
       }
     };
     window.addEventListener(LAYOUT_CHANGE_EVENT, onLayoutChange);
-    return () => window.removeEventListener(LAYOUT_CHANGE_EVENT, onLayoutChange);
+    return () =>
+      window.removeEventListener(LAYOUT_CHANGE_EVENT, onLayoutChange);
   }, []);
 
   useEffect(() => {
@@ -4098,7 +4179,12 @@ export function HarnessApp({
         else run(`activate-${cmd.activate}`, () => a.onActivate(cmd.activate));
         return;
       }
-      if (!searchViewOpenRef.current && !inboxViewOpenRef.current && !notesViewOpenRef.current && handleEditorFindKey(e)) {
+      if (
+        !searchViewOpenRef.current &&
+        !inboxViewOpenRef.current &&
+        !notesViewOpenRef.current &&
+        handleEditorFindKey(e)
+      ) {
         e.stopPropagation();
         return;
       }
@@ -4187,7 +4273,9 @@ export function HarnessApp({
       listen("toggle_sidebar", () =>
         run("toggle_sidebar", actions.current.onToggleSidebar),
       ),
-      listen("toggle_zen", () => run("toggle_zen", () => toggleTranscriptZen())),
+      listen("toggle_zen", () =>
+        run("toggle_zen", () => toggleTranscriptZen()),
+      ),
       listen("open_project", () => {
         void actions.current.pickProject();
       }),
@@ -4227,10 +4315,13 @@ export function HarnessApp({
     dockDragSize.current = size;
     applyDockGridStyle(el, dock.side, size);
   }, []);
-  const commitDockSize = useCallback((size: number) => {
-    dockDragSize.current = null;
-    onProjectTerminalSize(size);
-  }, [onProjectTerminalSize]);
+  const commitDockSize = useCallback(
+    (size: number) => {
+      dockDragSize.current = null;
+      onProjectTerminalSize(size);
+    },
+    [onProjectTerminalSize],
+  );
   useLayoutEffect(() => {
     if (dockDragSize.current != null) return;
     const el = dockGridRef.current;
@@ -4275,7 +4366,13 @@ export function HarnessApp({
         onOpenTerminal={(cwd: string) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
         onFileDeleted={onFileDeleted}
-        canGoBack={tabVisitNav.canBack || searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen}
+        canGoBack={
+          tabVisitNav.canBack ||
+          searchViewOpen ||
+          settingsOpen ||
+          inboxViewOpen ||
+          notesViewOpen
+        }
         canGoForward={tabVisitNav.canForward}
         onGoBack={onRailBack}
         onGoForward={onRailForward}
@@ -4321,192 +4418,202 @@ export function HarnessApp({
               ? "hidden"
               : "flex min-h-0 min-w-0 flex-1 flex-col"
           }
-          aria-hidden={searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen}
-          inert={searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen || undefined}
+          aria-hidden={
+            searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen
+          }
+          inert={
+            searchViewOpen ||
+            settingsOpen ||
+            inboxViewOpen ||
+            notesViewOpen ||
+            undefined
+          }
         >
-        <TitleBar
-          tabs={titleTabs}
-          activeId={activeTabId}
-          cwd={sidebarCwd}
-          gitCwd={gitCwd}
-          sidebarOpen={deckLayout || sidebarOpen}
-          deckLayout={deckLayout}
-          projectRailOpen={projectRailOpen}
-          sourceControlActive={
-            deckLayout
-              ? sidebarOpen && sidebarTab === "changes"
-              : !!activeTab?.diffOpen
-          }
-          onToggleSidebar={onToggleSidebar}
-          onShowSourceControl={onToggleChanges}
-          onSelect={activateTab}
-          canGoBack={tabVisitNav.canBack}
-          canGoForward={tabVisitNav.canForward}
-          onGoBack={onVisitBack}
-          onGoForward={onVisitForward}
-          onNew={onNew}
-          onNewTerminal={onShowProjectTerminal}
-          onShowTerminal={onShowProjectTerminal}
-          projectTerminalActive={
-            !!currentProjectDock &&
-            currentProjectDock.open &&
-            currentProjectDock.pane.files.length > 0
-          }
-          onOpenSettings={onOpenSettings}
-          onOpenInbox={onOpenInbox}
-          onOpenNotes={notesEnabled ? onOpenNotes : undefined}
-          onClose={onCloseTab}
-          onReorder={onReorderTabs}
-          onGoToFile={onGoToFile}
-          onJoinTab={onJoinTab}
-          onJoinTabToGroup={onJoinTabToGroup}
-          onAddToNewGroup={onAddToNewGroup}
-          onAddToGroup={onAddToGroup}
-          onRemoveFromGroup={onRemoveFromGroup}
-          onUngroup={onUngroup}
-          onGroupNewTab={onGroupNewTab}
-          onGroupClose={onGroupCloseTabs}
-          onGroupMoveToNewWindow={onGroupMoveToNewWindow}
-          recents={recents}
-          onSelectProject={deckLayout ? onSelectProject : undefined}
-        />
+          <TitleBar
+            tabs={titleTabs}
+            activeId={activeTabId}
+            cwd={sidebarCwd}
+            gitCwd={gitCwd}
+            sidebarOpen={deckLayout || sidebarOpen}
+            deckLayout={deckLayout}
+            projectRailOpen={projectRailOpen}
+            sourceControlActive={
+              deckLayout
+                ? sidebarOpen && sidebarTab === "changes"
+                : !!activeTab?.diffOpen
+            }
+            onToggleSidebar={onToggleSidebar}
+            onShowSourceControl={onToggleChanges}
+            onSelect={activateTab}
+            canGoBack={tabVisitNav.canBack}
+            canGoForward={tabVisitNav.canForward}
+            onGoBack={onVisitBack}
+            onGoForward={onVisitForward}
+            onNew={onNew}
+            onNewTerminal={onShowProjectTerminal}
+            onShowTerminal={onShowProjectTerminal}
+            projectTerminalActive={
+              !!currentProjectDock &&
+              currentProjectDock.open &&
+              currentProjectDock.pane.files.length > 0
+            }
+            onOpenSettings={onOpenSettings}
+            onOpenInbox={onOpenInbox}
+            onOpenNotes={notesEnabled ? onOpenNotes : undefined}
+            onClose={onCloseTab}
+            onReorder={onReorderTabs}
+            onGoToFile={onGoToFile}
+            onJoinTab={onJoinTab}
+            onJoinTabToGroup={onJoinTabToGroup}
+            onAddToNewGroup={onAddToNewGroup}
+            onAddToGroup={onAddToGroup}
+            onRemoveFromGroup={onRemoveFromGroup}
+            onUngroup={onUngroup}
+            onGroupNewTab={onGroupNewTab}
+            onGroupClose={onGroupCloseTabs}
+            onGroupMoveToNewWindow={onGroupMoveToNewWindow}
+            recents={recents}
+            onSelectProject={deckLayout ? onSelectProject : undefined}
+          />
 
-        <main className="relative min-h-0 min-w-0 flex-1">
-          <div
-            ref={dockGridRef}
-            className="absolute inset-0 grid h-full min-h-0 min-w-0"
-          >
-            {projectTerminals.map((dock: any) => {
-              const show =
-                deckLayout &&
-                dock.open &&
-                sameProjectPath(dock.projectPath, projectCwd);
-              return (
-                <div
-                  key={dock.projectPath}
-                  className={
-                    show
-                      ? "h-full min-h-0 min-w-0 w-full overflow-hidden"
-                      : "hidden"
-                  }
-                  style={show ? { gridArea: "dock" } : undefined}
-                  aria-hidden={!show}
-                >
-                  <ProjectTerminalDock
-                    dock={dock}
-                    focused={show && projectTerminalFocused}
-                    onFocus={focusProjectTerminal}
-                    onHide={onHideProjectTerminal}
-                    onSideChange={onProjectTerminalSide}
-                    onSizePaint={paintDockSize}
-                    onSizeCommit={commitDockSize}
-                    onAddTerminal={() =>
-                      openProjectTerminal(active?.cwd ?? projectCwd)
-                    }
-                    onSelectTerminal={onSelectProjectTerminal}
-                    onCloseTerminal={onCloseProjectTerminal}
-                    onReorderTerminals={onReorderProjectTerminals}
-                    onTerminalMetaChange={onTerminalMetaChange}
-                  />
-                </div>
-              );
-            })}
+          <main className="relative min-h-0 min-w-0 flex-1">
             <div
-              className="relative flex min-h-0 min-w-0 flex-row"
-              style={{ gridArea: "main" }}
+              ref={dockGridRef}
+              className="absolute inset-0 grid h-full min-h-0 min-w-0"
             >
-              {classicInbox ? (
-                <InboxDetailPane
-                  cwd={sidebarCwd}
-                  recents={recents}
-                  onStart={onStartInboxItem}
-                />
-              ) : (
-                <div className="relative min-h-0 min-w-0 flex-1">
-              {tabs.map((tab: any) => (
-                <div
-                  key={tab.id}
-                  aria-hidden={tab.id !== activeTabId}
-                  className={
-                    tab.id === activeTabId
-                      ? "absolute inset-0 flex h-full min-h-0 flex-col"
-                      : "hidden"
-                  }
-                >
-                  <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                    <PaneTree
-                      visible={tab.id === activeTabId}
-                      layout={tab.layout}
-                      sessions={sessions}
-                      editorPanes={[
-                        ...tab.editorPanes,
-                        ...(tab.terminalPanes ?? []),
-                      ]}
-                      dirtyFileIds={dirtyFiles}
-                      fileErrorCounts={fileErrorCounts}
-                      focusedId={
-                        tab.id === activeTabId &&
-                        !tab.diffFocused &&
-                        !projectTerminalFocused
-                          ? tab.focusedId
-                          : ""
+              {projectTerminals.map((dock: any) => {
+                const show =
+                  deckLayout &&
+                  dock.open &&
+                  sameProjectPath(dock.projectPath, projectCwd);
+                return (
+                  <div
+                    key={dock.projectPath}
+                    className={
+                      show
+                        ? "h-full min-h-0 min-w-0 w-full overflow-hidden"
+                        : "hidden"
+                    }
+                    style={show ? { gridArea: "dock" } : undefined}
+                    aria-hidden={!show}
+                  >
+                    <ProjectTerminalDock
+                      dock={dock}
+                      focused={show && projectTerminalFocused}
+                      onFocus={focusProjectTerminal}
+                      onHide={onHideProjectTerminal}
+                      onSideChange={onProjectTerminalSide}
+                      onSizePaint={paintDockSize}
+                      onSizeCommit={commitDockSize}
+                      onAddTerminal={() =>
+                        openProjectTerminal(active?.cwd ?? projectCwd)
                       }
-                      composerFocused={
-                        composerFocused && !projectTerminalFocused
-                      }
-                      recents={recents}
-                      hideProjectPicker={deckLayout}
-                      onFocus={onFocusPane}
-                      onClose={onClosePane}
-                      onSelectFile={onSelectFileSurface}
-                      onCloseFile={onCloseFile}
-                      onReorderFiles={onReorderFiles}
-                      onFileDirtyChange={onFileDirtyChange}
-                      onFileErrorCountChange={onFileErrorCountChange}
-                      onRatio={(splitId: string, index: number, ratio: number) =>
-                        onRatio(tab.id, splitId, index, ratio)
-                      }
-                      onCwdChange={onCwdChange}
-                      onBranchChange={onBranchChange}
-                      onModelChange={onModelChange}
-                      onModelSettingsChange={onModelSettingsChange}
-                      onRuntimeModeChange={onRuntimeModeChange}
-                      onSubmit={onSubmit}
-                      onStop={onStop}
-                      onInboxCardDismiss={onInboxCardDismiss}
-                      onNoteCardDismiss={onNoteCardDismiss}
-                      onHandoffCardDismiss={onHandoffCardDismiss}
-                      onApproval={onApproval}
-                      onOpenFile={onOpenFile}
-                      editorNavigation={editorNavigation}
-                      onOpenDiff={onOpenDiff}
-                      onOpenPlan={onOpenPlan}
-                      onSecondOpinion={onSecondOpinion}
-                      onHandoff={onHandoff}
-                      onMovePane={onMovePane}
-                      onNewTerminal={onNewTerminalInSession}
+                      onSelectTerminal={onSelectProjectTerminal}
+                      onCloseTerminal={onCloseProjectTerminal}
+                      onReorderTerminals={onReorderProjectTerminals}
                       onTerminalMetaChange={onTerminalMetaChange}
-                      onAddTerminalToPane={onAddTerminalToPane}
                     />
                   </div>
-                </div>
-              ))}
-                </div>
-              )}
-            {!deckLayout && !classicInbox && activeTab?.diffOpen ? (
-              <DiffPane
-                key={gitCwd ?? ""}
-                cwd={gitCwd}
-                textHarness={pickTextHarness(active?.harness)}
-                selectedPath={selectedChangePath(activeTab, gitCwd)}
-                focused={!!activeTab.diffFocused}
-                onFocus={onFocusDiff}
-                onOpenFile={onOpenDiff}
-              />
-            ) : null}
+                );
+              })}
+              <div
+                className="relative flex min-h-0 min-w-0 flex-row"
+                style={{ gridArea: "main" }}
+              >
+                {classicInbox ? (
+                  <InboxDetailPane
+                    cwd={sidebarCwd}
+                    recents={recents}
+                    onStart={onStartInboxItem}
+                  />
+                ) : (
+                  <div className="relative min-h-0 min-w-0 flex-1">
+                    {tabs.map((tab: any) => (
+                      <div
+                        key={tab.id}
+                        aria-hidden={tab.id !== activeTabId}
+                        className={
+                          tab.id === activeTabId
+                            ? "absolute inset-0 flex h-full min-h-0 flex-col"
+                            : "hidden"
+                        }
+                      >
+                        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                          <PaneTree
+                            visible={tab.id === activeTabId}
+                            layout={tab.layout}
+                            sessions={sessions}
+                            editorPanes={[
+                              ...tab.editorPanes,
+                              ...(tab.terminalPanes ?? []),
+                            ]}
+                            dirtyFileIds={dirtyFiles}
+                            fileErrorCounts={fileErrorCounts}
+                            focusedId={
+                              tab.id === activeTabId &&
+                              !tab.diffFocused &&
+                              !projectTerminalFocused
+                                ? tab.focusedId
+                                : ""
+                            }
+                            composerFocused={
+                              composerFocused && !projectTerminalFocused
+                            }
+                            recents={recents}
+                            hideProjectPicker={deckLayout}
+                            onFocus={onFocusPane}
+                            onClose={onClosePane}
+                            onSelectFile={onSelectFileSurface}
+                            onCloseFile={onCloseFile}
+                            onReorderFiles={onReorderFiles}
+                            onFileDirtyChange={onFileDirtyChange}
+                            onFileErrorCountChange={onFileErrorCountChange}
+                            onRatio={(
+                              splitId: string,
+                              index: number,
+                              ratio: number,
+                            ) => onRatio(tab.id, splitId, index, ratio)}
+                            onCwdChange={onCwdChange}
+                            onBranchChange={onBranchChange}
+                            onModelChange={onModelChange}
+                            onModelSettingsChange={onModelSettingsChange}
+                            onRuntimeModeChange={onRuntimeModeChange}
+                            onSubmit={onSubmit}
+                            onStop={onStop}
+                            onInboxCardDismiss={onInboxCardDismiss}
+                            onNoteCardDismiss={onNoteCardDismiss}
+                            onHandoffCardDismiss={onHandoffCardDismiss}
+                            onApproval={onApproval}
+                            onOpenFile={onOpenFile}
+                            editorNavigation={editorNavigation}
+                            onOpenDiff={onOpenDiff}
+                            onOpenPlan={onOpenPlan}
+                            onSecondOpinion={onSecondOpinion}
+                            onHandoff={onHandoff}
+                            onMovePane={onMovePane}
+                            onNewTerminal={onNewTerminalInSession}
+                            onTerminalMetaChange={onTerminalMetaChange}
+                            onAddTerminalToPane={onAddTerminalToPane}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!deckLayout && !classicInbox && activeTab?.diffOpen ? (
+                  <DiffPane
+                    key={gitCwd ?? ""}
+                    cwd={gitCwd}
+                    textHarness={pickTextHarness(active?.harness)}
+                    selectedPath={selectedChangePath(activeTab, gitCwd)}
+                    focused={!!activeTab.diffFocused}
+                    onFocus={onFocusDiff}
+                    onOpenFile={onOpenDiff}
+                  />
+                ) : null}
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
         </div>
         {searchViewOpen ? (
           <SearchView
@@ -4559,7 +4666,10 @@ export function HarnessApp({
             onOpenWhatsNew={onOpenWhatsNew}
           />
         ) : null}
-        {searchViewOpen || inboxViewOpen || notesViewOpen || settingsOpen ? null : (
+        {searchViewOpen ||
+        inboxViewOpen ||
+        notesViewOpen ||
+        settingsOpen ? null : (
           <UsageFooter
             providers={usageProviders}
             session={usageSession}
@@ -4647,14 +4757,18 @@ function toTitleTab(
     (tab.editorPanes.some((pane: any) => pane.id === tab.focusedId) ||
       (tab.terminalPanes ?? []).some((pane: any) => pane.id === tab.focusedId));
   const focused =
-    sessions.find((session: any) => session.id === tab.focusedId) ?? tabSessions[0];
+    sessions.find((session: any) => session.id === tab.focusedId) ??
+    tabSessions[0];
 
   const seen = new Set<HarnessId>();
   const harnesses: HarnessId[] = [];
   const busySeen = new Set<HarnessId>();
   const busyHarnesses: HarnessId[] = [];
   const ordered = focused
-    ? [focused, ...tabSessions.filter((session: any) => session.id !== focused.id)]
+    ? [
+        focused,
+        ...tabSessions.filter((session: any) => session.id !== focused.id),
+      ]
     : tabSessions;
   for (const session of ordered) {
     if (
@@ -4696,11 +4810,15 @@ function toTitleTab(
     (tab.terminalPanes ?? []).find((pane: any) => pane.id === tab.focusedId);
   const otherPanes = [
     ...tab.editorPanes.filter((pane: any) => pane.id !== focusedPane?.id),
-    ...(tab.terminalPanes ?? []).filter((pane: any) => pane.id !== focusedPane?.id),
+    ...(tab.terminalPanes ?? []).filter(
+      (pane: any) => pane.id !== focusedPane?.id,
+    ),
   ];
   const panes = focusedPane ? [focusedPane, ...otherPanes] : otherPanes;
   for (const pane of panes) {
-    const active = pane.files.find((file: any) => file.id === pane.activeFileId);
+    const active = pane.files.find(
+      (file: any) => file.id === pane.activeFileId,
+    );
     if (active) pushFile(active);
   }
   for (const pane of panes) {

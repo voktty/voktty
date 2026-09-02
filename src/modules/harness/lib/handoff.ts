@@ -2,10 +2,10 @@ import { isEditTool } from "./harness/preview";
 import { limitSection } from "./jsonText";
 import { displayPath } from "./paths";
 import {
-  HARNESS_TITLE,
   type Block,
-  type HarnessId,
+  HARNESS_TITLE,
   type HandoffMeta,
+  type HarnessId,
   type PendingHarnessSwitch,
   type SecondOpinionMeta,
   type Session,
@@ -118,10 +118,7 @@ export function lastHandoffBlock(blocks: Block[]): Block | undefined {
 }
 
 export function isPreparingHandoff(session: Session): boolean {
-  return session.blocks.some(
-    (block) =>
-      block.role === "handoff" && block.handoff?.status === "preparing",
-  );
+  return lastHandoffBlock(session.blocks)?.handoff?.status === "preparing";
 }
 
 export function pendingHandoff(session: Session): {
@@ -289,9 +286,7 @@ export function buildDeterministicHandoff(
   }
 
   const priorAll =
-    current && users[users.length - 1] === current
-      ? users.slice(0, -1)
-      : users;
+    current && users[users.length - 1] === current ? users.slice(0, -1) : users;
   const omitted = Math.max(0, priorAll.length - MAX_PRIOR_USERS);
   const prior = priorAll.slice(-MAX_PRIOR_USERS);
 
@@ -299,8 +294,8 @@ export function buildDeterministicHandoff(
   if (omitted > 0 || prior.length > 0 || lastAssistant) {
     const lines = [
       omitted > 0 ? `(${omitted} earlier messages omitted)` : "",
-      ...prior.map((text) =>
-        `User: ${oneLine(limitSection(text, USER_LINE_LIMIT))}`,
+      ...prior.map(
+        (text) => `User: ${oneLine(limitSection(text, USER_LINE_LIMIT))}`,
       ),
       lastAssistant
         ? `Assistant: ${oneLine(limitSection(lastAssistant, ASSISTANT_LIMIT))}`
