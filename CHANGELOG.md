@@ -7,15 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-09-02
+
+### Added
+
+- Inbox rows show whether an issue or pull request is open, draft, merged, or closed. The icon changes with the status (not only the colour), and the detail header uses the same marks, so closed items are no longer the same grey as drafts. In #49 by @emircan-sahin.
+
 ### Changed
 
 - Classic layout and the zen-mode toggle are gone. The workspace is always the project rail plus scoped tabs, and the transcript always folds tool work into phases above the final answer.
 - Session folder menus show the same saturation picker as project colors, and the picker stays open.
+- Agent and Task tools read as subagent work in the transcript — "Running a subagent" while they run — instead of a generic tool row. Codex nested-agent activity shows up the same way.
 
 ### Fixed
 
 - Claude's AskUserQuestion (and the same clarifying-question flow on Cursor, Grok, and OpenCode) now opens a form above the composer. Questions come one at a time — answer or skip, then the next — instead of an Allow/Deny prompt that silently chose the first option.
 - Agent CLIs no longer leak after a quit or a crash. `cursor-agent` survived as orphaned `node` processes because quit sent SIGTERM and exited before the delayed SIGKILL could land. Quit now waits for those trees to die, and the next launch reaps leftover agent processes from a previous run. Terminals close with the app; programs you started from a terminal are left alone.
+- A Claude turn no longer looks finished while a background subagent is still running. Completion waits until those tasks settle.
+- Clearing Merged or Closed on the inbox filter no longer snaps the list back to open items a moment later. An unfiltered inbox also fetches a longer page so open work is not crowded out by closed history. In #49 by @emircan-sahin.
 
 ## [0.1.28] - 2026-09-01
 
@@ -442,7 +451,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.28...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.29...HEAD
+[0.1.29]: https://github.com/hardbeat920/monocode/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/hardbeat920/monocode/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/hardbeat920/monocode/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/hardbeat920/monocode/compare/v0.1.25...v0.1.26
