@@ -5,6 +5,7 @@ const LABELS: Record<string, string> = {
   pi: "Pi",
   opencode: "OpenCode",
   grok: "Grok",
+  freebuff: "Freebuff",
   kimi: "Kimi",
   voktty: "Voktty",
 };

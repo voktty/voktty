@@ -2,25 +2,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sent: string[] = [];
 let onLine: ((line: string) => void) | undefined;
+let onExit: ((code: number | null) => void) | undefined;
+let onStderr: ((line: string) => void) | undefined;
 
 vi.mock("./child", () => ({
   resolveCodexBinary: async () => ({ path: "/fake/codex" }),
   spawnChild: async () => undefined,
   killChild: async () => undefined,
   unwatchChild: () => undefined,
-  watchChild: (_id: string, line: (l: string) => void) => {
+  watchChild: (
+    _id: string,
+    line: (value: string) => void,
+    exit: (code: number | null) => void,
+    stderr?: (value: string) => void,
+  ) => {
     onLine = line;
+    onExit = exit;
+    onStderr = stderr;
   },
   writeChild: async (_id: string, line: string) => {
     sent.push(line);
   },
 }));
 
-const {
-  sendCodexTurn,
-  stopCodexSession,
-  __codexTestReset,
-} = await import("./codex");
+const { sendCodexTurn, stopCodexSession, __codexTestReset } = await import(
+  "./codex"
+);
+
 import type { HarnessEvent } from "./types";
 
 function parse() {
@@ -85,6 +93,8 @@ describe("codex live turn sequence", () => {
   beforeEach(() => {
     sent.length = 0;
     onLine = undefined;
+    onExit = undefined;
+    onStderr = undefined;
   });
 
   afterEach(async () => {
@@ -129,5 +139,29 @@ describe("codex live turn sequence", () => {
     });
     await turn;
     expect(settled).toBe(true);
+  });
+
+  it("includes bounded stderr context when app-server exits", async () => {
+    const turn = sendCodexTurn({
+      sessionId: "codex-live",
+      cwd: "/repo",
+      model: "codex:gpt-5.4",
+      modelSettings: {},
+      runtimeMode: "supervised",
+      text: "inspect",
+      attachments: [],
+      onEvent: () => undefined,
+    });
+
+    await waitFor(
+      () => parse().some((message) => message.method === "initialize"),
+      "initialize",
+    );
+    onStderr?.("authentication failed");
+    onExit?.(1);
+
+    await expect(turn).rejects.toThrow(
+      "Codex app-server exited: authentication failed",
+    );
   });
 });

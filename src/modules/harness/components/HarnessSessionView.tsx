@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   appendUser,
   applyHarnessEvent,
+  cancelAgyTurn,
   cancelClaudeTurn,
   cancelCodexTurn,
   cancelCursorTurn,
@@ -10,6 +11,7 @@ import {
   cancelOmpTurn,
   cancelOpenCodeTurn,
   cancelPiTurn,
+  respondAgyApproval,
   respondClaudeApproval,
   respondCodexApproval,
   respondCursorApproval,
@@ -18,6 +20,7 @@ import {
   respondOmpApproval,
   respondOpenCodeApproval,
   respondPiApproval,
+  sendAgyTurn,
   sendClaudeTurn,
   sendCodexTurn,
   sendCursorTurn,
@@ -173,6 +176,9 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
           case "fx":
             await sendFxTurn(turnInput);
             break;
+          case "gemini":
+            await sendAgyTurn(turnInput);
+            break;
         }
       } catch (err: any) {
         setSession((prev) =>
@@ -224,6 +230,9 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
       case "fx":
         void cancelFxTurn(sessionId);
         break;
+      case "gemini":
+        void cancelAgyTurn(sessionId);
+        break;
     }
     setSession((prev) => (prev ? stopStreaming(prev) : prev));
   }, []);
@@ -256,6 +265,9 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
           break;
         case "fx":
           void respondFxApproval(sessionId, requestId, decision);
+          break;
+        case "gemini":
+          void respondAgyApproval(sessionId, requestId, decision);
           break;
       }
     },

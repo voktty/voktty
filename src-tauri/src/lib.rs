@@ -4,8 +4,8 @@ pub mod modules;
 
 use modules::{
     agent, agent_history, aliases, api_client, collab, control, dap, docker, extensions, fs, git,
-    git_review, harness, history, lsp, mcp, net, pty, rdp, remote, secrets, serial, shell, tray, tunnel,
-    vibrancy, web_server, workspace,
+    git_review, harness, history, lsp, mcp, net, pty, rdp, remote, secrets, serial, shell, tray,
+    tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]
@@ -292,8 +292,9 @@ pub fn run() {
                 .unwrap_or_else(|| std::path::PathBuf::from("."))
                 .join("voktty")
                 .join("harness.db");
-            harness::session_store::SessionStore::open(db_path)
-                .unwrap_or_else(|_| harness::session_store::SessionStore::open_in_memory().expect("in-memory db"))
+            harness::session_store::SessionStore::open(db_path).unwrap_or_else(|_| {
+                harness::session_store::SessionStore::open_in_memory().expect("in-memory db")
+            })
         })
         .manage(harness::window_transfer::WindowTransferState::new())
         .invoke_handler(tauri::generate_handler![
@@ -635,7 +636,7 @@ pub fn run() {
                 // on process exit; kill explicitly.
                 tauri::RunEvent::Exit => {
                     if let Some(state) = app.try_state::<harness::host::HarnessHost>() {
-                        let _ = state.kill_all();
+                        state.kill_all();
                     }
                     if let Some(state) = app.try_state::<tunnel::TunnelState>() {
                         let _ = state.0.stop_all_tunnels();

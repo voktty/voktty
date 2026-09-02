@@ -4,6 +4,12 @@ use tauri::State;
 
 pub struct WindowTransferState(Mutex<Option<String>>);
 
+impl Default for WindowTransferState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WindowTransferState {
     pub fn new() -> Self {
         Self(Mutex::new(None))

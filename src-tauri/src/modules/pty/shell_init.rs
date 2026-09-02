@@ -318,7 +318,11 @@ fn build_remote_ssh(
         .map(|user| format!("{user}@{}", connection.host.trim()))
         .unwrap_or_else(|| connection.host.trim().to_string());
     cmd.arg(destination);
-    cmd.arg(remote_shell_command(cwd.as_deref(), blocks, Some(&connection))?);
+    cmd.arg(remote_shell_command(
+        cwd.as_deref(),
+        blocks,
+        Some(&connection),
+    )?);
     Ok(cmd)
 }
 

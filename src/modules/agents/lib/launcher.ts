@@ -37,6 +37,12 @@ export const AGENT_LAUNCHERS = [
     defaultCommand: "grok",
     supportsHooks: false,
   },
+  {
+    id: "freebuff",
+    label: "Freebuff",
+    defaultCommand: "freebuff",
+    supportsHooks: false,
+  },
 ] as const;
 
 export type AgentLauncherId = (typeof AGENT_LAUNCHERS)[number]["id"];

@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::dirs_home;
 use super::fs::expand_home;
+use crate::dirs_home;
 
 const MAX_SKILLS: usize = 300;
 const MAX_FRONTMATTER_BYTES: usize = 16 * 1024;
