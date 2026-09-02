@@ -327,115 +327,127 @@ pub fn harness_free_port() -> Result<u16, String> {
 
 #[cfg(windows)]
 fn build_exec_command(command: &str, args: &[String]) -> Command {
-    let path = Path::new(command);
-    let effective_command = if path.extension().is_none() {
-        let exe = path.with_extension("exe");
-        let js = path.with_extension("js");
-        let cmd = path.with_extension("cmd");
-        let bat = path.with_extension("bat");
-        let ps1 = path.with_extension("ps1");
-        if exe.is_file() {
-            exe.to_string_lossy().into_owned()
-        } else if js.is_file() {
-            js.to_string_lossy().into_owned()
-        } else if cmd.is_file() {
-            cmd.to_string_lossy().into_owned()
-        } else if bat.is_file() {
-            bat.to_string_lossy().into_owned()
-        } else if ps1.is_file() {
-            ps1.to_string_lossy().into_owned()
-        } else {
-            command.to_string()
-        }
+    let resolved_path = if command == "codex" {
+        resolve_codex()
+    } else if command == "claude" {
+        resolve_claude()
+    } else if command == "agy" || command == "gemini" {
+        resolve_agy()
     } else {
-        command.to_string()
+        None
     };
+
+    let resolved_path = resolved_path.or_else(|| {
+        let p = Path::new(command);
+        if p.is_file() {
+            Some(p.to_path_buf())
+        } else {
+            which_in_path(&gui_search_path(), command)
+                .or_else(|| which_in_path(&std::env::var("PATH").unwrap_or_default(), command))
+                .or_else(|| which_via_login_shell(command))
+        }
+    });
+
+    let effective_command = resolved_path
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| command.to_string());
 
     let eff_path = Path::new(&effective_command);
     let lower = effective_command.to_ascii_lowercase();
 
     if lower.ends_with(".js") || lower.ends_with(".mjs") || lower.ends_with(".cjs") {
-        let node = which_in_path(&std::env::var("PATH").unwrap_or_default(), "node")
-            .unwrap_or_else(|| PathBuf::from("node.exe"));
+        let node = resolve_node();
         let mut c = Command::new(node);
         c.arg(&effective_command);
         c.args(args);
+        apply_gui_env(&mut c);
         crate::modules::proc::hide_console(&mut c);
         c
     } else if lower.ends_with(".cmd") || lower.ends_with(".bat") {
-        // If this is an npm wrapper, find the underlying Node.js entry point to bypass cmd.exe
-        if let Some(parent) = eff_path.parent() {
-            let stem = eff_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            let npm_candidates = [
-                parent.join(format!("node_modules/@openai/{}/bin/{}.js", stem, stem)),
-                parent.join(format!("node_modules/{}/bin/{}.js", stem, stem)),
-                parent.join(format!("node_modules/{}/dist/index.js", stem)),
-                parent.join(format!("node_modules/{}/cli.mjs", stem)),
-                parent.join("node_modules/@anthropic-ai/claude-code/cli.mjs"),
-                parent.join("node_modules/@earendil-works/pi-coding-agent/bin/pi.js"),
-            ];
-            for npm_js in &npm_candidates {
-                if npm_js.is_file() {
-                    let node = which_in_path(&std::env::var("PATH").unwrap_or_default(), "node")
-                        .unwrap_or_else(|| PathBuf::from("node.exe"));
-                    let mut c = Command::new(node);
-                    c.arg(npm_js);
-                    c.args(args);
-                    crate::modules::proc::hide_console(&mut c);
-                    return c;
-                }
-            }
-        }
-
-        // If a PowerShell script exists alongside, prefer it over cmd.exe
-        let ps1 = eff_path.with_extension("ps1");
-        if ps1.is_file() {
-            let pwsh = which_in_path(&std::env::var("PATH").unwrap_or_default(), "powershell")
-                .or_else(|| which_in_path(&std::env::var("PATH").unwrap_or_default(), "pwsh"))
-                .unwrap_or_else(|| PathBuf::from("powershell.exe"));
-            let mut c = Command::new(pwsh);
-            c.args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                &ps1.to_string_lossy(),
-            ]);
+        if let Some(target_js) = extract_js_from_cmd(eff_path) {
+            let node = resolve_node();
+            let mut c = Command::new(node);
+            c.arg(target_js);
             c.args(args);
+            apply_gui_env(&mut c);
             crate::modules::proc::hide_console(&mut c);
-            return c;
+            c
+        } else {
+            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
+            let mut c = Command::new(comspec);
+            c.arg("/c");
+            c.arg(&effective_command);
+            c.args(args);
+            apply_gui_env(&mut c);
+            crate::modules::proc::hide_console(&mut c);
+            c
         }
-
-        let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
-        let mut c = Command::new(comspec);
-        c.arg("/c");
-        c.arg(&effective_command);
-        c.args(args);
-        crate::modules::proc::hide_console(&mut c);
-        c
-    } else if lower.ends_with(".ps1") {
-        let pwsh = which_in_path(&std::env::var("PATH").unwrap_or_default(), "powershell")
-            .or_else(|| which_in_path(&std::env::var("PATH").unwrap_or_default(), "pwsh"))
-            .unwrap_or_else(|| PathBuf::from("powershell.exe"));
-        let mut c = Command::new(pwsh);
-        c.args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            &effective_command,
-        ]);
-        c.args(args);
-        crate::modules::proc::hide_console(&mut c);
-        c
     } else {
         let mut c = Command::new(&effective_command);
         c.args(args);
+        apply_gui_env(&mut c);
         crate::modules::proc::hide_console(&mut c);
         c
     }
+}
+
+#[cfg(windows)]
+fn resolve_node() -> PathBuf {
+    which_in_path(&gui_search_path(), "node")
+        .or_else(|| which_in_path(&std::env::var("PATH").unwrap_or_default(), "node"))
+        .or_else(|| which_via_login_shell("node"))
+        .or_else(|| {
+            let candidates = [
+                PathBuf::from("C:\\Program Files\\nodejs\\node.exe"),
+                PathBuf::from("C:\\Program Files (x86)\\nodejs\\node.exe"),
+            ];
+            candidates.into_iter().find(|p| p.is_file())
+        })
+        .unwrap_or_else(|| PathBuf::from("node.exe"))
+}
+
+#[cfg(windows)]
+fn extract_js_from_cmd(cmd_path: &Path) -> Option<PathBuf> {
+    let parent = cmd_path.parent()?;
+
+    // 1. Inspect the .cmd file directly to extract the JS file it executes
+    if let Ok(content) = std::fs::read_to_string(cmd_path) {
+        for line in content.lines() {
+            if let Some(pos) = line.find("%dp0%\\") {
+                let rest = &line[pos + 6..];
+                let path_str: String = rest
+                    .chars()
+                    .take_while(|&ch| ch != '"' && ch != ' ' && ch != '%' && ch != '\r' && ch != '\n')
+                    .collect();
+                if !path_str.is_empty() {
+                    let candidate = parent.join(&path_str);
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Direct npm node_modules inspection by stem
+    let stem = cmd_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let npm_candidates = [
+        parent.join(format!("node_modules/@openai/{}/bin/{}.js", stem, stem)),
+        parent.join(format!("node_modules/{}/bin/{}.js", stem, stem)),
+        parent.join(format!("node_modules/{}/dist/index.js", stem)),
+        parent.join(format!("node_modules/{}/dist/cli.js", stem)),
+        parent.join(format!("node_modules/{}/cli.mjs", stem)),
+        parent.join(format!("node_modules/{}/bin/index.js", stem)),
+        parent.join("node_modules/@anthropic-ai/claude-code/cli.mjs"),
+        parent.join("node_modules/@earendil-works/pi-coding-agent/bin/pi.js"),
+    ];
+    for candidate in &npm_candidates {
+        if candidate.is_file() {
+            return Some(candidate.clone());
+        }
+    }
+
+    None
 }
 
 #[cfg(not(windows))]
@@ -991,7 +1003,6 @@ fn resolve_codex() -> Option<PathBuf> {
             candidates.push(appdata.join("npm\\node_modules\\@openai\\codex\\bin\\codex.js"));
             candidates.push(appdata.join("npm\\codex.cmd"));
             candidates.push(appdata.join("npm\\codex.exe"));
-            candidates.push(appdata.join("npm\\codex.ps1"));
         }
         if let Some(localappdata) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
             candidates.push(localappdata.join("Programs\\codex\\codex.exe"));
@@ -1062,7 +1073,6 @@ fn resolve_claude() -> Option<PathBuf> {
             candidates.push(appdata.join("npm\\node_modules\\@anthropic-ai\\claude-code\\cli.mjs"));
             candidates.push(appdata.join("npm\\claude.cmd"));
             candidates.push(appdata.join("npm\\claude.exe"));
-            candidates.push(appdata.join("npm\\claude.ps1"));
         }
         if let Some(localappdata) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
             candidates.push(localappdata.join("Programs\\claude\\claude.exe"));
@@ -1500,7 +1510,7 @@ fn which_via_login_shell(name: &str) -> Option<PathBuf> {
 fn which_in_path(path: &str, name: &str) -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        let has_known_ext = [".exe", ".cmd", ".bat", ".ps1"]
+        let has_known_ext = [".exe", ".cmd", ".bat"]
             .iter()
             .any(|ext| name.to_ascii_lowercase().ends_with(ext));
 
@@ -1511,7 +1521,7 @@ fn which_in_path(path: &str, name: &str) -> Option<PathBuf> {
                     return Some(candidate);
                 }
             } else {
-                for ext in [".exe", ".cmd", ".bat", ".ps1"] {
+                for ext in [".exe", ".cmd", ".bat"] {
                     let candidate = dir.join(format!("{name}{ext}"));
                     if candidate.is_file() {
                         return Some(candidate);
@@ -2164,5 +2174,18 @@ mod exec_allowlist_tests {
         assert!(!exec_args_allowed(&args(&["--version", "--json"])));
         assert!(!exec_args_allowed(&args(&["-c", "id"])));
         assert!(!exec_args_allowed(&args(&["agent", "list", "--json"])));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_windows_exec_no_powershell_and_spawns_codex() {
+        let mut cmd = build_exec_command("codex", &[String::from("--version")]);
+        let output = cmd.output().expect("Failed to execute codex --version");
+        assert!(output.status.success(), "Codex execution must succeed: {:?}", output);
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            out_str.contains("codex-cli"),
+            "Expected codex-cli output, got: {out_str}"
+        );
     }
 }
