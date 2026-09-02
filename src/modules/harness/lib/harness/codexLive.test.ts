@@ -1,0 +1,133 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const sent: string[] = [];
+let onLine: ((line: string) => void) | undefined;
+
+vi.mock("./child", () => ({
+  resolveCodexBinary: async () => ({ path: "/fake/codex" }),
+  spawnChild: async () => undefined,
+  killChild: async () => undefined,
+  unwatchChild: () => undefined,
+  watchChild: (_id: string, line: (l: string) => void) => {
+    onLine = line;
+  },
+  writeChild: async (_id: string, line: string) => {
+    sent.push(line);
+  },
+}));
+
+const {
+  sendCodexTurn,
+  stopCodexSession,
+  __codexTestReset,
+} = await import("./codex");
+import type { HarnessEvent } from "./types";
+
+function parse() {
+  return sent.map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+function reply(id: number, result: unknown) {
+  onLine!(JSON.stringify({ id, result }));
+}
+
+function notify(method: string, params: unknown) {
+  onLine!(JSON.stringify({ method, params }));
+}
+
+const waitFor = async (pred: () => boolean, label: string) => {
+  for (let i = 0; i < 200; i++) {
+    if (pred()) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error(
+    `timed out waiting for ${label}; sent=${JSON.stringify(parse().map((m) => m.method ?? `reply:${m.id}`))}`,
+  );
+};
+
+async function startTurn(sessionId: string) {
+  const events: HarnessEvent[] = [];
+  const turn = sendCodexTurn({
+    sessionId,
+    cwd: "/repo",
+    model: "codex:gpt-5.4",
+    modelSettings: {},
+    runtimeMode: "supervised",
+    text: "summarize the changelog",
+    attachments: [],
+    onEvent: (event) => events.push(event),
+  });
+
+  await waitFor(
+    () => parse().some((m) => m.method === "initialize"),
+    "initialize",
+  );
+  reply(parse().find((m) => m.method === "initialize")!.id as number, {});
+  await waitFor(
+    () => parse().some((m) => m.method === "thread/start"),
+    "thread/start",
+  );
+  reply(parse().find((m) => m.method === "thread/start")!.id as number, {
+    thread: { id: "thr_1" },
+  });
+  await waitFor(
+    () => parse().some((m) => m.method === "turn/start"),
+    "turn/start",
+  );
+  reply(parse().find((m) => m.method === "turn/start")!.id as number, {
+    turn: { id: "turn_1", status: "inProgress" },
+  });
+  notify("turn/started", { turn: { id: "turn_1", status: "inProgress" } });
+  return { events, turn };
+}
+
+describe("codex live turn sequence", () => {
+  beforeEach(() => {
+    sent.length = 0;
+    onLine = undefined;
+  });
+
+  afterEach(async () => {
+    vi.useRealTimers();
+    await stopCodexSession("codex-live");
+    __codexTestReset();
+  });
+
+  it("stays busy after an agent message until turn/completed", async () => {
+    const { events, turn } = await startTurn("codex-live");
+    let settled = false;
+    void turn.then(() => {
+      settled = true;
+    });
+
+    notify("item/completed", {
+      item: {
+        id: "msg_1",
+        type: "agentMessage",
+        text: "I'll inspect the changelog first.",
+      },
+    });
+
+    vi.useFakeTimers();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(settled).toBe(false);
+    vi.useRealTimers();
+
+    notify("item/started", {
+      item: {
+        id: "cmd_1",
+        type: "commandExecution",
+        command: "git log -1",
+        status: "inProgress",
+      },
+    });
+    expect(settled).toBe(false);
+    expect(events.some((event) => event.type === "tool.started")).toBe(true);
+
+    notify("turn/completed", {
+      turn: { id: "turn_1", status: "completed" },
+    });
+    await turn;
+    expect(settled).toBe(true);
+  });
+});

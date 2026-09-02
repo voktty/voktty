@@ -57,11 +57,14 @@ export const ConsoleUptimeWidget = memo(function ConsoleUptimeWidget({
   const weekly = getWeeklyBreakdown(history);
   const topPaths = getTopActivePaths(history, 4);
 
+  const [open, setOpen] = useState(false);
+
   return (
-    <HoverCard openDelay={200} closeDelay={150}>
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={200} closeDelay={150}>
       <HoverCardTrigger asChild>
         <button
           type="button"
+          onClick={() => setOpen((v) => !v)}
           aria-label={`${t("statusbar.uptime.title")}: ${sessionHours}H`}
           className={cn(
             "group/uptime inline-flex h-5.5 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-all shadow-none select-none cursor-pointer active:scale-97",

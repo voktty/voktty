@@ -14,6 +14,7 @@ export type SettingsTab =
   | "mcp"
   | "vault"
   | "aliases"
+  | "harness"
   | "about";
 
 export async function openSettingsWindow(tab?: SettingsTab): Promise<void> {

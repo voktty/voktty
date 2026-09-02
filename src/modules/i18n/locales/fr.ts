@@ -1,4 +1,4 @@
-import { en, mergeLocale, type TranslationSchema } from "./en";
+﻿import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const frBase = mergeLocale(en, {
   common: {
@@ -74,6 +74,7 @@ const frBase = mergeLocale(en, {
       docker: "Docker",
       vault: "Coffre-fort",
       aliases: "Alias",
+      harness: "Agent Harness",
       about: "À propos",
     },
     general: {
@@ -1089,6 +1090,7 @@ const frBase = mergeLocale(en, {
       spacesOverview: "Espaces : Aperçu",
       newSpace: "Nouvel espace",
       switchToSpace: "Basculer vers {name}",
+      openHarness: "Agent Harness",
       newTerminal: "Nouveau terminal",
       dropPrompt: "Déposez le fichier ou dossier ici pour l'ouvrir",
       dropSubtitle:
@@ -1555,6 +1557,7 @@ const frBase = mergeLocale(en, {
       tabNewBlock: "Nouveau terminal de blocs",
       tabNewPrivate: "Nouveau terminal privé",
       tabNewPreview: "Nouvel aperçu web",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "Nouvel onglet d’éditeur",
       tabClose: "Fermer l’onglet ou le panneau",
       paneSplitRight: "Diviser le panneau à droite",
@@ -1715,6 +1718,7 @@ const frBase = mergeLocale(en, {
       openFile: "Ouvrir un fichier",
       openFolder: "Ouvrir un dossier",
       newFile: "Nouveau fichier",
+      openHarness: "Agent Harness",
       newTerminal: "Nouveau terminal",
       dropPrompt: "Déposez le fichier ou dossier ici pour l'ouvrir",
       dropSubtitle:

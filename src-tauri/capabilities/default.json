@@ -25,6 +25,7 @@
     "os:default",
     "notification:default",
     "store:default",
-    "process:default"
+    "process:default",
+    "dialog:default"
   ]
 }

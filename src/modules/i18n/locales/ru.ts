@@ -1,4 +1,4 @@
-import { en, mergeLocale, type TranslationSchema } from "./en";
+﻿import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const ruBase = mergeLocale(en, {
   common: {
@@ -74,6 +74,7 @@ const ruBase = mergeLocale(en, {
       docker: "Docker",
       vault: "Хранилище",
       aliases: "Псевдонимы",
+      harness: "Agent Harness",
       about: "О программе",
     },
     general: {
@@ -1074,6 +1075,7 @@ const ruBase = mergeLocale(en, {
       spacesOverview: "Пространства: Обзор",
       newSpace: "Новое пространство",
       switchToSpace: "Переключиться на {name}",
+      openHarness: "Agent Harness",
       newTerminal: "Новый терминал",
       dropPrompt: "Перетащите файл или папку сюда, чтобы открыть",
       dropSubtitle: "Файлы откроются в редакторе, а папки — в терминале",
@@ -1527,6 +1529,7 @@ const ruBase = mergeLocale(en, {
       tabNewBlock: "Новый блочный терминал",
       tabNewPrivate: "Новый приватный терминал",
       tabNewPreview: "Новый веб-просмотр",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "Новая вкладка редактора",
       tabClose: "Закрыть вкладку или панель",
       paneSplitRight: "Разделить панель вправо",
@@ -1684,6 +1687,7 @@ const ruBase = mergeLocale(en, {
       openFile: "Открыть файл",
       openFolder: "Открыть папку",
       newFile: "Новый файл",
+      openHarness: "Agent Harness",
       newTerminal: "Новый терминал",
       dropPrompt: "Перетащите файл или папку сюда, чтобы открыть",
       dropSubtitle: "Файлы откроются в редакторе, а папки — в терминале",

@@ -69,5 +69,11 @@ describe("toolsConfigFile", () => {
       (t) => t.id === "uipro-init-gemini",
     );
     expect(uiproInit?.command).toBe("uipro init --ai gemini");
+
+    const eccUniversal = DEFAULT_PROJECT_TOOLS.find(
+      (t) => t.id === "ecc-universal-install",
+    );
+    expect(eccUniversal?.command).toBe("npx ecc-universal install --guided");
+    expect(eccUniversal?.recommended).toBe(true);
   });
 });

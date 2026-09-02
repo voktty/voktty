@@ -4,7 +4,7 @@ pub mod modules;
 
 use modules::{
     agent, agent_history, aliases, api_client, collab, control, dap, docker, extensions, fs, git,
-    git_review, history, lsp, mcp, net, pty, rdp, remote, secrets, serial, shell, tray, tunnel,
+    git_review, harness, history, lsp, mcp, net, pty, rdp, remote, secrets, serial, shell, tray, tunnel,
     vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,6 +15,32 @@ use tauri::{Emitter, Manager, WindowEvent};
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri_plugin_window_state::StateFlags;
+
+pub(crate) fn dirs_home() -> Option<String> {
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = home.to_string_lossy().into_owned();
+        if !home.is_empty() {
+            return Some(home);
+        }
+    }
+    if let Some(userprofile) = std::env::var_os("USERPROFILE") {
+        let up = userprofile.to_string_lossy().into_owned();
+        if !up.is_empty() {
+            return Some(up);
+        }
+    }
+    None
+}
+
+pub(crate) struct PasswdIdentity {
+    pub home: String,
+    pub user: String,
+    pub shell: String,
+}
+
+pub(crate) fn passwd_identity() -> Option<PasswdIdentity> {
+    None
+}
 
 #[derive(Default)]
 struct ExitCoordinator(AtomicBool);
@@ -186,6 +212,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |_app| {
             if let Err(error) = control::start(_app.handle().clone(), control_for_setup.clone()) {
                 log::warn!("could not start Voktty control server: {error}");
@@ -252,6 +279,23 @@ pub fn run() {
         .manage(mcp::McpManagerState::default())
         .manage(agent_history::AgentHistoryState::new())
         .manage(git_review::GitReviewState::default())
+        .manage(harness::host::HarnessHost::new())
+        .manage({
+            let checkpoints_dir = dirs::data_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("voktty")
+                .join("checkpoints");
+            harness::checkpoint::CheckpointStore::new(checkpoints_dir)
+        })
+        .manage({
+            let db_path = dirs::data_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("voktty")
+                .join("harness.db");
+            harness::session_store::SessionStore::open(db_path)
+                .unwrap_or_else(|_| harness::session_store::SessionStore::open_in_memory().expect("in-memory db"))
+        })
+        .manage(harness::window_transfer::WindowTransferState::new())
         .invoke_handler(tauri::generate_handler![
             bootstrap_status,
             launch::launch_bootstrap,
@@ -482,6 +526,106 @@ pub fn run() {
             git_review::git_review_get_comments,
             git_review::git_review_delete_comment,
             git_review::git_review_update_comment,
+            harness::host::harness_resolve_cursor,
+            harness::host::harness_resolve_codex,
+            harness::host::harness_resolve_opencode,
+            harness::host::harness_resolve_claude,
+            harness::host::harness_resolve_omp,
+            harness::host::harness_resolve_pi,
+            harness::host::harness_resolve_fx,
+            harness::host::harness_resolve_grok,
+            harness::host::harness_resolve_gemini,
+            harness::host::harness_free_port,
+            harness::host::harness_spawn,
+            harness::host::harness_write,
+            harness::host::harness_kill,
+            harness::host::harness_kill_all,
+            harness::host::harness_http,
+            harness::host::harness_sse_open,
+            harness::host::harness_sse_close,
+            harness::host::harness_exec,
+            harness::checkpoint::session_checkpoint_ensure,
+            harness::checkpoint::session_checkpoint_capture,
+            harness::checkpoint::session_checkpoint_sync,
+            harness::checkpoint::session_checkpoint_status,
+            harness::checkpoint::session_checkpoint_stats,
+            harness::checkpoint::session_checkpoint_undo,
+            harness::checkpoint::session_checkpoint_keep,
+            harness::session_store::session_upsert,
+            harness::session_store::session_list_by_project,
+            harness::session_store::session_search,
+            harness::session_store::session_get,
+            harness::session_store::external_history_list_projects,
+            harness::session_store::session_delete,
+            harness::session_store::session_set_archived,
+            harness::session_store::session_set_pinned,
+            harness::session_store::session_set_in_flight,
+            harness::session_store::session_list_in_flight,
+            harness::session_store::session_take_in_flight,
+            harness::session_store::workspace_set_snapshot,
+            harness::session_store::workspace_get_snapshot,
+            harness::notes::notes_list,
+            harness::notes::notes_get,
+            harness::notes::notes_upsert,
+            harness::notes::notes_delete,
+            harness::skills::list_skills,
+            harness::rate_limits::fetch_claude_usage,
+            harness::fs::git_branches,
+            harness::fs::git_checkout,
+            harness::fs::git_create_branch,
+            harness::fs::git_stash,
+            harness::fs::create_path,
+            harness::fs::rename_path,
+            harness::fs::delete_path,
+            harness::fs::copy_path,
+            harness::fs::move_path,
+            harness::fs::reveal_path,
+            harness::fs::clone_repo,
+            harness::fs::read_file_preview,
+            harness::fs::stat_files,
+            harness::fs::inspect_paths,
+            harness::fs::read_file_base64,
+            harness::fs::write_attachment,
+            harness::fs::read_text_file,
+            harness::fs::write_text_file,
+            harness::fs::list_dir,
+            harness::fs::list_project_files,
+            harness::fs::git_diff_stats,
+            harness::fs::git_diff_index,
+            harness::fs::git_file_diff,
+            harness::fs::git_stage_file,
+            harness::fs::git_stage_contents,
+            harness::fs::git_unstage_file,
+            harness::fs::git_discard_file,
+            harness::fs::git_stage_all,
+            harness::fs::git_unstage_all,
+            harness::fs::harness_git_commit,
+            harness::fs::git_staged_context,
+            harness::fs::harness_git_push,
+            harness::fs::git_pull,
+            harness::fs::git_sync,
+            harness::fs::git_range_context,
+            harness::fs::git_pr_status,
+            harness::fs::git_pr_create,
+            harness::fs::git_github_repo,
+            harness::fs::git_github_work_items,
+            harness::fs::git_github_work_item_details,
+            harness::fs::git_github_work_item_thread,
+            harness::fs::git_github_work_item_comment,
+            harness::fs::git_github_pr_diff,
+            harness::linear::linear_status,
+            harness::linear::linear_set_token,
+            harness::linear::linear_list_teams,
+            harness::linear::linear_list_issues,
+            harness::linear::linear_issue_details,
+            harness::linear::linear_issue_thread,
+            harness::linear::linear_issue_comment,
+            harness::search::search_project,
+            harness::cursor_store::cursor_tool_calls,
+            harness::project_logo::save_project_logo,
+            harness::project_logo::remove_project_logo,
+            harness::window_transfer::stage_window_transfer,
+            harness::window_transfer::take_window_transfer,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -490,6 +634,9 @@ pub fn run() {
                 // Servers exit on stdin EOF, but destructors are not guaranteed
                 // on process exit; kill explicitly.
                 tauri::RunEvent::Exit => {
+                    if let Some(state) = app.try_state::<harness::host::HarnessHost>() {
+                        let _ = state.kill_all();
+                    }
                     if let Some(state) = app.try_state::<tunnel::TunnelState>() {
                         let _ = state.0.stop_all_tunnels();
                     }

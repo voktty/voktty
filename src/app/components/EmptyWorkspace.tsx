@@ -5,6 +5,7 @@ import {
   File02Icon,
   FileEditIcon,
   FolderOpenIcon,
+  SparklesIcon,
   Upload01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -16,6 +17,7 @@ type Props = {
   onOpenFolder?: () => void;
   onNewFile?: () => void;
   onNewTerminal: () => void;
+  onOpenHarness?: () => void;
   onDropPath?: (path: string) => void;
 };
 
@@ -25,6 +27,7 @@ export function EmptyWorkspace({
   onOpenFolder,
   onNewFile,
   onNewTerminal,
+  onOpenHarness,
   onDropPath,
 }: Props) {
   const { t } = useTranslation();
@@ -104,7 +107,7 @@ export function EmptyWorkspace({
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground max-w-md">
           {t("workspace.empty.description", { project: label })}
         </p>
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-xl">
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full max-w-2xl">
           <button
             type="button"
             onClick={onOpenFile}
@@ -153,6 +156,27 @@ export function EmptyWorkspace({
               {modKey}T
             </kbd>
           </button>
+
+          {onOpenHarness && (
+            <button
+              type="button"
+              onClick={onOpenHarness}
+              className="group flex items-center justify-between gap-2.5 h-12 px-3.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-foreground text-xs font-semibold border border-violet-500/30 hover:border-violet-500/50 transition-all active:scale-[0.98] shadow-xs"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <HugeiconsIcon
+                  icon={SparklesIcon}
+                  size={17}
+                  strokeWidth={2}
+                  className="shrink-0 text-violet-400 group-hover:text-violet-300"
+                />
+                <span className="truncate">{t("workspace.empty.openHarness") || "Agent Harness"}</span>
+              </div>
+              <kbd className="shrink-0 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-mono text-violet-400/90 border border-violet-500/30">
+                {modKey}⇧D
+              </kbd>
+            </button>
+          )}
         </div>
         {onNewFile && (
           <button

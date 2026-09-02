@@ -112,6 +112,7 @@ type Props = {
   onNewPreview: () => void;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
+  onNewHarness?: () => void;
   onNewRdp?: (options?: {
     host?: string;
     port?: number;
@@ -173,6 +174,7 @@ export function TabBar({
   onNewPreview,
   onNewEditor,
   onNewApiClient,
+  onNewHarness,
   onNewRdp,
   onConnectRemote,
   onOpenFile,
@@ -1146,6 +1148,7 @@ export function TabBar({
           onNewPreview={onNewPreview}
           onNewEditor={onNewEditor}
           onNewApiClient={onNewApiClient}
+          onNewHarness={onNewHarness}
           onNewRdp={onNewRdp}
           onConnectRemote={onConnectRemote}
           onOpenFile={onOpenFile}
@@ -1354,6 +1357,16 @@ export function TabIcon({
         size={14}
         strokeWidth={2}
         className="shrink-0 text-emerald-400"
+      />
+    );
+  }
+  if (tab.kind === "harness") {
+    return (
+      <HugeiconsIcon
+        icon={SparklesIcon}
+        size={14}
+        strokeWidth={2}
+        className="shrink-0 text-violet-400"
       />
     );
   }

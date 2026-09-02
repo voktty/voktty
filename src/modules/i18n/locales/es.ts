@@ -1,4 +1,4 @@
-import type { TranslationSchema } from "./en";
+﻿import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
   common: {
@@ -86,6 +86,7 @@ export const es: TranslationSchema = {
       mcp: "MCP",
       vault: "Bóveda",
       aliases: "Alias",
+      harness: "Agent Harness",
       about: "Acerca de",
     },
     general: {
@@ -1485,6 +1486,11 @@ export const es: TranslationSchema = {
       description:
         "Inicializa UI Pro con Gemini AI para creación y prototipado rápido.",
     },
+    eccUniversalInstall: {
+      name: "ECC Universal (ecc-universal install)",
+      description:
+        "Sistema de optimización de rendimiento para agentes: habilidades, instintos, memoria, seguridad y desarrollo enfocado en investigación.",
+    },
     agentsSkillsInit: {
       name: "Estructura de skills de agentes",
       description:
@@ -1620,6 +1626,7 @@ export const es: TranslationSchema = {
       extractFocusedSpaceMember: "Espacios: sacar miembro enfocado",
       moveFocusedSpaceMember: "Espacios: mover miembro enfocado...",
       closeFocusedSpaceMember: "Espacios: cerrar miembro enfocado",
+      openHarness: "Agent Harness",
       newTerminal: "Nueva terminal",
       dropPrompt: "Suelta el archivo o carpeta aquí para abrirlo",
       dropSubtitle:
@@ -2538,6 +2545,7 @@ export const es: TranslationSchema = {
       tabNewPrivate: "Nueva terminal privada",
       tabNewPreview: "Nueva vista previa web",
       tabNewApiClient: "Nuevo Cliente API y Sandbox",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "Nueva pestaña del editor",
       tabClose: "Cerrar pestaña o panel",
       paneSplitRight: "Dividir panel a la derecha",
@@ -2710,6 +2718,7 @@ export const es: TranslationSchema = {
       openFile: "Abrir archivo",
       openFolder: "Abrir carpeta",
       newFile: "Nuevo archivo",
+      openHarness: "Agent Harness",
       newTerminal: "Nueva terminal",
       dropPrompt: "Suelta el archivo o carpeta aquí para abrirlo",
       dropSubtitle:

@@ -22,6 +22,7 @@ import {
   ServerStack03Icon,
   Settings01Icon,
   SourceCodeIcon,
+  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { SettingsSearch } from "./components/SettingsSearch";
@@ -52,6 +53,11 @@ const ShortcutsSection = React.lazy(() =>
 const ModelsSection = React.lazy(() =>
   import("./sections/ModelsSection").then((m) => ({
     default: m.ModelsSection,
+  })),
+);
+const AgentsSection = React.lazy(() =>
+  import("./sections/AgentsSection").then((m) => ({
+    default: m.AgentsSection,
   })),
 );
 const ExtensionsSection = React.lazy(() =>
@@ -94,6 +100,11 @@ const AboutSection = React.lazy(() =>
     default: m.AboutSection,
   })),
 );
+const HarnessSection = React.lazy(() =>
+  import("./sections/HarnessSection").then((m) => ({
+    default: m.HarnessSection,
+  })),
+);
 
 const TABS: {
   id: SettingsTab;
@@ -105,6 +116,7 @@ const TABS: {
   { id: "themes", icon: PaintBoardIcon, component: ThemesSection },
   { id: "shortcuts", icon: KeyboardIcon, component: ShortcutsSection },
   { id: "models", icon: AiScanIcon, component: ModelsSection },
+  { id: "agents", icon: SparklesIcon, component: AgentsSection },
   { id: "extensions", icon: PackageIcon, component: ExtensionsSection },
   { id: "ssh", icon: ServerStack01Icon, component: SshSection },
   { id: "rdp", icon: ComputerIcon, component: RdpSection },
@@ -112,6 +124,7 @@ const TABS: {
   { id: "mcp", icon: ServerStack03Icon, component: McpSection },
   { id: "vault", icon: Key01Icon, component: VaultSection },
   { id: "aliases", icon: CommandLineIcon, component: AliasesSection },
+  { id: "harness", icon: AiScanIcon, component: HarnessSection },
   { id: "about", icon: InformationCircleIcon, component: AboutSection },
 ];
 
