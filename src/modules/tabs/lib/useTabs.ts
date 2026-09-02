@@ -188,6 +188,14 @@ export type ApiClientTab = TabBase & {
   title: string;
 };
 
+export type HarnessTab = TabBase & {
+  id: number;
+  kind: "harness";
+  title: string;
+  sessionId?: string;
+  cwd?: string;
+};
+
 export type Tab =
   | TerminalTab
   | EditorTab
@@ -198,7 +206,8 @@ export type Tab =
   | GitHistoryTab
   | GitCommitFileDiffTab
   | RdpTab
-  | ApiClientTab;
+  | ApiClientTab
+  | HarnessTab;
 
 export type TabPatch = Partial<{
   title: string;
@@ -1569,6 +1578,35 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return id;
   }, []);
 
+  const newHarnessTab = useCallback((spaceId?: string, cwd?: string, sessionId?: string) => {
+    const targetSpace = spaceId ?? activeSpaceIdRef.current;
+    const curr = tabsRef.current;
+    const existing = curr.find(
+      (t): t is HarnessTab => t.kind === "harness" && t.spaceId === targetSpace,
+    );
+    if (existing) {
+      setActiveId(existing.id);
+      return existing.id;
+    }
+    const id = nextIdRef.current++;
+    const nextTabs: Tab[] = [
+      ...curr,
+      {
+        id,
+        ...createTabIdentity(targetSpace),
+        kind: "harness",
+        spaceId: targetSpace,
+        title: "Agent Development",
+        cwd,
+        sessionId,
+      },
+    ];
+    tabsRef.current = nextTabs;
+    setTabs(nextTabs);
+    setActiveId(id);
+    return id;
+  }, []);
+
   const closeTab = useCallback((id: number, preferredNextId?: number | null) => {
     const editor = tabsRef.current.find(
       (tab): tab is EditorTab =>
@@ -1976,6 +2014,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     newMarkdownTab,
     newRdpTab,
     newApiClientTab,
+    newHarnessTab,
     setMarkdownView,
     openAiDiffTab,
     openGitDiffTab,

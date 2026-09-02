@@ -12,6 +12,7 @@ pub mod extensions;
 pub mod fs;
 pub mod git;
 pub mod git_review;
+pub mod harness;
 pub mod history;
 pub mod lsp;
 pub mod mcp;

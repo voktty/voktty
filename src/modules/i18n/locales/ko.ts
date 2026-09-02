@@ -1,4 +1,4 @@
-import { en, mergeLocale, type TranslationSchema } from "./en";
+﻿import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const koBase = mergeLocale(en, {
   common: {
@@ -74,6 +74,7 @@ const koBase = mergeLocale(en, {
       docker: "Docker",
       vault: "보관함",
       aliases: "별칭",
+      harness: "Agent Harness",
       about: "정보",
     },
     general: {
@@ -1040,6 +1041,7 @@ const koBase = mergeLocale(en, {
       spacesOverview: "스페이스: 개요",
       newSpace: "새 스페이스",
       switchToSpace: "{name}(으)로 전환",
+      openHarness: "Agent Harness",
       newTerminal: "새 터미널",
       dropPrompt: "파일 또는 폴더를 여기에 끌어다 놓아 열기",
       dropSubtitle: "파일은 편집기에서 열리고 폴더는 터미널에서 열립니다",
@@ -1487,6 +1489,7 @@ const koBase = mergeLocale(en, {
       tabNewBlock: "새 블록 터미널",
       tabNewPrivate: "새 비공개 터미널",
       tabNewPreview: "새 웹 미리보기",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "새 편집기 탭",
       tabClose: "탭 또는 패널 닫기",
       paneSplitRight: "패널 오른쪽으로 분할",
@@ -1646,6 +1649,7 @@ const koBase = mergeLocale(en, {
       openFile: "파일 열기",
       openFolder: "폴더 열기",
       newFile: "새 파일",
+      openHarness: "Agent Harness",
       newTerminal: "새 터미널",
       dropPrompt: "파일 또는 폴더를 여기에 끌어다 놓아 열기",
       dropSubtitle: "파일은 편집기에서 열리고 폴더는 터미널에서 열립니다",

@@ -35,6 +35,7 @@ export {
   type GitCommitFileDiffTab,
   type RdpTab,
   type ApiClientTab,
+  type HarnessTab,
   type AiDiffStatus,
   type TabPatch,
   type OpenFileTabOptions,

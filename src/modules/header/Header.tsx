@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { WindowControls } from "@/components/WindowControls";
 import { cn } from "@/lib/utils";
-import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
+import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS, fmtShortcut, MOD_KEY, SHIFT_KEY } from "@/lib/platform";
 import { NotificationBell } from "@/modules/agents";
 import type { AgentLaunchRequest } from "@/modules/agents/lib/launcher";
 import { useTranslation } from "@/modules/i18n";
@@ -21,6 +21,7 @@ import {
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SidebarRightIcon,
+  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -38,6 +39,7 @@ type Props = {
   onNewPreview: () => void;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
+  onNewHarness?: () => void;
   onNewRdp?: (options?: {
     host?: string;
     port?: number;
@@ -111,6 +113,7 @@ export function Header({
   onNewPreview,
   onNewEditor,
   onNewApiClient,
+  onNewHarness,
   onNewRdp,
   onConnectRemote,
   onOpenFile,
@@ -258,12 +261,32 @@ export function Header({
           />
         </Button>
 
-        {!IS_MAC && (
-          <NotificationBell
-            onActivate={onActivateAgent}
-            onActivateLocal={onActivateLocalAgent}
-            onOpenDiff={onOpenDiff}
-          />
+        {onNewHarness && (
+          <Button
+            onClick={onNewHarness}
+            variant="ghost"
+            size="icon-sm"
+            title={`Agent Development Harness (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+            aria-label="Agent Development Harness"
+            className={cn(
+              "shrink-0 rounded-md transition-colors",
+              tabs.some((t) => t.id === activeId && t.kind === "harness")
+                ? "bg-foreground/[0.07] text-violet-400 shadow-xs hover:bg-foreground/[0.1] hover:text-violet-300"
+                : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground",
+            )}
+          >
+            <HugeiconsIcon
+              icon={SparklesIcon}
+              size={15}
+              strokeWidth={1.75}
+              className={cn(
+                "transition-colors",
+                tabs.some((t) => t.id === activeId && t.kind === "harness")
+                  ? "text-violet-400"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            />
+          </Button>
         )}
       </div>
 
@@ -306,6 +329,7 @@ export function Header({
               onNewPreview={onNewPreview}
               onNewEditor={onNewEditor}
               onNewApiClient={onNewApiClient}
+              onNewHarness={onNewHarness}
               onNewRdp={onNewRdp}
               onConnectRemote={onConnectRemote}
               onShareTerminal={onShareTerminal}
@@ -322,29 +346,29 @@ export function Header({
         <div data-tauri-drag-region className="h-full min-w-2 flex-1" />
       </div>
 
-      {!hideTabStyleToggle && (
-        <Button
-          onClick={onToggleTabStyle}
-          title={
-            tabStyle === "horizontal"
-              ? t("header.switchToVerticalTabs")
-              : t("header.switchToHorizontalTabs")
-          }
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <HugeiconsIcon icon={SidebarRightIcon} size={16} strokeWidth={1.75} />
-        </Button>
-      )}
-
-      {IS_MAC && (
+      <div className="flex shrink-0 items-center gap-1">
         <NotificationBell
           onActivate={onActivateAgent}
           onActivateLocal={onActivateLocalAgent}
           onOpenDiff={onOpenDiff}
         />
-      )}
+
+        {!hideTabStyleToggle && (
+          <Button
+            onClick={onToggleTabStyle}
+            title={
+              tabStyle === "horizontal"
+                ? t("header.switchToVerticalTabs")
+                : t("header.switchToHorizontalTabs")
+            }
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <HugeiconsIcon icon={SidebarRightIcon} size={16} strokeWidth={1.75} />
+          </Button>
+        )}
+      </div>
 
       {USE_CUSTOM_WINDOW_CONTROLS && (
         <>

@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +58,7 @@ export type NewTabMenuProps = {
   onNewPreview?: () => void;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
+  onNewHarness?: () => void;
   onNewRdp?: (options?: {
     host?: string;
     port?: number;
@@ -178,6 +178,8 @@ export function NewTabMenu({
   onNewPrivate,
   onNewPreview,
   onNewEditor,
+  onNewApiClient,
+  onNewHarness,
   onNewRdp,
   onConnectRemote,
   onOpenFile,
@@ -201,6 +203,7 @@ export function NewTabMenu({
 
   const openLauncher = () => {
     openLauncherAfterMenuClose.current = true;
+    setMenuOpen(false);
   };
 
   const backToMenu = () => {
@@ -214,18 +217,14 @@ export function NewTabMenu({
         <span className="inline-flex">
           <DropdownMenu open={menuOpen} onOpenChange={onMenuOpenChange}>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="pointer-events-none ml-0.5 size-6 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100"
-                title={t("commandPalette.commands.newTerminal")}
+              <button
+                type="button"
+                className="pointer-events-none flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-md border border-transparent text-muted-foreground opacity-0 transition-opacity hover:border-border/30 hover:bg-foreground/[0.05] hover:text-foreground group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 cursor-pointer"
+                aria-label={t("tabs.newTab")}
+                title={t("tabs.newTab")}
               >
-                <HugeiconsIcon
-                  icon={PlusSignIcon}
-                  size={13}
-                  strokeWidth={1.75}
-                />
-              </Button>
+                <HugeiconsIcon icon={PlusSignIcon} size={13} strokeWidth={2} />
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
@@ -247,6 +246,8 @@ export function NewTabMenu({
                 onNewPrivate={onNewPrivate}
                 onNewPreview={onNewPreview}
                 onNewEditor={onNewEditor}
+                onNewApiClient={onNewApiClient}
+                onNewHarness={onNewHarness}
                 onNewRdp={onNewRdp}
                 onConnectRemote={onConnectRemote}
                 onOpenFile={onOpenFile}
@@ -291,6 +292,7 @@ export function NewTabMenuItems({
   onNewPrivate,
   onNewEditor,
   onNewApiClient,
+  onNewHarness: _onNewHarness,
   onConnectRemote,
   onOpenFile,
   onOpenFolder,
@@ -570,6 +572,7 @@ export function NewTabMenuItems({
 
 type NewTabMenuItemProps = {
   onSelect: () => void;
+  onMouseEnter?: () => void;
   customIcon?: ReactNode;
   label: string;
   shortcut?: string;
@@ -578,6 +581,7 @@ type NewTabMenuItemProps = {
 
 function NewTabMenuItem({
   onSelect,
+  onMouseEnter,
   customIcon,
   label,
   shortcut,
@@ -586,6 +590,7 @@ function NewTabMenuItem({
   return (
     <DropdownMenuItem
       onSelect={onSelect}
+      onMouseEnter={onMouseEnter}
       className="flex h-7.5 min-h-[28px] cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1 text-[12px] font-normal text-foreground/90 transition-colors hover:bg-accent/80 hover:text-foreground focus:bg-accent/80 focus:text-foreground"
     >
       {customIcon}

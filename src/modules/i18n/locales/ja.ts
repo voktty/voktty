@@ -1,4 +1,4 @@
-import { en, mergeLocale, type TranslationSchema } from "./en";
+﻿import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const jaBase = mergeLocale(en, {
   common: {
@@ -74,6 +74,7 @@ const jaBase = mergeLocale(en, {
       docker: "Docker",
       vault: "保管庫",
       aliases: "エイリアス",
+      harness: "Agent Harness",
       about: "情報",
     },
     general: {
@@ -1068,6 +1069,7 @@ const jaBase = mergeLocale(en, {
       spacesOverview: "スペース: 概要",
       newSpace: "新しいスペース",
       switchToSpace: "{name} に切り替え",
+      openHarness: "Agent Harness",
       newTerminal: "新しいターミナル",
       dropPrompt: "ファイルまたはフォルダをここにドロップして開く",
       dropSubtitle: "ファイルはエディタで、フォルダはターミナルで開かれます",
@@ -1524,6 +1526,7 @@ const jaBase = mergeLocale(en, {
       tabNewBlock: "新しいブロックターミナル",
       tabNewPrivate: "新しいプライベートターミナル",
       tabNewPreview: "新しい Web プレビュー",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "新しいエディタータブ",
       tabClose: "タブまたはペインを閉じる",
       paneSplitRight: "ペインを右に分割",
@@ -1680,6 +1683,7 @@ const jaBase = mergeLocale(en, {
       openFile: "ファイルを開く",
       openFolder: "フォルダーを開く",
       newFile: "新規ファイル",
+      openHarness: "Agent Harness",
       newTerminal: "新規ターミナル",
       dropPrompt: "ファイルまたはフォルダをここにドロップして開く",
       dropSubtitle: "ファイルはエディタで、フォルダはターミナルで開かれます",

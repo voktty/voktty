@@ -1,4 +1,4 @@
-export const en = {
+﻿export const en = {
   common: {
     textCopied: "Text copied to clipboard",
     textPasted: "Text pasted",
@@ -84,6 +84,7 @@ export const en = {
       mcp: "MCP",
       vault: "Vault",
       aliases: "Aliases",
+      harness: "Agent Harness",
       about: "About",
     },
     general: {
@@ -1445,6 +1446,11 @@ export const en = {
       description:
         "Initialize UI Pro with Gemini AI for fast creation and prototyping.",
     },
+    eccUniversalInstall: {
+      name: "ECC Universal (ecc-universal install)",
+      description:
+        "The agent harness performance optimization system. Skills, instincts, memory, security, and research-first development.",
+    },
     agentsSkillsInit: {
       name: "Agent Skills structure",
       description:
@@ -1577,6 +1583,7 @@ export const en = {
       extractFocusedSpaceMember: "Spaces: Extract focused member",
       moveFocusedSpaceMember: "Spaces: Move focused member...",
       closeFocusedSpaceMember: "Spaces: Close focused member",
+      openHarness: "Agent Harness",
       newTerminal: "New terminal",
       dropPrompt: "Drop file or folder here to open",
       dropSubtitle:
@@ -2471,6 +2478,7 @@ export const en = {
       tabNewPrivate: "New private terminal",
       tabNewPreview: "New web preview",
       tabNewApiClient: "New API Client & Sandbox",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "New editor tab",
       tabClose: "Close tab or pane",
       paneSplitRight: "Split pane right",
@@ -2641,6 +2649,7 @@ export const en = {
       openFile: "Open file",
       openFolder: "Open folder",
       newFile: "New file",
+      openHarness: "Agent Harness",
       newTerminal: "New terminal",
       dropPrompt: "Drop file or folder here to open",
       dropSubtitle:

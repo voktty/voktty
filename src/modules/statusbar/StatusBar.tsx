@@ -24,7 +24,8 @@ import type {
 } from "@/modules/workspace";
 import { IncognitoIcon, Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { RefObject } from "react";
+import { type RefObject, useState } from "react";
+import { cn } from "@/lib/utils";
 import { CwdBreadcrumb } from "./CwdBreadcrumb";
 import { DiagnosticsBadge } from "./DiagnosticsBadge";
 import { EditorStatus } from "./EditorStatus";
@@ -32,6 +33,8 @@ import { WorkspaceEnvSelector } from "./WorkspaceEnvSelector";
 
 import { ConsoleUptimeWidget } from "./components/ConsoleUptimeWidget";
 import { ProjectToolkitPopover } from "./components/ProjectToolkitPopover";
+import { FloatingArcadeWidget } from "./components/FloatingArcadeWidget";
+import { PacmanIcon } from "./components/PacmanIcon";
 
 type Props = {
   cwd: string | null;
@@ -94,6 +97,7 @@ export function StatusBar({
 }: Props) {
   const { t } = useTranslation();
   const panelOpen = useChatStore((s) => s.panelOpen);
+  const [arcadeOpen, setArcadeOpen] = useState(false);
 
   return (
     <footer className="flex h-7.5 shrink-0 items-center justify-between gap-2 border-t border-border/30 px-2.5 text-[10.5px]">
@@ -164,6 +168,19 @@ export function StatusBar({
         >
           <HugeiconsIcon icon={Settings01Icon} size={14} strokeWidth={1.75} />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+            arcadeOpen && "bg-accent text-yellow-400 hover:text-yellow-300",
+          )}
+          onClick={() => setArcadeOpen((prev) => !prev)}
+          title="Arcade (Pac-Man & Snake)"
+          aria-label="Arcade"
+        >
+          <PacmanIcon size={14} className={arcadeOpen ? "text-yellow-400" : undefined} />
+        </Button>
         <span className="mx-0.5 h-3.5 w-px shrink-0 rounded-full bg-border" />
         {hasComposer ? (
           <>
@@ -172,6 +189,9 @@ export function StatusBar({
           </>
         ) : null}
       </div>
+      {arcadeOpen ? (
+        <FloatingArcadeWidget onClose={() => setArcadeOpen(false)} />
+      ) : null}
     </footer>
   );
 }
