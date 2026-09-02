@@ -34,6 +34,9 @@ const VARIANT_KIND: Record<string, string> = {
   web_search: "search",
   listdir: "read",
   list_dir: "read",
+  agent: "agent",
+  task: "agent",
+  subagent: "agent",
 };
 
 const EFFORT_LABELS: Record<string, string> = {

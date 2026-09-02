@@ -551,6 +551,10 @@ function kindTitle(kind?: string): string {
       return "Shell";
     case "skill":
       return "Skill";
+    case "agent":
+    case "task":
+    case "subagent":
+      return "Subagent";
     case "think":
       return "Think";
     case "fetch":

@@ -5,7 +5,11 @@ import {
   selectedAnswerLabels,
   type UserQuestionReply,
 } from "../userQuestion";
-import { extractToolPreview, titleFromToolInput } from "./preview";
+import {
+  extractToolPreview,
+  isAgentToolName,
+  titleFromToolInput,
+} from "./preview";
 import { streamTextDelta } from "./streamText";
 import type { ApprovalDecision, HarnessEvent } from "./types";
 
@@ -394,6 +398,10 @@ export function sessionIdFromMessage(
   const type = stringField(rec, "type");
   const subtype = stringField(rec, "subtype");
   if (type === "system" && subtype?.startsWith("hook_")) return undefined;
+  // Subagents can carry their own session id. Rebinding the parent to it
+  // would drop resume for the conversation the user is actually in.
+  const parent = rec.parent_tool_use_id;
+  if (typeof parent === "string" && parent.length > 0) return undefined;
   return stringField(rec, "session_id");
 }
 
@@ -534,6 +542,198 @@ export function inputJsonDeltaFromEvent(
 export function isSubagentMessage(rec: Record<string, unknown>): boolean {
   const parent = rec.parent_tool_use_id;
   return typeof parent === "string" && parent.length > 0;
+}
+
+export function isAgentTaskType(taskType: string | undefined): boolean {
+  const key = (taskType ?? "").toLowerCase();
+  return key === "local_agent" || key === "remote_agent";
+}
+
+export type ClaudeAgentTaskStarted = {
+  taskId: string;
+  toolUseId?: string;
+  description: string;
+  taskType: string;
+  backgrounded: boolean;
+  ambient: boolean;
+};
+
+export function parseTaskStarted(
+  rec: Record<string, unknown>,
+): ClaudeAgentTaskStarted | null {
+  if (
+    stringField(rec, "type") !== "system" ||
+    stringField(rec, "subtype") !== "task_started"
+  ) {
+    return null;
+  }
+  const taskId = stringField(rec, "task_id");
+  if (!taskId) return null;
+  return {
+    taskId,
+    toolUseId: stringField(rec, "tool_use_id"),
+    description: stringField(rec, "description") ?? "Subagent",
+    taskType: stringField(rec, "task_type") ?? "",
+    backgrounded: rec.is_backgrounded === true,
+    ambient: rec.ambient === true,
+  };
+}
+
+export type ClaudeAgentTaskProgress = {
+  taskId: string;
+  toolUseId?: string;
+  description: string;
+  subagentType?: string;
+  lastToolName?: string;
+  summary?: string;
+};
+
+export function parseTaskProgress(
+  rec: Record<string, unknown>,
+): ClaudeAgentTaskProgress | null {
+  if (
+    stringField(rec, "type") !== "system" ||
+    stringField(rec, "subtype") !== "task_progress"
+  ) {
+    return null;
+  }
+  const taskId = stringField(rec, "task_id");
+  if (!taskId) return null;
+  return {
+    taskId,
+    toolUseId: stringField(rec, "tool_use_id"),
+    description: stringField(rec, "description") ?? "Subagent",
+    subagentType: stringField(rec, "subagent_type"),
+    lastToolName: stringField(rec, "last_tool_name"),
+    summary: stringField(rec, "summary"),
+  };
+}
+
+export type ClaudeAgentTaskUpdated = {
+  taskId: string;
+  status?: string;
+  description?: string;
+  error?: string;
+  backgrounded?: boolean;
+};
+
+export function parseTaskUpdated(
+  rec: Record<string, unknown>,
+): ClaudeAgentTaskUpdated | null {
+  if (
+    stringField(rec, "type") !== "system" ||
+    stringField(rec, "subtype") !== "task_updated"
+  ) {
+    return null;
+  }
+  const taskId = stringField(rec, "task_id");
+  const patch = asRecord(rec.patch) ?? {};
+  if (!taskId) return null;
+  const backgrounded =
+    patch.is_backgrounded === true
+      ? true
+      : patch.is_backgrounded === false
+        ? false
+        : undefined;
+  return {
+    taskId,
+    status: stringField(patch, "status"),
+    description: stringField(patch, "description"),
+    error: stringField(patch, "error"),
+    ...(backgrounded !== undefined ? { backgrounded } : {}),
+  };
+}
+
+export type ClaudeAgentTaskNotification = {
+  taskId: string;
+  toolUseId?: string;
+  status: string;
+  summary: string;
+  ambient: boolean;
+};
+
+export function parseTaskNotification(
+  rec: Record<string, unknown>,
+): ClaudeAgentTaskNotification | null {
+  if (
+    stringField(rec, "type") !== "system" ||
+    stringField(rec, "subtype") !== "task_notification"
+  ) {
+    return null;
+  }
+  const taskId = stringField(rec, "task_id");
+  if (!taskId) return null;
+  return {
+    taskId,
+    toolUseId: stringField(rec, "tool_use_id"),
+    status: stringField(rec, "status") ?? "completed",
+    summary: stringField(rec, "summary") ?? "",
+    ambient: rec.ambient === true,
+  };
+}
+
+export type ClaudeBackgroundAgentTask = {
+  taskId: string;
+  taskType: string;
+  description: string;
+};
+
+export function parseBackgroundAgentTasks(
+  rec: Record<string, unknown>,
+): ClaudeBackgroundAgentTask[] | null {
+  if (
+    stringField(rec, "type") !== "system" ||
+    stringField(rec, "subtype") !== "background_tasks_changed"
+  ) {
+    return null;
+  }
+  const tasks = Array.isArray(rec.tasks) ? rec.tasks : [];
+  return tasks.flatMap((item) => {
+    const row = asRecord(item);
+    if (!row || row.ambient === true) return [];
+    const taskId = stringField(row, "task_id");
+    const taskType = stringField(row, "task_type") ?? "";
+    if (!taskId || !isAgentTaskType(taskType)) return [];
+    return [
+      {
+        taskId,
+        taskType,
+        description: stringField(row, "description") ?? "Subagent",
+      },
+    ];
+  });
+}
+
+export type ClaudeToolProgress = {
+  toolUseId: string;
+  parentToolUseId?: string;
+  toolName?: string;
+  subagentType?: string;
+};
+
+export function parseToolProgress(
+  rec: Record<string, unknown>,
+): ClaudeToolProgress | null {
+  if (stringField(rec, "type") !== "tool_progress") return null;
+  const toolUseId = stringField(rec, "tool_use_id");
+  if (!toolUseId) return null;
+  const parent = stringField(rec, "parent_tool_use_id");
+  return {
+    toolUseId,
+    ...(parent ? { parentToolUseId: parent } : {}),
+    toolName: stringField(rec, "tool_name"),
+    subagentType: stringField(rec, "subagent_type"),
+  };
+}
+
+export function isTerminalAgentTaskStatus(status: string | undefined): boolean {
+  const key = (status ?? "").toLowerCase();
+  return (
+    key === "completed" ||
+    key === "failed" ||
+    key === "killed" ||
+    key === "stopped"
+  );
 }
 
 export function assistantTextBlocks(rec: Record<string, unknown>): string[] {
@@ -700,6 +900,7 @@ export function toolKindFromName(toolName: string): string {
     return "search";
   }
   if (normalized === "skill" || normalized === "skills") return "skill";
+  if (isAgentToolName(toolName)) return "agent";
   return toolName;
 }
 

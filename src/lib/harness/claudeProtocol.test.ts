@@ -9,15 +9,23 @@ import {
   contextUsedFromAssistant,
   extractExitPlanModePlan,
   isClaudeInitMessage,
+  isSubagentMessage,
   isTodoTool,
   listModelsFromControlResponse,
   normalizeClaudeCliEffort,
+  parseBackgroundAgentTasks,
   parseClaudeVersion,
   parseControlRequest,
   parseControlResponse,
+  parseTaskNotification,
+  parseTaskProgress,
+  parseTaskStarted,
+  parseTaskUpdated,
+  parseToolProgress,
   planTextFromTodos,
   resolveClaudeApiModelId,
   runtimeModeToPermission,
+  sessionIdFromMessage,
   statusTextFromSystem,
   streamDeltaFromEvent,
   toClaudePermissionResult,
@@ -421,6 +429,14 @@ describe("helpers", () => {
   it("classifies tools and todo plans", () => {
     expect(toolKindFromName("Bash")).toBe("execute");
     expect(toolKindFromName("Skill")).toBe("skill");
+    expect(toolKindFromName("Agent")).toBe("agent");
+    expect(toolKindFromName("Task")).toBe("agent");
+    expect(toolTitle("Agent", { description: "Explore the auth module" })).toBe(
+      "Explore the auth module",
+    );
+    expect(toolTitle("Task", { subagent_type: "explore" })).toBe(
+      "Explore subagent",
+    );
     expect(toolTitle("Bash", { command: "ls -la src" })).toBe("List src");
     expect(toolTitle("Skill", { skill: "code-review" })).toBe(
       "Skill /code-review",
@@ -575,5 +591,121 @@ describe("contextFromResult", () => {
 
   it("has nothing to report for a turn that never called the API", () => {
     expect(contextFromResult({ type: "result", usage: {} })).toBeUndefined();
+  });
+});
+
+describe("subagent messages", () => {
+  it("detects nested agent traffic by parent_tool_use_id", () => {
+    expect(isSubagentMessage({ parent_tool_use_id: "toolu_agent" })).toBe(true);
+    expect(isSubagentMessage({ parent_tool_use_id: null })).toBe(false);
+    expect(isSubagentMessage({ type: "assistant" })).toBe(false);
+  });
+
+  it("does not rebind the parent session to a subagent session id", () => {
+    expect(
+      sessionIdFromMessage({
+        type: "assistant",
+        session_id: "sub_1",
+        parent_tool_use_id: "toolu_agent",
+      }),
+    ).toBeUndefined();
+    expect(
+      sessionIdFromMessage({
+        type: "assistant",
+        session_id: "sess_1",
+        parent_tool_use_id: null,
+      }),
+    ).toBe("sess_1");
+  });
+
+  it("parses task lifecycle frames for local agents", () => {
+    expect(
+      parseTaskStarted({
+        type: "system",
+        subtype: "task_started",
+        task_id: "t1",
+        tool_use_id: "toolu_agent",
+        description: "Explore the auth module",
+        task_type: "local_agent",
+        is_backgrounded: true,
+      }),
+    ).toEqual({
+      taskId: "t1",
+      toolUseId: "toolu_agent",
+      description: "Explore the auth module",
+      taskType: "local_agent",
+      backgrounded: true,
+      ambient: false,
+    });
+    expect(
+      parseTaskProgress({
+        type: "system",
+        subtype: "task_progress",
+        task_id: "t1",
+        last_tool_name: "Read",
+        description: "Explore the auth module",
+      }),
+    ).toMatchObject({
+      taskId: "t1",
+      lastToolName: "Read",
+    });
+    expect(
+      parseTaskUpdated({
+        type: "system",
+        subtype: "task_updated",
+        task_id: "t1",
+        patch: { status: "completed" },
+      }),
+    ).toMatchObject({ taskId: "t1", status: "completed" });
+    expect(
+      parseTaskNotification({
+        type: "system",
+        subtype: "task_notification",
+        task_id: "t1",
+        tool_use_id: "toolu_agent",
+        status: "completed",
+        summary: "Found the tokens",
+      }),
+    ).toMatchObject({
+      taskId: "t1",
+      status: "completed",
+      summary: "Found the tokens",
+    });
+    expect(
+      parseBackgroundAgentTasks({
+        type: "system",
+        subtype: "background_tasks_changed",
+        tasks: [
+          {
+            task_id: "t1",
+            task_type: "local_agent",
+            description: "Explore",
+          },
+          {
+            task_id: "bash_1",
+            task_type: "local_bash",
+            description: "sleep 10",
+          },
+          {
+            task_id: "watch",
+            task_type: "local_agent",
+            description: "watcher",
+            ambient: true,
+          },
+        ],
+      }),
+    ).toEqual([
+      { taskId: "t1", taskType: "local_agent", description: "Explore" },
+    ]);
+    expect(
+      parseToolProgress({
+        type: "tool_progress",
+        tool_use_id: "toolu_agent",
+        subagent_type: "explore",
+      }),
+    ).toMatchObject({
+      toolUseId: "toolu_agent",
+      subagentType: "explore",
+    });
   });
 });

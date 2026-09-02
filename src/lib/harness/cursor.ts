@@ -855,6 +855,7 @@ function kindFromCursorToolName(
   }
   if (key === "shell" || key === "bash") return "execute";
   if (key === "skill" || key === "skills") return "skill";
+  if (key === "agent" || key === "task" || key === "subagent") return "agent";
   return fallback;
 }
 

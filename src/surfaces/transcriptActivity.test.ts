@@ -3,10 +3,12 @@ import type { Block } from "../lib/session";
 import {
   activityPhaseTitle,
   activityPreviousLabel,
+  activityStillRunning,
   buildActivityPhases,
   editVerb,
   groupTurnItems,
   groupTurns,
+  hasRunningSubagent,
   lastActivityIndex,
   nestedScrollAbsorbsWheel,
   proseSummary,
@@ -486,6 +488,47 @@ describe("activityPhaseTitle", () => {
     );
     expect(title([shell("a"), shell("b")])).toBe("Ran 2 commands");
     expect(title([shell("a")], true)).toBe("Running a command");
+    expect(
+      title(
+        [
+          {
+            id: "ag",
+            role: "tool",
+            text: "Explore the auth module",
+            tool: {
+              kind: "agent",
+              title: "Explore the auth module",
+              status: "in_progress",
+            },
+          },
+        ],
+        true,
+      ),
+    ).toBe("Running a subagent");
+  });
+});
+
+describe("running subagents", () => {
+  const agent = (
+    id: string,
+    status = "in_progress",
+  ): Block => ({
+    id,
+    role: "tool",
+    text: "Explore the auth module",
+    tool: { kind: "agent", title: "Explore the auth module", status },
+  });
+
+  it("keeps a pending Agent tool visible as its own phase", () => {
+    const phases = buildActivityPhases([read("r1"), agent("ag")]);
+    expect(phases.map((phase) => phase.kind)).toEqual(["research", "agent"]);
+  });
+
+  it("flags a live subagent until the tool completes", () => {
+    expect(hasRunningSubagent([agent("ag")])).toBe(true);
+    expect(activityStillRunning([agent("ag")])).toBe(true);
+    expect(hasRunningSubagent([agent("ag", "completed")])).toBe(false);
+    expect(activityStillRunning([agent("ag", "completed")])).toBe(false);
   });
 });
 

@@ -2,6 +2,7 @@ import type { RuntimeMode, ToolPreview } from "../session";
 import {
   composeToolTitle,
   extractToolPreview,
+  formatAgentType,
 } from "./preview";
 import { streamTextDelta } from "./streamText";
 import type { HarnessEvent } from "./types";
@@ -310,7 +311,6 @@ const SILENT_ITEM_TYPES = new Set([
   "userMessage",
   "contextCompaction",
   "enteredReviewMode",
-  "subAgentActivity",
 ]);
 
 /**
@@ -556,10 +556,53 @@ function mapToolItem(
     };
   }
 
+  if (itemType === "subAgentActivity") {
+    return mapSubAgentActivity(item, callId, completed);
+  }
+
   // Unknown item types are ignored; Codex may add new internal kinds over time.
   void item;
   void completed;
   return null;
+}
+
+function mapSubAgentActivity(
+  item: Record<string, unknown>,
+  callId: string,
+  completed: boolean,
+): HarnessEvent {
+  const kind = (stringField(item, "kind") ?? "").toLowerCase();
+  const path =
+    stringField(item, "agentPath") ?? stringField(item, "agent_path");
+  const leaf = path?.split(/[/\\]/).filter(Boolean).pop();
+  const title = leaf ? `${formatAgentType(leaf)} subagent` : "Subagent";
+  if (kind === "interrupted") {
+    return {
+      type: "tool.updated",
+      callId,
+      title,
+      kind: "agent",
+      status: "failed",
+    };
+  }
+  if (kind === "interacted") {
+    return {
+      type: completed ? "tool.updated" : "tool.started",
+      callId,
+      title,
+      kind: "agent",
+      status: "in_progress",
+    };
+  }
+  // `started` items are completion-only in app-server v2: the spawn finished,
+  // but the child agent is still running.
+  return {
+    type: "tool.started",
+    callId,
+    title,
+    kind: "agent",
+    status: "in_progress",
+  };
 }
 
 function mapFileChangeItem(

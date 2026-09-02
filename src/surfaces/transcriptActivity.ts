@@ -1,5 +1,6 @@
 import {
   composeToolTitle,
+  isAgentTool,
   isEditTool,
   isExecuteTool,
   isReadTool,
@@ -276,6 +277,24 @@ export function lastActivityIndex(items: TurnItem[]): number {
   return -1;
 }
 
+/** True while a tool in this turn is still running or waiting on the user. */
+export function activityStillRunning(blocks: Block[]): boolean {
+  return blocks.some(
+    (block) =>
+      (isToolBlock(block) && toolCallState(block) === "pending") ||
+      needsApproval(block),
+  );
+}
+
+export function hasRunningSubagent(blocks: Block[]): boolean {
+  return blocks.some(
+    (block) =>
+      isToolBlock(block) &&
+      isAgentTool(block.tool?.kind, block.text || block.tool?.title) &&
+      toolCallState(block) === "pending",
+  );
+}
+
 export function activityPreviousLabel(count: number): string {
   return `+${count} previous ${count === 1 ? "tool call" : "tool calls"}`;
 }
@@ -284,7 +303,7 @@ export function activityPreviousLabel(count: number): string {
  * What a run of tool calls was for. Reads and searches are one thing — looking
  * around — so a grep followed by the file it turned up stays one group.
  */
-export type ActivityWorkKind = "research" | "edit" | "run" | "other";
+export type ActivityWorkKind = "research" | "edit" | "run" | "agent" | "other";
 
 /** A work kind, or a group the agent only narrated: a thought, or a note. */
 export type ActivityPhaseKind = ActivityWorkKind | "think" | "note";
@@ -305,6 +324,7 @@ export type ActivityPhase = {
 const WORK_KIND_ORDER: ActivityWorkKind[] = [
   "edit",
   "run",
+  "agent",
   "research",
   "other",
 ];
@@ -313,6 +333,7 @@ export function toolCategory(block: Block): ActivityWorkKind {
   const kind = block.tool?.kind;
   const title = block.text || block.tool?.title;
   const preview = block.tool?.preview;
+  if (isAgentTool(kind, title)) return "agent";
   if (isEditTool(kind, title, preview)) return "edit";
   if (isSearchTool(kind, title, preview)) return "research";
   if (isReadTool(kind, title, preview)) return "research";
@@ -400,7 +421,13 @@ function absorbStrayPhases(phases: ActivityPhase[]): ActivityPhase[] {
     const previous = kept[kept.length - 1];
     const stray =
       !phase.headline && phase.steps.filter(isToolBlock).length === 1;
-    if (previous && stray && previous.steps.length > 0) {
+    if (
+      previous &&
+      stray &&
+      previous.steps.length > 0 &&
+      phase.kind !== "agent" &&
+      previous.kind !== "agent"
+    ) {
       previous.steps.push(...phase.steps);
       previous.kind = dominantWorkKind(previous.steps) ?? previous.kind;
       continue;
@@ -491,6 +518,14 @@ export function activityPhaseTitle(phase: ActivityPhase, live = false): string {
           ? "Running a command"
           : "Ran a command"
         : `${live ? "Running" : "Ran"} ${tally.runs} commands`;
+    case "agent": {
+      const count = phase.steps.filter(isToolBlock).length;
+      return count <= 1
+        ? live
+          ? "Running a subagent"
+          : "Ran a subagent"
+        : `${live ? "Running" : "Ran"} ${count} subagents`;
+    }
     case "think":
       return live ? "Thinking" : "Thought";
     default:

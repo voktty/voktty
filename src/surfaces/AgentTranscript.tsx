@@ -5,6 +5,7 @@ import {
   Copy,
   FilePlusCorner,
   Minus,
+  Bot,
   PenLine,
   Search,
   Sparkles,
@@ -60,10 +61,12 @@ import { TranscriptSelectionMenu } from "./TranscriptSelectionMenu";
 import {
   activityPhaseTitle,
   activityPreviousLabel,
+  activityStillRunning,
   buildActivityPhases,
   editVerb,
   groupTurnItems,
   groupTurns,
+  hasRunningSubagent,
   isIncompleteTool,
   isThinkingBlock,
   lastActivityIndex,
@@ -328,6 +331,7 @@ export function AgentTranscript({
               .some(
                 (item) => item.type === "block" && isProseBlock(item.block),
               );
+          const workStillRunning = activityStillRunning(turn);
           return (
             <div
               key={turn[0].id}
@@ -346,7 +350,7 @@ export function AgentTranscript({
                       key={item.blocks[0].id}
                       blocks={item.blocks}
                       cwd={cwd}
-                      done={settled || answering}
+                      done={settled || (answering && !workStillRunning)}
                       onApproval={onApproval}
                       onOpenFile={onOpenFile}
                       onOpenDiff={onOpenDiff}
@@ -411,6 +415,7 @@ export function AgentTranscript({
                   waitingLabel={
                     pendingQuestion ? "Waiting for answers" : undefined
                   }
+                  subagent={hasRunningSubagent(turn)}
                 />
               ) : null}
             </div>
@@ -432,10 +437,12 @@ function LiveWorking({
   startedAt,
   paused,
   waitingLabel,
+  subagent = false,
 }: {
   startedAt?: number;
   paused: boolean;
   waitingLabel?: string;
+  subagent?: boolean;
 }) {
   const elapsedMs = useElapsedFrom(startedAt, paused);
   return (
@@ -444,6 +451,7 @@ function LiveWorking({
       live
       waiting={paused}
       waitingLabel={waitingLabel}
+      subagent={subagent}
     />
   );
 }
@@ -454,6 +462,7 @@ function TurnDuration({
   done = false,
   waiting = false,
   waitingLabel,
+  subagent = false,
   completedAt,
   copyText: output,
   onSaveNote,
@@ -466,6 +475,7 @@ function TurnDuration({
   done?: boolean;
   waiting?: boolean;
   waitingLabel?: string;
+  subagent?: boolean;
   completedAt?: number;
   copyText?: string;
   onSaveNote?: (text: string) => void;
@@ -475,7 +485,7 @@ function TurnDuration({
 }) {
   const label = waiting
     ? waitingLabel ?? "Waiting for approval"
-    : formatWorkingDuration(elapsedMs, done);
+    : formatWorkingDuration(elapsedMs, done, subagent);
   const dot = (
     <span
       aria-hidden
@@ -487,7 +497,13 @@ function TurnDuration({
       role={live ? "status" : undefined}
       aria-live={live ? "polite" : undefined}
       aria-label={
-        waiting ? label : live ? "Agent is working" : label
+        waiting
+          ? label
+          : live
+            ? subagent
+              ? "Subagent is running"
+              : "Agent is working"
+            : label
       }
       className="flex items-center gap-3 px-4 pt-1 pb-3 font-sans text-sm text-content/40"
     >
@@ -1161,6 +1177,7 @@ function ActivityPhaseIcon({
   if (kind === "edit") return <PenLine {...props} />;
   if (kind === "research") return <Search {...props} />;
   if (kind === "run") return <Terminal {...props} />;
+  if (kind === "agent") return <Bot {...props} />;
   if (kind === "think") return <Sparkles {...props} />;
   if (kind === "other") return <Wrench {...props} />;
   return <Minus {...props} />;
@@ -1506,10 +1523,21 @@ function useElapsedFrom(
   return elapsedMs;
 }
 
-function formatWorkingDuration(elapsedMs: number | null, done = false): string {
-  if (elapsedMs == null) return done ? "Worked" : "Working…";
+function formatWorkingDuration(
+  elapsedMs: number | null,
+  done = false,
+  subagent = false,
+): string {
+  if (elapsedMs == null) {
+    if (done) return "Worked";
+    return subagent ? "Subagent running…" : "Working…";
+  }
   const totalSec = Math.max(1, Math.round(elapsedMs / 1000));
-  const label = done ? "Worked for" : "Working for";
+  const label = done
+    ? "Worked for"
+    : subagent
+      ? "Subagent running for"
+      : "Working for";
   if (totalSec < 60) return `${label} ${totalSec}s`;
   const minutes = Math.floor(totalSec / 60);
   const seconds = totalSec % 60;

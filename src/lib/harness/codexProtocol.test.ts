@@ -216,6 +216,40 @@ describe("mapCodexNotification", () => {
     });
   });
 
+  it("maps sub-agent activity as a live agent tool, not silence", () => {
+    const started = mapCodexNotification("item/completed", {
+      item: {
+        id: "sa_1",
+        type: "subAgentActivity",
+        kind: "started",
+        agentPath: "/root/explore-auth",
+        agentThreadId: "thr_child",
+      },
+    });
+    expect(started.events[0]).toMatchObject({
+      type: "tool.started",
+      callId: "sa_1",
+      kind: "agent",
+      status: "in_progress",
+      title: "Explore Auth subagent",
+    });
+
+    const interrupted = mapCodexNotification("item/completed", {
+      item: {
+        id: "sa_1",
+        type: "subAgentActivity",
+        kind: "interrupted",
+        agentPath: "/root/explore-auth",
+      },
+    });
+    expect(interrupted.events[0]).toMatchObject({
+      type: "tool.updated",
+      callId: "sa_1",
+      kind: "agent",
+      status: "failed",
+    });
+  });
+
   it("does not treat a completed agent message as the end of the turn", () => {
     const mapped = mapCodexNotification("item/completed", {
       item: {
