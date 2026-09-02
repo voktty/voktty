@@ -133,7 +133,11 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
       if (!current || current.id !== sessionId) return;
 
       current = appendUser(current, text, attachments);
-      setSession({ ...current, busy: true });
+      const title =
+        current.title === "New Session" && text.trim()
+          ? text.trim().slice(0, 48)
+          : current.title;
+      setSession({ ...current, title, busy: true });
 
       const onEvent = (event: HarnessEvent) => {
         setSession((prev) => (prev ? applyHarnessEvent(prev, event) : prev));
@@ -296,6 +300,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
         visible={true}
         focused={true}
         inSplit={false}
+        showHeader={true}
         composerFocused={true}
         recents={recents}
         onFocus={() => {}}

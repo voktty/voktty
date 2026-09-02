@@ -42,6 +42,11 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    --color-content: var(--content);
+    --color-background-base: var(--background-base);
+    --color-skill: var(--color-skill, #e8c547);
+    --color-mention: var(--color-mention, #38bdf8);
+    --color-markdown-heading: var(--color-markdown-heading, #f9a8c9);
     --color-frame: var(--frame);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
@@ -100,6 +105,16 @@
     --accent-action: #2563eb;
     --accent-indicator: #0284c7;
     --border-subtle: rgba(0, 0, 0, 0.06);
+
+    /* Monocode theme tokens */
+    --content: #18191c;
+    --background-base: #fafafc;
+    --color-content: #18191c;
+    --color-background-base: #fafafc;
+    --theme-hue: 240;
+    --theme-saturation: 0%;
+    --content-lightness: 18%;
+    --background-lightness: 97%;
 }
 
 .dark {
@@ -148,6 +163,16 @@
     --accent-action: #8b5cf6;
     --accent-indicator: #38bdf8;
     --border-subtle: rgba(255, 255, 255, 0.07);
+
+    /* Monocode theme tokens */
+    --content: #f4f4f6;
+    --background-base: #121214;
+    --color-content: #f4f4f6;
+    --color-background-base: #121214;
+    --theme-hue: 240;
+    --theme-saturation: 0%;
+    --content-lightness: 92%;
+    --background-lightness: 9%;
 }
 
 @layer base {
@@ -683,3 +708,183 @@ html *::-webkit-scrollbar {
     color: var(--primary);
   }
 }
+
+/*
+ * Monocode / Zen mode activity phases: a run of related tool calls under the line the
+ * agent wrote to introduce it, on a rail, folding back to that line when the
+ * agent moves on.
+ */
+.zen-phase-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease;
+}
+
+.zen-phase-body[data-open="false"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.zen-phase-body > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.zen-phase-body > .zen-phase-live {
+  max-height: min(17.5rem, 45vh);
+}
+
+.zen-phase-body[data-open="true"] > .zen-phase-live {
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+}
+
+/*
+ * The rail: a spine down the group with a step branching off it on a curve,
+ * drawn on the step itself so it follows however tall that step turns out to
+ * be. The curve is a quarter circle, tangent to the spine at the top and to
+ * the row at the bottom, so nothing turns a hard corner.
+ */
+.zen-phase-step {
+  position: relative;
+  padding-left: 20px;
+  --zen-rail: color-mix(
+    in srgb,
+    var(--color-content, #f4f4f6) 14%,
+    var(--color-background-base, #121214)
+  );
+}
+
+.zen-phase-step::before,
+.zen-phase-step::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+}
+
+.zen-phase-step::before {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--zen-rail);
+}
+
+/* The last step is where the spine leaves off, curve and all. */
+.zen-phase-step:last-child::before {
+  bottom: auto;
+  height: 7px;
+}
+
+.zen-phase-step::after {
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-left: 1px solid var(--zen-rail);
+  border-bottom: 1px solid var(--zen-rail);
+  border-bottom-left-radius: 8px;
+}
+
+/* Live steps fade in place. A slide or blur hitch the autoscroll. */
+@keyframes zen-step-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.zen-step-in {
+  animation: zen-step-in 180ms ease-out both;
+}
+
+@keyframes zen-thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.zen-thinking-pulse {
+  animation: zen-thinking-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes zen-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.zen-tool-spin {
+  animation: zen-spin 3.6s linear infinite;
+}
+
+@keyframes shimmer-text {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: 0% center;
+  }
+}
+
+.shimmer-text {
+  background-image:
+    linear-gradient(
+      90deg,
+      transparent calc(50% - var(--spread, 25%)),
+      var(--color-content, #f4f4f6) calc(50%),
+      transparent calc(50% + var(--spread, 25%))
+    ),
+    linear-gradient(
+      hsl(var(--theme-hue, 240) var(--theme-saturation, 0%) var(--content-lightness, 92%) / 0.4),
+      hsl(var(--theme-hue, 240) var(--theme-saturation, 0%) var(--content-lightness, 92%) / 0.4)
+    );
+  background-size:
+    250% 100%,
+    auto;
+  background-repeat: no-repeat, padding-box;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: shimmer-text var(--shimmer-duration, 2s) linear infinite;
+}
+
+@keyframes approval-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.approval-toast {
+  animation: approval-toast-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.agent-markdown p,
+.agent-markdown li {
+  color: color-mix(in srgb, var(--color-content, #f4f4f6) 78%, transparent);
+}
+
+.agent-markdown p strong,
+.agent-markdown p em,
+.agent-markdown p [data-streamdown="strong"] {
+  color: var(--color-content, #f4f4f6) !important;
+  opacity: 1;
+}
+
+.agent-reasoning.agent-markdown p,
+.agent-reasoning.agent-markdown li {
+  color: color-mix(in srgb, var(--color-content, #f4f4f6) 48%, transparent);
+}
+
