@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   closeLeaf,
   editorTabKey,
+  isChangesTab,
   isFilesystemTab,
   isReleaseNotesTab,
   isReviewTab,
@@ -9,6 +10,7 @@ import {
   layoutLeaves,
   layoutSashes,
   leaf,
+  newChangesTab,
   newFileTab,
   newPlanTab,
   newReleaseNotesWorkspaceTab,
@@ -18,6 +20,7 @@ import {
   nextTerminalTitle,
   isolateTerminalPanes,
   movePane,
+  openChangesTab,
   openEditorTab,
   openTerminalTab,
   paneEdgeFromPoint,
@@ -85,11 +88,47 @@ describe("editorTabKey", () => {
     const path = "/repo/EventStore.swift";
     expect(editorTabKey(newFileTab(path, cwd))).toBe(`file:${path}`);
     expect(editorTabKey(newFileTab(path, cwd, true))).toBe(`review:${path}`);
+    expect(editorTabKey(newChangesTab(cwd, path))).toBe(`changes:${cwd}`);
+    expect(editorTabKey(newChangesTab(cwd, `${cwd}/other.ts`))).toBe(
+      `changes:${cwd}`,
+    );
     expect(editorTabKey(newPlanTab("s", "b", "Plan", cwd))).toBe("plan:b");
     const terminal = newTerminalFile(cwd);
     expect(editorTabKey(terminal)).toBe(`terminal:${terminal.id}`);
     expect(isTerminalTab(terminal)).toBe(true);
     expect(isTerminalTab(newFileTab(path, cwd))).toBe(false);
+  });
+});
+
+describe("openChangesTab", () => {
+  it("reuses one Changes tab and updates the focused file", () => {
+    const cwd = "/repo";
+    const first = openChangesTab(newTab("session-a"), cwd, "/repo/a.ts");
+    const second = openChangesTab(first, cwd, "/repo/b.ts");
+    const files = second.editorPanes[0]?.files ?? [];
+    expect(files.filter(isChangesTab)).toHaveLength(1);
+    expect(files.filter(isReviewTab)).toHaveLength(1);
+    expect(files.find(isChangesTab)?.path).toBe("/repo/b.ts");
+  });
+
+  it("opens a Changes tab without a focused file", () => {
+    const cwd = "/repo";
+    const next = openChangesTab(newTab("session-a"), cwd);
+    expect(next.editorPanes[0]?.files.find(isChangesTab)?.path).toBe(cwd);
+  });
+
+  it("drops per-file review tabs in the same pane", () => {
+    const cwd = "/repo";
+    const withReview = openEditorTab(
+      newTab("session-a"),
+      newFileTab("/repo/a.ts", cwd, true),
+    );
+    const next = openChangesTab(withReview, cwd, "/repo/b.ts");
+    const files = next.editorPanes[0]?.files ?? [];
+    expect(files.some((file) => editorTabKey(file) === `review:${cwd}/a.ts`)).toBe(
+      false,
+    );
+    expect(files.filter(isChangesTab)).toHaveLength(1);
   });
 });
 

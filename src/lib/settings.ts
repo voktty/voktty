@@ -219,6 +219,48 @@ export function subscribeGridArcadeEnabled(onStoreChange: () => void) {
     window.removeEventListener(GRID_ARCADE_ENABLED_CHANGE_EVENT, onStoreChange);
 }
 
+const DIFF_VIEWER_KEY = "monocode.diffViewer";
+
+export type DiffViewer = "editor" | "unified";
+
+export const DIFF_VIEWER_DEFAULT: DiffViewer = "editor";
+
+/** Fired on `window` when the working-tree diff layout flips. */
+export const DIFF_VIEWER_CHANGE_EVENT = "monocode:diff-viewer-change";
+
+function isDiffViewer(value: unknown): value is DiffViewer {
+  return value === "editor" || value === "unified";
+}
+
+export function loadDiffViewer(): DiffViewer {
+  try {
+    const raw = localStorage.getItem(DIFF_VIEWER_KEY);
+    return isDiffViewer(raw) ? raw : DIFF_VIEWER_DEFAULT;
+  } catch {
+    return DIFF_VIEWER_DEFAULT;
+  }
+}
+
+export function saveDiffViewer(value: DiffViewer) {
+  const next = isDiffViewer(value) ? value : DIFF_VIEWER_DEFAULT;
+  try {
+    localStorage.setItem(DIFF_VIEWER_KEY, next);
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<DiffViewer>(DIFF_VIEWER_CHANGE_EVENT, { detail: next }),
+  );
+}
+
+export function subscribeDiffViewer(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(DIFF_VIEWER_CHANGE_EVENT, onStoreChange);
+  return () =>
+    window.removeEventListener(DIFF_VIEWER_CHANGE_EVENT, onStoreChange);
+}
+
 const CLAUDE_HOOKS_KEY = "monocode.claudeHooks";
 
 export const CLAUDE_HOOKS_DEFAULT = true;

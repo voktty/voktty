@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   COMPOSER_RUNNER_DEFAULT,
+  DIFF_VIEWER_DEFAULT,
   GRID_ARCADE_ENABLED_DEFAULT,
   LIVE_AGENTS_ENABLED_DEFAULT,
   loadComposerRunner,
+  loadDiffViewer,
   loadGridArcadeEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   NOTES_ENABLED_DEFAULT,
   saveComposerRunner,
+  saveDiffViewer,
   saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
@@ -18,6 +21,7 @@ const KEY = "monocode.composerRunner";
 const NOTES_KEY = "monocode.notesEnabled";
 const LIVE_AGENTS_KEY = "monocode.liveAgentsEnabled";
 const GRID_ARCADE_KEY = "monocode.gridArcadeEnabled";
+const DIFF_VIEWER_KEY = "monocode.diffViewer";
 
 function mockLocalStorage() {
   const data = new Map<string, string>();
@@ -120,5 +124,30 @@ describe("grid arcade enabled setting", () => {
     expect(loadGridArcadeEnabled()).toBe(false);
     saveGridArcadeEnabled(true);
     expect(loadGridArcadeEnabled()).toBe(true);
+  });
+});
+
+describe("diff viewer setting", () => {
+  beforeEach(mockLocalStorage);
+  afterEach(() => {
+    localStorage.removeItem(DIFF_VIEWER_KEY);
+  });
+
+  it("defaults to the editor layout", () => {
+    expect(DIFF_VIEWER_DEFAULT).toBe("editor");
+    expect(loadDiffViewer()).toBe("editor");
+  });
+
+  it("persists the unified layout", () => {
+    saveDiffViewer("unified");
+    expect(localStorage.getItem(DIFF_VIEWER_KEY)).toBe("unified");
+    expect(loadDiffViewer()).toBe("unified");
+    saveDiffViewer("editor");
+    expect(loadDiffViewer()).toBe("editor");
+  });
+
+  it("ignores unknown stored values", () => {
+    localStorage.setItem(DIFF_VIEWER_KEY, "split");
+    expect(loadDiffViewer()).toBe("editor");
   });
 });

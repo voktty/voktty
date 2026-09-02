@@ -45,6 +45,7 @@ import {
   newTerminalFile,
   newTerminalWorkspaceTab,
   nextTerminalTitle,
+  openChangesTab,
   openEditorTab,
   openTerminalTab,
   removePane,
@@ -268,6 +269,7 @@ import {
 import {
   loadLiveAgentsEnabled,
   loadNotesEnabled,
+  loadDiffViewer,
   loadSettingsSection,
   saveSettingsSection,
   subscribeLiveAgentsEnabled,
@@ -2062,13 +2064,14 @@ export default function App({
         setTabs((prev) =>
           prev.map((tab) => {
             if (tab.id !== activeTabId) return tab;
-            const opened = resolved
-              ? openEditorTab(
-                  tab,
-                  newFileTab(resolved, sidebarCwdRef.current, true),
-                )
-              : tab;
-            return opened;
+            if (loadDiffViewer() === "unified") {
+              return openChangesTab(tab, sidebarCwdRef.current, resolved);
+            }
+            if (!resolved) return tab;
+            return openEditorTab(
+              tab,
+              newFileTab(resolved, sidebarCwdRef.current, true),
+            );
           }),
         );
         setSidebarTab("changes");

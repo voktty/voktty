@@ -1,8 +1,9 @@
-import { GripVertical, Terminal, X } from "./icons";
+import { GitCompare, GripVertical, Terminal, X } from "./icons";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { basename } from "../lib/fs";
 import {
+  isChangesTab,
   isPlanTab,
   isReleaseNotesTab,
   isReviewTab,
@@ -45,6 +46,15 @@ export function surfaceTabPresentation(
       label: title,
       iconName: "CHANGELOG.md",
       tooltip: title,
+    };
+  }
+
+  if (isChangesTab(file)) {
+    return {
+      name: "Changes",
+      label: "Changes",
+      iconName: "CHANGES",
+      tooltip: "Working tree changes",
     };
   }
 
@@ -130,7 +140,8 @@ export function SurfaceTabs({
         const active = file.id === activeFileId;
         const dirty = dirtyFileIds.has(file.id);
         const errors = fileErrorCounts.get(file.id) ?? 0;
-        const review = isReviewTab(file);
+        const changes = isChangesTab(file);
+        const review = isReviewTab(file) && !changes;
         const terminal = isTerminalTab(file);
         const { label, iconName, tooltip } = surfaceTabPresentation(file);
         const dragging = sortable.draggingId === file.id;
@@ -190,6 +201,8 @@ export function SurfaceTabs({
             >
               {terminal ? (
                 <Terminal className="size-3.5 shrink-0" strokeWidth={1.75} />
+              ) : changes ? (
+                <GitCompare className="size-3.5 shrink-0" strokeWidth={1.75} />
               ) : (
                 <FileTypeIcon name={iconName} isDir={false} size={15} />
               )}

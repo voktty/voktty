@@ -42,6 +42,8 @@ export type FilePaneTab = {
   plan?: PlanTabSource;
   releaseNotes?: ReleaseNotesTabSource;
   review?: boolean;
+  /** Single working-tree review of every changed file (unified diff). */
+  changes?: boolean;
   terminal?: boolean;
   /** Foreground command when it isn't the shell. Live only — not persisted. */
   foreground?: string;
@@ -95,6 +97,16 @@ export function newFileTab(
     path,
     cwd,
     ...(review ? { review: true } : {}),
+  };
+}
+
+export function newChangesTab(cwd: string, focusPath?: string): FilePaneTab {
+  return {
+    id: crypto.randomUUID(),
+    path: focusPath || cwd,
+    cwd,
+    review: true,
+    changes: true,
   };
 }
 
@@ -302,10 +314,15 @@ export function isReviewTab(file: FilePaneTab): boolean {
   return !!file.review && !isVirtualDocumentTab(file);
 }
 
+export function isChangesTab(file: FilePaneTab): boolean {
+  return !!file.changes && isReviewTab(file);
+}
+
 export function editorTabKey(file: FilePaneTab): string {
   if (file.terminal) return `terminal:${file.id}`;
   if (file.plan) return `plan:${file.plan.blockId}`;
   if (file.releaseNotes) return `release-notes:${file.releaseNotes.version}`;
+  if (file.changes) return `changes:${file.cwd}`;
   return file.review ? `review:${file.path}` : `file:${file.path}`;
 }
 
@@ -372,6 +389,59 @@ export function openEditorTab(
     diffFocused: false,
     editorPanes: [editorPane],
   };
+}
+
+/** Focus the single working-tree Changes tab, creating it if needed. */
+export function openChangesTab(
+  tab: WorkspaceTab,
+  cwd: string,
+  focusPath?: string,
+): WorkspaceTab {
+  tab = isolateTerminalPanes(tab);
+  const next = newChangesTab(cwd, focusPath);
+  const existingPane = tab.editorPanes.find((pane) =>
+    pane.files.some(isChangesTab),
+  );
+  const existingFile = existingPane?.files.find(isChangesTab);
+
+  if (existingPane && existingFile) {
+    const updated = focusPath ? { ...existingFile, path: focusPath } : existingFile;
+    return {
+      ...tab,
+      focusedId: existingPane.id,
+      diffFocused: false,
+      editorPanes: tab.editorPanes.map((pane) =>
+        pane.id === existingPane.id
+          ? {
+              ...pane,
+              files: dropPerFileReviewTabs(pane.files).map((file) =>
+                file.id === updated.id ? updated : file,
+              ),
+              activeFileId: updated.id,
+            }
+          : pane,
+      ),
+    };
+  }
+
+  const opened = openEditorTab(tab, next);
+  return {
+    ...opened,
+    editorPanes: opened.editorPanes.map((pane) =>
+      pane.files.some(isChangesTab)
+        ? {
+            ...pane,
+            files: dropPerFileReviewTabs(pane.files),
+            activeFileId:
+              pane.files.find(isChangesTab)?.id ?? pane.activeFileId,
+          }
+        : pane,
+    ),
+  };
+}
+
+function dropPerFileReviewTabs(files: FilePaneTab[]): FilePaneTab[] {
+  return files.filter((file) => !isReviewTab(file) || isChangesTab(file));
 }
 
 /** Open a terminal in its own pane. Files never share this tab strip. */

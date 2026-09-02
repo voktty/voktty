@@ -1,13 +1,15 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { memo } from "react";
+import { memo, useSyncExternalStore } from "react";
 import {
   MarkdownViewShell,
   useMarkdownMode,
 } from "../chrome/MarkdownModeToggle";
 import { SurfaceTabs } from "../chrome/SurfaceTabs";
 import {
+  isChangesTab,
   isPlanTab,
   isReleaseNotesTab,
+  isReviewTab,
   isTerminalTab,
   type EditorPane,
   type FilePaneTab,
@@ -16,10 +18,12 @@ import type { TerminalMetaPatch } from "../lib/terminalTab";
 import type { EditorNavigationTarget } from "../lib/search";
 import { editorPathsEqual } from "../lib/search";
 import type { Session } from "../lib/session";
+import { loadDiffViewer, subscribeDiffViewer } from "../lib/settings";
 import { MarkdownPreview, MarkdownSource } from "./AgentMarkdown";
 import { FileEditor } from "./FileEditor";
 import { ReleaseNotesSurface } from "./ReleaseNotesSurface";
 import { TerminalView } from "./TerminalView";
+import { WorkingTreeDiff } from "./WorkingTreeDiff";
 
 type Props = {
   pane: EditorPane;
@@ -56,6 +60,17 @@ function FilePaneComponent({
   onPaneDragStart,
   onTerminalMetaChange,
 }: Props) {
+  const diffViewer = useSyncExternalStore(
+    subscribeDiffViewer,
+    loadDiffViewer,
+    loadDiffViewer,
+  );
+  const activeFile = pane.files.find((file) => file.id === pane.activeFileId);
+  const unifiedReview =
+    !!activeFile &&
+    (isChangesTab(activeFile) ||
+      (diffViewer === "unified" && isReviewTab(activeFile)));
+
   return (
     <div
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
@@ -72,52 +87,63 @@ function FilePaneComponent({
         onPaneDragStart={onPaneDragStart}
       />
       <div className="relative min-h-0 flex-1">
-        {pane.files.map((file) => (
-          <div
-            key={file.id}
-            aria-hidden={file.id !== pane.activeFileId}
-            className={
-              file.id === pane.activeFileId
-                ? "absolute inset-0 h-full"
-                : "hidden"
-            }
-          >
-            {isPlanTab(file) ? (
-              <PlanSurface
-                file={file}
-                sessions={sessions}
-                onOpenFile={onOpenFile}
-              />
-            ) : isReleaseNotesTab(file) ? (
-              <ReleaseNotesSurface source={file.releaseNotes} />
-            ) : isTerminalTab(file) ? (
-              <TerminalView
-                id={file.id}
-                cwd={file.cwd}
-                active={focused && file.id === pane.activeFileId}
-                onMetaChange={(patch) => onTerminalMetaChange?.(file.id, patch)}
-              />
-            ) : (
-              <FileEditor
-                path={file.path}
-                cwd={file.cwd}
-                showDiff={!!file.review}
-                active={focused && file.id === pane.activeFileId}
-                navigation={
-                  editorNavigation &&
-                  editorPathsEqual(file.path, editorNavigation.path)
-                    ? editorNavigation
-                    : null
-                }
-                onDirtyChange={(_path, dirty) => onDirtyChange(file.id, dirty)}
-                onErrorCountChange={(_path, count) =>
-                  onErrorCountChange(file.id, count)
-                }
-                onOpenFile={onOpenFile}
-              />
-            )}
+        {unifiedReview && activeFile ? (
+          <div className="absolute inset-0 h-full">
+            <WorkingTreeDiff cwd={activeFile.cwd} focusPath={activeFile.path} />
           </div>
-        ))}
+        ) : null}
+        {pane.files.map((file) => {
+          if ((unifiedReview && isReviewTab(file)) || isChangesTab(file))
+            return null;
+          return (
+            <div
+              key={file.id}
+              aria-hidden={file.id !== pane.activeFileId}
+              className={
+                file.id === pane.activeFileId
+                  ? "absolute inset-0 h-full"
+                  : "hidden"
+              }
+            >
+              {isPlanTab(file) ? (
+                <PlanSurface
+                  file={file}
+                  sessions={sessions}
+                  onOpenFile={onOpenFile}
+                />
+              ) : isReleaseNotesTab(file) ? (
+                <ReleaseNotesSurface source={file.releaseNotes} />
+              ) : isTerminalTab(file) ? (
+                <TerminalView
+                  id={file.id}
+                  cwd={file.cwd}
+                  active={focused && file.id === pane.activeFileId}
+                  onMetaChange={(patch) =>
+                    onTerminalMetaChange?.(file.id, patch)
+                  }
+                />
+              ) : (
+                <FileEditor
+                  path={file.path}
+                  cwd={file.cwd}
+                  showDiff={!!file.review}
+                  active={focused && file.id === pane.activeFileId}
+                  navigation={
+                    editorNavigation &&
+                    editorPathsEqual(file.path, editorNavigation.path)
+                      ? editorNavigation
+                      : null
+                  }
+                  onDirtyChange={(_path, dirty) => onDirtyChange(file.id, dirty)}
+                  onErrorCountChange={(_path, count) =>
+                    onErrorCountChange(file.id, count)
+                  }
+                  onOpenFile={onOpenFile}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

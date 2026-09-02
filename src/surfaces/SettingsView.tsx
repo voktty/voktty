@@ -117,16 +117,19 @@ import {
   KEYBINDINGS,
   loadClaudeHooks,
   loadComposerRunner,
+  loadDiffViewer,
   loadGridArcadeEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   saveClaudeHooks,
   saveComposerRunner,
+  saveDiffViewer,
   saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
   settingsSectionDescription,
   settingsSectionLabel,
+  type DiffViewer,
   type SettingsSectionId,
 } from "../lib/settings";
 import { loadSoundsEnabled, playCue, saveSoundsEnabled } from "../lib/sounds";
@@ -258,6 +261,7 @@ function GeneralPage({
     useState<TranscriptLayout>(loadTranscriptLayout);
   const [transcriptAnchor, setTranscriptAnchor] =
     useState(loadTranscriptAnchor);
+  const [diffViewer, setDiffViewer] = useState<DiffViewer>(loadDiffViewer);
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
   const [gridArcadeEnabled, setGridArcadeEnabled] = useState(
     loadGridArcadeEnabled,
@@ -287,6 +291,11 @@ function GeneralPage({
   const onTranscriptAnchor = (next: boolean) => {
     saveTranscriptAnchor(next);
     setTranscriptAnchor(next);
+  };
+
+  const onDiffViewer = (next: DiffViewer) => {
+    saveDiffViewer(next);
+    setDiffViewer(next);
   };
 
   const onComposerRunner = (next: boolean) => {
@@ -333,6 +342,20 @@ function GeneralPage({
             { value: "chat", label: "Chat" },
           ]}
           onChange={onTranscriptLayout}
+        />
+      </Row>
+      <Row
+        label="Diff view"
+        description="Editor keeps working-tree changes in the file, like VS Code. Unified stacks every changed file in a GitHub-style review, with sticky headers and collapsed unchanged lines."
+      >
+        <Segmented
+          label="Diff view"
+          value={diffViewer}
+          options={[
+            { value: "editor", label: "Editor" },
+            { value: "unified", label: "Unified" },
+          ]}
+          onChange={onDiffViewer}
         />
       </Row>
       <Row
