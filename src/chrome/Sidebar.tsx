@@ -26,7 +26,6 @@ import {
 import {
   loadSidebarTabOrder,
   saveSidebarTabOrder,
-  type SidebarLayout,
   type SidebarTabId,
 } from "../lib/appearance";
 import { basename } from "../lib/fs";
@@ -107,13 +106,11 @@ import {
 import { CwdPicker } from "./CwdPicker";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTree } from "./FileTree";
-import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { ProjectRail } from "./ProjectRail";
 import { RailAction } from "./RailAction";
-import { SettingsNav } from "./SettingsRail";
 import { TerminalSpinner } from "./TerminalSpinner";
-import { DevModeLabel, DevModeSlot, IconButton, TabVisitNav } from "./TitleBar";
+import { DevModeSlot, IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
@@ -121,7 +118,6 @@ import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SessionsEmpty } from "./SessionsEmpty";
 import { SidebarUpdateFooter } from "./SidebarUpdate";
 import { SourceControl } from "./SourceControl";
-import { InboxView } from "../surfaces/InboxView";
 
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 560;
@@ -154,7 +150,6 @@ type Props = {
   /** Working copy for Changes / explorer git. Falls back to `cwd`. */
   gitCwd?: string;
   open: boolean;
-  layout: SidebarLayout;
   sessions: SessionSummary[];
   busySessionIds: Set<string>;
   approvalSessionIds: Set<string>;
@@ -227,7 +222,6 @@ function SidebarComponent({
   cwd,
   gitCwd,
   open,
-  layout,
   sessions,
   busySessionIds,
   approvalSessionIds,
@@ -330,13 +324,11 @@ function SidebarComponent({
   const [filterMenu, setFilterMenu] = useState<{ x: number; y: number } | null>(
     null,
   );
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sessionListLimit, setSessionListLimit] = useState(SESSION_LIST_PAGE);
   const loadMoreRef = useRef<HTMLLIElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingFolderSessionIds = useRef(new Set<string>());
-  const deckLayout = layout === "deck";
   const busyIdsRef = useRef(busySessionIds);
   const focusedSessionIdRef = useRef(activeSessionId);
   const unseenFinishedLocalRef = useRef<Set<string>>(new Set());
@@ -382,7 +374,7 @@ function SidebarComponent({
         approvalSessionIds,
         unseenFinishedIds,
       ),
-      deckLayout || searchOpen ? searchQuery : "",
+      searchQuery,
     ),
   ].sort(compareSessionSummaries);
   // Summaries for the whole project stay in `sessions` so filters still work.
@@ -404,11 +396,11 @@ function SidebarComponent({
     shownUngrouped,
   );
   const hasMoreSessions = shownUngroupedCount < ungroupedVisible.length;
-  const sessionListKey = `${cwd}\0${sessionFilters.showArchived}\0${sessionFilters.time}\0${sessionFilters.hiddenHarnesses.join(",")}\0${sessionFilters.status.working}\0${sessionFilters.status.needsApproval}\0${sessionFilters.status.done}\0${deckLayout || searchOpen ? searchQuery : ""}`;
+  const sessionListKey = `${cwd}\0${sessionFilters.showArchived}\0${sessionFilters.time}\0${sessionFilters.hiddenHarnesses.join(",")}\0${sessionFilters.status.working}\0${sessionFilters.status.needsApproval}\0${sessionFilters.status.done}\0${searchQuery}`;
   const sessionHarnesses = harnessesInSessions(sessions);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
   const searchNarrowed = Boolean(
-    (deckLayout || searchOpen) && searchQuery.trim(),
+    searchQuery.trim(),
   );
   const narrowedByUser = searchNarrowed || filtersActive;
   const sortable = useSortable(tabOrder, (ids) => {
@@ -432,31 +424,25 @@ function SidebarComponent({
     },
     { axis: "y" },
   );
-  const visibleTabs = deckLayout
-    ? tabOrder.filter((itemId) => itemId !== "inbox")
-    : tabOrder.filter((itemId) => itemId !== "changes");
+  const visibleTabs = tabOrder.filter((itemId) => itemId !== "inbox");
   const canDragTabs = visibleTabs.length > 1;
-  const showProjectRail =
-    deckLayout && Boolean(onSelectProject && onOpenProject);
+  const showProjectRail = Boolean(onSelectProject && onOpenProject);
   // Settings live in the rail slot, so they keep it visible even when the
   // project rail itself is collapsed.
   const railVisible = showProjectRail && (projectRailOpen || settingsOpen);
   const inProject = looksLikeProject(cwd);
-  const classicSettings = settingsOpen && !deckLayout;
-  const showSidebarFooter = !deckLayout || !projectRailOpen;
+  const showSidebarFooter = !projectRailOpen;
   // A blank session has no project to browse, so the shell stands alone until
-  // one is picked — whether or not the rail is open. Classic settings keep the
-  // sidebar so it can host the section nav the rail would otherwise carry.
+  // one is picked — whether or not the rail is open.
   const sidebarVisible =
     open &&
     !searchActive &&
     !inboxActive &&
     !notesActive &&
-    (classicSettings || (!settingsOpen && !(deckLayout && !inProject)));
+    !settingsOpen &&
+    inProject;
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
   const changeStats = useProjectDiffStats(gitRoot, open);
-  const groupLogos = useTabGroupLogos();
-  const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
 
   useEffect(() => {
     setSessionListLimit(SESSION_LIST_PAGE);
@@ -519,7 +505,6 @@ function SidebarComponent({
   useEffect(() => {
     if (tab !== "sessions") {
       setFilterMenu(null);
-      setSearchOpen(false);
       setSearchQuery("");
     }
   }, [tab]);
@@ -545,7 +530,6 @@ function SidebarComponent({
     const sessionId = onNew?.();
     if (!sessionId) return;
     pendingFolderSessionIds.current.add(sessionId);
-    setSearchOpen(false);
     setSearchQuery("");
     setSessionFolders((current) => {
       const next = setFolderCollapsed(
@@ -785,14 +769,6 @@ function SidebarComponent({
     saveSessionSidebarFilters(next);
   };
 
-  const onToggleSessionSearch = () => {
-    setFilterMenu(null);
-    setSearchOpen((open) => {
-      if (open) setSearchQuery("");
-      return !open;
-    });
-  };
-
   const onFilterButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     if (filterMenu) {
       setFilterMenu(null);
@@ -825,23 +801,11 @@ function SidebarComponent({
         event.stopPropagation();
         if (searchQuery) {
           setSearchQuery("");
-          return;
         }
-        if (!deckLayout) setSearchOpen(false);
       }}
-      className={
-        deckLayout
-          ? "h-full w-full min-w-0 rounded-md bg-transparent py-0 pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/35"
-          : "w-full px-3 py-2 text-[12px] text-content outline-none placeholder:text-content/35"
-      }
+      className="h-full w-full min-w-0 rounded-md bg-transparent py-0 pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/35"
     />
   );
-
-  useEffect(() => {
-    if (!searchOpen) return;
-    searchInputRef.current?.focus();
-    searchInputRef.current?.select();
-  }, [searchOpen]);
 
   const onTabPick = (itemId: SidebarTab) => {
     onTabChange(itemId);
@@ -927,7 +891,7 @@ function SidebarComponent({
       ref={resize.setPaneRef}
       className="sidebar-glass relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
     >
-      {deckLayout && railVisible ? (
+      {railVisible ? (
         <>
           <div
             className="flex h-10 shrink-0 select-none items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
@@ -948,37 +912,22 @@ function SidebarComponent({
         </>
       ) : (
         <>
-          {deckLayout ? (
-            <div
-              className="flex h-10 shrink-0 select-none items-center border-b border-content/10 pr-1.5"
-              data-tauri-drag-region="deep"
-            >
-              {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
-              <DevModeSlot />
-              <TabVisitNav
-                canGoBack={canGoBack}
-                canGoForward={canGoForward}
-                onGoBack={onGoBack}
-                onGoForward={onGoForward}
-                onTogglePanel={onToggleProjectRail}
-                panelActive={false}
-              />
-            </div>
-          ) : (
-            <div
-              className="flex h-9.75 shrink-0 select-none items-center justify-end gap-1 pr-1.5"
-              data-tauri-drag-region="deep"
-            >
-              <DevModeLabel />
-              <TabVisitNav
-                canGoBack={canGoBack}
-                canGoForward={canGoForward}
-                onGoBack={onGoBack}
-                onGoForward={onGoForward}
-              />
-            </div>
-          )}
-          {deckLayout && onSelectProject ? (
+          <div
+            className="flex h-10 shrink-0 select-none items-center border-b border-content/10 pr-1.5"
+            data-tauri-drag-region="deep"
+          >
+            {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
+            <DevModeSlot />
+            <TabVisitNav
+              canGoBack={canGoBack}
+              canGoForward={canGoForward}
+              onGoBack={onGoBack}
+              onGoForward={onGoForward}
+              onTogglePanel={onToggleProjectRail}
+              panelActive={false}
+            />
+          </div>
+          {onSelectProject ? (
             <SidebarProjectPicker
               cwd={cwd}
               recents={recents}
@@ -994,29 +943,16 @@ function SidebarComponent({
               inboxUnseen={inboxUnseen}
             />
           ) : null}
-          {classicSettings ? null : (
-            <div
-              role="tablist"
-              aria-label="Workspace"
-              className={`flex h-9 shrink-0 items-center gap-px overflow-visible border-content/10 px-2 ${
-                // Mirrors the rail-open header stack: each row owns its own
-                // bottom border, so the seams land on the title bar's.
-                deckLayout ? "border-b" : "border-y"
-              }`}
-            >
-              {workspaceTabItems}
-            </div>
-          )}
+          <div
+            role="tablist"
+            aria-label="Workspace"
+            className="flex h-9 shrink-0 items-center gap-px overflow-visible border-b border-content/10 px-2"
+          >
+            {workspaceTabItems}
+          </div>
         </>
       )}
-      {classicSettings ? (
-        <SettingsNav
-          section={settingsSection}
-          onSelect={(next) => onSelectSettingsSection?.(next)}
-          onClose={() => onCloseSettings?.()}
-        />
-      ) : (
-        <>
+      <>
           <div
             className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
               tab === "files" ? "" : "hidden"
@@ -1050,57 +986,7 @@ function SidebarComponent({
               </p>
             )}
           </div>
-          {!deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
-            <div className="shrink-0 border-b border-content/10">
-              <div className="flex h-9 items-center px-2 pr-1.5">
-                <div
-                  title={cwd}
-                  className="flex h-full min-w-0 flex-1 items-center gap-1.5"
-                >
-                  {projectLogoPath ? (
-                    <ProjectLogoIcon
-                      path={projectLogoPath}
-                      className="size-4 shrink-0 rounded-sm ml-1.5"
-                      imageClassName="size-4"
-                    />
-                  ) : (
-                    <span className="grid size-6 shrink-0 place-items-center">
-                      <FileTypeIcon name={basename(cwd)} isDir isRoot />
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
-                    {basename(cwd)}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-px">
-                  <SessionsHeaderButton
-                    label="Search conversations"
-                    active={searchOpen}
-                    open={searchOpen}
-                    onClick={onToggleSessionSearch}
-                  >
-                    <Search className="size-3" strokeWidth={1.75} />
-                  </SessionsHeaderButton>
-                  <SessionsHeaderButton
-                    label="Filter sessions"
-                    active={filtersActive}
-                    open={!!filterMenu}
-                    hasPopup
-                    onClick={onFilterButtonClick}
-                  >
-                    <ListFilter className="size-3" strokeWidth={1.75} />
-                  </SessionsHeaderButton>
-                </div>
-              </div>
-              {searchOpen ? (
-                <div className="relative flex items-center border-t border-content/10 pl-3.5">
-                  <Search className="size-3 opacity-50" />
-                  {sessionSearchInput}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
+          {tab === "sessions" && cwd && cwd !== "~" ? (
             <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
               <div className="relative flex h-7 min-w-0 flex-1 items-center">
                 <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
@@ -1340,7 +1226,7 @@ function SidebarComponent({
               </div>
             )}
           </div>
-          {deckLayout && tab === "changes" ? (
+          {tab === "changes" ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <SourceControl
                 cwd={gitRoot}
@@ -1349,11 +1235,6 @@ function SidebarComponent({
                 selectedPath={selectedDiffPath}
                 onOpenFile={onOpenDiff ?? onOpenFile}
               />
-            </div>
-          ) : null}
-          {!deckLayout && tab === "inbox" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <InboxView cwd={cwd} recents={recents} variant="sidebar" />
             </div>
           ) : null}
           {showSidebarFooter ? (
@@ -1375,7 +1256,6 @@ function SidebarComponent({
             </>
           ) : null}
         </>
-      )}
       {sessionMenu ? (
         <ExplorerMenu
           x={sessionMenu.x}

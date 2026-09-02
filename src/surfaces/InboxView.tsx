@@ -71,7 +71,6 @@ import {
 import { projectName } from "../lib/paths";
 import { IS_MAC } from "../lib/platform";
 import { sameProjectPath, type RecentProject } from "../lib/recents";
-import { setInboxSelection, useInboxSelection } from "../lib/inboxSelection";
 import {
   isInboxEntryUnseen,
   markInboxItemSeen,
@@ -243,7 +242,6 @@ type Props = {
   cwd: string;
   recents: RecentProject[];
   besideRail?: boolean;
-  variant?: "overlay" | "sidebar";
   onClose?: () => void;
   onToggleSidebar?: () => void;
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
@@ -253,12 +251,10 @@ export function InboxView({
   cwd,
   recents,
   besideRail = false,
-  variant = "overlay",
   onClose,
   onToggleSidebar,
   onStart,
 }: Props) {
-  const sidebar = variant === "sidebar";
   const listLock = useLockOverscroll<HTMLDivElement>();
   const detailLock = useLockOverscroll<HTMLDivElement>();
   const onCloseRef = useRef(onClose);
@@ -330,7 +326,6 @@ export function InboxView({
   });
 
   useEffect(() => {
-    if (sidebar) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -343,7 +338,7 @@ export function InboxView({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [filterMenu, sidebar]);
+  }, [filterMenu]);
 
   useEffect(() => {
     const onChange = () => {
@@ -421,10 +416,6 @@ export function InboxView({
     if (key !== selectedKey) setSelectedKey(key);
   }, [selected, selectedKey]);
 
-  useEffect(() => {
-    setInboxSelection(selected);
-  }, [selected]);
-
   const onFiltersChange = (next: InboxFilters) => {
     const pruned = pruneInboxFilters(
       next,
@@ -453,12 +444,8 @@ export function InboxView({
 
   const list = (
     <div
-      ref={sidebar ? undefined : resize.setPaneRef}
-      className={
-        sidebar
-          ? "flex min-h-0 min-w-0 flex-1 flex-col"
-          : "relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
-      }
+      ref={resize.setPaneRef}
+      className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
     >
       <div
         role="tablist"
@@ -576,18 +563,16 @@ export function InboxView({
           </ul>
         )}
       </div>
-      {sidebar ? null : (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize inbox list"
-          className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
-            resize.dragging ? "bg-content/15" : "hover:bg-content/10"
-          }`}
-          onPointerDown={resize.onPointerDown}
-          onDoubleClick={resize.onDoubleClick}
-        />
-      )}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize inbox list"
+        className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
+          resize.dragging ? "bg-content/15" : "hover:bg-content/10"
+        }`}
+        onPointerDown={resize.onPointerDown}
+        onDoubleClick={resize.onDoubleClick}
+      />
     </div>
   );
 
@@ -602,19 +587,6 @@ export function InboxView({
       onClose={() => setFilterMenu(null)}
     />
   ) : null;
-
-  if (sidebar) {
-    return (
-      <div
-        role="region"
-        aria-label="Inbox"
-        className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
-      >
-        {list}
-        {filtersPortal}
-      </div>
-    );
-  }
 
   return (
     <div
@@ -657,41 +629,6 @@ export function InboxView({
         </div>
       </div>
       {filtersPortal}
-    </div>
-  );
-}
-
-export function InboxDetailPane({
-  cwd,
-  recents,
-  onStart,
-}: {
-  cwd: string;
-  recents: RecentProject[];
-  onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
-}) {
-  const item = useInboxSelection();
-  const logos = useTabGroupLogos();
-  const projects = useMemo(
-    () => inboxProjectsForRail(recents, cwd),
-    [cwd, recents],
-  );
-  const projectOptions = useMemo(
-    () => inboxProjectOptions(projects, logos),
-    [logos, projects],
-  );
-  return (
-    <div
-      role="region"
-      aria-label="Inbox"
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-none text-content"
-    >
-      <InboxDetailBody
-        item={item}
-        cwd={cwd}
-        projects={projectOptions}
-        onStart={onStart}
-      />
     </div>
   );
 }

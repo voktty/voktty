@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Classic layout and the zen-mode toggle are gone. The workspace is always the project rail plus scoped tabs, and the transcript always folds tool work into phases above the final answer.
+
 ### Fixed
 
 - Claude's AskUserQuestion (and the same clarifying-question flow on Cursor, Grok, and OpenCode) now opens a form above the composer. Questions come one at a time — answer or skip, then the next — instead of an Allow/Deny prompt that silently chose the first option.
