@@ -2155,6 +2155,7 @@ fn gh_run(root: &Path, args: &[&str], allow_empty: bool) -> Result<String, Strin
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GH_PAGER", "cat")
         .env("GIT_PAGER", "cat");
+    crate::modules::proc::hide_console(&mut cmd);
     super::host::apply_gui_env(&mut cmd);
     let output = cmd.output().map_err(|error| {
         if error.kind() == ErrorKind::NotFound {
