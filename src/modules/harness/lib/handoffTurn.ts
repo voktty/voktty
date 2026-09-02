@@ -16,13 +16,12 @@ export async function requestOutgoingHandoff(input: {
   model: string;
   modelSettings?: Record<string, string>;
   userRequest: string;
+  timeoutMs?: number;
 }): Promise<string> {
   let brief = "";
-  const timer = setTimeout(() => {
-    void cancelHarnessTurn(input.harness, input.sessionId);
-  }, HANDOFF_TIMEOUT_MS);
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await sendHarnessTurn({
+    const turn = sendHarnessTurn({
       harness: input.harness,
       sessionId: input.sessionId,
       cwd: input.cwd,
@@ -44,10 +43,17 @@ export async function requestOutgoingHandoff(input: {
         }
       },
     });
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        void cancelHarnessTurn(input.harness, input.sessionId);
+        reject(new Error("Outgoing handoff timed out"));
+      }, input.timeoutMs ?? HANDOFF_TIMEOUT_MS);
+    });
+    await Promise.race([turn, timeout]);
   } catch {
     // Caller falls back to the deterministic packet.
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
   return brief.trim();
 }

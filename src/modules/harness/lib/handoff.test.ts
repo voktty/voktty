@@ -10,6 +10,7 @@ import {
   consumeHandoff,
   handoffTurnCard,
   hasSessionEdits,
+  isPreparingHandoff,
   pendingHandoff,
   planComposerSwitch,
   sessionChildHarnesses,
@@ -18,12 +19,9 @@ import {
   userMessagesAfterHandoff,
   wrapHandoffPrompt,
 } from "./handoff";
-import { newSession, type Block, type Session } from "./session";
+import { type Block, newSession, type Session } from "./session";
 
-function sessionWith(
-  blocks: Block[],
-  extra?: Partial<Session>,
-): Session {
+function sessionWith(blocks: Block[], extra?: Partial<Session>): Session {
   return {
     ...newSession("cursor", "/tmp/project"),
     blocks,
@@ -40,10 +38,9 @@ describe("planComposerSwitch", () => {
   });
 
   it("arms a handoff for later instead of running it on picker change", () => {
-    const session = sessionWith(
-      [{ id: "u1", role: "user", text: "hey" }],
-      { providerSessionId: "acp-1" },
-    );
+    const session = sessionWith([{ id: "u1", role: "user", text: "hey" }], {
+      providerSessionId: "acp-1",
+    });
     expect(planComposerSwitch(session, "fx")).toEqual({
       kind: "arm",
       pending: {
@@ -196,6 +193,23 @@ describe("deterministic handoff", () => {
 });
 
 describe("handoff block lifecycle", () => {
+  it("does not let an orphaned historical handoff lock the session", () => {
+    const orphaned = appendPreparingHandoff(
+      sessionWith([{ id: "u1", role: "user", text: "go" }]),
+      "cursor",
+      "claude",
+    );
+    const recovered = appendReadyHandoff(
+      orphaned,
+      "claude",
+      "codex",
+      "Recovered context",
+    );
+
+    expect(isPreparingHandoff(orphaned)).toBe(true);
+    expect(isPreparingHandoff(recovered)).toBe(false);
+  });
+
   it("keeps the inject pending until the incoming harness accepts a turn", () => {
     let session = appendPreparingHandoff(
       sessionWith([{ id: "u1", role: "user", text: "go" }]),
@@ -225,7 +239,11 @@ describe("handoff block lifecycle", () => {
       blocks: [
         ...session.blocks,
         { id: "u2", role: "user" as const, text: "hey what is this" },
-        { id: "e1", role: "system" as const, text: "fx did not start. fx exited" },
+        {
+          id: "e1",
+          role: "system" as const,
+          text: "fx did not start. fx exited",
+        },
       ],
     };
     expect(pendingHandoff(afterFailedSend)?.from).toBe("cursor");

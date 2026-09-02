@@ -94,8 +94,14 @@ pub(crate) fn list_project_files_sync(cwd: &str) -> Result<Vec<ProjectFile>, Str
     Ok(walk_project_files(&root))
 }
 
+pub(crate) fn git_cmd() -> Command {
+    let mut cmd = Command::new("git");
+    crate::modules::proc::hide_console(&mut cmd);
+    cmd
+}
+
 fn git_ls_files(root: &Path) -> Option<Vec<ProjectFile>> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .arg("-C")
         .arg(root)
         .args(["ls-files", "-co", "--exclude-standard", "-z"])
@@ -893,10 +899,7 @@ fn add_untracked_map(root: &Path, files: &mut HashMap<String, FileAcc>) {
     }
 
     // Also consult git status --porcelain to catch any new untracked or staged files
-    if let Some(stdout) = git_run(
-        root,
-        &["status", "--porcelain=v1", "-z", "-uall"],
-    ) {
+    if let Some(stdout) = git_run(root, &["status", "--porcelain=v1", "-z", "-uall"]) {
         for chunk in stdout.split('\0') {
             if chunk.len() < 3 {
                 continue;
@@ -1068,7 +1071,7 @@ fn git_index_mode(root: &Path, relative: &str) -> Option<String> {
 }
 
 fn git_hash_object(root: &Path, relative: &str, contents: &[u8]) -> Result<String, String> {
-    let mut child = Command::new("git")
+    let mut child = git_cmd()
         .arg("--no-pager")
         .arg("-C")
         .arg(root)
@@ -2200,7 +2203,7 @@ pub(crate) fn resolve_repo_path(root: &Path, relative: &str) -> Result<String, S
 }
 
 pub(crate) fn git_checked(root: &Path, args: &[&str]) -> Result<(), String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .arg("--no-pager")
         .arg("-C")
         .arg(root)
@@ -2234,7 +2237,7 @@ fn git_run(root: &Path, args: &[&str]) -> Option<String> {
 }
 
 fn git_output(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .arg("--no-pager")
         .arg("-C")
         .arg(root)
@@ -2439,7 +2442,7 @@ fn git_branch_name(root: &Path, name: &str) -> Result<String, String> {
     if name.is_empty() {
         return Err("Branch name cannot be empty".into());
     }
-    let output = Command::new("git")
+    let output = git_cmd()
         .arg("-C")
         .arg(root)
         .args(["check-ref-format", "--branch", name])
@@ -2565,7 +2568,7 @@ fn git_ahead_behind(root: &Path, base: &str) -> (i64, i64) {
 }
 
 fn git_stdout(root: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .arg("-C")
         .arg(root)
         .args(args)
@@ -2883,7 +2886,7 @@ fn clone_repo_sync(url: &str, parent: &str) -> Result<String, String> {
         return Err(format!("{} already exists", dest.display()));
     }
     let dest_str = dest.to_str().ok_or("Invalid destination path")?;
-    let output = std::process::Command::new("git")
+    let output = git_cmd()
         .args(["clone", "--", url, dest_str])
         .output()
         .map_err(|e| {
@@ -3454,7 +3457,7 @@ pub fn reveal_path(path: String) -> Result<(), String> {
         if !status.success() {
             return Err("Could not reveal in File Explorer.".into());
         }
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -4011,10 +4014,7 @@ mod tests {
         git_discard_file_for(&dir.0, "a.txt").unwrap();
         git_discard_file_for(&dir.0, "new.txt").unwrap();
 
-        assert_eq!(
-            read_file(dir.0.join("a.txt")),
-            "alpha\n"
-        );
+        assert_eq!(read_file(dir.0.join("a.txt")), "alpha\n");
         assert!(!dir.0.join("new.txt").exists());
         assert!(git_diff_index_for(&dir.0).files.is_empty());
     }
@@ -4029,10 +4029,7 @@ mod tests {
         git_stage_file_for(&dir.0, "a.txt").unwrap();
         std::fs::write(dir.0.join("a.txt"), "gamma\n").unwrap();
         git_discard_file_for(&dir.0, "a.txt").unwrap();
-        assert_eq!(
-            read_file(dir.0.join("a.txt")),
-            "beta\n"
-        );
+        assert_eq!(read_file(dir.0.join("a.txt")), "beta\n");
         let file = git_diff_index_for(&dir.0)
             .files
             .into_iter()
@@ -4182,7 +4179,15 @@ mod tests {
             || !git(&a.0, &["push", "-u", "origin", "main"])
             || !git(&origin.0, &["symbolic-ref", "HEAD", "refs/heads/main"])
             || Command::new("git")
-                .args(["-c", "core.autocrlf=false", "clone", "-b", "main", &origin_url, "."])
+                .args([
+                    "-c",
+                    "core.autocrlf=false",
+                    "clone",
+                    "-b",
+                    "main",
+                    &origin_url,
+                    ".",
+                ])
                 .current_dir(&b.0)
                 .status()
                 .map(|status| !status.success())
@@ -4201,10 +4206,7 @@ mod tests {
         git_sync_changes_for(&a.0).unwrap();
 
         git_sync_changes_for(&b.0).unwrap();
-        assert_eq!(
-            read_file(b.0.join("a.txt")),
-            "beta\n"
-        );
+        assert_eq!(read_file(b.0.join("a.txt")), "beta\n");
         assert_eq!(git_diff_index_for(&b.0).ahead, 0);
         assert_eq!(git_diff_index_for(&b.0).behind, 0);
 
@@ -4621,10 +4623,7 @@ mod tests {
             git_checkout_for(&dir.0, "feature", None).unwrap(),
             "feature"
         );
-        assert_eq!(
-            read_file(dir.0.join("a.txt")),
-            "feature\n"
-        );
+        assert_eq!(read_file(dir.0.join("a.txt")), "feature\n");
     }
 
     #[test]
@@ -4651,10 +4650,7 @@ mod tests {
             git_checkout_for(&dir.0, "feature", None).unwrap(),
             "feature"
         );
-        assert_eq!(
-            read_file(dir.0.join("new.txt")),
-            "on-feature\n"
-        );
+        assert_eq!(read_file(dir.0.join("new.txt")), "on-feature\n");
     }
 
     #[test]
@@ -4680,10 +4676,7 @@ mod tests {
             git_checkout_for(&dir.0, "feature", None).unwrap(),
             "feature"
         );
-        assert_eq!(
-            read_file(dir.0.join("a.txt")),
-            "feature\n"
-        );
+        assert_eq!(read_file(dir.0.join("a.txt")), "feature\n");
     }
 
     #[test]

@@ -21,6 +21,7 @@ const DEFAULT_AGENTS: &[&str] = &[
     "qwen",
     "mistral",
     "perplexity",
+    "freebuff",
 ];
 
 fn normalize_agent_name(name: &str) -> &str {
@@ -365,7 +366,7 @@ mod tests {
 
     #[test]
     fn arms_on_known_external_agent_commands() {
-        for agent in ["opencode", "grok", "antigravity", "kimi"] {
+        for agent in ["opencode", "grok", "antigravity", "kimi", "freebuff"] {
             let mut d = AgentDetector::new();
             assert_eq!(
                 run(&mut d, &osc(&format!("133;C;{agent}"))),

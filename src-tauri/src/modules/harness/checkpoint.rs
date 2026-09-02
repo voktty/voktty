@@ -703,7 +703,12 @@ fn same_cwd(saved: &str, cwd: &str) -> bool {
         left.to_string_lossy()
             .replace('\\', "/")
             .trim_end_matches('/')
-            .eq_ignore_ascii_case(right.to_string_lossy().replace('\\', "/").trim_end_matches('/'))
+            .eq_ignore_ascii_case(
+                right
+                    .to_string_lossy()
+                    .replace('\\', "/")
+                    .trim_end_matches('/'),
+            )
     }
     #[cfg(not(target_os = "windows"))]
     {

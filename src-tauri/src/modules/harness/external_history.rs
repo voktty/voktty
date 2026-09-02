@@ -90,7 +90,7 @@ pub fn list_external_sessions_for_project(target_cwd: &str) -> Vec<SessionSummar
     }
 
     // Sort by updated_at descending
-    sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    sessions.sort_by_key(|session| std::cmp::Reverse(session.updated_at));
 
     set_cached(target_norm, sessions.clone());
     sessions
@@ -433,7 +433,7 @@ fn load_codex_session_record(session_id: &str, raw_id: &str) -> Option<SessionRe
     let reader = BufReader::new(file);
 
     let mut block_idx = 0;
-    for line in reader.lines().flatten() {
+    for line in reader.lines().map_while(Result::ok) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -541,7 +541,7 @@ fn load_antigravity_session_record(session_id: &str, raw_id: &str) -> Option<Ses
     let mut cwd = String::new();
     let mut title = "Antigravity Session".to_string();
 
-    for line in reader.lines().flatten() {
+    for line in reader.lines().map_while(Result::ok) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -594,10 +594,8 @@ fn load_antigravity_session_record(session_id: &str, raw_id: &str) -> Option<Ses
             let thinking = val.get("thinking").and_then(Value::as_str);
             let display_text = if !content_str.trim().is_empty() {
                 content_str
-            } else if let Some(th) = thinking {
-                th
             } else {
-                ""
+                thinking.unwrap_or_default()
             };
 
             if !display_text.trim().is_empty() {

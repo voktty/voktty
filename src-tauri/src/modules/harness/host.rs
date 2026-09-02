@@ -325,6 +325,126 @@ pub fn harness_free_port() -> Result<u16, String> {
         .map_err(|e| format!("Failed to reserve a local port: {e}"))
 }
 
+#[cfg(windows)]
+fn build_exec_command(command: &str, args: &[String]) -> Command {
+    let path = Path::new(command);
+    let effective_command = if path.extension().is_none() {
+        let exe = path.with_extension("exe");
+        let js = path.with_extension("js");
+        let cmd = path.with_extension("cmd");
+        let bat = path.with_extension("bat");
+        let ps1 = path.with_extension("ps1");
+        if exe.is_file() {
+            exe.to_string_lossy().into_owned()
+        } else if js.is_file() {
+            js.to_string_lossy().into_owned()
+        } else if cmd.is_file() {
+            cmd.to_string_lossy().into_owned()
+        } else if bat.is_file() {
+            bat.to_string_lossy().into_owned()
+        } else if ps1.is_file() {
+            ps1.to_string_lossy().into_owned()
+        } else {
+            command.to_string()
+        }
+    } else {
+        command.to_string()
+    };
+
+    let eff_path = Path::new(&effective_command);
+    let lower = effective_command.to_ascii_lowercase();
+
+    if lower.ends_with(".js") || lower.ends_with(".mjs") || lower.ends_with(".cjs") {
+        let node = which_in_path(&std::env::var("PATH").unwrap_or_default(), "node")
+            .unwrap_or_else(|| PathBuf::from("node.exe"));
+        let mut c = Command::new(node);
+        c.arg(&effective_command);
+        c.args(args);
+        crate::modules::proc::hide_console(&mut c);
+        c
+    } else if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+        // If this is an npm wrapper, find the underlying Node.js entry point to bypass cmd.exe
+        if let Some(parent) = eff_path.parent() {
+            let stem = eff_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let npm_candidates = [
+                parent.join(format!("node_modules/@openai/{}/bin/{}.js", stem, stem)),
+                parent.join(format!("node_modules/{}/bin/{}.js", stem, stem)),
+                parent.join(format!("node_modules/{}/dist/index.js", stem)),
+                parent.join(format!("node_modules/{}/cli.mjs", stem)),
+                parent.join("node_modules/@anthropic-ai/claude-code/cli.mjs"),
+                parent.join("node_modules/@earendil-works/pi-coding-agent/bin/pi.js"),
+            ];
+            for npm_js in &npm_candidates {
+                if npm_js.is_file() {
+                    let node = which_in_path(&std::env::var("PATH").unwrap_or_default(), "node")
+                        .unwrap_or_else(|| PathBuf::from("node.exe"));
+                    let mut c = Command::new(node);
+                    c.arg(npm_js);
+                    c.args(args);
+                    crate::modules::proc::hide_console(&mut c);
+                    return c;
+                }
+            }
+        }
+
+        // If a PowerShell script exists alongside, prefer it over cmd.exe
+        let ps1 = eff_path.with_extension("ps1");
+        if ps1.is_file() {
+            let pwsh = which_in_path(&std::env::var("PATH").unwrap_or_default(), "powershell")
+                .or_else(|| which_in_path(&std::env::var("PATH").unwrap_or_default(), "pwsh"))
+                .unwrap_or_else(|| PathBuf::from("powershell.exe"));
+            let mut c = Command::new(pwsh);
+            c.args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                &ps1.to_string_lossy(),
+            ]);
+            c.args(args);
+            crate::modules::proc::hide_console(&mut c);
+            return c;
+        }
+
+        let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
+        let mut c = Command::new(comspec);
+        c.arg("/c");
+        c.arg(&effective_command);
+        c.args(args);
+        crate::modules::proc::hide_console(&mut c);
+        c
+    } else if lower.ends_with(".ps1") {
+        let pwsh = which_in_path(&std::env::var("PATH").unwrap_or_default(), "powershell")
+            .or_else(|| which_in_path(&std::env::var("PATH").unwrap_or_default(), "pwsh"))
+            .unwrap_or_else(|| PathBuf::from("powershell.exe"));
+        let mut c = Command::new(pwsh);
+        c.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            &effective_command,
+        ]);
+        c.args(args);
+        crate::modules::proc::hide_console(&mut c);
+        c
+    } else {
+        let mut c = Command::new(&effective_command);
+        c.args(args);
+        crate::modules::proc::hide_console(&mut c);
+        c
+    }
+}
+
+#[cfg(not(windows))]
+fn build_exec_command(command: &str, args: &[String]) -> Command {
+    let mut c = Command::new(command);
+    c.args(args);
+    c
+}
+
 /// Off the main thread: fork/exec, and `apply_gui_env` can wait on the first
 /// login-shell read. Callers await this before writing to the child. Kill can
 /// still race the fork, so a cancelled spawn must not reinsert the child.
@@ -350,26 +470,7 @@ pub fn harness_spawn(
         ));
     }
 
-    #[cfg(windows)]
-    let mut cmd = {
-        if command.to_ascii_lowercase().ends_with(".cmd")
-            || command.to_ascii_lowercase().ends_with(".bat")
-        {
-            let mut c = Command::new("cmd.exe");
-            c.arg("/c").arg(&command).args(&args);
-            c
-        } else {
-            let mut c = Command::new(&command);
-            c.args(&args);
-            c
-        }
-    };
-    #[cfg(not(windows))]
-    let mut cmd = {
-        let mut c = Command::new(&command);
-        c.args(&args);
-        c
-    };
+    let mut cmd = build_exec_command(&command, &args);
 
     cmd.current_dir(&workdir)
         .stdin(Stdio::piped())
@@ -711,9 +812,8 @@ pub async fn harness_exec(
 }
 
 fn exec_capture(command: &str, args: &[String], cwd: Option<&str>) -> Result<String, String> {
-    let mut cmd = Command::new(command);
-    cmd.args(args)
-        .stdin(Stdio::null())
+    let mut cmd = build_exec_command(command, args);
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     prepare_child(&mut cmd, command);
@@ -812,10 +912,18 @@ fn signal_tree(pid: u32, signal: TreeSignal) {
             libc::kill(ipid, sig);
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
         let _ = signal;
-        let _ = Command::new("kill").arg(pid.to_string()).status();
+        let mut cmd = Command::new("taskkill");
+        cmd.args(["/F", "/T", "/PID", &pid.to_string()]);
+        crate::modules::proc::hide_console(&mut cmd);
+        let _ = cmd.status();
+    }
+    #[cfg(all(not(unix), not(windows)))]
+    {
+        let _ = signal;
+        let _ = pid;
     }
 }
 
@@ -825,7 +933,24 @@ fn tree_alive(pid: u32) -> bool {
         let ipid = pid as i32;
         unsafe { libc::kill(ipid, 0) == 0 || libc::kill(-ipid, 0) == 0 }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::{
+            GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if handle.is_null() {
+                return false;
+            }
+            let mut exit_code: u32 = 0;
+            let ok = GetExitCodeProcess(handle, &mut exit_code);
+            CloseHandle(handle);
+            ok != 0 && exit_code == 259
+        }
+    }
+    #[cfg(all(not(unix), not(windows)))]
     {
         let _ = pid;
         false
@@ -856,16 +981,17 @@ fn resolve_cursor_agent() -> Option<PathBuf> {
 }
 
 fn resolve_codex() -> Option<PathBuf> {
+    #[cfg_attr(windows, allow(unused_variables))]
     let home = dirs_home().map(PathBuf::from);
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     #[cfg(windows)]
     {
         if let Some(appdata) = std::env::var_os("APPDATA").map(PathBuf::from) {
+            candidates.push(appdata.join("npm\\node_modules\\@openai\\codex\\bin\\codex.js"));
             candidates.push(appdata.join("npm\\codex.cmd"));
             candidates.push(appdata.join("npm\\codex.exe"));
             candidates.push(appdata.join("npm\\codex.ps1"));
-            candidates.push(appdata.join("npm\\codex"));
         }
         if let Some(localappdata) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
             candidates.push(localappdata.join("Programs\\codex\\codex.exe"));
@@ -876,19 +1002,24 @@ fn resolve_codex() -> Option<PathBuf> {
             candidates.push(userprofile.join(".cargo\\bin\\codex.cmd"));
             candidates.push(userprofile.join(".local\\bin\\codex.exe"));
             candidates.push(userprofile.join(".local\\bin\\codex.cmd"));
+            candidates.push(userprofile.join("scoop\\shims\\codex.cmd"));
+            candidates.push(userprofile.join("scoop\\shims\\codex.exe"));
         }
     }
 
-    if let Some(home) = &home {
-        candidates.push(home.join(".local/bin/codex"));
-        candidates.push(home.join(".npm-global/bin/codex"));
-        candidates.push(home.join(".cargo/bin/codex"));
-        candidates.push(home.join("n/bin/codex"));
+    #[cfg(not(windows))]
+    {
+        if let Some(home) = &home {
+            candidates.push(home.join(".local/bin/codex"));
+            candidates.push(home.join(".npm-global/bin/codex"));
+            candidates.push(home.join(".cargo/bin/codex"));
+            candidates.push(home.join("n/bin/codex"));
+        }
+        candidates.push(PathBuf::from("/opt/homebrew/bin/codex"));
+        candidates.push(PathBuf::from("/usr/local/bin/codex"));
+        candidates.push(PathBuf::from("/usr/bin/codex"));
+        candidates.push(PathBuf::from("/snap/bin/codex"));
     }
-    candidates.push(PathBuf::from("/opt/homebrew/bin/codex"));
-    candidates.push(PathBuf::from("/usr/local/bin/codex"));
-    candidates.push(PathBuf::from("/usr/bin/codex"));
-    candidates.push(PathBuf::from("/snap/bin/codex"));
     if let Some(from_shell) = which_via_login_shell("codex") {
         candidates.push(from_shell);
     }
@@ -924,6 +1055,24 @@ fn resolve_opencode() -> Option<PathBuf> {
 fn resolve_claude() -> Option<PathBuf> {
     let home = dirs_home().map(PathBuf::from);
     let mut candidates: Vec<PathBuf> = Vec::new();
+
+    #[cfg(windows)]
+    {
+        if let Some(appdata) = std::env::var_os("APPDATA").map(PathBuf::from) {
+            candidates.push(appdata.join("npm\\node_modules\\@anthropic-ai\\claude-code\\cli.mjs"));
+            candidates.push(appdata.join("npm\\claude.cmd"));
+            candidates.push(appdata.join("npm\\claude.exe"));
+            candidates.push(appdata.join("npm\\claude.ps1"));
+        }
+        if let Some(localappdata) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+            candidates.push(localappdata.join("Programs\\claude\\claude.exe"));
+        }
+        if let Some(userprofile) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
+            candidates.push(userprofile.join(".cargo\\bin\\claude.exe"));
+            candidates.push(userprofile.join("scoop\\shims\\claude.exe"));
+            candidates.push(userprofile.join("scoop\\shims\\claude.cmd"));
+        }
+    }
 
     if let Some(home) = &home {
         candidates.push(home.join(".local/bin/claude"));
@@ -1128,9 +1277,8 @@ fn file_mentions_pi_coding_agent(path: &Path) -> bool {
 }
 
 fn help_mentions_rpc_mode(path: &Path) -> bool {
-    let mut cmd = Command::new(path);
-    cmd.arg("--help")
-        .stdin(Stdio::null())
+    let mut cmd = build_exec_command(&path.to_string_lossy(), &[String::from("--help")]);
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     // npm-installed harnesses are `#!/usr/bin/env node` scripts, so this probe
@@ -1221,9 +1369,8 @@ fn file_mentions_fx_agent(path: &Path) -> bool {
 }
 
 fn fx_help_mentions_acp(path: &Path) -> bool {
-    let mut cmd = Command::new(path);
-    cmd.arg("--help")
-        .stdin(Stdio::null())
+    let mut cmd = build_exec_command(&path.to_string_lossy(), &[String::from("--help")]);
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     // npm-installed harnesses are `#!/usr/bin/env node` scripts, so this probe
@@ -1284,9 +1431,8 @@ fn file_mentions_grok_agent(path: &Path) -> bool {
 }
 
 fn grok_help_mentions_agent(path: &Path) -> bool {
-    let mut cmd = Command::new(path);
-    cmd.arg("--help")
-        .stdin(Stdio::null())
+    let mut cmd = build_exec_command(&path.to_string_lossy(), &[String::from("--help")]);
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     apply_gui_env(&mut cmd);
@@ -1354,16 +1500,22 @@ fn which_via_login_shell(name: &str) -> Option<PathBuf> {
 fn which_in_path(path: &str, name: &str) -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        let extensions = ["", ".cmd", ".exe", ".bat", ".ps1"];
+        let has_known_ext = [".exe", ".cmd", ".bat", ".ps1"]
+            .iter()
+            .any(|ext| name.to_ascii_lowercase().ends_with(ext));
+
         for dir in std::env::split_paths(path) {
-            for ext in extensions {
-                let candidate = if ext.is_empty() {
-                    dir.join(name)
-                } else {
-                    dir.join(format!("{name}{ext}"))
-                };
+            if has_known_ext {
+                let candidate = dir.join(name);
                 if candidate.is_file() {
                     return Some(candidate);
+                }
+            } else {
+                for ext in [".exe", ".cmd", ".bat", ".ps1"] {
+                    let candidate = dir.join(format!("{name}{ext}"));
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
                 }
             }
         }

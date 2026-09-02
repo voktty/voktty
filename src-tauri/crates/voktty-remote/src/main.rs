@@ -826,10 +826,7 @@ impl RemoteServer {
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| "/bin/sh".to_string());
 
-        let mux_mode = params
-            .multiplexer_mode
-            .as_deref()
-            .unwrap_or("auto");
+        let mux_mode = params.multiplexer_mode.as_deref().unwrap_or("auto");
 
         let mut command = if mux_mode == "none" {
             let mut cmd = CommandBuilder::new(shell);
@@ -851,10 +848,7 @@ impl RemoteServer {
                 sanitized_name
             };
 
-            let action = params
-                .multiplexer_action
-                .as_deref()
-                .unwrap_or("auto");
+            let action = params.multiplexer_action.as_deref().unwrap_or("auto");
 
             let tmux_args = match action {
                 "attach_force" => format!("tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session -s '{session_name}'"),
@@ -863,7 +857,9 @@ impl RemoteServer {
             };
 
             let screen_args = match action {
-                "attach_force" => format!("screen -d -r '{session_name}' 2>/dev/null || screen -S '{session_name}'"),
+                "attach_force" => format!(
+                    "screen -d -r '{session_name}' 2>/dev/null || screen -S '{session_name}'"
+                ),
                 _ => format!("screen -xRR -S '{session_name}'"),
             };
 
@@ -1028,13 +1024,13 @@ impl RemoteServer {
         let requested = cwd.filter(|value| !value.trim().is_empty());
         let candidate = match requested {
             None => root.clone(),
-            Some(value) if Path::new(value).is_absolute() => {
-                match fs::canonicalize(value) {
-                    Ok(canonical_p) if canonical_p.starts_with(root) && canonical_p.is_dir() => canonical_p,
-                    _ if root.is_dir() => root.clone(),
-                    _ => return Err("PTY working directory is not a directory".to_string()),
+            Some(value) if Path::new(value).is_absolute() => match fs::canonicalize(value) {
+                Ok(canonical_p) if canonical_p.starts_with(root) && canonical_p.is_dir() => {
+                    canonical_p
                 }
-            }
+                _ if root.is_dir() => root.clone(),
+                _ => return Err("PTY working directory is not a directory".to_string()),
+            },
             Some(value) => match safe_relative_path(value) {
                 Ok(rel) => {
                     let cand = root.join(rel);
@@ -1941,7 +1937,8 @@ mod tests {
         let symlink_dir_path = workspace.path().join("linked_folder");
         #[cfg(unix)]
         {
-            std::os::unix::fs::symlink(external_target.path(), &symlink_dir_path).expect("symlink dir");
+            std::os::unix::fs::symlink(external_target.path(), &symlink_dir_path)
+                .expect("symlink dir");
         }
         #[cfg(windows)]
         {
@@ -1970,8 +1967,14 @@ mod tests {
                 params: json!({}),
             });
             assert!(list_root.ok);
-            let entries = list_root.result.expect("entries")["entries"].as_array().cloned().unwrap();
-            let link_entry = entries.iter().find(|e| e["name"] == "linked_folder").expect("entry found");
+            let entries = list_root.result.expect("entries")["entries"]
+                .as_array()
+                .cloned()
+                .unwrap();
+            let link_entry = entries
+                .iter()
+                .find(|e| e["name"] == "linked_folder")
+                .expect("entry found");
             assert_eq!(link_entry["kind"], "directory");
             assert_eq!(link_entry["isSymlink"], true);
 
@@ -1983,7 +1986,10 @@ mod tests {
                 params: json!({ "path": "linked_folder" }),
             });
             assert!(list_sub.ok);
-            let sub_entries = list_sub.result.expect("sub_entries")["entries"].as_array().cloned().unwrap();
+            let sub_entries = list_sub.result.expect("sub_entries")["entries"]
+                .as_array()
+                .cloned()
+                .unwrap();
             assert!(sub_entries.iter().any(|e| e["name"] == "external_file.txt"));
 
             // 3. Reading a file through the symlinked folder should work
@@ -1994,7 +2000,10 @@ mod tests {
                 params: json!({ "path": "linked_folder/external_file.txt" }),
             });
             assert!(read_sub.ok);
-            assert_eq!(read_sub.result.expect("content")["content"], "external content");
+            assert_eq!(
+                read_sub.result.expect("content")["content"],
+                "external content"
+            );
 
             // 4. Stat should report directory for linked folder
             let stat_dir = server.handle(RemoteRequest {
