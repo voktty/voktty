@@ -2,14 +2,19 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ChevronDown,
   CircleDot,
+  CircleX,
   ExternalLink,
   GitCompare,
+  GitMerge,
   GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
   Inbox,
   ListFilter,
   LoaderCircle,
   RefreshCw,
   Search,
+  type IconComponent,
 } from "../chrome/icons";
 import {
   useEffect,
@@ -731,6 +736,40 @@ function InboxDetailBody({
   );
 }
 
+type InboxStatusMark = {
+  Icon: IconComponent;
+  className: string;
+  label: string;
+};
+
+/** Status reads from the glyph first and the color second, so it survives color blindness. */
+function inboxStatusMark(item: InboxItem): InboxStatusMark {
+  const label = inboxItemStatus(item);
+  const pr = item.kind === "pr";
+  if (label === "Draft") {
+    return {
+      Icon: GitPullRequestDraft,
+      className: "text-content/50",
+      label,
+    };
+  }
+  if (label === "Merged") {
+    return { Icon: GitMerge, className: "text-violet-400/90", label };
+  }
+  if (label === "Closed") {
+    return {
+      Icon: pr ? GitPullRequestClosed : CircleX,
+      className: "text-rose-400/90",
+      label,
+    };
+  }
+  return {
+    Icon: pr ? GitPullRequest : CircleDot,
+    className: "text-emerald-400/90",
+    label,
+  };
+}
+
 function InboxCard({
   item,
   active,
@@ -747,7 +786,8 @@ function InboxCard({
   onSelect: () => void;
 }) {
   useInboxSeenTick();
-  const KindIcon = item.kind === "pr" ? GitPullRequest : CircleDot;
+  const status = inboxStatusMark(item);
+  const kindLabel = item.kind === "pr" ? "Pull request" : "Issue";
   const time = formatRelativeTime(item.updatedAt);
   const name = projectName(item.projectPath);
   const linear = item.provider === "linear";
@@ -762,7 +802,9 @@ function InboxCard({
       type="button"
       title={item.title}
       aria-current={active ? "true" : undefined}
-      aria-label={unseen ? `${item.title}, new` : undefined}
+      aria-label={`${status.label} ${kindLabel.toLowerCase()} ${inboxItemRef(
+        item,
+      )}: ${item.title}${unseen ? ", new" : ""}`}
       onClick={onSelect}
       className={`flex w-full flex-col rounded-md border px-2.5 py-2 text-left ${
         active
@@ -776,13 +818,12 @@ function InboxCard({
             provider={item.provider}
             className="size-3.5 shrink-0"
           />
-          <KindIcon
-            className="size-3 shrink-0 text-content/45"
+          <status.Icon
+            className={`size-3 shrink-0 ${status.className}`}
             strokeWidth={1.75}
           />
           <span className="min-w-0 truncate text-[11px] text-content/50">
-            {item.kind === "pr" ? "Pull request" : "Issue"} ·{" "}
-            {inboxItemRef(item)}
+            {kindLabel} · {inboxItemRef(item)}
           </span>
         </span>
         {time || unseen ? (
@@ -886,15 +927,7 @@ function InboxDetail({
   const status = linear
     ? item.state || inboxItemStatus(item)
     : inboxItemStatus(item);
-  const statusKind = inboxItemStatus(item);
-  const statusClass =
-    statusKind === "Open"
-      ? "text-emerald-400/90"
-      : statusKind === "Draft"
-        ? "text-content/50"
-        : statusKind === "Merged"
-          ? "text-violet-400/90"
-          : "text-content/45";
+  const statusMark = inboxStatusMark(item);
 
   const source = linear
     ? item.teamName || item.repo
@@ -1115,7 +1148,10 @@ function InboxDetail({
           <InboxProviderMark provider={item.provider} className="size-3.5" />
           <span>{item.kind === "pr" ? "Pull request" : "Issue"}</span>
           <span className="tabular-nums">{inboxItemRef(item)}</span>
-          <span className={statusClass}>{status}</span>
+          <span className={`flex items-center gap-1 ${statusMark.className}`}>
+            <statusMark.Icon className="size-3.5" strokeWidth={1.75} />
+            {status}
+          </span>
           {source ? <span className="truncate">{source}</span> : null}
         </div>
         <h1 className="text-[20px] font-semibold leading-tight text-content">
