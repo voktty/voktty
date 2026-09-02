@@ -18,6 +18,7 @@ import type {
 import type { GitDiffOpenInput, Tab } from "@/modules/tabs";
 import { TabBar } from "@/modules/tabs";
 import {
+  Cancel01Icon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SidebarRightIcon,
@@ -165,6 +166,19 @@ export function Header({
   const rootRef = useRef<HTMLElement>(null);
   const [compact, setCompact] = useState(false);
 
+  const activeSpaceId =
+    activeStripItem?.kind === "space" ? activeStripItem.spaceId : null;
+  const activeTabSpaceId = tabs.find((t) => t.id === activeId)?.spaceId ?? null;
+  const currentSpaceId = activeSpaceId ?? activeTabSpaceId;
+  const harnessTab =
+    tabs.find(
+      (t) =>
+        t.kind === "harness" &&
+        (!currentSpaceId || t.spaceId === currentSpaceId),
+    ) ?? tabs.find((t) => t.kind === "harness");
+  const isHarnessOpen = Boolean(harnessTab);
+  const isHarnessActive = isHarnessOpen && harnessTab?.id === activeId;
+
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -261,16 +275,16 @@ export function Header({
           />
         </Button>
 
-        {onNewHarness && (
+        {tabStyle === "vertical" && onNewHarness && (
           <Button
             onClick={onNewHarness}
             variant="ghost"
             size="icon-sm"
-            title={`Agent Development Harness (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
-            aria-label="Agent Development Harness"
+            title={`Agent Development (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+            aria-label="Agent Development"
             className={cn(
               "shrink-0 rounded-md transition-colors",
-              tabs.some((t) => t.id === activeId && t.kind === "harness")
+              isHarnessActive
                 ? "bg-foreground/[0.07] text-violet-400 shadow-xs hover:bg-foreground/[0.1] hover:text-violet-300"
                 : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground",
             )}
@@ -281,7 +295,7 @@ export function Header({
               strokeWidth={1.75}
               className={cn(
                 "transition-colors",
-                tabs.some((t) => t.id === activeId && t.kind === "harness")
+                isHarnessActive
                   ? "text-violet-400"
                   : "text-muted-foreground hover:text-foreground",
               )}
@@ -291,12 +305,76 @@ export function Header({
       </div>
 
       <div
-        className="flex min-w-0 flex-1 items-center gap-2"
+        className="flex min-w-0 flex-1 items-center gap-1.5"
         data-tauri-drag-region
       >
         {tabStyle === "horizontal" && (
           <>
             {spaceSwitcher}
+            {onNewHarness && (
+              isHarnessOpen && harnessTab ? (
+                <div
+                  role="tab"
+                  aria-selected={isHarnessActive}
+                  tabIndex={0}
+                  onClick={() => onSelect(harnessTab.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelect(harnessTab.id);
+                    }
+                  }}
+                  title={`Agent Development (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+                  className={cn(
+                    "group relative flex h-6.5 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium cursor-pointer select-none transition-all duration-150 outline-none",
+                    isHarnessActive
+                      ? "bg-foreground/[0.08] text-foreground shadow-xs ring-1 ring-inset ring-foreground/[0.06]"
+                      : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
+                  )}
+                >
+                  <HugeiconsIcon
+                    icon={SparklesIcon}
+                    size={14}
+                    strokeWidth={2}
+                    className={cn(
+                      "shrink-0 transition-colors",
+                      isHarnessActive
+                        ? "text-violet-400"
+                        : "text-violet-400/80 group-hover:text-violet-400",
+                    )}
+                  />
+                  <span className="truncate max-w-[140px]">Agent Development</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClose(harnessTab.id);
+                    }}
+                    title={t("tabs.closeTab") || "Close tab"}
+                    aria-label="Close Agent Development"
+                    className="ml-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-foreground/10 hover:text-foreground transition-colors"
+                  >
+                    <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  onClick={onNewHarness}
+                  variant="ghost"
+                  size="icon-sm"
+                  title={`Agent Development (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+                  aria-label="Agent Development"
+                  className="h-6.5 w-6.5 shrink-0 rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground transition-all duration-150"
+                >
+                  <HugeiconsIcon
+                    icon={SparklesIcon}
+                    size={14}
+                    strokeWidth={1.85}
+                    className="text-violet-400 group-hover:scale-105 transition-transform"
+                  />
+                </Button>
+              )
+            )}
             <TabBar
               tabs={tabs}
               activeId={activeId}
