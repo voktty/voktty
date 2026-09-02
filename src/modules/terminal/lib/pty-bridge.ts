@@ -8,6 +8,7 @@ import {
   currentWorkspaceEnv,
   type WorkspaceEnv,
   workspaceEnvForNativePty,
+  workspaceForDocumentPath,
 } from "@/modules/workspace";
 import { Channel, invoke } from "@tauri-apps/api/core";
 
@@ -39,7 +40,9 @@ export async function openPty(
   if (paneId !== undefined && isCollabGuestLeaf(paneId)) {
     return openCollabGuestPty(paneId, handlers);
   }
-  const activeWorkspace = workspace ?? currentWorkspaceEnv();
+  const activeWorkspace =
+    workspace ??
+    (cwd ? workspaceForDocumentPath(currentWorkspaceEnv(), cwd) : currentWorkspaceEnv());
   if (activeWorkspace.kind === "serial") {
     const onData = new Channel<ArrayBuffer>();
     const onExit = new Channel<number>();

@@ -85,6 +85,7 @@ export function labelFor(t: Tab): string {
   if (t.kind === "git-commit-file") return t.title;
   if (t.kind === "rdp") return t.title;
   if (t.kind === "api-client") return t.title;
+  if (t.kind === "harness") return t.title;
   if (t.customTitle) return t.customTitle;
 
   const remoteLabel = extractRemoteHostLabel(t);
@@ -196,6 +197,12 @@ export function getTabSubtitle(tab: Tab): {
     return {
       icon: "remote",
       text: translate("tabs.subtitles.apiClient"),
+    };
+  }
+  if (tab.kind === "harness") {
+    return {
+      icon: "status",
+      text: "agent development harness",
     };
   }
   return { icon: "none", text: "" };

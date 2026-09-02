@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { AiDiffStack, EditorStack, GitDiffStack } from "@/modules/editor";
 import { GitHistoryStack } from "@/modules/git-history";
 import { ApiClientStack } from "@/modules/api-client";
+import { HarnessStack } from "@/modules/harness";
 import { MarkdownStack } from "@/modules/markdown";
 import { PreviewStack } from "@/modules/preview";
 import { RdpStack } from "@/modules/rdp";
@@ -261,6 +262,20 @@ export function WorkspaceSurface({
         aria-hidden={!layerVisible("api-client")}
       >
         <ApiClientStack
+          tabs={tabs}
+          activeId={activeId}
+          placements={placements ? placementByTabId : undefined}
+        />
+      </div>
+      <div
+        className={cn(
+          LAYER,
+          visualLayout && "pointer-events-none",
+          !layerVisible("harness") && "invisible pointer-events-none",
+        )}
+        aria-hidden={!layerVisible("harness")}
+      >
+        <HarnessStack
           tabs={tabs}
           activeId={activeId}
           placements={placements ? placementByTabId : undefined}

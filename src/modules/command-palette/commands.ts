@@ -82,6 +82,7 @@ export type CommandPaletteActionContext = {
   canNavigateForward: boolean;
   openNewPreview: () => void;
   openNewApiClient?: () => void;
+  openNewHarness?: () => void;
   openActiveTabs: () => void;
   openGitGraph: () => void;
   openGitClone?: () => void;
@@ -443,6 +444,26 @@ export function createCommandItems(
       icon: GlobalIcon,
       shortcutId: "tab.newApiClient",
       run: () => ctx.openNewApiClient?.(),
+    },
+    {
+      id: "ai.openHarness",
+      title: "Open Agent Development Harness",
+      group: "AI",
+      keywords: [
+        "harness",
+        "agent",
+        "develop",
+        "code",
+        "monocode",
+        "composer",
+        "ai",
+        "codex",
+        "claude",
+        "agy",
+        "antigravity",
+      ],
+      icon: SparklesIcon,
+      run: () => ctx.openNewHarness?.(),
     },
     {
       id: "tab.close",

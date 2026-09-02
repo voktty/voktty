@@ -309,6 +309,7 @@ export default function App() {
     newMarkdownTab,
     newRdpTab,
     newApiClientTab,
+    newHarnessTab,
     setMarkdownView,
     setOverrideLanguage,
     openAiDiffTab,
@@ -1762,10 +1763,18 @@ export default function App() {
         void handleDroppedPath(custom.detail);
       }
     };
+    const terminalHandler = (e: Event) => {
+      const custom = e as CustomEvent<{ cwd?: string }>;
+      const cwd = custom.detail?.cwd;
+      newTab(cwd);
+    };
     window.addEventListener("voktty:open-dropped-path", handler);
-    return () =>
+    window.addEventListener("voktty:open-new-terminal-tab", terminalHandler);
+    return () => {
       window.removeEventListener("voktty:open-dropped-path", handler);
-  }, [handleDroppedPath]);
+      window.removeEventListener("voktty:open-new-terminal-tab", terminalHandler);
+    };
+  }, [handleDroppedPath, newTab]);
 
   const pickAndOpenFile = useCallback(async () => {
     const target = contextualInsertionTarget();
@@ -1849,6 +1858,26 @@ export default function App() {
     activeSpaceId,
     setWorkspaceEnv,
   ]);
+
+  const pickAndOpenProjectInHarness = useCallback(async () => {
+    if (activeSpace?.root) {
+      newHarnessTab(undefined, activeSpace.root);
+      return;
+    }
+    try {
+      const defaultDir = localLaunchCwd || localHome || undefined;
+      const picked = await invoke<string | null>("fs_pick_folder", {
+        defaultPath: defaultDir,
+      });
+      if (picked) {
+        newHarnessTab(undefined, picked);
+      } else {
+        newHarnessTab();
+      }
+    } catch {
+      newHarnessTab();
+    }
+  }, [activeSpace?.root, localLaunchCwd, localHome, newHarnessTab]);
 
   useLaunchRequests({
     ready: booted && spacesHydrated,
@@ -2363,6 +2392,7 @@ export default function App() {
       "tab.newPreview": () => openPreviewTab(""),
       "tab.newApiClient": () => newApiClientTab(),
       "tab.newEditor": openNewEditor,
+      "tab.newHarness": () => newHarnessTab(),
       "tab.close": handleCloseTabOrPane,
       "tab.next": () => stepSwitcher(1),
       "tab.prev": () => stepSwitcher(-1),
@@ -3828,6 +3858,7 @@ export default function App() {
         canNavigateForward: navigationAvailability.canGoForward,
         openNewPreview: () => openPreviewTab(""),
         openNewApiClient: () => newApiClientTab(),
+        openNewHarness: () => newHarnessTab(),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
         openGitClone: () => setGitCloneModalOpen(true),
@@ -3955,6 +3986,7 @@ export default function App() {
               onNewPreview={() => openPreviewTab("")}
               onNewEditor={openNewEditor}
               onNewApiClient={() => newApiClientTab()}
+              onNewHarness={() => newHarnessTab()}
               onNewRdp={(opts) => newRdpTab(opts)}
               onConnectRemote={() => setGuestConnectOpen(true)}
               onShareTerminal={handleShareTerminal}
@@ -4188,6 +4220,7 @@ export default function App() {
                           onOpenFolder={pickAndOpenFolder}
                           onNewFile={openNewEditor}
                           onNewTerminal={openNewTab}
+                          onOpenHarness={pickAndOpenProjectInHarness}
                           onDropPath={handleDroppedPath}
                         />
                       ) : (

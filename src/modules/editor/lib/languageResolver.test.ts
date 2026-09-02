@@ -1,4 +1,4 @@
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { resolveDisplayName, resolveLanguage } from "./languageResolver";
@@ -54,7 +54,9 @@ describe("resolveDisplayName", () => {
       doc: "{#if ready}<button on:click={run}>{label}</button>{/if}",
       extensions: [result.ext],
     });
-    const tree = syntaxTree(state).toString();
+    const tree = (
+      ensureSyntaxTree(state, state.doc.length, 5000) ?? syntaxTree(state)
+    ).toString();
     expect(tree).toContain("IfBlock");
     expect(tree).toContain("IfBlockOpen");
   });

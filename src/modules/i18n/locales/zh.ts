@@ -1,4 +1,4 @@
-import { en, mergeLocale, type TranslationSchema } from "./en";
+﻿import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const zhBase = mergeLocale(en, {
   common: {
@@ -74,6 +74,7 @@ const zhBase = mergeLocale(en, {
       docker: "Docker",
       vault: "密码库",
       aliases: "别名",
+      harness: "Agent Harness",
       about: "关于",
     },
     general: {
@@ -1001,6 +1002,7 @@ const zhBase = mergeLocale(en, {
       spacesOverview: "空间: 概览",
       newSpace: "新建空间",
       switchToSpace: "切换到 {name}",
+      openHarness: "Agent Harness",
       newTerminal: "新建终端",
       dropPrompt: "拖放文件或文件夹至此即可打开",
       dropSubtitle: "文件将在编辑器中打开，文件夹将在终端中打开",
@@ -1432,6 +1434,7 @@ const zhBase = mergeLocale(en, {
       tabNewBlock: "新建块终端",
       tabNewPrivate: "新建私有终端",
       tabNewPreview: "新建网页预览",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "新建编辑器标签页",
       tabClose: "关闭标签页或面板",
       paneSplitRight: "向右拆分面板",
@@ -1585,6 +1588,7 @@ const zhBase = mergeLocale(en, {
       openFile: "打开文件",
       openFolder: "打开文件夹",
       newFile: "新建文件",
+      openHarness: "Agent Harness",
       newTerminal: "新建终端",
       dropPrompt: "拖放文件或文件夹至此即可打开",
       dropSubtitle: "文件将在编辑器中打开，文件夹将在终端中打开",

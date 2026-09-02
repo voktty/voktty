@@ -87,6 +87,8 @@ type Props = {
   onNewPrivate?: () => void;
   onNewPreview?: () => void;
   onNewEditor?: () => void;
+  onNewApiClient?: () => void;
+  onNewHarness?: () => void;
   onNewRdp?: (options?: {
     host?: string;
     port?: number;
@@ -163,6 +165,16 @@ function TabBadgeIcon({ tab }: { tab: Tab }) {
       />
     );
   }
+  if (tab.kind === "harness") {
+    return (
+      <HugeiconsIcon
+        icon={SparklesIcon}
+        size={14}
+        strokeWidth={1.75}
+        className="text-violet-400"
+      />
+    );
+  }
   if (
     tab.kind === "git-diff" ||
     tab.kind === "git-history" ||
@@ -201,6 +213,8 @@ export function VerticalTabBar({
   onNewPrivate,
   onNewPreview,
   onNewEditor,
+  onNewApiClient,
+  onNewHarness,
   onNewRdp,
   onConnectRemote,
   onOpenFile,
@@ -355,6 +369,8 @@ export function VerticalTabBar({
             onNewPrivate={onNewPrivate}
             onNewPreview={onNewPreview}
             onNewEditor={onNewEditor}
+            onNewApiClient={onNewApiClient}
+            onNewHarness={onNewHarness}
             onNewRdp={onNewRdp}
             onConnectRemote={onConnectRemote}
             onOpenFile={onOpenFile}

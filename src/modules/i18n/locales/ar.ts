@@ -1,4 +1,4 @@
-import { en, mergeLocale, type TranslationSchema } from "./en";
+﻿import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const arLocaleBatch: TranslationSchema = mergeLocale(en, {
   common: {
@@ -85,6 +85,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
       mcp: "MCP",
       vault: "الخزنة",
       aliases: "الاختصارات",
+      harness: "Agent Harness",
       about: "حول",
     },
     general: {
@@ -1547,6 +1548,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
       extractFocusedSpaceMember: "المساحات: استخراج العنصر المركّز عليه",
       moveFocusedSpaceMember: "المساحات: نقل العنصر المركّز عليه...",
       closeFocusedSpaceMember: "المساحات: إغلاق العنصر المركّز عليه",
+      openHarness: "Agent Harness",
       newTerminal: "طرفية جديدة",
       dropPrompt: "أفلت الملف أو المجلد هنا لفتحه",
       dropSubtitle:
@@ -2441,6 +2443,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
       tabNewPrivate: "طرفية خاصة جديدة",
       tabNewPreview: "معاينة ويب جديدة",
       tabNewApiClient: "عميل API وبيئة اختبار جديدة",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "علامة تبويب محرر جديدة",
       tabClose: "إغلاق علامة التبويب أو اللوح",
       paneSplitRight: "تقسيم اللوح يميناً",
@@ -2611,6 +2614,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
       openFile: "فتح ملف",
       openFolder: "فتح مجلد",
       newFile: "ملف جديد",
+      openHarness: "Agent Harness",
       newTerminal: "طرفية جديدة",
       dropPrompt: "أفلت الملف أو المجلد هنا لفتحه",
       dropSubtitle:

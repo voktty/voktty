@@ -1029,17 +1029,27 @@ impl RemoteServer {
         let candidate = match requested {
             None => root.clone(),
             Some(value) if Path::new(value).is_absolute() => {
-                let canonical_p = fs::canonicalize(value).map_err(|e| e.to_string())?;
-                if !canonical_p.starts_with(root) {
-                    return Err("path is outside the workspace root".to_string());
+                match fs::canonicalize(value) {
+                    Ok(canonical_p) if canonical_p.starts_with(root) && canonical_p.is_dir() => canonical_p,
+                    _ if root.is_dir() => root.clone(),
+                    _ => return Err("PTY working directory is not a directory".to_string()),
                 }
-                canonical_p
             }
-            Some(value) => root.join(safe_relative_path(value)?),
+            Some(value) => match safe_relative_path(value) {
+                Ok(rel) => {
+                    let cand = root.join(rel);
+                    if cand.is_dir() {
+                        cand
+                    } else if root.is_dir() {
+                        root.clone()
+                    } else {
+                        return Err("PTY working directory is not a directory".to_string());
+                    }
+                }
+                Err(_) if root.is_dir() => root.clone(),
+                Err(e) => return Err(e),
+            },
         };
-        if !candidate.is_dir() {
-            return Err("PTY working directory is not a directory".to_string());
-        }
         Ok(candidate)
     }
 

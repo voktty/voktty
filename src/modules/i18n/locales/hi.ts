@@ -1,4 +1,4 @@
-import { en, mergeLocale, type TranslationSchema } from "./en";
+﻿import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const hiLocaleBase: TranslationSchema = mergeLocale(en, {
   common: {
@@ -85,6 +85,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
       mcp: "MCP",
       vault: "वॉल्ट",
       aliases: "उपनाम",
+      harness: "Agent Harness",
       about: "के बारे में",
     },
     general: {
@@ -1548,6 +1549,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
       extractFocusedSpaceMember: "स्पेस: फ़ोकस्ड सदस्य को निकालें",
       moveFocusedSpaceMember: "स्पेस: फ़ोकस्ड सदस्य को ले जाएं...",
       closeFocusedSpaceMember: "स्पेस: फ़ोकस्ड सदस्य को बंद करें",
+      openHarness: "Agent Harness",
       newTerminal: "नया टर्मिनल",
       dropPrompt: "खोलने के लिए फ़ाइल या फ़ोल्डर यहाँ छोड़ें",
       dropSubtitle:
@@ -2442,6 +2444,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
       tabNewPrivate: "नया निजी टर्मिनल",
       tabNewPreview: "नया वेब पूर्वावलोकन",
       tabNewApiClient: "नया एपीआई क्लाइंट और सैंडबॉक्स",
+      tabNewHarness: "Agent Development Harness",
       tabNewEditor: "नया संपादक टैब",
       tabClose: "टैब या पेन बंद करें",
       paneSplitRight: "पेन को दाईं ओर विभाजित करें",
@@ -2612,6 +2615,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
       openFile: "फ़ाइल खोलें",
       openFolder: "फ़ोल्डर खोलें",
       newFile: "नई फ़ाइल",
+      openHarness: "Agent Harness",
       newTerminal: "नया टर्मिनल",
       dropPrompt: "खोलने के लिए फ़ाइल या फ़ोल्डर यहाँ छोड़ें",
       dropSubtitle:
