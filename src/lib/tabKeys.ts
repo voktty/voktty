@@ -16,6 +16,7 @@
  *   New terminal        cmd-`
  *   New terminal tab    shift-cmd-`
  *   Toggle terminal     cmd-j
+ *   Stop focused turn   escape
  */
 
 import type { FocusDir } from "./layout";
@@ -76,4 +77,75 @@ export function tabCommand(e: KeyboardEvent): TabCommand | null {
   if (key >= "1" && key <= "8") return { activate: Number(key) - 1 };
   if (key === "9") return { activate: -1 };
   return null;
+}
+
+type EscapeKeyEvent = Pick<
+  KeyboardEvent,
+  | "key"
+  | "isComposing"
+  | "defaultPrevented"
+  | "repeat"
+  | "metaKey"
+  | "ctrlKey"
+  | "altKey"
+  | "shiftKey"
+>;
+
+type EscapeFocusTab = {
+  id: string;
+  focusedId: string;
+  diffFocused?: boolean;
+};
+
+type EscapeFocusSession = {
+  id: string;
+  busy?: boolean;
+};
+
+function isPlainEscape(e: EscapeKeyEvent): boolean {
+  return (
+    e.key === "Escape" &&
+    !e.isComposing &&
+    !e.repeat &&
+    !e.metaKey &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !e.shiftKey
+  );
+}
+
+export function shouldStopFocusedTurnOnEscape(
+  e: EscapeKeyEvent,
+  options: { inTerminal: boolean; focusedSessionBusy: boolean },
+): boolean {
+  return (
+    isPlainEscape(e) &&
+    !e.defaultPrevented &&
+    !options.inTerminal &&
+    options.focusedSessionBusy
+  );
+}
+
+export function focusedBusyAgentSessionId(
+  activeTabId: string,
+  tabs: readonly EscapeFocusTab[],
+  sessions: readonly EscapeFocusSession[],
+  projectTerminalFocused: boolean,
+): string | null {
+  if (projectTerminalFocused) return null;
+  const tab = tabs.find((entry) => entry.id === activeTabId);
+  if (!tab || tab.diffFocused) return null;
+  const session = sessions.find((entry) => entry.id === tab.focusedId);
+  return session?.busy === true ? session.id : null;
+}
+
+export function deferUnhandledEscape(
+  e: EscapeKeyEvent,
+  run: () => void,
+  defer: (callback: () => void) => void = queueMicrotask,
+): void {
+  if (!isPlainEscape(e) || e.defaultPrevented) return;
+  defer(() => {
+    if (!e.defaultPrevented) run();
+  });
 }
