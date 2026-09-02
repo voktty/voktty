@@ -60,6 +60,7 @@ import {
   saveSessionFolders,
   setFolderCollapsed,
   setFolderColor,
+  setFolderCustomColor,
   ungroupedSessions,
   type SessionFolder,
   type SessionListDropTarget,
@@ -98,12 +99,14 @@ import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
+import { normalizeHex } from "../lib/colorUtils";
 import {
   looksLikeProject,
   sameProjectPath,
   type RecentProject,
 } from "../lib/recents";
 import { CwdPicker } from "./CwdPicker";
+import { ColorPickerPopover, ColorSwatchRow } from "./ColorPickerPopover";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTree } from "./FileTree";
 import { HarnessIcon } from "./HarnessIcon";
@@ -709,6 +712,13 @@ function SidebarComponent({
     );
   };
 
+  const onFolderCustomColorChange = (color: string) => {
+    if (!folderMenu) return;
+    commitSessionFolders(
+      setFolderCustomColor(sessionFolders, folderMenu.folderId, color),
+    );
+  };
+
   const onSessionListDrop = (
     draggedId: string,
     target: SessionListDropTarget,
@@ -1062,6 +1072,7 @@ function SidebarComponent({
                           searchNarrowed || !entry.folder.collapsed;
                         const shellFill = folderShellFill(
                           entry.folder.colorIndex,
+                          entry.folder.customColor,
                         );
                         const folderIndex = visibleFolderIds.indexOf(
                           entry.folder.id,
@@ -1272,10 +1283,13 @@ function SidebarComponent({
           y={folderMenu.y}
           items={folderMenuItems}
           ariaLabel="Folder actions"
+          width={260}
           header={
             <FolderColorSwatches
               colorIndex={menuFolder?.colorIndex}
+              customColor={menuFolder?.customColor}
               onChange={onFolderColorChange}
+              onCustomChange={onFolderCustomColorChange}
             />
           }
           onPick={onFolderMenuPick}
@@ -1552,38 +1566,29 @@ function sessionListDropFromPoint(
 
 function FolderColorSwatches({
   colorIndex,
+  customColor,
   onChange,
+  onCustomChange,
 }: {
   colorIndex: number | undefined;
+  customColor: string | undefined;
   onChange: (index: number | null) => void;
+  onCustomChange: (color: string) => void;
 }) {
+  const paletteColor =
+    colorIndex != null ? TAB_GROUP_COLORS[colorIndex] : TAB_GROUP_COLORS[0];
+  const pickerValue = customColor ?? normalizeHex(paletteColor ?? TAB_GROUP_COLORS[0]);
   return (
-    <div className="flex items-center justify-between gap-0.5 px-1 py-1">
-      {TAB_GROUP_COLORS.map((color, index) => {
-        const selected =
-          (colorIndex == null && index === 0) || colorIndex === index;
-        return (
-          <button
-            key={color}
-            type="button"
-            title={`Color ${index + 1}`}
-            aria-label={`Color ${index + 1}`}
-            aria-pressed={selected}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onChange(index === 0 ? null : index)}
-            className="grid size-5 place-items-center rounded-full"
-          >
-            <span
-              className={`size-3.5 rounded-full ${
-                selected
-                  ? "ring-2 ring-content/80 ring-offset-1 ring-offset-transparent"
-                  : ""
-              }`}
-              style={{ background: color }}
-            />
-          </button>
-        );
-      })}
+    <div className="px-1 py-1">
+      <ColorSwatchRow
+        colors={TAB_GROUP_COLORS}
+        colorIndex={colorIndex}
+        customColor={customColor}
+        customPickerOpen
+        customHighlighted={customColor != null}
+        onPickIndex={(index) => onChange(index === 0 ? null : index)}
+      />
+      <ColorPickerPopover value={pickerValue} onChange={onCustomChange} />
     </div>
   );
 }
@@ -1616,7 +1621,7 @@ function FolderRow({
   onRename: () => void;
 }) {
   const count = sessions.length;
-  const accent = folderAccent(folder.colorIndex);
+  const accent = folderAccent(folder.colorIndex, folder.customColor);
   return (
     <button
       type="button"
@@ -1656,7 +1661,9 @@ function FolderRow({
         ) : (
           <>
             <Folder
-              className="size-3.5 group-hover:hidden group-focus-visible:hidden text-content"
+              className={`size-3.5 group-hover:hidden group-focus-visible:hidden ${
+                accent ? "" : "text-content"
+              }`}
               strokeWidth={1.75}
             />
             <ChevronRight

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Classic layout and the zen-mode toggle are gone. The workspace is always the project rail plus scoped tabs, and the transcript always folds tool work into phases above the final answer.
+- Session folder menus show the same saturation picker as project colors, and the picker stays open.
 
 ### Fixed
 
