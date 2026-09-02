@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-09-02
+
 ### Added
 
 - Settings → General → Diff view: Editor or Unified. Unified stacks every working-tree change in one **Changes** tab — GitHub-style review, editor syntax colours, sticky file headers and line numbers, and a single horizontal scroll that stops at the end of the line. Editor keeps the previous per-file working-tree tabs.
+
+### Fixed
+
+- Escape stops the in-flight agent turn you are focused on. Modals, pickers, search, and the editor still consume Escape first, and a terminal still uses Ctrl+C — Escape is not a PTY interrupt. In #44 by @MisterWanted.
 
 ## [0.1.29] - 2026-09-02
 
@@ -455,7 +461,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.29...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.30...HEAD
+[0.1.30]: https://github.com/hardbeat920/monocode/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/hardbeat920/monocode/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/hardbeat920/monocode/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/hardbeat920/monocode/compare/v0.1.26...v0.1.27
