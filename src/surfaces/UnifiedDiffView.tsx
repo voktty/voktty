@@ -413,7 +413,7 @@ function VirtualRows({
   onStageHunk?: (id: string, pos: number) => void;
 }) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  const lockOverscroll = useLockOverscroll<HTMLDivElement>();
+  const codeRef = useRef<HTMLDivElement | null>(null);
   const mouseYRef = useRef<number | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const rows = useMemo(
@@ -539,6 +539,41 @@ function VirtualRows({
     };
   }, [hoverAtY, near, scrollerRef, updateWindow]);
 
+  useEffect(() => {
+    if (!near) return;
+    const code = codeRef.current;
+    if (!code) return;
+
+    // WebKit can latch a wheel gesture to this horizontal scroller instead of
+    // chaining its vertical delta to the surrounding unified diff.
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) return;
+      const ownScroller = scrollerRef.current;
+      const verticalScroller =
+        ownScroller && ownScroller.scrollHeight > ownScroller.clientHeight + 1
+          ? ownScroller
+          : verticalScrollParent(code);
+      if (!verticalScroller) return;
+
+      const scale =
+        event.deltaMode === 1
+          ? UNIFIED_LINE_PX
+          : event.deltaMode === 2
+            ? verticalScroller.clientHeight
+            : 1;
+      const before = verticalScroller.scrollTop;
+      const max = verticalScroller.scrollHeight - verticalScroller.clientHeight;
+      const next = Math.min(max, Math.max(0, before + event.deltaY * scale));
+      if (next === before) return;
+
+      event.preventDefault();
+      verticalScroller.scrollTop = next;
+    };
+
+    code.addEventListener("wheel", onWheel, { passive: false });
+    return () => code.removeEventListener("wheel", onWheel);
+  }, [near, scrollerRef]);
+
   if (!near) {
     return <div style={{ height: totalHeight }} />;
   }
@@ -590,8 +625,8 @@ function VirtualRows({
         {renderLane("gutter")}
       </div>
       <div
-        ref={lockOverscroll}
-        className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-none"
+        ref={codeRef}
+        className="min-w-0 flex-1 overflow-x-auto overscroll-x-none"
       >
         <div style={{ ...lanePad, minWidth: `max(100%, ${minWidthCh}ch)` }}>
           {renderLane("code")}
