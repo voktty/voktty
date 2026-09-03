@@ -8,6 +8,7 @@ import { SurfaceTabs } from "../chrome/SurfaceTabs";
 import {
   isPlanTab,
   isReleaseNotesTab,
+  isReviewTab,
   isTerminalTab,
   type EditorPane,
   type FilePaneTab,
@@ -18,6 +19,7 @@ import { editorPathsEqual } from "../lib/search";
 import type { Session } from "../lib/session";
 import { IconButton } from "../chrome/TitleBar";
 import { Terminal } from "../chrome/icons";
+import { GitDiffPane } from "@/modules/editor/GitDiffPane";
 import { MarkdownPreview, MarkdownSource } from "./AgentMarkdown";
 import { FileEditor } from "./FileEditor";
 import { ReleaseNotesSurface } from "./ReleaseNotesSurface";
@@ -113,11 +115,21 @@ function FilePaneComponent({
                 active={focused && file.id === pane.activeFileId}
                 onMetaChange={(patch) => onTerminalMetaChange?.(file.id, patch)}
               />
+            ) : isReviewTab(file) ? (
+              <GitDiffPane
+                active={focused && file.id === pane.activeFileId}
+                source={{
+                  kind: "working",
+                  repoRoot: file.cwd,
+                  path: file.path,
+                  mode: "-",
+                  originalPath: null,
+                }}
+              />
             ) : (
               <FileEditor
                 path={file.path}
                 cwd={file.cwd}
-                showDiff={!!file.review}
                 active={focused && file.id === pane.activeFileId}
                 navigation={
                   editorNavigation &&
