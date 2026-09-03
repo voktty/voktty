@@ -201,20 +201,46 @@ export function ProjectRail({
     () => Array.from(allProjects.keys()),
     [allProjects],
   );
-  const unavailablePaths = useProjectAvailability(allProjectPaths);
+  const { unavailablePaths, recheckPath } =
+    useProjectAvailability(allProjectPaths);
   const sections = useMemo(
-    () => projectRailSections(recents, cwd, railOrder, pinnedPaths, busy),
-    [busy, cwd, pinnedPaths, railOrder, recents],
+    () =>
+      projectRailSections(
+        recents,
+        cwd,
+        railOrder,
+        pinnedPaths,
+        busy,
+        unavailablePaths,
+      ),
+    [busy, cwd, pinnedPaths, railOrder, recents, unavailablePaths],
   );
+
+  const handleSelectProject = async (path: string) => {
+    const isUnavailable = isBusyPath(path, unavailablePaths);
+    if (isUnavailable) {
+      const availableNow = await recheckPath(path);
+      if (availableNow) {
+        onSelectProject(path);
+      }
+    } else {
+      onSelectProject(path);
+    }
+  };
 
   useEffect(() => {
     setRailOrder((prev) => {
-      const synced = syncProjectRailOrder(prev, allProjects, busy);
+      const synced = syncProjectRailOrder(
+        prev,
+        allProjects,
+        busy,
+        unavailablePaths,
+      );
       if (synced.join("\0") === prev.join("\0")) return prev;
       saveProjectRailOrder(synced);
       return synced;
     });
-  }, [allProjects, busy]);
+  }, [allProjects, busy, unavailablePaths]);
 
   useEffect(() => {
     setPinnedPaths((prev) => {
@@ -427,7 +453,7 @@ export function ProjectRail({
                 sortable={pinnedSortable}
                 pinned
                 searchActive={searchActive || inboxActive || notesActive}
-                onSelect={onSelectProject}
+                onSelect={handleSelectProject}
                 onTogglePin={onTogglePin}
                 onContextMenu={onProjectContextMenu}
                 onOpenMenu={openProjectMenu}
@@ -450,7 +476,7 @@ export function ProjectRail({
               sortable={projectSortable}
               pinned={false}
               searchActive={searchActive || inboxActive || notesActive}
-              onSelect={onSelectProject}
+              onSelect={handleSelectProject}
               onTogglePin={onTogglePin}
               onContextMenu={onProjectContextMenu}
               onOpenMenu={openProjectMenu}
@@ -993,10 +1019,9 @@ function ProjectCard({
           <span
             title="Directorio no disponible en disco"
             aria-label="Directorio no disponible"
-            className="flex shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-medium text-amber-500 dark:text-amber-400 group-hover:hidden"
+            className="flex shrink-0 items-center justify-center text-amber-500 dark:text-amber-400 group-hover:hidden"
           >
-            <CircleAlert className="size-3 shrink-0" strokeWidth={2} />
-            <span className="hidden sm:inline text-[10px]">No disponible</span>
+            <CircleAlert className="size-3.5 shrink-0 text-amber-400" strokeWidth={2} />
           </span>
         ) : hasChanges ? (
           <span className="shrink-0 group-hover:hidden">
