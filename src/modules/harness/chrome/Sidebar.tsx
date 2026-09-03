@@ -340,12 +340,12 @@ function SidebarComponent({
     if (next[0]) onTabChange(next[0]);
   });
   const visibleTabs = deckLayout
-    ? tabOrder.filter((itemId) => itemId === "sessions")
+    ? tabOrder.filter((itemId) => itemId === "sessions" || itemId === "changes")
     : tabOrder.filter((itemId) => itemId !== "changes");
   const canDragTabs = visibleTabs.length > 1;
 
   useEffect(() => {
-    if (deckLayout && tab !== "sessions") {
+    if (deckLayout && tab !== "sessions" && tab !== "changes") {
       onTabChange("sessions");
     }
   }, [deckLayout, tab, onTabChange]);
