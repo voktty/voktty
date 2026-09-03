@@ -1,3 +1,5 @@
+import { toast } from "sonner";
+import { native } from "@/modules/ai/lib/native";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -141,10 +143,26 @@ type LoadState =
     }
   | { kind: "error"; message: string };
 
+export function normalizeGitRelativePath(
+  repoRoot: string,
+  filePath: string,
+): string {
+  if (!filePath) return "";
+  const normRepo = repoRoot.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const normFile = filePath.replace(/\\/g, "/");
+  const normFileLower = normFile.toLowerCase();
+  if (normFileLower === normRepo) return "";
+  if (normFileLower.startsWith(normRepo + "/")) {
+    return normFile.slice(normRepo.length + 1);
+  }
+  return normFile.replace(/^[\\/]+/, "");
+}
+
 function cacheKey(source: WorkingSource | CommitSource): string {
+  const relPath = normalizeGitRelativePath(source.repoRoot, source.path);
   return source.kind === "working"
-    ? workingDiffKey(source.repoRoot, source.path, source.mode)
-    : commitDiffKey(source.repoRoot, source.sha, source.path);
+    ? workingDiffKey(source.repoRoot, relPath, source.mode)
+    : commitDiffKey(source.repoRoot, source.sha, relPath);
 }
 
 function loadStateFromCache(source: WorkingSource | CommitSource): LoadState {
@@ -163,6 +181,21 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const themeExt = useEditorThemeExt();
   const { t } = useTranslation();
+  const [reloadKey, setReloadKey] = useState(0);
+  const [authorizing, setAuthorizing] = useState(false);
+
+  const relPath = useMemo(
+    () => normalizeGitRelativePath(source.repoRoot, source.path),
+    [source.repoRoot, source.path],
+  );
+  const relOriginalPath = useMemo(
+    () =>
+      source.originalPath
+        ? normalizeGitRelativePath(source.repoRoot, source.originalPath)
+        : null,
+    [source.repoRoot, source.originalPath],
+  );
+
   const [state, setState] = useState<LoadState>(() =>
     active ? loadStateFromCache(source) : { kind: "idle" },
   );
@@ -187,10 +220,8 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
 
   const sourceKind = source.kind;
   const sourceRepoRoot = source.repoRoot;
-  const sourcePath = source.path;
   const sourceMode = source.kind === "working" ? source.mode : undefined;
   const sourceSha = source.kind === "commit" ? source.sha : undefined;
-  const sourceOriginalPath = source.originalPath;
   const sourceEnvKey = source.workspaceEnv
     ? JSON.stringify(source.workspaceEnv)
     : "";
@@ -221,16 +252,16 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
       sourceKind === "working"
         ? fetchWorkingDiff(
             sourceRepoRoot,
-            sourcePath,
+            relPath,
             sourceMode!,
-            sourceOriginalPath,
+            relOriginalPath,
             source.workspaceEnv,
           )
         : fetchCommitDiff(
             sourceRepoRoot,
             sourceSha!,
-            sourcePath,
-            sourceOriginalPath,
+            relPath,
+            relOriginalPath,
             source.workspaceEnv,
           );
 
@@ -263,14 +294,30 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     cKey,
     sourceKind,
     sourceRepoRoot,
-    sourcePath,
+    relPath,
     sourceMode,
     sourceSha,
-    sourceOriginalPath,
+    relOriginalPath,
     sourceEnvKey,
+    reloadKey,
   ]);
 
-  const path = source.path;
+  const handleAuthorize = async () => {
+    setAuthorizing(true);
+    try {
+      await native.workspaceAuthorize(source.repoRoot);
+      toast.success(
+        t("git.authorizedSuccess", { defaultValue: "Directorio autorizado" }),
+      );
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setAuthorizing(false);
+    }
+  };
+
+  const path = relPath || source.path;
   const repoRoot = source.repoRoot;
   const mode = source.kind === "working" ? source.mode : "+";
   const loaded = state.kind === "loaded" ? state : null;
@@ -297,11 +344,13 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
 
   const fileComments = useMemo(
-    () => comments.filter((c) => c.path === path),
-    [comments, path],
+    () => comments.filter((c) => c.path === path || c.path === source.path),
+    [comments, path, source.path],
   );
 
-  const fileReview = overview?.files.find((f) => f.path === path);
+  const fileReview = overview?.files.find(
+    (f) => f.path === path || f.path === source.path,
+  );
   const isReviewed = fileReview?.reviewed ?? false;
 
   const reconciledRef = useRef<string>("");
@@ -506,8 +555,32 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
               {t("common.loading")}
             </div>
           ) : state.kind === "error" ? (
-            <div className="flex h-full items-center justify-center px-6 text-center text-[11.5px] text-destructive">
-              {state.message}
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="max-w-md text-[11.5px] text-destructive">
+                {state.message}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleAuthorize()}
+                  disabled={authorizing}
+                  className="h-7 text-[11px]"
+                >
+                  {authorizing ? <Spinner className="mr-1.5 size-3" /> : null}
+                  {t("git.authorizeDirectory", {
+                    defaultValue: "Autorizar Directorio",
+                  })}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                  className="h-7 text-[11px]"
+                >
+                  {t("common.retry", { defaultValue: "Reintentar" })}
+                </Button>
+              </div>
             </div>
           ) : useFallback ? (
             <ScrollArea className="h-full">
@@ -530,7 +603,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
         </div>
         {source.kind === "working" && review ? (
           <GitReviewQueue
-            currentPath={source.path}
+            currentPath={path}
             repoRoot={source.repoRoot}
             {...review}
           />
