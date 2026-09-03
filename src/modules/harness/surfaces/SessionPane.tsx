@@ -293,6 +293,7 @@ export const SessionPane = memo(function SessionPane({
               visible={visible}
               cwd={workCwd}
               harness={session.harness}
+              model={session.model}
               onApproval={approve}
               onAddToChat={addSelectionToChat}
               onSaveNote={notesEnabled ? saveNote : undefined}

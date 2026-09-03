@@ -165,7 +165,7 @@ function ChangedFiles({
     !!index.defaultBranch &&
     index.branch === index.defaultBranch;
   const canGenerate = files.length > 0 && !busy;
-  const canCommit = staged.length > 0 && message.trim().length > 0 && !busy;
+  const canCommit = files.length > 0 && message.trim().length > 0 && !busy;
   const canCreatePr =
     hasRemote &&
     !hasOpenPr &&
@@ -182,7 +182,7 @@ function ChangedFiles({
     ((index?.ahead ?? 0) > 0 || (index?.behind ?? 0) > 0);
   const canCommitPush = canCommit && hasRemote && !diverged;
   const canCommitPushPr = canCommitPush && !hasOpenPr && !onDefault;
-  const canEditMessage = staged.length > 0 && !busy;
+  const canEditMessage = !busy;
 
   useEffect(() => {
     if (!enabled) return;
@@ -274,6 +274,9 @@ function ChangedFiles({
     setBusy(createPr ? "pr" : "commit");
     setMenuOpen(false);
     try {
+      if (staged.length === 0) {
+        await gitStageAll(cwd);
+      }
       await gitCommit(cwd, message);
       if (push || createPr) await gitPush(cwd);
       setMessage("");

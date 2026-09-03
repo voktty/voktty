@@ -6,7 +6,7 @@ use std::process::{ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -163,10 +163,11 @@ impl HarnessHost {
             self.kill_all_gen.fetch_add(1, Ordering::SeqCst);
             inner.children.drain().map(|(_, child)| child).collect()
         };
-        for live in kids {
-            terminate(live.pid);
-        }
         self.stop_all_sse();
+        let pids: Vec<u32> = kids.iter().map(|live| live.pid).collect();
+        // Drop stdin before signaling so ACP CLIs that watch the pipe can exit.
+        drop(kids);
+        terminate_all(&pids);
     }
 
     fn insert_sse(&self, session_id: String, live: Arc<LiveSse>) -> Option<Arc<LiveSse>> {
@@ -603,7 +604,9 @@ pub fn harness_kill(host: State<HarnessHost>, session_id: String) -> Result<(), 
     Ok(())
 }
 
-#[tauri::command]
+/// Off the main thread: `kill_all` waits for the children to die before it
+/// returns, and a window close calls this while the app keeps running.
+#[tauri::command(async)]
 pub fn harness_kill_all(host: State<HarnessHost>) -> Result<(), String> {
     host.kill_all();
     Ok(())
@@ -863,6 +866,11 @@ fn exec_capture(command: &str, args: &[String], cwd: Option<&str>) -> Result<Str
 }
 
 const KILL_ESCALATE: Duration = Duration::from_secs(2);
+/// Quit and `Drop` cannot wait on a detached escalate thread — the process
+/// exits first and isolated harness groups stay behind as PID-1 orphans.
+const KILL_ALL_GRACE: Duration = Duration::from_millis(300);
+const KILL_ALL_KILL_WAIT: Duration = Duration::from_millis(150);
+const HARNESS_PARENT_ENV: &str = "MONOCODE_HARNESS_PARENT";
 
 /// An interactive shell has to source the user's whole rc file; nvm alone can
 /// take a second.
@@ -873,15 +881,16 @@ const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(5);
 /// gone or already replaced, so callers must not register this child.
 const SPAWN_CANCELLED: &str = "Harness start was cancelled";
 
+/// Its own process group, so one signal reaches the whole tree, plus the
+/// marker a later launch reads to recognise what this run left behind. Every
+/// harness spawn goes through here, probes included: a `--help` probe that
+/// hangs is a `node` process too, and an unmarked one is unreapable.
 fn isolate_child(cmd: &mut Command) {
+    cmd.env(HARNESS_PARENT_ENV, std::process::id().to_string());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = cmd;
     }
 }
 
@@ -900,6 +909,43 @@ fn terminate_after(pid: u32, escalate: Duration) {
             signal_tree(pid, TreeSignal::Kill);
         }
     });
+}
+
+/// SIGTERM every tree, then SIGKILL whatever is still standing, before return.
+pub(crate) fn terminate_all(pids: &[u32]) {
+    let pids: Vec<u32> = pids.iter().copied().filter(|pid| *pid > 1).collect();
+    if pids.is_empty() {
+        return;
+    }
+    for pid in &pids {
+        signal_tree(*pid, TreeSignal::Term);
+    }
+    wait_until_dead(&pids, Instant::now() + KILL_ALL_GRACE);
+    let remaining: Vec<u32> = pids
+        .iter()
+        .copied()
+        .filter(|pid| tree_alive(*pid))
+        .collect();
+    if remaining.is_empty() {
+        return;
+    }
+    for pid in &remaining {
+        signal_tree(*pid, TreeSignal::Kill);
+    }
+    wait_until_dead(&remaining, Instant::now() + KILL_ALL_KILL_WAIT);
+}
+
+/// The thread that owns each `Child` reaps it, so a killed leader stops
+/// answering `kill(pid, 0)` within a poll or two. Reaping here instead would
+/// race that thread for the exit status and free the pid while we still signal
+/// it.
+fn wait_until_dead(pids: &[u32], until: Instant) {
+    while Instant::now() < until {
+        if pids.iter().all(|pid| !tree_alive(*pid)) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
 }
 
 enum TreeSignal {
@@ -967,6 +1013,303 @@ fn tree_alive(pid: u32) -> bool {
         let _ = pid;
         false
     }
+}
+
+#[cfg(any(unix, test))]
+fn process_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        unsafe { libc::kill(pid as i32, 0) == 0 }
+    }
+    #[cfg(not(unix))]
+    {
+        tree_alive(pid)
+    }
+}
+
+#[cfg(any(unix, test))]
+#[derive(Debug, Clone)]
+struct ProcessSnapshot {
+    pid: u32,
+    ppid: u32,
+    args: String,
+    harness_parent: Option<u32>,
+}
+
+/// Kill harness trees left behind by a previous instance that exited
+/// before SIGKILL ran (crash, force-quit, or the detached escalate thread).
+/// Off-thread: the sweep shells out to `ps` and then waits on a SIGKILL, and
+/// launch would otherwise hold the first window for both. Nothing this run
+/// spawns can be caught by it — our own children carry our pid as the marker.
+pub(crate) fn reap_orphaned_harness_processes() {
+    #[cfg(unix)]
+    {
+        let our_pid = std::process::id();
+        thread::spawn(move || reap_snapshots(&snapshot_processes(), our_pid));
+    }
+}
+
+#[cfg(unix)]
+fn reap_snapshots(rows: &[ProcessSnapshot], our_pid: u32) {
+    let pids: Vec<u32> = rows
+        .iter()
+        .filter(|row| should_reap_process(row, our_pid, process_alive))
+        .map(|row| row.pid)
+        .collect();
+    terminate_all(&pids);
+}
+
+#[cfg(any(unix, test))]
+fn should_reap_process(
+    proc: &ProcessSnapshot,
+    our_pid: u32,
+    parent_alive: impl Fn(u32) -> bool,
+) -> bool {
+    if proc.pid == our_pid || proc.pid <= 1 || proc.ppid == our_pid {
+        return false;
+    }
+    if let Some(parent) = proc.harness_parent {
+        return looks_like_harness_argv(&proc.args) && parent != our_pid && !parent_alive(parent);
+    }
+    proc.ppid == 1 && is_legacy_orphaned_cursor_acp(&proc.args)
+}
+
+/// Pre-marker leftovers: `cursor-agent acp` reparented to launchd.
+#[cfg(any(unix, test))]
+fn is_legacy_orphaned_cursor_acp(args: &str) -> bool {
+    if !args.contains("cursor-agent") {
+        return false;
+    }
+    args.split_whitespace().any(|part| part == "acp")
+}
+
+/// Argv of an agent CLI we spawned — not a shell, tmux, or `npm start`.
+/// Used to decide whose environment is worth opening; the marker still
+/// decides what actually dies.
+#[cfg(any(unix, test))]
+fn looks_like_harness_argv(args: &str) -> bool {
+    if is_legacy_orphaned_cursor_acp(args) {
+        return true;
+    }
+    args.split_whitespace().any(is_harness_argv_token)
+}
+
+#[cfg(any(unix, test))]
+fn is_harness_argv_token(part: &str) -> bool {
+    let name = Path::new(part)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(part);
+    matches!(
+        name,
+        "cursor-agent"
+            | "pi-coding-agent"
+            | "claude"
+            | "codex"
+            | "opencode"
+            | "grok"
+            | "omp"
+            | "fx"
+            | "pi"
+            | "worker-server"
+            | "app-server"
+    )
+}
+
+#[cfg(any(all(unix, not(target_os = "linux")), test))]
+fn parse_ps_row(line: &str) -> Option<ProcessSnapshot> {
+    let s = line.trim();
+    let pid_end = s.find(char::is_whitespace)?;
+    let pid: u32 = s[..pid_end].parse().ok()?;
+    let rest = s[pid_end..].trim_start();
+    let ppid_end = rest.find(char::is_whitespace)?;
+    let ppid: u32 = rest[..ppid_end].parse().ok()?;
+    let args = rest[ppid_end..].trim_start();
+    if args.is_empty() {
+        return None;
+    }
+    Some(ProcessSnapshot {
+        pid,
+        ppid,
+        args: args.to_string(),
+        harness_parent: harness_parent_from_bytes(args.as_bytes()),
+    })
+}
+
+#[cfg(any(unix, test))]
+fn harness_parent_from_bytes(buf: &[u8]) -> Option<u32> {
+    let mut needle = Vec::with_capacity(HARNESS_PARENT_ENV.len() + 1);
+    needle.extend_from_slice(HARNESS_PARENT_ENV.as_bytes());
+    needle.push(b'=');
+    let pos = buf
+        .windows(needle.len())
+        .position(|chunk| chunk == needle)?;
+    let start = pos + needle.len();
+    let digits = buf[start..]
+        .iter()
+        .take_while(|b| b.is_ascii_digit())
+        .copied()
+        .collect::<Vec<u8>>();
+    std::str::from_utf8(&digits).ok()?.parse().ok()
+}
+
+#[cfg(unix)]
+fn snapshot_processes() -> Vec<ProcessSnapshot> {
+    #[cfg(target_os = "linux")]
+    {
+        snapshot_from_proc()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        snapshot_from_ps()
+    }
+}
+
+/// `ps -E`/`-e` dumps every process environment; skip that. List argv only,
+/// then open environ for agent CLIs. Linux orphans sit under `systemd --user`,
+/// not pid 1, so the marker (not ppid) is what identifies them.
+#[cfg(all(unix, not(target_os = "linux")))]
+fn snapshot_from_ps() -> Vec<ProcessSnapshot> {
+    let mut cmd = Command::new("ps");
+    #[cfg(target_os = "macos")]
+    {
+        cmd.args(["-axww", "-o", "pid=", "-o", "ppid=", "-o", "command="]);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        cmd.args(["-axww", "-o", "pid=", "-o", "ppid=", "-o", "args="]);
+    }
+    let Ok(output) = cmd.output() else {
+        return Vec::new();
+    };
+    let mut rows: Vec<ProcessSnapshot> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(parse_ps_row)
+        .collect();
+    attach_markers_from_env(&mut rows);
+    rows
+}
+
+#[cfg(target_os = "linux")]
+fn snapshot_from_proc() -> Vec<ProcessSnapshot> {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    let mut rows: Vec<ProcessSnapshot> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let pid: u32 = entry.file_name().to_str()?.parse().ok()?;
+            let dir = entry.path();
+            let cmdline = std::fs::read(dir.join("cmdline")).ok()?;
+            if cmdline.is_empty() {
+                return None;
+            }
+            Some(ProcessSnapshot {
+                pid,
+                ppid: proc_ppid(&dir)?,
+                args: String::from_utf8_lossy(&cmdline).replace('\0', " "),
+                harness_parent: None,
+            })
+        })
+        .collect();
+    attach_markers_from_env(&mut rows);
+    rows
+}
+
+#[cfg(unix)]
+fn attach_markers_from_env(rows: &mut [ProcessSnapshot]) {
+    let pids: Vec<u32> = rows
+        .iter()
+        .filter(|row| row.harness_parent.is_none() && looks_like_harness_argv(&row.args))
+        .map(|row| row.pid)
+        .collect();
+    if pids.is_empty() {
+        return;
+    }
+    let parents = read_harness_parents(&pids);
+    for row in rows {
+        if row.harness_parent.is_some() {
+            continue;
+        }
+        if let Some(parent) = parents.get(&row.pid).copied() {
+            row.harness_parent = Some(parent);
+        }
+    }
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn read_harness_parents(pids: &[u32]) -> HashMap<u32, u32> {
+    let mut found = HashMap::new();
+    if pids.is_empty() {
+        return found;
+    }
+    let list = pids
+        .iter()
+        .map(|pid| pid.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut cmd = Command::new("ps");
+    #[cfg(target_os = "macos")]
+    {
+        cmd.args(["-Eww", "-p", &list, "-o", "pid=", "-o", "command="]);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        cmd.args(["-eww", "-p", &list, "-o", "pid=", "-o", "args="]);
+    }
+    let Ok(output) = cmd.output() else {
+        return found;
+    };
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some((pid, command)) = parse_ps_pid_command(line) else {
+            continue;
+        };
+        if let Some(parent) = harness_parent_from_bytes(command.as_bytes()) {
+            found.insert(pid, parent);
+        }
+    }
+    found
+}
+
+#[cfg(any(all(unix, not(target_os = "linux")), test))]
+fn parse_ps_pid_command(line: &str) -> Option<(u32, String)> {
+    let s = line.trim();
+    let pid_end = s.find(char::is_whitespace)?;
+    let pid: u32 = s[..pid_end].parse().ok()?;
+    let command = s[pid_end..].trim_start();
+    if command.is_empty() {
+        return None;
+    }
+    Some((pid, command.to_string()))
+}
+
+#[cfg(target_os = "linux")]
+fn read_harness_parents(pids: &[u32]) -> HashMap<u32, u32> {
+    pids.iter()
+        .filter_map(|pid| {
+            let buf = std::fs::read(format!("/proc/{pid}/environ")).ok()?;
+            Some((*pid, harness_parent_from_bytes(&buf)?))
+        })
+        .collect()
+}
+
+#[cfg(target_os = "linux")]
+fn proc_ppid(dir: &Path) -> Option<u32> {
+    parse_proc_ppid(&std::fs::read_to_string(dir.join("stat")).ok()?)
+}
+
+/// Field 4 of `stat`, counted from the last closing paren: `comm` is unquoted
+/// and can hold spaces and parens of its own.
+#[cfg(any(target_os = "linux", test))]
+fn parse_proc_ppid(stat: &str) -> Option<u32> {
+    stat.get(stat.rfind(')')? + 1..)?
+        .split_whitespace()
+        .nth(1)?
+        .parse()
+        .ok()
 }
 
 fn resolve_cursor_agent() -> Option<PathBuf> {
