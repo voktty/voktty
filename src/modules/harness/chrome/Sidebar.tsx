@@ -340,9 +340,15 @@ function SidebarComponent({
     if (next[0]) onTabChange(next[0]);
   });
   const visibleTabs = deckLayout
-    ? tabOrder.filter((itemId) => itemId !== "inbox")
+    ? tabOrder.filter((itemId) => itemId === "sessions")
     : tabOrder.filter((itemId) => itemId !== "changes");
   const canDragTabs = visibleTabs.length > 1;
+
+  useEffect(() => {
+    if (deckLayout && tab !== "sessions") {
+      onTabChange("sessions");
+    }
+  }, [deckLayout, tab, onTabChange]);
   const showProjectRail =
     deckLayout && Boolean(onSelectProject && onOpenProject);
   // Settings live in the rail slot, so they keep it visible even when the
@@ -556,7 +562,7 @@ function SidebarComponent({
 
   const workspaceTabItems = visibleTabs.map((itemId, index) => {
     const active = tab === itemId;
-    const isChangesTab = itemId === "changes";
+    const isChangesTab = (itemId as string) === "changes";
     const draggingTab = sortable.draggingId === itemId;
     const showStart =
       sortable.draggingId &&
@@ -637,17 +643,19 @@ function SidebarComponent({
             data-tauri-drag-region="deep"
           >
             <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
-              Workspace
+              Sessions
             </span>
             <WorkspaceTitleActions onSearch={onGoToFile} onNew={onNew} />
           </div>
-          <div
-            role="tablist"
-            aria-label="Workspace"
-            className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-2"
-          >
-            {workspaceTabItems}
-          </div>
+          {visibleTabs.length > 1 ? (
+            <div
+              role="tablist"
+              aria-label="Workspace"
+              className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-2"
+            >
+              {workspaceTabItems}
+            </div>
+          ) : null}
         </>
       ) : (
         <>
@@ -696,7 +704,7 @@ function SidebarComponent({
               inboxUnseen={inboxUnseen}
             />
           ) : null}
-          {classicSettings ? null : (
+          {classicSettings || visibleTabs.length <= 1 ? null : (
             <div
               role="tablist"
               aria-label="Workspace"

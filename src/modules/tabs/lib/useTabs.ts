@@ -1732,6 +1732,17 @@ export function useTabs(initial?: Partial<TerminalTab>) {
             ...basePatch,
             ...(patch.title !== undefined && { title: patch.title }),
           };
+        } else if (x.kind === "harness") {
+          updated = {
+            ...x,
+            ...basePatch,
+            ...(patch.title !== undefined && { title: patch.title }),
+            ...(patch.cwd !== undefined && { cwd: patch.cwd }),
+            ...(patch.customTitle !== undefined && {
+              customTitle:
+                patch.customTitle === "" ? undefined : patch.customTitle,
+            }),
+          };
         } else {
           // editor tab: auto-promote from preview the moment the file becomes dirty.
           const autoPin =

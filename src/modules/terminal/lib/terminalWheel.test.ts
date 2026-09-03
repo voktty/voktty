@@ -86,6 +86,7 @@ describe("handleTerminalWheel", () => {
       selectionCopyTimer: null,
       isDirectTyping: false,
       wheelHistoryAccumulator: 0,
+      tmuxCopyModeActive: false,
       webglAddon: null,
       webglCanvases: [],
       fitAddon: {} as any,

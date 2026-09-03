@@ -114,6 +114,7 @@ export type Slot = {
   selectionCopyTimer: ReturnType<typeof setTimeout> | null;
   isDirectTyping: boolean;
   wheelHistoryAccumulator: number;
+  tmuxCopyModeActive: boolean;
 };
 
 const slots: Slot[] = [];
@@ -450,6 +451,7 @@ function createSlot(): Slot {
     selectionCopyTimer: null,
     isDirectTyping: false,
     wheelHistoryAccumulator: 0,
+    tmuxCopyModeActive: false,
   };
 
   // Some WKWebView builds bypass xterm's composition events. The pure bridge
@@ -773,7 +775,17 @@ function createSlot(): Slot {
   term.onData((data) => {
     const leafId = slot.currentLeafId;
     if (leafId === null) return;
-    adapter?.resolveLeaf(leafId)?.writeToPty(data);
+    const leafBridge = adapter?.resolveLeaf(leafId);
+    if (!leafBridge) return;
+
+    if (slot.tmuxCopyModeActive) {
+      slot.tmuxCopyModeActive = false;
+      if (data !== "q" && data !== "\x1b" && data !== "\x03") {
+        leafBridge.writeToPty("q");
+      }
+    }
+
+    leafBridge.writeToPty(data);
     if (data === "\r" || data === "\x03" || data === "\x04") {
       slot.isDirectTyping = false;
       useTerminalSuggestStore.getState().clear(leafId);
@@ -808,6 +820,16 @@ function createSlot(): Slot {
         });
       }
     }, 120);
+  });
+
+  host.addEventListener("mousedown", () => {
+    if (slot.tmuxCopyModeActive) {
+      slot.tmuxCopyModeActive = false;
+      const leafId = slot.currentLeafId;
+      if (leafId !== null) {
+        adapter?.resolveLeaf(leafId)?.writeToPty("q");
+      }
+    }
   });
 
   host.addEventListener("contextmenu", async (event) => {
@@ -929,14 +951,24 @@ export function handleTerminalWheel(
 
   // In remote SSH/multiplexed sessions or when an agent is running where tmux is typically running without `mouse on`:
   // Scroll Up -> trigger tmux copy-mode with page up so the conversation scrollback view is revealed.
-  // Scroll Down -> Page Down.
+  // Scroll Down -> Page Down and auto-exit when reaching bottom.
   if (isRemoteOrMultiplexed || activeAgent) {
     if (event.deltaY < 0) {
+      slot.tmuxCopyModeActive = true;
       // \x02[ enters tmux copy-mode, \x1b[5~ scrolls page up in copy-mode
       bridge.writeToPty("\x02[\x1b[5~");
     } else if (event.deltaY > 0) {
-      // \x1b[6~ is page down in copy-mode
-      bridge.writeToPty("\x1b[6~");
+      if (slot.tmuxCopyModeActive) {
+        slot.wheelHistoryAccumulator += event.deltaY;
+        bridge.writeToPty("\x1b[6~");
+        if (slot.wheelHistoryAccumulator >= WHEEL_HISTORY_STEP_THRESHOLD * 2) {
+          slot.tmuxCopyModeActive = false;
+          slot.wheelHistoryAccumulator = 0;
+          bridge.writeToPty("q");
+        }
+      } else {
+        bridge.writeToPty("\x1b[6~");
+      }
     }
   }
 

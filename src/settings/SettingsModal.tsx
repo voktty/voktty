@@ -22,7 +22,6 @@ import {
   ServerStack03Icon,
   Settings01Icon,
   SourceCodeIcon,
-  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { SettingsSearch } from "./components/SettingsSearch";
@@ -53,11 +52,6 @@ const ShortcutsSection = React.lazy(() =>
 const ModelsSection = React.lazy(() =>
   import("./sections/ModelsSection").then((m) => ({
     default: m.ModelsSection,
-  })),
-);
-const AgentsSection = React.lazy(() =>
-  import("./sections/AgentsSection").then((m) => ({
-    default: m.AgentsSection,
   })),
 );
 const ExtensionsSection = React.lazy(() =>
@@ -116,7 +110,6 @@ const TABS: {
   { id: "themes", icon: PaintBoardIcon, component: ThemesSection },
   { id: "shortcuts", icon: KeyboardIcon, component: ShortcutsSection },
   { id: "models", icon: AiScanIcon, component: ModelsSection },
-  { id: "agents", icon: SparklesIcon, component: AgentsSection },
   { id: "extensions", icon: PackageIcon, component: ExtensionsSection },
   { id: "ssh", icon: ServerStack01Icon, component: SshSection },
   { id: "rdp", icon: ComputerIcon, component: RdpSection },
