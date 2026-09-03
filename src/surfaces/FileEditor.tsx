@@ -114,6 +114,7 @@ export function FileEditor({
     original: string | null;
   }>({ path, original: null });
   const markdown = isMarkdownPath(path);
+  const svg = isSvgPath(path);
   const [mode, setMode] = useMarkdownMode(path);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const saveGeneration = useRef(0);
@@ -372,12 +373,16 @@ export function FileEditor({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
-      {markdown ? (
+      {markdown || svg ? (
         <MarkdownViewShell
           mode={mode}
           onModeChange={setMode}
           preview={
-            <MarkdownPreview text={draft} cwd={cwd} onOpenFile={onOpenFile} />
+            markdown ? (
+              <MarkdownPreview text={draft} cwd={cwd} onOpenFile={onOpenFile} />
+            ) : (
+              <SvgPreview source={draft} />
+            )
           }
           source={
             <div className="flex h-full min-h-0 min-w-0 flex-col">
@@ -1018,6 +1023,35 @@ function mergeLineRanges(ranges: LineRange[]): LineRange[] {
     }
   }
   return merged;
+}
+
+/**
+ * SVG is text, so it stays editable in CodeMirror and renders through an
+ * `<img>` rather than inline. In that context the webview runs no script and
+ * fetches no external reference the document asks for, which is what makes it
+ * safe to preview a file the agent may have just written.
+ */
+function SvgPreview({ source }: { source: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next = URL.createObjectURL(
+      new Blob([source], { type: "image/svg+xml" }),
+    );
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [source]);
+
+  if (!url) return null;
+  return (
+    <div className="grid h-full place-items-center overflow-auto p-6">
+      <img src={url} alt="" className="max-h-full max-w-full object-contain" />
+    </div>
+  );
+}
+
+function isSvgPath(path: string): boolean {
+  return basename(path).toLowerCase().endsWith(".svg");
 }
 
 function isMarkdownPath(path: string): boolean {

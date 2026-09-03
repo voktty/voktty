@@ -339,6 +339,12 @@ export function readTextFile(path: string): Promise<string> {
   return invoke<string>("read_text_file", { path });
 }
 
+/** Raw bytes for the image viewer. Arrives as an ArrayBuffer, not base64. */
+export async function readBinaryFile(path: string): Promise<Uint8Array> {
+  const buffer = await invoke<ArrayBuffer>("read_binary_file", { path });
+  return new Uint8Array(buffer);
+}
+
 export function writeTextFile(path: string, content: string): Promise<void> {
   return invoke<void>("write_text_file", { path, content });
 }

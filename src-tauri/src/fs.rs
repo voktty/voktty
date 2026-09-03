@@ -12,6 +12,7 @@ use crate::dirs_home;
 
 pub(crate) const MAX_TEXT_FILE_BYTES: u64 = 8 * 1024 * 1024;
 pub(crate) const MAX_ATTACHMENT_EMBED_BYTES: u64 = 20 * 1024 * 1024;
+pub(crate) const MAX_PREVIEW_BYTES: u64 = 25 * 1024 * 1024;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -3054,6 +3055,34 @@ fn read_file_base64_sync(path: &str) -> Result<String, String> {
     ))
 }
 
+/// Read a file as raw bytes for the image viewer.
+///
+/// Returns an `ipc::Response`, which reaches the webview as an ArrayBuffer, so
+/// previews skip the 33% base64 inflation that inline attachments pay. The
+/// caller decides what the bytes are by sniffing them; this only guards size.
+#[tauri::command]
+pub async fn read_binary_file(path: String) -> Result<tauri::ipc::Response, String> {
+    let bytes = tauri::async_runtime::spawn_blocking(move || read_binary_file_sync(&path))
+        .await
+        .map_err(|e| e.to_string())??;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+fn read_binary_file_sync(path: &str) -> Result<Vec<u8>, String> {
+    let path = expand_home(path);
+    let meta = std::fs::metadata(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if !meta.is_file() {
+        return Err("Not a file".into());
+    }
+    if meta.len() > MAX_PREVIEW_BYTES {
+        return Err(format!(
+            "File is too large to preview (maximum {} MB).",
+            MAX_PREVIEW_BYTES / 1024 / 1024
+        ));
+    }
+    std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 /// Persist a pasted blob so non-image attachments have a real path.
 #[tauri::command]
 pub async fn write_attachment(name: String, data: String) -> Result<String, String> {
@@ -3510,6 +3539,17 @@ mod tests {
             .collect();
         assert_eq!(names, vec![std::ffi::OsString::from("example.rs")]);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn binary_reads_return_bytes_and_refuse_directories() {
+        let dir = tmp("binary-read");
+        let file = dir.0.join("shot.png");
+        std::fs::write(&file, [0x89, b'P', b'N', b'G', 0x0d]).unwrap();
+
+        let bytes = read_binary_file_sync(&file.to_string_lossy()).unwrap();
+        assert_eq!(bytes, vec![0x89, b'P', b'N', b'G', 0x0d]);
+        assert!(read_binary_file_sync(&dir.0.to_string_lossy()).is_err());
     }
 
     #[test]
