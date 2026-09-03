@@ -447,7 +447,9 @@ export function createCommandItems(
     },
     {
       id: "ai.openHarness",
-      title: "Open Agent Development Harness",
+      title: t("commandPalette.commands.openHarness", {
+        defaultValue: "Open Agent Development Harness",
+      }),
       group: "AI",
       keywords: [
         "harness",

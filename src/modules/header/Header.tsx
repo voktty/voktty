@@ -280,8 +280,8 @@ export function Header({
             onClick={onNewHarness}
             variant="ghost"
             size="icon-sm"
-            title={`Agent Development (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
-            aria-label="Agent Development"
+            title={`${t("harness.agentDevelopment", { defaultValue: "Agent Development" })} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+            aria-label={t("harness.agentDevelopment", { defaultValue: "Agent Development" })}
             className={cn(
               "shrink-0 rounded-md transition-colors",
               isHarnessActive
@@ -324,7 +324,7 @@ export function Header({
                       onSelect(harnessTab.id);
                     }
                   }}
-                  title={`Agent Development (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+                  title={`${t("harness.agentDevelopment", { defaultValue: "Agent Development" })} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
                   className={cn(
                     "group relative flex h-6.5 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium cursor-pointer select-none transition-all duration-150 outline-none",
                     isHarnessActive
@@ -343,7 +343,7 @@ export function Header({
                         : "text-violet-400/80 group-hover:text-violet-400",
                     )}
                   />
-                  <span className="truncate max-w-[140px]">Agent Development</span>
+                  <span className="truncate max-w-[140px]">{t("harness.agentDevelopment", { defaultValue: "Agent Development" })}</span>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -351,7 +351,7 @@ export function Header({
                       onClose(harnessTab.id);
                     }}
                     title={t("tabs.closeTab") || "Close tab"}
-                    aria-label="Close Agent Development"
+                    aria-label={t("harness.closeAgentDevelopment", { defaultValue: "Close Agent Development" })}
                     className="ml-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-foreground/10 hover:text-foreground transition-colors"
                   >
                     <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
@@ -362,8 +362,8 @@ export function Header({
                   onClick={onNewHarness}
                   variant="ghost"
                   size="icon-sm"
-                  title={`Agent Development (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
-                  aria-label="Agent Development"
+                  title={`${t("harness.agentDevelopment", { defaultValue: "Agent Development" })} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+                  aria-label={t("harness.agentDevelopment", { defaultValue: "Agent Development" })}
                   className="h-6.5 w-6.5 shrink-0 rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground transition-all duration-150"
                 >
                   <HugeiconsIcon
