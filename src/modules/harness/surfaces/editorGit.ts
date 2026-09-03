@@ -929,7 +929,7 @@ function hunkScreenBounds(
   const doc = view.state.doc;
   const from = widgetPos(doc, chunk);
   const start = view.lineBlockAt(from);
-  let top = start.top;
+  const top = start.top;
   let bottom = start.bottom;
   if (chunk.fromB !== chunk.toB) {
     const last = Math.max(from, Math.min(chunk.endB, doc.length) - 1);

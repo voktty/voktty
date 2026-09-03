@@ -321,7 +321,7 @@ export const useHarnessStore = create<HarnessState>((set, get) => ({
         const curSess = s.sessions[sessionId];
         if (!curSess) return s;
 
-        let nextBlocks = [...curSess.blocks];
+        const nextBlocks = [...curSess.blocks];
         const lastIdx = nextBlocks.length - 1;
         const lastBlock = nextBlocks[lastIdx];
 

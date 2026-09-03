@@ -23,14 +23,14 @@ import {
   defaultDockSize,
   isVerticalDock,
   type DockSide,
-  type ProjectTerminalDock,
+  type ProjectTerminalDock as ProjectTerminalDockModel,
 } from "../lib/projectTerminal";
 import { MOD } from "../lib/platform";
 import type { TerminalMetaPatch } from "../lib/terminalTab";
 import { TerminalView } from "./TerminalView";
 
 type Props = {
-  dock: ProjectTerminalDock;
+  dock: ProjectTerminalDockModel;
   focused: boolean;
   onFocus: () => void;
   onHide: () => void;

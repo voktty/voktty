@@ -1,6 +1,6 @@
 import { diff } from "@codemirror/merge";
 import type { Annotation, ChangeSpec } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 
 const DOC_DIFF = { scanLimit: 5_000, timeout: 100 };
 

@@ -238,8 +238,8 @@ export function FloatingArcadeWidget({ onClose }: Props) {
     let raf = 0;
     let cols = 0;
     let rows = 0;
-    let rgb = parseContentRgb();
-    let surfaceRgb = parseSurfaceRgb();
+    const rgb = parseContentRgb();
+    const surfaceRgb = parseSurfaceRgb();
     let lastFrame = 0;
     let bubbleAt: { x: number; y: number } | null = null;
 

@@ -474,7 +474,7 @@ export function modelsFromGrokModelsOutput(stdout: string): AgentModel[] {
   const models: AgentModel[] = [];
   for (const raw of stdout.split(/\r?\n/)) {
     const line = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").trim();
-    const match = /^[*+\-]\s+(\S+)/.exec(line);
+    const match = /^[*+-]\s+(\S+)/.exec(line);
     if (!match) continue;
     const nativeId = match[1].trim();
     if (!nativeId) continue;

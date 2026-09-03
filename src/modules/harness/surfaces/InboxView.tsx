@@ -579,6 +579,8 @@ export function InboxView({
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize inbox list"
+          aria-valuenow={Math.round(resize.width)}
+          tabIndex={0}
           className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
             resize.dragging ? "bg-content/15" : "hover:bg-content/10"
           }`}
