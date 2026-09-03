@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { GitChangesPanel } from "../chrome/GitChangesPanel";
+import { SourceControlPanel } from "@/modules/source-control/SourceControlPanel";
+import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import type { HarnessId } from "../lib/session";
 
 const MIN_WIDTH = 280;
@@ -26,8 +27,6 @@ type Props = {
 
 export function DiffPane({
   cwd,
-  textHarness,
-  selectedPath,
   focused,
   onFocus,
   onOpenFile,
@@ -39,6 +38,8 @@ export function DiffPane({
   const widthRef = useRef(width);
   const pendingWidth = useRef(width);
   const resizeFrame = useRef<number | null>(null);
+
+  const sourceControl = useSourceControl(cwd, true);
 
   useEffect(() => {
     if (!dragging) return;
@@ -140,13 +141,16 @@ export function DiffPane({
           commitWidth();
         }}
       />
-      <GitChangesPanel
-        cwd={cwd}
-        enabled
-        textHarness={textHarness}
-        selectedPath={selectedPath}
-        onOpenFile={onOpenFile}
-      />
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <SourceControlPanel
+          open
+          sourceControl={sourceControl}
+          onOpenDiff={(input) => onOpenFile(input.path)}
+          onOpenFile={onOpenFile}
+          repositoryTarget={{ mode: "follow-context" }}
+          onFollowRepositoryContext={() => {}}
+        />
+      </div>
     </section>
   );
 }
