@@ -173,6 +173,7 @@ pub fn run() {
             fs::git_stage_contents,
             fs::git_unstage_file,
             fs::git_discard_file,
+            fs::git_discard_all,
             fs::git_stage_all,
             fs::git_unstage_all,
             fs::git_commit,

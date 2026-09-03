@@ -1,3 +1,4 @@
+import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   Check,
@@ -26,6 +27,7 @@ import {
   basename,
   gitCommit,
   gitDiffIndex,
+  gitDiscardAll,
   gitDiscardFile,
   gitPrCreate,
   gitPrStatus,
@@ -49,6 +51,15 @@ import { applyProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 
 const GIT_POLL_MS = 2000;
+
+function confirmNative(message: string, okLabel?: string): Promise<boolean> {
+  return ask(message, {
+    title: "MonoCode",
+    kind: "warning",
+    ...(okLabel ? { okLabel } : {}),
+  });
+}
+
 let stagedOpen = true;
 let changesOpen = true;
 const indexByCwd = new Map<string, GitDiffIndex>();
@@ -205,10 +216,10 @@ function ChangedFiles({
     window.alert(error instanceof Error ? error.message : String(error));
   };
 
-  const confirmDefault = (kind: "push" | "pr") => {
+  const confirmDefault = async (kind: "push" | "pr") => {
     if (!onDefault || !index?.branch) return true;
     const branch = index.branch;
-    return window.confirm(
+    return confirmNative(
       kind === "pr"
         ? `Create a pull request from default branch "${branch}"?`
         : `Push to default branch "${branch}"?`,
@@ -222,10 +233,12 @@ function ChangedFiles({
     if (busy) return;
     if (action === "discard") {
       const name = basename(file.relative);
-      const ok = window.confirm(
-        file.status === "untracked"
+      const untracked = file.status === "untracked";
+      const ok = await confirmNative(
+        untracked
           ? `Delete untracked file ${name}?`
           : `Discard changes in ${name}? This cannot be undone.`,
+        untracked ? "Delete" : "Discard",
       );
       if (!ok) return;
     }
@@ -242,13 +255,31 @@ function ChangedFiles({
     }
   };
 
-  const runAll = async (action: "stage" | "unstage") => {
+  const runAll = async (action: "stage" | "unstage" | "discard") => {
     if (busy) return;
+    if (action === "discard") {
+      const n = unstaged.length;
+      if (n === 0) return;
+      const only = unstaged[0];
+      const untrackedOnly = n === 1 && only?.status === "untracked";
+      const ok = await confirmNative(
+        untrackedOnly
+          ? `Delete untracked file ${basename(only.relative)}?`
+          : n === 1 && only
+            ? `Discard changes in ${basename(only.relative)}? This cannot be undone.`
+            : `Discard all unstaged changes in ${n} files? This cannot be undone.`,
+        untrackedOnly ? "Delete" : "Discard",
+      );
+      if (!ok) return;
+    }
     setBusy(action);
     try {
       if (action === "stage") await gitStageAll(cwd);
-      else await gitUnstageAll(cwd);
-      onMutated();
+      else if (action === "unstage") await gitUnstageAll(cwd);
+      else await gitDiscardAll(cwd);
+      onMutated(
+        action === "discard" ? unstaged.map((file) => file.path) : undefined,
+      );
     } catch (error) {
       fail(error);
     } finally {
@@ -270,7 +301,12 @@ function ChangedFiles({
 
   const commit = async (push: boolean, createPr = false) => {
     if (!canCommit) return;
-    if ((push || createPr) && !confirmDefault(createPr ? "pr" : "push")) return;
+    if (
+      (push || createPr) &&
+      !(await confirmDefault(createPr ? "pr" : "push"))
+    ) {
+      return;
+    }
     setBusy(createPr ? "pr" : "commit");
     setMenuOpen(false);
     try {
@@ -293,7 +329,7 @@ function ChangedFiles({
   const sync = async () => {
     if (!index || !(canSync || canPublish)) return;
     const willPush = !index.upstream || index.ahead > 0;
-    if (willPush && !confirmDefault("push")) return;
+    if (willPush && !(await confirmDefault("push"))) return;
     setBusy("sync");
     try {
       await gitSync(cwd);
@@ -322,7 +358,7 @@ function ChangedFiles({
 
   const createPr = async () => {
     if (!canCreatePr) return;
-    if (!confirmDefault("pr")) return;
+    if (!(await confirmDefault("pr"))) return;
     setBusy("pr");
     try {
       if ((index?.ahead ?? 0) > 0) await gitPush(cwd);
@@ -460,11 +496,13 @@ function ChangedFiles({
                   stagedOpen = !stagedExpanded;
                   setStagedExpanded(stagedOpen);
                 }}
-                headerAction={{
-                  title: "Unstage All Changes",
-                  icon: <Minus className="size-3.5" strokeWidth={1.75} />,
-                  onClick: () => void runAll("unstage"),
-                }}
+                headerActions={[
+                  {
+                    title: "Unstage All Changes",
+                    icon: <Minus className="size-3.5" strokeWidth={1.75} />,
+                    onClick: () => void runAll("unstage"),
+                  },
+                ]}
               >
                 {staged.map((file) => (
                   <ChangeRow
@@ -488,11 +526,18 @@ function ChangedFiles({
                   changesOpen = !changesExpanded;
                   setChangesExpanded(changesOpen);
                 }}
-                headerAction={{
-                  title: "Stage All Changes",
-                  icon: <Plus className="size-3.5" strokeWidth={1.75} />,
-                  onClick: () => void runAll("stage"),
-                }}
+                headerActions={[
+                  {
+                    title: "Discard All Changes",
+                    icon: <Undo2 className="size-3.5" strokeWidth={1.75} />,
+                    onClick: () => void runAll("discard"),
+                  },
+                  {
+                    title: "Stage All Changes",
+                    icon: <Plus className="size-3.5" strokeWidth={1.75} />,
+                    onClick: () => void runAll("stage"),
+                  },
+                ]}
               >
                 {unstaged.map((file) => (
                   <ChangeRow
@@ -722,14 +767,14 @@ function FileSection({
   count,
   open,
   onToggle,
-  headerAction,
+  headerActions,
   children,
 }: {
   title: string;
   count: number;
   open: boolean;
   onToggle: () => void;
-  headerAction: { title: string; icon: ReactNode; onClick: () => void };
+  headerActions: { title: string; icon: ReactNode; onClick: () => void }[];
   children: ReactNode;
 }) {
   return (
@@ -758,10 +803,16 @@ function FileSection({
             {count}
           </span>
         </button>
-        <div className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
-          <IconAction title={headerAction.title} onClick={headerAction.onClick}>
-            {headerAction.icon}
-          </IconAction>
+        <div className="flex opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+          {headerActions.map((action) => (
+            <IconAction
+              key={action.title}
+              title={action.title}
+              onClick={action.onClick}
+            >
+              {action.icon}
+            </IconAction>
+          ))}
         </div>
       </div>
       {open ? <ul>{children}</ul> : null}

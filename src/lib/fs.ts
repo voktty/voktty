@@ -116,6 +116,10 @@ export function gitDiscardFile(cwd: string, relative: string): Promise<void> {
   return invoke<void>("git_discard_file", { cwd, relative });
 }
 
+export function gitDiscardAll(cwd: string): Promise<void> {
+  return invoke<void>("git_discard_all", { cwd });
+}
+
 export function gitStageAll(cwd: string): Promise<void> {
   return invoke<void>("git_stage_all", { cwd });
 }

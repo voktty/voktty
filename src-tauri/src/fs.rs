@@ -295,6 +295,14 @@ pub async fn git_discard_file(cwd: String, relative: String) -> Result<(), Strin
     .map_err(|e| e.to_string())?
 }
 
+/// Discard every unstaged change (restore tracked files; delete untracked).
+#[tauri::command]
+pub async fn git_discard_all(cwd: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || git_discard_all_for(&expand_home(&cwd)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Stage every changed file in the repo.
 #[tauri::command]
 pub async fn git_stage_all(cwd: String) -> Result<(), String> {
@@ -1094,6 +1102,19 @@ fn git_discard_file_for(root: &Path, relative: &str) -> Result<(), String> {
         return Ok(());
     }
     git_checked(root, &["restore", "--worktree", "--", &relative])
+}
+
+fn git_discard_all_for(root: &Path) -> Result<(), String> {
+    let files: Vec<String> = git_diff_index_for(root)
+        .files
+        .into_iter()
+        .filter(|file| file.unstaged)
+        .map(|file| file.relative)
+        .collect();
+    for relative in files {
+        git_discard_file_for(root, &relative)?;
+    }
+    Ok(())
 }
 
 fn git_staged_context_for(root: &Path) -> Result<GitStagedContext, String> {
@@ -3980,6 +4001,42 @@ mod tests {
         );
         assert!(!dir.0.join("new.txt").exists());
         assert!(git_diff_index_for(&dir.0).files.is_empty());
+    }
+
+    #[test]
+    fn git_discard_all_restores_unstaged_and_keeps_staged() {
+        let dir = tmp("git-discard-all");
+        if !init_git_commit(&dir.0, &[("a.txt", "alpha\n"), ("b.txt", "one\n")]) {
+            return;
+        }
+        std::fs::write(dir.0.join("a.txt"), "beta\n").unwrap();
+        std::fs::write(dir.0.join("b.txt"), "two\n").unwrap();
+        git_stage_file_for(&dir.0, "b.txt").unwrap();
+        std::fs::write(dir.0.join("b.txt"), "three\n").unwrap();
+        std::fs::write(dir.0.join("new.txt"), "hello\n").unwrap();
+
+        git_discard_all_for(&dir.0).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(dir.0.join("a.txt")).unwrap(),
+            "alpha\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.0.join("b.txt")).unwrap(),
+            "two\n"
+        );
+        assert!(!dir.0.join("new.txt").exists());
+        let file = git_diff_index_for(&dir.0)
+            .files
+            .into_iter()
+            .find(|file| file.relative == "b.txt")
+            .unwrap();
+        assert!(file.staged);
+        assert!(!file.unstaged);
+        assert!(git_diff_index_for(&dir.0)
+            .files
+            .iter()
+            .all(|file| !file.unstaged));
     }
 
     #[test]
