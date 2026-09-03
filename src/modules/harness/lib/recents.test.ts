@@ -63,20 +63,23 @@ describe("looksLikeProject", () => {
 });
 
 describe("projectRailSections", () => {
-  it("keeps saved order and does not move the current project first", () => {
+  it("orders busy/active projects first, then by openedAt descending", () => {
     const recents = [
-      { path: "/tmp/older", openedAt: 1 },
-      { path: "/tmp/current", openedAt: 2 },
+      { path: "/tmp/older", openedAt: 100 },
+      { path: "/tmp/middle", openedAt: 200 },
+      { path: "/tmp/newest", openedAt: 300 },
     ];
-    const { pinned, projects } = projectRailSections(
+    const { projects } = projectRailSections(
       recents,
-      "/tmp/current/",
-      ["/tmp/older", "/tmp/current"],
+      "/tmp/newest",
       [],
+      [],
+      ["/tmp/middle"],
     );
-    expect([...pinned, ...projects].map((item) => item.path)).toEqual([
+    expect(projects.map((item) => item.path)).toEqual([
+      "/tmp/middle",
+      "/tmp/newest",
       "/tmp/older",
-      "/tmp/current",
     ]);
   });
 
@@ -93,18 +96,31 @@ describe("projectRailSections", () => {
       ["/tmp/b"],
     );
     expect(pinned.map((item) => item.path)).toEqual(["/tmp/b"]);
-    expect(projects.map((item) => item.path)).toEqual(["/tmp/a", "/tmp/c"]);
+    expect(projects.map((item) => item.path)).toEqual(["/tmp/c", "/tmp/a"]);
   });
 
-  it("appends new projects without reordering existing entries", () => {
+  it("appends new projects and orders by recency", () => {
     const projects = new Map([
       ["/tmp/older", { path: "/tmp/older", openedAt: 1 }],
       ["/tmp/new", { path: "/tmp/new", openedAt: 3 }],
     ]);
     expect(syncProjectRailOrder(["/tmp/older"], projects)).toEqual([
-      "/tmp/older",
       "/tmp/new",
+      "/tmp/older",
     ]);
+  });
+
+  it("retains pinned and ordered projects even if not in recents", () => {
+    const recents = [{ path: "/tmp/a", openedAt: 10 }];
+    const { pinned, projects } = projectRailSections(
+      recents,
+      "/tmp/a",
+      ["/tmp/ordered"],
+      ["/tmp/pinned"],
+    );
+    expect(pinned.map((item) => item.path)).toEqual(["/tmp/pinned"]);
+    expect(projects.map((item) => item.path)).toContain("/tmp/ordered");
+    expect(projects.map((item) => item.path)).toContain("/tmp/a");
   });
 });
 

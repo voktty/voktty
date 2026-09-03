@@ -89,6 +89,16 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (session.cwd && session.cwd !== "~") {
+      window.dispatchEvent(
+        new CustomEvent("voktty:harness-cwd-change", {
+          detail: { cwd: session.cwd },
+        }),
+      );
+    }
+  }, [session.cwd]);
+
   const handleCwdChange = useCallback((sessionId: string, newCwd: string) => {
     setSession((prev) => (prev && prev.id === sessionId ? { ...prev, cwd: newCwd } : prev));
     setRecents(rememberProject(newCwd));

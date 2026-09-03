@@ -2940,6 +2940,28 @@ export function HarnessApp({
     [activateTab, appendTab, onCwdChange],
   );
 
+  useEffect(() => {
+    if (projectCwd && projectCwd !== "~") {
+      window.dispatchEvent(
+        new CustomEvent("voktty:harness-cwd-change", {
+          detail: { cwd: projectCwd },
+        }),
+      );
+    }
+  }, [projectCwd]);
+
+  useEffect(() => {
+    const handleSelect = (e: Event) => {
+      const detail = (e as CustomEvent<{ path: string }>).detail;
+      if (detail?.path) {
+        onSelectProject(detail.path);
+      }
+    };
+    window.addEventListener("voktty:harness-select-project", handleSelect);
+    return () =>
+      window.removeEventListener("voktty:harness-select-project", handleSelect);
+  }, [onSelectProject]);
+
   const pickProject = useCallback(async () => {
     const path = await pickFolder();
     if (path) onSelectProject(path);
