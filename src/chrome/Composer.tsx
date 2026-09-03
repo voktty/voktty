@@ -63,7 +63,7 @@ import type {
   QueuedMessage,
   RuntimeMode,
 } from "../lib/session";
-import { harnessSupportsAttachments } from "../lib/session";
+import { HARNESS_TITLE, harnessSupportsAttachments } from "../lib/session";
 import type { UserQuestionPrompt, UserQuestionReply } from "../lib/userQuestion";
 import {
   createBlankSkill,
@@ -1125,7 +1125,7 @@ export function Composer({
                         ? "How can I help you today?"
                         : "Ask, build, / for skills, @ for references... "
               }
-              className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
+              className={`composer-field scrollbar-none relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
                 shell ? "py-4" : "py-3"
               }`}
               onFocus={onFocus}
@@ -1150,7 +1150,7 @@ export function Composer({
               label={
                 attachmentsSupported
                   ? "Attach files"
-                  : "fx does not support attachments"
+                  : `${HARNESS_TITLE[harness]} does not support attachments`
               }
               disabled={!attachmentsSupported}
               onClick={attachFromPicker}
