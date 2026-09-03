@@ -669,7 +669,6 @@ function parseGitPatch(text: string): {
       deletions += 1;
       hunks.push({ number: newNum, kind: "del", text: line.slice(1) });
     } else if (line.startsWith("\\")) {
-      continue;
     } else {
       const body = line.startsWith(" ") ? line.slice(1) : line;
       hunks.push({ number: newNum, kind: "context", text: body });
@@ -939,7 +938,7 @@ function firstLine(value: string | undefined): string {
 }
 
 function stripExecutePrefix(title: string): string {
-  return title.replace(/^(?:bash|shell|execute)\s*[:\-]\s+/i, "").trim();
+  return title.replace(/^(?:bash|shell|execute)\s*[:-]\s+/i, "").trim();
 }
 
 function skillNameField(value: unknown): string | undefined {

@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import type { CheckpointStatus } from "../types";
 
 type SessionReviewProps = {

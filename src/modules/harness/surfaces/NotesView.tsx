@@ -261,6 +261,10 @@ export function NotesView({
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize notes list"
+        aria-valuenow={Math.round(resize.width)}
+        aria-valuemin={MIN_WIDTH}
+        aria-valuemax={MAX_WIDTH}
+        tabIndex={0}
         className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
           resize.dragging ? "bg-content/15" : "hover:bg-content/10"
         }`}
@@ -715,6 +719,7 @@ function NoteSource({
         className="pointer-events-none absolute inset-y-0 w-px bg-content/10"
         style={{ left: gutterWidth }}
       />
+      {/* biome-ignore lint/a11y/noAutofocus: autofocus markdown note field */}
       <textarea
         value={value}
         autoFocus={autoFocus}

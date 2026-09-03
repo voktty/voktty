@@ -38,7 +38,7 @@ import { prettyCwd, projectName } from "../lib/paths";
 import { IS_MAC } from "../lib/platform";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import { searchProject, type OpenFileFn } from "../lib/search";
-import { type Session } from "../lib/session";
+import type { Session } from "../lib/session";
 import { searchSessions, type SessionSummary } from "../lib/sessionStore";
 
 const SCOPES: { id: SearchScope; label: string }[] = [

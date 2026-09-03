@@ -337,7 +337,7 @@ export function ModelPicker({
           data-model-picker
           className="flex flex-col overflow-hidden"
         >
-          <nav
+          <div
             role="tablist"
             aria-label="Providers"
             aria-keyshortcuts="ArrowLeft ArrowRight"
@@ -365,7 +365,7 @@ export function ModelPicker({
                 <HarnessIcon harness={id} className="size-4" />
               </ProviderTabButton>
             ))}
-          </nav>
+          </div>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="pb-1.5">

@@ -28,7 +28,7 @@ const signatureTooltipField = StateField.define<SignatureTooltipSpec | null>({
     for (const effect of transaction.effects) {
       if (effect.is(setSignatureTooltip)) return effect.value;
     }
-    return transaction.docChanged || !!transaction.selection ? null : value;
+    return transaction.docChanged || transaction.selection ? null : value;
   },
   provide: (field) =>
     showTooltip.from(field, (spec) =>

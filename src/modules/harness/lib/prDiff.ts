@@ -180,7 +180,6 @@ function parsePrFile(block: string): PrDiffFile | null {
       });
       oldNum += 1;
     } else if (line.startsWith("\\")) {
-      continue;
     } else {
       const text = line.startsWith(" ") ? line.slice(1) : line;
       diffLines.push({

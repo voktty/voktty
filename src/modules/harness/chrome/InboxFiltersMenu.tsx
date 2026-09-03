@@ -1,5 +1,5 @@
 import { Check, CircleDot, GitPullRequest } from "./icons";
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { InboxKind } from "../lib/githubTasks";
 import {
   DEFAULT_INBOX_FILTERS,

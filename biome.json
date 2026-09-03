@@ -55,6 +55,9 @@
         "useFocusableInteractive": "warn",
         "noStaticElementInteractions": "warn",
         "useAriaPropsSupportedByRole": "warn",
+        "useAriaPropsForRole": "warn",
+        "noAutofocus": "warn",
+        "noNoninteractiveElementToInteractiveRole": "warn",
         "noSvgWithoutTitle": "warn",
         "noNoninteractiveTabindex": "warn",
         "noLabelWithoutControl": "warn"

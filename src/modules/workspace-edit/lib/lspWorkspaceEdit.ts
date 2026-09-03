@@ -64,11 +64,8 @@ export function normalizeLspWorkspaceEdit(
   value: unknown,
 ): NormalizedLspWorkspaceEdit {
   if (!isRecord(value)) return { kind: "invalid", reason: "invalid-edit" };
-  const hasChanges = Object.prototype.hasOwnProperty.call(value, "changes");
-  const hasDocumentChanges = Object.prototype.hasOwnProperty.call(
-    value,
-    "documentChanges",
-  );
+  const hasChanges = "changes" in value;
+  const hasDocumentChanges = "documentChanges" in value;
   if (hasChanges && hasDocumentChanges) {
     return { kind: "invalid", reason: "ambiguous-payload" };
   }
