@@ -1,4 +1,4 @@
-﻿import type { TranslationSchema } from "./en";
+import type { TranslationSchema } from "./en";
 
 export const es: TranslationSchema = {
   common: {
@@ -981,6 +981,7 @@ export const es: TranslationSchema = {
       apiClient: "Cliente API y Sandbox",
       aiProposal: "Propuesta de IA",
       remoteDesktop: "Escritorio remoto",
+      harness: "Harness de desarrollo de agentes",
     },
   },
   spaces: {
@@ -1067,6 +1068,8 @@ export const es: TranslationSchema = {
     privateHidden: "Privado: oculto para la IA",
     privateHiddenTooltip:
       "La IA no puede ver la salida de esta terminal. Úsala para secretos, SSH o información que no quieras enviar al modelo.",
+    arcade: "Arcade (Pac-Man y Snake)",
+    arcadeLabel: "Arcade",
     uptime: {
       title: "Actividad de Consola",
       subtitle: "Tiempo en pantalla y estadísticas semanales",
@@ -1249,6 +1252,8 @@ export const es: TranslationSchema = {
     dropFilePath: "Suelta aquí la ruta del archivo",
   },
   git: {
+    authorizeDirectory: "Autorizar directorio",
+    authorizedSuccess: "Directorio autorizado con éxito",
     publish: "Publicar",
     publishBranch: "Publicar rama",
     publishBranchTooltip: "Publicar esta rama en el repositorio remoto",
@@ -3865,6 +3870,10 @@ subtabs: {
       saved: "Alias guardado",
       saveError: "No se pudo guardar el alias",
     },
+  },
+  harness: {
+    agentDevelopment: "Desarrollo de Agentes",
+    closeAgentDevelopment: "Cerrar Desarrollo de Agentes",
   },
 };
 

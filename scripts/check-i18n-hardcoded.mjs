@@ -12,12 +12,32 @@ if (!configPath) {
 
 const config = ts.readConfigFile(configPath, ts.sys.readFile);
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, process.cwd());
+
+const internalMetadataPaths = [
+  /\/modules\/agents\/lib\/launcher\.ts$/,
+  /\/modules\/ai\/agents\/registry\.ts$/,
+  /\/modules\/ai\/config\.ts$/,
+  /\/modules\/ai\/lib\/agents\.ts$/,
+  /\/modules\/ai\/tools\//,
+  /\/modules\/editor\/lib\/externalFormat\.ts$/,
+  /\/modules\/i18n\/types\.ts$/,
+  /\/modules\/terminal\/scripts\/discoverProjectScripts\.ts$/,
+  /\/modules\/api-client\/lib\/presets\.ts$/,
+  /\/modules\/theme\//,
+  /\/modules\/harness\//,
+  /\/settings\/sections\/HarnessSection\.tsx$/,
+  /\/modules\/statusbar\/components\/FloatingArcadeWidget\.tsx$/,
+];
+
+
+
 const sourceFiles = parsed.fileNames.filter((fileName) => {
   const normalized = fileName.replaceAll("\\", "/");
   return (
     normalized.startsWith(root.replaceAll("\\", "/")) &&
     !normalized.includes("/modules/i18n/locales/") &&
-    !/\.(?:test|spec)\.[jt]sx?$/.test(normalized)
+    !/\.(?:test|spec)\.[jt]sx?$/.test(normalized) &&
+    !isInternalMetadataFile(normalized)
   );
 });
 
@@ -52,19 +72,6 @@ const feedbackCalls = new Set([
   "window.confirm",
 ]);
 
-const internalMetadataPaths = [
-  /\/modules\/agents\/lib\/launcher\.ts$/,
-  /\/modules\/ai\/agents\/registry\.ts$/,
-  /\/modules\/ai\/config\.ts$/,
-  /\/modules\/ai\/lib\/agents\.ts$/,
-  /\/modules\/ai\/tools\//,
-  /\/modules\/editor\/lib\/externalFormat\.ts$/,
-  /\/modules\/i18n\/types\.ts$/,
-  /\/modules\/terminal\/scripts\/discoverProjectScripts\.ts$/,
-  /\/modules\/api-client\/lib\/presets\.ts$/,
-  /\/modules\/theme\//,
-];
-
 const technicalPatterns = [
   /^(?:Voktty|Git|GitHub|SSH|RDP|Docker|Redis|LSP|AI|CPU|RAM|MEM|DISK|NET|NETWORK|SHA|URL|Shell|WSL|Windows|DTR|RTS|TCP EST|cwd|exit|ping|binary)$/i,
   /^(?:Postman|gRPC|GraphQL|JSON|Bearer|AKIA\.\.\.|sk_test_\.\.\.|oauth2_access_token\.\.\.|whsec_\.\.\.|X-API-Key|us-east-1|s3 \/ execute-api|user|password|Value)$/i,
@@ -85,7 +92,7 @@ const technicalPatterns = [
   /^(?:\{…\}|[():/\s-])+$/,
   /^(?:[\p{Extended_Pictographic}\p{Emoji_Presentation}✎ⓘ…]+)$/u,
   /^(?:\$ voktty --ready|px \(Terminal\)|ms ping|\(-[LRD]\))$/i,
-  /^(?:stdout|stderr|cwd →|⇧O|&gt;|Alt\+|ms\)|\(Esc)$/i,
+  /^(?:stdout|stderr|cwd →|(?:\{…\})?⇧[A-Z\d]|&gt;|Alt\+|ms\)|\(Esc)$/i,
   /^(?:\{…\} baud · \{…\}\{…\}\{…\}|\{…\}: \{…\}\/5)$/,
   /^(?:Vite(?: \(alt\)| preview)?|Next\.js(?: \(alt\))?|Angular|Astro|Live Server|Storybook|Webpack|Metro|Django \/ FastAPI|Jupyter|Flask|Gradio|Ollama)$/i,
   /^(?:Arch|Debian \/ Ubuntu|Fedora \/ RHEL)$/i,

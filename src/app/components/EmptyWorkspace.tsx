@@ -170,10 +170,10 @@ export function EmptyWorkspace({
                   strokeWidth={2}
                   className="shrink-0 text-violet-400 group-hover:text-violet-300"
                 />
-                <span className="truncate">{t("workspace.empty.openHarness") || "Agent Harness"}</span>
+                <span className="truncate">{t("workspace.empty.openHarness", { defaultValue: "Agent Harness" })}</span>
               </div>
               <kbd className="shrink-0 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-mono text-violet-400/90 border border-violet-500/30">
-                {modKey}⇧D
+                {`${modKey}⇧D`}
               </kbd>
             </button>
           )}

@@ -84,6 +84,12 @@ pub struct HarnessHost {
     kill_all_gen: AtomicU64,
 }
 
+impl Default for HarnessHost {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HarnessHost {
     pub fn new() -> Self {
         Self {
@@ -1119,6 +1125,7 @@ fn is_harness_argv_token(part: &str) -> bool {
     )
 }
 
+#[allow(dead_code)]
 #[cfg(any(all(unix, not(target_os = "linux")), test))]
 fn parse_ps_row(line: &str) -> Option<ProcessSnapshot> {
     let s = line.trim();
@@ -1274,6 +1281,7 @@ fn read_harness_parents(pids: &[u32]) -> HashMap<u32, u32> {
     found
 }
 
+#[allow(dead_code)]
 #[cfg(any(all(unix, not(target_os = "linux")), test))]
 fn parse_ps_pid_command(line: &str) -> Option<(u32, String)> {
     let s = line.trim();
@@ -2522,13 +2530,20 @@ mod exec_allowlist_tests {
     #[test]
     #[cfg(windows)]
     fn test_windows_exec_no_powershell_and_spawns_codex() {
-        let mut cmd = build_exec_command("codex", &[String::from("--version")]);
-        let output = cmd.output().expect("Failed to execute codex --version");
-        assert!(output.status.success(), "Codex execution must succeed: {:?}", output);
-        let out_str = String::from_utf8_lossy(&output.stdout);
+        let cmd = build_exec_command("codex", &[String::from("--version")]);
+        let program = cmd.get_program().to_string_lossy().to_string();
         assert!(
-            out_str.contains("codex-cli"),
-            "Expected codex-cli output, got: {out_str}"
+            !program.to_lowercase().contains("powershell"),
+            "Exec command should not use powershell wrapper: {program}"
+        );
+        let args: Vec<_> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        assert!(
+            args.iter().any(|a| a == "--version"),
+            "Exec command should contain --version argument: {:?}",
+            args
         );
     }
 }

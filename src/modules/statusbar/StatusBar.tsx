@@ -176,8 +176,10 @@ export function StatusBar({
             arcadeOpen && "bg-accent text-yellow-400 hover:text-yellow-300",
           )}
           onClick={() => setArcadeOpen((prev) => !prev)}
-          title="Arcade (Pac-Man & Snake)"
-          aria-label="Arcade"
+          title={t("statusbar.arcade", {
+            defaultValue: "Arcade (Pac-Man & Snake)",
+          })}
+          aria-label={t("statusbar.arcadeLabel", { defaultValue: "Arcade" })}
         >
           <PacmanIcon size={14} className={arcadeOpen ? "text-yellow-400" : undefined} />
         </Button>

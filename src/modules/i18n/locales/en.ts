@@ -1,4 +1,4 @@
-﻿export const en = {
+export const en = {
   common: {
     textCopied: "Text copied to clipboard",
     textPasted: "Text pasted",
@@ -953,6 +953,7 @@
       apiClient: "API Client & Sandbox",
       aiProposal: "AI proposal",
       remoteDesktop: "Remote Desktop",
+      harness: "Agent Development Harness",
     },
   },
   spaces: {
@@ -1038,6 +1039,8 @@
     privateHidden: "Private: hidden from AI",
     privateHiddenTooltip:
       "AI can't see this terminal's output. Use it for secrets, SSH, or anything you don't want sent to the model.",
+    arcade: "Arcade (Pac-Man & Snake)",
+    arcadeLabel: "Arcade",
     uptime: {
       title: "Console Activity",
       subtitle: "Screen time & weekly statistics",
@@ -1216,6 +1219,8 @@
     dropFilePath: "Drop file path here",
   },
   git: {
+    authorizeDirectory: "Authorize Directory",
+    authorizedSuccess: "Directory authorized successfully",
     publish: "Publish",
     publishBranch: "Publish Branch",
     publishBranchTooltip: "Publish this branch to the remote repository",
@@ -1583,7 +1588,7 @@
       extractFocusedSpaceMember: "Spaces: Extract focused member",
       moveFocusedSpaceMember: "Spaces: Move focused member...",
       closeFocusedSpaceMember: "Spaces: Close focused member",
-      openHarness: "Agent Harness",
+      openHarness: "Open Agent Development Harness",
       newTerminal: "New terminal",
       dropPrompt: "Drop file or folder here to open",
       dropSubtitle:
@@ -3698,6 +3703,7 @@ subtabs: {
     export: "Export",
     find: "Find",
     findInTranscript: "Find in Transcript (Ctrl+F)",
+
     findPlaceholder: "Find in transcript...",
     previousMatch: "Previous match (Shift+Enter)",
     nextMatch: "Next match (Enter)",
@@ -3782,10 +3788,13 @@ subtabs: {
       saveError: "Failed to save alias",
     },
   },
+  harness: {
+    agentDevelopment: "Agent Development",
+    closeAgentDevelopment: "Close Agent Development",
+  },
 };
 
 export type TranslationSchema = typeof en;
-
 
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
