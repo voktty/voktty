@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { useProjectAvailability } from "../hooks/useProjectAvailability";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
@@ -184,28 +185,36 @@ export function ProjectRail({
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupLogos = useTabGroupLogos();
-  const allProjects = useMemo(
-    () => collectRailProjects(recents, cwd),
-    [cwd, recents],
-  );
-  const sections = useMemo(
-    () => projectRailSections(recents, cwd, railOrder, pinnedPaths),
-    [cwd, pinnedPaths, railOrder, recents],
-  );
   const busy = useMemo(() => {
     const set = new Set<string>();
     for (const path of busyPaths ?? []) set.add(path);
+    for (const agent of liveAgents ?? []) {
+      if (!agent.done && agent.cwd) set.add(agent.cwd);
+    }
     return set;
-  }, [busyPaths]);
+  }, [busyPaths, liveAgents]);
+  const allProjects = useMemo(
+    () => collectRailProjects(recents, cwd, pinnedPaths, railOrder),
+    [cwd, pinnedPaths, railOrder, recents],
+  );
+  const allProjectPaths = useMemo(
+    () => Array.from(allProjects.keys()),
+    [allProjects],
+  );
+  const unavailablePaths = useProjectAvailability(allProjectPaths);
+  const sections = useMemo(
+    () => projectRailSections(recents, cwd, railOrder, pinnedPaths, busy),
+    [busy, cwd, pinnedPaths, railOrder, recents],
+  );
 
   useEffect(() => {
     setRailOrder((prev) => {
-      const synced = syncProjectRailOrder(prev, allProjects);
+      const synced = syncProjectRailOrder(prev, allProjects, busy);
       if (synced.join("\0") === prev.join("\0")) return prev;
       saveProjectRailOrder(synced);
       return synced;
     });
-  }, [allProjects]);
+  }, [allProjects, busy]);
 
   useEffect(() => {
     setPinnedPaths((prev) => {
@@ -414,6 +423,7 @@ export function ProjectRail({
                 items={sections.pinned}
                 cwd={cwd}
                 busy={busy}
+                unavailablePaths={unavailablePaths}
                 sortable={pinnedSortable}
                 pinned
                 searchActive={searchActive || inboxActive || notesActive}
@@ -436,6 +446,7 @@ export function ProjectRail({
               onAdd={onOpenProject}
               cwd={cwd}
               busy={busy}
+              unavailablePaths={unavailablePaths}
               sortable={projectSortable}
               pinned={false}
               searchActive={searchActive || inboxActive || notesActive}
@@ -759,6 +770,7 @@ function ProjectSection({
   onAdd,
   cwd,
   busy,
+  unavailablePaths,
   sortable,
   pinned,
   searchActive,
@@ -778,6 +790,7 @@ function ProjectSection({
   onAdd?: () => void;
   cwd: string;
   busy: Set<string>;
+  unavailablePaths: Set<string>;
   sortable: SortableHandle;
   pinned: boolean;
   searchActive: boolean;
@@ -821,6 +834,7 @@ function ProjectSection({
             item={item}
             selected={!searchActive && sameProjectPath(item.path, cwd)}
             busy={isBusyPath(item.path, busy)}
+            unavailable={isBusyPath(item.path, unavailablePaths)}
             pinned={pinned}
             sortable={sortable}
             index={index}
@@ -847,6 +861,7 @@ function ProjectCard({
   item,
   selected,
   busy,
+  unavailable = false,
   pinned,
   sortable,
   index,
@@ -863,6 +878,7 @@ function ProjectCard({
   item: RecentProject;
   selected: boolean;
   busy: boolean;
+  unavailable?: boolean;
   pinned: boolean;
   sortable: SortableHandle;
   index: number;
@@ -897,14 +913,14 @@ function ProjectCard({
     sortable.toIndex === index &&
     sortable.fromIndex !== null &&
     sortable.toIndex > sortable.fromIndex;
-  const diffEnabled = Boolean(item.path) && item.path !== "~";
+  const diffEnabled = Boolean(item.path) && item.path !== "~" && !unavailable;
   const stats = useProjectDiffStats(item.path, diffEnabled);
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
   const deletions = stats?.deletions ?? 0;
   const hasChanges = files > 0 || additions > 0 || deletions > 0;
-  const cardTitle = projectCardTitle(item.path, name, stats, busy);
-  const cardAriaLabel = projectCardAriaLabel(name, stats, busy);
+  const cardTitle = projectCardTitle(item.path, name, stats, busy, unavailable);
+  const cardAriaLabel = projectCardAriaLabel(name, stats, busy, unavailable);
 
   return (
     <div
@@ -965,9 +981,24 @@ function ProjectCard({
             {name}
           </Shimmer>
         ) : (
-          <span className={nameClassName}>{name}</span>
+          <span
+            className={`${nameClassName} ${
+              unavailable ? "text-content/55 italic" : ""
+            }`}
+          >
+            {name}
+          </span>
         )}
-        {hasChanges ? (
+        {unavailable ? (
+          <span
+            title="Directorio no disponible en disco"
+            aria-label="Directorio no disponible"
+            className="flex shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-medium text-amber-500 dark:text-amber-400 group-hover:hidden"
+          >
+            <CircleAlert className="size-3 shrink-0" strokeWidth={2} />
+            <span className="hidden sm:inline text-[10px]">No disponible</span>
+          </span>
+        ) : hasChanges ? (
           <span className="shrink-0 group-hover:hidden">
             <ProjectDiffStat additions={additions} deletions={deletions} />
           </span>
@@ -1053,8 +1084,10 @@ function projectCardTitle(
   name: string,
   stats: GitDiffStats | null,
   busy: boolean,
+  unavailable = false,
 ): string {
   const parts = [name, path];
+  if (unavailable) parts.push("[Directorio no disponible en disco]");
   if (busy) parts.push("Working");
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
@@ -1077,8 +1110,10 @@ function projectCardAriaLabel(
   name: string,
   stats: GitDiffStats | null,
   busy: boolean,
+  unavailable = false,
 ): string {
   const parts = [name];
+  if (unavailable) parts.push("directorio no disponible");
   if (busy) parts.push("working");
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
