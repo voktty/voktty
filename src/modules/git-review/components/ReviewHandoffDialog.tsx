@@ -18,6 +18,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMemo, useState } from "react";
+import { requestAddToChat } from "@/modules/harness/lib/quoteDraft";
 import { toast } from "sonner";
 import { useGitReviewStore } from "../store/gitReviewStore";
 
@@ -71,6 +72,7 @@ export function ReviewHandoffDialog({
         detail: { prompt },
       }),
     );
+    requestAddToChat(prompt, "plain");
     toast.success(t("git.reviewSentToAgent"));
     onOpenChange(false);
   };

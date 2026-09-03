@@ -173,9 +173,20 @@ export function AiComposerProvider({ children }: ProviderProps) {
         void attachFileByPath(path);
       }
     };
+    const onInsertPrompt = (e: Event) => {
+      const prompt = (e as CustomEvent<{ prompt: string }>).detail?.prompt;
+      if (typeof prompt === "string" && prompt.length > 0) {
+        setValue((prev: string) => (prev ? `${prev}\n\n${prompt}` : prompt));
+        requestAnimationFrame(() => textareaRef.current?.focus());
+      }
+    };
     window.addEventListener("voktty:ai-attach-file", onAttach);
-    return () => window.removeEventListener("voktty:ai-attach-file", onAttach);
-  }, [attachFileByPath]);
+    window.addEventListener("voktty:agent:insert-prompt", onInsertPrompt);
+    return () => {
+      window.removeEventListener("voktty:ai-attach-file", onAttach);
+      window.removeEventListener("voktty:agent:insert-prompt", onInsertPrompt);
+    };
+  }, [attachFileByPath, setValue, textareaRef]);
 
   useEffect(() => {
     if (pendingSelections.length === 0) return;
