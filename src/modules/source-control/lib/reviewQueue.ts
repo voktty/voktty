@@ -125,8 +125,12 @@ export function reconcileGitReviewPath(
   entries: readonly Pick<GitReviewEntry, "path">[],
   currentPath: string | null,
 ): string | null {
-  if (currentPath && entries.some((entry) => entry.path === currentPath)) {
-    return currentPath;
-  }
+  if (!currentPath) return entries[0]?.path ?? null;
+  const match = entries.find(
+    (entry) =>
+      entry.path === currentPath ||
+      comparablePath(entry.path) === comparablePath(currentPath),
+  );
+  if (match) return match.path;
   return entries[0]?.path ?? null;
 }
