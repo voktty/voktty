@@ -1,7 +1,8 @@
-import { CircleDot, GitPullRequest, X } from "./icons";
+import { X } from "./icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { GithubLabel, InboxComposerCard } from "../lib/githubTasks";
 import { InboxProviderMark } from "./InboxProviderMark";
+import { InboxKindStatusIcon } from "./InboxKindStatusIcon";
 
 type Props = {
   card: InboxComposerCard;
@@ -9,7 +10,6 @@ type Props = {
 };
 
 export function InboxMiniCard({ card, onDismiss }: Props) {
-  const KindIcon = card.kind === "pr" ? GitPullRequest : CircleDot;
   const kindLabel = card.kind === "pr" ? "Pull request" : "Issue";
   const providerLabel = card.provider === "linear" ? "Linear" : "GitHub";
 
@@ -31,9 +31,10 @@ export function InboxMiniCard({ card, onDismiss }: Props) {
               provider={card.provider}
               className="size-3.5 shrink-0"
             />
-            <KindIcon
-              className="size-3 shrink-0 text-content/45"
-              strokeWidth={1.75}
+            <InboxKindStatusIcon
+              kind={card.kind}
+              provider={card.provider}
+              className="size-3 shrink-0"
             />
             <span className="min-w-0 truncate text-[11px] text-content/50">
               {kindLabel} · {card.identifier}

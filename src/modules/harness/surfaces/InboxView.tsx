@@ -1,10 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ChevronDown,
-  CircleDot,
   ExternalLink,
   GitCompare,
-  GitPullRequest,
   Inbox,
   ListFilter,
   LoaderCircle,
@@ -22,11 +20,11 @@ import {
   InboxFiltersMenu,
   INBOX_FILTER_MENU_WIDTH,
 } from "../chrome/InboxFiltersMenu";
+import { InboxKindStatusIcon } from "../chrome/InboxKindStatusIcon";
 import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { ProjectLogoIcon } from "../chrome/ProjectLogoIcon";
 import { ProjectMascot } from "../chrome/ProjectMascot";
 import { OverlayNav } from "../chrome/TitleBar";
-import { WindowControls } from "../chrome/WindowControls";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
@@ -638,7 +636,6 @@ export function InboxView({
           />
           <span className="min-w-0 truncate text-content">Inbox</span>
         </div>
-        {IS_MAC ? null : <WindowControls />}
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1">
@@ -747,7 +744,6 @@ function InboxCard({
   onSelect: () => void;
 }) {
   useInboxSeenTick();
-  const KindIcon = item.kind === "pr" ? GitPullRequest : CircleDot;
   const time = formatRelativeTime(item.updatedAt);
   const name = projectName(item.projectPath);
   const linear = item.provider === "linear";
@@ -776,9 +772,13 @@ function InboxCard({
             provider={item.provider}
             className="size-3.5 shrink-0"
           />
-          <KindIcon
-            className="size-3 shrink-0 text-content/45"
-            strokeWidth={1.75}
+          <InboxKindStatusIcon
+            kind={item.kind}
+            state={item.state}
+            draft={item.draft}
+            stateType={item.stateType}
+            provider={item.provider}
+            className="size-3 shrink-0"
           />
           <span className="min-w-0 truncate text-[11px] text-content/50">
             {item.kind === "pr" ? "Pull request" : "Issue"} ·{" "}
@@ -1113,6 +1113,14 @@ function InboxDetail({
       <header className="flex flex-col gap-3">
         <div className="flex items-center gap-2 text-[12px] text-content/50">
           <InboxProviderMark provider={item.provider} className="size-3.5" />
+          <InboxKindStatusIcon
+            kind={item.kind}
+            state={item.state}
+            draft={item.draft}
+            stateType={item.stateType}
+            provider={item.provider}
+            className="size-3.5"
+          />
           <span>{item.kind === "pr" ? "Pull request" : "Issue"}</span>
           <span className="tabular-nums">{inboxItemRef(item)}</span>
           <span className={statusClass}>{status}</span>
