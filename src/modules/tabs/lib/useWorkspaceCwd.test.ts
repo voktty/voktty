@@ -52,6 +52,22 @@ describe("selectWorkspaceCwd", () => {
       explorerTerminalId: 2,
     });
   });
+
+  it("uses the active harness tab cwd as the explorer context", () => {
+    const harnessTab = {
+      id: 5,
+      kind: "harness",
+      cwd: "C:/projects/web",
+      spaceId: "default",
+    } as Tab;
+
+    expect(
+      selectWorkspaceCwd(harnessTab, [harnessTab], "C:/Users/serge", undefined),
+    ).toEqual({
+      explorerRoot: "C:/projects/web",
+      explorerTerminalId: 5,
+    });
+  });
 });
 
 describe("selectLocalTerminalSpawnContext", () => {
