@@ -20,7 +20,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMemo, useState } from "react";
 import { requestAddToChat } from "@/modules/harness/lib/quoteDraft";
 import { toast } from "sonner";
-import { useGitReviewStore } from "../store/gitReviewStore";
+import { EMPTY_COMMENTS, useGitReviewStore } from "../store/gitReviewStore";
 
 type Props = {
   open: boolean;
@@ -45,7 +45,9 @@ export function ReviewHandoffDialog({
     [repoRoot, target],
   );
 
-  const comments = useGitReviewStore((s) => s.comments[key] ?? []);
+  const comments = useGitReviewStore(
+    (s) => s.comments[key] ?? (EMPTY_COMMENTS as unknown as typeof s.comments[string]),
+  );
   const overview = useGitReviewStore((s) => s.overviews[key]);
   const buildHandoffPrompt = useGitReviewStore((s) => s.buildHandoffPrompt);
 

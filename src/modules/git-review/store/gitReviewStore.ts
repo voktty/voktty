@@ -15,6 +15,8 @@ import type {
   SessionReviewOverview,
 } from "../types";
 
+export const EMPTY_COMMENTS: readonly ReviewComment[] = Object.freeze([]);
+
 export function sessionKey(repoRoot: string, target = "worktree"): string {
   return `${repoRoot.replace(/[\\/]+$/, "")}#${target}`;
 }
