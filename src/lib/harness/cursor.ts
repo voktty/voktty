@@ -23,11 +23,14 @@ import {
   type UserQuestionReply,
 } from "../userQuestion";
 import {
+  agentToolTitle,
   composeToolTitle,
   extractSearchQuery,
   extractShellCommand,
   extractSkillName,
   extractToolPreview,
+  isAgentTool,
+  isAgentToolName,
   isWeakToolTitle,
   mergeToolPreview,
 } from "./preview";
@@ -65,6 +68,9 @@ type Live = {
   toolEnrichmentTimer?: ReturnType<typeof setTimeout>;
   toolEnrichmentRunning: boolean;
   toolStatuses: Map<string, string>;
+  agentTools: Map<string, string>;
+  backgroundAgentTools: Set<string>;
+  promptActive: boolean;
   turns: Promise<void>;
 };
 
@@ -154,6 +160,9 @@ export async function cancelCursorTurn(sessionId: string): Promise<void> {
   }
   live.cancelled = true;
   live.muteUpdates = true;
+  live.promptActive = false;
+  live.agentTools.clear();
+  live.backgroundAgentTools.clear();
   if (live.toolEnrichmentTimer) clearTimeout(live.toolEnrichmentTimer);
   live.toolEnrichmentTimer = undefined;
   for (const [, resolve] of live.approvals) resolve("deny");
@@ -173,8 +182,11 @@ export async function stopCursorSession(sessionId: string): Promise<void> {
   liveByThread.delete(sessionId);
   if (live) {
     live.muteUpdates = true;
+    live.promptActive = false;
     if (live.toolEnrichmentTimer) clearTimeout(live.toolEnrichmentTimer);
     live.pendingToolEnrichments.clear();
+    live.agentTools.clear();
+    live.backgroundAgentTools.clear();
     for (const [, resolve] of live.approvals) resolve("deny");
     live.approvals.clear();
     for (const [, resolve] of live.questions) resolve({ kind: "skipped" });
@@ -309,6 +321,9 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       pendingToolEnrichments: new Map(),
       toolEnrichmentRunning: false,
       toolStatuses: new Map(),
+      agentTools: new Map(),
+      backgroundAgentTools: new Set(),
+      promptActive: false,
       turns: Promise.resolve(),
     };
     liveRef.current = live;
@@ -381,16 +396,26 @@ async function prompt(live: Live, input: SendTurnInput): Promise<void> {
   try {
     const blocks = promptBlocks(input.text, input.attachments);
     if (blocks.length === 0) return;
+    live.agentTools.clear();
+    live.backgroundAgentTools.clear();
+    live.promptActive = true;
     await live.acp.request("session/prompt", {
       sessionId: live.acpSessionId,
       prompt: blocks,
     });
-    if (live.cancelled) return;
+    live.promptActive = false;
+    if (live.cancelled) {
+      live.backgroundAgentTools.clear();
+      return;
+    }
+    settleCursorBackgroundAgents(live, "completed");
     live.onEvent({ type: "message.completed" });
     live.onEvent({ type: "reasoning.completed" });
     wakeCursorToolEnrichment(live);
   } catch (error) {
+    live.promptActive = false;
     if (live.cancelled) return;
+    settleCursorBackgroundAgents(live, "failed");
     live.onEvent({
       type: "session.error",
       message: error instanceof Error ? error.message : String(error),
@@ -442,7 +467,44 @@ async function handleRequest(
     await live.acp.respond(id, { outcome: { outcome: "accepted" } });
     return;
   }
+  if (method === "cursor/task") {
+    handleCursorTask(live, params);
+    await live.acp.respond(id, {}).catch(() => undefined);
+    return;
+  }
   await live.acp.respond(id, {}).catch(() => undefined);
+}
+
+function handleCursorTask(live: Live, params: unknown): void {
+  const task = asRecord(params);
+  if (!task || !live.promptActive) return;
+  const callId =
+    stringField(task, "toolCallId") ?? stringField(task, "tool_call_id");
+  if (!callId || !live.agentTools.has(callId)) return;
+
+  const agentId = stringField(task, "agentId") ?? stringField(task, "agent_id");
+  const durationMs =
+    numberField(task, "durationMs") ?? numberField(task, "duration_ms");
+  const background =
+    live.backgroundAgentTools.has(callId) ||
+    (!!agentId && durationMs === undefined);
+  if (!background) return;
+
+  const title =
+    stringField(task, "description") ??
+    live.agentTools.get(callId) ??
+    "Subagent";
+  live.agentTools.set(callId, title);
+  live.backgroundAgentTools.add(callId);
+  live.toolStatuses.set(callId, "in_progress");
+  live.onEvent({
+    type: "tool.updated",
+    callId,
+    title,
+    kind: "agent",
+    status: "in_progress",
+    detail: cursorSubagentDetail(task),
+  });
 }
 
 async function handleAskQuestion(
@@ -642,52 +704,64 @@ function handleSessionUpdate(live: Live, params: unknown) {
         "",
     );
     if (!callId) return;
-    const toolKind =
+    const reportedKind =
       coerceMaybeString(update, "kind") ?? coerceMaybeString(tool, "kind");
     const status =
       coerceMaybeString(update, "status") ?? coerceMaybeString(tool, "status");
-    if (status) live.toolStatuses.set(callId, status);
+    const rawTitle = toolLabel(update, tool);
+    const rawInput =
+      update.rawInput ??
+      tool.rawInput ??
+      update.raw_input ??
+      tool.raw_input ??
+      update.input ??
+      tool.input;
+    const agent =
+      live.agentTools.has(callId) ||
+      isAgentTool(reportedKind, rawTitle) ||
+      isCursorAgentInput(rawInput);
+    const toolKind = agent ? "agent" : reportedKind;
     const detail = toolDetail(update, tool);
     const preview = extractToolPreview(update, tool);
-    const title =
-      composeToolTitle({
-        kind: toolKind,
-        title: toolLabel(update, tool),
-        command: extractShellCommand(
-          update.rawInput,
-          tool.rawInput,
-          update.raw_input,
-          tool.raw_input,
-          update.input,
-          tool.input,
-        ),
-        skill: extractSkillName(
-          update.rawInput,
-          tool.rawInput,
-          update.raw_input,
-          tool.raw_input,
-          update.input,
-          tool.input,
-        ),
-        path: preview?.path,
-        query:
-          preview?.query ??
-          extractSearchQuery(
-            update.rawInput ??
-              tool.rawInput ??
-              update.raw_input ??
-              tool.raw_input ??
-              update.input ??
-              tool.input,
+    const title = agent
+      ? cursorAgentTitle(rawInput, rawTitle, live.agentTools.get(callId))
+      : composeToolTitle({
+          kind: toolKind,
+          title: rawTitle,
+          command: extractShellCommand(
+            update.rawInput,
+            tool.rawInput,
+            update.raw_input,
+            tool.raw_input,
+            update.input,
+            tool.input,
           ),
-        previewKind: preview?.kind,
-      }) || toolLabel(update, tool);
+          skill: extractSkillName(
+            update.rawInput,
+            tool.rawInput,
+            update.raw_input,
+            tool.raw_input,
+            update.input,
+            tool.input,
+          ),
+          path: preview?.path,
+          query: preview?.query ?? extractSearchQuery(rawInput),
+          previewKind: preview?.kind,
+        }) || rawTitle;
+    if (agent && title) live.agentTools.set(callId, title);
+    const background =
+      agent &&
+      status === "completed" &&
+      cursorToolOutputIsBackground(update, tool);
+    if (background) live.backgroundAgentTools.add(callId);
+    const displayedStatus = background ? "in_progress" : status;
+    if (displayedStatus) live.toolStatuses.set(callId, displayedStatus);
     live.onEvent({
       type: "tool.updated",
       callId,
       title,
       kind: toolKind,
-      status,
+      status: displayedStatus,
       detail,
       preview,
     });
@@ -698,6 +772,80 @@ function handleSessionUpdate(live: Live, params: unknown) {
       live.enrichedTools.add(callId);
     }
   }
+}
+
+function isCursorAgentInput(value: unknown): boolean {
+  const input = asRecord(value);
+  if (!input) return false;
+  const name =
+    stringField(input, "_toolName") ??
+    stringField(input, "toolName") ??
+    stringField(input, "tool_name") ??
+    stringField(input, "name");
+  return !!name && isAgentToolName(name);
+}
+
+function cursorAgentTitle(
+  rawInput: unknown,
+  rawTitle: string | undefined,
+  existing: string | undefined,
+): string {
+  const input = asRecord(rawInput);
+  if (input) return agentToolTitle(input, existing ?? rawTitle ?? "Subagent");
+  if (existing) return existing;
+  const stripped = rawTitle
+    ?.replace(/^(?:agent|task|subagent)\b[\s:·-]*/i, "")
+    .trim();
+  return stripped || "Subagent";
+}
+
+function cursorToolOutputIsBackground(
+  update: Record<string, unknown>,
+  tool: Record<string, unknown>,
+): boolean {
+  for (const value of [
+    update.rawOutput,
+    tool.rawOutput,
+    update.raw_output,
+    tool.raw_output,
+  ]) {
+    const output = asRecord(value);
+    if (output?.isBackground === true || output?.is_background === true) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function cursorSubagentDetail(
+  task: Record<string, unknown>,
+): string | undefined {
+  const type = task.subagentType ?? task.subagent_type;
+  if (typeof type === "string" && type && type !== "unspecified") {
+    return `${type.replace(/[_-]+/g, " ")} subagent`;
+  }
+  const custom = asRecord(type)?.custom;
+  if (typeof custom === "string" && custom.trim()) {
+    return `${custom.trim().replace(/[_-]+/g, " ")} subagent`;
+  }
+  return undefined;
+}
+
+function settleCursorBackgroundAgents(
+  live: Live,
+  status: "completed" | "failed",
+): void {
+  for (const callId of live.backgroundAgentTools) {
+    live.toolStatuses.set(callId, status);
+    live.onEvent({
+      type: "tool.updated",
+      callId,
+      title: live.agentTools.get(callId),
+      kind: "agent",
+      status,
+    });
+  }
+  live.backgroundAgentTools.clear();
 }
 
 const TOOL_ENRICH_MAX_ATTEMPTS = 20;
@@ -1208,6 +1356,16 @@ function stringField(
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function numberField(
+  rec: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = rec[key];
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
 function textFromContent(content: unknown, separator = ""): string {
   if (typeof content === "string") return content;
   const rec = asRecord(content);
@@ -1243,4 +1401,10 @@ function statusMark(status: string): string {
   if (status === "in_progress") return "[…]";
   if (status === "cancelled") return "[-]";
   return "[ ]";
+}
+
+export function __cursorTestReset(): void {
+  liveByThread.clear();
+  resumeByThread.clear();
+  cancelledThreads.clear();
 }
