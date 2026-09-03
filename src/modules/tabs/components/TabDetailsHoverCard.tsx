@@ -49,7 +49,7 @@ function formatBytes(bytes: number, precision = 1): string {
     Math.floor(Math.log(bytes) / Math.log(1024)),
     units.length - 1,
   );
-  const val = (bytes / Math.pow(1024, i)).toFixed(precision);
+  const val = (bytes / 1024 ** i).toFixed(precision);
   const cleanVal = val.endsWith(".0") ? val.slice(0, -2) : val;
   return `${cleanVal}${units[i]}`;
 }

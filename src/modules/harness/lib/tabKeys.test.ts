@@ -83,12 +83,12 @@ describe("tabCommand", () => {
 });
 
 describe("shouldStopFocusedTurnOnEscape", () => {
-  const escape = (partial: Partial<KeyboardEvent> = {}) =>
+  const makeEscapeKey = (partial: Partial<KeyboardEvent> = {}) =>
     key({ key: "Escape", ...partial });
 
   it("stops a busy focused agent turn on plain Escape", () => {
     expect(
-      shouldStopFocusedTurnOnEscape(escape(), {
+      shouldStopFocusedTurnOnEscape(makeEscapeKey(), {
         inTerminal: false,
         focusedSessionBusy: true,
       }),
@@ -97,7 +97,7 @@ describe("shouldStopFocusedTurnOnEscape", () => {
 
   it("does not steal Escape that another surface already handled", () => {
     expect(
-      shouldStopFocusedTurnOnEscape(escape({ defaultPrevented: true }), {
+      shouldStopFocusedTurnOnEscape(makeEscapeKey({ defaultPrevented: true }), {
         inTerminal: false,
         focusedSessionBusy: true,
       }),
@@ -106,13 +106,13 @@ describe("shouldStopFocusedTurnOnEscape", () => {
 
   it("leaves terminal Escape and idle sessions alone", () => {
     expect(
-      shouldStopFocusedTurnOnEscape(escape(), {
+      shouldStopFocusedTurnOnEscape(makeEscapeKey(), {
         inTerminal: true,
         focusedSessionBusy: true,
       }),
     ).toBe(false);
     expect(
-      shouldStopFocusedTurnOnEscape(escape(), {
+      shouldStopFocusedTurnOnEscape(makeEscapeKey(), {
         inTerminal: false,
         focusedSessionBusy: false,
       }),
@@ -129,7 +129,7 @@ describe("shouldStopFocusedTurnOnEscape", () => {
       { repeat: true },
     ]) {
       expect(
-        shouldStopFocusedTurnOnEscape(escape(partial), {
+        shouldStopFocusedTurnOnEscape(makeEscapeKey(partial), {
           inTerminal: false,
           focusedSessionBusy: true,
         }),
@@ -181,14 +181,14 @@ describe("focusedBusyAgentSessionId", () => {
 });
 
 describe("deferUnhandledEscape", () => {
-  const escape = (partial: Partial<KeyboardEvent> = {}) =>
+  const makeEscapeKey = (partial: Partial<KeyboardEvent> = {}) =>
     key({ key: "Escape", ...partial });
 
   it("runs after the keydown dispatch when Escape stays unhandled", () => {
     let deferred: (() => void) | undefined;
     let stopped = false;
     deferUnhandledEscape(
-      escape(),
+      makeEscapeKey(),
       () => {
         stopped = true;
       },
@@ -204,7 +204,9 @@ describe("deferUnhandledEscape", () => {
   it("yields to a later same-dispatch Escape handler", () => {
     let deferred: (() => void) | undefined;
     let stopped = false;
-    const event = escape() as KeyboardEvent & { defaultPrevented: boolean };
+    const event = makeEscapeKey() as KeyboardEvent & {
+      defaultPrevented: boolean;
+    };
     deferUnhandledEscape(
       event,
       () => {
@@ -224,8 +226,12 @@ describe("deferUnhandledEscape", () => {
     const defer = () => {
       scheduled += 1;
     };
-    deferUnhandledEscape(escape({ defaultPrevented: true }), () => {}, defer);
-    deferUnhandledEscape(escape({ repeat: true }), () => {}, defer);
+    deferUnhandledEscape(
+      makeEscapeKey({ defaultPrevented: true }),
+      () => {},
+      defer,
+    );
+    deferUnhandledEscape(makeEscapeKey({ repeat: true }), () => {}, defer);
     expect(scheduled).toBe(0);
   });
 });

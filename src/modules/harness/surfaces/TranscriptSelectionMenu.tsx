@@ -1,7 +1,7 @@
 import { MessageSquarePlus } from "../chrome/icons";
 import { useEffect, useRef } from "react";
 import { Popover } from "../chrome/Popover";
-import { type TranscriptSelection } from "../lib/transcriptSelection";
+import type { TranscriptSelection } from "../lib/transcriptSelection";
 
 type Props = {
   selection: TranscriptSelection | null;

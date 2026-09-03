@@ -157,7 +157,7 @@ function MarkdownCode({
   ...props
 }: MarkdownCodeProps) {
   const incomplete = useIsCodeFenceIncomplete();
-  const block = Object.prototype.hasOwnProperty.call(props, "data-block");
+  const block = "data-block" in props;
   if (!block) {
     const text = textContent(children);
     const fileName = inlineFileName(text);
@@ -395,6 +395,7 @@ function MermaidBlock({
     <div
       className="mermaid-block overflow-x-auto rounded-[10px] border border-content/10 bg-content/6 p-3"
       data-streamdown="mermaid-block"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized mermaid SVG output
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

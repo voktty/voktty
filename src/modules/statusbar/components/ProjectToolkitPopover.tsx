@@ -207,7 +207,7 @@ export function ProjectToolkitPopover({
     const q = query.trim().toLowerCase();
     const currentStack = stackInfo?.primaryType;
 
-    let list = tools.filter(
+    const list = tools.filter(
       (t) => t.category === "setup" || t.category === "custom",
     );
     if (currentStack && currentStack !== "general") {

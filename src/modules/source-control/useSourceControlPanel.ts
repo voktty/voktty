@@ -279,7 +279,7 @@ export function truncateDiff(diff: string): {
 export function cleanCommitMessage(raw: string): string {
   let text = raw.trim();
   const fence = text.match(
-    /^\`\`\`[a-zA-Z0-9_-]*\s*\n?([\s\S]*?)\n?\`\`\`\s*$/,
+    /^```[a-zA-Z0-9_-]*\s*\n?([\s\S]*?)\n?```\s*$/,
   );
   if (fence) text = fence[1].trim();
   const firstLine = text
@@ -287,9 +287,9 @@ export function cleanCommitMessage(raw: string): string {
     .map((line) => line.trim())
     .find(Boolean);
   if (!firstLine) return "";
-  let cleaned = firstLine.replace(/^[\"'`]+|[\"'`]+$/g, "").trim();
+  let cleaned = firstLine.replace(/^["'`]+|["'`]+$/g, "").trim();
   cleaned = cleaned.replace(/^(commit message|subject|title):\s*/i, "").trim();
-  cleaned = cleaned.replace(/^[\"'`]+|[\"'`]+$/g, "").trim();
+  cleaned = cleaned.replace(/^["'`]+|["'`]+$/g, "").trim();
 
   if (CONVENTIONAL_PREFIX.test(cleaned)) {
     return cleaned;

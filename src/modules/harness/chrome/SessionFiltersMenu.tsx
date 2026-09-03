@@ -1,5 +1,5 @@
 import { Check } from "./icons";
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Popover } from "./Popover";
 import {
   DEFAULT_SESSION_SIDEBAR_FILTERS,
