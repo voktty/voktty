@@ -573,7 +573,11 @@ export function useSourceControl(
       void doRefresh("never");
     };
     window.addEventListener("voktty:git-refresh", onGitRefresh);
-    return () => window.removeEventListener("voktty:git-refresh", onGitRefresh);
+    window.addEventListener("monocode-git-changed", onGitRefresh);
+    return () => {
+      window.removeEventListener("voktty:git-refresh", onGitRefresh);
+      window.removeEventListener("monocode-git-changed", onGitRefresh);
+    };
   }, [doRefresh]);
 
   const runRemoteAction = useCallback(

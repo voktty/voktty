@@ -243,6 +243,7 @@ const GIT_CHANGED = "monocode-git-changed";
 /** Tell git UIs (diff pane, branch picker) to reload after a local git mutation. */
 export function notifyGitChanged() {
   window.dispatchEvent(new Event(GIT_CHANGED));
+  window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
 }
 
 export function subscribeGitChanged(listener: () => void): () => void {

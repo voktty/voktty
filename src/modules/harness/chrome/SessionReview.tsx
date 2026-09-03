@@ -154,7 +154,7 @@ export function SessionReview({
             <button
               type="button"
               title="Review changes"
-              onClick={() => onOpenDiff()}
+              onClick={() => onOpenDiff(first?.path)}
               className="h-6 rounded-md bg-content/15 px-2 text-[11px] text-content/80 hover:bg-content/20 hover:text-content"
             >
               Review

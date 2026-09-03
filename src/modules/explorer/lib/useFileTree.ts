@@ -348,12 +348,24 @@ export function useFileTree(rootPath: string | null, options?: Options) {
       (paths) => {
         const current = nodesRef.current;
         const dirs = new Set<string>();
+        const loadedKeys = Object.keys(current).filter(
+          (k) => current[k]?.status === "loaded",
+        );
+        const norm = (s: string) => s.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
+
         for (const p of paths) {
           const parent = dirname(p);
-          if (current[parent]?.status === "loaded") dirs.add(parent);
-          if (current[p]?.status === "loaded") dirs.add(p);
+          const pNorm = norm(p);
+          const parentNorm = norm(parent);
+          for (const key of loadedKeys) {
+            const keyNorm = norm(key);
+            if (keyNorm === parentNorm || keyNorm === pNorm) {
+              dirs.add(key);
+            }
+          }
         }
         for (const d of dirs) void fetchChildren(d);
+        window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
       },
       workspace,
     ).then((un) => {
