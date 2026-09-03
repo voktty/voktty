@@ -32,6 +32,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fetchWorkingDiff } from "@/modules/editor/lib/diffCache";
 import {
+  EMPTY_COMMENTS,
   ReviewHandoffDialog,
   sessionKey,
   useGitReviewStore,
@@ -211,7 +212,9 @@ export function GitReviewQueue({
 
   const sKey = sessionKey(repoRoot, "worktree");
   const overview = useGitReviewStore((state) => state.overviews[sKey]);
-  const comments = useGitReviewStore((state) => state.comments[sKey] ?? []);
+  const comments = useGitReviewStore(
+    (state) => state.comments[sKey] ?? (EMPTY_COMMENTS as unknown as typeof state.comments[string]),
+  );
   const loadOverview = useGitReviewStore((state) => state.loadOverview);
   const loadComments = useGitReviewStore((state) => state.loadComments);
   const markFile = useGitReviewStore((state) => state.markFile);
