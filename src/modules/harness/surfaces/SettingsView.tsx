@@ -18,7 +18,6 @@ import {
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
-import { WindowControls } from "../chrome/WindowControls";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   applyBodyGlass,
@@ -218,7 +217,6 @@ export function SettingsView({
             Restore defaults
           </button>
         ) : null}
-        {IS_MAC ? null : <WindowControls />}
       </div>
 
       <div
