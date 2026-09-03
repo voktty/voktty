@@ -109,18 +109,12 @@ export function GitReviewQueue({
         : [],
     [matchesRepository, sourceControl.status],
   );
-  const selected = entries.find((entry) => entry.path === currentPath) ?? null;
-
-  useEffect(() => {
-    if (!matchesRepository || busy || entries.length === 0) {
-      return;
-    }
-    const nextPath = reconcileGitReviewPath(entries, currentPath);
-    if (nextPath !== currentPath) {
-      const next = entries.find((entry) => entry.path === nextPath);
-      if (next) openEntry(repoRoot, next, onOpenDiff);
-    }
-  }, [busy, currentPath, entries, matchesRepository, onOpenDiff, repoRoot]);
+  const selected =
+    entries.find(
+      (entry) =>
+        entry.path === currentPath ||
+        entry.path.replace(/\\/g, "/") === currentPath.replace(/\\/g, "/"),
+    ) ?? null;
 
   const invalidateEntry = useCallback(
     (entry: GitReviewEntry) => {

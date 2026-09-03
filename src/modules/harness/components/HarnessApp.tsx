@@ -2303,16 +2303,19 @@ export function HarnessApp({
     setComposerFocused(false);
   }, [activeTabId]);
 
-  const onShowSourceControl = useCallback(() => {
-    setSidebarOpen(true);
-    saveSidebarOpen(true);
-    setSidebarTab("changes");
-  }, []);
-
   const onToggleChanges = useCallback(() => {
-    if (deckLayout) onShowSourceControl();
-    else onToggleDiff();
-  }, [deckLayout, onShowSourceControl, onToggleDiff]);
+    if (deckLayout) {
+      if (sidebarOpen && sidebarTab === "changes") {
+        setSidebarTab("sessions");
+      } else {
+        setSidebarOpen(true);
+        saveSidebarOpen(true);
+        setSidebarTab("changes");
+      }
+    } else {
+      onToggleDiff();
+    }
+  }, [deckLayout, onToggleDiff, sidebarOpen, sidebarTab]);
 
   const onReorderTabs = useCallback(
     (ids: string[], movedId?: string) => {

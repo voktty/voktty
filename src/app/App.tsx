@@ -4039,6 +4039,15 @@ export default function App() {
     ],
   );
 
+  const gitReviewConfig = useMemo(
+    () => ({
+      sourceControl,
+      dirtyPaths: workspaceSearchDirtyPaths,
+      onOpenDiff: openGitDiffTab,
+    }),
+    [sourceControl, workspaceSearchDirtyPaths, openGitDiffTab],
+  );
+
   const shell = (
     <ThemeProvider>
       <TooltipProvider>
@@ -4344,11 +4353,7 @@ export default function App() {
                             }
                             onNavigateBack={navigateEditorBack}
                             onNavigateForward={navigateEditorForward}
-                            gitReview={{
-                              sourceControl,
-                              dirtyPaths: workspaceSearchDirtyPaths,
-                              onOpenDiff: openGitDiffTab,
-                            }}
+                            gitReview={gitReviewConfig}
                           />
                         </ErrorBoundary>
                       )}
