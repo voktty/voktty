@@ -1,5 +1,5 @@
 import { isMarkdownPath } from "@/lib/utils";
-import { t as translate } from "@/modules/i18n";
+import { t, t as translate } from "@/modules/i18n";
 import {
   type AgentInstanceCount,
   createAgentPanePlan,
@@ -1596,7 +1596,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         ...createTabIdentity(targetSpace),
         kind: "harness",
         spaceId: targetSpace,
-        title: "Agent Development",
+        title: t("harness.agentDevelopment", {
+          defaultValue: "Agent Development",
+        }),
         cwd,
         sessionId,
       },
