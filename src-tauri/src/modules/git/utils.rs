@@ -70,10 +70,35 @@ pub fn authorized_repo_root(
 }
 
 pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
-    if !is_safe_pathspec(rel) {
-        return Err(GitError::InvalidPath(rel.into()));
+    let rel_p = Path::new(rel);
+    let effective_rel = if rel_p.is_absolute() {
+        if let Ok(canon_repo) = std::fs::canonicalize(repo_root) {
+            if let Ok(canon_rel) = std::fs::canonicalize(rel_p) {
+                if let Ok(stripped) = canon_rel.strip_prefix(&canon_repo) {
+                    stripped.to_string_lossy().to_string()
+                } else {
+                    rel.to_string()
+                }
+            } else if let Ok(stripped) = rel_p.strip_prefix(repo_root) {
+                stripped.to_string_lossy().to_string()
+            } else {
+                rel.to_string()
+            }
+        } else if let Ok(stripped) = rel_p.strip_prefix(repo_root) {
+            stripped.to_string_lossy().to_string()
+        } else {
+            rel.to_string()
+        }
+    } else {
+        rel.to_string()
+    };
+    let clean_rel = effective_rel.replace('\\', "/");
+    let clean_rel = clean_rel.trim_start_matches('/');
+
+    if !is_safe_pathspec(clean_rel) {
+        return Err(GitError::InvalidPath(clean_rel.into()));
     }
-    let joined = repo_root.join(rel);
+    let joined = repo_root.join(clean_rel);
     match std::fs::canonicalize(&joined) {
         Ok(canonical) => {
             if !canonical.starts_with(repo_root) {
@@ -83,7 +108,7 @@ pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
         }
         // Deleted path (staging a removal): validate via nearest existing ancestor.
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            resolve_deleted_within_repo(repo_root, &joined, rel)
+            resolve_deleted_within_repo(repo_root, &joined, clean_rel)
         }
         Err(e) => Err(GitError::Io(e)),
     }
