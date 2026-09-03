@@ -27,6 +27,8 @@ import { isAtxHeadingLine } from "../lib/markdownSource";
 import { useColorScheme } from "../hooks/useColorScheme";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { copyText } from "../lib/clipboard";
+import { INBOX_MEDIA_PREFIXES, isInboxMediaUrl } from "../lib/inboxMedia";
+import { InboxMedia } from "./InboxMedia";
 
 const MERMAID_BASE_CONFIG = {
   startOnLoad: false,
@@ -57,10 +59,27 @@ const MARKDOWN_REHYPE_PLUGINS: PluggableList = [
   ],
 ];
 
+const INBOX_MEDIA_REHYPE_PLUGINS: PluggableList = [
+  defaultRehypePlugins.raw,
+  defaultRehypePlugins.sanitize,
+  [
+    harden,
+    {
+      defaultOrigin: "https://inbox.invalid",
+      allowedImagePrefixes: INBOX_MEDIA_PREFIXES,
+      allowedLinkPrefixes: ["*"],
+      allowDataImages: true,
+      imageBlockPolicy: "remove" as const,
+    },
+  ],
+];
+
 const FileOpenContext = createContext<{
   cwd?: string;
   onOpenFile?: (path: string) => void;
 }>({});
+
+const RemoteMediaContext = createContext(false);
 
 const LANGUAGE_FROM_EXT: Record<string, string> = {
   sh: "bash",
@@ -124,8 +143,13 @@ function MarkdownLink({
   onClick,
   ...props
 }: MarkdownLinkProps) {
+  const allowRemoteMedia = useContext(RemoteMediaContext);
   const { cwd, onOpenFile } = useContext(FileOpenContext);
   const filePath = href ? resolveWorkspacePath(href, cwd) : undefined;
+  const label = textContent(children);
+  if (allowRemoteMedia && href && isInboxMediaUrl(href)) {
+    return <InboxMedia src={href} alt={label} />;
+  }
 
   return (
     <a
@@ -273,9 +297,27 @@ function CodeCopyButton({ code }: { code: string }) {
   );
 }
 
+type MarkdownImageProps = ComponentProps<"img"> & { node?: unknown };
+
+function MarkdownImage({
+  src,
+  alt,
+  node: _node,
+  ...props
+}: MarkdownImageProps) {
+  const allowRemoteMedia = useContext(RemoteMediaContext);
+  const url = typeof src === "string" ? src.trim() : "";
+  if (url.startsWith("data:image/")) {
+    return <img {...props} src={url} alt={alt ?? ""} />;
+  }
+  if (!allowRemoteMedia || !url || !isInboxMediaUrl(url)) return null;
+  return <InboxMedia src={url} alt={alt} />;
+}
+
 const MARKDOWN_COMPONENTS = {
   a: MarkdownLink,
   code: MarkdownCode,
+  img: MarkdownImage,
 } satisfies Components;
 
 export const AgentMarkdown = memo(function AgentMarkdown({
@@ -284,27 +326,34 @@ export const AgentMarkdown = memo(function AgentMarkdown({
   className,
   cwd,
   onOpenFile,
+  allowRemoteMedia,
 }: {
   text: string;
   streaming?: boolean;
   className?: string;
   cwd?: string;
   onOpenFile?: (path: string) => void;
+  allowRemoteMedia?: boolean;
 }) {
   const fileOpen = useMemo(() => ({ cwd, onOpenFile }), [cwd, onOpenFile]);
+  const remoteMedia = !!allowRemoteMedia;
   return (
-    <FileOpenContext.Provider value={fileOpen}>
-      <Streamdown
-        className={`agent-markdown min-w-0 font-sans text-sm leading-6 ${className ?? ""}`}
-        components={MARKDOWN_COMPONENTS}
-        controls={false}
-        isAnimating={!!streaming}
-        plugins={MARKDOWN_PLUGINS}
-        rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
-      >
-        {text}
-      </Streamdown>
-    </FileOpenContext.Provider>
+    <RemoteMediaContext.Provider value={remoteMedia}>
+      <FileOpenContext.Provider value={fileOpen}>
+        <Streamdown
+          className={`agent-markdown min-w-0 font-sans text-sm leading-6 ${className ?? ""}`}
+          components={MARKDOWN_COMPONENTS}
+          controls={false}
+          isAnimating={!!streaming}
+          plugins={MARKDOWN_PLUGINS}
+          rehypePlugins={
+            remoteMedia ? INBOX_MEDIA_REHYPE_PLUGINS : MARKDOWN_REHYPE_PLUGINS
+          }
+        >
+          {text}
+        </Streamdown>
+      </FileOpenContext.Provider>
+    </RemoteMediaContext.Provider>
   );
 });
 

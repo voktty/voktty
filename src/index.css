@@ -626,6 +626,15 @@ header[data-tauri-drag-region] button {
   margin-inline: auto;
 }
 
+.agent-markdown .inbox-media {
+  vertical-align: middle;
+}
+
+.agent-markdown .inbox-media img,
+.agent-markdown .inbox-media video {
+  vertical-align: middle;
+}
+
 @keyframes approval-toast-in {
   from {
     opacity: 0;

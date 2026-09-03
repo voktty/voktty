@@ -4,6 +4,7 @@ mod checkpoint;
 mod cursor_store;
 mod fs;
 mod harness;
+mod inbox_media;
 mod linear;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -190,6 +191,7 @@ pub fn run() {
             fs::git_github_work_item_thread,
             fs::git_github_work_item_comment,
             fs::git_github_pr_diff,
+            inbox_media::fetch_inbox_media,
             linear::linear_status,
             linear::linear_set_token,
             linear::linear_list_teams,

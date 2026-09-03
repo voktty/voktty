@@ -1296,7 +1296,11 @@ function InboxDetail({
       ) : (
         <>
           {details?.body.trim() ? (
-            <AgentMarkdown text={details.body} cwd={markdownCwd} />
+            <AgentMarkdown
+              text={details.body}
+              cwd={markdownCwd}
+              allowRemoteMedia
+            />
           ) : (
             <p className="text-[13px] text-content/45">No description</p>
           )}
