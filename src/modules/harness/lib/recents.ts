@@ -267,16 +267,38 @@ export function isProjectBusy(
   return false;
 }
 
+export function isProjectUnavailable(
+  path: string,
+  unavailablePaths?: ReadonlySet<string>,
+): boolean {
+  if (!unavailablePaths || unavailablePaths.size === 0) return false;
+  const norm = normalize(path);
+  for (const u of unavailablePaths) {
+    if (sameProjectPath(u, norm)) return true;
+  }
+  return false;
+}
+
 /**
  * Sorts projects strictly in order:
- * 1. Active agentic activity (busy/running agent turns) first.
- * 2. Most recently used (openedAt descending).
+ * 1. Available projects:
+ *    a. Active agentic activity (busy/running agent turns) first.
+ *    b. Most recently used (openedAt descending).
+ * 2. Unavailable / missing projects ordered at the end:
+ *    a. Active busy turns first.
+ *    b. Most recently used.
  */
 export function sortProjectsByActivityAndRecency(
   items: RecentProject[],
   busyPaths?: Iterable<string>,
+  unavailablePaths?: ReadonlySet<string>,
 ): RecentProject[] {
   return [...items].sort((a, b) => {
+    const aUnavailable = isProjectUnavailable(a.path, unavailablePaths);
+    const bUnavailable = isProjectUnavailable(b.path, unavailablePaths);
+    if (!aUnavailable && bUnavailable) return -1;
+    if (aUnavailable && !bUnavailable) return 1;
+
     const aBusy = isProjectBusy(a.path, busyPaths);
     const bBusy = isProjectBusy(b.path, busyPaths);
     if (aBusy && !bBusy) return -1;
@@ -293,9 +315,10 @@ export function syncProjectRailOrder(
   _order: string[],
   projects: Map<string, RecentProject>,
   busyPaths?: Iterable<string>,
+  unavailablePaths?: ReadonlySet<string>,
 ): string[] {
   const all = [...projects.values()];
-  const sorted = sortProjectsByActivityAndRecency(all, busyPaths);
+  const sorted = sortProjectsByActivityAndRecency(all, busyPaths, unavailablePaths);
   return sorted.map((item) => item.path);
 }
 
@@ -305,6 +328,7 @@ export function projectRailSections(
   order: string[],
   pinnedPaths: string[],
   busyPaths?: Iterable<string>,
+  unavailablePaths?: ReadonlySet<string>,
 ): ProjectRailSections {
   const projects = collectRailProjects(
     recents,
@@ -324,8 +348,8 @@ export function projectRailSections(
     }
   }
 
-  const pinned = sortProjectsByActivityAndRecency(pinnedList, busyPaths);
-  const unpinned = sortProjectsByActivityAndRecency(unpinnedList, busyPaths);
+  const pinned = sortProjectsByActivityAndRecency(pinnedList, busyPaths, unavailablePaths);
+  const unpinned = sortProjectsByActivityAndRecency(unpinnedList, busyPaths, unavailablePaths);
 
   return { pinned, projects: unpinned };
 }

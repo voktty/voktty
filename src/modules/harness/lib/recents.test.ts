@@ -122,6 +122,28 @@ describe("projectRailSections", () => {
     expect(projects.map((item) => item.path)).toContain("/tmp/ordered");
     expect(projects.map((item) => item.path)).toContain("/tmp/a");
   });
+
+  it("sorts unavailable projects to the end after available projects", () => {
+    const recents = [
+      { path: "/tmp/missing-recent", openedAt: 300 },
+      { path: "/tmp/available-old", openedAt: 100 },
+      { path: "/tmp/available-new", openedAt: 200 },
+    ];
+    const unavailable = new Set(["/tmp/missing-recent"]);
+    const { projects } = projectRailSections(
+      recents,
+      "/tmp/available-new",
+      [],
+      [],
+      undefined,
+      unavailable,
+    );
+    expect(projects.map((item) => item.path)).toEqual([
+      "/tmp/available-new",
+      "/tmp/available-old",
+      "/tmp/missing-recent",
+    ]);
+  });
 });
 
 describe("projectRailItems", () => {
