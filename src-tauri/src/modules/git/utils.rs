@@ -70,29 +70,28 @@ pub fn authorized_repo_root(
 }
 
 pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
-    let rel_p = Path::new(rel);
-    let effective_rel = if rel_p.is_absolute() {
-        if let Ok(canon_repo) = std::fs::canonicalize(repo_root) {
-            if let Ok(canon_rel) = std::fs::canonicalize(rel_p) {
-                if let Ok(stripped) = canon_rel.strip_prefix(&canon_repo) {
-                    stripped.to_string_lossy().to_string()
-                } else {
-                    rel.to_string()
-                }
-            } else if let Ok(stripped) = rel_p.strip_prefix(repo_root) {
-                stripped.to_string_lossy().to_string()
-            } else {
-                rel.to_string()
-            }
-        } else if let Ok(stripped) = rel_p.strip_prefix(repo_root) {
-            stripped.to_string_lossy().to_string()
-        } else {
-            rel.to_string()
-        }
+    let rel_norm = rel.replace('\\', "/");
+    let repo_norm = repo_root.to_string_lossy().replace('\\', "/");
+    let repo_clean = repo_norm
+        .trim_start_matches("//?/")
+        .trim_start_matches(r"\\?\")
+        .trim_end_matches('/');
+    let rel_clean = rel_norm
+        .trim_start_matches("//?/")
+        .trim_start_matches(r"\\?\");
+
+    let repo_prefix = format!("{repo_clean}/");
+    let stripped_rel = if rel_clean.len() >= repo_prefix.len()
+        && rel_clean[..repo_prefix.len()].eq_ignore_ascii_case(&repo_prefix)
+    {
+        &rel_clean[repo_prefix.len()..]
+    } else if rel_clean.eq_ignore_ascii_case(repo_clean) {
+        ""
     } else {
-        rel.to_string()
+        rel.trim_start_matches(['/', '\\'])
     };
-    let clean_rel = effective_rel.replace('\\', "/");
+
+    let clean_rel = stripped_rel.replace('\\', "/");
     let clean_rel = clean_rel.trim_start_matches('/');
 
     if !is_safe_pathspec(clean_rel) {
@@ -101,7 +100,11 @@ pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
     let joined = repo_root.join(clean_rel);
     match std::fs::canonicalize(&joined) {
         Ok(canonical) => {
-            if !canonical.starts_with(repo_root) {
+            let canon_str = canonical.to_string_lossy().replace('\\', "/");
+            let canon_clean = canon_str
+                .trim_start_matches("//?/")
+                .trim_start_matches(r"\\?\");
+            if !canon_clean.to_lowercase().starts_with(&repo_clean.to_lowercase()) {
                 return Err(GitError::PathOutsideWorkspace(canonical));
             }
             Ok(canonical)
