@@ -148,13 +148,23 @@ export function normalizeGitRelativePath(
   filePath: string,
 ): string {
   if (!filePath) return "";
-  const normRepo = repoRoot.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const normRepo = repoRoot.replace(/\\/g, "/").replace(/\/+$/, "");
   const normFile = filePath.replace(/\\/g, "/");
-  const normFileLower = normFile.toLowerCase();
-  if (normFileLower === normRepo) return "";
-  if (normFileLower.startsWith(normRepo + "/")) {
+
+  // Exact match first (POSIX: Linux / macOS / Android / Windows)
+  if (normFile === normRepo) return "";
+  if (normFile.startsWith(normRepo + "/")) {
     return normFile.slice(normRepo.length + 1);
   }
+
+  // Case-insensitive fallback (Windows / macOS case-insensitive filesystems)
+  const normRepoLower = normRepo.toLowerCase();
+  const normFileLower = normFile.toLowerCase();
+  if (normFileLower === normRepoLower) return "";
+  if (normFileLower.startsWith(normRepoLower + "/")) {
+    return normFile.slice(normRepo.length + 1);
+  }
+
   return normFile.replace(/^[\\/]+/, "");
 }
 
