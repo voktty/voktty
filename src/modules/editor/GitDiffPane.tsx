@@ -176,6 +176,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
 
   useEffect(() => {
     if (!active) return;
+    let cancelled = false;
     const cached = loadStateFromCache(source);
     if (cached.kind === "loaded") {
       setState((prev) => {
@@ -184,16 +185,30 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           prev.originalContent === cached.originalContent &&
           prev.modifiedContent === cached.modifiedContent &&
           prev.isBinary === cached.isBinary &&
-          prev.fallbackPatch === cached.fallbackPatch &&
-          prev.langExt === cached.langExt
+          prev.fallbackPatch === cached.fallbackPatch
         ) {
           return prev;
         }
-        return cached;
+        return {
+          ...cached,
+          langExt: (prev.kind === "loaded" && prev.langExt) || cached.langExt,
+        };
       });
+      if (!cached.langExt) {
+        resolveLanguage(sourcePath)
+          .then((lang) => {
+            if (lang?.ext && !cancelled) {
+              setState((prev) =>
+                prev.kind === "loaded" && !prev.langExt
+                  ? { ...prev, langExt: lang.ext }
+                  : prev,
+              );
+            }
+          })
+          .catch(() => {});
+      }
       return;
     }
-    let cancelled = false;
     setState((prev) => (prev.kind === "loading" ? prev : { kind: "loading" }));
     const promise =
       sourceKind === "working"
@@ -261,13 +276,12 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   const sKey = sessionKey(repoRoot, "worktree");
   const reconciliation = useGitReviewStore((s) => s.reconciliations[fKey]);
   const overview = useGitReviewStore((s) => s.overviews[sKey]);
-  const viewMode = useGitReviewStore(
-    (s) =>
-      s.viewModes[fKey] ??
-      (reconciliation?.changedSinceReview && reconciliation.reviewedBaseline
-        ? "unreviewed"
-        : "full"),
-  );
+  const customViewMode = useGitReviewStore((s) => s.viewModes[fKey]);
+  const viewMode =
+    customViewMode ??
+    (reconciliation?.changedSinceReview && reconciliation.reviewedBaseline
+      ? "unreviewed"
+      : "full");
   const setViewMode = useGitReviewStore((s) => s.setViewMode);
   const markFile = useGitReviewStore((s) => s.markFile);
   const comments = useGitReviewStore((s) => s.comments[sKey] ?? []);
@@ -299,9 +313,9 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     }
   }, [
     active,
-    loaded,
-    modifiedContent,
-    originalContent,
+    loaded?.kind,
+    modifiedContent.length,
+    originalContent.length,
     path,
     repoRoot,
     sourceKind,

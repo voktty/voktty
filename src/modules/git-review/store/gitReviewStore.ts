@@ -90,12 +90,30 @@ export const useGitReviewStore = create<GitReviewStoreState>((set, get) => ({
     try {
       const overview = await getSessionReviewOverview(repoRoot, target);
       if (overview) {
-        set((state) => ({
-          overviews: {
-            ...state.overviews,
-            [key]: overview,
-          },
-        }));
+        set((state) => {
+          const prev = state.overviews[key];
+          if (
+            prev &&
+            prev.sessionId === overview.sessionId &&
+            prev.repoRoot === overview.repoRoot &&
+            prev.target === overview.target &&
+            prev.files.length === overview.files.length &&
+            prev.files.every(
+              (f, i) =>
+                f.path === overview.files[i]?.path &&
+                f.reviewed === overview.files[i]?.reviewed &&
+                f.snapshotHash === overview.files[i]?.snapshotHash,
+            )
+          ) {
+            return state;
+          }
+          return {
+            overviews: {
+              ...state.overviews,
+              [key]: overview,
+            },
+          };
+        });
       }
       return overview;
     } catch (err) {
@@ -148,12 +166,23 @@ export const useGitReviewStore = create<GitReviewStoreState>((set, get) => ({
         headContent,
       );
       if (rec) {
-        set((state) => ({
-          reconciliations: {
-            ...state.reconciliations,
-            [fKey]: rec,
-          },
-        }));
+        set((state) => {
+          const prev = state.reconciliations[fKey];
+          if (
+            prev &&
+            prev.reviewedBaseline === rec.reviewedBaseline &&
+            prev.changedSinceReview === rec.changedSinceReview &&
+            prev.ranges.length === rec.ranges.length
+          ) {
+            return state;
+          }
+          return {
+            reconciliations: {
+              ...state.reconciliations,
+              [fKey]: rec,
+            },
+          };
+        });
       }
       return rec;
     } catch (err) {
@@ -181,12 +210,22 @@ export const useGitReviewStore = create<GitReviewStoreState>((set, get) => ({
     const key = sessionKey(repoRoot, target);
     try {
       const comments = await getReviewComments(repoRoot, target);
-      set((state) => ({
-        comments: {
-          ...state.comments,
-          [key]: comments,
-        },
-      }));
+      set((state) => {
+        const prev = state.comments[key];
+        if (
+          prev &&
+          prev.length === comments.length &&
+          prev.every((c, i) => c.id === comments[i]?.id && c.comment === comments[i]?.comment)
+        ) {
+          return state;
+        }
+        return {
+          comments: {
+            ...state.comments,
+            [key]: comments,
+          },
+        };
+      });
       return comments;
     } catch (err) {
       console.error("loadComments error:", err);

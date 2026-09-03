@@ -195,7 +195,9 @@ export function FileEditor({
       return;
     }
     const relative = displayPath(path, cwd);
-    if (!cwd || cwd === "~" || !relative || relative === path) {
+    const isAbsoluteOutside =
+      /^[A-Za-z]:\//.test(relative) || relative.startsWith("/");
+    if (!cwd || cwd === "~" || !relative || isAbsoluteOutside) {
       setGitBase({ path, original: null });
       return;
     }
@@ -296,7 +298,9 @@ export function FileEditor({
   const stageGit = useCallback(
     async (contents: string) => {
       const relative = displayPath(path, cwd);
-      if (!cwd || cwd === "~" || !relative || relative === path) {
+      const isAbsoluteOutside =
+        /^[A-Za-z]:\//.test(relative) || relative.startsWith("/");
+      if (!cwd || cwd === "~" || !relative || isAbsoluteOutside) {
         throw new Error("Can't stage this file");
       }
       try {
