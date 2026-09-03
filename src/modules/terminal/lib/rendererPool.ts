@@ -40,6 +40,7 @@ import {
 } from "./terminalLinks";
 import { pasteIntoTerminal } from "./terminalPaste";
 import { useTerminalCopilotStore } from "../copilot/terminalCopilotStore";
+import { useAgentActivityStore } from "./agentActivity";
 import {
   extractCurrentPromptInput,
   useTerminalSuggestStore,
@@ -112,6 +113,7 @@ export type Slot = {
   imeState: ImeBridgeState;
   selectionCopyTimer: ReturnType<typeof setTimeout> | null;
   isDirectTyping: boolean;
+  wheelHistoryAccumulator: number;
 };
 
 const slots: Slot[] = [];
@@ -447,6 +449,7 @@ function createSlot(): Slot {
     imeState: createImeBridgeState(),
     selectionCopyTimer: null,
     isDirectTyping: false,
+    wheelHistoryAccumulator: 0,
   };
 
   // Some WKWebView builds bypass xterm's composition events. The pure bridge
@@ -763,6 +766,10 @@ function createSlot(): Slot {
     return true;
   });
 
+  term.attachCustomWheelEventHandler((event) => {
+    return handleTerminalWheel(slot, event);
+  });
+
   term.onData((data) => {
     const leafId = slot.currentLeafId;
     if (leafId === null) return;
@@ -836,6 +843,104 @@ function isAltScreen(s: Slot): boolean {
   } catch {
     return false;
   }
+}
+
+export const WHEEL_HISTORY_STEP_THRESHOLD = 45;
+
+export function handleTerminalWheel(
+  slot: Slot,
+  event: WheelEvent,
+): boolean {
+  const term = slot.term;
+
+  // 1. Normal buffer (regular shell, scrollback exists) -> let xterm scroll normally.
+  if (!isAltScreen(slot)) {
+    slot.wheelHistoryAccumulator = 0;
+    return true;
+  }
+
+  // 2. Application explicitly requested mouse tracking (e.g. tmux with `mouse on`, vim, htop)
+  // -> let xterm send standard mouse reporting escape sequences natively.
+  const mouseMode = term.modes.mouseTrackingMode;
+  if (mouseMode && mouseMode !== "none") {
+    slot.wheelHistoryAccumulator = 0;
+    return true;
+  }
+
+  // 3. Alternate Buffer WITHOUT application mouse tracking:
+  // (e.g. remote tmux session with default mouse off over SSH, or CLI agent like codex/agy in alt-screen).
+  const leafId = slot.currentLeafId;
+  if (leafId === null) return false;
+
+  const bridge = adapter?.resolveLeaf(leafId);
+  if (!bridge) return false;
+
+  // Check if pointer is hovering over the prompt / input line
+  let isOverInputLine = false;
+  try {
+    const rect = slot.host.getBoundingClientRect();
+    const cellHeight = rect.height / Math.max(1, term.rows);
+    const rowUnderMouse = Math.floor((event.clientY - rect.top) / cellHeight);
+    const buf = term.buffer.active;
+    isOverInputLine = rowUnderMouse >= buf.cursorY;
+  } catch {
+    isOverInputLine = false;
+  }
+
+  // INTENTIONAL HISTORY NAVIGATION:
+  // Triggered if the user holds Alt (Option on macOS) OR explicitly scrolls while hovering over the input prompt line.
+  if (event.altKey || isOverInputLine) {
+    event.preventDefault();
+    slot.wheelHistoryAccumulator += event.deltaY;
+
+    if (Math.abs(slot.wheelHistoryAccumulator) >= WHEEL_HISTORY_STEP_THRESHOLD) {
+      const steps = Math.trunc(
+        slot.wheelHistoryAccumulator / WHEEL_HISTORY_STEP_THRESHOLD,
+      );
+      slot.wheelHistoryAccumulator %= WHEEL_HISTORY_STEP_THRESHOLD;
+
+      // Delta < 0 = scroll up = previous input in history (Up arrow: \x1b[A)
+      // Delta > 0 = scroll down = next input in history (Down arrow: \x1b[B)
+      const keySeq = steps < 0 ? "\x1b[A" : "\x1b[B";
+      const count = Math.min(Math.abs(steps), 3);
+      for (let i = 0; i < count; i++) {
+        bridge.writeToPty(keySeq);
+      }
+    }
+    return false;
+  }
+
+  // NORMAL CONVERSATION / CHAT SCROLL:
+  // Prevent xterm.js from translating wheel to raw Up/Down arrow keys (which corrupts the prompt).
+  event.preventDefault();
+  slot.wheelHistoryAccumulator = 0;
+
+  const sessionInfo = adapter?.getSessionInfo?.(leafId);
+  const env = sessionInfo?.workspaceEnv;
+  const activeAgent =
+    leafId !== null
+      ? useAgentActivityStore.getState().agents[leafId]
+      : undefined;
+
+  const isRemoteOrMultiplexed =
+    env?.kind === "ssh" ||
+    env?.kind === "docker" ||
+    env?.kind === "wsl";
+
+  // In remote SSH/multiplexed sessions or when an agent is running where tmux is typically running without `mouse on`:
+  // Scroll Up -> trigger tmux copy-mode with page up so the conversation scrollback view is revealed.
+  // Scroll Down -> Page Down.
+  if (isRemoteOrMultiplexed || activeAgent) {
+    if (event.deltaY < 0) {
+      // \x02[ enters tmux copy-mode, \x1b[5~ scrolls page up in copy-mode
+      bridge.writeToPty("\x02[\x1b[5~");
+    } else if (event.deltaY > 0) {
+      // \x1b[6~ is page down in copy-mode
+      bridge.writeToPty("\x1b[6~");
+    }
+  }
+
+  return false;
 }
 
 function evictionScore(s: Slot): number {
