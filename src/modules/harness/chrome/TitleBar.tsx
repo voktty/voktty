@@ -318,7 +318,9 @@ function TitleTabItem({
         itemRef?.(el);
       }}
       className={`group @container relative flex h-full touch-none items-center self-stretch ${
-        deckLayout ? "min-w-0 w-full" : "w-56 min-w-28 shrink"
+        deckLayout
+          ? "min-w-0 w-full"
+          : "min-w-28 flex-1 max-w-xs sm:max-w-sm md:max-w-md shrink"
       } ${dragging ? "opacity-40" : ""} ${
         canDrag ? "cursor-grab active:cursor-grabbing" : ""
       }`}
@@ -603,9 +605,9 @@ function TabGroupBlock({
   return (
     <div
       ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-      className={`relative flex h-full items-center gap-0.5 ${
-        deckLayout ? "min-w-0 flex-1" : "shrink-0"
-      } ${draggingGroup ? "opacity-40" : ""}`}
+      className={`relative flex h-full items-center gap-0.5 min-w-0 flex-1 max-w-2xl ${
+        draggingGroup ? "opacity-40" : ""
+      }`}
       data-tauri-drag-region="false"
     >
       {showSegmentStart ? (
@@ -1263,9 +1265,7 @@ function TitleBarComponent({
           When crowded, tabs shrink to min-w-28 then the strip scrolls.
         */}
         <div
-          className={`relative h-full min-w-0 overflow-hidden ${
-            deckLayout ? "flex-1" : "shrink"
-          }`}
+          className="relative h-full min-w-0 flex-1 overflow-hidden"
           onWheel={(event) => {
             const el = tabStripRef.current;
             if (!el || el.scrollWidth <= el.clientWidth) return;
@@ -1354,9 +1354,9 @@ function TitleBarComponent({
                 <div
                   key={tab.id}
                   ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-                  className={`relative flex h-full items-center ${
-                    deckLayout ? "w-56 min-w-28 shrink" : "shrink-0"
-                  } ${draggingSegment ? "opacity-40" : ""}`}
+                  className={`relative flex h-full items-center min-w-28 flex-1 max-w-xs sm:max-w-sm md:max-w-md shrink ${
+                    draggingSegment ? "opacity-40" : ""
+                  }`}
                   data-tauri-drag-region="false"
                 >
                   {showSegmentStart ? (
