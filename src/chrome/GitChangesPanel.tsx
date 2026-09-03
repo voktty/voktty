@@ -398,8 +398,6 @@ function ChangedFiles({
 
   const sync = async () => {
     if (!index || !(canSync || canPublish)) return;
-    const willPush = !index.upstream || index.ahead > 0;
-    if (willPush && !(await confirmDefault("push"))) return;
     setBusy("sync");
     try {
       await gitSync(cwd);
