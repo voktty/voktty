@@ -2257,7 +2257,11 @@ export function HarnessApp({
             const opened = resolved
               ? openEditorTab(
                   tab,
-                  newFileTab(resolved, sidebarCwdRef.current, true),
+                  newFileTab(
+                    resolved,
+                    gitCwdRef.current || sidebarCwdRef.current,
+                    true,
+                  ),
                 )
               : tab;
             if (deckLayout) return opened;

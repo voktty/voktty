@@ -9,12 +9,14 @@ type Props = {
   textHarness?: HarnessId;
   selectedPath?: string;
   onOpenFile: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
 };
 
 export function SourceControl({
   cwd,
   enabled,
   onOpenFile,
+  onOpenDiff,
 }: Props) {
   const sourceControl = useSourceControl(cwd, enabled);
 
@@ -26,9 +28,13 @@ export function SourceControl({
       originalPath: string | null;
       title?: string;
     }) => {
-      onOpenFile(input.path);
+      if (onOpenDiff) {
+        onOpenDiff(input.path);
+      } else {
+        onOpenFile(input.path);
+      }
     },
-    [onOpenFile],
+    [onOpenFile, onOpenDiff],
   );
 
   return (

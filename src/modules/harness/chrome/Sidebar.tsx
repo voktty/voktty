@@ -950,7 +950,8 @@ function SidebarComponent({
                 enabled={open}
                 textHarness={textHarness}
                 selectedPath={selectedDiffPath}
-                onOpenFile={onOpenDiff ?? onOpenFile}
+                onOpenFile={onOpenFile}
+                onOpenDiff={onOpenDiff ?? onOpenFile}
               />
             </div>
           ) : null}
