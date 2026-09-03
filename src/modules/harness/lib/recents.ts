@@ -5,7 +5,7 @@ const RAIL_ORDER_KEY = "monocode.projectRailOrder";
 const RAIL_PINNED_KEY = "monocode.projectRailPinned";
 const ARCHIVED_KEY = "monocode.archivedProjects";
 const ARCHIVED_CHANGED = "monocode:archived-projects-changed";
-const MAX = 20;
+const MAX = 500;
 
 export type RecentProject = {
   path: string;
@@ -219,10 +219,12 @@ export function savePinnedProjects(pinned: string[]) {
   savePathList(RAIL_PINNED_KEY, pinned.map(normalize));
 }
 
-/** All projects for the rail, keyed by normalized path. */
+/** All projects for the rail, keyed by normalized path. Retains pinned and ordered paths so no project is lost. */
 export function collectRailProjects(
   recents: RecentProject[],
   currentCwd: string,
+  pinnedPaths: string[] = [],
+  savedOrder: string[] = [],
 ): Map<string, RecentProject> {
   const map = new Map<string, RecentProject>();
   for (const item of recents) {
@@ -236,30 +238,65 @@ export function collectRailProjects(
       map.set(path, { path, openedAt: Date.now() });
     }
   }
+  for (const p of pinnedPaths) {
+    if (!looksLikeProject(p)) continue;
+    const path = normalize(p);
+    if (!map.has(path)) {
+      map.set(path, { path, openedAt: 0 });
+    }
+  }
+  for (const p of savedOrder) {
+    if (!looksLikeProject(p)) continue;
+    const path = normalize(p);
+    if (!map.has(path)) {
+      map.set(path, { path, openedAt: 0 });
+    }
+  }
   return map;
+}
+
+export function isProjectBusy(
+  path: string,
+  busyPaths?: Iterable<string>,
+): boolean {
+  if (!busyPaths) return false;
+  const norm = normalize(path);
+  for (const b of busyPaths) {
+    if (sameProjectPath(b, norm)) return true;
+  }
+  return false;
+}
+
+/**
+ * Sorts projects strictly in order:
+ * 1. Active agentic activity (busy/running agent turns) first.
+ * 2. Most recently used (openedAt descending).
+ */
+export function sortProjectsByActivityAndRecency(
+  items: RecentProject[],
+  busyPaths?: Iterable<string>,
+): RecentProject[] {
+  return [...items].sort((a, b) => {
+    const aBusy = isProjectBusy(a.path, busyPaths);
+    const bBusy = isProjectBusy(b.path, busyPaths);
+    if (aBusy && !bBusy) return -1;
+    if (!aBusy && bBusy) return 1;
+    const timeA = a.openedAt ?? 0;
+    const timeB = b.openedAt ?? 0;
+    if (timeB !== timeA) return timeB - timeA;
+    return a.path.localeCompare(b.path);
+  });
 }
 
 /** Append new projects to the saved order without moving existing entries. */
 export function syncProjectRailOrder(
-  order: string[],
+  _order: string[],
   projects: Map<string, RecentProject>,
+  busyPaths?: Iterable<string>,
 ): string[] {
-  const paths = new Set(projects.keys());
-  const next: string[] = [];
-  const seen = new Set<string>();
-  for (const path of order) {
-    const normalized = normalize(path);
-    if (!paths.has(normalized) || seen.has(normalized)) continue;
-    seen.add(normalized);
-    next.push(normalized);
-  }
-  const newcomers = [...paths]
-    .filter((path) => !seen.has(path))
-    .sort(
-      (a, b) =>
-        (projects.get(b)?.openedAt ?? 0) - (projects.get(a)?.openedAt ?? 0),
-    );
-  return [...next, ...newcomers];
+  const all = [...projects.values()];
+  const sorted = sortProjectsByActivityAndRecency(all, busyPaths);
+  return sorted.map((item) => item.path);
 }
 
 export function projectRailSections(
@@ -267,18 +304,29 @@ export function projectRailSections(
   currentCwd: string,
   order: string[],
   pinnedPaths: string[],
+  busyPaths?: Iterable<string>,
 ): ProjectRailSections {
-  const projects = collectRailProjects(recents, currentCwd);
-  const syncedOrder = syncProjectRailOrder(order, projects);
+  const projects = collectRailProjects(
+    recents,
+    currentCwd,
+    pinnedPaths,
+    order,
+  );
   const pinnedSet = new Set(pinnedPaths.map(normalize));
-  const pinned: RecentProject[] = [];
-  const unpinned: RecentProject[] = [];
-  for (const path of syncedOrder) {
-    const item = projects.get(path);
-    if (!item) continue;
-    if (pinnedSet.has(path)) pinned.push(item);
-    else unpinned.push(item);
+  const pinnedList: RecentProject[] = [];
+  const unpinnedList: RecentProject[] = [];
+
+  for (const [path, item] of projects) {
+    if (pinnedSet.has(path)) {
+      pinnedList.push(item);
+    } else {
+      unpinnedList.push(item);
+    }
   }
+
+  const pinned = sortProjectsByActivityAndRecency(pinnedList, busyPaths);
+  const unpinned = sortProjectsByActivityAndRecency(unpinnedList, busyPaths);
+
   return { pinned, projects: unpinned };
 }
 
@@ -286,14 +334,16 @@ export function projectRailSections(
 export function projectRailItems(
   recents: RecentProject[],
   currentCwd: string,
+  busyPaths?: Iterable<string>,
 ): RecentProject[] {
-  const projects = collectRailProjects(recents, currentCwd);
-  const order = syncProjectRailOrder(loadProjectRailOrder(), projects);
+  const order = loadProjectRailOrder();
+  const pinnedPaths = loadPinnedProjects();
   const { pinned, projects: unpinned } = projectRailSections(
     recents,
     currentCwd,
     order,
-    loadPinnedProjects(),
+    pinnedPaths,
+    busyPaths,
   );
   return [...pinned, ...unpinned];
 }

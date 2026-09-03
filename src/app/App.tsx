@@ -78,6 +78,7 @@ import {
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
 import { useExtensionStore } from "@/modules/extensions";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
+import { lastProjectPath } from "@/modules/harness/lib/recents";
 import {
   Header,
   type SearchInlineHandle,
@@ -164,6 +165,7 @@ import { StatusBar } from "@/modules/statusbar";
 import {
   ActiveTabsLaunchpad,
   type CloseTabsPlan,
+  type HarnessTab,
   labelFor,
   type OpenFileTabOptions,
   type PreviewTab,
@@ -2838,8 +2840,66 @@ export default function App() {
     gitHistoryHandle,
   ]);
 
-  const activeCwd = activeTerminalLeafCwd;
+  const [harnessCwd, setHarnessCwd] = useState<string | null>(() => {
+    try {
+      return lastProjectPath();
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleHarnessCwd = (e: Event) => {
+      const detail = (e as CustomEvent<{ cwd: string }>).detail;
+      if (detail?.cwd) {
+        setHarnessCwd(detail.cwd);
+        const harnessTab = tabsRef.current.find(
+          (t): t is HarnessTab =>
+            t.id === effectiveActiveId && t.kind === "harness",
+        );
+        if (harnessTab && harnessTab.cwd !== detail.cwd) {
+          updateTab(harnessTab.id, { cwd: detail.cwd });
+        }
+      }
+    };
+    window.addEventListener("voktty:harness-cwd-change", handleHarnessCwd);
+    return () =>
+      window.removeEventListener("voktty:harness-cwd-change", handleHarnessCwd);
+  }, [effectiveActiveId, updateTab]);
+
+  const activeHarnessTab = activeTab?.kind === "harness" ? activeTab : null;
+  const activeHarnessCwd =
+    activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
+
+  const activeCwd =
+    activeTerminalLeafCwd ??
+    (activeTab?.kind === "harness"
+      ? activeHarnessCwd
+      : (activeTab && "cwd" in activeTab && typeof (activeTab as any).cwd === "string"
+          ? (activeTab as any).cwd
+          : null) ??
+        explorerRoot ??
+        inheritedCwdForNewTab ??
+        activeSpace?.root ??
+        lastProjectPath() ??
+        null);
   const localWorkspaceRoot = localHome;
+
+  const handleStatusBarCd = useCallback(
+    (path: string) => {
+      if (activeTab?.kind === "harness") {
+        window.dispatchEvent(
+          new CustomEvent("voktty:harness-select-project", {
+            detail: { path },
+          }),
+        );
+        setHarnessCwd(path);
+        return;
+      }
+      sendCd(path);
+    },
+    [activeTab?.kind, sendCd],
+  );
 
   const handleNewSpace = useCallback(() => {
     const { spaces, create, ensureViewSpace, openViewSpace, setActive } =
@@ -4417,7 +4477,7 @@ export default function App() {
               cwd={activeCwd}
               filePath={activeFilePath}
               home={home}
-              onCd={sendCd}
+              onCd={handleStatusBarCd}
               onWorkspaceChange={handleWorkspaceChange}
               onConnectSsh={handleConnectSsh}
               onConnectDocker={handleConnectDocker}
