@@ -1,5 +1,7 @@
+import { useCallback } from "react";
+import { SourceControlPanel } from "@/modules/source-control/SourceControlPanel";
+import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import type { HarnessId } from "../lib/session";
-import { GitChangesPanel } from "./GitChangesPanel";
 
 type Props = {
   cwd: string;
@@ -12,18 +14,32 @@ type Props = {
 export function SourceControl({
   cwd,
   enabled,
-  textHarness,
-  selectedPath,
   onOpenFile,
 }: Props) {
+  const sourceControl = useSourceControl(cwd, enabled);
+
+  const handleOpenDiff = useCallback(
+    (input: {
+      path: string;
+      repoRoot: string;
+      mode: "+" | "-";
+      originalPath: string | null;
+      title?: string;
+    }) => {
+      onOpenFile(input.path);
+    },
+    [onOpenFile],
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      <GitChangesPanel
-        cwd={cwd}
-        enabled={enabled}
-        textHarness={textHarness}
-        selectedPath={selectedPath}
+      <SourceControlPanel
+        open={enabled}
+        sourceControl={sourceControl}
+        onOpenDiff={handleOpenDiff}
         onOpenFile={onOpenFile}
+        repositoryTarget={{ mode: "follow-context" }}
+        onFollowRepositoryContext={() => {}}
       />
     </div>
   );

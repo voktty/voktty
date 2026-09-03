@@ -187,6 +187,9 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           prev.isBinary === cached.isBinary &&
           prev.fallbackPatch === cached.fallbackPatch
         ) {
+          if (!prev.langExt && cached.langExt) {
+            return { ...prev, langExt: cached.langExt };
+          }
           return prev;
         }
         return {
@@ -297,7 +300,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
 
   const reconciledRef = useRef<string>("");
   useEffect(() => {
-    if (active && sourceKind === "working" && loaded) {
+    if (active && sourceKind === "working" && state.kind === "loaded") {
       const recKey = `${repoRoot}:${path}:${originalContent.length}:${modifiedContent.length}`;
       if (reconciledRef.current === recKey) return;
       reconciledRef.current = recKey;
@@ -313,7 +316,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     }
   }, [
     active,
-    loaded?.kind,
+    state.kind,
     modifiedContent.length,
     originalContent.length,
     path,
@@ -367,22 +370,6 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     ],
     [effectiveOriginal, langExt],
   );
-
-  // Cache-hit path only: the diff came from the cache before the language
-  // pack was imported. Resolve and reconfigure once the view exists.
-  const stateKind = state.kind;
-  const stateLangExt = state.kind === "loaded" ? state.langExt : null;
-  useEffect(() => {
-    if (useFallback || stateKind !== "loaded" || stateLangExt) return;
-    let cancelled = false;
-    resolveLanguage(path).then((res) => {
-      if (cancelled || !res) return;
-      setState((s) => (s.kind === "loaded" ? { ...s, langExt: res.ext } : s));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [useFallback, path, stateKind, stateLangExt]);
 
   const stats = useMemo(
     () =>

@@ -28,7 +28,7 @@ import {
   Delete02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fetchWorkingDiff } from "@/modules/editor/lib/diffCache";
 import {
@@ -217,8 +217,10 @@ export function GitReviewQueue({
   const markFile = useGitReviewStore((state) => state.markFile);
   const deleteComment = useGitReviewStore((state) => state.deleteComment);
 
+  const loadedRepoRef = useRef<string>("");
   useEffect(() => {
-    if (matchesRepository && repoRoot) {
+    if (matchesRepository && repoRoot && loadedRepoRef.current !== repoRoot) {
+      loadedRepoRef.current = repoRoot;
       void loadOverview(repoRoot, "worktree");
       void loadComments(repoRoot, "worktree");
     }
