@@ -228,28 +228,42 @@ pub fn diff_content(
         _ => None,
     };
 
-    let original = if staged {
+    let (original, modified) = if staged {
         let spec = original_rel.as_deref().unwrap_or(&rel_path);
-        git_show_text(
+        let orig = git_show_text(
             &repo_root.workspace,
             &repo_root.git_path,
             &format!("HEAD:{spec}"),
-        )?
-    } else {
-        git_show_text(
+        )?;
+        let modi = git_show_text(
             &repo_root.workspace,
             &repo_root.git_path,
             &format!(":{rel_path}"),
-        )?
-    };
-    let modified = if staged {
-        git_show_text(
+        )?;
+        (orig, modi)
+    } else {
+        let from_index = git_show_text(
             &repo_root.workspace,
             &repo_root.git_path,
             &format!(":{rel_path}"),
-        )?
-    } else {
-        read_text_file(&worktree_path)?
+        )?;
+        let worktree_text = read_text_file(&worktree_path)?;
+        let orig = match (&from_index, &worktree_text) {
+            (TextSource::Text(idx_text), TextSource::Text(work_text)) if idx_text == work_text => {
+                let from_head = git_show_text(
+                    &repo_root.workspace,
+                    &repo_root.git_path,
+                    &format!("HEAD:{rel_path}"),
+                )?;
+                if matches!(from_head, TextSource::Text(_)) {
+                    from_head
+                } else {
+                    from_index
+                }
+            }
+            _ => from_index,
+        };
+        (orig, worktree_text)
     };
     let patch = diff_inner(&repo_root, Some(&rel_path), staged)?;
     let is_binary =
@@ -969,10 +983,29 @@ fn pathspec_from_input(repo_root: &Path, rel: &str) -> Result<String> {
 }
 
 fn pathspec(repo_root: &Path, absolute: &Path) -> String {
-    absolute
-        .strip_prefix(repo_root)
-        .map(|rel| rel.to_string_lossy().replace('\\', "/"))
-        .unwrap_or_else(|_| absolute.to_string_lossy().replace('\\', "/"))
+    let norm_repo = repo_root.to_string_lossy().replace('\\', "/");
+    let norm_repo = norm_repo
+        .trim_start_matches("//?/")
+        .trim_start_matches(r"\\?\")
+        .trim_end_matches('/');
+    let norm_abs = absolute.to_string_lossy().replace('\\', "/");
+    let norm_abs = norm_abs
+        .trim_start_matches("//?/")
+        .trim_start_matches(r"\\?\");
+
+    let repo_prefix = format!("{norm_repo}/");
+    if norm_abs.len() >= repo_prefix.len()
+        && norm_abs[..repo_prefix.len()].eq_ignore_ascii_case(&repo_prefix)
+    {
+        norm_abs[repo_prefix.len()..].trim_start_matches('/').to_string()
+    } else if norm_abs.eq_ignore_ascii_case(norm_repo) {
+        String::new()
+    } else {
+        absolute
+            .strip_prefix(repo_root)
+            .map(|rel| rel.to_string_lossy().replace('\\', "/").trim_start_matches('/').to_string())
+            .unwrap_or_else(|_| norm_abs.trim_start_matches('/').to_string())
+    }
 }
 
 pub fn list_branches(
