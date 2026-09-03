@@ -33,7 +33,10 @@ export function selectWorkspaceCwd(
   fallbackRoot: string | null,
   lastTerminalId: number | undefined,
 ): WorkspaceCwdSelection {
-  if (activeTab?.kind === "terminal" && activeTab.cwd) {
+  if (
+    (activeTab?.kind === "terminal" || activeTab?.kind === "harness") &&
+    activeTab.cwd
+  ) {
     return {
       explorerRoot: activeTab.cwd,
       explorerTerminalId: activeTab.id,
@@ -42,9 +45,14 @@ export function selectWorkspaceCwd(
 
   const lastTerminal = spaceTabs.find(
     (tab) =>
-      tab.id === lastTerminalId && tab.kind === "terminal" && Boolean(tab.cwd),
+      tab.id === lastTerminalId &&
+      (tab.kind === "terminal" || tab.kind === "harness") &&
+      Boolean(tab.cwd),
   );
-  if (lastTerminal?.kind === "terminal" && lastTerminal.cwd) {
+  if (
+    (lastTerminal?.kind === "terminal" || lastTerminal?.kind === "harness") &&
+    lastTerminal.cwd
+  ) {
     return {
       explorerRoot: lastTerminal.cwd,
       explorerTerminalId: lastTerminal.id,
@@ -52,9 +60,13 @@ export function selectWorkspaceCwd(
   }
 
   const anyTerminal = spaceTabs.find(
-    (tab) => tab.kind === "terminal" && Boolean(tab.cwd),
+    (tab) =>
+      (tab.kind === "terminal" || tab.kind === "harness") && Boolean(tab.cwd),
   );
-  if (anyTerminal?.kind === "terminal" && anyTerminal.cwd) {
+  if (
+    (anyTerminal?.kind === "terminal" || anyTerminal?.kind === "harness") &&
+    anyTerminal.cwd
+  ) {
     return {
       explorerRoot: anyTerminal.cwd,
       explorerTerminalId: anyTerminal.id,
@@ -73,7 +85,10 @@ export function useWorkspaceCwd(
   const lastTerminalId = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
-    if (activeTab?.kind === "terminal" && activeTab.cwd) {
+    if (
+      (activeTab?.kind === "terminal" || activeTab?.kind === "harness") &&
+      activeTab.cwd
+    ) {
       lastTerminalId.current.set(spaceId, activeTab.id);
     }
   }, [activeTab, spaceId]);
@@ -95,14 +110,21 @@ export function useWorkspaceCwd(
   );
 
   const inheritedCwdForNewTab = useCallback((): string | undefined => {
-    if (activeTab?.kind === "terminal" && activeTab.cwd) return activeTab.cwd;
+    if (
+      (activeTab?.kind === "terminal" || activeTab?.kind === "harness") &&
+      activeTab.cwd
+    )
+      return activeTab.cwd;
     const lastTerminal = spaceTabs.find(
       (tab) =>
         tab.id === lastTerminalId.current.get(spaceId) &&
-        tab.kind === "terminal" &&
+        (tab.kind === "terminal" || tab.kind === "harness") &&
         Boolean(tab.cwd),
     );
-    if (lastTerminal?.kind === "terminal" && lastTerminal.cwd) {
+    if (
+      (lastTerminal?.kind === "terminal" || lastTerminal?.kind === "harness") &&
+      lastTerminal.cwd
+    ) {
       return lastTerminal.cwd;
     }
     return home ?? undefined;

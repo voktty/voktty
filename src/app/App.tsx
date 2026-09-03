@@ -778,9 +778,45 @@ export default function App() {
     }
     return activeSpace?.env ?? LOCAL_WORKSPACE;
   }, [activeSpaceTabCount, activeTab, activeSpace?.env]);
+
+  const [harnessCwd, setHarnessCwd] = useState<string | null>(() => {
+    try {
+      return lastProjectPath();
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleHarnessCwd = (e: Event) => {
+      const detail = (e as CustomEvent<{ cwd: string }>).detail;
+      if (detail?.cwd) {
+        setHarnessCwd(detail.cwd);
+        const harnessTab =
+          tabsRef.current.find(
+            (t): t is HarnessTab =>
+              t.id === effectiveActiveId && t.kind === "harness",
+          ) ??
+          tabsRef.current.find((t): t is HarnessTab => t.kind === "harness");
+        if (harnessTab && harnessTab.cwd !== detail.cwd) {
+          updateTab(harnessTab.id, { cwd: detail.cwd });
+        }
+      }
+    };
+    window.addEventListener("voktty:harness-cwd-change", handleHarnessCwd);
+    return () =>
+      window.removeEventListener("voktty:harness-cwd-change", handleHarnessCwd);
+  }, [effectiveActiveId, updateTab]);
+
+  const activeHarnessTab = activeTab?.kind === "harness" ? activeTab : null;
+  const activeHarnessCwd =
+    activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
+
   const { explorerRoot, explorerTerminalId, inheritedCwdForNewTab } =
     useWorkspaceCwd(
-      activeTab,
+      activeTab?.kind === "harness" && activeHarnessCwd
+        ? { ...activeTab, cwd: activeHarnessCwd }
+        : activeTab,
       tabs,
       activeSpace?.root ??
         (activeSpaceTabCount === 0
@@ -790,6 +826,11 @@ export default function App() {
           : (launchCwd ?? home)),
       activeSpaceId ?? DEFAULT_SPACE_ID,
     );
+
+  const effectiveExplorerRoot =
+    activeTab?.kind === "harness"
+      ? (activeHarnessCwd || explorerRoot)
+      : explorerRoot;
   const explorerTerminal =
     explorerTerminalId === null
       ? undefined
@@ -848,7 +889,7 @@ export default function App() {
   useEditorFileSync({ tabs, tabsRef, editorRefs, workspace: workspaceEnv });
   useThemeFileEditing({ tabsRef, openFileTab });
 
-  const quickOpenRoot = explorerRoot ?? launchCwd ?? home;
+  const quickOpenRoot = effectiveExplorerRoot ?? launchCwd ?? home;
   const workspaceSearchDirtyPaths = useMemo(
     () =>
       tabs.flatMap((tab) =>
@@ -2042,7 +2083,7 @@ export default function App() {
       activeTab,
       tabs,
       activeTerminalLeafCwd,
-      explorerRoot,
+      explorerRoot: effectiveExplorerRoot,
       launchCwd,
       launchCwdResolved,
       home,
@@ -2839,37 +2880,6 @@ export default function App() {
     activeEditorHandle,
     gitHistoryHandle,
   ]);
-
-  const [harnessCwd, setHarnessCwd] = useState<string | null>(() => {
-    try {
-      return lastProjectPath();
-    } catch {
-      return null;
-    }
-  });
-
-  useEffect(() => {
-    const handleHarnessCwd = (e: Event) => {
-      const detail = (e as CustomEvent<{ cwd: string }>).detail;
-      if (detail?.cwd) {
-        setHarnessCwd(detail.cwd);
-        const harnessTab = tabsRef.current.find(
-          (t): t is HarnessTab =>
-            t.id === effectiveActiveId && t.kind === "harness",
-        );
-        if (harnessTab && harnessTab.cwd !== detail.cwd) {
-          updateTab(harnessTab.id, { cwd: detail.cwd });
-        }
-      }
-    };
-    window.addEventListener("voktty:harness-cwd-change", handleHarnessCwd);
-    return () =>
-      window.removeEventListener("voktty:harness-cwd-change", handleHarnessCwd);
-  }, [effectiveActiveId, updateTab]);
-
-  const activeHarnessTab = activeTab?.kind === "harness" ? activeTab : null;
-  const activeHarnessCwd =
-    activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
 
   const activeCwd =
     activeTerminalLeafCwd ??
@@ -4139,7 +4149,7 @@ export default function App() {
                       {sidebarView === "explorer" ? (
                         <FileExplorer
                           ref={explorerRef}
-                          rootPath={explorerRoot}
+                          rootPath={effectiveExplorerRoot}
                           navigationKey={`${activeSpaceId ?? DEFAULT_SPACE_ID}:${explorerNavigationScopeKey(activeExplorerWorkspaceEnv)}`}
                           workspaceKey={workspaceScopeKey(
                             activeExplorerWorkspaceEnv,
