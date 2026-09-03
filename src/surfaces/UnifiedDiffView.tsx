@@ -38,6 +38,7 @@ import {
   UNIFIED_LINE_PX,
   UNIFIED_OVERSCAN_PX,
   windowRows,
+  type DiffViewRow,
   type RowWindow,
 } from "../lib/unifiedDiffWindow";
 
@@ -295,7 +296,7 @@ const FileSection = memo(function FileSection({
       className={focused ? "bg-content/[0.03]" : undefined}
     >
       <header
-        className="sticky top-0 z-10 flex items-center gap-2 border-b border-content/10 bg-content/2 px-3 py-1.5 backdrop-blur-xl"
+        className="sticky top-0 z-30 flex items-center gap-2 border-b border-content/10 bg-content/2 px-3 py-1.5 backdrop-blur-xl"
       >
         <button
           type="button"
@@ -413,10 +414,8 @@ function VirtualRows({
 }) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
-  const bindBody = (el: HTMLDivElement | null) => {
-    bodyRef.current = el;
-    lockOverscroll(el);
-  };
+  const mouseYRef = useRef<number | null>(null);
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
   const rows = useMemo(
     () =>
       flattenVisibleRows(
@@ -467,10 +466,55 @@ function VirtualRows({
     );
   }, [rows, scrollerRef]);
 
+  const hoverAtY = useCallback(
+    (clientY: number | null) => {
+      const body = bodyRef.current;
+      if (clientY == null || !body) {
+        setHoverKey((current) => (current == null ? current : null));
+        return;
+      }
+      let y = clientY - body.getBoundingClientRect().top - range.padTop;
+      if (y < 0) {
+        setHoverKey((current) => (current == null ? current : null));
+        return;
+      }
+      for (let index = range.start; index < range.end; index += 1) {
+        const row = rows[index];
+        if (!row) break;
+        if (y < row.height) {
+          const key = diffRowKey(row, index);
+          setHoverKey((current) => (current === key ? current : key));
+          return;
+        }
+        y -= row.height;
+      }
+      setHoverKey((current) => (current == null ? current : null));
+    },
+    [range.end, range.padTop, range.start, rows],
+  );
+
   useLayoutEffect(() => {
     if (!near) return;
     updateWindow();
   }, [near, updateWindow, totalHeight]);
+
+  useLayoutEffect(() => {
+    if (!near) return;
+    hoverAtY(mouseYRef.current);
+  }, [hoverAtY, near]);
+
+  useLayoutEffect(() => {
+    if (!near) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    const apply = () => {
+      body.style.setProperty("--unified-body-width", `${body.clientWidth}px`);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [near, totalHeight]);
 
   useEffect(() => {
     if (!near) return;
@@ -483,6 +527,7 @@ function VirtualRows({
       frame = window.requestAnimationFrame(() => {
         frame = 0;
         updateWindow();
+        hoverAtY(mouseYRef.current);
       });
     };
     target.addEventListener("scroll", onScroll, { passive: true });
@@ -492,45 +537,115 @@ function VirtualRows({
       window.removeEventListener("resize", onScroll);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [near, scrollerRef, updateWindow]);
+  }, [hoverAtY, near, scrollerRef, updateWindow]);
 
   if (!near) {
     return <div style={{ height: totalHeight }} />;
   }
 
   const visible = rows.slice(range.start, range.end);
+  const lanePad = {
+    paddingTop: range.padTop,
+    paddingBottom: range.padBottom,
+  };
+
+  const renderLane = (lane: Lane) =>
+    visible.map((row, index) => {
+      const key = diffRowKey(row, range.start + index);
+      return (
+        <DiffLane
+          key={`${lane}-${key}`}
+          row={row}
+          lane={lane}
+          hovered={hoverKey === key}
+          tokens={row.type === "line" ? tokens?.get(row.line) : undefined}
+          onReveal={
+            row.type === "fold"
+              ? (direction) => onReveal(row.id, direction)
+              : undefined
+          }
+          onStage={
+            row.type === "line" && row.stage && row.line.pos != null
+              ? () => onStageHunk?.(fileId, row.line.pos as number)
+              : undefined
+          }
+        />
+      );
+    });
 
   return (
-    <div ref={bindBody} className="overflow-x-auto overscroll-x-none">
+    <div
+      ref={bodyRef}
+      className="flex"
+      onMouseMove={(event) => {
+        mouseYRef.current = event.clientY;
+        hoverAtY(event.clientY);
+      }}
+      onMouseLeave={() => {
+        mouseYRef.current = null;
+        hoverAtY(null);
+      }}
+    >
+      <div className="relative z-10 w-12 shrink-0" style={lanePad}>
+        {renderLane("gutter")}
+      </div>
       <div
-        style={{
-          paddingTop: range.padTop,
-          paddingBottom: range.padBottom,
-          minWidth: `max(100%, ${minWidthCh}ch)`,
-        }}
+        ref={lockOverscroll}
+        className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-none"
       >
-        {visible.map((row, index) =>
-          row.type === "fold" ? (
-            <FoldBar
-              key={row.id}
-              hidden={row.hidden}
-              onReveal={(direction) => onReveal(row.id, direction)}
-            />
-          ) : (
-            <DiffLineRow
-              key={`${range.start + index}-${row.line.kind}-${row.line.oldNumber ?? "x"}-${row.line.newNumber ?? "x"}`}
-              line={row.line}
-              tokens={tokens?.get(row.line)}
-              onStage={
-                row.stage && row.line.pos != null
-                  ? () => onStageHunk?.(fileId, row.line.pos as number)
-                  : undefined
-              }
-            />
-          ),
-        )}
+        <div style={{ ...lanePad, minWidth: `max(100%, ${minWidthCh}ch)` }}>
+          {renderLane("code")}
+        </div>
       </div>
     </div>
+  );
+}
+
+type Lane = "gutter" | "code";
+
+function diffRowKey(row: DiffViewRow, index: number) {
+  if (row.type === "fold") return `fold-${row.id}`;
+  return `${index}-${row.line.kind}-${row.line.oldNumber ?? "x"}-${row.line.newNumber ?? "x"}`;
+}
+
+function DiffLane({
+  row,
+  lane,
+  hovered,
+  tokens,
+  onReveal,
+  onStage,
+}: {
+  row: DiffViewRow;
+  lane: Lane;
+  hovered: boolean;
+  tokens?: SyntaxToken[];
+  onReveal?: (direction: "up" | "down" | "all") => void;
+  onStage?: () => void;
+}) {
+  if (row.type === "fold") {
+    if (lane === "gutter") {
+      return (
+        <div className="relative z-20" style={{ height: UNIFIED_FOLD_PX }}>
+          <div
+            className="absolute inset-y-0 left-0"
+            style={{ width: "var(--unified-body-width, 100%)" }}
+          >
+            <FoldBar hidden={row.hidden} onReveal={onReveal!} />
+          </div>
+        </div>
+      );
+    }
+    return <div style={{ height: UNIFIED_FOLD_PX }} />;
+  }
+  return (
+    <DiffLineRow
+      line={row.line}
+      lane={lane}
+      hovered={hovered}
+      tokens={tokens}
+      onStage={onStage}
+    />
   );
 }
 
@@ -543,7 +658,7 @@ function FoldBar({
 }) {
   return (
     <div
-      className="flex items-center gap-1 px-2"
+      className="flex items-center gap-1 bg-content/8 px-2"
       style={{ height: UNIFIED_FOLD_PX }}
     >
       <button
@@ -567,7 +682,7 @@ function FoldBar({
       <button
         type="button"
         onClick={() => onReveal("all")}
-        className="min-w-0 flex-1 rounded-md bg-content/8 px-2 py-1 text-left font-mono text-[11px] text-content/45 hover:bg-content/12 hover:text-content/70"
+        className="min-w-0 flex-1 py-1 text-left font-mono text-[11px] text-content/45 hover:text-content/70"
       >
         {hidden} unmodified {hidden === 1 ? "line" : "lines"}
       </button>
@@ -577,20 +692,25 @@ function FoldBar({
 
 const DiffLineRow = memo(function DiffLineRow({
   line,
+  lane,
+  hovered,
   tokens,
   onStage,
 }: {
   line: UnifiedLine;
+  lane: Lane;
+  hovered: boolean;
   tokens?: SyntaxToken[];
   onStage?: () => void;
 }) {
   if (line.kind === "hunk") {
     return (
-      <div
-        className="bg-content/5 px-3 font-mono text-[11px] leading-5 text-content/40"
-        style={{ height: UNIFIED_HUNK_PX }}
-      >
-        {line.text}
+      <div className="bg-content/5" style={{ height: UNIFIED_HUNK_PX }}>
+        {lane === "code" ? (
+          <span className="px-3 font-mono text-[11px] leading-5 text-content/40">
+            {line.text}
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -613,37 +733,39 @@ const DiffLineRow = memo(function DiffLineRow({
       ? "text-rose-300"
       : "text-content/35";
 
-  return (
-    <div
-      className={`group relative flex items-stretch ${row}`}
-      style={{ height: UNIFIED_LINE_PX }}
-    >
-      <span
-        className={`sticky left-0 z-[1] w-12 shrink-0 bg-background-base ${gutterText}`}
-      >
+  if (lane === "gutter") {
+    return (
+      <div className={`relative ${row}`} style={{ height: UNIFIED_LINE_PX }}>
         {gutterTint ? (
           <span
             className={`pointer-events-none absolute inset-0 ${gutterTint}`}
           />
         ) : null}
+        <span
+          className={`relative block pr-2 text-right font-mono text-[11px] tabular-nums ${gutterText}`}
+          style={{ lineHeight: `${UNIFIED_LINE_PX}px` }}
+        >
+          {number ?? ""}
+        </span>
         {onStage ? (
           <button
             type="button"
             title="Stage hunk"
             aria-label="Stage hunk"
             onClick={onStage}
-            className="absolute top-0.5 left-0.5 z-10 grid size-4 place-items-center rounded-[3px] bg-white text-[11px] font-bold text-black opacity-0 group-hover:opacity-100"
+            className={`absolute top-0.5 left-full z-10 ml-0.5 grid size-4 place-items-center rounded-[3px] bg-white text-[11px] font-bold text-black ${
+              hovered ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
           >
             +
           </button>
         ) : null}
-        <span
-          className="relative block pr-2 text-right font-mono text-[11px] tabular-nums"
-          style={{ lineHeight: `${UNIFIED_LINE_PX}px` }}
-        >
-          {number ?? ""}
-        </span>
-      </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={row} style={{ height: UNIFIED_LINE_PX }}>
       <span
         className={`whitespace-pre px-3 font-mono text-[12px] text-content/80 ${
           line.kind === "context" ? "opacity-70" : ""
