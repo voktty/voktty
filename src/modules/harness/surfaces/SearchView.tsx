@@ -13,7 +13,6 @@ import { HarnessIcon } from "../chrome/HarnessIcon";
 import { MatchText } from "../chrome/MatchText";
 import { ProjectLogoIcon } from "../chrome/ProjectLogoIcon";
 import { OverlayNav } from "../chrome/TitleBar";
-import { WindowControls } from "../chrome/WindowControls";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   conversationRowsFrom,
@@ -350,7 +349,6 @@ export function SearchView({
             />
           ) : null}
         </label>
-        {!IS_MAC ? <WindowControls /> : null}
       </div>
 
       <div className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-3">

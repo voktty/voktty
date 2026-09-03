@@ -17,7 +17,9 @@ import ArrowUp01Icon from "@hugeicons/core-free-icons/ArrowUp01Icon";
 import BotIcon from "@hugeicons/core-free-icons/BotIcon";
 import BrainIcon from "@hugeicons/core-free-icons/BrainIcon";
 import Cancel01Icon from "@hugeicons/core-free-icons/Cancel01Icon";
+import CancelCircleIcon from "@hugeicons/core-free-icons/CancelCircleIcon";
 import CaseSensitiveIcon from "@hugeicons/core-free-icons/CaseSensitiveIcon";
+import CheckmarkCircle02Icon from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
 import CircleArrowDown01Icon from "@hugeicons/core-free-icons/CircleArrowDown01Icon";
 import CircleDashedIcon from "@hugeicons/core-free-icons/CircleDashedIcon";
 import CircleDotIcon from "@hugeicons/core-free-icons/CircleDotIcon";
@@ -40,6 +42,9 @@ import FolderOpenIcon from "@hugeicons/core-free-icons/FolderOpenIcon";
 import GaugeIcon from "@hugeicons/core-free-icons/GaugeIcon";
 import GitBranchIcon from "@hugeicons/core-free-icons/GitBranchIcon";
 import GitCompareIcon from "@hugeicons/core-free-icons/GitCompareIcon";
+import GitMergeIcon from "@hugeicons/core-free-icons/GitMergeIcon";
+import GitPullRequestClosedIcon from "@hugeicons/core-free-icons/GitPullRequestClosedIcon";
+import GitPullRequestDraftIcon from "@hugeicons/core-free-icons/GitPullRequestDraftIcon";
 import GitPullRequestIcon from "@hugeicons/core-free-icons/GitPullRequestIcon";
 import ImageAdd01Icon from "@hugeicons/core-free-icons/ImageAdd01Icon";
 import InboxIcon from "@hugeicons/core-free-icons/InboxIcon";
@@ -137,8 +142,10 @@ export const ArrowLeft = wrap(ArrowLeft01Icon, "ArrowLeft");
 export const ArrowUp = wrap(ArrowUp01Icon, "ArrowUp");
 export const Bot = wrap(BotIcon, "Bot");
 export const Brain = wrap(BrainIcon, "Brain");
+export const CancelCircle = wrap(CancelCircleIcon, "CancelCircle");
 export const CaseSensitive = wrap(CaseSensitiveIcon, "CaseSensitive");
 export const Check = wrap(Tick02Icon, "Check");
+export const CheckmarkCircle = wrap(CheckmarkCircle02Icon, "CheckmarkCircle");
 export const ChevronDown = wrap(ArrowDown01Icon, "ChevronDown");
 export const ChevronLeft = wrap(ArrowLeft01Icon, "ChevronLeft");
 export const ChevronRight = wrap(ArrowRight01Icon, "ChevronRight");
@@ -159,7 +166,16 @@ export const FolderPlus = wrap(FolderAddIcon, "FolderPlus");
 export const Gauge = wrap(GaugeIcon, "Gauge");
 export const GitBranch = wrap(GitBranchIcon, "GitBranch");
 export const GitCompare = wrap(GitCompareIcon, "GitCompare");
+export const GitMerge = wrap(GitMergeIcon, "GitMerge");
 export const GitPullRequest = wrap(GitPullRequestIcon, "GitPullRequest");
+export const GitPullRequestClosed = wrap(
+  GitPullRequestClosedIcon,
+  "GitPullRequestClosed",
+);
+export const GitPullRequestDraft = wrap(
+  GitPullRequestDraftIcon,
+  "GitPullRequestDraft",
+);
 export const GripVertical = wrap(DragDropVerticalIcon, "GripVertical");
 export const ImagePlus = wrap(ImageAdd01Icon, "ImagePlus");
 export const Inbox = wrap(InboxIcon, "Inbox");
