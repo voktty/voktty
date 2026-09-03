@@ -163,32 +163,55 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     active ? loadStateFromCache(source) : { kind: "idle" },
   );
 
+  const sourceKind = source.kind;
+  const sourceRepoRoot = source.repoRoot;
+  const sourcePath = source.path;
+  const sourceMode = source.kind === "working" ? source.mode : undefined;
+  const sourceSha = source.kind === "commit" ? source.sha : undefined;
+  const sourceOriginalPath = source.originalPath;
+  const sourceEnvKey = source.workspaceEnv
+    ? JSON.stringify(source.workspaceEnv)
+    : "";
+  const cKey = cacheKey(source);
+
   useEffect(() => {
     if (!active) return;
     const cached = loadStateFromCache(source);
     if (cached.kind === "loaded") {
-      setState(cached);
+      setState((prev) => {
+        if (
+          prev.kind === "loaded" &&
+          prev.originalContent === cached.originalContent &&
+          prev.modifiedContent === cached.modifiedContent &&
+          prev.isBinary === cached.isBinary &&
+          prev.fallbackPatch === cached.fallbackPatch &&
+          prev.langExt === cached.langExt
+        ) {
+          return prev;
+        }
+        return cached;
+      });
       return;
     }
     let cancelled = false;
-    setState({ kind: "loading" });
+    setState((prev) => (prev.kind === "loading" ? prev : { kind: "loading" }));
     const promise =
-      source.kind === "working"
+      sourceKind === "working"
         ? fetchWorkingDiff(
-            source.repoRoot,
-            source.path,
-            source.mode,
-            source.originalPath,
+            sourceRepoRoot,
+            sourcePath,
+            sourceMode!,
+            sourceOriginalPath,
             source.workspaceEnv,
           )
         : fetchCommitDiff(
-            source.repoRoot,
-            source.sha,
-            source.path,
-            source.originalPath,
+            sourceRepoRoot,
+            sourceSha!,
+            sourcePath,
+            sourceOriginalPath,
             source.workspaceEnv,
           );
-    Promise.all([promise, resolveLanguage(source.path).catch(() => null)])
+    Promise.all([promise, resolveLanguage(sourcePath).catch(() => null)])
       .then(([res, lang]) => {
         if (cancelled) return;
         setState({
@@ -213,7 +236,17 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [active, source]);
+  }, [
+    active,
+    cKey,
+    sourceKind,
+    sourceRepoRoot,
+    sourcePath,
+    sourceMode,
+    sourceSha,
+    sourceOriginalPath,
+    sourceEnvKey,
+  ]);
 
   const path = source.path;
   const repoRoot = source.repoRoot;
@@ -248,8 +281,12 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   const fileReview = overview?.files.find((f) => f.path === path);
   const isReviewed = fileReview?.reviewed ?? false;
 
+  const reconciledRef = useRef<string>("");
   useEffect(() => {
-    if (active && source.kind === "working" && loaded) {
+    if (active && sourceKind === "working" && loaded) {
+      const recKey = `${repoRoot}:${path}:${originalContent.length}:${modifiedContent.length}`;
+      if (reconciledRef.current === recKey) return;
+      reconciledRef.current = recKey;
       void useGitReviewStore
         .getState()
         .reconcileFile(
@@ -260,7 +297,15 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           modifiedContent,
         );
     }
-  }, [active, loaded, modifiedContent, originalContent, path, repoRoot, source.kind]);
+  }, [
+    active,
+    loaded,
+    modifiedContent,
+    originalContent,
+    path,
+    repoRoot,
+    sourceKind,
+  ]);
 
   const hasReviewedBaseline = Boolean(
     reconciliation?.changedSinceReview &&
@@ -311,8 +356,10 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
 
   // Cache-hit path only: the diff came from the cache before the language
   // pack was imported. Resolve and reconfigure once the view exists.
+  const stateKind = state.kind;
+  const stateLangExt = state.kind === "loaded" ? state.langExt : null;
   useEffect(() => {
-    if (useFallback || state.kind !== "loaded" || state.langExt) return;
+    if (useFallback || stateKind !== "loaded" || stateLangExt) return;
     let cancelled = false;
     resolveLanguage(path).then((res) => {
       if (cancelled || !res) return;
@@ -321,7 +368,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [useFallback, path, state]);
+  }, [useFallback, path, stateKind, stateLangExt]);
 
   const stats = useMemo(
     () =>

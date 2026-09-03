@@ -1144,14 +1144,7 @@ function TitleBarComponent({
     railClosed && Boolean(onSelectProject) && !showCurrentProject;
   const trailingControls = (
     <div className="flex h-full shrink-0 items-stretch">
-      <div className="flex items-center gap-0.5 px-2">
-        {!deckLayout ? (
-          <ProjectDiffStats
-            cwd={gitCwd || cwd}
-            active={sourceControlActive}
-            onClick={onShowSourceControl}
-          />
-        ) : null}
+      <div className="flex items-center gap-1 px-2">
         {projectless && railClosed && onOpenInbox ? (
           <IconButton label="Inbox" onClick={onOpenInbox}>
             <Inbox className="size-3.5" strokeWidth={1.75} />
@@ -1184,6 +1177,13 @@ function TitleBarComponent({
           >
             <Terminal className="size-3.5" strokeWidth={1.75} />
           </IconButton>
+        ) : null}
+        {!projectless && onShowSourceControl ? (
+          <ProjectDiffStats
+            cwd={gitCwd || cwd}
+            active={sourceControlActive}
+            onClick={onShowSourceControl}
+          />
         ) : null}
         {deckLayout &&
         !projectRailOpen &&
