@@ -9,6 +9,7 @@ import {
   type GitReviewQueueConfig,
 } from "@/modules/source-control/GitReviewQueue";
 import {
+  EMPTY_COMMENTS,
   fileKey,
   ReviewCommentDialog,
   sessionKey,
@@ -69,6 +70,13 @@ const READONLY_EXT = [
   EditorState.readOnly.of(true),
   EditorView.editable.of(false),
 ];
+const BASIC_SETUP = {
+  lineNumbers: true,
+  foldGutter: true,
+  highlightActiveLine: false,
+  highlightActiveLineGutter: false,
+  searchKeymap: true,
+};
 const DIFF_THEME = EditorView.theme({
   "&.cm-merge-b .cm-changedText, .cm-changedText": {
     background: "rgba(110, 200, 120, 0.20) !important",
@@ -130,9 +138,6 @@ type LoadState =
       modifiedContent: string;
       isBinary: boolean;
       fallbackPatch: string;
-      /** Resolved before mount: a late compartment reconfigure would leave
-       * the merge view's deleted-chunk widgets unhighlighted. */
-      langExt: Extension | null;
     }
   | { kind: "error"; message: string };
 
@@ -151,7 +156,6 @@ function loadStateFromCache(source: WorkingSource | CommitSource): LoadState {
     modifiedContent: hit.modifiedContent,
     isBinary: hit.isBinary,
     fallbackPatch: hit.fallbackPatch,
-    langExt: resolveLanguageSync(source.path)?.ext ?? null,
   };
 }
 
@@ -162,6 +166,24 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   const [state, setState] = useState<LoadState>(() =>
     active ? loadStateFromCache(source) : { kind: "idle" },
   );
+
+  const [langExt, setLangExt] = useState<Extension | null>(
+    () => resolveLanguageSync(source.path)?.ext ?? null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    resolveLanguage(source.path)
+      .then((res) => {
+        if (!cancelled && res?.ext) {
+          setLangExt(res.ext);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [source.path]);
 
   const sourceKind = source.kind;
   const sourceRepoRoot = source.repoRoot;
@@ -176,7 +198,6 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
 
   useEffect(() => {
     if (!active) return;
-    let cancelled = false;
     const cached = loadStateFromCache(source);
     if (cached.kind === "loaded") {
       setState((prev) => {
@@ -187,31 +208,14 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           prev.isBinary === cached.isBinary &&
           prev.fallbackPatch === cached.fallbackPatch
         ) {
-          if (!prev.langExt && cached.langExt) {
-            return { ...prev, langExt: cached.langExt };
-          }
           return prev;
         }
-        return {
-          ...cached,
-          langExt: (prev.kind === "loaded" && prev.langExt) || cached.langExt,
-        };
+        return cached;
       });
-      if (!cached.langExt) {
-        resolveLanguage(sourcePath)
-          .then((lang) => {
-            if (lang?.ext && !cancelled) {
-              setState((prev) =>
-                prev.kind === "loaded" && !prev.langExt
-                  ? { ...prev, langExt: lang.ext }
-                  : prev,
-              );
-            }
-          })
-          .catch(() => {});
-      }
       return;
     }
+
+    let cancelled = false;
     setState((prev) => (prev.kind === "loading" ? prev : { kind: "loading" }));
     const promise =
       sourceKind === "working"
@@ -229,8 +233,9 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
             sourceOriginalPath,
             source.workspaceEnv,
           );
-    Promise.all([promise, resolveLanguage(sourcePath).catch(() => null)])
-      .then(([res, lang]) => {
+
+    promise
+      .then((res) => {
         if (cancelled) return;
         setState({
           kind: "loaded",
@@ -238,7 +243,6 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           modifiedContent: res.modifiedContent,
           isBinary: res.isBinary,
           fallbackPatch: res.fallbackPatch,
-          langExt: lang?.ext ?? null,
         });
       })
       .catch((err) => {
@@ -287,7 +291,9 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
       : "full");
   const setViewMode = useGitReviewStore((s) => s.setViewMode);
   const markFile = useGitReviewStore((s) => s.markFile);
-  const comments = useGitReviewStore((s) => s.comments[sKey] ?? []);
+  const comments = useGitReviewStore(
+    (s) => s.comments[sKey] ?? (EMPTY_COMMENTS as unknown as typeof s.comments[string]),
+  );
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
 
   const fileComments = useMemo(
@@ -351,7 +357,6 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     modifiedContent.length > LARGE_FILE_THRESHOLD;
   const useFallback = isBinary || isTooLarge;
 
-  const langExt = loaded?.langExt ?? null;
   const extensions = useMemo(
     () => [
       ...SHARED_EXT,
@@ -519,13 +524,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
               editable={false}
               height="100%"
               className="h-full"
-              basicSetup={{
-                lineNumbers: true,
-                foldGutter: true,
-                highlightActiveLine: false,
-                highlightActiveLineGutter: false,
-                searchKeymap: true,
-              }}
+              basicSetup={BASIC_SETUP}
             />
           )}
         </div>
