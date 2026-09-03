@@ -214,6 +214,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(move |_app| {
+            harness::host::reap_orphaned_harness_processes();
             if let Err(error) = control::start(_app.handle().clone(), control_for_setup.clone()) {
                 log::warn!("could not start Voktty control server: {error}");
             }

@@ -241,6 +241,38 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
     setSession((prev) => (prev ? stopStreaming(prev) : prev));
   }, []);
 
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.isComposing ||
+        event.repeat ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey ||
+        event.defaultPrevented
+      ) {
+        return;
+      }
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".voktty-terminal, .monocode-terminal")) {
+        return;
+      }
+      const current = sessionRef.current;
+      if (!current || !current.busy) return;
+
+      queueMicrotask(() => {
+        if (!event.defaultPrevented && sessionRef.current?.busy) {
+          handleStop(sessionRef.current.id);
+        }
+      });
+    };
+
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [handleStop]);
+
   const handleApproval = useCallback(
     (sessionId: string, requestId: number, decision: ApprovalDecision) => {
       const current = sessionRef.current;

@@ -710,9 +710,13 @@ function LiveAgentCard({
           active={live}
         />
         {live ? (
-          <p className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug">
+          <Shimmer
+            as="span"
+            duration={1.4}
+            className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug"
+          >
             {agent.title}
-          </p>
+          </Shimmer>
         ) : (
           <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug">
             {agent.title}
