@@ -431,7 +431,7 @@ fn remote_shell_command(
     base_cmd.push_str("_voktty_shell=\"${SHELL:-/bin/sh}\"; ");
     base_cmd.push_str(&format!(
         "_voktty_integration=\"$HOME/.voktty/shell-integration/{}\"; ",
-        crate::modules::remote::REMOTE_SHELL_INTEGRATION_VERSION
+        voktty_remote_protocol::REMOTE_SHELL_INTEGRATION_VERSION
     ));
     base_cmd.push_str("case \"${_voktty_shell##*/}\" in ");
     base_cmd.push_str(
@@ -442,7 +442,7 @@ fn remote_shell_command(
     );
     base_cmd.push_str(&format!(
         "fish) if [ -r \"$_voktty_integration/init.fish\" ]; then export fish_features=no-mark-prompt; exec \"$_voktty_shell\" -i -C 'functions -q __voktty_install_prompt; or source \"$HOME/.voktty/shell-integration/{}/init.fish\"; functions -q __voktty_install_prompt; and __voktty_install_prompt'; fi ;; ",
-        crate::modules::remote::REMOTE_SHELL_INTEGRATION_VERSION
+        voktty_remote_protocol::REMOTE_SHELL_INTEGRATION_VERSION
     ));
     base_cmd.push_str("esac; exec \"$_voktty_shell\" -l");
 
@@ -1491,7 +1491,10 @@ mod tests {
         ));
         assert!(command.contains("--rcfile \"$_voktty_integration/bashrc\" -i"));
         assert!(command.contains("ZDOTDIR=\"$_voktty_integration/zsh\""));
-        assert!(command.contains("source \"$HOME/.voktty/shell-integration/2/init.fish\""));
+        assert!(command.contains(&format!(
+            "source \"$HOME/.voktty/shell-integration/{}/init.fish\"",
+            voktty_remote_protocol::REMOTE_SHELL_INTEGRATION_VERSION
+        )));
         assert!(command.ends_with("exec \"$_voktty_shell\" -l"));
     }
 
@@ -1545,7 +1548,10 @@ mod tests {
         assert!(
             args[args.len() - 1].starts_with("cd -- '/srv/project' && export VOKTTY_TERMINAL=1;")
         );
-        assert!(args[args.len() - 1].contains("shell-integration/2"));
+        assert!(args[args.len() - 1].contains(&format!(
+            "shell-integration/{}",
+            voktty_remote_protocol::REMOTE_SHELL_INTEGRATION_VERSION
+        )));
         assert_eq!(args[args.len() - 2], "ubuntu@server.example");
     }
 
