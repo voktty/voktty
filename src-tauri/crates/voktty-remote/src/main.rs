@@ -860,9 +860,9 @@ impl RemoteServer {
             let action = params.multiplexer_action.as_deref().unwrap_or("auto");
 
             let tmux_args = match action {
-                "attach_force" => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}-s '{session_name}'"),
-                "new" => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux new-session {cwd_flag}-s '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}"),
-                _ => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux new-session -A {cwd_flag}-s '{session_name}'"),
+                "attach_force" => format!("tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}-s '{session_name}'"),
+                "new" => format!("tmux new-session {cwd_flag}-s '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}"),
+                _ => format!("tmux new-session -A {cwd_flag}-s '{session_name}'"),
             };
 
             let screen_args = match action {
@@ -873,8 +873,10 @@ impl RemoteServer {
                 _ => format!("screen -xRR -S '{session_name}'"),
             };
 
+            let cd_prefix = format!("cd -- '{s_cwd}' 2>/dev/null || true; ");
+
             let script = format!(
-                "{cd_prefix}if command -v tmux >/dev/null 2>&1; then exec {tmux_args}; elif command -v screen >/dev/null 2>&1; then exec {screen_args}; else {shell_wrapper}; fi"
+                "{cd_prefix}if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; exec {tmux_args}; elif command -v screen >/dev/null 2>&1; then exec {screen_args}; else {shell_wrapper}; fi"
             );
 
             let mut cmd = CommandBuilder::new("/bin/sh");
@@ -1409,12 +1411,25 @@ struct GitExecParams {
 }
 
 fn canonical_directory(path: &Path) -> Result<PathBuf, String> {
-    let canonical = fs::canonicalize(expand_home(path)).map_err(|error| error.to_string())?;
-    if canonical.is_dir() {
-        Ok(canonical)
-    } else {
-        Err("workspace root is not a directory".to_string())
+    let expanded = expand_home(path);
+    if let Ok(canonical) = fs::canonicalize(&expanded) {
+        if canonical.is_dir() {
+            return Ok(canonical);
+        }
     }
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        if let Ok(canonical) = fs::canonicalize(&home) {
+            if canonical.is_dir() {
+                return Ok(canonical);
+            }
+        }
+    }
+    if let Ok(canonical) = fs::canonicalize("/") {
+        if canonical.is_dir() {
+            return Ok(canonical);
+        }
+    }
+    Ok(PathBuf::from("/"))
 }
 
 fn expand_home(path: &Path) -> PathBuf {
