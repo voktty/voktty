@@ -1,3 +1,4 @@
+import { IS_WINDOWS } from "@/lib/platform";
 import {
   RemoteRequestError,
   requestRemoteResult,
@@ -57,7 +58,7 @@ function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+/g, "/");
 }
 
-function isWindowsLocalPath(path: string): boolean {
+export function isWindowsLocalPath(path: string): boolean {
   return /^[a-zA-Z]:[/\\]|^\\\\/.test(path);
 }
 
@@ -74,7 +75,14 @@ export function isPathInWorkspace(
   env: WorkspaceEnv | undefined,
   path: string,
 ): boolean {
-  if (env?.kind === "wsl") return isWslWorkspacePath(path);
+  if (!env || env.kind === "local") {
+    if (isWindowsLocalPath(path)) return true;
+    if (path.startsWith("/") || path === ".") {
+      return !IS_WINDOWS;
+    }
+    return true;
+  }
+  if (env.kind === "wsl") return isWslWorkspacePath(path);
   return isPathInRemoteWorkspace(env, path);
 }
 
