@@ -1,14 +1,17 @@
 import { AiIdea, CircleDashed, PanelRight, Play } from "./icons";
 import { planSummary, planTitle } from "../lib/plan";
-import type { PlanBlockMeta } from "../lib/session";
+import type { HarnessId, PlanBlockMeta, PlanBuildTarget } from "../lib/session";
+import { BuildTargetButton } from "./SecondOpinionButton";
 
 type Props = {
   text: string;
   streaming?: boolean;
   busy?: boolean;
   plan?: PlanBlockMeta;
+  harness?: HarnessId;
+  model?: string;
   onOpen?: () => void;
-  onBuild?: () => void;
+  onBuild?: (target?: PlanBuildTarget) => void;
 };
 
 export function PlanPreview({
@@ -16,6 +19,8 @@ export function PlanPreview({
   streaming,
   busy,
   plan,
+  harness,
+  model,
   onOpen,
   onBuild,
 }: Props) {
@@ -87,16 +92,33 @@ export function PlanPreview({
                 </button>
               ) : null}
               {onBuild ? (
-                <button
-                  type="button"
-                  title="Build this plan"
-                  disabled={buildDisabled}
-                  className="flex h-6 shrink-0 items-center gap-1 rounded-md bg-content px-2 font-sans text-[11px] text-background-base hover:bg-content/90 disabled:cursor-not-allowed disabled:opacity-40"
-                  onClick={onBuild}
-                >
-                  <Play className="size-3" strokeWidth={1.75} />
-                  {buildLabel}
-                </button>
+                <div className="flex items-center font-sans">
+                  <button
+                    type="button"
+                    title="Build this plan"
+                    disabled={buildDisabled}
+                    className={`flex h-6 shrink-0 items-center gap-1 bg-content px-2 font-sans text-[11px] text-background-base hover:bg-content/90 disabled:cursor-not-allowed disabled:opacity-40 ${
+                      harness ? "rounded-l-md" : "rounded-md"
+                    }`}
+                    onClick={() => onBuild()}
+                  >
+                    <Play className="size-3" strokeWidth={1.75} />
+                    {buildLabel}
+                  </button>
+                  {harness ? (
+                    <BuildTargetButton
+                      from={harness}
+                      model={model}
+                      disabled={buildDisabled}
+                      onPick={(targetHarness, targetModel) =>
+                        onBuild({
+                          harness: targetHarness,
+                          model: targetModel,
+                        })
+                      }
+                    />
+                  ) : null}
+                </div>
               ) : null}
             </div>
           ) : null}

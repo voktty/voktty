@@ -18,6 +18,7 @@ import {
   type Attachment,
   type Block,
   type HarnessId,
+  type PlanBuildTarget,
   type RuntimeMode,
   type Session,
   type TurnIntent,
@@ -88,7 +89,11 @@ type Props = {
     session?: { sessionId: string; cwd: string },
   ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
-  onBuildPlan: (sessionId: string, blockId: string) => void;
+  onBuildPlan: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
   onSecondOpinion?: (
     sessionId: string,
     harness: HarnessId,
@@ -158,7 +163,8 @@ export const SessionPane = memo(function SessionPane({
     [onOpenPlan, session.id],
   );
   const buildPlan = useCallback(
-    (blockId: string) => onBuildPlan(session.id, blockId),
+    (blockId: string, target?: PlanBuildTarget) =>
+      onBuildPlan(session.id, blockId, target),
     [onBuildPlan, session.id],
   );
   const jumpToBottomRef = useRef<(() => void) | null>(null);

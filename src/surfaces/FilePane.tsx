@@ -20,8 +20,9 @@ import { isImagePath } from "../lib/filePreview";
 import type { TerminalMetaPatch } from "../lib/terminalTab";
 import type { EditorNavigationTarget } from "../lib/search";
 import { editorPathsEqual } from "../lib/search";
-import type { Session } from "../lib/session";
+import type { PlanBuildTarget, Session } from "../lib/session";
 import { Play } from "../chrome/icons";
+import { BuildTargetButton } from "../chrome/SecondOpinionButton";
 import { loadDiffViewer, subscribeDiffViewer } from "../lib/settings";
 import { MarkdownPreview } from "./AgentMarkdown";
 import { BinaryFileView } from "./BinaryFileView";
@@ -46,7 +47,11 @@ type Props = {
   onReorderFiles: (paneId: string, ids: string[]) => void;
   onOpenFile: (path: string) => void;
   onUpdatePlan: (sessionId: string, blockId: string, text: string) => void;
-  onBuildPlan: (sessionId: string, blockId: string) => void;
+  onBuildPlan: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
   editorNavigation?: EditorNavigationTarget | null;
   onPaneDragStart?: (event: ReactPointerEvent<HTMLElement>) => void;
   onTerminalMetaChange?: (fileId: string, patch: TerminalMetaPatch) => void;
@@ -232,7 +237,11 @@ function PlanSurface({
   sessions: Session[];
   onOpenFile: (path: string) => void;
   onUpdatePlan: (sessionId: string, blockId: string, text: string) => void;
-  onBuildPlan: (sessionId: string, blockId: string) => void;
+  onBuildPlan: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
 }) {
   const plan = file.plan;
   const [mode, setMode] = useMarkdownMode(file.path);
@@ -253,6 +262,19 @@ function PlanSurface({
     );
   }
 
+  const buildDisabled =
+    !!session?.busy ||
+    !block.text.trim() ||
+    block.plan?.status === "streaming" ||
+    block.plan?.status === "building" ||
+    block.plan?.status === "built";
+  const buildLabel =
+    block.plan?.status === "building"
+      ? "Building…"
+      : block.plan?.status === "built"
+        ? "Built"
+        : "Build";
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
       <MarkdownViewShell
@@ -267,25 +289,29 @@ function PlanSurface({
           />
         }
         actions={
-          <button
-            type="button"
-            disabled={
-              !!session?.busy ||
-              !block.text.trim() ||
-              block.plan?.status === "streaming" ||
-              block.plan?.status === "building" ||
-              block.plan?.status === "built"
-            }
-            onClick={() => onBuildPlan(plan.sessionId, block.id)}
-            className="flex h-6 items-center gap-1.5 rounded-md bg-content px-2.5 text-[11px] font-medium text-background-base hover:bg-content/90 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Play className="size-3" />
-            {block.plan?.status === "building"
-              ? "Building…"
-              : block.plan?.status === "built"
-                ? "Built"
-                : "Build"}
-          </button>
+          <div className="flex items-center font-sans">
+            <button
+              type="button"
+              disabled={buildDisabled}
+              onClick={() => onBuildPlan(plan.sessionId, block.id)}
+              className={`flex h-6 items-center gap-1.5 bg-content px-2.5 font-sans text-[11px] font-medium text-background-base hover:bg-content/90 disabled:cursor-not-allowed disabled:opacity-40 ${
+                session ? "rounded-l-md" : "rounded-md"
+              }`}
+            >
+              <Play className="size-3" />
+              {buildLabel}
+            </button>
+            {session ? (
+              <BuildTargetButton
+                from={session.harness}
+                model={session.model}
+                disabled={buildDisabled}
+                onPick={(harness, model) =>
+                  onBuildPlan(plan.sessionId, block.id, { harness, model })
+                }
+              />
+            ) : null}
+          </div>
         }
         source={
           <textarea

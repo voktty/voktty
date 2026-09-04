@@ -26,6 +26,7 @@ import {
   type Attachment,
   type Block,
   type HarnessId,
+  type PlanBuildTarget,
   type RuntimeMode,
   type Session,
   type TurnIntent,
@@ -96,7 +97,11 @@ type Shared = {
   ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
   onUpdatePlan: (sessionId: string, blockId: string, text: string) => void;
-  onBuildPlan: (sessionId: string, blockId: string) => void;
+  onBuildPlan: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
   onSecondOpinion?: (
     sessionId: string,
     harness: HarnessId,

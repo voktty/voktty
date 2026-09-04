@@ -52,6 +52,7 @@ import {
   HARNESS_TITLE,
   type Block,
   type HarnessId,
+  type PlanBuildTarget,
   type ToolPreview,
 } from "../lib/session";
 import { HarnessIcon } from "../chrome/HarnessIcon";
@@ -103,7 +104,7 @@ type Props = {
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
-  onBuildPlan?: (blockId: string) => void;
+  onBuildPlan?: (blockId: string, target?: PlanBuildTarget) => void;
   onSecondOpinion?: (harness: HarnessId, turn: Block[], model: string) => void;
   onHandoff?: (harness: HarnessId, turn: Block[], model: string) => void;
   onJumpToBottomChange?: (show: boolean) => void;
@@ -390,6 +391,8 @@ export function AgentTranscript({
                     onOpenPlan={onOpenPlan}
                     onBuildPlan={onBuildPlan}
                     planBusy={!!busy}
+                    planHarness={harness}
+                    planModel={model}
                     cwd={cwd}
                   />
                 ),
@@ -692,6 +695,8 @@ const TranscriptBlock = memo(function TranscriptBlock({
   onOpenPlan,
   onBuildPlan,
   planBusy,
+  planHarness,
+  planModel,
 }: {
   block: Block;
   layout: TranscriptLayout;
@@ -702,8 +707,10 @@ const TranscriptBlock = memo(function TranscriptBlock({
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
-  onBuildPlan?: (blockId: string) => void;
+  onBuildPlan?: (blockId: string, target?: PlanBuildTarget) => void;
   planBusy?: boolean;
+  planHarness?: HarnessId;
+  planModel?: string;
 }) {
   if (block.role === "user") {
     return (
@@ -759,8 +766,12 @@ const TranscriptBlock = memo(function TranscriptBlock({
           streaming={block.streaming}
           busy={planBusy}
           plan={block.plan}
+          harness={planHarness}
+          model={planModel}
           onOpen={onOpenPlan ? () => onOpenPlan(block.id) : undefined}
-          onBuild={onBuildPlan ? () => onBuildPlan(block.id) : undefined}
+          onBuild={
+            onBuildPlan ? (target) => onBuildPlan(block.id, target) : undefined
+          }
         />
       </div>
     );

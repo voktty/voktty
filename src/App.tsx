@@ -223,6 +223,7 @@ import {
   type Attachment,
   type Block,
   type HarnessId,
+  type PlanBuildTarget,
   type RuntimeMode,
   type PlanStatus,
   type SecondOpinionMeta,
@@ -429,6 +430,38 @@ function withHarnessChoice(
       : { context: dropContextWindow(session.context) }),
     ...(session.harness === harness ? {} : { providerSessionId: undefined }),
   };
+}
+
+function withPlanBuildTarget(
+  session: Session,
+  target: PlanBuildTarget,
+): Session {
+  const resolved = resolveModel(target.harness, target.model);
+  const modelSettings = preferredModelSettings(resolved, session.modelSettings);
+  const plan = planComposerSwitch(session, target.harness);
+  const next = withHarnessChoice(
+    session,
+    target.harness,
+    resolved.id,
+    modelSettings,
+  );
+
+  if (plan.kind === "arm") {
+    return { ...next, pendingSwitch: plan.pending };
+  }
+  if (plan.kind === "revert") {
+    return {
+      ...next,
+      pendingSwitch: undefined,
+      ...(plan.restoreProviderSessionId
+        ? { providerSessionId: plan.restoreProviderSessionId }
+        : { providerSessionId: undefined }),
+    };
+  }
+  if (plan.kind === "empty") {
+    return { ...next, pendingSwitch: undefined };
+  }
+  return next;
 }
 
 function openSessionIds(tabs: WorkspaceTab[]): Set<string> {
@@ -3093,10 +3126,14 @@ export default function App({
         queuedMessageId?: string;
         intent?: TurnIntent;
         planBlockId?: string;
+        buildTarget?: PlanBuildTarget;
       },
     ) => {
-      const current = sessionsRef.current.find((s) => s.id === sessionId);
-      if (!current) return;
+      const storedCurrent = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!storedCurrent) return;
+      const current = options?.buildTarget
+        ? withPlanBuildTarget(storedCurrent, options.buildTarget)
+        : storedCurrent;
       const intent = options?.intent ?? "default";
       const approvedPlan = options?.planBlockId
         ? current.blocks.find(
@@ -3267,9 +3304,12 @@ export default function App({
       setSessions((prev) =>
         prev.map((s) => {
           if (s.id !== sessionId) return s;
-          const titled = isFirstTurn ? titleSeed : s.title;
+          const selected = options?.buildTarget
+            ? withPlanBuildTarget(s, options.buildTarget)
+            : s;
+          const titled = isFirstTurn ? titleSeed : selected.title;
           let next: Session = {
-            ...s,
+            ...selected,
             inboxCard: undefined,
             noteCard: undefined,
             handoffCard: undefined,
@@ -3577,7 +3617,7 @@ export default function App({
   );
 
   const onBuildPlan = useCallback(
-    (sessionId: string, blockId: string) => {
+    (sessionId: string, blockId: string, target?: PlanBuildTarget) => {
       const session = sessionsRef.current.find(
         (entry) => entry.id === sessionId,
       );
@@ -3593,9 +3633,13 @@ export default function App({
       ) {
         return;
       }
+      if (target && session.modelSettings) {
+        saveLastModelSettings(session.modelSettings, "fill");
+      }
       onSubmit(sessionId, "Build approved plan", [], {
         intent: "build",
         planBlockId: blockId,
+        buildTarget: target,
       });
     },
     [onSubmit],
