@@ -1,5 +1,6 @@
 import { buildAgentHistoryTools } from "./agentHistory";
 import { buildApiClientTools } from "./apiClient";
+import { buildBrowserTools } from "./browser";
 import { buildManagedAgentTools } from "./agent";
 import { buildEditTools } from "./edit";
 import { buildExtensionTools } from "./extensions";
@@ -49,6 +50,7 @@ export function buildTools(
     ...buildManagedAgentTools(ctx),
     ...buildApiClientTools(ctx),
     ...buildAgentHistoryTools(ctx),
+    ...buildBrowserTools(ctx),
   } as const;
   const safeMcpTools = Object.fromEntries(
     Object.entries(mcpTools).filter(([name]) => !(name in builtins)),
