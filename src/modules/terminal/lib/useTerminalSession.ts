@@ -42,6 +42,7 @@ import {
 } from "./osc-handlers";
 import {
   disposePtyTarget,
+  getRemotePtyCwd,
   isGuestPtyTarget,
   openPty,
   type PtySession,
@@ -1738,6 +1739,28 @@ export function getLeafTerminalStats(leafId: number): {
     rows: slot.term.rows,
     bufferLines: slot.term.buffer.active.length,
   };
+}
+
+export async function getLiveLeafCwd(leafId: number): Promise<string | null> {
+  const s = sessions.get(leafId);
+  if (!s) return null;
+  if (
+    s.workspaceEnv.kind === "ssh" &&
+    s.workspaceEnv.sessionId !== undefined &&
+    s.pty
+  ) {
+    try {
+      const cwd = await getRemotePtyCwd(s.workspaceEnv.sessionId, s.pty.id);
+      if (cwd) {
+        if (s.lastCwd !== cwd) {
+          s.lastCwd = cwd;
+          s.callbacks.onCwd?.(cwd);
+        }
+        return cwd;
+      }
+    } catch {}
+  }
+  return s.lastCwd;
 }
 
 export function terminalDebugStats() {

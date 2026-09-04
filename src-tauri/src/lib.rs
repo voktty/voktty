@@ -333,6 +333,7 @@ pub fn run() {
             remote::remote_pty_write,
             remote::remote_pty_resize,
             remote::remote_pty_close,
+            remote::remote_pty_get_cwd,
             remote::remote_watch_add,
             remote::remote_watch_remove,
             remote::ssh_ping,

@@ -478,16 +478,19 @@ fn remote_shell_command(
         String::new()
     };
 
+    let sh_cmd = format!("/bin/sh -c {}", shell_quote(&base_cmd));
+    let sh_cmd_quoted = shell_quote(&sh_cmd);
+
     let tmux_cmd = match action {
-        "attach_force" => format!("tmux attach -d -t {s} 2>/dev/null || tmux new-session {cwd_flag}-s {s}"),
-        "new" => format!("tmux new-session {cwd_flag}-s {s} 2>/dev/null || tmux new-session {cwd_flag}"),
-        _ => format!("tmux new-session -A {cwd_flag}-s {s}"),
+        "attach_force" => format!("tmux attach -d -t {s} 2>/dev/null || tmux new-session {cwd_flag}-s {s} {sh_cmd_quoted}"),
+        "new" => format!("tmux new-session {cwd_flag}-s {s} {sh_cmd_quoted} 2>/dev/null || tmux new-session {cwd_flag}{sh_cmd_quoted}"),
+        _ => format!("tmux new-session -A {cwd_flag}-s {s} {sh_cmd_quoted}"),
     };
 
     let screen_cmd = match action {
-        "attach_force" => format!("screen -d -r {s} 2>/dev/null || screen -S {s}"),
-        "new" => format!("screen -S {s} 2>/dev/null || screen"),
-        _ => format!("screen -xRR -S {s}"),
+        "attach_force" => format!("screen -d -r {s} 2>/dev/null || screen -S {s} {sh_cmd_quoted}"),
+        "new" => format!("screen -S {s} {sh_cmd_quoted} 2>/dev/null || screen {sh_cmd_quoted}"),
+        _ => format!("screen -xRR -S {s} {sh_cmd_quoted}"),
     };
 
     let cd_prefix = if let Some(cwd) = effective_cwd {
@@ -496,8 +499,10 @@ fn remote_shell_command(
         String::new()
     };
 
+    let default_cmd = format!("tmux set -g default-command {} 2>/dev/null || true; ", shell_quote(&sh_cmd));
+
     let full_command = format!(
-        "{cd_prefix}if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; exec {tmux_cmd}; elif command -v screen >/dev/null 2>&1; then exec {screen_cmd}; else {base_cmd}; fi"
+        "{cd_prefix}if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; {default_cmd}exec {tmux_cmd}; elif command -v screen >/dev/null 2>&1; then exec {screen_cmd}; else {base_cmd}; fi"
     );
 
     Ok(full_command)
@@ -1505,7 +1510,8 @@ mod tests {
             multiplexer_action: Some("attach_force".into()),
         };
         let command = remote_shell_command(Some("/srv/work"), false, Some(&conn)).unwrap();
-        assert!(command.contains("if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; exec tmux attach -d -t 'my-work' 2>/dev/null || tmux new-session -c '/srv/work' -s 'my-work'"));
+        assert!(command.contains("if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; tmux set -g default-command"));
+        assert!(command.contains("exec tmux attach -d -t 'my-work' 2>/dev/null || tmux new-session -c '/srv/work' -s 'my-work'"));
         assert!(command.contains("elif command -v screen >/dev/null 2>&1; then exec screen -d -r 'my-work' 2>/dev/null || screen -S 'my-work'"));
         assert!(command.contains("else cd -- '/srv/work' && export VOKTTY_TERMINAL=1;"));
     }

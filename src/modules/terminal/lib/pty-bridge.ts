@@ -211,3 +211,10 @@ export function disposePtyTarget(paneId: number): void {
 export function isGuestPtyTarget(paneId: number): boolean {
   return isCollabGuestLeaf(paneId);
 }
+
+export async function getRemotePtyCwd(
+  sessionId: number,
+  ptyId: number,
+): Promise<string> {
+  return invoke<string>("remote_pty_get_cwd", { sessionId, ptyId });
+}

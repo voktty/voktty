@@ -14,8 +14,8 @@ use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, Manager, State};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteRequest, RemoteResponse, METHOD_GIT_EXEC,
-    METHOD_HANDSHAKE, METHOD_PTY_CLOSE, METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_FILE,
-    METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, PROTOCOL_VERSION,
+    METHOD_HANDSHAKE, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
+    METHOD_READ_FILE, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, PROTOCOL_VERSION,
 };
 
 const REMOTE_OS: &str = "linux";
@@ -552,6 +552,27 @@ pub async fn remote_pty_close(
         .map(|_| ());
     session.unregister_pty(pty_id);
     result
+}
+
+#[tauri::command]
+pub async fn remote_pty_get_cwd(
+    state: State<'_, RemoteState>,
+    session_id: u64,
+    pty_id: u64,
+) -> Result<String, String> {
+    let session = remote_session(&state, session_id)?;
+    let request = RemoteRequest {
+        protocol: PROTOCOL_VERSION,
+        id: state.next_request_id("pty-get-cwd"),
+        method: METHOD_PTY_GET_CWD.to_string(),
+        params: serde_json::json!({ "ptyId": pty_id }),
+    };
+    let response = remote_request_for_session(session, request).await?;
+    let res = response_result(response)?;
+    res.get("cwd")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "no cwd in response".to_string())
 }
 
 #[tauri::command]
