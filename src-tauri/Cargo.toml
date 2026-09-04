@@ -59,7 +59,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 jsonschema = { version = "0.50", default-features = false }
-getrandom = "0.3"
+getrandom = "0.4"
 voktty-control-protocol = { path = "crates/voktty-control-protocol" }
 voktty-aliases = { path = "crates/voktty-aliases" }
 voktty-collab-protocol = { path = "crates/voktty-collab-protocol" }
