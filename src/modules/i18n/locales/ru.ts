@@ -1561,6 +1561,7 @@ const ruBase = mergeLocale(en, {
       agentHistoryOpen: "История операций агентов",
       agentFocusAttention: "Перейти к агенту, требующему внимания",
       sidebarToggle: "Переключить проводник файлов",
+      sourceControlToggle: "Переключить систему контроля версий",
       explorerFocus: "Переключить фокус проводника",
       explorerToggleHidden: "Переключить скрытые файлы",
       viewZoomIn: "Увеличить масштаб",

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -13,9 +13,9 @@ use sha2::{Digest, Sha256};
 use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, Manager, State};
 use voktty_remote_protocol::{
-    read_frame, write_frame, Frame, RemoteRequest, RemoteResponse, METHOD_HANDSHAKE,
-    METHOD_PTY_CLOSE, METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE,
-    PROTOCOL_VERSION,
+    read_frame, write_frame, Frame, RemoteRequest, RemoteResponse, METHOD_GIT_EXEC,
+    METHOD_HANDSHAKE, METHOD_PTY_CLOSE, METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_FILE,
+    METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, PROTOCOL_VERSION,
 };
 
 const REMOTE_OS: &str = "linux";
@@ -58,20 +58,161 @@ pub struct RemoteSessionInfo {
     pub capabilities: Vec<String>,
 }
 
+static GLOBAL_REMOTE: OnceLock<RemoteState> = OnceLock::new();
+
+#[derive(Clone)]
 pub struct RemoteState {
-    sessions: Mutex<HashMap<u64, Arc<RemoteSession>>>,
-    next_id: AtomicU64,
-    next_pty_id: AtomicU64,
-    next_request_id: AtomicU64,
+    sessions: Arc<Mutex<HashMap<u64, Arc<RemoteSession>>>>,
+    next_id: Arc<AtomicU64>,
+    next_pty_id: Arc<AtomicU64>,
+    next_request_id: Arc<AtomicU64>,
 }
 
 impl Default for RemoteState {
     fn default() -> Self {
-        Self {
-            sessions: Mutex::new(HashMap::new()),
-            next_id: AtomicU64::new(1),
-            next_pty_id: AtomicU64::new(1),
-            next_request_id: AtomicU64::new(1),
+        let state = Self {
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+            next_id: Arc::new(AtomicU64::new(1)),
+            next_pty_id: Arc::new(AtomicU64::new(1)),
+            next_request_id: Arc::new(AtomicU64::new(1)),
+        };
+        let _ = GLOBAL_REMOTE.set(state.clone());
+        state
+    }
+}
+
+impl RemoteState {
+    pub fn global() -> Option<RemoteState> {
+        GLOBAL_REMOTE.get().cloned()
+    }
+
+    pub(crate) fn exec_git(
+        &self,
+        session_id: u64,
+        cwd: Option<&str>,
+        args: &[std::ffi::OsString],
+        timeout_secs: u64,
+    ) -> Result<crate::modules::git::types::GitOutput, String> {
+        let session = self
+            .sessions
+            .lock()
+            .map_err(|_| "remote session state is poisoned".to_string())?
+            .get(&session_id)
+            .cloned()
+            .ok_or_else(|| format!("remote session {session_id} not found"))?;
+
+        let string_args: Vec<String> = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        let req_id = format!(
+            "git-{}",
+            self.next_request_id.fetch_add(1, Ordering::Relaxed)
+        );
+        let request = RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: req_id,
+            method: METHOD_GIT_EXEC.to_string(),
+            params: serde_json::json!({
+                "cwd": cwd,
+                "args": string_args,
+                "timeoutSecs": timeout_secs,
+            }),
+        };
+
+        let response = session.request(&request)?;
+        if !response.ok {
+            let err_msg = response
+                .error
+                .map(|e| e.message)
+                .unwrap_or_else(|| "remote git execution failed".to_string());
+            return Err(err_msg);
+        }
+
+        let result = response
+            .result
+            .ok_or_else(|| "missing result payload from remote git execution".to_string())?;
+
+        let stdout_b64 = result
+            .get("stdout")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        let stdout = base64::engine::general_purpose::STANDARD
+            .decode(stdout_b64)
+            .map_err(|e| format!("failed to decode remote git stdout base64: {e}"))?;
+
+        let stderr = result
+            .get("stderr")
+            .and_then(|v| v.as_str())
+            .map(|s| s.as_bytes().to_vec())
+            .unwrap_or_default();
+
+        let exit_code = result
+            .get("exitCode")
+            .and_then(|v| v.as_i64())
+            .map(|code| code as i32);
+
+        let timed_out = result
+            .get("timedOut")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        Ok(crate::modules::git::types::GitOutput {
+            stdout,
+            stderr,
+            exit_code,
+            timed_out,
+            truncated: false,
+        })
+    }
+
+    pub(crate) fn read_file_text(
+        &self,
+        session_id: u64,
+        path: &str,
+    ) -> Result<crate::modules::git::types::TextSource, String> {
+        let session = self
+            .sessions
+            .lock()
+            .map_err(|_| "remote session state is poisoned".to_string())?
+            .get(&session_id)
+            .cloned()
+            .ok_or_else(|| format!("remote session {session_id} not found"))?;
+
+        let req_id = format!(
+            "read-{}",
+            self.next_request_id.fetch_add(1, Ordering::Relaxed)
+        );
+        let request = RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: req_id,
+            method: METHOD_READ_FILE.to_string(),
+            params: serde_json::json!({
+                "path": path,
+            }),
+        };
+
+        let response = session.request(&request)?;
+        if !response.ok {
+            if let Some(err) = &response.error {
+                if err.code == "binary_file" {
+                    return Ok(crate::modules::git::types::TextSource::Binary);
+                }
+            }
+            return Ok(crate::modules::git::types::TextSource::Missing);
+        }
+
+        let content = response
+            .result
+            .as_ref()
+            .and_then(|r| r.get("content"))
+            .and_then(|c| c.as_str())
+            .map(|s| s.to_string());
+
+        match content {
+            Some(text) => Ok(crate::modules::git::types::TextSource::Text(text)),
+            None => Ok(crate::modules::git::types::TextSource::Missing),
         }
     }
 }

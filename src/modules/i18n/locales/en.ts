@@ -2524,6 +2524,7 @@ export const en = {
       agentHistoryOpen: "Agent operational history",
       agentFocusAttention: "Jump to agent needing attention",
       sidebarToggle: "Toggle file explorer",
+      sourceControlToggle: "Toggle source control",
       explorerFocus: "Toggle file explorer focus",
       explorerToggleHidden: "Toggle hidden files",
       viewZoomIn: "Zoom in",

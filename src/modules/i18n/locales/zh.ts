@@ -1466,6 +1466,7 @@ const zhBase = mergeLocale(en, {
       agentHistoryOpen: "Agent 操作历史",
       agentFocusAttention: "跳转到需要关注的代理",
       sidebarToggle: "切换文件资源管理器",
+      sourceControlToggle: "切换源代码管理",
       explorerFocus: "切换文件资源管理器焦点",
       explorerToggleHidden: "切换隐藏文件",
       viewZoomIn: "放大",

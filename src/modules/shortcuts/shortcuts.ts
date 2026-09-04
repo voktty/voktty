@@ -53,6 +53,7 @@ export type ShortcutId =
   | "agent.focusAttention"
   | "settings.open"
   | "sidebar.toggle"
+  | "sourceControl.toggle"
   | "editor.undo"
   | "editor.redo"
   | "editor.aiComplete"
@@ -324,7 +325,6 @@ export const SHORTCUTS: Shortcut[] = [
       { key: "F3" },
       { shift: true, key: "F3" },
       { [MOD_PROP]: true, key: "g" },
-      { [MOD_PROP]: true, shift: true, key: "g" },
     ],
   },
   {
@@ -351,7 +351,7 @@ export const SHORTCUTS: Shortcut[] = [
     id: "agentHistory.open",
     labelKey: "shortcuts.labels.agentHistoryOpen",
     group: "AI",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "h" }],
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "y" }],
   },
   {
     id: "agent.focusAttention",
@@ -369,6 +369,15 @@ export const SHORTCUTS: Shortcut[] = [
     defaultBindings: [
       { [MOD_PROP]: true, key: "b" },
       { [MOD_PROP]: true, shift: true, key: "b" },
+    ],
+  },
+  {
+    id: "sourceControl.toggle",
+    labelKey: "shortcuts.labels.sourceControlToggle",
+    group: "View",
+    defaultBindings: [
+      { [MOD_PROP]: true, shift: true, key: "g" },
+      { [MOD_PROP]: true, shift: true, key: "h" },
     ],
   },
   {
