@@ -67,11 +67,7 @@ export function isPathInRemoteWorkspace(
 ): env is RemoteWorkspaceEnv {
   if (!env || env.kind !== "ssh") return false;
   if (isWindowsLocalPath(path)) return false;
-  const root = normalizePath(env.root).replace(/\/+$/, "") || "/";
-  const candidate = normalizePath(path);
-  if (candidate === "." || candidate === root) return true;
-  const prefix = root === "/" ? "/" : `${root}/`;
-  return candidate.startsWith(prefix);
+  return path.startsWith("/") || path === "." || !path.includes(":");
 }
 
 export function isPathInWorkspace(
@@ -90,10 +86,10 @@ export function remoteRelativePath(
   const candidate = normalizePath(path);
   if (candidate === "." || candidate === root) return ".";
   const prefix = root === "/" ? "/" : `${root}/`;
-  if (!candidate.startsWith(prefix)) {
-    throw new Error("path is outside the remote workspace");
+  if (candidate.startsWith(prefix)) {
+    return candidate.slice(prefix.length) || ".";
   }
-  return candidate.slice(prefix.length) || ".";
+  return candidate;
 }
 
 export function remoteConnection(

@@ -19,28 +19,29 @@ const remote: Extract<WorkspaceEnv, { kind: "ssh" }> = {
 };
 
 describe("prepareRemoteExplorerEnv", () => {
-  it("opens a separate root-scoped explorer session for an outside cwd", async () => {
+  it("opens an explorer session when remote workspace is not yet connected", async () => {
+    const disconnectedRemote = { ...remote, sessionId: undefined };
     const open = vi.fn(async () => ({
       session_id: 9,
       architecture: "x86_64",
-      workspace_root: "/",
+      workspace_root: "/opt/data",
       helper_version: "1.0.0",
       capabilities: [],
     }));
 
     await expect(
-      prepareRemoteExplorerEnv(remote, "/opt/data", open),
+      prepareRemoteExplorerEnv(disconnectedRemote, "/opt/data", open),
     ).resolves.toEqual({
-      workspaceEnv: { ...remote, root: "/", sessionId: 9 },
+      workspaceEnv: { ...remote, root: "/opt/data", sessionId: 9 },
       opened: true,
     });
-    expect(open).toHaveBeenCalledWith(remote.connection, "/");
+    expect(open).toHaveBeenCalledWith(remote.connection, "/opt/data");
   });
 
-  it("reuses the terminal session while the cwd remains inside its root", async () => {
+  it("reuses the active remote session for any remote directory", async () => {
     const open = vi.fn();
     await expect(
-      prepareRemoteExplorerEnv(remote, "/root/project", open),
+      prepareRemoteExplorerEnv(remote, "/opt/data", open),
     ).resolves.toEqual({ workspaceEnv: remote, opened: false });
     expect(open).not.toHaveBeenCalled();
   });
