@@ -69,7 +69,7 @@ import {
   releaseNotesForVersion,
   releaseNotesTitle,
 } from "./lib/releaseNotes";
-import { orderByIds } from "./lib/reorder";
+import { mergeOrderedSubset, orderByIds } from "./lib/reorder";
 import {
   addTerminalToDock,
   applyDockGridStyle,
@@ -2197,10 +2197,18 @@ export default function App({
   const onReorderTabs = useCallback(
     (ids: string[], movedId?: string) => {
       setTabs((prev) => {
+        const visibleIds = new Set(ids);
+        const visibleTabs = prev.filter((tab) => visibleIds.has(tab.id));
         if (movedId) {
-          return applyGroupedReorder(prev, ids, movedId, projectOfTab) ?? prev;
+          const reordered = applyGroupedReorder(
+            visibleTabs,
+            ids,
+            movedId,
+            projectOfTab,
+          );
+          return reordered ? mergeOrderedSubset(prev, reordered) : prev;
         }
-        return orderByIds(prev, ids);
+        return mergeOrderedSubset(prev, orderByIds(visibleTabs, ids));
       });
     },
     [projectOfTab],
