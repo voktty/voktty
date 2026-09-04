@@ -55,6 +55,10 @@ import { syncWatchedMtime, watchFile } from "../lib/fileWatch";
 import { displayPath } from "../lib/paths";
 import type { EditorNavigation } from "../lib/search";
 import { MarkdownPreview } from "./AgentMarkdown";
+import {
+  DiffCommentComposer,
+  type DiffCommentComposerTarget,
+} from "./DiffCommentComposer";
 import { editorAutocomplete } from "./editorAutocomplete";
 import { languageForPath, schemeExtensions } from "./editorChrome";
 import { preserveEditorViewport, replaceEditorDoc } from "./editorDoc";
@@ -389,6 +393,7 @@ export function FileEditor({
               <CodeMirrorEditor
                 key={`${path}:${reloadKey}`}
                 path={path}
+                commentPath={relativePath}
                 value={loadState.content}
                 showDiff={showDiff}
                 gitOriginal={gitOriginal}
@@ -407,6 +412,7 @@ export function FileEditor({
         <CodeMirrorEditor
           key={`${path}:${reloadKey}`}
           path={path}
+          commentPath={relativePath}
           value={loadState.content}
           showDiff={showDiff}
           gitOriginal={gitOriginal}
@@ -441,6 +447,7 @@ export function FileEditor({
 
 function CodeMirrorEditor({
   path,
+  commentPath,
   value,
   showDiff,
   gitOriginal,
@@ -453,6 +460,7 @@ function CodeMirrorEditor({
   onDocChange,
 }: {
   path: string;
+  commentPath: string;
   value: string;
   showDiff: boolean;
   gitOriginal: string | null;
@@ -485,6 +493,8 @@ function CodeMirrorEditor({
     additions: number;
     deletions: number;
   } | null>(null);
+  const [commentTarget, setCommentTarget] =
+    useState<DiffCommentComposerTarget | null>(null);
   activeRef.current = active;
   onDirtyChangeRef.current = onDirtyChange;
   onErrorCountChangeRef.current = onErrorCountChange;
@@ -622,13 +632,12 @@ function CodeMirrorEditor({
       extensions: [
         minimalSetup,
         showDiff
-          ? editorGit(
-              onStageGit
-                ? {
-                    onStage: (contents) => onStageGitRef.current?.(contents),
-                  }
+          ? editorGit({
+              onStage: onStageGit
+                ? (contents) => onStageGitRef.current?.(contents)
                 : undefined,
-            )
+              onComment: setCommentTarget,
+            })
           : [],
         lineNumbers(),
         foldGutter(),
@@ -801,19 +810,28 @@ function CodeMirrorEditor({
   }, [active, path]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {showDiff ? (
-        <DiffChunkNav
-          index={chunkNav?.index ?? 0}
-          total={chunkNav?.positions.length ?? 0}
-          additions={chunkNav?.additions ?? 0}
-          deletions={chunkNav?.deletions ?? 0}
-          onPrev={() => stepChunkNav(-1)}
-          onNext={() => stepChunkNav(1)}
+    <>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {showDiff ? (
+          <DiffChunkNav
+            index={chunkNav?.index ?? 0}
+            total={chunkNav?.positions.length ?? 0}
+            additions={chunkNav?.additions ?? 0}
+            deletions={chunkNav?.deletions ?? 0}
+            onPrev={() => stepChunkNav(-1)}
+            onNext={() => stepChunkNav(1)}
+          />
+        ) : null}
+        <div ref={hostRef} className="min-h-0 flex-1" />
+      </div>
+      {commentTarget ? (
+        <DiffCommentComposer
+          path={commentPath}
+          target={commentTarget}
+          onDismiss={() => setCommentTarget(null)}
         />
       ) : null}
-      <div ref={hostRef} className="min-h-0 flex-1" />
-    </div>
+    </>
   );
 }
 

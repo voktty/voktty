@@ -41,6 +41,7 @@ type Shared = {
   dirtyFileIds: Set<string>;
   fileErrorCounts: Map<string, number>;
   focusedId: string;
+  addToChatSessionId?: string;
   composerFocused: boolean;
   recents: RecentProject[];
   hideProjectPicker?: boolean;
@@ -138,6 +139,7 @@ function PaneTreeComponent({
   dirtyFileIds,
   fileErrorCounts,
   focusedId,
+  addToChatSessionId,
   composerFocused,
   recents,
   hideProjectPicker,
@@ -347,6 +349,7 @@ function PaneTreeComponent({
                 )}
                 visible={visible}
                 focused={focusedId === session.id}
+                addToChatTarget={addToChatSessionId === session.id}
                 inSplit={inSplit}
                 composerFocused={composerFocused}
                 recents={recents}

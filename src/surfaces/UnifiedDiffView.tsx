@@ -4,6 +4,7 @@ import {
   ChevronRight,
   ChevronUp,
   FoldVertical,
+  MessageSquarePlus,
   Undo2,
   UnfoldVertical,
 } from "../chrome/icons";
@@ -21,10 +22,8 @@ import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useColorScheme } from "../hooks/useColorScheme";
 import type { ColorScheme } from "../lib/appearance";
 import { basename } from "../lib/fs";
-import {
-  highlightDiffFile,
-  type SyntaxToken,
-} from "./syntaxTokens";
+import { highlightDiffFile, type SyntaxToken } from "./syntaxTokens";
+import { DiffCommentComposer } from "./DiffCommentComposer";
 import {
   expandFold,
   type FoldReveal,
@@ -494,6 +493,7 @@ function FileBody({
   return (
     <VirtualRows
       fileId={file.id}
+      filePath={file.path}
       blocks={file.blocks}
       reveals={reveals}
       near={near}
@@ -508,6 +508,7 @@ function FileBody({
 
 function VirtualRows({
   fileId,
+  filePath,
   blocks,
   reveals,
   near,
@@ -518,6 +519,7 @@ function VirtualRows({
   onStageHunk,
 }: {
   fileId: string;
+  filePath: string;
   blocks: UnifiedBlock[];
   reveals: Record<string, FoldReveal>;
   near: boolean;
@@ -531,6 +533,9 @@ function VirtualRows({
   const codeRef = useRef<HTMLDivElement | null>(null);
   const mouseYRef = useRef<number | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [commentTarget, setCommentTarget] = useState<DiffCommentDraft | null>(
+    null,
+  );
   const rows = useMemo(
     () =>
       flattenVisibleRows(
@@ -711,6 +716,7 @@ function VirtualRows({
           row={row}
           lane={lane}
           hovered={hoverKey === key}
+          commenting={commentTarget?.key === key}
           tokens={row.type === "line" ? tokens?.get(row.line) : undefined}
           onReveal={
             row.type === "fold"
@@ -722,39 +728,59 @@ function VirtualRows({
               ? () => onStageHunk?.(fileId, row.line.pos as number)
               : undefined
           }
+          onComment={
+            lane === "gutter" && row.type === "line" && row.line.kind !== "hunk"
+              ? (anchor) => setCommentTarget({ key, line: row.line, anchor })
+              : undefined
+          }
         />
       );
     });
 
   return (
-    <div
-      ref={bodyRef}
-      className="flex"
-      onMouseMove={(event) => {
-        mouseYRef.current = event.clientY;
-        hoverAtY(event.clientY);
-      }}
-      onMouseLeave={() => {
-        mouseYRef.current = null;
-        hoverAtY(null);
-      }}
-    >
-      <div className="relative z-10 w-12 shrink-0" style={lanePad}>
-        {renderLane("gutter")}
-      </div>
+    <>
       <div
-        ref={codeRef}
-        className="min-w-0 flex-1 overflow-x-auto overscroll-x-none"
+        ref={bodyRef}
+        className="flex"
+        onMouseMove={(event) => {
+          mouseYRef.current = event.clientY;
+          hoverAtY(event.clientY);
+        }}
+        onMouseLeave={() => {
+          mouseYRef.current = null;
+          hoverAtY(null);
+        }}
       >
-        <div style={{ ...lanePad, minWidth: `max(100%, ${minWidthCh}ch)` }}>
-          {renderLane("code")}
+        <div className="relative z-10 w-12 shrink-0" style={lanePad}>
+          {renderLane("gutter")}
+        </div>
+        <div
+          ref={codeRef}
+          className="min-w-0 flex-1 overflow-x-auto overscroll-x-none"
+        >
+          <div style={{ ...lanePad, minWidth: `max(100%, ${minWidthCh}ch)` }}>
+            {renderLane("code")}
+          </div>
         </div>
       </div>
-    </div>
+      {commentTarget ? (
+        <DiffCommentComposer
+          path={filePath}
+          target={commentTarget}
+          onDismiss={() => setCommentTarget(null)}
+        />
+      ) : null}
+    </>
   );
 }
 
 type Lane = "gutter" | "code";
+
+type DiffCommentDraft = {
+  key: string;
+  line: UnifiedLine;
+  anchor: DOMRect;
+};
 
 function diffRowKey(row: DiffViewRow, index: number) {
   if (row.type === "fold") return `fold-${row.id}`;
@@ -765,16 +791,20 @@ function DiffLane({
   row,
   lane,
   hovered,
+  commenting,
   tokens,
   onReveal,
   onStage,
+  onComment,
 }: {
   row: DiffViewRow;
   lane: Lane;
   hovered: boolean;
+  commenting: boolean;
   tokens?: SyntaxToken[];
   onReveal?: (direction: "up" | "down" | "all") => void;
   onStage?: () => void;
+  onComment?: (anchor: DOMRect) => void;
 }) {
   if (row.type === "fold") {
     if (lane === "gutter") {
@@ -796,8 +826,10 @@ function DiffLane({
       line={row.line}
       lane={lane}
       hovered={hovered}
+      commenting={commenting}
       tokens={tokens}
       onStage={onStage}
+      onComment={onComment}
     />
   );
 }
@@ -847,14 +879,18 @@ const DiffLineRow = memo(function DiffLineRow({
   line,
   lane,
   hovered,
+  commenting,
   tokens,
   onStage,
+  onComment,
 }: {
   line: UnifiedLine;
   lane: Lane;
   hovered: boolean;
+  commenting: boolean;
   tokens?: SyntaxToken[];
   onStage?: () => void;
+  onComment?: (anchor: DOMRect) => void;
 }) {
   if (line.kind === "hunk") {
     return (
@@ -870,11 +906,7 @@ const DiffLineRow = memo(function DiffLineRow({
   const added = line.kind === "add";
   const deleted = line.kind === "del";
   const number = deleted ? line.oldNumber : line.newNumber;
-  const row = added
-    ? "bg-emerald-500/15"
-    : deleted
-      ? "bg-rose-500/15"
-      : "";
+  const row = added ? "bg-emerald-500/15" : deleted ? "bg-rose-500/15" : "";
   const gutterTint = added
     ? "bg-emerald-500/25"
     : deleted
@@ -900,6 +932,23 @@ const DiffLineRow = memo(function DiffLineRow({
         >
           {number ?? ""}
         </span>
+        {onComment ? (
+          <button
+            type="button"
+            title={`Comment on line ${number ?? ""}`.trim()}
+            aria-label={`Comment on line ${number ?? ""}`.trim()}
+            onClick={(event) =>
+              onComment(event.currentTarget.getBoundingClientRect())
+            }
+            className={`absolute top-0.5 left-0.5 z-10 grid size-4 place-items-center rounded-[3px] bg-content text-background-base outline-none transition-opacity hover:opacity-80 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent/50 ${
+              hovered || commenting
+                ? "opacity-100"
+                : "pointer-events-none opacity-0"
+            }`}
+          >
+            <MessageSquarePlus className="size-2.5" strokeWidth={2} />
+          </button>
+        ) : null}
         {onStage ? (
           <button
             type="button"
