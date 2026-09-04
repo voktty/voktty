@@ -479,9 +479,9 @@ fn remote_shell_command(
     };
 
     let tmux_cmd = match action {
-        "attach_force" => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux attach -d -t {s} 2>/dev/null || tmux new-session {cwd_flag}-s {s}"),
-        "new" => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux new-session {cwd_flag}-s {s} 2>/dev/null || tmux new-session {cwd_flag}"),
-        _ => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux new-session -A {cwd_flag}-s {s}"),
+        "attach_force" => format!("tmux attach -d -t {s} 2>/dev/null || tmux new-session {cwd_flag}-s {s}"),
+        "new" => format!("tmux new-session {cwd_flag}-s {s} 2>/dev/null || tmux new-session {cwd_flag}"),
+        _ => format!("tmux new-session -A {cwd_flag}-s {s}"),
     };
 
     let screen_cmd = match action {
@@ -491,13 +491,13 @@ fn remote_shell_command(
     };
 
     let cd_prefix = if let Some(cwd) = effective_cwd {
-        format!("cd -- {} && ", shell_quote(cwd))
+        format!("cd -- {} 2>/dev/null || true; ", shell_quote(cwd))
     } else {
         String::new()
     };
 
     let full_command = format!(
-        "{cd_prefix}if command -v tmux >/dev/null 2>&1; then exec {tmux_cmd}; elif command -v screen >/dev/null 2>&1; then exec {screen_cmd}; else {base_cmd}; fi"
+        "{cd_prefix}if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; exec {tmux_cmd}; elif command -v screen >/dev/null 2>&1; then exec {screen_cmd}; else {base_cmd}; fi"
     );
 
     Ok(full_command)
@@ -1505,7 +1505,7 @@ mod tests {
             multiplexer_action: Some("attach_force".into()),
         };
         let command = remote_shell_command(Some("/srv/work"), false, Some(&conn)).unwrap();
-        assert!(command.contains("if command -v tmux >/dev/null 2>&1; then exec tmux set -g allow-passthrough on 2>/dev/null; tmux attach -d -t 'my-work' 2>/dev/null || tmux new-session -c '/srv/work' -s 'my-work'"));
+        assert!(command.contains("if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; exec tmux attach -d -t 'my-work' 2>/dev/null || tmux new-session -c '/srv/work' -s 'my-work'"));
         assert!(command.contains("elif command -v screen >/dev/null 2>&1; then exec screen -d -r 'my-work' 2>/dev/null || screen -S 'my-work'"));
         assert!(command.contains("else cd -- '/srv/work' && export VOKTTY_TERMINAL=1;"));
     }
