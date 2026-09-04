@@ -177,10 +177,26 @@ input,
   margin-bottom: 0;
 }
 
+.agent-markdown [data-streamdown="blockquote"] {
+  padding-left: 0;
+  padding-inline-start: 1rem;
+  border-left: 0;
+  border-inline-start: 4px solid
+    color-mix(in srgb, var(--color-content) 20%, transparent);
+}
+
+.agent-markdown li > [data-streamdown="ordered-list"],
+.agent-markdown li > [data-streamdown="unordered-list"] {
+  padding-left: 0;
+  padding-inline-start: 1.5rem;
+}
+
 .inbox-comment-md.agent-markdown blockquote {
   margin: 0.4em 0;
-  padding: 0.15em 0 0.15em 0.75em;
-  border-left: 2px solid
+  padding: 0.15em 0;
+  padding-inline-start: 0.75em;
+  border: 0;
+  border-inline-start: 2px solid
     color-mix(in srgb, var(--color-content) 16%, transparent);
   color: color-mix(in srgb, var(--color-content) 55%, transparent);
 }
@@ -317,6 +333,12 @@ header[data-tauri-drag-region] button {
   margin-block: 16px;
   min-width: 0;
   max-width: 100%;
+  unicode-bidi: isolate;
+}
+
+.agent-markdown a[dir],
+.agent-markdown code[dir] {
+  unicode-bidi: isolate;
 }
 
 .agent-markdown .markdown-code-shell [data-streamdown="code-block"] {

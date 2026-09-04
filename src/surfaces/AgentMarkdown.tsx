@@ -141,6 +141,7 @@ function MarkdownLink({
   className,
   node: _node,
   onClick,
+  dir,
   ...props
 }: MarkdownLinkProps) {
   const allowRemoteMedia = useContext(RemoteMediaContext);
@@ -156,6 +157,7 @@ function MarkdownLink({
       href={href}
       className={`text-sky-400/90 hover:text-sky-300 hover:underline ${className ?? ""}`}
       {...props}
+      dir={dir ?? "auto"}
       onClick={(event) => {
         onClick?.(event);
         if (event.defaultPrevented) return;
@@ -194,6 +196,7 @@ function MarkdownCode({
     return (
       <code
         {...props}
+        dir="ltr"
         className={`inline-flex items-center gap-1 rounded-md bg-content/8 px-1.5 h-6 align-baseline font-mono text-[0.8em] text-content ${
           open ? "cursor-pointer hover:text-sky-300 hover:underline" : ""
         } ${className ?? ""}`}
@@ -235,7 +238,7 @@ function MarkdownCode({
   const code = textContent(children);
 
   return (
-    <div className="markdown-code-shell">
+    <div className="markdown-code-shell" dir="ltr">
       {iconName ? (
         <span className="markdown-code-icon" aria-hidden="true">
           <FileTypeIcon name={iconName} isDir={false} />
@@ -344,6 +347,7 @@ export const AgentMarkdown = memo(function AgentMarkdown({
           className={`agent-markdown min-w-0 font-sans text-sm leading-6 ${className ?? ""}`}
           components={MARKDOWN_COMPONENTS}
           controls={false}
+          dir="auto"
           isAnimating={!!streaming}
           plugins={MARKDOWN_PLUGINS}
           rehypePlugins={
@@ -466,7 +470,7 @@ function MermaidBlock({
 
   if (incomplete || failed) {
     return (
-      <div className="markdown-code-shell">
+      <div className="markdown-code-shell" dir="ltr">
         <span className="markdown-code-icon" aria-hidden="true">
           <FileTypeIcon name="diagram.mmd" isDir={false} />
         </span>
@@ -491,6 +495,7 @@ function MermaidBlock({
     <div
       className="mermaid-block overflow-x-auto rounded-[10px] border border-content/10 bg-content/6 p-3"
       data-streamdown="mermaid-block"
+      dir="ltr"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
