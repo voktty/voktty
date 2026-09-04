@@ -102,19 +102,12 @@ export function isWindowsNativePath(path: string): boolean {
   return /^[a-zA-Z]:[/\\]/.test(path) || /^[/\\]{2}/.test(path);
 }
 
-function normalizedWorkspacePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/\/+/g, "/");
-}
-
 function sshWorkspaceOwnsPath(
-  env: Extract<WorkspaceEnv, { kind: "ssh" }>,
+  _env: Extract<WorkspaceEnv, { kind: "ssh" }>,
   path: string,
 ): boolean {
   if (isWindowsNativePath(path)) return false;
-  const root = normalizedWorkspacePath(env.root).replace(/\/+$/, "") || "/";
-  const candidate = normalizedWorkspacePath(path);
-  if (candidate === "." || candidate === root) return true;
-  return candidate.startsWith(root === "/" ? "/" : `${root}/`);
+  return true;
 }
 
 /** Resolves the filesystem that owns a document at open time. */
