@@ -261,7 +261,6 @@ export const FileExplorer = memo(
     const loadingMessage = t("common.loading");
     const sourceRootIsReachable =
       sourceRootPath === null ||
-      workspaceEnv.kind !== "ssh" ||
       isPathInWorkspace(workspaceEnv, sourceRootPath);
     const workspaceRoot =
       workspaceEnv.kind === "ssh" ? workspaceEnv.root : null;

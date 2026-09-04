@@ -40,7 +40,7 @@
       "binaries/voktty-cli"
     ],
     "resources": [
-      "resources/remote"
+      "resources/remote/**/*"
     ],
     "targets": "all",
     "createUpdaterArtifacts": true,
