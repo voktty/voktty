@@ -997,13 +997,20 @@ fn pathspec(repo_root: &Path, absolute: &Path) -> String {
     if norm_abs.len() >= repo_prefix.len()
         && norm_abs[..repo_prefix.len()].eq_ignore_ascii_case(&repo_prefix)
     {
-        norm_abs[repo_prefix.len()..].trim_start_matches('/').to_string()
+        norm_abs[repo_prefix.len()..]
+            .trim_start_matches('/')
+            .to_string()
     } else if norm_abs.eq_ignore_ascii_case(norm_repo) {
         String::new()
     } else {
         absolute
             .strip_prefix(repo_root)
-            .map(|rel| rel.to_string_lossy().replace('\\', "/").trim_start_matches('/').to_string())
+            .map(|rel| {
+                rel.to_string_lossy()
+                    .replace('\\', "/")
+                    .trim_start_matches('/')
+                    .to_string()
+            })
             .unwrap_or_else(|_| norm_abs.trim_start_matches('/').to_string())
     }
 }

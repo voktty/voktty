@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::dirs_home;
 use super::fs::expand_home;
+use crate::dirs_home;
 use crate::passwd_identity;
 
 const STDOUT_EVENT: &str = "harness-stdout";
@@ -122,6 +122,7 @@ impl HarnessHost {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     fn spawn_stamp_current(&self, session_id: &str, epoch: u64, kill_all: u64) -> bool {
         let inner = self.lock_inner();
         self.kill_all_gen.load(Ordering::SeqCst) == kill_all
@@ -424,7 +425,9 @@ fn extract_js_from_cmd(cmd_path: &Path) -> Option<PathBuf> {
                 let rest = &line[pos + 6..];
                 let path_str: String = rest
                     .chars()
-                    .take_while(|&ch| ch != '"' && ch != ' ' && ch != '%' && ch != '\r' && ch != '\n')
+                    .take_while(|&ch| {
+                        ch != '"' && ch != ' ' && ch != '%' && ch != '\r' && ch != '\n'
+                    })
                     .collect();
                 if !path_str.is_empty() {
                     let candidate = parent.join(&path_str);
@@ -1022,6 +1025,7 @@ fn tree_alive(pid: u32) -> bool {
 }
 
 #[cfg(any(unix, test))]
+#[allow(dead_code)]
 fn process_alive(pid: u32) -> bool {
     if pid == 0 {
         return false;
@@ -1037,6 +1041,7 @@ fn process_alive(pid: u32) -> bool {
 }
 
 #[cfg(any(unix, test))]
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct ProcessSnapshot {
     pid: u32,
@@ -1069,6 +1074,7 @@ fn reap_snapshots(rows: &[ProcessSnapshot], our_pid: u32) {
 }
 
 #[cfg(any(unix, test))]
+#[allow(dead_code)]
 fn should_reap_process(
     proc: &ProcessSnapshot,
     our_pid: u32,
@@ -1085,6 +1091,7 @@ fn should_reap_process(
 
 /// Pre-marker leftovers: `cursor-agent acp` reparented to launchd.
 #[cfg(any(unix, test))]
+#[allow(dead_code)]
 fn is_legacy_orphaned_cursor_acp(args: &str) -> bool {
     if !args.contains("cursor-agent") {
         return false;
@@ -1096,6 +1103,7 @@ fn is_legacy_orphaned_cursor_acp(args: &str) -> bool {
 /// Used to decide whose environment is worth opening; the marker still
 /// decides what actually dies.
 #[cfg(any(unix, test))]
+#[allow(dead_code)]
 fn looks_like_harness_argv(args: &str) -> bool {
     if is_legacy_orphaned_cursor_acp(args) {
         return true;
@@ -1104,6 +1112,7 @@ fn looks_like_harness_argv(args: &str) -> bool {
 }
 
 #[cfg(any(unix, test))]
+#[allow(dead_code)]
 fn is_harness_argv_token(part: &str) -> bool {
     let name = Path::new(part)
         .file_name()
@@ -1312,6 +1321,7 @@ fn proc_ppid(dir: &Path) -> Option<u32> {
 /// Field 4 of `stat`, counted from the last closing paren: `comm` is unquoted
 /// and can hold spaces and parens of its own.
 #[cfg(any(target_os = "linux", test))]
+#[allow(dead_code)]
 fn parse_proc_ppid(stat: &str) -> Option<u32> {
     stat.get(stat.rfind(')')? + 1..)?
         .split_whitespace()
@@ -2035,7 +2045,7 @@ const LOGIN_SHELL_KEYS: [&str; 6] = [
 fn login_shell_path() -> Option<String> {
     #[cfg(windows)]
     {
-        return std::env::var("PATH").ok();
+        std::env::var("PATH").ok()
     }
     #[cfg(not(windows))]
     login_shell_env("PATH")
@@ -2061,9 +2071,9 @@ fn login_shell_env(name: &str) -> Option<String> {
 fn load_login_shell_env() -> HashMap<String, String> {
     #[cfg(windows)]
     {
-        return std::env::vars()
+        std::env::vars()
             .filter(|(k, v)| LOGIN_SHELL_KEYS.contains(&k.as_str()) && !v.is_empty())
-            .collect();
+            .collect()
     }
     #[cfg(not(windows))]
     {

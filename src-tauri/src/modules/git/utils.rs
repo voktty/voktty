@@ -104,7 +104,10 @@ pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
             let canon_clean = canon_str
                 .trim_start_matches("//?/")
                 .trim_start_matches(r"\\?\");
-            if !canon_clean.to_lowercase().starts_with(&repo_clean.to_lowercase()) {
+            if !canon_clean
+                .to_lowercase()
+                .starts_with(&repo_clean.to_lowercase())
+            {
                 return Err(GitError::PathOutsideWorkspace(canonical));
             }
             Ok(canonical)
