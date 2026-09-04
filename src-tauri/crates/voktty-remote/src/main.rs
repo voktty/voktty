@@ -1041,7 +1041,13 @@ impl RemoteServer {
         if let Some(dir) = &cwd {
             cmd.current_dir(dir);
         }
-        cmd.env("GIT_TERMINAL_PROMPT", "0")
+        let default_path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+        let path_env = match std::env::var("PATH") {
+            Ok(p) if !p.trim().is_empty() => format!("{default_path}:{p}"),
+            _ => default_path.to_string(),
+        };
+        cmd.env("PATH", path_env)
+            .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_ASKPASS", "")
             .env("SSH_ASKPASS", "")
             .env("GIT_OPTIONAL_LOCKS", "0")
