@@ -45,7 +45,6 @@ struct GoogleAccountsFile {
 #[serde(rename_all = "camelCase")]
 struct QuotaBucket {
     remaining_fraction: Option<f64>,
-    #[allow(dead_code)]
     remaining_amount: Option<Value>,
     reset_time: Option<String>,
     model_id: Option<String>,
@@ -74,9 +73,19 @@ struct PaidTier {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+struct IneligibleTier {
+    reason_code: Option<String>,
+    #[allow(dead_code)]
+    reason_message: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct CodeAssistResponse {
     current_tier: Option<CodeAssistTier>,
     paid_tier: Option<PaidTier>,
+    #[serde(default)]
+    ineligible_tiers: Vec<IneligibleTier>,
     #[serde(alias = "cloudaicompanionProject")]
     cloudai_companion_project: Option<String>,
 }
@@ -144,15 +153,22 @@ fn read_credentials() -> Option<GeminiOAuthCreds> {
     serde_json::from_str::<GeminiOAuthCreds>(&content).ok()
 }
 
+fn is_token_expired(creds: &GeminiOAuthCreds) -> bool {
+    match creds.expiry_date {
+        Some(raw_expiry) => {
+            let expiry_ms = if raw_expiry > 0.0 && raw_expiry < 10_000_000_000.0 {
+                (raw_expiry * 1000.0) as u64
+            } else {
+                raw_expiry as u64
+            };
+            now_epoch_ms() + 60_000 >= expiry_ms
+        }
+        None => true,
+    }
+}
+
 fn refresh_token_if_needed(creds: &mut GeminiOAuthCreds) -> bool {
-    let raw_expiry = creds.expiry_date.unwrap_or(0.0) as u64;
-    let expiry = if raw_expiry > 0 && raw_expiry < 10_000_000_000 {
-        raw_expiry * 1000
-    } else {
-        raw_expiry
-    };
-    let now = now_epoch_ms();
-    if expiry > now + 60_000 && creds.access_token.is_some() {
+    if !is_token_expired(creds) && creds.access_token.is_some() {
         return true;
     }
 
@@ -189,7 +205,7 @@ fn refresh_token_if_needed(creds: &mut GeminiOAuthCreds) -> bool {
             let tok = token_resp.access_token;
             creds.access_token = Some(tok.clone());
             if let Some(exp_sec) = token_resp.expires_in {
-                let new_exp = (now + exp_sec * 1000) as f64;
+                let new_exp = (now_epoch_ms() + exp_sec * 1000) as f64;
                 creds.expiry_date = Some(new_exp);
             }
             if let Some(ref new_id) = token_resp.id_token {
@@ -205,7 +221,10 @@ fn refresh_token_if_needed(creds: &mut GeminiOAuthCreds) -> bool {
                         if let Some(ref id) = creds.id_token {
                             map["id_token"] = json!(id);
                         }
-                        let _ = fs::write(path, map.to_string());
+                        let tmp_path = path.with_extension("tmp");
+                        if fs::write(&tmp_path, map.to_string()).is_ok() {
+                            let _ = fs::rename(&tmp_path, &path);
+                        }
                     }
                 }
             }
@@ -213,6 +232,14 @@ fn refresh_token_if_needed(creds: &mut GeminiOAuthCreds) -> bool {
         }
     }
     creds.access_token.is_some()
+}
+
+fn lenient_f64(v: Option<&Value>) -> Option<f64> {
+    match v {
+        Some(Value::Number(n)) => n.as_f64(),
+        Some(Value::String(s)) => s.trim().parse::<f64>().ok(),
+        _ => None,
+    }
 }
 
 pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
@@ -231,7 +258,7 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
 
     let agent = ureq::AgentBuilder::new().timeout(HTTP_TIMEOUT).build();
 
-    // Step 1: loadCodeAssist to get project ID
+    // Step 1: loadCodeAssist to resolve companion project and tier
     let body_ca = json!({
         "metadata": {
             "ideType": "GEMINI_CLI",
@@ -259,7 +286,15 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
                 if let Some(paid) = ca.paid_tier {
                     plan_name = paid.name.or(paid.id);
                 } else if let Some(cur) = ca.current_tier {
-                    plan_name = cur.name.or(cur.id);
+                    let name = match cur.id.as_deref() {
+                        Some("free-tier") => "Free".to_string(),
+                        Some("standard-tier") => "Standard".to_string(),
+                        Some("legacy-tier") => "Legacy".to_string(),
+                        _ => cur.name.unwrap_or_else(|| "Google AI / Antigravity".into()),
+                    };
+                    plan_name = Some(name);
+                } else if ca.ineligible_tiers.iter().any(|t| t.reason_code.as_deref() == Some("UNSUPPORTED_CLIENT")) {
+                    plan_name = Some("Individual tier (sunset)".into());
                 }
             }
         }
@@ -284,7 +319,11 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
             if response.status() >= 200 && response.status() < 300 {
                 let body_str = response.into_string().unwrap_or_default();
                 if let Ok(quota) = serde_json::from_str::<QuotaResponse>(&body_str) {
-                    return build_quota_from_response(quota, cost_engine, plan_name, user_email);
+                    if let Some(ref buckets) = quota.buckets {
+                        if !buckets.is_empty() {
+                            return build_quota_from_response(quota, cost_engine, plan_name, user_email);
+                        }
+                    }
                 }
             }
             fallback_local_transcripts(cost_engine, "Connected (quota buckets offline)", user_email)
@@ -298,8 +337,7 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
                 };
                 quota
             } else if status == 401 || status == 403 {
-                // If Cloud Code endpoint returns 401/403 but local credentials/account exist,
-                // keep status as Healthy connected with local Antigravity metrics.
+                // Subscription required / OAuth tier sunset -> healthy with local stats
                 fallback_local_transcripts(cost_engine, "Connected (Antigravity CLI)", user_email)
             } else {
                 fallback_local_transcripts(cost_engine, &format!("HTTP {status}"), user_email)
@@ -307,6 +345,13 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
         }
         Err(e) => fallback_local_transcripts(cost_engine, &format!("Network: {e}"), user_email),
     }
+}
+
+struct TierAgg {
+    remaining_fraction: f64,
+    reset_time: Option<String>,
+    remaining_amount: Option<f64>,
+    limit: Option<f64>,
 }
 
 fn build_quota_from_response(
@@ -320,52 +365,80 @@ fn build_quota_from_response(
     let mut worst_resets_at = None;
     let mut worst_label = String::new();
 
-    let mut tier_map: HashMap<String, (f64, Option<String>)> = HashMap::new();
+    let mut tier_map: HashMap<&str, TierAgg> = HashMap::new();
 
     if let Some(buckets) = quota.buckets {
-        for bucket in buckets {
-            let model_id = bucket.model_id.unwrap_or_else(|| "unknown".into());
-            let tier = if model_id.contains("flash-lite") || model_id.contains("flash_lite") {
-                "Flash Lite Models".to_string()
-            } else if model_id.contains("flash") {
-                "Flash Models".to_string()
-            } else if model_id.contains("pro") {
-                "Pro Models".to_string()
+        let tier_of = |m: &str| -> &'static str {
+            if m.contains("flash-lite") || m.contains("flash_lite") {
+                "Flash Lite Models"
+            } else if m.contains("flash") {
+                "Flash Models"
+            } else if m.contains("pro") {
+                "Pro Models"
             } else {
-                "Default Models".to_string()
+                "Other Models"
+            }
+        };
+
+        for bucket in &buckets {
+            let model_id = bucket.model_id.as_deref().unwrap_or("unknown");
+            let tier = tier_of(model_id);
+            let remaining = bucket.remaining_fraction.unwrap_or(1.0);
+            let remaining_amount = lenient_f64(bucket.remaining_amount.as_ref());
+            let limit = match (remaining_amount, bucket.remaining_fraction) {
+                (Some(ra), Some(rf)) if rf > 0.0 => Some(ra / rf),
+                _ => None,
             };
+            let valid_reset = bucket
+                .reset_time
+                .as_deref()
+                .filter(|t| !t.starts_with("1970"))
+                .map(String::from);
 
-            let remaining_fraction = bucket.remaining_fraction.unwrap_or(1.0);
-            let used_percent = (1.0 - remaining_fraction) * 100.0;
+            let entry = tier_map.entry(tier).or_insert(TierAgg {
+                remaining_fraction: 1.0,
+                reset_time: None,
+                remaining_amount: None,
+                limit: None,
+            });
 
-            let entry = tier_map.entry(tier).or_insert((0.0, None));
-            if used_percent > entry.0 {
-                entry.0 = used_percent;
-                entry.1 = bucket.reset_time;
+            if remaining < entry.remaining_fraction {
+                entry.remaining_fraction = remaining;
+                entry.remaining_amount = remaining_amount;
+                entry.limit = limit;
+            }
+            if entry.reset_time.is_none() && valid_reset.is_some() {
+                entry.reset_time = valid_reset;
             }
         }
     }
 
-    let tier_order = ["Flash Models", "Pro Models", "Flash Lite Models", "Default Models"];
+    let tier_order = ["Flash Models", "Pro Models", "Flash Lite Models", "Other Models"];
     for tier in &tier_order {
-        if let Some((used_pct, reset_time)) = tier_map.get(*tier) {
-            if *used_pct > worst_utilization {
-                worst_utilization = *used_pct;
-                worst_resets_at = reset_time.clone();
+        if let Some(agg) = tier_map.get(tier) {
+            let used = ((1.0 - agg.remaining_fraction) * 100.0).clamp(0.0, 100.0);
+            if used > worst_utilization {
+                worst_utilization = used;
+                worst_resets_at = agg.reset_time.clone();
                 worst_label = tier.to_string();
             }
+
+            let raw_used = match (agg.limit, agg.remaining_amount) {
+                (Some(lim), Some(rem)) => Some((lim - rem).max(0.0)),
+                _ => None,
+            };
 
             windows.push(QuotaWindow {
                 id: format!("gemini-{}", tier.to_lowercase().replace(' ', "-")),
                 provider_id: "gemini".into(),
                 label: tier.to_string(),
-                used_percent: used_pct.clamp(0.0, 100.0),
-                remaining_percent: (100.0 - used_pct).clamp(0.0, 100.0),
-                resets_at: reset_time.clone(),
+                used_percent: used,
+                remaining_percent: (agg.remaining_fraction * 100.0).clamp(0.0, 100.0),
+                resets_at: agg.reset_time.clone(),
                 resets_in_seconds: None,
-                raw_used: None,
-                raw_limit: None,
-                unit: Some("%".into()),
+                raw_used,
+                raw_limit: agg.limit,
+                unit: if agg.limit.is_some() { Some("req".into()) } else { Some("%".into()) },
             });
         }
     }
@@ -385,9 +458,9 @@ fn build_quota_from_response(
         LimitState::Healthy
     };
 
-    let (in_tokens, out_tokens, cache_tokens) = scan_today_tokens();
-    let cost =
-        cost_engine.calculate_cost_usd("gemini-3.8-flash", in_tokens, out_tokens, cache_tokens);
+    let (in_tokens, out_tokens, cache_tokens, primary_model) = scan_today_tokens();
+    let cost_model = primary_model.as_deref().unwrap_or("gemini-3.8-flash");
+    let cost = cost_engine.calculate_cost_usd(cost_model, in_tokens, out_tokens, cache_tokens);
 
     ProviderQuota {
         provider_id: "gemini".into(),
@@ -408,10 +481,9 @@ fn fallback_local_transcripts(
     reason: &str,
     email: Option<String>,
 ) -> ProviderQuota {
-    let (in_tokens, out_tokens, cache_tokens) = scan_today_tokens();
-    let cost =
-        cost_engine.calculate_cost_usd("gemini-3.8-flash", in_tokens, out_tokens, cache_tokens);
-    let total_tokens = in_tokens + out_tokens;
+    let (in_tokens, out_tokens, cache_tokens, primary_model) = scan_today_tokens();
+    let cost_model = primary_model.as_deref().unwrap_or("gemini-3.8-flash");
+    let cost = cost_engine.calculate_cost_usd(cost_model, in_tokens, out_tokens, cache_tokens);
     let is_connected = email.is_some() || gemini_installed();
 
     let state = if is_connected {
@@ -422,93 +494,20 @@ fn fallback_local_transcripts(
         }
     };
 
-    let mut windows = Vec::new();
-    if total_tokens > 0 {
-        let session_limit = 1_000_000.0;
-        let prompt_limit = 1_000_000.0;
-        let output_limit = 1_000_000.0;
-
-        let used_pct = (total_tokens as f64 / session_limit * 100.0).clamp(0.0, 100.0);
-        let in_pct = (in_tokens as f64 / prompt_limit * 100.0).clamp(0.0, 100.0);
-        let out_pct = (out_tokens as f64 / output_limit * 100.0).clamp(0.0, 100.0);
-
-        windows.push(QuotaWindow {
-            id: "gemini-local-today".into(),
-            provider_id: "gemini".into(),
-            label: "Tokens Today (Session)".into(),
-            used_percent: used_pct,
-            remaining_percent: (100.0 - used_pct).clamp(0.0, 100.0),
-            resets_at: None,
-            resets_in_seconds: None,
-            raw_used: Some(total_tokens as f64),
-            raw_limit: Some(session_limit),
-            unit: Some("tokens".into()),
-        });
-        windows.push(QuotaWindow {
-            id: "gemini-flash".into(),
-            provider_id: "gemini".into(),
-            label: "Flash / Prompt Tokens".into(),
-            used_percent: in_pct,
-            remaining_percent: (100.0 - in_pct).clamp(0.0, 100.0),
-            resets_at: None,
-            resets_in_seconds: None,
-            raw_used: Some(in_tokens as f64),
-            raw_limit: Some(prompt_limit),
-            unit: Some("tokens".into()),
-        });
-        windows.push(QuotaWindow {
-            id: "gemini-pro".into(),
-            provider_id: "gemini".into(),
-            label: "Pro / Output Tokens".into(),
-            used_percent: out_pct,
-            remaining_percent: (100.0 - out_pct).clamp(0.0, 100.0),
-            resets_at: None,
-            resets_in_seconds: None,
-            raw_used: Some(out_tokens as f64),
-            raw_limit: Some(output_limit),
-            unit: Some("tokens".into()),
-        });
-    } else if is_connected {
-        windows.push(QuotaWindow {
-            id: "gemini-flash".into(),
-            provider_id: "gemini".into(),
-            label: "Flash Models".into(),
-            used_percent: 0.0,
-            remaining_percent: 100.0,
-            resets_at: None,
-            resets_in_seconds: None,
-            raw_used: None,
-            raw_limit: None,
-            unit: Some("%".into()),
-        });
-        windows.push(QuotaWindow {
-            id: "gemini-pro".into(),
-            provider_id: "gemini".into(),
-            label: "Pro Models".into(),
-            used_percent: 0.0,
-            remaining_percent: 100.0,
-            resets_at: None,
-            resets_in_seconds: None,
-            raw_used: None,
-            raw_limit: None,
-            unit: Some("%".into()),
-        });
-    }
-
     ProviderQuota {
         provider_id: "gemini".into(),
         provider_name: "Google Gemini / Antigravity".into(),
         state,
-        windows,
+        windows: vec![],
         plan_name: if is_connected {
             Some("Google AI / Antigravity".into())
         } else {
             None
         },
         account_email: email,
-        cost_today_usd: Some(cost),
-        total_input_tokens: Some(in_tokens),
-        total_output_tokens: Some(out_tokens),
+        cost_today_usd: if in_tokens > 0 || out_tokens > 0 { Some(cost) } else { None },
+        total_input_tokens: if in_tokens > 0 { Some(in_tokens) } else { None },
+        total_output_tokens: if out_tokens > 0 { Some(out_tokens) } else { None },
         updated_at: iso_now(),
     }
 }
@@ -521,58 +520,35 @@ fn gemini_installed() -> bool {
     gemini_dir.exists()
 }
 
-fn scan_today_tokens() -> (u64, u64, u64) {
-    let Some(home) = dirs_home() else {
-        return (0, 0, 0);
-    };
-    let gemini_dir = PathBuf::from(home).join(".gemini");
-    if !gemini_dir.exists() {
-        return (0, 0, 0);
-    }
-
-    let today = Local::now().date_naive();
-    let mut total_in = 0u64;
-    let mut total_out = 0u64;
-    let mut total_cache = 0u64;
-
-    for sub in &["tmp", "antigravity-cli", "antigravity", "history"] {
-        let dir = gemini_dir.join(sub);
-        if dir.exists() {
-            scan_dir_recursive(&dir, today, &mut total_in, &mut total_out, &mut total_cache, 0);
-        }
-    }
-
-    (total_in, total_out, total_cache)
+#[derive(Deserialize, Debug, Default)]
+struct GeminiTokensField {
+    input: Option<u64>,
+    output: Option<u64>,
+    cached: Option<u64>,
+    thoughts: Option<u64>,
+    tool: Option<u64>,
+    #[allow(dead_code)]
+    total: Option<u64>,
 }
 
-fn scan_dir_recursive(
-    dir: &Path,
-    today: chrono::NaiveDate,
-    total_in: &mut u64,
-    total_out: &mut u64,
-    total_cache: &mut u64,
-    depth: u8,
-) {
-    if depth > 5 {
-        return;
-    }
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let p = entry.path();
-        if p.is_dir() {
-            scan_dir_recursive(&p, today, total_in, total_out, total_cache, depth + 1);
-        } else if p.is_file() {
-            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
-            if ext == "jsonl" || ext == "json" {
-                scan_single_file(&p, today, total_in, total_out, total_cache);
-            }
-        }
-    }
+#[derive(Deserialize, Debug, Default)]
+struct GeminiChatRecord {
+    #[serde(rename = "sessionId")]
+    #[allow(dead_code)]
+    session_id: Option<String>,
+    timestamp: Option<Value>,
+    #[serde(rename = "startTime")]
+    start_time: Option<Value>,
+    #[serde(rename = "lastUpdated")]
+    last_updated: Option<Value>,
+    #[allow(dead_code)]
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    model: Option<String>,
+    tokens: Option<GeminiTokensField>,
 }
 
-fn parse_date_value(v: &Value) -> Option<chrono::NaiveDate> {
+fn parse_date_val(v: &Value) -> Option<chrono::NaiveDate> {
     match v {
         Value::String(s) => {
             if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
@@ -604,82 +580,127 @@ fn parse_date_value(v: &Value) -> Option<chrono::NaiveDate> {
     }
 }
 
-fn scan_single_file(
-    path: &Path,
+/// Scans real Gemini and Antigravity chat logs from ~/.gemini/tmp/*/chats/*.jsonl
+/// Extracts real token usage and counts for today.
+fn scan_today_tokens() -> (u64, u64, u64, Option<String>) {
+    let Some(home) = dirs_home() else {
+        return (0, 0, 0, None);
+    };
+    let gemini_dir = PathBuf::from(home).join(".gemini");
+    if !gemini_dir.exists() {
+        return (0, 0, 0, None);
+    }
+
+    let today = Local::now().date_naive();
+    let mut total_in = 0u64;
+    let mut total_out = 0u64;
+    let mut total_cache = 0u64;
+    let mut model_counts: HashMap<String, u64> = HashMap::new();
+
+    let tmp_dir = gemini_dir.join("tmp");
+    if tmp_dir.is_dir() {
+        if let Ok(project_dirs) = fs::read_dir(&tmp_dir) {
+            for project_entry in project_dirs.flatten() {
+                let chats_dir = project_entry.path().join("chats");
+                if chats_dir.is_dir() {
+                    scan_chats_dir(
+                        &chats_dir,
+                        today,
+                        &mut total_in,
+                        &mut total_out,
+                        &mut total_cache,
+                        &mut model_counts,
+                        0,
+                    );
+                }
+            }
+        }
+    }
+
+    let primary_model = model_counts
+        .into_iter()
+        .max_by_key(|(_, count)| *count)
+        .map(|(m, _)| m);
+
+    (total_in, total_out, total_cache, primary_model)
+}
+
+fn scan_chats_dir(
+    dir: &Path,
     today: chrono::NaiveDate,
     total_in: &mut u64,
     total_out: &mut u64,
     total_cache: &mut u64,
+    model_counts: &mut HashMap<String, u64>,
+    depth: u8,
 ) {
-    let Ok(content) = fs::read_to_string(path) else {
-        return;
-    };
-    for line in content.lines() {
-        let line_trimmed = line.trim();
-        if line_trimmed.is_empty() {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if depth == 0 {
+                scan_chats_dir(
+                    &path,
+                    today,
+                    total_in,
+                    total_out,
+                    total_cache,
+                    model_counts,
+                    depth + 1,
+                );
+            }
             continue;
         }
-        let Ok(v) = serde_json::from_str::<Value>(line_trimmed) else {
+
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else { continue };
+        if ext != "jsonl" && ext != "json" {
             continue;
-        };
+        }
 
-        let date = v.get("timestamp")
-            .or_else(|| v.get("startTime"))
-            .or_else(|| v.get("lastUpdated"))
-            .or_else(|| v.get("created_at"))
-            .and_then(parse_date_value);
+        let Ok(meta) = entry.metadata() else { continue };
+        if meta.len() > 20 * 1024 * 1024 {
+            continue;
+        }
 
-        // Only count tokens from today
-        if let Some(d) = date {
-            if d != today {
+        let Ok(content) = fs::read_to_string(&path) else { continue };
+
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() {
                 continue;
             }
-        }
+            let Ok(rec) = serde_json::from_str::<GeminiChatRecord>(line) else {
+                continue;
+            };
 
-        let tokens_obj = v.get("tokens")
-            .or_else(|| v.get("usage"))
-            .or_else(|| v.get("tokenUsage"));
+            let msg_date = rec
+                .timestamp
+                .as_ref()
+                .or(rec.start_time.as_ref())
+                .or(rec.last_updated.as_ref())
+                .and_then(parse_date_val);
 
-        if let Some(tokens) = tokens_obj {
-            if let Some(i) = tokens.get("input")
-                .or_else(|| tokens.get("input_tokens"))
-                .or_else(|| tokens.get("inputTokens"))
-                .or_else(|| tokens.get("prompt_tokens"))
-                .and_then(|n| n.as_u64())
-            {
-                *total_in += i;
-            }
-            if let Some(o) = tokens.get("output")
-                .or_else(|| tokens.get("output_tokens"))
-                .or_else(|| tokens.get("outputTokens"))
-                .or_else(|| tokens.get("completion_tokens"))
-                .and_then(|n| n.as_u64())
-            {
-                *total_out += o;
-            }
-            if let Some(c) = tokens.get("cached")
-                .or_else(|| tokens.get("cached_tokens"))
-                .or_else(|| tokens.get("cache_read_input_tokens"))
-                .and_then(|n| n.as_u64())
-            {
-                *total_cache += c;
-            }
-        } else {
-            // Fallback token estimation (approx 4 chars/token) for Antigravity transcript format
-            let src = v.get("source").and_then(Value::as_str).unwrap_or("");
-            let kind = v.get("type").and_then(Value::as_str).unwrap_or("");
-            let content_len = v.get("content").and_then(Value::as_str).map(|s| s.len()).unwrap_or(0);
-            let thinking_len = v.get("thinking").and_then(Value::as_str).map(|s| s.len()).unwrap_or(0);
-            let tool_calls_len = v.get("tool_calls").map(|tc| tc.to_string().len()).unwrap_or(0);
+            if let Some(d) = msg_date {
+                if d == today {
+                    if let Some(tokens) = rec.tokens {
+                        let i = tokens.input.unwrap_or(0);
+                        let o = tokens.output.unwrap_or(0);
+                        let c = tokens.cached.unwrap_or(0);
+                        let th = tokens.thoughts.unwrap_or(0);
+                        let tl = tokens.tool.unwrap_or(0);
 
-            if src == "USER_EXPLICIT" || kind == "USER_INPUT" || kind == "user" {
-                let in_est = (content_len as u64 / 4).max(1);
-                *total_in += in_est;
-            } else if src == "MODEL" || kind == "PLANNER_RESPONSE" || kind == "gemini" || kind == "assistant" {
-                let out_est = ((content_len + thinking_len + tool_calls_len) as u64 / 4).max(1);
-                *total_out += out_est;
+                        *total_in += i;
+                        *total_out += o + th + tl;
+                        *total_cache += c;
+
+                        if let Some(model) = rec.model {
+                            *model_counts.entry(model).or_insert(0) += 1;
+                        }
+                    }
+                }
             }
         }
     }
 }
+
 
