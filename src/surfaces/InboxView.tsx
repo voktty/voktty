@@ -1028,7 +1028,7 @@ function InboxDetail({
   }, [githubKind, item.id, item.number, item.projectPath, linear, revision]);
 
   useEffect(() => {
-    if (!isPr) return;
+    if (!isPr || tab !== "code") return;
     let cancelled = false;
     const cachedDiff = peekGithubPrDiff(item.projectPath, item.number);
     if (cachedDiff) {
@@ -1057,7 +1057,7 @@ function InboxDetail({
     return () => {
       cancelled = true;
     };
-  }, [isPr, item.number, item.projectPath, revision]);
+  }, [isPr, item.number, item.projectPath, revision, tab]);
 
   const postComment = async (body: string) => {
     setPosting(true);

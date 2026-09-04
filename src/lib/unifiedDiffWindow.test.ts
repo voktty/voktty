@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { foldUnifiedLines, type UnifiedLine } from "./unifiedDiff";
 import {
   flattenVisibleRows,
+  layoutRows,
   rowsHeight,
   UNIFIED_FOLD_PX,
   UNIFIED_LINE_PX,
@@ -107,6 +108,52 @@ describe("windowRows", () => {
       end: 1,
       padTop: UNIFIED_FOLD_PX,
       padBottom: 0,
+    });
+  });
+
+  it("reuses cumulative layout for exact mixed-height boundaries", () => {
+    const rows = [
+      {
+        type: "line" as const,
+        stage: false,
+        height: UNIFIED_LINE_PX,
+        line: {
+          kind: "context" as const,
+          text: "one",
+          oldNumber: 1,
+          newNumber: 1,
+        },
+      },
+      {
+        type: "fold" as const,
+        id: "fold-0",
+        hidden: 10,
+        height: UNIFIED_FOLD_PX,
+      },
+      {
+        type: "line" as const,
+        stage: false,
+        height: UNIFIED_LINE_PX,
+        line: {
+          kind: "context" as const,
+          text: "two",
+          oldNumber: 12,
+          newNumber: 12,
+        },
+      },
+    ];
+    const layout = layoutRows(rows);
+    expect(layout.offsets).toEqual([
+      0,
+      UNIFIED_LINE_PX,
+      UNIFIED_LINE_PX + UNIFIED_FOLD_PX,
+      UNIFIED_LINE_PX * 2 + UNIFIED_FOLD_PX,
+    ]);
+    expect(windowRows(rows, UNIFIED_LINE_PX, 40, 0, layout)).toEqual({
+      start: 1,
+      end: 2,
+      padTop: UNIFIED_LINE_PX,
+      padBottom: UNIFIED_LINE_PX,
     });
   });
 });

@@ -5,11 +5,9 @@ import {
   gitCommitFiles,
   type GitChangedFile,
 } from "../lib/fs";
-import { buildUnifiedFile } from "../lib/unifiedDiff";
-import {
-  UnifiedDiffView,
-  type UnifiedDiffFileModel,
-} from "./UnifiedDiffView";
+import { forEachConcurrent } from "../lib/concurrent";
+import { buildUnifiedFile, type UnifiedFileDiff } from "../lib/unifiedDiff";
+import { UnifiedDiffView, type UnifiedDiffFileModel } from "./UnifiedDiffView";
 
 type Props = {
   cwd: string;
@@ -17,12 +15,13 @@ type Props = {
 };
 
 type LoadedDiff = {
-  file: GitChangedFile;
   binary: boolean;
   tooLarge: boolean;
-  original: string;
-  current: string;
+  unified: UnifiedFileDiff | null;
+  error?: string;
 };
+
+const DIFF_LOAD_CONCURRENCY = 4;
 
 export function CommitDiff({ cwd, sha }: Props) {
   const [files, setFiles] = useState<GitChangedFile[] | null>(null);
@@ -38,6 +37,8 @@ export function CommitDiff({ cwd, sha }: Props) {
 
     let disposed = false;
     let generation = 0;
+    setFiles(null);
+    setDiffs(new Map());
 
     const run = () => {
       const current = ++generation;
@@ -45,37 +46,42 @@ export function CommitDiff({ cwd, sha }: Props) {
         .then(async (listed) => {
           if (disposed || current !== generation) return;
           setFiles(listed);
+          setDiffs(new Map());
           setError(null);
-          const entries = await Promise.all(
-            listed.map(async (file) => {
+          await forEachConcurrent(
+            listed,
+            DIFF_LOAD_CONCURRENCY,
+            async (file) => {
+              let loaded: LoadedDiff;
               try {
                 const diff = await gitCommitFileDiff(cwd, sha, file.relative);
-                return [
-                  file.relative,
-                  {
-                    file,
-                    binary: diff.binary,
-                    tooLarge: diff.tooLarge,
-                    original: diff.original,
-                    current: diff.current,
-                  } satisfies LoadedDiff,
-                ] as const;
-              } catch {
-                return [
-                  file.relative,
-                  {
-                    file,
-                    binary: false,
-                    tooLarge: false,
-                    original: "",
-                    current: "",
-                  } satisfies LoadedDiff,
-                ] as const;
+                const unified =
+                  !diff.binary && !diff.tooLarge
+                    ? buildUnifiedFile(diff.original, diff.current)
+                    : null;
+                loaded = {
+                  binary: diff.binary,
+                  tooLarge: diff.tooLarge,
+                  unified,
+                };
+              } catch (caught: unknown) {
+                loaded = {
+                  binary: false,
+                  tooLarge: false,
+                  unified: null,
+                  error:
+                    caught instanceof Error ? caught.message : String(caught),
+                };
               }
-            }),
+              if (disposed || current !== generation) return;
+              setDiffs((existing) => {
+                const next = new Map(existing);
+                next.set(file.relative, loaded);
+                return next;
+              });
+            },
+            () => !disposed && current === generation,
           );
-          if (disposed || current !== generation) return;
-          setDiffs(new Map(entries));
         })
         .catch((caught: unknown) => {
           if (disposed || current !== generation) return;
@@ -94,10 +100,7 @@ export function CommitDiff({ cwd, sha }: Props) {
     if (!files) return [];
     return files.map((file) => {
       const loaded = diffs.get(file.relative);
-      const unified =
-        loaded && !loaded.binary && !loaded.tooLarge
-          ? buildUnifiedFile(loaded.original, loaded.current)
-          : null;
+      const unified = loaded?.unified ?? null;
       return {
         id: file.relative,
         path: file.path,
@@ -107,12 +110,14 @@ export function CommitDiff({ cwd, sha }: Props) {
         emptyMessage:
           loaded == null
             ? "Loading…"
-            : unified != null &&
-                unified.additions === 0 &&
-                unified.deletions === 0 &&
-                !loaded.binary
-              ? "No textual diff"
-              : undefined,
+            : loaded.error
+              ? `Couldn’t load diff: ${loaded.error}`
+              : unified != null &&
+                  unified.additions === 0 &&
+                  unified.deletions === 0 &&
+                  !loaded.binary
+                ? "No textual diff"
+                : undefined,
         additions: unified?.additions ?? file.additions,
         deletions: unified?.deletions ?? file.deletions,
         blocks: unified?.blocks ?? [],

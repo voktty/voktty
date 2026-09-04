@@ -234,6 +234,14 @@ pub async fn git_diff_index(cwd: String) -> Result<GitDiffIndex, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Changed files and counts without branch/upstream synchronization metadata.
+#[tauri::command]
+pub async fn git_diff_files(cwd: String) -> Result<GitDiffIndex, String> {
+    tauri::async_runtime::spawn_blocking(move || git_diff_files_for(&expand_home(&cwd)))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GitFileDiff {
@@ -778,7 +786,7 @@ pub(crate) fn git_diff_index_for(root: &Path) -> GitDiffIndex {
     git_diff_index_with(root, true)
 }
 
-/// File list + counts only. Skips ahead/behind/remote lookups used by the diff pane.
+/// File list + counts only. Skips ahead/behind/remote lookups used by Git chrome.
 pub(crate) fn git_diff_files_for(root: &Path) -> GitDiffIndex {
     git_diff_index_with(root, false)
 }

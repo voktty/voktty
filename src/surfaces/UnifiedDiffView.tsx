@@ -19,6 +19,7 @@ import {
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useColorScheme } from "../hooks/useColorScheme";
+import type { ColorScheme } from "../lib/appearance";
 import { basename } from "../lib/fs";
 import {
   highlightDiffFile,
@@ -32,7 +33,7 @@ import {
 } from "../lib/unifiedDiff";
 import {
   flattenVisibleRows,
-  rowsHeight,
+  layoutRows,
   UNIFIED_FOLD_PX,
   UNIFIED_HUNK_PX,
   UNIFIED_LINE_PX,
@@ -57,6 +58,9 @@ export type UnifiedDiffFileModel = {
   canStageHunk?: boolean;
 };
 
+type FileLayout = "stacked" | "cards";
+type InitialExpansion = "all" | "first" | "none";
+
 type Props = {
   files: UnifiedDiffFileModel[];
   truncated?: boolean;
@@ -65,6 +69,10 @@ type Props = {
   totals?: { additions: number; deletions: number };
   /** Fill the parent pane and scroll inside. Off when the parent already scrolls. */
   fill?: boolean;
+  /** Changes uses a continuous stack; embedded review surfaces can use cards. */
+  fileLayout?: FileLayout;
+  /** Applied when a new set of files is loaded. */
+  initialExpansion?: InitialExpansion;
   onStageFile?: (id: string) => void;
   onDiscardFile?: (id: string) => void;
   onStageHunk?: (id: string, pos: number) => void;
@@ -77,23 +85,31 @@ export function UnifiedDiffView({
   busyId,
   totals,
   fill = true,
+  fileLayout = "stacked",
+  initialExpansion = "all",
   onStageFile,
   onDiscardFile,
   onStageHunk,
 }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
-  const [open, setOpen] = useState<Set<string>>(
-    () => new Set(files.map((file) => file.id)),
+  const colorScheme = useColorScheme();
+  const [open, setOpen] = useState<Set<string>>(() =>
+    initiallyOpenFiles(files, initialExpansion),
   );
-  const [reveals, setReveals] = useState<Record<string, FoldReveal>>({});
+  const [reveals, setReveals] = useState<
+    Record<string, Record<string, FoldReveal>>
+  >({});
   const fileRefs = useRef(new Map<string, HTMLElement>());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const fileKey = files.map((file) => file.id).join("\n");
+  const fileKey = useMemo(
+    () => files.map((file) => file.id).join("\n"),
+    [files],
+  );
 
   useEffect(() => {
-    setOpen(new Set(files.map((file) => file.id)));
+    setOpen(initiallyOpenFiles(files, initialExpansion));
     setReveals({});
-  }, [fileKey]);
+  }, [fileKey, initialExpansion]);
 
   useEffect(() => {
     if (!focusPath) return;
@@ -104,10 +120,47 @@ export function UnifiedDiffView({
     scroller.scrollTo({ top: Math.max(0, top) });
   }, [focusPath, fileKey]);
 
-  const bindScroller = (el: HTMLDivElement | null) => {
-    scrollerRef.current = el;
-    lockOverscroll(el);
-  };
+  const bindScroller = useCallback(
+    (el: HTMLDivElement | null) => {
+      // In embedded mode an ancestor owns vertical scrolling. Leaving this
+      // null makes each file discover that real scroll root.
+      scrollerRef.current = fill ? el : null;
+      lockOverscroll(fill ? el : null);
+    },
+    [fill, lockOverscroll],
+  );
+
+  const toggleFile = useCallback((id: string) => {
+    setOpen((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const revealFold = useCallback(
+    (
+      fileId: string,
+      foldId: string,
+      total: number,
+      direction: "up" | "down" | "all",
+    ) => {
+      setReveals((current) => ({
+        ...current,
+        [fileId]: {
+          ...current[fileId],
+          [foldId]: expandFold(current[fileId]?.[foldId], total, direction),
+        },
+      }));
+    },
+    [],
+  );
+
+  const bindFileRef = useCallback((path: string, node: HTMLElement | null) => {
+    if (node) fileRefs.current.set(path, node);
+    else fileRefs.current.delete(path);
+  }, []);
 
   if (files.length === 0) {
     return (
@@ -170,7 +223,13 @@ export function UnifiedDiffView({
             patches.
           </p>
         ) : null}
-        <div className="flex flex-col">
+        <div
+          className={
+            fileLayout === "cards"
+              ? "flex flex-col gap-2 pt-2"
+              : "flex flex-col"
+          }
+        >
           {files.map((file) => (
             <FileSection
               key={file.id}
@@ -178,34 +237,16 @@ export function UnifiedDiffView({
               expanded={open.has(file.id)}
               focused={focusPath === file.path || focusPath === file.id}
               busy={busyId === file.id}
-              reveals={reveals}
+              reveals={reveals[file.id] ?? EMPTY_REVEALS}
+              fileLayout={fileLayout}
+              colorScheme={colorScheme}
               scrollerRef={scrollerRef}
-              onToggle={() => {
-                setOpen((current) => {
-                  const next = new Set(current);
-                  if (next.has(file.id)) next.delete(file.id);
-                  else next.add(file.id);
-                  return next;
-                });
-              }}
-              onReveal={(foldId, direction) => {
-                const key = `${file.id}:${foldId}`;
-                const block = file.blocks.find(
-                  (entry) => entry.kind === "fold" && entry.id === foldId,
-                );
-                const total = block?.kind === "fold" ? block.lines.length : 0;
-                setReveals((current) => ({
-                  ...current,
-                  [key]: expandFold(current[key], total, direction),
-                }));
-              }}
+              onToggle={toggleFile}
+              onReveal={revealFold}
               onStageFile={onStageFile}
               onDiscardFile={onDiscardFile}
               onStageHunk={onStageHunk}
-              bindRef={(node) => {
-                if (node) fileRefs.current.set(file.path, node);
-                else fileRefs.current.delete(file.path);
-              }}
+              bindRef={bindFileRef}
             />
           ))}
         </div>
@@ -214,12 +255,36 @@ export function UnifiedDiffView({
   );
 }
 
+type FileSectionProps = {
+  file: UnifiedDiffFileModel;
+  expanded: boolean;
+  focused: boolean;
+  busy: boolean;
+  reveals: Record<string, FoldReveal>;
+  fileLayout: FileLayout;
+  colorScheme: ColorScheme;
+  scrollerRef: React.RefObject<HTMLDivElement | null>;
+  onToggle: (id: string) => void;
+  onReveal: (
+    fileId: string,
+    foldId: string,
+    total: number,
+    direction: "up" | "down" | "all",
+  ) => void;
+  onStageFile?: (id: string) => void;
+  onDiscardFile?: (id: string) => void;
+  onStageHunk?: (id: string, pos: number) => void;
+  bindRef: (path: string, node: HTMLElement | null) => void;
+};
+
 const FileSection = memo(function FileSection({
   file,
   expanded,
   focused,
   busy,
   reveals,
+  fileLayout,
+  colorScheme,
   scrollerRef,
   onToggle,
   onReveal,
@@ -227,20 +292,7 @@ const FileSection = memo(function FileSection({
   onDiscardFile,
   onStageHunk,
   bindRef,
-}: {
-  file: UnifiedDiffFileModel;
-  expanded: boolean;
-  focused: boolean;
-  busy: boolean;
-  reveals: Record<string, FoldReveal>;
-  scrollerRef: React.RefObject<HTMLDivElement | null>;
-  onToggle: () => void;
-  onReveal: (foldId: string, direction: "up" | "down" | "all") => void;
-  onStageFile?: (id: string) => void;
-  onDiscardFile?: (id: string) => void;
-  onStageHunk?: (id: string, pos: number) => void;
-  bindRef: (node: HTMLElement | null) => void;
-}) {
+}: FileSectionProps) {
   const Chevron = expanded ? ChevronDown : ChevronRight;
   const name = basename(file.path);
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -248,7 +300,6 @@ const FileSection = memo(function FileSection({
   const [tokens, setTokens] = useState<Map<UnifiedLine, SyntaxToken[]> | null>(
     null,
   );
-  const colorScheme = useColorScheme();
 
   useEffect(() => {
     if (!expanded || !near) return;
@@ -261,10 +312,13 @@ const FileSection = memo(function FileSection({
     };
   }, [colorScheme, expanded, file, near]);
 
-  const setSection = (node: HTMLElement | null) => {
-    sectionRef.current = node;
-    bindRef(node);
-  };
+  const setSection = useCallback(
+    (node: HTMLElement | null) => {
+      sectionRef.current = node;
+      bindRef(file.path, node);
+    },
+    [bindRef, file.path],
+  );
 
   useLayoutEffect(() => {
     if (!expanded) return;
@@ -293,15 +347,25 @@ const FileSection = memo(function FileSection({
     <section
       ref={setSection}
       data-diff-file={file.path}
-      className={focused ? "bg-content/[0.03]" : undefined}
+      className={`${
+        fileLayout === "cards"
+          ? "overflow-hidden rounded-md border border-content/10"
+          : ""
+      } ${focused ? "bg-content/[0.03]" : ""}`}
     >
       <header
-        className="sticky top-0 z-30 flex items-center gap-2 border-b border-content/10 bg-content/2 px-3 py-1.5 backdrop-blur-xl"
+        className={`${
+          fileLayout === "stacked" ? "sticky top-0 z-30 backdrop-blur-xl" : ""
+        } flex items-center gap-2 bg-content/2 px-3 py-1.5 ${
+          fileLayout === "stacked" || expanded
+            ? "border-b border-content/10"
+            : ""
+        }`}
       >
         <button
           type="button"
           aria-expanded={expanded}
-          onClick={onToggle}
+          onClick={() => onToggle(file.id)}
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
           <Chevron
@@ -346,13 +410,64 @@ const FileSection = memo(function FileSection({
           near={near}
           tokens={tokens}
           scrollerRef={scrollerRef}
-          onReveal={onReveal}
+          onReveal={(foldId, direction) => {
+            const block = file.blocks.find(
+              (entry) => entry.kind === "fold" && entry.id === foldId,
+            );
+            const total = block?.kind === "fold" ? block.lines.length : 0;
+            onReveal(file.id, foldId, total, direction);
+          }}
           onStageHunk={onStageHunk}
         />
       ) : null}
     </section>
   );
-});
+}, equalFileSectionProps);
+
+const EMPTY_REVEALS: Record<string, FoldReveal> = {};
+
+function equalFileSectionProps(
+  previous: FileSectionProps,
+  next: FileSectionProps,
+): boolean {
+  return (
+    equalFileModel(previous.file, next.file) &&
+    previous.expanded === next.expanded &&
+    previous.focused === next.focused &&
+    previous.busy === next.busy &&
+    previous.reveals === next.reveals &&
+    previous.fileLayout === next.fileLayout &&
+    previous.colorScheme === next.colorScheme &&
+    previous.scrollerRef === next.scrollerRef &&
+    previous.onToggle === next.onToggle &&
+    previous.onReveal === next.onReveal &&
+    previous.onStageFile === next.onStageFile &&
+    previous.onDiscardFile === next.onDiscardFile &&
+    previous.onStageHunk === next.onStageHunk &&
+    previous.bindRef === next.bindRef
+  );
+}
+
+function equalFileModel(
+  previous: UnifiedDiffFileModel,
+  next: UnifiedDiffFileModel,
+): boolean {
+  return (
+    previous.id === next.id &&
+    previous.path === next.path &&
+    previous.label === next.label &&
+    previous.binary === next.binary &&
+    previous.tooLarge === next.tooLarge &&
+    previous.emptyMessage === next.emptyMessage &&
+    previous.additions === next.additions &&
+    previous.deletions === next.deletions &&
+    (previous.blocks === next.blocks ||
+      (previous.blocks.length === 0 && next.blocks.length === 0)) &&
+    previous.canStage === next.canStage &&
+    previous.canDiscard === next.canDiscard &&
+    previous.canStageHunk === next.canStageHunk
+  );
+}
 
 function FileBody({
   file,
@@ -420,12 +535,13 @@ function VirtualRows({
     () =>
       flattenVisibleRows(
         blocks,
-        (foldId) => reveals[`${fileId}:${foldId}`],
+        (foldId) => reveals[foldId],
         !!canStageHunk && !!onStageHunk,
       ),
     [blocks, canStageHunk, fileId, onStageHunk, reveals],
   );
-  const totalHeight = useMemo(() => rowsHeight(rows), [rows]);
+  const rowLayout = useMemo(() => layoutRows(rows), [rows]);
+  const totalHeight = rowLayout.totalHeight;
   const minWidthCh = useMemo(() => {
     let max = 40;
     for (const row of rows) {
@@ -455,6 +571,7 @@ function VirtualRows({
       rootRect.top - bodyRect.top,
       rootRect.bottom - bodyRect.top,
       UNIFIED_OVERSCAN_PX,
+      rowLayout,
     );
     setRange((current) =>
       current.start === next.start &&
@@ -464,7 +581,7 @@ function VirtualRows({
         ? current
         : next,
     );
-  }, [rows, scrollerRef]);
+  }, [rowLayout, rows, scrollerRef]);
 
   const hoverAtY = useCallback(
     (clientY: number | null) => {
@@ -519,7 +636,8 @@ function VirtualRows({
   useEffect(() => {
     if (!near) return;
     const body = bodyRef.current;
-    const root = scrollerRef.current ?? (body ? verticalScrollParent(body) : null);
+    const root =
+      scrollerRef.current ?? (body ? verticalScrollParent(body) : null);
     const target: HTMLElement | Window = root ?? window;
     let frame = 0;
     const onScroll = () => {
@@ -552,7 +670,7 @@ function VirtualRows({
       const verticalScroller =
         ownScroller && ownScroller.scrollHeight > ownScroller.clientHeight + 1
           ? ownScroller
-          : verticalScrollParent(code);
+          : verticalScrollParent(code, true);
       if (!verticalScroller) return;
 
       const scale =
@@ -881,13 +999,16 @@ function IconButton({
   );
 }
 
-function verticalScrollParent(el: HTMLElement): HTMLElement | null {
+function verticalScrollParent(
+  el: HTMLElement,
+  requireScrollable = false,
+): HTMLElement | null {
   let current = el.parentElement;
   while (current) {
     const overflowY = getComputedStyle(current).overflowY;
     if (
       (overflowY === "auto" || overflowY === "scroll") &&
-      current.scrollHeight > current.clientHeight + 1
+      (!requireScrollable || current.scrollHeight > current.clientHeight + 1)
     ) {
       return current;
     }
@@ -906,4 +1027,13 @@ function isNearViewport(
     ? root.getBoundingClientRect()
     : new DOMRect(0, 0, window.innerWidth, window.innerHeight);
   return bounds.bottom + margin > view.top && bounds.top - margin < view.bottom;
+}
+
+function initiallyOpenFiles(
+  files: readonly UnifiedDiffFileModel[],
+  mode: InitialExpansion,
+): Set<string> {
+  if (mode === "none" || files.length === 0) return new Set();
+  if (mode === "first") return new Set([files[0].id]);
+  return new Set(files.map((file) => file.id));
 }

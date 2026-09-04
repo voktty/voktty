@@ -82,6 +82,11 @@ export function gitDiffIndex(cwd: string): Promise<GitDiffIndex> {
   return invoke<GitDiffIndex>("git_diff_index", { cwd });
 }
 
+/** File list and counts only, for diff content views that do not need sync data. */
+export function gitDiffFiles(cwd: string): Promise<GitDiffIndex> {
+  return invoke<GitDiffIndex>("git_diff_files", { cwd });
+}
+
 export type GitFileDiff = {
   path: string;
   relative: string;
