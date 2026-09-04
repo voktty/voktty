@@ -485,6 +485,7 @@ export function planGitDiffOpen(
 ): { tabs: Tab[]; targetId: number } {
   const title = input.title ?? `${basename(input.path)} (${input.mode})`;
   const originalPath = input.originalPath ?? null;
+  const resolvedEnv = input.workspaceEnv ?? currentWorkspaceEnv();
   const matches = (tab: Tab): tab is GitDiffTab =>
     tab.kind === "git-diff" &&
     tab.spaceId === spaceId &&
@@ -496,17 +497,25 @@ export function planGitDiffOpen(
 
   if (existing) {
     const preview = pin ? false : existing.preview;
+    const nextEnv = input.workspaceEnv ?? existing.workspaceEnv ?? resolvedEnv;
     if (
       existing.title === title &&
       existing.originalPath === originalPath &&
-      existing.preview === preview
+      existing.preview === preview &&
+      JSON.stringify(existing.workspaceEnv) === JSON.stringify(nextEnv)
     ) {
       return { tabs, targetId: existing.id };
     }
     return {
       tabs: tabs.map((tab) =>
         tab.id === existing.id
-          ? { ...existing, title, originalPath, preview }
+          ? {
+              ...existing,
+              title,
+              originalPath,
+              preview,
+              workspaceEnv: nextEnv,
+            }
           : tab,
       ),
       targetId: existing.id,
@@ -525,7 +534,7 @@ export function planGitDiffOpen(
     mode: input.mode,
     originalPath,
     preview: !pin,
-    workspaceEnv: input.workspaceEnv,
+    workspaceEnv: resolvedEnv,
   } satisfies GitDiffTab;
 
   if (pin) return { tabs: [...tabs, tab], targetId: id };
@@ -553,6 +562,7 @@ export function planCommitHistoryOpen(
   spaceId: string,
   allocId: () => number,
 ): { tabs: Tab[]; targetId: number } {
+  const resolvedEnv = input.workspaceEnv ?? currentWorkspaceEnv();
   const existing = tabs.find(
     (tab): tab is GitHistoryTab =>
       tab.kind === "git-history" &&
@@ -561,14 +571,20 @@ export function planCommitHistoryOpen(
   );
   const title = input.branch ? `History · ${input.branch}` : "Git History";
   if (existing) {
-    if (existing.title === title) return { tabs, targetId: existing.id };
+    const nextEnv = input.workspaceEnv ?? existing.workspaceEnv ?? resolvedEnv;
+    if (
+      existing.title === title &&
+      JSON.stringify(existing.workspaceEnv) === JSON.stringify(nextEnv)
+    ) {
+      return { tabs, targetId: existing.id };
+    }
     return {
       tabs: tabs.map((tab) =>
         tab.id === existing.id
           ? {
               ...existing,
               title,
-              workspaceEnv: input.workspaceEnv ?? existing.workspaceEnv,
+              workspaceEnv: nextEnv,
             }
           : tab,
       ),
@@ -587,7 +603,7 @@ export function planCommitHistoryOpen(
         spaceId,
         title,
         repoRoot: input.repoRoot,
-        workspaceEnv: input.workspaceEnv,
+        workspaceEnv: resolvedEnv,
       } satisfies GitHistoryTab,
     ],
     targetId: id,
@@ -1499,6 +1515,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       originalPath: string | null;
       workspaceEnv?: WorkspaceEnv;
     }) => {
+      const resolvedEnv = input.workspaceEnv ?? currentWorkspaceEnv();
       const curr = tabsRef.current;
       const existing = curr.find(
         (t): t is GitCommitFileDiffTab =>
@@ -1516,7 +1533,8 @@ export function useTabs(initial?: Partial<TerminalTab>) {
                 title,
                 subject: input.subject,
                 originalPath: input.originalPath,
-                workspaceEnv: input.workspaceEnv ?? existing.workspaceEnv,
+                workspaceEnv:
+                  input.workspaceEnv ?? existing.workspaceEnv ?? resolvedEnv,
               }
             : t,
         );
@@ -1540,7 +1558,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           subject: input.subject,
           path: input.path,
           originalPath: input.originalPath,
-          workspaceEnv: input.workspaceEnv,
+          workspaceEnv: resolvedEnv,
         } satisfies GitCommitFileDiffTab,
       ];
       tabsRef.current = nextTabs;

@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { native } from "@/modules/ai/lib/native";
 import type { SidebarViewId } from "@/modules/sidebar";
 import type { Tab } from "@/modules/tabs";
+import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 import {
   activeRepositoryContextPath,
   gitGraphRepositoryPath,
@@ -24,6 +25,7 @@ type Params = {
   openCommitHistoryTab: (args: {
     repoRoot: string;
     branch: string | null;
+    workspaceEnv?: WorkspaceEnv;
   }) => void;
 };
 
@@ -86,6 +88,8 @@ export function useSourceControlContext({
     cycleSidebarView("source-control");
   }, [cycleSidebarView]);
 
+  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
+
   const openGitGraphFromContext = useCallback(async () => {
     const known = sourceControl.hasRepo ? sourceControl.repo : null;
     const fixedTargetIsLoaded =
@@ -96,14 +100,19 @@ export function useSourceControlContext({
       openCommitHistoryTab({
         repoRoot: known.repoRoot,
         branch: sourceControl.status?.branch ?? null,
+        workspaceEnv,
       });
       return;
     }
     if (!graphContextPath) return;
     try {
-      const repo = await native.gitResolveRepo(graphContextPath);
+      const repo = await native.gitResolveRepo(graphContextPath, workspaceEnv);
       if (!repo) return;
-      openCommitHistoryTab({ repoRoot: repo.repoRoot, branch: repo.branch });
+      openCommitHistoryTab({
+        repoRoot: repo.repoRoot,
+        branch: repo.branch,
+        workspaceEnv,
+      });
     } catch {
       /* noop */
     }
@@ -115,6 +124,7 @@ export function useSourceControlContext({
     graphContextPath,
     repositoryTarget,
     sidebarView,
+    workspaceEnv,
   ]);
 
   return { sourceControl, toggleSourceControl, openGitGraphFromContext };

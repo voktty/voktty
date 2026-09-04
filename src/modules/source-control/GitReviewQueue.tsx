@@ -38,7 +38,7 @@ import {
   useGitReviewStore,
 } from "@/modules/git-review";
 import { GitWalkthroughDialog } from "@/modules/git-review/components/GitWalkthroughDialog";
-
+import type { WorkspaceEnv } from "@/modules/workspace";
 import {
   buildGitReviewEntries,
   type GitReviewEntry,
@@ -54,12 +54,14 @@ type OpenDiffInput = {
   mode: "+" | "-";
   originalPath: string | null;
   title?: string;
+  workspaceEnv?: WorkspaceEnv;
 };
 
 export type GitReviewQueueConfig = {
   sourceControl: SourceControlSummary;
   dirtyPaths: readonly string[];
   onOpenDiff: (input: OpenDiffInput) => void;
+  workspaceEnv?: WorkspaceEnv;
 };
 
 type Props = GitReviewQueueConfig & {
@@ -79,12 +81,14 @@ function openEntry(
   repoRoot: string,
   entry: GitReviewEntry,
   onOpenDiff: (input: OpenDiffInput) => void,
+  workspaceEnv?: WorkspaceEnv,
 ) {
   onOpenDiff({
     path: entry.path,
     repoRoot,
     mode: entry.unstaged ? "-" : "+",
     originalPath: entry.originalPath,
+    workspaceEnv,
   });
 }
 
@@ -94,6 +98,7 @@ export function GitReviewQueue({
   sourceControl,
   dirtyPaths,
   onOpenDiff,
+  workspaceEnv,
 }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState<string | null>(null);
@@ -119,10 +124,10 @@ export function GitReviewQueue({
 
   const invalidateEntry = useCallback(
     (entry: GitReviewEntry) => {
-      invalidateDiff(workingDiffKey(repoRoot, entry.path, "+"));
-      invalidateDiff(workingDiffKey(repoRoot, entry.path, "-"));
+      invalidateDiff(workingDiffKey(repoRoot, entry.path, "+", workspaceEnv));
+      invalidateDiff(workingDiffKey(repoRoot, entry.path, "-", workspaceEnv));
     },
-    [repoRoot],
+    [repoRoot, workspaceEnv],
   );
 
   const toggleStage = useCallback(
@@ -133,9 +138,9 @@ export function GitReviewQueue({
       invalidateEntry(entry);
       try {
         if (entry.unstaged) {
-          await native.gitStage(repoRoot, [entry.path]);
+          await native.gitStage(repoRoot, [entry.path], workspaceEnv);
         } else {
-          await native.gitUnstage(repoRoot, [entry.path]);
+          await native.gitUnstage(repoRoot, [entry.path], workspaceEnv);
         }
         await sourceControl.refresh({ remote: "never" });
         onOpenDiff({
@@ -143,6 +148,7 @@ export function GitReviewQueue({
           repoRoot,
           mode: nextMode,
           originalPath: entry.originalPath,
+          workspaceEnv,
         });
       } catch (error) {
         toast.error(errorMessage(error));
@@ -151,7 +157,7 @@ export function GitReviewQueue({
         setBusy(null);
       }
     },
-    [busy, invalidateEntry, onOpenDiff, repoRoot, sourceControl],
+    [busy, invalidateEntry, onOpenDiff, repoRoot, sourceControl, workspaceEnv],
   );
 
   const requestDiscard = useCallback(
@@ -180,13 +186,15 @@ export function GitReviewQueue({
     setBusy(`discard:${entry.path}`);
     invalidateEntry(entry);
     try {
-      await native.gitDiscard(repoRoot, [
-        { path: entry.path, untracked: entry.untracked },
-      ]);
+      await native.gitDiscard(
+        repoRoot,
+        [{ path: entry.path, untracked: entry.untracked }],
+        workspaceEnv,
+      );
       await sourceControl.refresh({ remote: "never" });
       const nextPath = reconcileGitReviewPath(remaining, currentPath);
       const next = remaining.find((candidate) => candidate.path === nextPath);
-      if (next) openEntry(repoRoot, next, onOpenDiff);
+      if (next) openEntry(repoRoot, next, onOpenDiff, workspaceEnv);
     } catch (error) {
       toast.error(errorMessage(error));
       await sourceControl.refresh({ remote: "never" }).catch(() => {});
@@ -204,6 +212,7 @@ export function GitReviewQueue({
     repoRoot,
     sourceControl,
     t,
+    workspaceEnv,
   ]);
 
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);

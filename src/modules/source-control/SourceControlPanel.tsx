@@ -38,6 +38,7 @@ import {
 import { IS_MAC } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
+import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { type GitBranchEntry, native } from "@/modules/ai/lib/native";
 import {
   copyToClipboard,
@@ -303,6 +304,7 @@ function BranchDropdown({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation();
+  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const [open, setOpen] = useState(false);
   const [branches, setBranches] = useState<GitBranchEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -322,7 +324,7 @@ function BranchDropdown({
     setLoading(true);
     setError(null);
     try {
-      const result = await native.gitListBranches(repoRoot);
+      const result = await native.gitListBranches(repoRoot, workspaceEnv);
       if (id !== requestRef.current) return;
       setBranches(result.branches);
     } catch (e) {
@@ -334,7 +336,7 @@ function BranchDropdown({
         setLoading(false);
       }
     }
-  }, [repoRoot]);
+  }, [repoRoot, workspaceEnv]);
 
   useEffect(() => {
     if (open) {
@@ -348,7 +350,7 @@ function BranchDropdown({
       checkoutInFlight.current = true;
       setCheckingOut(true);
       try {
-        await native.gitCheckoutBranch(repoRoot, branch);
+        await native.gitCheckoutBranch(repoRoot, branch, workspaceEnv);
         setBranches([]);
         setOpen(false);
         onRefresh();
@@ -359,7 +361,7 @@ function BranchDropdown({
         setCheckingOut(false);
       }
     },
-    [repoRoot, onRefresh],
+    [onRefresh, repoRoot, workspaceEnv],
   );
 
   const localBranches = useMemo(

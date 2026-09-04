@@ -98,7 +98,7 @@ export function isWslWorkspacePath(path: string): boolean {
   return path === "." || path.startsWith("/");
 }
 
-function isWindowsNativePath(path: string): boolean {
+export function isWindowsNativePath(path: string): boolean {
   return /^[a-zA-Z]:[/\\]/.test(path) || /^[/\\]{2}/.test(path);
 }
 

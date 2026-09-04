@@ -583,20 +583,20 @@ export function useSourceControl(
     async (targetPath?: string) => {
       const pathToInit = targetPath ?? contextPath;
       if (!pathToInit) return;
-      await native.gitInit(pathToInit);
+      await native.gitInit(pathToInit, workspaceEnv);
       window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
       await doRefresh("never");
     },
-    [contextPath, doRefresh],
+    [contextPath, doRefresh, workspaceEnv],
   );
 
   const undoCommit = useCallback(async () => {
     const { repo } = stateRef.current;
     if (!repo) return;
-    await native.gitUndoCommit(repo.repoRoot);
+    await native.gitUndoCommit(repo.repoRoot, workspaceEnv);
     window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
     await doRefresh("never");
-  }, [doRefresh]);
+  }, [doRefresh, workspaceEnv]);
 
   useEffect(() => {
     const onGitRefresh = () => {
@@ -634,16 +634,16 @@ export function useSourceControl(
 
       try {
         if (action === "fetch") {
-          await native.gitFetch(repo.repoRoot);
+          await native.gitFetch(repo.repoRoot, workspaceEnv);
           touchAutoFetch(autoFetchByRepoRef.current, repo.repoRoot);
         } else if (action === "pull") {
-          await native.gitFetch(repo.repoRoot);
+          await native.gitFetch(repo.repoRoot, workspaceEnv);
           touchAutoFetch(autoFetchByRepoRef.current, repo.repoRoot);
-          await native.gitPullFfOnly(repo.repoRoot);
+          await native.gitPullFfOnly(repo.repoRoot, workspaceEnv);
         } else if (action === "publish") {
-          await native.gitPublish(repo.repoRoot);
+          await native.gitPublish(repo.repoRoot, undefined, workspaceEnv);
         } else {
-          await native.gitPush(repo.repoRoot);
+          await native.gitPush(repo.repoRoot, workspaceEnv);
         }
         if (isCurrentContext()) {
           setState((current) => ({ ...current, lastRemoteError: null }));
@@ -658,10 +658,12 @@ export function useSourceControl(
         }
         return { ok: false, action, error: message };
       } finally {
-        setState((current) => ({ ...current, busyAction: null }));
+        if (isCurrentContext()) {
+          setState((current) => ({ ...current, busyAction: null }));
+        }
       }
     },
-    [refresh],
+    [refresh, workspaceEnv],
   );
 
   useEffect(() => {
