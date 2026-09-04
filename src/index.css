@@ -936,25 +936,26 @@ header[data-tauri-drag-region] button {
   }
 }
 
-/* Popovers grow in from the edge they hang off, sliding the last few pixels
-   out of their trigger. The travel carries the animation rather than the fade:
-   WebKit composites `backdrop-filter` on its own layer, so a short opacity
-   ramp over the glass is nearly invisible. Still brief — a menu that takes its
-   time reads as lag rather than polish. */
+/* Popover contents grow in from the edge they hang off, sliding the last few
+   pixels out of their trigger. The glass frame stays still: WebKit composites
+   `backdrop-filter` on its own layer and can flash a stale backdrop if that
+   same layer moves and a menu-item hover invalidates it. Still brief — a menu
+   that takes its time reads as lag rather than polish. */
 @keyframes popover-open {
   from {
     opacity: 0;
-    transform: translate(var(--popover-shift, 0), var(--popover-lift, 0))
+    transform: translate3d(var(--popover-shift, 0), var(--popover-lift, 0), 0)
       scale(0.94);
   }
   to {
     opacity: 1;
-    transform: none;
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
 .popover-open {
   animation: popover-open 170ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  backface-visibility: hidden;
 }
 
 .popover-open[data-popover-side="bottom"] {
