@@ -502,6 +502,15 @@ export default function App() {
     const inSpace = tabsRef.current.filter((t) => t.spaceId === activeSpaceId);
     if (activeSpaceTabCount === 0) {
       setActiveId(NO_ACTIVE_TAB_ID);
+      if (activeSpaceId) {
+        useSpaces.getState().setEnv(activeSpaceId, LOCAL_WORKSPACE);
+        useSpaces
+          .getState()
+          .setRoot(
+            activeSpaceId,
+            localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
+          );
+      }
       if (workspaceEnv.kind !== "local") {
         void activateWorkspaceEnv(LOCAL_WORKSPACE);
       }
@@ -761,7 +770,7 @@ export default function App() {
   const activeTabWorkspaceEnv = useMemo(() => {
     if (activeSpaceTabCount === 0) return LOCAL_WORKSPACE;
     if (activeTab?.kind === "terminal") {
-      return activeTab.workspaceEnv ?? activeSpace?.env ?? LOCAL_WORKSPACE;
+      return activeTab.workspaceEnv ?? LOCAL_WORKSPACE;
     }
     if (
       activeTab &&
@@ -813,18 +822,22 @@ export default function App() {
   const activeHarnessCwd =
     activeHarnessTab?.cwd || harnessCwd || lastProjectPath();
 
+  const localFallbackRoot =
+    localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null;
+  const spaceFallbackRoot =
+    activeSpaceTabCount === 0 ||
+    !activeSpace?.env ||
+    activeSpace.env.kind === "local"
+      ? localFallbackRoot
+      : (activeSpace?.root ?? (launchCwd ?? home));
+
   const { explorerRoot, explorerTerminalId, inheritedCwdForNewTab } =
     useWorkspaceCwd(
       activeTab?.kind === "harness" && activeHarnessCwd
         ? { ...activeTab, cwd: activeHarnessCwd }
         : activeTab,
       tabs,
-      activeSpace?.root ??
-        (activeSpaceTabCount === 0
-          ? workspaceEnv.kind === "local"
-            ? (localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null)
-            : null
-          : (launchCwd ?? home)),
+      spaceFallbackRoot,
       activeSpaceId ?? DEFAULT_SPACE_ID,
     );
 
@@ -837,12 +850,14 @@ export default function App() {
       ? undefined
       : tabs.find((tab) => tab.id === explorerTerminalId);
   const activeExplorerWorkspaceEnv =
-    (explorerTerminalId !== null
-      ? explorerWorkspaceEnvsRef.current.get(explorerTerminalId)
-      : undefined) ??
-    (explorerTerminal?.kind === "terminal"
-      ? (explorerTerminal.workspaceEnv ?? activeSpace?.env ?? LOCAL_WORKSPACE)
-      : (activeSpace?.env ?? LOCAL_WORKSPACE));
+    activeSpaceTabCount === 0
+      ? LOCAL_WORKSPACE
+      : (explorerTerminalId !== null
+          ? explorerWorkspaceEnvsRef.current.get(explorerTerminalId)
+          : undefined) ??
+        (explorerTerminal?.kind === "terminal"
+          ? (explorerTerminal.workspaceEnv ?? LOCAL_WORKSPACE)
+          : (activeSpace?.env ?? LOCAL_WORKSPACE));
   const activeWorkspaceSessionId =
     activeTab &&
     "workspaceEnv" in activeTab &&
@@ -860,6 +875,19 @@ export default function App() {
     if (!booted || !spacesHydrated || !activeSpaceId) return;
     void activateWorkspaceEnv(activeTabWorkspaceEnv)
       .then((prepared) => {
+        if (prepared) {
+          useSpaces.getState().setEnv(activeSpaceId, prepared);
+          if (prepared.kind === "ssh") {
+            useSpaces.getState().setRoot(activeSpaceId, prepared.root);
+          } else if (prepared.kind === "local") {
+            useSpaces
+              .getState()
+              .setRoot(
+                activeSpaceId,
+                localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
+              );
+          }
+        }
         if (
           prepared?.kind === "ssh" &&
           activeWorkspaceTabId !== null &&
@@ -880,6 +908,9 @@ export default function App() {
     booted,
     spacesHydrated,
     updateTab,
+    localLaunchCwd,
+    localHome,
+    initialLaunchCwd,
   ]);
   const isTerminalTab = activeTab?.kind === "terminal";
   const isBlockTab = activeTerminalTab?.blocks === true;
@@ -991,8 +1022,38 @@ export default function App() {
         spaces.setActive(focusPlan.nextSpaceId);
         spaces.focusVisualMember(focusPlan.nextTabKey);
       }
+
+      const remainingTabs = tabsRef.current.filter((t) => t.id !== id);
+      const spaceId = closingTab.spaceId;
+      const remainingInSpace = remainingTabs.filter(
+        (t) => t.spaceId === spaceId,
+      );
+      const remainingSshTabs = remainingInSpace.filter(
+        (t) => "workspaceEnv" in t && t.workspaceEnv?.kind === "ssh",
+      );
+      if (spaceId && remainingSshTabs.length === 0) {
+        useSpaces.getState().setEnv(spaceId, LOCAL_WORKSPACE);
+        useSpaces
+          .getState()
+          .setRoot(
+            spaceId,
+            localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
+          );
+        if (spaceId === activeSpaceId) {
+          void activateWorkspaceEnv(LOCAL_WORKSPACE);
+        }
+      }
     },
-    [closeTab, effectiveActiveId, projectedStripItems],
+    [
+      closeTab,
+      effectiveActiveId,
+      projectedStripItems,
+      activeSpaceId,
+      activateWorkspaceEnv,
+      localLaunchCwd,
+      localHome,
+      initialLaunchCwd,
+    ],
   );
 
   const disposeTabs = useCallback(
@@ -1041,8 +1102,42 @@ export default function App() {
         editorRefs.current.delete(id);
         previewRefs.current.delete(id);
       }
+
+      const remainingTabs = tabsRef.current.filter(
+        (t) => !plan.closeIds.includes(t.id),
+      );
+      const affectedSpaceIds = new Set(
+        closedTabs.map((t) => t.spaceId).filter(Boolean),
+      );
+      for (const spaceId of affectedSpaceIds) {
+        const remainingInSpace = remainingTabs.filter(
+          (t) => t.spaceId === spaceId,
+        );
+        const remainingSshTabs = remainingInSpace.filter(
+          (t) => "workspaceEnv" in t && t.workspaceEnv?.kind === "ssh",
+        );
+        if (remainingSshTabs.length === 0) {
+          useSpaces.getState().setEnv(spaceId, LOCAL_WORKSPACE);
+          useSpaces
+            .getState()
+            .setRoot(
+              spaceId,
+              localLaunchCwd ?? localHome ?? initialLaunchCwd ?? null,
+            );
+          if (spaceId === activeSpaceId) {
+            void activateWorkspaceEnv(LOCAL_WORKSPACE);
+          }
+        }
+      }
     },
-    [closeTabs],
+    [
+      closeTabs,
+      activeSpaceId,
+      activateWorkspaceEnv,
+      localLaunchCwd,
+      localHome,
+      initialLaunchCwd,
+    ],
   );
 
   const {

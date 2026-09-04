@@ -28,6 +28,8 @@ const REMOTE_ZPROFILE: &str = include_str!("pty/scripts/zprofile.zsh");
 const REMOTE_ZLOGIN: &str = include_str!("pty/scripts/zlogin.zsh");
 const REMOTE_ZSHRC: &str = include_str!("pty/scripts/zshrc.zsh");
 const REMOTE_FISH_INIT: &str = include_str!("pty/scripts/init.fish");
+const BUNDLED_LINUX_X86_64_HELPER: &[u8] =
+    include_bytes!("../../resources/remote/linux-x86_64/voktty-remote");
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RemoteSshConnection {
@@ -1585,6 +1587,22 @@ fn read_bundled_helper(helper_path: &Path, architecture: &str) -> Result<Bundled
     Ok(BundledHelper { bytes, digest })
 }
 
+fn get_bundled_helper(app: &AppHandle, architecture: &str) -> Result<BundledHelper, String> {
+    if let Ok(path) = helper_path(app, architecture) {
+        if let Ok(helper) = read_bundled_helper(&path, architecture) {
+            return Ok(helper);
+        }
+    }
+    if architecture == "x86_64" {
+        let bytes = BUNDLED_LINUX_X86_64_HELPER.to_vec();
+        let digest = hex::encode(Sha256::digest(&bytes));
+        return Ok(BundledHelper { bytes, digest });
+    }
+    Err(format!(
+        "remote helper binary 'voktty-remote' for {architecture} was not found on local system (checked resource directory, application paths, and embedded bundle)"
+    ))
+}
+
 fn install_helper(
     connection: &RemoteSshConnection,
     helper: &BundledHelper,
@@ -1701,8 +1719,7 @@ fn open_remote_session(
     workspace_root: Option<String>,
 ) -> Result<(RemoteSession, RemoteSessionInfo), String> {
     let probe = probe_remote_helper(&connection)?;
-    let helper_path = helper_path(&app, &probe.architecture)?;
-    let helper = read_bundled_helper(&helper_path, &probe.architecture)?;
+    let helper = get_bundled_helper(&app, &probe.architecture)?;
     if probe.digest.as_deref() != Some(helper.digest.as_str()) {
         install_helper(&connection, &helper, &probe.architecture)?;
     }

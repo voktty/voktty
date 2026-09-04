@@ -39,7 +39,7 @@ export function watchAdd(
   const workspacePaths: string[] = [];
   const localPaths: string[] = [];
   for (const p of paths) {
-    if (isPathInWorkspace(workspace, p)) {
+    if (workspace.kind !== "local" && isPathInWorkspace(workspace, p)) {
       workspacePaths.push(p);
     } else {
       if (!isNetworkFilesystemPath(p)) localPaths.push(p);
@@ -77,7 +77,7 @@ export function watchRemove(
   const workspacePaths: string[] = [];
   const localPaths: string[] = [];
   for (const p of paths) {
-    if (isPathInWorkspace(workspace, p)) {
+    if (workspace.kind !== "local" && isPathInWorkspace(workspace, p)) {
       workspacePaths.push(p);
     } else {
       localPaths.push(p);

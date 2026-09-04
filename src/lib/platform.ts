@@ -2,10 +2,20 @@ import { platform } from "@tauri-apps/plugin-os";
 
 const PLATFORM = (() => {
   try {
-    return platform();
-  } catch {
-    return "";
+    const p = platform();
+    if (p) return p;
+  } catch {}
+  if (typeof navigator !== "undefined" && navigator.userAgent) {
+    if (/windows|win32/i.test(navigator.userAgent)) return "windows";
+    if (/macintosh|mac os x/i.test(navigator.userAgent)) return "macos";
+    if (/linux/i.test(navigator.userAgent)) return "linux";
   }
+  if (typeof process !== "undefined" && process.platform) {
+    if (process.platform === "win32") return "windows";
+    if (process.platform === "darwin") return "macos";
+    if (process.platform === "linux") return "linux";
+  }
+  return "";
 })();
 
 export const IS_MAC = PLATFORM === "macos";
