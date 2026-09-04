@@ -235,9 +235,9 @@ export const HARNESS_TITLE: Record<HarnessId, string> = {
   fx: "fx",
 };
 
-/** fx and Grok Build ACP reject image and audio blocks. */
+/** fx ACP rejects attachment prompt blocks. */
 export function harnessSupportsAttachments(id: HarnessId): boolean {
-  return id !== "fx" && id !== "grok";
+  return id !== "fx";
 }
 
 export function newSession(

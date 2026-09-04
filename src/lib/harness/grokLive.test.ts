@@ -94,7 +94,16 @@ describe("grok live turn sequence", () => {
       modelSettings: { effort: "high" },
       runtimeMode: "supervised",
       text: "hey",
-      attachments: [],
+      attachments: [
+        {
+          id: "image-1",
+          name: "screenshot.png",
+          mimeType: "image/png",
+          kind: "image",
+          size: 3,
+          data: "YWJj",
+        },
+      ],
       onEvent: (e) => events.push(e),
     });
     await handshake();
@@ -107,7 +116,14 @@ describe("grok live turn sequence", () => {
       () => parse().some((m) => m.method === "session/prompt"),
       "prompt",
     );
-    reply(parse().find((m) => m.method === "session/prompt")!.id, {
+    const promptRequest = parse().find(
+      (m) => m.method === "session/prompt",
+    )!;
+    expect(promptRequest.params.prompt).toEqual([
+      { type: "text", text: "hey" },
+      { type: "image", mimeType: "image/png", data: "YWJj" },
+    ]);
+    reply(promptRequest.id, {
       stopReason: "end_turn",
     });
     await turn;

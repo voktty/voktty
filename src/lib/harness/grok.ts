@@ -77,7 +77,7 @@ const cancelledThreads = new Set<string>();
 
 /**
  * Live Grok Build adapter. Spawns `grok agent stdio` and talks ACP.
- * Image/audio prompt blocks are not supported; the composer hides attachments.
+ * Grok accepts ACP image blocks despite advertising image: false.
  */
 export async function sendGrokTurn(input: SendTurnInput): Promise<void> {
   let live: Live;
@@ -412,7 +412,7 @@ async function applyModelSelection(
 
 async function prompt(live: Live, input: SendTurnInput): Promise<void> {
   try {
-    const blocks = grokPromptBlocks(input.text);
+    const blocks = grokPromptBlocks(input.text, input.attachments);
     if (blocks.length === 0) return;
     await live.acp.request(
       "session/prompt",

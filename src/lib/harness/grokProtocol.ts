@@ -1,6 +1,6 @@
-import type { PromptContentBlock } from "../attachments";
+import { promptBlocks, type PromptContentBlock } from "../attachments";
 import type { AgentModel, ModelSetting, ModelSettingChoice } from "../models";
-import type { RuntimeMode, ToolPreview } from "../session";
+import type { Attachment, RuntimeMode, ToolPreview } from "../session";
 import type { ApprovalDecision, HarnessEvent } from "./types";
 import type { UserQuestion, UserQuestionReply } from "../userQuestion";
 import { questionsFromUnknown, selectedAnswerLabels } from "../userQuestion";
@@ -74,10 +74,12 @@ export function askQuestionResponse(
   return { outcome: "accepted", answers };
 }
 
-/** ACP prompt blocks: Grok rejects image and audio. */
-export function grokPromptBlocks(text: string): PromptContentBlock[] {
-  const trimmed = text.trim();
-  return trimmed ? [{ type: "text", text: trimmed }] : [];
+/** Grok accepts ACP image blocks despite advertising image: false. */
+export function grokPromptBlocks(
+  text: string,
+  attachments: Attachment[] = [],
+): PromptContentBlock[] {
+  return promptBlocks(text, attachments);
 }
 
 export function grokSpawnArgs(input: {

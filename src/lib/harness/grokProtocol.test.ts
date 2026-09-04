@@ -22,14 +22,26 @@ import {
 import { harnessSupportsAttachments } from "../session";
 
 describe("grok protocol", () => {
-  it("does not support attachments", () => {
-    expect(harnessSupportsAttachments("grok")).toBe(false);
+  it("supports attachments despite Grok's stale advertised capability", () => {
+    expect(harnessSupportsAttachments("grok")).toBe(true);
     expect(harnessSupportsAttachments("cursor")).toBe(true);
   });
 
-  it("sends text-only prompt blocks", () => {
-    expect(grokPromptBlocks("  hello  ")).toEqual([
-      { type: "text", text: "hello" },
+  it("sends text and image prompt blocks", () => {
+    expect(
+      grokPromptBlocks("  describe this  ", [
+        {
+          id: "image-1",
+          name: "screenshot.png",
+          mimeType: "image/png",
+          kind: "image",
+          size: 3,
+          data: "YWJj",
+        },
+      ]),
+    ).toEqual([
+      { type: "text", text: "describe this" },
+      { type: "image", mimeType: "image/png", data: "YWJj" },
     ]);
     expect(grokPromptBlocks("   ")).toEqual([]);
   });
