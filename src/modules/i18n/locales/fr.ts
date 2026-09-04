@@ -795,6 +795,8 @@ const frBase = mergeLocale(en, {
     unsavedChanges: "Modifications non enregistrées",
   },
   git: {
+    authorizeDirectory: "Autoriser le répertoire",
+    authorizedSuccess: "Répertoire autorisé avec succès",
     publish: "Publier",
     publishBranch: "Publier la branche",
     publishBranchTooltip: "Publier cette branche sur le dépôt distant",

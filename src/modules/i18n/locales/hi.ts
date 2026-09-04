@@ -1212,6 +1212,8 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
     dropFilePath: "फ़ाइल पथ यहाँ छोड़ें",
   },
   git: {
+    authorizeDirectory: "निर्देशिका अधिकृत करें",
+    authorizedSuccess: "निर्देशिका सफलतापूर्वक अधिकृत की गई",
     publish: "प्रकाशित करें",
     publishBranch: "शाखा प्रकाशित करें",
     publishBranchTooltip: "इस शाखा को रिमोट रिपॉजिटरी में प्रकाशित करें",

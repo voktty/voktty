@@ -315,7 +315,8 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   const handleAuthorize = async () => {
     setAuthorizing(true);
     try {
-      await native.workspaceAuthorize(source.repoRoot);
+      await native.workspaceAuthorize(source.repoRoot).catch(() => {});
+      await native.gitAddSafeDirectory(source.repoRoot, source.workspaceEnv);
       toast.success(
         t("git.authorizedSuccess", { defaultValue: "Directorio autorizado" }),
       );

@@ -1207,16 +1207,24 @@ pub fn checkout_branch(
 }
 
 pub fn add_safe_directory(
-    _registry: &WorkspaceRegistry,
+    registry: &WorkspaceRegistry,
     path: &str,
     workspace: &WorkspaceEnv,
 ) -> Result<()> {
     ensure_git_available(workspace)?;
     let clean_path = safe_directory_path(path)?;
+    if !workspace.is_remote() {
+        let _ = registry.authorize(clean_path);
+    }
+    let normalized_path = if !workspace.is_remote() && clean_path.contains('\\') {
+        clean_path.replace('\\', "/")
+    } else {
+        clean_path.to_string()
+    };
     let output = run_git(
         workspace,
         None,
-        ["config", "--global", "--add", "safe.directory", clean_path],
+        ["config", "--global", "--add", "safe.directory", &normalized_path],
         DEFAULT_TIMEOUT_SECS,
     )?;
     ensure_success(&output, "failed to add git safe.directory exception")?;

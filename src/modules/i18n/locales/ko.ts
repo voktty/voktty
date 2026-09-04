@@ -768,6 +768,8 @@ const koBase = mergeLocale(en, {
     unsavedChanges: "저장되지 않은 변경 사항",
   },
   git: {
+    authorizeDirectory: "디렉터리 승인",
+    authorizedSuccess: "디렉터리가 성공적으로 승인되었습니다",
     publish: "발행",
     publishBranch: "브랜치 발행",
     publishBranchTooltip: "이 브랜치를 원격 저장소에 발행합니다",

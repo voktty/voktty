@@ -1211,6 +1211,8 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
     dropFilePath: "أفلت مسار الملف هنا",
   },
   git: {
+    authorizeDirectory: "تفويض الدليل",
+    authorizedSuccess: "تم تفويض الدليل بنجاح",
     publish: "نشر",
     publishBranch: "نشر الفرع",
     publishBranchTooltip: "نشر هذا الفرع إلى المستودع البعيد",

@@ -786,6 +786,8 @@ const deBase = mergeLocale(en, {
     unsavedChanges: "Nicht gespeicherte Änderungen",
   },
   git: {
+    authorizeDirectory: "Verzeichnis autorisieren",
+    authorizedSuccess: "Verzeichnis erfolgreich autorisiert",
     publish: "Veröffentlichen",
     publishBranch: "Branch veröffentlichen",
     publishBranchTooltip: "Diesen Branch im Remote-Repository veröffentlichen",

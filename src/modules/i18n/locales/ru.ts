@@ -779,6 +779,8 @@ const ruBase = mergeLocale(en, {
     unsavedChanges: "Несохраненные изменения",
   },
   git: {
+    authorizeDirectory: "Авторизовать каталог",
+    authorizedSuccess: "Каталог успешно авторизован",
     publish: "Опубликовать",
     publishBranch: "Опубликовать ветку",
     publishBranchTooltip: "Опубликовать эту ветку в удаленный репозиторий",
