@@ -21,6 +21,7 @@ import {
   Folder01Icon,
   FolderAddIcon,
   FolderGitTwoIcon,
+  Globe02Icon,
   ArrowUp01Icon,
   Refresh01Icon,
   Search01Icon,
@@ -40,6 +41,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { isWebPreviewablePath } from "@/modules/preview/components/LivePreviewButton";
 import { ExplorerSearch, type ExplorerSearchHandle } from "./ExplorerSearch";
 import { EntryRow, PendingRow, StatusRow, type RowActions } from "./TreeRow";
 import { InlineInput } from "./InlineInput";
@@ -86,6 +88,7 @@ type Props = {
   workspaceEnv: WorkspaceEnv;
   activeFilePath?: string | null;
   onOpenFile: (path: string, pin?: boolean) => void;
+  onOpenPreview?: (path: string) => void;
   onPathRenamed?: (from: string, to: string) => void;
   onPathDeleted?: (path: string) => void;
   onRevealInTerminal?: (path: string) => void;
@@ -242,6 +245,7 @@ export const FileExplorer = memo(
       workspaceEnv,
       activeFilePath,
       onOpenFile,
+      onOpenPreview,
       onPathRenamed,
       onPathDeleted,
       onRevealInTerminal,
@@ -1130,6 +1134,23 @@ export const FileExplorer = memo(
                         {t("common.open")}
                       </ContextMenuItem>
                     )}
+                    {onOpenPreview &&
+                      (!menuTarget.isDir
+                        ? isWebPreviewablePath(menuTarget.path)
+                        : true) && (
+                        <ContextMenuItem
+                          className={COMPACT_ITEM}
+                          onSelect={() => onOpenPreview(menuTarget.path)}
+                        >
+                          <HugeiconsIcon
+                            icon={Globe02Icon}
+                            size={14}
+                            strokeWidth={1.75}
+                            className="mr-1.5 shrink-0 text-cyan-400"
+                          />
+                          {t("preview.openPreview")}
+                        </ContextMenuItem>
+                      )}
                     <ContextMenuItem
                       className={COMPACT_ITEM}
                       onSelect={() => tree.beginRename(menuTarget.path)}
@@ -1262,6 +1283,20 @@ export const FileExplorer = memo(
                       onSelect={() => onOpenGitHistory(rootPath)}
                     >
                       {t("sidebar.gitHistory")}
+                    </ContextMenuItem>
+                  )}
+                  {onOpenPreview && rootPath && (
+                    <ContextMenuItem
+                      className={COMPACT_ITEM}
+                      onSelect={() => onOpenPreview(rootPath)}
+                    >
+                      <HugeiconsIcon
+                        icon={Globe02Icon}
+                        size={14}
+                        strokeWidth={1.75}
+                        className="mr-1.5 shrink-0 text-cyan-400"
+                      />
+                      {t("preview.openPreview")}
                     </ContextMenuItem>
                   )}
                   {hasGitRepo === false && rootPath && (

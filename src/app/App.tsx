@@ -2225,20 +2225,30 @@ export default function App() {
   const [gitCloneModalOpen, setGitCloneModalOpen] = useState(false);
 
   const openPreviewTab = useCallback(
-    (url?: string) => {
-      const explicitUrl = (url ?? "").trim();
-      if (explicitUrl) {
-        return newPreviewTab(explicitUrl);
+    (target?: string) => {
+      const explicit = (target ?? "").trim();
+      if (/^https?:\/\//i.test(explicit)) {
+        return newPreviewTab(explicit);
       }
 
       const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
       const activePath =
-        activeTab && "path" in activeTab && typeof activeTab.path === "string"
+        explicit ||
+        (activeTab && "path" in activeTab && typeof activeTab.path === "string"
           ? activeTab.path
-          : activeFilePath;
+          : activeFilePath);
+
+      const isSpecificWebFile =
+        typeof activePath === "string" &&
+        (activePath.endsWith(".html") ||
+          activePath.endsWith(".htm") ||
+          activePath.endsWith(".php") ||
+          activePath.endsWith(".svg"));
 
       const activeFileDir = activePath
-        ? activePath.replace(/[/\\][^/\\]+$/, "") || activePath
+        ? (isSpecificWebFile
+            ? activePath.replace(/[/\\][^/\\]+$/, "")
+            : activePath) || activePath
         : null;
 
       const termCwd =
@@ -2266,12 +2276,8 @@ export default function App() {
         .startServer(targetCandidate)
         .then((info) => {
           let targetUrl = info.url;
-          if (
-            activePath &&
-            (activePath.endsWith(".html") ||
-              activePath.endsWith(".htm") ||
-              activePath.endsWith(".php"))
-          ) {
+          if (isSpecificWebFile && activePath) {
+            const filename = activePath.split(/[/\\]/).pop() || "";
             const rel = activePath
               .replace(info.root_path, "")
               .replace(targetCandidate, "")
@@ -2279,6 +2285,8 @@ export default function App() {
               .replace(/\\/g, "/");
             if (rel && rel !== activePath) {
               targetUrl = `${info.url}/${rel}`;
+            } else if (filename) {
+              targetUrl = `${info.url}/${filename}`;
             }
           }
           updateTab(id, { url: targetUrl });
@@ -4322,6 +4330,7 @@ export default function App() {
                               workspaceEnv: activeExplorerWorkspaceEnv,
                             })
                           }
+                          onOpenPreview={openPreviewTab}
                           onPathRenamed={handlePathRenamed}
                           onPathDeleted={handlePathDeleted}
                           onRevealInTerminal={cdInNewTab}
