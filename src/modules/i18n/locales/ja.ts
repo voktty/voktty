@@ -1670,6 +1670,9 @@ const jaBase = mergeLocale(en, {
     openInBrowserTooltip: "システムのブラウザーで開く",
     noServerListening: ":{port} でリッスンしているサーバーはありません。",
     enterUrlNotice: "URL を入力するか、ポートプリセットを選択してください。",
+    inspectComponent: "コンポーネントを検査 (Ctrl+G)",
+    inspectingActive: "検査する要素をクリック",
+    clearSelection: "選択したコンポーネントをクリア",
   },
   workspace: {
     environment: "ワークスペース環境",

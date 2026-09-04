@@ -1576,6 +1576,9 @@ const zhBase = mergeLocale(en, {
     openInBrowserTooltip: "在系统浏览器中打开",
     noServerListening: "没有服务器在监听端口 :{port}。",
     enterUrlNotice: "输入 URL 或选择端口预设。",
+    inspectComponent: "检查组件 (Ctrl+G)",
+    inspectingActive: "点击元素进行检查",
+    clearSelection: "清除所选组件",
   },
   workspace: {
     environment: "工作区环境",

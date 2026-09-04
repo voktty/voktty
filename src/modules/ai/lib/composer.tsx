@@ -14,6 +14,10 @@ import { expandSnippetTokens, type Snippet } from "../lib/snippets";
 import { getChat, useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
 import { type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
+import {
+  useLiveComponentStore,
+  formatComponentPromptDirective,
+} from "@/modules/preview";
 
 export type FileAttachment = {
   id: string;
@@ -316,8 +320,14 @@ export function AiComposerProvider({ children }: ProviderProps) {
       if (m) seenHandles.add(m[1]);
       allSnippetBlocks.push(block);
     }
+    const selectedComponent = useLiveComponentStore.getState().selectedComponent;
+    const componentBlock = selectedComponent
+      ? formatComponentPromptDirective(selectedComponent)
+      : "";
+
     const composed = [
       commandMarker ?? "",
+      componentBlock,
       allSnippetBlocks.join("\n\n"),
       selectionBlocks.join("\n\n"),
       fileBlocks.join("\n\n"),
@@ -367,7 +377,8 @@ export function AiComposerProvider({ children }: ProviderProps) {
     (value.trim().length > 0 ||
       files.length > 0 ||
       pickedSnippets.length > 0 ||
-      pickedCommands.length > 0);
+      pickedCommands.length > 0 ||
+      useLiveComponentStore.getState().selectedComponent !== null);
 
   const ctx: ComposerCtx = {
     textareaRef,
