@@ -1678,7 +1678,9 @@ fn open_remote_session(
     }
 
     let session = start_helper(&app, &connection, &probe.architecture)?;
-    let workspace_root = workspace_root.unwrap_or_else(|| ".".to_string());
+    let workspace_root = workspace_root
+        .filter(|r| !r.trim().is_empty() && r != ".")
+        .unwrap_or_else(|| "/".to_string());
     let handshake = RemoteRequest {
         protocol: PROTOCOL_VERSION,
         id: "handshake".to_string(),

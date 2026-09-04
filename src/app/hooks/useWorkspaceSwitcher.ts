@@ -35,7 +35,7 @@ async function connectRemoteEnv(
 ): Promise<Extract<WorkspaceEnv, { kind: "ssh" }>> {
   const session = await openRemoteWorkspace(
     env.connection,
-    env.root || undefined,
+    env.root && env.root !== "." ? env.root : "/",
   );
   return {
     ...env,

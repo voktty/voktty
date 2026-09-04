@@ -124,9 +124,10 @@ export function registerOsc52ClipboardHandler(
 }
 
 function parseOsc7(data: string): string | null {
-  const m = data.match(/^file:\/\/[^/]*(\/.*)$/);
+  const m = data.match(/^file:\/\/([^/]*)(\/.*)$/);
   if (!m) return null;
-  let path = m[1];
+  const host = m[1];
+  let path = m[2];
   try {
     path = decodeURIComponent(path);
   } catch {}
@@ -140,10 +141,13 @@ function parseOsc7(data: string): string | null {
   // /C:/Users/foo -> C:/Users/foo so it's a valid Windows path.
   if (/^\/[A-Za-z]:/.test(path)) {
     path = path.slice(1);
-  } else if (IS_WINDOWS) {
-    // git-bash (MSYS) reports cwd as /c/Users/foo; map it to C:/Users/foo.
+  } else if (IS_WINDOWS && (!host || host.toLowerCase() === "localhost")) {
+    // git-bash (MSYS) reports cwd as /c/Users/foo; map it to C:/Users/foo only for localhost
+    // and when not referring to top-level unix directories like /var, /root, /home, /opt, /usr, /srv, /etc.
     const drive = path.match(/^\/([A-Za-z])(\/.*)?$/);
-    if (drive) path = `${drive[1].toUpperCase()}:${drive[2] ?? "/"}`;
+    if (drive && !/^\/(var|etc|home|root|usr|opt|srv|tmp|proc|sys|dev)(\/|$)/i.test(path)) {
+      path = `${drive[1].toUpperCase()}:${drive[2] ?? "/"}`;
+    }
   }
   return path;
 }

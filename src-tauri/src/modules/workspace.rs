@@ -498,13 +498,9 @@ impl WorkspaceEnv {
     }
 }
 
-fn is_remote_workspace_path(root: &str, path: &str) -> bool {
-    let root = root.replace('\\', "/").trim_end_matches('/').to_string();
+fn is_remote_workspace_path(_root: &str, path: &str) -> bool {
     let path = path.replace('\\', "/");
-    if root.is_empty() {
-        return path.starts_with('/');
-    }
-    path == root || (!root.is_empty() && path.starts_with(&format!("{root}/")))
+    path.starts_with('/') || path == "." || (!path.is_empty() && !path.contains(':'))
 }
 
 #[derive(Clone, Debug, Serialize)]

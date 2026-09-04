@@ -19,7 +19,7 @@ use crate::modules::git::types::{
 use crate::modules::workspace::validate_wsl_distro_name;
 use crate::modules::workspace::WorkspaceEnv;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 enum Availability {
     Ok,
     NotInstalled,
@@ -47,7 +47,9 @@ fn workspace_cache_key(workspace: &WorkspaceEnv) -> String {
     match workspace {
         WorkspaceEnv::Local => "local".into(),
         WorkspaceEnv::Wsl { distro } => format!("wsl:{distro}"),
-        WorkspaceEnv::Ssh { root, .. } => format!("ssh:{root}"),
+        WorkspaceEnv::Ssh { session_id, connection, .. } => {
+            format!("ssh:{}:{session_id:?}", connection.host)
+        }
         WorkspaceEnv::Docker { container_id, .. } => format!("docker:{container_id}"),
     }
 }
@@ -68,17 +70,19 @@ pub fn ensure_git_available(workspace: &WorkspaceEnv) -> Result<()> {
         Some(v) => v,
         None => {
             let fresh = check_git_availability(workspace);
-            let mut guard = availability_cell()
-                .lock()
-                .expect("git availability poisoned");
-            prune_expired_availability_entries(&mut guard);
-            guard.insert(
-                cache_key,
-                AvailabilityCache {
-                    value: fresh.clone(),
-                    checked_at: Instant::now(),
-                },
-            );
+            if fresh == Availability::Ok {
+                let mut guard = availability_cell()
+                    .lock()
+                    .expect("git availability poisoned");
+                prune_expired_availability_entries(&mut guard);
+                guard.insert(
+                    cache_key,
+                    AvailabilityCache {
+                        value: fresh.clone(),
+                        checked_at: Instant::now(),
+                    },
+                );
+            }
             fresh
         }
     };
