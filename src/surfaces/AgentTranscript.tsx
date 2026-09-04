@@ -447,7 +447,7 @@ export function AgentTranscript({
 /** Placeholder for private reasoning before the first assistant text arrives. */
 function InitialThinking({ live }: { live: boolean }) {
   return (
-    <div className="min-w-0 px-4 py-1 font-sans text-sm text-content/50">
+    <div className="min-w-0 px-4 pt-3 pb-1 font-sans text-sm text-content/50">
       {live ? <Shimmer duration={1.6}>Thinking…</Shimmer> : "Thinking…"}
     </div>
   );
