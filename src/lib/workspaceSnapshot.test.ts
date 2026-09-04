@@ -6,6 +6,7 @@ import {
   newCommitTab,
   newFileTab,
   newReleaseNotesWorkspaceTab,
+  newSessionChangesTab,
   newTab,
   newTerminalFile,
 } from "./layout";
@@ -62,6 +63,25 @@ describe("collectWorkspaceSnapshot", () => {
     const workspace = hydrateWorkspaceSnapshot(snapshot, new Map());
     const restored = workspace?.tabs[0]?.editorPanes[0]?.files[0];
     expect(restored?.changes).toBe(true);
+    expect(restored?.review).toBe(true);
+    expect(restored?.path).toBe("/tmp/a/src/lib.rs");
+  });
+
+  it("round-trips a session-scoped Changes tab", () => {
+    const file = newSessionChangesTab(
+      "/tmp/a",
+      "session-a",
+      "/tmp/a/src/lib.rs",
+    );
+    const tab = {
+      ...newTab("s1"),
+      id: "t1",
+      editorPanes: [{ id: "e1", files: [file], activeFileId: file.id }],
+    };
+    const snapshot = collectWorkspaceSnapshot([tab], [], "t1", "/tmp/a");
+    const restored = hydrateWorkspaceSnapshot(snapshot, new Map())?.tabs[0]
+      ?.editorPanes[0]?.files[0];
+    expect(restored?.sessionChanges).toEqual({ sessionId: "session-a" });
     expect(restored?.review).toBe(true);
     expect(restored?.path).toBe("/tmp/a/src/lib.rs");
   });

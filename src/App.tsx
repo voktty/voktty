@@ -49,6 +49,7 @@ import {
   openChangesTab,
   openCommitTab,
   openEditorTab,
+  openSessionChangesTab,
   openTerminalTab,
   removePane,
   replaceLeafId,
@@ -153,9 +154,10 @@ import { isEditTool } from "./lib/harness/preview";
 import {
   beginSessionTurn,
   captureSessionCheckpoint,
+  flushSessionCheckpoint,
   keepSessionChanges,
   notifyReviewChanged,
-  syncSessionCheckpoint,
+  prepareSessionCheckpoint,
 } from "./lib/checkpoint";
 import { notifyDirsChanged } from "./lib/fileTree";
 import { nudgeWatchedFiles } from "./lib/fileWatch";
@@ -2142,15 +2144,24 @@ export default function App({
   );
 
   const onOpenDiff = useCallback(
-    (path?: string) => {
+    (path?: string, session?: { sessionId: string; cwd: string }) => {
       void (async () => {
+        const diffCwd = session?.cwd ?? gitCwdRef.current;
         const resolved = path
-          ? ((await resolveOpenablePath(gitCwdRef.current, path)) ?? path)
+          ? ((await resolveOpenablePath(diffCwd, path)) ?? path)
           : undefined;
-        if (resolved) rememberOpenedFile(sidebarCwdRef.current, resolved);
+        if (resolved) rememberOpenedFile(diffCwd, resolved);
         setTabs((prev) =>
           prev.map((tab) => {
             if (tab.id !== activeTabId) return tab;
+            if (session) {
+              return openSessionChangesTab(
+                tab,
+                session.cwd,
+                session.sessionId,
+                resolved,
+              );
+            }
             if (loadDiffViewer() === "unified") {
               return openChangesTab(tab, sidebarCwdRef.current, resolved);
             }
@@ -3428,13 +3439,11 @@ export default function App({
         } finally {
           if (turnGen.current.get(sessionId) !== gen) return;
           flushHarnessEvents();
+          await flushSessionCheckpoint(sessionId);
           setSessions((prev) =>
             prev.map((s) => (s.id === sessionId ? stopStreaming(s) : s)),
           );
           playCue("turnFinished");
-          await syncSessionCheckpoint(sessionId, workCwd).catch(
-            () => undefined,
-          );
           notifyReviewChanged(sessionId);
           notifyGitChanged();
           nudgeWorkspace(workCwd);
@@ -3744,9 +3753,7 @@ export default function App({
         }),
       );
       if (session) {
-        void syncSessionCheckpoint(sessionId, sessionWorkCwd(session))
-          .catch(() => undefined)
-          .then(() => notifyReviewChanged(sessionId));
+        notifyReviewChanged(sessionId);
         nudgeWorkspace(sessionWorkCwd(session));
         notifyGitChanged();
         nudgeWatchedFiles();
@@ -4829,25 +4836,25 @@ function trackSessionEdits(
   cwd: string,
   event: HarnessEvent,
 ) {
-  if (event.type !== "tool.updated") return;
-  const completed = event.status === "completed" || event.status === "success";
-  if (!completed) return;
-  const kind = event.kind?.trim().toLowerCase();
-  if (kind === "execute" || event.preview?.kind === "shell") {
-    void syncSessionCheckpoint(sessionId, cwd)
-      .catch(() => undefined)
-      .then(() => notifyReviewChanged(sessionId));
-    return;
-  }
+  if (event.type !== "tool.started" && event.type !== "tool.updated") return;
   if (!isEditTool(event.kind, event.title, event.preview)) return;
-  const path = event.preview?.path;
-  if (path && cwd !== "~") {
-    void captureSessionCheckpoint(sessionId, cwd, [path])
-      .catch(() => undefined)
-      .then(() => notifyReviewChanged(sessionId));
+  const paths = [
+    ...(event.paths ?? []),
+    ...(event.preview?.path ? [event.preview.path] : []),
+  ].filter((path, index, all) => all.indexOf(path) === index);
+  if (paths.length === 0 || cwd === "~") return;
+  const completed =
+    event.type === "tool.updated" &&
+    (event.status === "completed" || event.status === "success");
+  if (!completed) {
+    void prepareSessionCheckpoint(sessionId, cwd, paths).catch(
+      () => undefined,
+    );
     return;
   }
-  notifyReviewChanged(sessionId);
+  void captureSessionCheckpoint(sessionId, cwd, paths)
+    .catch(() => undefined)
+    .then(() => notifyReviewChanged(sessionId));
 }
 
 function nudgeWorkspace(cwd?: string) {

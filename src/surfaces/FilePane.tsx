@@ -11,6 +11,7 @@ import {
   isPlanTab,
   isReleaseNotesTab,
   isReviewTab,
+  isSessionChangesTab,
   isTerminalTab,
   type EditorPane,
   type FilePaneTab,
@@ -26,6 +27,7 @@ import { BinaryFileView } from "./BinaryFileView";
 import { CommitDiff } from "./CommitDiff";
 import { FileEditor } from "./FileEditor";
 import { ReleaseNotesSurface } from "./ReleaseNotesSurface";
+import { SessionChangesDiff } from "./SessionChangesDiff";
 import { TerminalView } from "./TerminalView";
 import { WorkingTreeDiff } from "./WorkingTreeDiff";
 
@@ -70,8 +72,11 @@ function FilePaneComponent({
     loadDiffViewer,
   );
   const activeFile = pane.files.find((file) => file.id === pane.activeFileId);
+  const sessionReview =
+    activeFile && isSessionChangesTab(activeFile) ? activeFile : undefined;
   const unifiedReview =
     !!activeFile &&
+    !sessionReview &&
     (isChangesTab(activeFile) ||
       (diffViewer === "unified" && isReviewTab(activeFile)));
   const commitReview = !!activeFile && isCommitTab(activeFile);
@@ -92,7 +97,15 @@ function FilePaneComponent({
         onPaneDragStart={onPaneDragStart}
       />
       <div className="relative min-h-0 flex-1">
-        {commitReview && activeFile?.commit ? (
+        {sessionReview ? (
+          <div className="absolute inset-0 h-full">
+            <SessionChangesDiff
+              cwd={sessionReview.cwd}
+              sessionId={sessionReview.sessionChanges.sessionId}
+              focusPath={sessionReview.path}
+            />
+          </div>
+        ) : commitReview && activeFile?.commit ? (
           <div className="absolute inset-0 h-full">
             <CommitDiff cwd={activeFile.cwd} sha={activeFile.commit.sha} />
           </div>
@@ -105,6 +118,7 @@ function FilePaneComponent({
           if (
             isCommitTab(file) ||
             isChangesTab(file) ||
+            isSessionChangesTab(file) ||
             (unifiedReview && isReviewTab(file))
           )
             return null;

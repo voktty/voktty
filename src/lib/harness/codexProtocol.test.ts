@@ -232,6 +232,11 @@ describe("mapCodexNotification", () => {
             kind: "update",
             diff: "@@ -1 +1 @@\n-old\n+new\n",
           },
+          {
+            path: "src/lib/checkpoint.ts",
+            kind: "update",
+            diff: "@@ -1 +1 @@\n-old\n+new\n",
+          },
         ],
       },
     });
@@ -239,6 +244,7 @@ describe("mapCodexNotification", () => {
       type: "tool.started",
       callId: "fc_1",
       kind: "edit",
+      paths: ["src/App.tsx", "src/lib/checkpoint.ts"],
     });
   });
 

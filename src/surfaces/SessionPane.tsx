@@ -33,6 +33,7 @@ import {
 
 type Props = {
   session: Session;
+  reviewUndoLocked?: boolean;
   visible: boolean;
   focused: boolean;
   inSplit: boolean;
@@ -81,7 +82,10 @@ type Props = {
     reply: UserQuestionReply,
   ) => void;
   onOpenFile: (path: string) => void;
-  onOpenDiff: (path?: string) => void;
+  onOpenDiff: (
+    path?: string,
+    session?: { sessionId: string; cwd: string },
+  ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
   onSecondOpinion?: (
     sessionId: string,
@@ -101,6 +105,7 @@ type Props = {
 
 export const SessionPane = memo(function SessionPane({
   session,
+  reviewUndoLocked = false,
   visible,
   focused,
   inSplit,
@@ -264,6 +269,7 @@ export const SessionPane = memo(function SessionPane({
         cwd={workCwd}
         enabled={visible}
         busy={!!session.busy}
+        undoLocked={reviewUndoLocked}
         onOpenDiff={onOpenDiff}
       />
     </Composer>

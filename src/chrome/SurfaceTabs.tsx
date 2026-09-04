@@ -8,6 +8,7 @@ import {
   isPlanTab,
   isReleaseNotesTab,
   isReviewTab,
+  isSessionChangesTab,
   isTerminalTab,
   type FilePaneTab,
 } from "../lib/layout";
@@ -56,6 +57,15 @@ export function surfaceTabPresentation(
       label: "Changes",
       iconName: "CHANGES",
       tooltip: "Working tree changes",
+    };
+  }
+
+  if (isSessionChangesTab(file)) {
+    return {
+      name: "Session Changes",
+      label: "Session Changes",
+      iconName: "CHANGES",
+      tooltip: "Changes captured for this session only",
     };
   }
 

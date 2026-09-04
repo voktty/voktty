@@ -8,6 +8,7 @@ import {
   type FilePaneTab,
   type LayoutNode,
   type PlanTabSource,
+  type SessionChangesSource,
   type WorkspaceTab,
 } from "./layout";
 import type { ReleaseNotesTabSource } from "./releaseNotes";
@@ -373,13 +374,27 @@ function sanitizeFile(raw: unknown): FilePaneTab | null {
   const releaseNotes = sanitizeReleaseNotes(value.releaseNotes);
   const hasCommit = "commit" in value;
   const commit = sanitizeCommit(value.commit);
+  const hasSessionChanges = "sessionChanges" in value;
+  const sessionChanges = sanitizeSessionChanges(value.sessionChanges);
   if (hasReleaseNotes && !releaseNotes) return null;
   if (hasCommit && !commit) return null;
+  if (hasSessionChanges && !sessionChanges) return null;
+  if (
+    sessionChanges &&
+    (value.plan != null ||
+      releaseNotes != null ||
+      commit != null ||
+      value.changes === true ||
+      value.terminal === true)
+  ) {
+    return null;
+  }
   if (
     releaseNotes &&
     (value.plan != null ||
       value.review === true ||
       value.changes === true ||
+      sessionChanges != null ||
       value.terminal === true ||
       commit != null)
   ) {
@@ -390,6 +405,7 @@ function sanitizeFile(raw: unknown): FilePaneTab | null {
     (value.plan != null ||
       value.review === true ||
       value.changes === true ||
+      sessionChanges != null ||
       value.terminal === true)
   ) {
     return null;
@@ -401,10 +417,21 @@ function sanitizeFile(raw: unknown): FilePaneTab | null {
     ...(plan ? { plan } : {}),
     ...(releaseNotes ? { releaseNotes } : {}),
     ...(commit ? { commit } : {}),
+    ...(sessionChanges ? { sessionChanges, review: true } : {}),
     ...(value.review === true ? { review: true } : {}),
     ...(value.changes === true ? { changes: true, review: true } : {}),
     ...(value.terminal === true ? { terminal: true } : {}),
   };
+}
+
+function sanitizeSessionChanges(
+  raw: unknown,
+): SessionChangesSource | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const sessionId = (raw as Record<string, unknown>).sessionId;
+  return typeof sessionId === "string" && sessionId.trim()
+    ? { sessionId: sessionId.trim() }
+    : undefined;
 }
 
 function sanitizeCommit(raw: unknown): CommitTabSource | undefined {

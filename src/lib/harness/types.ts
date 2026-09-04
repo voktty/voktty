@@ -23,6 +23,8 @@ export type HarnessEvent =
       kind?: string;
       status?: string;
       preview?: ToolPreview;
+      /** Every path affected when one structured edit changes multiple files. */
+      paths?: string[];
     }
   | {
       type: "tool.updated";
@@ -32,6 +34,8 @@ export type HarnessEvent =
       status?: string;
       detail?: string;
       preview?: ToolPreview;
+      /** Every path affected when one structured edit changes multiple files. */
+      paths?: string[];
     }
   | {
       type: "approval.requested";

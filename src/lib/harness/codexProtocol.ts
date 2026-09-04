@@ -624,6 +624,9 @@ function mapFileChangeItem(
   completed: boolean,
 ): HarnessEvent {
   const changes = Array.isArray(item.changes) ? item.changes : [];
+  const paths = changes
+    .map((change) => stringField(asRecord(change), "path"))
+    .filter((path): path is string => Boolean(path));
   const first = asRecord(changes[0]);
   const path = stringField(first, "path");
   const diff = stringField(first, "diff");
@@ -644,6 +647,7 @@ function mapFileChangeItem(
       kind: "edit",
       status,
       preview,
+      ...(paths.length ? { paths } : {}),
     };
   }
   return {
@@ -653,6 +657,7 @@ function mapFileChangeItem(
     kind: "edit",
     status,
     preview,
+    ...(paths.length ? { paths } : {}),
   };
 }
 
@@ -662,6 +667,9 @@ function mapFileChangePatch(
   const itemId = stringField(rec, "itemId") ?? "";
   if (!itemId) return { events: [] };
   const changes = Array.isArray(rec.changes) ? rec.changes : [];
+  const paths = changes
+    .map((change) => stringField(asRecord(change), "path"))
+    .filter((path): path is string => Boolean(path));
   const first = asRecord(changes[0]);
   const path = stringField(first, "path");
   const diff = stringField(first, "diff") ?? stringField(rec, "diff");
@@ -682,6 +690,7 @@ function mapFileChangePatch(
         kind: "edit",
         status: "in_progress",
         preview,
+        ...(paths.length ? { paths } : {}),
       },
     ],
   };

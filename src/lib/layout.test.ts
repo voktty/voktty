@@ -7,6 +7,7 @@ import {
   isFilesystemTab,
   isReleaseNotesTab,
   isReviewTab,
+  isSessionChangesTab,
   isTerminalTab,
   layoutLeaves,
   layoutSashes,
@@ -16,6 +17,7 @@ import {
   newFileTab,
   newPlanTab,
   newReleaseNotesWorkspaceTab,
+  newSessionChangesTab,
   newTab,
   newTerminalFile,
   newTerminalWorkspaceTab,
@@ -25,6 +27,7 @@ import {
   openChangesTab,
   openCommitTab,
   openEditorTab,
+  openSessionChangesTab,
   openTerminalTab,
   paneEdgeFromPoint,
   placePane,
@@ -95,6 +98,10 @@ describe("editorTabKey", () => {
     expect(editorTabKey(newChangesTab(cwd, `${cwd}/other.ts`))).toBe(
       `changes:${cwd}`,
     );
+    expect(editorTabKey(newSessionChangesTab(cwd, "s1", path))).toBe(
+      `session-changes:${cwd}:s1`,
+    );
+    expect(isFilesystemTab(newSessionChangesTab(cwd, "s1", path))).toBe(false);
     expect(
       editorTabKey(
         newCommitTab(cwd, {
@@ -109,6 +116,38 @@ describe("editorTabKey", () => {
     expect(editorTabKey(terminal)).toBe(`terminal:${terminal.id}`);
     expect(isTerminalTab(terminal)).toBe(true);
     expect(isTerminalTab(newFileTab(path, cwd))).toBe(false);
+  });
+});
+
+describe("openSessionChangesTab", () => {
+  it("reuses one review per session without merging different sessions", () => {
+    const cwd = "/repo";
+    const first = openSessionChangesTab(
+      newTab("session-a"),
+      cwd,
+      "session-a",
+      "/repo/a.ts",
+    );
+    const focused = openSessionChangesTab(
+      first,
+      cwd,
+      "session-a",
+      "/repo/b.ts",
+    );
+    const second = openSessionChangesTab(
+      focused,
+      cwd,
+      "session-b",
+      "/repo/c.ts",
+    );
+    const reviews = second.editorPanes.flatMap((pane) =>
+      pane.files.filter(isSessionChangesTab),
+    );
+    expect(reviews).toHaveLength(2);
+    expect(
+      reviews.find((file) => file.sessionChanges.sessionId === "session-a")
+        ?.path,
+    ).toBe("/repo/b.ts");
   });
 });
 
