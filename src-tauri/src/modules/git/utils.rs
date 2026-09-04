@@ -31,6 +31,17 @@ pub fn canonical_dir(
     path: &str,
     workspace: &WorkspaceEnv,
 ) -> Result<ResolvedGitDirectory> {
+    if workspace.is_remote() {
+        let clean = normalize_git_path(path.trim());
+        let git_path = if clean.is_empty() { ".".to_string() } else { clean };
+        let local_path = PathBuf::from(&git_path);
+        return Ok(ResolvedGitDirectory {
+            workspace: workspace.clone(),
+            git_path,
+            local_path,
+        });
+    }
+
     let candidate = resolve_path(path, workspace);
     let (candidate, effective_workspace) = if !candidate.is_dir() {
         let local = PathBuf::from(path);
@@ -63,7 +74,7 @@ pub fn authorized_repo_root(
     workspace: &WorkspaceEnv,
 ) -> Result<ResolvedGitDirectory> {
     let canonical = canonical_dir(registry, path, workspace)?;
-    if !registry.is_authorized(&canonical.local_path) {
+    if !workspace.is_remote() && !registry.is_authorized(&canonical.local_path) {
         return Err(GitError::PathOutsideWorkspace(canonical.local_path));
     }
     Ok(canonical)
@@ -98,6 +109,9 @@ pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
         return Err(GitError::InvalidPath(clean_rel.into()));
     }
     let joined = repo_root.join(clean_rel);
+    if !repo_root.exists() {
+        return Ok(joined);
+    }
     match std::fs::canonicalize(&joined) {
         Ok(canonical) => {
             let canon_str = canonical.to_string_lossy().replace('\\', "/");

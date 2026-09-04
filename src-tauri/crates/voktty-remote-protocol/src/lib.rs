@@ -26,6 +26,7 @@ pub const METHOD_WATCH_REMOVE: &str = "fs.watchRemove";
 pub const METHOD_PTY_OPEN: &str = "pty.open";
 pub const METHOD_PTY_RESIZE: &str = "pty.resize";
 pub const METHOD_PTY_CLOSE: &str = "pty.close";
+pub const METHOD_GIT_EXEC: &str = "git.exec";
 
 const FRAME_REQUEST: u8 = 1;
 const FRAME_RESPONSE: u8 = 2;

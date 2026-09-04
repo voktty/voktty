@@ -2475,6 +2475,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
       agentHistoryOpen: "سجل تشغيل الوكلاء",
       agentFocusAttention: "الانتقال إلى الوكيل الذي يحتاج انتباهاً",
       sidebarToggle: "تبديل مستكشف الملفات",
+      sourceControlToggle: "تبديل التحكم في المصدر",
       explorerFocus: "تبديل التركيز على مستكشف الملفات",
       explorerToggleHidden: "تبديل إظهار الملفات المخفية",
       viewZoomIn: "تكبير",

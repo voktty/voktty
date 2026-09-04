@@ -1570,6 +1570,7 @@ const deBase = mergeLocale(en, {
       agentHistoryOpen: "Agenten-Operationsverlauf",
       agentFocusAttention: "Zum wartenden Agenten springen",
       sidebarToggle: "Datei-Explorer umschalten",
+      sourceControlToggle: "Quellcodeverwaltung umschalten",
       explorerFocus: "Fokus des Explorers umschalten",
       explorerToggleHidden: "Versteckte Dateien umschalten",
       viewZoomIn: "Vergrößern",

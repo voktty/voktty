@@ -2556,6 +2556,7 @@ export default function App() {
       },
       "settings.open": () => void openSettingsWindow(),
       "sidebar.toggle": toggleSidebar,
+      "sourceControl.toggle": toggleSourceControl,
       "explorer.focus": toggleExplorerFocus,
       "explorer.toggleHidden": toggleHiddenFiles,
       "view.zoomIn": zoomIn,

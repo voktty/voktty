@@ -2591,6 +2591,7 @@ export const es: TranslationSchema = {
       agentHistoryOpen: "Historial operativo de agentes",
       agentFocusAttention: "Ir al agente que necesita atención",
       sidebarToggle: "Alternar explorador de archivos",
+      sourceControlToggle: "Alternar control de código fuente",
       explorerFocus: "Alternar foco del explorador de archivos",
       explorerToggleHidden: "Alternar archivos ocultos",
       viewZoomIn: "Acercar",

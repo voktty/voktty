@@ -1521,6 +1521,7 @@ const koBase = mergeLocale(en, {
       agentHistoryOpen: "에이전트 작업 기록",
       agentFocusAttention: "주의가 필요한 에이전트로 이동",
       sidebarToggle: "파일 탐색기 전환",
+      sourceControlToggle: "소스 제어 토글",
       explorerFocus: "탐색기 포커스 전환",
       explorerToggleHidden: "숨김 파일 전환",
       viewZoomIn: "확대",

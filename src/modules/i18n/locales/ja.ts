@@ -1558,6 +1558,7 @@ const jaBase = mergeLocale(en, {
       agentHistoryOpen: "エージェントの操作履歴",
       agentFocusAttention: "注意が必要なエージェントへ移動",
       sidebarToggle: "ファイルエクスプローラーを切り替え",
+      sourceControlToggle: "ソース管理の切り替え",
       explorerFocus: "エクスプローラーのフォーカスを切り替え",
       explorerToggleHidden: "隠しファイルを切り替え",
       viewZoomIn: "ズームイン",
