@@ -6,10 +6,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   ArrowReloadHorizontalIcon,
   Globe02Icon,
   LinkSquare02Icon,
+  Target01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -21,6 +23,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { useLiveComponentStore } from "./store/liveComponentStore";
+import { LiveComponentBadge } from "./components/LiveComponentBadge";
 
 type PortPreset = {
   port: number;
@@ -63,6 +67,10 @@ export const PreviewAddressBar = forwardRef<PreviewAddressBarHandle, Props>(
     const { t } = useTranslation();
     const [draft, setDraft] = useState(url);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const isInspectorActive = useLiveComponentStore((s) => s.isInspectorActive);
+    const toggleInspector = useLiveComponentStore((s) => s.toggleInspector);
+    const selectedComponent = useLiveComponentStore((s) => s.selectedComponent);
 
     // Keep draft in sync when the parent updates the URL externally
     // (AI tool, detected localhost chip, etc.).
@@ -113,109 +121,148 @@ export const PreviewAddressBar = forwardRef<PreviewAddressBarHandle, Props>(
 
     return (
       <div className="shrink-0 border-b border-border/60">
-      <div className="flex h-9 items-center gap-1 bg-card/40 px-1.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onReload}
-          title={t("preview.reload")}
-          className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <HugeiconsIcon
-            icon={ArrowReloadHorizontalIcon}
-            size={14}
-            strokeWidth={1.75}
-          />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              title={t("preview.portsDropdownTitle")}
-              className="h-7 shrink-0 gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
-            >
-              <HugeiconsIcon
-                icon={Globe02Icon}
-                size={13}
-                strokeWidth={1.75}
-              />
-              <span className="hidden sm:inline">{t("preview.ports")}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="max-h-80 min-w-56 overflow-y-auto"
-          >
-            {PORT_PRESETS.map((p) => (
-              <DropdownMenuItem
-                key={p.port}
-                onSelect={(e) => {
-                  e.preventDefault();
-                  void tryPort(p.port);
-                }}
-              >
-                <span className="flex-1">{p.label}</span>
-                <span className="text-xs text-muted-foreground">
-                  {checkingPort === p.port ? t("preview.checkingPort") : `:${p.port}`}
-                </span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div className="flex min-w-0 flex-1 items-center">
-          <Input
-            ref={inputRef}
-            value={draft}
-            placeholder="http://localhost:3000"
-            spellCheck={false}
-            autoComplete="off"
-            className="h-7 w-full bg-muted/60 px-2 text-xs placeholder:text-muted-foreground/70 focus-visible:ring-0"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                submit();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setDraft(url);
-                inputRef.current?.blur();
-              }
-            }}
-          />
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            if (url) void openUrl(url).catch(console.error);
-          }}
-          title={t("preview.openInBrowserTooltip")}
-          className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-          disabled={!url}
-        >
-          <HugeiconsIcon
-            icon={LinkSquare02Icon}
-            size={14}
-            strokeWidth={1.75}
-          />
-        </Button>
-      </div>
-      {notice ? (
-        <div className="flex items-center gap-1.5 bg-amber-500/8 px-3 py-1 text-[11px] text-amber-600 dark:text-amber-400">
-          <span className="truncate">{notice}</span>
-          <button
+        <div className="flex h-9 items-center gap-1 bg-card/40 px-1.5">
+          <Button
             type="button"
-            onClick={() => setNotice(null)}
-            className="ml-auto rounded px-1 text-[10px] opacity-80 hover:bg-accent hover:opacity-100"
+            variant="ghost"
+            size="icon"
+            onClick={onReload}
+            title={t("preview.reload")}
+            className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
           >
-            {t("ai.dismiss")}
-          </button>
+            <HugeiconsIcon
+              icon={ArrowReloadHorizontalIcon}
+              size={14}
+              strokeWidth={1.75}
+            />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggleInspector}
+            title={
+              isInspectorActive
+                ? t("preview.inspectingActive")
+                : t("preview.inspectComponent")
+            }
+            className={cn(
+              "size-7 shrink-0 rounded-md transition-colors",
+              isInspectorActive
+                ? "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 ring-1 ring-cyan-500/50"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            <HugeiconsIcon
+              icon={Target01Icon}
+              size={14}
+              strokeWidth={1.75}
+            />
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                title={t("preview.portsDropdownTitle")}
+                className="h-7 shrink-0 gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <HugeiconsIcon
+                  icon={Globe02Icon}
+                  size={13}
+                  strokeWidth={1.75}
+                />
+                <span className="hidden sm:inline">{t("preview.ports")}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="max-h-80 min-w-56 overflow-y-auto"
+            >
+              {PORT_PRESETS.map((p) => (
+                <DropdownMenuItem
+                  key={p.port}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    void tryPort(p.port);
+                  }}
+                >
+                  <span className="flex-1">{p.label}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {checkingPort === p.port
+                      ? t("preview.checkingPort")
+                      : `:${p.port}`}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="flex min-w-0 flex-1 items-center">
+            <Input
+              ref={inputRef}
+              value={draft}
+              placeholder="http://localhost:3000"
+              spellCheck={false}
+              autoComplete="off"
+              className="h-7 w-full bg-muted/60 px-2 text-xs placeholder:text-muted-foreground/70 focus-visible:ring-0"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submit();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setDraft(url);
+                  inputRef.current?.blur();
+                }
+              }}
+            />
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (url) void openUrl(url).catch(console.error);
+            }}
+            title={t("preview.openInBrowserTooltip")}
+            className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            disabled={!url}
+          >
+            <HugeiconsIcon
+              icon={LinkSquare02Icon}
+              size={14}
+              strokeWidth={1.75}
+            />
+          </Button>
         </div>
-      ) : null}
+
+        {selectedComponent ? (
+          <div className="flex items-center gap-2 border-t border-border/40 bg-cyan-950/10 px-2.5 py-1 text-xs">
+            <span className="text-[10.5px] font-medium text-cyan-400/90 uppercase tracking-wide shrink-0">
+              {t("preview.inspectComponent").split(" ")[0]}:
+            </span>
+            <LiveComponentBadge compact />
+          </div>
+        ) : null}
+
+        {notice ? (
+          <div className="flex items-center gap-1.5 bg-amber-500/8 px-3 py-1 text-[11px] text-amber-600 dark:text-amber-400">
+            <span className="truncate">{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className="ml-auto rounded px-1 text-[10px] opacity-80 hover:bg-accent hover:opacity-100"
+            >
+              {t("ai.dismiss")}
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   },

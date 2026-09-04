@@ -2598,6 +2598,9 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
     openInBrowserTooltip: "فتح في متصفح النظام",
     noServerListening: "لا يوجد خادم يستمع على المنفذ :{port}.",
     enterUrlNotice: "أدخل عنوان URL أو اختر منفذاً مسبق الإعداد.",
+    inspectComponent: "فحص المكون (Ctrl+G)",
+    inspectingActive: "انقر فوق عنصر لفتحه وفحصه",
+    clearSelection: "مسح المكون المحدد",
   },
   workspace: {
     environment: "بيئة مساحة العمل",

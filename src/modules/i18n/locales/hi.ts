@@ -2599,6 +2599,9 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
     openInBrowserTooltip: "सिस्टम ब्राउज़र में खोलें",
     noServerListening: ":{port} पर कोई सर्वर नहीं सुन रहा है।",
     enterUrlNotice: "एक URL दर्ज करें या एक पोर्ट प्रीसेट चुनें।",
+    inspectComponent: "घटक का निरीक्षण करें (Ctrl+G)",
+    inspectingActive: "निरीक्षण करने के लिए तत्व पर क्लिक करें",
+    clearSelection: "चयनित घटक साफ़ करें",
   },
   workspace: {
     environment: "कार्यक्षेत्र वातावरण",

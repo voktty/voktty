@@ -2714,6 +2714,9 @@ export const es: TranslationSchema = {
     openInBrowserTooltip: "Abrir en el navegador del sistema",
     noServerListening: "Ningún servidor escuchando en :{port}.",
     enterUrlNotice: "Introduce una URL o elige un puerto predefinido.",
+    inspectComponent: "Inspeccionar componente (Ctrl+G)",
+    inspectingActive: "Haz clic en un elemento para inspeccionarlo",
+    clearSelection: "Quitar componente seleccionado",
   },
   workspace: {
     environment: "Entorno de trabajo",

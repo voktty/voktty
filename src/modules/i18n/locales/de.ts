@@ -1687,6 +1687,9 @@ const deBase = mergeLocale(en, {
     openInBrowserTooltip: "Im System-Browser öffnen",
     noServerListening: "Kein Server lauscht auf :{port}.",
     enterUrlNotice: "Geben Sie eine URL ein oder wählen Sie eine Port-Vorlage.",
+    inspectComponent: "Komponente untersuchen (Ctrl+G)",
+    inspectingActive: "Klicken Sie auf ein Element zur Untersuchung",
+    clearSelection: "Ausgewählte Komponente entfernen",
   },
   workspace: {
     environment: "Workspace-Umgebung",
