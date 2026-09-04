@@ -30,6 +30,7 @@ import {
   FolderOpenIcon,
   GitBranchIcon,
   GlobalIcon,
+  Globe02Icon,
   IncognitoIcon,
   PencilEdit02Icon,
   PlusSignIcon,
@@ -290,6 +291,7 @@ export function NewTabMenuItems({
   onNewWsl,
   onNewBlock,
   onNewPrivate,
+  onNewPreview,
   onNewEditor,
   onNewApiClient,
   onNewHarness: _onNewHarness,
@@ -497,6 +499,22 @@ export function NewTabMenuItems({
         }
         label={t("git.commitGraph")}
       />
+
+      {/* 6. Navegador Web / Live Preview */}
+      {onNewPreview && (
+        <NewTabMenuItem
+          onSelect={onNewPreview}
+          customIcon={
+            <HugeiconsIcon
+              icon={Globe02Icon}
+              size={14}
+              strokeWidth={1.75}
+              className="shrink-0 text-cyan-400"
+            />
+          }
+          label={t("preview.openPreview")}
+        />
+      )}
 
       {/* 7. API Client & Sandbox */}
       {onNewApiClient && (
