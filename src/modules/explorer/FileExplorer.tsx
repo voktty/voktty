@@ -103,6 +103,7 @@ type Props = {
   hasGitRepo?: boolean;
   onInitGit?: (path: string) => Promise<void> | void;
   onPrepareNavigationRoot?: (path: string) => Promise<boolean>;
+  onSyncToTerminal?: () => Promise<string | null | void> | string | null | void;
 };
 
 type Row =
@@ -252,6 +253,7 @@ export const FileExplorer = memo(
       hasGitRepo,
       onInitGit,
       onPrepareNavigationRoot,
+      onSyncToTerminal,
     },
     ref,
   ) {
@@ -364,14 +366,19 @@ export const FileExplorer = memo(
     }, [onPrepareNavigationRoot, parentPath, rootPath, t, workspaceEnv]);
 
     const handleSyncToTerminal = useCallback(async () => {
-      if (!sourceRootPath) return;
+      let targetPath = sourceRootPath;
+      try {
+        const liveCwd = await onSyncToTerminal?.();
+        if (liveCwd) targetPath = liveCwd;
+      } catch {}
+      if (!targetPath) return;
       if (refreshPendingNavigationRef.current === navigationKey) return;
       refreshPendingNavigationRef.current = navigationKey;
       const request = ++refreshRequestRef.current;
       let environmentChanged = false;
       try {
         environmentChanged =
-          (await onPrepareNavigationRoot?.(sourceRootPath)) ?? false;
+          (await onPrepareNavigationRoot?.(targetPath)) ?? false;
       } catch {
         if (request !== refreshRequestRef.current) return;
         toast.error(t("feedback.remoteSessionFailed"));
@@ -382,14 +389,15 @@ export const FileExplorer = memo(
         }
       }
       if (request !== refreshRequestRef.current) return;
-      setVisibleRootPath(sourceRootPath);
-      if (!environmentChanged) tree.refresh(sourceRootPath);
+      setVisibleRootPath(targetPath);
+      if (!environmentChanged) tree.refresh(targetPath);
     }, [
       navigationKey,
       onPrepareNavigationRoot,
+      onSyncToTerminal,
       sourceRootPath,
       t,
-      tree.refresh,
+      tree,
     ]);
 
     const handleRefreshCurrent = useCallback(() => {
