@@ -86,6 +86,10 @@ export function isIncompleteTool(
 
 export function isHiddenTool(block: Block): boolean {
   if (block.role !== "tool" && block.role !== "approval") return false;
+  // Harnesses also publish todo mutations as ordinary tool calls. The
+  // canonical tasks block is the user-facing representation, so keep the
+  // provider-internal call out of the activity stack.
+  if (block.tool?.kind?.toLowerCase() === "tasks") return true;
   if (
     isEditTool(
       block.tool?.kind,
@@ -302,7 +306,9 @@ export function lastActivityIndex(items: TurnItem[]): number {
 export function activityStillRunning(blocks: Block[]): boolean {
   return blocks.some(
     (block) =>
-      (isToolBlock(block) && toolCallState(block) === "pending") ||
+      (isToolBlock(block) &&
+        !isHiddenTool(block) &&
+        toolCallState(block) === "pending") ||
       needsApproval(block),
   );
 }

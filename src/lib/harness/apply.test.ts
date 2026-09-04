@@ -196,6 +196,77 @@ describe("task list updates", () => {
     expect(session.blocks.some((block) => block.role === "plan")).toBe(false);
   });
 
+  it("merges partial status updates without removing or renaming tasks", () => {
+    let session = appendUser(newSession("cursor", "/tmp"), "fix it");
+    session = applyHarnessEvent(session, {
+      type: "tasks.updated",
+      items: [
+        { id: "1", text: "Inspect", status: "completed" },
+        { id: "2", text: "Implement", status: "in_progress" },
+        { id: "3", text: "Verify", status: "pending" },
+      ],
+    });
+    session = applyHarnessEvent(session, {
+      type: "tasks.updated",
+      merge: true,
+      items: [
+        { id: "2", text: "Implementing the fix", status: "completed" },
+      ],
+    });
+
+    expect(
+      session.blocks.find((block) => block.role === "tasks")?.taskList?.items,
+    ).toEqual([
+      { id: "1", text: "Inspect", status: "completed" },
+      { id: "2", text: "Implement", status: "completed" },
+      { id: "3", text: "Verify", status: "pending" },
+    ]);
+  });
+
+  it("keeps known labels stable when a full snapshot changes membership", () => {
+    let session = appendUser(newSession("cursor", "/tmp"), "fix it");
+    session = applyHarnessEvent(session, {
+      type: "tasks.updated",
+      items: [
+        { id: "1", text: "Inspect", status: "completed" },
+        { id: "2", text: "Implement", status: "in_progress" },
+      ],
+    });
+    session = applyHarnessEvent(session, {
+      type: "tasks.updated",
+      items: [
+        { id: "2", text: "Implementing the fix", status: "completed" },
+        { id: "3", text: "Verify", status: "in_progress" },
+      ],
+    });
+
+    expect(
+      session.blocks.find((block) => block.role === "tasks")?.taskList?.items,
+    ).toEqual([
+      { id: "2", text: "Implement", status: "completed" },
+      { id: "3", text: "Verify", status: "in_progress" },
+    ]);
+  });
+
+  it("resets an in-progress task to pending when the turn stops", () => {
+    let session = appendUser(newSession("cursor", "/tmp"), "fix it");
+    session = applyHarnessEvent(session, {
+      type: "tasks.updated",
+      items: [
+        { text: "Inspect", status: "completed" },
+        { text: "Implement", status: "in_progress" },
+      ],
+    });
+    session = stopStreaming(session);
+
+    const tasks = session.blocks.find((block) => block.role === "tasks");
+    expect(tasks?.text).toBe("[x] Inspect\n[ ] Implement");
+    expect(tasks?.taskList?.items).toEqual([
+      { text: "Inspect", status: "completed" },
+      { text: "Implement", status: "pending" },
+    ]);
+  });
+
   it("keeps authored plans as separate document blocks", () => {
     let session = appendUser(newSession("codex", "/tmp"), "plan it");
     session = applyHarnessEvent(session, {

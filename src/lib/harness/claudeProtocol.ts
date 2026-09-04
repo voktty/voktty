@@ -4,7 +4,7 @@ import type {
   TaskListItem,
   ToolPreview,
 } from "../session";
-import { normalizeTaskListStatus } from "../taskList";
+import { isTaskListToolName, taskListFromToolInput } from "../taskList";
 import {
   questionPromptTitle,
   questionsFromUnknown,
@@ -859,27 +859,16 @@ export function tryParseJsonRecord(
 export function taskListFromTodos(
   input: Record<string, unknown>,
 ): TaskListItem[] | null {
-  const todos = input.todos;
-  if (!Array.isArray(todos)) return null;
-  return todos.flatMap((todo): TaskListItem[] => {
-    const rec = asRecord(todo);
-    const step =
-      stringField(rec, "content") ?? stringField(rec, "activeForm") ?? "Task";
-    return [
-      {
-        text: step,
-        status: normalizeTaskListStatus(stringField(rec, "status")),
-      },
-    ];
-  });
+  return taskListFromToolInput("TodoWrite", input);
 }
 
 export function isTodoTool(toolName: string): boolean {
-  return toolName.toLowerCase().includes("todowrite");
+  return isTaskListToolName(toolName);
 }
 
 export function toolKindFromName(toolName: string): string {
   const normalized = toolName.toLowerCase();
+  if (isTodoTool(toolName)) return "tasks";
   if (
     normalized.includes("bash") ||
     normalized.includes("command") ||

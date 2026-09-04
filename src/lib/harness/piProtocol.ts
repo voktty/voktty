@@ -1,5 +1,6 @@
 import type { Attachment, ToolPreview } from "../session";
 import type { AgentModel, ModelSetting } from "../models";
+import { isTaskListToolName } from "../taskList";
 import type { PiFlavor } from "./piFlavor";
 import { extractToolPreview, titleFromToolInput } from "./preview";
 import { streamTextDelta } from "./streamText";
@@ -558,6 +559,7 @@ export function textFromContent(content: unknown): string {
 
 export function toolKindFromName(toolName: string): string {
   const normalized = toolName.toLowerCase();
+  if (isTaskListToolName(toolName)) return "tasks";
   if (
     normalized.includes("bash") ||
     normalized.includes("command") ||

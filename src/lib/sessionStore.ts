@@ -350,7 +350,15 @@ function sanitizeTaskList(value: unknown): TaskListMeta | null {
     ) {
       return [];
     }
-    return [{ text, status }] satisfies TaskListMeta["items"];
+    const id =
+      typeof row.id === "string"
+        ? row.id.trim()
+        : typeof row.id === "number" && Number.isFinite(row.id)
+          ? String(row.id)
+          : "";
+    return [
+      { ...(id ? { id } : {}), text, status },
+    ] satisfies TaskListMeta["items"];
   });
   if (items.length === 0) return null;
   const key = typeof record.key === "string" ? record.key.trim() : "";

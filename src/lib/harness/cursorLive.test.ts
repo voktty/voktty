@@ -126,9 +126,10 @@ afterEach(async () => {
 });
 
 describe("cursor background subagents", () => {
-  it("emits Cursor todo updates as structured task lists", async () => {
+  it("emits request-shaped Cursor todo updates as structured task lists", async () => {
     const { events, promptId, turn } = await startTurn("cursor-live");
-    notify("cursor/update_todos", {
+    request(71, "cursor/update_todos", {
+      toolCallId: "call_todos",
       todos: [
         { content: "Inspect", status: "completed" },
         { content: "Implement", status: "in_progress" },
@@ -140,6 +141,88 @@ describe("cursor background subagents", () => {
         { text: "Inspect", status: "completed" },
         { text: "Implement", status: "in_progress" },
       ],
+    });
+    await waitFor(
+      () => parse().some((message) => message.id === 71 && "result" in message),
+      "cursor/update_todos response",
+    );
+    reply(promptId, { stopReason: "end_turn" });
+    await turn;
+  });
+
+  it("keeps notification-shaped Cursor todo updates compatible", async () => {
+    const { events, promptId, turn } = await startTurn("cursor-live");
+    notify("_cursor/update_todos", {
+      todos: [{ content: "Inspect", status: "pending" }],
+    });
+    expect(events.at(-1)).toEqual({
+      type: "tasks.updated",
+      items: [{ text: "Inspect", status: "pending" }],
+    });
+    reply(promptId, { stopReason: "end_turn" });
+    await turn;
+  });
+
+  it("preserves Cursor's partial-update signal and task identities", async () => {
+    const { events, promptId, turn } = await startTurn("cursor-live");
+    request(72, "cursor/update_todos", {
+      toolCallId: "call_todos",
+      merge: true,
+      todos: [
+        { id: "2", content: "Implementing the fix", status: "completed" },
+      ],
+    });
+    expect(events.at(-1)).toEqual({
+      type: "tasks.updated",
+      merge: true,
+      items: [
+        {
+          id: "2",
+          text: "Implementing the fix",
+          status: "completed",
+        },
+      ],
+    });
+    await waitFor(
+      () => parse().some((message) => message.id === 72 && "result" in message),
+      "partial cursor/update_todos response",
+    );
+    reply(promptId, { stopReason: "end_turn" });
+    await turn;
+  });
+
+  it("marks Cursor's redundant todo tool call as internal task activity", async () => {
+    const { events, promptId, turn } = await startTurn("cursor-live");
+    notify("session/update", {
+      sessionId: "cursor_1",
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "call_todos",
+        title: "Update TODOs",
+        kind: "other",
+        status: "pending",
+        rawInput: { _toolName: "updateTodos", todos: [] },
+      },
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "tool.updated",
+      callId: "call_todos",
+      kind: "tasks",
+    });
+    notify("session/update", {
+      sessionId: "cursor_1",
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call_todos",
+        kind: "other",
+        status: "completed",
+      },
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "tool.updated",
+      callId: "call_todos",
+      kind: "tasks",
+      status: "completed",
     });
     reply(promptId, { stopReason: "end_turn" });
     await turn;

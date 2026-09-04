@@ -1,4 +1,10 @@
-import type { Attachment, Block, Session, ToolPreview } from "../session";
+import type {
+  Attachment,
+  Block,
+  Session,
+  TaskListItem,
+  ToolPreview,
+} from "../session";
 import { mergeContextUsage } from "../contextUsage";
 import { displayPath } from "../paths";
 import {
@@ -115,8 +121,15 @@ function upsertTaskList(
     if (key) return block.taskList?.key === key;
     return index > lastUser;
   });
+  const previousItems =
+    existing >= 0 ? session.blocks[existing].taskList?.items : undefined;
+  const items = previousItems
+    ? event.merge
+      ? mergeTaskListItems(previousItems, event.items)
+      : preserveTaskListLabels(previousItems, event.items)
+    : event.items;
 
-  if (event.items.length === 0) {
+  if (items.length === 0) {
     if (existing < 0) return session;
     return {
       ...session,
@@ -129,9 +142,9 @@ function upsertTaskList(
     ...(event.explanation?.trim()
       ? { explanation: event.explanation.trim() }
       : {}),
-    items: event.items,
+    items,
   };
-  const text = taskListText(event.items);
+  const text = taskListText(items);
   if (existing >= 0) {
     const blocks = session.blocks.slice();
     blocks[existing] = {
@@ -147,6 +160,55 @@ function upsertTaskList(
     role: "tasks",
     text,
     taskList,
+  });
+}
+
+function mergeTaskListItems(
+  existing: TaskListItem[],
+  updates: TaskListItem[],
+): TaskListItem[] {
+  if (updates.length === 0) return existing;
+  const items = existing.slice();
+  const indexById = new Map<string, number>();
+  for (let index = 0; index < items.length; index += 1) {
+    const id = items[index].id;
+    if (id) indexById.set(id, index);
+  }
+
+  for (const update of updates) {
+    const index = update.id
+      ? (indexById.get(update.id) ??
+        items.findIndex((item) => item.text === update.text))
+      : items.findIndex((item) => item.text === update.text);
+    if (index < 0) {
+      items.push(update);
+      if (update.id) indexById.set(update.id, items.length - 1);
+      continue;
+    }
+    const current = items[index];
+    items[index] = {
+      ...(current.id || update.id ? { id: current.id ?? update.id } : {}),
+      // A merge update changes state. Full snapshots remain responsible for
+      // intentional task renames or reordered lists.
+      text: current.text,
+      status: update.status,
+    };
+  }
+  return items;
+}
+
+function preserveTaskListLabels(
+  existing: TaskListItem[],
+  snapshot: TaskListItem[],
+): TaskListItem[] {
+  const existingById = new Map(
+    existing.flatMap((item) => (item.id ? [[item.id, item] as const] : [])),
+  );
+  return snapshot.map((item) => {
+    const previous = item.id ? existingById.get(item.id) : undefined;
+    return previous && previous.text !== item.text
+      ? { ...item, text: previous.text }
+      : item;
   });
 }
 
@@ -220,10 +282,24 @@ export function stopStreaming(session: Session): Session {
     busy: false,
     pendingQuestion: undefined,
     blocks: stampTurnDuration(
-      session.blocks.map((block) =>
-        block.streaming ? { ...block, streaming: false } : block,
-      ),
+      session.blocks.map(stopBlockProgress),
     ),
+  };
+}
+
+function stopBlockProgress(block: Block): Block {
+  const stopped = block.streaming ? { ...block, streaming: false } : block;
+  const current = stopped.taskList;
+  if (!current?.items.some((item) => item.status === "in_progress")) {
+    return stopped;
+  }
+  const items = current.items.map((item) =>
+    item.status === "in_progress" ? { ...item, status: "pending" as const } : item,
+  );
+  return {
+    ...stopped,
+    text: taskListText(items),
+    taskList: { ...current, items },
   };
 }
 

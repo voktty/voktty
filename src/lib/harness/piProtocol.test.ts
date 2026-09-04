@@ -296,6 +296,7 @@ describe("tools and models", () => {
   it("titles built-in Pi tools", () => {
     expect(toolKindFromName("bash")).toBe("execute");
     expect(toolKindFromName("edit")).toBe("edit");
+    expect(toolKindFromName("todo_write")).toBe("tasks");
     expect(toolTitle("bash", { command: "git status -s" })).toBe("git status -s");
     expect(toolTitle("read", { path: "src/a.ts" })).toMatch(/src\/a\.ts/);
     expect(previewFromTool("write", { path: "src/a.ts" })?.kind).toBe("write");

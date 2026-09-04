@@ -442,6 +442,7 @@ describe("helpers", () => {
       "Skill /code-review",
     );
     expect(isTodoTool("TodoWrite")).toBe(true);
+    expect(toolKindFromName("TodoWrite")).toBe("tasks");
     expect(
       taskListFromTodos({
         todos: [

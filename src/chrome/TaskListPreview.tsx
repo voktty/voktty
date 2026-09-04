@@ -37,7 +37,7 @@ export function TaskListPreview({ items, explanation }: Props) {
       <ol className="py-1">
         {items.map((item, index) => (
           <li
-            key={`${index}:${item.text}`}
+            key={item.id ?? `${index}:${item.text}`}
             className="flex min-w-0 items-start gap-2.5 px-2.5 py-1.5"
           >
             <TaskState status={item.status} />

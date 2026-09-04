@@ -1,7 +1,10 @@
 import { nativeModelId } from "../models";
 import type { RuntimeMode } from "../session";
 import { promptBlocks } from "../attachments";
-import { normalizeTaskListStatus } from "../taskList";
+import {
+  isTaskListToolName,
+  taskListFromToolInput,
+} from "../taskList";
 import { AcpClient, type AcpHandlers } from "./acp";
 import {
   killChild,
@@ -69,6 +72,7 @@ type Live = {
   toolEnrichmentTimer?: ReturnType<typeof setTimeout>;
   toolEnrichmentRunning: boolean;
   toolStatuses: Map<string, string>;
+  taskListTools: Set<string>;
   agentTools: Map<string, string>;
   backgroundAgentTools: Set<string>;
   promptActive: boolean;
@@ -162,6 +166,7 @@ export async function cancelCursorTurn(sessionId: string): Promise<void> {
   live.cancelled = true;
   live.muteUpdates = true;
   live.promptActive = false;
+  live.taskListTools.clear();
   live.agentTools.clear();
   live.backgroundAgentTools.clear();
   if (live.toolEnrichmentTimer) clearTimeout(live.toolEnrichmentTimer);
@@ -322,6 +327,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       pendingToolEnrichments: new Map(),
       toolEnrichmentRunning: false,
       toolStatuses: new Map(),
+      taskListTools: new Set(),
       agentTools: new Map(),
       backgroundAgentTools: new Set(),
       promptActive: false,
@@ -399,6 +405,7 @@ async function prompt(live: Live, input: SendTurnInput): Promise<void> {
     if (blocks.length === 0) return;
     live.agentTools.clear();
     live.backgroundAgentTools.clear();
+    live.taskListTools.clear();
     live.promptActive = true;
     await live.acp.request("session/prompt", {
       sessionId: live.acpSessionId,
@@ -430,22 +437,8 @@ function handleNotification(live: Live, method: string, params: unknown) {
     handleSessionUpdate(live, params);
     return;
   }
-  if (method === "cursor/update_todos") {
-    const todos = asRecord(params)?.todos;
-    if (Array.isArray(todos)) {
-      const items = todos.flatMap((item) => {
-        const rec = asRecord(item);
-        const text = String(rec?.content ?? "").trim();
-        if (!text) return [];
-        return [
-          {
-            text,
-            status: normalizeTaskListStatus(rec?.status),
-          },
-        ];
-      });
-      live.onEvent({ type: "tasks.updated", items });
-    }
+  if (isCursorTodoUpdate(method)) {
+    emitCursorTodoUpdate(live, params);
   }
 }
 
@@ -470,12 +463,39 @@ async function handleRequest(
     await live.acp.respond(id, { outcome: { outcome: "accepted" } });
     return;
   }
+  if (isCursorTodoUpdate(method)) {
+    emitCursorTodoUpdate(live, params);
+    await live.acp.respond(id, {}).catch(() => undefined);
+    return;
+  }
   if (method === "cursor/task") {
     handleCursorTask(live, params);
     await live.acp.respond(id, {}).catch(() => undefined);
     return;
   }
   await live.acp.respond(id, {}).catch(() => undefined);
+}
+
+function isCursorTodoUpdate(method: string): boolean {
+  return method === "cursor/update_todos" || method === "_cursor/update_todos";
+}
+
+function emitCursorTodoUpdate(live: Live, params: unknown): void {
+  const rec = asRecord(params);
+  const callId = rec
+    ? stringField(rec, "toolCallId") ?? stringField(rec, "tool_call_id")
+    : undefined;
+  if (callId) {
+    live.taskListTools.add(callId);
+    live.onEvent({ type: "tool.updated", callId, kind: "tasks" });
+  }
+  const items = taskListFromToolInput("updateTodos", params);
+  if (!items) return;
+  live.onEvent({
+    type: "tasks.updated",
+    items,
+    ...(rec?.merge === true ? { merge: true } : {}),
+  });
 }
 
 function handleCursorTask(live: Live, params: unknown): void {
@@ -723,7 +743,11 @@ function handleSessionUpdate(live: Live, params: unknown) {
       live.agentTools.has(callId) ||
       isAgentTool(reportedKind, rawTitle) ||
       isCursorAgentInput(rawInput);
-    const toolKind = agent ? "agent" : reportedKind;
+    const taskList =
+      live.taskListTools.has(callId) ||
+      isCursorTaskListInput(rawInput, rawTitle);
+    if (taskList) live.taskListTools.add(callId);
+    const toolKind = agent ? "agent" : taskList ? "tasks" : reportedKind;
     const detail = toolDetail(update, tool);
     const preview = extractToolPreview(update, tool);
     const title = agent
@@ -786,6 +810,24 @@ function isCursorAgentInput(value: unknown): boolean {
     stringField(input, "tool_name") ??
     stringField(input, "name");
   return !!name && isAgentToolName(name);
+}
+
+function isCursorTaskListInput(
+  value: unknown,
+  title: string | undefined,
+): boolean {
+  const input = asRecord(value);
+  const name = input
+    ? (stringField(input, "_toolName") ??
+      stringField(input, "toolName") ??
+      stringField(input, "tool_name") ??
+      stringField(input, "name"))
+    : undefined;
+  const normalized = name?.replace(/[\s_-]+/g, "").toLowerCase();
+  return (
+    (!!normalized && isTaskListToolName(normalized)) ||
+    /^update todos\b/i.test(title ?? "")
+  );
 }
 
 function cursorAgentTitle(
@@ -1007,6 +1049,7 @@ function kindFromCursorToolName(
   if (key === "shell" || key === "bash") return "execute";
   if (key === "skill" || key === "skills") return "skill";
   if (key === "agent" || key === "task" || key === "subagent") return "agent";
+  if (isTaskListToolName(key)) return "tasks";
   return fallback;
 }
 

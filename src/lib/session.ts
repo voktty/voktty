@@ -39,6 +39,8 @@ export type TaskListItemStatus =
   "pending" | "in_progress" | "completed" | "cancelled";
 
 export type TaskListItem = {
+  /** Stable provider identity, when available, for merging status-only updates. */
+  id?: string;
   text: string;
   status: TaskListItemStatus;
 };

@@ -146,8 +146,8 @@ describe("sanitizeSessionForPersist", () => {
           key: "turn_1",
           explanation: "Inspection complete.",
           items: [
-            { text: "Inspect", status: "completed" },
-            { text: "Implement", status: "in_progress" },
+            { id: "1", text: "Inspect", status: "completed" },
+            { id: "2", text: "Implement", status: "in_progress" },
           ],
         },
       },

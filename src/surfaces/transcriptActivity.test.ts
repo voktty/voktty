@@ -121,6 +121,43 @@ describe("groupTurnItems", () => {
     expect(items[0].blocks.map((block) => block.id)).toEqual(["a", "b", "c"]);
   });
 
+  it("hides provider todo calls in favor of the shared tasks block", () => {
+    const tasks: Block = {
+      id: "tasks",
+      role: "tasks",
+      text: "[~] Implement",
+      taskList: {
+        items: [{ text: "Implement", status: "in_progress" }],
+      },
+    };
+    expect(
+      groupTurnItems([
+        {
+          id: "todo-tool",
+          role: "tool",
+          text: "Update TODOs",
+          tool: {
+            kind: "tasks",
+            title: "Update TODOs",
+            status: "completed",
+          },
+        },
+        tasks,
+      ]),
+    ).toEqual([{ type: "block", block: tasks }]);
+    expect(
+      activityStillRunning([
+        {
+          id: "todo-tool",
+          role: "tool",
+          text: "Update TODOs",
+          streaming: true,
+          tool: { kind: "tasks", status: "pending" },
+        },
+      ]),
+    ).toBe(false);
+  });
+
   it("folds edits into the activity stack", () => {
     const items = groupTurnItems([shell("a"), edit("b"), shell("c")]);
     expect(items).toHaveLength(1);

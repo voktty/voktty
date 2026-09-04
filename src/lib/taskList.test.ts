@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  isTaskListToolName,
   legacyTaskListFromText,
   normalizeTaskListStatus,
+  taskListFromToolInput,
   taskListProgressLabel,
   taskListText,
 } from "./taskList";
@@ -13,6 +15,26 @@ describe("task lists", () => {
     expect(normalizeTaskListStatus("done")).toBe("completed");
     expect(normalizeTaskListStatus("skipped")).toBe("cancelled");
     expect(normalizeTaskListStatus("unknown")).toBe("pending");
+  });
+
+  it("normalizes todo-write tools from different harnesses", () => {
+    expect(isTaskListToolName("TodoWrite")).toBe(true);
+    expect(isTaskListToolName("update_todos")).toBe(true);
+    expect(isTaskListToolName("edit")).toBe(false);
+    expect(
+      taskListFromToolInput("todowrite", {
+        todos: [
+          { id: "inspect", content: "Inspect", status: "completed" },
+          { id: 2, activeForm: "Implementing", status: "inProgress" },
+          { text: "Verify", status: "pending" },
+        ],
+      }),
+    ).toEqual([
+      { id: "inspect", text: "Inspect", status: "completed" },
+      { id: "2", text: "Implementing", status: "in_progress" },
+      { text: "Verify", status: "pending" },
+    ]);
+    expect(taskListFromToolInput("edit", { todos: [] })).toBeNull();
   });
 
   it("keeps a searchable text representation and reads legacy snapshots", () => {

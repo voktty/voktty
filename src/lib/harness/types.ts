@@ -67,6 +67,8 @@ export type HarnessEvent =
       type: "tasks.updated";
       key?: string;
       explanation?: string;
+      /** Merge changed items into the existing list instead of replacing it. */
+      merge?: boolean;
       items: TaskListItem[];
     }
   | { type: "plan"; text: string }

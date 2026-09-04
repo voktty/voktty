@@ -1,5 +1,6 @@
 import { modelContextWindow, nativeModelId } from "../models";
 import type { RuntimeMode } from "../session";
+import { taskListFromToolInput } from "../taskList";
 import {
   execChild,
   freeHarnessPort,
@@ -633,6 +634,8 @@ function emitTool(live: Live, part: OpenCodePart): void {
     (typeof state.title === "string" && state.title) ||
     tool;
   const detail = detailFromToolPart(part);
+  const tasks = taskListFromToolInput(tool, state.input);
+  if (tasks) live.onEvent({ type: "tasks.updated", items: tasks });
   if (status === "pending") {
     live.onEvent({
       type: "tool.started",

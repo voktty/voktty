@@ -1,5 +1,41 @@
 import type { TaskListItem, TaskListItemStatus } from "./session";
 
+export function isTaskListToolName(value: string): boolean {
+  const name = value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+  return ["todowrite", "writetodos", "updatetodos"].some(
+    (candidate) => name === candidate || name.endsWith(candidate),
+  );
+}
+
+/** Common todo-write payload used by Claude, OpenCode, and Pi extensions. */
+export function taskListFromToolInput(
+  toolName: string,
+  input: unknown,
+): TaskListItem[] | null {
+  if (!isTaskListToolName(toolName)) return null;
+  const rec = asRecord(input);
+  const todos = rec?.todos;
+  if (!Array.isArray(todos)) return null;
+  return todos.flatMap((todo): TaskListItem[] => {
+    const row = asRecord(todo);
+    const text = [row?.content, row?.activeForm, row?.text]
+      .find(
+        (value): value is string =>
+          typeof value === "string" && !!value.trim(),
+      )
+      ?.trim();
+    if (!text) return [];
+    const id = taskListItemId(row?.id);
+    return [
+      {
+        ...(id ? { id } : {}),
+        text,
+        status: normalizeTaskListStatus(row?.status),
+      },
+    ];
+  });
+}
+
 export function normalizeTaskListStatus(value: unknown): TaskListItemStatus {
   const status = String(value ?? "pending")
     .trim()
@@ -62,4 +98,17 @@ function statusFromLegacyMark(mark: string): TaskListItemStatus {
   if (mark === "~" || mark === "…") return "in_progress";
   if (mark === "-") return "cancelled";
   return "pending";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function taskListItemId(value: unknown): string | undefined {
+  if (typeof value === "string") return value.trim() || undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return undefined;
 }

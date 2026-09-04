@@ -1,4 +1,5 @@
 import { nativeModelId } from "../models";
+import { taskListFromToolInput } from "../taskList";
 import {
   killChild,
   spawnChild,
@@ -702,6 +703,7 @@ function upsertTool(
       status: "pending",
       preview: previewFromTool(name, input),
     });
+    emitTaskListIfNeeded(live, tool);
   } else if (Object.keys(input).length > 0) {
     updateTool(live, tool, input);
   }
@@ -724,6 +726,12 @@ function updateTool(
     detail: summarizeToolRequest(tool.name, tool.input),
     preview: previewFromTool(tool.name, tool.input),
   });
+  emitTaskListIfNeeded(live, tool);
+}
+
+function emitTaskListIfNeeded(live: Live, tool: InFlightTool): void {
+  const items = taskListFromToolInput(tool.name, tool.input);
+  if (items) live.onEvent({ type: "tasks.updated", items });
 }
 
 function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {

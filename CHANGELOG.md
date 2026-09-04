@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Settings → General → Follow-up behavior can queue prompts sent during an active turn and dispatch them in order when the agent finishes. Queued prompts can be edited, removed, or sent immediately with Steer; interrupting a turn pauses the queue until you resume it. In #56 by @tcmarkfeld.
 - Grok Build accepts image attachments in prompts.
-- Live task lists from supported agent harnesses appear as a separate Tasks card with per-item status and a completion count. Task progress is saved in session history, searchable, and included in handoffs and second opinions.
+- Live task lists from supported agent harnesses appear as a separate Tasks card with per-item status and a completion count, while provider-internal todo calls stay out of the activity feed. Partial task updates preserve the full checklist and its labels, and stopping a turn resets unfinished spinners. Task progress is saved in session history, searchable, and included in handoffs and second opinions.
 - Session checkpoint Review opens a read-only unified diff of the exact before-and-after changes made by that session, with session-scoped file and line counts.
 
 ### Changed
