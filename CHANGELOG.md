@@ -7,10 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Settings → General → Follow-up behavior can queue prompts sent during an active turn and dispatch them in order when the agent finishes. Queued prompts can be edited, removed, or sent immediately with Steer; interrupting a turn pauses the queue until you resume it. In #56 by @tcmarkfeld.
+- Grok Build accepts image attachments in prompts.
+- Live task lists from supported agent harnesses appear as a separate Tasks card with per-item status and a completion count. Task progress is saved in session history, searchable, and included in handoffs and second opinions.
+- Session checkpoint Review opens a read-only unified diff of the exact before-and-after changes made by that session, with session-scoped file and line counts.
+
+### Changed
+
+- Diff reviews load files concurrently, prioritize the focused file, and render large changes progressively. Embedded pull request diffs use collapsible file cards, and large patches are no longer silently capped at 2,000 rendered lines.
+- Sync Changes starts its pull and push without a separate push confirmation.
+- The composer hides its internal scrollbar, and a disabled attachment button names the active harness that does not support attachments.
+- Pull request CI cancels superseded runs while main-branch and other non-PR runs remain independent. In #57 by @tcmarkfeld.
+- The README uses a higher-resolution application screenshot.
+
 ### Fixed
 
 - Cursor background subagents stay visibly active until their result is delivered instead of making the session look stalled. In #61 by @D3nnis72.
+- Session Undo preserves changes that existed before the agent turn and is disabled when another running session or a later edit makes restoration unsafe. Checkpoint operations are serialized so overlapping review, keep, and undo actions cannot race.
+- Vertical wheel gestures over a horizontally scrollable unified diff code pane continue scrolling the surrounding review.
+- Reordering the visible tabs for one project no longer moves hidden tabs belonging to other projects.
+- Copying a code block no longer adds its final newline to the clipboard.
 - ⌘W / Ctrl+W closes the active workspace tab or pane when the project terminal has focus instead of closing a terminal from the project-wide dock.
+- The close button remains available on the last workspace tab.
 
 ## [0.1.31] - 2026-09-03
 

@@ -128,21 +128,9 @@ export function isToolBlock(block: Block): boolean {
   return block.role === "tool" || block.role === "approval";
 }
 
-/** Assistant prose with something in it — the paragraphs between tool calls. */
+/** Assistant prose with something in it. */
 export function isProseBlock(block: Block): boolean {
   return block.role === "assistant" && !!block.text.trim();
-}
-
-/**
- * Where the turn's final answer starts: the trailing run of assistant prose.
- * Everything before it folds, so the last thing the agent says is the only
- * full-size thing left. A block still streaming sits in that run, which is why
- * text renders in full as it arrives and only folds once the next tool starts.
- */
-export function finalResponseStart(blocks: Block[]): number {
-  let index = blocks.length;
-  while (index > 0 && isProseBlock(blocks[index - 1])) index -= 1;
-  return index;
 }
 
 /** First paragraph of a folded prose block, stripped to one plain line. */
@@ -199,14 +187,16 @@ export function groupTurns(blocks: Block[]): Block[][] {
 }
 
 /**
- * Fold a turn's working process — tool calls and the prose between them —
- * into one activity group, leaving the final answer standing alone.
+ * Fold contiguous runs of tool calls and reasoning into activity groups.
+ * Assistant prose always stands on its own, including progress updates between
+ * groups, so the readable transcript never disappears into activity chrome.
  */
 export function groupTurnItems(blocks: Block[]): TurnItem[] {
-  const visible = blocks.filter(
-    (block) => !isIgnoredTurnBlock(block) && !isHiddenTool(block),
+  const visible = withoutSupersededInitialThinking(
+    blocks.filter(
+      (block) => !isIgnoredTurnBlock(block) && !isHiddenTool(block),
+    ),
   );
-  const finalStart = finalResponseStart(visible);
   const items: TurnItem[] = [];
   let activity: Block[] = [];
   const flush = () => {
@@ -215,8 +205,8 @@ export function groupTurnItems(blocks: Block[]): TurnItem[] {
     }
     activity = [];
   };
-  visible.forEach((block, index) => {
-    if (isActivityBlock(block) || (index < finalStart && isProseBlock(block))) {
+  visible.forEach((block) => {
+    if (isActivityBlock(block)) {
       activity.push(block);
       return;
     }
@@ -225,6 +215,55 @@ export function groupTurnItems(blocks: Block[]): TurnItem[] {
   });
   flush();
   return items;
+}
+
+/**
+ * Some harnesses publish private reasoning before their first assistant text.
+ * Keep it around only while that text has not arrived; if a tool starts first,
+ * the reasoning belongs to that activity group and remains visible there.
+ */
+function withoutSupersededInitialThinking(blocks: Block[]): Block[] {
+  let start = 0;
+  while (
+    start < blocks.length &&
+    (blocks[start].role === "user" || blocks[start].role === "system")
+  ) {
+    start += 1;
+  }
+
+  let end = start;
+  while (end < blocks.length && isThinkingBlock(blocks[end])) end += 1;
+  if (end === start) return blocks;
+
+  const following = blocks.slice(end);
+  const proseIndex = following.findIndex(isProseBlock);
+  if (proseIndex < 0) return blocks;
+  const toolIndex = following.findIndex(isToolBlock);
+  if (toolIndex >= 0 && toolIndex < proseIndex) return blocks;
+
+  return [...blocks.slice(0, start), ...blocks.slice(end)];
+}
+
+/** The leading reasoning-only activity shown before the first response arrives. */
+export function initialThinkingIndex(items: TurnItem[]): number {
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    if (
+      item.type === "block" &&
+      (item.block.role === "user" || item.block.role === "system")
+    ) {
+      continue;
+    }
+    if (
+      item.type === "activity" &&
+      item.blocks.length > 0 &&
+      item.blocks.every(isThinkingBlock)
+    ) {
+      return index;
+    }
+    return -1;
+  }
+  return -1;
 }
 
 function isIgnoredTurnBlock(block: Block): boolean {

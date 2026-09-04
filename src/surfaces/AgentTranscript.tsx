@@ -8,7 +8,6 @@ import {
   Bot,
   PenLine,
   Search,
-  Sparkles,
   Terminal,
   Wrench,
   X,
@@ -71,6 +70,7 @@ import {
   groupTurnItems,
   groupTurns,
   hasRunningSubagent,
+  initialThinkingIndex,
   isIncompleteTool,
   isThinkingBlock,
   lastActivityIndex,
@@ -322,9 +322,10 @@ export function AgentTranscript({
           const durationMs = userBlock?.durationMs;
           const settled = !(busy && isLastTurn);
           const items = groupTurnItems(turn);
-          // Where the work ends and the answer begins: the last group of
-          // activity in the turn.
+          // Earlier activity groups have already been followed by prose or
+          // more work. Only the last one can still be the live group.
           const foldedAt = lastActivityIndex(items);
+          const initialThinkingAt = initialThinkingIndex(items);
           const startedAt = userBlock?.startedAt;
           // The agent starting its answer is the end of the work: fold the
           // groups then, not when the turn finally settles, so the collapse
@@ -353,24 +354,35 @@ export function AgentTranscript({
             >
               {items.map((item, itemIndex) =>
                 item.type === "activity" ? (
-                  <ActivityPhases
-                    key={item.blocks[0].id}
-                    blocks={item.blocks}
-                    cwd={cwd}
-                    done={settled || (answering && !workStillRunning)}
-                    onApproval={onApproval}
-                    onOpenFile={onOpenFile}
-                    onOpenDiff={onOpenDiff}
-                  />
+                  itemIndex === initialThinkingAt ? (
+                    <InitialThinking
+                      key={item.blocks[0].id}
+                      live={!settled}
+                    />
+                  ) : (
+                    <ActivityPhases
+                      key={item.blocks[0].id}
+                      blocks={item.blocks}
+                      cwd={cwd}
+                      done={
+                        settled ||
+                        itemIndex < foldedAt ||
+                        (answering && !workStillRunning)
+                      }
+                      onApproval={onApproval}
+                      onOpenFile={onOpenFile}
+                      onOpenDiff={onOpenDiff}
+                    />
+                  )
                 ) : (
                   <TranscriptBlock
                     key={item.block.id}
                     block={item.block}
                     layout={transcriptLayout}
                     stickyIndex={firstVisibleTurn + turnIndex + 1}
-                    compactTop={
-                      foldedAt >= 0 &&
-                      itemIndex === foldedAt + 1 &&
+                    afterActivity={
+                      itemIndex > 0 &&
+                      items[itemIndex - 1]?.type === "activity" &&
                       isProseBlock(item.block)
                     }
                     onApproval={onApproval}
@@ -428,6 +440,15 @@ export function AgentTranscript({
           onDismiss={dismissSelection}
         />
       ) : null}
+    </div>
+  );
+}
+
+/** Placeholder for private reasoning before the first assistant text arrives. */
+function InitialThinking({ live }: { live: boolean }) {
+  return (
+    <div className="min-w-0 px-4 py-1 font-sans text-sm text-content/50">
+      {live ? <Shimmer duration={1.6}>Thinking…</Shimmer> : "Thinking…"}
     </div>
   );
 }
@@ -662,7 +683,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   block,
   layout,
   stickyIndex,
-  compactTop = false,
+  afterActivity = false,
   cwd,
   onApproval,
   onOpenFile,
@@ -672,7 +693,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   block: Block;
   layout: TranscriptLayout;
   stickyIndex: number;
-  compactTop?: boolean;
+  afterActivity?: boolean;
   cwd?: string;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onOpenFile?: (path: string) => void;
@@ -768,7 +789,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   return (
     <div
       data-selectable-agent-response={block.streaming ? undefined : block.id}
-      className={`min-w-0 px-4 pb-1 text-content ${compactTop ? "pt-2" : "pt-3"}`}
+      className={`min-w-0 px-4 pb-1 text-content ${afterActivity ? "pt-1" : "pt-3"}`}
     >
       <AgentMarkdown
         text={block.text}
@@ -859,12 +880,10 @@ function UserMessageBlock({
 }
 
 /**
- * The turn's work as phases. A phase is a run of related calls under the line
- * the agent wrote to introduce it — "now I need to find the theme provider",
- * then the searches and reads that followed. The phase the agent is in stays
- * open, with new steps scrolling inside a short window; the moment it moves
- * on the phase folds back to its header, so a long turn ends up as a handful
- * of labelled groups sitting above the answer.
+ * The turn's work as phases. Related reasoning and calls stay together while
+ * assistant prose remains outside as full-size transcript text. The phase the
+ * agent is in stays open, with new steps scrolling inside a short window; the
+ * moment it moves on the phase folds back to its header.
  */
 function ActivityPhases({
   blocks,
@@ -1131,7 +1150,7 @@ function ActivityPhaseIcon({
   if (kind === "research") return <Search {...props} />;
   if (kind === "run") return <Terminal {...props} />;
   if (kind === "agent") return <Bot {...props} />;
-  if (kind === "think") return <Sparkles {...props} />;
+  if (kind === "think") return null;
   if (kind === "other") return <Wrench {...props} />;
   return <Minus {...props} />;
 }
