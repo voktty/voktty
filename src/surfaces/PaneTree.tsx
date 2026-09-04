@@ -67,6 +67,7 @@ type Shared = {
     options?: { intent?: TurnIntent },
   ) => void;
   onStop: (sessionId: string) => void;
+  onCompactContext: (sessionId: string) => boolean;
   onDeleteQueuedMessage: (sessionId: string, messageId: string) => void;
   onEditQueuedMessage: (
     sessionId: string,
@@ -155,6 +156,7 @@ function PaneTreeComponent({
   onRuntimeModeChange,
   onSubmit,
   onStop,
+  onCompactContext,
   onDeleteQueuedMessage,
   onEditQueuedMessage,
   onQueuedMessageEditingChange,
@@ -358,6 +360,7 @@ function PaneTreeComponent({
                 onRuntimeModeChange={onRuntimeModeChange}
                 onSubmit={onSubmit}
                 onStop={onStop}
+                onCompactContext={onCompactContext}
                 onDeleteQueuedMessage={onDeleteQueuedMessage}
                 onEditQueuedMessage={onEditQueuedMessage}
                 onQueuedMessageEditingChange={onQueuedMessageEditingChange}

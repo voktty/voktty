@@ -22,7 +22,9 @@ import { JsonRpcClient, type JsonRpcId } from "./jsonRpc";
 import { joinStreamText, snapshotRemainder } from "./streamText";
 import type {
   ApprovalDecision,
+  CompactContextInput,
   HarnessEvent,
+  HarnessSessionInput,
   SendTurnInput,
   SteerTurnInput,
 } from "./types";
@@ -94,6 +96,34 @@ export async function sendCodexTurn(input: SendTurnInput): Promise<void> {
       live.muteUpdates = false;
       try {
         await runTurn(live, input);
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
+  await live.turns;
+}
+
+export async function compactCodexContext(
+  input: CompactContextInput,
+): Promise<void> {
+  let live: Live;
+  try {
+    live = await ensureLive(input);
+  } catch (error) {
+    cancelledThreads.delete(input.sessionId);
+    throw error;
+  }
+  if (cancelledThreads.delete(input.sessionId)) return;
+
+  live.onEvent = input.onEvent;
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      try {
+        await runCompaction(live);
       } catch (error) {
         if (live.cancelled) return;
         throw error;
@@ -193,7 +223,7 @@ export function bindCodexSession(
   resumeByThread.set(threadId, { threadId: providerThreadId, cwd });
 }
 
-async function ensureLive(input: SendTurnInput): Promise<Live> {
+async function ensureLive(input: HarnessSessionInput): Promise<Live> {
   const existing = liveByThread.get(input.sessionId);
   if (existing && existing.cwd === input.cwd) {
     existing.onEvent = input.onEvent;
@@ -400,6 +430,27 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
       message: error instanceof Error ? error.message : String(error),
     });
     throw error;
+  } finally {
+    live.turnDone = null;
+    live.turnFailed = null;
+  }
+}
+
+async function runCompaction(live: Live): Promise<void> {
+  live.emittedAssistant = "";
+  live.emittedReasoning = "";
+  const turnPromise = new Promise<void>((resolve, reject) => {
+    live.turnDone = resolve;
+    live.turnFailed = reject;
+  });
+  settlePendingTurn(live);
+
+  try {
+    await live.rpc.request("thread/compact/start", {
+      threadId: live.threadId,
+    });
+    settlePendingTurn(live);
+    await turnPromise;
   } finally {
     live.turnDone = null;
     live.turnFailed = null;

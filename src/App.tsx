@@ -121,7 +121,9 @@ import {
   appendSteerUser,
   bindHarnessSession,
   cancelHarnessTurn,
+  canCompactHarnessContext,
   canSteerHarness,
+  compactHarnessContext,
   forgetHarnessSession,
   generateHarnessTitle,
   isLiveHarness,
@@ -212,6 +214,7 @@ import {
 } from "./lib/workspaceTabGroups";
 import {
   HARNESS_LABEL,
+  HARNESS_TITLE,
   canReplaceSessionTitle,
   formatSessionTitle,
   sessionNeedsInput,
@@ -3926,6 +3929,86 @@ export default function App({
     return () => window.clearTimeout(timer);
   }, [autoContinueKey, onSubmit]);
 
+  const onCompactContext = useCallback(
+    (sessionId: string) => {
+      const current = sessionsRef.current.find(
+        (session) => session.id === sessionId,
+      );
+      if (!current || current.busy) return false;
+      if (!canCompactHarnessContext(current.harness)) {
+        const unsupported = sessionsRef.current.map((session) =>
+          session.id === sessionId
+            ? applyHarnessEvent(session, {
+                type: "status",
+                text: `${HARNESS_TITLE[current.harness]} does not support manual context compaction.`,
+              })
+            : session,
+        );
+        sessionsRef.current = unsupported;
+        syncDockBadge(unsupported);
+        setSessions(unsupported);
+        return true;
+      }
+
+      const gen = (turnGen.current.get(sessionId) ?? 0) + 1;
+      turnGen.current.set(sessionId, gen);
+      const workCwd = sessionWorkCwd(current);
+      const started = sessionsRef.current.map((session) =>
+        session.id === sessionId
+          ? applyHarnessEvent(
+              { ...session, busy: true },
+              { type: "status", text: "Compacting context…" },
+            )
+          : session,
+      );
+      sessionsRef.current = started;
+      syncDockBadge(started);
+      setSessions(started);
+
+      void (async () => {
+        try {
+          await compactHarnessContext({
+            harness: current.harness,
+            sessionId,
+            cwd: workCwd,
+            model: current.model,
+            modelSettings: current.modelSettings,
+            runtimeMode: current.runtimeMode,
+            onEvent: (event) => {
+              if (turnGen.current.get(sessionId) !== gen) return;
+              enqueueHarnessEvent(sessionId, event);
+            },
+          });
+          if (turnGen.current.get(sessionId) !== gen) return;
+          enqueueHarnessEvent(sessionId, {
+            type: "status",
+            text: "Compacted context",
+          });
+        } catch (error: unknown) {
+          if (turnGen.current.get(sessionId) !== gen) return;
+          enqueueHarnessEvent(sessionId, {
+            type: "session.error",
+            message:
+              error instanceof Error
+                ? error.message
+                : `${current.harness} could not compact this context`,
+          });
+        } finally {
+          if (turnGen.current.get(sessionId) !== gen) return;
+          flushHarnessEvents();
+          const finished = sessionsRef.current.map((session) =>
+            session.id === sessionId ? { ...session, busy: false } : session,
+          );
+          sessionsRef.current = finished;
+          syncDockBadge(finished);
+          setSessions(finished);
+        }
+      })();
+      return true;
+    },
+    [enqueueHarnessEvent, flushHarnessEvents],
+  );
+
   const onStop = useCallback(
     (sessionId: string) => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
@@ -4742,6 +4825,7 @@ export default function App({
                           onRuntimeModeChange={onRuntimeModeChange}
                           onSubmit={onSubmit}
                           onStop={onStop}
+                          onCompactContext={onCompactContext}
                           onDeleteQueuedMessage={onDeleteQueuedMessage}
                           onEditQueuedMessage={onEditQueuedMessage}
                           onQueuedMessageEditingChange={

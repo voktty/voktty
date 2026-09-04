@@ -47,7 +47,9 @@ import {
 } from "./piProtocol";
 import type {
   ApprovalDecision,
+  CompactContextInput,
   HarnessEvent,
+  HarnessSessionInput,
   SendTurnInput,
   SteerTurnInput,
 } from "./types";
@@ -102,6 +104,7 @@ type Resume = {
 
 const INIT_TIMEOUT_MS = 45_000;
 const STATS_TIMEOUT_MS = 4_000;
+const COMPACT_TIMEOUT_MS = 30 * 60_000;
 
 type FlavorState = {
   liveByThread: Map<string, Live>;
@@ -168,6 +171,43 @@ export async function sendTurn(
       } catch (error) {
         if (live.cancelled) return;
         throw error;
+      }
+    });
+  await live.turns;
+}
+
+export async function compactContext(
+  flavor: PiFlavor,
+  input: CompactContextInput,
+): Promise<void> {
+  const state = stateFor(flavor);
+  let live = state.liveByThread.get(input.sessionId);
+  if (!live || live.cwd !== input.cwd) {
+    live = await ensureLive(flavor, input);
+  } else {
+    live.onEvent = input.onEvent;
+    await applyModel(live, input);
+  }
+  if (state.cancelledThreads.delete(input.sessionId)) return;
+
+  live.onEvent = input.onEvent;
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      const response = await live.rpc.request(
+        { type: "compact" },
+        COMPACT_TIMEOUT_MS,
+      );
+      const data = asRecord(response.data);
+      const used = data?.estimatedTokensAfter;
+      if (typeof used === "number" && Number.isFinite(used) && used > 0) {
+        live.onEvent({
+          type: "context",
+          used,
+          ...(live.contextWindow ? { window: live.contextWindow } : {}),
+        });
       }
     });
   await live.turns;
@@ -266,7 +306,7 @@ export function bindSession(
 
 async function ensureLive(
   flavor: PiFlavor,
-  input: SendTurnInput,
+  input: HarnessSessionInput,
 ): Promise<Live> {
   const { liveByThread, resumeByThread } = stateFor(flavor);
   const existing = liveByThread.get(input.sessionId);
@@ -307,7 +347,7 @@ async function ensureLive(
 
 async function startLive(
   flavor: PiFlavor,
-  input: SendTurnInput,
+  input: HarnessSessionInput,
   resume: string | undefined,
 ): Promise<Live> {
   const state = stateFor(flavor);
@@ -645,7 +685,10 @@ async function handleExtensionUi(
   ).catch(() => undefined);
 }
 
-async function applyModel(live: Live, input: SendTurnInput): Promise<void> {
+async function applyModel(
+  live: Live,
+  input: HarnessSessionInput,
+): Promise<void> {
   const native = nativeModelId(input.model);
   const ref = parsePiModelRef(native);
   if (ref && native !== live.nativeModel) {

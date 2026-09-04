@@ -10,7 +10,11 @@ import {
 } from "react";
 import { Composer } from "../chrome/Composer";
 import { SessionReview } from "../chrome/SessionReview";
-import type { ApprovalDecision, UserQuestionReply } from "../lib/harness";
+import {
+  canCompactHarnessContext,
+  type ApprovalDecision,
+  type UserQuestionReply,
+} from "../lib/harness";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import {
   sessionDisplayTitle,
@@ -61,6 +65,7 @@ type Props = {
     options?: { intent?: TurnIntent },
   ) => void;
   onStop: (sessionId: string) => void;
+  onCompactContext: (sessionId: string) => boolean;
   onDeleteQueuedMessage: (sessionId: string, messageId: string) => void;
   onEditQueuedMessage: (
     sessionId: string,
@@ -128,6 +133,7 @@ export const SessionPane = memo(function SessionPane({
   onRuntimeModeChange,
   onSubmit,
   onStop,
+  onCompactContext,
   onDeleteQueuedMessage,
   onEditQueuedMessage,
   onQueuedMessageEditingChange,
@@ -231,6 +237,7 @@ export const SessionPane = memo(function SessionPane({
       runtimeMode={session.runtimeMode}
       cwd={session.cwd}
       executionCwd={workCwd}
+      compactSupported={canCompactHarnessContext(session.harness)}
       recents={recents}
       hideProjectPicker={hideProjectPicker ? !showDeckProjectPicker : false}
       context={session.context}
@@ -264,6 +271,7 @@ export const SessionPane = memo(function SessionPane({
         onSubmit(session.id, text, attachments, options)
       }
       onStop={() => onStop(session.id)}
+      onCompactContext={() => onCompactContext(session.id)}
       queuedMessages={session.queuedMessages}
       queueStatus={session.queueStatus}
       onDeleteQueuedMessage={(messageId) =>

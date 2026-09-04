@@ -16,9 +16,12 @@ vi.mock("./child", () => ({
   },
 }));
 
-const { sendClaudeTurn, stopClaudeSession, __claudeTestReset } = await import(
-  "./claude"
-);
+const {
+  compactClaudeContext,
+  sendClaudeTurn,
+  stopClaudeSession,
+  __claudeTestReset,
+} = await import("./claude");
 import type { HarnessEvent } from "./types";
 import type { RuntimeMode, TurnIntent } from "../session";
 
@@ -70,10 +73,7 @@ async function startTurn(
     type: "control_response",
     response: { subtype: "success", request_id: "monocode_1" },
   });
-  await waitFor(
-    () => parse().some((m) => m.type === "user"),
-    "user prompt",
-  );
+  await waitFor(() => parse().some((m) => m.type === "user"), "user prompt");
   return { events, turn };
 }
 
@@ -286,12 +286,20 @@ describe("claude plan permissions", () => {
         (message.response as Record<string, unknown>)?.request_id === "write_1",
     );
     expect(
-      ((read?.response as Record<string, unknown>)
-        ?.response as Record<string, unknown>)?.behavior,
+      (
+        (read?.response as Record<string, unknown>)?.response as Record<
+          string,
+          unknown
+        >
+      )?.behavior,
     ).toBe("allow");
     expect(
-      ((write?.response as Record<string, unknown>)
-        ?.response as Record<string, unknown>)?.behavior,
+      (
+        (write?.response as Record<string, unknown>)?.response as Record<
+          string,
+          unknown
+        >
+      )?.behavior,
     ).toBe("deny");
     expect(events.some((event) => event.type === "approval.requested")).toBe(
       false,
@@ -299,5 +307,49 @@ describe("claude plan permissions", () => {
 
     emit({ type: "result", subtype: "success", session_id: "sess_1" });
     await turn;
+  });
+});
+
+describe("claude manual compaction", () => {
+  it("runs the built-in command and requires a compact boundary", async () => {
+    const { turn } = await startTurn("s1");
+    emit({ type: "result", subtype: "success", session_id: "sess_1" });
+    await turn;
+    sent.length = 0;
+
+    const events: HarnessEvent[] = [];
+    const compact = compactClaudeContext({
+      sessionId: "s1",
+      cwd: "/repo",
+      model: "claude:claude-sonnet-5",
+      runtimeMode: "supervised",
+      onEvent: (event) => events.push(event),
+    });
+    await waitFor(
+      () => parse().some((message) => message.type === "user"),
+      "compact command",
+    );
+    expect(parse().find((message) => message.type === "user")).toMatchObject({
+      message: { content: [{ type: "text", text: "/compact" }] },
+    });
+
+    emit({
+      type: "assistant",
+      session_id: "sess_1",
+      message: { content: [{ type: "text", text: "not transcript output" }] },
+    });
+    emit({
+      type: "system",
+      subtype: "compact_boundary",
+      session_id: "sess_1",
+    });
+    emit({ type: "result", subtype: "success", session_id: "sess_1" });
+    await compact;
+
+    expect(events).toContainEqual({
+      type: "status",
+      text: "Compacted context",
+    });
+    expect(events.some((event) => event.type === "message.delta")).toBe(false);
   });
 });

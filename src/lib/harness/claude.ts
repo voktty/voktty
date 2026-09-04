@@ -66,7 +66,9 @@ import {
 } from "../userQuestion";
 import type {
   ApprovalDecision,
+  CompactContextInput,
   HarnessEvent,
+  HarnessSessionInput,
   SendTurnInput,
   SteerTurnInput,
 } from "./types";
@@ -130,6 +132,8 @@ type Live = {
   initialized: boolean;
   emittedAssistant: string;
   emittedReasoning: string;
+  manualCompaction: boolean;
+  compactionConfirmed: boolean;
 };
 
 type Resume = {
@@ -175,6 +179,45 @@ export async function sendClaudeTurn(input: SendTurnInput): Promise<void> {
       } catch (error) {
         if (live.cancelled) return;
         throw error;
+      }
+    });
+  await live.turns;
+}
+
+export async function compactClaudeContext(
+  input: CompactContextInput,
+): Promise<void> {
+  const settingsKey = settingsKeyFor(input);
+  let live = liveByThread.get(input.sessionId);
+  if (!live || live.cwd !== input.cwd || live.settingsKey !== settingsKey) {
+    live = await ensureLive(input);
+  }
+  if (cancelledThreads.delete(input.sessionId)) return;
+
+  live.onEvent = input.onEvent;
+  live.runtimeMode = input.runtimeMode;
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      live.manualCompaction = true;
+      live.compactionConfirmed = false;
+      try {
+        await runTurn(live, {
+          ...input,
+          modelSettings: undefined,
+          text: "/compact",
+          attachments: [],
+        });
+        if (!live.compactionConfirmed) {
+          throw new Error("Claude Code did not confirm context compaction");
+        }
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      } finally {
+        live.manualCompaction = false;
       }
     });
   await live.turns;
@@ -277,7 +320,7 @@ export function bindClaudeSession(
   resumeByThread.set(threadId, { sessionId, cwd });
 }
 
-async function ensureLive(input: SendTurnInput): Promise<Live> {
+async function ensureLive(input: HarnessSessionInput): Promise<Live> {
   const settingsKey = settingsKeyFor(input);
   const planning = input.intent === "plan";
   const existing = liveByThread.get(input.sessionId);
@@ -340,6 +383,8 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
     initialized: false,
     emittedAssistant: "",
     emittedReasoning: "",
+    manualCompaction: false,
+    compactionConfirmed: false,
   };
   liveRef.current = live;
 
@@ -494,6 +539,10 @@ function handleLine(sessionId: string, live: Live, line: string): void {
     return;
   }
 
+  if (live.manualCompaction && type !== "system" && type !== "result") {
+    return;
+  }
+
   if (handleAgentLifecycle(live, rec)) return;
   if (type === "tool_progress") {
     handleToolProgress(live, rec);
@@ -517,7 +566,12 @@ function handleLine(sessionId: string, live: Live, line: string): void {
   }
   if (type === "system") {
     const text = statusTextFromSystem(rec);
-    if (text) live.onEvent({ type: "status", text });
+    if (text) {
+      if ((stringField(rec, "subtype") ?? "").startsWith("compact")) {
+        live.compactionConfirmed = true;
+      }
+      live.onEvent({ type: "status", text });
+    }
   }
 }
 
@@ -653,8 +707,12 @@ function handleUser(live: Live, rec: Record<string, unknown>): void {
 
 function handleResult(live: Live, rec: Record<string, unknown>): void {
   if (isSubagentMessage(rec)) return;
-  const context = contextFromResult(rec);
-  if (context) live.onEvent({ type: "context", ...context });
+  // A /compact result reports the summarizer call's usage, not the rebuilt
+  // conversation level. The next real turn will provide the fresh reading.
+  if (!live.manualCompaction) {
+    const context = contextFromResult(rec);
+    if (context) live.onEvent({ type: "context", ...context });
+  }
 
   const result = turnStatusFromResult(rec);
   if (result.status === "failed" && result.error && !live.cancelled) {
@@ -1111,7 +1169,7 @@ function writeJson(
   return writeChild(sessionId, JSON.stringify(payload));
 }
 
-function settingsKeyFor(input: SendTurnInput): string {
+function settingsKeyFor(input: HarnessSessionInput): string {
   return claudeSettingsKey({
     model: nativeModelId(input.model),
     effort: input.modelSettings?.effort,
@@ -1124,7 +1182,7 @@ function settingsKeyFor(input: SendTurnInput): string {
 }
 
 function launchOptions(
-  input: SendTurnInput,
+  input: HarnessSessionInput,
   resume: string | undefined,
   sessionId: string,
 ): {

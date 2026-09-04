@@ -22,9 +22,12 @@ vi.mock("./child", () => ({
   },
 }));
 
-const { sendGrokTurn, respondGrokApproval, stopGrokSession } = await import(
-  "./grok"
-);
+const {
+  compactGrokContext,
+  sendGrokTurn,
+  respondGrokApproval,
+  stopGrokSession,
+} = await import("./grok");
 import type { HarnessEvent } from "./types";
 
 function reply(id: number, result: unknown) {
@@ -116,9 +119,7 @@ describe("grok live turn sequence", () => {
       () => parse().some((m) => m.method === "session/prompt"),
       "prompt",
     );
-    const promptRequest = parse().find(
-      (m) => m.method === "session/prompt",
-    )!;
+    const promptRequest = parse().find((m) => m.method === "session/prompt")!;
     expect(promptRequest.params.prompt).toEqual([
       { type: "text", text: "hey" },
       { type: "image", mimeType: "image/png", data: "YWJj" },
@@ -227,5 +228,53 @@ describe("grok live turn sequence", () => {
     expect(turn2Events.some((e) => e.type === "session.ended")).toBe(true);
     expect(turn1Events.some((e) => e.type === "session.ended")).toBe(false);
     await stopGrokSession("t3");
+  });
+
+  it("compacts with Grok's ACP extension instead of a slash-command prompt", async () => {
+    const turn = sendGrokTurn({
+      sessionId: "t4",
+      cwd: "/repo",
+      model: "grok:grok-4.6",
+      runtimeMode: "supervised",
+      text: "hey",
+      attachments: [],
+      onEvent: () => undefined,
+    });
+    await handshake();
+    await waitFor(
+      () => parse().some((message) => message.method === "session/prompt"),
+      "session/prompt",
+    );
+    const prompt = parse().find(
+      (message) => message.method === "session/prompt",
+    )!;
+    reply(prompt.id, { stopReason: "end_turn" });
+    await turn;
+    sent.length = 0;
+
+    const compact = compactGrokContext({
+      sessionId: "t4",
+      cwd: "/repo",
+      model: "grok:grok-4.6",
+      runtimeMode: "supervised",
+      onEvent: () => undefined,
+    });
+    await waitFor(
+      () =>
+        parse().some(
+          (message) => message.method === "_x.ai/compact_conversation",
+        ),
+      "compact_conversation",
+    );
+    const request = parse().find(
+      (message) => message.method === "_x.ai/compact_conversation",
+    )!;
+    expect(request.params).toEqual({ sessionId: "S1" });
+    expect(parse().some((message) => message.method === "session/prompt")).toBe(
+      false,
+    );
+    reply(request.id, {});
+    await compact;
+    await stopGrokSession("t4");
   });
 });

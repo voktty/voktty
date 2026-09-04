@@ -22,6 +22,7 @@ import {
   isOpenCodeNotFound,
   mergeOpenCodeAssistantText,
   MINIMUM_OPENCODE_VERSION,
+  KNOWN_HIDDEN_AGENTS,
   parseOpenCodeModelSlug,
   parseOpenCodeVersion,
   parseServerUrlFromOutput,
@@ -43,7 +44,9 @@ import {
 import { streamTextDelta } from "./streamText";
 import type {
   ApprovalDecision,
+  CompactContextInput,
   HarnessEvent,
+  HarnessSessionInput,
   SendTurnInput,
   SteerTurnInput,
 } from "./types";
@@ -78,7 +81,7 @@ type Live = {
   nextApprovalUiId: number;
   partById: Map<string, OpenCodePart>;
   emittedTextByPartId: Map<string, string>;
-  messageRoleById: Map<string, "user" | "assistant">;
+  messageRoleById: Map<string, "user" | "assistant" | "hidden">;
   cancelled: boolean;
   muteUpdates: boolean;
   turns: Promise<void>;
@@ -128,6 +131,40 @@ export async function sendOpenCodeTurn(input: SendTurnInput): Promise<void> {
       live.muteUpdates = false;
       try {
         await runTurn(live, input);
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
+  await live.turns;
+}
+
+export async function compactOpenCodeContext(
+  input: CompactContextInput,
+): Promise<void> {
+  let live: Live;
+  try {
+    live = await ensureLive(input);
+  } catch (error) {
+    cancelledThreads.delete(input.sessionId);
+    throw error;
+  }
+  if (cancelledThreads.delete(input.sessionId)) return;
+
+  const model = parseOpenCodeModelSlug(nativeModelId(input.model));
+  if (!model) {
+    throw new Error(
+      "OpenCode models use provider/model ids. Wait for the catalog to load, then pick a model.",
+    );
+  }
+  live.onEvent = input.onEvent;
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      try {
+        await runCompaction(live, model);
       } catch (error) {
         if (live.cancelled) return;
         throw error;
@@ -243,7 +280,7 @@ export function bindOpenCodeSession(
   resumeByThread.set(threadId, { sessionId, cwd });
 }
 
-async function ensureLive(input: SendTurnInput): Promise<Live> {
+async function ensureLive(input: HarnessSessionInput): Promise<Live> {
   const existing = liveByThread.get(input.sessionId);
   if (existing && existing.cwd === input.cwd) {
     existing.onEvent = input.onEvent;
@@ -442,6 +479,16 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
   }
 }
 
+async function runCompaction(
+  live: Live,
+  model: { providerID: string; modelID: string },
+): Promise<void> {
+  // Unlike prompt_async, summarize responds only after the compaction pass.
+  // Keep this outside the normal turn latch: its eventual session.status=idle
+  // must not become a pending completion for the next user turn.
+  await live.client.summarizeSession(live.openCodeSessionId, model);
+}
+
 function handleEvent(live: Live, event: Record<string, unknown>): void {
   const payloadSessionId = eventSessionId(event);
   if (payloadSessionId && payloadSessionId !== live.openCodeSessionId) return;
@@ -454,10 +501,15 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
       const info = asRecord(properties.info);
       const id = stringField(info, "id");
       const role = stringField(info, "role");
+      const agent = stringField(info, "agent");
+      const hidden = agent != null && KNOWN_HIDDEN_AGENTS.has(agent);
       if (id && (role === "user" || role === "assistant")) {
-        live.messageRoleById.set(id, role);
+        live.messageRoleById.set(id, hidden ? "hidden" : role);
       }
-      if (role === "assistant") emitContext(live, info);
+      // A compaction assistant's usage describes the summarization call, not
+      // the rebuilt context. Keep the previous meter value until a real turn
+      // reports the post-compaction window level.
+      if (role === "assistant" && !hidden) emitContext(live, info);
       break;
     }
     case "message.removed": {
@@ -783,7 +835,7 @@ function parsePart(value: unknown): OpenCodePart | null {
 function roleForPart(
   live: Live,
   part: Pick<OpenCodePart, "messageID" | "type">,
-): "assistant" | "user" | undefined {
+): "assistant" | "user" | "hidden" | undefined {
   if (part.messageID) {
     const known = live.messageRoleById.get(part.messageID);
     if (known) return known;

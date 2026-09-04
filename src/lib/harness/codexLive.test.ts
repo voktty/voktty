@@ -17,6 +17,7 @@ vi.mock("./child", () => ({
 }));
 
 const {
+  compactCodexContext,
   sendCodexTurn,
   stopCodexSession,
   __codexTestReset,
@@ -144,7 +145,9 @@ describe("codex live turn sequence", () => {
       runtimeMode: "auto",
       intent: "plan",
     });
-    const turnStart = parse().find((message) => message.method === "turn/start");
+    const turnStart = parse().find(
+      (message) => message.method === "turn/start",
+    );
     expect(turnStart?.params).toMatchObject({
       approvalPolicy: "never",
       sandboxPolicy: { type: "readOnly" },
@@ -174,5 +177,48 @@ describe("codex live turn sequence", () => {
       turn: { id: "turn_1", status: "completed" },
     });
     await turn;
+  });
+
+  it("uses thread/compact/start and waits for its turn to complete", async () => {
+    const { turn } = await startTurn("codex-live");
+    notify("turn/completed", {
+      turn: { id: "turn_1", status: "completed" },
+    });
+    await turn;
+    sent.length = 0;
+
+    const compact = compactCodexContext({
+      sessionId: "codex-live",
+      cwd: "/repo",
+      model: "codex:gpt-5.4",
+      runtimeMode: "supervised",
+      onEvent: () => undefined,
+    });
+    await waitFor(
+      () =>
+        parse().some((message) => message.method === "thread/compact/start"),
+      "thread/compact/start",
+    );
+    const request = parse().find(
+      (message) => message.method === "thread/compact/start",
+    )!;
+    expect(request.params).toEqual({ threadId: "thr_1" });
+    reply(request.id as number, {});
+
+    let settled = false;
+    void compact.then(() => {
+      settled = true;
+    });
+    notify("turn/started", {
+      turn: { id: "compact_1", status: "inProgress" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(false);
+
+    notify("turn/completed", {
+      turn: { id: "compact_1", status: "completed" },
+    });
+    await compact;
+    expect(settled).toBe(true);
   });
 });

@@ -87,17 +87,22 @@ export type HarnessEvent =
 
 export type ApprovalDecision = "allow" | "deny";
 
-export type SendTurnInput = {
+export type HarnessSessionInput = {
   sessionId: string;
   cwd: string;
   model: string;
   modelSettings?: Record<string, string>;
   runtimeMode: RuntimeMode;
   intent?: TurnIntent;
-  text: string;
-  attachments?: Attachment[];
   onEvent: (event: HarnessEvent) => void;
 };
+
+export type SendTurnInput = HarnessSessionInput & {
+  text: string;
+  attachments?: Attachment[];
+};
+
+export type CompactContextInput = HarnessSessionInput;
 
 export type SteerTurnInput = {
   sessionId: string;

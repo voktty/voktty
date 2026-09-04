@@ -117,6 +117,7 @@ import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useComposerSkills } from "./useComposerSkills";
 import { Popover } from "./Popover";
 import { consumePlanCommand, PLAN_COMMAND } from "../lib/plan";
+import { COMPACT_COMMAND, isCompactCommand } from "../lib/compact";
 
 type Props = {
   enabled?: boolean;
@@ -132,6 +133,7 @@ type Props = {
   recents?: RecentProject[];
   hideProjectPicker?: boolean;
   context?: ContextUsage;
+  compactSupported?: boolean;
   quoteRequest?: QuoteRequest;
   initialDraft?: string;
   inboxCard?: InboxComposerCard;
@@ -160,6 +162,7 @@ type Props = {
     options?: { intent?: TurnIntent },
   ) => void;
   onStop?: () => void;
+  onCompactContext?: () => boolean;
   onDeleteQueuedMessage?: (messageId: string) => void;
   onEditQueuedMessage?: (messageId: string, text: string) => void;
   onQueuedMessageEditingChange?: (messageId?: string) => void;
@@ -380,6 +383,7 @@ export function Composer({
   recents = [],
   hideProjectPicker = false,
   context,
+  compactSupported = false,
   quoteRequest,
   initialDraft,
   inboxCard,
@@ -403,6 +407,7 @@ export function Composer({
   onQuestionReply,
   onSubmit,
   onStop,
+  onCompactContext,
   onDeleteQueuedMessage,
   onEditQueuedMessage,
   onQueuedMessageEditingChange,
@@ -469,7 +474,15 @@ export function Composer({
   });
   const skills = skillCatalog.skills;
   const slashItems = useMemo(
-    () => [PLAN_COMMAND, ...skills.filter((skill) => skill.name !== "plan")],
+    () => [
+      PLAN_COMMAND,
+      COMPACT_COMMAND,
+      ...skills.filter(
+        (skill) =>
+          skill.name !== PLAN_COMMAND.name &&
+          skill.name !== COMPACT_COMMAND.name,
+      ),
+    ],
     [skills],
   );
   const skillLimit = harness === "pi" ? Number.POSITIVE_INFINITY : undefined;
@@ -839,6 +852,21 @@ export function Composer({
   }, [addAttachments, attachmentsSupported, enabled]);
 
   const submit = (value: string) => {
+    if (isCompactCommand(value)) {
+      if (!onCompactContext?.()) return;
+      if (!ref.current) return;
+      ref.current.value = "";
+      ref.current.style.height = "auto";
+      setDraft("");
+      setPlusOpen(false);
+      setSlash(null);
+      setMention(null);
+      setCreatingSkill(false);
+      setCreateError(null);
+      syncHasValue("", attachments);
+      return;
+    }
+
     const command = consumePlanCommand(value);
     const text = composeInboxMessage(inboxCard, command.text);
     const files = attachments;
@@ -898,6 +926,16 @@ export function Composer({
         }
         setMention(null);
       }
+    }
+
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      isCompactCommand(e.currentTarget.value)
+    ) {
+      e.preventDefault();
+      submit(e.currentTarget.value);
+      return;
     }
 
     if (slash) {
@@ -1088,7 +1126,11 @@ export function Composer({
               onClose={() => ref.current?.focus()}
             />
             <div className="ml-auto flex shrink-0 items-center">
-              <ContextMeter usage={context} />
+              <ContextMeter
+                usage={context}
+                onCompact={compactSupported ? onCompactContext : undefined}
+                compactDisabled={busy}
+              />
             </div>
           </div>
 

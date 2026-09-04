@@ -30,7 +30,9 @@ import {
 } from "./grokProtocol";
 import type {
   ApprovalDecision,
+  CompactContextInput,
   HarnessEvent,
+  HarnessSessionInput,
   SendTurnInput,
   SteerTurnInput,
 } from "./types";
@@ -113,6 +115,35 @@ export async function sendGrokTurn(input: SendTurnInput): Promise<void> {
   }
 }
 
+export async function compactGrokContext(
+  input: CompactContextInput,
+): Promise<void> {
+  let live = liveByThread.get(input.sessionId);
+  if (!live || live.cwd !== input.cwd) {
+    live = await ensureLive(input);
+  }
+  if (cancelledThreads.delete(input.sessionId)) return;
+
+  live.onEvent = input.onEvent;
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      try {
+        await live.acp.request(
+          "_x.ai/compact_conversation",
+          { sessionId: live.acpSessionId },
+          PROMPT_TIMEOUT_MS,
+        );
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
+  await live.turns;
+}
+
 export async function steerGrokTurn(_input: SteerTurnInput): Promise<void> {
   throw new Error("Grok Build does not support steering an in-flight turn");
 }
@@ -182,7 +213,7 @@ export function bindGrokSession(
   resumeByThread.set(threadId, { acpSessionId: sessionId, cwd });
 }
 
-async function ensureLive(input: SendTurnInput): Promise<Live> {
+async function ensureLive(input: HarnessSessionInput): Promise<Live> {
   const wantPlanning = input.intent === "plan";
   const wantFullAccess = input.runtimeMode === "full-access" && !wantPlanning;
   const existing = liveByThread.get(input.sessionId);
@@ -386,7 +417,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
 
 async function applyModelSelection(
   live: Live,
-  input: SendTurnInput,
+  input: HarnessSessionInput,
 ): Promise<void> {
   const base = nativeModelId(input.model);
   if (base && base !== live.modelId) {
