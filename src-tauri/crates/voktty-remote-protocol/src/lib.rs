@@ -28,6 +28,7 @@ pub const METHOD_PTY_RESIZE: &str = "pty.resize";
 pub const METHOD_PTY_CLOSE: &str = "pty.close";
 pub const METHOD_PTY_GET_CWD: &str = "pty.getCwd";
 pub const METHOD_GIT_EXEC: &str = "git.exec";
+pub const REMOTE_SHELL_INTEGRATION_VERSION: &str = "3";
 
 const FRAME_REQUEST: u8 = 1;
 const FRAME_RESPONSE: u8 = 2;

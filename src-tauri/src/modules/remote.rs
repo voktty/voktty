@@ -16,11 +16,12 @@ use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteRequest, RemoteResponse, METHOD_GIT_EXEC,
     METHOD_HANDSHAKE, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
     METHOD_READ_FILE, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, PROTOCOL_VERSION,
+    REMOTE_SHELL_INTEGRATION_VERSION,
 };
 
 const REMOTE_OS: &str = "linux";
 const REMOTE_VERSION: &str = env!("CARGO_PKG_VERSION");
-pub(crate) const REMOTE_SHELL_INTEGRATION_VERSION: &str = "2";
+
 const REMOTE_BASHRC: &str = include_str!("pty/scripts/bashrc.bash");
 const REMOTE_ZSHENV: &str = include_str!("pty/scripts/zshenv.zsh");
 const REMOTE_ZPROFILE: &str = include_str!("pty/scripts/zprofile.zsh");
@@ -1622,6 +1623,21 @@ fn install_helper(
     }
 }
 
+fn normalize_script_lf(content: &str) -> String {
+    content.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+fn remote_shell_bundle() -> [(String, String); 6] {
+    [
+        ("bashrc".to_string(), normalize_script_lf(REMOTE_BASHRC)),
+        ("zsh/.zshenv".to_string(), normalize_script_lf(REMOTE_ZSHENV)),
+        ("zsh/.zprofile".to_string(), normalize_script_lf(REMOTE_ZPROFILE)),
+        ("zsh/.zlogin".to_string(), normalize_script_lf(REMOTE_ZLOGIN)),
+        ("zsh/.zshrc".to_string(), normalize_script_lf(REMOTE_ZSHRC)),
+        ("init.fish".to_string(), normalize_script_lf(REMOTE_FISH_INIT)),
+    ]
+}
+
 fn remote_shell_bundle_digest() -> String {
     let mut digest = Sha256::new();
     for (name, content) in remote_shell_bundle() {
@@ -1633,16 +1649,6 @@ fn remote_shell_bundle_digest() -> String {
     hex::encode(digest.finalize())
 }
 
-fn remote_shell_bundle() -> [(&'static str, &'static str); 6] {
-    [
-        ("bashrc", REMOTE_BASHRC),
-        ("zsh/.zshenv", REMOTE_ZSHENV),
-        ("zsh/.zprofile", REMOTE_ZPROFILE),
-        ("zsh/.zlogin", REMOTE_ZLOGIN),
-        ("zsh/.zshrc", REMOTE_ZSHRC),
-        ("init.fish", REMOTE_FISH_INIT),
-    ]
-}
 
 fn install_remote_shell_integration(
     connection: &RemoteSshConnection,

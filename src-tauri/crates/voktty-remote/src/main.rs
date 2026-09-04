@@ -23,7 +23,7 @@ use voktty_remote_protocol::{
     METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME,
     METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
     METHOD_WATCH_REMOVE, METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW,
-    METHOD_WRITE_FILE, PROTOCOL_VERSION,
+    METHOD_WRITE_FILE, PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -837,7 +837,7 @@ impl RemoteServer {
         let cd_prefix = format!("cd -- '{s_cwd}' && ");
 
         let shell_wrapper = format!(
-            "export VOKTTY_TERMINAL=1; _voktty_shell=\"${{SHELL:-/bin/sh}}\"; _voktty_integration=\"$HOME/.voktty/shell-integration/2\"; case \"${{_voktty_shell##*/}}\" in bash) if [ -r \"$_voktty_integration/bashrc\" ]; then exec \"$_voktty_shell\" --rcfile \"$_voktty_integration/bashrc\" -i; fi ;; zsh) if [ -r \"$_voktty_integration/zsh/.zshrc\" ]; then export VOKTTY_USER_ZDOTDIR=\"${{ZDOTDIR:-$HOME}}\" ZDOTDIR=\"$_voktty_integration/zsh\"; exec \"$_voktty_shell\" -l; fi ;; fish) if [ -r \"$_voktty_integration/init.fish\" ]; then export fish_features=no-mark-prompt; exec \"$_voktty_shell\" -i -C 'functions -q __voktty_install_prompt; or source \"$HOME/.voktty/shell-integration/2/init.fish\"; functions -q __voktty_install_prompt; and __voktty_install_prompt'; fi ;; esac; exec \"$_voktty_shell\" -l"
+            "export VOKTTY_TERMINAL=1; _voktty_shell=\"${{SHELL:-/bin/sh}}\"; _voktty_integration=\"$HOME/.voktty/shell-integration/{REMOTE_SHELL_INTEGRATION_VERSION}\"; case \"${{_voktty_shell##*/}}\" in bash) if [ -r \"$_voktty_integration/bashrc\" ]; then exec \"$_voktty_shell\" --rcfile \"$_voktty_integration/bashrc\" -i; fi ;; zsh) if [ -r \"$_voktty_integration/zsh/.zshrc\" ]; then export VOKTTY_USER_ZDOTDIR=\"${{ZDOTDIR:-$HOME}}\" ZDOTDIR=\"$_voktty_integration/zsh\"; exec \"$_voktty_shell\" -l; fi ;; fish) if [ -r \"$_voktty_integration/init.fish\" ]; then export fish_features=no-mark-prompt; exec \"$_voktty_shell\" -i -C 'functions -q __voktty_install_prompt; or source \"$HOME/.voktty/shell-integration/{REMOTE_SHELL_INTEGRATION_VERSION}/init.fish\"; functions -q __voktty_install_prompt; and __voktty_install_prompt'; fi ;; esac; exec \"$_voktty_shell\" -l"
         );
 
         let sh_cmd = format!("/bin/sh -c '{}'", shell_wrapper.replace('\'', "'\\''"));
