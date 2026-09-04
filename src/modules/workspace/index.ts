@@ -4,6 +4,7 @@ export {
   type DockerWorkspaceConnection,
   documentWorkspaceKey,
   getWslHome,
+  isWindowsNativePath,
   isWslWorkspacePath,
   LOCAL_WORKSPACE,
   type NativePtyWorkspaceEnv,

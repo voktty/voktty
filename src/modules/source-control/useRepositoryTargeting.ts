@@ -1,5 +1,6 @@
 import { native } from "@/modules/ai/lib/native";
 import { t } from "@/modules/i18n";
+import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -19,6 +20,7 @@ type Params = {
   openCommitHistoryTab: (input: {
     repoRoot: string;
     branch: string | null;
+    workspaceEnv?: WorkspaceEnv;
   }) => void;
 };
 
@@ -29,6 +31,7 @@ export function useRepositoryTargeting({
   openSourceControl,
   openCommitHistoryTab,
 }: Params) {
+  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const [targets, setTargets] = useState<SourceControlRepositoryTargets>({});
   const sourceControlRequestRef = useRef(0);
   const historyRequestRef = useRef(0);
@@ -50,7 +53,7 @@ export function useRepositoryTargeting({
     async (path: string, requestRef: RequestCounter) => {
       const requestId = ++requestRef.current;
       try {
-        const repo = await native.gitResolveRepo(path);
+        const repo = await native.gitResolveRepo(path, workspaceEnv);
         if (
           requestId !== requestRef.current ||
           !isContextCurrent(spaceId, workspaceKey)
@@ -73,7 +76,7 @@ export function useRepositoryTargeting({
         return null;
       }
     },
-    [isContextCurrent, spaceId, workspaceKey],
+    [isContextCurrent, spaceId, workspaceEnv, workspaceKey],
   );
 
   const openInSourceControl = useCallback(
@@ -97,9 +100,13 @@ export function useRepositoryTargeting({
     async (path: string) => {
       const repo = await resolveRepository(path, historyRequestRef);
       if (!repo) return;
-      openCommitHistoryTab({ repoRoot: repo.repoRoot, branch: repo.branch });
+      openCommitHistoryTab({
+        repoRoot: repo.repoRoot,
+        branch: repo.branch,
+        workspaceEnv,
+      });
     },
-    [openCommitHistoryTab, resolveRepository],
+    [openCommitHistoryTab, resolveRepository, workspaceEnv],
   );
 
   const followActiveContext = useCallback(() => {

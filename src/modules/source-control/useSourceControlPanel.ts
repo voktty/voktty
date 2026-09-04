@@ -20,6 +20,7 @@ import {
 import { useTranslation } from "@/modules/i18n";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { playVokttySound } from "@/modules/sound";
+import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildGitReviewEntries,
@@ -477,10 +478,12 @@ export function useSourceControlPanel(
         mode: DiffMode;
         originalPath: string | null;
         title?: string;
+        workspaceEnv?: WorkspaceEnv;
       }) => void)
     | null,
   dirtyPaths: readonly string[] = [],
 ): SourceControlPanelState {
+  const workspaceEnv = useWorkspaceEnvStore((state) => state.env);
   const selectedModelId = useChatStore((state) => state.selectedModelId);
   const agentStatus = useChatStore((state) => state.agentMeta.status);
   const hasApiKeyForSelected = useChatStore((state) => {
@@ -496,8 +499,7 @@ export function useSourceControlPanel(
   const openaiCompatibleModelId = usePreferencesStore(
     (state) => state.openaiCompatibleModelId,
   );
-  const openrouterModelId = usePreferencesStore(
-    (state) => state.openrouterModelId,
+  const openrouterModelId = usePreferencesStore((state) => state.openrouterModelId,
   );
   const { t } = useTranslation();
   const [panelState, setPanelState] = useState<PanelState>("closed");
@@ -657,9 +659,10 @@ export function useSourceControlPanel(
         repoRoot,
         mode: sel.mode,
         originalPath: file?.originalPath ?? null,
+        workspaceEnv,
       });
     },
-    [onOpenDiff],
+    [onOpenDiff, workspaceEnv],
   );
 
   const refresh = useCallback(async () => {
@@ -668,9 +671,9 @@ export function useSourceControlPanel(
       setSelectionTransition("none");
       return;
     }
-    if (summary.repo) invalidateRepoDiffs(summary.repo.repoRoot);
+    if (summary.repo) invalidateRepoDiffs(summary.repo.repoRoot, workspaceEnv);
     await summary.refresh({ remote: "never" });
-  }, [isOpen, summary]);
+  }, [isOpen, summary, workspaceEnv]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -814,11 +817,11 @@ export function useSourceControlPanel(
       await runMutation(
         `stage:${entry.path}`,
         (s) => optimisticStage(s, paths),
-        () => native.gitStage(repo.repoRoot, [entry.path]),
+        () => native.gitStage(repo.repoRoot, [entry.path], workspaceEnv),
         [entry.path],
       );
     },
-    [repo, runMutation],
+    [repo, runMutation, workspaceEnv],
   );
 
   const unstageEntry = useCallback(
@@ -828,11 +831,11 @@ export function useSourceControlPanel(
       await runMutation(
         `unstage:${entry.path}`,
         (s) => optimisticUnstage(s, paths),
-        () => native.gitUnstage(repo.repoRoot, [entry.path]),
+        () => native.gitUnstage(repo.repoRoot, [entry.path], workspaceEnv),
         [entry.path],
       );
     },
-    [repo, runMutation],
+    [repo, runMutation, workspaceEnv],
   );
 
   const requestDiscardEntry = useCallback(
@@ -887,10 +890,10 @@ export function useSourceControlPanel(
         ? `discard:${list[0].path}`
         : "discard:all",
       (s) => optimisticDiscard(s, paths),
-      () => native.gitDiscard(repo.repoRoot, entries),
+      () => native.gitDiscard(repo.repoRoot, entries, workspaceEnv),
       [...paths],
     );
-  }, [dirtyPaths, pendingDiscard, repo, runMutation, t]);
+  }, [dirtyPaths, pendingDiscard, repo, runMutation, t, workspaceEnv]);
 
   const stageAllEntries = useCallback(async () => {
     if (!repo || unstagedEntries.length === 0) return;
@@ -898,10 +901,10 @@ export function useSourceControlPanel(
     await runMutation(
       "stage:all",
       (s) => optimisticStage(s, paths),
-      () => native.gitStage(repo.repoRoot, [...paths]),
+      () => native.gitStage(repo.repoRoot, [...paths], workspaceEnv),
       [...paths],
     );
-  }, [repo, runMutation, unstagedEntries]);
+  }, [repo, runMutation, unstagedEntries, workspaceEnv]);
 
   const unstageAllEntries = useCallback(async () => {
     if (!repo || stagedEntries.length === 0) return;
@@ -909,10 +912,10 @@ export function useSourceControlPanel(
     await runMutation(
       "unstage:all",
       (s) => optimisticUnstage(s, paths),
-      () => native.gitUnstage(repo.repoRoot, [...paths]),
+      () => native.gitUnstage(repo.repoRoot, [...paths], workspaceEnv),
       [...paths],
     );
-  }, [repo, runMutation, stagedEntries]);
+  }, [repo, runMutation, stagedEntries, workspaceEnv]);
 
   const selectFile = useCallback(
     async (entry: SourceControlFileEntry) => {
@@ -1151,9 +1154,9 @@ export function useSourceControlPanel(
         async () => {
           if (stagedEntries.length > 0) {
             const allStaged = stagedEntries.map((e) => e.path);
-            await native.gitUnstage(repo.repoRoot, allStaged);
+            await native.gitUnstage(repo.repoRoot, allStaged, workspaceEnv);
           }
-          await native.gitStage(repo.repoRoot, group.files);
+          await native.gitStage(repo.repoRoot, group.files, workspaceEnv);
         },
         [...pathsToStage],
       );
@@ -1165,7 +1168,7 @@ export function useSourceControlPanel(
         }),
       );
     },
-    [repo, runMutation, stagedEntries],
+    [repo, runMutation, stagedEntries, t, workspaceEnv],
   );
 
   const commit = useCallback(async () => {
@@ -1175,7 +1178,11 @@ export function useSourceControlPanel(
     setActionError(null);
     let committed = false;
     try {
-      const result = await native.gitCommit(repo.repoRoot, commitMessage);
+      const result = await native.gitCommit(
+        repo.repoRoot,
+        commitMessage,
+        workspaceEnv,
+      );
       committed = true;
       playVokttySound("success", { retrigger: "restart" });
       setCommitMessage("");
@@ -1185,7 +1192,7 @@ export function useSourceControlPanel(
           summary: result.summary,
         }),
       );
-      invalidateRepoDiffs(repo.repoRoot);
+      invalidateRepoDiffs(repo.repoRoot, workspaceEnv);
       await summary.refresh({ remote: "never" });
     } catch (error) {
       setActionError(normalizeError(error));
@@ -1193,7 +1200,7 @@ export function useSourceControlPanel(
     } finally {
       setLocalActionBusy(null);
     }
-  }, [commitMessage, repo, summary]);
+  }, [commitMessage, repo, summary, t, workspaceEnv]);
 
   const push = useCallback(async () => {
     if (!repo) return;
