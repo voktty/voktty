@@ -20,6 +20,352 @@ pub struct WebServerInfo {
     pub server_type: String, // "static" | "php"
 }
 
+pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
+  if (window.__VOKTTY_INSPECTOR_INSTALLED__) return;
+  window.__VOKTTY_INSPECTOR_INSTALLED__ = true;
+
+  function generateCssSelector(el) {
+    if (!el) return "";
+    if (el.id && /^[A-Za-z_-][\w-]*$/.test(el.id)) return "#" + el.id;
+    var parts = [];
+    var current = el;
+    var depth = 0;
+    while (current && depth < 4) {
+      var tag = (current.tagName || "").toLowerCase();
+      if (tag === "body" || tag === "html" || !tag) break;
+      var part = tag;
+      if (current.id && /^[A-Za-z_-][\w-]*$/.test(current.id)) {
+        part += "#" + current.id;
+        parts.unshift(part);
+        break;
+      }
+      var classArray = Array.from(current.classList || []).filter(function(c) {
+        return !c.startsWith("voktty-") && !c.includes(":") && !c.includes("/");
+      }).slice(0, 2);
+      if (classArray.length > 0) part += "." + classArray.join(".");
+      parts.unshift(part);
+      current = current.parentElement;
+      depth++;
+    }
+    return parts.join(" > ") || (el.tagName ? el.tagName.toLowerCase() : "element");
+  }
+
+  function extractReactFiberMetadata(el) {
+    var hierarchy = [];
+    var componentName, filePath, lineNumber, columnNumber, propsSummary;
+    var fiberKey = Object.keys(el || {}).find(function(k) {
+      return k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$");
+    });
+    if (!fiberKey) return { hierarchy: hierarchy };
+    var fiber = el[fiberKey];
+    var curr = fiber;
+    var depth = 0;
+    while (curr && depth < 20) {
+      if (curr.type) {
+        var name = typeof curr.type === "string" ? curr.type : (curr.type.displayName || curr.type.name);
+        if (name && typeof name === "string" && /^[A-Z]/.test(name) && !hierarchy.includes(name)) {
+          hierarchy.push(name);
+          if (!componentName) componentName = name;
+          if (!propsSummary && curr.memoizedProps) {
+            try {
+              var s = {};
+              for (var k in curr.memoizedProps) {
+                if (k !== "children" && typeof curr.memoizedProps[k] !== "function") {
+                  s[k] = curr.memoizedProps[k];
+                }
+              }
+              propsSummary = s;
+            } catch(e) {}
+          }
+        }
+      }
+      if (curr._debugSource && !filePath) {
+        filePath = curr._debugSource.fileName;
+        lineNumber = curr._debugSource.lineNumber;
+        columnNumber = curr._debugSource.columnNumber;
+      }
+      curr = curr.return;
+      depth++;
+    }
+    return {
+      componentName: componentName,
+      filePath: filePath,
+      lineNumber: lineNumber,
+      columnNumber: columnNumber,
+      propsSummary: propsSummary,
+      hierarchy: hierarchy
+    };
+  }
+
+  function extractDomMetadata(element, url) {
+    var tagName = (element.tagName || "").toLowerCase();
+    var idAttr = element.id || undefined;
+    var classList = element.classList ? Array.from(element.classList).filter(function(c) { return !c.startsWith("voktty-"); }) : [];
+    var attributes = {};
+    if (element.attributes) {
+      for (var i = 0; i < element.attributes.length; i++) {
+        var attr = element.attributes[i];
+        if (attr && !attr.name.startsWith("voktty-")) {
+          attributes[attr.name] = attr.value;
+        }
+      }
+    }
+    var selector = generateCssSelector(element);
+    var framework = "dom-generic";
+    var componentName, filePath, lineNumber, columnNumber, propsSummary, hierarchy = [];
+
+    if (typeof element.closest === "function") {
+      var astroEl = element.closest("[data-astro-source-file]");
+      if (astroEl) {
+        framework = "astro";
+        var src = astroEl.getAttribute("data-astro-source-file");
+        if (src) {
+          var p = src.split(":");
+          filePath = p[0];
+          lineNumber = parseInt(p[1], 10) || undefined;
+          columnNumber = parseInt(p[2], 10) || undefined;
+        }
+      }
+      var vueEl = element.closest("[data-v-inspector]");
+      if (vueEl) {
+        framework = "vue";
+        var insp = vueEl.getAttribute("data-v-inspector");
+        if (insp) {
+          var vp = insp.split(":");
+          filePath = vp[0];
+          lineNumber = parseInt(vp[1], 10) || undefined;
+          columnNumber = parseInt(vp[2], 10) || undefined;
+        }
+      }
+      var svelteEl = element.closest("[data-svelte-h], [data-svelte-component]");
+      if (svelteEl) {
+        framework = "svelte";
+        componentName = svelteEl.getAttribute("data-svelte-component") || undefined;
+      }
+    }
+
+    var reactMeta = extractReactFiberMetadata(element);
+    if (reactMeta.componentName || reactMeta.filePath || reactMeta.hierarchy.length > 0) {
+      framework = "react";
+      if (!componentName) componentName = reactMeta.componentName;
+      if (!filePath) filePath = reactMeta.filePath;
+      if (lineNumber === undefined) lineNumber = reactMeta.lineNumber;
+      if (columnNumber === undefined) columnNumber = reactMeta.columnNumber;
+      if (!propsSummary) propsSummary = reactMeta.propsSummary;
+      if (reactMeta.hierarchy.length > 0) hierarchy = reactMeta.hierarchy;
+    }
+
+    var rect = element.getBoundingClientRect();
+    var boundingBox = {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left
+    };
+
+    var computedStyle = window.getComputedStyle ? window.getComputedStyle(element) : null;
+    var styles = {};
+    if (computedStyle) {
+      var sampleProps = [
+        "display", "position", "flexDirection", "gridTemplateColumns",
+        "gap", "padding", "margin", "width", "height", "color",
+        "backgroundColor", "fontSize", "fontWeight", "borderRadius", "border"
+      ];
+      for (var j = 0; j < sampleProps.length; j++) {
+        var sp = sampleProps[j];
+        var val = computedStyle[sp];
+        if (val) styles[sp] = val;
+      }
+    }
+
+    var textSnippet = (element.innerText || element.textContent || "").trim();
+    if (textSnippet.length > 120) {
+      textSnippet = textSnippet.slice(0, 117) + "...";
+    }
+
+    var outerHtml = element.outerHTML || "";
+    if (outerHtml.length > 600) {
+      outerHtml = outerHtml.slice(0, 597) + "...";
+    }
+
+    return {
+      id: "comp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+      tagName: tagName,
+      idAttr: idAttr,
+      classList: classList,
+      attributes: attributes,
+      selector: selector,
+      componentName: componentName,
+      filePath: filePath,
+      lineNumber: lineNumber,
+      columnNumber: columnNumber,
+      propsSummary: propsSummary,
+      framework: framework,
+      hierarchy: hierarchy,
+      boundingBox: boundingBox,
+      styles: styles,
+      textSnippet: textSnippet || undefined,
+      outerHtml: outerHtml || undefined,
+      timestamp: Date.now(),
+      pageUrl: url || window.location.href
+    };
+  }
+
+  var active = false;
+  var hoveredEl = null;
+
+  var overlayHost = document.createElement("div");
+  overlayHost.id = "voktty-inspector-root";
+  overlayHost.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;";
+  var shadow = overlayHost.attachShadow({ mode: "open" });
+
+  var box = document.createElement("div");
+  box.style.cssText = "position:absolute;display:none;pointer-events:none;border:2px solid #06b6d4;background:rgba(6,182,212,0.12);border-radius:4px;box-shadow:0 0 12px rgba(6,182,212,0.35);transition:all 60ms ease-out;z-index:2147483647;";
+
+  var label = document.createElement("div");
+  label.style.cssText = "position:absolute;bottom:calc(100% + 4px);left:0;background:#0f172a;color:#38bdf8;padding:2px 8px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid #0284c7;box-shadow:0 2px 8px rgba(0,0,0,0.5);pointer-events:none;";
+  box.appendChild(label);
+  shadow.appendChild(box);
+
+  function updateHighlight(el) {
+    if (!el || !active) {
+      box.style.display = "none";
+      return;
+    }
+    var r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) {
+      box.style.display = "none";
+      return;
+    }
+    box.style.display = "block";
+    box.style.top = (r.top + window.scrollY) + "px";
+    box.style.left = (r.left + window.scrollX) + "px";
+    box.style.width = r.width + "px";
+    box.style.height = r.height + "px";
+
+    var title = (el.tagName || "").toLowerCase();
+    if (el.id) title += "#" + el.id;
+    else if (el.classList && el.classList.length > 0) {
+      var cls = Array.from(el.classList).filter(function(c){ return !c.startsWith("voktty-"); })[0];
+      if (cls) title += "." + cls;
+    }
+    label.textContent = "\u{1F3AF} " + title;
+  }
+
+  function handleMouseMove(e) {
+    if (!active) return;
+    var target = document.elementFromPoint(e.clientX, e.clientY);
+    if (target && target !== overlayHost && !overlayHost.contains(target)) {
+      if (hoveredEl !== target) {
+        hoveredEl = target;
+        updateHighlight(target);
+      }
+    }
+  }
+
+  function handleClick(e) {
+    if (!active) return;
+    var target = document.elementFromPoint(e.clientX, e.clientY);
+    if (target && target !== overlayHost && !overlayHost.contains(target)) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      var meta = extractDomMetadata(target, window.location.href);
+      try {
+        window.parent.postMessage({
+          type: "VOKTTY_LIVE_COMPONENT_SELECTED",
+          payload: meta
+        }, "*");
+      } catch (err) {
+        console.warn("[Voktty Inspector] PostMessage failed", err);
+      }
+    }
+  }
+
+  window.addEventListener("message", function(e) {
+    if (e.data && e.data.type === "VOKTTY_SET_INSPECTOR_ACTIVE") {
+      active = Boolean(e.data.active);
+      if (active) {
+        if (!document.body.contains(overlayHost)) {
+          document.body.appendChild(overlayHost);
+        }
+        document.addEventListener("mousemove", handleMouseMove, true);
+        document.addEventListener("click", handleClick, true);
+      } else {
+        box.style.display = "none";
+        document.removeEventListener("mousemove", handleMouseMove, true);
+        document.removeEventListener("click", handleClick, true);
+      }
+      try {
+        window.parent.postMessage({
+          type: "VOKTTY_INSPECTOR_STATE_CHANGE",
+          payload: { active: active }
+        }, "*");
+      } catch (_) {}
+    }
+  });
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function() {
+      if (document.body) document.body.appendChild(overlayHost);
+    });
+  } else if (document.body) {
+    document.body.appendChild(overlayHost);
+  }
+})();"##;
+
+pub fn ensure_php_helpers() -> Result<(PathBuf, PathBuf), String> {
+    let dir = std::env::temp_dir().join("voktty_web_server");
+    let _ = fs::create_dir_all(&dir);
+
+    let js_path = dir.join("voktty_inspector.js");
+    let router_path = dir.join("voktty_router.php");
+    let append_path = dir.join("voktty_append.php");
+
+    let _ = fs::write(&js_path, INSPECTOR_BUNDLE_JS);
+
+    let router_code = r#"<?php
+$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+if ($uri === '/__voktty_inspector.js') {
+    header('Content-Type: application/javascript; charset=utf-8');
+    header('Access-Control-Allow-Origin: *');
+    echo file_get_contents(__DIR__ . '/voktty_inspector.js');
+    exit;
+}
+$docroot = $_SERVER['DOCUMENT_ROOT'] ?? getcwd();
+$filePath = $docroot . $uri;
+if ($uri !== '/' && file_exists($filePath) && !is_dir($filePath)) {
+    return false;
+}
+if (is_dir($filePath)) {
+    if (file_exists($filePath . '/index.php')) {
+        include $filePath . '/index.php';
+        exit;
+    }
+    if (file_exists($filePath . '/index.html')) {
+        include $filePath . '/index.html';
+        exit;
+    }
+}
+return false;
+"#;
+    let _ = fs::write(&router_path, router_code);
+
+    let append_code = r#"<?php
+if (function_exists('headers_list')) {
+    echo "\n<script src=\"/__voktty_inspector.js\"></script>\n";
+}
+"#;
+    let _ = fs::write(&append_path, append_code);
+
+    Ok((router_path, append_path))
+}
+
 enum RunningServer {
     Static {
         port: u16,
@@ -101,6 +447,13 @@ pub fn normalize_root_path(raw: &str) -> Result<PathBuf, String> {
 
 pub fn has_php_files(dir: &Path) -> bool {
     let clean = clean_path(dir);
+    if clean.is_file() {
+        if let Some(ext) = clean.extension() {
+            if ext.eq_ignore_ascii_case("php") {
+                return true;
+            }
+        }
+    }
     if let Ok(entries) = fs::read_dir(&clean) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -108,6 +461,26 @@ pub fn has_php_files(dir: &Path) -> bool {
                 if let Some(ext) = path.extension() {
                     if ext.eq_ignore_ascii_case("php") {
                         return true;
+                    }
+                }
+            } else if path.is_dir() {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                let lower = name.to_ascii_lowercase();
+                if matches!(
+                    lower.as_str(),
+                    "public" | "src" | "app" | "www" | "web" | "html"
+                ) {
+                    if let Ok(sub_entries) = fs::read_dir(&path) {
+                        for sub in sub_entries.flatten() {
+                            if sub
+                                .path()
+                                .extension()
+                                .map(|e| e.eq_ignore_ascii_case("php"))
+                                .unwrap_or(false)
+                            {
+                                return true;
+                            }
+                        }
                     }
                 }
             }
@@ -218,6 +591,16 @@ fn handle_connection(mut stream: TcpStream, root: &Path) {
     let decoded = url_decode(clean_uri);
     let relative = decoded.trim_start_matches('/');
 
+    if relative == "__voktty_inspector.js" {
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/javascript; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n{}",
+            INSPECTOR_BUNDLE_JS.len(),
+            INSPECTOR_BUNDLE_JS
+        );
+        let _ = stream.write_all(resp.as_bytes());
+        return;
+    }
+
     let clean_root = clean_path(&root.canonicalize().unwrap_or_else(|_| root.to_path_buf()));
     let target_path = if relative.is_empty() {
         clean_root.clone()
@@ -266,11 +649,37 @@ fn handle_connection(mut stream: TcpStream, root: &Path) {
         return;
     }
 
+    let mime = guess_mime(&file_to_serve);
+    if mime.starts_with("text/html") {
+        if let Ok(mut html_content) = fs::read_to_string(&file_to_serve) {
+            let script_tag = "<script src=\"/__voktty_inspector.js\"></script>";
+            if !html_content.contains("__voktty_inspector.js") {
+                if let Some(pos) = html_content.rfind("</body>") {
+                    html_content.insert_str(pos, script_tag);
+                } else if let Some(pos) = html_content.rfind("</html>") {
+                    html_content.insert_str(pos, script_tag);
+                } else {
+                    html_content.push_str(script_tag);
+                }
+            }
+            let bytes = html_content.as_bytes();
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n",
+                mime,
+                bytes.len()
+            );
+            let _ = stream.write_all(header.as_bytes());
+            if method == "GET" {
+                let _ = stream.write_all(bytes);
+            }
+            return;
+        }
+    }
+
     match File::open(&file_to_serve) {
         Ok(mut f) => {
             let metadata = f.metadata().ok();
             let len = metadata.map(|m| m.len()).unwrap_or(0);
-            let mime = guess_mime(&file_to_serve);
 
             let header = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n",
@@ -411,6 +820,7 @@ fn send_directory_listing(stream: &mut TcpStream, dir: &Path, root: &Path, reque
   <ul>
     {}{}
   </ul>
+  <script src="/__voktty_inspector.js"></script>
 </body>
 </html>"#,
         request_path.trim_start_matches('/'),
@@ -432,8 +842,19 @@ fn start_static_server_thread(
 ) -> Result<(u16, Arc<AtomicBool>), String> {
     let port = preferred_port.unwrap_or(0);
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let listener =
-        TcpListener::bind(addr).map_err(|e| format!("Failed to bind web server port: {e}"))?;
+    let listener = match TcpListener::bind(addr) {
+        Ok(l) => l,
+        Err(e) if port != 0 => {
+            log::warn!(
+                "Static server port {} in use ({}), allocating random port",
+                port,
+                e
+            );
+            TcpListener::bind("127.0.0.1:0")
+                .map_err(|e2| format!("Failed to bind web server port: {e2}"))?
+        }
+        Err(e) => return Err(format!("Failed to bind web server port: {e}")),
+    };
     let actual_port = listener
         .local_addr()
         .map_err(|e| format!("Failed to get local addr: {e}"))?
@@ -467,24 +888,64 @@ fn start_static_server_thread(
 
 fn start_php_server(root: &Path, preferred_port: Option<u16>) -> Result<(u16, Child), String> {
     let port = if let Some(p) = preferred_port {
-        p
+        if p != 0 {
+            if let Ok(test_bind) = TcpListener::bind(format!("127.0.0.1:{}", p)) {
+                drop(test_bind);
+                p
+            } else {
+                log::warn!("Preferred PHP port {} in use, allocating random port", p);
+                let temp_listener = TcpListener::bind("127.0.0.1:0")
+                    .map_err(|e| format!("Failed to allocate port for PHP server: {e}"))?;
+                let allocated = temp_listener
+                    .local_addr()
+                    .map_err(|e| e.to_string())?
+                    .port();
+                drop(temp_listener);
+                allocated
+            }
+        } else {
+            let temp_listener = TcpListener::bind("127.0.0.1:0")
+                .map_err(|e| format!("Failed to allocate port for PHP server: {e}"))?;
+            let allocated = temp_listener
+                .local_addr()
+                .map_err(|e| e.to_string())?
+                .port();
+            drop(temp_listener);
+            allocated
+        }
     } else {
         let temp_listener = TcpListener::bind("127.0.0.1:0")
             .map_err(|e| format!("Failed to allocate port for PHP server: {e}"))?;
-        temp_listener
+        let allocated = temp_listener
             .local_addr()
             .map_err(|e| e.to_string())?
-            .port()
+            .port();
+        drop(temp_listener);
+        allocated
     };
 
     let bind_target = format!("127.0.0.1:{}", port);
     let clean_root = clean_path(root);
-    let root_str = clean_root.to_string_lossy().to_string();
+    let mut doc_root = clean_root.clone();
+    let public_dir = clean_root.join("public");
+    if public_dir.join("index.php").is_file() {
+        doc_root = public_dir;
+    }
+    let root_str = doc_root.to_string_lossy().to_string();
+
+    let (router_path, append_path) =
+        ensure_php_helpers().unwrap_or_else(|_| (PathBuf::new(), PathBuf::new()));
 
     let mut cmd = Command::new("php");
-    cmd.args(["-S", &bind_target, "-t", &root_str])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    cmd.args(["-S", &bind_target, "-t", &root_str]);
+    if append_path.exists() {
+        cmd.arg("-d")
+            .arg(format!("auto_append_file={}", append_path.to_string_lossy()));
+    }
+    if router_path.exists() {
+        cmd.arg(&router_path.to_string_lossy().to_string());
+    }
+    cmd.stdout(Stdio::null()).stderr(Stdio::null());
 
     crate::modules::proc::hide_console(&mut cmd);
 
