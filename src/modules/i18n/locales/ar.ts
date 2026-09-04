@@ -1,4 +1,4 @@
-﻿import { en, mergeLocale, type TranslationSchema } from "./en";
+import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const arLocaleBatch: TranslationSchema = mergeLocale(en, {
   common: {
@@ -2667,10 +2667,11 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
       multiplexerAsk: "السؤال عند الاتصال",
       tmuxSessionName: "اسم / بادئة الجلسة (اختياري)",
     },
+    connect: "اتصال",
     errors: {
       hostRequired: "اسم المضيف أو عنوان IP مطلوب",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "تم اكتشاف جلسات عن بُعد",
       description: "حدد كيفية الاتصال بـ",
       activeSessionsTitle: "الجلسات النشطة على الخادم",
@@ -2683,8 +2684,12 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
       noExistingSessions: "لم يتم العثور على جلسات حالية على هذا الخادم.",
       newSession: "جلسة مستقلة جديدة",
       directShell: "الاتصال بدون tmux (طرفية مباشرة)",
+      refresh: "تحديث الجلسات",
+      customSessionPlaceholder: "اسم الجلسة (مثال: dev, work-2)",
+      createAndConnect: "إنشاء واتصال",
+      manageSessions: "تحديد الجلسة...",
     },
-subtabs: {
+    subtabs: {
       servers: "خوادم SSH",
       tunnels: "توجيه المنافذ",
     },

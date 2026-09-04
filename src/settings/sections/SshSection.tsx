@@ -11,6 +11,7 @@ import {
 } from "@/modules/ssh";
 import { SshTunnelsManager } from "@/modules/ssh/tunnels";
 import { InlineRename } from "@/modules/spaces/components/InlineRename";
+import { useSettingsModalStore } from "@/modules/settings/settingsModalStore";
 import {
   Add01Icon,
   Delete02Icon,
@@ -18,6 +19,7 @@ import {
   Edit02Icon,
   GlobalIcon,
   PencilEdit02Icon,
+  PlayIcon,
   ServerStack01Icon,
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
@@ -46,6 +48,15 @@ export function SshSection() {
 
   const handleDelete = (id: string) => {
     void deleteSshConnection(id);
+  };
+
+  const handleConnect = (conn: SshConnection, forcePickSession = false) => {
+    useSettingsModalStore.getState().closeSettings();
+    window.dispatchEvent(
+      new CustomEvent("voktty:connect-ssh", {
+        detail: { connection: conn, forcePickSession },
+      }),
+    );
   };
 
   const handleCommitRename = (conn: SshConnection, name: string) => {
@@ -187,6 +198,24 @@ export function SshSection() {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => handleConnect(conn, false)}
+                      title={t("ssh.connect")}
+                      className="size-7 rounded-md text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 cursor-pointer"
+                    >
+                      <HugeiconsIcon icon={PlayIcon} size={13} strokeWidth={2} />
+                    </Button>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => handleConnect(conn, true)}
+                      title={t("ssh.sessionPicker.manageSessions")}
+                      className="size-7 rounded-md text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <HugeiconsIcon icon={ServerStack03Icon} size={13} strokeWidth={1.75} />
+                    </Button>
                     <Button
                       size="icon-xs"
                       variant="ghost"

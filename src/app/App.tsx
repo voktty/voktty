@@ -1450,15 +1450,27 @@ export default function App() {
   );
 
   const handleConnectSsh = useCallback(
-    async (conn: SshConnection) => {
-      if (conn.multiplexerMode === "ask") {
+    async (conn: SshConnection, forcePickSession: boolean = false) => {
+      const mode = conn.multiplexerMode ?? "auto";
+      if (mode !== "none") {
         try {
           const probe = await probeSshMultiplexer(conn);
-          if (probe.supported && probe.sessions.length > 0) {
-            setSessionPickerConn(conn);
-            setSessionPickerProbe(probe);
-            setSessionPickerOpen(true);
-            return;
+          if (probe.supported) {
+            const hasMultiple = probe.sessions.length > 1;
+            const hasAttached = probe.sessions.some(
+              (s) => s.isAttached || s.attachedCount > 0,
+            );
+            if (
+              forcePickSession ||
+              mode === "ask" ||
+              hasMultiple ||
+              hasAttached
+            ) {
+              setSessionPickerConn(conn);
+              setSessionPickerProbe(probe);
+              setSessionPickerOpen(true);
+              return;
+            }
           }
         } catch {
           // If probe fails (e.g. host down or auth required in PTY), proceed to startSshConnection
@@ -1468,6 +1480,25 @@ export default function App() {
     },
     [startSshConnection],
   );
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        connection: SshConnection;
+        forcePickSession?: boolean;
+      }>;
+      if (customEvent.detail?.connection) {
+        void handleConnectSsh(
+          customEvent.detail.connection,
+          customEvent.detail.forcePickSession,
+        );
+      }
+    };
+    window.addEventListener("voktty:connect-ssh", handler);
+    return () => {
+      window.removeEventListener("voktty:connect-ssh", handler);
+    };
+  }, [handleConnectSsh]);
 
   const handleConnectDocker = useCallback(
     async (conn: DockerWorkspaceConnection) => {

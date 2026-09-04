@@ -1,4 +1,4 @@
-﻿import { en, mergeLocale, type TranslationSchema } from "./en";
+import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const hiLocaleBase: TranslationSchema = mergeLocale(en, {
   common: {
@@ -2668,10 +2668,11 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
       multiplexerAsk: "कनेक्ट करते समय पूछें",
       tmuxSessionName: "सत्र का नाम / उपसर्ग (वैकल्पिक)",
     },
+    connect: "कनेक्ट करें",
     errors: {
       hostRequired: "होस्ट या IP पता आवश्यक है",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "रिमोट सत्र का पता चला",
       description: "कनेक्ट करने का तरीका चुनें:",
       activeSessionsTitle: "होस्ट पर सक्रिय सत्र",
@@ -2684,8 +2685,12 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
       noExistingSessions: "इस होस्ट पर कोई मौजूदा सत्र नहीं मिला।",
       newSession: "नया स्वतंत्र सत्र",
       directShell: "tmux के बिना कनेक्ट करें (प्रत्यक्ष शेल)",
+      refresh: "सत्र रीफ़्रेश करें",
+      customSessionPlaceholder: "सत्र नाम (उदा. dev, work-2)",
+      createAndConnect: "बनाएं और कनेक्ट करें",
+      manageSessions: "सत्र चुनें...",
     },
-subtabs: {
+    subtabs: {
       servers: "SSH सर्वर",
       tunnels: "पोर्ट फ़ॉरवर्डिंग",
     },

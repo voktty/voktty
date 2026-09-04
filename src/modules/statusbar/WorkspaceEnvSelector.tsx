@@ -72,7 +72,7 @@ function writeCollapsedState(state: CollapsedState) {
 
 type Props = {
   onSelect: (env: WorkspaceEnv) => void;
-  onConnectSsh?: (conn: SshConnection) => void;
+  onConnectSsh?: (conn: SshConnection, forcePickSession?: boolean) => void;
   onConnectRdp?: (conn: RdpConnectionProfile) => void;
   onNewSsh?: () => void;
   onNewRdp?: () => void;
@@ -517,7 +517,29 @@ export function WorkspaceEnvSelector({
                           </div>
 
                           {/* Status Ping Dot */}
-                          <div className="flex shrink-0 items-center gap-1.5 pl-2">
+                          <div className="flex shrink-0 items-center gap-1 pl-2">
+                            <button
+                              type="button"
+                              aria-label={t("ssh.sessionPicker.manageSessions")}
+                              title={t("ssh.sessionPicker.manageSessions")}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onPointerUp={(event) => event.stopPropagation()}
+                              onPointerCancel={(event) =>
+                                event.stopPropagation()
+                              }
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onConnectSsh?.(conn, true);
+                              }}
+                              className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/70 hover:bg-accent hover:text-foreground cursor-pointer"
+                            >
+                              <HugeiconsIcon
+                                icon={ServerStack03Icon}
+                                size={12}
+                                strokeWidth={1.75}
+                              />
+                            </button>
                             <button
                               type="button"
                               data-inline-rename
@@ -533,7 +555,7 @@ export function WorkspaceEnvSelector({
                                 event.stopPropagation();
                                 setRenamingConnectionId(conn.id);
                               }}
-                              className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                              className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/70 hover:bg-accent hover:text-foreground cursor-pointer"
                             >
                               <HugeiconsIcon
                                 icon={PencilEdit02Icon}
