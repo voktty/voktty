@@ -15,10 +15,13 @@ export async function prepareRemoteExplorerEnv(
   cwd: string,
   openRemoteWorkspace: OpenRemoteWorkspace,
 ): Promise<{ workspaceEnv: WorkspaceEnv; opened: boolean }> {
-  if (workspaceEnv.kind !== "ssh" || isPathInWorkspace(workspaceEnv, cwd)) {
+  if (workspaceEnv.kind !== "ssh") {
     return { workspaceEnv, opened: false };
   }
-  const session = await openRemoteWorkspace(workspaceEnv.connection, "/");
+  if (workspaceEnv.sessionId !== undefined && isPathInWorkspace(workspaceEnv, cwd)) {
+    return { workspaceEnv, opened: false };
+  }
+  const session = await openRemoteWorkspace(workspaceEnv.connection, cwd || "/");
   return {
     workspaceEnv: {
       ...workspaceEnv,

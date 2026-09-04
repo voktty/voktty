@@ -40,10 +40,20 @@ if [[ -z "$__VOKTTY_HOOKS_LOADED" ]]; then
     done
   }
 
+  _voktty_emit() {
+    if [[ -n "$TMUX" ]]; then
+      local seq="$1"
+      local escaped="${seq//$'\e'/$'\e\e'}"
+      printf '\ePtmux;\e%s\e\\' "$escaped"
+    else
+      printf '%s' "$1"
+    fi
+  }
+
   _voktty_precmd() {
     local _voktty_ret=$?
-    printf '\e]133;D;%s\e\\' "$_voktty_ret"
-    printf '\e]7;file://%s%s\e\\' "${HOST}" "$(_voktty_urlencode "$PWD")"
+    _voktty_emit "$(printf '\e]133;D;%s\e\\' "$_voktty_ret")"
+    _voktty_emit "$(printf '\e]7;file://%s%s\e\\' "${HOST}" "$(_voktty_urlencode "$PWD")")"
     # In block mode the host renders its own input bar, so suppress the shell
     # prompt entirely (keep only the OSC 133 B marker) and add a leading blank
     # line so frozen command blocks get vertical breathing room.
@@ -63,7 +73,7 @@ if [[ -z "$__VOKTTY_HOOKS_LOADED" ]]; then
       # Re-inject prompt-end marker in case a framework rebuilt PS1 (p10k, starship).
       PS1=$'%{\e]133;B\e\\%}'"$PS1"
     fi
-    printf '\e]133;A\e\\'
+    _voktty_emit "$(printf '\e]133;A\e\\')"
   }
 
   _voktty_preexec() {

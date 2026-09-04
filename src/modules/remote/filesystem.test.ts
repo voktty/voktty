@@ -37,20 +37,18 @@ describe("remote filesystem paths", () => {
     expect(remoteRelativePath(env, "/srv/project/src/main.rs")).toBe(
       "src/main.rs",
     );
-  });
-
-  it("rejects paths outside the remote workspace", () => {
-    expect(() => remoteRelativePath(env, "/srv/other/main.rs")).toThrow(
-      "outside",
+    expect(remoteRelativePath(env, "/srv/other/main.rs")).toBe(
+      "/srv/other/main.rs",
     );
   });
 
-  it("routes POSIX paths through the WSL workspace backend", () => {
+  it("routes POSIX paths through the workspace backend", () => {
     const wsl: WorkspaceEnv = { kind: "wsl", distro: "Ubuntu" };
 
     expect(isPathInWorkspace(wsl, "/home/serge/project")).toBe(true);
     expect(isPathInWorkspace(wsl, "C:/project")).toBe(false);
-    expect(isPathInWorkspace(env, "/srv/other/main.rs")).toBe(false);
+    expect(isPathInWorkspace(env, "/srv/other/main.rs")).toBe(true);
+    expect(isPathInWorkspace(env, "C:/project")).toBe(false);
   });
 
   it("reads remote binary files without passing through UTF-8", async () => {

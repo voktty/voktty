@@ -41,10 +41,20 @@ if [ -z "$__VOKTTY_HOOKS_LOADED" ]; then
     done
   }
 
+  _voktty_emit() {
+    if [ -n "$TMUX" ]; then
+      local seq="$1"
+      local escaped="${seq//$'\e'/$'\e\e'}"
+      printf '\ePtmux;\e%s\e\\' "$escaped"
+    else
+      printf '%s' "$1"
+    fi
+  }
+
   _voktty_precmd() {
     local _voktty_ret=$?
-    printf '\e]133;D;%s\e\\' "$_voktty_ret"
-    printf '\e]7;file://%s%s\e\\' "${HOSTNAME:-$(uname -n 2>/dev/null)}" "$(_voktty_urlencode "$PWD")"
+    _voktty_emit "$(printf '\e]133;D;%s\e\\' "$_voktty_ret")"
+    _voktty_emit "$(printf '\e]7;file://%s%s\e\\' "${HOSTNAME:-$(uname -n 2>/dev/null)}" "$(_voktty_urlencode "$PWD")")"
     if [ -n "$VOKTTY_BLOCKS" ]; then
       # Host renders its own input bar: suppress the shell prompt (B marker
       # only) and reserve header/gap rows, mirroring the zsh integration.
@@ -57,7 +67,7 @@ if [ -z "$__VOKTTY_HOOKS_LOADED" ]; then
       PS1='\[\e]133;B\e\\\]'"$PS1"
       __VOKTTY_PS1_INJECTED=1
     fi
-    printf '\e]133;A\e\\'
+    _voktty_emit "$(printf '\e]133;A\e\\')"
   }
 
   case ":${PROMPT_COMMAND:-}:" in

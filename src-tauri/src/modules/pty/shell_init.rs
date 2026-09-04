@@ -393,6 +393,10 @@ fn validate_remote_connection(
             .extra_args
             .as_deref()
             .is_some_and(|args| args.chars().any(char::is_control))
+        || connection
+            .initial_directory
+            .as_deref()
+            .is_some_and(|path| path.chars().any(char::is_control))
     {
         return Err("SSH arguments contain control characters".to_string());
     }
@@ -404,11 +408,18 @@ fn remote_shell_command(
     blocks: bool,
     connection: Option<&crate::modules::remote::RemoteSshConnection>,
 ) -> Result<String, String> {
-    if cwd.is_some_and(|path| path.chars().any(char::is_control)) {
+    let effective_cwd = cwd
+        .filter(|path| !path.trim().is_empty())
+        .or_else(|| {
+            connection
+                .and_then(|c| c.initial_directory.as_deref())
+                .filter(|path| !path.trim().is_empty())
+        });
+    if effective_cwd.is_some_and(|path| path.chars().any(char::is_control)) {
         return Err("remote cwd contains control characters".to_string());
     }
     let mut base_cmd = String::new();
-    if let Some(cwd) = cwd.filter(|path| !path.trim().is_empty()) {
+    if let Some(cwd) = effective_cwd {
         base_cmd.push_str("cd -- ");
         base_cmd.push_str(&shell_quote(cwd));
         base_cmd.push_str(" && ");
@@ -461,10 +472,16 @@ fn remote_shell_command(
         .unwrap_or("auto");
 
     let s = shell_quote(&session_name);
+    let cwd_flag = if let Some(cwd) = effective_cwd {
+        format!("-c {} ", shell_quote(cwd))
+    } else {
+        String::new()
+    };
+
     let tmux_cmd = match action {
-        "attach_force" => format!("tmux attach -d -t {s} 2>/dev/null || tmux new-session -s {s}"),
-        "new" => format!("tmux new-session -s {s} 2>/dev/null || tmux new-session"),
-        _ => format!("tmux new-session -A -s {s}"),
+        "attach_force" => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux attach -d -t {s} 2>/dev/null || tmux new-session {cwd_flag}-s {s}"),
+        "new" => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux new-session {cwd_flag}-s {s} 2>/dev/null || tmux new-session {cwd_flag}"),
+        _ => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux new-session -A {cwd_flag}-s {s}"),
     };
 
     let screen_cmd = match action {
@@ -473,8 +490,14 @@ fn remote_shell_command(
         _ => format!("screen -xRR -S {s}"),
     };
 
+    let cd_prefix = if let Some(cwd) = effective_cwd {
+        format!("cd -- {} && ", shell_quote(cwd))
+    } else {
+        String::new()
+    };
+
     let full_command = format!(
-        "if command -v tmux >/dev/null 2>&1; then exec {tmux_cmd}; elif command -v screen >/dev/null 2>&1; then exec {screen_cmd}; else {base_cmd}; fi"
+        "{cd_prefix}if command -v tmux >/dev/null 2>&1; then exec {tmux_cmd}; elif command -v screen >/dev/null 2>&1; then exec {screen_cmd}; else {base_cmd}; fi"
     );
 
     Ok(full_command)
@@ -1463,7 +1486,7 @@ mod tests {
         ));
         assert!(command.contains("--rcfile \"$_voktty_integration/bashrc\" -i"));
         assert!(command.contains("ZDOTDIR=\"$_voktty_integration/zsh\""));
-        assert!(command.contains("source \"$HOME/.voktty/shell-integration/1/init.fish\""));
+        assert!(command.contains("source \"$HOME/.voktty/shell-integration/2/init.fish\""));
         assert!(command.ends_with("exec \"$_voktty_shell\" -l"));
     }
 
@@ -1475,13 +1498,14 @@ mod tests {
             port: Some(22),
             identity_file: None,
             extra_args: None,
+            initial_directory: None,
             multiplexer_mode: Some("auto".into()),
             tmux_session_name: Some("my-work".into()),
             active_multiplexer_session: None,
             multiplexer_action: Some("attach_force".into()),
         };
         let command = remote_shell_command(Some("/srv/work"), false, Some(&conn)).unwrap();
-        assert!(command.contains("if command -v tmux >/dev/null 2>&1; then exec tmux attach -d -t 'my-work' 2>/dev/null || tmux new-session -s 'my-work'"));
+        assert!(command.contains("if command -v tmux >/dev/null 2>&1; then exec tmux set -g allow-passthrough on 2>/dev/null; tmux attach -d -t 'my-work' 2>/dev/null || tmux new-session -c '/srv/work' -s 'my-work'"));
         assert!(command.contains("elif command -v screen >/dev/null 2>&1; then exec screen -d -r 'my-work' 2>/dev/null || screen -S 'my-work'"));
         assert!(command.contains("else cd -- '/srv/work' && export VOKTTY_TERMINAL=1;"));
     }
@@ -1494,6 +1518,7 @@ mod tests {
             port: Some(2222),
             identity_file: Some("C:/keys/id_ed25519".into()),
             extra_args: Some("-o ConnectTimeout=5".into()),
+            initial_directory: None,
             multiplexer_mode: Some("none".into()),
             tmux_session_name: None,
             active_multiplexer_session: None,
@@ -1514,7 +1539,7 @@ mod tests {
         assert!(
             args[args.len() - 1].starts_with("cd -- '/srv/project' && export VOKTTY_TERMINAL=1;")
         );
-        assert!(args[args.len() - 1].contains("shell-integration/1"));
+        assert!(args[args.len() - 1].contains("shell-integration/2"));
         assert_eq!(args[args.len() - 2], "ubuntu@server.example");
     }
 
