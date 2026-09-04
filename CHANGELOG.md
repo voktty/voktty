@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.33] - 2026-09-04
+
 ### Added
 
+- Selecting Astra in the composer celebrates it with a pane-wide solar animation: champagne-gold meteors, star glints, a glowing sun, and orbiting rings. The effect replays on every selection, fades out automatically, and respects reduced-motion preferences.
 - Diff reviews can be annotated line by line in both Unified and Editor views. Use the comment action on a changed line to write a note and add its file, line number, and code context to the active composer; collect multiple comments and send them to the agent in one prompt.
+- Compact session context manually with `/compact` or the context meter on supported agent harnesses.
+
+### Fixed
+
+- Agent markdown supports mixed right-to-left and left-to-right text while keeping code and Mermaid blocks left-to-right.
+- Popover glass backgrounds stay stable during opening and closing animations.
 
 ## [0.1.32] - 2026-09-04
 
@@ -510,7 +519,9 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.31...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.33...HEAD
+[0.1.33]: https://github.com/hardbeat920/monocode/compare/v0.1.32...v0.1.33
+[0.1.32]: https://github.com/hardbeat920/monocode/compare/v0.1.31...v0.1.32
 [0.1.31]: https://github.com/hardbeat920/monocode/compare/v0.1.30...v0.1.31
 [0.1.30]: https://github.com/hardbeat920/monocode/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/hardbeat920/monocode/compare/v0.1.28...v0.1.29
