@@ -39,8 +39,12 @@ pub(crate) struct PasswdIdentity {
 }
 
 pub(crate) fn passwd_identity() -> Option<PasswdIdentity> {
-    let user = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).ok()?;
-    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok()?;
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .ok()?;
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()?;
     let shell = std::env::var("SHELL").unwrap_or_else(|_| {
         if cfg!(windows) {
             "cmd.exe".to_string()
