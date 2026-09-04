@@ -151,6 +151,69 @@ describe("status blocks", () => {
   });
 });
 
+describe("task list updates", () => {
+  it("updates one structured checklist instead of appending plan cards", () => {
+    let session = appendUser(newSession("codex", "/tmp"), "fix it");
+    session = applyHarnessEvent(session, {
+      type: "tasks.updated",
+      key: "turn_1",
+      explanation: "Starting with the regression.",
+      items: [
+        { text: "Inspect", status: "in_progress" },
+        { text: "Verify", status: "pending" },
+      ],
+    });
+    const taskId = session.blocks.find((block) => block.role === "tasks")?.id;
+
+    session = applyHarnessEvent(session, {
+      type: "tool.started",
+      callId: "call_1",
+      title: "Read src/App.tsx",
+    });
+    session = applyHarnessEvent(session, {
+      type: "tasks.updated",
+      key: "turn_1",
+      items: [
+        { text: "Inspect", status: "completed" },
+        { text: "Verify", status: "in_progress" },
+      ],
+    });
+
+    const tasks = session.blocks.filter((block) => block.role === "tasks");
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      id: taskId,
+      text: "[x] Inspect\n[~] Verify",
+      taskList: {
+        key: "turn_1",
+        items: [
+          { text: "Inspect", status: "completed" },
+          { text: "Verify", status: "in_progress" },
+        ],
+      },
+    });
+    expect(tasks[0]?.taskList?.explanation).toBeUndefined();
+    expect(session.blocks.some((block) => block.role === "plan")).toBe(false);
+  });
+
+  it("keeps authored plans as separate document blocks", () => {
+    let session = appendUser(newSession("codex", "/tmp"), "plan it");
+    session = applyHarnessEvent(session, {
+      type: "tasks.updated",
+      items: [{ text: "Inspect", status: "pending" }],
+    });
+    session = applyHarnessEvent(session, {
+      type: "plan",
+      text: "# Proposed approach\n\nUse two layers.",
+    });
+    expect(session.blocks.map((block) => block.role)).toEqual([
+      "user",
+      "tasks",
+      "plan",
+    ]);
+  });
+});
+
 describe("applyHarnessEvent context", () => {
   it("tracks the newest level instead of summing turns", () => {
     let session = newSession("claude", "/repo");

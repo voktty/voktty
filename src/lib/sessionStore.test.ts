@@ -133,6 +133,29 @@ describe("sanitizeSessionForPersist", () => {
       },
     });
   });
+
+  it("keeps structured task lists", () => {
+    const session = newSession("codex", "/tmp/project");
+    session.blocks = [
+      { id: "u1", role: "user", text: "fix it" },
+      {
+        id: "tasks1",
+        role: "tasks",
+        text: "[x] Inspect\n[~] Implement",
+        taskList: {
+          key: "turn_1",
+          explanation: "Inspection complete.",
+          items: [
+            { text: "Inspect", status: "completed" },
+            { text: "Implement", status: "in_progress" },
+          ],
+        },
+      },
+    ];
+    expect(sanitizeSessionForPersist(session).blocks[1]).toEqual(
+      session.blocks[1],
+    );
+  });
 });
 
 describe("persistFingerprint", () => {

@@ -42,7 +42,12 @@ export function turnUserRequest(blocks: Block[]): string {
 
 export function turnReport(blocks: Block[]): string {
   return blocks
-    .filter((block) => block.role === "assistant" || block.role === "plan")
+    .filter(
+      (block) =>
+        block.role === "assistant" ||
+        block.role === "tasks" ||
+        block.role === "plan",
+    )
     .map((block) => block.text.replace(/\r\n?/g, "\n").trim())
     .filter(Boolean)
     .join("\n\n");

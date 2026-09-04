@@ -30,9 +30,25 @@ export type BlockRole =
   | "reasoning"
   | "tool"
   | "approval"
+  | "tasks"
   | "plan"
   | "system"
   | "handoff";
+
+export type TaskListItemStatus =
+  "pending" | "in_progress" | "completed" | "cancelled";
+
+export type TaskListItem = {
+  text: string;
+  status: TaskListItemStatus;
+};
+
+export type TaskListMeta = {
+  /** Provider identity for replacing later snapshots of the same list. */
+  key?: string;
+  explanation?: string;
+  items: TaskListItem[];
+};
 
 export type HandoffStatus = "preparing" | "ready";
 
@@ -125,6 +141,7 @@ export type Block = {
     requestId: number;
     decided?: "allow" | "deny" | "cancelled";
   };
+  taskList?: TaskListMeta;
   handoff?: HandoffMeta;
   secondOpinion?: SecondOpinionMeta;
   /** Note chip shown on this user turn. Body is not stored; the harness already received it. */

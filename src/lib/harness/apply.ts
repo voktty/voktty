@@ -9,6 +9,7 @@ import {
   stubFilePreview,
 } from "./preview";
 import { joinStreamText } from "./streamText";
+import { taskListText } from "../taskList";
 import type { HarnessEvent } from "./types";
 
 export function applyHarnessEvent(
@@ -77,6 +78,8 @@ export function applyHarnessEvent(
           window: event.window,
         }),
       };
+    case "tasks.updated":
+      return upsertTaskList(session, event);
     case "plan":
       return appendBlock(session, {
         id: crypto.randomUUID(),
@@ -96,6 +99,65 @@ export function applyHarnessEvent(
     default:
       return session;
   }
+}
+
+function upsertTaskList(
+  session: Session,
+  event: Extract<HarnessEvent, { type: "tasks.updated" }>,
+): Session {
+  const key = event.key?.trim() || undefined;
+  const lastUser = lastMatchingBlock(
+    session.blocks,
+    (block) => block.role === "user",
+  );
+  const existing = lastMatchingBlock(session.blocks, (block, index) => {
+    if (block.role !== "tasks") return false;
+    if (key) return block.taskList?.key === key;
+    return index > lastUser;
+  });
+
+  if (event.items.length === 0) {
+    if (existing < 0) return session;
+    return {
+      ...session,
+      blocks: session.blocks.filter((_, index) => index !== existing),
+    };
+  }
+
+  const taskList = {
+    ...(key ? { key } : {}),
+    ...(event.explanation?.trim()
+      ? { explanation: event.explanation.trim() }
+      : {}),
+    items: event.items,
+  };
+  const text = taskListText(event.items);
+  if (existing >= 0) {
+    const blocks = session.blocks.slice();
+    blocks[existing] = {
+      ...blocks[existing],
+      text,
+      taskList,
+    };
+    return { ...session, blocks };
+  }
+
+  return appendBlock(session, {
+    id: crypto.randomUUID(),
+    role: "tasks",
+    text,
+    taskList,
+  });
+}
+
+function lastMatchingBlock(
+  blocks: Block[],
+  predicate: (block: Block, index: number) => boolean,
+): number {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    if (predicate(blocks[index], index)) return index;
+  }
+  return -1;
 }
 
 type UserTurnExtra = {

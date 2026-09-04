@@ -132,10 +132,16 @@ describe("fx protocol", () => {
       }),
     ).toEqual([
       {
-        type: "plan",
-        text: "[x] Inspect router\n[ ] Add test",
+        type: "tasks.updated",
+        items: [
+          { text: "Inspect router", status: "completed" },
+          { text: "Add test", status: "pending" },
+        ],
       },
     ]);
+    expect(
+      eventsFromAcpUpdate({ sessionUpdate: "plan", text: "# Approach" }),
+    ).toEqual([{ type: "plan", text: "# Approach" }]);
 
     expect(
       eventsFromAcpUpdate({

@@ -1,6 +1,7 @@
 import { nativeModelId } from "../models";
 import type { RuntimeMode } from "../session";
 import { promptBlocks } from "../attachments";
+import { normalizeTaskListStatus } from "../taskList";
 import { AcpClient, type AcpHandlers } from "./acp";
 import {
   killChild,
@@ -432,16 +433,18 @@ function handleNotification(live: Live, method: string, params: unknown) {
   if (method === "cursor/update_todos") {
     const todos = asRecord(params)?.todos;
     if (Array.isArray(todos)) {
-      const text = todos
-        .map((item) => {
-          const rec = asRecord(item);
-          const status = String(rec?.status ?? "pending");
-          const content = String(rec?.content ?? "");
-          return `${statusMark(status)} ${content}`.trim();
-        })
-        .filter(Boolean)
-        .join("\n");
-      if (text) live.onEvent({ type: "plan", text });
+      const items = todos.flatMap((item) => {
+        const rec = asRecord(item);
+        const text = String(rec?.content ?? "").trim();
+        if (!text) return [];
+        return [
+          {
+            text,
+            status: normalizeTaskListStatus(rec?.status),
+          },
+        ];
+      });
+      live.onEvent({ type: "tasks.updated", items });
     }
   }
 }
@@ -1394,13 +1397,6 @@ function joinContentParts(parts: string[], separator: string): string {
     joined += boundaryAlreadyPresent ? part : separator + part;
   }
   return joined;
-}
-
-function statusMark(status: string): string {
-  if (status === "completed") return "[x]";
-  if (status === "in_progress") return "[…]";
-  if (status === "cancelled") return "[-]";
-  return "[ ]";
 }
 
 export function __cursorTestReset(): void {

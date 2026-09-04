@@ -126,6 +126,25 @@ afterEach(async () => {
 });
 
 describe("cursor background subagents", () => {
+  it("emits Cursor todo updates as structured task lists", async () => {
+    const { events, promptId, turn } = await startTurn("cursor-live");
+    notify("cursor/update_todos", {
+      todos: [
+        { content: "Inspect", status: "completed" },
+        { content: "Implement", status: "in_progress" },
+      ],
+    });
+    expect(events.at(-1)).toEqual({
+      type: "tasks.updated",
+      items: [
+        { text: "Inspect", status: "completed" },
+        { text: "Implement", status: "in_progress" },
+      ],
+    });
+    reply(promptId, { stopReason: "end_turn" });
+    await turn;
+  });
+
   it("keeps an ACP background task active until the prompt completes", async () => {
     const { events, promptId, turn } = await startTurn("cursor-live");
     let settled = false;

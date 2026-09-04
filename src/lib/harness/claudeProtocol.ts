@@ -1,4 +1,10 @@
-import type { Attachment, RuntimeMode, ToolPreview } from "../session";
+import type {
+  Attachment,
+  RuntimeMode,
+  TaskListItem,
+  ToolPreview,
+} from "../session";
+import { normalizeTaskListStatus } from "../taskList";
 import {
   questionPromptTitle,
   questionsFromUnknown,
@@ -850,21 +856,22 @@ export function tryParseJsonRecord(
   }
 }
 
-export function planTextFromTodos(
+export function taskListFromTodos(
   input: Record<string, unknown>,
-): string | null {
+): TaskListItem[] | null {
   const todos = input.todos;
-  if (!Array.isArray(todos) || todos.length === 0) return null;
-  const lines = todos.flatMap((todo) => {
+  if (!Array.isArray(todos)) return null;
+  return todos.flatMap((todo): TaskListItem[] => {
     const rec = asRecord(todo);
     const step =
       stringField(rec, "content") ?? stringField(rec, "activeForm") ?? "Task";
-    const status = stringField(rec, "status") ?? "pending";
-    const mark =
-      status === "completed" ? "[x]" : status === "in_progress" ? "[~]" : "[ ]";
-    return [`${mark} ${step}`];
+    return [
+      {
+        text: step,
+        status: normalizeTaskListStatus(stringField(rec, "status")),
+      },
+    ];
   });
-  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 export function isTodoTool(toolName: string): boolean {

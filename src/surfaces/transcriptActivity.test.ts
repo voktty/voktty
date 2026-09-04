@@ -202,12 +202,23 @@ describe("turnCopyText", () => {
         { id: "a1", role: "assistant", text: "I'll inspect the file." },
         shell("t"),
         { id: "r", role: "reasoning", text: "thinking" },
+        {
+          id: "tasks",
+          role: "tasks",
+          text: "[x] inspect\n[~] implement",
+          taskList: {
+            items: [
+              { text: "inspect", status: "completed" },
+              { text: "implement", status: "in_progress" },
+            ],
+          },
+        },
         { id: "p", role: "plan", text: "## Plan\n\n- edit App.tsx" },
         { id: "a2", role: "assistant", text: "Done.\n\n```ts\nfixed\n```" },
         { id: "s", role: "system", text: "session error" },
       ]),
     ).toBe(
-      "I'll inspect the file.\n\n## Plan\n\n- edit App.tsx\n\nDone.\n\n```ts\nfixed\n```",
+      "I'll inspect the file.\n\n[x] inspect\n[~] implement\n\n## Plan\n\n- edit App.tsx\n\nDone.\n\n```ts\nfixed\n```",
     );
   });
 

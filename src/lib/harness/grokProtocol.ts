@@ -1,6 +1,7 @@
 import { promptBlocks, type PromptContentBlock } from "../attachments";
 import type { AgentModel, ModelSetting, ModelSettingChoice } from "../models";
 import type { Attachment, RuntimeMode, ToolPreview } from "../session";
+import { normalizeTaskListStatus } from "../taskList";
 import type { ApprovalDecision, HarnessEvent } from "./types";
 import type { UserQuestion, UserQuestionReply } from "../userQuestion";
 import { questionsFromUnknown, selectedAnswerLabels } from "../userQuestion";
@@ -397,8 +398,8 @@ export function eventsFromAcpUpdate(params: unknown): HarnessEvent[] {
   }
 
   if (kind === "plan" || kind === "current_plan") {
-    const text = planText(update);
-    return text ? [{ type: "plan", text }] : [];
+    const event = planEvent(update);
+    return event ? [event] : [];
   }
 
   if (kind === "session_summary_generated") {
@@ -709,29 +710,27 @@ function hasUsageFields(rec: Record<string, unknown>): boolean {
   );
 }
 
-function planText(update: Record<string, unknown>): string {
-  if (typeof update.text === "string" && update.text.trim()) return update.text;
+function planEvent(update: Record<string, unknown>): HarnessEvent | null {
   const entries = update.entries ?? update.plan;
-  if (!Array.isArray(entries)) return "";
-  return entries
-    .map((item) => {
+  if (Array.isArray(entries)) {
+    const items = entries.flatMap((item) => {
       const rec = asRecord(item);
-      if (!rec) return "";
-      const status = String(rec.status ?? "pending");
+      if (!rec) return [];
       const content = String(rec.content ?? rec.text ?? rec.title ?? "").trim();
-      if (!content) return "";
-      const mark =
-        status === "completed"
-          ? "[x]"
-          : status === "in_progress"
-            ? "[…]"
-            : status === "cancelled"
-              ? "[-]"
-              : "[ ]";
-      return `${mark} ${content}`;
-    })
-    .filter(Boolean)
-    .join("\n");
+      if (!content) return [];
+      return [
+        {
+          text: content,
+          status: normalizeTaskListStatus(rec.status),
+        },
+      ];
+    });
+    return { type: "tasks.updated", items };
+  }
+  if (typeof update.text === "string" && update.text.trim()) {
+    return { type: "plan", text: update.text };
+  }
+  return null;
 }
 
 function toolLabel(rec: Record<string, unknown>): string | undefined {

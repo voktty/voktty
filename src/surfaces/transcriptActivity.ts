@@ -234,10 +234,15 @@ function isIgnoredTurnBlock(block: Block): boolean {
   return block.role === "assistant" && !block.text.trim();
 }
 
-/** Markdown the user actually reads: assistant prose plus any plan, not tool chrome. */
+/** Text the user actually reads: assistant prose, tasks, and plans, not tool chrome. */
 export function turnCopyText(blocks: Block[]): string {
   return blocks
-    .filter((block) => block.role === "assistant" || block.role === "plan")
+    .filter(
+      (block) =>
+        block.role === "assistant" ||
+        block.role === "tasks" ||
+        block.role === "plan",
+    )
     .map((block) => block.text.replace(/\r\n?/g, "\n").trim())
     .filter(Boolean)
     .join("\n\n");

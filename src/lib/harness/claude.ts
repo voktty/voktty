@@ -38,7 +38,7 @@ import {
   parseTaskStarted,
   parseTaskUpdated,
   parseToolProgress,
-  planTextFromTodos,
+  taskListFromTodos,
   previewFromTool,
   resolveClaudeApiModelId,
   runtimeModeToPermission,
@@ -537,7 +537,7 @@ function handleStreamEvent(live: Live, rec: Record<string, unknown>): void {
       status: isAgentToolName(tool.name) ? "in_progress" : "pending",
       preview: previewFromTool(tool.name, tool.input),
     });
-    emitPlanIfNeeded(live, tool.name, tool.input);
+    emitTaskListIfNeeded(live, tool.name, tool.input);
     return;
   }
 
@@ -560,7 +560,7 @@ function handleStreamEvent(live: Live, rec: Record<string, unknown>): void {
       detail: summarizeToolRequest(tool.name, parsed),
       preview: previewFromTool(tool.name, parsed),
     });
-    emitPlanIfNeeded(live, tool.name, parsed);
+    emitTaskListIfNeeded(live, tool.name, parsed);
     return;
   }
 }
@@ -605,7 +605,7 @@ function handleAssistant(live: Live, rec: Record<string, unknown>): void {
       const plan = extractExitPlanModePlan(use.input);
       if (plan) live.onEvent({ type: "plan", text: plan });
     }
-    emitPlanIfNeeded(live, tool.name, tool.input);
+    emitTaskListIfNeeded(live, tool.name, tool.input);
   }
 }
 
@@ -793,14 +793,14 @@ function waitQuestion(
   });
 }
 
-function emitPlanIfNeeded(
+function emitTaskListIfNeeded(
   live: Live,
   toolName: string,
   input: Record<string, unknown>,
 ): void {
   if (!isTodoTool(toolName)) return;
-  const plan = planTextFromTodos(input);
-  if (plan) live.onEvent({ type: "plan", text: plan });
+  const items = taskListFromTodos(input);
+  if (items) live.onEvent({ type: "tasks.updated", items });
 }
 
 function handleAgentLifecycle(

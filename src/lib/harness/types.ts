@@ -1,4 +1,9 @@
-import type { Attachment, RuntimeMode, ToolPreview } from "../session";
+import type {
+  Attachment,
+  RuntimeMode,
+  TaskListItem,
+  ToolPreview,
+} from "../session";
 import type { UserQuestion } from "../userQuestion";
 
 export type HarnessEvent =
@@ -53,6 +58,12 @@ export type HarnessEvent =
       type: "question.resolved";
       requestId: number;
       decision: "answered" | "skipped" | "cancelled";
+    }
+  | {
+      type: "tasks.updated";
+      key?: string;
+      explanation?: string;
+      items: TaskListItem[];
     }
   | { type: "plan"; text: string }
   /** Context-window level after the harness's latest request. */

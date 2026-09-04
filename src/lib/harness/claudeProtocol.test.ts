@@ -22,7 +22,7 @@ import {
   parseTaskStarted,
   parseTaskUpdated,
   parseToolProgress,
-  planTextFromTodos,
+  taskListFromTodos,
   resolveClaudeApiModelId,
   runtimeModeToPermission,
   sessionIdFromMessage,
@@ -443,13 +443,16 @@ describe("helpers", () => {
     );
     expect(isTodoTool("TodoWrite")).toBe(true);
     expect(
-      planTextFromTodos({
+      taskListFromTodos({
         todos: [
           { content: "One", status: "completed" },
           { content: "Two", status: "pending" },
         ],
       }),
-    ).toBe("[x] One\n[ ] Two");
+    ).toEqual([
+      { text: "One", status: "completed" },
+      { text: "Two", status: "pending" },
+    ]);
     expect(extractExitPlanModePlan({ plan: "# Plan" })).toBe("# Plan");
   });
 

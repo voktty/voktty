@@ -1,4 +1,5 @@
-import type { RuntimeMode, ToolPreview } from "../session";
+import type { RuntimeMode, TaskListItem, ToolPreview } from "../session";
+import { normalizeTaskListStatus } from "../taskList";
 import {
   composeToolTitle,
   extractToolPreview,
@@ -226,17 +227,29 @@ export function mapCodexNotification(
   if (method === "turn/plan/updated") {
     const plan = rec.plan;
     if (!Array.isArray(plan)) return { events: [] };
-    const text = plan
-      .map((step) => {
-        const row = asRecord(step);
-        const status = stringField(row, "status") ?? "pending";
-        const body = stringField(row, "step") ?? "";
-        return `${statusMark(status)} ${body}`.trim();
-      })
-      .filter(Boolean)
-      .join("\n");
-    if (!text) return { events: [] };
-    return { events: [{ type: "plan", text }] };
+    const items = plan.flatMap((step): TaskListItem[] => {
+      const row = asRecord(step);
+      const body = stringField(row, "step") ?? "";
+      if (!body) return [];
+      return [
+        {
+          text: body,
+          status: normalizeTaskListStatus(stringField(row, "status")),
+        },
+      ];
+    });
+    const key = stringField(rec, "turnId");
+    const explanation = stringField(rec, "explanation");
+    return {
+      events: [
+        {
+          type: "tasks.updated",
+          items,
+          ...(key ? { key } : {}),
+          ...(explanation ? { explanation } : {}),
+        },
+      ],
+    };
   }
 
   if (method === "item/started" || method === "item/completed") {
@@ -706,13 +719,6 @@ function mapItemStatus(
   }
   if (status === "inProgress") return "in_progress";
   return completed ? "completed" : "in_progress";
-}
-
-function statusMark(status: string): string {
-  if (status === "completed") return "[x]";
-  if (status === "inProgress" || status === "in_progress") return "[…]";
-  if (status === "cancelled") return "[-]";
-  return "[ ]";
 }
 
 export function mapApprovalRequest(

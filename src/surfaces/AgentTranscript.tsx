@@ -26,6 +26,7 @@ import { AttachmentChip } from "../chrome/AttachmentChip";
 import { FilePreview } from "../chrome/FilePreview";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { PlanPreview } from "../chrome/PlanPreview";
+import { TaskListPreview } from "../chrome/TaskListPreview";
 import {
   HandoffButton,
   SecondOpinionButton,
@@ -42,6 +43,7 @@ import {
 } from "../lib/harness/preview";
 import { copyText } from "../lib/clipboard";
 import { playCue } from "../lib/sounds";
+import { legacyTaskListFromText } from "../lib/taskList";
 import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import { resolveModel } from "../lib/models";
 import { harnessForTurn } from "../lib/secondOpinion";
@@ -703,7 +705,27 @@ const TranscriptBlock = memo(function TranscriptBlock({
     return null;
   }
 
+  if (block.role === "tasks") {
+    if (!block.taskList?.items.length) return null;
+    return (
+      <div className="px-4 py-1">
+        <TaskListPreview
+          items={block.taskList.items}
+          explanation={block.taskList.explanation}
+        />
+      </div>
+    );
+  }
+
   if (block.role === "plan") {
+    const legacyTasks = legacyTaskListFromText(block.text);
+    if (legacyTasks) {
+      return (
+        <div className="px-4 py-1">
+          <TaskListPreview items={legacyTasks} />
+        </div>
+      );
+    }
     return (
       <div className="px-4 py-1">
         <PlanPreview

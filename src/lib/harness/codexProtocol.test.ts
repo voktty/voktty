@@ -125,6 +125,32 @@ describe("mapCodexNotification", () => {
     expect(mapped.events).toEqual([{ type: "message.delta", text: "Hello" }]);
   });
 
+  it("keeps task progress distinct from authored plan documents", () => {
+    expect(
+      mapCodexNotification("turn/plan/updated", {
+        turnId: "turn_1",
+        explanation: "The inspection is done.",
+        plan: [
+          { step: "Inspect", status: "completed" },
+          { step: "Implement", status: "inProgress" },
+        ],
+      }).events,
+    ).toEqual([
+      {
+        type: "tasks.updated",
+        key: "turn_1",
+        explanation: "The inspection is done.",
+        items: [
+          { text: "Inspect", status: "completed" },
+          { text: "Implement", status: "in_progress" },
+        ],
+      },
+    ]);
+    expect(
+      mapCodexNotification("item/plan/delta", { delta: "# Approach" }).events,
+    ).toEqual([{ type: "plan", text: "# Approach" }]);
+  });
+
   it("keeps whitespace-only agent message deltas", () => {
     const mapped = mapCodexNotification("item/agentMessage/delta", {
       delta: "\n\n",
