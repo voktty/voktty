@@ -12,6 +12,7 @@ import {
 } from "@/modules/remote";
 import {
   currentWorkspaceEnv,
+  isWindowsNativePath,
   LOCAL_WORKSPACE,
   workspaceForNativeFs,
   type WorkspaceEnv,
@@ -165,12 +166,7 @@ function resolveGitWorkspace(
   const current = currentWorkspaceEnv();
   // If the path is a local Windows path (e.g. starts with C:/ or C:\) or UNC path,
   // but current workspace is remote/docker/serial, fallback to local workspace.
-  if (
-    repoRootOrPath &&
-    (repoRootOrPath.includes(":") ||
-      repoRootOrPath.startsWith("\\\\") ||
-      repoRootOrPath.startsWith("//"))
-  ) {
+  if (repoRootOrPath && isWindowsNativePath(repoRootOrPath)) {
     if (
       current.kind === "docker" ||
       current.kind === "ssh" ||
