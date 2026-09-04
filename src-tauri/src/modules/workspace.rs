@@ -194,6 +194,9 @@ pub async fn workspace_authorize(
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<String, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
+    if workspace.is_remote() {
+        return Ok(path);
+    }
     let resolved = resolve_path(&path, &workspace);
     let canonical = registry.authorize(&resolved).map_err(|e| e.to_string())?;
     Ok(crate::modules::fs::to_canon(&canonical))

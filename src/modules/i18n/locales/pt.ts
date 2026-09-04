@@ -785,6 +785,8 @@ const ptBase = mergeLocale(en, {
     unsavedChanges: "Alterações não salvas",
   },
   git: {
+    authorizeDirectory: "Autorizar diretório",
+    authorizedSuccess: "Diretório autorizado com sucesso",
     publish: "Publicar",
     publishBranch: "Publicar branch",
     publishBranchTooltip: "Publicar esta branch no repositório remoto",

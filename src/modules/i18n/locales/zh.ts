@@ -734,6 +734,8 @@ const zhBase = mergeLocale(en, {
     unsavedChanges: "未保存的更改",
   },
   git: {
+    authorizeDirectory: "授权目录",
+    authorizedSuccess: "目录授权成功",
     publish: "发布",
     publishBranch: "发布分支",
     publishBranchTooltip: "将此分支发布到远程仓库",
