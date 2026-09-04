@@ -174,6 +174,28 @@ pub fn collect_codex_quota(cost_engine: &CostEngine) -> ProviderQuota {
     }
 }
 
+fn format_codex_window_label(plan_type: Option<&str>, window_seconds: Option<i64>, secondary: bool) -> String {
+    let is_free = plan_type.map_or(false, |p| p.eq_ignore_ascii_case("free"));
+    if let Some(sec) = window_seconds {
+        if sec >= 86400 * 20 {
+            return if is_free { "Monthly Limit (Free)".into() } else { "Monthly Limit".into() };
+        } else if sec >= 86400 * 6 {
+            return "Weekly (7d)".into();
+        } else if sec >= 86400 {
+            return "Daily (24h)".into();
+        } else if sec <= 3600 * 6 && sec > 0 {
+            return "Session (5h)".into();
+        }
+    }
+    if is_free && !secondary {
+        "Monthly Limit (Free)".into()
+    } else if secondary {
+        "Weekly (7d)".into()
+    } else {
+        "Session (5h)".into()
+    }
+}
+
 fn build_quota_from_wham(
     wham: WhamUsageResponse,
     cost_engine: &CostEngine,
@@ -191,17 +213,18 @@ fn build_quota_from_wham(
             let resets_at = p.reset_at.and_then(|ts| {
                 DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339())
             });
+            let label = format_codex_window_label(plan_name.as_deref(), p.limit_window_seconds, false);
 
             if used > worst_utilization {
                 worst_utilization = used;
                 worst_resets_at = resets_at.clone();
-                worst_label = "5-hour session".into();
+                worst_label = label.clone();
             }
 
             windows.push(QuotaWindow {
-                id: "codex-session-5h".into(),
+                id: "codex-primary".into(),
                 provider_id: "codex".into(),
-                label: "Session (5h)".into(),
+                label,
                 used_percent: used.clamp(0.0, 100.0),
                 remaining_percent: (100.0 - used).clamp(0.0, 100.0),
                 resets_at,
@@ -217,17 +240,18 @@ fn build_quota_from_wham(
             let resets_at = s.reset_at.and_then(|ts| {
                 DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339())
             });
+            let label = format_codex_window_label(plan_name.as_deref(), s.limit_window_seconds, true);
 
             if used > worst_utilization {
                 worst_utilization = used;
                 worst_resets_at = resets_at.clone();
-                worst_label = "Weekly (7d)".into();
+                worst_label = label.clone();
             }
 
             windows.push(QuotaWindow {
-                id: "codex-weekly-7d".into(),
+                id: "codex-secondary".into(),
                 provider_id: "codex".into(),
-                label: "Weekly (7d)".into(),
+                label,
                 used_percent: used.clamp(0.0, 100.0),
                 remaining_percent: (100.0 - used).clamp(0.0, 100.0),
                 resets_at,
@@ -286,17 +310,18 @@ fn fallback_offline_codex(
     let mut worst_resets_at = None;
     let mut worst_label = String::new();
 
-    if let Some((used, reset_ts)) = offline_primary {
+    if let Some((used, reset_ts, window_mins)) = offline_primary {
         let resets_at = reset_ts.and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339()));
+        let label = format_codex_window_label(plan_name.as_deref(), window_mins.map(|m| m * 60), false);
         if used > worst_utilization {
             worst_utilization = used;
             worst_resets_at = resets_at.clone();
-            worst_label = "Session (5h)".into();
+            worst_label = label.clone();
         }
         windows.push(QuotaWindow {
-            id: "codex-session-5h".into(),
+            id: "codex-primary".into(),
             provider_id: "codex".into(),
-            label: "Session (5h)".into(),
+            label,
             used_percent: used.clamp(0.0, 100.0),
             remaining_percent: (100.0 - used).clamp(0.0, 100.0),
             resets_at,
@@ -307,17 +332,18 @@ fn fallback_offline_codex(
         });
     }
 
-    if let Some((used, reset_ts)) = offline_secondary {
+    if let Some((used, reset_ts, window_mins)) = offline_secondary {
         let resets_at = reset_ts.and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339()));
+        let label = format_codex_window_label(plan_name.as_deref(), window_mins.map(|m| m * 60), true);
         if used > worst_utilization {
             worst_utilization = used;
             worst_resets_at = resets_at.clone();
-            worst_label = "Weekly (7d)".into();
+            worst_label = label.clone();
         }
         windows.push(QuotaWindow {
-            id: "codex-weekly-7d".into(),
+            id: "codex-secondary".into(),
             provider_id: "codex".into(),
-            label: "Weekly (7d)".into(),
+            label,
             used_percent: used.clamp(0.0, 100.0),
             remaining_percent: (100.0 - used).clamp(0.0, 100.0),
             resets_at,
@@ -472,7 +498,10 @@ fn scan_rollout_file(
     }
 }
 
-fn scan_newest_rollout_rate_limits() -> (Option<(f64, Option<i64>)>, Option<(f64, Option<i64>)>) {
+fn scan_newest_rollout_rate_limits() -> (
+    Option<(f64, Option<i64>, Option<i64>)>,
+    Option<(f64, Option<i64>, Option<i64>)>,
+) {
     let Some(home) = dirs_home() else {
         return (None, None);
     };
@@ -497,12 +526,14 @@ fn scan_newest_rollout_rate_limits() -> (Option<(f64, Option<i64>)>, Option<(f64
                                     let primary = rl.get("primary").and_then(|p| {
                                         let used = p.get("used_percent").and_then(Value::as_f64)?;
                                         let reset = p.get("resets_at").and_then(Value::as_i64);
-                                        Some((used, reset))
+                                        let mins = p.get("window_minutes").and_then(Value::as_i64);
+                                        Some((used, reset, mins))
                                     });
                                     let secondary = rl.get("secondary").and_then(|s| {
                                         let used = s.get("used_percent").and_then(Value::as_f64)?;
                                         let reset = s.get("resets_at").and_then(Value::as_i64);
-                                        Some((used, reset))
+                                        let mins = s.get("window_minutes").and_then(Value::as_i64);
+                                        Some((used, reset, mins))
                                     });
                                     if primary.is_some() || secondary.is_some() {
                                         return (primary, secondary);

@@ -16,6 +16,53 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useState } from "react";
 
+function formatResetDisplay(
+  resetsAt?: string | null,
+  resetsInSeconds?: number | null,
+): string | null {
+  if (resetsInSeconds !== undefined && resetsInSeconds !== null && resetsInSeconds > 0) {
+    const days = Math.floor(resetsInSeconds / 86400);
+    const hours = Math.floor((resetsInSeconds % 86400) / 3600);
+    const minutes = Math.floor((resetsInSeconds % 3600) / 60);
+    if (days > 1) {
+      return `Resets in ${days}d ${hours}h`;
+    }
+    if (days === 1 || hours >= 6) {
+      return `Resets in ${days > 0 ? `${days}d ` : ""}${hours}h`;
+    }
+    if (hours > 0) {
+      return `Resets in ${hours}h ${minutes}m`;
+    }
+    return `Resets in ${minutes}m`;
+  }
+
+  if (!resetsAt) return null;
+  const d = new Date(resetsAt);
+  if (isNaN(d.getTime())) return null;
+
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  if (diffMs > 0) {
+    const diffSec = Math.floor(diffMs / 1000);
+    const days = Math.floor(diffSec / 86400);
+    const hours = Math.floor((diffSec % 86400) / 3600);
+    const minutes = Math.floor((diffSec % 3600) / 60);
+
+    if (days > 1) {
+      return `Resets: ${d.toLocaleDateString([], { month: "short", day: "numeric" })} (${days}d)`;
+    }
+    if (days === 1 || hours >= 12) {
+      return `Resets: ${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    }
+    if (hours > 0) {
+      return `Resets in ${hours}h ${minutes}m`;
+    }
+    return `Resets in ${minutes}m`;
+  }
+
+  return `Resets: ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+}
+
 export function QuotaUsageWidget() {
   const { t } = useTranslation();
   const { overview, loading, fetchOverview, refreshProvider } = useQuotaStore();
@@ -281,12 +328,9 @@ export function QuotaUsageWidget() {
                               }}
                             />
                           </div>
-                          {w.resetsAt && (
+                          {formatResetDisplay(w.resetsAt, w.resetsInSeconds) && (
                             <div className="text-[9px] text-muted-foreground/80 text-right">
-                              {t("statusbar.quota.resets", {
-                                time: new Date(w.resetsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                                defaultValue: `Resets: ${new Date(w.resetsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-                              })}
+                              {formatResetDisplay(w.resetsAt, w.resetsInSeconds)}
                             </div>
                           )}
                         </div>
