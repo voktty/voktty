@@ -390,7 +390,11 @@ pub fn classify_git_error(stderr: &str) -> Option<GitError> {
     if lower.contains("host key verification failed") {
         return Some(GitError::HostKeyUnverified);
     }
-    if lower.contains("detected dubious ownership in repository at") {
+    if lower.contains("detected dubious ownership in repository at")
+        || lower.contains("safe.directory")
+        || lower.contains("not in the list of safe directories")
+        || lower.contains("unsafe repository")
+    {
         let path = extract_quoted_path(stderr).unwrap_or_default();
         return Some(GitError::DubiousOwnership { path });
     }
@@ -398,10 +402,18 @@ pub fn classify_git_error(stderr: &str) -> Option<GitError> {
 }
 
 fn extract_quoted_path(stderr: &str) -> Option<String> {
-    let start = stderr.find('\'')?;
-    let rest = &stderr[start + 1..];
-    let end = rest.find('\'')?;
-    Some(rest[..end].to_string())
+    for quote in ['\'', '"', '`'] {
+        if let Some(start) = stderr.find(quote) {
+            let rest = &stderr[start + 1..];
+            if let Some(end) = rest.find(quote) {
+                let candidate = rest[..end].trim();
+                if !candidate.is_empty() {
+                    return Some(candidate.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 fn decode_text(bytes: Vec<u8>) -> TextSource {

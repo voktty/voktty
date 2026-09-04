@@ -774,6 +774,8 @@ const jaBase = mergeLocale(en, {
     unsavedChanges: "未保存の変更",
   },
   git: {
+    authorizeDirectory: "ディレクトリを承認",
+    authorizedSuccess: "ディレクトリが正常に承認されました",
     publish: "発行",
     publishBranch: "ブランチを発行",
     publishBranchTooltip: "このブランチをリモートリポジトリに発行します",

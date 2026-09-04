@@ -247,12 +247,23 @@ function extractDubiousOwnershipPath(
       : error instanceof Error
         ? error.message
         : "";
-  if (!msg.toLowerCase().includes("dubious ownership")) return null;
-  const match = msg.match(/repository\s+at\s+('[^']+'|"[^"]+")/i);
-  if (match) {
-    return match[1].replace(/^['"]|['"]$/g, "");
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes("dubious ownership") ||
+    lower.includes("safe.directory") ||
+    lower.includes("outside the authorized workspace") ||
+    lower.includes("not in the list of safe directories") ||
+    lower.includes("unsafe repository") ||
+    lower.includes("unauthorized")
+  ) {
+    const match = msg.match(/(?:repository\s+at|workspace:)\s+('[^']+'|"[^"]+"|[^\s,]+)/i);
+    if (match) {
+      const extracted = match[1].replace(/^['"]|['"]$/g, "").trim();
+      if (extracted.length > 0) return extracted;
+    }
+    return fallbackContextPath;
   }
-  return fallbackContextPath;
+  return null;
 }
 
 export function useSourceControl(
@@ -489,9 +500,11 @@ export function useSourceControl(
 
   const trustRepository = useCallback(
     async (path?: string) => {
-      const pathToTrust = path ?? stateRef.current.dubiousOwnershipPath;
+      const pathToTrust =
+        path ?? stateRef.current.dubiousOwnershipPath ?? contextPath;
       if (!pathToTrust) return;
       const trustedContextKey = contextKeyRef.current;
+      await native.workspaceAuthorize(pathToTrust).catch(() => {});
       await native.gitAddSafeDirectory(pathToTrust, workspaceEnv);
       if (trustedContextKey !== contextKeyRef.current) return;
 
@@ -508,43 +521,60 @@ export function useSourceControl(
         dubiousOwnershipPath: null,
       }));
 
-      void native
-        .gitStatus(pathToTrust, workspaceEnv)
-        .then((status) => {
-          if (
-            requestId !== requestIdRef.current ||
-            trustedContextKey !== contextKeyRef.current
-          ) {
-            return;
-          }
-          setState((current) => ({
-            ...current,
-            repo: repositoryInfoFromStatus(status),
-            status,
-            hasRepo: true,
-            isLoading: false,
-            localError: null,
-            dubiousOwnershipPath: null,
-          }));
-          lastRefreshAtRef.current = Date.now();
-        })
-        .catch((error) => {
-          if (
-            requestId !== requestIdRef.current ||
-            trustedContextKey !== contextKeyRef.current
-          ) {
-            return;
-          }
+      try {
+        const resolved = await native.gitResolveRepo(pathToTrust, workspaceEnv);
+        if (
+          requestId !== requestIdRef.current ||
+          trustedContextKey !== contextKeyRef.current
+        ) {
+          return;
+        }
+        if (!resolved) {
           setState((current) => ({
             ...current,
             repo: null,
             status: null,
             hasRepo: false,
             isLoading: false,
-            localError: normalizeError(error),
+            localError: null,
             dubiousOwnershipPath: null,
           }));
-        });
+          return;
+        }
+        const status = await native.gitStatus(resolved.repoRoot, workspaceEnv);
+        if (
+          requestId !== requestIdRef.current ||
+          trustedContextKey !== contextKeyRef.current
+        ) {
+          return;
+        }
+        setState((current) => ({
+          ...current,
+          repo: repositoryInfoFromStatus(status),
+          status,
+          hasRepo: true,
+          isLoading: false,
+          localError: null,
+          dubiousOwnershipPath: null,
+        }));
+        lastRefreshAtRef.current = Date.now();
+      } catch (error) {
+        if (
+          requestId !== requestIdRef.current ||
+          trustedContextKey !== contextKeyRef.current
+        ) {
+          return;
+        }
+        setState((current) => ({
+          ...current,
+          repo: null,
+          status: null,
+          hasRepo: false,
+          isLoading: false,
+          localError: normalizeError(error),
+          dubiousOwnershipPath: null,
+        }));
+      }
     },
     [contextKey, contextPath, workspaceEnv],
   );

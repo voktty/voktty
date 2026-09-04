@@ -1037,24 +1037,45 @@ export const SourceControlPanel = memo(function SourceControlPanel({
             }
             title={t("git.dubiousOwnershipTitle")}
             body={t("git.dubiousOwnershipDesc", {
-              path: scm.dubiousOwnershipPath ?? "",
+              path: scm.dubiousOwnershipPath ?? sourceControl.contextPath ?? "",
             })}
             action={
-              <Button
-                size="sm"
-                className="gap-1.5 bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 hover:text-amber-400 border border-amber-500/30 font-medium"
-                onClick={async () => {
-                  try {
-                    await scm.trustRepository();
-                    toast.success(t("git.trustRepositorySuccess"));
-                  } catch (err) {
-                    toast.error(String(err));
-                  }
-                }}
-              >
-                <HugeiconsIcon icon={CheckmarkCircle01Icon} size={14} />
-                {t("git.trustRepository")}
-              </Button>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 hover:text-amber-400 border border-amber-500/30 font-medium"
+                  disabled={isRefreshing || !!scm.actionBusy}
+                  onClick={async () => {
+                    try {
+                      await scm.trustRepository(
+                        scm.dubiousOwnershipPath ??
+                          sourceControl.contextPath ??
+                          undefined,
+                      );
+                      toast.success(
+                        t("git.authorizedSuccess", {
+                          defaultValue: t("git.trustRepositorySuccess"),
+                        }),
+                      );
+                    } catch (err) {
+                      toast.error(String(err));
+                    }
+                  }}
+                >
+                  <HugeiconsIcon icon={CheckmarkCircle01Icon} size={14} />
+                  {t("git.authorizeDirectory", {
+                    defaultValue: t("git.trustRepository"),
+                  })}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isRefreshing || !!scm.actionBusy}
+                  onClick={handleRefresh}
+                >
+                  {t("explorer.refresh")}
+                </Button>
+              </div>
             }
           />
         ) : null}
@@ -1100,6 +1121,33 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   <HugeiconsIcon icon={GitBranchIcon} size={14} />
                   {t("git.cloneRepo")}
                 </Button>
+                {sourceControl.contextPath ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    disabled={isRefreshing || !!scm.actionBusy}
+                    onClick={async () => {
+                      try {
+                        await scm.trustRepository(
+                          sourceControl.contextPath ?? undefined,
+                        );
+                        toast.success(
+                          t("git.authorizedSuccess", {
+                            defaultValue: t("git.trustRepositorySuccess"),
+                          }),
+                        );
+                      } catch (err) {
+                        toast.error(String(err));
+                      }
+                    }}
+                  >
+                    <HugeiconsIcon icon={CheckmarkCircle01Icon} size={13} />
+                    {t("git.authorizeDirectory", {
+                      defaultValue: t("git.trustRepository"),
+                    })}
+                  </Button>
+                ) : null}
               </div>
             }
           />
@@ -1110,9 +1158,44 @@ export const SourceControlPanel = memo(function SourceControlPanel({
             title={t("sidebar.sourceControl")}
             body={scm.statusError ?? t("git.unknownSourceControlError")}
             action={
-              <Button size="sm" onClick={() => void scm.refresh()}>
-                {t("explorer.refresh")}
-              </Button>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                {sourceControl.contextPath || scm.dubiousOwnershipPath ? (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 font-medium"
+                    disabled={isRefreshing || !!scm.actionBusy}
+                    onClick={async () => {
+                      try {
+                        await scm.trustRepository(
+                          scm.dubiousOwnershipPath ??
+                            sourceControl.contextPath ??
+                            undefined,
+                        );
+                        toast.success(
+                          t("git.authorizedSuccess", {
+                            defaultValue: t("git.trustRepositorySuccess"),
+                          }),
+                        );
+                      } catch (err) {
+                        toast.error(String(err));
+                      }
+                    }}
+                  >
+                    <HugeiconsIcon icon={CheckmarkCircle01Icon} size={14} />
+                    {t("git.authorizeDirectory", {
+                      defaultValue: t("git.trustRepository"),
+                    })}
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isRefreshing || !!scm.actionBusy}
+                  onClick={() => void scm.refresh()}
+                >
+                  {t("explorer.refresh")}
+                </Button>
+              </div>
             }
           />
         ) : null}
