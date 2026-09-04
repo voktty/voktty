@@ -3176,16 +3176,16 @@ dependencies = [
 
 [[package]]
 name = "ironrdp-graphics"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7eebdb21cbfbc05f71a4125243485ea35ef7b5f9dec6035d228b830cafcf3145"
+checksum = "c7493e426b6a8104cd497e518ba7781a9c7fc9a5f58a9cc0c1111e6d66f63bcc"
 dependencies = [
  "bit_field",
  "bitflags 2.11.1",
  "bitvec",
  "byteorder",
  "ironrdp-core 0.2.1",
- "ironrdp-pdu 0.8.0",
+ "ironrdp-pdu 0.9.0",
  "num-derive",
  "num-traits",
  "yuv",
@@ -3212,29 +3212,6 @@ dependencies = [
  "sha1 0.10.7",
  "tap",
  "thiserror 2.0.18",
- "x509-cert",
-]
-
-[[package]]
-name = "ironrdp-pdu"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a27ab729591c84f992a408ba1b8b29fab354d85aa8d464f053a42fbb5f51e7b"
-dependencies = [
- "bit_field",
- "bitflags 2.11.1",
- "byteorder",
- "der-parser",
- "ironrdp-core 0.2.1",
- "ironrdp-error 0.2.0",
- "md-5 0.10.6",
- "num-bigint",
- "num-derive",
- "num-integer",
- "num-traits",
- "pkcs1 0.7.5",
- "sha1 0.10.7",
- "tap",
  "x509-cert",
 ]
 
@@ -8144,7 +8121,7 @@ dependencies = [
  "hyper-util",
  "ignore",
  "ironrdp-cliprdr",
- "ironrdp-graphics 0.8.1",
+ "ironrdp-graphics 0.9.0",
  "ironrdp-pdu 0.9.0",
  "ironrdp-session",
  "ironrdp-tls",
