@@ -824,16 +824,22 @@ impl RemoteServer {
                 return RemoteResponse::failure(request.id, "pty_open_failed", error.to_string())
             }
         };
-        let shell = std::env::var("SHELL")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| "/bin/sh".to_string());
 
         let mux_mode = params.multiplexer_mode.as_deref().unwrap_or("auto");
 
+        let effective_cwd_str = cwd.to_string_lossy().into_owned();
+        let s_cwd = effective_cwd_str.replace('\'', "'\\''");
+        let cwd_flag = format!("-c '{s_cwd}' ");
+        let cd_prefix = format!("cd -- '{s_cwd}' && ");
+
+        let shell_wrapper = format!(
+            "export VOKTTY_TERMINAL=1; _voktty_shell=\"${{SHELL:-/bin/sh}}\"; _voktty_integration=\"$HOME/.voktty/shell-integration/2\"; case \"${{_voktty_shell##*/}}\" in bash) if [ -r \"$_voktty_integration/bashrc\" ]; then exec \"$_voktty_shell\" --rcfile \"$_voktty_integration/bashrc\" -i; fi ;; zsh) if [ -r \"$_voktty_integration/zsh/.zshrc\" ]; then export VOKTTY_USER_ZDOTDIR=\"${{ZDOTDIR:-$HOME}}\" ZDOTDIR=\"$_voktty_integration/zsh\"; exec \"$_voktty_shell\" -l; fi ;; fish) if [ -r \"$_voktty_integration/init.fish\" ]; then export fish_features=no-mark-prompt; exec \"$_voktty_shell\" -i -C 'functions -q __voktty_install_prompt; or source \"$HOME/.voktty/shell-integration/2/init.fish\"; functions -q __voktty_install_prompt; and __voktty_install_prompt'; fi ;; esac; exec \"$_voktty_shell\" -l"
+        );
+
         let mut command = if mux_mode == "none" {
-            let mut cmd = CommandBuilder::new(shell);
-            cmd.arg("-l");
+            let script = format!("{cd_prefix}{shell_wrapper}");
+            let mut cmd = CommandBuilder::new("/bin/sh");
+            cmd.args(["-c", &script]);
             cmd
         } else {
             let session_name = params
@@ -854,9 +860,9 @@ impl RemoteServer {
             let action = params.multiplexer_action.as_deref().unwrap_or("auto");
 
             let tmux_args = match action {
-                "attach_force" => format!("tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session -s '{session_name}'"),
-                "new" => format!("tmux new-session -s '{session_name}' 2>/dev/null || tmux new-session"),
-                _ => format!("tmux new-session -A -s '{session_name}'"),
+                "attach_force" => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}-s '{session_name}'"),
+                "new" => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux new-session {cwd_flag}-s '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}"),
+                _ => format!("tmux set -g allow-passthrough on 2>/dev/null; tmux new-session -A {cwd_flag}-s '{session_name}'"),
             };
 
             let screen_args = match action {
@@ -868,7 +874,7 @@ impl RemoteServer {
             };
 
             let script = format!(
-                "if command -v tmux >/dev/null 2>&1; then exec {tmux_args}; elif command -v screen >/dev/null 2>&1; then exec {screen_args}; else exec \"$SHELL\" -l; fi"
+                "{cd_prefix}if command -v tmux >/dev/null 2>&1; then exec {tmux_args}; elif command -v screen >/dev/null 2>&1; then exec {screen_args}; else {shell_wrapper}; fi"
             );
 
             let mut cmd = CommandBuilder::new("/bin/sh");
@@ -1142,9 +1148,6 @@ impl RemoteServer {
             None => root.clone(),
             Some(value) if Path::new(value).is_absolute() => {
                 let canonical_p = fs::canonicalize(value).map_err(|e| e.to_string())?;
-                if !canonical_p.starts_with(root) {
-                    return Err("PTY working directory is outside the workspace root".to_string());
-                }
                 if !canonical_p.is_dir() {
                     return Err("PTY working directory is not a directory".to_string());
                 }
@@ -1154,9 +1157,6 @@ impl RemoteServer {
                 let rel = safe_relative_path(value)?;
                 let cand = root.join(rel);
                 let canonical = fs::canonicalize(&cand).map_err(|e| e.to_string())?;
-                if !canonical.starts_with(root) {
-                    return Err("PTY working directory is outside the workspace root".to_string());
-                }
                 if !canonical.is_dir() {
                     return Err("PTY working directory is not a directory".to_string());
                 }
@@ -1172,9 +1172,6 @@ impl RemoteServer {
         let raw_path = Path::new(raw_str);
         let candidate = if raw_path.is_absolute() {
             let canonical_raw = fs::canonicalize(raw_path).map_err(|e| e.to_string())?;
-            if !canonical_raw.starts_with(root) {
-                return Err("path is outside the workspace root".to_string());
-            }
             canonical_raw
         } else {
             let relative = safe_relative_path(raw_str)?;
@@ -1188,8 +1185,13 @@ impl RemoteServer {
 
     fn resolve_for_write(&self, path: &str) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let relative = safe_relative_path(path)?;
-        let candidate = root.join(relative);
+        let raw_path = Path::new(path);
+        let candidate = if raw_path.is_absolute() {
+            raw_path.to_path_buf()
+        } else {
+            let relative = safe_relative_path(path)?;
+            root.join(relative)
+        };
         let parent = candidate.parent().ok_or("path has no parent")?;
         if !parent.exists() {
             return Err("parent directory does not exist".to_string());
@@ -1199,8 +1201,14 @@ impl RemoteServer {
 
     fn resolve_entry(&self, path: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let relative = safe_relative_path(path.unwrap_or("."))?;
-        let candidate = root.join(relative);
+        let raw_str = path.unwrap_or(".");
+        let raw_path = Path::new(raw_str);
+        let candidate = if raw_path.is_absolute() {
+            raw_path.to_path_buf()
+        } else {
+            let relative = safe_relative_path(raw_str)?;
+            root.join(relative)
+        };
         if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
             return Err("path does not exist".to_string());
         }
@@ -1209,8 +1217,14 @@ impl RemoteServer {
 
     fn resolve_new_path(&self, path: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let relative = safe_relative_path(path.unwrap_or("."))?;
-        let candidate = root.join(relative);
+        let raw_str = path.unwrap_or(".");
+        let raw_path = Path::new(raw_str);
+        let candidate = if raw_path.is_absolute() {
+            raw_path.to_path_buf()
+        } else {
+            let relative = safe_relative_path(raw_str)?;
+            root.join(relative)
+        };
         if candidate == *root {
             return Err("path must not be the workspace root".to_string());
         }

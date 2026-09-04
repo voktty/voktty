@@ -1817,7 +1817,16 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         const cwdChanged = isActive && t.cwd !== cwd;
         if (paneTree === t.paneTree && !cwdChanged) return t;
         changed = true;
-        return { ...t, paneTree, ...(cwdChanged && { cwd }) };
+        const workspaceEnv =
+          cwdChanged && t.workspaceEnv?.kind === "ssh"
+            ? { ...t.workspaceEnv, root: cwd }
+            : t.workspaceEnv;
+        return {
+          ...t,
+          paneTree,
+          ...(cwdChanged && { cwd }),
+          ...(workspaceEnv !== t.workspaceEnv && { workspaceEnv }),
+        };
       });
       return changed ? next : curr;
     });

@@ -72,14 +72,20 @@ function __voktty_install_prompt
     if set -q VOKTTY_BLOCKS
         function fish_right_prompt
         end
-        function fish_greeting
+    function __voktty_emit
+        if set -q TMUX
+            set -l seq (string replace -a \e \e\e -- $argv[1])
+            printf '\ePtmux;\e%s\e\\' "$seq"
+        else
+            printf '%s' "$argv[1]"
         end
     end
+
     function fish_prompt
         set -l __voktty_status $status
-        printf '\e]133;D;%d\e\\' $__voktty_status
-        printf '\e]7;file://%s%s\e\\' "$__VOKTTY_HOST" (__voktty_urlencode_path "$PWD")
-        printf '\e]133;A\e\\'
+        __voktty_emit (printf '\e]133;D;%d\e\\' $__voktty_status)
+        __voktty_emit (printf '\e]7;file://%s%s\e\\' "$__VOKTTY_HOST" (__voktty_urlencode_path "$PWD"))
+        __voktty_emit (printf '\e]133;A\e\\')
         # Block mode: host renders its own input bar, so suppress the shell prompt
         # (B marker only) and reserve header/gap rows, mirroring zsh.
         if set -q VOKTTY_BLOCKS

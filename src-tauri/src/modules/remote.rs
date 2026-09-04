@@ -20,7 +20,7 @@ use voktty_remote_protocol::{
 
 const REMOTE_OS: &str = "linux";
 const REMOTE_VERSION: &str = env!("CARGO_PKG_VERSION");
-pub(crate) const REMOTE_SHELL_INTEGRATION_VERSION: &str = "1";
+pub(crate) const REMOTE_SHELL_INTEGRATION_VERSION: &str = "2";
 const REMOTE_BASHRC: &str = include_str!("pty/scripts/bashrc.bash");
 const REMOTE_ZSHENV: &str = include_str!("pty/scripts/zshenv.zsh");
 const REMOTE_ZPROFILE: &str = include_str!("pty/scripts/zprofile.zsh");
@@ -39,6 +39,8 @@ pub struct RemoteSshConnection {
     pub identity_file: Option<String>,
     #[serde(rename = "extraArgs", default)]
     pub extra_args: Option<String>,
+    #[serde(rename = "initialDirectory", default)]
+    pub initial_directory: Option<String>,
     #[serde(rename = "multiplexerMode", default)]
     pub multiplexer_mode: Option<String>,
     #[serde(rename = "tmuxSessionName", default)]
@@ -1326,6 +1328,13 @@ fn validate_connection(connection: &RemoteSshConnection) -> Result<(), String> {
     {
         return Err("SSH arguments contain control characters".to_string());
     }
+    if connection
+        .initial_directory
+        .as_deref()
+        .is_some_and(|path| path.chars().any(char::is_control))
+    {
+        return Err("SSH initial directory contains control characters".to_string());
+    }
     Ok(())
 }
 
@@ -1680,7 +1689,8 @@ fn open_remote_session(
     let session = start_helper(&app, &connection, &probe.architecture)?;
     let workspace_root = workspace_root
         .filter(|r| !r.trim().is_empty() && r != ".")
-        .unwrap_or_else(|| "/".to_string());
+        .or_else(|| connection.initial_directory.clone().filter(|d| !d.trim().is_empty()))
+        .unwrap_or_else(|| ".".to_string());
     let handshake = RemoteRequest {
         protocol: PROTOCOL_VERSION,
         id: "handshake".to_string(),
@@ -1856,6 +1866,7 @@ mod tests {
             port: Some(2222),
             identity_file: Some("C:/keys/id_ed25519".to_string()),
             extra_args: Some("-o ConnectTimeout=5".to_string()),
+            initial_directory: None,
             multiplexer_mode: None,
             tmux_session_name: None,
             active_multiplexer_session: None,
@@ -1898,6 +1909,7 @@ mod tests {
             port: Some(9194),
             identity_file: Some("~/.ssh/id_ed25519".to_string()),
             extra_args: Some("-o HostKeyAlias=forgenex-code4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR".to_string()),
+            initial_directory: None,
             multiplexer_mode: None,
             tmux_session_name: None,
             active_multiplexer_session: None,
@@ -1949,7 +1961,7 @@ mod tests {
         let command = probe_command();
         assert!(command.contains("aarch64|arm64) arch=aarch64"));
         assert!(command.contains(&format!(".voktty/servers/{REMOTE_VERSION}/linux-$arch")));
-        assert!(command.contains(".voktty/shell-integration/1/.digest"));
+        assert!(command.contains(&format!(".voktty/shell-integration/{REMOTE_SHELL_INTEGRATION_VERSION}/.digest")));
         assert!(command.contains("VOKTTY_HELPER|%s|%s|%s"));
     }
 
@@ -1959,7 +1971,7 @@ mod tests {
         assert_eq!(digest.len(), 64);
         assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
         let command = shell_integration_install_command(&digest);
-        assert!(command.contains(".voktty/shell-integration/1"));
+        assert!(command.contains(&format!(".voktty/shell-integration/{REMOTE_SHELL_INTEGRATION_VERSION}")));
         assert!(command.contains("$dir/zsh/.zshrc"));
         assert!(command.contains("$dir/init.fish"));
         assert!(command.contains(&digest));
