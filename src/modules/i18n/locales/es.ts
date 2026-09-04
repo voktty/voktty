@@ -1070,6 +1070,15 @@ export const es: TranslationSchema = {
       "La IA no puede ver la salida de esta terminal. Úsala para secretos, SSH o información que no quieras enviar al modelo.",
     arcade: "Arcade (Pac-Man y Snake)",
     arcadeLabel: "Arcade",
+    quota: {
+      widgetTitle: "Cuotas de IA y Uso de Tokens",
+      widgetLabel: "Cuotas de IA",
+      header: "Cuotas y Consumo de IA",
+      today: "Hoy: {cost}",
+      resets: "Resetea: {time}",
+      tokensSummary: "Entrada: {inTokens} · Salida: {outTokens}",
+      costUsd: "${cost}",
+    },
     uptime: {
       title: "Actividad de Consola",
       subtitle: "Tiempo en pantalla y estadísticas semanales",

@@ -206,6 +206,9 @@ export function WorkspaceEnvSelector({
       ) : (
         <HugeiconsIcon icon={ServerStack03Icon} size={12} strokeWidth={1.75} />
       )}
+      {!isConnecting && !connectionError && env.kind === "local" && (
+        <span className="size-1.5 rounded-full bg-emerald-500/80 shadow-[0_0_6px_rgba(16,185,129,0.5)]" />
+      )}
       {!isConnecting && !connectionError && env.kind === "ssh" && (
         <span className="size-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)]" />
       )}
@@ -215,7 +218,7 @@ export function WorkspaceEnvSelector({
       {!isConnecting && !connectionError && env.kind === "serial" && (
         <span className="size-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.7)]" />
       )}
-      <span className="max-w-32 truncate">{label}</span>
+      {env.kind !== "local" && <span className="max-w-28 truncate text-[10px]">{label}</span>}
     </button>
   );
 

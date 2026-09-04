@@ -72,12 +72,17 @@ export type ModelCatalogItem = {
 
 export const AGENT_MODELS: Record<HarnessAgentId, ModelCatalogItem[]> = {
   antigravity: [
-    { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", provider: "Antigravity", contextWindow: 1_000_000, reasoning: true },
-    { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", provider: "Antigravity", contextWindow: 1_000_000, reasoning: true },
-    { id: "gemini-3.7-flash-low", name: "Gemini 3.7 Flash (Low)", provider: "Antigravity", contextWindow: 1_000_000, reasoning: true },
+    { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.7-flash-low", name: "Gemini 3.7 Flash (Low)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.6-flash-high", name: "Gemini 3.6 Flash (High)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.6-flash-low", name: "Gemini 3.6 Flash (Low)", provider: "Antigravity", contextWindow: 1_048_576, reasoning: true },
     { id: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)", provider: "Antigravity", contextWindow: 2_000_000, reasoning: true },
     { id: "gemini-3.1-pro-low", name: "Gemini 3.1 Pro (Low)", provider: "Antigravity", contextWindow: 2_000_000, reasoning: true },
-    { id: "gemini-3.6-flash-high", name: "Gemini 3.6 Flash (High)", provider: "Antigravity", contextWindow: 1_000_000, reasoning: true },
     { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Thinking)", provider: "Antigravity", contextWindow: 200_000, reasoning: true },
     { id: "claude-opus-4-6-thinking", name: "Claude Opus 4.6 (Thinking)", provider: "Antigravity", contextWindow: 200_000, reasoning: true },
     { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)", provider: "Antigravity", contextWindow: 128_000, reasoning: true },

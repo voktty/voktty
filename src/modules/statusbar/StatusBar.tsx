@@ -35,6 +35,7 @@ import { ConsoleUptimeWidget } from "./components/ConsoleUptimeWidget";
 import { ProjectToolkitPopover } from "./components/ProjectToolkitPopover";
 import { FloatingArcadeWidget } from "./components/FloatingArcadeWidget";
 import { PacmanIcon } from "./components/PacmanIcon";
+import { QuotaUsageWidget } from "@/modules/quota";
 
 type Props = {
   cwd: string | null;
@@ -168,6 +169,7 @@ export function StatusBar({
         >
           <HugeiconsIcon icon={Settings01Icon} size={14} strokeWidth={1.75} />
         </Button>
+        <QuotaUsageWidget />
         <Button
           variant="ghost"
           size="icon"

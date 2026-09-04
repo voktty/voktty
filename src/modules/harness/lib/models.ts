@@ -286,6 +286,25 @@ export const MODELS: AgentModel[] = [
     nativeId: "gpt-5.4-mini",
   },
   {
+    id: "gemini:gemini-3.8-flash",
+    harness: "gemini",
+    name: "Gemini 3.8 Flash",
+    nativeId: "gemini-3.8-flash-high",
+    settings: [
+      {
+        id: "effort",
+        label: "Reasoning",
+        kind: "select",
+        value: "high",
+        options: [
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ],
+      },
+    ],
+  },
+  {
     id: "gemini:gemini-3.7-flash",
     harness: "gemini",
     name: "Gemini 3.7 Flash",
@@ -365,7 +384,7 @@ export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
   claude: "claude:fable-5.1",
   codex: "codex:gpt-5.6-sol",
   cursor: "cursor:composer-2.5",
-  gemini: "gemini:gemini-3.7-flash",
+  gemini: "gemini:gemini-3.8-flash",
   grok: "grok:grok-4.6",
   opencode: "opencode:glm-5",
   pi: "pi:default",
