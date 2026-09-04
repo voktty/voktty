@@ -1041,6 +1041,15 @@ export const en = {
       "AI can't see this terminal's output. Use it for secrets, SSH, or anything you don't want sent to the model.",
     arcade: "Arcade (Pac-Man & Snake)",
     arcadeLabel: "Arcade",
+    quota: {
+      widgetTitle: "AI Quotas & Token Usage",
+      widgetLabel: "AI Quotas",
+      header: "AI Quotas & Consumption",
+      today: "Today: {cost}",
+      resets: "Resets: {time}",
+      tokensSummary: "In: {inTokens} · Out: {outTokens}",
+      costUsd: "${cost}",
+    },
     uptime: {
       title: "Console Activity",
       subtitle: "Screen time & weekly statistics",

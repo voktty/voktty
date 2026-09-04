@@ -1,54 +1,92 @@
 import { invoke } from "@tauri-apps/api/core";
-import { homeDir, readTextFile } from "./fs";
+import type { ProviderQuota } from "../../quota/types";
 import {
   errorRateLimits,
-  parseClaudeOAuthUsage,
-  parseCodexRateLimits,
-  unavailableRateLimits,
+  parseResetTimestamp,
   type ProviderRateLimits,
+  type RateLimitProvider,
+  type RateLimitWindow,
 } from "./rateLimits";
-import {
-  killChild,
-  resolveCodexBinary,
-  spawnChild,
-  unwatchChild,
-  watchChild,
-} from "./harness/child";
-import { asRecord } from "./harness/codexProtocol";
-import { JsonRpcClient } from "./harness/jsonRpc";
 
-const USAGE_CHILD_ID = "monocode-codex-usage";
-const DISCOVERY_TIMEOUT_MS = 3_500;
-const REQUEST_TIMEOUT_MS = 3_000;
+function providerQuotaToRateLimits(
+  provider: RateLimitProvider,
+  quota: ProviderQuota,
+): ProviderRateLimits {
+  let session: RateLimitWindow | null = null;
+  let weekly: RateLimitWindow | null = null;
 
-type ClaudeUsageFetch = {
-  status: "ok" | "error" | "unavailable" | string;
-  httpStatus?: number | null;
-  body?: string | null;
-  error?: string | null;
-};
+  for (const w of quota.windows) {
+    const idLower = w.id.toLowerCase();
+    const labelLower = w.label.toLowerCase();
+    const resetsAt = parseResetTimestamp(w.resetsAt);
+
+    if (
+      idLower.includes("session") ||
+      labelLower.includes("session") ||
+      labelLower.includes("5h") ||
+      idLower.includes("flash")
+    ) {
+      session = {
+        usedPercent: w.usedPercent,
+        windowMinutes: 300,
+        resetsAt,
+      };
+    } else if (
+      idLower.includes("weekly") ||
+      labelLower.includes("weekly") ||
+      labelLower.includes("7d") ||
+      idLower.includes("pro")
+    ) {
+      weekly = {
+        usedPercent: w.usedPercent,
+        windowMinutes: 10_080,
+        resetsAt,
+      };
+    } else if (!session) {
+      session = {
+        usedPercent: w.usedPercent,
+        windowMinutes: 300,
+        resetsAt,
+      };
+    } else if (!weekly) {
+      weekly = {
+        usedPercent: w.usedPercent,
+        windowMinutes: 10_080,
+        resetsAt,
+      };
+    }
+  }
+
+  let status: "ok" | "error" | "unavailable" = "ok";
+  let error: string | null = null;
+
+  if (quota.state.kind === "unavailable") {
+    status = "unavailable";
+    error = quota.state.message || "Provider unavailable";
+  } else if (quota.state.kind === "unauthenticated") {
+    status = "unavailable";
+    error = quota.state.message || "Not authenticated";
+  } else if (quota.state.kind === "rate_limited") {
+    status = "error";
+    error = quota.state.message || "Rate limited";
+  }
+
+  return {
+    provider,
+    session,
+    weekly,
+    updatedAt: Date.now(),
+    error,
+    status,
+  };
+}
 
 export async function fetchClaudeRateLimits(): Promise<ProviderRateLimits> {
   try {
-    const result = await invoke<ClaudeUsageFetch>("fetch_claude_usage");
-    if (result.status === "ok" && result.body) {
-      const parsed = parseClaudeOAuthUsage(result.body);
-      if (parsed.session || parsed.weekly) return parsed;
-      return {
-        ...parsed,
-        status: parsed.status === "ok" ? "ok" : parsed.status,
-      };
-    }
-    if (result.status === "unavailable") {
-      return unavailableRateLimits(
-        "claude",
-        result.error?.trim() || "Claude not signed in",
-      );
-    }
-    return errorRateLimits(
-      "claude",
-      result.error?.trim() || "Claude usage unavailable",
-    );
+    const quota = await invoke<ProviderQuota>("refresh_quota_provider", {
+      provider: "claude",
+    });
+    return providerQuotaToRateLimits("claude", quota);
   } catch (error) {
     return errorRateLimits(
       "claude",
@@ -58,141 +96,30 @@ export async function fetchClaudeRateLimits(): Promise<ProviderRateLimits> {
 }
 
 export async function fetchCodexRateLimits(): Promise<ProviderRateLimits> {
-  let path: string;
   try {
-    path = (await resolveCodexBinary()).path;
-  } catch {
-    return unavailableRateLimits("codex", "Codex CLI not found");
-  }
-
-  const cwd = await homeDir();
-  const rpc = new JsonRpcClient(
-    USAGE_CHILD_ID,
-    {
-      onRequest: (id) => {
-        void rpc.respond(id, {}).catch(() => undefined);
-      },
-    },
-    { includeJsonrpc: false, label: "codex-usage" },
-  );
-
-  const stop = async () => {
-    rpc.close();
-    unwatchChild(USAGE_CHILD_ID);
-    await killChild(USAGE_CHILD_ID).catch(() => undefined);
-  };
-
-  await killChild(USAGE_CHILD_ID).catch(() => undefined);
-
-  watchChild(
-    USAGE_CHILD_ID,
-    (line) => rpc.pushLine(line),
-    () => rpc.close(new Error("Codex usage probe exited")),
-  );
-
-  try {
-    await spawnChild(USAGE_CHILD_ID, path, ["app-server"], cwd);
-    return await withTimeout(
-      DISCOVERY_TIMEOUT_MS,
-      async () => {
-        await rpc.request(
-          "initialize",
-          {
-            clientInfo: {
-              name: "monocode",
-              title: "MonoCode",
-              version: "0.1.0",
-            },
-            capabilities: { experimentalApi: true },
-          },
-          REQUEST_TIMEOUT_MS,
-        );
-        await rpc.notify("initialized", undefined);
-
-        const result = await rpc.request<unknown>(
-          "account/rateLimits/read",
-          {},
-          REQUEST_TIMEOUT_MS,
-        );
-        const parsed = parseCodexRateLimits(result);
-        if (parsed.session || parsed.weekly) return parsed;
-        const rec = asRecord(result);
-        if (rec && !parsed.session && !parsed.weekly) {
-          return unavailableRateLimits("codex", "No Codex usage data");
-        }
-        return parsed;
-      },
-      () => {
-        void stop();
-      },
-    );
+    const quota = await invoke<ProviderQuota>("refresh_quota_provider", {
+      provider: "codex",
+    });
+    return providerQuotaToRateLimits("codex", quota);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    // Fallback: check ~/.codex/auth.json if probe timed out or had trouble connecting
-    try {
-      const authPath = `${cwd}/.codex/auth.json`.replace(/\\/g, "/");
-      const raw = await readTextFile(authPath);
-      const auth = JSON.parse(raw);
-      if (auth.tokens?.access_token || auth.OPENAI_API_KEY) {
-        return {
-          provider: "codex",
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: null,
-          status: "ok",
-        };
-      }
-    } catch {
-      // not signed in
-    }
-
-    if (
-      /not signed in|chatgpt authentication required|not authenticated/i.test(
-        message,
-      )
-    ) {
-      return unavailableRateLimits("codex", "Codex not signed in");
-    }
-    if (/ENOENT|not found|could not run/i.test(message)) {
-      return unavailableRateLimits("codex", "Codex CLI not found");
-    }
-    return errorRateLimits("codex", message);
-  } finally {
-    await stop();
+    return errorRateLimits(
+      "codex",
+      error instanceof Error ? error.message : "Codex usage unavailable",
+    );
   }
 }
 
 export async function fetchGeminiRateLimits(): Promise<ProviderRateLimits> {
-  return {
-    provider: "gemini",
-    session: null,
-    weekly: null,
-    updatedAt: Date.now(),
-    error: null,
-    status: "ok",
-  };
-}
-
-async function withTimeout<T>(
-  ms: number,
-  work: () => Promise<T>,
-  onTimeout: () => void,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const pending = work();
   try {
-    return await Promise.race([
-      pending,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => {
-          onTimeout();
-          reject(new Error("Codex usage probe timed out"));
-        }, ms);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-    void pending.catch(() => undefined);
+    const quota = await invoke<ProviderQuota>("refresh_quota_provider", {
+      provider: "gemini",
+    });
+    return providerQuotaToRateLimits("gemini", quota);
+  } catch (error) {
+    return errorRateLimits(
+      "gemini",
+      error instanceof Error ? error.message : "Gemini usage unavailable",
+    );
   }
 }
+

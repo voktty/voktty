@@ -4,8 +4,8 @@ pub mod modules;
 
 use modules::{
     agent, agent_history, aliases, api_client, collab, control, dap, docker, extensions, fs, git,
-    git_review, harness, history, lsp, mcp, net, pty, rdp, remote, secrets, serial, shell, tray,
-    tunnel, vibrancy, web_server, workspace,
+    git_review, harness, history, lsp, mcp, net, pty, quota, rdp, remote, secrets, serial, shell,
+    tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]
@@ -585,6 +585,8 @@ pub fn run() {
             harness::notes::notes_delete,
             harness::skills::list_skills,
             harness::rate_limits::fetch_claude_usage,
+            quota::get_quota_overview,
+            quota::refresh_quota_provider,
             harness::fs::git_branches,
             harness::fs::git_checkout,
             harness::fs::git_create_branch,

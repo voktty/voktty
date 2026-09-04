@@ -33,7 +33,7 @@ export class AgyProtocolRunner {
     if (params.model) {
       args.push("--model", params.model);
     } else {
-      args.push("--model", "gemini-3.7-flash-high");
+      args.push("--model", "gemini-3.8-flash-high");
     }
 
     if (params.reasoningEffort && params.reasoningEffort !== "off") {

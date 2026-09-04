@@ -297,7 +297,7 @@ fn scan_antigravity_sessions(
                 id: format!("ext_gemini_{}", session_uuid),
                 cwd: original_cwd.to_string(),
                 harness: "gemini".to_string(),
-                model: "gemini-3.7-flash".to_string(),
+                model: "gemini-3.8-flash".to_string(),
                 runtime_mode: "supervised".to_string(),
                 title,
                 provider_session_id: Some(session_uuid),

@@ -43,6 +43,13 @@ const REASONING_EFFORT_LOW: ModelSetting = {
 
 export const AGY_MODEL_CATALOG: AgentModel[] = [
   {
+    id: "gemini:gemini-3.8-flash",
+    harness: "gemini",
+    name: "Gemini 3.8 Flash",
+    nativeId: "gemini-3.8-flash-high",
+    settings: [REASONING_EFFORT_HIGH],
+  },
+  {
     id: "gemini:gemini-3.7-flash",
     harness: "gemini",
     name: "Gemini 3.7 Flash",
