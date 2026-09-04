@@ -2569,12 +2569,7 @@ fn git_ahead_behind(root: &Path, base: &str) -> (i64, i64) {
 }
 
 fn git_stdout(root: &Path, args: &[&str]) -> Option<String> {
-    let output = git_cmd()
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .ok()?;
+    let output = git_cmd().arg("-C").arg(root).args(args).output().ok()?;
     if !output.status.success() {
         return None;
     }
