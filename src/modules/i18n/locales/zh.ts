@@ -1,4 +1,4 @@
-﻿import { en, mergeLocale, type TranslationSchema } from "./en";
+import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const zhBase = mergeLocale(en, {
   common: {
@@ -1636,10 +1636,11 @@ const zhBase = mergeLocale(en, {
       multiplexerAsk: "连接时询问",
       tmuxSessionName: "会话名称 / 前缀（可选）",
     },
+    connect: "连接",
     errors: {
       hostRequired: "主机或 IP 地址为必填项",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "检测到远程会话",
       description: "选择连接至以下主机的方式：",
       activeSessionsTitle: "主机上的活动会话",
@@ -1652,8 +1653,12 @@ const zhBase = mergeLocale(en, {
       noExistingSessions: "该主机上未找到现有会话。",
       newSession: "新建独立会话",
       directShell: "不使用 tmux 连接（直接 Shell）",
+      refresh: "刷新会话列表",
+      customSessionPlaceholder: "会话名称（如 dev, work-2）",
+      createAndConnect: "创建并连接",
+      manageSessions: "选择会话...",
     },
-subtabs: {
+    subtabs: {
       servers: "SSH 服务器",
       tunnels: "端口转发",
     },

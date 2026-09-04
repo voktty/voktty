@@ -2727,10 +2727,11 @@ export const en = {
       multiplexerAsk: "Ask on connect",
       tmuxSessionName: "Session Name / Prefix (optional)",
     },
+    connect: "Connect",
     errors: {
       hostRequired: "Host or IP address is required",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "Remote Sessions Detected",
       description: "Select how you would like to connect to",
       activeSessionsTitle: "Active Sessions on Host",
@@ -2743,8 +2744,12 @@ export const en = {
       noExistingSessions: "No existing sessions found on this host.",
       newSession: "New Independent Session",
       directShell: "Connect without tmux (direct shell)",
+      refresh: "Refresh sessions",
+      customSessionPlaceholder: "Session name (e.g. dev, work-2)",
+      createAndConnect: "Create & Connect",
+      manageSessions: "Select Session...",
     },
-subtabs: {
+    subtabs: {
       servers: "SSH Servers",
       tunnels: "Port Forwarding",
     },

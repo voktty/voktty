@@ -2799,10 +2799,11 @@ export const es: TranslationSchema = {
       multiplexerAsk: "Preguntar al conectar",
       tmuxSessionName: "Nombre / Prefijo de sesión (opcional)",
     },
+    connect: "Conectar",
     errors: {
       hostRequired: "El host o dirección IP es obligatorio",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "Sesiones Remotas Detectadas",
       description: "Selecciona cómo deseas conectar a",
       activeSessionsTitle: "Sesiones activas en el servidor",
@@ -2815,8 +2816,12 @@ export const es: TranslationSchema = {
       noExistingSessions: "No se encontraron sesiones existentes en este servidor.",
       newSession: "Nueva Sesión Independiente",
       directShell: "Conectar sin tmux (shell directa)",
+      refresh: "Actualizar sesiones",
+      customSessionPlaceholder: "Nombre de sesión (ej. dev, work-2)",
+      createAndConnect: "Crear y Conectar",
+      manageSessions: "Seleccionar Sesión...",
     },
-subtabs: {
+    subtabs: {
       servers: "Servidores SSH",
       tunnels: "Port Forwarding",
     },

@@ -463,12 +463,13 @@ fn remote_shell_command(
     let s = shell_quote(&session_name);
     let tmux_cmd = match action {
         "attach_force" => format!("tmux attach -d -t {s} 2>/dev/null || tmux new-session -s {s}"),
-        "new" => format!("tmux new-session -s {s}"),
+        "new" => format!("tmux new-session -s {s} 2>/dev/null || tmux new-session"),
         _ => format!("tmux new-session -A -s {s}"),
     };
 
     let screen_cmd = match action {
         "attach_force" => format!("screen -d -r {s} 2>/dev/null || screen -S {s}"),
+        "new" => format!("screen -S {s} 2>/dev/null || screen"),
         _ => format!("screen -xRR -S {s}"),
     };
 

@@ -1,4 +1,4 @@
-﻿import { en, mergeLocale, type TranslationSchema } from "./en";
+import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const ruBase = mergeLocale(en, {
   common: {
@@ -1737,10 +1737,11 @@ const ruBase = mergeLocale(en, {
       multiplexerAsk: "Спрашивать при подключении",
       tmuxSessionName: "Имя / префикс сессии (опционально)",
     },
+    connect: "Подключиться",
     errors: {
       hostRequired: "Необходимо указать хост или IP-адрес",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "Обнаружены удаленные сессии",
       description: "Выберите способ подключения к",
       activeSessionsTitle: "Активные сессии на хосте",
@@ -1753,8 +1754,12 @@ const ruBase = mergeLocale(en, {
       noExistingSessions: "На сервере не найдено активных сессий.",
       newSession: "Новая независимая сессия",
       directShell: "Подключиться без tmux (прямой шелл)",
+      refresh: "Обновить сессии",
+      customSessionPlaceholder: "Имя сессии (напр. dev, work-2)",
+      createAndConnect: "Создать и подключить",
+      manageSessions: "Выбрать сессию...",
     },
-subtabs: {
+    subtabs: {
       servers: "Серверы SSH",
       tunnels: "Проброс портов",
     },

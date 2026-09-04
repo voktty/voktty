@@ -125,6 +125,13 @@ export async function openPty(
     releaseHandlers();
   };
 
+  const sshConnection =
+    activeWorkspace.kind === "ssh" ? activeWorkspace.connection : undefined;
+  const multiplexerMode = sshConnection?.multiplexerMode;
+  const tmuxSessionName =
+    sshConnection?.activeMultiplexerSession ?? sshConnection?.tmuxSessionName;
+  const multiplexerAction = sshConnection?.multiplexerAction;
+
   const id =
     remoteSessionId !== undefined
       ? await invoke<number>("remote_pty_open", {
@@ -133,6 +140,9 @@ export async function openPty(
           rows,
           cwd: cwd ?? remoteWorkspace?.root,
           blocks: blocks ?? false,
+          multiplexerMode: multiplexerMode ?? null,
+          tmuxSessionName: tmuxSessionName ?? null,
+          multiplexerAction: multiplexerAction ?? null,
           onData,
           onExit,
         })

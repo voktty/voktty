@@ -17,7 +17,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { reusableWorkspaceEnv, sameWorkspace } from "./workspaceActivation";
+import {
+  reusableWorkspaceEnv,
+  sameRemoteHost,
+  sameWorkspace,
+} from "./workspaceActivation";
 
 async function resolveEnvHome(env: WorkspaceEnv): Promise<string> {
   if (env.kind === "ssh") return env.root;
@@ -256,10 +260,13 @@ export function useWorkspaceSwitcher({
         if (
           env.kind === "ssh" &&
           workspaceEnv.kind === "ssh" &&
-          sameWorkspace(env, workspaceEnv) &&
+          sameRemoteHost(env.connection, workspaceEnv.connection) &&
           workspaceEnv.sessionId !== undefined
         ) {
-          prepared = workspaceEnv;
+          prepared = {
+            ...env,
+            sessionId: workspaceEnv.sessionId,
+          };
         } else if (env.kind === "ssh" && env.sessionId === undefined) {
           prepared = await connectRemoteEnv(env);
         }
