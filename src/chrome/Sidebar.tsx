@@ -1079,6 +1079,8 @@ function SidebarComponent({
                       const folderIndex = visibleFolderIds.indexOf(
                         entry.folder.id,
                       );
+                      const beforeUngrouped =
+                        sessionListEntries[index + 1]?.kind === "session";
                       const draggingFolder =
                         folderSortable.draggingId === entry.folder.id;
                       const showFolderDropStart =
@@ -1099,7 +1101,7 @@ function SidebarComponent({
                           }
                           data-session-folder={entry.folder.id}
                           className={`relative ${
-                            expanded ? "mb-1.5" : ""
+                            expanded || beforeUngrouped ? "mb-1.5" : ""
                           } ${draggingFolder ? "opacity-40" : ""}`}
                         >
                           {showFolderDropStart ? (
