@@ -72,6 +72,7 @@ function __voktty_install_prompt
     if set -q VOKTTY_BLOCKS
         function fish_right_prompt
         end
+    end
     function __voktty_emit
         if set -q TMUX
             set -l seq (string replace -a \e \e\e -- $argv[1])

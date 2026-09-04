@@ -19,8 +19,8 @@ use serde_json::{json, Value};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse,
     METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC, METHOD_GREP,
-    METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_PTY_CLOSE, METHOD_PTY_OPEN,
-    METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME,
+    METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD,
+    METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME,
     METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
     METHOD_WATCH_REMOVE, METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW,
     METHOD_WRITE_FILE, PROTOCOL_VERSION,
@@ -105,6 +105,8 @@ struct RemotePty {
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     writer: Mutex<Box<dyn Write + Send>>,
     master: Mutex<Box<dyn MasterPty + Send>>,
+    tmux_session_name: Option<String>,
+    child_pid: Option<u32>,
 }
 
 struct RemoteWatch {
@@ -158,6 +160,7 @@ impl RemoteServer {
             METHOD_WORKSPACE_EDIT_APPLY => self.workspace_edit_apply(request),
             METHOD_PTY_RESIZE => self.resize_pty(request),
             METHOD_PTY_CLOSE => self.close_pty(request),
+            METHOD_PTY_GET_CWD => self.get_cwd_pty(request),
             METHOD_WATCH_REMOVE => self.remove_watch(request),
             METHOD_GIT_EXEC => self.git_exec(request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
@@ -204,6 +207,7 @@ impl RemoteServer {
                     METHOD_PTY_OPEN,
                     METHOD_PTY_RESIZE,
                     METHOD_PTY_CLOSE,
+                    METHOD_PTY_GET_CWD,
                     METHOD_GIT_EXEC
                 ]
             }),
@@ -836,11 +840,14 @@ impl RemoteServer {
             "export VOKTTY_TERMINAL=1; _voktty_shell=\"${{SHELL:-/bin/sh}}\"; _voktty_integration=\"$HOME/.voktty/shell-integration/2\"; case \"${{_voktty_shell##*/}}\" in bash) if [ -r \"$_voktty_integration/bashrc\" ]; then exec \"$_voktty_shell\" --rcfile \"$_voktty_integration/bashrc\" -i; fi ;; zsh) if [ -r \"$_voktty_integration/zsh/.zshrc\" ]; then export VOKTTY_USER_ZDOTDIR=\"${{ZDOTDIR:-$HOME}}\" ZDOTDIR=\"$_voktty_integration/zsh\"; exec \"$_voktty_shell\" -l; fi ;; fish) if [ -r \"$_voktty_integration/init.fish\" ]; then export fish_features=no-mark-prompt; exec \"$_voktty_shell\" -i -C 'functions -q __voktty_install_prompt; or source \"$HOME/.voktty/shell-integration/2/init.fish\"; functions -q __voktty_install_prompt; and __voktty_install_prompt'; fi ;; esac; exec \"$_voktty_shell\" -l"
         );
 
-        let mut command = if mux_mode == "none" {
+        let sh_cmd = format!("/bin/sh -c '{}'", shell_wrapper.replace('\'', "'\\''"));
+        let sh_cmd_quoted = format!("'{}'", sh_cmd.replace('\'', "'\\''"));
+
+        let (mut command, tmux_name) = if mux_mode == "none" {
             let script = format!("{cd_prefix}{shell_wrapper}");
             let mut cmd = CommandBuilder::new("/bin/sh");
             cmd.args(["-c", &script]);
-            cmd
+            (cmd, None)
         } else {
             let session_name = params
                 .tmux_session_name
@@ -860,28 +867,29 @@ impl RemoteServer {
             let action = params.multiplexer_action.as_deref().unwrap_or("auto");
 
             let tmux_args = match action {
-                "attach_force" => format!("tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}-s '{session_name}'"),
-                "new" => format!("tmux new-session {cwd_flag}-s '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}"),
-                _ => format!("tmux new-session -A {cwd_flag}-s '{session_name}'"),
+                "attach_force" => format!("tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session {cwd_flag}-s '{session_name}' {sh_cmd_quoted}"),
+                "new" => format!("tmux new-session {cwd_flag}-s '{session_name}' {sh_cmd_quoted} 2>/dev/null || tmux new-session {cwd_flag}{sh_cmd_quoted}"),
+                _ => format!("tmux new-session -A {cwd_flag}-s '{session_name}' {sh_cmd_quoted}"),
             };
 
             let screen_args = match action {
                 "attach_force" => format!(
-                    "screen -d -r '{session_name}' 2>/dev/null || screen -S '{session_name}'"
+                    "screen -d -r '{session_name}' 2>/dev/null || screen -S '{session_name}' {sh_cmd_quoted}"
                 ),
-                "new" => format!("screen -S '{session_name}' 2>/dev/null || screen"),
-                _ => format!("screen -xRR -S '{session_name}'"),
+                "new" => format!("screen -S '{session_name}' {sh_cmd_quoted} 2>/dev/null || screen {sh_cmd_quoted}"),
+                _ => format!("screen -xRR -S '{session_name}' {sh_cmd_quoted}"),
             };
 
             let cd_prefix = format!("cd -- '{s_cwd}' 2>/dev/null || true; ");
+            let default_cmd = format!("tmux set -g default-command {sh_cmd_quoted} 2>/dev/null || true; ");
 
             let script = format!(
-                "{cd_prefix}if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; exec {tmux_args}; elif command -v screen >/dev/null 2>&1; then exec {screen_args}; else {shell_wrapper}; fi"
+                "{cd_prefix}if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; {default_cmd}exec {tmux_args}; elif command -v screen >/dev/null 2>&1; then exec {screen_args}; else {shell_wrapper}; fi"
             );
 
             let mut cmd = CommandBuilder::new("/bin/sh");
             cmd.args(["-c", &script]);
-            cmd
+            (cmd, Some(session_name))
         };
         command.cwd(cwd.clone());
         command.env("TERM", "xterm-256color");
@@ -896,6 +904,7 @@ impl RemoteServer {
                 return RemoteResponse::failure(request.id, "pty_spawn_failed", error.to_string())
             }
         };
+        let child_pid = child.process_id();
         drop(pair.slave);
         let reader = match pair.master.try_clone_reader() {
             Ok(reader) => reader,
@@ -915,6 +924,8 @@ impl RemoteServer {
             killer: Mutex::new(child.clone_killer()),
             writer: Mutex::new(writer),
             master: Mutex::new(pair.master),
+            tmux_session_name: tmux_name,
+            child_pid,
         });
         if let Ok(mut ptys) = self.ptys.lock() {
             ptys.insert(params.pty_id, pty.clone());
@@ -1016,6 +1027,69 @@ impl RemoteServer {
             let _ = pty.killer.lock().map(|mut killer| killer.kill());
         }
         RemoteResponse::success(request.id, json!({ "ptyId": params.pty_id }))
+    }
+
+    fn get_cwd_pty(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<PtyIdParams>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        let pty = match self
+            .ptys
+            .lock()
+            .ok()
+            .and_then(|p| p.get(&params.pty_id).cloned())
+        {
+            Some(pty) => pty,
+            None => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "pty_not_found",
+                    "PTY session not found",
+                )
+            }
+        };
+
+        // 1. If tmux session name is present, try asking tmux for the pane current path
+        if let Some(ref session_name) = pty.tmux_session_name {
+            if let Ok(output) = std::process::Command::new("tmux")
+                .args([
+                    "display-message",
+                    "-p",
+                    "-t",
+                    session_name,
+                    "#{pane_current_path}",
+                ])
+                .output()
+            {
+                if output.status.success() {
+                    let cwd = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !cwd.is_empty() && Path::new(&cwd).is_dir() {
+                        return RemoteResponse::success(request.id, json!({ "cwd": cwd }));
+                    }
+                }
+            }
+        }
+
+        // 2. On Linux, try reading /proc/<pid>/cwd
+        if let Some(pid) = pty.child_pid {
+            if let Ok(target) = std::fs::read_link(format!("/proc/{pid}/cwd")) {
+                let cwd = target.to_string_lossy().into_owned();
+                if !cwd.is_empty() && Path::new(&cwd).is_dir() {
+                    return RemoteResponse::success(request.id, json!({ "cwd": cwd }));
+                }
+            }
+        }
+
+        // 3. Fallback to workspace root
+        let fallback = self
+            .root
+            .as_ref()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| ".".to_string());
+        RemoteResponse::success(request.id, json!({ "cwd": fallback }))
     }
 
     fn git_exec(&self, request: RemoteRequest) -> RemoteResponse {

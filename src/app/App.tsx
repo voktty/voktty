@@ -185,6 +185,7 @@ import {
   findLeafCwd,
   getActiveTerminalLeafId,
   getLeafTerminalStats,
+  getLiveLeafCwd,
   hasLeaf,
   leafIds,
   navigateFocusedBlocks,
@@ -2730,6 +2731,20 @@ export default function App() {
     [setLeafCwd, workspaceEnv],
   );
 
+  const handleSyncActiveTerminal = useCallback(async (): Promise<string | null> => {
+    const tab = tabsRef.current.find((t) => t.id === effectiveActiveId);
+    const activeLeafId =
+      tab?.kind === "terminal" ? tab.activeLeafId : undefined;
+    if (activeLeafId !== undefined) {
+      const liveCwd = await getLiveLeafCwd(activeLeafId);
+      if (liveCwd) {
+        handleTerminalCwd(activeLeafId, liveCwd);
+        return liveCwd;
+      }
+    }
+    return null;
+  }, [effectiveActiveId, handleTerminalCwd]);
+
   const handleTerminalTitle = useCallback(
     (leafId: number, title: string) => {
       const tab = tabsRef.current.find(
@@ -4200,6 +4215,7 @@ export default function App() {
                           onPrepareNavigationRoot={
                             handlePrepareExplorerNavigationRoot
                           }
+                          onSyncToTerminal={handleSyncActiveTerminal}
                           gitStatus={
                             explorerGitDecorations ? sourceControl.status : null
                           }
