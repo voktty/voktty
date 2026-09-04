@@ -1,4 +1,4 @@
-﻿import { en, mergeLocale, type TranslationSchema } from "./en";
+import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const jaBase = mergeLocale(en, {
   common: {
@@ -1732,10 +1732,11 @@ const jaBase = mergeLocale(en, {
       multiplexerAsk: "接続時に確認",
       tmuxSessionName: "セッション名 / プレフィックス (任意)",
     },
+    connect: "接続",
     errors: {
       hostRequired: "ホストまたは IP アドレスは必須です",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "リモートセッションを検出",
       description: "接続方法を選択してください：",
       activeSessionsTitle: "ホスト上のアクティブセッション",
@@ -1748,15 +1749,19 @@ const jaBase = mergeLocale(en, {
       noExistingSessions: "このホスト上に既存のセッションは見つかりませんでした。",
       newSession: "新しい独立セッション",
       directShell: "tmux なしで接続 (直接シェル)",
+      refresh: "セッションを更新",
+      customSessionPlaceholder: "セッション名 (例: dev, work-2)",
+      createAndConnect: "作成して接続",
+      manageSessions: "セッションを選択...",
     },
-subtabs: {
+    subtabs: {
       servers: "SSH サーバー",
       tunnels: "ポート転送",
     },
     tunnels: {
       title: "ポート転送 & SSH トンネル",
       description:
-        "安全な SSH トンネル (-L、-R、-D) を介してローカルまたはリモートのポートを転送します。",
+        "安全な SSH トンネル (-L, -R, -D) を介してローカルまたはリモートのポートを転送します。",
       newButton: "新規トンネル",
       stopAllButton: "すべて停止",
       filterAll: "すべて",

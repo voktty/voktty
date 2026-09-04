@@ -1,4 +1,4 @@
-﻿import { en, mergeLocale, type TranslationSchema } from "./en";
+import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const koBase = mergeLocale(en, {
   common: {
@@ -1697,10 +1697,11 @@ const koBase = mergeLocale(en, {
       multiplexerAsk: "연결 시 확인",
       tmuxSessionName: "세션 이름 / 접두사 (선택 사항)",
     },
+    connect: "연결",
     errors: {
       hostRequired: "호스트 또는 IP 주소는 필수 항목입니다",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "원격 세션 감지됨",
       description: "연결 방법을 선택하세요:",
       activeSessionsTitle: "호스트의 활성 세션",
@@ -1713,8 +1714,12 @@ const koBase = mergeLocale(en, {
       noExistingSessions: "이 호스트에서 기존 세션을 찾을 수 없습니다.",
       newSession: "새 독립 세션",
       directShell: "tmux 없이 연결 (직접 셸)",
+      refresh: "세션 새로고침",
+      customSessionPlaceholder: "세션 이름 (예: dev, work-2)",
+      createAndConnect: "생성 및 연결",
+      manageSessions: "세션 선택...",
     },
-subtabs: {
+    subtabs: {
       servers: "SSH 서버",
       tunnels: "포트 포워딩",
     },

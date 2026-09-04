@@ -852,7 +852,7 @@ impl RemoteServer {
 
             let tmux_args = match action {
                 "attach_force" => format!("tmux attach -d -t '{session_name}' 2>/dev/null || tmux new-session -s '{session_name}'"),
-                "new" => format!("tmux new-session -s '{session_name}'"),
+                "new" => format!("tmux new-session -s '{session_name}' 2>/dev/null || tmux new-session"),
                 _ => format!("tmux new-session -A -s '{session_name}'"),
             };
 
@@ -860,6 +860,7 @@ impl RemoteServer {
                 "attach_force" => format!(
                     "screen -d -r '{session_name}' 2>/dev/null || screen -S '{session_name}'"
                 ),
+                "new" => format!("screen -S '{session_name}' 2>/dev/null || screen"),
                 _ => format!("screen -xRR -S '{session_name}'"),
             };
 

@@ -310,12 +310,22 @@ pub async fn remote_pty_open(
     rows: u16,
     cwd: Option<String>,
     blocks: Option<bool>,
+    multiplexer_mode: Option<String>,
+    tmux_session_name: Option<String>,
+    multiplexer_action: Option<String>,
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<u64, String> {
     let session = remote_session(&state, session_id)?;
     let pty_id = state.next_pty_id.fetch_add(1, Ordering::Relaxed);
     session.register_pty(pty_id, on_data, on_exit)?;
+
+    let mode = multiplexer_mode.or_else(|| session.connection.multiplexer_mode.clone());
+    let session_name = tmux_session_name
+        .or_else(|| session.connection.active_multiplexer_session.clone())
+        .or_else(|| session.connection.tmux_session_name.clone());
+    let action = multiplexer_action.or_else(|| session.connection.multiplexer_action.clone());
+
     let request = RemoteRequest {
         protocol: PROTOCOL_VERSION,
         id: state.next_request_id("pty-open"),
@@ -326,9 +336,9 @@ pub async fn remote_pty_open(
             "rows": rows,
             "cwd": cwd,
             "blocks": blocks.unwrap_or(false),
-            "multiplexerMode": session.connection.multiplexer_mode,
-            "tmuxSessionName": session.connection.active_multiplexer_session.as_deref().or(session.connection.tmux_session_name.as_deref()),
-            "multiplexerAction": session.connection.multiplexer_action,
+            "multiplexerMode": mode,
+            "tmuxSessionName": session_name,
+            "multiplexerAction": action,
         }),
     };
     let request_session = session.clone();

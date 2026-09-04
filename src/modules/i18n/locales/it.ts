@@ -1,4 +1,4 @@
-﻿import { en, mergeLocale, type TranslationSchema } from "./en";
+import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const itBase = mergeLocale(en, {
   common: {
@@ -1765,10 +1765,11 @@ const itBase = mergeLocale(en, {
       multiplexerAsk: "Chiedi alla connessione",
       tmuxSessionName: "Nome / Prefisso sessione (opzionale)",
     },
+    connect: "Connetti",
     errors: {
       hostRequired: "L'host o l'indirizzo IP è obbligatorio",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "Sessioni Remote Rilevate",
       description: "Seleziona come connetterti a",
       activeSessionsTitle: "Sessioni attive sull'host",
@@ -1781,8 +1782,12 @@ const itBase = mergeLocale(en, {
       noExistingSessions: "Nessuna sessione esistente trovata su questo host.",
       newSession: "Nuova sessione indipendente",
       directShell: "Connetti senza tmux (shell diretta)",
+      refresh: "Aggiorna sessioni",
+      customSessionPlaceholder: "Nome sessione (es. dev, work-2)",
+      createAndConnect: "Crea e Connetti",
+      manageSessions: "Seleziona sessione...",
     },
-subtabs: {
+    subtabs: {
       servers: "Server SSH",
       tunnels: "Inoltro Porte",
     },

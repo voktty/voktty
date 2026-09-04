@@ -30,6 +30,33 @@ describe("reusableWorkspaceEnv", () => {
     ).toBe(current);
   });
 
+  it("does not reuse an SSH workspace when target multiplexer sessions differ", () => {
+    const connection1 = {
+      id: "host-1",
+      name: "Server",
+      host: "server.test",
+      port: 22,
+      user: "root",
+      activeMultiplexerSession: "voktty-1",
+    };
+    const connection2 = {
+      ...connection1,
+      activeMultiplexerSession: "voktty-2",
+    };
+    const current: WorkspaceEnv = {
+      kind: "ssh",
+      connection: connection1,
+      root: "/opt/data",
+      sessionId: 42,
+    };
+    expect(
+      reusableWorkspaceEnv(
+        { kind: "ssh", connection: connection2, root: "/opt/data" },
+        current,
+      ),
+    ).toBeNull();
+  });
+
   it("does not reuse a disconnected SSH workspace", () => {
     const connection = {
       id: "host-1",

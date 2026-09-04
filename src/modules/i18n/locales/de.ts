@@ -1,4 +1,4 @@
-﻿import { en, mergeLocale, type TranslationSchema } from "./en";
+import { en, mergeLocale, type TranslationSchema } from "./en";
 
 const deBase = mergeLocale(en, {
   common: {
@@ -1750,10 +1750,11 @@ const deBase = mergeLocale(en, {
       multiplexerAsk: "Beim Verbinden fragen",
       tmuxSessionName: "Sitzungsname / Präfix (optional)",
     },
+    connect: "Verbinden",
     errors: {
       hostRequired: "Host oder IP-Adresse ist erforderlich",
     },
-        sessionPicker: {
+    sessionPicker: {
       title: "Erkannte Remote-Sitzungen",
       description: "Wählen Sie die Verbindungsmethode für",
       activeSessionsTitle: "Aktive Sitzungen auf dem Host",
@@ -1766,8 +1767,12 @@ const deBase = mergeLocale(en, {
       noExistingSessions: "Keine vorhandenen Sitzungen auf diesem Host gefunden.",
       newSession: "Neue unabhängige Sitzung",
       directShell: "Ohne tmux verbinden (direkte Shell)",
+      refresh: "Sitzungen aktualisieren",
+      customSessionPlaceholder: "Sitzungsname (z.B. dev, work-2)",
+      createAndConnect: "Erstellen & Verbinden",
+      manageSessions: "Sitzung auswählen...",
     },
-subtabs: {
+    subtabs: {
       servers: "SSH-Server",
       tunnels: "Port-Weiterleitung",
     },

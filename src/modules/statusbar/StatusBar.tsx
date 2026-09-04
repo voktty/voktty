@@ -43,7 +43,7 @@ type Props = {
   home: string | null;
   onCd: (path: string) => void;
   onWorkspaceChange: (env: WorkspaceEnv) => void;
-  onConnectSsh?: (conn: SshConnection) => void;
+  onConnectSsh?: (conn: SshConnection, forcePickSession?: boolean) => void;
   onConnectDocker?: (conn: DockerWorkspaceConnection) => void;
   onConnectRdp?: (conn: import("@/modules/rdp").RdpConnectionProfile) => void;
   onNewSsh?: () => void;
