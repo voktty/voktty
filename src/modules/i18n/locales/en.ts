@@ -2645,6 +2645,9 @@ export const en = {
     openInBrowserTooltip: "Open in system browser",
     noServerListening: "No server listening on :{port}.",
     enterUrlNotice: "Enter a URL or pick a port preset.",
+    inspectComponent: "Inspect Component (Ctrl+G)",
+    inspectingActive: "Click an element to inspect",
+    clearSelection: "Clear selected component",
   },
   workspace: {
     environment: "Workspace environment",

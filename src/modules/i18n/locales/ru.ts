@@ -1674,6 +1674,9 @@ const ruBase = mergeLocale(en, {
     openInBrowserTooltip: "Открыть в системном браузере",
     noServerListening: "Нет сервера, прослушивающего порт :{port}.",
     enterUrlNotice: "Введите URL или выберите предустановленный порт.",
+    inspectComponent: "Инспектировать компонент (Ctrl+G)",
+    inspectingActive: "Нажмите на элемент для проверки",
+    clearSelection: "Очистить выбранный компонент",
   },
   workspace: {
     environment: "Среда рабочей области",

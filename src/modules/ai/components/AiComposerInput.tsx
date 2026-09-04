@@ -12,6 +12,7 @@ import { useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
 import { FilePickerContent } from "./FilePicker";
 import { type PickerItem, SnippetPickerContent } from "./SnippetPicker";
+import { LiveComponentBadge } from "@/modules/preview";
 
 type SnippetTrigger = {
   start: number;
@@ -255,6 +256,7 @@ export function AiComposerInput() {
 
   return (
     <>
+      <LiveComponentBadge compact className="mb-2" />
       <Popover open={pickerOpen}>
         <PopoverAnchor asChild>
           <div className="flex items-start gap-2">

@@ -88,6 +88,11 @@ import {
 } from "../lib/notes";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useComposerSkills } from "./useComposerSkills";
+import {
+  LiveComponentBadge,
+  useLiveComponentStore,
+  formatComponentPromptDirective,
+} from "@/modules/preview";
 
 type Props = {
   enabled?: boolean;
@@ -232,6 +237,7 @@ export function Composer({
   const [runnerLive, setRunnerLive] = useState(
     () => busy && loadComposerRunner(),
   );
+  const selectedComponent = useLiveComponentStore((s) => s.selectedComponent);
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
 
@@ -614,8 +620,13 @@ export function Composer({
   }, [addAttachments, attachmentsSupported, enabled]);
 
   const submit = (value: string) => {
-    const text = composeInboxMessage(inboxCard, value);
+    let text = composeInboxMessage(inboxCard, value);
     const files = attachments;
+    const selectedComp = useLiveComponentStore.getState().selectedComponent;
+    if (selectedComp) {
+      const compDirective = formatComponentPromptDirective(selectedComp);
+      text = text ? `${compDirective}\n\n${text}` : compDirective;
+    }
     if (!text && files.length === 0 && !noteCard && !handoffCard) return;
     onSubmit(text, files);
     if (!ref.current) return;
@@ -861,6 +872,12 @@ export function Composer({
                   onRemove={() => removeAttachment(file.id)}
                 />
               ))}
+            </div>
+          ) : null}
+
+          {selectedComponent ? (
+            <div className="flex flex-wrap gap-1.5 px-3 pt-2">
+              <LiveComponentBadge compact />
             </div>
           ) : null}
 

@@ -1636,6 +1636,9 @@ const koBase = mergeLocale(en, {
     openInBrowserTooltip: "시스템 브라우저에서 열기",
     noServerListening: ":{port}에서 수신 대기 중인 서버가 없습니다.",
     enterUrlNotice: "URL을 입력하거나 포트 프리셋을 선택하세요.",
+    inspectComponent: "컴포넌트 검사 (Ctrl+G)",
+    inspectingActive: "검사할 요소를 클릭하세요",
+    clearSelection: "선택한 컴포넌트 지우기",
   },
   workspace: {
     environment: "작업 공간 환경",

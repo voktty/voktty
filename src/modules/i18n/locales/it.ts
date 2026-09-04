@@ -1701,6 +1701,9 @@ const itBase = mergeLocale(en, {
     openInBrowserTooltip: "Apri nel browser di sistema",
     noServerListening: "Nessun server in ascolto su :{port}.",
     enterUrlNotice: "Inserisci un URL o seleziona una porta preimpostata.",
+    inspectComponent: "Ispeziona componente (Ctrl+G)",
+    inspectingActive: "Fai clic su un elemento per ispezionarlo",
+    clearSelection: "Rimuovi componente selezionato",
   },
   workspace: {
     environment: "Ambiente dello spazio di lavoro",

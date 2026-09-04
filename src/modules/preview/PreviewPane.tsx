@@ -12,6 +12,11 @@ import {
   PreviewAddressBar,
   type PreviewAddressBarHandle,
 } from "./PreviewAddressBar";
+import {
+  attachInspectorBridge,
+  sendInspectorActive,
+} from "./lib/inspectorBridge";
+import { useLiveComponentStore } from "./store/liveComponentStore";
 
 export type PreviewPaneHandle = {
   reload: () => void;
@@ -38,6 +43,16 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
     const [nonce, setNonce] = useState(0);
     const [loaded, setLoaded] = useState(visible);
     const addressRef = useRef<PreviewAddressBarHandle>(null);
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+
+    const isInspectorActive = useLiveComponentStore((s) => s.isInspectorActive);
+    const setSelectedComponent = useLiveComponentStore(
+      (s) => s.setSelectedComponent,
+    );
+    const setInspectorActive = useLiveComponentStore(
+      (s) => s.setInspectorActive,
+    );
+    const toggleInspector = useLiveComponentStore((s) => s.toggleInspector);
 
     useEffect(() => {
       if (visible) {
@@ -47,6 +62,46 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       const t = setTimeout(() => setLoaded(false), SUSPEND_AFTER_MS);
       return () => clearTimeout(t);
     }, [visible]);
+
+    // Keyboard shortcut: Ctrl+G / Cmd+G to toggle component inspector
+    useEffect(() => {
+      if (!visible) return;
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "g") {
+          e.preventDefault();
+          toggleInspector();
+        }
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [visible, toggleInspector]);
+
+    // Inspector bridge & message listener
+    useEffect(() => {
+      const iframe = iframeRef.current;
+      if (!iframe || !loaded) return;
+
+      const detach = attachInspectorBridge(
+        iframe,
+        (meta) => {
+          setSelectedComponent(meta);
+        },
+        (active) => {
+          setInspectorActive(active);
+        },
+      );
+
+      return () => {
+        detach();
+      };
+    }, [loaded, nonce, setSelectedComponent, setInspectorActive]);
+
+    // Sync active state with iframe
+    useEffect(() => {
+      if (iframeRef.current && loaded) {
+        sendInspectorActive(iframeRef.current, isInspectorActive);
+      }
+    }, [isInspectorActive, loaded, nonce]);
 
     useImperativeHandle(
       ref,
@@ -100,6 +155,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
           {url ? (
             loaded ? (
               <iframe
+                ref={iframeRef}
                 key={`${url}#${nonce}`}
                 src={url}
                 title={t("preview.title")}
