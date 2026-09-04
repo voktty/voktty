@@ -338,6 +338,10 @@ export function getInspectorInjectedScript(): string {
   if (window.__VOKTTY_INSPECTOR_INSTALLED__) return;
   window.__VOKTTY_INSPECTOR_INSTALLED__ = true;
 
+  ${generateCssSelector.toString()}
+  ${extractReactFiberMetadata.toString()}
+  ${extractDomMetadata.toString()}
+
   let active = false;
   let hoveredEl = null;
 
@@ -370,7 +374,7 @@ export function getInspectorInjectedScript(): string {
     box.style.width = r.width + "px";
     box.style.height = r.height + "px";
 
-    let title = el.tagName.toLowerCase();
+    let title = (el.tagName || "").toLowerCase();
     if (el.id) title += "#" + el.id;
     else if (el.classList && el.classList.length > 0) {
       const cls = Array.from(el.classList).slice(0, 1)[0];
@@ -398,7 +402,7 @@ export function getInspectorInjectedScript(): string {
       e.stopPropagation();
       e.stopImmediatePropagation();
 
-      const meta = ${extractDomMetadata.toString()}(target, window.location.href);
+      const meta = extractDomMetadata(target, window.location.href);
       try {
         window.parent.postMessage({
           type: "VOKTTY_LIVE_COMPONENT_SELECTED",
