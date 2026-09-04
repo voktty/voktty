@@ -1791,7 +1791,7 @@ fn probe_command() -> String {
 
 fn start_command(architecture: &str) -> String {
     format!(
-        "cd \"$HOME\" && exec \"$HOME/.voktty/servers/{REMOTE_VERSION}/linux-{architecture}/voktty-remote\" --stdio"
+        "export PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin:${{PATH:-}}\"; cd \"$HOME\" && exec \"$HOME/.voktty/servers/{REMOTE_VERSION}/linux-{architecture}/voktty-remote\" --stdio"
     )
 }
 
