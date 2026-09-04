@@ -1993,19 +1993,9 @@ export default function App({
 
   const onClosePane = useCallback(
     (sessionId?: string) => {
-      if (
-        sessionId === undefined &&
-        projectTerminalFocused
-      ) {
-        const dock = findProjectTerminal(
-          projectTerminalsRef.current,
-          projectCwdRef.current,
-        );
-        if (dock) {
-          onCloseProjectTerminal(dock.pane.activeFileId);
-          return;
-        }
-      }
+      // The project terminal is shared by every workspace tab in the project.
+      // Keep the global close command scoped to workspace tabs and panes even
+      // while the dock has focus; terminal tabs have their own close buttons.
       if (!activeTab) return;
       const focusedSurface = findSurfacePane(activeTab, activeTab.focusedId);
       if (sessionId === undefined && focusedSurface) {
@@ -2051,11 +2041,9 @@ export default function App({
     [
       activeTab,
       onCloseFile,
-      onCloseProjectTerminal,
       onCloseTab,
       onClearTabSession,
       persistSession,
-      projectTerminalFocused,
       refreshHistory,
       sidebarCwd,
       tabCloseScope,

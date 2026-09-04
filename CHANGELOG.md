@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Cursor background subagents stay visibly active until their result is delivered instead of making the session look stalled. In #61 by @D3nnis72.
+- ⌘W / Ctrl+W closes the active workspace tab or pane when the project terminal has focus instead of closing a terminal from the project-wide dock.
 
 ## [0.1.31] - 2026-09-03
 
