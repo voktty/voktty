@@ -1589,6 +1589,7 @@ const frBase = mergeLocale(en, {
       agentHistoryOpen: "Historique opérationnel des agents",
       agentFocusAttention: "Aller à l’agent nécessitant votre attention",
       sidebarToggle: "Basculer l’explorateur de fichiers",
+      sourceControlToggle: "Basculer le contrôle de code source",
       explorerFocus: "Basculer le focus de l’explorateur",
       explorerToggleHidden: "Basculer les fichiers cachés",
       viewZoomIn: "Zoom avant",

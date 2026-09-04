@@ -254,11 +254,23 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let dur = Duration::from_secs(timeout_secs.clamp(1, MAX_TIMEOUT_SECS));
     let args: Vec<OsString> = args
         .into_iter()
         .map(|arg| arg.as_ref().to_os_string())
         .collect();
+
+    if let WorkspaceEnv::Ssh { session_id, .. } = workspace {
+        let Some(session_id) = session_id else {
+            return Err(GitError::Spawn("remote session id not established".into()));
+        };
+        let remote_state = crate::modules::remote::RemoteState::global()
+            .ok_or_else(|| GitError::Spawn("remote state not initialized".into()))?;
+        return remote_state
+            .exec_git(*session_id, cwd, &args, timeout_secs)
+            .map_err(GitError::Spawn);
+    }
+
+    let dur = Duration::from_secs(timeout_secs.clamp(1, MAX_TIMEOUT_SECS));
     let mut cmd = build_git_command(workspace, cwd, &args)?;
     cmd.env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_ASKPASS", "")

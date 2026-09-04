@@ -1579,6 +1579,7 @@ const ptBase = mergeLocale(en, {
       agentHistoryOpen: "Histórico operacional de agentes",
       agentFocusAttention: "Ir para o agente que precisa de atenção",
       sidebarToggle: "Alternar explorador de arquivos",
+      sourceControlToggle: "Alternar controle de código-fonte",
       explorerFocus: "Alternar foco do explorador de arquivos",
       explorerToggleHidden: "Alternar arquivos ocultos",
       viewZoomIn: "Ampliar",

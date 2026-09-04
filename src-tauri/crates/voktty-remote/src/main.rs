@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufWriter, Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::process::Stdio;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -17,12 +18,12 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse,
-    METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GREP, METHOD_GREP_CANCEL,
-    METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_PTY_CLOSE, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
-    METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME, METHOD_REPLACE_APPLY,
-    METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE,
-    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
-    PROTOCOL_VERSION,
+    METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC, METHOD_GREP,
+    METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_PTY_CLOSE, METHOD_PTY_OPEN,
+    METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME,
+    METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
+    METHOD_WATCH_REMOVE, METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW,
+    METHOD_WRITE_FILE, PROTOCOL_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -158,6 +159,7 @@ impl RemoteServer {
             METHOD_PTY_RESIZE => self.resize_pty(request),
             METHOD_PTY_CLOSE => self.close_pty(request),
             METHOD_WATCH_REMOVE => self.remove_watch(request),
+            METHOD_GIT_EXEC => self.git_exec(request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
     }
@@ -201,7 +203,8 @@ impl RemoteServer {
                     METHOD_WATCH_REMOVE,
                     METHOD_PTY_OPEN,
                     METHOD_PTY_RESIZE,
-                    METHOD_PTY_CLOSE
+                    METHOD_PTY_CLOSE,
+                    METHOD_GIT_EXEC
                 ]
             }),
         )
@@ -1007,6 +1010,112 @@ impl RemoteServer {
         RemoteResponse::success(request.id, json!({ "ptyId": params.pty_id }))
     }
 
+    fn git_exec(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<GitExecParams>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+
+        let cwd = match &params.cwd {
+            Some(s) if !s.trim().is_empty() => {
+                let p = expand_home(Path::new(s));
+                if !p.is_dir() {
+                    return RemoteResponse::failure(
+                        request.id,
+                        "invalid_cwd",
+                        "working directory is not a directory",
+                    );
+                }
+                Some(p)
+            }
+            _ => self.root.clone(),
+        };
+
+        let timeout_secs = params.timeout_secs.unwrap_or(30).clamp(1, 300);
+        let dur = Duration::from_secs(timeout_secs);
+
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(&params.args);
+        if let Some(dir) = &cwd {
+            cmd.current_dir(dir);
+        }
+        cmd.env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_ASKPASS", "")
+            .env("SSH_ASKPASS", "")
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .env("GCM_INTERACTIVE", "Never")
+            .env("GCM_PROVIDER", "")
+            .env("LC_ALL", "C")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let mut child = match cmd.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "spawn_failed", error.to_string());
+            }
+        };
+
+        let stdout_pipe = child.stdout.take();
+        let stderr_pipe = child.stderr.take();
+
+        let stdout_handle = thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut pipe) = stdout_pipe {
+                let _ = pipe.read_to_end(&mut buf);
+            }
+            buf
+        });
+        let stderr_handle = thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut pipe) = stderr_pipe {
+                let _ = pipe.read_to_end(&mut buf);
+            }
+            buf
+        });
+
+        let (tx, rx) = mpsc::channel();
+        let child_killer = Arc::new(Mutex::new(child));
+        let child_waiter = child_killer.clone();
+
+        thread::spawn(move || {
+            let res = child_waiter.lock().unwrap().wait();
+            let _ = tx.send(res);
+        });
+
+        let (exit_code, timed_out) = match rx.recv_timeout(dur) {
+            Ok(Ok(status)) => (status.code(), false),
+            Ok(Err(_)) => (None, false),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if let Ok(mut c) = child_killer.lock() {
+                    let _ = c.kill();
+                    let _ = c.wait();
+                }
+                (None, true)
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => (None, false),
+        };
+
+        let stdout_bytes = stdout_handle.join().unwrap_or_default();
+        let stderr_bytes = stderr_handle.join().unwrap_or_default();
+
+        let stdout_base64 = base64::engine::general_purpose::STANDARD.encode(&stdout_bytes);
+        let stderr_string = String::from_utf8_lossy(&stderr_bytes).into_owned();
+
+        RemoteResponse::success(
+            request.id,
+            json!({
+                "stdout": stdout_base64,
+                "stderr": stderr_string,
+                "exitCode": exit_code,
+                "timedOut": timed_out,
+            }),
+        )
+    }
+
     fn find_pty(&self, pty_id: u64) -> Result<Arc<RemotePty>, String> {
         self.ptys
             .lock()
@@ -1053,8 +1162,18 @@ impl RemoteServer {
 
     fn resolve_existing(&self, path: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
-        let relative = safe_relative_path(path.unwrap_or("."))?;
-        let candidate = root.join(relative);
+        let raw_str = path.unwrap_or(".");
+        let raw_path = Path::new(raw_str);
+        let candidate = if raw_path.is_absolute() {
+            let canonical_raw = fs::canonicalize(raw_path).map_err(|e| e.to_string())?;
+            if !canonical_raw.starts_with(root) {
+                return Err("path is outside the workspace root".to_string());
+            }
+            canonical_raw
+        } else {
+            let relative = safe_relative_path(raw_str)?;
+            root.join(relative)
+        };
         if !candidate.exists() && fs::symlink_metadata(&candidate).is_err() {
             return Err("path does not exist".to_string());
         }
@@ -1259,6 +1378,14 @@ struct PtyIdParams {
 #[derive(Deserialize)]
 struct WatchParams {
     paths: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GitExecParams {
+    cwd: Option<String>,
+    args: Vec<String>,
+    timeout_secs: Option<u64>,
 }
 
 fn canonical_directory(path: &Path) -> Result<PathBuf, String> {
@@ -2019,5 +2146,40 @@ mod tests {
             assert_eq!(stat_res["kind"], "dir");
             assert_eq!(stat_res["isSymlink"], true);
         }
+    }
+
+    #[test]
+    fn git_exec_runs_command_and_returns_output() {
+        let workspace = tempdir().expect("workspace");
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "1".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        let res = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "2".to_string(),
+            method: METHOD_GIT_EXEC.to_string(),
+            params: json!({
+                "args": ["--version"]
+            }),
+        });
+        assert!(res.ok);
+        let result = res.result.expect("result");
+        let b64 = result["stdout"].as_str().expect("stdout");
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .expect("valid base64");
+        let stdout = String::from_utf8_lossy(&decoded);
+        assert!(stdout.contains("git version"));
+        assert_eq!(result["exitCode"], 0);
+        assert_eq!(result["timedOut"], false);
     }
 }

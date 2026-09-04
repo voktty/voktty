@@ -2476,6 +2476,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
       agentHistoryOpen: "एजेंट संचालन इतिहास",
       agentFocusAttention: "ध्यान देने वाले एजेंट पर जाएं",
       sidebarToggle: "फ़ाइल एक्सप्लोरर टॉगल करें",
+      sourceControlToggle: "स्रोत नियंत्रण टॉगल करें",
       explorerFocus: "फ़ाइल एक्सप्लोरर फ़ोकस टॉगल करें",
       explorerToggleHidden: "छिपी हुई फ़ाइलें टॉगल करें",
       viewZoomIn: "ज़ूम इन",

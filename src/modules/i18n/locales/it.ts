@@ -1585,6 +1585,7 @@ const itBase = mergeLocale(en, {
       agentHistoryOpen: "Cronologia operativa degli agenti",
       agentFocusAttention: "Vai all’agente che richiede attenzione",
       sidebarToggle: "Attiva/disattiva esplora file",
+      sourceControlToggle: "Attiva/disattiva controllo del codice sorgente",
       explorerFocus: "Attiva/disattiva focus esplora file",
       explorerToggleHidden: "Attiva/disattiva file nascosti",
       viewZoomIn: "Aumenta zoom",
