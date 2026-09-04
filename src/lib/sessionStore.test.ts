@@ -134,6 +134,36 @@ describe("sanitizeSessionForPersist", () => {
     });
   });
 
+  it("keeps edited and approved plan metadata", () => {
+    const session = newSession("codex", "/tmp/project");
+    session.blocks = [
+      { id: "u1", role: "user", text: "plan this" },
+      {
+        id: "p1",
+        role: "plan",
+        text: "# Edited plan",
+        plan: {
+          key: "turn:1",
+          status: "built",
+          originalText: "# Original plan",
+          approvedText: "# Edited plan",
+          edited: true,
+        },
+      },
+    ];
+    expect(sanitizeSessionForPersist(session).blocks[1]).toMatchObject({
+      role: "plan",
+      text: "# Edited plan",
+      plan: {
+        key: "turn:1",
+        status: "built",
+        originalText: "# Original plan",
+        approvedText: "# Edited plan",
+        edited: true,
+      },
+    });
+  });
+
   it("keeps structured task lists", () => {
     const session = newSession("codex", "/tmp/project");
     session.blocks = [

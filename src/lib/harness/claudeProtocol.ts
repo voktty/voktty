@@ -35,7 +35,7 @@ export const SUPPORTED_CLAUDE_IMAGE_MIME_TYPES = new Set([
 ]);
 
 export type ClaudePermissionMode =
-  "default" | "acceptEdits" | "auto" | "bypassPermissions";
+  "default" | "plan" | "acceptEdits" | "auto" | "bypassPermissions";
 
 export type ClaudeControlRequest = {
   requestId: string;
@@ -340,9 +340,7 @@ export function listModelsFromControlResponse(
 export function isClaudeInitMessage(rec: Record<string, unknown>): boolean {
   const type = stringField(rec, "type");
   const subtype = stringField(rec, "subtype");
-  return (
-    type === "system" && (subtype === "init" || subtype === "initialized")
-  );
+  return type === "system" && (subtype === "init" || subtype === "initialized");
 }
 
 export function toClaudePermissionResult(

@@ -1,7 +1,9 @@
 import {
   ArrowUp,
+  AiIdea,
   Check,
   CornerDownRight,
+  FilePlus,
   ListEnd,
   Pause,
   Pencil,
@@ -62,9 +64,13 @@ import type {
   MessageQueueStatus,
   QueuedMessage,
   RuntimeMode,
+  TurnIntent,
 } from "../lib/session";
 import { HARNESS_TITLE, harnessSupportsAttachments } from "../lib/session";
-import type { UserQuestionPrompt, UserQuestionReply } from "../lib/userQuestion";
+import type {
+  UserQuestionPrompt,
+  UserQuestionReply,
+} from "../lib/userQuestion";
 import {
   createBlankSkill,
   rankSkills,
@@ -109,6 +115,8 @@ import {
 } from "../lib/notes";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useComposerSkills } from "./useComposerSkills";
+import { Popover } from "./Popover";
+import { consumePlanCommand, PLAN_COMMAND } from "../lib/plan";
 
 type Props = {
   enabled?: boolean;
@@ -146,7 +154,11 @@ type Props = {
   onNoteCardDismiss?: () => void;
   onHandoffCardDismiss?: () => void;
   onQuestionReply?: (requestId: number, reply: UserQuestionReply) => void;
-  onSubmit: (text: string, attachments: Attachment[]) => void;
+  onSubmit: (
+    text: string,
+    attachments: Attachment[],
+    options?: { intent?: TurnIntent },
+  ) => void;
   onStop?: () => void;
   onDeleteQueuedMessage?: (messageId: string) => void;
   onEditQueuedMessage?: (messageId: string, text: string) => void;
@@ -401,6 +413,7 @@ export function Composer({
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const plusRef = useRef<HTMLDivElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const attachmentsRef = useRef<Attachment[]>([]);
   const consumedQuoteId = useRef<number | null>(null);
@@ -416,6 +429,8 @@ export function Composer({
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fileDrag, setFileDrag] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [planSelected, setPlanSelected] = useState(false);
   const [slash, setSlash] = useState<SlashToken | null>(null);
   const [skillActive, setSkillActive] = useState(0);
   const [creatingSkill, setCreatingSkill] = useState(false);
@@ -453,21 +468,19 @@ export function Composer({
     pickerOpen,
   });
   const skills = skillCatalog.skills;
-  const skillLimit =
-    harness === "pi" ? Number.POSITIVE_INFINITY : undefined;
-  const rankedSkills = rankSkills(
-    skills,
-    slash?.query ?? "",
-    skillLimit,
-  );
-  const attachmentsSupported = harnessSupportsAttachments(harness);
-  const skillNames = useMemo(
-    () => new Set(skills.map((skill) => skill.invocation)),
+  const slashItems = useMemo(
+    () => [PLAN_COMMAND, ...skills.filter((skill) => skill.name !== "plan")],
     [skills],
   );
+  const skillLimit = harness === "pi" ? Number.POSITIVE_INFINITY : undefined;
+  const rankedSkills = rankSkills(slashItems, slash?.query ?? "", skillLimit);
+  const attachmentsSupported = harnessSupportsAttachments(harness);
+  const skillNames = useMemo(
+    () => new Set(slashItems.map((skill) => skill.invocation)),
+    [slashItems],
+  );
   const mentionFiles = useMemo(
-    () =>
-      notesEnabled ? [...files, ...notesAsProjectFiles(notes)] : files,
+    () => (notesEnabled ? [...files, ...notesAsProjectFiles(notes)] : files),
     [files, notes, notesEnabled],
   );
   const mentionIndex = useMemo(
@@ -667,16 +680,24 @@ export function Composer({
         setCreatingSkill(false);
         return;
       }
-      const next = replaceSlashToken(el.value, token, skill.invocation);
+      const planCommand = skill.name === PLAN_COMMAND.name;
+      const next = planCommand
+        ? `${el.value.slice(0, token.start)}${el.value
+            .slice(token.end)
+            .replace(/^\s/, "")}`
+        : replaceSlashToken(el.value, token, skill.invocation);
       el.value = next;
       resizeTextarea(el);
-      let cursor = token.start + skill.invocation.length + 1;
+      let cursor = planCommand
+        ? token.start
+        : token.start + skill.invocation.length + 1;
       if (next[cursor] === " ") cursor += 1;
       el.setSelectionRange(cursor, cursor);
       setDraft(next);
       syncHasValue(next, attachmentsRef.current);
       setSlash(null);
       setCreatingSkill(false);
+      if (planCommand) setPlanSelected(true);
       el.focus();
     },
     [syncHasValue],
@@ -711,7 +732,7 @@ export function Composer({
     if (!focused) return;
     if (
       document.querySelector(
-        "[data-model-picker], [data-access-picker], [data-model-settings], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker]",
+        "[data-model-picker], [data-access-picker], [data-model-settings], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker], [data-composer-plus]",
       )
     )
       return;
@@ -818,15 +839,20 @@ export function Composer({
   }, [addAttachments, attachmentsSupported, enabled]);
 
   const submit = (value: string) => {
-    const text = composeInboxMessage(inboxCard, value);
+    const command = consumePlanCommand(value);
+    const text = composeInboxMessage(inboxCard, command.text);
     const files = attachments;
     if (!text && files.length === 0 && !noteCard && !handoffCard) return;
-    onSubmit(text, files);
+    onSubmit(text, files, {
+      intent: planSelected || command.planning ? "plan" : "default",
+    });
     if (!ref.current) return;
     ref.current.value = "";
     ref.current.style.height = "auto";
     setDraft("");
     setAttachments([]);
+    setPlanSelected(false);
+    setPlusOpen(false);
     setSlash(null);
     setMention(null);
     setCreatingSkill(false);
@@ -1021,9 +1047,7 @@ export function Composer({
               files={rankedFiles}
               query={mention?.query ?? ""}
               active={mentionActive}
-              loading={
-                looksLikeProject(cwd) && peekProjectFiles(cwd) == null
-              }
+              loading={looksLikeProject(cwd) && peekProjectFiles(cwd) == null}
               includeNotes={notesEnabled}
               onActive={setMentionActive}
               onPick={pickMention}
@@ -1123,7 +1147,7 @@ export function Composer({
                       ? "Add context, or send to continue…"
                       : shell
                         ? "How can I help you today?"
-                        : "Ask, build, / for skills, @ for references... "
+                        : "Ask, build, / for commands, @ for references... "
               }
               className={`composer-field scrollbar-none relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
                 shell ? "py-4" : "py-3"
@@ -1146,17 +1170,88 @@ export function Composer({
           </div>
 
           <div className="flex items-center gap-1 px-2 pb-2">
-            <ToolButton
-              label={
-                attachmentsSupported
-                  ? "Attach files"
-                  : `${HARNESS_TITLE[harness]} does not support attachments`
-              }
-              disabled={!attachmentsSupported}
-              onClick={attachFromPicker}
-            >
-              <Plus className="size-3.5" strokeWidth={1.5} />
-            </ToolButton>
+            <div ref={plusRef} className="relative shrink-0">
+              <ToolButton
+                label="Add files or choose a mode"
+                active={plusOpen}
+                onClick={() => setPlusOpen((open) => !open)}
+              >
+                <Plus className="size-3.5" strokeWidth={1.5} />
+              </ToolButton>
+              {plusOpen ? (
+                <Popover
+                  anchor={plusRef}
+                  side="top"
+                  align="start"
+                  width={250}
+                  onDismiss={() => setPlusOpen(false)}
+                  data-composer-plus
+                  className="p-1.5"
+                >
+                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wide text-content/40">
+                    Add to message
+                  </p>
+                  <button
+                    type="button"
+                    disabled={!attachmentsSupported}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setPlusOpen(false);
+                      attachFromPicker();
+                    }}
+                    className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left text-content hover:bg-content/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <FilePlus className="mt-0.5 size-4 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-[13px]">Upload file</span>
+                      <span className="block text-[11px] leading-4 text-content/45">
+                        {attachmentsSupported
+                          ? "Attach files or images to this message"
+                          : `${HARNESS_TITLE[harness]} does not support attachments`}
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={planSelected}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setPlanSelected((selected) => !selected);
+                      setPlusOpen(false);
+                      ref.current?.focus();
+                    }}
+                    className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left text-content hover:bg-content/10"
+                  >
+                    <AiIdea className="mt-0.5 size-4 shrink-0 text-yellow-300/80" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px]">Plan mode</span>
+                      <span className="block text-[11px] leading-4 text-content/45">
+                        Create a plan to review before building
+                      </span>
+                    </span>
+                    {planSelected ? (
+                      <Check className="mt-0.5 size-3.5 shrink-0 text-accent" />
+                    ) : null}
+                  </button>
+                </Popover>
+              ) : null}
+            </div>
+            {planSelected ? (
+              <button
+                type="button"
+                title="Turn off Plan mode"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setPlanSelected(false);
+                  ref.current?.focus();
+                }}
+                className="flex h-6.5 shrink-0 items-center gap-1 rounded-md bg-yellow-300/12 px-1.5 text-[11px] text-yellow-200/90 hover:bg-yellow-300/18"
+              >
+                <AiIdea className="size-3.5" />
+                Plan
+                <X className="size-3" />
+              </button>
+            ) : null}
             <div
               className="composer-toolbar flex min-w-0 flex-1 items-center"
               onWheel={(e) => {

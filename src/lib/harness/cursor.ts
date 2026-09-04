@@ -1,10 +1,7 @@
 import { nativeModelId } from "../models";
 import type { RuntimeMode } from "../session";
 import { promptBlocks } from "../attachments";
-import {
-  isTaskListToolName,
-  taskListFromToolInput,
-} from "../taskList";
+import { isTaskListToolName, taskListFromToolInput } from "../taskList";
 import { AcpClient, type AcpHandlers } from "./acp";
 import {
   killChild,
@@ -18,7 +15,12 @@ import {
   type StoredCursorToolCall,
 } from "./cursorStore";
 import { stopCursorTitleGeneration } from "./cursorTitle";
-import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
+import type {
+  ApprovalDecision,
+  HarnessEvent,
+  SendTurnInput,
+  SteerTurnInput,
+} from "./types";
 import {
   CUSTOM_OPTION_ID,
   questionPromptTitle,
@@ -64,6 +66,7 @@ type Live = {
   muteUpdates: boolean;
   cancelled: boolean;
   runtimeMode: RuntimeMode;
+  planning: boolean;
   onEvent: (event: HarnessEvent) => void;
   approvals: Map<number, (decision: ApprovalDecision) => void>;
   questions: Map<number, (reply: UserQuestionReply) => void>;
@@ -106,19 +109,22 @@ export async function sendCursorTurn(input: SendTurnInput): Promise<void> {
 
   live.onEvent = input.onEvent;
   live.runtimeMode = input.runtimeMode;
-  live.turns = live.turns.catch(() => undefined).then(async () => {
-    live.cancelled = false;
-    live.muteUpdates = false;
-    scheduleCursorToolEnrichment(live, 0);
-    try {
-      await applyModelSelection(live, input);
-      if (live.cancelled) return;
-      await prompt(live, input);
-    } catch (error) {
-      if (live.cancelled) return;
-      throw error;
-    }
-  });
+  live.planning = input.intent === "plan";
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      scheduleCursorToolEnrichment(live, 0);
+      try {
+        await applyModelSelection(live, input);
+        if (live.cancelled) return;
+        await prompt(live, input);
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
   await live.turns;
 }
 
@@ -226,6 +232,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
   if (existing && existing.cwd === input.cwd) {
     existing.onEvent = input.onEvent;
     existing.runtimeMode = input.runtimeMode;
+    existing.planning = input.intent === "plan";
     return existing;
   }
   if (existing) {
@@ -320,6 +327,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       muteUpdates: didLoad,
       cancelled: false,
       runtimeMode: input.runtimeMode,
+      planning: input.intent === "plan",
       onEvent: input.onEvent,
       approvals: new Map(),
       questions: new Map(),
@@ -483,7 +491,7 @@ function isCursorTodoUpdate(method: string): boolean {
 function emitCursorTodoUpdate(live: Live, params: unknown): void {
   const rec = asRecord(params);
   const callId = rec
-    ? stringField(rec, "toolCallId") ?? stringField(rec, "tool_call_id")
+    ? (stringField(rec, "toolCallId") ?? stringField(rec, "tool_call_id"))
     : undefined;
   if (callId) {
     live.taskListTools.add(callId);
@@ -530,11 +538,7 @@ function handleCursorTask(live: Live, params: unknown): void {
   });
 }
 
-async function handleAskQuestion(
-  live: Live,
-  id: number,
-  params: unknown,
-) {
+async function handleAskQuestion(live: Live, id: number, params: unknown) {
   const rec = asRecord(params);
   const questions = questionsFromUnknown(params);
   const title =
@@ -607,15 +611,13 @@ async function handlePermission(live: Live, id: number, params: unknown) {
   const title =
     composeToolTitle({
       kind,
-      title: toolLabel(tool, subject ?? tool) ?? command ?? stringField(rec ?? {}, "title"),
+      title:
+        toolLabel(tool, subject ?? tool) ??
+        command ??
+        stringField(rec ?? {}, "title"),
       command:
         command ??
-        extractShellCommand(
-          tool.rawInput,
-          tool.raw_input,
-          tool.input,
-          subject,
-        ),
+        extractShellCommand(tool.rawInput, tool.raw_input, tool.input, subject),
       skill: extractSkillName(
         tool.rawInput,
         tool.raw_input,
@@ -656,6 +658,21 @@ async function handlePermission(live: Live, id: number, params: unknown) {
     .map((item) => asRecord(item)?.optionId)
     .filter((value): value is string => typeof value === "string");
 
+  if (live.planning) {
+    const normalized = (preview?.kind ?? kind ?? "").toLowerCase();
+    const readOnly = normalized === "read" || normalized === "search";
+    const optionId = readOnly
+      ? pickOption(optionIds, ["allow-once", "allow_once", "allow"])
+      : pickOption(optionIds, ["reject-once", "reject_once", "reject-always"]);
+    await live.acp.respond(id, {
+      outcome: {
+        outcome: "selected",
+        optionId: optionId ?? (readOnly ? "allow-once" : "reject-once"),
+      },
+    });
+    return;
+  }
+
   const auto = pickAutoOption(live.runtimeMode, kind, optionIds);
   if (auto) {
     await live.acp.respond(id, {
@@ -681,13 +698,19 @@ async function handlePermission(live: Live, id: number, params: unknown) {
 
   const optionId =
     decision === "allow"
-      ? pickOption(optionIds, ["allow-once", "allow_once", "allow-always", "allow_always"])
+      ? pickOption(optionIds, [
+          "allow-once",
+          "allow_once",
+          "allow-always",
+          "allow_always",
+        ])
       : pickOption(optionIds, ["reject-once", "reject_once", "reject-always"]);
 
   await live.acp.respond(id, {
     outcome: {
       outcome: "selected",
-      optionId: optionId ?? (decision === "allow" ? "allow-once" : "reject-once"),
+      optionId:
+        optionId ?? (decision === "allow" ? "allow-once" : "reject-once"),
     },
   });
 }
@@ -717,8 +740,13 @@ function handleSessionUpdate(live: Live, params: unknown) {
     if (text) live.onEvent({ type: "reasoning.delta", text });
     return;
   }
-  if (kind === "tool_call" || kind === "tool_call_update" || kind === "tool_call_content_chunk") {
-    const tool = asRecord(update.toolCall) ?? asRecord(update.tool_call) ?? update;
+  if (
+    kind === "tool_call" ||
+    kind === "tool_call_update" ||
+    kind === "tool_call_content_chunk"
+  ) {
+    const tool =
+      asRecord(update.toolCall) ?? asRecord(update.tool_call) ?? update;
     const callId = String(
       tool.toolCallId ??
         tool.tool_call_id ??
@@ -901,7 +929,13 @@ function needsCursorToolEnrichment(
   preview: ReturnType<typeof extractToolPreview>,
 ): boolean {
   const key = (kind ?? "").toLowerCase();
-  if (key === "execute" || key === "think" || key === "fetch" || key === "skill") return false;
+  if (
+    key === "execute" ||
+    key === "think" ||
+    key === "fetch" ||
+    key === "skill"
+  )
+    return false;
   if (preview?.path || preview?.query) return false;
   if (key === "read" || key === "search" || key === "edit" || key === "write") {
     return true;
@@ -1071,13 +1105,26 @@ function pickAutoOption(
   if (optionIds.length === 0) return null;
   const tool = (kind ?? "").toLowerCase();
   if (runtimeMode === "supervised") return null;
-  if (runtimeMode === "auto-accept-edits" && (tool === "execute" || tool === "other")) {
+  if (
+    runtimeMode === "auto-accept-edits" &&
+    (tool === "execute" || tool === "other")
+  ) {
     return null;
   }
   if (runtimeMode === "full-access") {
-    return pickOption(optionIds, ["allow-always", "allow_always", "allow-once", "allow_once"]);
+    return pickOption(optionIds, [
+      "allow-always",
+      "allow_always",
+      "allow-once",
+      "allow_once",
+    ]);
   }
-  return pickOption(optionIds, ["allow-once", "allow_once", "allow-always", "allow_always"]);
+  return pickOption(optionIds, [
+    "allow-once",
+    "allow_once",
+    "allow-always",
+    "allow_always",
+  ]);
 }
 
 function pickOption(optionIds: string[], preferred: string[]): string | null {
@@ -1199,7 +1246,9 @@ function toolDetail(
   if (typeof output === "string" && output.trim()) return capToolDetail(output);
   const outputText = textFromContent(output);
   if (outputText.trim()) return capToolDetail(outputText);
-  return inputLabel(update.rawInput ?? tool.rawInput ?? update.input ?? tool.input);
+  return inputLabel(
+    update.rawInput ?? tool.rawInput ?? update.input ?? tool.input,
+  );
 }
 
 const MAX_TOOL_DETAIL_CHARS = 8_000;
@@ -1295,8 +1344,7 @@ function contentPath(content: unknown): string | undefined {
   for (const item of content) {
     const rec = asRecord(item);
     const path =
-      rec &&
-      (stringField(rec, "path") ?? contentPath(rec.content ?? rec.diff));
+      rec && (stringField(rec, "path") ?? contentPath(rec.content ?? rec.diff));
     if (path) return path;
   }
   return undefined;
@@ -1374,9 +1422,7 @@ function looksLikeCallId(value: string): boolean {
   const text = value.trim();
   return (
     /^(call[-_]?|tool[-_])[a-z0-9_-]+$/i.test(text) ||
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      text,
-    )
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)
   );
 }
 

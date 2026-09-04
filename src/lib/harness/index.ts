@@ -1,5 +1,11 @@
 export { startHarnessBridge, killAllChildren } from "./child";
-export { applyHarnessEvent, appendUser, appendSteerUser, stopStreaming } from "./apply";
+export {
+  applyHarnessEvent,
+  appendUser,
+  appendSteerUser,
+  promoteLastAssistantToPlan,
+  stopStreaming,
+} from "./apply";
 export {
   sendCursorTurn,
   cancelCursorTurn,

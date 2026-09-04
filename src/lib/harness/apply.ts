@@ -16,6 +16,7 @@ import {
 } from "./preview";
 import { joinStreamText } from "./streamText";
 import { taskListText } from "../taskList";
+import { isReviewablePlan } from "../plan";
 import type { HarnessEvent } from "./types";
 
 export function applyHarnessEvent(
@@ -87,11 +88,7 @@ export function applyHarnessEvent(
     case "tasks.updated":
       return upsertTaskList(session, event);
     case "plan":
-      return appendBlock(session, {
-        id: crypto.randomUUID(),
-        role: "plan",
-        text: event.text,
-      });
+      return upsertPlan(session, event);
     case "session.error":
       return appendBlock(stopStreaming(session), {
         id: crypto.randomUUID(),
@@ -105,6 +102,58 @@ export function applyHarnessEvent(
     default:
       return session;
   }
+}
+
+function upsertPlan(
+  session: Session,
+  event: Extract<HarnessEvent, { type: "plan" }>,
+): Session {
+  const key = event.key?.trim() || undefined;
+  const lastUser = lastMatchingBlock(
+    session.blocks,
+    (block) => block.role === "user",
+  );
+  const existing = lastMatchingBlock(session.blocks, (block, index) => {
+    if (block.role !== "plan") return false;
+    if (key) {
+      return block.plan?.key === key || (!block.plan?.key && index > lastUser);
+    }
+    return index > lastUser;
+  });
+  const streaming = event.streaming ?? false;
+
+  if (existing >= 0) {
+    const current = session.blocks[existing];
+    const text = event.append
+      ? joinStreamText(current.text, event.text)
+      : event.text || current.text;
+    const blocks = session.blocks.slice();
+    blocks[existing] = {
+      ...current,
+      text,
+      streaming,
+      plan: {
+        ...(current.plan ?? { status: streaming ? "streaming" : "ready" }),
+        ...(key ? { key } : {}),
+        status: streaming ? "streaming" : "ready",
+        ...(!streaming && text ? { originalText: text, edited: false } : {}),
+      },
+    };
+    return { ...session, blocks };
+  }
+
+  if (!event.text) return session;
+  return appendBlock(session, {
+    id: crypto.randomUUID(),
+    role: "plan",
+    text: event.text,
+    streaming,
+    plan: {
+      ...(key ? { key } : {}),
+      status: streaming ? "streaming" : "ready",
+      ...(!streaming ? { originalText: event.text } : {}),
+    },
+  });
 }
 
 function upsertTaskList(
@@ -281,20 +330,84 @@ export function stopStreaming(session: Session): Session {
     ...session,
     busy: false,
     pendingQuestion: undefined,
-    blocks: stampTurnDuration(
-      session.blocks.map(stopBlockProgress),
-    ),
+    blocks: stampTurnDuration(session.blocks.map(stopBlockProgress)),
   };
 }
 
+/**
+ * Harnesses without a structured plan event return their plan as the final
+ * assistant message. Convert only that final message after the turn has
+ * actually ended; progress commentary earlier in the turn must stay normal
+ * assistant text.
+ */
+export function promoteLastAssistantToPlan(
+  session: Session,
+  key?: string,
+): Session {
+  let lastUser = -1;
+  for (let index = session.blocks.length - 1; index >= 0; index -= 1) {
+    if (session.blocks[index].role === "user") {
+      lastUser = index;
+      break;
+    }
+  }
+
+  if (
+    session.blocks.some(
+      (block, index) => index > lastUser && block.role === "plan",
+    )
+  ) {
+    return session;
+  }
+
+  let assistant = -1;
+  for (let index = session.blocks.length - 1; index > lastUser; index -= 1) {
+    const block = session.blocks[index];
+    if (block.role === "assistant" && block.text.trim()) {
+      assistant = index;
+      break;
+    }
+  }
+  if (assistant < 0) return session;
+
+  const blocks = session.blocks.slice();
+  const block = blocks[assistant];
+  if (!isReviewablePlan(block.text)) return session;
+  blocks[assistant] = {
+    ...block,
+    role: "plan",
+    streaming: false,
+    plan: {
+      ...(key ? { key } : {}),
+      status: "ready",
+      originalText: block.text,
+      edited: false,
+    },
+  };
+  return { ...session, blocks };
+}
+
 function stopBlockProgress(block: Block): Block {
-  const stopped = block.streaming ? { ...block, streaming: false } : block;
+  let stopped = block.streaming ? { ...block, streaming: false } : block;
+  if (stopped.role === "plan" && stopped.plan?.status === "streaming") {
+    stopped = {
+      ...stopped,
+      plan: {
+        ...stopped.plan,
+        status: "ready",
+        originalText: stopped.text,
+        edited: false,
+      },
+    };
+  }
   const current = stopped.taskList;
   if (!current?.items.some((item) => item.status === "in_progress")) {
     return stopped;
   }
   const items = current.items.map((item) =>
-    item.status === "in_progress" ? { ...item, status: "pending" as const } : item,
+    item.status === "in_progress"
+      ? { ...item, status: "pending" as const }
+      : item,
   );
   return {
     ...stopped,

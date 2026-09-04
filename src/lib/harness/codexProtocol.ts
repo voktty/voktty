@@ -1,4 +1,9 @@
-import type { RuntimeMode, TaskListItem, ToolPreview } from "../session";
+import type {
+  RuntimeMode,
+  TaskListItem,
+  ToolPreview,
+  TurnIntent,
+} from "../session";
 import { normalizeTaskListStatus } from "../taskList";
 import {
   composeToolTitle,
@@ -99,8 +104,18 @@ export function buildTurnStartParams(input: {
   model?: string;
   effort?: string;
   serviceTier?: string;
+  intent?: TurnIntent;
 }): Record<string, unknown> {
-  const config = runtimeModeToCodexConfig(input.runtimeMode);
+  const runtimeConfig = runtimeModeToCodexConfig(input.runtimeMode);
+  const config: CodexThreadConfig =
+    input.intent === "plan"
+      ? {
+          approvalPolicy: "never",
+          sandbox: "read-only",
+          approvalsReviewer: "auto_review",
+          sandboxPolicy: { type: "readOnly" },
+        }
+      : runtimeConfig;
   const turnInput: Array<Record<string, unknown>> = [];
   if (input.prompt) {
     turnInput.push({ type: "text", text: input.prompt });
@@ -114,6 +129,14 @@ export function buildTurnStartParams(input: {
     approvalPolicy: config.approvalPolicy,
     approvalsReviewer: config.approvalsReviewer,
     sandboxPolicy: config.sandboxPolicy,
+    collaborationMode: {
+      mode: input.intent === "plan" ? "plan" : "default",
+      settings: {
+        model: input.model ?? null,
+        reasoning_effort: input.effort ?? null,
+        developer_instructions: null,
+      },
+    },
     ...(input.model ? { model: input.model } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
     ...(input.serviceTier && input.serviceTier !== "default"
@@ -164,10 +187,7 @@ function numberField(
 export type CodexApprovalKind = "command" | "file-change" | "permissions";
 
 export type CodexApprovalDecisionWire =
-  | "accept"
-  | "acceptForSession"
-  | "decline"
-  | "cancel";
+  "accept" | "acceptForSession" | "decline" | "cancel";
 
 export function toCodexApprovalDecision(
   decision: "allow" | "deny",
@@ -221,7 +241,17 @@ export function mapCodexNotification(
   if (method === "item/plan/delta") {
     const delta = streamTextDelta(rec.delta);
     if (!delta) return { events: [] };
-    return { events: [{ type: "plan", text: delta }] };
+    return {
+      events: [
+        {
+          type: "plan",
+          text: delta,
+          key: stringField(rec, "itemId"),
+          append: true,
+          streaming: true,
+        },
+      ],
+    };
   }
 
   if (method === "turn/plan/updated") {
@@ -456,7 +486,18 @@ function mapItemLifecycle(
 
   if (itemType === "plan") {
     const text = stringField(item, "text");
-    if (text) return { events: [{ type: "plan", text }] };
+    if (text) {
+      return {
+        events: [
+          {
+            type: "plan",
+            text,
+            key: stringField(item, "id"),
+            streaming: false,
+          },
+        ],
+      };
+    }
     return { events: [] };
   }
 
@@ -476,8 +517,7 @@ function mapToolItem(
     const command = stringField(item, "command") ?? "Shell";
     const status = mapItemStatus(stringField(item, "status"), completed);
     const output =
-      stringField(item, "aggregatedOutput") ??
-      stringField(item, "output");
+      stringField(item, "aggregatedOutput") ?? stringField(item, "output");
     const preview: ToolPreview | undefined = undefined;
     const eventType = completed ? "tool.updated" : "tool.started";
     if (eventType === "tool.started") {
@@ -719,10 +759,7 @@ function buildDiffPreview(
   );
 }
 
-function mapItemStatus(
-  status: string | undefined,
-  completed: boolean,
-): string {
+function mapItemStatus(status: string | undefined, completed: boolean): string {
   if (status === "completed" || status === "failed" || status === "declined") {
     return status === "declined" ? "failed" : status;
   }

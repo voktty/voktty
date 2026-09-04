@@ -20,16 +20,19 @@ import {
   type HarnessId,
   type RuntimeMode,
   type Session,
+  type TurnIntent,
 } from "../lib/session";
 import { AgentTranscript } from "./AgentTranscript";
 import { EmptySession } from "./EmptySession";
 import { MOD } from "../lib/platform";
-import { acknowledgeQuoteRequest, ADD_TO_CHAT_EVENT, type AddToChatRequest, type QuoteRequest } from "../lib/quoteDraft";
-import { createNote, noteTitle } from "../lib/notes";
 import {
-  loadNotesEnabled,
-  subscribeNotesEnabled,
-} from "../lib/settings";
+  acknowledgeQuoteRequest,
+  ADD_TO_CHAT_EVENT,
+  type AddToChatRequest,
+  type QuoteRequest,
+} from "../lib/quoteDraft";
+import { createNote, noteTitle } from "../lib/notes";
+import { loadNotesEnabled, subscribeNotesEnabled } from "../lib/settings";
 
 type Props = {
   session: Session;
@@ -54,6 +57,7 @@ type Props = {
     sessionId: string,
     text: string,
     attachments: Attachment[],
+    options?: { intent?: TurnIntent },
   ) => void;
   onStop: (sessionId: string) => void;
   onDeleteQueuedMessage: (sessionId: string, messageId: string) => void;
@@ -62,10 +66,7 @@ type Props = {
     messageId: string,
     text: string,
   ) => void;
-  onQueuedMessageEditingChange: (
-    sessionId: string,
-    messageId?: string,
-  ) => void;
+  onQueuedMessageEditingChange: (sessionId: string, messageId?: string) => void;
   onSteerQueuedMessage: (sessionId: string, messageId: string) => void;
   onResumeQueue: (sessionId: string) => void;
   onInboxCardDismiss?: (sessionId: string) => void;
@@ -87,6 +88,7 @@ type Props = {
     session?: { sessionId: string; cwd: string },
   ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
+  onBuildPlan: (sessionId: string, blockId: string) => void;
   onSecondOpinion?: (
     sessionId: string,
     harness: HarnessId,
@@ -134,6 +136,7 @@ export const SessionPane = memo(function SessionPane({
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
+  onBuildPlan,
   onSecondOpinion,
   onHandoff,
   onNewTerminal,
@@ -154,6 +157,10 @@ export const SessionPane = memo(function SessionPane({
     (blockId: string) => onOpenPlan(session.id, blockId),
     [onOpenPlan, session.id],
   );
+  const buildPlan = useCallback(
+    (blockId: string) => onBuildPlan(session.id, blockId),
+    [onBuildPlan, session.id],
+  );
   const jumpToBottomRef = useRef<(() => void) | null>(null);
   const quoteRequestId = useRef(0);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
@@ -161,10 +168,13 @@ export const SessionPane = memo(function SessionPane({
   const onJumpToBottomReady = useCallback((jump: () => void) => {
     jumpToBottomRef.current = jump;
   }, []);
-  const addSelectionToChat = useCallback((text: string, mode?: QuoteRequest["mode"]) => {
-    quoteRequestId.current += 1;
-    setQuoteRequest({ id: quoteRequestId.current, text, mode });
-  }, []);
+  const addSelectionToChat = useCallback(
+    (text: string, mode?: QuoteRequest["mode"]) => {
+      quoteRequestId.current += 1;
+      setQuoteRequest({ id: quoteRequestId.current, text, mode });
+    },
+    [],
+  );
   const acknowledgeQuote = useCallback((handledId: number) => {
     setQuoteRequest((current) => acknowledgeQuoteRequest(current, handledId));
   }, []);
@@ -244,7 +254,9 @@ export const SessionPane = memo(function SessionPane({
         onModelSettingsChange(session.id, settings)
       }
       onRuntimeModeChange={(mode) => onRuntimeModeChange(session.id, mode)}
-      onSubmit={(text, attachments) => onSubmit(session.id, text, attachments)}
+      onSubmit={(text, attachments, options) =>
+        onSubmit(session.id, text, attachments, options)
+      }
       onStop={() => onStop(session.id)}
       queuedMessages={session.queuedMessages}
       queueStatus={session.queueStatus}
@@ -350,6 +362,7 @@ export const SessionPane = memo(function SessionPane({
               onOpenFile={onOpenFile}
               onOpenDiff={onOpenDiff}
               onOpenPlan={openPlan}
+              onBuildPlan={buildPlan}
               onSecondOpinion={
                 onSecondOpinion
                   ? (harness, turn, model) =>

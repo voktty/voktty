@@ -3,6 +3,7 @@ import type {
   RuntimeMode,
   TaskListItem,
   ToolPreview,
+  TurnIntent,
 } from "../session";
 import type { UserQuestion } from "../userQuestion";
 
@@ -71,7 +72,16 @@ export type HarnessEvent =
       merge?: boolean;
       items: TaskListItem[];
     }
-  | { type: "plan"; text: string }
+  | {
+      type: "plan";
+      text: string;
+      /** Merge identity for deltas and the authoritative completed item. */
+      key?: string;
+      /** Append a stream delta instead of replacing the current snapshot. */
+      append?: boolean;
+      /** False marks the plan ready for review. */
+      streaming?: boolean;
+    }
   /** Context-window level after the harness's latest request. */
   | { type: "context"; used?: number; window?: number };
 
@@ -83,6 +93,7 @@ export type SendTurnInput = {
   model: string;
   modelSettings?: Record<string, string>;
   runtimeMode: RuntimeMode;
+  intent?: TurnIntent;
   text: string;
   attachments?: Attachment[];
   onEvent: (event: HarnessEvent) => void;

@@ -52,6 +52,22 @@ export type TaskListMeta = {
   items: TaskListItem[];
 };
 
+/** One-shot behavior selected in the composer for the next harness turn. */
+export type TurnIntent = "default" | "plan" | "build";
+
+export type PlanStatus = "streaming" | "ready" | "building" | "built";
+
+export type PlanBlockMeta = {
+  /** Provider or turn identity used to merge streamed snapshots. */
+  key?: string;
+  status: PlanStatus;
+  /** Provider-authored plan before any user edits. */
+  originalText?: string;
+  /** Exact markdown the user approved with Build. */
+  approvedText?: string;
+  edited?: boolean;
+};
+
 export type HandoffStatus = "preparing" | "ready";
 
 export type HandoffMeta = {
@@ -117,6 +133,7 @@ export type QueuedMessage = {
   attachments: Attachment[];
   noteCard?: NoteComposerCard;
   handoffCard?: HandoffComposerCard;
+  intent?: TurnIntent;
 };
 
 export type MessageQueueStatus = "active" | "paused" | "resuming";
@@ -144,6 +161,7 @@ export type Block = {
     decided?: "allow" | "deny" | "cancelled";
   };
   taskList?: TaskListMeta;
+  plan?: PlanBlockMeta;
   handoff?: HandoffMeta;
   secondOpinion?: SecondOpinionMeta;
   /** Note chip shown on this user turn. Body is not stored; the harness already received it. */

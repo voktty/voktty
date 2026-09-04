@@ -67,6 +67,16 @@ describe("grok protocol", () => {
     expect(grokTextSpawnArgs()[0]).toBe("--no-auto-update");
     expect(grokTextSpawnArgs().at(-1)).toBe("stdio");
     expect(grokTextSpawnArgs()).toContain("dontAsk");
+    expect(grokSpawnArgs({ model: "grok:grok-4.6", plan: true })).toEqual([
+      "--no-auto-update",
+      "--permission-mode",
+      "plan",
+      "agent",
+      "--no-leader",
+      "--model",
+      "grok-4.6",
+      "stdio",
+    ]);
   });
 
   it("sets yoloMode only for full access", () => {
@@ -113,7 +123,9 @@ describe("grok protocol", () => {
       "allow-once",
     );
     expect(pickAutoOption("auto-accept-edits", "execute", options)).toBeNull();
-    expect(pickAutoOption("full-access", "execute", options)).toBe("allow-once");
+    expect(pickAutoOption("full-access", "execute", options)).toBe(
+      "allow-once",
+    );
   });
 
   it("picks allow/reject option ids from ACP permission options", () => {

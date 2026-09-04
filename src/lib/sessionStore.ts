@@ -11,6 +11,7 @@ import type {
   SecondOpinionMeta,
   Session,
   TaskListMeta,
+  PlanBlockMeta,
 } from "./session";
 import { HARNESSES, RUNTIME_MODES } from "./session";
 
@@ -322,6 +323,11 @@ function sanitizeBlock(block: Block): Block | null {
   const taskList = sanitizeTaskList(block.taskList);
   if (taskList) next.taskList = taskList;
   else if (block.role === "tasks") return null;
+  const plan = sanitizePlan(block.plan, block.text);
+  if (plan) next.plan = plan;
+  else if (block.role === "plan") {
+    next.plan = { status: "ready", originalText: block.text };
+  }
   const handoff = sanitizeHandoff(block.handoff);
   if (handoff) next.handoff = handoff;
   else if (block.role === "handoff") return null;
@@ -330,6 +336,33 @@ function sanitizeBlock(block: Block): Block | null {
   const noteCard = sanitizeNoteCard(block.noteCard);
   if (noteCard) next.noteCard = noteCard;
   return next;
+}
+
+function sanitizePlan(value: unknown, text: string): PlanBlockMeta | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const status = record.status;
+  if (
+    status !== "streaming" &&
+    status !== "ready" &&
+    status !== "building" &&
+    status !== "built"
+  ) {
+    return null;
+  }
+  const key = typeof record.key === "string" ? record.key.trim() : "";
+  const originalText =
+    typeof record.originalText === "string" ? record.originalText : text;
+  const approvedText =
+    typeof record.approvedText === "string" ? record.approvedText : "";
+  return {
+    ...(key ? { key } : {}),
+    // A restarted app cannot still be executing this approval.
+    status: status === "streaming" || status === "building" ? "ready" : status,
+    ...(originalText ? { originalText } : {}),
+    ...(approvedText ? { approvedText } : {}),
+    ...(record.edited === true ? { edited: true } : {}),
+  };
 }
 
 function sanitizeTaskList(value: unknown): TaskListMeta | null {

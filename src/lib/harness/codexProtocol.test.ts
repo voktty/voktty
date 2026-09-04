@@ -81,6 +81,33 @@ describe("buildThreadStartParams / buildTurnStartParams", () => {
       { type: "image", url: "data:image/png;base64,abc" },
     ]);
     expect(turn.sandboxPolicy).toEqual({ type: "workspaceWrite" });
+    expect(turn.collaborationMode).toEqual({
+      mode: "default",
+      settings: {
+        model: "gpt-5.4",
+        reasoning_effort: "high",
+        developer_instructions: null,
+      },
+    });
+  });
+
+  it("uses native plan mode with a non-escalating read-only sandbox", () => {
+    const turn = buildTurnStartParams({
+      threadId: "thr_1",
+      runtimeMode: "full-access",
+      prompt: "plan this",
+      model: "gpt-5.4",
+      intent: "plan",
+    });
+    expect(turn).toMatchObject({
+      approvalPolicy: "never",
+      approvalsReviewer: "auto_review",
+      sandboxPolicy: { type: "readOnly" },
+      collaborationMode: {
+        mode: "plan",
+        settings: { developer_instructions: null },
+      },
+    });
   });
 
   it("builds steer input with expected turn id", () => {
@@ -102,9 +129,9 @@ describe("isRecoverableThreadResumeError", () => {
     expect(
       isRecoverableThreadResumeError(new Error("Thread thr_x not found")),
     ).toBe(true);
-    expect(
-      isRecoverableThreadResumeError(new Error("unknown thread id")),
-    ).toBe(true);
+    expect(isRecoverableThreadResumeError(new Error("unknown thread id"))).toBe(
+      true,
+    );
   });
 
   it("rejects unrelated errors", () => {
@@ -147,8 +174,19 @@ describe("mapCodexNotification", () => {
       },
     ]);
     expect(
-      mapCodexNotification("item/plan/delta", { delta: "# Approach" }).events,
-    ).toEqual([{ type: "plan", text: "# Approach" }]);
+      mapCodexNotification("item/plan/delta", {
+        itemId: "plan_1",
+        delta: "# Approach",
+      }).events,
+    ).toEqual([
+      {
+        type: "plan",
+        text: "# Approach",
+        key: "plan_1",
+        append: true,
+        streaming: true,
+      },
+    ]);
   });
 
   it("keeps whitespace-only agent message deltas", () => {
@@ -336,9 +374,7 @@ describe("mapCodexNotification", () => {
   });
 
   it("ignores unknown methods", () => {
-    expect(mapCodexNotification("future/unknown", { x: 1 }).events).toEqual(
-      [],
-    );
+    expect(mapCodexNotification("future/unknown", { x: 1 }).events).toEqual([]);
   });
 });
 
@@ -405,9 +441,9 @@ describe("parseCodexModelList", () => {
     const luna = models.find((m) => m.nativeId === "gpt-5.6-luna");
     expect(luna?.settings?.some((s) => s.id === "reasoningEffort")).toBe(true);
     expect(luna?.settings?.some((s) => s.id === "serviceTier")).toBe(true);
-    expect(
-      luna?.settings?.find((s) => s.id === "reasoningEffort")?.value,
-    ).toBe("medium");
+    expect(luna?.settings?.find((s) => s.id === "reasoningEffort")?.value).toBe(
+      "medium",
+    );
   });
 });
 

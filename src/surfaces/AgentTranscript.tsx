@@ -103,6 +103,7 @@ type Props = {
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
+  onBuildPlan?: (blockId: string) => void;
   onSecondOpinion?: (harness: HarnessId, turn: Block[], model: string) => void;
   onHandoff?: (harness: HarnessId, turn: Block[], model: string) => void;
   onJumpToBottomChange?: (show: boolean) => void;
@@ -124,6 +125,7 @@ export function AgentTranscript({
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
+  onBuildPlan,
   onSecondOpinion,
   onHandoff,
   onJumpToBottomChange,
@@ -355,10 +357,7 @@ export function AgentTranscript({
               {items.map((item, itemIndex) =>
                 item.type === "activity" ? (
                   itemIndex === initialThinkingAt ? (
-                    <InitialThinking
-                      key={item.blocks[0].id}
-                      live={!settled}
-                    />
+                    <InitialThinking key={item.blocks[0].id} live={!settled} />
                   ) : (
                     <ActivityPhases
                       key={item.blocks[0].id}
@@ -389,6 +388,8 @@ export function AgentTranscript({
                     onOpenFile={onOpenFile}
                     onOpenDiff={onOpenDiff}
                     onOpenPlan={onOpenPlan}
+                    onBuildPlan={onBuildPlan}
+                    planBusy={!!busy}
                     cwd={cwd}
                   />
                 ),
@@ -689,6 +690,8 @@ const TranscriptBlock = memo(function TranscriptBlock({
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
+  onBuildPlan,
+  planBusy,
 }: {
   block: Block;
   layout: TranscriptLayout;
@@ -699,6 +702,8 @@ const TranscriptBlock = memo(function TranscriptBlock({
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
+  onBuildPlan?: (blockId: string) => void;
+  planBusy?: boolean;
 }) {
   if (block.role === "user") {
     return (
@@ -752,7 +757,10 @@ const TranscriptBlock = memo(function TranscriptBlock({
         <PlanPreview
           text={block.text}
           streaming={block.streaming}
+          busy={planBusy}
+          plan={block.plan}
           onOpen={onOpenPlan ? () => onOpenPlan(block.id) : undefined}
+          onBuild={onBuildPlan ? () => onBuildPlan(block.id) : undefined}
         />
       </div>
     );

@@ -7,10 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { setGrabbing, suppressTextSelection } from "../lib/drag";
-import {
-  paneDropFromPoint,
-  useExternalPaneDrop,
-} from "../lib/paneDrop";
+import { paneDropFromPoint, useExternalPaneDrop } from "../lib/paneDrop";
 import type { ApprovalDecision, UserQuestionReply } from "../lib/harness";
 import type { EditorNavigationTarget } from "../lib/search";
 import {
@@ -31,6 +28,7 @@ import {
   type HarnessId,
   type RuntimeMode,
   type Session,
+  type TurnIntent,
 } from "../lib/session";
 import { FilePane } from "./FilePane";
 import { SessionPane } from "./SessionPane";
@@ -65,6 +63,7 @@ type Shared = {
     sessionId: string,
     text: string,
     attachments: Attachment[],
+    options?: { intent?: TurnIntent },
   ) => void;
   onStop: (sessionId: string) => void;
   onDeleteQueuedMessage: (sessionId: string, messageId: string) => void;
@@ -73,10 +72,7 @@ type Shared = {
     messageId: string,
     text: string,
   ) => void;
-  onQueuedMessageEditingChange: (
-    sessionId: string,
-    messageId?: string,
-  ) => void;
+  onQueuedMessageEditingChange: (sessionId: string, messageId?: string) => void;
   onSteerQueuedMessage: (sessionId: string, messageId: string) => void;
   onResumeQueue: (sessionId: string) => void;
   onInboxCardDismiss?: (sessionId: string) => void;
@@ -99,6 +95,8 @@ type Shared = {
     session?: { sessionId: string; cwd: string },
   ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
+  onUpdatePlan: (sessionId: string, blockId: string, text: string) => void;
+  onBuildPlan: (sessionId: string, blockId: string) => void;
   onSecondOpinion?: (
     sessionId: string,
     harness: HarnessId,
@@ -166,6 +164,8 @@ function PaneTreeComponent({
   editorNavigation,
   onOpenDiff,
   onOpenPlan,
+  onUpdatePlan,
+  onBuildPlan,
   onSecondOpinion,
   onHandoff,
   onMovePane,
@@ -320,6 +320,8 @@ function PaneTreeComponent({
                 onDirtyChange={onFileDirtyChange}
                 onErrorCountChange={onFileErrorCountChange}
                 onOpenFile={onOpenFile}
+                onUpdatePlan={onUpdatePlan}
+                onBuildPlan={onBuildPlan}
                 editorNavigation={editorNavigation}
                 onPaneDragStart={onPaneDragStart}
                 onTerminalMetaChange={onTerminalMetaChange}
@@ -364,6 +366,7 @@ function PaneTreeComponent({
                 onOpenFile={onOpenFile}
                 onOpenDiff={onOpenDiff}
                 onOpenPlan={onOpenPlan}
+                onBuildPlan={onBuildPlan}
                 onSecondOpinion={onSecondOpinion}
                 onHandoff={onHandoff}
                 onNewTerminal={onNewTerminal}

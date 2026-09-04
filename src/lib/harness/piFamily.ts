@@ -45,7 +45,12 @@ import {
   turnErrorFromEvent,
   type PiExtensionUiRequest,
 } from "./piProtocol";
-import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
+import type {
+  ApprovalDecision,
+  HarnessEvent,
+  SendTurnInput,
+  SteerTurnInput,
+} from "./types";
 
 type PendingApproval = {
   request: PiExtensionUiRequest;
@@ -67,6 +72,7 @@ type Live = {
   contextWindow?: number;
   nativeModel: string;
   thinking: string;
+  planning: boolean;
   onEvent: (event: HarnessEvent) => void;
   approvals: Map<number, PendingApproval>;
   nextApprovalUiId: number;
@@ -152,16 +158,18 @@ export async function sendTurn(
   if (cancelledThreads.delete(input.sessionId)) return;
 
   live.onEvent = input.onEvent;
-  live.turns = live.turns.catch(() => undefined).then(async () => {
-    live.cancelled = false;
-    live.muteUpdates = false;
-    try {
-      await runTurn(live, input);
-    } catch (error) {
-      if (live.cancelled) return;
-      throw error;
-    }
-  });
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      try {
+        await runTurn(live, input);
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
   await live.turns;
 }
 
@@ -262,13 +270,18 @@ async function ensureLive(
 ): Promise<Live> {
   const { liveByThread, resumeByThread } = stateFor(flavor);
   const existing = liveByThread.get(input.sessionId);
-  if (existing && existing.cwd === input.cwd) {
+  const wantPlanning = input.intent === "plan";
+  if (
+    existing &&
+    existing.cwd === input.cwd &&
+    existing.planning === wantPlanning
+  ) {
     existing.onEvent = input.onEvent;
     await applyModel(existing, input);
     return existing;
   }
   if (existing) {
-    resumeByThread.delete(input.sessionId);
+    if (existing.cwd !== input.cwd) resumeByThread.delete(input.sessionId);
     await stopSession(flavor, input.sessionId);
   }
 
@@ -304,11 +317,15 @@ async function startLive(
   const modelRef = parsePiModelRef(native);
   const liveRef: { current: Live | null } = { current: null };
 
-  const rpc = new PiRpc(input.sessionId, (rec) => {
-    const current = liveRef.current;
-    if (!current) return;
-    handleFrame(flavor, input.sessionId, current, rec);
-  }, flavor.label);
+  const rpc = new PiRpc(
+    input.sessionId,
+    (rec) => {
+      const current = liveRef.current;
+      if (!current) return;
+      handleFrame(flavor, input.sessionId, current, rec);
+    },
+    flavor.label,
+  );
 
   const live: Live = {
     rpc,
@@ -316,6 +333,7 @@ async function startLive(
     providerSessionId: resume ?? "",
     nativeModel: native,
     thinking: input.modelSettings?.thinking ?? "",
+    planning: input.intent === "plan",
     onEvent: input.onEvent,
     approvals: new Map(),
     nextApprovalUiId: 1,
@@ -363,6 +381,7 @@ async function startLive(
     buildPiSpawnArgs(flavor, {
       resume,
       model: modelRef ? native : undefined,
+      plan: input.intent === "plan",
     }),
     input.cwd,
   );
@@ -637,9 +656,10 @@ async function applyModel(live: Live, input: SendTurnInput): Promise<void> {
     });
     live.nativeModel = native;
     const model = asRecord(result.data);
-    const window = model && typeof model.contextWindow === "number"
-      ? model.contextWindow
-      : undefined;
+    const window =
+      model && typeof model.contextWindow === "number"
+        ? model.contextWindow
+        : undefined;
     if (window && window > 0) live.contextWindow = window;
   } else if (ref) {
     live.nativeModel = native;

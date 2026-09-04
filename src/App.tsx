@@ -2,7 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, message } from "@tauri-apps/plugin-dialog";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Sidebar } from "./chrome/Sidebar";
 import { ApprovalToasts } from "./chrome/ApprovalToasts";
 import { WhatsNewDialog } from "./chrome/WhatsNewDialog";
@@ -20,7 +28,13 @@ import {
 import { IS_MAC } from "./lib/platform";
 import { runUpdateFlow } from "./lib/updater";
 import { displayAttachments, prepareAttachments } from "./lib/attachments";
-import { basename, notifyGitChanged, pickFolder, restoreSessionCheckout, type GitHistoryCommit } from "./lib/fs";
+import {
+  basename,
+  notifyGitChanged,
+  pickFolder,
+  restoreSessionCheckout,
+  type GitHistoryCommit,
+} from "./lib/fs";
 import {
   invalidateProjectFiles,
   prefetchProjectFiles,
@@ -66,10 +80,7 @@ import {
   type SplitDir,
   type WorkspaceTab,
 } from "./lib/layout";
-import {
-  releaseNotesForVersion,
-  releaseNotesTitle,
-} from "./lib/releaseNotes";
+import { releaseNotesForVersion, releaseNotesTitle } from "./lib/releaseNotes";
 import { mergeOrderedSubset, orderByIds } from "./lib/reorder";
 import {
   addTerminalToDock,
@@ -94,9 +105,7 @@ import {
   removeTabFromGroup,
   tabGroupProject,
 } from "./lib/tabGroups";
-import {
-  type WindowTransferPayload,
-} from "./lib/windowTransfer";
+import { type WindowTransferPayload } from "./lib/windowTransfer";
 import {
   confirmCloseTerminal,
   confirmCloseTerminals,
@@ -119,6 +128,7 @@ import {
   probeHarnessAvailability,
   refreshHarnessCatalogs,
   registerBuiltinHarnesses,
+  promoteLastAssistantToPlan,
   respondHarnessApproval,
   respondHarnessQuestion,
   sendHarnessTurn,
@@ -168,7 +178,12 @@ import {
   resolveModel,
   saveLastModelSettings,
 } from "./lib/models";
-import { planTitle } from "./lib/plan";
+import {
+  buildPlanPrompt,
+  isProviderFailureText,
+  planTitle,
+  planTurnPrompt,
+} from "./lib/plan";
 import {
   displayPath,
   isEqualOrInside,
@@ -209,9 +224,12 @@ import {
   type Block,
   type HarnessId,
   type RuntimeMode,
+  type PlanStatus,
   type SecondOpinionMeta,
   type Session,
+  type TurnIntent,
 } from "./lib/session";
+
 import {
   canDispatchQueuedHead,
   dequeueQueuedMessage,
@@ -277,10 +295,7 @@ import { SettingsView } from "./surfaces/SettingsView";
 import { InboxView } from "./surfaces/InboxView";
 import { NotesView } from "./surfaces/NotesView";
 import { inboxComposerCard, type InboxItem } from "./lib/githubTasks";
-import {
-  linearIssueDetails,
-  peekLinearIssueDetails,
-} from "./lib/linear";
+import { linearIssueDetails, peekLinearIssueDetails } from "./lib/linear";
 import {
   loadLiveAgentsEnabled,
   loadNotesEnabled,
@@ -329,6 +344,33 @@ import {
   setQuitWorkspace,
   type ResumedWorkspace,
 } from "./lib/appLifecycle";
+
+function withPlanStatus(
+  session: Session,
+  blockId: string,
+  status: PlanStatus,
+): Session {
+  return {
+    ...session,
+    blocks: session.blocks.map((block) =>
+      block.id === blockId && block.role === "plan"
+        ? {
+            ...block,
+            plan: { ...(block.plan ?? { status: "ready" }), status },
+          }
+        : block,
+    ),
+  };
+}
+
+function lastAssistantTextInTurn(session: Session): string {
+  for (let index = session.blocks.length - 1; index >= 0; index -= 1) {
+    const block = session.blocks[index];
+    if (block.role === "user") return "";
+    if (block.role === "assistant" && block.text.trim()) return block.text;
+  }
+  return "";
+}
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
@@ -462,11 +504,8 @@ export default function App({
   const [tabs, setTabs] = useState<WorkspaceTab[]>(
     () => windowTransfer?.tabs ?? resumed?.tabs ?? [seed.tab],
   );
-  const [projectTerminals, setProjectTerminals] = useState<
-    ProjectTerminal[]
-  >(
-    () =>
-      windowTransfer?.projectTerminals ?? resumed?.projectTerminals ?? [],
+  const [projectTerminals, setProjectTerminals] = useState<ProjectTerminal[]>(
+    () => windowTransfer?.projectTerminals ?? resumed?.projectTerminals ?? [],
   );
   const [projectTerminalFocused, setProjectTerminalFocused] = useState(false);
   const [activeTabId, setActiveTabId] = useState(
@@ -528,9 +567,7 @@ export default function App({
   const [fileErrorCounts, setFileErrorCounts] = useState<Map<string, number>>(
     () => new Map(),
   );
-  const [history, setHistory] = useState<SessionSummary[]>(
-    () => bootHistory,
-  );
+  const [history, setHistory] = useState<SessionSummary[]>(() => bootHistory);
   /**
    * Projects whose rows are already in `history`. This has to be state, not a
    * ref: `sidebarCwd` is derived during render, so the frame that first shows
@@ -736,9 +773,7 @@ export default function App({
       (session) => activeTab && leafIds(activeTab.layout).includes(session.id),
     );
   const sessionDefaults = active ?? sessions[0];
-  const activeSkillContext = active
-    ? piSkillContextForSession(active)
-    : null;
+  const activeSkillContext = active ? piSkillContextForSession(active) : null;
   const activeSkillCwd = activeSkillContext?.cwd;
 
   useEffect(() => {
@@ -754,7 +789,8 @@ export default function App({
   sidebarCwdRef.current = sidebarCwd;
   const sidebarCwdKey =
     sidebarCwd && sidebarCwd !== "~" ? normalizeProjectPath(sidebarCwd) : null;
-  const historyFailed = sidebarCwdKey != null && historyErrorCwd === sidebarCwdKey;
+  const historyFailed =
+    sidebarCwdKey != null && historyErrorCwd === sidebarCwdKey;
   // True from the very first frame that shows a project we have never listed,
   // so the sidebar can stay blank instead of flashing "No sessions yet".
   const historyPending =
@@ -971,9 +1007,7 @@ export default function App({
         if (!summary) return;
         lastPersisted.current.set(session.id, fingerprint);
         if (summary.cwd === sidebarCwdRef.current) {
-          setHistory((current) =>
-            mergeProjectHistorySummary(current, summary),
-          );
+          setHistory((current) => mergeProjectHistorySummary(current, summary));
         }
       })
       .catch(() => undefined);
@@ -1075,7 +1109,14 @@ export default function App({
       void saveWorkspaceSnapshot(snapshot).catch(() => undefined);
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [tabs, sessions, activeTabId, projectCwd, projectTerminals, windowTransfer]);
+  }, [
+    tabs,
+    sessions,
+    activeTabId,
+    projectCwd,
+    projectTerminals,
+    windowTransfer,
+  ]);
 
   useEffect(() => {
     if (lastProjectPath()) return;
@@ -1230,10 +1271,7 @@ export default function App({
         setNotesViewOpen(false);
         setSidebarTab("sessions");
         const cwd =
-          item.projectPath ||
-          active?.cwd ||
-          sessionDefaults?.cwd ||
-          projectCwd;
+          item.projectPath || active?.cwd || sessionDefaults?.cwd || projectCwd;
         const ref =
           item.provider === "linear"
             ? item.identifier?.trim() || `#${item.number}`
@@ -1373,12 +1411,7 @@ export default function App({
       );
       setComposerFocused(true);
     },
-    [
-      activeTab,
-      projectCwd,
-      sessionDefaults?.cwd,
-      sessionDefaults?.runtimeMode,
-    ],
+    [activeTab, projectCwd, sessionDefaults?.cwd, sessionDefaults?.runtimeMode],
   );
 
   const focusProjectTerminal = useCallback(() => {
@@ -1395,9 +1428,7 @@ export default function App({
         const existing = findProjectTerminal(prev, projectPath);
         const file = newTerminalFile(
           workdir,
-          existing
-            ? nextDockTerminalTitle(existing, workdir)
-            : undefined,
+          existing ? nextDockTerminalTitle(existing, workdir) : undefined,
         );
         if (!existing) {
           return [...prev, createProjectTerminal(projectPath, file)];
@@ -1452,13 +1483,7 @@ export default function App({
       );
       setComposerFocused(false);
     },
-    [
-      active?.cwd,
-      activeTab,
-      appendTab,
-      openProjectTerminal,
-      projectCwd,
-    ],
+    [active?.cwd, activeTab, appendTab, openProjectTerminal, projectCwd],
   );
 
   const onNewTerminal = useCallback(() => {
@@ -1466,10 +1491,7 @@ export default function App({
   }, [active?.cwd, onOpenTerminal, projectCwd]);
 
   const onShowProjectTerminal = useCallback(() => {
-    const dock = findProjectTerminal(
-      projectTerminalsRef.current,
-      projectCwd,
-    );
+    const dock = findProjectTerminal(projectTerminalsRef.current, projectCwd);
     if (dock && dock.pane.files.length > 0) {
       if (!dock.open) {
         setProjectTerminals((prev) =>
@@ -1482,12 +1504,7 @@ export default function App({
       return;
     }
     onOpenTerminal(active?.cwd ?? projectCwd);
-  }, [
-    active?.cwd,
-    focusProjectTerminal,
-    onOpenTerminal,
-    projectCwd,
-  ]);
+  }, [active?.cwd, focusProjectTerminal, onOpenTerminal, projectCwd]);
 
   const onNewTerminalInSession = useCallback(
     (sessionId: string) => {
@@ -1505,10 +1522,7 @@ export default function App({
 
   const onToggleProjectTerminal = useCallback(() => {
     if (!looksLikeProject(projectCwd)) return;
-    const dock = findProjectTerminal(
-      projectTerminalsRef.current,
-      projectCwd,
-    );
+    const dock = findProjectTerminal(projectTerminalsRef.current, projectCwd);
     if (!dock) {
       openProjectTerminal(active?.cwd ?? projectCwd);
       return;
@@ -1521,12 +1535,7 @@ export default function App({
     );
     if (nextOpen) focusProjectTerminal();
     else setProjectTerminalFocused(false);
-  }, [
-    active?.cwd,
-    focusProjectTerminal,
-    openProjectTerminal,
-    projectCwd,
-  ]);
+  }, [active?.cwd, focusProjectTerminal, openProjectTerminal, projectCwd]);
 
   const onHideProjectTerminal = useCallback(() => {
     setProjectTerminals((prev) =>
@@ -1559,14 +1568,17 @@ export default function App({
     );
   }, []);
 
-  const onSelectProjectTerminal = useCallback((fileId: string) => {
-    setProjectTerminals((prev) =>
-      mapProjectTerminal(prev, projectCwdRef.current, (dock) =>
-        selectDockTerminal(dock, fileId),
-      ),
-    );
-    focusProjectTerminal();
-  }, [focusProjectTerminal]);
+  const onSelectProjectTerminal = useCallback(
+    (fileId: string) => {
+      setProjectTerminals((prev) =>
+        mapProjectTerminal(prev, projectCwdRef.current, (dock) =>
+          selectDockTerminal(dock, fileId),
+        ),
+      );
+      focusProjectTerminal();
+    },
+    [focusProjectTerminal],
+  );
 
   const onReorderProjectTerminals = useCallback((ids: string[]) => {
     setProjectTerminals((prev) =>
@@ -1595,9 +1607,7 @@ export default function App({
 
   const onTerminalMetaChange = useCallback(
     (fileId: string, patch: TerminalMetaPatch) => {
-      setProjectTerminals((prev) =>
-        patchProjectTerminals(prev, fileId, patch),
-      );
+      setProjectTerminals((prev) => patchProjectTerminals(prev, fileId, patch));
       setTabs((prev) =>
         prev.map((tab) => updateTerminalTab(tab, fileId, patch)),
       );
@@ -1737,10 +1747,7 @@ export default function App({
     const current = tabsRef.current;
     const activeId = activeTabIdRef.current;
     const closing = current.filter((tab) => tab.id !== activeId);
-    if (
-      !current.some((tab) => tab.id === activeId) ||
-      closing.length === 0
-    ) {
+    if (!current.some((tab) => tab.id === activeId) || closing.length === 0) {
       return;
     }
 
@@ -2375,11 +2382,15 @@ export default function App({
 
       const replaceTarget =
         !leafIds(tab.layout).includes(sessionId) &&
-        isBlankSession(sessionsRef.current.find((entry) => entry.id === targetId));
+        isBlankSession(
+          sessionsRef.current.find((entry) => entry.id === targetId),
+        );
 
       if (replaceTarget) {
         lastPersisted.current.delete(targetId);
-        const blank = sessionsRef.current.find((entry) => entry.id === targetId);
+        const blank = sessionsRef.current.find(
+          (entry) => entry.id === targetId,
+        );
         if (blank) void forgetHarnessSession(blank.harness, targetId);
       }
 
@@ -2635,7 +2646,16 @@ export default function App({
       setProjectCwd(normalized);
       setRecents(rememberProject(normalized));
       setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, cwd: normalized, branch: undefined, worktreeCwd: undefined } : s)),
+        prev.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                cwd: normalized,
+                branch: undefined,
+                worktreeCwd: undefined,
+              }
+            : s,
+        ),
       );
       // The session's project just moved in place; a group only holds tabs that
       // share one project, so drop this tab out if it no longer matches.
@@ -2674,9 +2694,7 @@ export default function App({
         worktreeCwd: undefined,
         ...(current.worktreeCwd ? { providerSessionId: undefined } : {}),
       };
-      setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? next : s)),
-      );
+      setSessions((prev) => prev.map((s) => (s.id === sessionId ? next : s)));
       persistSession(next);
       notifyReviewChanged(sessionId);
     },
@@ -3073,16 +3091,24 @@ export default function App({
         noteCard?: NoteComposerCard;
         handoffCard?: HandoffComposerCard;
         queuedMessageId?: string;
+        intent?: TurnIntent;
+        planBlockId?: string;
       },
     ) => {
       const current = sessionsRef.current.find((s) => s.id === sessionId);
       if (!current) return;
+      const intent = options?.intent ?? "default";
+      const approvedPlan = options?.planBlockId
+        ? current.blocks.find(
+            (block) =>
+              block.id === options.planBlockId && block.role === "plan",
+          )
+        : undefined;
+      if (intent === "build" && !approvedPlan?.text.trim()) return;
       if (options?.queuedMessageId) {
         const mode =
           options.followUpBehavior === "steer" ? "steer" : "dispatch";
-        if (
-          !queuedMessageForSubmit(current, options.queuedMessageId, mode)
-        ) {
+        if (!queuedMessageForSubmit(current, options.queuedMessageId, mode)) {
           return;
         }
       }
@@ -3102,7 +3128,8 @@ export default function App({
       }
       if (isPreparingHandoff(current)) return;
       const workCwd = sessionWorkCwd(current);
-      const harnessText = composeNoteMessage(noteCard, text);
+      const submittedText = intent === "build" ? "Build approved plan" : text;
+      const harnessText = composeNoteMessage(noteCard, submittedText);
 
       const pendingSwitch =
         current.pendingSwitch && current.pendingSwitch.from !== current.harness
@@ -3111,7 +3138,9 @@ export default function App({
 
       if (current.busy && !pendingSwitch) {
         const followUpBehavior =
-          options?.followUpBehavior ?? loadFollowUpBehavior();
+          intent === "plan"
+            ? "queue"
+            : (options?.followUpBehavior ?? loadFollowUpBehavior());
         if (followUpBehavior === "queue") {
           setSessions((prev) =>
             prev.map((s) =>
@@ -3129,6 +3158,7 @@ export default function App({
                         attachments,
                         noteCard,
                         handoffCard,
+                        intent,
                       },
                     ],
                     queueStatus:
@@ -3166,7 +3196,7 @@ export default function App({
             if (options?.queuedMessageId) {
               next = dequeueQueuedMessage(next, options.queuedMessageId);
             }
-            return appendSteerUser(next, text, visible, cards);
+            return appendSteerUser(next, submittedText, visible, cards);
           }),
         );
         void (async () => {
@@ -3209,15 +3239,22 @@ export default function App({
         HARNESS_LABEL[current.harness],
       );
       const titleSeed =
-        isFirstTurn && !current.inboxCard && !current.noteCard && placeholderTitle
-          ? titleFromPrompt(text, current.harness, attachments)
+        isFirstTurn &&
+        !current.inboxCard &&
+        !current.noteCard &&
+        placeholderTitle
+          ? titleFromPrompt(submittedText, current.harness, attachments)
           : current.title;
       const visible = displayAttachments(attachments);
       const card =
         options?.secondOpinion ??
         (handoffCard ? handoffTurnCard(handoffCard) : undefined);
       const visibleText =
-        card?.kind === "handoff" ? text : card ? SECOND_OPINION_TITLE : text;
+        card?.kind === "handoff"
+          ? submittedText
+          : card
+            ? SECOND_OPINION_TITLE
+            : submittedText;
       const cards = userTurnCards(noteCard, card);
       const live = isLiveHarness(current.harness);
       const queuedHandoff =
@@ -3237,6 +3274,23 @@ export default function App({
             noteCard: undefined,
             handoffCard: undefined,
           };
+          if (approvedPlan && intent === "build") {
+            next = {
+              ...next,
+              blocks: next.blocks.map((block) =>
+                block.id === approvedPlan.id
+                  ? {
+                      ...block,
+                      plan: {
+                        ...(block.plan ?? { status: "ready" as const }),
+                        status: "building" as const,
+                        approvedText: block.text,
+                      },
+                    }
+                  : block,
+              ),
+            };
+          }
           if (options?.queuedMessageId) {
             next = dequeueQueuedMessage(next, options.queuedMessageId);
           }
@@ -3289,7 +3343,8 @@ export default function App({
         void generateHarnessTitle(current.harness, {
           sessionId,
           cwd: workCwd,
-          message: harnessText || attachments.map((file) => file.name).join(", "),
+          message:
+            harnessText || attachments.map((file) => file.name).join(", "),
         })
           .then((title) => {
             if (!title) return;
@@ -3360,14 +3415,36 @@ export default function App({
           );
         };
 
+        const planEventKey = `turn:${gen}`;
+        let nativePlanSeen = false;
+        let providerFailureSeen = false;
+        const routePlanEvent = (event: HarnessEvent): HarnessEvent | null => {
+          if (event.type === "session.error") providerFailureSeen = true;
+          if (intent !== "plan") return event;
+          if (event.type === "plan") {
+            nativePlanSeen = true;
+            return {
+              ...event,
+              key: planEventKey,
+            };
+          }
+          return event;
+        };
+
         await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
         if (turnGen.current.get(sessionId) !== gen) return;
+        let buildSucceeded = false;
         try {
           const prepared = await prepareAttachments(attachments);
-          const prompt = await preparePrompt(harnessText, {
-            harness: current.harness,
-            cwd: workCwd,
-          });
+          const prompt =
+            intent === "build" && approvedPlan
+              ? buildPlanPrompt(approvedPlan.text)
+              : await preparePrompt(harnessText, {
+                  harness: current.harness,
+                  cwd: workCwd,
+                });
+          const turnPrompt =
+            intent === "plan" ? planTurnPrompt(prompt) : prompt;
           const earlier = queuedHandoff
             ? userMessagesAfterHandoff(current)
             : [];
@@ -3378,14 +3455,15 @@ export default function App({
             model: current.model,
             modelSettings: current.modelSettings,
             runtimeMode: current.runtimeMode,
+            intent,
             text: wrap
               ? wrapHandoffPrompt(
                   wrap.text,
                   wrap.from,
-                  prompt.trim() || CONTINUE_PROMPT,
+                  turnPrompt.trim() || CONTINUE_PROMPT,
                   earlier,
                 )
-              : prompt,
+              : turnPrompt,
             attachments: prepared,
             onEvent: (event) => {
               if (turnGen.current.get(sessionId) !== gen) return;
@@ -3398,7 +3476,8 @@ export default function App({
               }
               nudgeOpenEditors(event, workCwd);
               trackSessionEdits(sessionId, workCwd, event);
-              enqueueHarnessEvent(sessionId, event);
+              const routed = routePlanEvent(event);
+              if (routed) enqueueHarnessEvent(sessionId, routed);
             },
           });
           if (turnGen.current.get(sessionId) !== gen) return;
@@ -3413,6 +3492,7 @@ export default function App({
               }),
             );
           }
+          buildSucceeded = true;
         } catch (error: unknown) {
           if (turnGen.current.get(sessionId) !== gen) return;
           if (wrap) revealHandoff(wrap.text);
@@ -3429,7 +3509,24 @@ export default function App({
           flushHarnessEvents();
           await flushSessionCheckpoint(sessionId);
           setSessions((prev) =>
-            prev.map((s) => (s.id === sessionId ? stopStreaming(s) : s)),
+            prev.map((s) => {
+              if (s.id !== sessionId) return s;
+              const stopped = stopStreaming(s);
+              const providerFailed =
+                providerFailureSeen ||
+                isProviderFailureText(lastAssistantTextInTurn(stopped));
+              const finalized =
+                intent === "plan" && !nativePlanSeen && !providerFailed
+                  ? promoteLastAssistantToPlan(stopped, planEventKey)
+                  : stopped;
+              return approvedPlan && intent === "build"
+                ? withPlanStatus(
+                    finalized,
+                    approvedPlan.id,
+                    buildSucceeded && !providerFailed ? "built" : "ready",
+                  )
+                : finalized;
+            }),
           );
           playCue("turnFinished");
           notifyReviewChanged(sessionId);
@@ -3441,6 +3538,67 @@ export default function App({
       })();
     },
     [enqueueHarnessEvent, flushHarnessEvents],
+  );
+
+  const onUpdatePlan = useCallback(
+    (sessionId: string, blockId: string, text: string) => {
+      setSessions((prev) =>
+        prev.map((session) => {
+          if (session.id !== sessionId || session.busy) return session;
+          return {
+            ...session,
+            blocks: session.blocks.map((block) => {
+              if (
+                block.id !== blockId ||
+                block.role !== "plan" ||
+                block.plan?.status === "streaming" ||
+                block.plan?.status === "building" ||
+                block.plan?.status === "built"
+              ) {
+                return block;
+              }
+              const originalText = block.plan?.originalText ?? block.text;
+              return {
+                ...block,
+                text,
+                plan: {
+                  ...(block.plan ?? { status: "ready" as const }),
+                  status: "ready" as const,
+                  originalText,
+                  edited: text !== originalText,
+                },
+              };
+            }),
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const onBuildPlan = useCallback(
+    (sessionId: string, blockId: string) => {
+      const session = sessionsRef.current.find(
+        (entry) => entry.id === sessionId,
+      );
+      const block = session?.blocks.find((entry) => entry.id === blockId);
+      if (
+        !session ||
+        session.busy ||
+        block?.role !== "plan" ||
+        !block.text.trim() ||
+        block.plan?.status === "streaming" ||
+        block.plan?.status === "building" ||
+        block.plan?.status === "built"
+      ) {
+        return;
+      }
+      onSubmit(sessionId, "Build approved plan", [], {
+        intent: "build",
+        planBlockId: blockId,
+      });
+    },
+    [onSubmit],
   );
 
   useEffect(() => {
@@ -3490,6 +3648,7 @@ export default function App({
             queuedMessageId: head.id,
             noteCard: head.noteCard,
             handoffCard: head.handoffCard,
+            intent: head.intent,
           });
         }, 0),
       );
@@ -3592,7 +3751,12 @@ export default function App({
   );
 
   const openSessionBeside = useCallback(
-    (sourceId: string, session: Session, cwd: string, focusComposer = false) => {
+    (
+      sourceId: string,
+      session: Session,
+      cwd: string,
+      focusComposer = false,
+    ) => {
       const nextSessions = [...sessionsRef.current, session];
       sessionsRef.current = nextSessions;
       setSessions(nextSessions);
@@ -3849,8 +4013,7 @@ export default function App({
   // `history` now spans every visited project; consumers that expect the
   // current project only get this slice.
   const projectHistory = useMemo(
-    () =>
-      history.filter((entry) => sameProjectPath(entry.cwd, sidebarCwd)),
+    () => history.filter((entry) => sameProjectPath(entry.cwd, sidebarCwd)),
     [history, sidebarCwd],
   );
 
@@ -4151,7 +4314,12 @@ export default function App({
         else run(`activate-${cmd.activate}`, () => a.onActivate(cmd.activate));
         return;
       }
-      if (!searchViewOpenRef.current && !inboxViewOpenRef.current && !notesViewOpenRef.current && handleEditorFindKey(e)) {
+      if (
+        !searchViewOpenRef.current &&
+        !inboxViewOpenRef.current &&
+        !notesViewOpenRef.current &&
+        handleEditorFindKey(e)
+      ) {
         e.stopPropagation();
         return;
       }
@@ -4276,10 +4444,13 @@ export default function App({
     dockDragSize.current = size;
     applyDockGridStyle(el, dock.side, size);
   }, []);
-  const commitDockSize = useCallback((size: number) => {
-    dockDragSize.current = null;
-    onProjectTerminalSize(size);
-  }, [onProjectTerminalSize]);
+  const commitDockSize = useCallback(
+    (size: number) => {
+      dockDragSize.current = null;
+      onProjectTerminalSize(size);
+    },
+    [onProjectTerminalSize],
+  );
   useLayoutEffect(() => {
     if (dockDragSize.current != null) return;
     const el = dockGridRef.current;
@@ -4323,7 +4494,13 @@ export default function App({
         onOpenTerminal={(cwd) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
         onFileDeleted={onFileDeleted}
-        canGoBack={tabVisitNav.canBack || searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen}
+        canGoBack={
+          tabVisitNav.canBack ||
+          searchViewOpen ||
+          settingsOpen ||
+          inboxViewOpen ||
+          notesViewOpen
+        }
         canGoForward={tabVisitNav.canForward}
         onGoBack={onRailBack}
         onGoForward={onRailForward}
@@ -4375,173 +4552,183 @@ export default function App({
               ? "hidden"
               : "flex min-h-0 min-w-0 flex-1 flex-col"
           }
-          aria-hidden={searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen}
-          inert={searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen || undefined}
+          aria-hidden={
+            searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen
+          }
+          inert={
+            searchViewOpen ||
+            settingsOpen ||
+            inboxViewOpen ||
+            notesViewOpen ||
+            undefined
+          }
         >
-        {!IS_MAC ? (
-          <MenuBar
+          {!IS_MAC ? (
+            <MenuBar
+              onNew={onNew}
+              onNewTerminal={onNewTerminal}
+              onToggleTerminal={onToggleProjectTerminal}
+              onGoToFile={onGoToFile}
+              onToggleSidebar={onToggleSidebar}
+              onShowSourceControl={onToggleChanges}
+              onCloseCurrentTab={
+                activeTabId ? () => onCloseTab(activeTabId) : undefined
+              }
+              onCloseOtherTabs={onCloseOtherTabs}
+              onPickProject={pickProject}
+              onFindInProject={onFindInProject}
+              onSearch={onOpenSearch}
+              onOpenInbox={onOpenInbox}
+              onOpenNotes={notesEnabled ? onOpenNotes : undefined}
+            />
+          ) : null}
+          <TitleBar
+            tabs={titleTabs}
+            activeId={activeTabId}
+            cwd={sidebarCwd}
+            projectRailOpen={projectRailOpen}
+            onToggleSidebar={onToggleSidebar}
+            onSelect={activateTab}
             onNew={onNew}
             onNewTerminal={onNewTerminal}
-            onToggleTerminal={onToggleProjectTerminal}
-            onGoToFile={onGoToFile}
-            onToggleSidebar={onToggleSidebar}
-            onShowSourceControl={onToggleChanges}
-            onCloseCurrentTab={
-              activeTabId ? () => onCloseTab(activeTabId) : undefined
+            onShowTerminal={onShowProjectTerminal}
+            projectTerminalActive={
+              !!currentProjectDock && currentProjectDock.pane.files.length > 0
             }
-            onCloseOtherTabs={onCloseOtherTabs}
-            onPickProject={pickProject}
-            onFindInProject={onFindInProject}
-            onSearch={onOpenSearch}
+            onOpenSettings={onOpenSettings}
             onOpenInbox={onOpenInbox}
             onOpenNotes={notesEnabled ? onOpenNotes : undefined}
+            onClose={onCloseTab}
+            onReorder={onReorderTabs}
+            onGoToFile={onGoToFile}
+            recents={recents}
+            onSelectProject={onSelectProject}
           />
-        ) : null}
-        <TitleBar
-          tabs={titleTabs}
-          activeId={activeTabId}
-          cwd={sidebarCwd}
-          projectRailOpen={projectRailOpen}
-          onToggleSidebar={onToggleSidebar}
-          onSelect={activateTab}
-          onNew={onNew}
-          onNewTerminal={onNewTerminal}
-          onShowTerminal={onShowProjectTerminal}
-          projectTerminalActive={
-            !!currentProjectDock && currentProjectDock.pane.files.length > 0
-          }
-          onOpenSettings={onOpenSettings}
-          onOpenInbox={onOpenInbox}
-          onOpenNotes={notesEnabled ? onOpenNotes : undefined}
-          onClose={onCloseTab}
-          onReorder={onReorderTabs}
-          onGoToFile={onGoToFile}
-          recents={recents}
-          onSelectProject={onSelectProject}
-        />
 
-        <main className="relative min-h-0 min-w-0 flex-1">
-          <div
-            ref={dockGridRef}
-            className="absolute inset-0 grid h-full min-h-0 min-w-0"
-          >
-            {projectTerminals.map((dock) => {
-              const show =
-                dock.open && sameProjectPath(dock.projectPath, projectCwd);
-              return (
-                <div
-                  key={dock.projectPath}
-                  className={
-                    show
-                      ? "h-full min-h-0 min-w-0 w-full overflow-hidden"
-                      : "hidden"
-                  }
-                  style={show ? { gridArea: "dock" } : undefined}
-                  aria-hidden={!show}
-                >
-                  <ProjectTerminalDock
-                    dock={dock}
-                    focused={show && projectTerminalFocused}
-                    onFocus={focusProjectTerminal}
-                    onHide={onHideProjectTerminal}
-                    onSideChange={onProjectTerminalSide}
-                    onSizePaint={paintDockSize}
-                    onSizeCommit={commitDockSize}
-                    onAddTerminal={() =>
-                      onOpenTerminal(active?.cwd ?? projectCwd)
-                    }
-                    onSelectTerminal={onSelectProjectTerminal}
-                    onCloseTerminal={onCloseProjectTerminal}
-                    onReorderTerminals={onReorderProjectTerminals}
-                    onTerminalMetaChange={onTerminalMetaChange}
-                  />
-                </div>
-              );
-            })}
+          <main className="relative min-h-0 min-w-0 flex-1">
             <div
-              className="relative flex min-h-0 min-w-0 flex-row"
-              style={{ gridArea: "main" }}
+              ref={dockGridRef}
+              className="absolute inset-0 grid h-full min-h-0 min-w-0"
             >
-              <div className="relative min-h-0 min-w-0 flex-1">
-              {tabs.map((tab) => (
-                <div
-                  key={tab.id}
-                  aria-hidden={tab.id !== activeTabId}
-                  className={
-                    tab.id === activeTabId
-                      ? "absolute inset-0 flex h-full min-h-0 flex-col"
-                      : "hidden"
-                  }
-                >
-                  <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                    <PaneTree
-                      visible={tab.id === activeTabId}
-                      layout={tab.layout}
-                      sessions={sessions}
-                      editorPanes={[
-                        ...tab.editorPanes,
-                        ...(tab.terminalPanes ?? []),
-                      ]}
-                      dirtyFileIds={dirtyFiles}
-                      fileErrorCounts={fileErrorCounts}
-                      focusedId={
-                        tab.id === activeTabId &&
-                        !tab.diffFocused &&
-                        !projectTerminalFocused
-                          ? tab.focusedId
-                          : ""
+              {projectTerminals.map((dock) => {
+                const show =
+                  dock.open && sameProjectPath(dock.projectPath, projectCwd);
+                return (
+                  <div
+                    key={dock.projectPath}
+                    className={
+                      show
+                        ? "h-full min-h-0 min-w-0 w-full overflow-hidden"
+                        : "hidden"
+                    }
+                    style={show ? { gridArea: "dock" } : undefined}
+                    aria-hidden={!show}
+                  >
+                    <ProjectTerminalDock
+                      dock={dock}
+                      focused={show && projectTerminalFocused}
+                      onFocus={focusProjectTerminal}
+                      onHide={onHideProjectTerminal}
+                      onSideChange={onProjectTerminalSide}
+                      onSizePaint={paintDockSize}
+                      onSizeCommit={commitDockSize}
+                      onAddTerminal={() =>
+                        onOpenTerminal(active?.cwd ?? projectCwd)
                       }
-                      composerFocused={
-                        composerFocused && !projectTerminalFocused
-                      }
-                      recents={recents}
-                      hideProjectPicker
-                      onFocus={onFocusPane}
-                      onClose={onClosePane}
-                      onSelectFile={onSelectFileSurface}
-                      onCloseFile={onCloseFile}
-                      onReorderFiles={onReorderFiles}
-                      onFileDirtyChange={onFileDirtyChange}
-                      onFileErrorCountChange={onFileErrorCountChange}
-                      onRatio={(splitId, index, ratio) =>
-                        onRatio(tab.id, splitId, index, ratio)
-                      }
-                      onCwdChange={onCwdChange}
-                      onBranchChange={onBranchChange}
-                      onModelChange={onModelChange}
-                      onModelSettingsChange={onModelSettingsChange}
-                      onRuntimeModeChange={onRuntimeModeChange}
-                      onSubmit={onSubmit}
-                      onStop={onStop}
-                      onDeleteQueuedMessage={onDeleteQueuedMessage}
-                      onEditQueuedMessage={onEditQueuedMessage}
-                      onQueuedMessageEditingChange={
-                        onQueuedMessageEditingChange
-                      }
-                      onSteerQueuedMessage={onSteerQueuedMessage}
-                      onResumeQueue={onResumeQueue}
-                      onInboxCardDismiss={onInboxCardDismiss}
-                      onNoteCardDismiss={onNoteCardDismiss}
-                      onHandoffCardDismiss={onHandoffCardDismiss}
-                      onApproval={onApproval}
-                      onQuestionReply={onQuestionReply}
-                      onOpenFile={onOpenFile}
-                      editorNavigation={editorNavigation}
-                      onOpenDiff={onOpenDiff}
-                      onOpenPlan={onOpenPlan}
-                      onSecondOpinion={onSecondOpinion}
-                      onHandoff={onHandoff}
-                      onMovePane={onMovePane}
-                      onNewTerminal={onNewTerminalInSession}
+                      onSelectTerminal={onSelectProjectTerminal}
+                      onCloseTerminal={onCloseProjectTerminal}
+                      onReorderTerminals={onReorderProjectTerminals}
                       onTerminalMetaChange={onTerminalMetaChange}
                     />
                   </div>
+                );
+              })}
+              <div
+                className="relative flex min-h-0 min-w-0 flex-row"
+                style={{ gridArea: "main" }}
+              >
+                <div className="relative min-h-0 min-w-0 flex-1">
+                  {tabs.map((tab) => (
+                    <div
+                      key={tab.id}
+                      aria-hidden={tab.id !== activeTabId}
+                      className={
+                        tab.id === activeTabId
+                          ? "absolute inset-0 flex h-full min-h-0 flex-col"
+                          : "hidden"
+                      }
+                    >
+                      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                        <PaneTree
+                          visible={tab.id === activeTabId}
+                          layout={tab.layout}
+                          sessions={sessions}
+                          editorPanes={[
+                            ...tab.editorPanes,
+                            ...(tab.terminalPanes ?? []),
+                          ]}
+                          dirtyFileIds={dirtyFiles}
+                          fileErrorCounts={fileErrorCounts}
+                          focusedId={
+                            tab.id === activeTabId &&
+                            !tab.diffFocused &&
+                            !projectTerminalFocused
+                              ? tab.focusedId
+                              : ""
+                          }
+                          composerFocused={
+                            composerFocused && !projectTerminalFocused
+                          }
+                          recents={recents}
+                          hideProjectPicker
+                          onFocus={onFocusPane}
+                          onClose={onClosePane}
+                          onSelectFile={onSelectFileSurface}
+                          onCloseFile={onCloseFile}
+                          onReorderFiles={onReorderFiles}
+                          onFileDirtyChange={onFileDirtyChange}
+                          onFileErrorCountChange={onFileErrorCountChange}
+                          onRatio={(splitId, index, ratio) =>
+                            onRatio(tab.id, splitId, index, ratio)
+                          }
+                          onCwdChange={onCwdChange}
+                          onBranchChange={onBranchChange}
+                          onModelChange={onModelChange}
+                          onModelSettingsChange={onModelSettingsChange}
+                          onRuntimeModeChange={onRuntimeModeChange}
+                          onSubmit={onSubmit}
+                          onStop={onStop}
+                          onDeleteQueuedMessage={onDeleteQueuedMessage}
+                          onEditQueuedMessage={onEditQueuedMessage}
+                          onQueuedMessageEditingChange={
+                            onQueuedMessageEditingChange
+                          }
+                          onSteerQueuedMessage={onSteerQueuedMessage}
+                          onResumeQueue={onResumeQueue}
+                          onInboxCardDismiss={onInboxCardDismiss}
+                          onNoteCardDismiss={onNoteCardDismiss}
+                          onHandoffCardDismiss={onHandoffCardDismiss}
+                          onApproval={onApproval}
+                          onQuestionReply={onQuestionReply}
+                          onOpenFile={onOpenFile}
+                          editorNavigation={editorNavigation}
+                          onOpenDiff={onOpenDiff}
+                          onOpenPlan={onOpenPlan}
+                          onUpdatePlan={onUpdatePlan}
+                          onBuildPlan={onBuildPlan}
+                          onSecondOpinion={onSecondOpinion}
+                          onHandoff={onHandoff}
+                          onMovePane={onMovePane}
+                          onNewTerminal={onNewTerminalInSession}
+                          onTerminalMetaChange={onTerminalMetaChange}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-                </div>
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
         </div>
         {searchViewOpen ? (
           <SearchView
@@ -4594,7 +4781,10 @@ export default function App({
             onOpenWhatsNew={onOpenWhatsNew}
           />
         ) : null}
-        {searchViewOpen || inboxViewOpen || notesViewOpen || settingsOpen ? null : (
+        {searchViewOpen ||
+        inboxViewOpen ||
+        notesViewOpen ||
+        settingsOpen ? null : (
           <UsageFooter
             providers={usageProviders}
             session={usageSession}
@@ -4835,9 +5025,7 @@ function trackSessionEdits(
     event.type === "tool.updated" &&
     (event.status === "completed" || event.status === "success");
   if (!completed) {
-    void prepareSessionCheckpoint(sessionId, cwd, paths).catch(
-      () => undefined,
-    );
+    void prepareSessionCheckpoint(sessionId, cwd, paths).catch(() => undefined);
     return;
   }
   void captureSessionCheckpoint(sessionId, cwd, paths)
