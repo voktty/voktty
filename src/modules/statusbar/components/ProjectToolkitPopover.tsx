@@ -6,14 +6,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
-import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useTranslation } from "@/modules/i18n";
+import { listSkills, type DiscoveredSkill } from "@/modules/harness/lib/fs";
 import {
   allServers,
   detectBinary,
@@ -21,18 +20,21 @@ import {
   redetectBinary,
   useLspRuntimeStore,
 } from "@/modules/lsp";
+import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { setLspActivation } from "@/modules/settings/store";
 import { LspInstallDialog } from "@/settings/components/LspInstallDialog";
 import { resolveLspSwitchState } from "@/settings/components/lspSwitchState";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
+  Cancel01Icon,
   CheckmarkCircle01Icon,
   CodeIcon,
   Copy01Icon,
   CpuIcon,
   Download01Icon,
   Edit02Icon,
+  File01Icon,
   Folder01Icon,
   Layers01Icon,
   Loading03Icon,
@@ -75,14 +77,12 @@ export function ProjectToolkitPopover({
   onOpenSettings,
 }: Props) {
   const { t } = useTranslation();
-  const aiAvailable = useAiAvailable();
   const [open, setOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>(() =>
-    aiAvailable ? "ai" : "lsp",
-  );
+  const [activeTab, setActiveTab] = useState<TabId>("ai");
   const [query, setQuery] = useState("");
   const [stackInfo, setStackInfo] = useState<ProjectStackInfo | null>(null);
   const [tools, setTools] = useState<ConfigurableTool[]>(DEFAULT_PROJECT_TOOLS);
+  const [skills, setSkills] = useState<DiscoveredSkill[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [executedId, setExecutedId] = useState<string | null>(null);
   const [installTarget, setInstallTarget] = useState<LspPreset | null>(null);
@@ -92,10 +92,6 @@ export function ProjectToolkitPopover({
   const customServers = usePreferencesStore((s) => s.lspCustomServers);
   const servers = useMemo(() => allServers(customServers), [customServers]);
 
-  useEffect(() => {
-    if (!aiAvailable && activeTab === "ai") setActiveTab("lsp");
-  }, [activeTab, aiAvailable]);
-
   const reloadTools = useCallback(async () => {
     const loaded = await loadToolsConfigFile(cwd);
     setTools(loaded);
@@ -103,11 +99,32 @@ export function ProjectToolkitPopover({
     setConfigFilePath(resolvedPath);
   }, [cwd]);
 
+  const reloadSkills = useCallback(async () => {
+    if (!cwd) {
+      setSkills([]);
+      return;
+    }
+    try {
+      const list = await listSkills(cwd);
+      setSkills(list);
+    } catch {
+      setSkills([]);
+    }
+  }, [cwd]);
+
   useEffect(() => {
     void reloadTools();
-  }, [reloadTools]);
+    void reloadSkills();
+  }, [reloadTools, reloadSkills]);
 
-  // Listen for editor save events to hot-reload tools instantly
+  useEffect(() => {
+    if (open) {
+      void reloadTools();
+      void reloadSkills();
+    }
+  }, [open, reloadTools, reloadSkills]);
+
+  // Listen for editor save events to hot-reload tools and skills instantly
   useEffect(() => {
     type FileWrittenPayload = { path: string; source?: string };
     const unlistenPromise =
@@ -124,12 +141,20 @@ export function ProjectToolkitPopover({
           ) {
             void reloadTools();
           }
+          if (
+            normalized.includes("skill") ||
+            normalized.includes(".agents") ||
+            normalized.includes(".claude") ||
+            normalized.includes("prompts")
+          ) {
+            void reloadSkills();
+          }
         },
       );
     return () => {
       void unlistenPromise.then((un) => un());
     };
-  }, [reloadTools]);
+  }, [reloadTools, reloadSkills]);
 
   useEffect(() => {
     let cancelled = false;
@@ -184,6 +209,19 @@ export function ProjectToolkitPopover({
     }
   };
 
+  // Filter discovered skills based on search query
+  const filteredSkills = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return skills;
+    return skills.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q) ||
+        s.source.toLowerCase().includes(q) ||
+        s.path.toLowerCase().includes(q),
+    );
+  }, [skills, query]);
+
   // Filter tools based on category, detected stack and search query
   const filteredAiSkills = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -202,6 +240,8 @@ export function ProjectToolkitPopover({
       );
     });
   }, [tools, query, t]);
+
+  const totalAiCount = filteredSkills.length + filteredAiSkills.length;
 
   const filteredSetupActions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -332,11 +372,29 @@ export function ProjectToolkitPopover({
                   variant="ghost"
                   size="icon-xs"
                   className="size-6 text-muted-foreground hover:text-foreground"
-                  onClick={onOpenSettings}
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenSettings();
+                  }}
                   title={t("header.settings")}
+                  aria-label={t("header.settings")}
                 >
                   <HugeiconsIcon
                     icon={Settings01Icon}
+                    size={13}
+                    strokeWidth={1.75}
+                  />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-6 text-muted-foreground hover:text-foreground"
+                  onClick={() => setOpen(false)}
+                  title={t("common.close") || "Close"}
+                  aria-label={t("common.close") || "Close"}
+                >
+                  <HugeiconsIcon
+                    icon={Cancel01Icon}
                     size={13}
                     strokeWidth={1.75}
                   />
@@ -361,34 +419,27 @@ export function ProjectToolkitPopover({
             </div>
 
             {/* Segmented tabs */}
-            <div
-              className={cn(
-                "grid gap-1 rounded-lg border border-border/30 bg-muted/40 p-0.5 text-[11px] font-medium text-muted-foreground",
-                aiAvailable ? "grid-cols-3" : "grid-cols-2",
-              )}
-            >
-              {aiAvailable ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("ai")}
-                  className={`flex items-center justify-center gap-1.5 rounded-md py-1 transition-all ${
-                    activeTab === "ai"
-                      ? "bg-background text-foreground shadow-2xs"
-                      : "hover:text-foreground"
-                  }`}
-                >
-                  <HugeiconsIcon
-                    icon={SparklesIcon}
-                    size={12}
-                    strokeWidth={2}
-                  />
-                  <span>
-                    {t("projectToolkit.aiTab", {
-                      count: filteredAiSkills.length,
-                    })}
-                  </span>
-                </button>
-              ) : null}
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-border/30 bg-muted/40 p-0.5 text-[11px] font-medium text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => setActiveTab("ai")}
+                className={`flex items-center justify-center gap-1.5 rounded-md py-1 transition-all ${
+                  activeTab === "ai"
+                    ? "bg-background text-foreground shadow-2xs"
+                    : "hover:text-foreground"
+                }`}
+              >
+                <HugeiconsIcon
+                  icon={SparklesIcon}
+                  size={12}
+                  strokeWidth={2}
+                />
+                <span>
+                  {t("projectToolkit.aiTab", {
+                    count: totalAiCount,
+                  })}
+                </span>
+              </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("lsp")}
@@ -424,28 +475,76 @@ export function ProjectToolkitPopover({
 
           {/* Scrollable list */}
           <div className="flex-1 overflow-y-auto p-2">
-            {aiAvailable && activeTab === "ai" && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between px-1 py-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
-                  <span>{t("projectToolkit.aiSection")}</span>
-                  <button
-                    type="button"
-                    onClick={() => void handleEditConfigFile()}
-                    className="cursor-pointer text-primary hover:underline lowercase"
-                  >
-                    {t("projectToolkit.editJson")} ✎
-                  </button>
+            {activeTab === "ai" && (
+              <div className="flex flex-col gap-3">
+                {/* Discovered Project / User Skills */}
+                {filteredSkills.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between px-1 py-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                      <span>
+                        {t("projectToolkit.discoveredSkills", {
+                          count: filteredSkills.length,
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          void openSettingsWindow("models");
+                        }}
+                        className="cursor-pointer text-primary hover:underline lowercase"
+                      >
+                        {t("projectToolkit.aiSettings")} →
+                      </button>
+                    </div>
+                    {filteredSkills.map((skill) => (
+                      <DiscoveredSkillCard
+                        key={`${skill.source}:${skill.name}:${skill.path}`}
+                        skill={skill}
+                        copied={copiedId === `skill:${skill.name}`}
+                        onCopy={() => handleCopy(`/${skill.name}`, `skill:${skill.name}`)}
+                        onOpen={
+                          onOpenFile
+                            ? () => {
+                                onOpenFile(skill.path);
+                                setOpen(false);
+                              }
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* AI Kits & Starters */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between px-1 py-0.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                    <span>
+                      {filteredSkills.length > 0
+                        ? t("projectToolkit.aiKits", {
+                            count: filteredAiSkills.length,
+                          })
+                        : t("projectToolkit.aiSection")}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void handleEditConfigFile()}
+                      className="cursor-pointer text-primary hover:underline lowercase"
+                    >
+                      {t("projectToolkit.editJson")} ✎
+                    </button>
+                  </div>
+                  {filteredAiSkills.map((action) => (
+                    <ActionCard
+                      key={action.id}
+                      action={action}
+                      copied={copiedId === action.id}
+                      executed={executedId === action.id}
+                      onCopy={() => handleCopy(action.command, action.id)}
+                      onRun={() => handleRun(action.command, action.id)}
+                    />
+                  ))}
                 </div>
-                {filteredAiSkills.map((action) => (
-                  <ActionCard
-                    key={action.id}
-                    action={action}
-                    copied={copiedId === action.id}
-                    executed={executedId === action.id}
-                    onCopy={() => handleCopy(action.command, action.id)}
-                    onRun={() => handleRun(action.command, action.id)}
-                  />
-                ))}
               </div>
             )}
 
@@ -480,7 +579,10 @@ export function ProjectToolkitPopover({
                   <span>{t("projectToolkit.lspSection")}</span>
                   <button
                     type="button"
-                    onClick={onOpenSettings}
+                    onClick={() => {
+                      setOpen(false);
+                      void openSettingsWindow("editor");
+                    }}
                     className="cursor-pointer text-primary hover:underline lowercase"
                   >
                     {t("projectToolkit.customServers")} →
@@ -517,7 +619,10 @@ export function ProjectToolkitPopover({
             </button>
             <button
               type="button"
-              onClick={onOpenSettings}
+              onClick={() => {
+                setOpen(false);
+                void openSettingsWindow("editor");
+              }}
               className="cursor-pointer font-medium text-foreground/80 hover:text-foreground hover:underline"
             >
               {t("projectToolkit.lspSettings")} →
@@ -532,6 +637,84 @@ export function ProjectToolkitPopover({
         onClose={() => setInstallTarget(null)}
       />
     </>
+  );
+}
+
+function DiscoveredSkillCard({
+  skill,
+  copied,
+  onCopy,
+  onOpen,
+}: {
+  skill: DiscoveredSkill;
+  copied: boolean;
+  onCopy: () => void;
+  onOpen?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="group flex flex-col gap-1.5 rounded-lg border border-border/40 bg-background/60 p-2.5 transition-all hover:border-border/80 hover:bg-background/90 hover:shadow-xs">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted/40 text-primary">
+            <HugeiconsIcon icon={SparklesIcon} size={13} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold text-foreground font-mono truncate">
+                /{skill.name}
+              </span>
+              <span className="rounded bg-primary/10 border border-primary/20 px-1 py-0.2 text-[9.5px] font-medium text-primary capitalize">
+                {skill.source}
+              </span>
+              {skill.scope === "project" ? (
+                <span className="rounded bg-muted/60 px-1 py-0.2 text-[9.5px] font-medium text-muted-foreground">
+                  project
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="size-6 text-muted-foreground hover:text-foreground"
+            onClick={onCopy}
+            title={t("projectToolkit.copyInvocation") || "Copy slash command"}
+          >
+            <HugeiconsIcon
+              icon={copied ? CheckmarkCircle01Icon : Copy01Icon}
+              size={12}
+              strokeWidth={copied ? 2 : 1.75}
+              className={copied ? "text-emerald-500" : ""}
+            />
+          </Button>
+          {onOpen && skill.path ? (
+            <Button
+              variant="secondary"
+              size="xs"
+              className="h-6 gap-1 px-2 text-[10.5px] font-medium"
+              onClick={onOpen}
+              title={t("projectToolkit.openSkillFile") || "Open skill file in editor"}
+            >
+              <HugeiconsIcon icon={File01Icon} size={11} strokeWidth={1.75} />
+              <span>{t("common.open") || "Open"}</span>
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {skill.description ? (
+        <p className="text-[11px] leading-relaxed text-muted-foreground/90 line-clamp-2">
+          {skill.description}
+        </p>
+      ) : null}
+
+      <div className="flex items-center gap-1.5 rounded-md border border-border/30 bg-muted/30 px-2 py-0.8 font-mono text-[10px] text-muted-foreground/80 select-text truncate">
+        <span className="truncate">{skill.path}</span>
+      </div>
+    </div>
   );
 }
 
