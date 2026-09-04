@@ -151,7 +151,7 @@ export function SurfaceTabs({
               sortable.setItemRef(file.id, el);
               if (el && file.id === activeFileId) activeTabRef.current = el;
             }}
-            className={`group relative flex w-52 min-w-28 shrink touch-none items-stretch border-r border-content/10 ${
+            className={`group relative flex min-w-28 flex-1 max-w-sm shrink touch-none items-stretch border-r border-content/10 ${
               active ? "bg-content/8" : "hover:bg-content/5"
             } ${dragging ? "opacity-40" : ""} ${
               canDrag ? "cursor-grab active:cursor-grabbing" : ""

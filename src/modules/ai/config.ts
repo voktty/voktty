@@ -387,6 +387,15 @@ export const MODELS = [
 
   // ── Google ────────────────────────────────────────────────────────────────
   {
+    id: "gemini-3.8-flash",
+    provider: "google",
+    label: "Gemini 3.8 Flash",
+    hint: "Frontier",
+    description: "Google's newest flagship fast multimodal model with dynamic thinking.",
+    capabilities: { intelligence: 5, speed: 5, cost: 4 },
+    tags: ["vision", "reasoning", "tools", "coding"],
+  },
+  {
     id: "gemini-3.7-flash",
     provider: "google",
     label: "Gemini 3.7 Flash",

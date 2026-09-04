@@ -320,7 +320,7 @@ function TitleTabItem({
       className={`group @container relative flex h-full touch-none items-center self-stretch ${
         deckLayout
           ? "min-w-0 w-full"
-          : "min-w-28 flex-1 max-w-xs sm:max-w-sm md:max-w-md shrink"
+          : "min-w-28 flex-1 shrink"
       } ${dragging ? "opacity-40" : ""} ${
         canDrag ? "cursor-grab active:cursor-grabbing" : ""
       }`}
@@ -483,7 +483,7 @@ function GroupLabel({
       }}
       onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
-      className={`relative sticky left-0 z-20 flex h-7.5 max-w-36 shrink-0 items-center gap-1.5 self-center rounded-md px-2.5 pr-3 text-[11px] font-medium hover:brightness-110 ${
+      className={`relative z-10 flex h-7.5 max-w-36 shrink-0 items-center gap-1.5 self-center rounded-md px-2.5 pr-3 text-[11px] font-medium hover:brightness-110 ${
         canDrag ? "cursor-grab touch-none active:cursor-grabbing" : ""
       }`}
       style={{
@@ -605,7 +605,7 @@ function TabGroupBlock({
   return (
     <div
       ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-      className={`relative flex h-full items-center gap-0.5 min-w-0 flex-1 max-w-2xl ${
+      className={`relative flex h-full items-center gap-0.5 min-w-0 flex-1 ${
         draggingGroup ? "opacity-40" : ""
       }`}
       data-tauri-drag-region="false"
@@ -1354,7 +1354,7 @@ function TitleBarComponent({
                 <div
                   key={tab.id}
                   ref={(el) => segmentDrag.setSegmentRef(segmentIndex, el)}
-                  className={`relative flex h-full items-center min-w-28 flex-1 max-w-xs sm:max-w-sm md:max-w-md shrink ${
+                  className={`relative flex h-full items-center min-w-28 flex-1 shrink ${
                     draggingSegment ? "opacity-40" : ""
                   }`}
                   data-tauri-drag-region="false"

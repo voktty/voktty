@@ -19,6 +19,7 @@ pub mod mcp;
 pub mod net;
 pub mod proc;
 pub mod pty;
+pub mod quota;
 pub mod rdp;
 pub mod remote;
 pub mod secrets;
