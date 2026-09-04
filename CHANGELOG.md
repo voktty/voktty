@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-09-04
+
 ### Added
 
+- Plan mode is available from the composer’s + menu or with `/plan`. Supported agents produce a reviewable Plan card instead of starting implementation; open it to inspect or edit the full markdown, then approve the exact plan with Build.
+- The Plan card and expanded markdown view have a split Build button. Use its model picker to implement the approved plan with another model or agent harness; cross-harness builds carry the session context through the existing handoff flow.
 - Settings → General → Follow-up behavior can queue prompts sent during an active turn and dispatch them in order when the agent finishes. Queued prompts can be edited, removed, or sent immediately with Steer; interrupting a turn pauses the queue until you resume it. In #56 by @tcmarkfeld.
 - Grok Build accepts image attachments in prompts.
 - Live task lists from supported agent harnesses appear as a separate Tasks card with per-item status and a completion count, while provider-internal todo calls stay out of the activity feed. Partial task updates preserve the full checklist and its labels, and stopping a turn resets unfinished spinners. Task progress is saved in session history, searchable, and included in handoffs and second opinions.
