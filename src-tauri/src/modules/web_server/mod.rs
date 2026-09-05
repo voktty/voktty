@@ -1551,8 +1551,10 @@ fn start_php_server(root: &Path, preferred_port: Option<u16>) -> Result<(u16, Ch
     let mut cmd = Command::new("php");
     cmd.args(["-S", &bind_target, "-t", &root_str]);
     if append_path.exists() {
-        cmd.arg("-d")
-            .arg(format!("auto_append_file={}", append_path.to_string_lossy()));
+        cmd.arg("-d").arg(format!(
+            "auto_append_file={}",
+            append_path.to_string_lossy()
+        ));
     }
     if router_path.exists() {
         cmd.arg(router_path.to_string_lossy().to_string());
@@ -1874,7 +1876,9 @@ pub fn handle_proxy_request(stream: &mut TcpStream, raw_uri: &str) {
                 }
 
                 let script_tag = format!("\n<script>\n{}\n</script>\n", INSPECTOR_BUNDLE_JS);
-                if !html.contains("voktty-injected-inspector") && !html.contains("__voktty_inspector_active") {
+                if !html.contains("voktty-injected-inspector")
+                    && !html.contains("__voktty_inspector_active")
+                {
                     if let Some(pos) = html.rfind("</body>") {
                         html.insert_str(pos, &script_tag);
                     } else if let Some(pos) = html.rfind("</html>") {
@@ -2402,8 +2406,22 @@ pub async fn web_server_resolve_element_source(
     };
 
     let template_extensions = [
-        "html", "htm", "php", "blade.php", "astro", "vue", "svelte", "tsx", "jsx",
-        "twig", "liquid", "erb", "ejs", "hbs", "njk", "pug",
+        "html",
+        "htm",
+        "php",
+        "blade.php",
+        "astro",
+        "vue",
+        "svelte",
+        "tsx",
+        "jsx",
+        "twig",
+        "liquid",
+        "erb",
+        "ejs",
+        "hbs",
+        "njk",
+        "pug",
     ];
 
     let walker = ignore::WalkBuilder::new(&clean_root)
@@ -2422,7 +2440,10 @@ pub async fn web_server_resolve_element_source(
         if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
             let path = entry.into_path();
             let path_lower = path.to_string_lossy().to_ascii_lowercase();
-            if template_extensions.iter().any(|ext| path_lower.ends_with(ext)) {
+            if template_extensions
+                .iter()
+                .any(|ext| path_lower.ends_with(ext))
+            {
                 candidate_files.push(path);
             }
         }
@@ -2514,13 +2535,19 @@ pub async fn web_server_resolve_element_source(
                 if trimmed_id.len() >= 2 {
                     let id_pat1 = format!("id=\"{}\"", trimmed_id.to_ascii_lowercase());
                     let id_pat2 = format!("id='{}'", trimmed_id.to_ascii_lowercase());
-                    if let Some(pos) = line_lower.find(&id_pat1).or_else(|| line_lower.find(&id_pat2)) {
+                    if let Some(pos) = line_lower
+                        .find(&id_pat1)
+                        .or_else(|| line_lower.find(&id_pat2))
+                    {
                         line_score += 100;
                         match_col = pos + 1;
                         matched_reason = format!("id:#{}", trimmed_id);
                     } else if line_lower.contains(&trimmed_id.to_ascii_lowercase()) {
                         line_score += 35;
-                        match_col = line_lower.find(&trimmed_id.to_ascii_lowercase()).unwrap_or(0) + 1;
+                        match_col = line_lower
+                            .find(&trimmed_id.to_ascii_lowercase())
+                            .unwrap_or(0)
+                            + 1;
                         if matched_reason.is_empty() {
                             matched_reason = format!("id_approx:#{}", trimmed_id);
                         }
@@ -2706,7 +2733,8 @@ mod tests {
         assert_eq!(port, Some(2045));
         assert_eq!(path.as_deref(), Some("index.html"));
 
-        let (port, path) = parse_url_port_and_path("http://localhost:3000/pages/about.php?v=1#hash");
+        let (port, path) =
+            parse_url_port_and_path("http://localhost:3000/pages/about.php?v=1#hash");
         assert_eq!(port, Some(3000));
         assert_eq!(path.as_deref(), Some("pages/about.php"));
 

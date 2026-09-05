@@ -1648,11 +1648,23 @@ fn normalize_script_lf(content: &str) -> String {
 fn remote_shell_bundle() -> [(String, String); 6] {
     [
         ("bashrc".to_string(), normalize_script_lf(REMOTE_BASHRC)),
-        ("zsh/.zshenv".to_string(), normalize_script_lf(REMOTE_ZSHENV)),
-        ("zsh/.zprofile".to_string(), normalize_script_lf(REMOTE_ZPROFILE)),
-        ("zsh/.zlogin".to_string(), normalize_script_lf(REMOTE_ZLOGIN)),
+        (
+            "zsh/.zshenv".to_string(),
+            normalize_script_lf(REMOTE_ZSHENV),
+        ),
+        (
+            "zsh/.zprofile".to_string(),
+            normalize_script_lf(REMOTE_ZPROFILE),
+        ),
+        (
+            "zsh/.zlogin".to_string(),
+            normalize_script_lf(REMOTE_ZLOGIN),
+        ),
         ("zsh/.zshrc".to_string(), normalize_script_lf(REMOTE_ZSHRC)),
-        ("init.fish".to_string(), normalize_script_lf(REMOTE_FISH_INIT)),
+        (
+            "init.fish".to_string(),
+            normalize_script_lf(REMOTE_FISH_INIT),
+        ),
     ]
 }
 
@@ -1666,7 +1678,6 @@ fn remote_shell_bundle_digest() -> String {
     }
     hex::encode(digest.finalize())
 }
-
 
 fn install_remote_shell_integration(
     connection: &RemoteSshConnection,
@@ -1733,7 +1744,12 @@ fn open_remote_session(
     let session = start_helper(&app, &connection, &probe.architecture)?;
     let workspace_root = workspace_root
         .filter(|r| !r.trim().is_empty() && r != ".")
-        .or_else(|| connection.initial_directory.clone().filter(|d| !d.trim().is_empty()))
+        .or_else(|| {
+            connection
+                .initial_directory
+                .clone()
+                .filter(|d| !d.trim().is_empty())
+        })
         .unwrap_or_else(|| ".".to_string());
     let handshake = RemoteRequest {
         protocol: PROTOCOL_VERSION,
@@ -2005,7 +2021,9 @@ mod tests {
         let command = probe_command();
         assert!(command.contains("aarch64|arm64) arch=aarch64"));
         assert!(command.contains(&format!(".voktty/servers/{REMOTE_VERSION}/linux-$arch")));
-        assert!(command.contains(&format!(".voktty/shell-integration/{REMOTE_SHELL_INTEGRATION_VERSION}/.digest")));
+        assert!(command.contains(&format!(
+            ".voktty/shell-integration/{REMOTE_SHELL_INTEGRATION_VERSION}/.digest"
+        )));
         assert!(command.contains("VOKTTY_HELPER|%s|%s|%s"));
     }
 
@@ -2015,7 +2033,9 @@ mod tests {
         assert_eq!(digest.len(), 64);
         assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
         let command = shell_integration_install_command(&digest);
-        assert!(command.contains(&format!(".voktty/shell-integration/{REMOTE_SHELL_INTEGRATION_VERSION}")));
+        assert!(command.contains(&format!(
+            ".voktty/shell-integration/{REMOTE_SHELL_INTEGRATION_VERSION}"
+        )));
         assert!(command.contains("$dir/zsh/.zshrc"));
         assert!(command.contains("$dir/init.fish"));
         assert!(command.contains(&digest));

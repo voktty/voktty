@@ -1224,7 +1224,13 @@ pub fn add_safe_directory(
     let output = run_git(
         workspace,
         None,
-        ["config", "--global", "--add", "safe.directory", &normalized_path],
+        [
+            "config",
+            "--global",
+            "--add",
+            "safe.directory",
+            &normalized_path,
+        ],
         DEFAULT_TIMEOUT_SECS,
     )?;
     ensure_success(&output, "failed to add git safe.directory exception")?;

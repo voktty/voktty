@@ -33,7 +33,11 @@ pub fn canonical_dir(
 ) -> Result<ResolvedGitDirectory> {
     if workspace.is_remote() {
         let clean = normalize_git_path(path.trim());
-        let git_path = if clean.is_empty() { ".".to_string() } else { clean };
+        let git_path = if clean.is_empty() {
+            ".".to_string()
+        } else {
+            clean
+        };
         let local_path = PathBuf::from(&git_path);
         return Ok(ResolvedGitDirectory {
             workspace: workspace.clone(),
