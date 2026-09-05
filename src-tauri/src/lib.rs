@@ -5,7 +5,7 @@ pub mod modules;
 use modules::{
     agent, agent_history, aliases, api_client, collab, control, dap, docker, extensions, fs, git,
     git_review, harness, history, lsp, mcp, net, pty, quota, rdp, remote, secrets, serial, shell,
-    tray, tunnel, vibrancy, web_server, workspace,
+    ssh_native, tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]
@@ -288,6 +288,7 @@ pub fn run() {
         .manage(ExitCoordinator::default())
         .manage(fs::replace::WorkspaceReplaceState::default())
         .manage(rdp::RdpState::default())
+        .manage(ssh_native::state::SshNativeState::new())
         .manage(collab::CollabState::default())
         .manage(collab::CollabGuestState::default())
         .manage(mcp::McpManagerState::default())
@@ -505,6 +506,9 @@ pub fn run() {
             rdp::rdp_disconnect,
             rdp::rdp_launch_native,
             rdp::rdp_probe_host,
+            ssh_native::ssh_native_connect,
+            ssh_native::ssh_native_disconnect,
+            ssh_native::ssh_native_sessions,
             collab::requirements::collab_cloudflared_status,
             collab::collab_host_start,
             collab::collab_host_stop,
