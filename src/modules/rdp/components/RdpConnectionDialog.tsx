@@ -137,8 +137,8 @@ export function RdpConnectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md gap-4 rounded-2xl border border-border/50 bg-popover/95 p-6 backdrop-blur-xl">
-        <DialogHeader className="gap-1">
+      <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border border-border/50 bg-popover/95 backdrop-blur-xl">
+        <DialogHeader className="p-6 pb-3 border-b border-border/40 shrink-0 gap-1">
           <div className="flex items-center gap-2 text-primary">
             <HugeiconsIcon icon={ComputerIcon} size={20} />
             <DialogTitle className="text-base font-semibold text-foreground">
@@ -152,13 +152,12 @@ export function RdpConnectionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {error && (
-          <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
-            {error}
-          </div>
-        )}
-
-        <div className="flex flex-col gap-3.5 text-xs">
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3.5 text-xs">
+          {error && (
+            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
+              {error}
+            </div>
+          )}
           {/* Display Name */}
           <div className="flex flex-col gap-1">
             <Label htmlFor="rdp-name" className="text-xs font-medium text-foreground/80">
@@ -334,7 +333,7 @@ export function RdpConnectionDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0 mt-2">
+        <DialogFooter className="p-4 px-6 border-t border-border/40 bg-muted/15 shrink-0 flex items-center justify-between gap-2">
           <Button
             variant="ghost"
             size="sm"

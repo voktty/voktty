@@ -119,19 +119,20 @@ export function VaultItemDialog({ open, onOpenChange, item, onSave }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden shadow-2xl border-border bg-popover text-popover-foreground">
+        <DialogHeader className="p-5 pb-3 border-b border-border/40 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <HugeiconsIcon icon={item ? Key01Icon : SecurityCheckIcon} size={18} strokeWidth={1.75} />
             <span>{item ? t("vault.dialog.editTitle") : t("vault.dialog.newTitle")}</span>
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs">
             {t("vault.dialog.description")}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3 py-1">
-          <div className="grid grid-cols-3 gap-2">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3.5">
+            <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2 flex flex-col gap-1">
               <Label htmlFor="vault-item-name" className="text-[11px] text-muted-foreground">
                 {t("vault.dialog.nameLabel")} *
@@ -265,9 +266,10 @@ export function VaultItemDialog({ open, onOpenChange, item, onSave }: Props) {
                 className="h-8 text-xs"
               />
             </div>
+            </div>
           </div>
 
-          <DialogFooter className="mt-2 flex items-center justify-end gap-2">
+          <DialogFooter className="p-3.5 px-5 border-t border-border/40 bg-muted/15 shrink-0 flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"

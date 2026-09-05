@@ -116,8 +116,8 @@ export function SshSessionPickerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden shadow-2xl border-border bg-popover text-popover-foreground">
+        <DialogHeader className="p-5 pb-3 border-b border-border/40 shrink-0">
           <div className="flex items-center justify-between gap-2 pr-6">
             <DialogTitle className="flex items-center gap-2">
               <HugeiconsIcon
@@ -141,7 +141,7 @@ export function SshSessionPickerModal({
               />
             </button>
           </div>
-          <DialogDescription>
+          <DialogDescription className="text-xs">
             {t("ssh.sessionPicker.description")}{" "}
             <span className="font-mono text-foreground font-semibold">
               {serverLabel}
@@ -149,7 +149,7 @@ export function SshSessionPickerModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2.5 max-h-[380px] overflow-y-auto py-1">
+        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3.5">
           {sessions.length > 0 ? (
             <div className="flex flex-col gap-2">
               <span className="text-[11px] font-medium text-muted-foreground">
@@ -314,7 +314,7 @@ export function SshSessionPickerModal({
           </div>
         </div>
 
-        <DialogFooter className="mt-1">
+        <DialogFooter className="p-3.5 px-5 border-t border-border/40 bg-muted/15 shrink-0 flex items-center justify-end">
           <Button
             type="button"
             variant="outline"
