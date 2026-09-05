@@ -1336,20 +1336,19 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   const newPreviewTab = useCallback(
     (url: string, options?: { devServerScope?: string }) => {
       const id = nextIdRef.current++;
-      setTabs((t) => [
-        ...t,
-        {
-          id,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "preview",
-          spaceId: activeSpaceIdRef.current,
-          title: titleFromUrl(url),
-          url,
-          ...(options?.devServerScope
-            ? { devServerScope: options.devServerScope }
-            : {}),
-        },
-      ]);
+      const newTab: Tab = {
+        id,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "preview",
+        spaceId: activeSpaceIdRef.current,
+        title: titleFromUrl(url),
+        url,
+        ...(options?.devServerScope
+          ? { devServerScope: options.devServerScope }
+          : {}),
+      };
+      tabsRef.current = [...tabsRef.current, newTab];
+      setTabs(tabsRef.current);
       setActiveId(id);
       return id;
     },
