@@ -35,6 +35,10 @@ export type PlanTabSource = {
   title: string;
 };
 
+export type SessionChangesSource = {
+  sessionId: string;
+};
+
 export type FilePaneTab = {
   id: string;
   path: string;
@@ -42,6 +46,10 @@ export type FilePaneTab = {
   plan?: PlanTabSource;
   releaseNotes?: ReleaseNotesTabSource;
   review?: boolean;
+  /** Single working-tree review of every changed file (unified diff). */
+  changes?: boolean;
+  /** Read-only diff built from one session's captured before/after snapshots. */
+  sessionChanges?: SessionChangesSource;
   terminal?: boolean;
   /** Foreground command when it isn't the shell. Live only — not persisted. */
   foreground?: string;
@@ -95,6 +103,30 @@ export function newFileTab(
     path,
     cwd,
     ...(review ? { review: true } : {}),
+  };
+}
+
+export function newChangesTab(cwd: string, focusPath?: string): FilePaneTab {
+  return {
+    id: crypto.randomUUID(),
+    path: focusPath || cwd,
+    cwd,
+    review: true,
+    changes: true,
+  };
+}
+
+export function newSessionChangesTab(
+  cwd: string,
+  sessionId: string,
+  focusPath?: string,
+): FilePaneTab {
+  return {
+    id: crypto.randomUUID(),
+    path: focusPath || cwd,
+    cwd,
+    review: true,
+    sessionChanges: { sessionId },
   };
 }
 
@@ -302,10 +334,23 @@ export function isReviewTab(file: FilePaneTab): boolean {
   return !!file.review && !isVirtualDocumentTab(file);
 }
 
+export function isChangesTab(file: FilePaneTab): boolean {
+  return !!file.changes && isReviewTab(file);
+}
+
+export function isSessionChangesTab(
+  file: FilePaneTab,
+): file is FilePaneTab & { sessionChanges: SessionChangesSource } {
+  return !!file.sessionChanges && isReviewTab(file);
+}
+
 export function editorTabKey(file: FilePaneTab): string {
   if (file.terminal) return `terminal:${file.id}`;
   if (file.plan) return `plan:${file.plan.blockId}`;
   if (file.releaseNotes) return `release-notes:${file.releaseNotes.version}`;
+  if (file.sessionChanges)
+    return `session-changes:${file.cwd}:${file.sessionChanges.sessionId}`;
+  if (file.changes) return `changes:${file.cwd}`;
   return file.review ? `review:${file.path}` : `file:${file.path}`;
 }
 
@@ -371,6 +416,77 @@ export function openEditorTab(
     focusedId: editorPane.id,
     diffFocused: false,
     editorPanes: [editorPane],
+  };
+}
+
+/** Focus the working-tree changes tab, creating it if needed. */
+export function openChangesTab(
+  tab: WorkspaceTab,
+  cwd: string,
+  focusPath?: string,
+): WorkspaceTab {
+  const next = newChangesTab(cwd, focusPath);
+  const key = editorTabKey(next);
+  const existingPane = tab.editorPanes.find((pane) =>
+    pane.files.some((file) => editorTabKey(file) === key),
+  );
+  const existingFile = existingPane?.files.find(
+    (file) => editorTabKey(file) === key,
+  );
+  if (!existingPane || !existingFile) return openEditorTab(tab, next);
+
+  const updated = focusPath ? { ...existingFile, path: focusPath } : existingFile;
+  return {
+    ...tab,
+    focusedId: existingPane.id,
+    diffFocused: false,
+    editorPanes: tab.editorPanes.map((pane) =>
+      pane.id === existingPane.id
+        ? {
+            ...pane,
+            files: pane.files.map((file) =>
+              file.id === updated.id ? updated : file,
+            ),
+            activeFileId: updated.id,
+          }
+        : pane,
+    ),
+  };
+}
+
+/** Focus one session's exact captured diff, creating a tab if needed. */
+export function openSessionChangesTab(
+  tab: WorkspaceTab,
+  cwd: string,
+  sessionId: string,
+  focusPath?: string,
+): WorkspaceTab {
+  const next = newSessionChangesTab(cwd, sessionId, focusPath);
+  const key = editorTabKey(next);
+  const existingPane = tab.editorPanes.find((pane) =>
+    pane.files.some((file) => editorTabKey(file) === key),
+  );
+  const existingFile = existingPane?.files.find(
+    (file) => editorTabKey(file) === key,
+  );
+  if (!existingPane || !existingFile) return openEditorTab(tab, next);
+
+  const updated = focusPath ? { ...existingFile, path: focusPath } : existingFile;
+  return {
+    ...tab,
+    focusedId: existingPane.id,
+    diffFocused: false,
+    editorPanes: tab.editorPanes.map((pane) =>
+      pane.id === existingPane.id
+        ? {
+            ...pane,
+            files: pane.files.map((file) =>
+              file.id === updated.id ? updated : file,
+            ),
+            activeFileId: updated.id,
+          }
+        : pane,
+    ),
   };
 }
 

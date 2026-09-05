@@ -50,6 +50,7 @@ import {
   captureSessionCheckpoint,
   keepSessionChanges,
   notifyReviewChanged,
+  prepareSessionCheckpoint,
   syncSessionCheckpoint,
 } from "../lib/checkpoint";
 import { dropContextWindow } from "../lib/contextUsage";
@@ -142,6 +143,7 @@ import {
   newTab,
   newTerminalFile,
   openEditorTab,
+  openSessionChangesTab,
   type PaneEdge,
   removePane,
   replaceLeafId,
@@ -2269,15 +2271,24 @@ export function HarnessApp({
   );
 
   const onOpenDiff = useCallback(
-    (path?: string) => {
+    (path?: string, session?: { sessionId: string; cwd: string }) => {
       void (async () => {
+        const diffCwd = session?.cwd ?? gitCwdRef.current;
         const resolved = path
-          ? ((await resolveOpenablePath(gitCwdRef.current, path)) ?? path)
+          ? ((await resolveOpenablePath(diffCwd, path)) ?? path)
           : undefined;
         if (resolved) rememberOpenedFile(sidebarCwdRef.current, resolved);
         setTabs((prev: any) =>
           prev.map((tab: any) => {
             if (tab.id !== activeTabId) return tab;
+            if (session) {
+              return openSessionChangesTab(
+                tab,
+                session.cwd,
+                session.sessionId,
+                resolved,
+              );
+            }
             const opened = resolved
               ? openEditorTab(
                   tab,
@@ -5251,6 +5262,19 @@ function trackSessionEdits(
   event: HarnessEvent,
 ) {
   if (event.type !== "tool.updated") return;
+  const isEdit = isEditTool(event.kind, event.title, event.preview);
+  const path = event.preview?.path;
+
+  if (
+    isEdit &&
+    path &&
+    cwd !== "~" &&
+    (event.status === "in_progress" || event.status === "pending")
+  ) {
+    void prepareSessionCheckpoint(sessionId, cwd, [path]).catch(() => undefined);
+    return;
+  }
+
   const completed = event.status === "completed" || event.status === "success";
   if (!completed) return;
   const kind = event.kind?.trim().toLowerCase();
@@ -5260,8 +5284,7 @@ function trackSessionEdits(
       .then(() => notifyReviewChanged(sessionId));
     return;
   }
-  if (!isEditTool(event.kind, event.title, event.preview)) return;
-  const path = event.preview?.path;
+  if (!isEdit) return;
   if (path && cwd !== "~") {
     void captureSessionCheckpoint(sessionId, cwd, [path])
       .catch(() => undefined)

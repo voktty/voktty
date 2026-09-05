@@ -90,7 +90,10 @@ type Shared = {
   ) => void;
   onOpenFile: (path: string) => void;
   editorNavigation?: EditorNavigationTarget | null;
-  onOpenDiff: (path?: string) => void;
+  onOpenDiff: (
+    path?: string,
+    session?: { sessionId: string; cwd: string },
+  ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
   onSecondOpinion?: (
     sessionId: string,
@@ -328,6 +331,9 @@ function PaneTreeComponent({
                 focused={focusedId === session.id}
                 addToChatTarget={addToChatSessionId === session.id}
                 inSplit={inSplit}
+                undoLocked={sessions.some(
+                  (s) => s.id !== session.id && s.cwd === session.cwd && !!s.busy,
+                )}
                 composerFocused={composerFocused}
                 recents={recents}
                 hideProjectPicker={hideProjectPicker}

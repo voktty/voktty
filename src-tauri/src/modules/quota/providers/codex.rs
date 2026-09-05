@@ -175,7 +175,7 @@ pub fn collect_codex_quota(cost_engine: &CostEngine) -> ProviderQuota {
 }
 
 fn format_codex_window_label(plan_type: Option<&str>, window_seconds: Option<i64>, secondary: bool) -> String {
-    let is_free = plan_type.map_or(false, |p| p.eq_ignore_ascii_case("free"));
+    let is_free = plan_type.is_some_and(|p| p.eq_ignore_ascii_case("free"));
     if let Some(sec) = window_seconds {
         if sec >= 86400 * 20 {
             return if is_free { "Monthly Limit (Free)".into() } else { "Monthly Limit".into() };
@@ -498,9 +498,11 @@ fn scan_rollout_file(
     }
 }
 
+type RateLimitWindow = (f64, Option<i64>, Option<i64>);
+
 fn scan_newest_rollout_rate_limits() -> (
-    Option<(f64, Option<i64>, Option<i64>)>,
-    Option<(f64, Option<i64>, Option<i64>)>,
+    Option<RateLimitWindow>,
+    Option<RateLimitWindow>,
 ) {
     let Some(home) = dirs_home() else {
         return (None, None);

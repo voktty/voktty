@@ -1247,8 +1247,7 @@ impl RemoteServer {
         let raw_str = path.unwrap_or(".");
         let raw_path = Path::new(raw_str);
         let candidate = if raw_path.is_absolute() {
-            let canonical_raw = fs::canonicalize(raw_path).map_err(|e| e.to_string())?;
-            canonical_raw
+            fs::canonicalize(raw_path).map_err(|e| e.to_string())?
         } else {
             let relative = safe_relative_path(raw_str)?;
             root.join(relative)
