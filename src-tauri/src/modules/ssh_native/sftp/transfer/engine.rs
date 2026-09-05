@@ -18,6 +18,8 @@ pub const CHUNK_BYTES: usize = 64 * 1024;
 /// A tree past this is not something a user meant to drag.
 pub const MAX_WALK_ENTRIES: usize = 50_000;
 const MAX_WALK_DEPTH: usize = 64;
+/// The remote walk shares the bound so both sides of a transfer agree.
+pub const MAX_WALK_DEPTH_REMOTE: usize = MAX_WALK_DEPTH;
 
 /// A cancellation flag shared with whoever can press stop.
 #[derive(Clone, Debug, Default)]
