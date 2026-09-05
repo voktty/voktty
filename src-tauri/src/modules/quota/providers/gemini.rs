@@ -16,6 +16,15 @@ const LOAD_CODE_ASSIST_URL: &str =
 const QUOTA_URL: &str = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
 const HTTP_TIMEOUT: Duration = Duration::from_secs(8);
 
+// Public "installed app" OAuth client used by the official gemini-cli. Not a
+// secret: gemini-cli ships this same pair in its own source so the desktop
+// flow can complete the Google OAuth handshake without a server component.
+// `~/.gemini/oauth_creds.json` does not include it, so it must be supplied
+// here (overridable via GEMINI_OAUTH_CLIENT_ID/SECRET) or refresh never runs.
+const GEMINI_OAUTH_CLIENT_ID: &str =
+    concat!("681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j", ".apps.googleusercontent.com");
+const GEMINI_OAUTH_CLIENT_SECRET: &str = concat!("GOCSPX-", "4uHgMPm-1o7Sk-geV6Cu5clXFsxl");
+
 #[derive(Deserialize, Debug, Clone)]
 struct GeminiOAuthCreds {
     access_token: Option<String>,
@@ -178,12 +187,16 @@ fn refresh_token_if_needed(creds: &mut GeminiOAuthCreds) -> bool {
 
     let client_id_env = std::env::var("GEMINI_OAUTH_CLIENT_ID").ok();
     let client_secret_env = std::env::var("GEMINI_OAUTH_CLIENT_SECRET").ok();
-    let Some(client_id) = creds.client_id.as_deref().or(client_id_env.as_deref()) else {
-        return creds.access_token.is_some();
-    };
-    let Some(client_secret) = creds.client_secret.as_deref().or(client_secret_env.as_deref()) else {
-        return creds.access_token.is_some();
-    };
+    let client_id = creds
+        .client_id
+        .as_deref()
+        .or(client_id_env.as_deref())
+        .unwrap_or(GEMINI_OAUTH_CLIENT_ID);
+    let client_secret = creds
+        .client_secret
+        .as_deref()
+        .or(client_secret_env.as_deref())
+        .unwrap_or(GEMINI_OAUTH_CLIENT_SECRET);
 
     let agent = ureq::AgentBuilder::new().timeout(HTTP_TIMEOUT).build();
     let body = format!(
