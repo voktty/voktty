@@ -72,7 +72,7 @@ export function LocalAgentNotificationsBridge() {
         visible: visibleRef.current,
         allowToast: true,
         playSound,
-        onActivate: () => useChatStore.getState().openPanel(),
+        onActivate: () => useChatStore.getState().presentChat(),
       });
 
     const becameBusy = isBusy(status) && !isBusy(was);

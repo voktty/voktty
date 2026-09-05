@@ -31,9 +31,9 @@ describe("defaultGeom", () => {
 
 describe("clampGeom", () => {
   it("keeps the window fully within the viewport", () => {
-    const g = clampGeom({ x: 5000, y: 5000, w: 500, h: 400 }, vp);
+    const g = clampGeom({ x: 5000, y: 5000, w: 500, h: 450 }, vp);
     expect(g.x).toBe(vp.vw - 500);
-    expect(g.y).toBe(vp.vh - 400);
+    expect(g.y).toBe(vp.vh - 450);
   });
 
   it("enforces the minimum size", () => {
@@ -44,7 +44,7 @@ describe("clampGeom", () => {
 });
 
 describe("applyDrag", () => {
-  const start: Geom = { x: 800, y: 400, w: 500, h: 300 };
+  const start: Geom = { x: 800, y: 400, w: 500, h: 450 };
 
   it("moves by the delta", () => {
     expect(applyDrag(start, -100, -50, vp)).toMatchObject({ x: 700, y: 350 });

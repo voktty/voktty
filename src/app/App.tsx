@@ -36,6 +36,7 @@ import {
 import { AgentHistoryModal, useAgentHistoryStore } from "@/modules/agent-history";
 import {
   AgentRunBridge,
+  AiMiniWindow,
   AiSidebarPanel,
   LocalAgentNotificationsBridge,
   SelectionAskAi,
@@ -621,6 +622,8 @@ export default function App() {
 
   const tabStyle = usePreferencesStore((s) => s.tabStyle);
   const panelOpen = useChatStore((s) => s.panelOpen);
+  const miniOpen = useChatStore((s) => s.mini.open);
+  const miniPresence = usePresence(miniOpen, 200);
 
   const verticalTabsPanelRef = useRef<PanelImperativeHandle | null>(null);
   const rightPanelWidthRef = useRef(readRightPanelWidth());
@@ -708,9 +711,10 @@ export default function App() {
     setActiveTabsLaunchpadOpen(true);
   }, []);
   const focusInput = useChatStore((s) => s.focusInput);
-  const openPanel = useChatStore((s) => s.openPanel);
   const closePanel = useChatStore((s) => s.closePanel);
+  const openMini = useChatStore((s) => s.openMini);
   const closeMini = useChatStore((s) => s.closeMini);
+  const presentChat = useChatStore((s) => s.presentChat);
   const [aiSidebarMounted, setAiSidebarMounted] = useState(panelOpen);
   const setLive = useChatStore((s) => s.setLive);
   const respondToApproval = useChatStore((s) => s.respondToApproval);
@@ -1288,11 +1292,21 @@ export default function App() {
     }
     if (panelOpen) {
       closePanel();
+    } else if (miniOpen) {
+      closeMini();
     } else {
-      openPanel();
+      openMini();
       focusInput(null);
     }
-  }, [closePanel, hasComposer, panelOpen, openPanel, focusInput]);
+  }, [
+    closeMini,
+    closePanel,
+    hasComposer,
+    miniOpen,
+    openMini,
+    panelOpen,
+    focusInput,
+  ]);
 
   const attachSelection = useChatStore((s) => s.attachSelection);
 
@@ -1307,10 +1321,10 @@ export default function App() {
       window.dispatchEvent(
         new CustomEvent<string>("voktty:ai-attach-file", { detail: path }),
       );
-      openPanel();
+      presentChat();
       focusInput(null);
     },
-    [hasComposer, openPanel, focusInput],
+    [hasComposer, presentChat, focusInput],
   );
 
   const askFromSelection = useCallback(() => {
@@ -1326,7 +1340,6 @@ export default function App() {
     const source: "terminal" | "editor" =
       activeTab?.kind === "editor" ? "editor" : "terminal";
     attachSelection(selection, source);
-    openPanel();
     focusInput(null);
   }, [
     hasComposer,
@@ -1334,7 +1347,6 @@ export default function App() {
     focusInput,
     attachSelection,
     activeTab,
-    openPanel,
   ]);
 
   const editFromSelection = useCallback(() => {
@@ -3216,9 +3228,9 @@ export default function App() {
   const onActivateAgent = activateAgentTarget;
 
   const onActivateLocalAgent = useCallback(() => {
-    openPanel();
+    presentChat();
     focusInput(null);
-  }, [openPanel, focusInput]);
+  }, [presentChat, focusInput]);
 
   const handleLeafExit = useCallback(
     (leafId: number, _code: number) => {
@@ -4991,6 +5003,10 @@ export default function App() {
               />
               <LocalAgentNotificationsBridge />
             </>
+          ) : null}
+
+          {hasComposer && miniPresence.mounted ? (
+            <AiMiniWindow state={miniPresence.state} />
           ) : null}
 
           {hasComposer && askPresence.mounted ? (

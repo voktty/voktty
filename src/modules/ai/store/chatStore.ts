@@ -139,6 +139,14 @@ type StoreState = {
   closePanel: () => void;
   togglePanel: () => void;
 
+  /** Shows the chat in whichever surface is already open; opens the floating
+   * mini window when neither is, instead of always forcing the docked panel. */
+  presentChat: () => void;
+
+  unreadCount: number;
+  markChatRead: () => void;
+  noteUnreadMessage: () => void;
+
   focusSignal: number;
   pendingPrefill: string | null;
   focusInput: (prefill?: string | null) => void;
@@ -294,19 +302,20 @@ export const useChatStore = create<StoreState>((set, get) => ({
   mini: { open: false },
   openMini: () => {
     if (!isAiRuntimeAvailable()) return;
-    set({ mini: { open: true } });
+    set({ mini: { open: true }, unreadCount: 0 });
   },
   closeMini: () => set({ mini: { open: false } }),
   toggleMini: () =>
-    set((s) => ({
-      mini: { open: !s.mini.open && isAiRuntimeAvailable() },
-    })),
+    set((s) => {
+      const next = !s.mini.open && isAiRuntimeAvailable();
+      return { mini: { open: next }, unreadCount: next ? 0 : s.unreadCount };
+    }),
 
   panelOpen: readInitialPanelOpen() && isAiRuntimeAvailable(),
   openPanel: () => {
     if (!isAiRuntimeAvailable()) return;
     persistPanelOpen(true);
-    set({ panelOpen: true });
+    set({ panelOpen: true, unreadCount: 0 });
   },
   closePanel: () => {
     persistPanelOpen(false);
@@ -316,16 +325,30 @@ export const useChatStore = create<StoreState>((set, get) => ({
     set((s) => {
       const next = !s.panelOpen && isAiRuntimeAvailable();
       persistPanelOpen(next);
-      return { panelOpen: next };
+      return { panelOpen: next, unreadCount: next ? 0 : s.unreadCount };
+    }),
+
+  presentChat: () => {
+    const s = get();
+    if (!isAiRuntimeAvailable()) return;
+    if (s.panelOpen || s.mini.open) return;
+    s.openMini();
+  },
+
+  unreadCount: 0,
+  markChatRead: () => set({ unreadCount: 0 }),
+  noteUnreadMessage: () =>
+    set((s) => {
+      if (s.panelOpen || s.mini.open) return s;
+      return { unreadCount: s.unreadCount + 1 };
     }),
 
   focusSignal: 0,
   pendingPrefill: null,
   focusInput: (prefill = null) => {
     if (!isAiRuntimeAvailable()) return;
-    persistPanelOpen(true);
+    get().presentChat();
     set((s) => ({
-      panelOpen: true,
       focusSignal: s.focusSignal + 1,
       pendingPrefill: prefill ?? null,
     }));
@@ -342,9 +365,8 @@ export const useChatStore = create<StoreState>((set, get) => ({
     const trimmed = text.trim();
     if (!trimmed) return;
     const id = `sel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    persistPanelOpen(true);
+    get().presentChat();
     set((s) => ({
-      panelOpen: true,
       focusSignal: s.focusSignal + 1,
       pendingSelections: [
         ...s.pendingSelections,

@@ -31,6 +31,7 @@ export function AgentStatusPill({ onClick }: Props) {
     <button
       key={`${meta.status}:${label}`}
       type="button"
+      data-ai-mini-window-trigger
       onClick={onClick}
       className={cn(
         "flex h-6 items-center gap-1.5 rounded-md border px-1.5 text-[11px] transition-colors",

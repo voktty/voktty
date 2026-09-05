@@ -3,18 +3,19 @@ export type Viewport = { vw: number; vh: number };
 export type ResizeDir = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 export const MIN_W = 400;
-export const MIN_H = 280;
+export const MIN_H = 420;
 
 const MARGIN_X = 16;
 const BOTTOM_GAP = 96;
 const TOP_GAP = 16;
+const DEFAULT_H = 760;
 
 const clamp = (v: number, lo: number, hi: number) =>
   v < lo ? lo : v > hi ? hi : v;
 
 export function defaultGeom(vp: Viewport): Geom {
   const w = Math.max(MIN_W, Math.min(500, vp.vw - MARGIN_X * 2));
-  const h = Math.max(MIN_H, Math.min(600, vp.vh - BOTTOM_GAP - TOP_GAP));
+  const h = Math.max(MIN_H, Math.min(DEFAULT_H, vp.vh - BOTTOM_GAP - TOP_GAP));
   return clampGeom(
     { x: vp.vw - w - MARGIN_X, y: vp.vh - h - BOTTOM_GAP, w, h },
     vp,
