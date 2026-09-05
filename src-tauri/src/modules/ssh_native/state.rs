@@ -3,15 +3,15 @@
 //! Generic over the session value so the rules here can be tested without a
 //! real SSH transport; production stores the connected chain.
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use serde::Serialize;
 
 use super::cells::{self, Cell};
 use super::connection::NativeChain;
-use super::types::{SshErrorCode, SshNativeError, SshNativeTarget};
+use super::registry::Registry;
+use super::types::{SshNativeError, SshNativeTarget};
 
 /// Each session is a live socket and a spawned task, so the count is bounded.
 const MAX_SESSIONS: usize = 32;
@@ -29,10 +29,20 @@ pub struct SshSessionInfo {
     pub consumers: usize,
 }
 
+#[derive(Clone)]
 struct Entry<T> {
     cell: Cell<T>,
     info: SshSessionInfo,
     consumers: Arc<AtomicUsize>,
+}
+
+impl<T> Entry<T> {
+    fn info(&self) -> SshSessionInfo {
+        SshSessionInfo {
+            consumers: self.consumers.load(Ordering::Acquire),
+            ..self.info.clone()
+        }
+    }
 }
 
 /// A consumer's claim on a session. Holding it keeps the session counted as in
@@ -48,15 +58,6 @@ impl<T> SessionLease<T> {
     }
 }
 
-/// A live transport has nothing safe or useful to print.
-impl<T> std::fmt::Debug for SessionLease<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SessionLease")
-            .field("consumers", &self.consumers.load(Ordering::Acquire))
-            .finish()
-    }
-}
-
 impl<T: Clone> SessionLease<T> {
     pub fn value(&self) -> T {
         cells::read(&self.cell)
@@ -69,21 +70,24 @@ impl<T> Drop for SessionLease<T> {
     }
 }
 
-pub struct SessionRegistry<T> {
-    entries: Mutex<HashMap<String, Entry<T>>>,
-    next_id: AtomicU64,
+/// A live transport has nothing safe or useful to print.
+impl<T> std::fmt::Debug for SessionLease<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionLease")
+            .field("consumers", &self.consumers.load(Ordering::Acquire))
+            .finish()
+    }
 }
 
-impl<T> SessionRegistry<T> {
+pub struct SessionRegistry<T> {
+    entries: Registry<Entry<T>>,
+}
+
+impl<T: Clone> SessionRegistry<T> {
     pub fn new() -> Self {
         Self {
-            entries: Mutex::new(HashMap::new()),
-            next_id: AtomicU64::new(1),
+            entries: Registry::new("ssh", MAX_SESSIONS),
         }
-    }
-
-    fn lock(&self) -> MutexGuard<'_, HashMap<String, Entry<T>>> {
-        self.entries.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn insert(
@@ -93,49 +97,31 @@ impl<T> SessionRegistry<T> {
         hops: usize,
         value: T,
     ) -> Result<SshSessionInfo, SshNativeError> {
-        let mut entries = self.lock();
-        if entries.len() >= MAX_SESSIONS {
-            return Err(SshNativeError::new(
-                SshErrorCode::Config,
-                format!("at most {MAX_SESSIONS} native SSH sessions can be open"),
-            ));
-        }
-
-        let id = format!("ssh-{}", self.next_id.fetch_add(1, Ordering::Relaxed));
-        let info = SshSessionInfo {
-            id: id.clone(),
-            host: target.destination.host.clone(),
-            port: target.destination.port(),
-            user: user.to_string(),
-            hops,
-            consumers: 0,
-        };
-        entries.insert(
-            id,
-            Entry {
-                cell: cells::cell(value),
-                info: info.clone(),
-                consumers: Arc::new(AtomicUsize::new(0)),
+        let entry = self.entries.insert_with(|id| Entry {
+            cell: cells::cell(value.clone()),
+            info: SshSessionInfo {
+                id: id.to_string(),
+                host: target.destination.host.clone(),
+                port: target.destination.port(),
+                user: user.to_string(),
+                hops,
+                consumers: 0,
             },
-        );
-        Ok(info)
+            consumers: Arc::new(AtomicUsize::new(0)),
+        })?;
+        Ok(entry.info())
     }
 
     /// Point an existing session at a new transport after a reconnect. Every
     /// lease handed out earlier follows it.
     pub fn replace(&self, id: &str, value: T) -> Result<(), SshNativeError> {
-        match self.lock().get(id) {
-            Some(entry) => {
-                cells::write(&entry.cell, value);
-                Ok(())
-            }
-            None => Err(unknown_session(id)),
-        }
+        let entry = self.entries.get(id)?;
+        cells::write(&entry.cell, value);
+        Ok(())
     }
 
     pub fn acquire(&self, id: &str) -> Result<SessionLease<T>, SshNativeError> {
-        let entries = self.lock();
-        let entry = entries.get(id).ok_or_else(|| unknown_session(id))?;
+        let entry = self.entries.get(id)?;
         entry.consumers.fetch_add(1, Ordering::AcqRel);
         Ok(SessionLease {
             cell: Arc::clone(&entry.cell),
@@ -147,43 +133,30 @@ impl<T> SessionRegistry<T> {
     /// until its last holder drops it, so an in-flight transfer is not severed
     /// mid-write.
     pub fn close(&self, id: &str) -> Result<(), SshNativeError> {
-        match self.lock().remove(id) {
-            Some(_) => Ok(()),
-            None => Err(unknown_session(id)),
-        }
+        self.entries.remove(id).map(|_| ())
     }
 
     pub fn info(&self, id: &str) -> Option<SshSessionInfo> {
-        self.lock().get(id).map(read_info)
+        self.entries.find(id).map(|entry| entry.info())
     }
 
     pub fn list(&self) -> Vec<SshSessionInfo> {
-        let mut sessions: Vec<SshSessionInfo> = self.lock().values().map(read_info).collect();
+        let mut sessions: Vec<SshSessionInfo> =
+            self.entries.values().iter().map(Entry::info).collect();
         sessions.sort_by(|a, b| a.id.cmp(&b.id));
         sessions
     }
 
     pub fn len(&self) -> usize {
-        self.lock().len()
+        self.entries.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.entries.is_empty()
     }
 }
 
-fn read_info<T>(entry: &Entry<T>) -> SshSessionInfo {
-    SshSessionInfo {
-        consumers: entry.consumers.load(Ordering::Acquire),
-        ..entry.info.clone()
-    }
-}
-
-fn unknown_session(id: &str) -> SshNativeError {
-    SshNativeError::new(SshErrorCode::Config, format!("unknown SSH session {id}"))
-}
-
-impl<T> Default for SessionRegistry<T> {
+impl<T: Clone> Default for SessionRegistry<T> {
     fn default() -> Self {
         Self::new()
     }
@@ -194,7 +167,7 @@ pub type SshNativeState = SessionRegistry<Arc<NativeChain>>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::modules::ssh_native::types::SshNativeHop;
+    use crate::modules::ssh_native::types::{SshErrorCode, SshNativeHop};
 
     fn target(host: &str) -> SshNativeTarget {
         SshNativeTarget {

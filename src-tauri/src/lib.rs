@@ -289,6 +289,7 @@ pub fn run() {
         .manage(fs::replace::WorkspaceReplaceState::default())
         .manage(rdp::RdpState::default())
         .manage(ssh_native::state::SshNativeState::new())
+        .manage(ssh_native::sftp::commands::new_state())
         .manage(collab::CollabState::default())
         .manage(collab::CollabGuestState::default())
         .manage(mcp::McpManagerState::default())
@@ -509,6 +510,18 @@ pub fn run() {
             ssh_native::ssh_native_connect,
             ssh_native::ssh_native_disconnect,
             ssh_native::ssh_native_sessions,
+            ssh_native::sftp::commands::ssh_native_sftp_open,
+            ssh_native::sftp::commands::ssh_native_sftp_close,
+            ssh_native::sftp::commands::ssh_native_sftp_read_dir,
+            ssh_native::sftp::commands::ssh_native_sftp_stat,
+            ssh_native::sftp::commands::ssh_native_sftp_canonicalize,
+            ssh_native::sftp::commands::ssh_native_sftp_read_text,
+            ssh_native::sftp::commands::ssh_native_sftp_read_binary,
+            ssh_native::sftp::commands::ssh_native_sftp_write_text,
+            ssh_native::sftp::commands::ssh_native_sftp_create_dir,
+            ssh_native::sftp::commands::ssh_native_sftp_create_file,
+            ssh_native::sftp::commands::ssh_native_sftp_rename,
+            ssh_native::sftp::commands::ssh_native_sftp_delete,
             collab::requirements::collab_cloudflared_status,
             collab::collab_host_start,
             collab::collab_host_stop,

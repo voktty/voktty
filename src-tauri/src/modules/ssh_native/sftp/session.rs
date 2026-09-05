@@ -78,6 +78,15 @@ pub struct NativeSftp {
     root: String,
 }
 
+/// Only the root: a live channel has nothing safe or useful to print.
+impl std::fmt::Debug for NativeSftp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeSftp")
+            .field("root", &self.root)
+            .finish()
+    }
+}
+
 type SftpFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, SftpError>> + Send + 'a>>;
 
 impl NativeSftp {
