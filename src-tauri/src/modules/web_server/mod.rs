@@ -113,6 +113,31 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
     var selector = generateCssSelector(element);
     var framework = "dom-generic";
     var componentName, filePath, lineNumber, columnNumber, propsSummary, hierarchy = [];
+    var parentClasses = [];
+
+    var currP = element.parentElement;
+    var pDepth = 0;
+    while (currP && pDepth < 6) {
+      if (currP.id && !parentClasses.includes("#" + currP.id)) {
+        parentClasses.push("#" + currP.id);
+      }
+      if (currP.classList && currP.classList.length > 0) {
+        for (var ci = 0; ci < currP.classList.length; ci++) {
+          var cName = currP.classList[ci];
+          if (!cName.startsWith("voktty-") && !parentClasses.includes(cName)) {
+            parentClasses.push(cName);
+          }
+        }
+      }
+      if (!filePath && currP.getAttribute) {
+        var dataFile = currP.getAttribute("data-file") || currP.getAttribute("data-source") || currP.getAttribute("data-template") || currP.getAttribute("data-component") || currP.getAttribute("data-blade") || currP.getAttribute("data-php-file");
+        if (dataFile) {
+          filePath = dataFile;
+        }
+      }
+      currP = currP.parentElement;
+      pDepth++;
+    }
 
     if (typeof element.closest === "function") {
       var astroEl = element.closest("[data-astro-source-file]");
@@ -197,6 +222,7 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       tagName: tagName,
       idAttr: idAttr,
       classList: classList,
+      parentClasses: parentClasses,
       attributes: attributes,
       selector: selector,
       componentName: componentName,
@@ -207,10 +233,14 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       framework: framework,
       hierarchy: hierarchy,
       boundingBox: boundingBox,
+      rect: boundingBox,
       styles: styles,
+      innerText: textSnippet || "",
       textSnippet: textSnippet || undefined,
+      htmlSnippet: outerHtml || "",
       outerHtml: outerHtml || undefined,
       timestamp: Date.now(),
+      url: url || window.location.href,
       pageUrl: url || window.location.href
     };
   }
@@ -224,10 +254,10 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
   var shadow = overlayHost.attachShadow({ mode: "open" });
 
   var box = document.createElement("div");
-  box.style.cssText = "position:absolute;display:none;pointer-events:none;border:2px solid #06b6d4;background:rgba(6,182,212,0.12);border-radius:4px;box-shadow:0 0 14px rgba(6,182,212,0.45);transition:top 60ms ease-out, left 60ms ease-out, width 60ms ease-out, height 60ms ease-out;z-index:2147483647;";
+  box.style.cssText = "position:absolute;display:none;pointer-events:none;border:2px solid #06b6d4;background:rgba(6,182,212,0.14);border-radius:4px;box-shadow:0 0 16px rgba(6,182,212,0.5), inset 0 0 8px rgba(6,182,212,0.2);transition:top 50ms ease-out, left 50ms ease-out, width 50ms ease-out, height 50ms ease-out;z-index:2147483647;";
 
   var label = document.createElement("div");
-  label.style.cssText = "position:absolute;bottom:calc(100% + 4px);left:0;background:#0f172a;color:#38bdf8;padding:2px 8px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid #0284c7;box-shadow:0 2px 8px rgba(0,0,0,0.5);pointer-events:none;";
+  label.style.cssText = "position:absolute;left:0;background:rgba(15,23,42,0.95);color:#38bdf8;padding:3px 10px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;font-weight:600;white-space:nowrap;border:1px solid #0284c7;box-shadow:0 4px 14px rgba(0,0,0,0.5);pointer-events:none;backdrop-filter:blur(8px);display:flex;align-items:center;gap:6px;";
   box.appendChild(label);
   shadow.appendChild(box);
 
@@ -247,13 +277,23 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
     box.style.width = r.width + "px";
     box.style.height = r.height + "px";
 
+    if (r.top < 32) {
+      label.style.top = "calc(100% + 4px)";
+      label.style.bottom = "auto";
+    } else {
+      label.style.bottom = "calc(100% + 4px)";
+      label.style.top = "auto";
+    }
+
     var title = (el.tagName || "").toLowerCase();
     if (el.id) title += "#" + el.id;
     else if (el.classList && el.classList.length > 0) {
       var cls = Array.from(el.classList).filter(function(c){ return !c.startsWith("voktty-"); })[0];
       if (cls) title += "." + cls;
     }
-    label.textContent = "\u{1F3AF} " + title;
+    var w = Math.round(r.width);
+    var h = Math.round(r.height);
+    label.textContent = "\u{1F3AF} " + title + "  " + w + "\u00D7" + h + "px";
   }
 
   function handleMouseMove(e) {
@@ -267,19 +307,16 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
     }
   }
 
-  function handlePointerDown(e) {
-    if (!active) return;
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
   function handleClick(e) {
     if (!active) return;
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    var target = document.elementFromPoint(e.clientX, e.clientY);
+    var target = e.target && e.target !== overlayHost && !overlayHost.contains(e.target)
+      ? e.target
+      : document.elementFromPoint(e.clientX, e.clientY);
+
     if (target && target !== overlayHost && !overlayHost.contains(target)) {
       var meta = extractDomMetadata(target, window.location.href);
       try {
@@ -290,6 +327,7 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       } catch (err) {
         console.warn("[Voktty Inspector] PostMessage failed", err);
       }
+      setActive(false);
     }
   }
 
@@ -303,19 +341,37 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       try {
         document.documentElement.style.setProperty("cursor", "crosshair", "important");
       } catch(_) {}
-      document.addEventListener("pointerdown", handlePointerDown, true);
       document.addEventListener("mousemove", handleMouseMove, true);
       document.addEventListener("click", handleClick, true);
+      document.addEventListener("auxclick", handleClick, true);
     } else {
       box.style.display = "none";
       try {
         document.documentElement.style.removeProperty("cursor");
       } catch(_) {}
-      document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("mousemove", handleMouseMove, true);
       document.removeEventListener("click", handleClick, true);
+      document.removeEventListener("auxclick", handleClick, true);
     }
   }
+
+  // Intercept anchor navigation inside proxied pages when inspector is idle
+  document.addEventListener("click", function(e) {
+    if (active) return;
+    var anchor = e.target && e.target.closest ? e.target.closest("a") : null;
+    if (anchor && anchor.href && !anchor.href.startsWith("javascript:") && !anchor.href.startsWith("#")) {
+      if (anchor.target === "_blank") return;
+      e.preventDefault();
+      try {
+        window.parent.postMessage({
+          type: "VOKTTY_PROXY_NAVIGATE",
+          payload: { url: anchor.href }
+        }, "*");
+      } catch(_) {
+        window.location.href = "/__voktty_proxy?url=" + encodeURIComponent(anchor.href);
+      }
+    }
+  }, true);
 
   window.addEventListener("scroll", function() {
     if (active && hoveredEl) updateHighlight(hoveredEl);
@@ -373,6 +429,33 @@ if ($uri === '/__voktty_inspector.js') {
     header('Cache-Control: no-cache, no-store, must-revalidate');
     echo file_get_contents(__DIR__ . '/voktty_inspector.js');
     exit;
+}
+if (strpos($uri, '/__voktty_proxy') === 0) {
+    $targetUrl = $_GET['url'] ?? '';
+    if ($targetUrl) {
+        $content = @file_get_contents($targetUrl);
+        if ($content !== false) {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Access-Control-Allow-Origin: *');
+            $base = "<base href=\"" . htmlspecialchars($targetUrl, ENT_QUOTES) . "\">\n<script>window.__VOKTTY_IS_PROXIED__ = true;</script>";
+            if (strpos($content, '<head>') !== false) {
+                $content = str_replace('<head>', "<head>\n" . $base, $content);
+            } else {
+                $content = "<head>" . $base . "</head>" . $content;
+            }
+            $script = "<script src=\"/__voktty_inspector.js\"></script>";
+            if (strpos($content, '__voktty_inspector.js') === false) {
+                $pos = strripos($content, '</body>');
+                if ($pos !== false) {
+                    $content = substr_replace($content, $script . '</body>', $pos, 7);
+                } else {
+                    $content .= "\n" . $script;
+                }
+            }
+            echo $content;
+            exit;
+        }
+    }
 }
 
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?? getcwd();
@@ -464,6 +547,7 @@ enum RunningServer {
 #[derive(Default)]
 pub struct WebServerState {
     servers: Mutex<HashMap<String, RunningServer>>,
+    proxy_server: Mutex<Option<(u16, Arc<AtomicBool>)>>,
 }
 
 impl WebServerState {
@@ -479,6 +563,14 @@ impl WebServerState {
                     let _ = child.wait();
                 }
             }
+        }
+        if let Some((_, stop_flag)) = self
+            .proxy_server
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
+            stop_flag.store(true, Ordering::SeqCst);
         }
     }
 }
@@ -680,6 +772,11 @@ fn handle_connection(mut stream: TcpStream, root: &Path) {
             INSPECTOR_BUNDLE_JS
         );
         let _ = stream.write_all(resp.as_bytes());
+        return;
+    }
+
+    if raw_uri.starts_with("/__voktty_proxy") || relative.starts_with("__voktty_proxy") {
+        handle_proxy_request(&mut stream, raw_uri);
         return;
     }
 
@@ -1241,6 +1338,643 @@ pub async fn web_server_list(
         }
     }
     Ok(list)
+}
+
+pub fn url_encode(s: &str) -> String {
+    let mut encoded = String::new();
+    for b in s.bytes() {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(b as char);
+            }
+            _ => {
+                encoded.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    encoded
+}
+
+static LAST_PROXIED_URL: Mutex<Option<String>> = Mutex::new(None);
+
+pub fn record_last_proxied_url(target: &str) {
+    if let Ok(mut lock) = LAST_PROXIED_URL.lock() {
+        *lock = Some(target.to_string());
+    }
+}
+
+pub fn get_last_proxied_url() -> Option<String> {
+    LAST_PROXIED_URL.lock().ok().and_then(|g| g.clone())
+}
+
+pub fn handle_proxy_request(stream: &mut TcpStream, raw_uri: &str) {
+    let query_str = raw_uri.split('?').nth(1).unwrap_or("");
+    let mut target_url = String::new();
+    for pair in query_str.split('&') {
+        let mut parts = pair.splitn(2, '=');
+        if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
+            if k == "url" {
+                target_url = url_decode(v);
+                break;
+            }
+        }
+    }
+
+    if target_url.is_empty() {
+        let body = "<!DOCTYPE html><html><body><h3>Voktty Preview Proxy</h3><p>Missing <code>url</code> parameter.</p></body></html>";
+        let resp = format!(
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(resp.as_bytes());
+        return;
+    }
+
+    record_last_proxied_url(&target_url);
+
+    let result = ureq::get(&target_url)
+        .set(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        )
+        .set(
+            "Accept",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        )
+        .set("Accept-Language", "en-US,en;q=0.9,es;q=0.8")
+        .timeout(Duration::from_secs(15))
+        .call();
+
+    match result {
+        Ok(response) => {
+            let status = response.status();
+            let status_text = response.status_text().to_string();
+            let content_type = response.content_type().to_string();
+
+            if content_type.contains("text/html") || content_type.contains("application/xhtml+xml")
+            {
+                let mut html = response.into_string().unwrap_or_default();
+                let base_url = if let Ok(parsed) = url::Url::parse(&target_url) {
+                    let mut base = parsed.clone();
+                    let path = base.path().to_string();
+                    if !path.ends_with('/') && !path.contains('.') {
+                        base.set_path(&format!("{}/", path));
+                    }
+                    base.to_string()
+                } else {
+                    target_url.clone()
+                };
+
+                let base_tag = format!(
+                    "<base href=\"{}\">\n<meta name=\"referrer\" content=\"no-referrer-when-downgrade\">\n<script>window.__VOKTTY_IS_PROXIED__ = true;</script>",
+                    base_url
+                );
+                if let Some(pos) = html.find("<head>") {
+                    html.insert_str(pos + 6, &format!("\n{}", base_tag));
+                } else if let Some(pos) = html.find("<HEAD>") {
+                    html.insert_str(pos + 6, &format!("\n{}", base_tag));
+                } else if let Some(pos) = html.find("<html>") {
+                    html.insert_str(pos + 6, &format!("<head>{}</head>", base_tag));
+                } else {
+                    html.insert_str(0, &format!("<head>{}</head>", base_tag));
+                }
+
+                let script_tag = format!("\n<script>\n{}\n</script>\n", INSPECTOR_BUNDLE_JS);
+                if !html.contains("voktty-injected-inspector") && !html.contains("__voktty_inspector_active") {
+                    if let Some(pos) = html.rfind("</body>") {
+                        html.insert_str(pos, &script_tag);
+                    } else if let Some(pos) = html.rfind("</html>") {
+                        html.insert_str(pos, &script_tag);
+                    } else {
+                        html.push_str(&script_tag);
+                    }
+                }
+
+                let bytes = html.as_bytes();
+                let header = format!(
+                    "HTTP/1.1 {} {}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n",
+                    status, status_text, bytes.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(bytes);
+            } else {
+                let header = format!(
+                    "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n",
+                    status, status_text, content_type
+                );
+                if stream.write_all(header.as_bytes()).is_ok() {
+                    let mut reader = response.into_reader();
+                    let mut buf = [0u8; 16384];
+                    while let Ok(n) = reader.read(&mut buf) {
+                        if n == 0 {
+                            break;
+                        }
+                        if stream.write_all(&buf[..n]).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            let err_msg = e.to_string();
+            let body = format!(
+                r#"<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proxy Error - Voktty Preview</title>
+  <style>
+    body {{ font-family: system-ui, -apple-system, sans-serif; padding: 3rem; background: #0f172a; color: #f8fafc; line-height: 1.6; max-width: 680px; margin: 0 auto; }}
+    .card {{ background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); }}
+    h2 {{ margin-top: 0; color: #ef4444; display: flex; align-items: center; gap: 0.5rem; }}
+    code {{ background: #0f172a; color: #38bdf8; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.9em; word-break: break-all; }}
+    .url {{ color: #94a3b8; font-size: 0.85em; margin-bottom: 1.5rem; word-break: break-all; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>⚠️ Unable to load remote URL</h2>
+    <div class="url"><code>{}</code></div>
+    <p>Failed to retrieve response from the remote server:</p>
+    <p><code>{}</code></p>
+  </div>
+</body>
+</html>"#,
+                target_url, err_msg
+            );
+            let resp = format!(
+                "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        }
+    }
+}
+
+pub fn handle_proxy_connection(mut stream: TcpStream) {
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+
+    let mut buf = [0u8; 4096];
+    let n = match stream.read(&mut buf) {
+        Ok(n) if n > 0 => n,
+        _ => return,
+    };
+
+    let req_str = String::from_utf8_lossy(&buf[..n]);
+    let mut lines = req_str.lines();
+    let request_line = match lines.next() {
+        Some(l) => l,
+        None => return,
+    };
+
+    let mut parts = request_line.split_whitespace();
+    let method = parts.next().unwrap_or("GET");
+    let raw_uri = parts.next().unwrap_or("/");
+
+    if method != "GET" && method != "HEAD" && method != "OPTIONS" {
+        let resp =
+            "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let _ = stream.write_all(resp.as_bytes());
+        return;
+    }
+
+    if method == "OPTIONS" {
+        let resp = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n";
+        let _ = stream.write_all(resp.as_bytes());
+        return;
+    }
+
+    let clean_uri = sanitize_request_path(raw_uri);
+    let decoded = url_decode(clean_uri);
+    let relative = decoded.trim_start_matches('/');
+
+    if relative == "__voktty_inspector.js" {
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/javascript; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n{}",
+            INSPECTOR_BUNDLE_JS.len(),
+            INSPECTOR_BUNDLE_JS
+        );
+        let _ = stream.write_all(resp.as_bytes());
+        return;
+    }
+
+    if raw_uri.starts_with("/__voktty_proxy") || relative.starts_with("__voktty_proxy") {
+        handle_proxy_request(&mut stream, raw_uri);
+        return;
+    }
+
+    // Subresource forwarding for images, stylesheets, fonts, JS chunks, and media
+    let mut referer_val: Option<String> = None;
+    let mut accept_val: Option<String> = None;
+
+    for line in lines {
+        let lower = line.to_ascii_lowercase();
+        if lower.starts_with("referer:") {
+            let val = line["referer:".len()..].trim().to_string();
+            if !val.is_empty() {
+                referer_val = Some(val);
+            }
+        } else if lower.starts_with("accept:") {
+            let val = line["accept:".len()..].trim().to_string();
+            if !val.is_empty() {
+                accept_val = Some(val);
+            }
+        }
+    }
+
+    let parent_target_url = referer_val
+        .as_deref()
+        .and_then(|r| {
+            if let Some(pos) = r.find("/__voktty_proxy?url=") {
+                let enc = &r[pos + "/__voktty_proxy?url=".len()..];
+                let decoded_url = url_decode(enc.split('&').next().unwrap_or(enc));
+                if !decoded_url.is_empty() {
+                    return Some(decoded_url);
+                }
+            }
+            if r.starts_with("http://") || r.starts_with("https://") {
+                if !r.contains("127.0.0.1") && !r.contains("localhost") {
+                    return Some(r.to_string());
+                }
+            }
+            None
+        })
+        .or_else(get_last_proxied_url);
+
+    if let Some(parent_url) = parent_target_url {
+        if let Ok(parent_parsed) = url::Url::parse(&parent_url) {
+            let joined_res = if raw_uri.starts_with('/') {
+                parent_parsed.join(raw_uri)
+            } else {
+                parent_parsed.join(&format!("/{}", raw_uri))
+            };
+
+            if let Ok(resolved_url) = joined_res {
+                let target_sub_str = resolved_url.to_string();
+                let mut req = ureq::get(&target_sub_str)
+                    .set(
+                        "User-Agent",
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    )
+                    .set("Referer", &parent_url)
+                    .set("Accept-Language", "en-US,en;q=0.9,es;q=0.8")
+                    .timeout(Duration::from_secs(12));
+
+                if let Some(ref acc) = accept_val {
+                    req = req.set("Accept", acc);
+                }
+
+                if let Ok(response) = req.call() {
+                    let status = response.status();
+                    let status_text = response.status_text().to_string();
+                    let content_type = response.content_type().to_string();
+
+                    let header = format!(
+                        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\nConnection: close\r\n\r\n",
+                        status, status_text, content_type
+                    );
+
+                    if stream.write_all(header.as_bytes()).is_ok() && method != "HEAD" {
+                        let mut reader = response.into_reader();
+                        let mut sbuf = [0u8; 16384];
+                        while let Ok(read_n) = reader.read(&mut sbuf) {
+                            if read_n == 0 {
+                                break;
+                            }
+                            if stream.write_all(&sbuf[..read_n]).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    let resp = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let _ = stream.write_all(resp.as_bytes());
+}
+
+pub fn start_proxy_server_thread() -> Result<(u16, Arc<AtomicBool>), String> {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .map_err(|e| format!("Failed to bind preview proxy port: {e}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| format!("Failed to get local addr: {e}"))?
+        .port();
+
+    let _ = listener.set_nonblocking(true);
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let stop_clone = Arc::clone(&stop_flag);
+
+    thread::spawn(move || {
+        while !stop_clone.load(Ordering::Relaxed) {
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    thread::spawn(move || {
+                        handle_proxy_connection(stream);
+                    });
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(20));
+                }
+                Err(_) => {
+                    thread::sleep(Duration::from_millis(50));
+                }
+            }
+        }
+    });
+
+    Ok((port, stop_flag))
+}
+
+pub fn get_or_start_proxy_server(state: &WebServerState) -> Result<u16, String> {
+    let mut guard = state.proxy_server.lock().map_err(|e| e.to_string())?;
+    if let Some((port, stop_flag)) = &*guard {
+        if !stop_flag.load(Ordering::Relaxed) {
+            return Ok(*port);
+        }
+    }
+    let (port, stop_flag) = start_proxy_server_thread()?;
+    *guard = Some((port, stop_flag));
+    Ok(port)
+}
+
+#[tauri::command]
+pub async fn web_server_proxy_url(
+    state: State<'_, WebServerState>,
+    target_url: String,
+) -> Result<String, String> {
+    let port = get_or_start_proxy_server(&state)?;
+    let encoded = url_encode(&target_url);
+    Ok(format!(
+        "http://127.0.0.1:{}/__voktty_proxy?url={}",
+        port, encoded
+    ))
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ResolvedElementSource {
+    pub file_path: String,
+    pub relative_path: String,
+    pub line_number: u64,
+    pub column_number: usize,
+    pub framework: String,
+    pub matched_by: String,
+}
+
+fn is_generic_utility_class(class_name: &str) -> bool {
+    let lower = class_name.to_ascii_lowercase();
+    let lower = lower.trim();
+    if lower.is_empty() || lower.starts_with("voktty-") {
+        return true;
+    }
+    if matches!(
+        lower,
+        "row"
+            | "col"
+            | "container"
+            | "container-fluid"
+            | "flex"
+            | "d-flex"
+            | "block"
+            | "inline-block"
+            | "inline"
+            | "grid"
+            | "hidden"
+            | "active"
+            | "show"
+            | "fade"
+            | "clearfix"
+            | "wrapper"
+            | "content"
+            | "main"
+            | "box"
+            | "card"
+            | "card-body"
+            | "btn"
+            | "btn-primary"
+            | "btn-secondary"
+            | "btn-success"
+            | "btn-danger"
+            | "text-center"
+            | "text-left"
+            | "text-right"
+            | "w-full"
+            | "h-full"
+            | "relative"
+            | "absolute"
+            | "fixed"
+            | "static"
+    ) {
+        return true;
+    }
+    if lower.starts_with("col-")
+        || lower.starts_with("aos-")
+        || lower.starts_with("animate__")
+        || lower.starts_with("p-")
+        || lower.starts_with("m-")
+        || lower.starts_with("pt-")
+        || lower.starts_with("pb-")
+        || lower.starts_with("pl-")
+        || lower.starts_with("pr-")
+        || lower.starts_with("px-")
+        || lower.starts_with("py-")
+        || lower.starts_with("mx-")
+        || lower.starts_with("my-")
+        || lower.starts_with("mt-")
+        || lower.starts_with("mb-")
+        || lower.starts_with("ml-")
+        || lower.starts_with("mr-")
+        || lower.starts_with("w-")
+        || lower.starts_with("h-")
+        || lower.starts_with("gap-")
+        || lower.starts_with("space-")
+        || lower.starts_with("justify-")
+        || lower.starts_with("items-")
+        || lower.starts_with("border-")
+        || lower.starts_with("rounded-")
+        || lower.starts_with("shadow-")
+    {
+        return true;
+    }
+    false
+}
+
+fn detect_framework_from_extension(ext: &str) -> &'static str {
+    match ext {
+        "php" => "php",
+        "blade" => "blade",
+        "astro" => "astro",
+        "vue" => "vue",
+        "svelte" => "svelte",
+        "tsx" | "jsx" => "react",
+        "html" | "htm" => "html",
+        "twig" => "twig",
+        "liquid" => "liquid",
+        "erb" => "erb",
+        "ejs" => "ejs",
+        "hbs" => "handlebars",
+        _ => "template",
+    }
+}
+
+fn escape_regex_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        if "\\.+*?()|[]{}^$".contains(c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
+#[tauri::command]
+pub async fn web_server_resolve_element_source(
+    root: String,
+    _tag_name: String,
+    id_attr: Option<String>,
+    classes: Vec<String>,
+    parent_classes: Option<Vec<String>>,
+    text_snippet: Option<String>,
+) -> Result<Option<ResolvedElementSource>, String> {
+    let clean_root = normalize_root_path(&root)?;
+    if !clean_root.is_dir() {
+        return Ok(None);
+    }
+
+    let mut search_tokens: Vec<(String, String)> = Vec::new();
+
+    if let Some(ref id) = id_attr {
+        let trimmed = id.trim();
+        if !trimmed.is_empty() && trimmed.len() >= 2 {
+            search_tokens.push((trimmed.to_string(), "id".to_string()));
+        }
+    }
+
+    for c in &classes {
+        if !is_generic_utility_class(c) && c.len() >= 3 && !search_tokens.iter().any(|(t, _)| t == c) {
+            search_tokens.push((c.clone(), "class".to_string()));
+        }
+    }
+
+    if let Some(ref parents) = parent_classes {
+        for pc in parents {
+            let clean_pc = pc.trim_start_matches('#');
+            if !is_generic_utility_class(clean_pc) && clean_pc.len() >= 3 && !search_tokens.iter().any(|(t, _)| t == clean_pc) {
+                search_tokens.push((clean_pc.to_string(), "parent_class".to_string()));
+            }
+        }
+    }
+
+    if let Some(ref text) = text_snippet {
+        let trimmed = text.trim();
+        if trimmed.len() >= 6 && trimmed.len() <= 60 {
+            let clean_snippet: String = trimmed
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_')
+                .collect();
+            let clean_snippet = clean_snippet.trim();
+            if clean_snippet.len() >= 6 && !search_tokens.iter().any(|(t, _)| t == clean_snippet) {
+                search_tokens.push((clean_snippet.to_string(), "text".to_string()));
+            }
+        }
+    }
+
+    if search_tokens.is_empty() {
+        return Ok(None);
+    }
+
+    let template_extensions = [
+        "blade.php", "php", "astro", "vue", "svelte", "tsx", "jsx",
+        "html", "htm", "twig", "liquid", "erb", "ejs", "hbs", "njk", "pug",
+    ];
+
+    let walker = ignore::WalkBuilder::new(&clean_root)
+        .hidden(true)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .ignore(true)
+        .parents(true)
+        .follow_links(false)
+        .build();
+
+    let collected_entries: Vec<ignore::DirEntry> = walker.flatten().collect();
+
+    for (token, matched_by) in search_tokens {
+        let escaped = escape_regex_literal(&token);
+        let matcher = match grep_regex::RegexMatcherBuilder::new()
+            .case_insensitive(true)
+            .line_terminator(Some(b'\n'))
+            .build(&escaped)
+        {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+
+        for dent in &collected_entries {
+            if !dent.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                continue;
+            }
+            let path = dent.path();
+            let path_str = path.to_string_lossy().to_ascii_lowercase();
+
+            let is_template = template_extensions.iter().any(|ext| path_str.ends_with(ext));
+            if !is_template {
+                continue;
+            }
+
+            let mut searcher = grep_searcher::SearcherBuilder::new()
+                .binary_detection(grep_searcher::BinaryDetection::quit(b'\x00'))
+                .line_number(true)
+                .build();
+
+            let mut found_line: Option<(u64, usize)> = None;
+            let _ = searcher.search_path(
+                &matcher,
+                path,
+                grep_searcher::sinks::UTF8(|line_num, text| {
+                    let col = text.to_ascii_lowercase().find(&token.to_ascii_lowercase()).unwrap_or(0) + 1;
+                    found_line = Some((line_num, col));
+                    Ok(false)
+                }),
+            );
+
+            if let Some((line, col)) = found_line {
+                let rel = path
+                    .strip_prefix(&clean_root)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+
+                let ext = if rel.ends_with(".blade.php") {
+                    "blade"
+                } else {
+                    path.extension().and_then(|e| e.to_str()).unwrap_or("")
+                };
+                let framework = detect_framework_from_extension(ext).to_string();
+                let abs_path = path.to_string_lossy().to_string();
+
+                return Ok(Some(ResolvedElementSource {
+                    file_path: abs_path,
+                    relative_path: rel,
+                    line_number: line,
+                    column_number: col,
+                    framework,
+                    matched_by,
+                }));
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 #[cfg(test)]

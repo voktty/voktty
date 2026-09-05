@@ -93,7 +93,9 @@ import {
   extractLocalPort,
   type PreviewPaneHandle,
   useDevServerCaptureStore,
+  useLiveComponentStore,
   useWebServerStore,
+  type WebServerInfo,
 } from "@/modules/preview";
 import {
   QuickOpenDialog,
@@ -2253,10 +2255,68 @@ export default function App() {
   const [gitCloneModalOpen, setGitCloneModalOpen] = useState(false);
 
   const openPreviewTab = useCallback(
-    (target?: string) => {
+    (target?: string, options?: { splitWithActive?: boolean }) => {
       const explicit = (target ?? "").trim();
+      const shouldSplit = options?.splitWithActive ?? true;
+
+      const setupSplitWithActive = (newTabId: number) => {
+        if (!shouldSplit) return;
+        const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
+        if (!activeTab) return;
+        const spaceId = activeTab.spaceId;
+        const spacesState = useSpaces.getState();
+        const newTab = tabsRef.current.find((t) => t.id === newTabId);
+        if (!newTab) return;
+
+        const existingOwner = spacesState.viewSpaces.find(
+          (vs) => !vs.deleted && vs.memberOrder.includes(activeTab.tabKey),
+        );
+        const workspaceViewSpace = spacesState.viewSpaces.find(
+          (vs) => !vs.deleted && vs.id === `view-${spaceId}`,
+        );
+        const targetViewSpace = existingOwner ?? workspaceViewSpace;
+        const currentMemberCount = targetViewSpace
+          ? targetViewSpace.memberOrder.length
+          : 1;
+
+        if (currentMemberCount < spaceViewLimit) {
+          const targetViewSpaceId = targetViewSpace
+            ? targetViewSpace.id
+            : spacesState.ensureViewSpace({
+                workspaceId: spaceId,
+                name:
+                  spacesState.spaces.find((s) => s.id === spaceId)?.name ??
+                  spaceId,
+                color: spacesState.spaces.find((s) => s.id === spaceId)?.color,
+                initialMember: activeTab.tabKey,
+              });
+
+          if (
+            !spacesState.viewSpaces
+              .find((vs) => vs.id === targetViewSpaceId)
+              ?.memberOrder.includes(activeTab.tabKey)
+          ) {
+            spacesState.addMemberToViewSpace(
+              targetViewSpaceId,
+              activeTab.tabKey,
+              spaceViewLimit,
+            );
+          }
+
+          spacesState.addMemberToViewSpace(
+            targetViewSpaceId,
+            newTab.tabKey,
+            spaceViewLimit,
+          );
+          spacesState.openViewSpace(targetViewSpaceId);
+          spacesState.focusVisualMember(newTab.tabKey);
+        }
+      };
+
       if (/^https?:\/\//i.test(explicit)) {
-        return newPreviewTab(explicit);
+        const id = newPreviewTab(explicit);
+        setupSplitWithActive(id);
+        return id;
       }
 
       const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
@@ -2299,6 +2359,7 @@ export default function App() {
 
       const targetCandidate = rootCandidate || "";
       const id = newPreviewTab("");
+      setupSplitWithActive(id);
       void useWebServerStore
         .getState()
         .startServer(targetCandidate)
@@ -2334,8 +2395,101 @@ export default function App() {
       activeSpace?.root,
       inheritedCwdForNewTab,
       launchCwd,
+      spaceViewLimit,
       updateTab,
     ],
+  );
+
+  const navigateFileInPreview = useCallback(
+    async (previewTabId: number, filePath: string) => {
+      const servers = useWebServerStore.getState().servers;
+      const normFile = filePath.replace(/\\/g, "/").toLowerCase();
+      let matchedServer: WebServerInfo | undefined;
+      let matchedRelative = "";
+
+      for (const s of Object.values(servers)) {
+        const normRoot = s.root_path.replace(/\\/g, "/").toLowerCase();
+        if (normFile.startsWith(normRoot)) {
+          matchedServer = s;
+          matchedRelative = filePath
+            .slice(s.root_path.length)
+            .replace(/^[/\\]+/, "")
+            .replace(/\\/g, "/");
+          break;
+        }
+      }
+
+      if (matchedServer) {
+        const targetUrl = matchedRelative
+          ? `${matchedServer.url}/${matchedRelative}`
+          : matchedServer.url;
+        const currentTab = tabsRef.current.find((t) => t.id === previewTabId);
+        if (currentTab?.kind === "preview" && currentTab.url === targetUrl) {
+          previewRefs.current.get(previewTabId)?.reload();
+        } else {
+          updateTab(previewTabId, { url: targetUrl });
+        }
+        return;
+      }
+
+      const currentTab = tabsRef.current.find((t) => t.id === previewTabId);
+      if (currentTab && currentTab.kind === "preview" && currentTab.url) {
+        const localPort = extractLocalPort(currentTab.url);
+        if (localPort) {
+          const baseRoot = effectiveExplorerRoot || activeSpace?.root;
+          if (baseRoot) {
+            const normBase = baseRoot.replace(/\\/g, "/").toLowerCase();
+            if (normFile.startsWith(normBase)) {
+              const rel = filePath
+                .slice(baseRoot.length)
+                .replace(/^[/\\]+/, "")
+                .replace(/\\/g, "/");
+              try {
+                const origin = new URL(currentTab.url).origin;
+                const targetUrl = `${origin}/${rel}`;
+                if (currentTab.url === targetUrl) {
+                  previewRefs.current.get(previewTabId)?.reload();
+                } else {
+                  updateTab(previewTabId, { url: targetUrl });
+                }
+                return;
+              } catch {
+                const targetUrl = `http://localhost:${localPort}/${rel}`;
+                if (currentTab.url === targetUrl) {
+                  previewRefs.current.get(previewTabId)?.reload();
+                } else {
+                  updateTab(previewTabId, { url: targetUrl });
+                }
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      const containingDir = filePath.replace(/[/\\][^/\\]+$/, "") || filePath;
+      const rootToUse = effectiveExplorerRoot || containingDir;
+
+      try {
+        const info = await useWebServerStore.getState().startServer(rootToUse);
+        const filename = filePath.split(/[/\\]/).pop() || "";
+        const rel = filePath
+          .replace(info.root_path, "")
+          .replace(rootToUse, "")
+          .replace(/^[/\\]+/, "")
+          .replace(/\\/g, "/");
+        const targetUrl =
+          rel && rel !== filePath
+            ? `${info.url}/${rel}`
+            : filename
+              ? `${info.url}/${filename}`
+              : info.url;
+        updateTab(previewTabId, { url: targetUrl });
+      } catch (err) {
+        console.error("Failed to navigate preview file:", err);
+      }
+    },
+    [activeSpace?.root, effectiveExplorerRoot, updateTab],
   );
 
   const openDevServerPreview = useCallback(
@@ -2351,11 +2505,63 @@ export default function App() {
         setActiveId(linked.id);
         return linked.id;
       }
-      return newPreviewTab(capture.url, {
+      const id = newPreviewTab(capture.url, {
         devServerScope: capture.scope,
       });
+      const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
+      if (activeTab) {
+        const spaceId = activeTab.spaceId;
+        const spacesState = useSpaces.getState();
+        const newTab = tabsRef.current.find((t) => t.id === id);
+        if (newTab) {
+          const existingOwner = spacesState.viewSpaces.find(
+            (vs) => !vs.deleted && vs.memberOrder.includes(activeTab.tabKey),
+          );
+          const workspaceViewSpace = spacesState.viewSpaces.find(
+            (vs) => !vs.deleted && vs.id === `view-${spaceId}`,
+          );
+          const targetViewSpace = existingOwner ?? workspaceViewSpace;
+          const currentMemberCount = targetViewSpace
+            ? targetViewSpace.memberOrder.length
+            : 1;
+
+          if (currentMemberCount < spaceViewLimit) {
+            const targetViewSpaceId = targetViewSpace
+              ? targetViewSpace.id
+              : spacesState.ensureViewSpace({
+                  workspaceId: spaceId,
+                  name:
+                    spacesState.spaces.find((s) => s.id === spaceId)?.name ??
+                    spaceId,
+                  color: spacesState.spaces.find((s) => s.id === spaceId)?.color,
+                  initialMember: activeTab.tabKey,
+                });
+
+            if (
+              !spacesState.viewSpaces
+                .find((vs) => vs.id === targetViewSpaceId)
+                ?.memberOrder.includes(activeTab.tabKey)
+            ) {
+              spacesState.addMemberToViewSpace(
+                targetViewSpaceId,
+                activeTab.tabKey,
+                spaceViewLimit,
+              );
+            }
+
+            spacesState.addMemberToViewSpace(
+              targetViewSpaceId,
+              newTab.tabKey,
+              spaceViewLimit,
+            );
+            spacesState.openViewSpace(targetViewSpaceId);
+            spacesState.focusVisualMember(newTab.tabKey);
+          }
+        }
+      }
+      return id;
     },
-    [newPreviewTab, setActiveId, updateTab],
+    [effectiveActiveId, newPreviewTab, setActiveId, spaceViewLimit, updateTab],
   );
 
   useEffect(() => {
@@ -2377,6 +2583,36 @@ export default function App() {
       }
     });
   }, [updateTab]);
+
+  useEffect(() => {
+    const handleJumpToComponent = (e: Event) => {
+      const customEvent = e as CustomEvent<{
+        path: string;
+        line?: number;
+        column?: number;
+      }>;
+      const detail = customEvent.detail;
+      if (!detail?.path) return;
+      const tabId = openFileTab(detail.path, true, { activate: true });
+      if (typeof detail.line === "number" && detail.line > 0) {
+        setTimeout(() => {
+          const handle = editorRefs.current.get(tabId);
+          if (handle) {
+            handle.gotoLocation(detail.line!, detail.column ?? 1, undefined, {
+              focus: true,
+            });
+          }
+        }, 80);
+      }
+    };
+    window.addEventListener("voktty:jump-to-component", handleJumpToComponent);
+    return () => {
+      window.removeEventListener(
+        "voktty:jump-to-component",
+        handleJumpToComponent,
+      );
+    };
+  }, [openFileTab]);
 
   const handleDuplicateTab = useCallback(
     (id: number) => {
@@ -2596,6 +2832,8 @@ export default function App() {
       "tab.newBlock": openNewBlockTab,
       "tab.newPrivate": openNewPrivateTab,
       "tab.newPreview": () => openPreviewTab(""),
+      "preview.toggleInspector": () =>
+        useLiveComponentStore.getState().toggleInspector(),
       "tab.newApiClient": () => newApiClientTab(),
       "tab.newEditor": openNewEditor,
       "tab.newHarness": openNewHarness,
@@ -4353,10 +4591,26 @@ export default function App() {
                           hasGitRepo={sourceControl.hasRepo}
                           onInitGit={sourceControl.initRepository}
                           activeFilePath={explorerActiveFilePath}
-                          onOpenFile={(path, pin) =>
+                          onOpenFile={(path, pin) => {
+                            const currentTab = tabsRef.current.find(
+                              (t) => t.id === effectiveActiveId,
+                            );
+                            if (currentTab?.kind === "preview") {
+                              void navigateFileInPreview(currentTab.id, path);
+                              return;
+                            }
+                            handleOpenFile(path, pin, {
+                              workspaceEnv: activeExplorerWorkspaceEnv,
+                            });
+                          }}
+                          onOpenFileInEditor={(path, pin) =>
                             handleOpenFile(path, pin, {
                               workspaceEnv: activeExplorerWorkspaceEnv,
                             })
+                          }
+                          isPreviewActive={
+                            tabs.find((t) => t.id === effectiveActiveId)?.kind ===
+                            "preview"
                           }
                           onOpenPreview={openPreviewTab}
                           onPathRenamed={handlePathRenamed}

@@ -394,19 +394,16 @@ export function getInspectorInjectedScript(): string {
     }
   }
 
-  function handlePointerDown(e) {
-    if (!active) return;
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
   function handleClick(e) {
     if (!active) return;
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    const target = document.elementFromPoint(e.clientX, e.clientY);
+    const target = e.target && e.target !== overlayHost && !overlayHost.contains(e.target)
+      ? e.target
+      : document.elementFromPoint(e.clientX, e.clientY);
+
     if (target && target !== overlayHost && !overlayHost.contains(target)) {
       const meta = extractDomMetadata(target, window.location.href);
       try {
@@ -417,6 +414,7 @@ export function getInspectorInjectedScript(): string {
       } catch (err) {
         console.warn("[Voktty Inspector] PostMessage failed", err);
       }
+      setActive(false);
     }
   }
 
@@ -430,17 +428,17 @@ export function getInspectorInjectedScript(): string {
       try {
         document.documentElement.style.setProperty("cursor", "crosshair", "important");
       } catch(_) {}
-      document.addEventListener("pointerdown", handlePointerDown, true);
       document.addEventListener("mousemove", handleMouseMove, true);
       document.addEventListener("click", handleClick, true);
+      document.addEventListener("auxclick", handleClick, true);
     } else {
       box.style.display = "none";
       try {
         document.documentElement.style.removeProperty("cursor");
       } catch(_) {}
-      document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("mousemove", handleMouseMove, true);
       document.removeEventListener("click", handleClick, true);
+      document.removeEventListener("auxclick", handleClick, true);
     }
   }
 

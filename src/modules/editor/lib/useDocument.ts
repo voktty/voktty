@@ -132,6 +132,9 @@ export function useDocument({ path, workspaceEnv, onDirtyChange }: Options) {
     // Edits typed while the write was in flight must stay dirty.
     setDirty(bufferRef.current !== content);
     notifyDocumentSaved(path);
+    window.dispatchEvent(
+      new CustomEvent("voktty:reload-preview", { detail: { path } }),
+    );
   }, [path, workspaceEnv]);
 
   // False when the write was withheld because the file changed on disk

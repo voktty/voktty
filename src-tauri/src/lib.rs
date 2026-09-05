@@ -475,6 +475,8 @@ pub fn run() {
             web_server::web_server_stop,
             web_server::web_server_get_for_path,
             web_server::web_server_list,
+            web_server::web_server_proxy_url,
+            web_server::web_server_resolve_element_source,
             tray::tray_toggle_window,
             tray::tray_hide_window,
             tray::tray_show_window,

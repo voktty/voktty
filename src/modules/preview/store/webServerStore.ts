@@ -30,6 +30,7 @@ type WebServerState = {
   stopServerByUrl: (url: string) => Promise<void>;
   getServerForPath: (path: string) => Promise<WebServerInfo | null>;
   listServers: () => Promise<WebServerInfo[]>;
+  getProxyUrl: (url: string) => Promise<string>;
 };
 
 export const useWebServerStore = create<WebServerState>((set) => ({
@@ -121,6 +122,15 @@ export const useWebServerStore = create<WebServerState>((set) => ({
     } catch (err) {
       console.error("Failed to list web servers:", err);
       return [];
+    }
+  },
+
+  getProxyUrl: async (targetUrl: string) => {
+    try {
+      return await invoke<string>("web_server_proxy_url", { targetUrl });
+    } catch (err) {
+      console.error("Failed to get proxy URL:", err);
+      return targetUrl;
     }
   },
 }));

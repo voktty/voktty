@@ -1,4 +1,6 @@
-import { Alert02Icon, Globe02Icon } from "@hugeicons/core-free-icons";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { Globe02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
 import {
@@ -17,6 +19,8 @@ import {
   sendInspectorActive,
 } from "./lib/inspectorBridge";
 import { useLiveComponentStore } from "./store/liveComponentStore";
+
+import { LiveComponentBadge } from "./components/LiveComponentBadge";
 
 export type PreviewPaneHandle = {
   reload: () => void;
@@ -42,10 +46,12 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
     // contentWindow.location.reload() throws on cross-origin frames).
     const [nonce, setNonce] = useState(0);
     const [loaded, setLoaded] = useState(visible);
+    const [effectiveSrc, setEffectiveSrc] = useState(url);
     const addressRef = useRef<PreviewAddressBarHandle>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
 
     const isInspectorActive = useLiveComponentStore((s) => s.isInspectorActive);
+    const selectedComponent = useLiveComponentStore((s) => s.selectedComponent);
     const setSelectedComponent = useLiveComponentStore(
       (s) => s.setSelectedComponent,
     );
@@ -53,6 +59,61 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       (s) => s.setInspectorActive,
     );
     const toggleInspector = useLiveComponentStore((s) => s.toggleInspector);
+
+    useEffect(() => {
+      let cancelled = false;
+      if (!url) {
+        setEffectiveSrc("");
+        return;
+      }
+      if (isLocalUrl(url)) {
+        setEffectiveSrc(url);
+        return;
+      }
+      invoke<string>("web_server_proxy_url", { targetUrl: url })
+        .then((proxied) => {
+          if (!cancelled) setEffectiveSrc(proxied);
+        })
+        .catch((err) => {
+          console.warn("[PreviewPane] Failed to resolve proxy url:", err);
+          if (!cancelled) setEffectiveSrc(url);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [url]);
+
+    // Live-reload: automatically refresh the iframe when local files change or are saved
+    useEffect(() => {
+      if (!loaded) return;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const triggerReload = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          setNonce((n) => n + 1);
+        }, 120);
+      };
+
+      const unlistenWritten = getCurrentWebviewWindow().listen<unknown>(
+        "fs:file-written",
+        triggerReload,
+      );
+      const unlistenChanged = getCurrentWebviewWindow().listen<unknown>(
+        "fs:changed",
+        triggerReload,
+      );
+
+      const handleCustomEvent = () => triggerReload();
+      window.addEventListener("voktty:reload-preview", handleCustomEvent);
+
+      return () => {
+        if (timer) clearTimeout(timer);
+        window.removeEventListener("voktty:reload-preview", handleCustomEvent);
+        unlistenWritten.then((unlisten) => unlisten());
+        unlistenChanged.then((unlisten) => unlisten());
+      };
+    }, [loaded]);
 
     useEffect(() => {
       if (visible) {
@@ -63,17 +124,21 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       return () => clearTimeout(t);
     }, [visible]);
 
-    // Keyboard shortcut: Ctrl+G / Cmd+G to toggle component inspector
+    // Keyboard shortcut: Ctrl+G / Cmd+G / Ctrl+Shift+C to toggle component inspector
     useEffect(() => {
       if (!visible) return;
       const handleKeyDown = (e: KeyboardEvent) => {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "g") {
+        if (
+          ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "g") ||
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "c")
+        ) {
           e.preventDefault();
+          e.stopPropagation();
           toggleInspector();
         }
       };
-      window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
+      window.addEventListener("keydown", handleKeyDown, true);
+      return () => window.removeEventListener("keydown", handleKeyDown, true);
     }, [visible, toggleInspector]);
 
     // Inspector bridge & message listener
@@ -90,21 +155,27 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
           setInspectorActive(active);
         },
         () => {
-          sendInspectorActive(iframe, useLiveComponentStore.getState().isInspectorActive);
+          sendInspectorActive(
+            iframe,
+            useLiveComponentStore.getState().isInspectorActive,
+          );
+        },
+        (newUrl) => {
+          onUrlChange(newUrl);
         },
       );
 
       return () => {
         detach();
       };
-    }, [loaded, nonce, setSelectedComponent, setInspectorActive]);
+    }, [loaded, nonce, effectiveSrc, setSelectedComponent, setInspectorActive, onUrlChange]);
 
     // Sync active state with iframe
     useEffect(() => {
       if (iframeRef.current && loaded) {
         sendInspectorActive(iframeRef.current, isInspectorActive);
       }
-    }, [isInspectorActive, loaded, nonce]);
+    }, [isInspectorActive, loaded, nonce, effectiveSrc]);
 
     useImperativeHandle(
       ref,
@@ -118,8 +189,6 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       }),
       [url],
     );
-
-    const showXfoHint = url ? !isLocalUrl(url) : false;
 
     return (
       <div
@@ -135,42 +204,28 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
           onSubmit={onUrlChange}
           onReload={() => setNonce((n) => n + 1)}
         />
-        {showXfoHint ? (
-          <div className="flex h-7 shrink-0 items-center gap-1.5 border-b border-border/60 bg-amber-500/8 px-3 text-[11px] text-amber-600 dark:text-amber-400">
-            <HugeiconsIcon
-              icon={Alert02Icon}
-              size={12}
-              strokeWidth={1.75}
-              className="shrink-0"
-            />
-            <span className="truncate">
-              {t("preview.xfoHint")}
-            </span>
-          </div>
-        ) : null}
         <div
           className={
-            url
+            effectiveSrc
               ? "relative min-h-0 flex-1 bg-white"
               : "relative min-h-0 flex-1 bg-background"
           }
         >
-          {url ? (
+          {selectedComponent ? (
+            <div className="absolute top-3 inset-x-3 sm:inset-x-6 z-30 max-w-3xl mx-auto pointer-events-auto">
+              <LiveComponentBadge />
+            </div>
+          ) : null}
+          {effectiveSrc ? (
             loaded ? (
               <iframe
                 ref={iframeRef}
-                key={`${url}#${nonce}`}
-                src={url}
+                key={`${effectiveSrc}#${nonce}`}
+                src={effectiveSrc}
                 title={t("preview.title")}
                 className="h-full w-full border-0"
-                // sandbox grants the bare minimum for a dev preview: scripts,
-                // same-origin (cookies/storage for the previewed app), forms,
-                // popups for "open in new tab". Critically OMITS
-                // `allow-top-navigation*` — without it the iframe cannot
-                // navigate the parent Tauri webview to an attacker origin,
-                // which would otherwise expose `window.__TAURI__` IPC.
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
-                referrerPolicy="no-referrer"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+                referrerPolicy="no-referrer-when-downgrade"
                 allow="clipboard-read; clipboard-write; fullscreen"
               />
             ) : (
