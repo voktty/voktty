@@ -888,6 +888,35 @@ html *::-webkit-scrollbar {
   color: color-mix(in srgb, var(--color-content, #f4f4f6) 48%, transparent);
 }
 
+.agent-markdown [data-streamdown="blockquote"] {
+  padding-left: 0;
+  padding-inline-start: 1rem;
+  border-left: 0;
+  border-inline-start: 4px solid
+    color-mix(in srgb, var(--color-content, #f4f4f6) 20%, transparent);
+}
+
+.agent-markdown li > [data-streamdown="ordered-list"],
+.agent-markdown li > [data-streamdown="unordered-list"] {
+  padding-left: 0;
+  padding-inline-start: 1.5rem;
+}
+
+.inbox-comment-md.agent-markdown blockquote {
+  margin: 0.4em 0;
+  padding: 0.15em 0;
+  padding-inline-start: 0.75em;
+  border: 0;
+  border-inline-start: 2px solid
+    color-mix(in srgb, var(--color-content, #f4f4f6) 16%, transparent);
+  color: color-mix(in srgb, var(--color-content, #f4f4f6) 55%, transparent);
+}
+
+.agent-markdown a[dir],
+.agent-markdown code[dir] {
+  unicode-bidi: isolate;
+}
+
 /* Two-frame mascot loop — a hard swap plus a one-pixel hop, arcade style. */
 .mascot-active {
   animation: mascot-hop var(--mascot-beat, 460ms) infinite;
@@ -956,5 +985,50 @@ html *::-webkit-scrollbar {
 .mascot-stunned .mascot-talk {
   opacity: 0;
 }
+
+/* Popover contents grow in from the edge they hang off, sliding the last few
+   pixels out of their trigger. The glass frame stays still: WebKit composites
+   `backdrop-filter` on its own layer and can flash a stale backdrop if that
+   same layer moves and a menu-item hover invalidates it. Still brief: a menu
+   that takes its time reads as lag rather than polish. */
+@keyframes popover-open {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--popover-shift, 0), var(--popover-lift, 0), 0)
+      scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.popover-open {
+  animation: popover-open 170ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  backface-visibility: hidden;
+}
+
+.popover-open[data-popover-side="bottom"] {
+  --popover-lift: -8px;
+}
+
+.popover-open[data-popover-side="top"] {
+  --popover-lift: 8px;
+}
+
+.popover-open[data-popover-side="right"] {
+  --popover-shift: -8px;
+}
+
+.popover-open[data-popover-side="left"] {
+  --popover-shift: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover-open {
+    animation: none;
+  }
+}
+
 
 
