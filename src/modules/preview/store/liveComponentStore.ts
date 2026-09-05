@@ -271,6 +271,7 @@ export const useLiveComponentStore = create<LiveComponentState>((set, get) => ({
             const updated: LiveComponentMetadata = {
               ...state.selectedComponent,
               filePath: resolved.relative_path || resolved.file_path,
+              absolutePath: resolved.file_path,
               lineNumber: resolved.line_number,
               columnNumber: resolved.column_number,
               framework:

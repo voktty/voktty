@@ -142,4 +142,16 @@ describe("liveComponentStore", () => {
     expect(queries).toContain("checkout-btn");
     expect(queries).toContain("Pay $50");
   });
+
+  it("stores and preserves absolutePath alongside relative filePath", () => {
+    const compWithAbs: LiveComponentMetadata = {
+      ...mockComponent,
+      filePath: "index.html",
+      absolutePath: "C:/projects/web/index.html",
+    };
+    useLiveComponentStore.getState().setSelectedComponent(compWithAbs);
+    const selected = useLiveComponentStore.getState().selectedComponent;
+    expect(selected?.filePath).toBe("index.html");
+    expect(selected?.absolutePath).toBe("C:/projects/web/index.html");
+  });
 });
