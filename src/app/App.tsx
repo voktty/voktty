@@ -874,6 +874,14 @@ export default function App() {
       : null;
 
   useEffect(() => {
+    useLiveComponentStore
+      .getState()
+      .setActiveWorkspaceRoot(
+        effectiveExplorerRoot || activeSpace?.root || null,
+      );
+  }, [effectiveExplorerRoot, activeSpace?.root]);
+
+  useEffect(() => {
     if (!booted || !spacesHydrated || !activeSpaceId) return;
     void activateWorkspaceEnv(activeTabWorkspaceEnv)
       .then((prepared) => {

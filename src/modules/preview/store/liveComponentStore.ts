@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import type { LiveComponentMetadata } from "../types";
+import { useWebServerStore } from "./webServerStore";
 
 export function formatComponentBadgeLabel(comp: LiveComponentMetadata): string {
   if (comp.componentName) {
@@ -170,11 +171,21 @@ export async function resolveElementSource(
 ): Promise<ResolvedSourceResult | null> {
   if (comp.filePath) return null;
   try {
-    const root = workspaceRoot || "";
+    let root = workspaceRoot || "";
+    if (!root && comp.url) {
+      const servers = useWebServerStore.getState().servers;
+      for (const s of Object.values(servers)) {
+        if (comp.url.includes(`:${s.port}`)) {
+          root = s.root_path;
+          break;
+        }
+      }
+    }
     const result = await invoke<ResolvedSourceResult | null>(
       "web_server_resolve_element_source",
       {
-        root,
+        root: root || null,
+        url: comp.url || null,
         tagName: comp.tagName,
         idAttr: comp.idAttr || null,
         classes: comp.classList || [],

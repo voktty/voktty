@@ -586,13 +586,56 @@ pub fn clean_path(p: &Path) -> PathBuf {
     }
 }
 
+pub fn is_system_directory(path: &Path) -> bool {
+    let p_str = path.to_string_lossy().to_ascii_lowercase().replace('/', "\\");
+
+    // Windows system paths
+    if p_str.starts_with("c:\\windows")
+        || p_str.starts_with("c:\\program files")
+        || p_str.starts_with("c:\\program files (x86)")
+        || p_str.starts_with("c:\\programdata")
+        || p_str.starts_with("c:\\system volume information")
+        || p_str.starts_with("c:\\$recycle.bin")
+    {
+        return true;
+    }
+
+    // Root drive itself (e.g. "c:\\" or "c:")
+    let trimmed = p_str.trim_end_matches('\\');
+    if trimmed.len() <= 2 && trimmed.ends_with(':') {
+        return true;
+    }
+
+    // Unix system paths
+    if p_str.starts_with("/bin")
+        || p_str.starts_with("/sbin")
+        || p_str.starts_with("/usr")
+        || p_str.starts_with("/etc")
+        || p_str.starts_with("/var")
+        || p_str.starts_with("/sys")
+        || p_str.starts_with("/proc")
+        || p_str.starts_with("/dev")
+        || p_str.starts_with("/system")
+        || p_str.starts_with("/library")
+        || p_str == "/"
+    {
+        return true;
+    }
+
+    false
+}
+
 pub fn normalize_root_path(raw: &str) -> Result<PathBuf, String> {
     let trimmed = raw.trim();
     let mut p = if trimmed.is_empty() {
         if let Some(snapshot) = crate::modules::workspace::launch_cwd_snapshot() {
             snapshot
         } else if let Ok(cwd) = std::env::current_dir() {
-            cwd
+            if !is_system_directory(&cwd) {
+                cwd
+            } else {
+                return Err("Default working directory is a system path".to_string());
+            }
         } else {
             return Err("No path provided and failed to get current directory".to_string());
         }
@@ -1824,76 +1867,125 @@ fn detect_framework_from_extension(ext: &str) -> &'static str {
     }
 }
 
-fn escape_regex_literal(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 8);
-    for c in s.chars() {
-        if "\\.+*?()|[]{}^$".contains(c) {
-            out.push('\\');
-        }
-        out.push(c);
+pub fn parse_url_port_and_path(raw_url: &str) -> (Option<u16>, Option<String>) {
+    let trimmed = raw_url.trim();
+    if trimmed.is_empty() {
+        return (None, None);
     }
-    out
+    let without_scheme = if let Some(idx) = trimmed.find("://") {
+        &trimmed[idx + 3..]
+    } else {
+        trimmed
+    };
+
+    let (host_port, path_and_query) = match without_scheme.find('/') {
+        Some(idx) => (&without_scheme[..idx], &without_scheme[idx..]),
+        None => (without_scheme, ""),
+    };
+
+    let port = if let Some(colon_idx) = host_port.find(':') {
+        host_port[colon_idx + 1..].parse::<u16>().ok()
+    } else {
+        None
+    };
+
+    let path_clean = path_and_query
+        .split('?')
+        .next()
+        .unwrap_or("")
+        .split('#')
+        .next()
+        .unwrap_or("")
+        .trim_start_matches('/');
+
+    let path_opt = if path_clean.is_empty() {
+        None
+    } else {
+        Some(path_clean.to_string())
+    };
+
+    (port, path_opt)
 }
 
 #[tauri::command]
 pub async fn web_server_resolve_element_source(
-    root: String,
-    _tag_name: String,
+    state: State<'_, WebServerState>,
+    root: Option<String>,
+    url: Option<String>,
+    tag_name: String,
     id_attr: Option<String>,
     classes: Vec<String>,
     parent_classes: Option<Vec<String>>,
     text_snippet: Option<String>,
 ) -> Result<Option<ResolvedElementSource>, String> {
-    let clean_root = normalize_root_path(&root)?;
-    if !clean_root.is_dir() {
-        return Ok(None);
-    }
+    let (url_port, url_path) = url
+        .as_deref()
+        .map(parse_url_port_and_path)
+        .unwrap_or((None, None));
 
-    let mut search_tokens: Vec<(String, String)> = Vec::new();
-
-    if let Some(ref id) = id_attr {
-        let trimmed = id.trim();
-        if !trimmed.is_empty() && trimmed.len() >= 2 {
-            search_tokens.push((trimmed.to_string(), "id".to_string()));
-        }
-    }
-
-    for c in &classes {
-        if !is_generic_utility_class(c) && c.len() >= 3 && !search_tokens.iter().any(|(t, _)| t == c) {
-            search_tokens.push((c.clone(), "class".to_string()));
-        }
-    }
-
-    if let Some(ref parents) = parent_classes {
-        for pc in parents {
-            let clean_pc = pc.trim_start_matches('#');
-            if !is_generic_utility_class(clean_pc) && clean_pc.len() >= 3 && !search_tokens.iter().any(|(t, _)| t == clean_pc) {
-                search_tokens.push((clean_pc.to_string(), "parent_class".to_string()));
+    // 1. Try explicit root parameter if valid and not system path
+    let mut resolved_root: Option<PathBuf> = None;
+    if let Some(ref r) = root {
+        let trimmed = r.trim();
+        if !trimmed.is_empty() {
+            if let Ok(clean) = normalize_root_path(trimmed) {
+                if clean.is_dir() && !is_system_directory(&clean) {
+                    resolved_root = Some(clean);
+                }
             }
         }
     }
 
-    if let Some(ref text) = text_snippet {
-        let trimmed = text.trim();
-        if trimmed.len() >= 6 && trimmed.len() <= 60 {
-            let clean_snippet: String = trimmed
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_')
-                .collect();
-            let clean_snippet = clean_snippet.trim();
-            if clean_snippet.len() >= 6 && !search_tokens.iter().any(|(t, _)| t == clean_snippet) {
-                search_tokens.push((clean_snippet.to_string(), "text".to_string()));
+    // 2. If root not provided, resolve from active Web Server state using the port
+    if resolved_root.is_none() {
+        if let Some(port) = url_port {
+            if let Ok(map) = state.servers.lock() {
+                for server in map.values() {
+                    match server {
+                        RunningServer::Static {
+                            port: sp,
+                            root_path,
+                            ..
+                        } if *sp == port => {
+                            if !is_system_directory(root_path) && root_path.is_dir() {
+                                resolved_root = Some(root_path.clone());
+                                break;
+                            }
+                        }
+                        RunningServer::Php {
+                            port: pp,
+                            root_path,
+                            ..
+                        } if *pp == port => {
+                            if !is_system_directory(root_path) && root_path.is_dir() {
+                                resolved_root = Some(root_path.clone());
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
     }
 
-    if search_tokens.is_empty() {
-        return Ok(None);
+    // 3. Fallback to workspace launch snapshot if valid and not a system directory
+    if resolved_root.is_none() {
+        if let Some(snapshot) = crate::modules::workspace::launch_cwd_snapshot() {
+            if snapshot.is_dir() && !is_system_directory(&snapshot) {
+                resolved_root = Some(snapshot);
+            }
+        }
     }
+
+    let clean_root = match resolved_root {
+        Some(r) => r,
+        None => return Ok(None),
+    };
 
     let template_extensions = [
-        "blade.php", "php", "astro", "vue", "svelte", "tsx", "jsx",
-        "html", "htm", "twig", "liquid", "erb", "ejs", "hbs", "njk", "pug",
+        "html", "htm", "php", "blade.php", "astro", "vue", "svelte", "tsx", "jsx",
+        "twig", "liquid", "erb", "ejs", "hbs", "njk", "pug",
     ];
 
     let walker = ignore::WalkBuilder::new(&clean_root)
@@ -1903,78 +1995,201 @@ pub async fn web_server_resolve_element_source(
         .git_exclude(true)
         .ignore(true)
         .parents(true)
+        .max_depth(Some(8))
         .follow_links(false)
         .build();
 
-    let collected_entries: Vec<ignore::DirEntry> = walker.flatten().collect();
-
-    for (token, matched_by) in search_tokens {
-        let escaped = escape_regex_literal(&token);
-        let matcher = match grep_regex::RegexMatcherBuilder::new()
-            .case_insensitive(true)
-            .line_terminator(Some(b'\n'))
-            .build(&escaped)
-        {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-
-        for dent in &collected_entries {
-            if !dent.file_type().map(|t| t.is_file()).unwrap_or(false) {
-                continue;
-            }
-            let path = dent.path();
-            let path_str = path.to_string_lossy().to_ascii_lowercase();
-
-            let is_template = template_extensions.iter().any(|ext| path_str.ends_with(ext));
-            if !is_template {
-                continue;
-            }
-
-            let mut searcher = grep_searcher::SearcherBuilder::new()
-                .binary_detection(grep_searcher::BinaryDetection::quit(b'\x00'))
-                .line_number(true)
-                .build();
-
-            let mut found_line: Option<(u64, usize)> = None;
-            let _ = searcher.search_path(
-                &matcher,
-                path,
-                grep_searcher::sinks::UTF8(|line_num, text| {
-                    let col = text.to_ascii_lowercase().find(&token.to_ascii_lowercase()).unwrap_or(0) + 1;
-                    found_line = Some((line_num, col));
-                    Ok(false)
-                }),
-            );
-
-            if let Some((line, col)) = found_line {
-                let rel = path
-                    .strip_prefix(&clean_root)
-                    .unwrap_or(path)
-                    .to_string_lossy()
-                    .replace('\\', "/");
-
-                let ext = if rel.ends_with(".blade.php") {
-                    "blade"
-                } else {
-                    path.extension().and_then(|e| e.to_str()).unwrap_or("")
-                };
-                let framework = detect_framework_from_extension(ext).to_string();
-                let abs_path = path.to_string_lossy().to_string();
-
-                return Ok(Some(ResolvedElementSource {
-                    file_path: abs_path,
-                    relative_path: rel,
-                    line_number: line,
-                    column_number: col,
-                    framework,
-                    matched_by,
-                }));
+    let mut candidate_files: Vec<PathBuf> = Vec::new();
+    for entry in walker.flatten() {
+        if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            let path = entry.into_path();
+            let path_lower = path.to_string_lossy().to_ascii_lowercase();
+            if template_extensions.iter().any(|ext| path_lower.ends_with(ext)) {
+                candidate_files.push(path);
             }
         }
     }
 
-    Ok(None)
+    if candidate_files.is_empty() {
+        return Ok(None);
+    }
+
+    // Sort candidate files to check direct URL target and index files first
+    candidate_files.sort_by(|a, b| {
+        let a_rel = a
+            .strip_prefix(&clean_root)
+            .unwrap_or(a)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let b_rel = b
+            .strip_prefix(&clean_root)
+            .unwrap_or(b)
+            .to_string_lossy()
+            .replace('\\', "/");
+
+        let a_is_url = url_path
+            .as_ref()
+            .map(|u| a_rel.eq_ignore_ascii_case(u))
+            .unwrap_or(false);
+        let b_is_url = url_path
+            .as_ref()
+            .map(|u| b_rel.eq_ignore_ascii_case(u))
+            .unwrap_or(false);
+
+        if a_is_url && !b_is_url {
+            std::cmp::Ordering::Less
+        } else if !a_is_url && b_is_url {
+            std::cmp::Ordering::Greater
+        } else {
+            let a_is_index = a_rel == "index.html" || a_rel == "index.php";
+            let b_is_index = b_rel == "index.html" || b_rel == "index.php";
+            if a_is_index && !b_is_index {
+                std::cmp::Ordering::Less
+            } else if !a_is_index && b_is_index {
+                std::cmp::Ordering::Greater
+            } else {
+                a_rel.cmp(&b_rel)
+            }
+        }
+    });
+
+    let tag_lower = tag_name.to_ascii_lowercase();
+    let mut best_score: u32 = 0;
+    let mut best_result: Option<ResolvedElementSource> = None;
+
+    for path in &candidate_files {
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let rel = path
+            .strip_prefix(&clean_root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+
+        let is_target_url_file = if let Some(ref target) = url_path {
+            rel.eq_ignore_ascii_case(target)
+                || path
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .map(|f| f.eq_ignore_ascii_case(target))
+                    .unwrap_or(false)
+        } else {
+            rel == "index.html" || rel == "index.php" || rel == "index.htm"
+        };
+
+        let url_bonus: u32 = if is_target_url_file { 30 } else { 0 };
+
+        for (line_idx, line) in content.lines().enumerate() {
+            let line_num = (line_idx + 1) as u64;
+            let line_lower = line.to_ascii_lowercase();
+
+            let mut line_score: u32 = 0;
+            let mut matched_reason = String::new();
+            let mut match_col: usize = 1;
+
+            // 1. Exact / attribute ID match
+            if let Some(ref id) = id_attr {
+                let trimmed_id = id.trim();
+                if trimmed_id.len() >= 2 {
+                    let id_pat1 = format!("id=\"{}\"", trimmed_id.to_ascii_lowercase());
+                    let id_pat2 = format!("id='{}'", trimmed_id.to_ascii_lowercase());
+                    if let Some(pos) = line_lower.find(&id_pat1).or_else(|| line_lower.find(&id_pat2)) {
+                        line_score += 100;
+                        match_col = pos + 1;
+                        matched_reason = format!("id:#{}", trimmed_id);
+                    } else if line_lower.contains(&trimmed_id.to_ascii_lowercase()) {
+                        line_score += 35;
+                        match_col = line_lower.find(&trimmed_id.to_ascii_lowercase()).unwrap_or(0) + 1;
+                        if matched_reason.is_empty() {
+                            matched_reason = format!("id_approx:#{}", trimmed_id);
+                        }
+                    }
+                }
+            }
+
+            // 2. Visible text snippet match
+            if let Some(ref text) = text_snippet {
+                let trimmed_text = text.trim();
+                if trimmed_text.len() >= 5 {
+                    let clean_text = trimmed_text.to_ascii_lowercase();
+                    if let Some(pos) = line_lower.find(&clean_text) {
+                        line_score += 75;
+                        if match_col == 1 {
+                            match_col = pos + 1;
+                        }
+                        if matched_reason.is_empty() {
+                            matched_reason = "text_match".to_string();
+                        }
+                    }
+                }
+            }
+
+            // 3. Classes match
+            for c in &classes {
+                if is_generic_utility_class(c) || c.len() < 3 {
+                    continue;
+                }
+                let c_lower = c.to_ascii_lowercase();
+                if let Some(pos) = line_lower.find(&c_lower) {
+                    let has_tag = !tag_lower.is_empty() && line_lower.contains(&tag_lower);
+                    let class_score = if has_tag { 50 } else { 30 };
+                    line_score += class_score;
+                    if match_col == 1 {
+                        match_col = pos + 1;
+                    }
+                    if matched_reason.is_empty() {
+                        matched_reason = format!("class:.{}", c);
+                    }
+                }
+            }
+
+            // 4. Parent classes match
+            if let Some(ref parents) = parent_classes {
+                for pc in parents {
+                    let clean_pc = pc.trim_start_matches('#');
+                    if is_generic_utility_class(clean_pc) || clean_pc.len() < 3 {
+                        continue;
+                    }
+                    if line_lower.contains(&clean_pc.to_ascii_lowercase()) {
+                        line_score += 15;
+                        if matched_reason.is_empty() {
+                            matched_reason = format!("parent_class:{}", clean_pc);
+                        }
+                    }
+                }
+            }
+
+            if line_score > 0 {
+                let total_score = line_score + url_bonus;
+                if total_score > best_score {
+                    best_score = total_score;
+                    let ext = if rel.ends_with(".blade.php") {
+                        "blade"
+                    } else {
+                        path.extension().and_then(|e| e.to_str()).unwrap_or("")
+                    };
+                    let framework = detect_framework_from_extension(ext).to_string();
+                    best_result = Some(ResolvedElementSource {
+                        file_path: path.to_string_lossy().to_string(),
+                        relative_path: rel.clone(),
+                        line_number: line_num,
+                        column_number: match_col,
+                        framework,
+                        matched_by: matched_reason,
+                    });
+                }
+            }
+        }
+    }
+
+    if best_score >= 30 {
+        Ok(best_result)
+    } else {
+        Ok(None)
+    }
 }
 
 #[cfg(test)]

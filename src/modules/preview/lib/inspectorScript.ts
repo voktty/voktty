@@ -311,6 +311,22 @@ export function extractDomMetadata(
     };
   }
 
+  const parentClasses: string[] = [];
+  let currParent = element.parentElement;
+  let depth = 0;
+  while (currParent && depth < 3) {
+    if (currParent.id) parentClasses.push(`#${currParent.id}`);
+    if (currParent.classList) {
+      Array.from(currParent.classList).forEach((c) => {
+        if (!c.startsWith("voktty-") && !c.includes(":") && !c.includes("/")) {
+          parentClasses.push(c);
+        }
+      });
+    }
+    currParent = currParent.parentElement;
+    depth++;
+  }
+
   return {
     id: `comp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     timestamp: Date.now(),
@@ -324,6 +340,7 @@ export function extractDomMetadata(
     tagName,
     idAttr,
     classList,
+    parentClasses: parentClasses.length > 0 ? parentClasses : undefined,
     htmlSnippet,
     innerText,
     attributes,
