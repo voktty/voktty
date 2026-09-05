@@ -298,8 +298,29 @@ export const KEYBINDINGS: KeybindingRow[] = [
   },
   { command: "Tab: Back", keys: `${MOD}[`, when: "Always" },
   { command: "Tab: Forward", keys: `${MOD}]`, when: "Always" },
+  { command: "Tab: Close Others", keys: `${MOD}${ALT}T`, when: "Always" },
   { command: "Tab: Activate 1–8", keys: `${MOD}1 … ${MOD}8`, when: "Always" },
   { command: "Tab: Activate Last", keys: `${MOD}9`, when: "Always" },
+  {
+    command: "Session: Previous",
+    keys: `${MOD}${SHIFT}↑`,
+    when: "!overlay && (!textFocus || emptyComposer)",
+  },
+  {
+    command: "Session: Next",
+    keys: `${MOD}${SHIFT}↓`,
+    when: "!overlay && (!textFocus || emptyComposer)",
+  },
+  {
+    command: "Project: Previous",
+    keys: `${MOD}${SHIFT}←`,
+    when: "!overlay && (!textFocus || emptyComposer)",
+  },
+  {
+    command: "Project: Next",
+    keys: `${MOD}${SHIFT}→`,
+    when: "!overlay && (!textFocus || emptyComposer)",
+  },
   { command: "Pane: Close", keys: `${MOD}W`, when: "Always" },
   { command: "Pane: Split Right", keys: `${MOD}D`, when: "!editorFocus" },
   {
