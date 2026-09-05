@@ -1,14 +1,14 @@
-import {
-  HighlightStyle,
-  LanguageSupport,
-  syntaxHighlighting,
-} from "@codemirror/language";
+import { syntaxHighlighting } from "@codemirror/language";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { tags } from "@lezer/highlight";
 import { cspStyleNonce } from "../lib/csp";
-import { basename } from "../lib/fs";
 import type { ColorScheme } from "../lib/appearance";
+import { editorHighlightStyleFor } from "./editorLanguage";
+
+export {
+  editorHighlightStyleFor,
+  languageForPath,
+} from "./editorLanguage";
 
 function editorThemeStyles(dark: boolean) {
   return EditorView.theme(
@@ -134,90 +134,6 @@ export function editorThemeFor(scheme: ColorScheme): Extension {
   ];
 }
 
-const HIGHLIGHT_TAGS = {
-  keyword: [
-    tags.keyword,
-    tags.controlKeyword,
-    tags.definitionKeyword,
-    tags.moduleKeyword,
-    tags.operatorKeyword,
-    tags.modifier,
-    tags.self,
-    tags.bool,
-    tags.null,
-    tags.atom,
-    tags.unit,
-  ],
-  callable: [
-    tags.function(tags.variableName),
-    tags.function(tags.propertyName),
-    tags.labelName,
-    tags.macroName,
-  ],
-  string: [
-    tags.string,
-    tags.docString,
-    tags.character,
-    tags.attributeValue,
-    tags.special(tags.string),
-    tags.regexp,
-    tags.escape,
-  ],
-  type: [
-    tags.typeName,
-    tags.className,
-    tags.namespace,
-    tags.tagName,
-    tags.standard(tags.typeName),
-  ],
-  number: [tags.number, tags.integer, tags.float],
-  comment: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment],
-  property: [tags.propertyName, tags.attributeName],
-  meta: [tags.meta, tags.processingInstruction, tags.annotation],
-  heading: [
-    tags.heading,
-    tags.heading1,
-    tags.heading2,
-    tags.heading3,
-    tags.heading4,
-    tags.heading5,
-    tags.heading6,
-  ],
-};
-
-// Pastel-on-dark palette.
-const HIGHLIGHT_DARK = HighlightStyle.define([
-  { tag: HIGHLIGHT_TAGS.keyword, color: "#ff8ffd" },
-  { tag: HIGHLIGHT_TAGS.heading, color: "var(--color-markdown-heading)" },
-  { tag: HIGHLIGHT_TAGS.callable, color: "#a5d5fe" },
-  { tag: HIGHLIGHT_TAGS.string, color: "#b4fa72" },
-  { tag: HIGHLIGHT_TAGS.type, color: "#ff8272" },
-  { tag: HIGHLIGHT_TAGS.number, color: "#b4fa72" },
-  { tag: HIGHLIGHT_TAGS.comment, color: "#fefdc2" },
-  { tag: HIGHLIGHT_TAGS.property, color: "#d0d1fe" },
-  { tag: HIGHLIGHT_TAGS.meta, color: "#8e8e8e" },
-  { tag: tags.invalid, color: "#ffc4bd", textDecoration: "underline" },
-]);
-
-// One-Light-family palette tuned for a near-white canvas.
-const HIGHLIGHT_LIGHT = HighlightStyle.define([
-  { tag: HIGHLIGHT_TAGS.keyword, color: "#a626a4" },
-  { tag: HIGHLIGHT_TAGS.heading, color: "var(--color-markdown-heading)" },
-  { tag: HIGHLIGHT_TAGS.callable, color: "#4078f2" },
-  { tag: HIGHLIGHT_TAGS.string, color: "#50a14f" },
-  { tag: HIGHLIGHT_TAGS.type, color: "#c18401" },
-  { tag: HIGHLIGHT_TAGS.number, color: "#986801" },
-  { tag: HIGHLIGHT_TAGS.comment, color: "#8a9199" },
-  { tag: HIGHLIGHT_TAGS.property, color: "#e45649" },
-  { tag: HIGHLIGHT_TAGS.meta, color: "#5c6370" },
-  { tag: tags.invalid, color: "#cf222e", textDecoration: "underline" },
-]);
-
-export function editorHighlightStyleFor(scheme: ColorScheme) {
-  return scheme === "light" ? HIGHLIGHT_LIGHT : HIGHLIGHT_DARK;
-}
-
-/** Theme + syntax highlighting for one color scheme; swap via a Compartment. */
 export function schemeExtensions(scheme: ColorScheme): Extension[] {
   return [
     editorThemeFor(scheme),
@@ -225,47 +141,3 @@ export function schemeExtensions(scheme: ColorScheme): Extension[] {
   ];
 }
 
-export async function languageForPath(path: string): Promise<Extension | null> {
-  const name = basename(path).toLowerCase();
-  const extension = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
-
-  if ([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"].includes(extension)) {
-    const { javascript } = await import("@codemirror/lang-javascript");
-    return javascript({
-      jsx: extension === ".jsx" || extension === ".tsx",
-      typescript: extension === ".ts" || extension === ".tsx",
-    });
-  }
-  if (extension === ".json" || name === "package-lock.json") {
-    const { json } = await import("@codemirror/lang-json");
-    return json();
-  }
-  if (extension === ".css") {
-    const { css } = await import("@codemirror/lang-css");
-    return css();
-  }
-  if ([".html", ".htm"].includes(extension)) {
-    const { html } = await import("@codemirror/lang-html");
-    return html();
-  }
-  if ([".md", ".mdx", ".markdown"].includes(extension)) {
-    const { markdown } = await import("@codemirror/lang-markdown");
-    return markdown();
-  }
-  if (extension === ".rs") {
-    const { rustLanguage } = await import("@codemirror/lang-rust");
-    const { completeFromList } = await import("@codemirror/autocomplete");
-    const keywords =
-      "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while"
-        .split(" ")
-        .map((label) => ({ label, type: "keyword" }));
-    return new LanguageSupport(rustLanguage, [
-      rustLanguage.data.of({ autocomplete: completeFromList(keywords) }),
-    ]);
-  }
-  if (extension === ".py") {
-    const { python } = await import("@codemirror/lang-python");
-    return python();
-  }
-  return null;
-}
