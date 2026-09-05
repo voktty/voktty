@@ -4820,6 +4820,9 @@ export function HarnessApp({
                                 ? tab.focusedId
                                 : ""
                             }
+                            addToChatSessionId={
+                              tab.id === activeTabId ? active?.id : undefined
+                            }
                             composerFocused={
                               composerFocused && !projectTerminalFocused
                             }
