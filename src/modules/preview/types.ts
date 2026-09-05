@@ -23,6 +23,7 @@ export type LiveComponentMetadata = {
   url: string;
   componentName?: string;
   filePath?: string;
+  absolutePath?: string;
   lineNumber?: number;
   columnNumber?: number;
   framework: FrameworkType;

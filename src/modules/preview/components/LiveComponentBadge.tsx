@@ -63,18 +63,20 @@ export function LiveComponentBadge({
 
   const handleJumpToCode = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (comp.filePath) {
+    const targetPath = comp.absolutePath || comp.filePath;
+    if (targetPath) {
       window.dispatchEvent(
         new CustomEvent("voktty:jump-to-component", {
           detail: {
-            path: comp.filePath,
+            path: targetPath,
             line: comp.lineNumber,
             column: comp.columnNumber,
           },
         }),
       );
       toast.success(
-        t("preview.jumpingToCode") || `Abriendo ${comp.filePath}:${comp.lineNumber || 1}`,
+        t("preview.jumpingToCode") ||
+          `Abriendo ${comp.filePath || targetPath}:${comp.lineNumber || 1}`,
       );
     }
   };
