@@ -15,6 +15,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -22,7 +23,6 @@ import {
   type ClipboardEvent,
   type KeyboardEvent,
   type ReactNode,
-  type UIEvent,
 } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
@@ -38,6 +38,7 @@ import {
   loadProjectFiles,
   peekProjectFiles,
   recentOpenedFiles,
+  subscribeProjectFiles,
 } from "../lib/fileIndex";
 import {
   buildMentionIndex,
@@ -158,6 +159,7 @@ type Props = {
   onSteerQueuedMessage?: (messageId: string) => void;
   onResumeQueue?: () => void;
   onOpenFile?: (path: string) => void;
+  onDraftChange?: (text: string) => void;
   children?: ReactNode;
 };
 
@@ -401,6 +403,7 @@ export function Composer({
   onSteerQueuedMessage,
   onResumeQueue,
   onOpenFile,
+  onDraftChange,
   children,
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -587,13 +590,21 @@ export function Composer({
 
   useEffect(() => {
     let cancelled = false;
+    const apply = (next: ProjectFile[]) => {
+      if (!cancelled) setFiles(next);
+    };
+    const cached = peekProjectFiles(cwd);
+    if (cached) apply(cached);
     void loadProjectFiles(cwd, mentionOpen)
-      .then((next) => {
-        if (!cancelled) setFiles(next);
-      })
+      .then(apply)
       .catch(() => undefined);
+    const unsub = subscribeProjectFiles(() => {
+      const next = peekProjectFiles(cwd);
+      if (next) apply(next);
+    });
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [cwd, mentionOpen]);
 
@@ -626,16 +637,31 @@ export function Composer({
   useEffect(() => {
     const el = ref.current;
     if (!el || !initialDraft) return;
-    el.value = initialDraft;
+    if (el.value !== initialDraft) el.value = initialDraft;
     resizeTextarea(el);
   }, [initialDraft]);
 
-  const syncHighlightScroll = (e: UIEvent<HTMLTextAreaElement>) => {
+  useEffect(() => {
+    onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
+
+  const syncHighlightScroll = useCallback((el: HTMLTextAreaElement) => {
     const highlight = highlightRef.current;
     if (!highlight) return;
-    highlight.scrollTop = e.currentTarget.scrollTop;
-    highlight.scrollLeft = e.currentTarget.scrollLeft;
-  };
+    highlight.scrollTop = el.scrollTop;
+    highlight.scrollLeft = el.scrollLeft;
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    syncHighlightScroll(el);
+    const frame = requestAnimationFrame(() => {
+      if (ref.current === el) syncHighlightScroll(el);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draft, syncHighlightScroll]);
 
   const syncTokensFromTextarea = (el: HTMLTextAreaElement) => {
     if (creatingSkill) return;
@@ -836,6 +862,7 @@ export function Composer({
       ref.current.value = "";
       ref.current.style.height = "auto";
       setDraft("");
+      onDraftChange?.("");
       setSlash(null);
       setMention(null);
       setCreatingSkill(false);
@@ -857,6 +884,7 @@ export function Composer({
     ref.current.value = "";
     ref.current.style.height = "auto";
     setDraft("");
+    onDraftChange?.("");
     setAttachments([]);
     setSlash(null);
     setMention(null);
@@ -1169,7 +1197,7 @@ export function Composer({
               onFocus={onFocus}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
-              onScroll={syncHighlightScroll}
+              onScroll={(e) => syncHighlightScroll(e.currentTarget)}
               onClick={(e) => syncTokensFromTextarea(e.currentTarget)}
               onKeyUp={(e) => syncTokensFromTextarea(e.currentTarget)}
               onSelect={(e) => syncTokensFromTextarea(e.currentTarget)}
