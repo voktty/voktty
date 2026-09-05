@@ -4510,14 +4510,17 @@ export function HarnessApp({
                 : `${current.harness} could not compact this context`,
           });
         } finally {
-          if (turnGen.current.get(sessionId) !== gen) return;
-          flushHarnessEvents();
-          const finished = sessionsRef.current.map((session: any) =>
-            session.id === sessionId ? { ...session, busy: false } : session,
-          );
-          sessionsRef.current = finished;
-          syncDockBadge(finished);
-          setSessions(finished);
+          // Guarded with a condition rather than an early return: a `return`
+          // here would discard whatever the try or catch was propagating.
+          if (turnGen.current.get(sessionId) === gen) {
+            flushHarnessEvents();
+            const finished = sessionsRef.current.map((session: any) =>
+              session.id === sessionId ? { ...session, busy: false } : session,
+            );
+            sessionsRef.current = finished;
+            syncDockBadge(finished);
+            setSessions(finished);
+          }
         }
       })();
       return true;
