@@ -148,10 +148,11 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
 
       const detach = attachInspectorBridge(
         iframe,
-        (meta) => {
+        (meta, autoJump) => {
           setSelectedComponent(
             meta,
             useLiveComponentStore.getState().activeWorkspaceRoot,
+            autoJump,
           );
         },
         (active) => {
@@ -165,6 +166,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
         },
         (newUrl) => {
           onUrlChange(newUrl);
+        },
+        () => {
+          setNonce((n) => n + 1);
         },
       );
 

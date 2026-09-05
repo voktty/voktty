@@ -228,6 +228,7 @@ export interface LiveComponentState {
   setSelectedComponent: (
     comp: LiveComponentMetadata | null,
     workspaceRoot?: string | null,
+    autoJump?: boolean,
   ) => void;
   setInspectorActive: (active: boolean) => void;
   toggleInspector: () => void;
@@ -240,7 +241,7 @@ export const useLiveComponentStore = create<LiveComponentState>((set, get) => ({
   history: [],
   activeWorkspaceRoot: null,
   setActiveWorkspaceRoot: (root) => set({ activeWorkspaceRoot: root }),
-  setSelectedComponent: (comp, workspaceRoot) => {
+  setSelectedComponent: (comp, workspaceRoot, autoJump) => {
     if (!comp) {
       set({ selectedComponent: null });
       return;
@@ -287,6 +288,21 @@ export const useLiveComponentStore = create<LiveComponentState>((set, get) => ({
               ),
             };
           });
+
+          if (autoJump) {
+            const targetPath = resolved.file_path || resolved.relative_path;
+            if (targetPath) {
+              window.dispatchEvent(
+                new CustomEvent("voktty:jump-to-component", {
+                  detail: {
+                    path: targetPath,
+                    line: resolved.line_number,
+                    column: resolved.column_number,
+                  },
+                }),
+              );
+            }
+          }
         } else if (get().selectedComponent?.id === comp.id) {
           set((state) => {
             if (
@@ -304,6 +320,19 @@ export const useLiveComponentStore = create<LiveComponentState>((set, get) => ({
           });
         }
       });
+    } else if (autoJump) {
+      const targetPath = comp.absolutePath || comp.filePath;
+      if (targetPath) {
+        window.dispatchEvent(
+          new CustomEvent("voktty:jump-to-component", {
+            detail: {
+              path: targetPath,
+              line: comp.lineNumber,
+              column: comp.columnNumber,
+            },
+          }),
+        );
+      }
     }
   },
   setInspectorActive: (active) => set({ isInspectorActive: active }),

@@ -375,6 +375,233 @@ export function getInspectorInjectedScript(): string {
   box.appendChild(label);
   shadow.appendChild(box);
 
+  const menu = document.createElement("div");
+  menu.id = "voktty-context-menu";
+  menu.style.cssText = "position:fixed;display:none;min-width:230px;max-width:320px;background:rgba(15,23,42,0.96);color:#f8fafc;border:1px solid #0284c7;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.6),0 0 16px rgba(6,182,212,0.25);padding:6px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px;z-index:2147483647;backdrop-filter:blur(14px);user-select:none;pointer-events:auto;";
+  shadow.appendChild(menu);
+
+  const toastEl = document.createElement("div");
+  toastEl.id = "voktty-toast";
+  toastEl.style.cssText = "position:fixed;bottom:20px;right:20px;display:none;background:#064e3b;color:#6ee7b7;border:1px solid #059669;padding:6px 14px;border-radius:8px;font-family:system-ui,-apple-system,sans-serif;font-size:12px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,0.5);z-index:2147483647;pointer-events:none;transition:opacity 150ms ease-out;";
+  shadow.appendChild(toastEl);
+
+  let toastTimer = null;
+  function showToast(msg) {
+    if (toastTimer) clearTimeout(toastTimer);
+    toastEl.textContent = "✓ " + msg;
+    toastEl.style.display = "block";
+    toastEl.style.opacity = "1";
+    toastTimer = setTimeout(() => {
+      toastEl.style.opacity = "0";
+      setTimeout(() => { toastEl.style.display = "none"; }, 160);
+    }, 1600);
+  }
+
+  function hideContextMenu() {
+    menu.style.display = "none";
+  }
+
+  function copyText(text, successMsg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(successMsg || "Copiado al portapapeles");
+      }).catch(() => {
+        fallbackCopy(text, successMsg);
+      });
+    } else {
+      fallbackCopy(text, successMsg);
+    }
+  }
+
+  function fallbackCopy(text, successMsg) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.top = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (ok) showToast(successMsg || "Copiado al portapapeles");
+    } catch (_) {
+      showToast("Error al copiar");
+    }
+  }
+
+  function createMenuItem(icon, text, onClick, isDanger) {
+    const item = document.createElement("div");
+    item.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;transition:background 100ms;font-size:12px;color:" + (isDanger ? "#fca5a5" : "#e2e8f0") + ";";
+    item.innerHTML = "<span style=\"font-size:13px;\">" + icon + "</span><span style=\"flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;\">" + text + "</span>";
+    item.addEventListener("mouseenter", () => {
+      item.style.background = isDanger ? "rgba(239,68,68,0.2)" : "rgba(6,182,212,0.18)";
+      item.style.color = isDanger ? "#fecaca" : "#38bdf8";
+    });
+    item.addEventListener("mouseleave", () => {
+      item.style.background = "transparent";
+      item.style.color = isDanger ? "#fca5a5" : "#e2e8f0";
+    });
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hideContextMenu();
+      onClick();
+    });
+    return item;
+  }
+
+  function createMenuDivider() {
+    const div = document.createElement("div");
+    div.style.cssText = "height:1px;background:rgba(255,255,255,0.08);margin:4px 0;";
+    return div;
+  }
+
+  function showContextMenu(x, y, meta) {
+    if (!document.body.contains(overlayHost) && document.body) {
+      document.body.appendChild(overlayHost);
+    }
+    menu.innerHTML = "";
+
+    const tagTitle = "<" + (meta.componentName || meta.tagName) + (meta.idAttr ? "#" + meta.idAttr : (meta.classList && meta.classList[0] ? "." + meta.classList[0] : "")) + "/>";
+
+    const header = document.createElement("div");
+    header.style.cssText = "padding:5px 8px 6px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:#38bdf8;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;justify-content:space-between;";
+    header.innerHTML = "<span style=\"overflow:hidden;text-overflow:ellipsis;\">" + tagTitle + "</span><span style=\"font-size:9px;text-transform:uppercase;color:#94a3b8;font-family:sans-serif;margin-left:6px;\">" + (meta.framework || "DOM") + "</span>";
+    menu.appendChild(header);
+
+    menu.appendChild(createMenuItem("🎯", "Inspeccionar elemento (IA)", () => {
+      try {
+        window.parent.postMessage({
+          type: "VOKTTY_LIVE_COMPONENT_SELECTED",
+          payload: meta
+        }, "*");
+        showToast("Elemento seleccionado");
+      } catch(_) {}
+    }));
+
+    menu.appendChild(createMenuItem("💻", "Ir al código en el editor", () => {
+      try {
+        window.parent.postMessage({
+          type: "VOKTTY_LIVE_COMPONENT_SELECTED",
+          payload: meta,
+          autoJump: true
+        }, "*");
+        showToast("Abriendo en editor...");
+      } catch(_) {}
+    }));
+
+    menu.appendChild(createMenuDivider());
+
+    menu.appendChild(createMenuItem("📋", "Copiar Referencia (@component)", () => {
+      const tagLabel = meta.componentName ? ("<" + meta.componentName + "/>") : (meta.idAttr ? ("<" + meta.tagName + "#" + meta.idAttr + "/>") : (meta.classList && meta.classList.length > 0 ? ("<" + meta.tagName + "." + meta.classList.join(".") + "/>") : ("<" + meta.tagName + "/>")));
+      let ref = "@component " + tagLabel;
+      if (meta.filePath) {
+        ref += " in " + meta.filePath + (meta.lineNumber ? ":" + meta.lineNumber : "");
+      }
+      if (meta.selector && meta.selector !== meta.tagName) {
+        ref += " (selector: " + meta.selector + ")";
+      }
+      copyText(ref, "Referencia copiada");
+    }));
+
+    menu.appendChild(createMenuItem("🐛", "Copiar Prompt para Depurar", () => {
+      const prompt = [
+        "### 🐛 Solicitud de Diagnóstico y Depuración",
+        "- **Elemento**: <" + (meta.componentName || meta.tagName) + ">",
+        meta.filePath ? ("- **Archivo**: " + meta.filePath + (meta.lineNumber ? ":" + meta.lineNumber : "")) : "",
+        "- **Selector DOM**: " + meta.selector,
+        meta.innerText ? ("- **Texto visible**: \"" + meta.innerText + "\"") : "",
+        meta.htmlSnippet ? ("- **HTML del elemento**:\n" + meta.htmlSnippet) : "",
+        "- **Problema**: [Describe aquí el error o fallo visual]"
+      ].filter(Boolean).join("\n");
+      copyText(prompt, "Prompt de depuración copiado");
+    }));
+
+    menu.appendChild(createMenuItem("💡", "Copiar Prompt para Modificar", () => {
+      const prompt = [
+        "### 💡 Instrucción de Modificación de Componente",
+        "- **Elemento**: <" + (meta.componentName || meta.tagName) + ">",
+        meta.filePath ? ("- **Archivo**: " + meta.filePath + (meta.lineNumber ? ":" + meta.lineNumber : "")) : "",
+        "- **Selector DOM**: " + meta.selector,
+        meta.innerText ? ("- **Texto visible**: \"" + meta.innerText + "\"") : "",
+        meta.htmlSnippet ? ("- **HTML actual**:\n" + meta.htmlSnippet) : "",
+        "- **Cambios solicitados**: [Describe aquí los cambios deseados]"
+      ].filter(Boolean).join("\n");
+      copyText(prompt, "Prompt de modificación copiado");
+    }));
+
+    menu.appendChild(createMenuDivider());
+
+    menu.appendChild(createMenuItem("🔍", "Copiar Selector CSS", () => {
+      copyText(meta.selector, "Selector CSS copiado");
+    }));
+
+    if (meta.htmlSnippet) {
+      menu.appendChild(createMenuItem("📄", "Copiar Fragmento HTML", () => {
+        copyText(meta.htmlSnippet, "HTML copiado");
+      }));
+    }
+
+    menu.appendChild(createMenuDivider());
+
+    menu.appendChild(createMenuItem("🔄", "Recargar Vista Previa", () => {
+      try {
+        window.parent.postMessage({ type: "VOKTTY_RELOAD_PREVIEW" }, "*");
+      } catch(_) {
+        window.location.reload();
+      }
+    }));
+
+    const footer = document.createElement("div");
+    footer.style.cssText = "padding:4px 6px 2px;font-size:10px;color:#64748b;text-align:center;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;";
+    footer.textContent = "Shift + Clic derecho para menú nativo";
+    menu.appendChild(footer);
+
+    menu.style.display = "block";
+
+    let posX = x;
+    let posY = y;
+    const menuWidth = 230;
+    const menuHeight = 270;
+
+    if (posX + menuWidth > window.innerWidth) {
+      posX = Math.max(8, window.innerWidth - menuWidth - 8);
+    }
+    if (posY + menuHeight > window.innerHeight) {
+      posY = Math.max(8, window.innerHeight - menuHeight - 8);
+    }
+
+    menu.style.left = posX + "px";
+    menu.style.top = posY + "px";
+  }
+
+  function handleContextMenu(e) {
+    if (e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const target = e.target && e.target !== overlayHost && !overlayHost.contains(e.target)
+      ? e.target
+      : document.elementFromPoint(e.clientX, e.clientY);
+
+    if (!target || target === overlayHost || overlayHost.contains(target) || target === document.documentElement) return;
+
+    const meta = extractDomMetadata(target, window.location.href);
+    showContextMenu(e.clientX, e.clientY, meta);
+  }
+
+  document.addEventListener("contextmenu", handleContextMenu, true);
+  document.addEventListener("click", (e) => {
+    if (menu.style.display !== "none" && !menu.contains(e.target)) {
+      hideContextMenu();
+    }
+  }, true);
+  window.addEventListener("scroll", hideContextMenu, { passive: true });
+  window.addEventListener("resize", hideContextMenu, { passive: true });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideContextMenu();
+  }, true);
+
   function updateHighlight(el) {
     if (!el || !active) {
       box.style.display = "none";
