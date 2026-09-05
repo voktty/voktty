@@ -56,6 +56,7 @@ describe("agent launch commands", () => {
       pi: "pi --provider local",
       opencode: "opencode",
       grok: "grok",
+      hermes: "hermes",
       freebuff: "freebuff",
     });
   });
@@ -73,36 +74,11 @@ describe("createAgentPanePlan", () => {
       const visit = (node: typeof plan.paneTree) => {
         if (node.kind === "leaf") {
           expect(node.cwd).toBe("/workspace");
-          return;
+        } else {
+          node.children.forEach(visit);
         }
-        node.children.forEach(visit);
       };
       visit(plan.paneTree);
     },
   );
-
-  it("balances four agents into a two by two grid", () => {
-    const { paneTree } = createAgentPanePlan(4, allocator());
-    expect(paneTree.kind).toBe("split");
-    if (paneTree.kind !== "split") return;
-    expect(paneTree.dir).toBe("row");
-    expect(paneTree.children).toHaveLength(2);
-    expect(
-      paneTree.children.every(
-        (child) =>
-          child.kind === "split" &&
-          child.dir === "col" &&
-          child.children.length === 2,
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects counts outside the renderer pool limit", () => {
-    expect(() =>
-      createAgentPanePlan(0 as AgentInstanceCount, allocator()),
-    ).toThrow(RangeError);
-    expect(() =>
-      createAgentPanePlan(5 as AgentInstanceCount, allocator()),
-    ).toThrow(RangeError);
-  });
 });

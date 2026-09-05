@@ -38,6 +38,12 @@ export const AGENT_LAUNCHERS = [
     supportsHooks: false,
   },
   {
+    id: "hermes",
+    label: "Hermes",
+    defaultCommand: "hermes",
+    supportsHooks: false,
+  },
+  {
     id: "freebuff",
     label: "Freebuff",
     defaultCommand: "freebuff",
