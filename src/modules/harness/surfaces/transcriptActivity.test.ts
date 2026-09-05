@@ -8,6 +8,7 @@ import {
   editVerb,
   groupTurnItems,
   groupTurns,
+  initialThinkingIndex,
   lastActivityIndex,
   nestedScrollAbsorbsWheel,
   proseSummary,
@@ -284,7 +285,7 @@ describe("zen mode grouping", () => {
     expect(items.map((item) => item.type)).toEqual(["activity", "block"]);
   });
 
-  it("folds prose between tool calls in and leaves the final answer out", () => {
+  it("keeps prose standalone between tool calls and leaves the final answer out", () => {
     const items = groupTurnItems(
       [
         { id: "u", role: "user", text: "cut the release" },
@@ -298,17 +299,17 @@ describe("zen mode grouping", () => {
     );
     expect(items.map((item) => item.type)).toEqual([
       "block",
+      "block",
+      "activity",
+      "block",
       "activity",
       "block",
     ]);
-    if (items[1]?.type !== "activity") return;
-    expect(items[1].blocks.map((block) => block.id)).toEqual([
-      "a1",
-      "a",
-      "a2",
-      "b",
-    ]);
-    expect(items[2]).toMatchObject({ type: "block", block: { id: "a3" } });
+    expect(items[1]).toMatchObject({ type: "block", block: { id: "a1" } });
+    expect(items[2]).toMatchObject({ type: "activity", blocks: [{ id: "a" }] });
+    expect(items[3]).toMatchObject({ type: "block", block: { id: "a2" } });
+    expect(items[4]).toMatchObject({ type: "activity", blocks: [{ id: "b" }] });
+    expect(items[5]).toMatchObject({ type: "block", block: { id: "a3" } });
   });
 
   it("keeps the trailing run of prose blocks out of the stack", () => {
@@ -327,13 +328,77 @@ describe("zen mode grouping", () => {
     ]);
   });
 
-  it("folds every paragraph when the turn ends on a tool call", () => {
+  it("keeps prose standalone when the turn ends on a tool call", () => {
     const items = groupTurnItems(
       [{ id: "a1", role: "assistant", text: "Looking now." }, shell("a")],
       true,
     );
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ type: "activity" });
+    expect(items).toMatchObject([
+      { type: "block", block: { id: "a1" } },
+      { type: "activity", blocks: [{ id: "a" }] },
+    ]);
+  });
+
+  it("uses assistant prose as boundaries between reasoning and tool groups", () => {
+    const items = groupTurnItems(
+      [
+        note("a1", "I will inspect the config first."),
+        thought("r1"),
+        read("t1"),
+        note("a2", "The config is healthy. I am checking the build next."),
+        thought("r2"),
+        shell("t2"),
+      ],
+      true,
+    );
+
+    expect(items).toMatchObject([
+      { type: "block", block: { id: "a1" } },
+      { type: "activity", blocks: [{ id: "r1" }, { id: "t1" }] },
+      { type: "block", block: { id: "a2" } },
+      { type: "activity", blocks: [{ id: "r2" }, { id: "t2" }] },
+    ]);
+  });
+
+  it("replaces leading reasoning with the first assistant prose", () => {
+    const items = groupTurnItems(
+      [
+        { id: "u", role: "user", text: "Investigate it" },
+        thought("r1", "I should inspect the current changes."),
+        thought("r2", "I need a structured checklist."),
+        note("a1", "I will investigate the current changes."),
+        read("t1"),
+      ],
+      true,
+    );
+
+    expect(items).toMatchObject([
+      { type: "block", block: { id: "u" } },
+      { type: "block", block: { id: "a1" } },
+      { type: "activity", blocks: [{ id: "t1" }] },
+    ]);
+  });
+
+  it("identifies leading reasoning while the first prose is pending", () => {
+    const thinking = groupTurnItems(
+      [
+        { id: "u", role: "user", text: "Investigate it" },
+        thought("r1"),
+        thought("r2"),
+      ],
+      true,
+    );
+    expect(initialThinkingIndex(thinking)).toBe(1);
+
+    const toolActivity = groupTurnItems(
+      [
+        { id: "u", role: "user", text: "Investigate it" },
+        thought("r1"),
+        read("t1"),
+      ],
+      true,
+    );
+    expect(initialThinkingIndex(toolActivity)).toBe(-1);
   });
 
   it("leaves prose alone when zen is off", () => {
