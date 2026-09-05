@@ -1671,6 +1671,13 @@ const koBase = mergeLocale(en, {
     importSuccess:
       "새 호스트 {imported}개를 가져왔습니다(구성에서 총 {total}개 발견).",
     noConfigFound: "~/.ssh/config에서 호스트를 찾을 수 없습니다.",
+    filesystemBackend: {
+      title: "원격 파일 시스템 백엔드",
+      description:
+        "SSH 탐색기와 편집기를 처리할 백엔드입니다. Helper는 호스트에 업로드되는 voktty-remote 서버이며, 네이티브 SFTP는 프로세스 내에서 실행되어 호스트에 helper가 필요하지 않습니다.",
+      helper: "Helper (voktty-remote)",
+      native: "네이티브 SFTP",
+    },
     noConnectionsTitle: "아직 SSH 연결이 없습니다",
     noConnectionsDesc:
       "원격 서버를 추가하거나 ~/.ssh/config에서 호스트를 가져와 한 번의 클릭으로 연결하세요.",

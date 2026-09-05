@@ -1147,6 +1147,12 @@ export async function setVimMode(value: boolean): Promise<void> {
   await writePref(KEY_VIM_MODE, value);
 }
 
+export async function setRemoteFilesystemBackend(
+  value: RemoteFilesystemBackend,
+): Promise<void> {
+  await writePref(KEY_REMOTE_FS_BACKEND, value);
+}
+
 export async function setEditorWordWrap(value: boolean): Promise<void> {
   await writePref(KEY_EDITOR_WORD_WRAP, value);
 }
