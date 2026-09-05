@@ -351,7 +351,7 @@ export function getInspectorInjectedScript(): string {
   const shadow = overlayHost.attachShadow({ mode: "open" });
 
   const box = document.createElement("div");
-  box.style.cssText = "position:absolute;display:none;pointer-events:none;border:2px solid #06b6d4;background:rgba(6,182,212,0.12);border-radius:4px;box-shadow:0 0 12px rgba(6,182,212,0.35);transition:all 60ms ease-out;z-index:2147483647;";
+  box.style.cssText = "position:absolute;display:none;pointer-events:none;border:2px solid #06b6d4;background:rgba(6,182,212,0.12);border-radius:4px;box-shadow:0 0 14px rgba(6,182,212,0.45);transition:top 60ms ease-out, left 60ms ease-out, width 60ms ease-out, height 60ms ease-out;z-index:2147483647;";
 
   const label = document.createElement("div");
   label.style.cssText = "position:absolute;bottom:calc(100% + 4px);left:0;background:#0f172a;color:#38bdf8;padding:2px 8px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid #0284c7;box-shadow:0 2px 8px rgba(0,0,0,0.5);pointer-events:none;";
@@ -369,8 +369,8 @@ export function getInspectorInjectedScript(): string {
       return;
     }
     box.style.display = "block";
-    box.style.top = (r.top + window.scrollY) + "px";
-    box.style.left = (r.left + window.scrollX) + "px";
+    box.style.top = r.top + "px";
+    box.style.left = r.left + "px";
     box.style.width = r.width + "px";
     box.style.height = r.height + "px";
 
@@ -394,14 +394,20 @@ export function getInspectorInjectedScript(): string {
     }
   }
 
+  function handlePointerDown(e) {
+    if (!active) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   function handleClick(e) {
     if (!active) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
     const target = document.elementFromPoint(e.clientX, e.clientY);
     if (target && target !== overlayHost && !overlayHost.contains(target)) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
       const meta = extractDomMetadata(target, window.location.href);
       try {
         window.parent.postMessage({
@@ -414,20 +420,41 @@ export function getInspectorInjectedScript(): string {
     }
   }
 
+  function setActive(newActive) {
+    active = Boolean(newActive);
+    window.__VOKTTY_INSPECTOR_ACTIVE__ = active;
+    if (active) {
+      if (!document.body.contains(overlayHost) && document.body) {
+        document.body.appendChild(overlayHost);
+      }
+      try {
+        document.documentElement.style.setProperty("cursor", "crosshair", "important");
+      } catch(_) {}
+      document.addEventListener("pointerdown", handlePointerDown, true);
+      document.addEventListener("mousemove", handleMouseMove, true);
+      document.addEventListener("click", handleClick, true);
+    } else {
+      box.style.display = "none";
+      try {
+        document.documentElement.style.removeProperty("cursor");
+      } catch(_) {}
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("mousemove", handleMouseMove, true);
+      document.removeEventListener("click", handleClick, true);
+    }
+  }
+
+  window.addEventListener("scroll", function() {
+    if (active && hoveredEl) updateHighlight(hoveredEl);
+  }, { passive: true });
+
+  window.addEventListener("resize", function() {
+    if (active && hoveredEl) updateHighlight(hoveredEl);
+  }, { passive: true });
+
   window.addEventListener("message", function(e) {
     if (e.data && e.data.type === "VOKTTY_SET_INSPECTOR_ACTIVE") {
-      active = Boolean(e.data.active);
-      if (active) {
-        if (!document.body.contains(overlayHost)) {
-          document.body.appendChild(overlayHost);
-        }
-        document.addEventListener("mousemove", handleMouseMove, true);
-        document.addEventListener("click", handleClick, true);
-      } else {
-        box.style.display = "none";
-        document.removeEventListener("mousemove", handleMouseMove, true);
-        document.removeEventListener("click", handleClick, true);
-      }
+      setActive(Boolean(e.data.active));
       try {
         window.parent.postMessage({
           type: "VOKTTY_INSPECTOR_STATE_CHANGE",
@@ -438,9 +465,20 @@ export function getInspectorInjectedScript(): string {
   });
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => document.body.appendChild(overlayHost));
-  } else if (document.body) {
+    document.addEventListener("DOMContentLoaded", () => {
+      if (document.body && !document.body.contains(overlayHost)) {
+        document.body.appendChild(overlayHost);
+      }
+    });
+  } else if (document.body && !document.body.contains(overlayHost)) {
     document.body.appendChild(overlayHost);
   }
+
+  try {
+    window.parent.postMessage({
+      type: "VOKTTY_INSPECTOR_READY",
+      payload: { ready: true }
+    }, "*");
+  } catch(_) {}
 })();`;
 }
