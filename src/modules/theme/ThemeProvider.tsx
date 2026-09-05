@@ -14,7 +14,7 @@ import {
   setThemeId as persistThemeId,
   type ThemePref,
 } from "@/modules/settings/store";
-import { applyTheme, clearTheme } from "./applyTheme";
+import { applyTheme, clearTheme, isDarkColor } from "./applyTheme";
 import {
   listCustomThemes,
   onCustomThemesChange,
@@ -126,14 +126,8 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  const resolvedMode: "dark" | "light" =
+  const rawResolvedMode: "dark" | "light" =
     mode === "system" ? (systemDark ? "dark" : "light") : mode;
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("light", "dark");
-    root.classList.add(resolvedMode);
-  }, [resolvedMode]);
 
   const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
   const vibrancyOpacity = usePreferencesStore((s) => s.vibrancyOpacity);
@@ -143,6 +137,34 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     () => resolveTheme(effectiveId, customThemes),
     [effectiveId, customThemes],
   );
+
+  const resolvedMode: "dark" | "light" = useMemo(() => {
+    if (effectiveId === DEFAULT_THEME_ID) return rawResolvedMode;
+    const directVariant = activeTheme.variants[rawResolvedMode];
+    if (directVariant && (Object.keys(directVariant.colors ?? {}).length > 0 || directVariant.terminal)) {
+      const bg = directVariant.colors?.background;
+      return bg ? (isDarkColor(bg) ? "dark" : "light") : rawResolvedMode;
+    }
+    if (activeTheme.variants.dark && (!activeTheme.variants.light || Object.keys(activeTheme.variants.light?.colors ?? {}).length === 0)) {
+      const bg = activeTheme.variants.dark.colors?.background;
+      return bg ? (isDarkColor(bg) ? "dark" : "light") : "dark";
+    }
+    if (activeTheme.variants.light && (!activeTheme.variants.dark || Object.keys(activeTheme.variants.dark?.colors ?? {}).length === 0)) {
+      const bg = activeTheme.variants.light.colors?.background;
+      return bg ? (isDarkColor(bg) ? "dark" : "light") : "light";
+    }
+    return rawResolvedMode;
+  }, [effectiveId, activeTheme, rawResolvedMode]);
+
+  useEffect(() => {
+    if (effectiveId === DEFAULT_THEME_ID) {
+      const root = document.documentElement;
+      root.classList.remove("light", "dark", "theme-light");
+      root.classList.add(resolvedMode);
+      root.classList.toggle("theme-light", resolvedMode === "light");
+    }
+  }, [resolvedMode, effectiveId]);
+
   useEffect(() => {
     if (effectiveId === DEFAULT_THEME_ID) {
       clearTheme();
