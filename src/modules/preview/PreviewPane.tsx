@@ -149,7 +149,10 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       const detach = attachInspectorBridge(
         iframe,
         (meta) => {
-          setSelectedComponent(meta);
+          setSelectedComponent(
+            meta,
+            useLiveComponentStore.getState().activeWorkspaceRoot,
+          );
         },
         (active) => {
           setInspectorActive(active);
