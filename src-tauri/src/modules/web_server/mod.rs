@@ -587,37 +587,48 @@ pub fn clean_path(p: &Path) -> PathBuf {
 }
 
 pub fn is_system_directory(path: &Path) -> bool {
-    let p_str = path.to_string_lossy().to_ascii_lowercase().replace('/', "\\");
+    let p_lossy = path.to_string_lossy().to_ascii_lowercase();
+    let p_win = p_lossy.replace('/', "\\");
+    let p_unix = p_lossy.replace('\\', "/");
 
-    // Windows system paths
-    if p_str.starts_with("c:\\windows")
-        || p_str.starts_with("c:\\program files")
-        || p_str.starts_with("c:\\program files (x86)")
-        || p_str.starts_with("c:\\programdata")
-        || p_str.starts_with("c:\\system volume information")
-        || p_str.starts_with("c:\\$recycle.bin")
+    // Windows system paths (any drive letter, e.g. C:, D:, etc.)
+    let win_without_drive = if p_win.len() >= 2 && p_win.chars().nth(1) == Some(':') {
+        &p_win[2..]
+    } else {
+        &p_win[..]
+    };
+
+    if win_without_drive.starts_with("\\windows")
+        || win_without_drive.starts_with("\\program files")
+        || win_without_drive.starts_with("\\program files (x86)")
+        || win_without_drive.starts_with("\\programdata")
+        || win_without_drive.starts_with("\\system volume information")
+        || win_without_drive.starts_with("\\$recycle.bin")
     {
         return true;
     }
 
-    // Root drive itself (e.g. "c:\\" or "c:")
-    let trimmed = p_str.trim_end_matches('\\');
-    if trimmed.len() <= 2 && trimmed.ends_with(':') {
+    // Windows Root drive itself (e.g. "C:\", "D:", etc.)
+    let trimmed_win = p_win.trim_end_matches('\\');
+    if trimmed_win.len() == 2 && trimmed_win.ends_with(':') {
         return true;
     }
 
-    // Unix system paths
-    if p_str.starts_with("/bin")
-        || p_str.starts_with("/sbin")
-        || p_str.starts_with("/usr")
-        || p_str.starts_with("/etc")
-        || p_str.starts_with("/var")
-        || p_str.starts_with("/sys")
-        || p_str.starts_with("/proc")
-        || p_str.starts_with("/dev")
-        || p_str.starts_with("/system")
-        || p_str.starts_with("/library")
-        || p_str == "/"
+    // Unix / macOS / Linux system paths
+    if p_unix.starts_with("/bin")
+        || p_unix.starts_with("/sbin")
+        || p_unix.starts_with("/usr")
+        || p_unix.starts_with("/etc")
+        || p_unix.starts_with("/var")
+        || p_unix.starts_with("/sys")
+        || p_unix.starts_with("/proc")
+        || p_unix.starts_with("/dev")
+        || p_unix.starts_with("/boot")
+        || p_unix.starts_with("/root")
+        || p_unix.starts_with("/system")
+        || p_unix.starts_with("/library")
+        || p_unix.starts_with("/private")
+        || p_unix == "/"
     {
         return true;
     }
@@ -2256,5 +2267,38 @@ mod tests {
         assert!(res.contains("<h1>Hello Voktty</h1>"));
 
         stop_flag.store(true, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn test_is_system_directory() {
+        assert!(is_system_directory(Path::new("C:\\Windows")));
+        assert!(is_system_directory(Path::new("C:\\Windows\\System32")));
+        assert!(is_system_directory(Path::new("D:\\Program Files")));
+        assert!(is_system_directory(Path::new("C:\\")));
+        assert!(is_system_directory(Path::new("C:")));
+        assert!(is_system_directory(Path::new("/bin")));
+        assert!(is_system_directory(Path::new("/usr/bin")));
+        assert!(is_system_directory(Path::new("/etc")));
+        assert!(is_system_directory(Path::new("/System/Library")));
+        assert!(is_system_directory(Path::new("/")));
+
+        assert!(!is_system_directory(Path::new("C:\\projects\\my-app")));
+        assert!(!is_system_directory(Path::new("/home/user/project")));
+        assert!(!is_system_directory(Path::new("/Users/dev/workspace")));
+    }
+
+    #[test]
+    fn test_parse_url_port_and_path() {
+        let (port, path) = parse_url_port_and_path("http://127.0.0.1:2045/index.html");
+        assert_eq!(port, Some(2045));
+        assert_eq!(path.as_deref(), Some("index.html"));
+
+        let (port, path) = parse_url_port_and_path("http://localhost:3000/pages/about.php?v=1#hash");
+        assert_eq!(port, Some(3000));
+        assert_eq!(path.as_deref(), Some("pages/about.php"));
+
+        let (port, path) = parse_url_port_and_path("http://127.0.0.1:8080/");
+        assert_eq!(port, Some(8080));
+        assert_eq!(path, None);
     }
 }
