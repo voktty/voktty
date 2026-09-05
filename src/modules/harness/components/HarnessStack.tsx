@@ -74,7 +74,10 @@ export function HarnessStack({ tabs, activeId, placements }: Props) {
                 </div>
               }
             >
-              <LazyHarnessApp />
+              <LazyHarnessApp
+                initialCwd={tab.cwd}
+                initialSessionId={tab.sessionId}
+              />
             </Suspense>
           </div>
         );
