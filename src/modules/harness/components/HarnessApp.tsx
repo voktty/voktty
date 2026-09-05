@@ -106,6 +106,7 @@ import {
   isLiveHarness,
   pickTextHarness,
   probeHarnessAvailability,
+  promoteLastAssistantToPlan,
   refreshHarnessCatalogs,
   registerBuiltinHarnesses,
   respondHarnessApproval,
@@ -186,7 +187,12 @@ import {
   rebasePath,
   resolveWorkspacePath,
 } from "../lib/paths";
-import { planTitle } from "../lib/plan";
+import {
+  buildPlanPrompt,
+  isProviderFailureText,
+  planTitle,
+  planTurnPrompt,
+} from "../lib/plan";
 import { IS_MAC } from "../lib/platform";
 import { removeProjectData } from "../lib/projectData";
 import {
@@ -245,12 +251,15 @@ import {
   hasPendingApproval,
   newDefaultSession,
   newSession,
+  type PlanBuildTarget,
+  type PlanStatus,
   type RuntimeMode,
   type SecondOpinionMeta,
   type Session,
   sessionDisplayTitle,
   sessionWorkCwd,
   titleFromPrompt,
+  type TurnIntent,
 } from "../lib/session";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
 import {
@@ -404,6 +413,65 @@ function withHarnessChoice(
       : { context: dropContextWindow(session.context) }),
     ...(session.harness === harness ? {} : { providerSessionId: undefined }),
   };
+}
+
+function withPlanBuildTarget(
+  session: Session,
+  target: PlanBuildTarget,
+): Session {
+  const resolved = resolveModel(target.harness, target.model);
+  const modelSettings = preferredModelSettings(resolved, session.modelSettings);
+  const plan = planComposerSwitch(session, target.harness);
+  const next = withHarnessChoice(
+    session,
+    target.harness,
+    resolved.id,
+    modelSettings,
+  );
+
+  if (plan.kind === "arm") {
+    return { ...next, pendingSwitch: plan.pending };
+  }
+  if (plan.kind === "revert") {
+    return {
+      ...next,
+      pendingSwitch: undefined,
+      ...(plan.restoreProviderSessionId
+        ? { providerSessionId: plan.restoreProviderSessionId }
+        : { providerSessionId: undefined }),
+    };
+  }
+  if (plan.kind === "empty") {
+    return { ...next, pendingSwitch: undefined };
+  }
+  return next;
+}
+
+function withPlanStatus(
+  session: Session,
+  blockId: string,
+  status: PlanStatus,
+): Session {
+  return {
+    ...session,
+    blocks: session.blocks.map((block) =>
+      block.id === blockId && block.role === "plan"
+        ? {
+            ...block,
+            plan: { ...(block.plan ?? { status: "ready" as const }), status },
+          }
+        : block,
+    ),
+  };
+}
+
+function lastAssistantTextInTurn(session: Session): string {
+  for (let index = session.blocks.length - 1; index >= 0; index -= 1) {
+    const block = session.blocks[index];
+    if (block.role === "user") return "";
+    if (block.role === "assistant" && block.text.trim()) return block.text;
+  }
+  return "";
 }
 
 function openSessionIds(tabs: WorkspaceTab[]): Set<string> {
@@ -3363,10 +3431,24 @@ export function HarnessApp({
         noteCard?: NoteComposerCard;
         handoffCard?: HandoffComposerCard;
         queuedMessageId?: string;
+        intent?: TurnIntent;
+        planBlockId?: string;
+        buildTarget?: PlanBuildTarget;
       },
     ) => {
-      const current = sessionsRef.current.find((s: any) => s.id === sessionId);
-      if (!current) return;
+      const storedCurrent = sessionsRef.current.find((s: any) => s.id === sessionId);
+      if (!storedCurrent) return;
+      const current = options?.buildTarget
+        ? withPlanBuildTarget(storedCurrent, options.buildTarget)
+        : storedCurrent;
+      const intent = options?.intent ?? "default";
+      const approvedPlan = options?.planBlockId
+        ? current.blocks.find(
+            (block: any) =>
+              block.id === options.planBlockId && block.role === "plan",
+          )
+        : undefined;
+      if (intent === "build" && !approvedPlan?.text.trim()) return;
       if (options?.queuedMessageId) {
         const mode =
           options.followUpBehavior === "steer" ? "steer" : "dispatch";
@@ -3390,7 +3472,8 @@ export function HarnessApp({
       }
       if (isPreparingHandoff(current)) return;
       const workCwd = sessionWorkCwd(current);
-      const harnessText = composeNoteMessage(noteCard, text);
+      const submittedText = intent === "build" ? "Build approved plan" : text;
+      const harnessText = composeNoteMessage(noteCard, submittedText);
 
       const pendingSwitch =
         current.pendingSwitch && current.pendingSwitch.from !== current.harness
@@ -3399,7 +3482,9 @@ export function HarnessApp({
 
       if (current.busy && !pendingSwitch) {
         const followUpBehavior =
-          options?.followUpBehavior ?? loadFollowUpBehavior();
+          intent === "plan"
+            ? "queue"
+            : (options?.followUpBehavior ?? loadFollowUpBehavior());
         if (followUpBehavior === "queue") {
           setSessions((prev: any) =>
             prev.map((s: any) =>
@@ -3417,6 +3502,7 @@ export function HarnessApp({
                         attachments,
                         noteCard,
                         handoffCard,
+                        intent,
                       },
                     ],
                     queueStatus:
@@ -3431,11 +3517,9 @@ export function HarnessApp({
           !isLiveHarness(current.harness) ||
           !canSteerHarness(current.harness)
         ) {
-          // Harnesses that cannot steer (fx) used to drop the message on the
-          // floor here, so a follow-up sent mid-turn just vanished. Say so.
           enqueueHarnessEvent(sessionId, {
             type: "status",
-            text: `${current.harness} cannot take a follow-up mid-turn — wait for this turn to finish, or stop it first.`,
+            text: `${current.harness} cannot take a follow-up mid-turn - wait for this turn to finish, or stop it first.`,
           });
           flushHarnessEvents();
           return;
@@ -3454,7 +3538,7 @@ export function HarnessApp({
             if (options?.queuedMessageId) {
               next = dequeueQueuedMessage(next, options.queuedMessageId);
             }
-            return appendSteerUser(next, text, visible, cards);
+            return appendSteerUser(next, submittedText, visible, cards);
           }),
         );
         void (async () => {
@@ -3501,14 +3585,18 @@ export function HarnessApp({
         !current.inboxCard &&
         !current.noteCard &&
         placeholderTitle
-          ? titleFromPrompt(text, current.harness, attachments)
+          ? titleFromPrompt(submittedText, current.harness, attachments)
           : current.title;
       const visible = displayAttachments(attachments);
       const card =
         options?.secondOpinion ??
         (handoffCard ? handoffTurnCard(handoffCard) : undefined);
       const visibleText =
-        card?.kind === "handoff" ? text : card ? SECOND_OPINION_TITLE : text;
+        card?.kind === "handoff"
+          ? submittedText
+          : card
+            ? SECOND_OPINION_TITLE
+            : submittedText;
       const cards = userTurnCards(noteCard, card);
       const live = isLiveHarness(current.harness);
       const queuedHandoff =
@@ -3517,13 +3605,33 @@ export function HarnessApp({
       setSessions((prev: any) =>
         prev.map((s: any) => {
           if (s.id !== sessionId) return s;
-          const titled = isFirstTurn ? titleSeed : s.title;
+          const selected = options?.buildTarget
+            ? withPlanBuildTarget(s, options.buildTarget)
+            : s;
+          const titled = isFirstTurn ? titleSeed : selected.title;
           let next: any = {
-            ...s,
+            ...selected,
             inboxCard: undefined,
             noteCard: undefined,
             handoffCard: undefined,
           };
+          if (approvedPlan && intent === "build") {
+            next = {
+              ...next,
+              blocks: next.blocks.map((block: any) =>
+                block.id === approvedPlan.id
+                  ? {
+                      ...block,
+                      plan: {
+                        ...(block.plan ?? { status: "ready" as const }),
+                        status: "building" as const,
+                        approvedText: block.text,
+                      },
+                    }
+                  : block,
+              ),
+            };
+          }
           if (options?.queuedMessageId) {
             next = dequeueQueuedMessage(next, options.queuedMessageId);
           }
@@ -3545,7 +3653,7 @@ export function HarnessApp({
                 {
                   id: crypto.randomUUID(),
                   role: "system",
-                  text: `${next.harness} is not connected yet — install and sign in to that provider, then retry.`,
+                  text: `${next.harness} is not connected yet - install and sign in to that provider, then retry.`,
                 },
               ],
             };
@@ -3617,6 +3725,22 @@ export function HarnessApp({
             }),
           );
         };
+        const planEventKey = `turn:${gen}`;
+        let nativePlanSeen = false;
+        let providerFailureSeen = false;
+        const routePlanEvent = (event: HarnessEvent): HarnessEvent | null => {
+          if (event.type === "session.error") providerFailureSeen = true;
+          if (intent !== "plan") return event;
+          if (event.type === "plan") {
+            nativePlanSeen = true;
+            return {
+              ...event,
+              key: planEventKey,
+            };
+          }
+          return event;
+        };
+        let buildSucceeded = false;
         try {
           if (pendingSwitch) {
             if (current.busy) {
@@ -3656,10 +3780,15 @@ export function HarnessApp({
           await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
           if (turnGen.current.get(sessionId) !== gen) return;
           const prepared = await prepareAttachments(attachments);
-          const prompt = await preparePrompt(harnessText, {
-            harness: current.harness,
-            cwd: workCwd,
-          });
+          const prompt =
+            intent === "build" && approvedPlan
+              ? buildPlanPrompt(approvedPlan.text)
+              : await preparePrompt(harnessText, {
+                  harness: current.harness,
+                  cwd: workCwd,
+                });
+          const turnPrompt =
+            intent === "plan" ? planTurnPrompt(prompt) : prompt;
           const earlier = queuedHandoff
             ? userMessagesAfterHandoff(current)
             : [];
@@ -3670,14 +3799,15 @@ export function HarnessApp({
             model: current.model,
             modelSettings: current.modelSettings,
             runtimeMode: current.runtimeMode,
+            intent,
             text: wrap
               ? wrapHandoffPrompt(
                   wrap.text,
                   wrap.from,
-                  prompt.trim() || CONTINUE_PROMPT,
+                  turnPrompt.trim() || CONTINUE_PROMPT,
                   earlier,
                 )
-              : prompt,
+              : turnPrompt,
             attachments: prepared,
             onEvent: (event: any) => {
               if (turnGen.current.get(sessionId) !== gen) return;
@@ -3690,7 +3820,8 @@ export function HarnessApp({
               }
               nudgeOpenEditors(event, workCwd);
               trackSessionEdits(sessionId, workCwd, event);
-              enqueueHarnessEvent(sessionId, event);
+              const routed = routePlanEvent(event);
+              if (routed) enqueueHarnessEvent(sessionId, routed);
             },
           });
           if (turnGen.current.get(sessionId) !== gen) return;
@@ -3706,6 +3837,7 @@ export function HarnessApp({
               }),
             );
           }
+          buildSucceeded = true;
         } catch (error: unknown) {
           if (turnGen.current.get(sessionId) !== gen) return;
           if (pendingSwitch || wrap) {
@@ -3730,9 +3862,24 @@ export function HarnessApp({
           if (turnGen.current.get(sessionId) === gen) {
             flushHarnessEvents();
             setSessions((prev: any) =>
-              prev.map((s: any) =>
-                s.id === sessionId ? stopStreaming(s) : s,
-              ),
+              prev.map((s: any) => {
+                if (s.id !== sessionId) return s;
+                const stopped = stopStreaming(s);
+                const providerFailed =
+                  providerFailureSeen ||
+                  isProviderFailureText(lastAssistantTextInTurn(stopped));
+                const finalized =
+                  intent === "plan" && !nativePlanSeen && !providerFailed
+                    ? promoteLastAssistantToPlan(stopped, planEventKey)
+                    : stopped;
+                return approvedPlan && intent === "build"
+                  ? withPlanStatus(
+                      finalized,
+                      approvedPlan.id,
+                      buildSucceeded && !providerFailed ? "built" : "ready",
+                    )
+                  : finalized;
+              }),
             );
             playCue("turnFinished");
             await syncSessionCheckpoint(sessionId, workCwd).catch(
@@ -3748,6 +3895,71 @@ export function HarnessApp({
       })();
     },
     [enqueueHarnessEvent, flushHarnessEvents],
+  );
+
+  const onUpdatePlan = useCallback(
+    (sessionId: string, blockId: string, text: string) => {
+      setSessions((prev: any) =>
+        prev.map((session: any) => {
+          if (session.id !== sessionId || session.busy) return session;
+          return {
+            ...session,
+            blocks: session.blocks.map((block: any) => {
+              if (
+                block.id !== blockId ||
+                block.role !== "plan" ||
+                block.plan?.status === "streaming" ||
+                block.plan?.status === "building" ||
+                block.plan?.status === "built"
+              ) {
+                return block;
+              }
+              const originalText = block.plan?.originalText ?? block.text;
+              return {
+                ...block,
+                text,
+                plan: {
+                  ...(block.plan ?? { status: "ready" as const }),
+                  status: "ready" as const,
+                  originalText,
+                  edited: text !== originalText,
+                },
+              };
+            }),
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const onBuildPlan = useCallback(
+    (sessionId: string, blockId: string, target?: PlanBuildTarget) => {
+      const session = sessionsRef.current.find(
+        (entry) => entry.id === sessionId,
+      );
+      const block = session?.blocks.find((entry: any) => entry.id === blockId);
+      if (
+        !session ||
+        session.busy ||
+        block?.role !== "plan" ||
+        !block.text.trim() ||
+        block.plan?.status === "streaming" ||
+        block.plan?.status === "building" ||
+        block.plan?.status === "built"
+      ) {
+        return;
+      }
+      if (target && session.modelSettings) {
+        saveLastModelSettings(session.modelSettings, "fill");
+      }
+      onSubmit(sessionId, "Build approved plan", [], {
+        intent: "build",
+        planBlockId: blockId,
+        buildTarget: target,
+      });
+    },
+    [onSubmit],
   );
 
   const openSessionBeside = useCallback(
@@ -3931,6 +4143,7 @@ export function HarnessApp({
             queuedMessageId: head.id,
             noteCard: head.noteCard,
             handoffCard: head.handoffCard,
+            intent: head.intent,
           });
         }, 0),
       );
@@ -4952,6 +5165,8 @@ export function HarnessApp({
                             editorNavigation={editorNavigation}
                             onOpenDiff={onOpenDiff}
                             onOpenPlan={onOpenPlan}
+                            onUpdatePlan={onUpdatePlan}
+                            onBuildPlan={onBuildPlan}
                             onSecondOpinion={onSecondOpinion}
                             onHandoff={onHandoff}
                             onMovePane={onMovePane}

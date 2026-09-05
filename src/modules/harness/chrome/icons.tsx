@@ -6,6 +6,7 @@ import {
 } from "@hugeicons/react";
 import Add01Icon from "@hugeicons/core-free-icons/Add01Icon";
 import AddSquareIcon from "@hugeicons/core-free-icons/AddSquareIcon";
+import AiIdeaIcon from "@hugeicons/core-free-icons/AiIdeaIcon";
 import AlertCircleIcon from "@hugeicons/core-free-icons/AlertCircleIcon";
 import AppWindowIcon from "@hugeicons/core-free-icons/AppWindowIcon";
 import ArchiveIcon from "@hugeicons/core-free-icons/ArchiveIcon";
@@ -137,6 +138,7 @@ const UnfoldVerticalIcon: IconSvgElement = [
   ["path", { d: "M7 17L12 22L17 17", ...stroke, key: "5" }],
 ];
 
+export const AiIdea = wrap(AiIdeaIcon, "AiIdea");
 export const AlertCircle = wrap(AlertCircleIcon, "AlertCircle");
 export const AppWindow = wrap(AppWindowIcon, "AppWindow");
 export const Archive = wrap(ArchiveIcon, "Archive");

@@ -17,11 +17,12 @@ import {
 import type { TerminalMetaPatch } from "../lib/terminalTab";
 import type { EditorNavigationTarget } from "../lib/search";
 import { editorPathsEqual } from "../lib/search";
-import type { Session } from "../lib/session";
+import type { PlanBuildTarget, Session } from "../lib/session";
 import { IconButton } from "../chrome/TitleBar";
-import { Terminal } from "../chrome/icons";
+import { Play, Terminal } from "../chrome/icons";
+import { BuildTargetButton } from "../chrome/SecondOpinionButton";
 import { GitDiffPane } from "@/modules/editor/GitDiffPane";
-import { MarkdownPreview, MarkdownSource } from "./AgentMarkdown";
+import { MarkdownPreview } from "./AgentMarkdown";
 import { FileEditor } from "./FileEditor";
 import { ReleaseNotesSurface } from "./ReleaseNotesSurface";
 import { SessionChangesDiff } from "./SessionChangesDiff";
@@ -40,6 +41,12 @@ type Props = {
   onErrorCountChange: (fileId: string, count: number) => void;
   onReorderFiles: (paneId: string, ids: string[]) => void;
   onOpenFile: (path: string) => void;
+  onUpdatePlan?: (sessionId: string, blockId: string, text: string) => void;
+  onBuildPlan?: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
   editorNavigation?: EditorNavigationTarget | null;
   onPaneDragStart?: (event: ReactPointerEvent<HTMLElement>) => void;
   onTerminalMetaChange?: (fileId: string, patch: TerminalMetaPatch) => void;
@@ -59,6 +66,8 @@ function FilePaneComponent({
   onErrorCountChange,
   onReorderFiles,
   onOpenFile,
+  onUpdatePlan,
+  onBuildPlan,
   editorNavigation,
   onPaneDragStart,
   onTerminalMetaChange,
@@ -107,6 +116,8 @@ function FilePaneComponent({
                 file={file}
                 sessions={sessions}
                 onOpenFile={onOpenFile}
+                onUpdatePlan={onUpdatePlan}
+                onBuildPlan={onBuildPlan}
               />
             ) : isReleaseNotesTab(file) ? (
               <ReleaseNotesSurface source={file.releaseNotes} />
@@ -172,6 +183,8 @@ export const FilePane = memo(FilePaneComponent, (previous, next) => {
     previous.onErrorCountChange !== next.onErrorCountChange ||
     previous.onReorderFiles !== next.onReorderFiles ||
     previous.onOpenFile !== next.onOpenFile ||
+    previous.onUpdatePlan !== next.onUpdatePlan ||
+    previous.onBuildPlan !== next.onBuildPlan ||
     previous.editorNavigation !== next.editorNavigation ||
     Boolean(previous.onPaneDragStart) !== Boolean(next.onPaneDragStart) ||
     previous.onTerminalMetaChange !== next.onTerminalMetaChange
@@ -195,10 +208,18 @@ function PlanSurface({
   file,
   sessions,
   onOpenFile,
+  onUpdatePlan,
+  onBuildPlan,
 }: {
   file: FilePaneTab;
   sessions: Session[];
   onOpenFile: (path: string) => void;
+  onUpdatePlan?: (sessionId: string, blockId: string, text: string) => void;
+  onBuildPlan?: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
 }) {
   const plan = file.plan;
   const [mode, setMode] = useMarkdownMode(file.path);
@@ -209,7 +230,7 @@ function PlanSurface({
     ? session?.blocks.find((entry) => entry.id === plan.blockId)
     : undefined;
 
-  if (!block) {
+  if (!block || !plan) {
     return (
       <div className="grid h-full place-items-center p-6 text-center">
         <p className="text-[13px] text-content/70">
@@ -218,6 +239,19 @@ function PlanSurface({
       </div>
     );
   }
+
+  const buildDisabled =
+    !!session?.busy ||
+    !block.text.trim() ||
+    block.plan?.status === "streaming" ||
+    block.plan?.status === "building" ||
+    block.plan?.status === "built";
+  const buildLabel =
+    block.plan?.status === "building"
+      ? "Building…"
+      : block.plan?.status === "built"
+        ? "Built"
+        : "Build";
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
@@ -232,7 +266,41 @@ function PlanSurface({
             onOpenFile={onOpenFile}
           />
         }
-        source={<MarkdownSource text={block.text} />}
+        actions={
+          <div className="flex items-center font-sans">
+            <button
+              type="button"
+              disabled={buildDisabled}
+              onClick={() => onBuildPlan?.(plan.sessionId, block.id)}
+              className={`flex h-6 items-center gap-1.5 bg-content px-2.5 font-sans text-[11px] font-medium text-background-base hover:bg-content/90 disabled:cursor-not-allowed disabled:opacity-40 ${
+                session ? "rounded-l-md" : "rounded-md"
+              }`}
+            >
+              <Play className="size-3" />
+              {buildLabel}
+            </button>
+            {session ? (
+              <BuildTargetButton
+                from={session.harness}
+                model={session.model}
+                disabled={buildDisabled}
+                onPick={(harness, model) =>
+                  onBuildPlan?.(plan.sessionId, block.id, { harness, model })
+                }
+              />
+            ) : null}
+          </div>
+        }
+        source={
+          <textarea
+            value={block.text}
+            onChange={(e) =>
+              onUpdatePlan?.(plan.sessionId, block.id, e.target.value)
+            }
+            className="h-full w-full resize-none bg-transparent p-4 font-mono text-[12px] leading-relaxed text-content outline-none"
+            spellCheck={false}
+          />
+        }
       />
     </div>
   );
