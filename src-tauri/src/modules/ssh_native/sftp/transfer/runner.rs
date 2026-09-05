@@ -47,6 +47,9 @@ pub struct TransferOutcome {
     pub progress: TransferProgress,
     pub skipped: u64,
     pub interruption: Option<Interruption>,
+    /// The step to carry on from. Answering a conflict resumes here rather
+    /// than replaying everything already copied.
+    pub next_index: usize,
 }
 
 /// Expand the request into the ordered steps it will perform.
@@ -135,6 +138,7 @@ pub async fn execute(
     sftp: Arc<NativeSftp>,
     request: &TransferRequest,
     steps: &[TransferStep],
+    from: usize,
     cancel: &Cancel,
     on_progress: &mut impl FnMut(TransferProgress),
 ) -> Result<TransferOutcome, SshNativeError> {
@@ -143,11 +147,13 @@ pub async fn execute(
     let mut claimed: HashSet<String> = HashSet::new();
     let mut skipped = 0u64;
     let mut done = 0u64;
+    let mut index = from;
 
-    for step in steps {
+    for step in steps.iter().skip(from) {
         if cancel.is_cancelled() {
             return Err(super::engine::cancelled());
         }
+        index += 1;
         if step.is_dir {
             ensure_directory(&sftp, request.direction, &step.destination).await?;
             continue;
@@ -177,6 +183,7 @@ pub async fn execute(
                     interruption: Some(Interruption::NeedsDecision {
                         step: Box::new(step.clone()),
                     }),
+                    next_index: index - 1,
                 })
             }
             ConflictOutcome::Transfer { destination } => (destination, 0),
@@ -211,6 +218,7 @@ pub async fn execute(
         progress: tracker.snapshot(),
         skipped,
         interruption: None,
+        next_index: steps.len(),
     })
 }
 
@@ -426,6 +434,15 @@ mod tests {
         assert!(error.message.contains("nope"));
     }
 
+    /// `tokio::fs::File` buffers, so a write only reaches disk once flushed.
+    /// `copy_stream` always flushes before returning, which is what makes the
+    /// bytes on disk match the reported progress.
+    async fn write_and_flush(file: &mut tokio::fs::File, bytes: &[u8]) {
+        use tokio::io::AsyncWriteExt;
+        file.write_all(bytes).await.expect("write");
+        file.flush().await.expect("flush");
+    }
+
     #[tokio::test]
     async fn a_local_write_truncates_at_offset_zero_and_appends_otherwise() {
         let root = tempfile::tempdir().expect("root");
@@ -434,16 +451,12 @@ mod tests {
 
         // Offset zero must not leave the tail of the longer previous file.
         let mut file = open_local_write(&path, 0).await.expect("truncating open");
-        tokio::io::AsyncWriteExt::write_all(&mut file, b"abc")
-            .await
-            .expect("write");
+        write_and_flush(&mut file, b"abc").await;
         drop(file);
         assert_eq!(std::fs::read(&path).expect("read"), b"abc");
 
         let mut file = open_local_write(&path, 3).await.expect("appending open");
-        tokio::io::AsyncWriteExt::write_all(&mut file, b"de")
-            .await
-            .expect("write");
+        write_and_flush(&mut file, b"de").await;
         drop(file);
         assert_eq!(std::fs::read(&path).expect("read"), b"abcde");
     }

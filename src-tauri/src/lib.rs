@@ -290,6 +290,7 @@ pub fn run() {
         .manage(rdp::RdpState::default())
         .manage(ssh_native::state::SshNativeState::new())
         .manage(ssh_native::sftp::commands::new_state())
+        .manage(ssh_native::sftp::transfer::jobs::new_state())
         .manage(collab::CollabState::default())
         .manage(collab::CollabGuestState::default())
         .manage(mcp::McpManagerState::default())
@@ -522,6 +523,11 @@ pub fn run() {
             ssh_native::sftp::commands::ssh_native_sftp_create_file,
             ssh_native::sftp::commands::ssh_native_sftp_rename,
             ssh_native::sftp::commands::ssh_native_sftp_delete,
+            ssh_native::sftp::transfer::jobs::ssh_native_transfer_start,
+            ssh_native::sftp::transfer::jobs::ssh_native_transfer_decide,
+            ssh_native::sftp::transfer::jobs::ssh_native_transfer_cancel,
+            ssh_native::sftp::transfer::jobs::ssh_native_transfer_list,
+            ssh_native::sftp::transfer::jobs::ssh_native_transfer_progress,
             collab::requirements::collab_cloudflared_status,
             collab::collab_host_start,
             collab::collab_host_stop,
