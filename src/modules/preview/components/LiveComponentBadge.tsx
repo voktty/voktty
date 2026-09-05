@@ -125,14 +125,14 @@ export function LiveComponentBadge({
     const promptText = formatComponentVisualPrompt(comp);
     void navigator.clipboard.writeText(promptText);
     triggerCopyFeedback("visual");
-    toast.success("Prompt de Estilos copiado");
+    toast.success(t("preview.badge.stylesPromptCopiedToast"));
   };
 
   const handleCopySelector = (e: React.MouseEvent) => {
     e.stopPropagation();
     void navigator.clipboard.writeText(comp.selector);
     triggerCopyFeedback("selector");
-    toast.success("Selector CSS copiado");
+    toast.success(t("preview.badge.cssSelectorCopiedToast"));
   };
 
   const handleCopyHtml = (e: React.MouseEvent) => {
@@ -140,7 +140,7 @@ export function LiveComponentBadge({
     if (comp.htmlSnippet) {
       void navigator.clipboard.writeText(comp.htmlSnippet);
       triggerCopyFeedback("html");
-      toast.success("Fragmento HTML copiado");
+      toast.success(t("preview.badge.htmlSnippetCopiedToast"));
     }
   };
 
@@ -271,7 +271,10 @@ export function LiveComponentBadge({
               type="button"
               onClick={handleJumpToCode}
               className="inline-flex items-center gap-1.5 rounded-md bg-cyan-950/70 border border-cyan-500/35 px-2 py-0.5 text-xs font-mono text-cyan-200 hover:text-cyan-100 hover:bg-cyan-900/70 transition-colors shrink-0 whitespace-nowrap max-w-[260px] truncate"
-              title={`Abrir ${comp.filePath}:${comp.lineNumber || 1} en el editor`}
+              title={t("preview.badge.openInEditorTitle", {
+                path: comp.filePath,
+                line: comp.lineNumber || 1,
+              })}
             >
               <HugeiconsIcon
                 icon={Folder01Icon}
@@ -287,7 +290,7 @@ export function LiveComponentBadge({
                 size={12}
                 className="animate-spin text-cyan-400"
               />
-              Buscando archivo...
+              {t("preview.badge.searchingFile")}
             </span>
           ) : (
             <span
@@ -306,7 +309,7 @@ export function LiveComponentBadge({
 
           {comp.matchedBy ? (
             <span className="rounded bg-muted/60 border border-border/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground whitespace-nowrap shrink-0">
-              via {comp.matchedBy}
+              {t("preview.badge.matchedByLabel", { source: comp.matchedBy })}
             </span>
           ) : null}
 
@@ -331,7 +334,7 @@ export function LiveComponentBadge({
       {comp.breadcrumbs && comp.breadcrumbs.length > 1 ? (
         <div className="flex items-center gap-1 overflow-x-auto py-1.5 border-b border-border/30 text-[11px] font-mono text-muted-foreground no-scrollbar">
           <span className="text-[10px] text-muted-foreground/60 shrink-0 font-sans uppercase tracking-wider">
-            DOM:
+            {t("preview.badge.domBreadcrumbLabel")}
           </span>
           {comp.breadcrumbs.map((crumb, idx) => {
             const isLast = idx === comp.breadcrumbs!.length - 1;
@@ -359,14 +362,18 @@ export function LiveComponentBadge({
                   }`}
                   title={
                     isLast
-                      ? "Elemento seleccionado actual"
-                      : `Seleccionar ancestro: ${crumb.selector}`
+                      ? t("preview.badge.crumbCurrentTitle")
+                      : t("preview.badge.crumbSelectTitle", {
+                          selector: crumb.selector,
+                        })
                   }
                 >
                   {crumbLabel}
                 </button>
                 {!isLast ? (
-                  <span className="text-muted-foreground/40 text-[10px]">›</span>
+                  <span className="text-muted-foreground/40 text-[10px]">
+                    {t("preview.badge.breadcrumbSeparatorIcon")}
+                  </span>
                 ) : null}
               </div>
             );
@@ -388,7 +395,11 @@ export function LiveComponentBadge({
             strokeWidth={2}
             className={copiedKey === "ref" ? "text-emerald-400" : ""}
           />
-          <span>{copiedKey === "ref" ? "¡Copiado!" : "Copiar Ref"}</span>
+          <span>
+            {copiedKey === "ref"
+              ? t("preview.badge.copied")
+              : t("preview.badge.copyRefLabel")}
+          </span>
         </button>
 
         <button
@@ -406,7 +417,11 @@ export function LiveComponentBadge({
             strokeWidth={2}
             className={copiedKey === "debug" ? "text-emerald-400" : ""}
           />
-          <span>{copiedKey === "debug" ? "¡Copiado!" : "Prompt Debug"}</span>
+          <span>
+            {copiedKey === "debug"
+              ? t("preview.badge.copied")
+              : t("preview.badge.debugPromptLabel")}
+          </span>
         </button>
 
         <button
@@ -424,13 +439,17 @@ export function LiveComponentBadge({
             strokeWidth={2}
             className={copiedKey === "modify" ? "text-emerald-400" : ""}
           />
-          <span>{copiedKey === "modify" ? "¡Copiado!" : "Prompt Modificar"}</span>
+          <span>
+            {copiedKey === "modify"
+              ? t("preview.badge.copied")
+              : t("preview.badge.modifyPromptLabel")}
+          </span>
         </button>
 
         <button
           type="button"
           onClick={handleCopyVisualPrompt}
-          title="Copiar prompt con estilos y box model para rediseño visual con IA"
+          title={t("preview.badge.copyVisualPromptTitle")}
           className="flex items-center gap-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 border border-purple-500/30 px-2.5 py-1 text-xs font-medium transition-colors active:scale-95 shadow-sm whitespace-nowrap shrink-0"
         >
           <HugeiconsIcon
@@ -439,7 +458,11 @@ export function LiveComponentBadge({
             strokeWidth={2}
             className={copiedKey === "visual" ? "text-emerald-400" : ""}
           />
-          <span>{copiedKey === "visual" ? "¡Copiado!" : "Prompt Estilos"}</span>
+          <span>
+            {copiedKey === "visual"
+              ? t("preview.badge.copied")
+              : t("preview.badge.stylesPromptLabel")}
+          </span>
         </button>
 
         {comp.filePath ? (
@@ -452,7 +475,7 @@ export function LiveComponentBadge({
             className="flex items-center gap-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 hover:text-cyan-100 border border-cyan-500/40 px-2.5 py-1 text-xs font-medium transition-colors active:scale-95 shadow-sm whitespace-nowrap shrink-0"
           >
             <HugeiconsIcon icon={CodeIcon} size={13} strokeWidth={2} />
-            <span>Ir al Código</span>
+            <span>{t("preview.jumpToCode")}</span>
           </button>
         ) : null}
 
@@ -460,7 +483,9 @@ export function LiveComponentBadge({
           type="button"
           onClick={() => setExpanded(!expanded)}
           title={
-            expanded ? "Ocultar detalles técnicos" : "Ver detalles técnicos y HTML"
+            expanded
+              ? t("preview.badge.detailsToggleHide")
+              : t("preview.badge.detailsToggleShow")
           }
           className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium border transition-colors ml-auto whitespace-nowrap shrink-0 ${
             expanded
@@ -473,7 +498,7 @@ export function LiveComponentBadge({
             size={13}
             strokeWidth={2}
           />
-          <span>Detalles</span>
+          <span>{t("preview.badge.detailsLabel")}</span>
         </button>
       </div>
 
@@ -491,7 +516,7 @@ export function LiveComponentBadge({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              DOM & HTML
+              {t("preview.badge.tabDomHtml")}
             </button>
             <button
               type="button"
@@ -502,7 +527,7 @@ export function LiveComponentBadge({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Estilos Computados
+              {t("preview.badge.tabComputedStyles")}
             </button>
             <button
               type="button"
@@ -513,7 +538,7 @@ export function LiveComponentBadge({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Box Model
+              {t("preview.badge.tabBoxModel")}
             </button>
           </div>
 
@@ -522,7 +547,7 @@ export function LiveComponentBadge({
               {/* DOM Selector */}
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-                  <span>Selector DOM</span>
+                  <span>{t("preview.badge.domSelectorLabel")}</span>
                   <button
                     type="button"
                     onClick={handleCopySelector}
@@ -532,7 +557,9 @@ export function LiveComponentBadge({
                       icon={copiedKey === "selector" ? Tick02Icon : Copy01Icon}
                       size={10}
                     />
-                    {copiedKey === "selector" ? "Copiado" : "Copiar"}
+                    {copiedKey === "selector"
+                      ? t("preview.badge.copiedShort")
+                      : t("preview.badge.copyLabel")}
                   </button>
                 </div>
                 <div className="rounded-lg bg-muted/60 p-2 font-mono text-xs text-foreground/90 select-text overflow-x-auto border border-border/40">
@@ -544,10 +571,12 @@ export function LiveComponentBadge({
               {comp.innerText ? (
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-semibold text-muted-foreground">
-                    Texto Visible
+                    {t("preview.badge.visibleTextLabel")}
                   </span>
                   <div className="rounded-lg bg-muted/40 p-2 text-xs italic text-foreground/85 border border-border/30 select-text">
-                    &ldquo;{comp.innerText}&rdquo;
+                    {t("preview.badge.visibleTextValue", {
+                      text: comp.innerText,
+                    })}
                   </div>
                 </div>
               ) : null}
@@ -556,7 +585,7 @@ export function LiveComponentBadge({
               {comp.htmlSnippet ? (
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-                    <span>Fragmento HTML</span>
+                    <span>{t("preview.badge.htmlSnippetLabel")}</span>
                     <button
                       type="button"
                       onClick={handleCopyHtml}
@@ -566,7 +595,9 @@ export function LiveComponentBadge({
                         icon={copiedKey === "html" ? Tick02Icon : Copy01Icon}
                         size={10}
                       />
-                      {copiedKey === "html" ? "Copiado" : "Copiar"}
+                      {copiedKey === "html"
+                        ? t("preview.badge.copiedShort")
+                        : t("preview.badge.copyLabel")}
                     </button>
                   </div>
                   <pre className="rounded-lg bg-muted/70 p-2.5 font-mono text-[11px] text-foreground/90 select-text overflow-x-auto max-h-36 border border-border/40 whitespace-pre-wrap break-all">
@@ -579,7 +610,7 @@ export function LiveComponentBadge({
             /* Computed Styles Tab */
             <div className="flex flex-col gap-2">
               <span className="text-[11px] font-semibold text-muted-foreground">
-                Propiedades CSS Calculadas
+                {t("preview.badge.computedCssPropsLabel")}
               </span>
               {comp.styles && Object.keys(comp.styles).length > 0 ? (
                 <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto font-mono text-[10.5px]">
@@ -602,7 +633,7 @@ export function LiveComponentBadge({
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground italic py-2">
-                  No hay estilos disponibles para este elemento.
+                  {t("preview.badge.noStylesAvailable")}
                 </div>
               )}
             </div>
@@ -612,7 +643,9 @@ export function LiveComponentBadge({
               {comp.boxModel ? (
                 <div className="relative rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-center font-mono text-[10px] text-amber-300 w-full max-w-sm">
                   <span className="absolute top-1 left-2 text-[9px] uppercase tracking-wider text-amber-400/70">
-                    Margin ({comp.boxModel.margin.top}px)
+                    {t("preview.badge.boxModelMarginLabel", {
+                      value: comp.boxModel.margin.top,
+                    })}
                   </span>
                   <div className="my-1 flex justify-between px-2 text-amber-400/60">
                     <span>{comp.boxModel.margin.left}px</span>
@@ -622,7 +655,9 @@ export function LiveComponentBadge({
                   {/* Border Box */}
                   <div className="relative rounded border border-cyan-500/50 bg-cyan-500/10 p-3 text-cyan-300">
                     <span className="absolute top-1 left-2 text-[9px] uppercase tracking-wider text-cyan-400/70">
-                      Border ({comp.boxModel.border.top}px)
+                      {t("preview.badge.boxModelBorderLabel", {
+                        value: comp.boxModel.border.top,
+                      })}
                     </span>
                     <div className="my-1 flex justify-between px-2 text-cyan-400/60">
                       <span>{comp.boxModel.border.left}px</span>
@@ -632,7 +667,9 @@ export function LiveComponentBadge({
                     {/* Padding Box */}
                     <div className="relative rounded border border-emerald-500/50 bg-emerald-500/10 p-3 text-emerald-300">
                       <span className="absolute top-1 left-2 text-[9px] uppercase tracking-wider text-emerald-400/70">
-                        Padding ({comp.boxModel.padding.top}px)
+                        {t("preview.badge.boxModelPaddingLabel", {
+                          value: comp.boxModel.padding.top,
+                        })}
                       </span>
                       <div className="my-1 flex justify-between px-2 text-emerald-400/60">
                         <span>{comp.boxModel.padding.left}px</span>
@@ -645,22 +682,31 @@ export function LiveComponentBadge({
                       </div>
 
                       <div className="text-[9px] text-emerald-400/70 mt-1">
-                        Bottom: {comp.boxModel.padding.bottom}px
+                        {t("preview.badge.boxModelBottomLabel", {
+                          value: comp.boxModel.padding.bottom,
+                        })}
                       </div>
                     </div>
 
                     <div className="text-[9px] text-cyan-400/70 mt-1">
-                      Bottom: {comp.boxModel.border.bottom}px
+                      {t("preview.badge.boxModelBottomLabel", {
+                        value: comp.boxModel.border.bottom,
+                      })}
                     </div>
                   </div>
 
                   <div className="text-[9px] text-amber-400/70 mt-1">
-                    Bottom: {comp.boxModel.margin.bottom}px
+                    {t("preview.badge.boxModelBottomLabel", {
+                      value: comp.boxModel.margin.bottom,
+                    })}
                   </div>
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground italic py-2">
-                  Dimensiones de caja: {dimWidth} × {dimHeight} px
+                  {t("preview.badge.boxDimensionsLabel", {
+                    width: dimWidth ?? 0,
+                    height: dimHeight ?? 0,
+                  })}
                 </div>
               )}
             </div>

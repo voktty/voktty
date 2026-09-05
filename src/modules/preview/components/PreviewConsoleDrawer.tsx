@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useTranslation } from "@/modules/i18n";
 import { cn } from "@/lib/utils";
 import {
   Cancel01Icon,
@@ -16,6 +17,7 @@ import {
 import type { ConsoleEntry } from "../types";
 
 export function PreviewConsoleDrawer() {
+  const { t } = useTranslation();
   const entries = usePreviewDevtoolsStore((s) => s.consoleEntries);
   const filter = usePreviewDevtoolsStore((s) => s.consoleFilter);
   const search = usePreviewDevtoolsStore((s) => s.consoleSearch);
@@ -82,8 +84,12 @@ export function PreviewConsoleDrawer() {
             onClick={() => toggleConsole()}
             className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground/90 hover:text-foreground"
           >
-            <span className="font-mono text-xs">{isOpen ? "▼" : "▲"}</span>
-            <span>Consola</span>
+            <span className="font-mono text-xs">
+              {isOpen
+                ? t("preview.console.toggleIconOpen")
+                : t("preview.console.toggleIconClosed")}
+            </span>
+            <span>{t("preview.console.heading")}</span>
             <span className="text-[10px] text-muted-foreground font-mono">
               ({entries.length})
             </span>
@@ -146,12 +152,12 @@ export function PreviewConsoleDrawer() {
                   )}
                 >
                   {f === "all"
-                    ? "Todos"
+                    ? t("preview.console.filterAll")
                     : f === "error"
-                      ? "Errores"
+                      ? t("preview.console.filterErrors")
                       : f === "warn"
-                        ? "Avisos"
-                        : "Logs"}
+                        ? t("preview.console.filterWarnings")
+                        : t("preview.console.filterLogs")}
                 </button>
               ))}
             </div>
@@ -159,7 +165,7 @@ export function PreviewConsoleDrawer() {
             {/* Search Input */}
             <Input
               type="text"
-              placeholder="Filtrar mensajes..."
+              placeholder={t("preview.console.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-5 w-32 border-border/40 bg-background/60 px-1.5 text-[10px] placeholder:text-muted-foreground/60 shadow-none"
@@ -171,7 +177,7 @@ export function PreviewConsoleDrawer() {
               variant="ghost"
               size="icon"
               onClick={clearConsole}
-              title="Limpiar consola"
+              title={t("preview.console.clearConsole")}
               className="size-5 rounded text-muted-foreground hover:text-foreground"
             >
               <HugeiconsIcon icon={Cancel01Icon} size={11} />
@@ -186,8 +192,8 @@ export function PreviewConsoleDrawer() {
           {filteredEntries.length === 0 ? (
             <div className="flex h-full items-center justify-center text-muted-foreground/60 text-xs italic py-8">
               {entries.length === 0
-                ? "No hay mensajes en consola todavía."
-                : "No hay mensajes que coincidan con el filtro."}
+                ? t("preview.console.emptyNoMessages")
+                : t("preview.console.emptyNoMatch")}
             </div>
           ) : (
             filteredEntries.map((entry) => (
@@ -208,8 +214,8 @@ export function PreviewConsoleDrawer() {
                   {entry.level === "error"
                     ? "❌"
                     : entry.level === "warn"
-                      ? "⚠️"
-                      : "›"}
+                      ? t("preview.console.warnLevelIcon")
+                      : t("preview.console.logLevelDefaultIcon")}
                 </span>
 
                 {/* Repeat Count */}
@@ -228,7 +234,7 @@ export function PreviewConsoleDrawer() {
                   {entry.stack ? (
                     <details className="mt-1 text-[10px] text-muted-foreground/80">
                       <summary className="cursor-pointer hover:text-foreground">
-                        Ver Stack Trace
+                        {t("preview.console.viewStackTrace")}
                       </summary>
                       <pre className="mt-1 max-h-32 overflow-x-auto whitespace-pre rounded bg-black/40 p-2 text-[10px] text-muted-foreground font-mono">
                         {entry.stack}
@@ -249,7 +255,9 @@ export function PreviewConsoleDrawer() {
                       )
                     }
                     className="shrink-0 text-[10px] text-cyan-400 hover:underline hover:text-cyan-300 truncate max-w-[130px]"
-                    title={`Abrir ${entry.source.file}`}
+                    title={t("preview.console.openSourceTitle", {
+                      file: entry.source.file,
+                    })}
                   >
                     {entry.source.file.replace(/^.*[\\/]/, "")}
                     {entry.source.line ? `:${entry.source.line}` : ""}
@@ -275,14 +283,16 @@ export function PreviewConsoleDrawer() {
                       size="sm"
                       onClick={() => handleCopyPrompt(entry)}
                       className="h-5 gap-1 rounded px-1.5 text-[10px] font-medium bg-red-500/15 text-red-300 hover:bg-red-500/25 border border-red-500/30"
-                      title="Copiar prompt completo para resolver este error con la IA"
+                      title={t("preview.console.copyErrorPromptTitle")}
                     >
                       <HugeiconsIcon
                         icon={copiedId === entry.id ? Copy01Icon : SparklesIcon}
                         size={10}
                       />
                       <span>
-                        {copiedId === entry.id ? "Copiado!" : "Resolver con IA"}
+                        {copiedId === entry.id
+                          ? t("preview.console.copiedExclaim")
+                          : t("preview.console.resolveWithAi")}
                       </span>
                     </Button>
                   </div>

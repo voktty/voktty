@@ -78,7 +78,7 @@ const technicalPatterns = [
   /^(?:text|bg|border|from|to|dark:text|hover:text)-[a-z]+-\d+(?:\/\d+)?$/,
   /^(?:JSON|GraphQL) \(application\/json\)$/,
   /^(?:\{…\} (?:B|KB)|\{…\} ms|\{ "limit": \d+, "offset": \d+, "type": "[a-z]+" \})$/,
-  /^(?:(?:Ctrl|Alt|Shift|Esc|Enter|Tab|Win)(?:\s*\+?\s*(?:Ctrl|Alt|Shift|Esc|Enter|Tab|Win|Del|Home|Insert|Break|Fin|[A-Z]))*)$/i,
+  /^(?:(?:Ctrl|Alt|Shift|Esc|Enter|Tab|Win)(?:\s*\+?\s*(?:Ctrl|Alt|Shift|Esc|Enter|Tab|Win|Del|Home|Insert|Break|Fin|[A-Z0-9]))*)$/,
   /^(?:https?|wss?):\/\//i,
   /^(?:[A-Z]:[\\/]|[.~]?[\\/]|--?[a-z\d-]+\b)/i,
   /^(?:[\d./:_*{}()[\]<>|+%=,@#-]+|[A-Z\d_-]{1,8})$/,
