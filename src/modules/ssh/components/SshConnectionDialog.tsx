@@ -161,279 +161,281 @@ export function SshConnectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden shadow-2xl border-border bg-popover text-popover-foreground">
+        <DialogHeader className="p-5 pb-3 border-b border-border/40 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <HugeiconsIcon icon={ServerStack03Icon} size={18} strokeWidth={1.75} />
             {connection ? t("ssh.dialog.editTitle") : t("ssh.dialog.newTitle")}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs">
             {t("ssh.dialog.description")}
           </DialogDescription>
         </DialogHeader>
 
         <form
-          className="flex flex-col gap-3 py-1"
+          className="flex-1 min-h-0 flex flex-col overflow-hidden"
           onSubmit={(e) => {
             e.preventDefault();
             void save(false);
           }}
         >
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2 flex flex-col gap-1">
-              <Label htmlFor="ssh-host" className="text-[11px] text-muted-foreground">
-                {t("ssh.dialog.host")} *
-              </Label>
-              <Input
-                id="ssh-host"
-                ref={hostInputRef}
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                placeholder="192.168.1.100 / server.com"
-                className="h-8 text-xs font-mono"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="ssh-port" className="text-[11px] text-muted-foreground">
-                {t("ssh.dialog.port")}
-              </Label>
-              <Input
-                id="ssh-port"
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-                placeholder="22"
-                className="h-8 text-xs font-mono"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="ssh-name" className="text-[11px] text-muted-foreground">
-                {t("ssh.dialog.name")}
-              </Label>
-              <Input
-                id="ssh-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t("ssh.dialog.namePlaceholder")}
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="ssh-user" className="text-[11px] text-muted-foreground">
-                {t("ssh.dialog.user")}
-              </Label>
-              <Input
-                id="ssh-user"
-                value={user}
-                onChange={(e) => setUser(e.target.value)}
-                placeholder="root / ubuntu"
-                className="h-8 text-xs font-mono"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="ssh-key" className="text-[11px] text-muted-foreground">
-              {t("ssh.dialog.identityFile")}
-            </Label>
-            <Input
-              id="ssh-key"
-              value={identityFile}
-              onChange={(e) => setIdentityFile(e.target.value)}
-              placeholder="~/.ssh/id_ed25519 or C:/keys/server.pem"
-              className="h-8 text-xs font-mono"
-            />
-            {isUnlocked && vaultSshKeys.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1 pt-1">
-                <span className="text-[10.5px] text-muted-foreground flex items-center gap-1">
-                  <HugeiconsIcon icon={Key01Icon} size={11} />
-                  {t("ssh.dialog.fromVault")}:
-                </span>
-                {vaultSshKeys.map((k) => (
-                  <button
-                    key={k.id}
-                    type="button"
-                    onClick={() => setIdentityFile(`~/.ssh/${k.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`)}
-                    className="rounded bg-muted/70 hover:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground cursor-pointer transition-colors"
-                  >
-                    {k.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="ssh-args" className="text-[11px] text-muted-foreground">
-                {t("ssh.dialog.extraArgs")}
-              </Label>
-              <span className="text-[10px] text-muted-foreground/70">
-                {t("ssh.dialog.extraArgsHint")}
-              </span>
-            </div>
-            <textarea
-              id="ssh-args"
-              value={extraArgs}
-              onChange={(e) => setExtraArgs(e.target.value)}
-              placeholder={t("ssh.dialog.extraArgsPlaceholder")}
-              rows={2}
-              className="w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs font-mono shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            />
-            <div className="flex flex-wrap items-center gap-1 pt-0.5">
-              <span className="text-[10px] text-muted-foreground">
-                {t("ssh.dialog.quickPresets")}
-              </span>
-              <button
-                type="button"
-                onClick={handleToggleBypassHostKey}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
-                  extraArgs.includes("StrictHostKeyChecking=no")
-                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                    : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-                title="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-              >
-                {t("ssh.dialog.presetBypassHostKey")}
-              </button>
-              <button
-                type="button"
-                onClick={handleAddHostKeyAlias}
-                className="rounded bg-muted/70 hover:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                title={`-o HostKeyAlias=${name.trim() || host.trim() || "alias"}`}
-              >
-                +{t("ssh.dialog.presetHostKeyAlias")}
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleOrAppendArg("-o LogLevel=ERROR")}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
-                  extraArgs.includes("LogLevel=ERROR")
-                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
-                    : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-                title="-o LogLevel=ERROR"
-              >
-                {t("ssh.dialog.presetLogLevelError")}
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleOrAppendArg("-A")}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
-                  extraArgs.split(/\s+/).includes("-A")
-                    ? "bg-primary/20 text-primary border border-primary/40"
-                    : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-                title="-A (ForwardAgent yes)"
-              >
-                -A
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleOrAppendArg("-C")}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
-                  extraArgs.split(/\s+/).includes("-C")
-                    ? "bg-primary/20 text-primary border border-primary/40"
-                    : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-                title="-C (Compression yes)"
-              >
-                -C
-              </button>
-            </div>
-            <span className="text-[10px] leading-relaxed text-muted-foreground">
-              {t("ssh.dialog.extraArgsDescription")}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-[11px] font-medium text-foreground">
-                {t("ssh.dialog.multiplexerTitle")}
-              </Label>
-              <span className="text-[10px] font-mono text-muted-foreground/70">
-                {t("ssh.dialog.multiplexerBadge")}
-              </span>
-            </div>
-            <p className="text-[10px] leading-relaxed text-muted-foreground">
-              {t("ssh.dialog.multiplexerDescription")}
-            </p>
-            <div className="grid grid-cols-3 gap-1 pt-1">
-              <button
-                type="button"
-                onClick={() => setMultiplexerMode("none")}
-                className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
-                  multiplexerMode === "none"
-                    ? "bg-secondary text-secondary-foreground border-border shadow-xs"
-                    : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
-                }`}
-              >
-                {t("ssh.dialog.multiplexerDisabled")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setMultiplexerMode("auto")}
-                className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
-                  multiplexerMode === "auto"
-                    ? "bg-secondary text-secondary-foreground border-border shadow-xs"
-                    : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
-                }`}
-              >
-                {t("ssh.dialog.multiplexerAuto")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setMultiplexerMode("ask")}
-                className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
-                  multiplexerMode === "ask"
-                    ? "bg-secondary text-secondary-foreground border-border shadow-xs"
-                    : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
-                }`}
-              >
-                {t("ssh.dialog.multiplexerAsk")}
-              </button>
-            </div>
-            {multiplexerMode !== "none" && (
-              <div className="flex flex-col gap-1 pt-1">
-                <Label htmlFor="ssh-tmux-name" className="text-[10.5px] text-muted-foreground">
-                  {t("ssh.dialog.tmuxSessionName")}
+          <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3.5">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2 flex flex-col gap-1">
+                <Label htmlFor="ssh-host" className="text-[11px] text-muted-foreground">
+                  {t("ssh.dialog.host")} *
                 </Label>
                 <Input
-                  id="ssh-tmux-name"
-                  value={tmuxSessionName}
-                  onChange={(e) => setTmuxSessionName(e.target.value)}
-                  placeholder={name.trim() ? name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_") : "voktty"}
-                  className="h-7 text-xs font-mono"
+                  id="ssh-host"
+                  ref={hostInputRef}
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  placeholder="192.168.1.100 / server.com"
+                  className="h-8 text-xs font-mono"
                 />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="ssh-port" className="text-[11px] text-muted-foreground">
+                  {t("ssh.dialog.port")}
+                </Label>
+                <Input
+                  id="ssh-port"
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                  placeholder="22"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="ssh-name" className="text-[11px] text-muted-foreground">
+                  {t("ssh.dialog.name")}
+                </Label>
+                <Input
+                  id="ssh-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t("ssh.dialog.namePlaceholder")}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="ssh-user" className="text-[11px] text-muted-foreground">
+                  {t("ssh.dialog.user")}
+                </Label>
+                <Input
+                  id="ssh-user"
+                  value={user}
+                  onChange={(e) => setUser(e.target.value)}
+                  placeholder="root / ubuntu"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="ssh-key" className="text-[11px] text-muted-foreground">
+                {t("ssh.dialog.identityFile")}
+              </Label>
+              <Input
+                id="ssh-key"
+                value={identityFile}
+                onChange={(e) => setIdentityFile(e.target.value)}
+                placeholder="~/.ssh/id_ed25519 or C:/keys/server.pem"
+                className="h-8 text-xs font-mono"
+              />
+              {isUnlocked && vaultSshKeys.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 pt-1">
+                  <span className="text-[10.5px] text-muted-foreground flex items-center gap-1">
+                    <HugeiconsIcon icon={Key01Icon} size={11} />
+                    {t("ssh.dialog.fromVault")}:
+                  </span>
+                  {vaultSshKeys.map((k) => (
+                    <button
+                      key={k.id}
+                      type="button"
+                      onClick={() => setIdentityFile(`~/.ssh/${k.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`)}
+                      className="rounded bg-muted/70 hover:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground cursor-pointer transition-colors"
+                    >
+                      {k.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="ssh-args" className="text-[11px] text-muted-foreground">
+                  {t("ssh.dialog.extraArgs")}
+                </Label>
+                <span className="text-[10px] text-muted-foreground/70">
+                  {t("ssh.dialog.extraArgsHint")}
+                </span>
+              </div>
+              <textarea
+                id="ssh-args"
+                value={extraArgs}
+                onChange={(e) => setExtraArgs(e.target.value)}
+                placeholder={t("ssh.dialog.extraArgsPlaceholder")}
+                rows={2}
+                className="w-full resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs font-mono shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                <span className="text-[10px] text-muted-foreground">
+                  {t("ssh.dialog.quickPresets")}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleToggleBypassHostKey}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                    extraArgs.includes("StrictHostKeyChecking=no")
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                      : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+                >
+                  {t("ssh.dialog.presetBypassHostKey")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddHostKeyAlias}
+                  className="rounded bg-muted/70 hover:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                  title={`-o HostKeyAlias=${name.trim() || host.trim() || "alias"}`}
+                >
+                  +{t("ssh.dialog.presetHostKeyAlias")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleOrAppendArg("-o LogLevel=ERROR")}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                    extraArgs.includes("LogLevel=ERROR")
+                      ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                      : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="-o LogLevel=ERROR"
+                >
+                  {t("ssh.dialog.presetLogLevelError")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleOrAppendArg("-A")}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                    extraArgs.split(/\s+/).includes("-A")
+                      ? "bg-primary/20 text-primary border border-primary/40"
+                      : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="-A (ForwardAgent yes)"
+                >
+                  -A
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleOrAppendArg("-C")}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                    extraArgs.split(/\s+/).includes("-C")
+                      ? "bg-primary/20 text-primary border border-primary/40"
+                      : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="-C (Compression yes)"
+                >
+                  -C
+                </button>
+              </div>
+              <span className="text-[10px] leading-relaxed text-muted-foreground">
+                {t("ssh.dialog.extraArgsDescription")}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-medium text-foreground">
+                  {t("ssh.dialog.multiplexerTitle")}
+                </Label>
+                <span className="text-[10px] font-mono text-muted-foreground/70">
+                  {t("ssh.dialog.multiplexerBadge")}
+                </span>
+              </div>
+              <p className="text-[10px] leading-relaxed text-muted-foreground">
+                {t("ssh.dialog.multiplexerDescription")}
+              </p>
+              <div className="grid grid-cols-3 gap-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setMultiplexerMode("none")}
+                  className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
+                    multiplexerMode === "none"
+                      ? "bg-secondary text-secondary-foreground border-border shadow-xs"
+                      : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
+                  }`}
+                >
+                  {t("ssh.dialog.multiplexerDisabled")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMultiplexerMode("auto")}
+                  className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
+                    multiplexerMode === "auto"
+                      ? "bg-secondary text-secondary-foreground border-border shadow-xs"
+                      : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
+                  }`}
+                >
+                  {t("ssh.dialog.multiplexerAuto")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMultiplexerMode("ask")}
+                  className={`rounded-md px-2 py-1.5 text-xs font-medium cursor-pointer transition-colors text-center border ${
+                    multiplexerMode === "ask"
+                      ? "bg-secondary text-secondary-foreground border-border shadow-xs"
+                      : "bg-transparent hover:bg-muted/60 text-muted-foreground border-transparent"
+                  }`}
+                >
+                  {t("ssh.dialog.multiplexerAsk")}
+                </button>
+              </div>
+              {multiplexerMode !== "none" && (
+                <div className="flex flex-col gap-1 pt-1">
+                  <Label htmlFor="ssh-tmux-name" className="text-[10.5px] text-muted-foreground">
+                    {t("ssh.dialog.tmuxSessionName")}
+                  </Label>
+                  <Input
+                    id="ssh-tmux-name"
+                    value={tmuxSessionName}
+                    onChange={(e) => setTmuxSessionName(e.target.value)}
+                    placeholder={name.trim() ? name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_") : "voktty"}
+                    className="h-7 text-xs font-mono"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="ssh-initial-directory" className="text-[11px] text-muted-foreground">
+                {t("ssh.dialog.initialDirectory")}
+              </Label>
+              <Input
+                id="ssh-initial-directory"
+                value={initialDirectory}
+                onChange={(e) => setInitialDirectory(e.target.value)}
+                placeholder="/srv/project or ~/project"
+                className="h-8 text-xs font-mono"
+              />
+              <span className="text-[10px] leading-relaxed text-muted-foreground">
+                {t("ssh.dialog.initialDirectoryDescription")}
+              </span>
+            </div>
+
+            {error && (
+              <div className="text-[11px] text-destructive">
+                {error}
               </div>
             )}
           </div>
 
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="ssh-initial-directory" className="text-[11px] text-muted-foreground">
-              {t("ssh.dialog.initialDirectory")}
-            </Label>
-            <Input
-              id="ssh-initial-directory"
-              value={initialDirectory}
-              onChange={(e) => setInitialDirectory(e.target.value)}
-              placeholder="/srv/project or ~/project"
-              className="h-8 text-xs font-mono"
-            />
-            <span className="text-[10px] leading-relaxed text-muted-foreground">
-              {t("ssh.dialog.initialDirectoryDescription")}
-            </span>
-          </div>
-
-          {error && (
-            <div className="text-[11px] text-destructive">
-              {error}
-            </div>
-          )}
-
-          <DialogFooter className="mt-2 flex items-center justify-end gap-2">
+          <DialogFooter className="p-3.5 px-5 border-t border-border/40 bg-muted/15 shrink-0 flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -443,10 +445,9 @@ export function SshConnectionDialog({
               {t("common.cancel")}
             </Button>
             <Button
-              type="button"
+              type="submit"
               variant="secondary"
               size="sm"
-              onClick={() => void save(false)}
             >
               {t("common.save")}
             </Button>
