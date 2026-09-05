@@ -35,6 +35,7 @@ type Props = {
   session: Session;
   visible: boolean;
   focused: boolean;
+  addToChatTarget?: boolean;
   inSplit: boolean;
   composerFocused: boolean;
   recents: RecentProject[];
@@ -99,6 +100,7 @@ export const SessionPane = memo(function SessionPane({
   session,
   visible,
   focused,
+  addToChatTarget = focused,
   inSplit,
   showHeader,
   composerFocused,
@@ -176,7 +178,7 @@ export const SessionPane = memo(function SessionPane({
   );
 
   useEffect(() => {
-    if (!focused) return;
+    if (!addToChatTarget) return;
     const onAdd = (event: Event) => {
       const detail = (event as CustomEvent<AddToChatRequest>).detail;
       if (!detail?.text) return;
@@ -184,7 +186,7 @@ export const SessionPane = memo(function SessionPane({
     };
     window.addEventListener(ADD_TO_CHAT_EVENT, onAdd);
     return () => window.removeEventListener(ADD_TO_CHAT_EVENT, onAdd);
-  }, [addSelectionToChat, focused]);
+  }, [addSelectionToChat, addToChatTarget]);
   const workCwd = sessionWorkCwd(session);
   const isEmpty = session.blocks.length === 0;
   const showDeckProjectPicker = isEmpty && !looksLikeProject(session.cwd);
