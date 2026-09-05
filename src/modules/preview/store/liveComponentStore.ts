@@ -119,6 +119,47 @@ export function formatComponentModifyPrompt(comp: LiveComponentMetadata): string
   return parts.join("\n");
 }
 
+export function formatComponentVisualPrompt(comp: LiveComponentMetadata): string {
+  const parts: string[] = [
+    "### 🎨 Solicitud de Ajuste Visual y Estilos",
+    `- **Elemento**: \`<${comp.componentName || comp.tagName || "element"}>\``,
+  ];
+
+  if (comp.filePath) {
+    const loc = comp.lineNumber ? `:${comp.lineNumber}` : "";
+    parts.push(`- **Archivo**: \`${comp.filePath}${loc}\``);
+  }
+  parts.push(`- **Selector DOM**: \`${comp.selector}\``);
+
+  if (comp.rect) {
+    parts.push(`- **Dimensiones**: \`${Math.round(comp.rect.width)} × ${Math.round(comp.rect.height)}px\``);
+  }
+
+  if (comp.styles && Object.keys(comp.styles).length > 0) {
+    const styleLines = Object.entries(comp.styles)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `  ${k}: ${v};`);
+    parts.push(`- **Estilos Computados Actuales**:\n\`\`\`css\n${styleLines.join("\n")}\n\`\`\``);
+  }
+
+  if (comp.boxModel) {
+    const { margin, padding, border } = comp.boxModel;
+    parts.push(
+      `- **Box Model**: Margin (${margin.top}/${margin.right}/${margin.bottom}/${margin.left}px) | Padding (${padding.top}/${padding.right}/${padding.bottom}/${padding.left}px) | Border (${border.top}/${border.right}/${border.bottom}/${border.left}px)`,
+    );
+  }
+
+  if (comp.htmlSnippet) {
+    parts.push(`- **HTML del elemento**:\n\`\`\`html\n${comp.htmlSnippet.trim()}\n\`\`\``);
+  }
+
+  parts.push(
+    "- **Objetivo Visual**:\n[Describe aquí los cambios visuales, colores, espaciados, fuentes o layout deseados]",
+  );
+
+  return parts.join("\n");
+}
+
 export function formatComponentPromptDirective(comp: LiveComponentMetadata): string {
   const parts: string[] = ["[TARGET COMPONENT CONTEXT]"];
 

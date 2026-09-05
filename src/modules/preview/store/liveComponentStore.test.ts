@@ -8,6 +8,7 @@ import {
   formatComponentModifyPrompt,
   formatComponentPromptDirective,
   formatComponentReference,
+  formatComponentVisualPrompt,
   useLiveComponentStore,
 } from "./liveComponentStore";
 
@@ -132,6 +133,11 @@ describe("liveComponentStore", () => {
     expect(modifyPrompt).toContain("### 💡 Instrucción de Modificación de Componente");
     expect(modifyPrompt).toContain("CheckoutButton");
     expect(modifyPrompt).toContain("src/components/CheckoutButton.tsx:42");
+
+    const visualPrompt = formatComponentVisualPrompt(mockComponent);
+    expect(visualPrompt).toContain("### 🎨 Solicitud de Ajuste Visual y Estilos");
+    expect(visualPrompt).toContain("CheckoutButton");
+    expect(visualPrompt).toContain("button.checkout-btn.primary");
   });
 
   it("formats candidate grep queries", () => {
@@ -155,3 +161,4 @@ describe("liveComponentStore", () => {
     expect(selected?.absolutePath).toBe("C:/projects/web/index.html");
   });
 });
+
