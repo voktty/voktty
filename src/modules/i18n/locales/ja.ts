@@ -1706,6 +1706,13 @@ const jaBase = mergeLocale(en, {
     importSuccess:
       "{imported} 個の新しいホストをインポートしました (設定内に合計 {total} 個検出)。",
     noConfigFound: "~/.ssh/config にホストが見つかりませんでした。",
+    filesystemBackend: {
+      title: "リモートファイルシステムのバックエンド",
+      description:
+        "SSH のエクスプローラーとエディターを処理するバックエンドです。Helper はホストにアップロードされる voktty-remote サーバーで、ネイティブ SFTP はプロセス内で動作しホスト側に helper を必要としません。",
+      helper: "Helper (voktty-remote)",
+      native: "ネイティブ SFTP",
+    },
     noConnectionsTitle: "SSH 接続はまだありません",
     noConnectionsDesc:
       "リモートサーバーを追加するか、~/.ssh/config からホストをインポートしてワンクリックで接続できるようにします。",

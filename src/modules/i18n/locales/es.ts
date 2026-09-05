@@ -2849,6 +2849,13 @@ export const es: TranslationSchema = {
     importSuccess:
       "Se importaron {imported} nuevos hosts ({total} encontrados en config).",
     noConfigFound: "No se encontraron hosts en ~/.ssh/config.",
+    filesystemBackend: {
+      title: "Backend del sistema de archivos remoto",
+      description:
+        "Que backend sirve el explorador y el editor SSH. El helper es el servidor voktty-remote subido al host; el SFTP nativo corre en proceso y no necesita helper en el host.",
+      helper: "Helper (voktty-remote)",
+      native: "SFTP nativo",
+    },
     noConnectionsTitle: "Aún no hay conexiones SSH",
     noConnectionsDesc:
       "Agrega un servidor remoto o importa tus hosts desde ~/.ssh/config para conectar con un solo clic.",

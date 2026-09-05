@@ -1742,6 +1742,13 @@ const frBase = mergeLocale(en, {
     importSuccess:
       "{imported} nouveaux hôtes importés ({total} trouvés dans la configuration).",
     noConfigFound: "Aucun hôte trouvé dans ~/.ssh/config.",
+    filesystemBackend: {
+      title: "Backend du systeme de fichiers distant",
+      description:
+        "Quel backend sert l'explorateur et l'editeur SSH. Le helper est le serveur voktty-remote televerse sur l'hote ; le SFTP natif s'execute en processus et ne necessite aucun helper sur l'hote.",
+      helper: "Helper (voktty-remote)",
+      native: "SFTP natif",
+    },
     noConnectionsTitle: "Aucune connexion SSH pour le moment",
     noConnectionsDesc:
       "Ajoutez un serveur distant ou importez vos hôtes depuis ~/.ssh/config pour vous connecter en un clic.",

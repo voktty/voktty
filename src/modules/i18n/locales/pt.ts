@@ -1730,6 +1730,13 @@ const ptBase = mergeLocale(en, {
     importSuccess:
       "{imported} novos hosts importados ({total} encontrados na configuração).",
     noConfigFound: "Nenhum host encontrado em ~/.ssh/config.",
+    filesystemBackend: {
+      title: "Backend do sistema de arquivos remoto",
+      description:
+        "Qual backend serve o explorador e o editor SSH. O helper e o servidor voktty-remote enviado ao host; o SFTP nativo roda em processo e nao precisa de helper no host.",
+      helper: "Helper (voktty-remote)",
+      native: "SFTP nativo",
+    },
     noConnectionsTitle: "Nenhuma conexão SSH ainda",
     noConnectionsDesc:
       "Adicione um servidor remoto ou importe seus hosts de ~/.ssh/config para conectar com um clique.",
