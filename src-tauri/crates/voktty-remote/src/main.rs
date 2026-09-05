@@ -881,7 +881,8 @@ impl RemoteServer {
             };
 
             let cd_prefix = format!("cd -- '{s_cwd}' 2>/dev/null || true; ");
-            let default_cmd = format!("tmux set -g default-command {sh_cmd_quoted} 2>/dev/null || true; ");
+            let default_cmd =
+                format!("tmux set -g default-command {sh_cmd_quoted} 2>/dev/null || true; ");
 
             let script = format!(
                 "{cd_prefix}if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; {default_cmd}exec {tmux_args}; elif command -v screen >/dev/null 2>&1; then exec {screen_args}; else {shell_wrapper}; fi"
@@ -1220,26 +1221,27 @@ impl RemoteServer {
     fn resolve_pty_cwd(&self, cwd: Option<&str>) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("handshake is required")?;
         let requested = cwd.filter(|value| !value.trim().is_empty());
-        let candidate = match requested {
-            None => root.clone(),
-            Some(value) if Path::new(value).is_absolute() => {
-                let canonical_p = fs::canonicalize(value).map_err(|e| e.to_string())?;
-                if !canonical_p.is_dir() {
-                    return Err("PTY working directory is not a directory".to_string());
-                }
-                canonical_p
-            }
-            Some(value) => {
-                let rel = safe_relative_path(value)?;
-                let cand = root.join(rel);
-                let canonical = fs::canonicalize(&cand).map_err(|e| e.to_string())?;
-                if !canonical.is_dir() {
-                    return Err("PTY working directory is not a directory".to_string());
-                }
-                canonical
-            }
+        let Some(value) = requested else {
+            return Ok(root.clone());
         };
-        Ok(candidate)
+
+        let candidate = if Path::new(value).is_absolute() {
+            PathBuf::from(value)
+        } else {
+            root.join(safe_relative_path(value)?)
+        };
+        let canonical = fs::canonicalize(&candidate).map_err(|e| e.to_string())?;
+
+        // Containment is checked after canonicalizing and for both forms, so
+        // neither an absolute path nor a symlink inside the root can land the
+        // shell outside the workspace the user authorized.
+        if !canonical.starts_with(root) {
+            return Err("PTY working directory is outside the workspace root".to_string());
+        }
+        if !canonical.is_dir() {
+            return Err("PTY working directory is not a directory".to_string());
+        }
+        Ok(canonical)
     }
 
     fn resolve_existing(&self, path: Option<&str>) -> Result<PathBuf, String> {
