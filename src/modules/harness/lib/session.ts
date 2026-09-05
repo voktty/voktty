@@ -223,7 +223,7 @@ export type QueuedMessage = {
   attachments: Attachment[];
   noteCard?: NoteComposerCard;
   handoffCard?: HandoffComposerCard;
-  intent?: RuntimeMode | string;
+  intent?: TurnIntent;
 };
 
 export type MessageQueueStatus = "active" | "paused" | "resuming";

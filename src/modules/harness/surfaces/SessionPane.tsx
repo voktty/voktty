@@ -18,6 +18,7 @@ import {
   type Attachment,
   type Block,
   type HarnessId,
+  type PlanBuildTarget,
   type RuntimeMode,
   type Session,
 } from "../lib/session";
@@ -83,6 +84,11 @@ type Props = {
     session?: { sessionId: string; cwd: string },
   ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
+  onBuildPlan?: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
   onSecondOpinion?: (
     sessionId: string,
     harness: HarnessId,
@@ -134,6 +140,7 @@ export const SessionPane = memo(function SessionPane({
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
+  onBuildPlan,
   onSecondOpinion,
   onHandoff,
   onNewTerminal,
@@ -148,6 +155,11 @@ export const SessionPane = memo(function SessionPane({
   const openPlan = useCallback(
     (blockId: string) => onOpenPlan(session.id, blockId),
     [onOpenPlan, session.id],
+  );
+  const buildPlan = useCallback(
+    (blockId: string, target?: PlanBuildTarget) =>
+      onBuildPlan?.(session.id, blockId, target),
+    [onBuildPlan, session.id],
   );
   const jumpToBottomRef = useRef<(() => void) | null>(null);
   const quoteRequestId = useRef(0);
@@ -349,6 +361,7 @@ export const SessionPane = memo(function SessionPane({
               onOpenFile={onOpenFile}
               onOpenDiff={onOpenDiff}
               onOpenPlan={openPlan}
+              onBuildPlan={buildPlan}
               onSecondOpinion={
                 onSecondOpinion
                   ? (harness, turn, model) =>
