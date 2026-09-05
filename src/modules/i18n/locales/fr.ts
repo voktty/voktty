@@ -1731,6 +1731,29 @@ const frBase = mergeLocale(en, {
         "Les fichiers s'ouvriront dans l'éditeur ; les dossiers dans le terminal",
     },
   },
+  transfers: {
+    title: "Transferts",
+    clearFinished: "Effacer les termines",
+    uploadingTo: "Envoi vers {target}",
+    downloadingTo: "Telechargement vers {target}",
+    cancel: "Annuler le transfert",
+    progressLabel: "Progression du transfert",
+    conflict: "{path} existe deja",
+    skipped: "{count} ignores",
+    state: {
+      awaiting: "En attente de votre reponse",
+      cancelled: "Annule",
+      failed: "Echec",
+      completed: "Termine",
+      preparing: "Preparation",
+    },
+    policy: {
+      overwrite: "Ecraser",
+      skip: "Ignorer",
+      rename: "Renommer",
+      resume: "Reprendre",
+    },
+  },
   ssh: {
     title: "Connexions SSH",
     description:
