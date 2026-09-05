@@ -1,8 +1,14 @@
+import type { HarnessId } from "../session";
 import type { PrContent } from "../gitText";
 import { hasLiveCatalog } from "../models";
-import type { HarnessId, RuntimeMode } from "../session";
-import { updateCodexRuntimeMode } from "./codex";
-import type { ApprovalDecision, SendTurnInput, SteerTurnInput } from "./types";
+import type { UserQuestionReply } from "../userQuestion";
+import type { NativeCommandProvider } from "./nativeCommands";
+import type {
+  ApprovalDecision,
+  CompactContextInput,
+  SendTurnInput,
+  SteerTurnInput,
+} from "./types";
 
 export type TitleInput = {
   sessionId: string;
@@ -20,13 +26,21 @@ export type HarnessAdapter = {
   live: boolean;
   /** False when the harness cannot accept a follow-up while a turn is running. Default: same as live. */
   canSteer?: boolean;
+  commands?: NativeCommandProvider;
   sendTurn(input: SendTurnInput): Promise<void>;
+  /** Trigger provider-owned compaction outside MonoCode's normal user-turn path. */
+  compactContext?(input: CompactContextInput): Promise<void>;
   steerTurn(input: SteerTurnInput): Promise<void>;
   cancelTurn(sessionId: string): Promise<void>;
   respondApproval(
     sessionId: string,
     requestId: number,
     decision: ApprovalDecision,
+  ): void;
+  respondQuestion?(
+    sessionId: string,
+    requestId: number,
+    reply: UserQuestionReply,
   ): void;
   /** Kill the child but keep resume state for later rebind. */
   stopSession(sessionId: string): Promise<void>;
@@ -51,8 +65,6 @@ export type HarnessAdapter = {
 };
 
 const adapters = new Map<HarnessId, HarnessAdapter>();
-const sessionOwners = new Map<string, HarnessId>();
-const sessionTransitions = new Map<string, Promise<unknown>>();
 
 /**
  * After a turn settles, keep the child warm for follow-ups, then park it.
@@ -82,41 +94,6 @@ function scheduleIdlePark(harness: HarnessId, sessionId: string): void {
 export function resetHarnessIdlePark(): void {
   for (const timer of idleParkTimers.values()) clearTimeout(timer);
   idleParkTimers.clear();
-  sessionOwners.clear();
-  sessionTransitions.clear();
-}
-
-async function transitionSession<T>(
-  sessionId: string,
-  operation: () => Promise<T>,
-): Promise<T> {
-  const previous = sessionTransitions.get(sessionId) ?? Promise.resolve();
-  const current = previous.catch(() => undefined).then(operation);
-  sessionTransitions.set(sessionId, current);
-  try {
-    return await current;
-  } finally {
-    if (sessionTransitions.get(sessionId) === current) {
-      sessionTransitions.delete(sessionId);
-    }
-  }
-}
-
-async function claimHarnessSession(
-  harness: HarnessId,
-  sessionId: string,
-): Promise<void> {
-  await transitionSession(sessionId, async () => {
-    const previous = sessionOwners.get(sessionId);
-    if (previous === harness) return;
-    cancelIdlePark(sessionId);
-    if (previous) {
-      await getHarness(previous)
-        ?.forgetSession(sessionId)
-        .catch(() => undefined);
-    }
-    sessionOwners.set(sessionId, harness);
-  });
 }
 
 export function registerHarness(adapter: HarnessAdapter): void {
@@ -150,21 +127,34 @@ export async function sendHarnessTurn(
   if (!adapter.live) {
     throw new Error(`${input.harness} is not connected yet`);
   }
-  await claimHarnessSession(input.harness, input.sessionId);
   cancelIdlePark(input.sessionId);
   try {
     await adapter.sendTurn(input);
-  } catch (error) {
-    await transitionSession(input.sessionId, async () => {
-      if (sessionOwners.get(input.sessionId) !== input.harness) return;
-      sessionOwners.delete(input.sessionId);
-      await adapter.stopSession(input.sessionId).catch(() => undefined);
-    });
-    throw error;
   } finally {
-    if (sessionOwners.get(input.sessionId) === input.harness) {
-      scheduleIdlePark(input.harness, input.sessionId);
-    }
+    scheduleIdlePark(input.harness, input.sessionId);
+  }
+}
+
+export function canCompactHarnessContext(id: HarnessId): boolean {
+  const adapter = adapters.get(id);
+  return adapter?.live === true && adapter.compactContext != null;
+}
+
+export async function compactHarnessContext(
+  input: CompactContextInput & { harness: HarnessId },
+): Promise<void> {
+  const adapter = requireHarness(input.harness);
+  if (!adapter.live) {
+    throw new Error(`${input.harness} is not connected yet`);
+  }
+  if (!adapter.compactContext) {
+    throw new Error(`${input.harness} does not support manual compaction`);
+  }
+  cancelIdlePark(input.sessionId);
+  try {
+    await adapter.compactContext(input);
+  } finally {
+    scheduleIdlePark(input.harness, input.sessionId);
   }
 }
 
@@ -191,14 +181,9 @@ export async function cancelHarnessTurn(
 ): Promise<void> {
   const adapter = getHarness(harness);
   if (!adapter?.live) return;
-  await transitionSession(sessionId, async () => {
-    if (sessionOwners.get(sessionId) !== harness) return;
-    cancelIdlePark(sessionId);
-    await adapter.cancelTurn(sessionId);
-    if (sessionOwners.get(sessionId) === harness) {
-      scheduleIdlePark(harness, sessionId);
-    }
-  });
+  cancelIdlePark(sessionId);
+  await adapter.cancelTurn(sessionId);
+  scheduleIdlePark(harness, sessionId);
 }
 
 export function respondHarnessApproval(
@@ -210,44 +195,33 @@ export function respondHarnessApproval(
   getHarness(harness)?.respondApproval(sessionId, requestId, decision);
 }
 
+export function respondHarnessQuestion(
+  harness: HarnessId,
+  sessionId: string,
+  requestId: number,
+  reply: UserQuestionReply,
+): void {
+  getHarness(harness)?.respondQuestion?.(sessionId, requestId, reply);
+}
+
 export async function stopHarnessSession(
   harness: HarnessId,
   sessionId: string,
 ): Promise<void> {
+  cancelIdlePark(sessionId);
   const adapter = getHarness(harness);
   if (!adapter?.live) return;
-  await transitionSession(sessionId, async () => {
-    const owner = sessionOwners.get(sessionId);
-    if (owner && owner !== harness) return;
-    cancelIdlePark(sessionId);
-    try {
-      await adapter.stopSession(sessionId);
-    } finally {
-      if (sessionOwners.get(sessionId) === harness) {
-        sessionOwners.delete(sessionId);
-      }
-    }
-  });
+  await adapter.stopSession(sessionId);
 }
 
 export async function forgetHarnessSession(
   harness: HarnessId,
   sessionId: string,
 ): Promise<void> {
+  cancelIdlePark(sessionId);
   const adapter = getHarness(harness);
   if (!adapter) return;
-  await transitionSession(sessionId, async () => {
-    const owner = sessionOwners.get(sessionId);
-    if (owner && owner !== harness) return;
-    cancelIdlePark(sessionId);
-    try {
-      await adapter.forgetSession(sessionId);
-    } finally {
-      if (sessionOwners.get(sessionId) === harness) {
-        sessionOwners.delete(sessionId);
-      }
-    }
-  });
+  await adapter.forgetSession(sessionId);
 }
 
 export function bindHarnessSession(
@@ -256,7 +230,6 @@ export function bindHarnessSession(
   providerSessionId: string,
   cwd: string,
 ): void {
-  sessionOwners.set(threadId, harness);
   getHarness(harness)?.bindSession(threadId, providerSessionId, cwd);
 }
 
@@ -326,14 +299,4 @@ export async function warmupHarnessText(
   cwd: string,
 ): Promise<void> {
   await getHarness(harness)?.warmupText?.(cwd);
-}
-
-export function updateHarnessRuntimeMode(
-  harness: HarnessId,
-  sessionId: string,
-  mode: RuntimeMode,
-): void {
-  if (harness === "codex") {
-    updateCodexRuntimeMode(sessionId, mode);
-  }
 }

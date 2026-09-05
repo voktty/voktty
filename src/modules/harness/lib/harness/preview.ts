@@ -211,6 +211,56 @@ export function isSkillTool(kind?: string, title?: string): boolean {
   return /^skill\b/i.test(title?.trim() ?? "");
 }
 
+/** Claude Code's Agent tool (named Task before v2.1.63), plus Codex subagents. */
+export function isAgentToolName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return (
+    normalized === "agent" ||
+    normalized === "task" ||
+    normalized === "subagent" ||
+    normalized === "taskcreate"
+  );
+}
+
+export function isAgentTool(kind?: string, title?: string): boolean {
+  const key = kind?.trim().toLowerCase() ?? "";
+  if (key === "agent" || key === "task" || key === "subagent") return true;
+  if (key && key !== "other") return false;
+  return /^(agent|task|subagent)\b/i.test(title?.trim() ?? "");
+}
+
+/** Human label for a spawned subagent: the agent's description, else its type. */
+export function agentToolTitle(
+  input: Record<string, unknown>,
+  fallback = "Subagent",
+): string {
+  const description = coerceString(input.description)?.trim();
+  if (description) return description;
+  const type =
+    coerceString(input.subagent_type) ??
+    coerceString(input.subagentType) ??
+    coerceString(input.agent_type) ??
+    coerceString(input.agentType);
+  if (type) {
+    const label = formatAgentType(type);
+    return /subagent/i.test(label) ? label : `${label} subagent`;
+  }
+  if (
+    fallback &&
+    !isAgentToolName(fallback) &&
+    !isWeakToolTitle(fallback)
+  ) {
+    return fallback;
+  }
+  return "Subagent";
+}
+
+export function formatAgentType(value: string): string {
+  const text = value.trim().replace(/[_-]+/g, " ");
+  if (!text) return "Subagent";
+  return text.replace(/\b[a-z]/g, (char) => char.toUpperCase());
+}
+
 export function extractSearchQuery(value: unknown): string | undefined {
   const keys = [
     "pattern",
@@ -237,6 +287,9 @@ export function titleFromToolInput(
   kind: string,
   input: Record<string, unknown>,
 ): string {
+  if (isAgentToolName(name) || isAgentTool(kind)) {
+    return agentToolTitle(input, name);
+  }
   const preview = extractToolPreview(
     { title: name, name, kind, rawInput: input, input },
     { title: name, name, kind, rawInput: input },
@@ -271,6 +324,12 @@ export function composeToolTitle(opts: {
   const previewKind = opts.previewKind;
   const command = firstLine(opts.command);
   const skill = formatSkillName(opts.skill);
+
+  if (isAgentTool(kind, title)) {
+    const rest = title.replace(/^(agent|task|subagent)\b\s*/i, "").trim();
+    if (rest && !isWeakToolTitle(rest)) return rest;
+    return "Subagent";
+  }
 
   if (
     isSkillTool(kind, title) ||
@@ -568,37 +627,13 @@ function extractDiff(content: unknown): {
       (change ? coerceString(change.path) : undefined);
     const patch = asRecord(block.patch);
     const patchText = coerceString(patch?.text) ?? coerceString(block.patch);
-    if (
-      patchText &&
-      (/(?:^|\n)(?:diff --git|@@ |--- |\+\+\+ )/.test(patchText) ||
-        patchText.includes("@@ -"))
-    ) {
+    if (patchText && /^(diff --git|@@ )/.test(patchText.trim())) {
       const parsed = parseGitPatch(patchText);
       return {
         path: parsed.path ?? path ?? undefined,
         lines: parsed.lines,
         additions: parsed.additions,
         deletions: parsed.deletions,
-      };
-    }
-    if (
-      block.oldText != null ||
-      block.old_text != null ||
-      block.newText != null ||
-      block.new_text != null
-    ) {
-      const oldText =
-        coerceString(block.oldText) ?? coerceString(block.old_text);
-      const newText =
-        coerceString(block.newText) ?? coerceString(block.new_text) ?? "";
-      const built = compactDiff(oldText, newText);
-      return {
-        path: path ?? undefined,
-        oldText,
-        newText,
-        lines: built.lines,
-        additions: built.additions,
-        deletions: built.deletions,
       };
     }
     return {
@@ -646,11 +681,11 @@ function parseGitPatch(text: string): {
   const hunks: ToolPreviewLine[] = [];
   let additions = 0;
   let deletions = 0;
-  let newNum = 1;
+  let newNum = 0;
   for (const line of text.replace(/\r\n/g, "\n").split("\n")) {
-    const header = line.match(/^@@\s+-(?:\d+)(?:,\d+)?\s+\+(\d+)/);
+    const header = line.match(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)/);
     if (header) {
-      newNum = Number(header[1]) || 1;
+      newNum = Number(header[2]);
       continue;
     }
     if (
@@ -669,6 +704,7 @@ function parseGitPatch(text: string): {
       deletions += 1;
       hunks.push({ number: newNum, kind: "del", text: line.slice(1) });
     } else if (line.startsWith("\\")) {
+      continue;
     } else {
       const body = line.startsWith(" ") ? line.slice(1) : line;
       hunks.push({ number: newNum, kind: "context", text: body });
@@ -938,7 +974,7 @@ function firstLine(value: string | undefined): string {
 }
 
 function stripExecutePrefix(title: string): string {
-  return title.replace(/^(?:bash|shell|execute)\s*[:-]\s+/i, "").trim();
+  return title.replace(/^(?:bash|shell|execute)\s*[:\-]\s+/i, "").trim();
 }
 
 function skillNameField(value: unknown): string | undefined {

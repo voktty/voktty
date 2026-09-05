@@ -2,34 +2,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sent: string[] = [];
 let onLine: ((line: string) => void) | undefined;
-let onExit: ((code: number | null) => void) | undefined;
-let onStderr: ((line: string) => void) | undefined;
 
 vi.mock("./child", () => ({
   resolveCodexBinary: async () => ({ path: "/fake/codex" }),
   spawnChild: async () => undefined,
   killChild: async () => undefined,
   unwatchChild: () => undefined,
-  watchChild: (
-    _id: string,
-    line: (value: string) => void,
-    exit: (code: number | null) => void,
-    stderr?: (value: string) => void,
-  ) => {
+  watchChild: (_id: string, line: (l: string) => void) => {
     onLine = line;
-    onExit = exit;
-    onStderr = stderr;
   },
   writeChild: async (_id: string, line: string) => {
     sent.push(line);
   },
 }));
 
-const { sendCodexTurn, stopCodexSession, __codexTestReset } = await import(
-  "./codex"
-);
-
+const {
+  compactCodexContext,
+  sendCodexTurn,
+  stopCodexSession,
+  __codexTestReset,
+} = await import("./codex");
 import type { HarnessEvent } from "./types";
+import type { RuntimeMode, TurnIntent } from "../session";
 
 function parse() {
   return sent.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -53,14 +47,21 @@ const waitFor = async (pred: () => boolean, label: string) => {
   );
 };
 
-async function startTurn(sessionId: string) {
+async function startTurn(
+  sessionId: string,
+  options: {
+    runtimeMode?: RuntimeMode;
+    intent?: TurnIntent;
+  } = {},
+) {
   const events: HarnessEvent[] = [];
   const turn = sendCodexTurn({
     sessionId,
     cwd: "/repo",
     model: "codex:gpt-5.4",
     modelSettings: {},
-    runtimeMode: "supervised",
+    runtimeMode: options.runtimeMode ?? "supervised",
+    intent: options.intent,
     text: "summarize the changelog",
     attachments: [],
     onEvent: (event) => events.push(event),
@@ -93,8 +94,6 @@ describe("codex live turn sequence", () => {
   beforeEach(() => {
     sent.length = 0;
     onLine = undefined;
-    onExit = undefined;
-    onStderr = undefined;
   });
 
   afterEach(async () => {
@@ -141,27 +140,85 @@ describe("codex live turn sequence", () => {
     expect(settled).toBe(true);
   });
 
-  it("includes bounded stderr context when app-server exits", async () => {
-    const turn = sendCodexTurn({
+  it("keeps plan turns read-only without surfacing approval prompts", async () => {
+    const { events, turn } = await startTurn("codex-live", {
+      runtimeMode: "auto",
+      intent: "plan",
+    });
+    const turnStart = parse().find(
+      (message) => message.method === "turn/start",
+    );
+    expect(turnStart?.params).toMatchObject({
+      approvalPolicy: "never",
+      sandboxPolicy: { type: "readOnly" },
+      collaborationMode: { mode: "plan" },
+    });
+
+    onLine!(
+      JSON.stringify({
+        id: 91,
+        method: "item/commandExecution/requestApproval",
+        params: { itemId: "cmd_1", command: "git status --short" },
+      }),
+    );
+    await waitFor(
+      () => parse().some((message) => message.id === 91),
+      "silent plan denial",
+    );
+
+    expect(events.some((event) => event.type === "approval.requested")).toBe(
+      false,
+    );
+    expect(parse().find((message) => message.id === 91)?.result).toEqual({
+      decision: "decline",
+    });
+
+    notify("turn/completed", {
+      turn: { id: "turn_1", status: "completed" },
+    });
+    await turn;
+  });
+
+  it("uses thread/compact/start and waits for its turn to complete", async () => {
+    const { turn } = await startTurn("codex-live");
+    notify("turn/completed", {
+      turn: { id: "turn_1", status: "completed" },
+    });
+    await turn;
+    sent.length = 0;
+
+    const compact = compactCodexContext({
       sessionId: "codex-live",
       cwd: "/repo",
       model: "codex:gpt-5.4",
-      modelSettings: {},
       runtimeMode: "supervised",
-      text: "inspect",
-      attachments: [],
       onEvent: () => undefined,
     });
-
     await waitFor(
-      () => parse().some((message) => message.method === "initialize"),
-      "initialize",
+      () =>
+        parse().some((message) => message.method === "thread/compact/start"),
+      "thread/compact/start",
     );
-    onStderr?.("authentication failed");
-    onExit?.(1);
+    const request = parse().find(
+      (message) => message.method === "thread/compact/start",
+    )!;
+    expect(request.params).toEqual({ threadId: "thr_1" });
+    reply(request.id as number, {});
 
-    await expect(turn).rejects.toThrow(
-      "Codex app-server exited: authentication failed",
-    );
+    let settled = false;
+    void compact.then(() => {
+      settled = true;
+    });
+    notify("turn/started", {
+      turn: { id: "compact_1", status: "inProgress" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(false);
+
+    notify("turn/completed", {
+      turn: { id: "compact_1", status: "completed" },
+    });
+    await compact;
+    expect(settled).toBe(true);
   });
 });

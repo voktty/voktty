@@ -11,26 +11,17 @@ export type ShellIntent = {
 const MAX_COMMAND_CHARS = 2000;
 
 const READABLE_BIN =
-  /\b(?:cat|bat|batcat|nl|less|more|tac|head|tail|sed|grep|egrep|fgrep|rgrep|rg|ag|ack|find|ls|tree|tee|type|dir|Get-Content|gc|Get-ChildItem|gci|Select-String|sls|findstr)\b/i;
+  /\b(?:cat|bat|batcat|nl|less|more|tac|head|tail|sed|grep|egrep|fgrep|rgrep|rg|ag|ack|find|ls|tree|tee)\b/;
 
 /**
  * Best-effort label for a shell command. Returns undefined when the command
  * should stay as typed (git, npm, scripts, mixed opaque work).
  */
 export function inferShellIntent(command: string): ShellIntent | undefined {
-  let text = command.trim();
+  const text = command.trim();
   if (!text || text.length > MAX_COMMAND_CHARS) return undefined;
   if (/^(Read|Find|List|Edit|Write)\s+\S/.test(text)) return undefined;
   if (looksUnsafe(text)) return undefined;
-
-  // Unwrap powershell / cmd execution wrappers
-  const wrapper = text.match(
-    /^(?:["']?(?:[A-Za-z]:[/\\][^"'\n]+[/\\]|(?:\/usr\/bin\/|\/bin\/)?)?(?:pwsh|powershell|cmd|sh|bash)(?:\.exe)?["']?\s+)(?:-[a-zA-Z]+\s+)*(?:-Command|-c|\/c|\/s)\s+["']?([\s\S]+?)["']?$/i,
-  );
-  if (wrapper && wrapper[1]) {
-    text = wrapper[1].trim();
-  }
-
   const write = extractWriteRedirect(text);
   if (!READABLE_BIN.test(text) && !write) return undefined;
 
@@ -70,15 +61,8 @@ export function formatShellIntent(
     const q = query || intent.query;
     return q ? `Find ${q}` : undefined;
   }
-  let target = path || intent.path;
+  const target = path || intent.path;
   if (!target) return undefined;
-  if (/^[A-Za-z]:[\\/]/.test(target)) {
-    const parts = target.replace(/[/\\]+$/, "").split(/[/\\]/).filter(Boolean);
-    target =
-      parts.length > 2
-        ? parts.slice(-2).join("/")
-        : parts[parts.length - 1] ?? target;
-  }
   return `${intent.verb} ${target}`;
 }
 
@@ -99,7 +83,7 @@ export function rewriteReadableTitle(
 type Classified = ShellIntent | "noise" | "opaque";
 
 function classifyArgv(argv: string[]): Classified {
-  const bin = binName(argv[0]).toLowerCase();
+  const bin = binName(argv[0]);
   if (NOISE_BINS.has(bin)) return "noise";
   if (READ_BINS.has(bin)) return readIntent(argv);
   if (bin === "head" || bin === "tail") return headTailIntent(argv);
@@ -107,15 +91,7 @@ function classifyArgv(argv: string[]): Classified {
   if (bin === "tee") return teeIntent(argv);
   if (SEARCH_BINS.has(bin)) return grepIntent(argv);
   if (bin === "find") return findIntent(argv);
-  if (
-    bin === "ls" ||
-    bin === "tree" ||
-    bin === "dir" ||
-    bin === "get-childitem" ||
-    bin === "gci"
-  ) {
-    return listIntent(argv);
-  }
+  if (bin === "ls" || bin === "tree") return listIntent(argv);
   return "opaque";
 }
 
@@ -144,9 +120,6 @@ const READ_BINS = new Set([
   "less",
   "more",
   "tac",
-  "type",
-  "get-content",
-  "gc",
 ]);
 
 const SEARCH_BINS = new Set([
@@ -157,8 +130,6 @@ const SEARCH_BINS = new Set([
   "rg",
   "ag",
   "ack",
-  "select-string",
-  "sls",
 ]);
 
 const GREP_VALUE_FLAGS = new Set([

@@ -69,6 +69,21 @@ describe("buildPiSpawnArgs", () => {
     ]);
   });
 
+  it("limits plan turns to each flavor's read-only tools", () => {
+    expect(buildPiSpawnArgs(PI_FLAVOR, { plan: true })).toEqual([
+      "--mode",
+      "rpc",
+      "--tools",
+      "read,grep,find,ls",
+    ]);
+    expect(buildPiSpawnArgs(OMP_FLAVOR, { plan: true })).toEqual([
+      "--mode",
+      "rpc",
+      "--tools",
+      "read,grep,glob,lsp",
+    ]);
+  });
+
   it("uses omp's renamed resume and context flags", () => {
     expect(buildPiSpawnArgs(OMP_FLAVOR, { resume: "abc123" })).toEqual([
       "--mode",
@@ -141,6 +156,35 @@ describe("buildPiPrompt", () => {
 });
 
 describe("RPC frames", () => {
+  it("displays colored extension labels without changing RPC values", () => {
+    const option = "\u001b[32mProceed\u001b[39m";
+    const request = parseExtensionUiRequest({
+      type: "extension_ui_request",
+      id: "colored-select",
+      method: "select",
+      title: "\u001b[1mChoose\u001b[22m",
+      options: [option],
+    })!;
+    expect(extensionUiTitle(request)).toBe("Choose");
+    expect(extensionUiResponse(request, "allow")).toEqual({
+      type: "extension_ui_response",
+      id: "colored-select",
+      value: option,
+    });
+  });
+
+  it("removes terminal styling and hyperlink controls from confirmation text", () => {
+    const request = parseExtensionUiRequest({
+      type: "extension_ui_request",
+      id: "colored-confirm",
+      method: "confirm",
+      title: "\u001b[38;2;100;150;200mReview\u001b[0m",
+      message:
+        "Open \u001b]8;;https://example.com\u001b\\docs\u001b]8;;\u0007?\n\t[1, 2]",
+    })!;
+    expect(extensionUiTitle(request)).toBe("Review — Open docs?\n\t[1, 2]");
+  });
+
   it("parses responses, events, and extension UI", () => {
     expect(parseJsonLine("not json")).toBeNull();
     const response = parseRpcResponse({
@@ -287,7 +331,9 @@ describe("streaming events", () => {
     });
 
     expect(isAgentSettled({ type: "agent_settled" })).toBe(true);
-    expect(agentEndWillRetry({ type: "agent_end", willRetry: true })).toBe(true);
+    expect(agentEndWillRetry({ type: "agent_end", willRetry: true })).toBe(
+      true,
+    );
     expect(agentEndWillRetry({ type: "agent_end" })).toBe(false);
   });
 });
@@ -296,7 +342,10 @@ describe("tools and models", () => {
   it("titles built-in Pi tools", () => {
     expect(toolKindFromName("bash")).toBe("execute");
     expect(toolKindFromName("edit")).toBe("edit");
-    expect(toolTitle("bash", { command: "git status -s" })).toBe("git status -s");
+    expect(toolKindFromName("todo_write")).toBe("tasks");
+    expect(toolTitle("bash", { command: "git status -s" })).toBe(
+      "git status -s",
+    );
     expect(toolTitle("read", { path: "src/a.ts" })).toMatch(/src\/a\.ts/);
     expect(previewFromTool("write", { path: "src/a.ts" })?.kind).toBe("write");
   });
@@ -349,9 +398,12 @@ describe("tools and models", () => {
       }),
     ).toBeUndefined();
     expect(
-      contextFromUsage({
-        usage: { totalTokens: 120 },
-      }, 200),
+      contextFromUsage(
+        {
+          usage: { totalTokens: 120 },
+        },
+        200,
+      ),
     ).toEqual({ used: 120, window: 200 });
     // Live 0.80.x shapes: finished total on the assistant message, streaming
     // total on the nested partial. Tool-result usage is a nested LLM call, not
@@ -431,7 +483,11 @@ describe("turnErrorFromEvent", () => {
     expect(
       turnErrorFromEvent({
         type: "message_end",
-        message: { role: "assistant", stopReason: "end_turn", content: [{ type: "text", text: "hi" }] },
+        message: {
+          role: "assistant",
+          stopReason: "end_turn",
+          content: [{ type: "text", text: "hi" }],
+        },
       }),
     ).toBeNull();
     expect(

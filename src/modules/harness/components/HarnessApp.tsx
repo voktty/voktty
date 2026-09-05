@@ -95,8 +95,10 @@ import {
   appendUser,
   applyHarnessEvent,
   bindHarnessSession,
+  canCompactHarnessContext,
   cancelHarnessTurn,
   canSteerHarness,
+  compactHarnessContext,
   forgetHarnessSession,
   generateHarnessTitle,
   type HarnessEvent,
@@ -110,7 +112,6 @@ import {
   startHarnessBridge,
   steerHarnessTurn,
   stopStreaming,
-  updateHarnessRuntimeMode,
 } from "../lib/harness";
 import { isEditTool } from "../lib/harness/preview";
 import {
@@ -237,6 +238,7 @@ import {
   canReplaceSessionTitle,
   formatSessionTitle,
   HARNESS_LABEL,
+  HARNESS_TITLE,
   type HarnessId,
   hasPendingApproval,
   newDefaultSession,
@@ -3332,10 +3334,6 @@ export function HarnessApp({
 
   const onRuntimeModeChange = useCallback(
     (sessionId: string, runtimeMode: RuntimeMode) => {
-      const current = sessionsRef.current.find((s: any) => s.id === sessionId);
-      if (current) {
-        updateHarnessRuntimeMode(current.harness, sessionId, runtimeMode);
-      }
       setSessions((prev: any) =>
         prev.map((s: any) => (s.id === sessionId ? { ...s, runtimeMode } : s)),
       );
@@ -4017,6 +4015,86 @@ export function HarnessApp({
       );
     },
     [],
+  );
+
+  const onCompactContext = useCallback(
+    (sessionId: string) => {
+      const current = sessionsRef.current.find(
+        (session: any) => session.id === sessionId,
+      );
+      if (!current || current.busy) return false;
+      if (!canCompactHarnessContext(current.harness)) {
+        const unsupported = sessionsRef.current.map((session: any) =>
+          session.id === sessionId
+            ? applyHarnessEvent(session, {
+                type: "status",
+                text: `${HARNESS_TITLE[current.harness as HarnessId]} does not support manual context compaction.`,
+              })
+            : session,
+        );
+        sessionsRef.current = unsupported;
+        syncDockBadge(unsupported);
+        setSessions(unsupported);
+        return true;
+      }
+
+      const gen = (turnGen.current.get(sessionId) ?? 0) + 1;
+      turnGen.current.set(sessionId, gen);
+      const workCwd = sessionWorkCwd(current);
+      const started = sessionsRef.current.map((session: any) =>
+        session.id === sessionId
+          ? applyHarnessEvent(
+              { ...session, busy: true },
+              { type: "status", text: "Compacting context…" },
+            )
+          : session,
+      );
+      sessionsRef.current = started;
+      syncDockBadge(started);
+      setSessions(started);
+
+      void (async () => {
+        try {
+          await compactHarnessContext({
+            harness: current.harness,
+            sessionId,
+            cwd: workCwd,
+            model: current.model,
+            modelSettings: current.modelSettings,
+            runtimeMode: current.runtimeMode,
+            onEvent: (event) => {
+              if (turnGen.current.get(sessionId) !== gen) return;
+              enqueueHarnessEvent(sessionId, event);
+            },
+          });
+          if (turnGen.current.get(sessionId) !== gen) return;
+          enqueueHarnessEvent(sessionId, {
+            type: "status",
+            text: "Compacted context",
+          });
+        } catch (error: unknown) {
+          if (turnGen.current.get(sessionId) !== gen) return;
+          enqueueHarnessEvent(sessionId, {
+            type: "session.error",
+            message:
+              error instanceof Error
+                ? error.message
+                : `${current.harness} could not compact this context`,
+          });
+        } finally {
+          if (turnGen.current.get(sessionId) !== gen) return;
+          flushHarnessEvents();
+          const finished = sessionsRef.current.map((session: any) =>
+            session.id === sessionId ? { ...session, busy: false } : session,
+          );
+          sessionsRef.current = finished;
+          syncDockBadge(finished);
+          setSessions(finished);
+        }
+      })();
+      return true;
+    },
+    [enqueueHarnessEvent, flushHarnessEvents],
   );
 
   const onStop = useCallback(
@@ -4847,6 +4925,7 @@ export function HarnessApp({
                             onRuntimeModeChange={onRuntimeModeChange}
                             onSubmit={onSubmit}
                             onStop={onStop}
+                            onCompactContext={onCompactContext}
                             onDeleteQueuedMessage={onDeleteQueuedMessage}
                             onEditQueuedMessage={onEditQueuedMessage}
                             onQueuedMessageEditingChange={

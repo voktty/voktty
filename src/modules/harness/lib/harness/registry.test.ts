@@ -1,18 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetHarnessModelOverlays, setHarnessModels } from "../models";
+import type { HarnessId } from "../session";
 import {
-  cancelHarnessTurn,
-  forgetHarnessSession,
   HARNESS_IDLE_PARK_MS,
-  type HarnessAdapter,
+  canCompactHarnessContext,
+  compactHarnessContext,
   isLiveHarness,
   listHarnesses,
   refreshHarnessCatalogs,
   registerHarness,
   resetHarnessIdlePark,
   sendHarnessTurn,
+  type HarnessAdapter,
 } from "./registry";
 import type { SendTurnInput, SteerTurnInput } from "./types";
+import { registerBuiltinHarnesses } from "./register";
 
 function stub(
   id: "cursor" | "codex" | "claude" | "pi",
@@ -52,6 +54,63 @@ describe("harness registry", () => {
         .filter((id) => id === "claude" || id === "codex" || id === "cursor")
         .sort(),
     ).toEqual(["claude", "codex", "cursor"]);
+  });
+
+  it("advertises and dispatches compaction only when an adapter supports it", async () => {
+    const compactContext = vi.fn(async () => undefined);
+    registerHarness(stub("codex", { compactContext }));
+    registerHarness(stub("claude"));
+
+    expect(canCompactHarnessContext("codex")).toBe(true);
+    expect(canCompactHarnessContext("claude")).toBe(false);
+
+    await compactHarnessContext({
+      harness: "codex",
+      sessionId: "compact-1",
+      cwd: "/tmp",
+      model: "codex:gpt-5.4",
+      runtimeMode: "supervised",
+      onEvent: () => undefined,
+    });
+
+    expect(compactContext).toHaveBeenCalledOnce();
+    await expect(
+      compactHarnessContext({
+        harness: "claude",
+        sessionId: "compact-2",
+        cwd: "/tmp",
+        model: "claude:sonnet",
+        runtimeMode: "supervised",
+        onEvent: () => undefined,
+      }),
+    ).rejects.toThrow("does not support manual compaction");
+  });
+
+  it("exposes the native compaction support matrix", () => {
+    registerBuiltinHarnesses();
+    const ids: HarnessId[] = [
+      "claude",
+      "codex",
+      "cursor",
+      "grok",
+      "opencode",
+      "pi",
+      "omp",
+      "fx",
+    ];
+
+    expect(
+      Object.fromEntries(ids.map((id) => [id, canCompactHarnessContext(id)])),
+    ).toEqual({
+      claude: true,
+      codex: true,
+      cursor: false,
+      grok: true,
+      opencode: true,
+      pi: true,
+      omp: true,
+      fx: false,
+    });
   });
 
   it("refreshes only the requested catalogs", async () => {
@@ -112,122 +171,5 @@ describe("harness registry", () => {
     expect(stopSession).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(stopSession).toHaveBeenCalledWith("s1");
-  });
-
-  it("forgets the previous provider before another provider claims the child", async () => {
-    const order: string[] = [];
-    registerHarness(
-      stub("codex", {
-        async sendTurn() {
-          order.push("codex:send");
-        },
-        async forgetSession() {
-          order.push("codex:forget");
-        },
-      }),
-    );
-    registerHarness(
-      stub("claude", {
-        async sendTurn() {
-          order.push("claude:send");
-        },
-      }),
-    );
-
-    const input = {
-      sessionId: "shared",
-      cwd: "/tmp",
-      text: "hi",
-      runtimeMode: "supervised" as const,
-      onEvent: () => undefined,
-    };
-    await sendHarnessTurn({ ...input, harness: "codex", model: "codex:x" });
-    await sendHarnessTurn({ ...input, harness: "claude", model: "claude:y" });
-
-    expect(order).toEqual(["codex:send", "codex:forget", "claude:send"]);
-  });
-
-  it("ignores stale cleanup after a new provider owns the session", async () => {
-    const cancelCodex = vi.fn(async () => undefined);
-    const forgetCodex = vi.fn(async () => undefined);
-    const cancelClaude = vi.fn(async () => undefined);
-    registerHarness(
-      stub("codex", {
-        cancelTurn: cancelCodex,
-        forgetSession: forgetCodex,
-      }),
-    );
-    registerHarness(stub("claude", { cancelTurn: cancelClaude }));
-
-    const input = {
-      sessionId: "shared",
-      cwd: "/tmp",
-      text: "hi",
-      runtimeMode: "supervised" as const,
-      onEvent: () => undefined,
-    };
-    await sendHarnessTurn({ ...input, harness: "codex", model: "codex:x" });
-    await sendHarnessTurn({ ...input, harness: "claude", model: "claude:y" });
-    forgetCodex.mockClear();
-
-    await cancelHarnessTurn("codex", "shared");
-    await forgetHarnessSession("codex", "shared");
-
-    expect(cancelCodex).not.toHaveBeenCalled();
-    expect(forgetCodex).not.toHaveBeenCalled();
-    expect(cancelClaude).not.toHaveBeenCalled();
-  });
-
-  it("releases a failed provider so another provider can recover the session", async () => {
-    const stopCodex = vi.fn(async () => undefined);
-    const sendClaude = vi.fn(async () => undefined);
-    registerHarness(
-      stub("codex", {
-        async sendTurn() {
-          throw new Error("startup failed");
-        },
-        stopSession: stopCodex,
-      }),
-    );
-    registerHarness(stub("claude", { sendTurn: sendClaude }));
-    const input = {
-      sessionId: "recover",
-      cwd: "/tmp",
-      text: "hi",
-      runtimeMode: "supervised" as const,
-      onEvent: () => undefined,
-    };
-
-    await expect(
-      sendHarnessTurn({ ...input, harness: "codex", model: "codex:x" }),
-    ).rejects.toThrow("startup failed");
-    await sendHarnessTurn({ ...input, harness: "claude", model: "claude:y" });
-
-    expect(stopCodex).toHaveBeenCalledWith("recover");
-    expect(sendClaude).toHaveBeenCalledOnce();
-  });
-
-  it("lets the next provider start even when stale cleanup reports an error", async () => {
-    const sendClaude = vi.fn(async () => undefined);
-    registerHarness(
-      stub("codex", {
-        async forgetSession() {
-          throw new Error("already exited");
-        },
-      }),
-    );
-    registerHarness(stub("claude", { sendTurn: sendClaude }));
-    const input = {
-      sessionId: "recover-cleanup",
-      cwd: "/tmp",
-      text: "hi",
-      runtimeMode: "supervised" as const,
-      onEvent: () => undefined,
-    };
-
-    await sendHarnessTurn({ ...input, harness: "codex", model: "codex:x" });
-    await sendHarnessTurn({ ...input, harness: "claude", model: "claude:y" });
-
-    expect(sendClaude).toHaveBeenCalledOnce();
   });
 });
