@@ -473,6 +473,12 @@ export function Composer({
 
   const mentionOpen =
     mention !== null && (looksLikeProject(cwd) || notesEnabled);
+  const navigationEmpty =
+    draft.length === 0 &&
+    attachments.length === 0 &&
+    !inboxCard &&
+    !noteCard &&
+    !handoffCard;
   const pickerOpen = creatingSkill || slash !== null;
   const skillCatalog = useComposerSkills({
     harness,
@@ -1202,6 +1208,7 @@ export function Composer({
             </div>
             <textarea
               ref={ref}
+              data-composer-empty={navigationEmpty ? "true" : undefined}
               rows={1}
               spellCheck={false}
               defaultValue={initialDraft}

@@ -113,15 +113,44 @@ describe("tabCommand", () => {
     expect(adjacentItemId([], "a", 1)).toBeNull();
   });
 
+  it("allows navigation from an empty composer", () => {
+    expect(
+      shouldHandleListNavigation({
+        blockedTarget: true,
+        emptyComposerTarget: true,
+        surfaceOpen: false,
+      }),
+    ).toBe(true);
+  });
+
   it("blocks list navigation while another text or app surface owns focus", () => {
     expect(
-      shouldHandleListNavigation({ blockedTarget: false, surfaceOpen: false }),
+      shouldHandleListNavigation({
+        blockedTarget: false,
+        emptyComposerTarget: false,
+        surfaceOpen: false,
+      }),
     ).toBe(true);
     expect(
-      shouldHandleListNavigation({ blockedTarget: true, surfaceOpen: false }),
+      shouldHandleListNavigation({
+        blockedTarget: true,
+        emptyComposerTarget: false,
+        surfaceOpen: false,
+      }),
     ).toBe(false);
     expect(
-      shouldHandleListNavigation({ blockedTarget: false, surfaceOpen: true }),
+      shouldHandleListNavigation({
+        blockedTarget: false,
+        emptyComposerTarget: false,
+        surfaceOpen: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldHandleListNavigation({
+        blockedTarget: true,
+        emptyComposerTarget: true,
+        surfaceOpen: true,
+      }),
     ).toBe(false);
   });
 });

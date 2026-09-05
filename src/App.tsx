@@ -4464,6 +4464,9 @@ export default function App({
               'input, textarea, select, [contenteditable="true"], .cm-editor, .monocode-terminal, [role="dialog"], [data-model-picker], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker], [data-app-search]',
             ),
           );
+          const emptyComposerTarget = Boolean(
+            target?.matches('textarea[data-composer-empty="true"]'),
+          );
           const surfaceOpen =
             searchViewOpenRef.current ||
             inboxViewOpenRef.current ||
@@ -4471,7 +4474,13 @@ export default function App({
             settingsOpenRef.current ||
             filePickerOpenRef.current ||
             Boolean(whatsNewVersionRef.current);
-          if (!shouldHandleListNavigation({ blockedTarget, surfaceOpen })) {
+          if (
+            !shouldHandleListNavigation({
+              blockedTarget,
+              emptyComposerTarget,
+              surfaceOpen,
+            })
+          ) {
             return;
           }
         }

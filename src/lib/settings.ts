@@ -345,22 +345,22 @@ export const KEYBINDINGS: KeybindingRow[] = [
   {
     command: "Session: Previous",
     keys: `${MOD}${SHIFT}↑`,
-    when: "!textFocus && !overlay",
+    when: "!overlay && (!textFocus || emptyComposer)",
   },
   {
     command: "Session: Next",
     keys: `${MOD}${SHIFT}↓`,
-    when: "!textFocus && !overlay",
+    when: "!overlay && (!textFocus || emptyComposer)",
   },
   {
     command: "Project: Previous",
     keys: `${MOD}${SHIFT}←`,
-    when: "!textFocus && !overlay",
+    when: "!overlay && (!textFocus || emptyComposer)",
   },
   {
     command: "Project: Next",
     keys: `${MOD}${SHIFT}→`,
-    when: "!textFocus && !overlay",
+    when: "!overlay && (!textFocus || emptyComposer)",
   },
   { command: "Pane: Close", keys: `${MOD}W`, when: "Always" },
   { command: "Pane: Split Right", keys: `${MOD}D`, when: "!editorFocus" },

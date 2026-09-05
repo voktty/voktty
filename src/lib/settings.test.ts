@@ -167,9 +167,11 @@ describe("workspace navigation keybindings", () => {
       "Project: Previous",
       "Project: Next",
     ]);
-    expect(rows.every((row) => row.when === "!textFocus && !overlay")).toBe(
-      true,
-    );
+    expect(
+      rows.every(
+        (row) => row.when === "!overlay && (!textFocus || emptyComposer)",
+      ),
+    ).toBe(true);
   });
 });
 
