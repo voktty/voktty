@@ -1030,5 +1030,35 @@ html *::-webkit-scrollbar {
   }
 }
 
+/* Onboarding welcome logo — pixel-grid replica of the Voktty mark (GitHub
+   heatmap style; see public/voktty.svg and lib/logoPixels.ts, which
+   rasterizes it). Each cell breathes between a floor and a peak opacity on
+   its own timer, so the silhouette keeps forming and un-forming without ever
+   fully vanishing. Pure CSS grid + keyframe, no canvas loop. */
+.voktty-pixel {
+  border-radius: 2px;
+  opacity: var(--voktty-pixel-floor, 0.3);
+  animation-name: voktty-pixel-pulse;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes voktty-pixel-pulse {
+  0%,
+  100% {
+    opacity: var(--voktty-pixel-floor, 0.3);
+  }
+  50% {
+    opacity: var(--voktty-pixel-peak, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voktty-pixel {
+    animation: none;
+    opacity: var(--voktty-pixel-peak, 1);
+  }
+}
+
 
 
