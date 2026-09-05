@@ -28,6 +28,7 @@ import type {
   Attachment,
   Block,
   HarnessId,
+  PlanBuildTarget,
   RuntimeMode,
   Session,
 } from "../lib/session";
@@ -95,6 +96,12 @@ type Shared = {
     session?: { sessionId: string; cwd: string },
   ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
+  onUpdatePlan?: (sessionId: string, blockId: string, text: string) => void;
+  onBuildPlan?: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
   onSecondOpinion?: (
     sessionId: string,
     harness: HarnessId,
@@ -164,6 +171,8 @@ function PaneTreeComponent({
   editorNavigation,
   onOpenDiff,
   onOpenPlan,
+  onUpdatePlan,
+  onBuildPlan,
   onSecondOpinion,
   onHandoff,
   onMovePane,
@@ -319,6 +328,8 @@ function PaneTreeComponent({
                 onDirtyChange={onFileDirtyChange}
                 onErrorCountChange={onFileErrorCountChange}
                 onOpenFile={onOpenFile}
+                onUpdatePlan={onUpdatePlan}
+                onBuildPlan={onBuildPlan}
                 editorNavigation={editorNavigation}
                 onPaneDragStart={onPaneDragStart}
                 onTerminalMetaChange={onTerminalMetaChange}
@@ -359,6 +370,7 @@ function PaneTreeComponent({
                 onOpenFile={onOpenFile}
                 onOpenDiff={onOpenDiff}
                 onOpenPlan={onOpenPlan}
+                onBuildPlan={onBuildPlan}
                 onSecondOpinion={onSecondOpinion}
                 onHandoff={onHandoff}
                 onNewTerminal={onNewTerminal}
