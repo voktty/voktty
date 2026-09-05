@@ -1,4 +1,4 @@
-import type { LiveComponentMetadata } from "../types";
+import type { ConsoleEntry, LiveComponentMetadata } from "../types";
 import { getInspectorInjectedScript } from "./inspectorScript";
 
 export function attachInspectorBridge(
@@ -8,6 +8,7 @@ export function attachInspectorBridge(
   onReady?: () => void,
   onNavigate?: (url: string) => void,
   onReload?: () => void,
+  onConsoleEntry?: (entry: ConsoleEntry) => void,
 ): () => void {
   const handleMessage = (event: MessageEvent) => {
     if (!event.data || typeof event.data !== "object") return;
@@ -22,6 +23,8 @@ export function attachInspectorBridge(
     } else if (type === "VOKTTY_INSPECTOR_STATE_CHANGE" && payload) {
       const { active } = payload as { active: boolean };
       onStateChange?.(active);
+    } else if (type === "VOKTTY_CONSOLE_ENTRY" && payload) {
+      onConsoleEntry?.(payload as ConsoleEntry);
     } else if (type === "VOKTTY_PROXY_NAVIGATE" && payload) {
       const { url } = payload as { url: string };
       if (url) onNavigate?.(url);
@@ -76,3 +79,42 @@ export function sendInspectorActive(
     console.warn("[Voktty Inspector] Failed to send active state", err);
   }
 }
+
+export function sendSelectElementBySelector(
+  iframe: HTMLIFrameElement | null,
+  selector: string,
+  autoJump?: boolean,
+): void {
+  if (!iframe || !iframe.contentWindow || !selector) return;
+  try {
+    iframe.contentWindow.postMessage(
+      {
+        type: "VOKTTY_SELECT_ELEMENT_BY_SELECTOR",
+        selector,
+        autoJump: Boolean(autoJump),
+      },
+      "*",
+    );
+  } catch (err) {
+    console.warn("[Voktty Inspector] Failed to select element by selector", err);
+  }
+}
+
+export function sendHighlightElement(
+  iframe: HTMLIFrameElement | null,
+  selector: string,
+): void {
+  if (!iframe || !iframe.contentWindow || !selector) return;
+  try {
+    iframe.contentWindow.postMessage(
+      {
+        type: "VOKTTY_HIGHLIGHT_ELEMENT",
+        selector,
+      },
+      "*",
+    );
+  } catch (err) {
+    console.warn("[Voktty Inspector] Failed to highlight element", err);
+  }
+}
+

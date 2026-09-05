@@ -20,9 +20,82 @@ pub struct WebServerInfo {
     pub server_type: String, // "static" | "php"
 }
 
-pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
+pub const INSPECTOR_BUNDLE_JS: &str = r####"(function() {
   if (window.__VOKTTY_INSPECTOR_INSTALLED__) return;
   window.__VOKTTY_INSPECTOR_INSTALLED__ = true;
+
+  // Console & Runtime Error Interception
+  (function initConsoleBridge() {
+    if (window.__voktty_console_inited) return;
+    window.__voktty_console_inited = true;
+
+    function formatArg(arg) {
+      if (arg === null) return 'null';
+      if (arg === undefined) return 'undefined';
+      if (typeof arg === 'string') return arg;
+      if (typeof arg === 'number' || typeof arg === 'boolean') return String(arg);
+      if (arg instanceof Error) return (arg.name ? arg.name + ': ' : '') + arg.message + (arg.stack ? '\n' + arg.stack : '');
+      try {
+        return JSON.stringify(arg, null, 2);
+      } catch(_) {
+        return String(arg);
+      }
+    }
+
+    function emitLog(level, args, stack) {
+      try {
+        var msg = Array.prototype.map.call(args, formatArg).join(' ');
+        var entry = {
+          id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          level: level,
+          message: msg,
+          stack: stack || undefined,
+          timestamp: Date.now()
+        };
+        window.parent.postMessage({
+          type: 'VOKTTY_CONSOLE_ENTRY',
+          payload: entry
+        }, '*');
+      } catch(_) {}
+    }
+
+    var originalLog = console.log;
+    var originalInfo = console.info;
+    var originalWarn = console.warn;
+    var originalError = console.error;
+
+    console.log = function() {
+      originalLog.apply(console, arguments);
+      emitLog('log', arguments);
+    };
+    console.info = function() {
+      originalInfo.apply(console, arguments);
+      emitLog('info', arguments);
+    };
+    console.warn = function() {
+      originalWarn.apply(console, arguments);
+      var stack = (new Error()).stack;
+      emitLog('warn', arguments, stack);
+    };
+    console.error = function() {
+      originalError.apply(console, arguments);
+      var stack = (new Error()).stack;
+      emitLog('error', arguments, stack);
+    };
+
+    window.addEventListener('error', function(e) {
+      var msg = e.message || 'Uncaught runtime error';
+      var stack = e.error && e.error.stack ? e.error.stack : (e.filename ? e.filename + ':' + e.lineno + ':' + e.colno : '');
+      emitLog('error', [msg], stack);
+    });
+
+    window.addEventListener('unhandledrejection', function(e) {
+      var reason = e.reason;
+      var msg = reason instanceof Error ? (reason.name ? reason.name + ': ' : '') + reason.message : String(reason || 'Unhandled Promise Rejection');
+      var stack = reason instanceof Error && reason.stack ? reason.stack : undefined;
+      emitLog('error', [msg], stack);
+    });
+  })();
 
   function generateCssSelector(el) {
     if (!el) return "";
@@ -95,6 +168,59 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       propsSummary: propsSummary,
       hierarchy: hierarchy
     };
+  }
+
+  function extractBoxModel(style) {
+    if (!style) return undefined;
+    var parse = function(v) { return parseFloat(v) || 0; };
+    return {
+      margin: {
+        top: parse(style.marginTop),
+        right: parse(style.marginRight),
+        bottom: parse(style.marginBottom),
+        left: parse(style.marginLeft)
+      },
+      padding: {
+        top: parse(style.paddingTop),
+        right: parse(style.paddingRight),
+        bottom: parse(style.paddingBottom),
+        left: parse(style.paddingLeft)
+      },
+      border: {
+        top: parse(style.borderTopWidth),
+        right: parse(style.borderRightWidth),
+        bottom: parse(style.borderBottomWidth),
+        left: parse(style.borderLeftWidth)
+      }
+    };
+  }
+
+  function buildBreadcrumbs(element) {
+    var crumbs = [];
+    var curr = element;
+    while (curr && crumbs.length < 6) {
+      var tag = (curr.tagName || "").toLowerCase();
+      if (!tag || tag === "html" || tag === "#document") break;
+      var id = curr.id && /^[A-Za-z_-][\w-]*$/.test(curr.id) ? curr.id : undefined;
+      var classArray = Array.from(curr.classList || []).filter(function(c) {
+        return !c.startsWith("voktty-") && !c.includes(":");
+      });
+      var cls = classArray.length > 0 ? classArray[0] : undefined;
+      var reactName = undefined;
+      try {
+        var fMeta = extractReactFiberMetadata(curr);
+        if (fMeta && fMeta.componentName) reactName = fMeta.componentName;
+      } catch(_) {}
+      crumbs.unshift({
+        tagName: tag,
+        id: id,
+        className: cls,
+        selector: generateCssSelector(curr),
+        componentName: reactName
+      });
+      curr = curr.parentElement;
+    }
+    return crumbs;
   }
 
   function extractDomMetadata(element, url) {
@@ -207,6 +333,9 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       }
     }
 
+    var boxModel = extractBoxModel(computedStyle);
+    var breadcrumbs = buildBreadcrumbs(element);
+
     var textSnippet = (element.innerText || element.textContent || "").trim();
     if (textSnippet.length > 120) {
       textSnippet = textSnippet.slice(0, 117) + "...";
@@ -232,9 +361,11 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       propsSummary: propsSummary,
       framework: framework,
       hierarchy: hierarchy,
+      breadcrumbs: breadcrumbs,
       boundingBox: boundingBox,
       rect: boundingBox,
       styles: styles,
+      boxModel: boxModel,
       innerText: textSnippet || "",
       textSnippet: textSnippet || undefined,
       htmlSnippet: outerHtml || "",
@@ -320,7 +451,7 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
   function createMenuItem(icon, text, onClick, isDanger) {
     var item = document.createElement("div");
     item.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;transition:background 100ms;font-size:12px;color:" + (isDanger ? "#fca5a5" : "#e2e8f0") + ";";
-    item.innerHTML = "<span style=\"font-size:13px;\">" + icon + "</span><span style=\"flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;\">" + text + "</span>";
+    item.innerHTML = "<span style='font-size:13px;'>" + icon + "</span><span style='flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>" + text + "</span>";
     item.addEventListener("mouseenter", function() {
       item.style.background = isDanger ? "rgba(239,68,68,0.2)" : "rgba(6,182,212,0.18)";
       item.style.color = isDanger ? "#fecaca" : "#38bdf8";
@@ -353,7 +484,7 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
 
     var header = document.createElement("div");
     header.style.cssText = "padding:5px 8px 6px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:#38bdf8;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;justify-content:space-between;";
-    header.innerHTML = "<span style=\"overflow:hidden;text-overflow:ellipsis;\">" + tagTitle + "</span><span style=\"font-size:9px;text-transform:uppercase;color:#94a3b8;font-family:sans-serif;margin-left:6px;\">" + (meta.framework || "DOM") + "</span>";
+    header.innerHTML = "<span style='overflow:hidden;text-overflow:ellipsis;'>" + tagTitle + "</span><span style='font-size:9px;text-transform:uppercase;color:#94a3b8;font-family:sans-serif;margin-left:6px;'>" + (meta.framework || "DOM") + "</span>";
     menu.appendChild(header);
 
     menu.appendChild(createMenuItem("🎯", "Inspeccionar elemento (IA)", function() {
@@ -379,61 +510,61 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
 
     menu.appendChild(createMenuDivider());
 
-    menu.appendChild(createMenuItem('📋', 'Copiar Referencia (@component)', function() {
-      var tagLabel = meta.componentName ? ('<' + meta.componentName + '/>') : (meta.idAttr ? ('<' + meta.tagName + '#' + meta.idAttr + '/>') : (meta.classList && meta.classList.length > 0 ? ('<' + meta.tagName + '.' + meta.classList.join('.') + '/>') : ('<' + meta.tagName + '/>')));
-      var ref = '@component ' + tagLabel;
+    menu.appendChild(createMenuItem("📋", "Copiar Referencia (@component)", function() {
+      var tagLabel = meta.componentName ? ("<" + meta.componentName + "/>") : (meta.idAttr ? ("<" + meta.tagName + "#" + meta.idAttr + "/>") : (meta.classList && meta.classList.length > 0 ? ("<" + meta.tagName + "." + meta.classList.join(".") + "/>") : ("<" + meta.tagName + "/>")));
+      var ref = "@component " + tagLabel;
       if (meta.filePath) {
-        ref += ' in ' + meta.filePath + (meta.lineNumber ? ':' + meta.lineNumber : '');
+        ref += " in " + meta.filePath + (meta.lineNumber ? ":" + meta.lineNumber : "");
       }
       if (meta.selector && meta.selector !== meta.tagName) {
-        ref += ' (selector: ' + meta.selector + ')';
+        ref += " (selector: " + meta.selector + ")";
       }
-      copyText(ref, 'Referencia copiada');
+      copyText(ref, "Referencia copiada");
     }));
 
-    menu.appendChild(createMenuItem('🐛', 'Copiar Prompt para Depurar', function() {
+    menu.appendChild(createMenuItem("🐛", "Copiar Prompt para Depurar", function() {
       var prompt = [
-        '### 🐛 Solicitud de Diagnóstico y Depuración',
-        '- **Elemento**: <' + (meta.componentName || meta.tagName) + '>',
-        meta.filePath ? ('- **Archivo**: ' + meta.filePath + (meta.lineNumber ? ':' + meta.lineNumber : '')) : '',
-        '- **Selector DOM**: ' + meta.selector,
-        meta.innerText ? ('- **Texto visible**: ' + meta.innerText) : '',
-        meta.htmlSnippet ? ('- **HTML del elemento**:\n' + meta.htmlSnippet) : '',
-        '- **Problema**: [Describe aquí el error o fallo visual]'
-      ].filter(Boolean).join('\n');
-      copyText(prompt, 'Prompt de depuración copiado');
+        "### 🐛 Solicitud de Diagnóstico y Depuración",
+        "- **Elemento**: <" + (meta.componentName || meta.tagName) + ">",
+        meta.filePath ? ("- **Archivo**: " + meta.filePath + (meta.lineNumber ? ":" + meta.lineNumber : "")) : "",
+        "- **Selector DOM**: " + meta.selector,
+        meta.innerText ? ("- **Texto visible**: '" + meta.innerText + "'") : "",
+        meta.htmlSnippet ? ("- **HTML del elemento**:\n" + meta.htmlSnippet) : "",
+        "- **Problema**: [Describe aquí el error o fallo visual]"
+      ].filter(Boolean).join("\n");
+      copyText(prompt, "Prompt de depuración copiado");
     }));
 
-    menu.appendChild(createMenuItem('💡', 'Copiar Prompt para Modificar', function() {
+    menu.appendChild(createMenuItem("💡", "Copiar Prompt para Modificar", function() {
       var prompt = [
-        '### 💡 Instrucción de Modificación de Componente',
-        '- **Elemento**: <' + (meta.componentName || meta.tagName) + '>',
-        meta.filePath ? ('- **Archivo**: ' + meta.filePath + (meta.lineNumber ? ':' + meta.lineNumber : '')) : '',
-        '- **Selector DOM**: ' + meta.selector,
-        meta.innerText ? ('- **Texto visible**: ' + meta.innerText) : '',
-        meta.htmlSnippet ? ('- **HTML actual**:\n' + meta.htmlSnippet) : '',
-        '- **Cambios solicitados**: [Describe aquí los cambios deseados]'
-      ].filter(Boolean).join('\n');
-      copyText(prompt, 'Prompt de modificación copiado');
+        "### 💡 Instrucción de Modificación de Componente",
+        "- **Elemento**: <" + (meta.componentName || meta.tagName) + ">",
+        meta.filePath ? ("- **Archivo**: " + meta.filePath + (meta.lineNumber ? ":" + meta.lineNumber : "")) : "",
+        "- **Selector DOM**: " + meta.selector,
+        meta.innerText ? ("- **Texto visible**: '" + meta.innerText + "'") : "",
+        meta.htmlSnippet ? ("- **HTML actual**:\n" + meta.htmlSnippet) : "",
+        "- **Cambios solicitados**: [Describe aquí los cambios deseados]"
+      ].filter(Boolean).join("\n");
+      copyText(prompt, "Prompt de modificación copiado");
     }));
 
     menu.appendChild(createMenuDivider());
 
-    menu.appendChild(createMenuItem('🔍', 'Copiar Selector CSS', function() {
-      copyText(meta.selector, 'Selector CSS copiado');
+    menu.appendChild(createMenuItem("🔍", "Copiar Selector CSS", function() {
+      copyText(meta.selector, "Selector CSS copiado");
     }));
 
     if (meta.htmlSnippet) {
-      menu.appendChild(createMenuItem('📄', 'Copiar Fragmento HTML', function() {
-        copyText(meta.htmlSnippet, 'HTML copiado');
+      menu.appendChild(createMenuItem("📄", "Copiar Fragmento HTML", function() {
+        copyText(meta.htmlSnippet, "HTML copiado");
       }));
     }
 
     menu.appendChild(createMenuDivider());
 
-    menu.appendChild(createMenuItem('🔄', 'Recargar Vista Previa', function() {
+    menu.appendChild(createMenuItem("🔄", "Recargar Vista Previa", function() {
       try {
-        window.parent.postMessage({ type: 'VOKTTY_RELOAD_PREVIEW' }, '*');
+        window.parent.postMessage({ type: "VOKTTY_RELOAD_PREVIEW" }, "*");
       } catch(_) {
         window.location.reload();
       }
@@ -509,19 +640,17 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       label.style.top = "calc(100% + 4px)";
       label.style.bottom = "auto";
     } else {
-      label.style.bottom = "calc(100% + 4px)";
       label.style.top = "auto";
+      label.style.bottom = "calc(100% + 4px)";
     }
 
     var title = (el.tagName || "").toLowerCase();
     if (el.id) title += "#" + el.id;
     else if (el.classList && el.classList.length > 0) {
-      var cls = Array.from(el.classList).filter(function(c){ return !c.startsWith("voktty-"); })[0];
+      var cls = Array.from(el.classList).slice(0, 1)[0];
       if (cls) title += "." + cls;
     }
-    var w = Math.round(r.width);
-    var h = Math.round(r.height);
-    label.textContent = "\u{1F3AF} " + title + "  " + w + "\u00D7" + h + "px";
+    label.innerHTML = "<span>🎯</span><span>" + title + "</span><span style='font-size:10px;color:#94a3b8;font-weight:400;margin-left:4px;'>" + Math.round(r.width) + "×" + Math.round(r.height) + "</span>";
   }
 
   function handleMouseMove(e) {
@@ -610,7 +739,8 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
   }, { passive: true });
 
   window.addEventListener("message", function(e) {
-    if (e.data && e.data.type === "VOKTTY_SET_INSPECTOR_ACTIVE") {
+    if (!e.data || typeof e.data !== "object") return;
+    if (e.data.type === "VOKTTY_SET_INSPECTOR_ACTIVE") {
       setActive(Boolean(e.data.active));
       try {
         window.parent.postMessage({
@@ -618,6 +748,27 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
           payload: { active: active }
         }, "*");
       } catch (_) {}
+    } else if (e.data.type === "VOKTTY_HIGHLIGHT_ELEMENT") {
+      if (e.data.selector) {
+        try {
+          var el = document.querySelector(e.data.selector);
+          if (el) updateHighlight(el);
+        } catch(_) {}
+      }
+    } else if (e.data.type === "VOKTTY_SELECT_ELEMENT_BY_SELECTOR") {
+      if (e.data.selector) {
+        try {
+          var el = document.querySelector(e.data.selector);
+          if (el) {
+            var meta = extractDomMetadata(el, window.location.href);
+            window.parent.postMessage({
+              type: "VOKTTY_LIVE_COMPONENT_SELECTED",
+              payload: meta,
+              autoJump: Boolean(e.data.autoJump)
+            }, "*");
+          }
+        } catch(_) {}
+      }
     }
   });
 
@@ -637,7 +788,7 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       payload: { ready: true }
     }, "*");
   } catch(_) {}
-})();"##;
+})();"####;
 
 pub fn ensure_php_helpers() -> Result<(PathBuf, PathBuf), String> {
     let dir = std::env::temp_dir().join("voktty_web_server");

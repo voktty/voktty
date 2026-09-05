@@ -154,11 +154,32 @@ describe("inspectorScript: DOM & Framework extraction", () => {
     expect(meta.hierarchy).toContain("OrderButton");
   });
 
-  it("produces valid injected script string", () => {
+  it("extracts breadcrumbs and box model", () => {
+    const parent: InspectableElement = {
+      tagName: "MAIN",
+      id: "app-main",
+    };
+    const child: InspectableElement = {
+      tagName: "DIV",
+      classList: ["card-container"],
+      parentElement: parent,
+      attributes: [],
+    };
+
+    const meta = extractDomMetadata(child);
+    expect(meta.breadcrumbs).toBeDefined();
+    expect(meta.breadcrumbs?.length).toBeGreaterThanOrEqual(1);
+    expect(meta.breadcrumbs?.[meta.breadcrumbs.length - 1].tagName).toBe("div");
+  });
+
+  it("produces valid injected script string with console and selector handling", () => {
     const script = getInspectorInjectedScript();
     expect(typeof script).toBe("string");
     expect(script).toContain("VOKTTY_LIVE_COMPONENT_SELECTED");
     expect(script).toContain("VOKTTY_SET_INSPECTOR_ACTIVE");
+    expect(script).toContain("VOKTTY_CONSOLE_ENTRY");
+    expect(script).toContain("VOKTTY_SELECT_ELEMENT_BY_SELECTOR");
     expect(script).toContain("voktty-inspector-root");
   });
 });
+

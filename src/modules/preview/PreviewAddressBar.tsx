@@ -25,6 +25,7 @@ import {
 } from "react";
 import { useLiveComponentStore } from "./store/liveComponentStore";
 import { LiveComponentBadge } from "./components/LiveComponentBadge";
+import { PreviewViewportControls } from "./components/PreviewViewportControls";
 
 type PortPreset = {
   port: number;
@@ -222,6 +223,8 @@ export const PreviewAddressBar = forwardRef<PreviewAddressBarHandle, Props>(
               }}
             />
           </div>
+
+          <PreviewViewportControls />
 
           <Button
             type="button"

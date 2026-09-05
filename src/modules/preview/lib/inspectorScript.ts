@@ -1,5 +1,7 @@
 import type {
+  BoxModel,
   ComponentRect,
+  DomBreadcrumbItem,
   FrameworkType,
   LiveComponentMetadata,
 } from "../types";
@@ -181,6 +183,66 @@ export function extractReactFiberMetadata(el: InspectableElement): {
   };
 }
 
+export function extractBoxModel(
+  style: CSSStyleDeclaration | null | undefined,
+): BoxModel | undefined {
+  if (!style) return undefined;
+  const parse = (v: string | undefined) => (v ? parseFloat(v) || 0 : 0);
+  return {
+    margin: {
+      top: parse(style.marginTop),
+      right: parse(style.marginRight),
+      bottom: parse(style.marginBottom),
+      left: parse(style.marginLeft),
+    },
+    padding: {
+      top: parse(style.paddingTop),
+      right: parse(style.paddingRight),
+      bottom: parse(style.paddingBottom),
+      left: parse(style.paddingLeft),
+    },
+    border: {
+      top: parse(style.borderTopWidth),
+      right: parse(style.borderRightWidth),
+      bottom: parse(style.borderBottomWidth),
+      left: parse(style.borderLeftWidth),
+    },
+  };
+}
+
+export function buildBreadcrumbs(
+  element: InspectableElement,
+): DomBreadcrumbItem[] {
+  const crumbs: DomBreadcrumbItem[] = [];
+  let curr: InspectableElement | null = element;
+  while (curr && crumbs.length < 6) {
+    const tag = (curr.tagName || "").toLowerCase();
+    if (!tag || tag === "html" || tag === "#document") break;
+    const id =
+      curr.id && /^[A-Za-z_-][\w-]*$/.test(curr.id) ? curr.id : undefined;
+    const classArray = Array.from(
+      (curr.classList as unknown as string[]) || [],
+    ).filter((c) => !c.startsWith("voktty-") && !c.includes(":"));
+    const cls = classArray.length > 0 ? classArray[0] : undefined;
+
+    let reactName: string | undefined;
+    try {
+      const fMeta = extractReactFiberMetadata(curr);
+      if (fMeta && fMeta.componentName) reactName = fMeta.componentName;
+    } catch (_) {}
+
+    crumbs.unshift({
+      tagName: tag,
+      id,
+      className: cls,
+      selector: generateCssSelector(curr),
+      componentName: reactName,
+    });
+    curr = curr.parentElement ?? null;
+  }
+  return crumbs;
+}
+
 export function extractDomMetadata(
   element: InspectableElement,
   url: string = typeof window !== "undefined" ? window.location?.href ?? "about:blank" : "about:blank",
@@ -311,6 +373,44 @@ export function extractDomMetadata(
     };
   }
 
+  const computedStyle =
+    typeof window !== "undefined" && window.getComputedStyle
+      ? window.getComputedStyle(element as unknown as Element)
+      : null;
+
+  const styles: Record<string, string> = {};
+  if (computedStyle) {
+    const sampleProps = [
+      "display",
+      "position",
+      "flexDirection",
+      "justifyContent",
+      "alignItems",
+      "gap",
+      "gridTemplateColumns",
+      "width",
+      "height",
+      "color",
+      "backgroundColor",
+      "fontSize",
+      "fontWeight",
+      "fontFamily",
+      "lineHeight",
+      "zIndex",
+      "borderRadius",
+      "border",
+    ];
+    for (const prop of sampleProps) {
+      const val = computedStyle[prop as keyof CSSStyleDeclaration];
+      if (val && typeof val === "string") {
+        styles[prop] = val;
+      }
+    }
+  }
+
+  const boxModel = extractBoxModel(computedStyle);
+  const breadcrumbs = buildBreadcrumbs(element);
+
   const parentClasses: string[] = [];
   let currParent = element.parentElement;
   let depth = 0;
@@ -346,7 +446,11 @@ export function extractDomMetadata(
     attributes,
     propsSummary,
     hierarchy,
+    breadcrumbs,
     rect,
+    boundingBox: rect,
+    styles,
+    boxModel,
   };
 }
 
@@ -355,8 +459,83 @@ export function getInspectorInjectedScript(): string {
   if (window.__VOKTTY_INSPECTOR_INSTALLED__) return;
   window.__VOKTTY_INSPECTOR_INSTALLED__ = true;
 
+  // Console & Runtime Error Interception
+  (function initConsoleBridge() {
+    if (window.__voktty_console_inited) return;
+    window.__voktty_console_inited = true;
+
+    function formatArg(arg) {
+      if (arg === null) return "null";
+      if (arg === undefined) return "undefined";
+      if (typeof arg === "string") return arg;
+      if (typeof arg === "number" || typeof arg === "boolean") return String(arg);
+      if (arg instanceof Error) return (arg.name ? arg.name + ": " : "") + arg.message + (arg.stack ? "\\n" + arg.stack : "");
+      try {
+        return JSON.stringify(arg, null, 2);
+      } catch(_) {
+        return String(arg);
+      }
+    }
+
+    function emitLog(level, args, stack) {
+      try {
+        var msg = Array.prototype.map.call(args, formatArg).join(" ");
+        var entry = {
+          id: "log_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+          level: level,
+          message: msg,
+          stack: stack || undefined,
+          timestamp: Date.now()
+        };
+        window.parent.postMessage({
+          type: "VOKTTY_CONSOLE_ENTRY",
+          payload: entry
+        }, "*");
+      } catch(_) {}
+    }
+
+    var originalLog = console.log;
+    var originalInfo = console.info;
+    var originalWarn = console.warn;
+    var originalError = console.error;
+
+    console.log = function() {
+      originalLog.apply(console, arguments);
+      emitLog("log", arguments);
+    };
+    console.info = function() {
+      originalInfo.apply(console, arguments);
+      emitLog("info", arguments);
+    };
+    console.warn = function() {
+      originalWarn.apply(console, arguments);
+      var stack = (new Error()).stack;
+      emitLog("warn", arguments, stack);
+    };
+    console.error = function() {
+      originalError.apply(console, arguments);
+      var stack = (new Error()).stack;
+      emitLog("error", arguments, stack);
+    };
+
+    window.addEventListener("error", function(e) {
+      var msg = e.message || "Uncaught runtime error";
+      var stack = e.error && e.error.stack ? e.error.stack : (e.filename ? e.filename + ":" + e.lineno + ":" + e.colno : "");
+      emitLog("error", [msg], stack);
+    });
+
+    window.addEventListener("unhandledrejection", function(e) {
+      var reason = e.reason;
+      var msg = reason instanceof Error ? (reason.name ? reason.name + ": " : "") + reason.message : String(reason || "Unhandled Promise Rejection");
+      var stack = reason instanceof Error && reason.stack ? reason.stack : undefined;
+      emitLog("error", [msg], stack);
+    });
+  })();
+
   ${generateCssSelector.toString()}
   ${extractReactFiberMetadata.toString()}
+  ${extractBoxModel.toString()}
+  ${buildBreadcrumbs.toString()}
   ${extractDomMetadata.toString()}
 
   let active = false;
@@ -695,7 +874,8 @@ export function getInspectorInjectedScript(): string {
   }, { passive: true });
 
   window.addEventListener("message", function(e) {
-    if (e.data && e.data.type === "VOKTTY_SET_INSPECTOR_ACTIVE") {
+    if (!e.data || typeof e.data !== "object") return;
+    if (e.data.type === "VOKTTY_SET_INSPECTOR_ACTIVE") {
       setActive(Boolean(e.data.active));
       try {
         window.parent.postMessage({
@@ -703,6 +883,27 @@ export function getInspectorInjectedScript(): string {
           payload: { active: active }
         }, "*");
       } catch (_) {}
+    } else if (e.data.type === "VOKTTY_HIGHLIGHT_ELEMENT") {
+      if (e.data.selector) {
+        try {
+          const el = document.querySelector(e.data.selector);
+          if (el) updateHighlight(el);
+        } catch(_) {}
+      }
+    } else if (e.data.type === "VOKTTY_SELECT_ELEMENT_BY_SELECTOR") {
+      if (e.data.selector) {
+        try {
+          const el = document.querySelector(e.data.selector);
+          if (el) {
+            const meta = extractDomMetadata(el, window.location.href);
+            window.parent.postMessage({
+              type: "VOKTTY_LIVE_COMPONENT_SELECTED",
+              payload: meta,
+              autoJump: Boolean(e.data.autoJump)
+            }, "*");
+          }
+        } catch(_) {}
+      }
     }
   });
 

@@ -16,11 +16,16 @@ import {
 } from "./PreviewAddressBar";
 import {
   attachInspectorBridge,
+  sendHighlightElement,
   sendInspectorActive,
+  sendSelectElementBySelector,
 } from "./lib/inspectorBridge";
 import { useLiveComponentStore } from "./store/liveComponentStore";
+import { usePreviewDevtoolsStore } from "./store/previewDevtoolsStore";
 
 import { LiveComponentBadge } from "./components/LiveComponentBadge";
+import { PreviewConsoleDrawer } from "./components/PreviewConsoleDrawer";
+import { cn } from "@/lib/utils";
 
 export type PreviewPaneHandle = {
   reload: () => void;
@@ -59,6 +64,16 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       (s) => s.setInspectorActive,
     );
     const toggleInspector = useLiveComponentStore((s) => s.toggleInspector);
+
+    const viewportMode = usePreviewDevtoolsStore((s) => s.viewportMode);
+    const customWidth = usePreviewDevtoolsStore((s) => s.customWidth);
+    const customHeight = usePreviewDevtoolsStore((s) => s.customHeight);
+    const scale = usePreviewDevtoolsStore((s) => s.scale);
+    const showDeviceFrame = usePreviewDevtoolsStore((s) => s.showDeviceFrame);
+    const addConsoleEntry = usePreviewDevtoolsStore((s) => s.addConsoleEntry);
+
+    const isFixedViewport =
+      viewportMode !== "responsive" && Boolean(customWidth && customHeight);
 
     useEffect(() => {
       let cancelled = false;
@@ -115,6 +130,43 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       };
     }, [loaded]);
 
+    // Custom events from UI for selector navigation
+    useEffect(() => {
+      const handleSelectBySelector = (
+        e: Event,
+      ) => {
+        const ce = e as CustomEvent<{ selector: string; autoJump?: boolean }>;
+        if (iframeRef.current && ce.detail?.selector) {
+          sendSelectElementBySelector(
+            iframeRef.current,
+            ce.detail.selector,
+            ce.detail.autoJump,
+          );
+        }
+      };
+
+      const handleHighlight = (e: Event) => {
+        const ce = e as CustomEvent<{ selector: string }>;
+        if (iframeRef.current && ce.detail?.selector) {
+          sendHighlightElement(iframeRef.current, ce.detail.selector);
+        }
+      };
+
+      window.addEventListener(
+        "voktty:select-element-by-selector",
+        handleSelectBySelector,
+      );
+      window.addEventListener("voktty:highlight-element", handleHighlight);
+
+      return () => {
+        window.removeEventListener(
+          "voktty:select-element-by-selector",
+          handleSelectBySelector,
+        );
+        window.removeEventListener("voktty:highlight-element", handleHighlight);
+      };
+    }, []);
+
     useEffect(() => {
       if (visible) {
         setLoaded(true);
@@ -170,12 +222,23 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
         () => {
           setNonce((n) => n + 1);
         },
+        (entry) => {
+          addConsoleEntry(entry);
+        },
       );
 
       return () => {
         detach();
       };
-    }, [loaded, nonce, effectiveSrc, setSelectedComponent, setInspectorActive, onUrlChange]);
+    }, [
+      loaded,
+      nonce,
+      effectiveSrc,
+      setSelectedComponent,
+      setInspectorActive,
+      onUrlChange,
+      addConsoleEntry,
+    ]);
 
     // Sync active state with iframe
     useEffect(() => {
@@ -214,7 +277,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
         <div
           className={
             effectiveSrc
-              ? "relative min-h-0 flex-1 bg-white"
+              ? isFixedViewport
+                ? "relative min-h-0 flex-1 overflow-auto bg-slate-950/60 p-4 flex items-center justify-center"
+                : "relative min-h-0 flex-1 bg-white"
               : "relative min-h-0 flex-1 bg-background"
           }
         >
@@ -223,18 +288,47 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
               <LiveComponentBadge />
             </div>
           ) : null}
+
           {effectiveSrc ? (
             loaded ? (
-              <iframe
-                ref={iframeRef}
-                key={`${effectiveSrc}#${nonce}`}
-                src={effectiveSrc}
-                title={t("preview.title")}
-                className="h-full w-full border-0"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
-                referrerPolicy="no-referrer-when-downgrade"
-                allow="clipboard-read; clipboard-write; fullscreen"
-              />
+              isFixedViewport ? (
+                <div
+                  style={{
+                    width: customWidth!,
+                    height: customHeight!,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "center center",
+                  }}
+                  className={cn(
+                    "relative shrink-0 overflow-hidden bg-white transition-all duration-150",
+                    showDeviceFrame
+                      ? "rounded-[24px] border-[10px] border-slate-800 shadow-2xl ring-1 ring-white/10"
+                      : "border border-border/60 shadow-lg",
+                  )}
+                >
+                  <iframe
+                    ref={iframeRef}
+                    key={`${effectiveSrc}#${nonce}`}
+                    src={effectiveSrc}
+                    title={t("preview.title")}
+                    className="h-full w-full border-0 bg-white"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    allow="clipboard-read; clipboard-write; fullscreen"
+                  />
+                </div>
+              ) : (
+                <iframe
+                  ref={iframeRef}
+                  key={`${effectiveSrc}#${nonce}`}
+                  src={effectiveSrc}
+                  title={t("preview.title")}
+                  className="h-full w-full border-0"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  allow="clipboard-read; clipboard-write; fullscreen"
+                />
+              )
             ) : (
               <SuspendedState
                 onReload={() => {
@@ -247,6 +341,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
             <EmptyState />
           )}
         </div>
+
+        {/* Live DevTools Mini-Console Drawer */}
+        {effectiveSrc ? <PreviewConsoleDrawer /> : null}
       </div>
     );
   },
