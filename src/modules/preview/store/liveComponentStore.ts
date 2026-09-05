@@ -31,14 +31,33 @@ export function formatComponentLocation(comp: LiveComponentMetadata): string {
 }
 
 export function formatComponentReference(comp: LiveComponentMetadata): string {
+  const tagLabel = comp.componentName
+    ? `<${comp.componentName}/>`
+    : comp.idAttr
+      ? `<${comp.tagName}#${comp.idAttr}/>`
+      : comp.classList && comp.classList.length > 0
+        ? `<${comp.tagName}.${comp.classList.join(".")}/>`
+        : `<${comp.tagName}/>`;
+
+  const details: string[] = [];
+  if (comp.selector && comp.selector !== comp.tagName) {
+    details.push(`selector: \`${comp.selector}\``);
+  }
+  if (
+    comp.innerText &&
+    comp.innerText.trim().length > 0 &&
+    comp.innerText.trim().length <= 40
+  ) {
+    details.push(`text: "${comp.innerText.trim()}"`);
+  }
+
+  const suffix = details.length > 0 ? ` (${details.join(", ")})` : "";
+
   if (comp.filePath) {
     const loc = comp.lineNumber ? `:${comp.lineNumber}` : "";
-    const name = comp.componentName
-      ? `<${comp.componentName}/>`
-      : `<${comp.tagName}/>`;
-    return `@component ${name} in ${comp.filePath}${loc}`;
+    return `@component ${tagLabel} in ${comp.filePath}${loc}${suffix}`;
   }
-  return `@dom \`${comp.selector}\``;
+  return `@dom ${tagLabel}${suffix}`;
 }
 
 export function formatComponentDebugPrompt(comp: LiveComponentMetadata): string {
