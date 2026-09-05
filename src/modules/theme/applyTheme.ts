@@ -60,8 +60,7 @@ const ANSI_VARS: readonly string[] = [
   "--terminal-ansi-bright-white",
 ];
 
-const ALL_VARS: readonly string[] = [
-  ...Object.values(COLOR_VAR),
+const EXTRA_VARS: readonly string[] = [
   "--frame",
   "--vibrancy-opacity",
   "--terminal-background",
@@ -69,8 +68,49 @@ const ALL_VARS: readonly string[] = [
   "--terminal-cursor",
   "--terminal-cursor-accent",
   "--terminal-selection",
+  "--background-base",
+  "--color-background-base",
+  "--content",
+  "--color-content",
+  "--background-lightness",
+  "--content-lightness",
+];
+
+const ALL_VARS: readonly string[] = [
+  ...Object.values(COLOR_VAR),
+  ...EXTRA_VARS,
   ...ANSI_VARS,
 ];
+
+export function isDarkColor(color: string): boolean {
+  if (!color || color === "transparent") return true;
+  const trimmed = color.trim().toLowerCase();
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (/^#[0-9a-f]{3}$/i.test(trimmed)) {
+    r = Number.parseInt(trimmed[1] + trimmed[1], 16);
+    g = Number.parseInt(trimmed[2] + trimmed[2], 16);
+    b = Number.parseInt(trimmed[3] + trimmed[3], 16);
+  } else if (/^#[0-9a-f]{6}$/i.test(trimmed)) {
+    r = Number.parseInt(trimmed.slice(1, 3), 16);
+    g = Number.parseInt(trimmed.slice(3, 5), 16);
+    b = Number.parseInt(trimmed.slice(5, 7), 16);
+  } else {
+    const match = trimmed.match(
+      /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i,
+    );
+    if (match) {
+      r = Number.parseInt(match[1], 10);
+      g = Number.parseInt(match[2], 10);
+      b = Number.parseInt(match[3], 10);
+    } else {
+      return true;
+    }
+  }
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness < 128;
+}
 
 export function colorWithAlpha(color: string, alpha: number): string {
   if (!color || color === "transparent") return "transparent";
@@ -128,7 +168,18 @@ export function applyTheme(
   const colors = variant.colors;
   const terminal = variant.terminal;
   for (const v of ALL_VARS) root.style.removeProperty(v);
-  if (colors) writeColors(root, colors, vibrancyEnabled, vibrancyOpacity);
+
+  const isDark = colors?.background
+    ? isDarkColor(colors.background)
+    : theme.variants[mode]
+      ? mode === "dark"
+      : Boolean(theme.variants.dark);
+
+  root.classList.toggle("dark", isDark);
+  root.classList.toggle("light", !isDark);
+  root.classList.toggle("theme-light", !isDark);
+
+  if (colors) writeColors(root, colors, vibrancyEnabled, vibrancyOpacity, isDark);
   if (terminal) writeTerminal(root, terminal, vibrancyEnabled);
   lastAppliedKey = `${theme.id}:${mode}:${vibrancyEnabled}:${vibrancyOpacity}`;
 }
@@ -145,6 +196,7 @@ function writeColors(
   c: ThemeColors,
   vibrancyEnabled: boolean,
   vibrancyOpacity: number,
+  isDark: boolean,
 ): void {
   for (const k of Object.keys(c) as (keyof ThemeColors)[]) {
     const v = c[k];
@@ -153,14 +205,20 @@ function writeColors(
     }
   }
 
-  const bg = c.background ?? "#121214";
-  const fg = c.foreground ?? "#f4f4f6";
+  const bg = c.background ?? (isDark ? "#121214" : "#fafafc");
+  const fg = c.foreground ?? (isDark ? "#f4f4f6" : "#18191c");
   const rawFrame = c.surfaceToolbar ?? c.sidebar ?? bg;
   const rawTermBg = c.surfacePane ?? c.card ?? bg;
   const borderSubtle =
-    c.borderSubtle ?? c.border ?? "rgba(255, 255, 255, 0.07)";
+    c.borderSubtle ?? c.border ?? (isDark ? "rgba(255, 255, 255, 0.07)" : "rgba(0, 0, 0, 0.06)");
 
   root.style.setProperty("--border-subtle", borderSubtle);
+  root.style.setProperty("--background-base", bg);
+  root.style.setProperty("--color-background-base", bg);
+  root.style.setProperty("--content", fg);
+  root.style.setProperty("--color-content", fg);
+  root.style.setProperty("--background-lightness", isDark ? "9%" : "97%");
+  root.style.setProperty("--content-lightness", isDark ? "92%" : "18%");
 
   if (vibrancyEnabled) {
     root.style.setProperty("--vibrancy-opacity", String(vibrancyOpacity));
@@ -182,7 +240,7 @@ function writeColors(
       Math.min(1, vibrancyOpacity * 0.95),
     );
     const activeItem = colorWithAlpha(
-      c.surfaceActiveItem ?? c.accent ?? "rgba(255, 255, 255, 0.08)",
+      c.surfaceActiveItem ?? c.accent ?? (isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"),
       Math.min(1, vibrancyOpacity * 0.80),
     );
 
@@ -201,7 +259,7 @@ function writeColors(
     root.style.setProperty("--terminal-cursor-accent", "transparent");
     root.style.setProperty(
       "--terminal-selection",
-      c.accent ?? "rgba(99, 102, 241, 0.28)",
+      c.accent ?? (isDark ? "rgba(99, 102, 241, 0.28)" : "rgba(37, 99, 235, 0.25)"),
     );
   } else {
     root.style.setProperty("--frame", rawFrame);
@@ -217,7 +275,7 @@ function writeColors(
     if (!c.surfaceActiveItem)
       root.style.setProperty(
         "--surface-active-item",
-        c.accent ?? "rgba(255, 255, 255, 0.08)",
+        c.accent ?? (isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"),
       );
 
     root.style.setProperty("--terminal-background", rawTermBg);
@@ -226,7 +284,7 @@ function writeColors(
     root.style.setProperty("--terminal-cursor-accent", rawTermBg);
     root.style.setProperty(
       "--terminal-selection",
-      c.accent ?? "rgba(99, 102, 241, 0.28)",
+      c.accent ?? (isDark ? "rgba(99, 102, 241, 0.28)" : "rgba(37, 99, 235, 0.25)"),
     );
   }
 }
