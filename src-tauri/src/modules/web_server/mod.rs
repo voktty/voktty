@@ -224,7 +224,7 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
   var shadow = overlayHost.attachShadow({ mode: "open" });
 
   var box = document.createElement("div");
-  box.style.cssText = "position:absolute;display:none;pointer-events:none;border:2px solid #06b6d4;background:rgba(6,182,212,0.12);border-radius:4px;box-shadow:0 0 12px rgba(6,182,212,0.35);transition:all 60ms ease-out;z-index:2147483647;";
+  box.style.cssText = "position:absolute;display:none;pointer-events:none;border:2px solid #06b6d4;background:rgba(6,182,212,0.12);border-radius:4px;box-shadow:0 0 14px rgba(6,182,212,0.45);transition:top 60ms ease-out, left 60ms ease-out, width 60ms ease-out, height 60ms ease-out;z-index:2147483647;";
 
   var label = document.createElement("div");
   label.style.cssText = "position:absolute;bottom:calc(100% + 4px);left:0;background:#0f172a;color:#38bdf8;padding:2px 8px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid #0284c7;box-shadow:0 2px 8px rgba(0,0,0,0.5);pointer-events:none;";
@@ -242,8 +242,8 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
       return;
     }
     box.style.display = "block";
-    box.style.top = (r.top + window.scrollY) + "px";
-    box.style.left = (r.left + window.scrollX) + "px";
+    box.style.top = r.top + "px";
+    box.style.left = r.left + "px";
     box.style.width = r.width + "px";
     box.style.height = r.height + "px";
 
@@ -267,14 +267,20 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
     }
   }
 
+  function handlePointerDown(e) {
+    if (!active) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   function handleClick(e) {
     if (!active) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
     var target = document.elementFromPoint(e.clientX, e.clientY);
     if (target && target !== overlayHost && !overlayHost.contains(target)) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
       var meta = extractDomMetadata(target, window.location.href);
       try {
         window.parent.postMessage({
@@ -287,20 +293,41 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
     }
   }
 
+  function setActive(newActive) {
+    active = Boolean(newActive);
+    window.__VOKTTY_INSPECTOR_ACTIVE__ = active;
+    if (active) {
+      if (!document.body.contains(overlayHost) && document.body) {
+        document.body.appendChild(overlayHost);
+      }
+      try {
+        document.documentElement.style.setProperty("cursor", "crosshair", "important");
+      } catch(_) {}
+      document.addEventListener("pointerdown", handlePointerDown, true);
+      document.addEventListener("mousemove", handleMouseMove, true);
+      document.addEventListener("click", handleClick, true);
+    } else {
+      box.style.display = "none";
+      try {
+        document.documentElement.style.removeProperty("cursor");
+      } catch(_) {}
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("mousemove", handleMouseMove, true);
+      document.removeEventListener("click", handleClick, true);
+    }
+  }
+
+  window.addEventListener("scroll", function() {
+    if (active && hoveredEl) updateHighlight(hoveredEl);
+  }, { passive: true });
+
+  window.addEventListener("resize", function() {
+    if (active && hoveredEl) updateHighlight(hoveredEl);
+  }, { passive: true });
+
   window.addEventListener("message", function(e) {
     if (e.data && e.data.type === "VOKTTY_SET_INSPECTOR_ACTIVE") {
-      active = Boolean(e.data.active);
-      if (active) {
-        if (!document.body.contains(overlayHost)) {
-          document.body.appendChild(overlayHost);
-        }
-        document.addEventListener("mousemove", handleMouseMove, true);
-        document.addEventListener("click", handleClick, true);
-      } else {
-        box.style.display = "none";
-        document.removeEventListener("mousemove", handleMouseMove, true);
-        document.removeEventListener("click", handleClick, true);
-      }
+      setActive(Boolean(e.data.active));
       try {
         window.parent.postMessage({
           type: "VOKTTY_INSPECTOR_STATE_CHANGE",
@@ -312,11 +339,20 @@ pub const INSPECTOR_BUNDLE_JS: &str = r##"(function() {
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function() {
-      if (document.body) document.body.appendChild(overlayHost);
+      if (document.body && !document.body.contains(overlayHost)) {
+        document.body.appendChild(overlayHost);
+      }
     });
-  } else if (document.body) {
+  } else if (document.body && !document.body.contains(overlayHost)) {
     document.body.appendChild(overlayHost);
   }
+
+  try {
+    window.parent.postMessage({
+      type: "VOKTTY_INSPECTOR_READY",
+      payload: { ready: true }
+    }, "*");
+  } catch(_) {}
 })();"##;
 
 pub fn ensure_php_helpers() -> Result<(PathBuf, PathBuf), String> {
@@ -334,30 +370,76 @@ $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 if ($uri === '/__voktty_inspector.js') {
     header('Content-Type: application/javascript; charset=utf-8');
     header('Access-Control-Allow-Origin: *');
+    header('Cache-Control: no-cache, no-store, must-revalidate');
     echo file_get_contents(__DIR__ . '/voktty_inspector.js');
     exit;
 }
+
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?? getcwd();
 $filePath = $docroot . $uri;
-if ($uri !== '/' && file_exists($filePath) && !is_dir($filePath)) {
-    return false;
-}
+
 if (is_dir($filePath)) {
     if (file_exists($filePath . '/index.php')) {
-        include $filePath . '/index.php';
+        $filePath = $filePath . '/index.php';
+    } else if (file_exists($filePath . '/index.html')) {
+        $filePath = $filePath . '/index.html';
+    } else if (file_exists($filePath . '/index.htm')) {
+        $filePath = $filePath . '/index.htm';
+    }
+}
+
+if (file_exists($filePath) && !is_dir($filePath)) {
+    $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    if ($ext === 'html' || $ext === 'htm') {
+        header('Content-Type: text/html; charset=utf-8');
+        header('Access-Control-Allow-Origin: *');
+        $html = file_get_contents($filePath);
+        $script = "<script src=\"/__voktty_inspector.js\"></script>";
+        if (strpos($html, '__voktty_inspector.js') === false) {
+            $pos = strripos($html, '</body>');
+            if ($pos !== false) {
+                $html = substr_replace($html, $script . '</body>', $pos, 7);
+            } else {
+                $pos = strripos($html, '</html>');
+                if ($pos !== false) {
+                    $html = substr_replace($html, $script . '</html>', $pos, 7);
+                } else {
+                    $html .= "\n" . $script;
+                }
+            }
+        }
+        echo $html;
         exit;
     }
-    if (file_exists($filePath . '/index.html')) {
-        include $filePath . '/index.html';
+    if ($ext === 'php') {
+        ob_start(function($buffer) {
+            $script = "<script src=\"/__voktty_inspector.js\"></script>";
+            if (strpos($buffer, '__voktty_inspector.js') === false) {
+                $pos = strripos($buffer, '</body>');
+                if ($pos !== false) {
+                    return substr_replace($buffer, $script . '</body>', $pos, 7);
+                }
+                $pos = strripos($buffer, '</html>');
+                if ($pos !== false) {
+                    return substr_replace($buffer, $script . '</html>', $pos, 7);
+                }
+                return $buffer . "\n" . $script;
+            }
+            return $buffer;
+        });
+        include $filePath;
+        ob_end_flush();
         exit;
     }
 }
+
 return false;
 "#;
     let _ = fs::write(&router_path, router_code);
 
     let append_code = r#"<?php
-if (function_exists('headers_list')) {
+if (!isset($GLOBALS['__VOKTTY_APPEND_DONE__'])) {
+    $GLOBALS['__VOKTTY_APPEND_DONE__'] = true;
     echo "\n<script src=\"/__voktty_inspector.js\"></script>\n";
 }
 "#;

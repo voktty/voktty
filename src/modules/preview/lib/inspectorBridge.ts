@@ -5,6 +5,7 @@ export function attachInspectorBridge(
   iframe: HTMLIFrameElement,
   onSelected: (meta: LiveComponentMetadata) => void,
   onStateChange?: (active: boolean) => void,
+  onReady?: () => void,
 ): () => void {
   const handleMessage = (event: MessageEvent) => {
     if (!event.data || typeof event.data !== "object") return;
@@ -18,6 +19,8 @@ export function attachInspectorBridge(
     } else if (type === "VOKTTY_INSPECTOR_STATE_CHANGE" && payload) {
       const { active } = payload as { active: boolean };
       onStateChange?.(active);
+    } else if (type === "VOKTTY_INSPECTOR_READY") {
+      onReady?.();
     }
   };
 
@@ -30,12 +33,13 @@ export function attachInspectorBridge(
         const script = doc.createElement("script");
         script.id = "voktty-injected-inspector";
         script.textContent = getInspectorInjectedScript();
-        doc.head?.appendChild(script) || doc.body?.appendChild(script);
+        (doc.head || doc.body || doc.documentElement)?.appendChild(script);
       }
     } catch {
       // Cross-origin iframe: direct script injection via DOM throws,
       // which is expected. Message bridge continues listening.
     }
+    onReady?.();
   };
 
   iframe.addEventListener("load", injectIfPossible);
