@@ -83,6 +83,8 @@ export type Tab = {
   multiPane?: boolean;
   /** Focus is on a file/terminal pane rather than a conversation pane. */
   fileFocused?: boolean;
+  /** The sole pane is a fresh conversation with no user turn or open file. */
+  blank?: boolean;
   /** Explicit tab group; absent means ungrouped. */
   groupId?: string;
   dirty?: boolean;
@@ -200,6 +202,10 @@ export function tabStripOverflow(
     left: scrollLeft > 1,
     right: scrollLeft < maxScroll - 1,
   };
+}
+
+export function titleTabClosable(tab: Tab, tabCount: number): boolean {
+  return tabCount > 1 || !tab.blank;
 }
 
 function TabHarnesses({
@@ -529,7 +535,7 @@ function TabGroupBlock({
   mascotName,
   logoPath,
   activeId,
-  closable,
+  tabCount,
   canDrag,
   canDragGroup,
   sortable,
@@ -551,7 +557,7 @@ function TabGroupBlock({
   mascotName: string | null;
   logoPath?: string | null;
   activeId: string;
-  closable: boolean;
+  tabCount: number;
   canDrag: boolean;
   canDragGroup: boolean;
   sortable: SortableApi;
@@ -654,7 +660,7 @@ function TabGroupBlock({
                 tab={tab}
                 index={index}
                 active={tab.id === activeId}
-                closable={closable}
+                closable={titleTabClosable(tab, tabCount)}
                 canDrag={canDrag}
                 sortable={sortable}
                 onSelect={onSelect}
@@ -915,7 +921,6 @@ function TitleBarComponent({
     el.scrollBy({ left: direction * amount, behavior: "smooth" });
   }, []);
   const activeTabRef = useRef<HTMLDivElement | null>(null);
-  const closable = tabs.length > 1;
   const canDrag = tabs.length > 1;
   const [collapsedGroups, setCollapsedGroups] = useState(
     loadCollapsedTabGroups,
@@ -1323,7 +1328,7 @@ function TitleBarComponent({
                       shared ? resolveTabGroupLogo(shared, groupLogos) : null
                     }
                     activeId={activeId}
-                    closable={closable}
+                    tabCount={tabs.length}
                     canDrag={canDrag}
                     canDragGroup={canDragSegments}
                     sortable={sortable}
@@ -1369,7 +1374,7 @@ function TitleBarComponent({
                     tab={tab}
                     index={segment.index}
                     active={active}
-                    closable={closable}
+                    closable={titleTabClosable(tab, tabs.length)}
                     canDrag={canDrag}
                     sortable={sortable}
                     onSelect={onSelect}

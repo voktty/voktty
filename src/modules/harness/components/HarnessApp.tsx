@@ -517,6 +517,7 @@ function titleTabsEqual(a: TitleTab[], b: TitleTab[]): boolean {
       tab.files.join("\u0000") === other.files.join("\u0000") &&
       tab.multiPane === other.multiPane &&
       tab.fileFocused === other.fileFocused &&
+      tab.blank === other.blank &&
       tab.terminal === other.terminal &&
       tab.groupId === other.groupId
     );
@@ -2370,6 +2371,23 @@ export function HarnessApp({
       sidebarCwd,
       tabCloseScope,
     ],
+  );
+
+  const onCloseTitleTab = useCallback(
+    (id: string) => {
+      const closePlan = planWorkspaceTabClose({
+        tabs: tabsRef.current,
+        sessions: sessionsRef.current,
+        closingTabId: id,
+        scope: tabCloseScope,
+      });
+      if (closePlan.action === "keep" && id === activeTabIdRef.current) {
+        onClosePane();
+        return;
+      }
+      onCloseTab(id);
+    },
+    [onClosePane, onCloseTab, tabCloseScope],
   );
 
   const deckProjectTabs = useMemo(() => {
@@ -5293,7 +5311,7 @@ export function HarnessApp({
             onOpenSettings={onOpenSettings}
             onOpenInbox={onOpenInbox}
             onOpenNotes={notesEnabled ? onOpenNotes : undefined}
-            onClose={onCloseTab}
+            onClose={onCloseTitleTab}
             onReorder={onReorderTabs}
             onGoToFile={onGoToFile}
             onJoinTab={onJoinTab}
@@ -5696,6 +5714,7 @@ function toTitleTab(
     files,
     multiPane,
     fileFocused,
+    blank: isBlankWorkspaceTab(tab, sessions),
     dirty: tab.editorPanes.some((pane: any) =>
       pane.files.some(
         (file: any) => isFilesystemTab(file) && dirtyFiles.has(file.id),
