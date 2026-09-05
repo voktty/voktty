@@ -2,7 +2,7 @@ import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { message } from "@tauri-apps/plugin-dialog";
+import { ask, message } from "@tauri-apps/plugin-dialog";
 import {
   useCallback,
   useEffect,
@@ -48,6 +48,7 @@ import { displayAttachments, prepareAttachments } from "../lib/attachments";
 import {
   beginSessionTurn,
   captureSessionCheckpoint,
+  flushSessionCheckpoint,
   keepSessionChanges,
   notifyReviewChanged,
   prepareSessionCheckpoint,
@@ -336,8 +337,8 @@ import {
   collectWorkspaceSnapshot,
   workspaceSnapshotKey,
 } from "../lib/workspaceSnapshot";
+import { runSessionRemoval } from "../lib/sessionRemoval";
 import {
-  applyDeletedSessionToWorkspace,
   applyPlaceSessionOnPane,
   filterTabsForProject,
   findTabForProject,
@@ -480,6 +481,18 @@ function openSessionIds(tabs: WorkspaceTab[]): Set<string> {
     for (const id of leafIds(tab.layout)) ids.add(id);
   }
   return ids;
+}
+
+function filesInWorkspaceTabs(tabs: readonly WorkspaceTab[]): FilePaneTab[] {
+  return tabs.flatMap((tab) => [
+    ...tab.editorPanes.flatMap((pane) => pane.files),
+    ...(tab.terminalPanes ?? []).flatMap((pane) => pane.files),
+  ]);
+}
+
+/** Native sheet. window.confirm is swallowed when a macOS menu accelerator fires. */
+function confirmDiscardUnsaved(prompt: string): Promise<boolean> {
+  return ask(prompt, { title: "MonoCode", kind: "warning" });
 }
 
 function titleTabsEqual(a: TitleTab[], b: TitleTab[]): boolean {
@@ -663,6 +676,9 @@ export function HarnessApp({
   });
   const turnGen = useRef(new Map<string, number>());
   const queueDispatchingRef = useRef<Set<string>>(new Set());
+  const dirtyFilesRef = useRef(dirtyFiles);
+  dirtyFilesRef.current = dirtyFiles;
+  const removingSessionIds = useRef(new Set<string>());
   const lastPersisted = useRef(new Map<string, string>());
   const lastBoundProvider = useRef(new Map<string, string>());
   const lastPersistedUserBlock = useRef(new Map<string, string>());
@@ -736,6 +752,31 @@ export function HarnessApp({
     syncDockBadge(next);
     setSessions(next);
   }, []);
+
+  const stopSessionForRemoval = useCallback(
+    async (sessionId: string): Promise<Session | undefined> => {
+      const open = sessionsRef.current.find(
+        (session: any) => session.id === sessionId,
+      );
+      if (!open?.busy) return open;
+
+      turnGen.current.set(
+        sessionId,
+        (turnGen.current.get(sessionId) ?? 0) + 1,
+      );
+      flushHarnessEvents();
+      await Promise.all(
+        sessionChildHarnesses(open).map((harness: any) =>
+          cancelHarnessTurn(harness, sessionId).catch(() => undefined),
+        ),
+      );
+      flushHarnessEvents();
+      return sessionsRef.current.find(
+        (session: any) => session.id === sessionId,
+      );
+    },
+    [flushHarnessEvents],
+  );
 
   const applyApprovalEvent = useCallback(
     (sessionId: string, event: HarnessEvent) => {
@@ -1046,7 +1087,7 @@ export function HarnessApp({
     // by cwd, so a project loaded once paints from cache on the way back and
     // revalidates quietly underneath the cards already on screen. Whether the
     // first load is still pending is derived from `loadedProjects`, not
-    // tracked here — a status set from this effect lands a render too late to
+    // tracked here, a status set from this effect lands a render too late to
     // suppress the empty state.
     const key = normalizeProjectPath(cwd);
     setHistoryErrorCwd((prev: any) => (prev === key ? null : prev));
@@ -2738,30 +2779,175 @@ export function HarnessApp({
     [persistSession, refreshHistory, sidebarCwd],
   );
 
-  const onArchiveHistorySession = useCallback(
-    async (sessionId: string, archived: boolean) => {
+  const onRemoveHistorySession = useCallback(
+    async (sessionId: string, mode: "archive" | "delete") => {
+      if (removingSessionIds.current.has(sessionId)) return;
       const open = sessionsRef.current.find(
         (session) => session.id === sessionId,
       );
-      if (open && shouldPersistSession(open)) {
-        await upsertSession(open).catch(() => undefined);
-      }
-      await setSessionArchived(sessionId, archived).catch(() => undefined);
-      setHistory((current) => {
-        const existing = current.find((entry: any) => entry.id === sessionId);
-        if (existing) {
-          return current.map((entry: any) =>
-            entry.id === sessionId ? { ...entry, archived } : entry,
-          );
-        }
-        if (!open) return current;
-        return mergeHistorySummary(current, {
-          ...summaryFromSession(open),
-          archived,
+      const summary = history.find((entry) => entry.id === sessionId);
+      const seed = open ?? summary;
+      const label = seed
+        ? sessionDisplayTitle(seed.title, seed.harness)
+        : "this session";
+      if (mode === "delete" && !window.confirm(`Delete "${label}"?`)) return;
+
+      removingSessionIds.current.add(sessionId);
+      pendingPersist.current.delete(sessionId);
+      let savedSummary: SessionSummary | undefined;
+      try {
+        await runSessionRemoval({
+          sessionId,
+          scope: tabCloseScope,
+          readWorkspace: () => ({
+            tabs: tabsRef.current,
+            sessions: sessionsRef.current,
+            activeTabId: activeTabIdRef.current,
+            dirtyFiles: dirtyFilesRef.current,
+          }),
+          createReplacement: (latest) =>
+            newSession(
+              latest?.harness ?? seed?.harness ?? "cursor",
+              latest?.cwd ?? seed?.cwd ?? sidebarCwd,
+              latest?.model ?? seed?.model,
+              latest?.runtimeMode ?? seed?.runtimeMode,
+              latest?.modelSettings ?? open?.modelSettings,
+            ),
+          confirmClose: async (closedTabs) => {
+            const files = filesInWorkspaceTabs(closedTabs);
+            const unsaved = files.some(
+              (file) =>
+                isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
+            );
+            if (
+              unsaved &&
+              !(await confirmDiscardUnsaved(
+                `${mode === "archive" ? "Archive" : "Delete"} this conversation with unsaved files?`,
+              ))
+            )
+              return false;
+            const terminals = files.filter((file) => file.terminal);
+            return (
+              terminals.length === 0 || (await confirmCloseTerminals(terminals))
+            );
+          },
+          stop: async () => {
+            await stopSessionForRemoval(sessionId);
+          },
+          updateSession: (stopped) => {
+            const next = sessionsRef.current.map((session) =>
+              session.id === sessionId ? stopped : session,
+            );
+            sessionsRef.current = next;
+            setSessions(next);
+          },
+          persist: async (latest) => {
+            if (latest) await flushSessionCheckpoint(sessionId);
+            if (mode === "delete") {
+              await deleteSession(sessionId);
+              return;
+            }
+            if (latest && shouldPersistSession(latest)) {
+              const saved = await upsertSession(latest);
+              if (!saved)
+                throw new Error("The conversation could not be saved.");
+              savedSummary = saved;
+            }
+            await setSessionArchived(sessionId, true);
+          },
+          commit: (removal) => {
+            const latest = sessionsRef.current.find(
+              (session) => session.id === sessionId,
+            );
+            const harnesses: HarnessId[] = latest
+              ? sessionChildHarnesses(latest)
+              : [seed?.harness ?? "cursor"];
+            for (const harness of harnesses) {
+              void forgetHarnessSession(harness, sessionId);
+            }
+            lastPersisted.current.delete(sessionId);
+            pendingPersist.current.delete(sessionId);
+            const closingFiles = filesInWorkspaceTabs(removal.closedTabs);
+            setDirtyFiles((current) => {
+              const next = new Set(current);
+              for (const file of closingFiles) next.delete(file.id);
+              return next;
+            });
+            sessionsRef.current = removal.sessions;
+            tabsRef.current = removal.tabs;
+            setSessions(removal.sessions);
+            setTabs(removal.tabs);
+            if (removal.activeTabId !== activeTabIdRef.current) {
+              activateTab(removal.activeTabId);
+            }
+            const activeTab = removal.tabs.find(
+              (tab) => tab.id === removal.activeTabId,
+            );
+            setComposerFocused(
+              removal.sessions.some(
+                (session) => session.id === activeTab?.focusedId,
+              ),
+            );
+            if (mode === "archive") {
+              const archived =
+                savedSummary ??
+                summary ??
+                (latest && summaryFromSession(latest));
+              if (archived) {
+                setHistory((current) =>
+                  mergeHistorySummary(current, { ...archived, archived: true }),
+                );
+              }
+            } else {
+              setHistory((current) =>
+                current.filter((entry) => entry.id !== sessionId),
+              );
+              void refreshHistory(sidebarCwd);
+            }
+          },
         });
-      });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        void message(`Could not ${mode} this conversation.\n\n${detail}`, {
+          title: "MonoCode",
+          kind: "error",
+        });
+      } finally {
+        removingSessionIds.current.delete(sessionId);
+      }
     },
-    [],
+    [
+      activateTab,
+      history,
+      refreshHistory,
+      sidebarCwd,
+      stopSessionForRemoval,
+      tabCloseScope,
+    ],
+  );
+
+  const onArchiveHistorySession = useCallback(
+    async (sessionId: string, archived: boolean) => {
+      if (archived) return onRemoveHistorySession(sessionId, "archive");
+      if (removingSessionIds.current.has(sessionId)) return;
+      try {
+        await setSessionArchived(sessionId, false);
+        setHistory((current) =>
+          current.map((entry) =>
+            entry.id === sessionId ? { ...entry, archived: false } : entry,
+          ),
+        );
+      } catch (error) {
+        void message(
+          `Could not unarchive this conversation.\n\n${String(error)}`,
+          {
+            title: "MonoCode",
+            kind: "error",
+          },
+        );
+      }
+    },
+    [onRemoveHistorySession],
   );
 
   const onPinHistorySession = useCallback(
@@ -2789,87 +2975,8 @@ export function HarnessApp({
   );
 
   const onDeleteHistorySession = useCallback(
-    async (sessionId: string) => {
-      const open = sessionsRef.current.find(
-        (session) => session.id === sessionId,
-      );
-      const summary =
-        history.find((entry: any) => entry.id === sessionId) ?? open ?? null;
-      const label = summary
-        ? sessionDisplayTitle(summary.title, summary.harness)
-        : "this session";
-
-      if (!window.confirm(`Delete “${label}”?`)) return;
-
-      if (open?.busy) {
-        turnGen.current.set(
-          sessionId,
-          (turnGen.current.get(sessionId) ?? 0) + 1,
-        );
-        for (const id of sessionChildHarnesses(open)) {
-          void cancelHarnessTurn(id, sessionId);
-        }
-      }
-
-      const harness = open?.harness ?? summary?.harness ?? "cursor";
-      if (open) {
-        for (const id of sessionChildHarnesses(open)) {
-          void forgetHarnessSession(id, sessionId);
-        }
-      } else {
-        void forgetHarnessSession(harness, sessionId);
-      }
-      lastPersisted.current.delete(sessionId);
-      await deleteSession(sessionId).catch(() => undefined);
-
-      if (
-        !tabsRef.current.some((tab: any) =>
-          leafIds(tab.layout).includes(sessionId),
-        )
-      ) {
-        setSessions((prev: any) =>
-          prev.filter((session: any) => session.id !== sessionId),
-        );
-        void refreshHistory(sidebarCwd);
-        return;
-      }
-
-      const {
-        tabs: nextTabs,
-        sessions: nextSessions,
-        activeTabId: nextActiveTabId,
-      } = applyDeletedSessionToWorkspace({
-        tabs: tabsRef.current,
-        sessions: sessionsRef.current,
-        sessionId,
-        activeTabId: activeTabIdRef.current,
-        scope: tabCloseScope,
-        createReplacement: (seed: any) =>
-          newSession(
-            seed?.harness ?? harness,
-            seed?.cwd ?? summary?.cwd ?? sidebarCwd,
-            seed?.model ?? summary?.model,
-            seed?.runtimeMode ?? summary?.runtimeMode,
-            seed?.modelSettings,
-          ),
-      });
-
-      setSessions(nextSessions);
-      setTabs(nextTabs);
-      if (nextActiveTabId !== activeTabIdRef.current) {
-        activateTab(nextActiveTabId);
-      }
-      setComposerFocused(
-        nextSessions.some((session: any) => {
-          const tab = nextTabs.find(
-            (entry: any) => entry.id === nextActiveTabId,
-          );
-          return !!tab && session.id === tab.focusedId;
-        }),
-      );
-      void refreshHistory(sidebarCwd);
-    },
-    [activateTab, history, refreshHistory, sidebarCwd, tabCloseScope],
+    (sessionId: string) => onRemoveHistorySession(sessionId, "delete"),
+    [onRemoveHistorySession],
   );
 
   const onFocusDir = useCallback(
@@ -3436,6 +3543,7 @@ export function HarnessApp({
         buildTarget?: PlanBuildTarget;
       },
     ) => {
+      if (removingSessionIds.current.has(sessionId)) return;
       const storedCurrent = sessionsRef.current.find((s: any) => s.id === sessionId);
       if (!storedCurrent) return;
       const current = options?.buildTarget

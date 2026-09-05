@@ -1,4 +1,5 @@
 import {
+  Archive,
   Check,
   CircleAlert,
   GitBranch,
@@ -358,7 +359,7 @@ function SidebarComponent({
   const classicSettings = settingsOpen && !deckLayout;
   const showSidebarFooter = !deckLayout || !projectRailOpen;
   // A blank session has no project to browse, so the shell stands alone until
-  // one is picked — whether or not the rail is open. Classic settings keep the
+  // one is picked, whether or not the rail is open. Classic settings keep the
   // sidebar so it can host the section nav the rail would otherwise carry.
   const sidebarVisible =
     open &&
@@ -845,7 +846,7 @@ function SidebarComponent({
                 {/*
               A project's first load stays deliberately blank. The listing is
               served from a covering index and resolves within a frame or two,
-              so a placeholder only ever flashed — reading as a glitch rather
+              so a placeholder only ever flashed, reading as a glitch rather
               than as progress. This is checked before the empty state so that
               cannot claim "No sessions yet" before the rows have landed.
             */}
@@ -920,6 +921,15 @@ function SidebarComponent({
                                   onDeleteSession
                                     ? (e) =>
                                         onSessionContextMenu(session.id, e)
+                                    : undefined
+                                }
+                                onArchive={
+                                  onArchiveSession
+                                    ? () =>
+                                        onArchiveSession(
+                                          session.id,
+                                          !session.archived,
+                                        )
                                     : undefined
                                 }
                                 onRename={
@@ -1240,6 +1250,7 @@ function SessionCard({
   onSelect,
   onPlaceOnPane,
   onContextMenu,
+  onArchive,
   onRename,
   onDelete,
 }: {
@@ -1254,6 +1265,7 @@ function SessionCard({
   onSelect: (sessionId: string) => void;
   onPlaceOnPane?: (sessionId: string, targetId: string, edge: PaneEdge) => void;
   onContextMenu?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
+  onArchive?: () => void;
   onRename?: () => void;
   onDelete?: () => void;
 }) {
@@ -1263,6 +1275,7 @@ function SessionCard({
   const gitLabel = formatGitLabel(session.repo, session.branch);
   const time = formatRelative(session.updatedAt, now);
   const model = resolveModel(session.harness, session.model).name;
+  const archiveLabel = session.archived ? "Unarchive" : "Archive";
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (e.key === "F2" && onRename) {
@@ -1357,98 +1370,123 @@ function SessionCard({
   };
 
   return (
-    <button
-      type="button"
-      title={title}
-      aria-current={isActive ? "true" : undefined}
-      data-tauri-drag-region="false"
-      onPointerDown={onPointerDown}
-      onClick={() => {
-        if (performance.now() < skipClickUntil.current) return;
-        onSelect(session.id);
-      }}
-      onContextMenu={onContextMenu}
-      onKeyDown={onKeyDown}
-      className={`border flex w-full touch-none flex-col rounded-md px-2.5 py-2 text-left ${
-        dragging ? "opacity-40" : ""
-      } ${
-        needsApproval
-          ? "bg-content/20 text-content border-content/30 border-dashed"
-          : isActive
-            ? "bg-content/10 text-content border-transparent"
-            : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
-      }`}
-    >
-      <span className="flex items-center gap-2">
-        <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          <HarnessIcon
-            harness={session.harness}
-            className="size-3.5 shrink-0"
-          />
-          <span className="min-w-0 truncate text-[11px] text-content/50">
-            {model}
+    <div className="group relative">
+      <button
+        type="button"
+        title={title}
+        aria-current={isActive ? "true" : undefined}
+        data-tauri-drag-region="false"
+        onPointerDown={onPointerDown}
+        onClick={() => {
+          if (performance.now() < skipClickUntil.current) return;
+          onSelect(session.id);
+        }}
+        onContextMenu={onContextMenu}
+        onKeyDown={onKeyDown}
+        className={`border flex w-full touch-none flex-col rounded-md px-2.5 py-2 text-left ${
+          dragging ? "opacity-40" : ""
+        } ${
+          needsApproval
+            ? "bg-content/20 text-content border-content/30 border-dashed"
+            : isActive
+              ? "bg-content/10 text-content border-transparent"
+              : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
+        }`}
+      >
+        <span className="flex items-center gap-2">
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            <HarnessIcon
+              harness={session.harness}
+              className="size-3.5 shrink-0"
+            />
+            <span className="min-w-0 truncate text-[11px] text-content/50">
+              {model}
+            </span>
+          </span>
+          <span
+            className={`flex shrink-0 items-center gap-1 text-[11px] tabular-nums ${
+              needsApproval
+                ? "text-amber-400"
+                : busy
+                  ? "text-accent"
+                  : done
+                    ? "text-emerald-400"
+                    : "text-content/45"
+            }`}
+          >
+            {needsApproval ? (
+              <>
+                <CircleAlert className="size-3" strokeWidth={1.75} />
+                <span>Need approval</span>
+              </>
+            ) : busy ? (
+              <>
+                <TerminalSpinner className="inline-block w-3 select-none text-center text-[11px] leading-none text-accent" />
+                <span>Working...</span>
+              </>
+            ) : done ? (
+              <>
+                <Check className="size-3" strokeWidth={2.25} />
+                <span>Done</span>
+              </>
+            ) : (
+              <span>{time}</span>
+            )}
           </span>
         </span>
-        <span
-          className={`flex shrink-0 items-center gap-1 text-[11px] tabular-nums ${
-            needsApproval
-              ? "text-amber-400"
-              : busy
-                ? "text-accent"
-                : done
-                  ? "text-emerald-400"
-                  : "text-content/45"
-          }`}
-        >
-          {needsApproval ? (
-            <>
-              <CircleAlert className="size-3" strokeWidth={1.75} />
-              <span>Need approval</span>
-            </>
-          ) : busy ? (
-            <>
-              <TerminalSpinner className="inline-block w-3 select-none text-center text-[11px] leading-none text-accent" />
-              <span>Working...</span>
-            </>
-          ) : done ? (
-            <>
-              <Check className="size-3" strokeWidth={2.25} />
-              <span>Done</span>
-            </>
+        <span className="mt-1 flex min-w-0 items-center gap-1.5">
+          {session.pinned ? (
+            <Pin
+              className="size-3 shrink-0 text-content/45"
+              strokeWidth={1.75}
+            />
+          ) : null}
+          <span className="min-w-0 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
+            {title}
+          </span>
+        </span>
+        <span className="mt-1 flex items-center gap-2">
+          {gitLabel ? (
+            <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-content/45">
+              <GitBranch className="size-3 shrink-0" strokeWidth={1.75} />
+              <span className="min-w-0 truncate">{gitLabel}</span>
+            </span>
           ) : (
-            <span>{time}</span>
+            <span className="min-w-0 flex-1" />
           )}
-        </span>
-      </span>
-      <span className="mt-1 flex min-w-0 items-center gap-1.5">
-        {session.pinned ? (
-          <Pin
-            className="size-3 shrink-0 text-content/45"
-            strokeWidth={1.75}
-          />
-        ) : null}
-        <span className="min-w-0 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
-          {title}
-        </span>
-      </span>
-      <span className="mt-1 flex items-center gap-2">
-        {gitLabel ? (
-          <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-content/45">
-            <GitBranch className="size-3 shrink-0" strokeWidth={1.75} />
-            <span className="min-w-0 truncate">{gitLabel}</span>
+          <span
+            className={`flex shrink-0 items-center gap-1.5 ${
+              onArchive
+                ? "transition-[padding] group-focus-within:pl-5 group-hover:pl-5"
+                : ""
+            }`}
+          >
+            <DiffStat additions={additions} deletions={deletions} />
+            <HarnessIcon
+              harness={session.harness}
+              className="size-3.5 shrink-0"
+            />
           </span>
-        ) : (
-          <span className="min-w-0 flex-1" />
-        )}
-        <span className="flex shrink-0 items-center gap-1.5">
-          <DiffStat additions={additions} deletions={deletions} />
-          <HarnessIcon
-            harness={session.harness}
-            className="size-3.5 shrink-0"
-          />
         </span>
-      </span>
-    </button>
+      </button>
+      {onArchive ? (
+        <button
+          type="button"
+          data-no-drag
+          data-tauri-drag-region="false"
+          title={archiveLabel}
+          aria-label={`${archiveLabel} ${title}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onArchive();
+          }}
+          className="pointer-events-none absolute right-2 bottom-[7px] grid size-5 place-items-center rounded text-content/50 opacity-0 transition-opacity hover:bg-content/10 hover:text-content group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
+        >
+          <Archive className="size-3.5" strokeWidth={1.75} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
