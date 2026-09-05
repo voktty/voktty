@@ -117,25 +117,41 @@ const PROVIDER_ICON = {
 export function AiOpenButton({
   onOpen,
   open = false,
+  unreadCount = 0,
 }: {
   onOpen: () => void;
   open?: boolean;
+  unreadCount?: number;
 }) {
   const { t } = useTranslation();
   const label = open ? t("ai.closePanel") : t("ai.openAgent");
+  const hasUnread = !open && unreadCount > 0;
+  const accessibleLabel = hasUnread
+    ? `${label} — ${t("ai.unreadMessages", { count: unreadCount })}`
+    : label;
   return (
     <button
       type="button"
+      data-ai-mini-window-trigger
       onClick={onOpen}
       className={cn(
-        "flex h-5.5 items-center gap-1 rounded-md border border-border/60 bg-card px-1.5 text-[10.5px]",
+        "relative flex h-5.5 items-center gap-1 rounded-md border border-border/60 bg-card px-1.5 text-[10.5px]",
         "text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground",
         "animate-in slide-in-from-top-2 duration-200 ease-out",
       )}
-      title={label}
+      title={accessibleLabel}
+      aria-label={accessibleLabel}
     >
       <span>{label}</span>
       <Kbd className="h-3.5 min-w-3.5 px-0.5 text-[9px]">{fmtShortcut(MOD_KEY, "I")}</Kbd>
+      {hasUnread ? (
+        <span
+          aria-hidden
+          className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold leading-none text-primary-foreground"
+        >
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      ) : null}
     </button>
   );
 }

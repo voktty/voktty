@@ -98,6 +98,8 @@ export function StatusBar({
 }: Props) {
   const { t } = useTranslation();
   const panelOpen = useChatStore((s) => s.panelOpen);
+  const miniOpen = useChatStore((s) => s.mini.open);
+  const chatUnreadCount = useChatStore((s) => s.unreadCount);
   const [arcadeOpen, setArcadeOpen] = useState(false);
 
   return (
@@ -189,7 +191,11 @@ export function StatusBar({
         {hasComposer ? (
           <>
             <AgentStatusPill onClick={onToggleAi} />
-            <AiOpenButton onOpen={onOpenAi} open={panelOpen} />
+            <AiOpenButton
+              onOpen={onOpenAi}
+              open={panelOpen || miniOpen}
+              unreadCount={chatUnreadCount}
+            />
           </>
         ) : null}
       </div>

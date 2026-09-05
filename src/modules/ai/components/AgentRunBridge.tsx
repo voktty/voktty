@@ -60,7 +60,8 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
     chat,
   });
   const patch = useChatStore((s) => s.patchAgentMeta);
-  const openPanel = useChatStore((s) => s.openPanel);
+  const presentChat = useChatStore((s) => s.presentChat);
+  const noteUnreadMessage = useChatStore((s) => s.noteUnreadMessage);
   const persistMessages = useChatStore((s) => s.persistMessages);
   const setApprovalResponder = useChatStore((s) => s.setApprovalResponder);
 
@@ -115,8 +116,21 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
   }, [status, approvalsPending, patch]);
 
   useEffect(() => {
-    if (approvalsPending > 0) openPanel();
-  }, [approvalsPending, openPanel]);
+    if (approvalsPending > 0) presentChat();
+  }, [approvalsPending, presentChat]);
+
+  // Count a completed assistant turn as an unread message when the user has
+  // dismissed both the mini window and the panel, so they see a badge instead
+  // of silently missing the reply.
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    const wasBusy =
+      prevStatusRef.current === "submitted" ||
+      prevStatusRef.current === "streaming";
+    const isSettled = status === "ready" || status === "error";
+    if (wasBusy && isSettled) noteUnreadMessage();
+    prevStatusRef.current = status;
+  }, [status, noteUnreadMessage]);
 
   // ---- AI diff tab management ----------------------------------------------
   // We track which approvalIds have already opened a tab so re-renders don't
