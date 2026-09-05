@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   closeLeaf,
   editorTabKey,
+  isChangesTab,
   isFilesystemTab,
   isReleaseNotesTab,
   isReviewTab,
+  isSessionChangesTab,
   isTerminalTab,
   layoutLeaves,
   layoutSashes,
@@ -18,7 +20,9 @@ import {
   nextTerminalTitle,
   isolateTerminalPanes,
   movePane,
+  openChangesTab,
   openEditorTab,
+  openSessionChangesTab,
   openTerminalTab,
   paneEdgeFromPoint,
   placePane,
@@ -373,5 +377,69 @@ describe("placePane", () => {
     const tree = leaf("a");
     expect(placePane(tree, "b", "missing", "right")).toBe(tree);
     expect(placePane(tree, "a", "a", "right")).toBe(tree);
+  });
+});
+
+describe("openSessionChangesTab", () => {
+  it("reuses one Session Changes tab per session and updates the focused file", () => {
+    const cwd = "/repo";
+    const first = openSessionChangesTab(
+      newTab("session-a"),
+      cwd,
+      "session-a",
+      "/repo/a.ts",
+    );
+    const second = openSessionChangesTab(
+      first,
+      cwd,
+      "session-a",
+      "/repo/b.ts",
+    );
+    const files = second.editorPanes[0]?.files ?? [];
+    expect(files.filter(isSessionChangesTab)).toHaveLength(1);
+    expect(files.filter(isReviewTab)).toHaveLength(1);
+    expect(files.find(isSessionChangesTab)?.path).toBe("/repo/b.ts");
+  });
+
+  it("keeps separate review tabs for different sessions", () => {
+    const cwd = "/repo";
+    const focused = openSessionChangesTab(
+      newTab("session-a"),
+      cwd,
+      "session-a",
+      "/repo/b.ts",
+    );
+    const second = openSessionChangesTab(
+      focused,
+      cwd,
+      "session-b",
+      "/repo/c.ts",
+    );
+    const reviews = second.editorPanes.flatMap((pane) =>
+      pane.files.filter(isSessionChangesTab),
+    );
+    expect(reviews).toHaveLength(2);
+    expect(
+      reviews.find((file) => file.sessionChanges.sessionId === "session-a")
+        ?.path,
+    ).toBe("/repo/b.ts");
+  });
+});
+
+describe("openChangesTab", () => {
+  it("reuses one Changes tab and updates the focused file", () => {
+    const cwd = "/repo";
+    const first = openChangesTab(newTab("session-a"), cwd, "/repo/a.ts");
+    const second = openChangesTab(first, cwd, "/repo/b.ts");
+    const files = second.editorPanes[0]?.files ?? [];
+    expect(files.filter(isChangesTab)).toHaveLength(1);
+    expect(files.filter(isReviewTab)).toHaveLength(1);
+    expect(files.find(isChangesTab)?.path).toBe("/repo/b.ts");
+  });
+
+  it("opens a Changes tab without a focused file", () => {
+    const cwd = "/repo";
+    const next = openChangesTab(newTab("session-a"), cwd);
+    expect(next.editorPanes[0]?.files.find(isChangesTab)?.path).toBe(cwd);
   });
 });

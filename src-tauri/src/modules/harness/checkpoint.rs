@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 use super::fs::{
-    expand_home, git_checked, git_diff_files_for, resolve_repo_path, GitChangedFile, GitDiffIndex,
-    GitDiffStats, MAX_TEXT_FILE_BYTES,
+    expand_home, git_blob, git_checked, git_diff_files_for, resolve_repo_path, GitChangedFile,
+    GitDiffIndex, GitDiffStats, MAX_TEXT_FILE_BYTES,
 };
 
 const MAX_SNAPSHOT_FILES: usize = 500;
@@ -59,6 +59,46 @@ impl CheckpointStore {
                 tracked,
             },
         )
+    }
+
+    fn prepare(&self, session_id: &str, cwd: &str, paths: &[String]) -> Result<(), String> {
+        if paths.is_empty() {
+            return Ok(());
+        }
+        let root = project_root(cwd)?;
+        let dir = self.session_dir(session_id);
+        let mut manifest = match read_manifest(&dir)? {
+            Some(manifest) if same_cwd(&manifest.cwd, cwd) => manifest,
+            _ => return Ok(()),
+        };
+
+        let mut dirty = false;
+        for path in paths {
+            if manifest.touched.len() >= MAX_SNAPSHOT_FILES {
+                break;
+            }
+            let Ok(relative) = relative_to_root(&root, path) else {
+                continue;
+            };
+            if manifest.touched.insert(relative.clone()) {
+                dirty = true;
+            }
+            let tracked_in_head = in_head(&root, &relative);
+            if tracked_in_head && manifest.tracked.insert(relative.clone()) {
+                dirty = true;
+            }
+            if manifest.files.contains_key(&relative) {
+                continue;
+            }
+            manifest
+                .files
+                .insert(relative.clone(), snapshot_file(&dir, &root, &relative)?);
+            dirty = true;
+        }
+        if dirty {
+            write_manifest(&dir, &manifest)?;
+        }
+        Ok(())
     }
 
     fn capture(&self, session_id: &str, cwd: &str, paths: &[String]) -> Result<(), String> {
@@ -156,11 +196,96 @@ impl CheckpointStore {
             return Ok(CheckpointStatus { files: Vec::new() });
         };
         let root = project_root(cwd)?;
+        let foreign_touched = self.foreign_touched_paths(cwd, session_id);
         Ok(diff_from_manifest(
             &self.session_dir(session_id),
             &root,
             &manifest,
+            &foreign_touched,
         ))
+    }
+
+    fn file_diff(
+        &self,
+        session_id: &str,
+        cwd: &str,
+        relative: &str,
+    ) -> Result<CheckpointFileDiff, String> {
+        let Some(manifest) = self.load_matching(session_id, cwd)? else {
+            return Err("No active session checkpoint".into());
+        };
+        let root = project_root(cwd)?;
+        let dir = self.session_dir(session_id);
+        let relative = relative_to_root(&root, relative)?;
+        let abs = root.join(&relative);
+
+        let (orig_bytes, is_skipped) = match manifest.files.get(&relative) {
+            Some(SnapshotKind::Contents) => {
+                match read_snapshot(&dir, &relative, SnapshotKind::Contents) {
+                    FileState::Contents(bytes) => (bytes, false),
+                    _ => (Vec::new(), false),
+                }
+            }
+            Some(SnapshotKind::Missing) => (Vec::new(), false),
+            Some(SnapshotKind::Skipped) => (Vec::new(), true),
+            None => {
+                if in_head(&root, &relative) || manifest.tracked.contains(&relative) {
+                    (
+                        git_blob(&root, &format!("HEAD:{relative}")).unwrap_or_default(),
+                        false,
+                    )
+                } else {
+                    (Vec::new(), false)
+                }
+            }
+        };
+
+        let current_bytes = if abs.is_file() {
+            std::fs::read(&abs).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        let binary = orig_bytes.contains(&0) || current_bytes.contains(&0);
+        let too_large = is_skipped
+            || orig_bytes.len() as u64 > MAX_TEXT_FILE_BYTES
+            || current_bytes.len() as u64 > MAX_TEXT_FILE_BYTES;
+
+        let status = if orig_bytes.is_empty()
+            && (manifest.files.get(&relative) == Some(&SnapshotKind::Missing)
+                || (!in_head(&root, &relative) && !manifest.tracked.contains(&relative)))
+        {
+            if abs.is_file() {
+                "added"
+            } else {
+                "deleted"
+            }
+        } else if !abs.exists() {
+            "deleted"
+        } else if orig_bytes == current_bytes {
+            "unmodified"
+        } else {
+            "modified"
+        };
+
+        let (original_text, current_text) = if binary || too_large {
+            (String::new(), String::new())
+        } else {
+            (
+                String::from_utf8_lossy(&orig_bytes).into_owned(),
+                String::from_utf8_lossy(&current_bytes).into_owned(),
+            )
+        };
+
+        Ok(CheckpointFileDiff {
+            path: abs.to_string_lossy().into_owned(),
+            relative,
+            status: status.to_string(),
+            original: original_text,
+            current: current_text,
+            binary,
+            too_large,
+        })
     }
 
     /// Remaining git line counts for each session, using one working-tree index.
@@ -180,8 +305,9 @@ impl CheckpointStore {
                 out.insert(session_id.clone(), GitDiffStats::default());
                 continue;
             };
+            let foreign_touched = self.foreign_touched_paths(cwd, session_id);
             let status =
-                diff_from_manifest_with(&index, &self.session_dir(session_id), &root, &manifest);
+                diff_from_manifest_with(&index, &self.session_dir(session_id), &root, &manifest, &foreign_touched);
             out.insert(session_id.clone(), stats_from_status(&status));
         }
         Ok(out)
@@ -198,17 +324,29 @@ impl CheckpointStore {
         };
         let root = project_root(cwd)?;
         let dir = self.session_dir(session_id);
-        let changed = diff_from_manifest(&dir, &root, &manifest);
+        let foreign_touched = self.foreign_touched_paths(cwd, session_id);
+        let changed = diff_from_manifest(&dir, &root, &manifest, &foreign_touched);
         if let Some(relative) = relative {
             let relative = resolve_repo_path(&root, relative)?;
+            if foreign_touched.contains(&relative) {
+                return Err(format!("Cannot undo shared file: {relative}"));
+            }
             restore_one(&dir, &root, &manifest, &relative)?;
             return self.status(session_id, cwd);
         }
+        let all_undone = changed.files.iter().all(|f| f.undoable);
         for file in &changed.files {
+            if !file.undoable {
+                continue;
+            }
             restore_one(&dir, &root, &manifest, &file.relative)?;
         }
-        let _ = std::fs::remove_dir_all(&dir);
-        Ok(CheckpointStatus { files: Vec::new() })
+        if all_undone {
+            let _ = std::fs::remove_dir_all(&dir);
+            Ok(CheckpointStatus { files: Vec::new() })
+        } else {
+            self.status(session_id, cwd)
+        }
     }
 
     fn keep(
@@ -304,6 +442,20 @@ pub struct CheckpointFile {
     pub status: String,
     pub additions: i64,
     pub deletions: i64,
+    pub exact: bool,
+    pub undoable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckpointFileDiff {
+    pub path: String,
+    pub relative: String,
+    pub status: String,
+    pub original: String,
+    pub current: String,
+    pub binary: bool,
+    pub too_large: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -332,6 +484,23 @@ pub async fn session_checkpoint_ensure(
     validate_id(&session_id, "session")?;
     let store = store.inner().clone();
     tauri::async_runtime::spawn_blocking(move || store.ensure(&session_id, &cwd))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn session_checkpoint_prepare(
+    store: State<'_, CheckpointStore>,
+    session_id: String,
+    cwd: String,
+    paths: Vec<String>,
+) -> Result<(), String> {
+    validate_id(&session_id, "session")?;
+    if paths.len() > MAX_SNAPSHOT_FILES {
+        return Err("Too many paths".into());
+    }
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || store.prepare(&session_id, &cwd, &paths))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -380,6 +549,20 @@ pub async fn session_checkpoint_status(
 }
 
 #[tauri::command]
+pub async fn session_checkpoint_file_diff(
+    store: State<'_, CheckpointStore>,
+    session_id: String,
+    cwd: String,
+    relative: String,
+) -> Result<CheckpointFileDiff, String> {
+    validate_id(&session_id, "session")?;
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || store.file_diff(&session_id, &cwd, &relative))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn session_checkpoint_stats(
     store: State<'_, CheckpointStore>,
     cwd: String,
@@ -422,8 +605,13 @@ pub async fn session_checkpoint_keep(
         .map_err(|e| e.to_string())?
 }
 
-fn diff_from_manifest(dir: &Path, root: &Path, manifest: &Manifest) -> CheckpointStatus {
-    diff_from_manifest_with(&git_diff_files_for(root), dir, root, manifest)
+fn diff_from_manifest(
+    dir: &Path,
+    root: &Path,
+    manifest: &Manifest,
+    foreign_touched: &HashSet<String>,
+) -> CheckpointStatus {
+    diff_from_manifest_with(&git_diff_files_for(root), dir, root, manifest, foreign_touched)
 }
 
 fn diff_from_manifest_with(
@@ -431,6 +619,7 @@ fn diff_from_manifest_with(
     dir: &Path,
     root: &Path,
     manifest: &Manifest,
+    foreign_touched: &HashSet<String>,
 ) -> CheckpointStatus {
     let by_relative: BTreeMap<&str, &GitChangedFile> = index
         .files
@@ -444,10 +633,14 @@ fn diff_from_manifest_with(
         if !file_differs(dir, root, manifest, relative, &git_dirty) {
             continue;
         }
+        let exact = !foreign_touched.contains(relative.as_str());
+        let undoable = exact && manifest.files.get(relative) != Some(&SnapshotKind::Skipped);
         files.push(describe_change(
             root,
             relative,
             by_relative.get(relative.as_str()).copied(),
+            exact,
+            undoable,
         ));
     }
 
@@ -493,7 +686,13 @@ fn file_differs(
     }
 }
 
-fn describe_change(root: &Path, relative: &str, git: Option<&GitChangedFile>) -> CheckpointFile {
+fn describe_change(
+    root: &Path,
+    relative: &str,
+    git: Option<&GitChangedFile>,
+    exact: bool,
+    undoable: bool,
+) -> CheckpointFile {
     if let Some(file) = git {
         return CheckpointFile {
             path: file.path.clone(),
@@ -501,6 +700,8 @@ fn describe_change(root: &Path, relative: &str, git: Option<&GitChangedFile>) ->
             status: file.status.clone(),
             additions: file.additions,
             deletions: file.deletions,
+            exact,
+            undoable,
         };
     }
     let abs = root.join(relative);
@@ -511,6 +712,8 @@ fn describe_change(root: &Path, relative: &str, git: Option<&GitChangedFile>) ->
         status: status.into(),
         additions: 0,
         deletions: 0,
+        exact,
+        undoable,
     }
 }
 
@@ -1249,6 +1452,79 @@ mod tests {
         assert_eq!(s1.additions, 1);
         assert_eq!(s1.deletions, 0);
         assert_eq!(relatives(&store.status("s1", &cwd).unwrap()), vec!["a.txt"]);
+    }
+
+    #[test]
+    fn prepare_captures_baseline_before_edit() {
+        let repo = tmp("prepare-baseline");
+        if !init_git_commit(&repo.0, &[("a.txt", "initial\n")]) {
+            return;
+        }
+        let cwd = repo.0.to_string_lossy().into_owned();
+        let (_root, store) = store();
+        store.ensure("s1", &cwd).unwrap();
+
+        // Prepare before modifying
+        store.prepare("s1", &cwd, &[repo.0.join("a.txt").to_string_lossy().into_owned()]).unwrap();
+
+        // Agent modifies the file
+        std::fs::write(repo.0.join("a.txt"), "modified\n").unwrap();
+        store.sync("s1", &cwd).unwrap();
+
+        let diff = store.file_diff("s1", &cwd, "a.txt").unwrap();
+        assert_eq!(diff.original, "initial\n");
+        assert_eq!(diff.current, "modified\n");
+        assert_eq!(diff.status, "modified");
+        assert!(!diff.binary);
+        assert!(!diff.too_large);
+    }
+
+    #[test]
+    fn shared_files_between_sessions_mark_exact_and_undoable_false() {
+        let repo = tmp("shared-sessions");
+        if !init_git_commit(&repo.0, &[("shared.txt", "base\n"), ("solo.txt", "base\n")]) {
+            return;
+        }
+        let cwd = repo.0.to_string_lossy().into_owned();
+        let (_root, store) = store();
+
+        store.ensure("s1", &cwd).unwrap();
+        store.ensure("s2", &cwd).unwrap();
+
+        std::fs::write(repo.0.join("shared.txt"), "session-1\n").unwrap();
+        record(&store, "s1", &cwd, &["shared.txt"]);
+
+        std::fs::write(repo.0.join("solo.txt"), "solo-1\n").unwrap();
+        record(&store, "s1", &cwd, &["solo.txt"]);
+
+        // s2 also touches shared.txt
+        std::fs::write(repo.0.join("shared.txt"), "session-2\n").unwrap();
+        record(&store, "s2", &cwd, &["shared.txt"]);
+
+        let s1_status = store.status("s1", &cwd).unwrap();
+        let shared_file = s1_status.files.iter().find(|f| f.relative == "shared.txt").unwrap();
+        let solo_file = s1_status.files.iter().find(|f| f.relative == "solo.txt").unwrap();
+
+        assert!(!shared_file.exact);
+        assert!(!shared_file.undoable);
+
+        assert!(solo_file.exact);
+        assert!(solo_file.undoable);
+
+        // Undoing shared file explicitly fails with an error
+        let err = store.undo("s1", &cwd, Some("shared.txt")).unwrap_err();
+        assert!(err.contains("shared"));
+
+        // Undoing all only undos solo.txt and leaves shared.txt untouched
+        store.undo("s1", &cwd, None).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(repo.0.join("solo.txt")).unwrap(),
+            "base\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(repo.0.join("shared.txt")).unwrap(),
+            "session-2\n"
+        );
     }
 
     #[test]

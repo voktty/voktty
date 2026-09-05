@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { newReleaseNotesWorkspaceTab } from "../lib/layout";
+import {
+  newChangesTab,
+  newReleaseNotesWorkspaceTab,
+  newSessionChangesTab,
+} from "../lib/layout";
 import { releaseNotesTitle } from "../lib/releaseNotes";
 import { appendProblems, surfaceTabPresentation } from "./SurfaceTabs";
 
@@ -14,6 +18,26 @@ describe("surfaceTabPresentation", () => {
       label: releaseNotesTitle("0.1.23"),
       iconName: "CHANGELOG.md",
       tooltip: releaseNotesTitle("0.1.23"),
+    });
+  });
+
+  it("labels working-tree changes tab", () => {
+    const file = newChangesTab("/workspace/repo");
+    expect(surfaceTabPresentation(file)).toEqual({
+      name: "Changes",
+      label: "Changes",
+      iconName: "CHANGES",
+      tooltip: "Working tree changes",
+    });
+  });
+
+  it("labels session-scoped changes tab", () => {
+    const file = newSessionChangesTab("/workspace/repo", "session-42");
+    expect(surfaceTabPresentation(file)).toEqual({
+      name: "Session Changes",
+      label: "Session Changes",
+      iconName: "CHANGES",
+      tooltip: "Changes captured for this session only",
     });
   });
 });

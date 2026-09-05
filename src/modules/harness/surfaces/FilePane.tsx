@@ -9,6 +9,7 @@ import {
   isPlanTab,
   isReleaseNotesTab,
   isReviewTab,
+  isSessionChangesTab,
   isTerminalTab,
   type EditorPane,
   type FilePaneTab,
@@ -23,6 +24,7 @@ import { GitDiffPane } from "@/modules/editor/GitDiffPane";
 import { MarkdownPreview, MarkdownSource } from "./AgentMarkdown";
 import { FileEditor } from "./FileEditor";
 import { ReleaseNotesSurface } from "./ReleaseNotesSurface";
+import { SessionChangesDiff } from "./SessionChangesDiff";
 import { TerminalView } from "./TerminalView";
 
 type Props = {
@@ -114,6 +116,12 @@ function FilePaneComponent({
                 cwd={file.cwd}
                 active={focused && file.id === pane.activeFileId}
                 onMetaChange={(patch) => onTerminalMetaChange?.(file.id, patch)}
+              />
+            ) : isSessionChangesTab(file) ? (
+              <SessionChangesDiff
+                cwd={file.cwd}
+                sessionId={file.sessionChanges.sessionId}
+                focusPath={file.path !== file.cwd ? file.path : undefined}
               />
             ) : isReviewTab(file) ? (
               <GitDiffPane

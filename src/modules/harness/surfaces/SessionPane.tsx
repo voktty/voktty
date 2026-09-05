@@ -78,7 +78,10 @@ type Props = {
     decision: ApprovalDecision,
   ) => void;
   onOpenFile: (path: string) => void;
-  onOpenDiff: (path?: string) => void;
+  onOpenDiff: (
+    path?: string,
+    session?: { sessionId: string; cwd: string },
+  ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
   onSecondOpinion?: (
     sessionId: string,
@@ -95,6 +98,7 @@ type Props = {
   onNewTerminal: (sessionId: string) => void;
   onPaneDragStart?: (event: ReactPointerEvent<HTMLElement>) => void;
   showHeader?: boolean;
+  undoLocked?: boolean;
 };
 
 export const SessionPane = memo(function SessionPane({
@@ -104,6 +108,7 @@ export const SessionPane = memo(function SessionPane({
   addToChatTarget = focused,
   inSplit,
   showHeader,
+  undoLocked = false,
   composerFocused,
   recents,
   hideProjectPicker,
@@ -259,6 +264,7 @@ export const SessionPane = memo(function SessionPane({
         cwd={workCwd}
         enabled={visible}
         busy={!!session.busy}
+        undoLocked={undoLocked}
         onOpenDiff={onOpenDiff}
       />
     </Composer>
