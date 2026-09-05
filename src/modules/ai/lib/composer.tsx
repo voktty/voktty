@@ -351,7 +351,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
     if (!sessionId) return;
     const store = useChatStore.getState();
     store.patchAgentMeta({ hitStepCap: false, compactionNotice: null });
-    store.openPanel();
+    store.presentChat();
     void (async () => {
       const { getOrCreateChat } = await import("../store/chatRuntime");
       const chat = getOrCreateChat(sessionId);

@@ -99,6 +99,27 @@ export function AiMiniWindow({ state }: { state: PresenceState }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [closeMini]);
 
+  // Dismiss on an outside click, but never for a Radix popper portal (model
+  // dropdown, session picker, context hovercard — rendered outside this DOM
+  // subtree) and never for the button that toggles the window itself, or the
+  // close-here / reopen-there race would cancel the toggle out.
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (ref.current?.contains(target)) return;
+      if (
+        target.closest(
+          "[data-ai-mini-window-trigger], [data-radix-popper-content-wrapper]",
+        )
+      )
+        return;
+      closeMini();
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
+  }, [closeMini, ref]);
+
   return (
     <div
       ref={ref}

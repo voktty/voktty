@@ -258,7 +258,10 @@ export function AiChatView({
   }
 
   return (
-    <Conversation initial={false}>
+    <Conversation
+      initial={false}
+      resize={status === "streaming" ? "instant" : "smooth"}
+    >
       <ConversationContent className="gap-5 p-3">
         <ConversationMessageWindow
           sessionId={sessionId}
