@@ -11,6 +11,28 @@ type Options = {
   onCopied: (destDir: string) => void;
 };
 
+/**
+ * Upload through the native queue when the workspace opted into it, and fall
+ * back to the scp path otherwise, so the default behaviour is unchanged.
+ */
+async function uploadToRemote(
+  env: Extract<ReturnType<typeof currentWorkspaceEnv>, { kind: "ssh" }>,
+  paths: string[],
+  destDir: string,
+): Promise<void> {
+  const { enqueueUpload } = await import("@/modules/ssh-native/transferBridge");
+  const queued = await enqueueUpload(env, paths, destDir);
+  if (queued) {
+    await queued.done;
+    return;
+  }
+  await invoke("ssh_upload_files", {
+    connection: env.connection,
+    sources: paths,
+    destDir,
+  });
+}
+
 function parentDir(path: string): string {
   const i = path.lastIndexOf("/");
   return i > 0 ? path.slice(0, i) : path;
@@ -83,11 +105,7 @@ export function useExplorerFileDrop({ rootPath, isDir, onCopied }: Options) {
                 host: env.connection.host,
               }),
             );
-            void invoke("ssh_upload_files", {
-              connection: env.connection,
-              sources: p.paths,
-              destDir: dir,
-            })
+            void uploadToRemote(env, p.paths, dir)
               .then(() => {
                 toast.success(t("feedback.uploadSuccess", { fileName, dir }), {
                   id: toastId,
