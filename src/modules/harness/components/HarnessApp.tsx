@@ -231,7 +231,7 @@ import {
   focusReleaseNotesTarget,
   planReleaseNotesOpen,
 } from "../lib/releaseNotesWorkspace";
-import { orderByIds } from "../lib/reorder";
+import { mergeOrderedSubset, orderByIds } from "../lib/reorder";
 import type { EditorNavigationTarget, OpenFileFn } from "../lib/search";
 import {
   buildSecondOpinionCard,
@@ -2556,10 +2556,18 @@ export function HarnessApp({
   const onReorderTabs = useCallback(
     (ids: string[], movedId?: string) => {
       setTabs((prev: any) => {
+        const visibleIds = new Set(ids);
+        const visibleTabs = prev.filter((tab: any) => visibleIds.has(tab.id));
         if (movedId) {
-          return applyGroupedReorder(prev, ids, movedId, projectOfTab) ?? prev;
+          const reordered = applyGroupedReorder(
+            visibleTabs,
+            ids,
+            movedId,
+            projectOfTab,
+          );
+          return reordered ? mergeOrderedSubset(prev, reordered) : prev;
         }
-        return orderByIds(prev, ids);
+        return mergeOrderedSubset(prev, orderByIds(visibleTabs, ids));
       });
     },
     [projectOfTab],
