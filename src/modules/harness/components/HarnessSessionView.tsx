@@ -3,33 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   appendUser,
   applyHarnessEvent,
-  cancelAgyTurn,
-  cancelClaudeTurn,
-  cancelCodexTurn,
-  cancelCursorTurn,
-  cancelFxTurn,
-  cancelGrokTurn,
-  cancelOmpTurn,
-  cancelOpenCodeTurn,
-  cancelPiTurn,
-  respondAgyApproval,
-  respondClaudeApproval,
-  respondCodexApproval,
-  respondCursorApproval,
-  respondFxApproval,
-  respondGrokApproval,
-  respondOmpApproval,
-  respondOpenCodeApproval,
-  respondPiApproval,
-  sendAgyTurn,
-  sendClaudeTurn,
-  sendCodexTurn,
-  sendCursorTurn,
-  sendFxTurn,
-  sendGrokTurn,
-  sendOmpTurn,
-  sendOpenCodeTurn,
-  sendPiTurn,
+  cancelHarnessTurn,
+  respondHarnessApproval,
+  sendHarnessTurn,
   startHarnessBridge,
   stopStreaming,
 } from "../lib/harness";
@@ -166,35 +142,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
       };
 
       try {
-        switch (current.harness) {
-          case "claude":
-            await sendClaudeTurn(turnInput);
-            break;
-          case "codex":
-            await sendCodexTurn(turnInput);
-            break;
-          case "cursor":
-            await sendCursorTurn(turnInput);
-            break;
-          case "opencode":
-            await sendOpenCodeTurn(turnInput);
-            break;
-          case "grok":
-            await sendGrokTurn(turnInput);
-            break;
-          case "pi":
-            await sendPiTurn(turnInput);
-            break;
-          case "omp":
-            await sendOmpTurn(turnInput);
-            break;
-          case "fx":
-            await sendFxTurn(turnInput);
-            break;
-          case "gemini":
-            await sendAgyTurn(turnInput);
-            break;
-        }
+        await sendHarnessTurn({ ...turnInput, harness: current.harness });
       } catch (err: any) {
         setSession((prev) =>
           prev
@@ -220,35 +168,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
   const handleStop = useCallback((sessionId: string) => {
     const current = sessionRef.current;
     if (!current) return;
-    switch (current.harness) {
-      case "claude":
-        void cancelClaudeTurn(sessionId);
-        break;
-      case "codex":
-        void cancelCodexTurn(sessionId);
-        break;
-      case "cursor":
-        void cancelCursorTurn(sessionId);
-        break;
-      case "opencode":
-        void cancelOpenCodeTurn(sessionId);
-        break;
-      case "grok":
-        void cancelGrokTurn(sessionId);
-        break;
-      case "pi":
-        void cancelPiTurn(sessionId);
-        break;
-      case "omp":
-        void cancelOmpTurn(sessionId);
-        break;
-      case "fx":
-        void cancelFxTurn(sessionId);
-        break;
-      case "gemini":
-        void cancelAgyTurn(sessionId);
-        break;
-    }
+    void cancelHarnessTurn(current.harness, sessionId);
     setSession((prev) => (prev ? stopStreaming(prev) : prev));
   }, []);
 
@@ -288,35 +208,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
     (sessionId: string, requestId: number, decision: ApprovalDecision) => {
       const current = sessionRef.current;
       if (!current) return;
-      switch (current.harness) {
-        case "claude":
-          void respondClaudeApproval(sessionId, requestId, decision);
-          break;
-        case "codex":
-          void respondCodexApproval(sessionId, requestId, decision);
-          break;
-        case "cursor":
-          void respondCursorApproval(sessionId, requestId, decision);
-          break;
-        case "opencode":
-          void respondOpenCodeApproval(sessionId, requestId, decision);
-          break;
-        case "grok":
-          void respondGrokApproval(sessionId, requestId, decision);
-          break;
-        case "pi":
-          void respondPiApproval(sessionId, requestId, decision);
-          break;
-        case "omp":
-          void respondOmpApproval(sessionId, requestId, decision);
-          break;
-        case "fx":
-          void respondFxApproval(sessionId, requestId, decision);
-          break;
-        case "gemini":
-          void respondAgyApproval(sessionId, requestId, decision);
-          break;
-      }
+      respondHarnessApproval(current.harness, sessionId, requestId, decision);
     },
     [],
   );
@@ -355,6 +247,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
         onRuntimeModeChange={handleRuntimeModeChange}
         onSubmit={handleSubmit}
         onStop={handleStop}
+        onCompactContext={() => false}
         onApproval={handleApproval}
         onOpenFile={handleOpenFile}
         onOpenDiff={handleOpenFile}

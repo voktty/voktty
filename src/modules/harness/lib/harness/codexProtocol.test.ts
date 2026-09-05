@@ -81,6 +81,33 @@ describe("buildThreadStartParams / buildTurnStartParams", () => {
       { type: "image", url: "data:image/png;base64,abc" },
     ]);
     expect(turn.sandboxPolicy).toEqual({ type: "workspaceWrite" });
+    expect(turn.collaborationMode).toEqual({
+      mode: "default",
+      settings: {
+        model: "gpt-5.4",
+        reasoning_effort: "high",
+        developer_instructions: null,
+      },
+    });
+  });
+
+  it("uses native plan mode with a non-escalating read-only sandbox", () => {
+    const turn = buildTurnStartParams({
+      threadId: "thr_1",
+      runtimeMode: "full-access",
+      prompt: "plan this",
+      model: "gpt-5.4",
+      intent: "plan",
+    });
+    expect(turn).toMatchObject({
+      approvalPolicy: "never",
+      approvalsReviewer: "auto_review",
+      sandboxPolicy: { type: "readOnly" },
+      collaborationMode: {
+        mode: "plan",
+        settings: { developer_instructions: null },
+      },
+    });
   });
 
   it("builds steer input with expected turn id", () => {
@@ -102,9 +129,9 @@ describe("isRecoverableThreadResumeError", () => {
     expect(
       isRecoverableThreadResumeError(new Error("Thread thr_x not found")),
     ).toBe(true);
-    expect(
-      isRecoverableThreadResumeError(new Error("unknown thread id")),
-    ).toBe(true);
+    expect(isRecoverableThreadResumeError(new Error("unknown thread id"))).toBe(
+      true,
+    );
   });
 
   it("rejects unrelated errors", () => {
@@ -123,6 +150,43 @@ describe("mapCodexNotification", () => {
       delta: "Hello",
     });
     expect(mapped.events).toEqual([{ type: "message.delta", text: "Hello" }]);
+  });
+
+  it("keeps task progress distinct from authored plan documents", () => {
+    expect(
+      mapCodexNotification("turn/plan/updated", {
+        turnId: "turn_1",
+        explanation: "The inspection is done.",
+        plan: [
+          { step: "Inspect", status: "completed" },
+          { step: "Implement", status: "inProgress" },
+        ],
+      }).events,
+    ).toEqual([
+      {
+        type: "tasks.updated",
+        key: "turn_1",
+        explanation: "The inspection is done.",
+        items: [
+          { text: "Inspect", status: "completed" },
+          { text: "Implement", status: "in_progress" },
+        ],
+      },
+    ]);
+    expect(
+      mapCodexNotification("item/plan/delta", {
+        itemId: "plan_1",
+        delta: "# Approach",
+      }).events,
+    ).toEqual([
+      {
+        type: "plan",
+        text: "# Approach",
+        key: "plan_1",
+        append: true,
+        streaming: true,
+      },
+    ]);
   });
 
   it("keeps whitespace-only agent message deltas", () => {
@@ -206,6 +270,11 @@ describe("mapCodexNotification", () => {
             kind: "update",
             diff: "@@ -1 +1 @@\n-old\n+new\n",
           },
+          {
+            path: "src/lib/checkpoint.ts",
+            kind: "update",
+            diff: "@@ -1 +1 @@\n-old\n+new\n",
+          },
         ],
       },
     });
@@ -213,6 +282,41 @@ describe("mapCodexNotification", () => {
       type: "tool.started",
       callId: "fc_1",
       kind: "edit",
+      paths: ["src/App.tsx", "src/lib/checkpoint.ts"],
+    });
+  });
+
+  it("maps sub-agent activity as a live agent tool, not silence", () => {
+    const started = mapCodexNotification("item/completed", {
+      item: {
+        id: "sa_1",
+        type: "subAgentActivity",
+        kind: "started",
+        agentPath: "/root/explore-auth",
+        agentThreadId: "thr_child",
+      },
+    });
+    expect(started.events[0]).toMatchObject({
+      type: "tool.started",
+      callId: "sa_1",
+      kind: "agent",
+      status: "in_progress",
+      title: "Explore Auth subagent",
+    });
+
+    const interrupted = mapCodexNotification("item/completed", {
+      item: {
+        id: "sa_1",
+        type: "subAgentActivity",
+        kind: "interrupted",
+        agentPath: "/root/explore-auth",
+      },
+    });
+    expect(interrupted.events[0]).toMatchObject({
+      type: "tool.updated",
+      callId: "sa_1",
+      kind: "agent",
+      status: "failed",
     });
   });
 
@@ -270,9 +374,7 @@ describe("mapCodexNotification", () => {
   });
 
   it("ignores unknown methods", () => {
-    expect(mapCodexNotification("future/unknown", { x: 1 }).events).toEqual(
-      [],
-    );
+    expect(mapCodexNotification("future/unknown", { x: 1 }).events).toEqual([]);
   });
 });
 
@@ -339,9 +441,9 @@ describe("parseCodexModelList", () => {
     const luna = models.find((m) => m.nativeId === "gpt-5.6-luna");
     expect(luna?.settings?.some((s) => s.id === "reasoningEffort")).toBe(true);
     expect(luna?.settings?.some((s) => s.id === "serviceTier")).toBe(true);
-    expect(
-      luna?.settings?.find((s) => s.id === "reasoningEffort")?.value,
-    ).toBe("medium");
+    expect(luna?.settings?.find((s) => s.id === "reasoningEffort")?.value).toBe(
+      "medium",
+    );
   });
 });
 

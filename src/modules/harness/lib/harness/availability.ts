@@ -5,7 +5,6 @@ import {
   resolveCodexBinary,
   resolveCursorBinary,
   resolveFxBinary,
-  resolveGeminiBinary,
   resolveGrokBinary,
   resolveOmpBinary,
   resolveOpenCodeBinary,
@@ -23,29 +22,29 @@ const CLI: Record<HarnessId, { name: string; install?: string }> = {
   claude: { name: "Claude Code CLI" },
   codex: { name: "Codex CLI" },
   cursor: { name: "Cursor CLI" },
-  gemini: { name: "Antigravity / Gemini CLI" },
   grok: {
     name: "Grok Build CLI",
     install: "curl -fsSL https://x.ai/cli/install.sh | bash",
   },
-  hermes: { name: "Hermes CLI", install: "pip install hermes-agent" },
   opencode: { name: "OpenCode CLI" },
   pi: { name: "Pi CLI", install: "npm i -g @earendil-works/pi-coding-agent" },
   omp: { name: "omp CLI", install: "curl -fsSL https://omp.sh/install | sh" },
   fx: { name: "fx CLI", install: "curl -fsSL https://fx.sh/setup.sh | bash" },
+  gemini: { name: "Gemini CLI" },
+  hermes: { name: "Hermes CLI" },
 };
 
 let availability: HarnessAvailability = {
-  claude: true,
-  codex: true,
-  cursor: true,
-  gemini: true,
-  grok: true,
-  hermes: true,
-  opencode: true,
-  pi: true,
-  omp: true,
-  fx: true,
+  claude: false,
+  codex: false,
+  cursor: false,
+  grok: false,
+  opencode: false,
+  pi: false,
+  omp: false,
+  fx: false,
+  gemini: false,
+  hermes: false,
 };
 let version = 0;
 let inflight: Promise<void> | null = null;
@@ -80,8 +79,8 @@ export function hasProbedHarnessAvailability(): boolean {
   return probedAt > 0;
 }
 
-export function isHarnessAvailable(_id: HarnessId): boolean {
-  return true;
+export function isHarnessAvailable(id: HarnessId): boolean {
+  return availability[id];
 }
 
 export function harnessUnavailableHint(id: HarnessId): string {
@@ -119,14 +118,6 @@ export function probeHarnessAvailability(
       if (id === "codex") {
         try {
           await resolveCodexBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "gemini") {
-        try {
-          await resolveGeminiBinary();
           return [id, true] as const;
         } catch {
           return [id, false] as const;

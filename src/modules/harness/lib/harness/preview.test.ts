@@ -202,3 +202,25 @@ describe("skill titles", () => {
     expect(isWeakToolTitle("Skill /code-review")).toBe(false);
   });
 });
+
+describe("agent titles", () => {
+  it("prefers the description, then the subagent type", () => {
+    expect(
+      titleFromToolInput("Agent", "agent", {
+        description: "Explore the auth module",
+        subagent_type: "explore",
+      }),
+    ).toBe("Explore the auth module");
+    expect(titleFromToolInput("Task", "agent", { subagent_type: "explore" })).toBe(
+      "Explore subagent",
+    );
+    expect(titleFromToolInput("Agent", "agent", {})).toBe("Subagent");
+  });
+
+  it("labels a composed agent kind as Subagent when the title is a placeholder", () => {
+    expect(composeToolTitle({ kind: "agent", title: "Task" })).toBe("Subagent");
+    expect(
+      composeToolTitle({ kind: "agent", title: "Explore the auth module" }),
+    ).toBe("Explore the auth module");
+  });
+});
