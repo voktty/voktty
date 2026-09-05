@@ -122,16 +122,19 @@ import {
   KEYBINDINGS,
   loadClaudeHooks,
   loadComposerRunner,
+  loadFollowUpBehavior,
   loadGridArcadeEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   saveClaudeHooks,
   saveComposerRunner,
+  saveFollowUpBehavior,
   saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
   settingsSectionDescription,
   settingsSectionLabel,
+  type FollowUpBehavior,
   type SettingsSectionId,
 } from "../lib/settings";
 import { loadSoundsEnabled, playCue, saveSoundsEnabled } from "../lib/sounds";
@@ -265,6 +268,8 @@ function GeneralPage({
   const [transcriptAnchor, setTranscriptAnchor] =
     useState(loadTranscriptAnchor);
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
+  const [followUpBehavior, setFollowUpBehavior] =
+    useState<FollowUpBehavior>(loadFollowUpBehavior);
   const [gridArcadeEnabled, setGridArcadeEnabled] = useState(
     loadGridArcadeEnabled,
   );
@@ -313,6 +318,11 @@ function GeneralPage({
   const onComposerRunner = (next: boolean) => {
     saveComposerRunner(next);
     setComposerRunner(next);
+  };
+
+  const onFollowUpBehavior = (next: FollowUpBehavior) => {
+    saveFollowUpBehavior(next);
+    setFollowUpBehavior(next);
   };
 
   const onGridArcadeEnabled = (next: boolean) => {
@@ -368,6 +378,20 @@ function GeneralPage({
             { value: "chat", label: "Chat" },
           ]}
           onChange={onTranscriptLayout}
+        />
+      </Row>
+      <Row
+        label="Follow-up behavior"
+        description="Queue follow-ups until the active turn finishes, or steer the active turn immediately."
+      >
+        <Segmented
+          label="Follow-up behavior"
+          value={followUpBehavior}
+          options={[
+            { value: "queue", label: "Queue" },
+            { value: "steer", label: "Steer" },
+          ]}
+          onChange={onFollowUpBehavior}
         />
       </Row>
       <Row

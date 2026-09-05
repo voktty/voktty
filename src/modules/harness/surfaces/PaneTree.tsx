@@ -66,6 +66,18 @@ type Shared = {
     attachments: Attachment[],
   ) => void;
   onStop: (sessionId: string) => void;
+  onDeleteQueuedMessage?: (sessionId: string, messageId: string) => void;
+  onEditQueuedMessage?: (
+    sessionId: string,
+    messageId: string,
+    text: string,
+  ) => void;
+  onQueuedMessageEditingChange?: (
+    sessionId: string,
+    messageId?: string,
+  ) => void;
+  onSteerQueuedMessage?: (sessionId: string, messageId: string) => void;
+  onResumeQueue?: (sessionId: string) => void;
   onInboxCardDismiss?: (sessionId: string) => void;
   onNoteCardDismiss?: (sessionId: string) => void;
   onHandoffCardDismiss?: (sessionId: string) => void;
@@ -132,6 +144,11 @@ function PaneTreeComponent({
   onRuntimeModeChange,
   onSubmit,
   onStop,
+  onDeleteQueuedMessage,
+  onEditQueuedMessage,
+  onQueuedMessageEditingChange,
+  onSteerQueuedMessage,
+  onResumeQueue,
   onInboxCardDismiss,
   onNoteCardDismiss,
   onHandoffCardDismiss,
@@ -318,6 +335,11 @@ function PaneTreeComponent({
                 onRuntimeModeChange={onRuntimeModeChange}
                 onSubmit={onSubmit}
                 onStop={onStop}
+                onDeleteQueuedMessage={onDeleteQueuedMessage}
+                onEditQueuedMessage={onEditQueuedMessage}
+                onQueuedMessageEditingChange={onQueuedMessageEditingChange}
+                onSteerQueuedMessage={onSteerQueuedMessage}
+                onResumeQueue={onResumeQueue}
                 onInboxCardDismiss={onInboxCardDismiss}
                 onNoteCardDismiss={onNoteCardDismiss}
                 onHandoffCardDismiss={onHandoffCardDismiss}
