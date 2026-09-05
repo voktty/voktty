@@ -25,6 +25,7 @@ import { AttachmentChip } from "../chrome/AttachmentChip";
 import { FilePreview } from "../chrome/FilePreview";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { PlanPreview } from "../chrome/PlanPreview";
+import { TaskListPreview } from "../chrome/TaskListPreview";
 import { HandoffButton, SecondOpinionButton } from "../chrome/SecondOpinionButton";
 import { SecondOpinionCard } from "../chrome/SecondOpinionCard";
 import { NoteMiniCard } from "../chrome/NoteMiniCard";
@@ -41,6 +42,7 @@ import { playCue } from "../lib/sounds";
 import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import { harnessForTurn } from "../lib/secondOpinion";
 import { resolveModel } from "../lib/models";
+import { legacyTaskListFromText } from "../lib/taskList";
 import { Shimmer } from "./Shimmer";
 import {
   hasPendingApproval,
@@ -695,7 +697,27 @@ const TranscriptBlock = memo(function TranscriptBlock({
     return null;
   }
 
+  if (block.role === "tasks") {
+    if (!block.taskList?.items.length) return null;
+    return (
+      <div className="px-4 py-1">
+        <TaskListPreview
+          items={block.taskList.items}
+          explanation={block.taskList.explanation}
+        />
+      </div>
+    );
+  }
+
   if (block.role === "plan") {
+    const legacyTasks = legacyTaskListFromText(block.text);
+    if (legacyTasks) {
+      return (
+        <div className="px-4 py-1">
+          <TaskListPreview items={legacyTasks} />
+        </div>
+      );
+    }
     return (
       <div className="px-4 py-1">
         <PlanPreview

@@ -3,6 +3,7 @@ import type { Block } from "../lib/session";
 import {
   activityPhaseTitle,
   activityPreviousLabel,
+  activityStillRunning,
   buildActivityPhases,
   editVerb,
   groupTurnItems,
@@ -134,6 +135,43 @@ describe("groupTurnItems", () => {
     if (items[0]?.type !== "activity") return;
     expect(items[0].blocks.map((block) => block.id)).toEqual(["a", "b", "c"]);
   });
+
+  it("hides provider todo calls in favor of the shared tasks block", () => {
+    const tasks: Block = {
+      id: "tasks",
+      role: "tasks",
+      text: "[~] Implement",
+      taskList: {
+        items: [{ text: "Implement", status: "in_progress" }],
+      },
+    };
+    expect(
+      groupTurnItems([
+        {
+          id: "todo-tool",
+          role: "tool",
+          text: "Update TODOs",
+          tool: {
+            kind: "tasks",
+            title: "Update TODOs",
+            status: "completed",
+          },
+        },
+        tasks,
+      ]),
+    ).toEqual([{ type: "block", block: tasks }]);
+    expect(
+      activityStillRunning([
+        {
+          id: "todo-tool",
+          role: "tool",
+          text: "Update TODOs",
+          streaming: true,
+          tool: { kind: "tasks", status: "pending" },
+        },
+      ]),
+    ).toBe(false);
+  });
 });
 
 describe("splitActivityRows", () => {
@@ -168,12 +206,23 @@ describe("turnCopyText", () => {
         { id: "a1", role: "assistant", text: "I'll inspect the file." },
         shell("t"),
         { id: "r", role: "reasoning", text: "thinking" },
+        {
+          id: "tasks",
+          role: "tasks",
+          text: "[x] inspect\n[~] implement",
+          taskList: {
+            items: [
+              { text: "inspect", status: "completed" },
+              { text: "implement", status: "in_progress" },
+            ],
+          },
+        },
         { id: "p", role: "plan", text: "## Plan\n\n- edit App.tsx" },
         { id: "a2", role: "assistant", text: "Done.\n\n```ts\nfixed\n```" },
         { id: "s", role: "system", text: "session error" },
       ]),
     ).toBe(
-      "I'll inspect the file.\n\n## Plan\n\n- edit App.tsx\n\nDone.\n\n```ts\nfixed\n```",
+      "I'll inspect the file.\n\n[x] inspect\n[~] implement\n\n## Plan\n\n- edit App.tsx\n\nDone.\n\n```ts\nfixed\n```",
     );
   });
 

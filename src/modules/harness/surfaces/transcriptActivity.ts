@@ -1,5 +1,6 @@
 import {
   composeToolTitle,
+  isAgentTool,
   isEditTool,
   isExecuteTool,
   isReadTool,
@@ -85,6 +86,10 @@ export function isIncompleteTool(
 
 export function isHiddenTool(block: Block): boolean {
   if (block.role !== "tool" && block.role !== "approval") return false;
+  // Harnesses also publish todo mutations as ordinary tool calls. The
+  // canonical tasks block is the user-facing representation, so keep the
+  // provider-internal call out of the activity stack.
+  if (block.tool?.kind?.toLowerCase() === "tasks") return true;
   if (
     isEditTool(
       block.tool?.kind,
@@ -237,10 +242,15 @@ function isIgnoredTurnBlock(block: Block, zen: boolean): boolean {
   return block.role === "assistant" && !block.text.trim();
 }
 
-/** Markdown the user actually reads: assistant prose plus any plan, not tool chrome. */
+/** Text the user actually reads: assistant prose, tasks, and plans, not tool chrome. */
 export function turnCopyText(blocks: Block[]): string {
   return blocks
-    .filter((block) => block.role === "assistant" || block.role === "plan")
+    .filter(
+      (block) =>
+        block.role === "assistant" ||
+        block.role === "tasks" ||
+        block.role === "plan",
+    )
     .map((block) => block.text.replace(/\r\n?/g, "\n").trim())
     .filter(Boolean)
     .join("\n\n");
@@ -274,6 +284,26 @@ export function lastActivityIndex(items: TurnItem[]): number {
     if (items[index].type === "activity") return index;
   }
   return -1;
+}
+
+/** True while a tool in this turn is still running or waiting on the user. */
+export function activityStillRunning(blocks: Block[]): boolean {
+  return blocks.some(
+    (block) =>
+      (isToolBlock(block) &&
+        !isHiddenTool(block) &&
+        toolCallState(block) === "pending") ||
+      needsApproval(block),
+  );
+}
+
+export function hasRunningSubagent(blocks: Block[]): boolean {
+  return blocks.some(
+    (block) =>
+      isToolBlock(block) &&
+      isAgentTool(block.tool?.kind, block.text || block.tool?.title) &&
+      toolCallState(block) === "pending",
+  );
 }
 
 export function activityPreviousLabel(count: number): string {
