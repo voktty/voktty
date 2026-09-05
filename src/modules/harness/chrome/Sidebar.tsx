@@ -140,6 +140,7 @@ type Props = {
   /** First listing for this project has not arrived yet. */
   pending: boolean;
   onSelectSession: (sessionId: string) => void;
+  onSessionNavigationOrder?: (ids: readonly string[]) => void;
   onPlaceSessionOnPane?: (
     sessionId: string,
     targetId: string,
@@ -206,6 +207,7 @@ function SidebarComponent({
   status,
   pending,
   onSelectSession,
+  onSessionNavigationOrder,
   onPlaceSessionOnPane,
   onRenameSession,
   onArchiveSession,
@@ -328,6 +330,11 @@ function SidebarComponent({
       deckLayout || searchOpen ? searchQuery : "",
     ),
   ].sort(compareSessionSummaries);
+  const sessionNavigationIds = visibleSessions.map((session) => session.id);
+  const sessionNavigationKey = sessionNavigationIds.join("\0");
+  useEffect(() => {
+    onSessionNavigationOrder?.(sessionNavigationIds);
+  }, [onSessionNavigationOrder, sessionNavigationKey]);
   const sessionHarnesses = harnessesInSessions(sessions);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
   const searchNarrowed = Boolean(

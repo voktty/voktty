@@ -222,6 +222,7 @@ import {
   loadRecents,
   looksLikeProject,
   normalizeProjectPath,
+  projectRailItems,
   rememberProject,
   sameProjectPath,
 } from "../lib/recents";
@@ -307,7 +308,11 @@ import {
   tabGroupProject,
   ungroupTabs,
 } from "../lib/tabGroups";
-import { tabCommand } from "../lib/tabKeys";
+import {
+  adjacentItemId,
+  shouldHandleListNavigation,
+  tabCommand,
+} from "../lib/tabKeys";
 import {
   canTabVisitBack,
   canTabVisitForward,
@@ -661,6 +666,11 @@ export function HarnessApp({
   inboxViewOpenRef.current = inboxViewOpen;
   const notesViewOpenRef = useRef(notesViewOpen);
   notesViewOpenRef.current = notesViewOpen;
+  const settingsOpenRef = useRef(settingsOpen);
+  settingsOpenRef.current = settingsOpen;
+  const filePickerOpenRef = useRef(filePickerOpen);
+  filePickerOpenRef.current = filePickerOpen;
+  const sessionNavigationIdsRef = useRef<readonly string[]>([]);
 
   useEffect(() => {
     if (!notesEnabled) setNotesViewOpen(false);
@@ -1907,6 +1917,66 @@ export function HarnessApp({
       tabCloseScope,
     ],
   );
+
+  const onCloseOtherTabs = useCallback(() => {
+    const current = tabsRef.current;
+    const activeId = activeTabIdRef.current;
+    const closing = current.filter((tab) => tab.id !== activeId);
+    if (
+      !current.some((tab) => tab.id === activeId) ||
+      closing.length === 0
+    ) {
+      return;
+    }
+
+    const closingIds = new Set(closing.map((tab) => tab.id));
+    const closingFiles = closing.flatMap((tab) => [
+      ...tab.editorPanes.flatMap((pane: any) => pane.files),
+      ...(tab.terminalPanes ?? []).flatMap((pane: any) => pane.files),
+    ]);
+    const unsaved = closingFiles.filter(
+      (file: any) => isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
+    );
+    const terminals = closingFiles.filter((file: any) => file.terminal);
+
+    const finishClose = () => {
+      const sessionIds = new Set(
+        closing.flatMap((tab) =>
+          leafIds(tab.layout).filter((paneId) =>
+            sessionsRef.current.some((session) => session.id === paneId),
+          ),
+        ),
+      );
+      for (const sessionId of sessionIds) {
+        persistSession(
+          sessionsRef.current.find((session) => session.id === sessionId),
+        );
+      }
+      setDirtyFiles((prev: Set<string>) => {
+        const next = new Set(prev);
+        for (const file of closingFiles) next.delete(file.id);
+        return next;
+      });
+      setTabs((prev: any) =>
+        prev.filter((tab: any) => tab.id === activeId || !closingIds.has(tab.id)),
+      );
+      void refreshHistory(sidebarCwd);
+    };
+
+    void (async () => {
+      if (unsaved.length > 0) {
+        const ok = await confirmDiscardUnsaved(
+          "Close other tabs with unsaved files?",
+        );
+        if (!ok) return;
+      }
+      if (terminals.length > 0) {
+        const ok = await confirmCloseTerminals(terminals);
+        if (!ok) return;
+      }
+      finishClose();
+    })();
+  }, [confirmCloseTerminals, confirmDiscardUnsaved, persistSession, refreshHistory, sidebarCwd]);
 
   const onGroupNewTab = useCallback(
     (groupId: string) => {
@@ -4744,8 +4814,48 @@ export function HarnessApp({
     );
   }, []);
 
+  const onSessionNavigationOrder = useCallback((ids: readonly string[]) => {
+    sessionNavigationIdsRef.current = ids;
+  }, []);
+
+  const onNavigateSessionList = useCallback(
+    (delta: number) => {
+      const activeWorkspace = tabsRef.current.find(
+        (entry) => entry.id === activeTabIdRef.current,
+      );
+      if (!activeWorkspace || activeWorkspace.diffFocused) return;
+      const current = sessionsRef.current.find(
+        (session) => session.id === activeWorkspace.focusedId,
+      );
+      if (!current) return;
+
+      const next = adjacentItemId(
+        sessionNavigationIdsRef.current,
+        current.id,
+        delta,
+      );
+      if (!next || next === current.id) return;
+      void onSelectHistorySession(next);
+    },
+    [onSelectHistorySession],
+  );
+
+  const onNavigateProjectList = useCallback(
+    (delta: number) => {
+      const current = normalizeProjectPath(projectCwdRef.current);
+      const ids = projectRailItems(loadRecents(), current).map(
+        (project) => project.path,
+      );
+      const next = adjacentItemId(ids, current, delta);
+      if (!next || sameProjectPath(next, current)) return;
+      onSelectProject(next);
+    },
+    [onSelectProject],
+  );
+
   const actions = useRef({
     onNew,
+    onCloseOtherTabs,
     onClosePane,
     onNext,
     onPrev,
@@ -4764,10 +4874,13 @@ export function HarnessApp({
     onNewTerminal,
     onNewTerminalTab,
     onToggleProjectTerminal,
+    onNavigateSessionList,
+    onNavigateProjectList,
     openSettings,
   });
   actions.current = {
     onNew,
+    onCloseOtherTabs,
     onClosePane,
     onNext,
     onPrev,
@@ -4786,6 +4899,8 @@ export function HarnessApp({
     onNewTerminal,
     onNewTerminalTab,
     onToggleProjectTerminal,
+    onNavigateSessionList,
+    onNavigateProjectList,
     openSettings,
   };
 
@@ -4803,6 +4918,36 @@ export function HarnessApp({
       const cmd = tabCommand(e);
       if (cmd) {
         const target = e.target instanceof Element ? e.target : null;
+        const listNavigation =
+          cmd === "prev-session" ||
+          cmd === "next-session" ||
+          cmd === "prev-project" ||
+          cmd === "next-project";
+        if (listNavigation) {
+          const blockedTarget = Boolean(
+            target?.closest(
+              'input, textarea, select, [contenteditable="true"], .cm-editor, .monocode-terminal, [role="dialog"], [data-model-picker], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker], [data-app-search]',
+            ),
+          );
+          const emptyComposerTarget = Boolean(
+            target?.matches('textarea[data-composer-empty="true"]'),
+          );
+          const surfaceOpen =
+            searchViewOpenRef.current ||
+            inboxViewOpenRef.current ||
+            notesViewOpenRef.current ||
+            settingsOpenRef.current ||
+            filePickerOpenRef.current;
+          if (
+            !shouldHandleListNavigation({
+              blockedTarget,
+              emptyComposerTarget,
+              surfaceOpen,
+            })
+          ) {
+            return;
+          }
+        }
         if (
           target?.closest(".monocode-terminal") &&
           e.ctrlKey &&
@@ -4834,6 +4979,8 @@ export function HarnessApp({
         e.stopPropagation();
         const a = actions.current;
         if (cmd === "new") run("new", a.onNew);
+        else if (cmd === "close-others")
+          run("close-others", a.onCloseOtherTabs);
         else if (cmd === "close") run("close", a.onClosePane);
         else if (cmd === "next") run("next", a.onNext);
         else if (cmd === "prev") run("prev", a.onPrev);
@@ -4848,6 +4995,14 @@ export function HarnessApp({
           run("new-terminal-tab", a.onNewTerminalTab);
         else if (cmd === "toggle-terminal")
           run("toggle-terminal", a.onToggleProjectTerminal);
+        else if (cmd === "prev-session")
+          run("prev-session", () => a.onNavigateSessionList(-1));
+        else if (cmd === "next-session")
+          run("next-session", () => a.onNavigateSessionList(1));
+        else if (cmd === "prev-project")
+          run("prev-project", () => a.onNavigateProjectList(-1));
+        else if (cmd === "next-project")
+          run("next-project", () => a.onNavigateProjectList(1));
         else if ("focus" in cmd)
           run(`focus-${cmd.focus}`, () => a.onFocusDir(cmd.focus));
         else run(`activate-${cmd.activate}`, () => a.onActivate(cmd.activate));
@@ -4910,6 +5065,9 @@ export function HarnessApp({
   useEffect(() => {
     const unlisten: Array<Promise<() => void>> = [
       listen("new_tab", () => run("new", actions.current.onNew)),
+      listen("close_other_tabs", () =>
+        run("close-others", actions.current.onCloseOtherTabs),
+      ),
       listen("close_tab", () => run("close", actions.current.onClosePane)),
       listen("next_tab", () => run("next", actions.current.onNext)),
       listen("prev_tab", () => run("prev", actions.current.onPrev)),
@@ -5031,6 +5189,7 @@ export function HarnessApp({
         status={historyFailed ? "error" : "idle"}
         pending={historyPending}
         onSelectSession={onSelectHistorySession}
+        onSessionNavigationOrder={onSessionNavigationOrder}
         onPlaceSessionOnPane={onPlaceSessionOnPane}
         onRenameSession={onRenameHistorySession}
         onArchiveSession={onArchiveHistorySession}
