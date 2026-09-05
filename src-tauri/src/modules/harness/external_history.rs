@@ -676,6 +676,14 @@ pub fn list_external_projects() -> Vec<String> {
                 if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
                     for r in rows.flatten() {
                         let norm = normalize_project_path(&r);
+                        #[cfg(windows)]
+                        {
+                            let is_drive = norm.len() >= 2 && norm.as_bytes()[1] == b':';
+                            let is_unc = norm.starts_with("//");
+                            if !is_drive && !is_unc {
+                                continue;
+                            }
+                        }
                         if !norm.is_empty() && norm != "~" {
                             set.insert(norm);
                         }

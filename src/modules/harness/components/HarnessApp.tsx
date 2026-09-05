@@ -427,25 +427,36 @@ export function HarnessApp({
   windowTransfer = null,
   resumed = null,
   installedUpdate = null,
+  initialCwd,
+  initialSessionId,
 }: {
   windowTransfer?: WindowTransferPayload | null;
   resumed?: ResumedWorkspace | null;
   installedUpdate?: InstalledUpdate | null;
+  initialCwd?: string;
+  initialSessionId?: string;
 } = {}) {
   const [projectCwd, setProjectCwd] = useState(
     () =>
+      (initialCwd && looksLikeProject(initialCwd) ? initialCwd : undefined) ??
       windowTransfer?.projectCwd ??
       resumed?.projectCwd ??
       lastProjectPath() ??
       "~",
   );
-  const [recents, setRecents] = useState(() =>
-    resumed?.projectCwd && looksLikeProject(resumed.projectCwd)
-      ? rememberProject(resumed.projectCwd)
-      : loadRecents(),
-  );
+  const [recents, setRecents] = useState(() => {
+    const candidate =
+      (initialCwd && looksLikeProject(initialCwd) ? initialCwd : undefined) ??
+      resumed?.projectCwd;
+    return candidate && looksLikeProject(candidate)
+      ? rememberProject(candidate)
+      : loadRecents();
+  });
   const [seed] = useState(() => {
-    const cwd = lastProjectPath() ?? "~";
+    const cwd =
+      (initialCwd && looksLikeProject(initialCwd) ? initialCwd : undefined) ??
+      lastProjectPath() ??
+      "~";
     const session = newDefaultSession(cwd);
     const tab = newTab(session.id);
     return { session, tab };
@@ -2956,6 +2967,24 @@ export function HarnessApp({
       );
     }
   }, [projectCwd]);
+
+  const initialSessionHandled = useRef(false);
+  useEffect(() => {
+    if (initialSessionId && !initialSessionHandled.current) {
+      initialSessionHandled.current = true;
+      void onSelectHistorySession(initialSessionId);
+    }
+  }, [initialSessionId, onSelectHistorySession]);
+
+  const prevInitialCwdRef = useRef(initialCwd);
+  useEffect(() => {
+    if (initialCwd && initialCwd !== prevInitialCwdRef.current) {
+      prevInitialCwdRef.current = initialCwd;
+      if (looksLikeProject(initialCwd)) {
+        onSelectProject(initialCwd);
+      }
+    }
+  }, [initialCwd, onSelectProject]);
 
   useEffect(() => {
     const handleSelect = (e: Event) => {

@@ -2029,25 +2029,53 @@ export default function App() {
     setWorkspaceEnv,
   ]);
 
+  const openNewHarness = useCallback(() => {
+    const isLocalSpace = !activeSpace?.env || activeSpace.env.kind === "local";
+    const localRoot =
+      (isLocalSpace && activeSpace?.root) ||
+      localLaunchCwd ||
+      localHome ||
+      initialLaunchCwd ||
+      undefined;
+    newHarnessTab(undefined, localRoot);
+  }, [
+    activeSpace?.env,
+    activeSpace?.root,
+    initialLaunchCwd,
+    localHome,
+    localLaunchCwd,
+    newHarnessTab,
+  ]);
+
   const pickAndOpenProjectInHarness = useCallback(async () => {
-    if (activeSpace?.root) {
+    const isLocalSpace = !activeSpace?.env || activeSpace.env.kind === "local";
+    if (isLocalSpace && activeSpace?.root) {
       newHarnessTab(undefined, activeSpace.root);
       return;
     }
     try {
-      const defaultDir = localLaunchCwd || localHome || undefined;
+      const defaultDir =
+        localLaunchCwd || localHome || initialLaunchCwd || undefined;
       const picked = await invoke<string | null>("fs_pick_folder", {
         defaultPath: defaultDir,
       });
       if (picked) {
         newHarnessTab(undefined, picked);
       } else {
-        newHarnessTab();
+        openNewHarness();
       }
     } catch {
-      newHarnessTab();
+      openNewHarness();
     }
-  }, [activeSpace?.root, localLaunchCwd, localHome, newHarnessTab]);
+  }, [
+    activeSpace?.env,
+    activeSpace?.root,
+    initialLaunchCwd,
+    localHome,
+    localLaunchCwd,
+    newHarnessTab,
+    openNewHarness,
+  ]);
 
   useLaunchRequests({
     ready: booted && spacesHydrated,
@@ -2570,7 +2598,7 @@ export default function App() {
       "tab.newPreview": () => openPreviewTab(""),
       "tab.newApiClient": () => newApiClientTab(),
       "tab.newEditor": openNewEditor,
-      "tab.newHarness": () => newHarnessTab(),
+      "tab.newHarness": openNewHarness,
       "tab.close": handleCloseTabOrPane,
       "tab.next": () => stepSwitcher(1),
       "tab.prev": () => stepSwitcher(-1),
@@ -4078,7 +4106,7 @@ export default function App() {
         canNavigateForward: navigationAvailability.canGoForward,
         openNewPreview: () => openPreviewTab(""),
         openNewApiClient: () => newApiClientTab(),
-        openNewHarness: () => newHarnessTab(),
+        openNewHarness,
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
         openGitClone: () => setGitCloneModalOpen(true),
@@ -4215,7 +4243,7 @@ export default function App() {
               onNewPreview={() => openPreviewTab("")}
               onNewEditor={openNewEditor}
               onNewApiClient={() => newApiClientTab()}
-              onNewHarness={() => newHarnessTab()}
+              onNewHarness={openNewHarness}
               onNewRdp={(opts) => newRdpTab(opts)}
               onConnectRemote={() => setGuestConnectOpen(true)}
               onShareTerminal={handleShareTerminal}
