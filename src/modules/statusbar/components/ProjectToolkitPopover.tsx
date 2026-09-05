@@ -669,7 +669,7 @@ function DiscoveredSkillCard({
               </span>
               {skill.scope === "project" ? (
                 <span className="rounded bg-muted/60 px-1 py-0.2 text-[9.5px] font-medium text-muted-foreground">
-                  project
+                  {t("projectToolkit.scopeProject")}
                 </span>
               ) : null}
             </div>
@@ -699,7 +699,7 @@ function DiscoveredSkillCard({
               title={t("projectToolkit.openSkillFile") || "Open skill file in editor"}
             >
               <HugeiconsIcon icon={File01Icon} size={11} strokeWidth={1.75} />
-              <span>{t("common.open") || "Open"}</span>
+              <span>{t("common.open")}</span>
             </Button>
           ) : null}
         </div>

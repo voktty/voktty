@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { useTranslation } from "@/modules/i18n";
 import { cn } from "@/lib/utils";
 import {
   ArrowDown01Icon,
@@ -29,6 +30,7 @@ const SCALE_PRESETS = [
 ];
 
 export function PreviewViewportControls() {
+  const { t } = useTranslation();
   const viewportMode = usePreviewDevtoolsStore((s) => s.viewportMode);
   const activePresetId = usePreviewDevtoolsStore((s) => s.activePresetId);
   const customWidth = usePreviewDevtoolsStore((s) => s.customWidth);
@@ -66,7 +68,7 @@ export function PreviewViewportControls() {
                 ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
-            title="Seleccionar dispositivo o resolución"
+            title={t("preview.viewport.selectDeviceTitle")}
           >
             {viewportMode === "mobile" ? (
               <HugeiconsIcon icon={SmartPhone01Icon} size={13} />
@@ -81,8 +83,11 @@ export function PreviewViewportControls() {
               {activePreset
                 ? activePreset.name
                 : viewportMode === "responsive"
-                  ? "100% Responsivo"
-                  : `${customWidth}×${customHeight}`}
+                  ? t("preview.viewport.responsiveLabel")
+                  : t("preview.viewport.customSizeLabel", {
+                      width: customWidth ?? 0,
+                      height: customHeight ?? 0,
+                    })}
             </span>
             <HugeiconsIcon
               icon={ArrowDown01Icon}
@@ -101,13 +106,13 @@ export function PreviewViewportControls() {
             )}
           >
             <span className="mr-2 text-sm">📐</span>
-            <span>100% Responsivo (Fluido)</span>
+            <span>{t("preview.viewport.responsiveFullLabel")}</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />
 
           <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider">
-            📱 Teléfonos Móviles
+            {t("preview.viewport.categoryMobile")}
           </DropdownMenuLabel>
           {VIEWPORT_PRESETS.filter((p) => p.category === "mobile").map((p) => (
             <DropdownMenuItem
@@ -128,7 +133,7 @@ export function PreviewViewportControls() {
           <DropdownMenuSeparator />
 
           <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider">
-            💻 Tablets & Laptops
+            {t("preview.viewport.categoryTabletLaptop")}
           </DropdownMenuLabel>
           {VIEWPORT_PRESETS.filter(
             (p) => p.category === "tablet" || p.category === "laptop",
@@ -151,7 +156,7 @@ export function PreviewViewportControls() {
           <DropdownMenuSeparator />
 
           <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider">
-            🖥️ Escritorio
+            {t("preview.viewport.categoryDesktop")}
           </DropdownMenuLabel>
           {VIEWPORT_PRESETS.filter((p) => p.category === "desktop").map((p) => (
             <DropdownMenuItem
@@ -209,8 +214,8 @@ export function PreviewViewportControls() {
             onClick={toggleLandscape}
             title={
               isLandscape
-                ? "Cambiar a vertical (Portrait)"
-                : "Cambiar a horizontal (Landscape)"
+                ? t("preview.viewport.orientationToPortrait")
+                : t("preview.viewport.orientationToLandscape")
             }
             className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
           >
@@ -223,7 +228,11 @@ export function PreviewViewportControls() {
             variant="ghost"
             size="icon"
             onClick={() => setShowDeviceFrame(!showDeviceFrame)}
-            title={showDeviceFrame ? "Ocultar marco de dispositivo" : "Mostrar marco"}
+            title={
+              showDeviceFrame
+                ? t("preview.viewport.hideDeviceFrame")
+                : t("preview.viewport.showDeviceFrame")
+            }
             className={cn(
               "size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent",
               showDeviceFrame && "text-cyan-400 bg-cyan-500/10",
@@ -242,7 +251,7 @@ export function PreviewViewportControls() {
             variant="ghost"
             size="sm"
             className="h-7 px-1.5 text-[11px] font-mono text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="Escala de zoom"
+            title={t("preview.viewport.zoomScaleTitle")}
           >
             {Math.round(scale * 100)}%
           </Button>
