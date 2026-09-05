@@ -1,4 +1,5 @@
 import {
+  Archive,
   Check,
   ChevronDown,
   ChevronRight,
@@ -767,6 +768,11 @@ function SidebarComponent({
         onListDrop={onSessionListDrop}
         onListDropTargetChange={setSessionDrop}
         onContextMenu={(e) => onSessionContextMenu(session.id, e)}
+        onArchive={
+          onArchiveSession
+            ? () => onArchiveSession(session.id, !session.archived)
+            : undefined
+        }
         onRename={
           onRenameSession ? () => setRenamingSessionId(session.id) : undefined
         }
@@ -1784,6 +1790,7 @@ function SessionCard({
   onListDrop,
   onListDropTargetChange,
   onContextMenu,
+  onArchive,
   onRename,
   onDelete,
 }: {
@@ -1801,6 +1808,7 @@ function SessionCard({
   onListDrop?: (draggedId: string, target: SessionListDropTarget) => void;
   onListDropTargetChange?: (target: SessionListDropTarget | null) => void;
   onContextMenu?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
+  onArchive?: () => void;
   onRename?: () => void;
   onDelete?: () => void;
 }) {
@@ -1955,80 +1963,112 @@ function SessionCard({
     window.addEventListener("keydown", onKey);
   };
 
+  const archiveLabel = session.archived ? "Unarchive" : "Archive";
+
   return (
-    <button
-      type="button"
-      title={title}
-      aria-current={isActive ? "true" : undefined}
-      data-session-card={session.id}
-      data-tauri-drag-region="false"
-      onPointerDown={onPointerDown}
-      onPointerEnter={() => onPrefetch?.(session.id)}
-      onClick={() => {
-        if (performance.now() < skipClickUntil.current) return;
-        onSelect(session.id);
-      }}
-      onContextMenu={onContextMenu}
-      onKeyDown={onKeyDown}
-      className={`relative border flex w-full touch-none flex-col rounded-md px-2.5 text-left ${
-        compact ? "py-1.5" : "py-2"
-      } ${dragging ? "opacity-40" : ""} ${
-        dropTarget
-          ? "text-content border-transparent"
-          : needsApproval
-            ? "bg-content/20 text-content border-content/30 border-dashed"
-            : isActive
-              ? "bg-content/10 text-content border-transparent"
-              : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
-      }`}
-    >
-      {dropTarget ? (
-        <div className="pointer-events-none absolute inset-0 rounded-md bg-accent/20" />
-      ) : null}
-      {compact ? null : (
-        <span className="relative flex items-center gap-2">
-          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+    <div className="group relative">
+      <button
+        type="button"
+        title={title}
+        aria-current={isActive ? "true" : undefined}
+        data-session-card={session.id}
+        data-tauri-drag-region="false"
+        onPointerDown={onPointerDown}
+        onPointerEnter={() => onPrefetch?.(session.id)}
+        onClick={() => {
+          if (performance.now() < skipClickUntil.current) return;
+          onSelect(session.id);
+        }}
+        onContextMenu={onContextMenu}
+        onKeyDown={onKeyDown}
+        className={`relative border flex w-full touch-none flex-col rounded-md px-2.5 text-left ${
+          compact ? "py-1.5" : "py-2"
+        } ${dragging ? "opacity-40" : ""} ${
+          dropTarget
+            ? "text-content border-transparent"
+            : needsApproval
+              ? "bg-content/20 text-content border-content/30 border-dashed"
+              : isActive
+                ? "bg-content/10 text-content border-transparent"
+                : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
+        }`}
+      >
+        {dropTarget ? (
+          <div className="pointer-events-none absolute inset-0 rounded-md bg-accent/20" />
+        ) : null}
+        {compact ? null : (
+          <span className="relative flex items-center gap-2">
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              <HarnessIcon
+                harness={session.harness}
+                className="size-3.5 shrink-0"
+              />
+              <span className="min-w-0 truncate text-[11px] text-content/50">
+                {model}
+              </span>
+            </span>
+            {status}
+          </span>
+        )}
+        <span
+          className={`relative flex min-w-0 items-center gap-1.5 ${
+            compact ? "" : "mt-1"
+          }`}
+        >
+          {session.pinned ? (
+            <Pin
+              className="size-3 shrink-0 text-content/45"
+              strokeWidth={1.75}
+            />
+          ) : null}
+          <span className="min-w-0 flex-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
+            {title}
+          </span>
+          {compact ? status : null}
+        </span>
+        <span className="relative mt-1 flex items-center gap-2">
+          {gitLabel ? (
+            <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-content/45">
+              <GitBranch className="size-3 shrink-0" strokeWidth={1.75} />
+              <span className="min-w-0 truncate">{gitLabel}</span>
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1" />
+          )}
+          <span
+            className={`flex shrink-0 items-center gap-1.5 ${
+              onArchive
+                ? "transition-[padding] group-focus-within:pl-5 group-hover:pl-5"
+                : ""
+            }`}
+          >
             <HarnessIcon
               harness={session.harness}
               className="size-3.5 shrink-0"
             />
-            <span className="min-w-0 truncate text-[11px] text-content/50">
-              {model}
-            </span>
           </span>
-          {status}
         </span>
-      )}
-      <span
-        className={`relative flex min-w-0 items-center gap-1.5 ${
-          compact ? "" : "mt-1"
-        }`}
-      >
-        {session.pinned ? (
-          <Pin className="size-3 shrink-0 text-content/45" strokeWidth={1.75} />
-        ) : null}
-        <span className="min-w-0 flex-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
-          {title}
-        </span>
-        {compact ? status : null}
-      </span>
-      <span className="relative mt-1 flex items-center gap-2">
-        {gitLabel ? (
-          <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-content/45">
-            <GitBranch className="size-3 shrink-0" strokeWidth={1.75} />
-            <span className="min-w-0 truncate">{gitLabel}</span>
-          </span>
-        ) : (
-          <span className="min-w-0 flex-1" />
-        )}
-        <span className="flex shrink-0 items-center gap-1.5">
-          <HarnessIcon
-            harness={session.harness}
-            className="size-3.5 shrink-0"
-          />
-        </span>
-      </span>
-    </button>
+      </button>
+      {onArchive ? (
+        <button
+          type="button"
+          data-no-drag
+          data-tauri-drag-region="false"
+          title={archiveLabel}
+          aria-label={`${archiveLabel} ${title}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onArchive();
+          }}
+          className={`pointer-events-none absolute right-7 grid size-5 place-items-center rounded text-content/50 opacity-0 transition-opacity hover:bg-content/10 hover:text-content group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 ${
+            compact ? "bottom-[5px]" : "bottom-[7px]"
+          }`}
+        >
+          <Archive className="size-3.5" strokeWidth={1.75} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
