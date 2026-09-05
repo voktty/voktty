@@ -223,162 +223,157 @@ export function LiveComponentBadge({
 
   return (
     <div
-      className={`flex flex-col rounded-xl border border-cyan-500/50 bg-background/98 p-3 text-xs text-foreground shadow-2xl backdrop-blur-xl select-none ring-1 ring-cyan-500/20 animate-in fade-in slide-in-from-top-2 duration-200 ${className}`}
+      className={`flex flex-col rounded-xl border border-cyan-500/40 bg-background/95 p-2.5 sm:p-3 text-xs text-foreground shadow-2xl backdrop-blur-xl select-none ring-1 ring-cyan-500/20 animate-in fade-in slide-in-from-top-2 duration-200 ${className}`}
     >
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 min-w-0">
-        <div className="flex items-start md:items-center gap-2.5 min-w-0 flex-1">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 shrink-0 border border-cyan-500/40 shadow-sm">
-            <HugeiconsIcon icon={Target01Icon} size={17} strokeWidth={2} />
+      {/* Top Header: Target Info & Badges */}
+      <div className="flex items-center justify-between gap-2.5 min-w-0 pb-2 border-b border-border/40">
+        <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+          <div className="flex size-7 items-center justify-center rounded-md bg-cyan-500/15 text-cyan-400 shrink-0 border border-cyan-500/30">
+            <HugeiconsIcon icon={Target01Icon} size={15} strokeWidth={2} />
           </div>
 
-          <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span
-                onClick={comp.filePath ? handleJumpToCode : undefined}
-                className={`text-sm font-bold font-mono text-cyan-300 ${
-                  comp.filePath ? "cursor-pointer hover:underline" : ""
-                }`}
-              >
-                {label}
-              </span>
-
-              {comp.framework && comp.framework !== "dom-generic" ? (
-                <span className="rounded-md bg-cyan-500/20 border border-cyan-500/35 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold text-cyan-300">
-                  {comp.framework}
-                </span>
-              ) : null}
-
-              {comp.matchedBy ? (
-                <span className="rounded-md bg-muted/70 border border-border/50 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
-                  via {comp.matchedBy}
-                </span>
-              ) : null}
-
-              {dimWidth && dimHeight ? (
-                <span className="rounded-md bg-muted/50 border border-border/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-                  {dimWidth} × {dimHeight}px
-                </span>
-              ) : null}
-            </div>
-
-            <div className="flex items-center gap-2 mt-1">
-              {comp.isResolvingSource ? (
-                <span className="flex items-center gap-1.5 text-xs text-cyan-400 font-medium">
-                  <HugeiconsIcon
-                    icon={Loading03Icon}
-                    size={12}
-                    className="animate-spin"
-                  />
-                  Buscando archivo de plantilla en el workspace...
-                </span>
-              ) : comp.filePath ? (
-                <span
-                  onClick={handleJumpToCode}
-                  className="flex items-center gap-1.5 text-xs font-mono text-cyan-200 cursor-pointer hover:underline hover:text-cyan-100 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30 truncate max-w-full"
-                  title={`Abrir ${comp.filePath}:${comp.lineNumber || 1} en el editor`}
-                >
-                  <HugeiconsIcon icon={Folder01Icon} size={13} className="shrink-0 text-cyan-400" />
-                  <span className="truncate">{location}</span>
-                </span>
-              ) : (
-                <span
-                  className="text-xs text-muted-foreground font-mono truncate max-w-full"
-                  title={comp.selector}
-                >
-                  {comp.selector}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Primary Action Buttons */}
-        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end md:border-l md:border-border/60 md:pl-3">
-          <button
-            type="button"
-            onClick={handleCopyReference}
-            title={t("preview.copyReference") || "Copiar referencia técnica"}
-            className="flex items-center gap-1.5 rounded-lg bg-secondary/90 hover:bg-secondary text-secondary-foreground px-2.5 py-1.5 text-xs font-medium transition-colors border border-border/60 active:scale-95 shadow-sm"
+          <span
+            onClick={comp.filePath ? handleJumpToCode : undefined}
+            className={`font-bold font-mono text-cyan-300 text-[13px] whitespace-nowrap shrink-0 ${
+              comp.filePath ? "cursor-pointer hover:underline" : ""
+            }`}
           >
-            <HugeiconsIcon
-              icon={copiedKey === "ref" ? Tick02Icon : Copy01Icon}
-              size={14}
-              strokeWidth={2}
-              className={copiedKey === "ref" ? "text-emerald-400" : ""}
-            />
-            <span>{copiedKey === "ref" ? "¡Copiado!" : "Copiar Ref"}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleCopyDebugPrompt}
-            title={t("preview.copyDebugPrompt") || "Copiar prompt estructurado para depurar"}
-            className="flex items-center gap-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-rose-200 border border-rose-500/35 px-2.5 py-1.5 text-xs font-medium transition-colors active:scale-95 shadow-sm"
-          >
-            <HugeiconsIcon
-              icon={copiedKey === "debug" ? Tick02Icon : Alert02Icon}
-              size={14}
-              strokeWidth={2}
-              className={copiedKey === "debug" ? "text-emerald-400" : ""}
-            />
-            <span>{copiedKey === "debug" ? "¡Copiado!" : "Prompt Debug"}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleCopyModifyPrompt}
-            title={t("preview.copyModifyPrompt") || "Copiar prompt de instrucción para modificar"}
-            className="flex items-center gap-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 border border-amber-500/35 px-2.5 py-1.5 text-xs font-medium transition-colors active:scale-95 shadow-sm"
-          >
-            <HugeiconsIcon
-              icon={copiedKey === "modify" ? Tick02Icon : Edit02Icon}
-              size={14}
-              strokeWidth={2}
-              className={copiedKey === "modify" ? "text-emerald-400" : ""}
-            />
-            <span>{copiedKey === "modify" ? "¡Copiado!" : "Prompt Modificar"}</span>
-          </button>
+            {label}
+          </span>
 
           {comp.filePath ? (
             <button
               type="button"
               onClick={handleJumpToCode}
-              title={t("preview.jumpToCode") || "Abrir archivo y línea en el editor"}
-              className="flex items-center gap-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 hover:text-cyan-100 border border-cyan-500/50 px-2.5 py-1.5 text-xs font-medium transition-colors active:scale-95 shadow-sm"
+              className="inline-flex items-center gap-1.5 rounded-md bg-cyan-950/70 border border-cyan-500/35 px-2 py-0.5 text-xs font-mono text-cyan-200 hover:text-cyan-100 hover:bg-cyan-900/70 transition-colors shrink-0 whitespace-nowrap max-w-[260px] truncate"
+              title={`Abrir ${comp.filePath}:${comp.lineNumber || 1} en el editor`}
             >
-              <HugeiconsIcon icon={CodeIcon} size={14} strokeWidth={2} />
-              <span>Ir al Código</span>
+              <HugeiconsIcon icon={Folder01Icon} size={12} className="shrink-0 text-cyan-400" />
+              <span className="truncate">{location}</span>
             </button>
+          ) : comp.isResolvingSource ? (
+            <span className="inline-flex items-center gap-1.5 text-xs text-cyan-400 font-medium whitespace-nowrap shrink-0">
+              <HugeiconsIcon
+                icon={Loading03Icon}
+                size={12}
+                className="animate-spin text-cyan-400"
+              />
+              Buscando archivo...
+            </span>
+          ) : (
+            <span
+              className="text-xs text-muted-foreground font-mono truncate max-w-[200px]"
+              title={comp.selector}
+            >
+              {comp.selector}
+            </span>
+          )}
+
+          {comp.framework && comp.framework !== "dom-generic" ? (
+            <span className="rounded bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.5 text-[10px] uppercase font-semibold text-cyan-300 whitespace-nowrap shrink-0">
+              {comp.framework}
+            </span>
           ) : null}
 
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            title={expanded ? "Ocultar detalles técnicos" : "Ver detalles técnicos y HTML"}
-            className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium border transition-colors ${
-              expanded
-                ? "bg-cyan-500/20 text-cyan-200 border-cyan-500/40"
-                : "bg-muted/60 text-muted-foreground hover:bg-muted border-border/50"
-            }`}
-          >
-            <HugeiconsIcon
-              icon={expanded ? ArrowUp01Icon : ArrowDown01Icon}
-              size={14}
-              strokeWidth={2}
-            />
-            <span>Detalles</span>
-          </button>
+          {comp.matchedBy ? (
+            <span className="rounded bg-muted/60 border border-border/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground whitespace-nowrap shrink-0">
+              via {comp.matchedBy}
+            </span>
+          ) : null}
 
+          {dimWidth && dimHeight ? (
+            <span className="rounded bg-muted/40 border border-border/30 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground whitespace-nowrap shrink-0">
+              {dimWidth} × {dimHeight}px
+            </span>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleClear}
+          title={t("preview.clearSelection") || "Cerrar inspector"}
+          className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0 ml-1"
+        >
+          <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} />
+        </button>
+      </div>
+
+      {/* Primary Action Buttons Toolbar */}
+      <div className="flex items-center gap-1.5 flex-wrap pt-2">
+        <button
+          type="button"
+          onClick={handleCopyReference}
+          title={t("preview.copyReference") || "Copiar referencia técnica"}
+          className="flex items-center gap-1.5 rounded-lg bg-secondary/80 hover:bg-secondary text-secondary-foreground px-2.5 py-1 text-xs font-medium transition-colors border border-border/60 active:scale-95 shadow-sm whitespace-nowrap shrink-0"
+        >
+          <HugeiconsIcon
+            icon={copiedKey === "ref" ? Tick02Icon : Copy01Icon}
+            size={13}
+            strokeWidth={2}
+            className={copiedKey === "ref" ? "text-emerald-400" : ""}
+          />
+          <span>{copiedKey === "ref" ? "¡Copiado!" : "Copiar Ref"}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleCopyDebugPrompt}
+          title={t("preview.copyDebugPrompt") || "Copiar prompt estructurado para depurar"}
+          className="flex items-center gap-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/30 px-2.5 py-1 text-xs font-medium transition-colors active:scale-95 shadow-sm whitespace-nowrap shrink-0"
+        >
+          <HugeiconsIcon
+            icon={copiedKey === "debug" ? Tick02Icon : Alert02Icon}
+            size={13}
+            strokeWidth={2}
+            className={copiedKey === "debug" ? "text-emerald-400" : ""}
+          />
+          <span>{copiedKey === "debug" ? "¡Copiado!" : "Prompt Debug"}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleCopyModifyPrompt}
+          title={t("preview.copyModifyPrompt") || "Copiar prompt de instrucción para modificar"}
+          className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 px-2.5 py-1 text-xs font-medium transition-colors active:scale-95 shadow-sm whitespace-nowrap shrink-0"
+        >
+          <HugeiconsIcon
+            icon={copiedKey === "modify" ? Tick02Icon : Edit02Icon}
+            size={13}
+            strokeWidth={2}
+            className={copiedKey === "modify" ? "text-emerald-400" : ""}
+          />
+          <span>{copiedKey === "modify" ? "¡Copiado!" : "Prompt Modificar"}</span>
+        </button>
+
+        {comp.filePath ? (
           <button
             type="button"
-            onClick={handleClear}
-            title={t("preview.clearSelection") || "Cerrar inspector"}
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors ml-1"
+            onClick={handleJumpToCode}
+            title={t("preview.jumpToCode") || "Abrir archivo y línea en el editor"}
+            className="flex items-center gap-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 hover:text-cyan-100 border border-cyan-500/40 px-2.5 py-1 text-xs font-medium transition-colors active:scale-95 shadow-sm whitespace-nowrap shrink-0"
           >
-            <HugeiconsIcon icon={Cancel01Icon} size={15} strokeWidth={2} />
+            <HugeiconsIcon icon={CodeIcon} size={13} strokeWidth={2} />
+            <span>Ir al Código</span>
           </button>
-        </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          title={expanded ? "Ocultar detalles técnicos" : "Ver detalles técnicos y HTML"}
+          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium border transition-colors ml-auto whitespace-nowrap shrink-0 ${
+            expanded
+              ? "bg-cyan-500/20 text-cyan-200 border-cyan-500/40"
+              : "bg-muted/60 text-muted-foreground hover:bg-muted border-border/50"
+          }`}
+        >
+          <HugeiconsIcon
+            icon={expanded ? ArrowUp01Icon : ArrowDown01Icon}
+            size={13}
+            strokeWidth={2}
+          />
+          <span>Detalles</span>
+        </button>
       </div>
 
       {/* Expandable Technical Details Drawer */}
