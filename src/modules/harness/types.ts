@@ -3,6 +3,8 @@ export type HarnessAgentId =
   | "claude"
   | "codex"
   | "cursor"
+  | "hermes"
+  | "gemini"
   | "opencode"
   | "grok"
   | "pi";
@@ -115,6 +117,14 @@ export const AGENT_MODELS: Record<HarnessAgentId, ModelCatalogItem[]> = {
   pi: [
     { id: "pi-default", name: "Inflection Pi", provider: "Inflection", contextWindow: 32_000, reasoning: false },
   ],
+  gemini: [
+    { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", provider: "Google", contextWindow: 1_048_576, reasoning: true },
+    { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", provider: "Google", contextWindow: 1_048_576, reasoning: true },
+  ],
+  hermes: [
+    { id: "hermes-3-llama-3.1-70b", name: "Hermes 3 (70B)", provider: "Nous Research", contextWindow: 128_000, reasoning: true },
+    { id: "hermes-3-llama-3.1-405b", name: "Hermes 3 (405B)", provider: "Nous Research", contextWindow: 128_000, reasoning: true },
+  ],
 };
 
 export const DEFAULT_AGENT_MODELS: Record<HarnessAgentId, string> = {
@@ -122,6 +132,8 @@ export const DEFAULT_AGENT_MODELS: Record<HarnessAgentId, string> = {
   claude: "claude-3-7-sonnet-20250219",
   codex: "o3-mini",
   cursor: "claude-3.5-sonnet",
+  gemini: "gemini-3.8-flash-high",
+  hermes: "hermes-3-llama-3.1-70b",
   opencode: "deepseek-r1",
   grok: "grok-beta",
   pi: "pi-default",

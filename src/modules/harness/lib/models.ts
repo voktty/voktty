@@ -378,6 +378,27 @@ export const MODELS: AgentModel[] = [
     name: "GPT-OSS 120B (Medium)",
     nativeId: "gpt-oss-120b-medium",
   },
+  {
+    id: "hermes:hermes-3-llama-3.1-405b",
+    harness: "hermes",
+    name: "Hermes 3 (Llama 3.1 405B)",
+    nativeId: "hermes-3-llama-3.1-405b",
+    contextWindow: 128_000,
+  },
+  {
+    id: "hermes:hermes-3-llama-3.1-70b",
+    harness: "hermes",
+    name: "Hermes 3 (Llama 3.1 70B)",
+    nativeId: "hermes-3-llama-3.1-70b",
+    contextWindow: 128_000,
+  },
+  {
+    id: "hermes:hermes-3-llama-3.1-8b",
+    harness: "hermes",
+    name: "Hermes 3 (Llama 3.1 8B)",
+    nativeId: "hermes-3-llama-3.1-8b",
+    contextWindow: 128_000,
+  },
 ];
 
 export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
@@ -386,6 +407,7 @@ export const DEFAULT_MODEL_ID: Record<HarnessId, string> = {
   cursor: "cursor:composer-2.5",
   gemini: "gemini:gemini-3.8-flash",
   grok: "grok:grok-4.6",
+  hermes: "hermes:hermes-3-llama-3.1-70b",
   opencode: "opencode:glm-5",
   pi: "pi:default",
   omp: "omp:default",
@@ -412,6 +434,7 @@ const HARNESS_ORDER: HarnessId[] = [
   "cursor",
   "gemini",
   "grok",
+  "hermes",
   "opencode",
   "pi",
   "omp",

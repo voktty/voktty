@@ -9,8 +9,19 @@ import { AgyProtocolRunner } from "./agyProtocol";
 import { ClaudeProtocolRunner } from "./claudeProtocol";
 import { CodexProtocolRunner } from "./codexProtocol";
 import { CursorProtocolRunner } from "./cursorProtocol";
+import { GenericProtocolRunner } from "./genericProtocol";
+import { HermesProtocolRunner } from "./hermesProtocol";
+import { UniversalStreamParser } from "./universalStreamParser";
 
-export { AgyProtocolRunner, ClaudeProtocolRunner, CodexProtocolRunner, CursorProtocolRunner };
+export {
+  AgyProtocolRunner,
+  ClaudeProtocolRunner,
+  CodexProtocolRunner,
+  CursorProtocolRunner,
+  GenericProtocolRunner,
+  HermesProtocolRunner,
+  UniversalStreamParser,
+};
 
 type ActiveRunner = {
   sessionId: string;
@@ -45,8 +56,19 @@ export async function sendAgentTurn(
     case "cursor":
       runner = new CursorProtocolRunner(sessionId, onEvent);
       break;
+    case "hermes":
+      runner = new HermesProtocolRunner(sessionId, onEvent);
+      break;
+    case "gemini":
+      runner = new GenericProtocolRunner(sessionId, "gemini", onEvent);
+      break;
+    case "opencode":
+    case "grok":
+    case "pi":
+      runner = new GenericProtocolRunner(sessionId, harness, onEvent);
+      break;
     default:
-      runner = new AgyProtocolRunner(sessionId, onEvent);
+      runner = new GenericProtocolRunner(sessionId, String(harness), onEvent);
       break;
   }
 
