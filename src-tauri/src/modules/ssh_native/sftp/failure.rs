@@ -29,6 +29,7 @@ pub fn classify(error: SftpError, context: &str) -> SshNativeError {
         SftpError::IO(_) => SshErrorCode::Unreachable,
         SftpError::Status(status) => match status.status_code {
             StatusCode::NoConnection | StatusCode::ConnectionLost => SshErrorCode::Unreachable,
+            StatusCode::NoSuchFile => SshErrorCode::NotFound,
             _ => SshErrorCode::Protocol,
         },
         _ => SshErrorCode::Protocol,
@@ -72,6 +73,23 @@ mod tests {
         assert_eq!(error.code, SshErrorCode::Protocol);
         assert!(error.message.contains("read /etc/shadow"));
         assert!(error.message.contains("Permission denied"));
+    }
+
+    #[test]
+    fn only_a_missing_path_is_classified_as_not_found() {
+        assert_eq!(
+            classify(status(StatusCode::NoSuchFile), "stat /x").code,
+            SshErrorCode::NotFound
+        );
+        // A permission error must never look like a missing file.
+        assert_eq!(
+            classify(status(StatusCode::PermissionDenied), "stat /x").code,
+            SshErrorCode::Protocol
+        );
+        assert_eq!(
+            classify(status(StatusCode::Failure), "stat /x").code,
+            SshErrorCode::Protocol
+        );
     }
 
     #[test]

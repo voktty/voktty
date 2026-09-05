@@ -128,6 +128,12 @@ pub enum SshErrorCode {
     HostKeyChanged,
     HostKeyRevoked,
     AuthFailed,
+    /// The file is not valid UTF-8; the caller should read it as bytes.
+    BinaryFile,
+    /// The server reported the path does not exist. Distinct from any other
+    /// refusal: treating a permission error as "missing" would let a write
+    /// clobber a file the user cannot read.
+    NotFound,
     Timeout,
     Protocol,
     Cancelled,

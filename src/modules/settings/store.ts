@@ -89,6 +89,18 @@ export const EDITOR_THEMES = [
 
 export type EditorThemeId = (typeof EDITOR_THEMES)[number];
 
+/**
+ * Which backend serves the SSH explorer and editor filesystem. `helper` is the
+ * uploaded voktty-remote server; `native` is the in-process SFTP client.
+ */
+export type RemoteFilesystemBackend = "helper" | "native";
+
+export function isRemoteFilesystemBackend(
+  value: unknown,
+): value is RemoteFilesystemBackend {
+  return value === "helper" || value === "native";
+}
+
 /** "auto" follows the active app theme's editorTheme pairing (resolved live). */
 export const EDITOR_THEME_AUTO = "auto" as const;
 export type EditorThemePref = typeof EDITOR_THEME_AUTO | EditorThemeId;
@@ -165,6 +177,7 @@ export type Preferences = {
   aiHealthCheckedAt: number | null;
   defaultModelId: ModelId;
   editorTheme: EditorThemePref;
+  remoteFilesystemBackend: RemoteFilesystemBackend;
   editorFontSize: number;
   customInstructions: string;
   autostart: boolean;
@@ -296,6 +309,7 @@ const KEY_AI_HEALTH_REVISION = "aiHealthRevision";
 const KEY_AI_HEALTH_CHECKED_AT = "aiHealthCheckedAt";
 const KEY_DEFAULT_MODEL = "defaultModelId";
 const KEY_EDITOR_THEME = "editorTheme";
+const KEY_REMOTE_FS_BACKEND = "remoteFilesystemBackend";
 const KEY_EDITOR_FONT_SIZE = "editorFontSize";
 const KEY_CUSTOM_INSTRUCTIONS = "customInstructions";
 const KEY_AUTOSTART = "autostart";
@@ -441,6 +455,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   aiHealthCheckedAt: null,
   defaultModelId: DEFAULT_MODEL_ID,
   editorTheme: EDITOR_THEME_AUTO,
+  remoteFilesystemBackend: "helper",
   editorFontSize: EDITOR_FONT_SIZE_DEFAULT,
   customInstructions: "",
   autostart: false,
@@ -619,6 +634,12 @@ export async function loadPreferences(): Promise<Preferences> {
       if (stored === EDITOR_THEME_AUTO || isEditorThemeId(stored))
         return stored;
       return DEFAULT_PREFERENCES.editorTheme;
+    })(),
+    remoteFilesystemBackend: ((): RemoteFilesystemBackend => {
+      const stored = get<string>(KEY_REMOTE_FS_BACKEND);
+      return isRemoteFilesystemBackend(stored)
+        ? stored
+        : DEFAULT_PREFERENCES.remoteFilesystemBackend;
     })(),
     editorFontSize: clampEditorFontSize(
       get<number>(KEY_EDITOR_FONT_SIZE) ?? DEFAULT_PREFERENCES.editorFontSize,
@@ -1398,6 +1419,7 @@ export async function onPreferencesChange(
     [KEY_AI_HEALTH_CHECKED_AT]: "aiHealthCheckedAt",
     [KEY_DEFAULT_MODEL]: "defaultModelId",
     [KEY_EDITOR_THEME]: "editorTheme",
+    [KEY_REMOTE_FS_BACKEND]: "remoteFilesystemBackend",
     [KEY_EDITOR_FONT_SIZE]: "editorFontSize",
     [KEY_CUSTOM_INSTRUCTIONS]: "customInstructions",
     [KEY_AUTOSTART]: "autostart",
@@ -1536,6 +1558,7 @@ export const PREF_KEY_TO_STORAGE_KEY: Record<PrefKey, string> = {
   aiHealthCheckedAt: KEY_AI_HEALTH_CHECKED_AT,
   defaultModelId: KEY_DEFAULT_MODEL,
   editorTheme: KEY_EDITOR_THEME,
+  remoteFilesystemBackend: KEY_REMOTE_FS_BACKEND,
   editorFontSize: KEY_EDITOR_FONT_SIZE,
   customInstructions: KEY_CUSTOM_INSTRUCTIONS,
   autostart: KEY_AUTOSTART,

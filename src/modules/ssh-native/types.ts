@@ -31,6 +31,8 @@ export type SshErrorCode =
   | "host_key_changed"
   | "host_key_revoked"
   | "auth_failed"
+  | "binary_file"
+  | "not_found"
   | "timeout"
   | "protocol"
   | "cancelled"
