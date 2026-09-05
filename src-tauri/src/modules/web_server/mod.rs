@@ -1860,6 +1860,30 @@ fn is_generic_utility_class(class_name: &str) -> bool {
     false
 }
 
+fn is_generic_ui_keyword(s: &str) -> bool {
+    matches!(
+        s.trim().to_ascii_lowercase().as_str(),
+        "placeholder"
+            | "loading"
+            | "select"
+            | "submit"
+            | "button"
+            | "title"
+            | "text"
+            | "content"
+            | "item"
+            | "items"
+            | "value"
+            | "label"
+            | "icon"
+            | "input"
+            | "search"
+            | "close"
+            | "cancel"
+            | "ok"
+    )
+}
+
 fn detect_framework_from_extension(ext: &str) -> &'static str {
     match ext {
         "php" => "php",
@@ -2124,15 +2148,21 @@ pub async fn web_server_resolve_element_source(
             // 2. Visible text snippet match
             if let Some(ref text) = text_snippet {
                 let trimmed_text = text.trim();
-                if trimmed_text.len() >= 5 {
+                if trimmed_text.len() >= 4 {
                     let clean_text = trimmed_text.to_ascii_lowercase();
+                    let is_generic = is_generic_ui_keyword(&clean_text);
                     if let Some(pos) = line_lower.find(&clean_text) {
-                        line_score += 75;
+                        let text_score = if is_generic { 15 } else { 80 };
+                        line_score += text_score;
                         if match_col == 1 {
                             match_col = pos + 1;
                         }
                         if matched_reason.is_empty() {
-                            matched_reason = "text_match".to_string();
+                            matched_reason = if is_generic {
+                                format!("text_kw:{}", clean_text)
+                            } else {
+                                "text_match".to_string()
+                            };
                         }
                     }
                 }
@@ -2283,8 +2313,8 @@ mod tests {
         assert!(is_system_directory(Path::new("/")));
 
         assert!(!is_system_directory(Path::new("C:\\projects\\my-app")));
-        assert!(!is_system_directory(Path::new("/home/user/project")));
-        assert!(!is_system_directory(Path::new("/Users/dev/workspace")));
+        assert!(!is_system_directory(Path::new("/workspace/project")));
+        assert!(!is_system_directory(Path::new("/srv/http/site")));
     }
 
     #[test]

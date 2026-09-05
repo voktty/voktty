@@ -109,7 +109,7 @@ describe("liveComponentStore", () => {
 
   it("formats component reference for copying", () => {
     expect(formatComponentReference(mockComponent)).toBe(
-      "@component <CheckoutButton/> in src/components/CheckoutButton.tsx:42",
+      "@component <CheckoutButton/> in src/components/CheckoutButton.tsx:42 (selector: `button.checkout-btn.primary`, text: \"Pay $50\")",
     );
 
     const noFile: LiveComponentMetadata = {
@@ -117,7 +117,7 @@ describe("liveComponentStore", () => {
       filePath: undefined,
     };
     expect(formatComponentReference(noFile)).toBe(
-      "@dom `button.checkout-btn.primary`",
+      "@dom <CheckoutButton/> (selector: `button.checkout-btn.primary`, text: \"Pay $50\")",
     );
   });
 
