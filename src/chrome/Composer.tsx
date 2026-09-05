@@ -170,6 +170,7 @@ type Props = {
   onSteerQueuedMessage?: (messageId: string) => void;
   onResumeQueue?: () => void;
   onOpenFile?: (path: string) => void;
+  onDraftChange?: (text: string) => void;
   children?: ReactNode;
 };
 
@@ -415,6 +416,7 @@ export function Composer({
   onSteerQueuedMessage,
   onResumeQueue,
   onOpenFile,
+  onDraftChange,
   children,
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -649,9 +651,13 @@ export function Composer({
   useEffect(() => {
     const el = ref.current;
     if (!el || !initialDraft) return;
-    el.value = initialDraft;
+    if (el.value !== initialDraft) el.value = initialDraft;
     resizeTextarea(el);
   }, [initialDraft]);
+
+  useEffect(() => {
+    onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
 
   const syncHighlightScroll = (e: UIEvent<HTMLTextAreaElement>) => {
     const highlight = highlightRef.current;
@@ -867,6 +873,7 @@ export function Composer({
       ref.current.value = "";
       ref.current.style.height = "auto";
       setDraft("");
+      onDraftChange?.("");
       setPlusOpen(false);
       setSlash(null);
       setMention(null);
@@ -887,6 +894,7 @@ export function Composer({
     ref.current.value = "";
     ref.current.style.height = "auto";
     setDraft("");
+    onDraftChange?.("");
     setAttachments([]);
     setPlanSelected(false);
     setPlusOpen(false);
