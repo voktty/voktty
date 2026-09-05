@@ -25,7 +25,7 @@ import {
   saveProjectRailOpen,
   type SidebarTabId,
 } from "./lib/appearance";
-import { IS_MAC } from "./lib/platform";
+import { HAS_NATIVE_GLASS, IS_MAC } from "./lib/platform";
 import { runUpdateFlow } from "./lib/updater";
 import { displayAttachments, prepareAttachments } from "./lib/attachments";
 import {
@@ -341,6 +341,7 @@ import {
 import type { InstalledUpdate } from "./lib/updateNotice";
 import {
   bindResumedSessions,
+  closeBusyWindow,
   hasInFlightSessions,
   hideCurrentWindow,
   closeCurrentWindow,
@@ -1020,6 +1021,10 @@ export default function App({
         event.preventDefault();
         if (hasInFlightSessions(sessionsRef.current)) {
           flushHarnessEvents();
+          if (!IS_MAC) {
+            void closeBusyWindow();
+            return;
+          }
           void persistLiveTranscripts(sessionsRef.current);
           void hideCurrentWindow();
           return;
@@ -4816,7 +4821,7 @@ export default function App({
   return (
     <div
       className={`flex h-full text-content ${
-        IS_MAC ? "bg-background-base/40" : "bg-background-base"
+        HAS_NATIVE_GLASS ? "bg-background-base/40" : "bg-background-base"
       }`}
     >
       <Sidebar

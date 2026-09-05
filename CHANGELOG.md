@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows is a supported desktop target. Terminals, agent CLIs, and the rest of the macOS/Linux feature set run there, and the window uses Tauri Acrylic in place of macOS vibrancy.
 - Settings → General → Diff view: Editor or Unified. Unified stacks every working-tree change in one **Changes** tab — GitHub-style review, editor syntax colours, sticky file headers and line numbers, and a single horizontal scroll that stops at the end of the line. Editor keeps the previous per-file working-tree tabs.
 
 ### Fixed
