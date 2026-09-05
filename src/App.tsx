@@ -201,6 +201,7 @@ import {
   loadRecents,
   looksLikeProject,
   normalizeProjectPath,
+  projectRailItems,
   rememberProject,
   sameProjectPath,
 } from "./lib/recents";
@@ -259,8 +260,10 @@ import { hiddenApprovalNotices } from "./lib/approvalToast";
 import { nextUnseenFinishedSessions } from "./lib/sessionDone";
 import { playCue } from "./lib/sounds";
 import {
+  adjacentItemId,
   deferUnhandledEscape,
   focusedBusyAgentSessionId,
+  shouldHandleListNavigation,
   shouldStopFocusedTurnOnEscape,
   tabCommand,
 } from "./lib/tabKeys";
@@ -644,6 +647,13 @@ export default function App({
   inboxViewOpenRef.current = inboxViewOpen;
   const notesViewOpenRef = useRef(notesViewOpen);
   notesViewOpenRef.current = notesViewOpen;
+  const settingsOpenRef = useRef(settingsOpen);
+  settingsOpenRef.current = settingsOpen;
+  const sessionNavigationIdsRef = useRef<readonly string[]>([]);
+  const filePickerOpenRef = useRef(filePickerOpen);
+  filePickerOpenRef.current = filePickerOpen;
+  const whatsNewVersionRef = useRef(whatsNewVersion);
+  whatsNewVersionRef.current = whatsNewVersion;
 
   useEffect(() => {
     if (!notesEnabled) setNotesViewOpen(false);
@@ -4339,6 +4349,45 @@ export default function App({
     );
   }, []);
 
+  const onSessionNavigationOrder = useCallback((ids: readonly string[]) => {
+    sessionNavigationIdsRef.current = ids;
+  }, []);
+
+  const onNavigateSessionList = useCallback(
+    (delta: number) => {
+      const activeWorkspace = tabsRef.current.find(
+        (entry) => entry.id === activeTabIdRef.current,
+      );
+      if (!activeWorkspace || activeWorkspace.diffFocused) return;
+      const current = sessionsRef.current.find(
+        (session) => session.id === activeWorkspace.focusedId,
+      );
+      if (!current) return;
+
+      const next = adjacentItemId(
+        sessionNavigationIdsRef.current,
+        current.id,
+        delta,
+      );
+      if (!next || next === current.id) return;
+      void onSelectHistorySession(next);
+    },
+    [onSelectHistorySession],
+  );
+
+  const onNavigateProjectList = useCallback(
+    (delta: number) => {
+      const current = normalizeProjectPath(projectCwdRef.current);
+      const ids = projectRailItems(loadRecents(), current).map(
+        (project) => project.path,
+      );
+      const next = adjacentItemId(ids, current, delta);
+      if (!next || sameProjectPath(next, current)) return;
+      onSelectProject(next);
+    },
+    [onSelectProject],
+  );
+
   const actions = useRef({
     onNew,
     onCloseOtherTabs,
@@ -4360,6 +4409,8 @@ export default function App({
     onNewTerminal,
     onNewTerminalTab,
     onToggleProjectTerminal,
+    onNavigateSessionList,
+    onNavigateProjectList,
     openSettings,
   });
   actions.current = {
@@ -4383,6 +4434,8 @@ export default function App({
     onNewTerminal,
     onNewTerminalTab,
     onToggleProjectTerminal,
+    onNavigateSessionList,
+    onNavigateProjectList,
     openSettings,
   };
 
@@ -4400,6 +4453,28 @@ export default function App({
       const cmd = tabCommand(e);
       if (cmd) {
         const target = e.target instanceof Element ? e.target : null;
+        const listNavigation =
+          cmd === "prev-session" ||
+          cmd === "next-session" ||
+          cmd === "prev-project" ||
+          cmd === "next-project";
+        if (listNavigation) {
+          const blockedTarget = Boolean(
+            target?.closest(
+              'input, textarea, select, [contenteditable="true"], .cm-editor, .monocode-terminal, [role="dialog"], [data-model-picker], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker], [data-app-search]',
+            ),
+          );
+          const surfaceOpen =
+            searchViewOpenRef.current ||
+            inboxViewOpenRef.current ||
+            notesViewOpenRef.current ||
+            settingsOpenRef.current ||
+            filePickerOpenRef.current ||
+            Boolean(whatsNewVersionRef.current);
+          if (!shouldHandleListNavigation({ blockedTarget, surfaceOpen })) {
+            return;
+          }
+        }
         if (
           target?.closest(".monocode-terminal") &&
           e.ctrlKey &&
@@ -4444,6 +4519,14 @@ export default function App({
           run("new-terminal-tab", a.onNewTerminalTab);
         else if (cmd === "toggle-terminal")
           run("toggle-terminal", a.onToggleProjectTerminal);
+        else if (cmd === "prev-session")
+          run("prev-session", () => a.onNavigateSessionList(-1));
+        else if (cmd === "next-session")
+          run("next-session", () => a.onNavigateSessionList(1));
+        else if (cmd === "prev-project")
+          run("prev-project", () => a.onNavigateProjectList(-1));
+        else if (cmd === "next-project")
+          run("next-project", () => a.onNavigateProjectList(1));
         else if ("focus" in cmd)
           run(`focus-${cmd.focus}`, () => a.onFocusDir(cmd.focus));
         else run(`activate-${cmd.activate}`, () => a.onActivate(cmd.activate));
@@ -4620,6 +4703,7 @@ export default function App({
         status={historyFailed ? "error" : "idle"}
         pending={historyPending}
         onSelectSession={onSelectHistorySession}
+        onSessionNavigationOrder={onSessionNavigationOrder}
         onPlaceSessionOnPane={onPlaceSessionOnPane}
         onRenameSession={onRenameHistorySession}
         onArchiveSession={onArchiveHistorySession}
