@@ -41,6 +41,7 @@ import { emitKeysChanged } from "@/modules/settings/store";
 import { openExternalUrl } from "@/lib/external-link";
 import { cn } from "@/lib/utils";
 import type { ProviderId } from "@/modules/ai/config";
+import { VokttyAnimatedLogo } from "./VokttyAnimatedLogo";
 
 interface OnboardingWizardProps {
   open: boolean;
@@ -248,7 +249,8 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
             {/* STEP 1: Language & Tabs */}
             {step === 1 && (
               <div className="space-y-4">
-                <div>
+                <div className="flex items-center gap-3">
+                  <VokttyAnimatedLogo size={56} />
                   <p className="text-[11px] text-muted-foreground">
                     {t("onboarding.step1Desc")}
                   </p>
