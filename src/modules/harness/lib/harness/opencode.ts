@@ -1,5 +1,6 @@
 import { modelContextWindow, nativeModelId } from "../models";
 import type { RuntimeMode } from "../session";
+import { taskListFromToolInput } from "../taskList";
 import {
   execChild,
   freeHarnessPort,
@@ -21,6 +22,7 @@ import {
   isOpenCodeNotFound,
   mergeOpenCodeAssistantText,
   MINIMUM_OPENCODE_VERSION,
+  KNOWN_HIDDEN_AGENTS,
   parseOpenCodeModelSlug,
   parseOpenCodeVersion,
   parseServerUrlFromOutput,
@@ -34,14 +36,37 @@ import {
   toolKindFromName,
   type OpenCodePart,
 } from "./opencodeProtocol";
-import { composeToolTitle, extractShellCommand, extractSkillName } from "./preview";
+import {
+  composeToolTitle,
+  extractShellCommand,
+  extractSkillName,
+} from "./preview";
 import { streamTextDelta } from "./streamText";
-import type { ApprovalDecision, HarnessEvent, SendTurnInput, SteerTurnInput } from "./types";
+import type {
+  ApprovalDecision,
+  CompactContextInput,
+  HarnessEvent,
+  HarnessSessionInput,
+  SendTurnInput,
+  SteerTurnInput,
+} from "./types";
+import {
+  questionPromptTitle,
+  questionsFromUnknown,
+  selectedAnswerLabels,
+  type UserQuestion,
+  type UserQuestionReply,
+} from "../userQuestion";
 
 type PendingApproval = {
   id: string;
-  kind: "permission" | "question";
   resolve: (decision: ApprovalDecision) => void;
+};
+
+type PendingQuestion = {
+  id: string;
+  questions: UserQuestion[];
+  resolve: (reply: UserQuestionReply) => void;
 };
 
 type Live = {
@@ -49,12 +74,14 @@ type Live = {
   openCodeSessionId: string;
   cwd: string;
   runtimeMode: RuntimeMode;
+  planning: boolean;
   onEvent: (event: HarnessEvent) => void;
   approvals: Map<number, PendingApproval>;
+  questions: Map<number, PendingQuestion>;
   nextApprovalUiId: number;
   partById: Map<string, OpenCodePart>;
   emittedTextByPartId: Map<string, string>;
-  messageRoleById: Map<string, "user" | "assistant">;
+  messageRoleById: Map<string, "user" | "assistant" | "hidden">;
   cancelled: boolean;
   muteUpdates: boolean;
   turns: Promise<void>;
@@ -96,16 +123,53 @@ export async function sendOpenCodeTurn(input: SendTurnInput): Promise<void> {
 
   live.onEvent = input.onEvent;
   live.runtimeMode = input.runtimeMode;
-  live.turns = live.turns.catch(() => undefined).then(async () => {
-    live.cancelled = false;
-    live.muteUpdates = false;
-    try {
-      await runTurn(live, input);
-    } catch (error) {
-      if (live.cancelled) return;
-      throw error;
-    }
-  });
+  live.planning = input.intent === "plan";
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      try {
+        await runTurn(live, input);
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
+  await live.turns;
+}
+
+export async function compactOpenCodeContext(
+  input: CompactContextInput,
+): Promise<void> {
+  let live: Live;
+  try {
+    live = await ensureLive(input);
+  } catch (error) {
+    cancelledThreads.delete(input.sessionId);
+    throw error;
+  }
+  if (cancelledThreads.delete(input.sessionId)) return;
+
+  const model = parseOpenCodeModelSlug(nativeModelId(input.model));
+  if (!model) {
+    throw new Error(
+      "OpenCode models use provider/model ids. Wait for the catalog to load, then pick a model.",
+    );
+  }
+  live.onEvent = input.onEvent;
+  live.turns = live.turns
+    .catch(() => undefined)
+    .then(async () => {
+      live.cancelled = false;
+      live.muteUpdates = false;
+      try {
+        await runCompaction(live, model);
+      } catch (error) {
+        if (live.cancelled) return;
+        throw error;
+      }
+    });
   await live.turns;
 }
 
@@ -148,6 +212,17 @@ export function respondOpenCodeApproval(
   pending.resolve(decision);
 }
 
+export function respondOpenCodeQuestion(
+  sessionId: string,
+  requestId: number,
+  reply: UserQuestionReply,
+): void {
+  const live = liveByThread.get(sessionId);
+  const pending = live?.questions.get(requestId);
+  if (!pending) return;
+  pending.resolve(reply);
+}
+
 export async function cancelOpenCodeTurn(sessionId: string): Promise<void> {
   const live = liveByThread.get(sessionId);
   if (!live) {
@@ -158,6 +233,9 @@ export async function cancelOpenCodeTurn(sessionId: string): Promise<void> {
   live.muteUpdates = true;
   for (const [, pending] of live.approvals) pending.resolve("deny");
   live.approvals.clear();
+  for (const [, pending] of live.questions)
+    pending.resolve({ kind: "skipped" });
+  live.questions.clear();
   await live.client.abortSession(live.openCodeSessionId);
   finishActiveTurn(live, [
     { type: "message.completed" },
@@ -173,6 +251,9 @@ export async function stopOpenCodeSession(sessionId: string): Promise<void> {
     live.muteUpdates = true;
     for (const [, pending] of live.approvals) pending.resolve("deny");
     live.approvals.clear();
+    for (const [, pending] of live.questions)
+      pending.resolve({ kind: "skipped" });
+    live.questions.clear();
     live.activeTurn = false;
     live.turnDone?.();
     live.turnDone = null;
@@ -199,7 +280,7 @@ export function bindOpenCodeSession(
   resumeByThread.set(threadId, { sessionId, cwd });
 }
 
-async function ensureLive(input: SendTurnInput): Promise<Live> {
+async function ensureLive(input: HarnessSessionInput): Promise<Live> {
   const existing = liveByThread.get(input.sessionId);
   if (existing && existing.cwd === input.cwd) {
     existing.onEvent = input.onEvent;
@@ -273,8 +354,10 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       openCodeSessionId: openCodeSession.id,
       cwd: input.cwd,
       runtimeMode: input.runtimeMode,
+      planning: input.intent === "plan",
       onEvent: input.onEvent,
       approvals: new Map(),
+      questions: new Map(),
       nextApprovalUiId: 1,
       partById: new Map(),
       emittedTextByPartId: new Map(),
@@ -377,7 +460,7 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
     await live.client.promptAsync({
       sessionID: live.openCodeSessionId,
       model: parsed,
-      agent: input.modelSettings?.agent,
+      agent: openCodeAgentForTurn(input),
       variant: input.modelSettings?.variant,
       parts,
     });
@@ -396,6 +479,16 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
   }
 }
 
+async function runCompaction(
+  live: Live,
+  model: { providerID: string; modelID: string },
+): Promise<void> {
+  // Unlike prompt_async, summarize responds only after the compaction pass.
+  // Keep this outside the normal turn latch: its eventual session.status=idle
+  // must not become a pending completion for the next user turn.
+  await live.client.summarizeSession(live.openCodeSessionId, model);
+}
+
 function handleEvent(live: Live, event: Record<string, unknown>): void {
   const payloadSessionId = eventSessionId(event);
   if (payloadSessionId && payloadSessionId !== live.openCodeSessionId) return;
@@ -408,10 +501,15 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
       const info = asRecord(properties.info);
       const id = stringField(info, "id");
       const role = stringField(info, "role");
+      const agent = stringField(info, "agent");
+      const hidden = agent != null && KNOWN_HIDDEN_AGENTS.has(agent);
       if (id && (role === "user" || role === "assistant")) {
-        live.messageRoleById.set(id, role);
+        live.messageRoleById.set(id, hidden ? "hidden" : role);
       }
-      if (role === "assistant") emitContext(live, info);
+      // A compaction assistant's usage describes the summarization call, not
+      // the rebuilt context. Keep the previous meter value until a real turn
+      // reports the post-compaction window level.
+      if (role === "assistant" && !hidden) emitContext(live, info);
       break;
     }
     case "message.removed": {
@@ -450,11 +548,14 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
       break;
     }
     case "permission.asked": {
-      const id = stringField(properties, "id") ?? stringField(properties, "requestID");
+      const id =
+        stringField(properties, "id") ?? stringField(properties, "requestID");
       if (!id) break;
       const permission = stringField(properties, "permission") ?? "tool";
       const patterns = Array.isArray(properties.patterns)
-        ? properties.patterns.filter((item): item is string => typeof item === "string")
+        ? properties.patterns.filter(
+            (item): item is string => typeof item === "string",
+          )
         : [];
       const metadata = asRecord(properties.metadata) ?? {};
       const callId =
@@ -471,7 +572,9 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
           tool: permission,
           state: {
             ...metadata,
-            input: metadata.input ?? (patterns[0] ? { path: patterns[0] } : undefined),
+            input:
+              metadata.input ??
+              (patterns[0] ? { path: patterns[0] } : undefined),
           },
         }) ??
         (patterns[0]
@@ -494,6 +597,14 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
           query: preview?.query,
           previewKind: preview?.kind,
         }) || permissionTitle(permission, patterns);
+      if (live.planning) {
+        const decision =
+          kind === "read" || kind === "search" ? "allow" : "deny";
+        void live.client
+          .replyPermission(id, toOpenCodePermissionReply(decision))
+          .catch(() => undefined);
+        break;
+      }
       if (callId) {
         live.onEvent({
           type: "tool.updated",
@@ -511,28 +622,22 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
         callId,
         preview,
       });
-      void waitApproval(live, uiId, id, "permission");
+      void waitApproval(live, uiId, id);
       break;
     }
     case "question.asked": {
-      const id = stringField(properties, "id") ?? stringField(properties, "requestID");
+      const id =
+        stringField(properties, "id") ?? stringField(properties, "requestID");
       if (!id) break;
-      const questions = Array.isArray(properties.questions)
-        ? properties.questions
-        : [];
-      const first = asRecord(questions[0]);
-      const title =
-        stringField(first, "header") ??
-        stringField(first, "question") ??
-        "OpenCode question";
+      const questions = questionsFromUnknown(properties);
       const uiId = live.nextApprovalUiId++;
       live.onEvent({
-        type: "approval.requested",
+        type: "question.asked",
         requestId: uiId,
-        title,
-        kind: "other",
+        title: questionPromptTitle(questions) || "OpenCode question",
+        questions,
       });
-      void waitApproval(live, uiId, id, "question", questions);
+      void waitQuestion(live, uiId, id, questions);
       break;
     }
     case "session.status": {
@@ -562,14 +667,21 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
   }
 }
 
+export function openCodeAgentForTurn(input: {
+  intent?: SendTurnInput["intent"];
+  modelSettings?: Record<string, string>;
+}): string | undefined {
+  if (input.intent === "plan") return "plan";
+  if (input.intent === "build") return "build";
+  const configured = input.modelSettings?.agent?.trim();
+  return configured && configured !== "plan" ? configured : "build";
+}
+
 /**
  * OpenCode reports tokens per assistant message but not the window, so the
  * window comes from the catalog entry for the model that produced it.
  */
-function emitContext(
-  live: Live,
-  info: Record<string, unknown> | null,
-): void {
+function emitContext(live: Live, info: Record<string, unknown> | null): void {
   const used = contextUsedFromMessageInfo(info);
   if (used === undefined) return;
   const providerID = stringField(info, "providerID");
@@ -585,7 +697,10 @@ function emitAssistantText(live: Live, part: OpenCodePart): void {
   const text = part.text;
   if (text === undefined) return;
   const previous = live.emittedTextByPartId.get(part.id);
-  const { latestText, deltaToEmit } = mergeOpenCodeAssistantText(previous, text);
+  const { latestText, deltaToEmit } = mergeOpenCodeAssistantText(
+    previous,
+    text,
+  );
   live.emittedTextByPartId.set(part.id, latestText);
   const mapped = textDeltaEvent(part, deltaToEmit);
   if (mapped) live.onEvent(mapped);
@@ -611,6 +726,8 @@ function emitTool(live: Live, part: OpenCodePart): void {
     (typeof state.title === "string" && state.title) ||
     tool;
   const detail = detailFromToolPart(part);
+  const tasks = taskListFromToolInput(tool, state.input);
+  if (tasks) live.onEvent({ type: "tasks.updated", items: tasks });
   if (status === "pending") {
     live.onEvent({
       type: "tool.started",
@@ -642,31 +759,39 @@ async function waitApproval(
   live: Live,
   uiId: number,
   id: string,
-  kind: "permission" | "question",
-  questions?: unknown[],
 ): Promise<void> {
   const decision = await new Promise<ApprovalDecision>((resolve) => {
-    live.approvals.set(uiId, { id, kind, resolve });
+    live.approvals.set(uiId, { id, resolve });
   });
   live.approvals.delete(uiId);
   live.onEvent({ type: "approval.resolved", requestId: uiId, decision });
-  if (kind === "permission") {
-    await live.client
-      .replyPermission(id, toOpenCodePermissionReply(decision))
-      .catch(() => undefined);
-    return;
-  }
-  if (decision === "deny") {
+  await live.client
+    .replyPermission(id, toOpenCodePermissionReply(decision))
+    .catch(() => undefined);
+}
+
+async function waitQuestion(
+  live: Live,
+  uiId: number,
+  id: string,
+  questions: UserQuestion[],
+): Promise<void> {
+  const reply = await new Promise<UserQuestionReply>((resolve) => {
+    live.questions.set(uiId, { id, questions, resolve });
+  });
+  live.questions.delete(uiId);
+  live.onEvent({
+    type: "question.resolved",
+    requestId: uiId,
+    decision: reply.kind,
+  });
+  if (reply.kind !== "answered") {
     await live.client.rejectQuestion(id).catch(() => undefined);
     return;
   }
-  const answers = (questions ?? []).map((question) => {
-    const rec = asRecord(question);
-    const options = Array.isArray(rec?.options) ? rec.options : [];
-    const first = asRecord(options[0]);
-    const label = stringField(first, "label");
-    return label ? [label] : [];
-  });
+  const answers = questions.map((question) =>
+    selectedAnswerLabels(question, reply),
+  );
   await live.client.replyQuestion(id, answers).catch(() => undefined);
 }
 
@@ -710,12 +835,14 @@ function parsePart(value: unknown): OpenCodePart | null {
 function roleForPart(
   live: Live,
   part: Pick<OpenCodePart, "messageID" | "type">,
-): "assistant" | "user" | undefined {
+): "assistant" | "user" | "hidden" | undefined {
   if (part.messageID) {
     const known = live.messageRoleById.get(part.messageID);
     if (known) return known;
   }
-  return part.type === "tool" || part.type === "text" || part.type === "reasoning"
+  return part.type === "tool" ||
+    part.type === "text" ||
+    part.type === "reasoning"
     ? "assistant"
     : undefined;
 }

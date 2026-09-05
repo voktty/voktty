@@ -112,6 +112,7 @@ import {
   useLiveComponentStore,
   formatComponentPromptDirective,
 } from "@/modules/preview";
+import { COMPACT_COMMAND, isCompactCommand } from "../lib/compact";
 
 type Props = {
   enabled?: boolean;
@@ -127,6 +128,7 @@ type Props = {
   recents?: RecentProject[];
   hideProjectPicker?: boolean;
   context?: ContextUsage;
+  compactSupported?: boolean;
   quoteRequest?: QuoteRequest;
   initialDraft?: string;
   inboxCard?: InboxComposerCard;
@@ -149,6 +151,7 @@ type Props = {
   onHandoffCardDismiss?: () => void;
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop?: () => void;
+  onCompactContext?: () => boolean;
   onDeleteQueuedMessage?: (messageId: string) => void;
   onEditQueuedMessage?: (messageId: string, text: string) => void;
   onQueuedMessageEditingChange?: (messageId?: string) => void;
@@ -369,6 +372,7 @@ export function Composer({
   recents = [],
   hideProjectPicker = false,
   context,
+  compactSupported = false,
   quoteRequest,
   initialDraft,
   inboxCard,
@@ -390,6 +394,7 @@ export function Composer({
   onHandoffCardDismiss,
   onSubmit,
   onStop,
+  onCompactContext,
   onDeleteQueuedMessage,
   onEditQueuedMessage,
   onQueuedMessageEditingChange,
@@ -453,17 +458,24 @@ export function Composer({
     pickerOpen,
   });
   const skills = skillCatalog.skills;
+  const slashItems = useMemo(
+    () => [
+      COMPACT_COMMAND,
+      ...skills.filter((skill) => skill.name !== COMPACT_COMMAND.name),
+    ],
+    [skills],
+  );
   const skillLimit =
     harness === "pi" ? Number.POSITIVE_INFINITY : undefined;
   const rankedSkills = rankSkills(
-    skills,
+    slashItems,
     slash?.query ?? "",
     skillLimit,
   );
   const attachmentsSupported = harnessSupportsAttachments(harness);
   const skillNames = useMemo(
-    () => new Set(skills.map((skill) => skill.invocation)),
-    [skills],
+    () => new Set(slashItems.map((skill) => skill.invocation)),
+    [slashItems],
   );
   const mentionFiles = useMemo(
     () =>
@@ -818,6 +830,20 @@ export function Composer({
   }, [addAttachments, attachmentsSupported, enabled]);
 
   const submit = (value: string) => {
+    if (isCompactCommand(value)) {
+      if (!onCompactContext?.()) return;
+      if (!ref.current) return;
+      ref.current.value = "";
+      ref.current.style.height = "auto";
+      setDraft("");
+      setSlash(null);
+      setMention(null);
+      setCreatingSkill(false);
+      setCreateError(null);
+      syncHasValue("", attachments);
+      return;
+    }
+
     let text = composeInboxMessage(inboxCard, value);
     const files = attachments;
     const selectedComp = useLiveComponentStore.getState().selectedComponent;
@@ -1066,7 +1092,11 @@ export function Composer({
               onClose={() => ref.current?.focus()}
             />
             <div className="ml-auto flex shrink-0 items-center">
-              <ContextMeter usage={context} />
+              <ContextMeter
+                usage={context}
+                onCompact={compactSupported ? onCompactContext : undefined}
+                compactDisabled={busy}
+              />
             </div>
           </div>
 

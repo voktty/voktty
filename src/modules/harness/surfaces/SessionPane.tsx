@@ -10,7 +10,7 @@ import {
 } from "react";
 import { Composer } from "../chrome/Composer";
 import { SessionReview } from "../chrome/SessionReview";
-import type { ApprovalDecision } from "../lib/harness";
+import { canCompactHarnessContext, type ApprovalDecision } from "../lib/harness";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import {
   sessionDisplayTitle,
@@ -56,6 +56,7 @@ type Props = {
     attachments: Attachment[],
   ) => void;
   onStop: (sessionId: string) => void;
+  onCompactContext: (sessionId: string) => boolean;
   onDeleteQueuedMessage?: (sessionId: string, messageId: string) => void;
   onEditQueuedMessage?: (
     sessionId: string,
@@ -115,6 +116,7 @@ export const SessionPane = memo(function SessionPane({
   onRuntimeModeChange,
   onSubmit,
   onStop,
+  onCompactContext,
   onDeleteQueuedMessage,
   onEditQueuedMessage,
   onQueuedMessageEditingChange,
@@ -232,6 +234,8 @@ export const SessionPane = memo(function SessionPane({
       onRuntimeModeChange={(mode) => onRuntimeModeChange(session.id, mode)}
       onSubmit={(text, attachments) => onSubmit(session.id, text, attachments)}
       onStop={() => onStop(session.id)}
+      compactSupported={canCompactHarnessContext(session.harness)}
+      onCompactContext={() => onCompactContext(session.id)}
       queuedMessages={session.queuedMessages}
       queueStatus={session.queueStatus}
       onDeleteQueuedMessage={(messageId) =>
