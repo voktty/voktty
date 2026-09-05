@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-09-05
+
 ### Added
 
+- Navigate sessions with Shift+Command/Ctrl+Up or Down and projects with Shift+Command/Ctrl+Left or Right. The shortcuts follow the visible sidebar order and also work from an empty composer. In #47 by @MisterWanted.
+- Session cards show an Archive or Unarchive action on hover and keyboard focus.
 - OMP's native commands and custom workflows appear in the `/` picker, with descriptions and argument hints. Commands run through OMP with their arguments intact, and workflow dialogs support choosing options and entering text. MonoCode keeps `/plan` and `/compact`; use `/omp:plan` and `/omp:compact` for OMP's versions.
+- The `@` file picker supports files and folders whose paths contain spaces and refreshes when the workspace changes, so newly created paths appear without restarting MonoCode. Unsafe control and bidirectional formatting characters are excluded from mention tokens. In #67 by @elanchezhiyanr.
 
 ### Fixed
 
+- Opening a file from the explorer preserves the unfinished composer draft. In #76 by @kartava.
+- Pi extension status and notification labels no longer expose raw ANSI styling codes; interactive option values remain unchanged.
 - OMP commands that finish locally display their output and release the composer without waiting for an agent turn. Command inventory updates refresh the active session's picker, and ongoing OMP workflows no longer finish early on a nonterminal agent event. In #73.
 
 ## [0.1.33] - 2026-09-04
@@ -527,7 +534,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.33...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.34...HEAD
+[0.1.34]: https://github.com/hardbeat920/monocode/compare/v0.1.33...v0.1.34
 [0.1.33]: https://github.com/hardbeat920/monocode/compare/v0.1.32...v0.1.33
 [0.1.32]: https://github.com/hardbeat920/monocode/compare/v0.1.31...v0.1.32
 [0.1.31]: https://github.com/hardbeat920/monocode/compare/v0.1.30...v0.1.31
