@@ -117,6 +117,10 @@ ironrdp-tls = { version = "0.2", features = ["rustls"] }
 rusqlite = { version = "0.33", features = ["bundled"] }
 regex = "1"
 chrono = "0.4"
+# Native SSH transport for SFTP, port forwarding, metrics and remote processes.
+# The interactive PTY still uses the system ssh client; see ADR-010.
+russh = "0.54"
+russh-sftp = "2.4.0"
 
 [dev-dependencies]
 proptest = "1"
