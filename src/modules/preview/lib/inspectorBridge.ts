@@ -3,26 +3,30 @@ import { getInspectorInjectedScript } from "./inspectorScript";
 
 export function attachInspectorBridge(
   iframe: HTMLIFrameElement,
-  onSelected: (meta: LiveComponentMetadata) => void,
+  onSelected: (meta: LiveComponentMetadata, autoJump?: boolean) => void,
   onStateChange?: (active: boolean) => void,
   onReady?: () => void,
   onNavigate?: (url: string) => void,
+  onReload?: () => void,
 ): () => void {
   const handleMessage = (event: MessageEvent) => {
     if (!event.data || typeof event.data !== "object") return;
-    const { type, payload } = event.data as {
+    const { type, payload, autoJump } = event.data as {
       type?: string;
       payload?: unknown;
+      autoJump?: boolean;
     };
 
     if (type === "VOKTTY_LIVE_COMPONENT_SELECTED" && payload) {
-      onSelected(payload as LiveComponentMetadata);
+      onSelected(payload as LiveComponentMetadata, Boolean(autoJump));
     } else if (type === "VOKTTY_INSPECTOR_STATE_CHANGE" && payload) {
       const { active } = payload as { active: boolean };
       onStateChange?.(active);
     } else if (type === "VOKTTY_PROXY_NAVIGATE" && payload) {
       const { url } = payload as { url: string };
       if (url) onNavigate?.(url);
+    } else if (type === "VOKTTY_RELOAD_PREVIEW") {
+      onReload?.();
     } else if (type === "VOKTTY_INSPECTOR_READY") {
       onReady?.();
     }
