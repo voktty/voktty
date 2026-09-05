@@ -17,6 +17,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -24,7 +25,6 @@ import {
   type ClipboardEvent,
   type KeyboardEvent,
   type ReactNode,
-  type UIEvent,
 } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
@@ -671,12 +671,26 @@ export function Composer({
     onDraftChange?.(draft);
   }, [draft, onDraftChange]);
 
-  const syncHighlightScroll = (e: UIEvent<HTMLTextAreaElement>) => {
+  const syncHighlightScroll = useCallback((el: HTMLTextAreaElement) => {
     const highlight = highlightRef.current;
     if (!highlight) return;
-    highlight.scrollTop = e.currentTarget.scrollTop;
-    highlight.scrollLeft = e.currentTarget.scrollLeft;
-  };
+    highlight.scrollTop = el.scrollTop;
+    highlight.scrollLeft = el.scrollLeft;
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    // The textarea can scroll itself to keep the caret visible before React
+    // commits the updated highlight text. Sync again after that commit, when
+    // the overlay has enough scrollable content to accept the same offset.
+    syncHighlightScroll(el);
+    const frame = requestAnimationFrame(() => {
+      if (ref.current === el) syncHighlightScroll(el);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draft, syncHighlightScroll]);
 
   const syncTokensFromTextarea = (el: HTMLTextAreaElement) => {
     if (creatingSkill) return;
@@ -1229,7 +1243,7 @@ export function Composer({
               onFocus={onFocus}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
-              onScroll={syncHighlightScroll}
+              onScroll={(e) => syncHighlightScroll(e.currentTarget)}
               onClick={(e) => syncTokensFromTextarea(e.currentTarget)}
               onKeyUp={(e) => syncTokensFromTextarea(e.currentTarget)}
               onSelect={(e) => syncTokensFromTextarea(e.currentTarget)}
