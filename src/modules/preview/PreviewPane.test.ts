@@ -53,7 +53,7 @@ describe("PreviewPane iframe sandbox", () => {
     }
   });
 
-  it("sets referrerPolicy to no-referrer", () => {
-    expect(iframeJsx).toMatch(/referrerPolicy="no-referrer"/);
+  it("sets a safe referrerPolicy", () => {
+    expect(iframeJsx).toMatch(/referrerPolicy="no-referrer-when-downgrade"/);
   });
 });

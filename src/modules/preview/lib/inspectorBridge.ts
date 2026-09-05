@@ -6,6 +6,7 @@ export function attachInspectorBridge(
   onSelected: (meta: LiveComponentMetadata) => void,
   onStateChange?: (active: boolean) => void,
   onReady?: () => void,
+  onNavigate?: (url: string) => void,
 ): () => void {
   const handleMessage = (event: MessageEvent) => {
     if (!event.data || typeof event.data !== "object") return;
@@ -19,6 +20,9 @@ export function attachInspectorBridge(
     } else if (type === "VOKTTY_INSPECTOR_STATE_CHANGE" && payload) {
       const { active } = payload as { active: boolean };
       onStateChange?.(active);
+    } else if (type === "VOKTTY_PROXY_NAVIGATE" && payload) {
+      const { url } = payload as { url: string };
+      if (url) onNavigate?.(url);
     } else if (type === "VOKTTY_INSPECTOR_READY") {
       onReady?.();
     }

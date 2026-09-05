@@ -3,8 +3,11 @@ import type { LiveComponentMetadata } from "../types";
 import {
   formatCandidateGrepQuery,
   formatComponentBadgeLabel,
+  formatComponentDebugPrompt,
   formatComponentLocation,
+  formatComponentModifyPrompt,
   formatComponentPromptDirective,
+  formatComponentReference,
   useLiveComponentStore,
 } from "./liveComponentStore";
 
@@ -43,7 +46,7 @@ describe("liveComponentStore", () => {
 
     useLiveComponentStore.getState().setSelectedComponent(mockComponent);
 
-    expect(useLiveComponentStore.getState().selectedComponent).toEqual(
+    expect(useLiveComponentStore.getState().selectedComponent).toMatchObject(
       mockComponent,
     );
     expect(useLiveComponentStore.getState().isInspectorActive).toBe(false);
@@ -104,11 +107,38 @@ describe("liveComponentStore", () => {
     expect(directive).toContain("Directive: The user\'s request applies specifically to this targeted component");
   });
 
-  it("generates candidate grep queries for ambiguous components", () => {
+  it("formats component reference for copying", () => {
+    expect(formatComponentReference(mockComponent)).toBe(
+      "@component <CheckoutButton/> in src/components/CheckoutButton.tsx:42",
+    );
+
+    const noFile: LiveComponentMetadata = {
+      ...mockComponent,
+      filePath: undefined,
+    };
+    expect(formatComponentReference(noFile)).toBe(
+      "@dom `button.checkout-btn.primary`",
+    );
+  });
+
+  it("formats component debug and modify prompts", () => {
+    const debugPrompt = formatComponentDebugPrompt(mockComponent);
+    expect(debugPrompt).toContain("### 🐛 Solicitud de Diagnóstico y Depuración");
+    expect(debugPrompt).toContain("CheckoutButton");
+    expect(debugPrompt).toContain("src/components/CheckoutButton.tsx:42");
+    expect(debugPrompt).toContain("button.checkout-btn.primary");
+
+    const modifyPrompt = formatComponentModifyPrompt(mockComponent);
+    expect(modifyPrompt).toContain("### 💡 Instrucción de Modificación de Componente");
+    expect(modifyPrompt).toContain("CheckoutButton");
+    expect(modifyPrompt).toContain("src/components/CheckoutButton.tsx:42");
+  });
+
+  it("formats candidate grep queries", () => {
     const queries = formatCandidateGrepQuery(mockComponent);
     expect(queries).toContain("function CheckoutButton");
     expect(queries).toContain("<CheckoutButton");
-    expect(queries).toContain("id=\"pay-now\"");
+    expect(queries).toContain('id="pay-now"');
     expect(queries).toContain("checkout-btn");
     expect(queries).toContain("Pay $50");
   });

@@ -17,6 +17,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
+  CodeIcon,
   FileAddIcon,
   Folder01Icon,
   FolderAddIcon,
@@ -88,7 +89,9 @@ type Props = {
   workspaceEnv: WorkspaceEnv;
   activeFilePath?: string | null;
   onOpenFile: (path: string, pin?: boolean) => void;
+  onOpenFileInEditor?: (path: string, pin?: boolean) => void;
   onOpenPreview?: (path: string) => void;
+  isPreviewActive?: boolean;
   onPathRenamed?: (from: string, to: string) => void;
   onPathDeleted?: (path: string) => void;
   onRevealInTerminal?: (path: string) => void;
@@ -245,7 +248,9 @@ export const FileExplorer = memo(
       workspaceEnv,
       activeFilePath,
       onOpenFile,
+      onOpenFileInEditor,
       onOpenPreview,
+      isPreviewActive,
       onPathRenamed,
       onPathDeleted,
       onRevealInTerminal,
@@ -1131,10 +1136,37 @@ export const FileExplorer = memo(
                         className={COMPACT_ITEM}
                         onSelect={() => onOpenFile(menuTarget.path, true)}
                       >
-                        {t("common.open")}
+                        {isPreviewActive ? (
+                          <>
+                            <HugeiconsIcon
+                              icon={Globe02Icon}
+                              size={14}
+                              strokeWidth={1.75}
+                              className="mr-1.5 shrink-0 text-cyan-400"
+                            />
+                            {t("explorer.viewInBrowserPreview")}
+                          </>
+                        ) : (
+                          t("common.open")
+                        )}
                       </ContextMenuItem>
                     )}
-                    {onOpenPreview &&
+                    {isPreviewActive && onOpenFileInEditor && !menuTarget.isDir && (
+                      <ContextMenuItem
+                        className={COMPACT_ITEM}
+                        onSelect={() => onOpenFileInEditor(menuTarget.path, true)}
+                      >
+                        <HugeiconsIcon
+                          icon={CodeIcon}
+                          size={14}
+                          strokeWidth={1.75}
+                          className="mr-1.5 shrink-0 text-emerald-400"
+                        />
+                        {t("explorer.openInEditor")}
+                      </ContextMenuItem>
+                    )}
+                    {!isPreviewActive &&
+                      onOpenPreview &&
                       (!menuTarget.isDir
                         ? isWebPreviewablePath(menuTarget.path)
                         : true) && (

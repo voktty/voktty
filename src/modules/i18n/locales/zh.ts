@@ -725,6 +725,8 @@ const zhBase = mergeLocale(en, {
     searching: "正在搜索…",
     noMatches: "无匹配项",
     open: "打开",
+    openInEditor: "在编辑器中打开",
+    viewInBrowserPreview: "在网页预览中查看",
     openInSourceControl: "在源代码管理中打开",
     openGitHistory: "打开 Git 历史",
     attachToAgent: "附加到智能体",

@@ -3,6 +3,9 @@ export type FrameworkType =
   | "vue"
   | "svelte"
   | "astro"
+  | "blade"
+  | "php"
+  | "template"
   | "dom-generic";
 
 export type ComponentRect = {
@@ -27,12 +30,15 @@ export type LiveComponentMetadata = {
   tagName: string;
   idAttr?: string;
   classList: string[];
+  parentClasses?: string[];
   htmlSnippet: string;
   innerText: string;
   attributes: Record<string, string>;
   propsSummary?: Record<string, unknown>;
   hierarchy: string[];
   rect?: ComponentRect;
+  matchedBy?: string;
+  isResolvingSource?: boolean;
 };
 
 export type InspectorInboundMessage =

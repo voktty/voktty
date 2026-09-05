@@ -13,6 +13,7 @@ export type ShortcutId =
   | "tab.newBlock"
   | "tab.newPrivate"
   | "tab.newPreview"
+  | "preview.toggleInspector"
   | "tab.newApiClient"
   | "tab.newEditor"
   | "tab.newHarness"
@@ -155,6 +156,15 @@ export const SHORTCUTS: Shortcut[] = [
     group: "Tabs",
     // Cmd/Ctrl+P belongs to Quick Open, so web preview uses this binding.
     defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "o" }],
+  },
+  {
+    id: "preview.toggleInspector",
+    labelKey: "shortcuts.labels.previewToggleInspector",
+    group: "Tabs",
+    defaultBindings: [
+      { [MOD_PROP]: true, key: "g" },
+      { [MOD_PROP]: true, shift: true, key: "c" },
+    ],
   },
   {
     id: "tab.newApiClient",
@@ -324,7 +334,6 @@ export const SHORTCUTS: Shortcut[] = [
       { [MOD_PROP]: true, key: "f" },
       { key: "F3" },
       { shift: true, key: "F3" },
-      { [MOD_PROP]: true, key: "g" },
     ],
   },
   {
