@@ -89,6 +89,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
         (active) => {
           setInspectorActive(active);
         },
+        () => {
+          sendInspectorActive(iframe, useLiveComponentStore.getState().isInspectorActive);
+        },
       );
 
       return () => {
