@@ -500,6 +500,7 @@ function titleTabsEqual(a: TitleTab[], b: TitleTab[]): boolean {
       tab.files.join("\u0000") === other.files.join("\u0000") &&
       tab.multiPane === other.multiPane &&
       tab.fileFocused === other.fileFocused &&
+      tab.blank === other.blank &&
       tab.terminal === other.terminal &&
       tab.groupId === other.groupId
     );
@@ -2103,6 +2104,23 @@ export default function App({
       sidebarCwd,
       tabCloseScope,
     ],
+  );
+
+  const onCloseTitleTab = useCallback(
+    (id: string) => {
+      const closePlan = planWorkspaceTabClose({
+        tabs: tabsRef.current,
+        sessions: sessionsRef.current,
+        closingTabId: id,
+        scope: tabCloseScope,
+      });
+      if (closePlan.action === "keep" && id === activeTabIdRef.current) {
+        onClosePane();
+        return;
+      }
+      onCloseTab(id);
+    },
+    [onClosePane, onCloseTab, tabCloseScope],
   );
 
   const deckProjectTabs = useMemo(() => {
@@ -4826,7 +4844,7 @@ export default function App({
             onOpenSettings={onOpenSettings}
             onOpenInbox={onOpenInbox}
             onOpenNotes={notesEnabled ? onOpenNotes : undefined}
-            onClose={onCloseTab}
+            onClose={onCloseTitleTab}
             onReorder={onReorderTabs}
             onGoToFile={onGoToFile}
             recents={recents}
@@ -5199,6 +5217,7 @@ function toTitleTab(
     files,
     multiPane,
     fileFocused,
+    blank: isBlankWorkspaceTab(tab, sessions),
     dirty: tab.editorPanes.some((pane) =>
       pane.files.some(
         (file) => isFilesystemTab(file) && dirtyFiles.has(file.id),
