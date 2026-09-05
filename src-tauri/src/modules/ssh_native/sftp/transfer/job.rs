@@ -4,7 +4,7 @@
 //! so an illegal one is a compile-time-shaped error rather than a surprise in
 //! the middle of a copy.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::super::super::types::{SshErrorCode, SshNativeError};
 use super::plan::ConflictPolicy;
@@ -50,7 +50,7 @@ pub enum JobEvent {
     Cancel,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum JobDirection {
     Upload,
