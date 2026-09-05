@@ -9,16 +9,36 @@ pub mod cells;
 pub mod connection;
 pub mod host_trust;
 pub mod known_hosts;
+pub mod registry;
 pub mod sftp;
 pub mod state;
 pub mod types;
 
+use std::future::Future;
 use std::sync::Arc;
 
 use tauri::State;
 
 use state::{SshNativeState, SshSessionInfo};
-use types::{HostKeyApproval, SshCredential, SshNativeError, SshNativeTarget};
+use types::{HostKeyApproval, SshCredential, SshErrorCode, SshNativeError, SshNativeTarget};
+
+/// Drive a russh-backed operation on its own task.
+///
+/// Those futures carry higher-ranked `Send` bounds that a Tauri command future
+/// cannot satisfy directly, so every command hands the work to the runtime and
+/// awaits the join instead.
+pub(crate) async fn run_detached<T, F>(future: F) -> Result<T, SshNativeError>
+where
+    F: Future<Output = Result<T, SshNativeError>> + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::spawn(future).await.map_err(|error| {
+        SshNativeError::new(
+            SshErrorCode::Protocol,
+            format!("the operation task failed: {error}"),
+        )
+    })?
+}
 
 /// Open a native session and register it.
 ///
@@ -32,19 +52,11 @@ pub async fn ssh_native_connect(
     credentials: Vec<SshCredential>,
     approval: Option<HostKeyApproval>,
 ) -> Result<SshSessionInfo, SshNativeError> {
-    // Driven on its own task: the russh handshake future carries higher-ranked
-    // `Send` bounds that a Tauri command future cannot satisfy directly.
     let attempt = target.clone();
     let approval = approval.unwrap_or(HostKeyApproval::None);
     let (chain, remember_line) =
-        tokio::spawn(async move { connection::connect(attempt, credentials, approval).await })
-            .await
-            .map_err(|error| {
-                SshNativeError::new(
-                    types::SshErrorCode::Protocol,
-                    format!("connection task failed: {error}"),
-                )
-            })??;
+        run_detached(async move { connection::connect(attempt, credentials, approval).await })
+            .await?;
 
     // Only after the session is up, and only for a key the user accepted.
     if let Some(line) = remember_line {
