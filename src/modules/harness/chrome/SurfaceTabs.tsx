@@ -3,9 +3,11 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { basename } from "../lib/fs";
 import {
+  isChangesTab,
   isPlanTab,
   isReleaseNotesTab,
   isReviewTab,
+  isSessionChangesTab,
   isTerminalTab,
   type FilePaneTab,
 } from "../lib/layout";
@@ -45,6 +47,24 @@ export function surfaceTabPresentation(
       label: title,
       iconName: "CHANGELOG.md",
       tooltip: title,
+    };
+  }
+
+  if (isChangesTab(file)) {
+    return {
+      name: "Changes",
+      label: "Changes",
+      iconName: "CHANGES",
+      tooltip: "Working tree changes",
+    };
+  }
+
+  if (isSessionChangesTab(file)) {
+    return {
+      name: "Session Changes",
+      label: "Session Changes",
+      iconName: "CHANGES",
+      tooltip: "Changes captured for this session only",
     };
   }
 

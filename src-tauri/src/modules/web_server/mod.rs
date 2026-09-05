@@ -1555,7 +1555,7 @@ fn start_php_server(root: &Path, preferred_port: Option<u16>) -> Result<(u16, Ch
             .arg(format!("auto_append_file={}", append_path.to_string_lossy()));
     }
     if router_path.exists() {
-        cmd.arg(&router_path.to_string_lossy().to_string());
+        cmd.arg(router_path.to_string_lossy().to_string());
     }
     cmd.stdout(Stdio::null()).stderr(Stdio::null());
 
@@ -2029,10 +2029,11 @@ pub fn handle_proxy_connection(mut stream: TcpStream) {
                     return Some(decoded_url);
                 }
             }
-            if r.starts_with("http://") || r.starts_with("https://") {
-                if !r.contains("127.0.0.1") && !r.contains("localhost") {
-                    return Some(r.to_string());
-                }
+            if (r.starts_with("http://") || r.starts_with("https://"))
+                && !r.contains("127.0.0.1")
+                && !r.contains("localhost")
+            {
+                return Some(r.to_string());
             }
             None
         })
@@ -2321,6 +2322,7 @@ pub fn parse_url_port_and_path(raw_url: &str) -> (Option<u16>, Option<String>) {
     (port, path_opt)
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn web_server_resolve_element_source(
     state: State<'_, WebServerState>,
@@ -2360,21 +2362,23 @@ pub async fn web_server_resolve_element_source(
                             port: sp,
                             root_path,
                             ..
-                        } if *sp == port => {
-                            if !is_system_directory(root_path) && root_path.is_dir() {
-                                resolved_root = Some(root_path.clone());
-                                break;
-                            }
+                        } if *sp == port
+                            && !is_system_directory(root_path)
+                            && root_path.is_dir() =>
+                        {
+                            resolved_root = Some(root_path.clone());
+                            break;
                         }
                         RunningServer::Php {
                             port: pp,
                             root_path,
                             ..
-                        } if *pp == port => {
-                            if !is_system_directory(root_path) && root_path.is_dir() {
-                                resolved_root = Some(root_path.clone());
-                                break;
-                            }
+                        } if *pp == port
+                            && !is_system_directory(root_path)
+                            && root_path.is_dir() =>
+                        {
+                            resolved_root = Some(root_path.clone());
+                            break;
                         }
                         _ => {}
                     }

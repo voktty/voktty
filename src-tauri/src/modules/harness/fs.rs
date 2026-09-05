@@ -2229,7 +2229,7 @@ pub(crate) fn git_checked(root: &Path, args: &[&str]) -> Result<(), String> {
     Err(format!("git {} failed", args.join(" ")))
 }
 
-fn git_blob(root: &Path, spec: &str) -> Option<Vec<u8>> {
+pub(crate) fn git_blob(root: &Path, spec: &str) -> Option<Vec<u8>> {
     git_output(root, &["cat-file", "-p", spec])
 }
 
