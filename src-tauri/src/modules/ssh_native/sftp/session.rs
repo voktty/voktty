@@ -9,8 +9,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use russh_sftp::client::error::Error as SftpError;
+use russh_sftp::client::fs::File;
 use russh_sftp::client::SftpSession;
-use russh_sftp::protocol::FileAttributes;
+use russh_sftp::protocol::{FileAttributes, OpenFlags};
 use serde::Serialize;
 use tokio::sync::Mutex;
 
@@ -20,6 +21,8 @@ use super::super::state::SessionLease;
 use super::super::types::{SshErrorCode, SshNativeError};
 use super::failure::{self, is_transport_dead};
 use super::paths;
+use super::transfer::engine::{MAX_WALK_DEPTH_REMOTE, MAX_WALK_ENTRIES};
+use super::transfer::plan::WalkEntry;
 
 /// Matches the cap the existing remote helper applies, so a media preview
 /// behaves the same on either backend.
@@ -387,6 +390,86 @@ impl NativeSftp {
         Ok(removed)
     }
 
+    /// List everything under `root`, relative to it, for a transfer plan.
+    ///
+    /// Symlinks are recorded but never descended into, so a link loop on the
+    /// server cannot turn a finite tree into an endless walk.
+    pub async fn walk(&self, root: String) -> Result<Vec<WalkEntry>, SshNativeError> {
+        let base = self.resolve(&root)?;
+        let mut entries: Vec<WalkEntry> = Vec::new();
+        let mut pending: Vec<(String, String, usize)> = vec![(base, String::new(), 0)];
+
+        while let Some((directory, prefix, depth)) = pending.pop() {
+            if depth > MAX_WALK_DEPTH_REMOTE {
+                return Err(SshNativeError::new(
+                    SshErrorCode::Config,
+                    format!("refusing to walk deeper than {MAX_WALK_DEPTH_REMOTE} levels"),
+                ));
+            }
+
+            for item in self.list_dir(directory).await? {
+                if entries.len() >= MAX_WALK_ENTRIES {
+                    return Err(SshNativeError::new(
+                        SshErrorCode::Config,
+                        format!("refusing to walk more than {MAX_WALK_ENTRIES} entries"),
+                    ));
+                }
+                let relative = if prefix.is_empty() {
+                    item.name.clone()
+                } else {
+                    format!("{prefix}/{}", item.name)
+                };
+                let descend = item.is_dir && !item.is_symlink;
+                entries.push(WalkEntry {
+                    relative: relative.clone(),
+                    is_dir: descend,
+                    size: if descend { 0 } else { item.size },
+                    modified_ms: item.modified_ms,
+                });
+                if descend {
+                    pending.push((item.path, relative, depth + 1));
+                }
+            }
+        }
+
+        entries.sort_by(|a, b| a.relative.cmp(&b.relative));
+        Ok(entries)
+    }
+
+    /// Open a file for reading, positioned at `offset` so a resumed transfer
+    /// picks up where it stopped.
+    pub async fn open_read(&self, path: String, offset: u64) -> Result<File, SshNativeError> {
+        let target = self.resolve(&path)?;
+        let mut file = self
+            .run(&format!("open {target}"), |session| {
+                let target = target.clone();
+                Box::pin(async move { session.open(target).await })
+            })
+            .await?;
+        seek(&mut file, offset, &target).await?;
+        Ok(file)
+    }
+
+    /// Open a file for writing. A non-zero `offset` appends to what is already
+    /// there; a zero offset truncates, so a restart never leaves a tail of the
+    /// previous, longer file behind.
+    pub async fn open_write(&self, path: String, offset: u64) -> Result<File, SshNativeError> {
+        let target = self.resolve(&path)?;
+        let flags = if offset > 0 {
+            OpenFlags::WRITE | OpenFlags::CREATE
+        } else {
+            OpenFlags::WRITE | OpenFlags::CREATE | OpenFlags::TRUNCATE
+        };
+        let mut file = self
+            .run(&format!("open {target} for writing"), |session| {
+                let target = target.clone();
+                Box::pin(async move { session.open_with_flags(target, flags).await })
+            })
+            .await?;
+        seek(&mut file, offset, &target).await?;
+        Ok(file)
+    }
+
     async fn remove_file(&self, target: String) -> Result<(), SshNativeError> {
         self.run(&format!("remove {target}"), |session| {
             let target = target.clone();
@@ -402,6 +485,23 @@ impl NativeSftp {
         })
         .await
     }
+}
+
+async fn seek(file: &mut File, offset: u64, target: &str) -> Result<(), SshNativeError> {
+    use tokio::io::AsyncSeekExt;
+
+    if offset == 0 {
+        return Ok(());
+    }
+    file.seek(std::io::SeekFrom::Start(offset))
+        .await
+        .map_err(|error| {
+            SshNativeError::new(
+                SshErrorCode::Protocol,
+                format!("cannot seek {target} to {offset}: {error}"),
+            )
+        })?;
+    Ok(())
 }
 
 #[cfg(test)]
