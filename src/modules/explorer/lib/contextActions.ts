@@ -49,11 +49,28 @@ export async function downloadRemoteFilesOrFolders(
       t("feedback.downloadStarting", { label, host: connection.host }),
     );
 
-    await invoke("ssh_download_files", {
-      connection,
-      remoteSources: remotePaths,
-      localDestDir: destDir,
-    });
+    // The native queue serves this only when the workspace opted into it;
+    // otherwise the scp path below stays exactly as it was.
+    const { currentWorkspaceEnv } = await import("@/modules/workspace");
+    const env = currentWorkspaceEnv();
+    const queued =
+      env.kind === "ssh"
+        ? await (await import("@/modules/ssh-native/transferBridge")).enqueueDownload(
+            env,
+            remotePaths,
+            destDir,
+          )
+        : undefined;
+
+    if (queued) {
+      await queued.done;
+    } else {
+      await invoke("ssh_download_files", {
+        connection,
+        remoteSources: remotePaths,
+        localDestDir: destDir,
+      });
+    }
 
     toast.success(t("feedback.downloadSuccess", { label, dir: destDir }), {
       id: toastId,
