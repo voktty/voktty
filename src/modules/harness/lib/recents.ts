@@ -1,3 +1,4 @@
+import { IS_WINDOWS } from "./platform";
 import { prettyCwd } from "./paths";
 
 const KEY = "monocode.recentProjects";
@@ -46,11 +47,13 @@ export function loadRecents(): RecentProject[] {
       if (!item || typeof item !== "object") continue;
       const rec = item as { path?: unknown; openedAt?: unknown };
       if (typeof rec.path !== "string" || !rec.path) continue;
+      const path = normalize(rec.path);
+      if (!looksLikeProject(path)) continue;
       const openedAt =
         typeof rec.openedAt === "number" && Number.isFinite(rec.openedAt)
           ? rec.openedAt
           : 0;
-      out.push({ path: normalize(rec.path), openedAt });
+      out.push({ path, openedAt });
     }
     return out;
   } catch {
@@ -68,7 +71,7 @@ function save(next: RecentProject[]) {
 
 export function rememberProject(path: string): RecentProject[] {
   const normalized = normalize(path);
-  if (normalized === "~") return loadRecents();
+  if (normalized === "~" || !looksLikeProject(normalized)) return loadRecents();
   dropArchived(normalized);
   const prev = loadRecents().filter((p) => p.path !== normalized);
   const next = [{ path: normalized, openedAt: Date.now() }, ...prev].slice(
@@ -185,7 +188,7 @@ function readPathList(key: string): string[] {
     for (const item of parsed) {
       if (typeof item !== "string" || !item) continue;
       const path = normalize(item);
-      if (seen.has(path)) continue;
+      if (seen.has(path) || !looksLikeProject(path)) continue;
       seen.add(path);
       out.push(path);
     }
@@ -375,6 +378,16 @@ export function projectRailItems(
 /** True if this looks like a user project, not an app bundle or system root. */
 export function looksLikeProject(path: string): boolean {
   if (!path || path === "/" || path === "~") return false;
+  if (path === "/root" || path === "/root/") return false;
+  if (
+    IS_WINDOWS &&
+    !/^[a-zA-Z]:[/\\]/.test(path) &&
+    !/^[/\\]{2}/.test(path) &&
+    !path.startsWith("/tmp/") &&
+    !path.startsWith("/Users/")
+  ) {
+    return false;
+  }
   // Home itself arrives expanded (`/Users/me`), so the `~` check above misses
   // it. Indexing it walks `~/Library`, which trips the OS consent prompt.
   if (prettyCwd(path) === "~") return false;
