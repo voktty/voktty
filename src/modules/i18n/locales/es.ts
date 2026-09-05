@@ -2838,6 +2838,29 @@ export const es: TranslationSchema = {
         "Los archivos se abrirán en el editor y las carpetas en la terminal",
     },
   },
+  transfers: {
+    title: "Transferencias",
+    clearFinished: "Limpiar terminadas",
+    uploadingTo: "Subiendo a {target}",
+    downloadingTo: "Bajando a {target}",
+    cancel: "Cancelar transferencia",
+    progressLabel: "Progreso de la transferencia",
+    conflict: "{path} ya existe",
+    skipped: "{count} omitidos",
+    state: {
+      awaiting: "Esperando tu respuesta",
+      cancelled: "Cancelada",
+      failed: "Fallida",
+      completed: "Hecho",
+      preparing: "Preparando",
+    },
+    policy: {
+      overwrite: "Sobrescribir",
+      skip: "Omitir",
+      rename: "Renombrar",
+      resume: "Reanudar",
+    },
+  },
   ssh: {
     title: "Conexiones SSH",
     description:

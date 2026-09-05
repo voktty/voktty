@@ -4,6 +4,8 @@ import {
   prepareRemoteExplorerEnv,
 } from "@/app/lib/remoteExplorerEnv";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
+import { TransferQueuePanel } from "@/modules/ssh-native/components/TransferQueuePanel";
+import { decideTransferConflict } from "@/modules/ssh-native/transferBridge";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import {
   ResizableHandle,
@@ -4994,6 +4996,7 @@ export default function App() {
             />
           ) : null}
           <Toaster position="bottom-right" />
+          <TransferQueuePanel onDecide={decideTransferConflict} />
 
           {hasComposer ? (
             <>

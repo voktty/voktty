@@ -1695,6 +1695,29 @@ const jaBase = mergeLocale(en, {
       dropSubtitle: "ファイルはエディタで、フォルダはターミナルで開かれます",
     },
   },
+  transfers: {
+    title: "転送",
+    clearFinished: "完了分をクリア",
+    uploadingTo: "{target} へアップロード中",
+    downloadingTo: "{target} へダウンロード中",
+    cancel: "転送をキャンセル",
+    progressLabel: "転送の進捗",
+    conflict: "{path} は既に存在します",
+    skipped: "{count} 件スキップ",
+    state: {
+      awaiting: "応答を待っています",
+      cancelled: "キャンセル済み",
+      failed: "失敗",
+      completed: "完了",
+      preparing: "準備中",
+    },
+    policy: {
+      overwrite: "上書き",
+      skip: "スキップ",
+      rename: "名前を変更",
+      resume: "再開",
+    },
+  },
   ssh: {
     title: "SSH 接続",
     description:

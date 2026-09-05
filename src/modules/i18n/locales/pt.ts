@@ -1719,6 +1719,29 @@ const ptBase = mergeLocale(en, {
       dropSubtitle: "Arquivos abrirão no editor; pastas abrirão no terminal",
     },
   },
+  transfers: {
+    title: "Transferencias",
+    clearFinished: "Limpar concluidas",
+    uploadingTo: "Enviando para {target}",
+    downloadingTo: "Baixando para {target}",
+    cancel: "Cancelar transferencia",
+    progressLabel: "Progresso da transferencia",
+    conflict: "{path} ja existe",
+    skipped: "{count} ignorados",
+    state: {
+      awaiting: "Aguardando sua resposta",
+      cancelled: "Cancelada",
+      failed: "Falhou",
+      completed: "Concluido",
+      preparing: "Preparando",
+    },
+    policy: {
+      overwrite: "Sobrescrever",
+      skip: "Ignorar",
+      rename: "Renomear",
+      resume: "Retomar",
+    },
+  },
   ssh: {
     title: "Conexões SSH",
     description:

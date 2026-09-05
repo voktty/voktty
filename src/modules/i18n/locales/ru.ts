@@ -1699,6 +1699,29 @@ const ruBase = mergeLocale(en, {
       dropSubtitle: "Файлы откроются в редакторе, а папки — в терминале",
     },
   },
+  transfers: {
+    title: "Передачи",
+    clearFinished: "Очистить завершённые",
+    uploadingTo: "Загрузка в {target}",
+    downloadingTo: "Скачивание в {target}",
+    cancel: "Отменить передачу",
+    progressLabel: "Ход передачи",
+    conflict: "{path} уже существует",
+    skipped: "Пропущено: {count}",
+    state: {
+      awaiting: "Ожидание вашего ответа",
+      cancelled: "Отменена",
+      failed: "Ошибка",
+      completed: "Готово",
+      preparing: "Подготовка",
+    },
+    policy: {
+      overwrite: "Перезаписать",
+      skip: "Пропустить",
+      rename: "Переименовать",
+      resume: "Продолжить",
+    },
+  },
   ssh: {
     title: "SSH-подключения",
     description:
