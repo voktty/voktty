@@ -75,6 +75,8 @@ import type {
 import {
   createBlankSkill,
   rankSkills,
+  hasNativeCommands,
+  isNativeCommandPrompt,
   replaceSlashToken,
   skillTextParts,
   slashTokenAt,
@@ -130,6 +132,7 @@ type Props = {
   runtimeMode: RuntimeMode;
   cwd?: string;
   executionCwd: string;
+  sessionId?: string;
   branch?: string;
   recents?: RecentProject[];
   hideProjectPicker?: boolean;
@@ -381,6 +384,7 @@ export function Composer({
   runtimeMode,
   cwd = "~",
   executionCwd,
+  sessionId,
   branch,
   recents = [],
   hideProjectPicker = false,
@@ -473,6 +477,7 @@ export function Composer({
   const skillCatalog = useComposerSkills({
     harness,
     executionCwd,
+    sessionId,
     pickerOpen,
   });
   const skills = skillCatalog.skills;
@@ -482,13 +487,14 @@ export function Composer({
       COMPACT_COMMAND,
       ...skills.filter(
         (skill) =>
-          skill.name !== PLAN_COMMAND.name &&
-          skill.name !== COMPACT_COMMAND.name,
+          skill.kind === "native" ||
+          (skill.name !== PLAN_COMMAND.name &&
+            skill.name !== COMPACT_COMMAND.name),
       ),
     ],
     [skills],
   );
-  const skillLimit = harness === "pi" ? Number.POSITIVE_INFINITY : undefined;
+  const skillLimit = hasNativeCommands(harness) ? Number.POSITIVE_INFINITY : undefined;
   const rankedSkills = rankSkills(slashItems, slash?.query ?? "", skillLimit);
   const attachmentsSupported = harnessSupportsAttachments(harness);
   const skillNames = useMemo(
@@ -669,7 +675,7 @@ export function Composer({
   const syncTokensFromTextarea = (el: HTMLTextAreaElement) => {
     if (creatingSkill) return;
     const cursor = el.selectionStart ?? 0;
-    const token = slashTokenAt(el.value, cursor);
+    const token = slashTokenAt(el.value, cursor, hasNativeCommands(harness));
     setSlash(token);
     setMention(token ? null : mentionTokenAt(el.value, cursor));
   };
@@ -708,7 +714,7 @@ export function Composer({
         setCreatingSkill(false);
         return;
       }
-      const planCommand = skill.name === PLAN_COMMAND.name;
+      const planCommand = skill.kind === "builtin" && skill.name === PLAN_COMMAND.name;
       const next = planCommand
         ? `${el.value.slice(0, token.start)}${el.value
             .slice(token.end)
@@ -884,7 +890,9 @@ export function Composer({
     }
 
     const command = consumePlanCommand(value);
-    const text = composeInboxMessage(inboxCard, command.text);
+    const text = isNativeCommandPrompt(command.text, harness)
+      ? command.text
+      : composeInboxMessage(inboxCard, command.text);
     const files = attachments;
     if (!text && files.length === 0 && !noteCard && !handoffCard) return;
     onSubmit(text, files, {

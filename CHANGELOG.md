@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- OMP's native commands and custom workflows appear in the `/` picker, with descriptions and argument hints. Commands run through OMP with their arguments intact, and workflow dialogs support choosing options and entering text. MonoCode keeps `/plan` and `/compact`; use `/omp:plan` and `/omp:compact` for OMP's versions.
+
+### Fixed
+
+- OMP commands that finish locally display their output and release the composer without waiting for an agent turn. Command inventory updates refresh the active session's picker, and ongoing OMP workflows no longer finish early on a nonterminal agent event. In #73.
+
 ## [0.1.33] - 2026-09-04
 
 ### Added

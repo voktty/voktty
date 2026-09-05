@@ -275,8 +275,8 @@ import {
   type TabVisitHistory,
 } from "./lib/tabVisitHistory";
 import { preparePrompt } from "./lib/promptPreparation";
-import { warmPiSkills } from "./lib/skills";
-import { piSkillContextForSession } from "./lib/sessionSkills";
+import { warmNativeSkills, isNativeCommandPrompt } from "./lib/skills";
+import { nativeSkillContextForSession } from "./lib/sessionSkills";
 import {
   ADD_NOTE_TO_CHAT_EVENT,
   composeNoteMessage,
@@ -502,6 +502,9 @@ function titleTabsEqual(a: TitleTab[], b: TitleTab[]): boolean {
     );
   });
 }
+
+// Register capabilities before composer hooks choose their discovery strategy.
+registerBuiltinHarnesses();
 
 export default function App({
   windowTransfer = null,
@@ -743,7 +746,6 @@ export default function App({
   );
 
   useEffect(() => {
-    registerBuiltinHarnesses();
     if (resumed?.sessions.length) bindResumedSessions(resumed.sessions);
     const stopBridge = startHarnessBridge();
     const reap = () => {
@@ -809,13 +811,13 @@ export default function App({
       (session) => activeTab && leafIds(activeTab.layout).includes(session.id),
     );
   const sessionDefaults = active ?? sessions[0];
-  const activeSkillContext = active ? piSkillContextForSession(active) : null;
+  const activeSkillContext = active ? nativeSkillContextForSession(active) : null;
   const activeSkillCwd = activeSkillContext?.cwd;
 
   useEffect(() => {
     if (!activeSkillContext || !activeSkillCwd) return;
-    warmPiSkills(activeSkillContext);
-  }, [activeSkillCwd]);
+    warmNativeSkills(activeSkillContext);
+  }, [activeSkillCwd, active?.id, active?.harness]);
 
   const sidebarCwd =
     active?.cwd ??
@@ -3169,7 +3171,10 @@ export default function App({
       if (isPreparingHandoff(current)) return;
       const workCwd = sessionWorkCwd(current);
       const submittedText = intent === "build" ? "Build approved plan" : text;
-      const harnessText = composeNoteMessage(noteCard, submittedText);
+      const rawCommand = isNativeCommandPrompt(submittedText, current.harness);
+      const harnessText = rawCommand
+        ? submittedText
+        : composeNoteMessage(noteCard, submittedText);
 
       const pendingSwitch =
         current.pendingSwitch && current.pendingSwitch.from !== current.harness
@@ -3187,9 +3192,9 @@ export default function App({
               s.id === sessionId
                 ? {
                     ...s,
-                    inboxCard: undefined,
-                    noteCard: undefined,
-                    handoffCard: undefined,
+                    inboxCard: rawCommand ? s.inboxCard : undefined,
+                    noteCard: rawCommand ? s.noteCard : undefined,
+                    handoffCard: rawCommand ? s.handoffCard : undefined,
                     queuedMessages: [
                       ...(s.queuedMessages ?? []),
                       {
@@ -3229,9 +3234,9 @@ export default function App({
             if (s.id !== sessionId) return s;
             let next: Session = {
               ...s,
-              inboxCard: undefined,
-              noteCard: undefined,
-              handoffCard: undefined,
+              inboxCard: rawCommand ? s.inboxCard : undefined,
+              noteCard: rawCommand ? s.noteCard : undefined,
+              handoffCard: rawCommand ? s.handoffCard : undefined,
             };
             if (options?.queuedMessageId) {
               next = dequeueQueuedMessage(next, options.queuedMessageId);
@@ -3244,6 +3249,7 @@ export default function App({
             const prepared = await prepareAttachments(attachments);
             const prompt = await preparePrompt(harnessText, {
               harness: current.harness,
+              sessionId,
               cwd: workCwd,
             });
             await steerHarnessTurn({
@@ -3295,7 +3301,7 @@ export default function App({
           : card
             ? SECOND_OPINION_TITLE
             : submittedText;
-      const cards = userTurnCards(noteCard, card);
+      const cards = rawCommand ? undefined : userTurnCards(noteCard, card);
       const live = isLiveHarness(current.harness);
       const queuedHandoff =
         live && !pendingSwitch ? pendingHandoff(current) : null;
@@ -3313,9 +3319,9 @@ export default function App({
           const titled = isFirstTurn ? titleSeed : selected.title;
           let next: Session = {
             ...selected,
-            inboxCard: undefined,
-            noteCard: undefined,
-            handoffCard: undefined,
+            inboxCard: rawCommand ? s.inboxCard : undefined,
+            noteCard: rawCommand ? s.noteCard : undefined,
+            handoffCard: rawCommand ? s.handoffCard : undefined,
           };
           if (approvedPlan && intent === "build") {
             next = {
@@ -3484,10 +3490,11 @@ export default function App({
               ? buildPlanPrompt(approvedPlan.text)
               : await preparePrompt(harnessText, {
                   harness: current.harness,
+                  sessionId,
                   cwd: workCwd,
                 });
           const turnPrompt =
-            intent === "plan" ? planTurnPrompt(prompt) : prompt;
+            intent === "plan" && !rawCommand ? planTurnPrompt(prompt) : prompt;
           const earlier = queuedHandoff
             ? userMessagesAfterHandoff(current)
             : [];
@@ -3499,7 +3506,7 @@ export default function App({
             modelSettings: current.modelSettings,
             runtimeMode: current.runtimeMode,
             intent,
-            text: wrap
+            text: wrap && !rawCommand
               ? wrapHandoffPrompt(
                   wrap.text,
                   wrap.from,
@@ -3531,7 +3538,8 @@ export default function App({
                 const ready = isPreparingHandoff(s)
                   ? completeHandoff(s, wrap.text)
                   : s;
-                return consumeHandoff(ready);
+                // A command owns its arguments; deliver the recap with the next chat prompt.
+                return rawCommand ? ready : consumeHandoff(ready);
               }),
             );
           }
