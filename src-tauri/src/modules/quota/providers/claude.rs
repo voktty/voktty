@@ -59,7 +59,9 @@ fn iso_now() -> String {
 
 fn read_credentials() -> Option<ClaudeCredentials> {
     if let Some(home) = dirs_home() {
-        let p1 = PathBuf::from(&home).join(".claude").join(".credentials.json");
+        let p1 = PathBuf::from(&home)
+            .join(".claude")
+            .join(".credentials.json");
         if p1.exists() {
             if let Ok(content) = fs::read_to_string(&p1) {
                 if let Ok(c) = serde_json::from_str::<ClaudeCredentials>(&content) {
@@ -73,8 +75,14 @@ fn read_credentials() -> Option<ClaudeCredentials> {
             if let Ok(content) = fs::read_to_string(&p2) {
                 if let Ok(val) = serde_json::from_str::<Value>(&content) {
                     let oauth = val.get("claudeAiOauth").unwrap_or(&val);
-                    let access = oauth.get("accessToken").and_then(Value::as_str).map(String::from);
-                    let refresh = oauth.get("refreshToken").and_then(Value::as_str).map(String::from);
+                    let access = oauth
+                        .get("accessToken")
+                        .and_then(Value::as_str)
+                        .map(String::from);
+                    let refresh = oauth
+                        .get("refreshToken")
+                        .and_then(Value::as_str)
+                        .map(String::from);
                     let exp = oauth.get("expiresAt").and_then(Value::as_u64);
                     if access.is_some() || refresh.is_some() {
                         return Some(ClaudeCredentials {
@@ -90,7 +98,6 @@ fn read_credentials() -> Option<ClaudeCredentials> {
     }
     None
 }
-
 
 fn refresh_token_if_needed(creds: &mut ClaudeCredentials) -> bool {
     let expires_at = creds.expires_at.unwrap_or(0);
@@ -400,7 +407,13 @@ fn scan_today_tokens() -> (u64, u64, u64) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                scan_jsonl_dir(&path, today, &mut total_in, &mut total_out, &mut total_cache);
+                scan_jsonl_dir(
+                    &path,
+                    today,
+                    &mut total_in,
+                    &mut total_out,
+                    &mut total_cache,
+                );
             }
         }
     }
@@ -452,4 +465,3 @@ fn scan_jsonl_dir(
         }
     }
 }
-
