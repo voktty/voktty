@@ -2,23 +2,32 @@ import { describe, expect, it } from "vitest";
 import {
   closeLeaf,
   editorTabKey,
+  isChangesTab,
+  isCommitTab,
   isFilesystemTab,
   isReleaseNotesTab,
   isReviewTab,
+  isSessionChangesTab,
   isTerminalTab,
   layoutLeaves,
   layoutSashes,
   leaf,
+  newChangesTab,
+  newCommitTab,
   newFileTab,
   newPlanTab,
   newReleaseNotesWorkspaceTab,
+  newSessionChangesTab,
   newTab,
   newTerminalFile,
   newTerminalWorkspaceTab,
   nextTerminalTitle,
   isolateTerminalPanes,
   movePane,
+  openChangesTab,
+  openCommitTab,
   openEditorTab,
+  openSessionChangesTab,
   openTerminalTab,
   paneEdgeFromPoint,
   placePane,
@@ -85,11 +94,123 @@ describe("editorTabKey", () => {
     const path = "/repo/EventStore.swift";
     expect(editorTabKey(newFileTab(path, cwd))).toBe(`file:${path}`);
     expect(editorTabKey(newFileTab(path, cwd, true))).toBe(`review:${path}`);
+    expect(editorTabKey(newChangesTab(cwd, path))).toBe(`changes:${cwd}`);
+    expect(editorTabKey(newChangesTab(cwd, `${cwd}/other.ts`))).toBe(
+      `changes:${cwd}`,
+    );
+    expect(editorTabKey(newSessionChangesTab(cwd, "s1", path))).toBe(
+      `session-changes:${cwd}:s1`,
+    );
+    expect(isFilesystemTab(newSessionChangesTab(cwd, "s1", path))).toBe(false);
+    expect(
+      editorTabKey(
+        newCommitTab(cwd, {
+          sha: "abc1234deadbeef",
+          shortSha: "abc1234",
+          subject: "Fix the graph",
+        }),
+      ),
+    ).toBe(`commit:${cwd}:abc1234deadbeef`);
     expect(editorTabKey(newPlanTab("s", "b", "Plan", cwd))).toBe("plan:b");
     const terminal = newTerminalFile(cwd);
     expect(editorTabKey(terminal)).toBe(`terminal:${terminal.id}`);
     expect(isTerminalTab(terminal)).toBe(true);
     expect(isTerminalTab(newFileTab(path, cwd))).toBe(false);
+  });
+});
+
+describe("openSessionChangesTab", () => {
+  it("reuses one review per session without merging different sessions", () => {
+    const cwd = "/repo";
+    const first = openSessionChangesTab(
+      newTab("session-a"),
+      cwd,
+      "session-a",
+      "/repo/a.ts",
+    );
+    const focused = openSessionChangesTab(
+      first,
+      cwd,
+      "session-a",
+      "/repo/b.ts",
+    );
+    const second = openSessionChangesTab(
+      focused,
+      cwd,
+      "session-b",
+      "/repo/c.ts",
+    );
+    const reviews = second.editorPanes.flatMap((pane) =>
+      pane.files.filter(isSessionChangesTab),
+    );
+    expect(reviews).toHaveLength(2);
+    expect(
+      reviews.find((file) => file.sessionChanges.sessionId === "session-a")
+        ?.path,
+    ).toBe("/repo/b.ts");
+  });
+});
+
+describe("openChangesTab", () => {
+  it("reuses one Changes tab and updates the focused file", () => {
+    const cwd = "/repo";
+    const first = openChangesTab(newTab("session-a"), cwd, "/repo/a.ts");
+    const second = openChangesTab(first, cwd, "/repo/b.ts");
+    const files = second.editorPanes[0]?.files ?? [];
+    expect(files.filter(isChangesTab)).toHaveLength(1);
+    expect(files.filter(isReviewTab)).toHaveLength(1);
+    expect(files.find(isChangesTab)?.path).toBe("/repo/b.ts");
+  });
+
+  it("opens a Changes tab without a focused file", () => {
+    const cwd = "/repo";
+    const next = openChangesTab(newTab("session-a"), cwd);
+    expect(next.editorPanes[0]?.files.find(isChangesTab)?.path).toBe(cwd);
+  });
+
+  it("drops per-file review tabs in the same pane", () => {
+    const cwd = "/repo";
+    const withReview = openEditorTab(
+      newTab("session-a"),
+      newFileTab("/repo/a.ts", cwd, true),
+    );
+    const next = openChangesTab(withReview, cwd, "/repo/b.ts");
+    const files = next.editorPanes[0]?.files ?? [];
+    expect(files.some((file) => editorTabKey(file) === `review:${cwd}/a.ts`)).toBe(
+      false,
+    );
+    expect(files.filter(isChangesTab)).toHaveLength(1);
+  });
+
+  it("keeps a commit tab when opening Changes", () => {
+    const cwd = "/repo";
+    const withCommit = openCommitTab(newTab("session-a"), cwd, {
+      sha: "abc1234deadbeef",
+      shortSha: "abc1234",
+      subject: "Fix the graph",
+    });
+    const next = openChangesTab(withCommit, cwd);
+    const files = next.editorPanes[0]?.files ?? [];
+    expect(files.filter(isCommitTab)).toHaveLength(1);
+    expect(files.filter(isChangesTab)).toHaveLength(1);
+  });
+});
+
+describe("openCommitTab", () => {
+  it("reuses one tab per commit", () => {
+    const cwd = "/repo";
+    const commit = {
+      sha: "abc1234deadbeef",
+      shortSha: "abc1234",
+      subject: "Fix the graph",
+    };
+    const first = openCommitTab(newTab("session-a"), cwd, commit);
+    const second = openCommitTab(first, cwd, { ...commit, subject: "other" });
+    const files = second.editorPanes[0]?.files ?? [];
+    const commitFile = files.find(isCommitTab);
+    expect(files.filter(isCommitTab)).toHaveLength(1);
+    expect(commitFile?.commit.subject).toBe("Fix the graph");
+    expect(commitFile && isFilesystemTab(commitFile)).toBe(false);
   });
 });
 

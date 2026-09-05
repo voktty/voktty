@@ -24,7 +24,7 @@ function chat(
 }
 
 describe("isInFlightSession", () => {
-  it("is true for a busy turn or a live approval", () => {
+  it("is true for a busy turn, a live approval, or a parked question", () => {
     expect(isInFlightSession(chat("/tmp/a"))).toBe(false);
     expect(isInFlightSession(chat("/tmp/a", { busy: true }))).toBe(true);
     expect(
@@ -39,6 +39,24 @@ describe("isInFlightSession", () => {
               approval: { requestId: 1 },
             },
           ],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isInFlightSession(
+        chat("/tmp/a", {
+          pendingQuestion: {
+            requestId: 4,
+            questions: [
+              {
+                id: "q1",
+                prompt: "Which file?",
+                multiSelect: false,
+                allowCustom: true,
+                options: [{ id: "a.ts", label: "a.ts" }],
+              },
+            ],
+          },
         }),
       ),
     ).toBe(true);

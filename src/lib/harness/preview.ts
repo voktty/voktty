@@ -211,6 +211,56 @@ export function isSkillTool(kind?: string, title?: string): boolean {
   return /^skill\b/i.test(title?.trim() ?? "");
 }
 
+/** Claude Code's Agent tool (named Task before v2.1.63), plus Codex subagents. */
+export function isAgentToolName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return (
+    normalized === "agent" ||
+    normalized === "task" ||
+    normalized === "subagent" ||
+    normalized === "taskcreate"
+  );
+}
+
+export function isAgentTool(kind?: string, title?: string): boolean {
+  const key = kind?.trim().toLowerCase() ?? "";
+  if (key === "agent" || key === "task" || key === "subagent") return true;
+  if (key && key !== "other") return false;
+  return /^(agent|task|subagent)\b/i.test(title?.trim() ?? "");
+}
+
+/** Human label for a spawned subagent: the agent's description, else its type. */
+export function agentToolTitle(
+  input: Record<string, unknown>,
+  fallback = "Subagent",
+): string {
+  const description = coerceString(input.description)?.trim();
+  if (description) return description;
+  const type =
+    coerceString(input.subagent_type) ??
+    coerceString(input.subagentType) ??
+    coerceString(input.agent_type) ??
+    coerceString(input.agentType);
+  if (type) {
+    const label = formatAgentType(type);
+    return /subagent/i.test(label) ? label : `${label} subagent`;
+  }
+  if (
+    fallback &&
+    !isAgentToolName(fallback) &&
+    !isWeakToolTitle(fallback)
+  ) {
+    return fallback;
+  }
+  return "Subagent";
+}
+
+export function formatAgentType(value: string): string {
+  const text = value.trim().replace(/[_-]+/g, " ");
+  if (!text) return "Subagent";
+  return text.replace(/\b[a-z]/g, (char) => char.toUpperCase());
+}
+
 export function extractSearchQuery(value: unknown): string | undefined {
   const keys = [
     "pattern",
@@ -237,6 +287,9 @@ export function titleFromToolInput(
   kind: string,
   input: Record<string, unknown>,
 ): string {
+  if (isAgentToolName(name) || isAgentTool(kind)) {
+    return agentToolTitle(input, name);
+  }
   const preview = extractToolPreview(
     { title: name, name, kind, rawInput: input, input },
     { title: name, name, kind, rawInput: input },
@@ -271,6 +324,12 @@ export function composeToolTitle(opts: {
   const previewKind = opts.previewKind;
   const command = firstLine(opts.command);
   const skill = formatSkillName(opts.skill);
+
+  if (isAgentTool(kind, title)) {
+    const rest = title.replace(/^(agent|task|subagent)\b\s*/i, "").trim();
+    if (rest && !isWeakToolTitle(rest)) return rest;
+    return "Subagent";
+  }
 
   if (
     isSkillTool(kind, title) ||

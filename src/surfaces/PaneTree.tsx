@@ -7,11 +7,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { setGrabbing, suppressTextSelection } from "../lib/drag";
-import {
-  paneDropFromPoint,
-  useExternalPaneDrop,
-} from "../lib/paneDrop";
-import type { ApprovalDecision } from "../lib/harness";
+import { paneDropFromPoint, useExternalPaneDrop } from "../lib/paneDrop";
+import type { ApprovalDecision, UserQuestionReply } from "../lib/harness";
 import type { EditorNavigationTarget } from "../lib/search";
 import {
   layoutLeaves,
@@ -22,14 +19,17 @@ import {
   type LayoutSash,
   type PaneEdge,
 } from "../lib/layout";
-import type { RecentProject } from "../lib/recents";
+import { sameProjectPath, type RecentProject } from "../lib/recents";
 import type { TerminalMetaPatch } from "../lib/terminalTab";
-import type {
-  Attachment,
-  Block,
-  HarnessId,
-  RuntimeMode,
-  Session,
+import {
+  sessionWorkCwd,
+  type Attachment,
+  type Block,
+  type HarnessId,
+  type PlanBuildTarget,
+  type RuntimeMode,
+  type Session,
+  type TurnIntent,
 } from "../lib/session";
 import { FilePane } from "./FilePane";
 import { SessionPane } from "./SessionPane";
@@ -41,6 +41,7 @@ type Shared = {
   dirtyFileIds: Set<string>;
   fileErrorCounts: Map<string, number>;
   focusedId: string;
+  addToChatSessionId?: string;
   composerFocused: boolean;
   recents: RecentProject[];
   hideProjectPicker?: boolean;
@@ -64,8 +65,19 @@ type Shared = {
     sessionId: string,
     text: string,
     attachments: Attachment[],
+    options?: { intent?: TurnIntent },
   ) => void;
   onStop: (sessionId: string) => void;
+  onCompactContext: (sessionId: string) => boolean;
+  onDeleteQueuedMessage: (sessionId: string, messageId: string) => void;
+  onEditQueuedMessage: (
+    sessionId: string,
+    messageId: string,
+    text: string,
+  ) => void;
+  onQueuedMessageEditingChange: (sessionId: string, messageId?: string) => void;
+  onSteerQueuedMessage: (sessionId: string, messageId: string) => void;
+  onResumeQueue: (sessionId: string) => void;
   onInboxCardDismiss?: (sessionId: string) => void;
   onNoteCardDismiss?: (sessionId: string) => void;
   onHandoffCardDismiss?: (sessionId: string) => void;
@@ -74,10 +86,24 @@ type Shared = {
     requestId: number,
     decision: ApprovalDecision,
   ) => void;
+  onQuestionReply: (
+    sessionId: string,
+    requestId: number,
+    reply: UserQuestionReply,
+  ) => void;
   onOpenFile: (path: string) => void;
   editorNavigation?: EditorNavigationTarget | null;
-  onOpenDiff: (path?: string) => void;
+  onOpenDiff: (
+    path?: string,
+    session?: { sessionId: string; cwd: string },
+  ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
+  onUpdatePlan: (sessionId: string, blockId: string, text: string) => void;
+  onBuildPlan: (
+    sessionId: string,
+    blockId: string,
+    target?: PlanBuildTarget,
+  ) => void;
   onSecondOpinion?: (
     sessionId: string,
     harness: HarnessId,
@@ -113,6 +139,7 @@ function PaneTreeComponent({
   dirtyFileIds,
   fileErrorCounts,
   focusedId,
+  addToChatSessionId,
   composerFocused,
   recents,
   hideProjectPicker,
@@ -131,14 +158,23 @@ function PaneTreeComponent({
   onRuntimeModeChange,
   onSubmit,
   onStop,
+  onCompactContext,
+  onDeleteQueuedMessage,
+  onEditQueuedMessage,
+  onQueuedMessageEditingChange,
+  onSteerQueuedMessage,
+  onResumeQueue,
   onInboxCardDismiss,
   onNoteCardDismiss,
   onHandoffCardDismiss,
   onApproval,
+  onQuestionReply,
   onOpenFile,
   editorNavigation,
   onOpenDiff,
   onOpenPlan,
+  onUpdatePlan,
+  onBuildPlan,
   onSecondOpinion,
   onHandoff,
   onMovePane,
@@ -293,6 +329,8 @@ function PaneTreeComponent({
                 onDirtyChange={onFileDirtyChange}
                 onErrorCountChange={onFileErrorCountChange}
                 onOpenFile={onOpenFile}
+                onUpdatePlan={onUpdatePlan}
+                onBuildPlan={onBuildPlan}
                 editorNavigation={editorNavigation}
                 onPaneDragStart={onPaneDragStart}
                 onTerminalMetaChange={onTerminalMetaChange}
@@ -300,8 +338,18 @@ function PaneTreeComponent({
             ) : session ? (
               <SessionPane
                 session={session}
+                reviewUndoLocked={sessions.some(
+                  (other) =>
+                    other.id !== session.id &&
+                    other.busy &&
+                    sameProjectPath(
+                      sessionWorkCwd(other),
+                      sessionWorkCwd(session),
+                    ),
+                )}
                 visible={visible}
                 focused={focusedId === session.id}
+                addToChatTarget={addToChatSessionId === session.id}
                 inSplit={inSplit}
                 composerFocused={composerFocused}
                 recents={recents}
@@ -315,13 +363,21 @@ function PaneTreeComponent({
                 onRuntimeModeChange={onRuntimeModeChange}
                 onSubmit={onSubmit}
                 onStop={onStop}
+                onCompactContext={onCompactContext}
+                onDeleteQueuedMessage={onDeleteQueuedMessage}
+                onEditQueuedMessage={onEditQueuedMessage}
+                onQueuedMessageEditingChange={onQueuedMessageEditingChange}
+                onSteerQueuedMessage={onSteerQueuedMessage}
+                onResumeQueue={onResumeQueue}
                 onInboxCardDismiss={onInboxCardDismiss}
                 onNoteCardDismiss={onNoteCardDismiss}
                 onHandoffCardDismiss={onHandoffCardDismiss}
                 onApproval={onApproval}
+                onQuestionReply={onQuestionReply}
                 onOpenFile={onOpenFile}
                 onOpenDiff={onOpenDiff}
                 onOpenPlan={onOpenPlan}
+                onBuildPlan={onBuildPlan}
                 onSecondOpinion={onSecondOpinion}
                 onHandoff={onHandoff}
                 onNewTerminal={onNewTerminal}

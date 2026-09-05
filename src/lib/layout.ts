@@ -35,6 +35,16 @@ export type PlanTabSource = {
   title: string;
 };
 
+export type CommitTabSource = {
+  sha: string;
+  shortSha: string;
+  subject: string;
+};
+
+export type SessionChangesSource = {
+  sessionId: string;
+};
+
 export type FilePaneTab = {
   id: string;
   path: string;
@@ -42,6 +52,12 @@ export type FilePaneTab = {
   plan?: PlanTabSource;
   releaseNotes?: ReleaseNotesTabSource;
   review?: boolean;
+  /** Single working-tree review of every changed file (unified diff). */
+  changes?: boolean;
+  /** Read-only diff built from one session's captured before/after snapshots. */
+  sessionChanges?: SessionChangesSource;
+  /** Historical commit review (unified diff, read-only). */
+  commit?: CommitTabSource;
   terminal?: boolean;
   /** Foreground command when it isn't the shell. Live only — not persisted. */
   foreground?: string;
@@ -95,6 +111,39 @@ export function newFileTab(
     path,
     cwd,
     ...(review ? { review: true } : {}),
+  };
+}
+
+export function newChangesTab(cwd: string, focusPath?: string): FilePaneTab {
+  return {
+    id: crypto.randomUUID(),
+    path: focusPath || cwd,
+    cwd,
+    review: true,
+    changes: true,
+  };
+}
+
+export function newSessionChangesTab(
+  cwd: string,
+  sessionId: string,
+  focusPath?: string,
+): FilePaneTab {
+  return {
+    id: crypto.randomUUID(),
+    path: focusPath || cwd,
+    cwd,
+    review: true,
+    sessionChanges: { sessionId },
+  };
+}
+
+export function newCommitTab(cwd: string, commit: CommitTabSource): FilePaneTab {
+  return {
+    id: crypto.randomUUID(),
+    path: `commit:${commit.sha}`,
+    cwd,
+    commit,
   };
 }
 
@@ -234,16 +283,26 @@ export function isReleaseNotesTab(
   return !!file.releaseNotes;
 }
 
+export function isCommitTab(
+  file: FilePaneTab,
+): file is FilePaneTab & { commit: CommitTabSource } {
+  return !!file.commit;
+}
+
 export function isTerminalTab(file: FilePaneTab): boolean {
   return !!file.terminal;
 }
 
 export function isVirtualDocumentTab(file: FilePaneTab): boolean {
-  return isPlanTab(file) || isReleaseNotesTab(file);
+  return isPlanTab(file) || isReleaseNotesTab(file) || isCommitTab(file);
 }
 
 export function isFilesystemTab(file: FilePaneTab): boolean {
-  return !isTerminalTab(file) && !isVirtualDocumentTab(file);
+  return (
+    !isTerminalTab(file) &&
+    !isVirtualDocumentTab(file) &&
+    !file.sessionChanges
+  );
 }
 
 export function focusedFileTab(tab: WorkspaceTab): FilePaneTab | undefined {
@@ -302,10 +361,24 @@ export function isReviewTab(file: FilePaneTab): boolean {
   return !!file.review && !isVirtualDocumentTab(file);
 }
 
+export function isChangesTab(file: FilePaneTab): boolean {
+  return !!file.changes && isReviewTab(file);
+}
+
+export function isSessionChangesTab(
+  file: FilePaneTab,
+): file is FilePaneTab & { sessionChanges: SessionChangesSource } {
+  return !!file.sessionChanges && isReviewTab(file);
+}
+
 export function editorTabKey(file: FilePaneTab): string {
   if (file.terminal) return `terminal:${file.id}`;
   if (file.plan) return `plan:${file.plan.blockId}`;
   if (file.releaseNotes) return `release-notes:${file.releaseNotes.version}`;
+  if (file.commit) return `commit:${file.cwd}:${file.commit.sha}`;
+  if (file.sessionChanges)
+    return `session-changes:${file.cwd}:${file.sessionChanges.sessionId}`;
+  if (file.changes) return `changes:${file.cwd}`;
   return file.review ? `review:${file.path}` : `file:${file.path}`;
 }
 
@@ -372,6 +445,107 @@ export function openEditorTab(
     diffFocused: false,
     editorPanes: [editorPane],
   };
+}
+
+/** Focus the single working-tree Changes tab, creating it if needed. */
+export function openChangesTab(
+  tab: WorkspaceTab,
+  cwd: string,
+  focusPath?: string,
+): WorkspaceTab {
+  tab = isolateTerminalPanes(tab);
+  const next = newChangesTab(cwd, focusPath);
+  const existingPane = tab.editorPanes.find((pane) =>
+    pane.files.some(isChangesTab),
+  );
+  const existingFile = existingPane?.files.find(isChangesTab);
+
+  if (existingPane && existingFile) {
+    const updated = focusPath ? { ...existingFile, path: focusPath } : existingFile;
+    return {
+      ...tab,
+      focusedId: existingPane.id,
+      diffFocused: false,
+      editorPanes: tab.editorPanes.map((pane) =>
+        pane.id === existingPane.id
+          ? {
+              ...pane,
+              files: dropPerFileReviewTabs(pane.files).map((file) =>
+                file.id === updated.id ? updated : file,
+              ),
+              activeFileId: updated.id,
+            }
+          : pane,
+      ),
+    };
+  }
+
+  const opened = openEditorTab(tab, next);
+  return {
+    ...opened,
+    editorPanes: opened.editorPanes.map((pane) =>
+      pane.files.some(isChangesTab)
+        ? {
+            ...pane,
+            files: dropPerFileReviewTabs(pane.files),
+            activeFileId:
+              pane.files.find(isChangesTab)?.id ?? pane.activeFileId,
+          }
+        : pane,
+    ),
+  };
+}
+
+/** Focus one session's exact captured diff, creating a tab if needed. */
+export function openSessionChangesTab(
+  tab: WorkspaceTab,
+  cwd: string,
+  sessionId: string,
+  focusPath?: string,
+): WorkspaceTab {
+  const next = newSessionChangesTab(cwd, sessionId, focusPath);
+  const key = editorTabKey(next);
+  const existingPane = tab.editorPanes.find((pane) =>
+    pane.files.some((file) => editorTabKey(file) === key),
+  );
+  const existingFile = existingPane?.files.find(
+    (file) => editorTabKey(file) === key,
+  );
+  if (!existingPane || !existingFile) return openEditorTab(tab, next);
+
+  const updated = focusPath ? { ...existingFile, path: focusPath } : existingFile;
+  return {
+    ...tab,
+    focusedId: existingPane.id,
+    diffFocused: false,
+    editorPanes: tab.editorPanes.map((pane) =>
+      pane.id === existingPane.id
+        ? {
+            ...pane,
+            files: pane.files.map((file) =>
+              file.id === updated.id ? updated : file,
+            ),
+            activeFileId: updated.id,
+          }
+        : pane,
+    ),
+  };
+}
+
+/** Focus a historical commit's unified diff, creating the tab if needed. */
+export function openCommitTab(
+  tab: WorkspaceTab,
+  cwd: string,
+  commit: CommitTabSource,
+): WorkspaceTab {
+  return openEditorTab(tab, newCommitTab(cwd, commit));
+}
+
+function dropPerFileReviewTabs(files: FilePaneTab[]): FilePaneTab[] {
+  return files.filter(
+    (file) =>
+      !isReviewTab(file) || isChangesTab(file) || isSessionChangesTab(file),
+  );
 }
 
 /** Open a terminal in its own pane. Files never share this tab strip. */

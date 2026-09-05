@@ -4,6 +4,7 @@ mod checkpoint;
 mod cursor_store;
 mod fs;
 mod harness;
+mod inbox_media;
 mod linear;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -138,6 +139,7 @@ pub fn run() {
         .manage(pty::PtyHost::new())
         .manage(window_transfer::WindowTransferState::new())
         .setup(|app| {
+            harness::reap_orphaned_harness_processes();
             session_store::init(app.handle())?;
             checkpoint::init(app.handle())?;
             menu::install(app.handle())?;
@@ -167,11 +169,16 @@ pub fn run() {
             fs::list_project_files,
             fs::git_diff_stats,
             fs::git_diff_index,
+            fs::git_diff_files,
             fs::git_file_diff,
+            fs::git_history,
+            fs::git_commit_files,
+            fs::git_commit_file_diff,
             fs::git_stage_file,
             fs::git_stage_contents,
             fs::git_unstage_file,
             fs::git_discard_file,
+            fs::git_discard_all,
             fs::git_stage_all,
             fs::git_unstage_all,
             fs::git_commit,
@@ -188,6 +195,7 @@ pub fn run() {
             fs::git_github_work_item_thread,
             fs::git_github_work_item_comment,
             fs::git_github_pr_diff,
+            inbox_media::fetch_inbox_media,
             linear::linear_status,
             linear::linear_set_token,
             linear::linear_list_teams,
@@ -210,6 +218,7 @@ pub fn run() {
             fs::stat_files,
             fs::inspect_paths,
             fs::read_file_base64,
+            fs::read_binary_file,
             fs::write_attachment,
             fs::read_text_file,
             fs::write_text_file,
@@ -257,9 +266,10 @@ pub fn run() {
             notes::notes_upsert,
             notes::notes_delete,
             checkpoint::session_checkpoint_ensure,
+            checkpoint::session_checkpoint_prepare,
             checkpoint::session_checkpoint_capture,
-            checkpoint::session_checkpoint_sync,
             checkpoint::session_checkpoint_status,
+            checkpoint::session_checkpoint_file_diff,
             checkpoint::session_checkpoint_undo,
             checkpoint::session_checkpoint_keep,
             set_traffic_lights_visible,

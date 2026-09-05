@@ -1,4 +1,19 @@
-import { ArrowUp, Plus, Square, StickyNote } from "./icons";
+import {
+  ArrowUp,
+  AiIdea,
+  Check,
+  CornerDownRight,
+  FilePlus,
+  ListEnd,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  Square,
+  StickyNote,
+  Trash2,
+  X,
+} from "./icons";
 import {
   useCallback,
   useEffect,
@@ -25,6 +40,7 @@ import {
   loadProjectFiles,
   peekProjectFiles,
   recentOpenedFiles,
+  subscribeProjectFiles,
 } from "../lib/fileIndex";
 import {
   buildMentionIndex,
@@ -43,11 +59,24 @@ import {
 } from "../lib/githubTasks";
 import type { HandoffComposerCard } from "../lib/handoff";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
-import type { Attachment, HarnessId, RuntimeMode } from "../lib/session";
-import { harnessSupportsAttachments } from "../lib/session";
+import type {
+  Attachment,
+  HarnessId,
+  MessageQueueStatus,
+  QueuedMessage,
+  RuntimeMode,
+  TurnIntent,
+} from "../lib/session";
+import { HARNESS_TITLE, harnessSupportsAttachments } from "../lib/session";
+import type {
+  UserQuestionPrompt,
+  UserQuestionReply,
+} from "../lib/userQuestion";
 import {
   createBlankSkill,
   rankSkills,
+  hasNativeCommands,
+  isNativeCommandPrompt,
   replaceSlashToken,
   skillTextParts,
   slashTokenAt,
@@ -67,6 +96,7 @@ import { NoteMiniCard } from "./NoteMiniCard";
 import { HandoffMiniCard } from "./HandoffMiniCard";
 import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
+import { QuestionForm } from "./QuestionForm";
 import { SkillPicker } from "./SkillPicker";
 import { projectName } from "../lib/paths";
 import { consumeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
@@ -88,6 +118,9 @@ import {
 } from "../lib/notes";
 import { resolveTabGroupLogo } from "../lib/tabGroups";
 import { useComposerSkills } from "./useComposerSkills";
+import { Popover } from "./Popover";
+import { consumePlanCommand, PLAN_COMMAND } from "../lib/plan";
+import { COMPACT_COMMAND, isCompactCommand } from "../lib/compact";
 
 type Props = {
   enabled?: boolean;
@@ -99,16 +132,21 @@ type Props = {
   runtimeMode: RuntimeMode;
   cwd?: string;
   executionCwd: string;
+  sessionId?: string;
   branch?: string;
   recents?: RecentProject[];
   hideProjectPicker?: boolean;
   context?: ContextUsage;
+  compactSupported?: boolean;
   quoteRequest?: QuoteRequest;
   initialDraft?: string;
   inboxCard?: InboxComposerCard;
   noteCard?: NoteComposerCard;
   handoffCard?: HandoffComposerCard;
+  question?: UserQuestionPrompt;
   busy?: boolean;
+  queuedMessages?: QueuedMessage[];
+  queueStatus?: MessageQueueStatus;
   hotkeys?: boolean;
   onFocus: () => void;
   onCwdChange: (cwd: string) => void;
@@ -121,9 +159,21 @@ type Props = {
   onInboxCardDismiss?: () => void;
   onNoteCardDismiss?: () => void;
   onHandoffCardDismiss?: () => void;
-  onSubmit: (text: string, attachments: Attachment[]) => void;
+  onQuestionReply?: (requestId: number, reply: UserQuestionReply) => void;
+  onSubmit: (
+    text: string,
+    attachments: Attachment[],
+    options?: { intent?: TurnIntent },
+  ) => void;
   onStop?: () => void;
+  onCompactContext?: () => boolean;
+  onDeleteQueuedMessage?: (messageId: string) => void;
+  onEditQueuedMessage?: (messageId: string, text: string) => void;
+  onQueuedMessageEditingChange?: (messageId?: string) => void;
+  onSteerQueuedMessage?: (messageId: string) => void;
+  onResumeQueue?: () => void;
   onOpenFile?: (path: string) => void;
+  onDraftChange?: (text: string) => void;
   children?: ReactNode;
 };
 
@@ -158,6 +208,171 @@ function ToolButton({
   );
 }
 
+function MessageQueue({
+  messages,
+  status,
+  onDelete,
+  onEdit,
+  onEditingChange,
+  onSteer,
+  onResume,
+}: {
+  messages: QueuedMessage[];
+  status?: MessageQueueStatus;
+  onDelete?: (messageId: string) => void;
+  onEdit?: (messageId: string, text: string) => void;
+  onEditingChange?: (messageId?: string) => void;
+  onSteer?: (messageId: string) => void;
+  onResume?: () => void;
+}) {
+  const [editingId, setEditingId] = useState<string>();
+  const [editDraft, setEditDraft] = useState("");
+  const onEditingChangeRef = useRef(onEditingChange);
+  onEditingChangeRef.current = onEditingChange;
+  const editingIdRef = useRef(editingId);
+  editingIdRef.current = editingId;
+  useEffect(() => {
+    return () => {
+      if (editingIdRef.current) onEditingChangeRef.current?.();
+    };
+  }, []);
+  if (messages.length === 0) return null;
+  const paused = status === "paused";
+
+  const startEdit = (message: QueuedMessage) => {
+    setEditingId(message.id);
+    setEditDraft(message.text);
+    onEditingChange?.(message.id);
+  };
+  const cancelEdit = () => {
+    setEditingId(undefined);
+    setEditDraft("");
+    onEditingChange?.();
+  };
+  const saveEdit = (message: QueuedMessage) => {
+    if (!editDraft.trim() && message.attachments.length === 0) return;
+    onEdit?.(message.id, editDraft);
+    setEditingId(undefined);
+    setEditDraft("");
+  };
+
+  return (
+    <div className="px-2 text-content/55" data-message-queue>
+      <div
+        className="relative z-0 rounded-t-[10px] border border-b-0 border-content/10 bg-content/3 px-2 py-1"
+        data-message-queue-card
+      >
+        {paused ? (
+          <div className="flex h-7 items-center gap-2 border-b border-content/10 text-[12px]">
+            <Pause className="size-3.5" />
+            <span className="min-w-0 flex-1 truncate">
+              Queue paused because you interrupted
+            </span>
+            <button
+              type="button"
+              onClick={onResume}
+              className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 hover:bg-content/10 hover:text-content"
+            >
+              <Play className="size-3.5" />
+              Resume
+            </button>
+          </div>
+        ) : null}
+        {messages.map((message, index) => {
+          const editing = editingId === message.id;
+          const label =
+            message.text.trim() ||
+            `${message.attachments.length} attachment${message.attachments.length === 1 ? "" : "s"}`;
+          return (
+            <div
+              key={message.id}
+              className={`flex min-h-7 items-center gap-2 text-[12px] ${
+                index > 0 ? "border-t border-content/10" : ""
+              }`}
+            >
+              <ListEnd className="size-3.5 shrink-0" />
+              {editing ? (
+                <>
+                  <textarea
+                    autoFocus
+                    aria-label="Edit queued message"
+                    value={editDraft}
+                    rows={1}
+                    onChange={(event) => setEditDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelEdit();
+                      } else if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        saveEdit(message);
+                      }
+                    }}
+                    className="min-h-6 min-w-0 flex-1 resize-none rounded-md border border-content/15 bg-content/5 px-1.5 py-0.5 text-[12px] text-content outline-none focus:border-content/30"
+                  />
+                  <button
+                    type="button"
+                    title="Save queued message"
+                    aria-label="Save queued message"
+                    disabled={
+                      !editDraft.trim() && message.attachments.length === 0
+                    }
+                    onClick={() => saveEdit(message)}
+                    className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-content/10 hover:text-content disabled:opacity-30"
+                  >
+                    <Check className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Cancel queued message edit"
+                    aria-label="Cancel queued message edit"
+                    onClick={cancelEdit}
+                    className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-content/10 hover:text-content"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-content/80">
+                    {label}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onSteer?.(message.id)}
+                    className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 hover:bg-content/10 hover:text-content"
+                  >
+                    <CornerDownRight className="size-3.5" />
+                    Steer
+                  </button>
+                  <button
+                    type="button"
+                    title="Edit queued message"
+                    aria-label="Edit queued message"
+                    onClick={() => startEdit(message)}
+                    className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-content/10 hover:text-content"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Remove queued message"
+                    aria-label="Remove queued message"
+                    onClick={() => onDelete?.(message.id)}
+                    className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-content/10 hover:text-content"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Composer({
   enabled = true,
   focused,
@@ -169,16 +384,21 @@ export function Composer({
   runtimeMode,
   cwd = "~",
   executionCwd,
+  sessionId,
   branch,
   recents = [],
   hideProjectPicker = false,
   context,
+  compactSupported = false,
   quoteRequest,
   initialDraft,
   inboxCard,
   noteCard,
   handoffCard,
+  question,
   busy = false,
+  queuedMessages = [],
+  queueStatus,
   onFocus,
   onCwdChange,
   onBranchChange,
@@ -190,13 +410,22 @@ export function Composer({
   onInboxCardDismiss,
   onNoteCardDismiss,
   onHandoffCardDismiss,
+  onQuestionReply,
   onSubmit,
   onStop,
+  onCompactContext,
+  onDeleteQueuedMessage,
+  onEditQueuedMessage,
+  onQueuedMessageEditingChange,
+  onSteerQueuedMessage,
+  onResumeQueue,
   onOpenFile,
+  onDraftChange,
   children,
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const plusRef = useRef<HTMLDivElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const attachmentsRef = useRef<Attachment[]>([]);
   const consumedQuoteId = useRef<number | null>(null);
@@ -212,6 +441,8 @@ export function Composer({
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [fileDrag, setFileDrag] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [planSelected, setPlanSelected] = useState(false);
   const [slash, setSlash] = useState<SlashToken | null>(null);
   const [skillActive, setSkillActive] = useState(0);
   const [creatingSkill, setCreatingSkill] = useState(false);
@@ -246,24 +477,32 @@ export function Composer({
   const skillCatalog = useComposerSkills({
     harness,
     executionCwd,
+    sessionId,
     pickerOpen,
   });
   const skills = skillCatalog.skills;
-  const skillLimit =
-    harness === "pi" ? Number.POSITIVE_INFINITY : undefined;
-  const rankedSkills = rankSkills(
-    skills,
-    slash?.query ?? "",
-    skillLimit,
-  );
-  const attachmentsSupported = harnessSupportsAttachments(harness);
-  const skillNames = useMemo(
-    () => new Set(skills.map((skill) => skill.invocation)),
+  const slashItems = useMemo(
+    () => [
+      PLAN_COMMAND,
+      COMPACT_COMMAND,
+      ...skills.filter(
+        (skill) =>
+          skill.kind === "native" ||
+          (skill.name !== PLAN_COMMAND.name &&
+            skill.name !== COMPACT_COMMAND.name),
+      ),
+    ],
     [skills],
   );
+  const skillLimit = hasNativeCommands(harness) ? Number.POSITIVE_INFINITY : undefined;
+  const rankedSkills = rankSkills(slashItems, slash?.query ?? "", skillLimit);
+  const attachmentsSupported = harnessSupportsAttachments(harness);
+  const skillNames = useMemo(
+    () => new Set(slashItems.map((skill) => skill.invocation)),
+    [slashItems],
+  );
   const mentionFiles = useMemo(
-    () =>
-      notesEnabled ? [...files, ...notesAsProjectFiles(notes)] : files,
+    () => (notesEnabled ? [...files, ...notesAsProjectFiles(notes)] : files),
     [files, notes, notesEnabled],
   );
   const mentionIndex = useMemo(
@@ -371,13 +610,21 @@ export function Composer({
 
   useEffect(() => {
     let cancelled = false;
+    const apply = (next: ProjectFile[]) => {
+      if (!cancelled) setFiles(next);
+    };
+    const cached = peekProjectFiles(cwd);
+    if (cached) apply(cached);
     void loadProjectFiles(cwd, mentionOpen)
-      .then((next) => {
-        if (!cancelled) setFiles(next);
-      })
+      .then(apply)
       .catch(() => undefined);
+    const unsub = subscribeProjectFiles(() => {
+      const next = peekProjectFiles(cwd);
+      if (next) apply(next);
+    });
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [cwd, mentionOpen]);
 
@@ -410,9 +657,13 @@ export function Composer({
   useEffect(() => {
     const el = ref.current;
     if (!el || !initialDraft) return;
-    el.value = initialDraft;
+    if (el.value !== initialDraft) el.value = initialDraft;
     resizeTextarea(el);
   }, [initialDraft]);
+
+  useEffect(() => {
+    onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
 
   const syncHighlightScroll = (e: UIEvent<HTMLTextAreaElement>) => {
     const highlight = highlightRef.current;
@@ -424,7 +675,7 @@ export function Composer({
   const syncTokensFromTextarea = (el: HTMLTextAreaElement) => {
     if (creatingSkill) return;
     const cursor = el.selectionStart ?? 0;
-    const token = slashTokenAt(el.value, cursor);
+    const token = slashTokenAt(el.value, cursor, hasNativeCommands(harness));
     setSlash(token);
     setMention(token ? null : mentionTokenAt(el.value, cursor));
   };
@@ -463,16 +714,24 @@ export function Composer({
         setCreatingSkill(false);
         return;
       }
-      const next = replaceSlashToken(el.value, token, skill.invocation);
+      const planCommand = skill.kind === "builtin" && skill.name === PLAN_COMMAND.name;
+      const next = planCommand
+        ? `${el.value.slice(0, token.start)}${el.value
+            .slice(token.end)
+            .replace(/^\s/, "")}`
+        : replaceSlashToken(el.value, token, skill.invocation);
       el.value = next;
       resizeTextarea(el);
-      let cursor = token.start + skill.invocation.length + 1;
+      let cursor = planCommand
+        ? token.start
+        : token.start + skill.invocation.length + 1;
       if (next[cursor] === " ") cursor += 1;
       el.setSelectionRange(cursor, cursor);
       setDraft(next);
       syncHasValue(next, attachmentsRef.current);
       setSlash(null);
       setCreatingSkill(false);
+      if (planCommand) setPlanSelected(true);
       el.focus();
     },
     [syncHasValue],
@@ -507,7 +766,7 @@ export function Composer({
     if (!focused) return;
     if (
       document.querySelector(
-        "[data-model-picker], [data-access-picker], [data-model-settings], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker]",
+        "[data-model-picker], [data-access-picker], [data-model-settings], [data-file-picker], [data-branch-picker], [data-skill-picker], [data-mention-picker], [data-composer-plus]",
       )
     )
       return;
@@ -614,15 +873,39 @@ export function Composer({
   }, [addAttachments, attachmentsSupported, enabled]);
 
   const submit = (value: string) => {
-    const text = composeInboxMessage(inboxCard, value);
+    if (isCompactCommand(value)) {
+      if (!onCompactContext?.()) return;
+      if (!ref.current) return;
+      ref.current.value = "";
+      ref.current.style.height = "auto";
+      setDraft("");
+      onDraftChange?.("");
+      setPlusOpen(false);
+      setSlash(null);
+      setMention(null);
+      setCreatingSkill(false);
+      setCreateError(null);
+      syncHasValue("", attachments);
+      return;
+    }
+
+    const command = consumePlanCommand(value);
+    const text = isNativeCommandPrompt(command.text, harness)
+      ? command.text
+      : composeInboxMessage(inboxCard, command.text);
     const files = attachments;
     if (!text && files.length === 0 && !noteCard && !handoffCard) return;
-    onSubmit(text, files);
+    onSubmit(text, files, {
+      intent: planSelected || command.planning ? "plan" : "default",
+    });
     if (!ref.current) return;
     ref.current.value = "";
     ref.current.style.height = "auto";
     setDraft("");
+    onDraftChange?.("");
     setAttachments([]);
+    setPlanSelected(false);
+    setPlusOpen(false);
     setSlash(null);
     setMention(null);
     setCreatingSkill(false);
@@ -668,6 +951,16 @@ export function Composer({
         }
         setMention(null);
       }
+    }
+
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      isCompactCommand(e.currentTarget.value)
+    ) {
+      e.preventDefault();
+      submit(e.currentTarget.value);
+      return;
     }
 
     if (slash) {
@@ -739,7 +1032,19 @@ export function Composer({
       className={`relative shrink-0 ${shell ? "" : "p-1.5 pt-0"}`}
       onMouseDown={onFocus}
     >
+      {question && onQuestionReply ? (
+        <QuestionForm prompt={question} onReply={onQuestionReply} />
+      ) : null}
       {children}
+      <MessageQueue
+        messages={queuedMessages}
+        status={queueStatus}
+        onDelete={onDeleteQueuedMessage}
+        onEdit={onEditQueuedMessage}
+        onEditingChange={onQueuedMessageEditingChange}
+        onSteer={onSteerQueuedMessage}
+        onResume={onResumeQueue}
+      />
       <div className="relative overflow-visible">
         {pickerOpen ? (
           <div className="absolute inset-x-0 bottom-full z-30 mb-1">
@@ -805,9 +1110,7 @@ export function Composer({
               files={rankedFiles}
               query={mention?.query ?? ""}
               active={mentionActive}
-              loading={
-                looksLikeProject(cwd) && peekProjectFiles(cwd) == null
-              }
+              loading={looksLikeProject(cwd) && peekProjectFiles(cwd) == null}
               includeNotes={notesEnabled}
               onActive={setMentionActive}
               onPick={pickMention}
@@ -848,7 +1151,11 @@ export function Composer({
               onClose={() => ref.current?.focus()}
             />
             <div className="ml-auto flex shrink-0 items-center">
-              <ContextMeter usage={context} />
+              <ContextMeter
+                usage={context}
+                onCompact={compactSupported ? onCompactContext : undefined}
+                compactDisabled={busy}
+              />
             </div>
           </div>
 
@@ -907,9 +1214,9 @@ export function Composer({
                       ? "Add context, or send to continue…"
                       : shell
                         ? "How can I help you today?"
-                        : "Ask, build, / for skills, @ for references... "
+                        : "Ask, build, / for commands, @ for references... "
               }
-              className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
+              className={`composer-field scrollbar-none relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
                 shell ? "py-4" : "py-3"
               }`}
               onFocus={onFocus}
@@ -930,17 +1237,88 @@ export function Composer({
           </div>
 
           <div className="flex items-center gap-1 px-2 pb-2">
-            <ToolButton
-              label={
-                attachmentsSupported
-                  ? "Attach files"
-                  : "fx does not support attachments"
-              }
-              disabled={!attachmentsSupported}
-              onClick={attachFromPicker}
-            >
-              <Plus className="size-3.5" strokeWidth={1.5} />
-            </ToolButton>
+            <div ref={plusRef} className="relative shrink-0">
+              <ToolButton
+                label="Add files or choose a mode"
+                active={plusOpen}
+                onClick={() => setPlusOpen((open) => !open)}
+              >
+                <Plus className="size-3.5" strokeWidth={1.5} />
+              </ToolButton>
+              {plusOpen ? (
+                <Popover
+                  anchor={plusRef}
+                  side="top"
+                  align="start"
+                  width={250}
+                  onDismiss={() => setPlusOpen(false)}
+                  data-composer-plus
+                  className="p-1.5"
+                >
+                  <p className="px-2 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wide text-content/40">
+                    Add to message
+                  </p>
+                  <button
+                    type="button"
+                    disabled={!attachmentsSupported}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setPlusOpen(false);
+                      attachFromPicker();
+                    }}
+                    className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left text-content hover:bg-content/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <FilePlus className="mt-0.5 size-4 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-[13px]">Upload file</span>
+                      <span className="block text-[11px] leading-4 text-content/45">
+                        {attachmentsSupported
+                          ? "Attach files or images to this message"
+                          : `${HARNESS_TITLE[harness]} does not support attachments`}
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={planSelected}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setPlanSelected((selected) => !selected);
+                      setPlusOpen(false);
+                      ref.current?.focus();
+                    }}
+                    className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left text-content hover:bg-content/10"
+                  >
+                    <AiIdea className="mt-0.5 size-4 shrink-0 text-yellow-300/80" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px]">Plan mode</span>
+                      <span className="block text-[11px] leading-4 text-content/45">
+                        Create a plan to review before building
+                      </span>
+                    </span>
+                    {planSelected ? (
+                      <Check className="mt-0.5 size-3.5 shrink-0 text-accent" />
+                    ) : null}
+                  </button>
+                </Popover>
+              ) : null}
+            </div>
+            {planSelected ? (
+              <button
+                type="button"
+                title="Turn off Plan mode"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setPlanSelected(false);
+                  ref.current?.focus();
+                }}
+                className="flex h-6.5 shrink-0 items-center gap-1 rounded-md bg-yellow-300/12 px-1.5 text-[11px] text-yellow-200/90 hover:bg-yellow-300/18"
+              >
+                <AiIdea className="size-3.5" />
+                Plan
+                <X className="size-3" />
+              </button>
+            ) : null}
             <div
               className="composer-toolbar flex min-w-0 flex-1 items-center"
               onWheel={(e) => {

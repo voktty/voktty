@@ -1,4 +1,5 @@
 import {
+  Archive,
   Check,
   ChevronDown,
   ChevronRight,
@@ -26,10 +27,9 @@ import {
 import {
   loadSidebarTabOrder,
   saveSidebarTabOrder,
-  type SidebarLayout,
   type SidebarTabId,
 } from "../lib/appearance";
-import { basename } from "../lib/fs";
+import { basename, type GitHistoryCommit } from "../lib/fs";
 import { IS_MAC, MOD } from "../lib/platform";
 import { resolveModel } from "../lib/models";
 import { projectName } from "../lib/paths";
@@ -62,6 +62,7 @@ import {
   sessionListNavigationIds,
   setFolderCollapsed,
   setFolderColor,
+  setFolderCustomColor,
   ungroupedSessions,
   type SessionFolder,
   type SessionListDropTarget,
@@ -100,21 +101,21 @@ import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
 import { useSortable } from "../hooks/useSortable";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
+import { normalizeHex } from "../lib/colorUtils";
 import {
   looksLikeProject,
   sameProjectPath,
   type RecentProject,
 } from "../lib/recents";
 import { CwdPicker } from "./CwdPicker";
+import { ColorPickerPopover, ColorSwatchRow } from "./ColorPickerPopover";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTree } from "./FileTree";
-import { FileTypeIcon } from "./FileTypeIcon";
 import { HarnessIcon } from "./HarnessIcon";
 import { ProjectRail } from "./ProjectRail";
 import { RailAction } from "./RailAction";
-import { SettingsNav } from "./SettingsRail";
 import { TerminalSpinner } from "./TerminalSpinner";
-import { DevModeLabel, DevModeSlot, IconButton, TabVisitNav } from "./TitleBar";
+import { DevModeSlot, IconButton, TabVisitNav } from "./TitleBar";
 import { ProjectSearch } from "./ProjectSearch";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
@@ -122,7 +123,6 @@ import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SessionsEmpty } from "./SessionsEmpty";
 import { SidebarUpdateFooter } from "./SidebarUpdate";
 import { SourceControl } from "./SourceControl";
-import { InboxView } from "../surfaces/InboxView";
 
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 560;
@@ -155,7 +155,6 @@ type Props = {
   /** Working copy for Changes / explorer git. Falls back to `cwd`. */
   gitCwd?: string;
   open: boolean;
-  layout: SidebarLayout;
   sessions: SessionSummary[];
   busySessionIds: Set<string>;
   approvalSessionIds: Set<string>;
@@ -192,7 +191,9 @@ type Props = {
   onGoBack?: () => void;
   onGoForward?: () => void;
   onOpenDiff?: (path: string) => void;
+  onOpenCommit?: (commit: GitHistoryCommit) => void;
   selectedDiffPath?: string;
+  selectedCommitSha?: string;
   textHarness?: HarnessId;
   onShowSourceControl?: () => void;
   recents?: RecentProject[];
@@ -229,7 +230,6 @@ function SidebarComponent({
   cwd,
   gitCwd,
   open,
-  layout,
   sessions,
   busySessionIds,
   approvalSessionIds,
@@ -260,7 +260,9 @@ function SidebarComponent({
   onGoBack,
   onGoForward,
   onOpenDiff,
+  onOpenCommit,
   selectedDiffPath,
+  selectedCommitSha,
   textHarness,
   onShowSourceControl,
   recents = [],
@@ -333,13 +335,11 @@ function SidebarComponent({
   const [filterMenu, setFilterMenu] = useState<{ x: number; y: number } | null>(
     null,
   );
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sessionListLimit, setSessionListLimit] = useState(SESSION_LIST_PAGE);
   const loadMoreRef = useRef<HTMLLIElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pendingFolderSessionIds = useRef(new Set<string>());
-  const deckLayout = layout === "deck";
   const busyIdsRef = useRef(busySessionIds);
   const focusedSessionIdRef = useRef(activeSessionId);
   const unseenFinishedLocalRef = useRef<Set<string>>(new Set());
@@ -385,13 +385,11 @@ function SidebarComponent({
         approvalSessionIds,
         unseenFinishedIds,
       ),
-      deckLayout || searchOpen ? searchQuery : "",
+      searchQuery,
     ),
   ].sort(compareSessionSummaries);
   const filtersActive = hasActiveSessionFilters(sessionFilters);
-  const searchNarrowed = Boolean(
-    (deckLayout || searchOpen) && searchQuery.trim(),
-  );
+  const searchNarrowed = Boolean(searchQuery.trim());
   // Summaries for the whole project stay in `sessions` so filters still work.
   // Folders sit above the ungrouped list. Only a page of ungrouped cards
   // mounts; the sentinel below asks for the next page.
@@ -424,7 +422,7 @@ function SidebarComponent({
     onSessionNavigationOrder?.(sessionNavigationIds);
   }, [onSessionNavigationOrder, sessionNavigationKey]);
   const hasMoreSessions = shownUngroupedCount < ungroupedVisible.length;
-  const sessionListKey = `${cwd}\0${sessionFilters.showArchived}\0${sessionFilters.time}\0${sessionFilters.hiddenHarnesses.join(",")}\0${sessionFilters.status.working}\0${sessionFilters.status.needsApproval}\0${sessionFilters.status.done}\0${deckLayout || searchOpen ? searchQuery : ""}`;
+  const sessionListKey = `${cwd}\0${sessionFilters.showArchived}\0${sessionFilters.time}\0${sessionFilters.hiddenHarnesses.join(",")}\0${sessionFilters.status.working}\0${sessionFilters.status.needsApproval}\0${sessionFilters.status.done}\0${searchQuery}`;
   const sessionHarnesses = harnessesInSessions(sessions);
   const narrowedByUser = searchNarrowed || filtersActive;
   const sortable = useSortable(tabOrder, (ids) => {
@@ -448,31 +446,25 @@ function SidebarComponent({
     },
     { axis: "y" },
   );
-  const visibleTabs = deckLayout
-    ? tabOrder.filter((itemId) => itemId !== "inbox")
-    : tabOrder.filter((itemId) => itemId !== "changes");
+  const visibleTabs = tabOrder.filter((itemId) => itemId !== "inbox");
   const canDragTabs = visibleTabs.length > 1;
-  const showProjectRail =
-    deckLayout && Boolean(onSelectProject && onOpenProject);
+  const showProjectRail = Boolean(onSelectProject && onOpenProject);
   // Settings live in the rail slot, so they keep it visible even when the
   // project rail itself is collapsed.
   const railVisible = showProjectRail && (projectRailOpen || settingsOpen);
   const inProject = looksLikeProject(cwd);
-  const classicSettings = settingsOpen && !deckLayout;
-  const showSidebarFooter = !deckLayout || !projectRailOpen;
+  const showSidebarFooter = !projectRailOpen;
   // A blank session has no project to browse, so the shell stands alone until
-  // one is picked — whether or not the rail is open. Classic settings keep the
-  // sidebar so it can host the section nav the rail would otherwise carry.
+  // one is picked — whether or not the rail is open.
   const sidebarVisible =
     open &&
     !searchActive &&
     !inboxActive &&
     !notesActive &&
-    (classicSettings || (!settingsOpen && !(deckLayout && !inProject)));
+    !settingsOpen &&
+    inProject;
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
   const changeStats = useProjectDiffStats(gitRoot, open);
-  const groupLogos = useTabGroupLogos();
-  const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
 
   useEffect(() => {
     setSessionListLimit(SESSION_LIST_PAGE);
@@ -535,7 +527,6 @@ function SidebarComponent({
   useEffect(() => {
     if (tab !== "sessions") {
       setFilterMenu(null);
-      setSearchOpen(false);
       setSearchQuery("");
     }
   }, [tab]);
@@ -561,7 +552,6 @@ function SidebarComponent({
     const sessionId = onNew?.();
     if (!sessionId) return;
     pendingFolderSessionIds.current.add(sessionId);
-    setSearchOpen(false);
     setSearchQuery("");
     setSessionFolders((current) => {
       const next = setFolderCollapsed(
@@ -741,6 +731,13 @@ function SidebarComponent({
     );
   };
 
+  const onFolderCustomColorChange = (color: string) => {
+    if (!folderMenu) return;
+    commitSessionFolders(
+      setFolderCustomColor(sessionFolders, folderMenu.folderId, color),
+    );
+  };
+
   const onSessionListDrop = (
     draggedId: string,
     target: SessionListDropTarget,
@@ -787,6 +784,11 @@ function SidebarComponent({
         onListDrop={onSessionListDrop}
         onListDropTargetChange={setSessionDrop}
         onContextMenu={(e) => onSessionContextMenu(session.id, e)}
+        onArchive={
+          onArchiveSession
+            ? () => onArchiveSession(session.id, !session.archived)
+            : undefined
+        }
         onRename={
           onRenameSession ? () => setRenamingSessionId(session.id) : undefined
         }
@@ -799,14 +801,6 @@ function SidebarComponent({
   const onSessionFiltersChange = (next: SessionSidebarFilters) => {
     setSessionFilters(next);
     saveSessionSidebarFilters(next);
-  };
-
-  const onToggleSessionSearch = () => {
-    setFilterMenu(null);
-    setSearchOpen((open) => {
-      if (open) setSearchQuery("");
-      return !open;
-    });
   };
 
   const onFilterButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -841,23 +835,11 @@ function SidebarComponent({
         event.stopPropagation();
         if (searchQuery) {
           setSearchQuery("");
-          return;
         }
-        if (!deckLayout) setSearchOpen(false);
       }}
-      className={
-        deckLayout
-          ? "h-full w-full min-w-0 rounded-md bg-transparent py-0 pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/35"
-          : "w-full px-3 py-2 text-[12px] text-content outline-none placeholder:text-content/35"
-      }
+      className="h-full w-full min-w-0 rounded-md bg-transparent py-0 pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/35"
     />
   );
-
-  useEffect(() => {
-    if (!searchOpen) return;
-    searchInputRef.current?.focus();
-    searchInputRef.current?.select();
-  }, [searchOpen]);
 
   const onTabPick = (itemId: SidebarTab) => {
     onTabChange(itemId);
@@ -943,7 +925,7 @@ function SidebarComponent({
       ref={resize.setPaneRef}
       className="sidebar-glass relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
     >
-      {deckLayout && railVisible ? (
+      {railVisible ? (
         <>
           <div
             className="flex h-10 shrink-0 select-none items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
@@ -964,37 +946,22 @@ function SidebarComponent({
         </>
       ) : (
         <>
-          {deckLayout ? (
-            <div
-              className="flex h-10 shrink-0 select-none items-center border-b border-content/10 pr-1.5"
-              data-tauri-drag-region="deep"
-            >
-              {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
-              <DevModeSlot />
-              <TabVisitNav
-                canGoBack={canGoBack}
-                canGoForward={canGoForward}
-                onGoBack={onGoBack}
-                onGoForward={onGoForward}
-                onTogglePanel={onToggleProjectRail}
-                panelActive={false}
-              />
-            </div>
-          ) : (
-            <div
-              className="flex h-9.75 shrink-0 select-none items-center justify-end gap-1 pr-1.5"
-              data-tauri-drag-region="deep"
-            >
-              <DevModeLabel />
-              <TabVisitNav
-                canGoBack={canGoBack}
-                canGoForward={canGoForward}
-                onGoBack={onGoBack}
-                onGoForward={onGoForward}
-              />
-            </div>
-          )}
-          {deckLayout && onSelectProject ? (
+          <div
+            className="flex h-10 shrink-0 select-none items-center border-b border-content/10 pr-1.5"
+            data-tauri-drag-region="deep"
+          >
+            {IS_MAC ? <div className="w-[78px] shrink-0" /> : null}
+            <DevModeSlot />
+            <TabVisitNav
+              canGoBack={canGoBack}
+              canGoForward={canGoForward}
+              onGoBack={onGoBack}
+              onGoForward={onGoForward}
+              onTogglePanel={onToggleProjectRail}
+              panelActive={false}
+            />
+          </div>
+          {onSelectProject ? (
             <SidebarProjectPicker
               cwd={cwd}
               recents={recents}
@@ -1010,388 +977,321 @@ function SidebarComponent({
               inboxUnseen={inboxUnseen}
             />
           ) : null}
-          {classicSettings ? null : (
-            <div
-              role="tablist"
-              aria-label="Workspace"
-              className={`flex h-9 shrink-0 items-center gap-px overflow-visible border-content/10 px-2 ${
-                // Mirrors the rail-open header stack: each row owns its own
-                // bottom border, so the seams land on the title bar's.
-                deckLayout ? "border-b" : "border-y"
-              }`}
-            >
-              {workspaceTabItems}
-            </div>
-          )}
+          <div
+            role="tablist"
+            aria-label="Workspace"
+            className="flex h-9 shrink-0 items-center gap-px overflow-visible border-b border-content/10 px-2"
+          >
+            {workspaceTabItems}
+          </div>
         </>
       )}
-      {classicSettings ? (
-        <SettingsNav
-          section={settingsSection}
-          onSelect={(next) => onSelectSettingsSection?.(next)}
-          onClose={() => onCloseSettings?.()}
-        />
-      ) : (
-        <>
-          <div
-            className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
-              tab === "files" ? "" : "hidden"
-            }`}
-          >
-            {filesSearchOpen ? (
-              <ProjectSearch
+      <>
+        <div
+          className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
+            tab === "files" ? "" : "hidden"
+          }`}
+        >
+          {filesSearchOpen ? (
+            <ProjectSearch
+              cwd={gitRoot}
+              focusToken={searchFocusToken}
+              onOpenFile={onOpenFile}
+              onClose={() => onFilesSearchOpenChange(false)}
+            />
+          ) : cwd && cwd !== "~" ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <FileTree
+                key={gitRoot}
                 cwd={gitRoot}
-                focusToken={searchFocusToken}
                 onOpenFile={onOpenFile}
-                onClose={() => onFilesSearchOpenChange(false)}
+                onOpenTerminal={onOpenTerminal}
+                onFileMoved={onFileMoved}
+                onFileDeleted={onFileDeleted}
+                onSearch={onOpenFilesSearch}
+                gitStatuses={gitStatuses}
+                sourceControlActive={open && tab === "changes"}
+                onShowSourceControl={onShowSourceControl}
               />
-            ) : cwd && cwd !== "~" ? (
-              <div className="flex min-h-0 flex-1 flex-col">
-                <FileTree
-                  key={gitRoot}
-                  cwd={gitRoot}
-                  onOpenFile={onOpenFile}
-                  onOpenTerminal={onOpenTerminal}
-                  onFileMoved={onFileMoved}
-                  onFileDeleted={onFileDeleted}
-                  onSearch={onOpenFilesSearch}
-                  gitStatuses={gitStatuses}
-                  sourceControlActive={open && tab === "changes"}
-                  onShowSourceControl={onShowSourceControl}
-                />
-              </div>
-            ) : (
-              <p className="px-3 py-2 text-[12px] text-content/50">
-                No project folder
-              </p>
-            )}
+            </div>
+          ) : (
+            <p className="px-3 py-2 text-[12px] text-content/50">
+              No project folder
+            </p>
+          )}
+        </div>
+        {tab === "sessions" && cwd && cwd !== "~" ? (
+          <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
+            <div className="relative flex h-7 min-w-0 flex-1 items-center">
+              <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
+              {sessionSearchInput}
+            </div>
+            <SessionsHeaderButton
+              label="Filter sessions"
+              active={filtersActive}
+              open={!!filterMenu}
+              hasPopup
+              onClick={onFilterButtonClick}
+            >
+              <ListFilter className="size-3" strokeWidth={1.75} />
+            </SessionsHeaderButton>
           </div>
-          {!deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
-            <div className="shrink-0 border-b border-content/10">
-              <div className="flex h-9 items-center px-2 pr-1.5">
-                <div
-                  title={cwd}
-                  className="flex h-full min-w-0 flex-1 items-center gap-1.5"
-                >
-                  {projectLogoPath ? (
-                    <ProjectLogoIcon
-                      path={projectLogoPath}
-                      className="size-4 shrink-0 rounded-sm ml-1.5"
-                      imageClassName="size-4"
-                    />
-                  ) : (
-                    <span className="grid size-6 shrink-0 place-items-center">
-                      <FileTypeIcon name={basename(cwd)} isDir isRoot />
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-[0.08em] text-content/50 uppercase">
-                    {basename(cwd)}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-px">
-                  <SessionsHeaderButton
-                    label="Search conversations"
-                    active={searchOpen}
-                    open={searchOpen}
-                    onClick={onToggleSessionSearch}
-                  >
-                    <Search className="size-3" strokeWidth={1.75} />
-                  </SessionsHeaderButton>
-                  <SessionsHeaderButton
-                    label="Filter sessions"
-                    active={filtersActive}
-                    open={!!filterMenu}
-                    hasPopup
-                    onClick={onFilterButtonClick}
-                  >
-                    <ListFilter className="size-3" strokeWidth={1.75} />
-                  </SessionsHeaderButton>
-                </div>
-              </div>
-              {searchOpen ? (
-                <div className="relative flex items-center border-t border-content/10 pl-3.5">
-                  <Search className="size-3 opacity-50" />
-                  {sessionSearchInput}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {deckLayout && tab === "sessions" && cwd && cwd !== "~" ? (
-            <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
-              <div className="relative flex h-7 min-w-0 flex-1 items-center">
-                <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
-                {sessionSearchInput}
-              </div>
-              <SessionsHeaderButton
-                label="Filter sessions"
-                active={filtersActive}
-                open={!!filterMenu}
-                hasPopup
-                onClick={onFilterButtonClick}
-              >
-                <ListFilter className="size-3" strokeWidth={1.75} />
-              </SessionsHeaderButton>
-            </div>
-          ) : null}
-          <div
-            ref={(el) => {
-              sessionsLock(el);
-              sessionsScrollRef.current = el;
-            }}
-            className={`min-h-0 flex-1 overflow-y-auto overscroll-none ${
-              tab === "sessions" ? "" : "hidden"
-            }`}
-          >
-            {!cwd || cwd === "~" ? (
-              <p className="px-3 py-2 text-[12px] text-content/50">
-                No project folder
-              </p>
-            ) : (
-              <div>
-                {/*
+        ) : null}
+        <div
+          ref={(el) => {
+            sessionsLock(el);
+            sessionsScrollRef.current = el;
+          }}
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-none ${
+            tab === "sessions" ? "" : "hidden"
+          }`}
+        >
+          {!cwd || cwd === "~" ? (
+            <p className="px-3 py-2 text-[12px] text-content/50">
+              No project folder
+            </p>
+          ) : (
+            <div>
+              {/*
               A project's first load stays deliberately blank. The listing is
               served from a covering index and resolves within a frame or two,
               so a placeholder only ever flashed — reading as a glitch rather
               than as progress. This is checked before the empty state so that
               cannot claim "No sessions yet" before the rows have landed.
             */}
-                {pendingFirstLoad ? null : status === "error" &&
-                  sessions.length === 0 ? (
+              {pendingFirstLoad ? null : status === "error" &&
+                sessions.length === 0 ? (
+                <p className="px-3 py-2 text-[12px] text-content/50">
+                  Couldn’t load sessions
+                </p>
+              ) : visibleSessions.length === 0 ? (
+                // A narrowed-down result is a transient answer to what the user
+                // just typed, so it stays a quiet line of text. Only the genuine
+                // "this project has nothing in it" case earns the illustration.
+                narrowedByUser ? (
                   <p className="px-3 py-2 text-[12px] text-content/50">
-                    Couldn’t load sessions
+                    {searchNarrowed
+                      ? "No matching sessions"
+                      : "No sessions match these filters"}
                   </p>
-                ) : visibleSessions.length === 0 ? (
-                  // A narrowed-down result is a transient answer to what the user
-                  // just typed, so it stays a quiet line of text. Only the genuine
-                  // "this project has nothing in it" case earns the illustration.
-                  narrowedByUser ? (
-                    <p className="px-3 py-2 text-[12px] text-content/50">
-                      {searchNarrowed
-                        ? "No matching sessions"
-                        : "No sessions match these filters"}
-                    </p>
-                  ) : (
-                    <SessionsEmpty message="Sessions you start will show up here" />
-                  )
                 ) : (
-                  <ul className="flex flex-col gap-0.5 p-1.5">
-                    {sessionListEntries.map((entry, index) => {
-                      if (entry.kind === "divider") {
-                        return (
-                          <li
-                            key={`divider-${index}`}
-                            aria-hidden
-                            className="mx-1 my-1 list-none"
-                          >
-                            <div className="h-px bg-content/10" />
-                          </li>
-                        );
-                      }
-                      if (entry.kind === "folder") {
-                        const expanded =
-                          searchNarrowed || !entry.folder.collapsed;
-                        const shellFill = folderShellFill(
-                          entry.folder.colorIndex,
-                        );
-                        const folderIndex = visibleFolderIds.indexOf(
-                          entry.folder.id,
-                        );
-                        const draggingFolder =
-                          folderSortable.draggingId === entry.folder.id;
-                        const showFolderDropStart =
-                          folderSortable.draggingId &&
-                          folderSortable.toIndex === folderIndex &&
-                          folderSortable.fromIndex !== null &&
-                          folderSortable.toIndex < folderSortable.fromIndex;
-                        const showFolderDropEnd =
-                          folderSortable.draggingId &&
-                          folderSortable.toIndex === folderIndex &&
-                          folderSortable.fromIndex !== null &&
-                          folderSortable.toIndex > folderSortable.fromIndex;
-                        return (
-                          <li
-                            key={entry.folder.id}
-                            ref={(el) =>
-                              folderSortable.setItemRef(entry.folder.id, el)
-                            }
-                            data-session-folder={entry.folder.id}
-                            className={`relative ${
-                              expanded ? "mb-1.5" : ""
-                            } ${draggingFolder ? "opacity-40" : ""}`}
-                          >
-                            {showFolderDropStart ? (
-                              <div className="pointer-events-none absolute inset-x-1 top-0 z-20 h-0.5 rounded-full bg-accent" />
-                            ) : null}
-                            {showFolderDropEnd ? (
-                              <div className="pointer-events-none absolute inset-x-1 bottom-0 z-20 h-0.5 rounded-full bg-accent" />
-                            ) : null}
-                            <div
-                              className={`overflow-hidden rounded-md ${
-                                shellFill ? "" : "bg-content/5"
-                              }`}
-                              style={
-                                shellFill
-                                  ? { background: shellFill }
-                                  : undefined
-                              }
-                            >
-                              {renamingFolderId === entry.folder.id ? (
-                                <FolderRenameRow
-                                  folder={entry.folder}
-                                  memberCount={entry.sessions.length}
-                                  dropTarget={isSessionDrop(
-                                    "folder",
-                                    entry.folder.id,
-                                  )}
-                                  onCommit={(name) => {
-                                    commitSessionFolders(
-                                      renameFolder(
-                                        sessionFolders,
-                                        entry.folder.id,
-                                        name,
-                                      ),
-                                    );
-                                    setRenamingFolderId(null);
-                                  }}
-                                  onCancel={() => setRenamingFolderId(null)}
-                                />
-                              ) : (
-                                <FolderRow
-                                  folder={entry.folder}
-                                  sessions={entry.sessions}
-                                  expanded={expanded}
-                                  dropTarget={isSessionDrop(
-                                    "folder",
-                                    entry.folder.id,
-                                  )}
-                                  canReorder={visibleFolderIds.length > 1}
-                                  busy={entry.sessions.some((session) =>
-                                    busySessionIds.has(session.id),
-                                  )}
-                                  done={entry.sessions.some((session) =>
-                                    unseenFinishedIds.has(session.id),
-                                  )}
-                                  needsApproval={entry.sessions.some(
-                                    (session) =>
-                                      approvalSessionIds.has(session.id),
-                                  )}
-                                  onPointerDown={(event) =>
-                                    folderSortable.onItemPointerDown(
-                                      entry.folder.id,
-                                      event,
-                                    )
-                                  }
-                                  onToggle={() => {
-                                    if (folderSortable.consumeClick()) return;
-                                    if (searchNarrowed) return;
-                                    commitSessionFolders(
-                                      setFolderCollapsed(
-                                        sessionFolders,
-                                        entry.folder.id,
-                                        !entry.folder.collapsed,
-                                      ),
-                                    );
-                                  }}
-                                  onContextMenu={(event) =>
-                                    onFolderContextMenu(entry.folder.id, event)
-                                  }
-                                  onRename={() =>
-                                    setRenamingFolderId(entry.folder.id)
-                                  }
-                                />
-                              )}
-                              {expanded ? (
-                                <>
-                                  <ul className="flex flex-col gap-px p-1">
-                                    {entry.sessions.map((session) => (
-                                      <li key={session.id}>
-                                        {renderSessionCard(session, true)}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                  {onNew ? (
-                                    <div className="border-t border-content/10 p-1">
-                                      <button
-                                        type="button"
-                                        data-no-drag
-                                        data-tauri-drag-region="false"
-                                        title="New session"
-                                        aria-label="New session"
-                                        onClick={() =>
-                                          onNewInFolder(entry.folder.id)
-                                        }
-                                        className="relative flex w-full items-center gap-1 rounded-md border border-transparent px-2.5 py-1.5 text-left text-content/45 hover:bg-content/10 hover:text-content"
-                                      >
-                                        <Plus
-                                          className="size-3 shrink-0"
-                                          strokeWidth={1.75}
-                                        />
-                                        <span className="text-[13px] font-semibold leading-snug">
-                                          New session
-                                        </span>
-                                      </button>
-                                    </div>
-                                  ) : null}
-                                </>
-                              ) : null}
-                            </div>
-                          </li>
-                        );
-                      }
+                  <SessionsEmpty message="Sessions you start will show up here" />
+                )
+              ) : (
+                <ul className="flex flex-col gap-0.5 p-1.5">
+                  {sessionListEntries.map((entry, index) => {
+                    if (entry.kind === "divider") {
                       return (
-                        <li key={entry.session.id}>
-                          {renderSessionCard(entry.session)}
+                        <li
+                          key={`divider-${index}`}
+                          aria-hidden
+                          className="mx-1 my-1 list-none"
+                        >
+                          <div className="h-px bg-content/10" />
                         </li>
                       );
-                    })}
-                    {hasMoreSessions ? (
-                      <li
-                        ref={loadMoreRef}
-                        aria-hidden
-                        className="h-px list-none"
-                      />
-                    ) : null}
-                  </ul>
-                )}
-              </div>
-            )}
+                    }
+                    if (entry.kind === "folder") {
+                      const expanded =
+                        searchNarrowed || !entry.folder.collapsed;
+                      const shellFill = folderShellFill(
+                        entry.folder.colorIndex,
+                        entry.folder.customColor,
+                      );
+                      const folderIndex = visibleFolderIds.indexOf(
+                        entry.folder.id,
+                      );
+                      const beforeUngrouped =
+                        sessionListEntries[index + 1]?.kind === "session";
+                      const draggingFolder =
+                        folderSortable.draggingId === entry.folder.id;
+                      const showFolderDropStart =
+                        folderSortable.draggingId &&
+                        folderSortable.toIndex === folderIndex &&
+                        folderSortable.fromIndex !== null &&
+                        folderSortable.toIndex < folderSortable.fromIndex;
+                      const showFolderDropEnd =
+                        folderSortable.draggingId &&
+                        folderSortable.toIndex === folderIndex &&
+                        folderSortable.fromIndex !== null &&
+                        folderSortable.toIndex > folderSortable.fromIndex;
+                      return (
+                        <li
+                          key={entry.folder.id}
+                          ref={(el) =>
+                            folderSortable.setItemRef(entry.folder.id, el)
+                          }
+                          data-session-folder={entry.folder.id}
+                          className={`relative ${
+                            expanded || beforeUngrouped ? "mb-1.5" : ""
+                          } ${draggingFolder ? "opacity-40" : ""}`}
+                        >
+                          {showFolderDropStart ? (
+                            <div className="pointer-events-none absolute inset-x-1 top-0 z-20 h-0.5 rounded-full bg-accent" />
+                          ) : null}
+                          {showFolderDropEnd ? (
+                            <div className="pointer-events-none absolute inset-x-1 bottom-0 z-20 h-0.5 rounded-full bg-accent" />
+                          ) : null}
+                          <div
+                            className={`overflow-hidden rounded-md ${
+                              shellFill ? "" : "bg-content/5"
+                            }`}
+                            style={
+                              shellFill ? { background: shellFill } : undefined
+                            }
+                          >
+                            {renamingFolderId === entry.folder.id ? (
+                              <FolderRenameRow
+                                folder={entry.folder}
+                                memberCount={entry.sessions.length}
+                                dropTarget={isSessionDrop(
+                                  "folder",
+                                  entry.folder.id,
+                                )}
+                                onCommit={(name) => {
+                                  commitSessionFolders(
+                                    renameFolder(
+                                      sessionFolders,
+                                      entry.folder.id,
+                                      name,
+                                    ),
+                                  );
+                                  setRenamingFolderId(null);
+                                }}
+                                onCancel={() => setRenamingFolderId(null)}
+                              />
+                            ) : (
+                              <FolderRow
+                                folder={entry.folder}
+                                sessions={entry.sessions}
+                                expanded={expanded}
+                                dropTarget={isSessionDrop(
+                                  "folder",
+                                  entry.folder.id,
+                                )}
+                                canReorder={visibleFolderIds.length > 1}
+                                busy={entry.sessions.some((session) =>
+                                  busySessionIds.has(session.id),
+                                )}
+                                done={entry.sessions.some((session) =>
+                                  unseenFinishedIds.has(session.id),
+                                )}
+                                needsApproval={entry.sessions.some((session) =>
+                                  approvalSessionIds.has(session.id),
+                                )}
+                                onPointerDown={(event) =>
+                                  folderSortable.onItemPointerDown(
+                                    entry.folder.id,
+                                    event,
+                                  )
+                                }
+                                onToggle={() => {
+                                  if (folderSortable.consumeClick()) return;
+                                  if (searchNarrowed) return;
+                                  commitSessionFolders(
+                                    setFolderCollapsed(
+                                      sessionFolders,
+                                      entry.folder.id,
+                                      !entry.folder.collapsed,
+                                    ),
+                                  );
+                                }}
+                                onContextMenu={(event) =>
+                                  onFolderContextMenu(entry.folder.id, event)
+                                }
+                                onRename={() =>
+                                  setRenamingFolderId(entry.folder.id)
+                                }
+                              />
+                            )}
+                            {expanded ? (
+                              <>
+                                <ul className="flex flex-col gap-px p-1">
+                                  {entry.sessions.map((session) => (
+                                    <li key={session.id}>
+                                      {renderSessionCard(session, true)}
+                                    </li>
+                                  ))}
+                                </ul>
+                                {onNew ? (
+                                  <div className="border-t border-content/10 p-1">
+                                    <button
+                                      type="button"
+                                      data-no-drag
+                                      data-tauri-drag-region="false"
+                                      title="New session"
+                                      aria-label="New session"
+                                      onClick={() =>
+                                        onNewInFolder(entry.folder.id)
+                                      }
+                                      className="relative flex w-full items-center gap-1 rounded-md border border-transparent px-2.5 py-1.5 text-left text-content/45 hover:bg-content/10 hover:text-content"
+                                    >
+                                      <Plus
+                                        className="size-3 shrink-0"
+                                        strokeWidth={1.75}
+                                      />
+                                      <span className="text-[13px] font-semibold leading-snug">
+                                        New session
+                                      </span>
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    }
+                    return (
+                      <li key={entry.session.id}>
+                        {renderSessionCard(entry.session)}
+                      </li>
+                    );
+                  })}
+                  {hasMoreSessions ? (
+                    <li
+                      ref={loadMoreRef}
+                      aria-hidden
+                      className="h-px list-none"
+                    />
+                  ) : null}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+        {tab === "changes" ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <SourceControl
+              cwd={gitRoot}
+              enabled={open}
+              textHarness={textHarness}
+              selectedPath={selectedDiffPath}
+              selectedSha={selectedCommitSha}
+              onOpenFile={onOpenDiff ?? onOpenFile}
+              onOpenCommit={onOpenCommit ?? (() => {})}
+            />
           </div>
-          {deckLayout && tab === "changes" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <SourceControl
-                cwd={gitRoot}
-                enabled={open}
-                textHarness={textHarness}
-                selectedPath={selectedDiffPath}
-                onOpenFile={onOpenDiff ?? onOpenFile}
+        ) : null}
+        {showSidebarFooter ? (
+          <>
+            <SidebarUpdateFooter
+              update={updateNotice}
+              onOpenWhatsNew={onOpenWhatsNew}
+              onDismissUpdate={onDismissUpdate}
+            />
+            <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
+              <RailAction
+                label="Settings"
+                icon={Settings}
+                onClick={onOpenSettings}
+                shortcut={`${MOD},`}
+                ariaLabel={`Settings (${MOD},)`}
               />
             </div>
-          ) : null}
-          {!deckLayout && tab === "inbox" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <InboxView cwd={cwd} recents={recents} variant="sidebar" />
-            </div>
-          ) : null}
-          {showSidebarFooter ? (
-            <>
-              <SidebarUpdateFooter
-                update={updateNotice}
-                onOpenWhatsNew={onOpenWhatsNew}
-                onDismissUpdate={onDismissUpdate}
-              />
-              <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
-                <RailAction
-                  label="Settings"
-                  icon={Settings}
-                  onClick={onOpenSettings}
-                  shortcut={`${MOD},`}
-                  ariaLabel={`Settings (${MOD},)`}
-                />
-              </div>
-            </>
-          ) : null}
-        </>
-      )}
+          </>
+        ) : null}
+      </>
       {sessionMenu ? (
         <ExplorerMenu
           x={sessionMenu.x}
@@ -1408,10 +1308,13 @@ function SidebarComponent({
           y={folderMenu.y}
           items={folderMenuItems}
           ariaLabel="Folder actions"
+          width={260}
           header={
             <FolderColorSwatches
               colorIndex={menuFolder?.colorIndex}
+              customColor={menuFolder?.customColor}
               onChange={onFolderColorChange}
+              onCustomChange={onFolderCustomColorChange}
             />
           }
           onPick={onFolderMenuPick}
@@ -1688,38 +1591,30 @@ function sessionListDropFromPoint(
 
 function FolderColorSwatches({
   colorIndex,
+  customColor,
   onChange,
+  onCustomChange,
 }: {
   colorIndex: number | undefined;
+  customColor: string | undefined;
   onChange: (index: number | null) => void;
+  onCustomChange: (color: string) => void;
 }) {
+  const paletteColor =
+    colorIndex != null ? TAB_GROUP_COLORS[colorIndex] : TAB_GROUP_COLORS[0];
+  const pickerValue =
+    customColor ?? normalizeHex(paletteColor ?? TAB_GROUP_COLORS[0]);
   return (
-    <div className="flex items-center justify-between gap-0.5 px-1 py-1">
-      {TAB_GROUP_COLORS.map((color, index) => {
-        const selected =
-          (colorIndex == null && index === 0) || colorIndex === index;
-        return (
-          <button
-            key={color}
-            type="button"
-            title={`Color ${index + 1}`}
-            aria-label={`Color ${index + 1}`}
-            aria-pressed={selected}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onChange(index === 0 ? null : index)}
-            className="grid size-5 place-items-center rounded-full"
-          >
-            <span
-              className={`size-3.5 rounded-full ${
-                selected
-                  ? "ring-2 ring-content/80 ring-offset-1 ring-offset-transparent"
-                  : ""
-              }`}
-              style={{ background: color }}
-            />
-          </button>
-        );
-      })}
+    <div className="px-1 py-1">
+      <ColorSwatchRow
+        colors={TAB_GROUP_COLORS}
+        colorIndex={colorIndex}
+        customColor={customColor}
+        customPickerOpen
+        customHighlighted={customColor != null}
+        onPickIndex={(index) => onChange(index === 0 ? null : index)}
+      />
+      <ColorPickerPopover value={pickerValue} onChange={onCustomChange} />
     </div>
   );
 }
@@ -1752,7 +1647,7 @@ function FolderRow({
   onRename: () => void;
 }) {
   const count = sessions.length;
-  const accent = folderAccent(folder.colorIndex);
+  const accent = folderAccent(folder.colorIndex, folder.customColor);
   return (
     <button
       type="button"
@@ -1792,7 +1687,7 @@ function FolderRow({
         ) : (
           <>
             <Folder
-              className="size-3.5 group-hover:hidden group-focus-visible:hidden text-content"
+              className={`size-3.5 group-hover:hidden group-focus-visible:hidden text-content`}
               strokeWidth={1.75}
             />
             <ChevronRight
@@ -1911,6 +1806,7 @@ function SessionCard({
   onListDrop,
   onListDropTargetChange,
   onContextMenu,
+  onArchive,
   onRename,
   onDelete,
 }: {
@@ -1928,6 +1824,7 @@ function SessionCard({
   onListDrop?: (draggedId: string, target: SessionListDropTarget) => void;
   onListDropTargetChange?: (target: SessionListDropTarget | null) => void;
   onContextMenu?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
+  onArchive?: () => void;
   onRename?: () => void;
   onDelete?: () => void;
 }) {
@@ -2082,80 +1979,112 @@ function SessionCard({
     window.addEventListener("keydown", onKey);
   };
 
+  const archiveLabel = session.archived ? "Unarchive" : "Archive";
+
   return (
-    <button
-      type="button"
-      title={title}
-      aria-current={isActive ? "true" : undefined}
-      data-session-card={session.id}
-      data-tauri-drag-region="false"
-      onPointerDown={onPointerDown}
-      onPointerEnter={() => onPrefetch?.(session.id)}
-      onClick={() => {
-        if (performance.now() < skipClickUntil.current) return;
-        onSelect(session.id);
-      }}
-      onContextMenu={onContextMenu}
-      onKeyDown={onKeyDown}
-      className={`relative border flex w-full touch-none flex-col rounded-md px-2.5 text-left ${
-        compact ? "py-1.5" : "py-2"
-      } ${dragging ? "opacity-40" : ""} ${
-        dropTarget
-          ? "text-content border-transparent"
-          : needsApproval
-            ? "bg-content/20 text-content border-content/30 border-dashed"
-            : isActive
-              ? "bg-content/10 text-content border-transparent"
-              : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
-      }`}
-    >
-      {dropTarget ? (
-        <div className="pointer-events-none absolute inset-0 rounded-md bg-accent/20" />
-      ) : null}
-      {compact ? null : (
-        <span className="relative flex items-center gap-2">
-          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+    <div className="group relative">
+      <button
+        type="button"
+        title={title}
+        aria-current={isActive ? "true" : undefined}
+        data-session-card={session.id}
+        data-tauri-drag-region="false"
+        onPointerDown={onPointerDown}
+        onPointerEnter={() => onPrefetch?.(session.id)}
+        onClick={() => {
+          if (performance.now() < skipClickUntil.current) return;
+          onSelect(session.id);
+        }}
+        onContextMenu={onContextMenu}
+        onKeyDown={onKeyDown}
+        className={`relative border flex w-full touch-none flex-col rounded-md px-2.5 text-left ${
+          compact ? "py-1.5" : "py-2"
+        } ${dragging ? "opacity-40" : ""} ${
+          dropTarget
+            ? "text-content border-transparent"
+            : needsApproval
+              ? "bg-content/20 text-content border-content/30 border-dashed"
+              : isActive
+                ? "bg-content/10 text-content border-transparent"
+                : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
+        }`}
+      >
+        {dropTarget ? (
+          <div className="pointer-events-none absolute inset-0 rounded-md bg-accent/20" />
+        ) : null}
+        {compact ? null : (
+          <span className="relative flex items-center gap-2">
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              <HarnessIcon
+                harness={session.harness}
+                className="size-3.5 shrink-0"
+              />
+              <span className="min-w-0 truncate text-[11px] text-content/50">
+                {model}
+              </span>
+            </span>
+            {status}
+          </span>
+        )}
+        <span
+          className={`relative flex min-w-0 items-center gap-1.5 ${
+            compact ? "" : "mt-1"
+          }`}
+        >
+          {session.pinned ? (
+            <Pin
+              className="size-3 shrink-0 text-content/45"
+              strokeWidth={1.75}
+            />
+          ) : null}
+          <span className="min-w-0 flex-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
+            {title}
+          </span>
+          {compact ? status : null}
+        </span>
+        <span className="relative mt-1 flex items-center gap-2">
+          {gitLabel ? (
+            <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-content/45">
+              <GitBranch className="size-3 shrink-0" strokeWidth={1.75} />
+              <span className="min-w-0 truncate">{gitLabel}</span>
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1" />
+          )}
+          <span
+            className={`flex shrink-0 items-center gap-1.5 ${
+              onArchive
+                ? "transition-[padding] group-focus-within:pl-5 group-hover:pl-5"
+                : ""
+            }`}
+          >
             <HarnessIcon
               harness={session.harness}
               className="size-3.5 shrink-0"
             />
-            <span className="min-w-0 truncate text-[11px] text-content/50">
-              {model}
-            </span>
           </span>
-          {status}
         </span>
-      )}
-      <span
-        className={`relative flex min-w-0 items-center gap-1.5 ${
-          compact ? "" : "mt-1"
-        }`}
-      >
-        {session.pinned ? (
-          <Pin className="size-3 shrink-0 text-content/45" strokeWidth={1.75} />
-        ) : null}
-        <span className="min-w-0 flex-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
-          {title}
-        </span>
-        {compact ? status : null}
-      </span>
-      <span className="relative mt-1 flex items-center gap-2">
-        {gitLabel ? (
-          <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-content/45">
-            <GitBranch className="size-3 shrink-0" strokeWidth={1.75} />
-            <span className="min-w-0 truncate">{gitLabel}</span>
-          </span>
-        ) : (
-          <span className="min-w-0 flex-1" />
-        )}
-        <span className="flex shrink-0 items-center gap-1.5">
-          <HarnessIcon
-            harness={session.harness}
-            className="size-3.5 shrink-0"
-          />
-        </span>
-      </span>
-    </button>
+      </button>
+      {onArchive ? (
+        <button
+          type="button"
+          data-no-drag
+          data-tauri-drag-region="false"
+          title={archiveLabel}
+          aria-label={`${archiveLabel} ${title}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onArchive();
+          }}
+          className={`pointer-events-none absolute right-7 grid size-5 place-items-center rounded text-content/50 opacity-0 transition-opacity hover:bg-content/10 hover:text-content group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 ${
+            compact ? "bottom-[5px]" : "bottom-[7px]"
+          }`}
+        >
+          <Archive className="size-3.5" strokeWidth={1.75} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 

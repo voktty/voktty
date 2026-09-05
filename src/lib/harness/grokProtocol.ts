@@ -1,7 +1,10 @@
-import type { PromptContentBlock } from "../attachments";
+import { promptBlocks, type PromptContentBlock } from "../attachments";
 import type { AgentModel, ModelSetting, ModelSettingChoice } from "../models";
-import type { RuntimeMode, ToolPreview } from "../session";
+import type { Attachment, RuntimeMode, ToolPreview } from "../session";
+import { normalizeTaskListStatus } from "../taskList";
 import type { ApprovalDecision, HarnessEvent } from "./types";
+import type { UserQuestion, UserQuestionReply } from "../userQuestion";
+import { questionsFromUnknown, selectedAnswerLabels } from "../userQuestion";
 import {
   composeToolTitle,
   extractSearchQuery,
@@ -32,6 +35,9 @@ const VARIANT_KIND: Record<string, string> = {
   web_search: "search",
   listdir: "read",
   list_dir: "read",
+  agent: "agent",
+  task: "agent",
+  subagent: "agent",
 };
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -49,24 +55,45 @@ export type GrokPermissionRequest = {
   optionIds: string[];
 };
 
-export type GrokAskQuestion = {
-  question: string;
-  multiSelect: boolean;
-  options: string[];
-};
+export type GrokAskQuestion = UserQuestion;
 
-/** ACP prompt blocks: Grok rejects image and audio. */
-export function grokPromptBlocks(text: string): PromptContentBlock[] {
-  const trimmed = text.trim();
-  return trimmed ? [{ type: "text", text: trimmed }] : [];
+export function askQuestionsFromAcp(params: unknown): UserQuestion[] {
+  return questionsFromUnknown(params);
+}
+
+export function askQuestionResponse(
+  reply: UserQuestionReply,
+  questions: UserQuestion[],
+): Record<string, unknown> {
+  if (reply.kind !== "answered") return { outcome: "skip_interview" };
+  const answers: Record<string, string | string[]> = {};
+  for (const question of questions) {
+    const labels = selectedAnswerLabels(question, reply);
+    if (labels.length === 0) continue;
+    answers[question.prompt] = question.multiSelect
+      ? labels
+      : (labels[0] ?? "");
+  }
+  return { outcome: "accepted", answers };
+}
+
+/** Grok accepts ACP image blocks despite advertising image: false. */
+export function grokPromptBlocks(
+  text: string,
+  attachments: Attachment[] = [],
+): PromptContentBlock[] {
+  return promptBlocks(text, attachments);
 }
 
 export function grokSpawnArgs(input: {
   model: string;
   effort?: string;
   fullAccess?: boolean;
+  plan?: boolean;
 }): string[] {
-  const args = ["--no-auto-update", "agent", "--no-leader"];
+  const args = ["--no-auto-update"];
+  if (input.plan) args.push("--permission-mode", "plan");
+  args.push("agent", "--no-leader");
   const native = nativeId(input.model);
   if (native) args.push("--model", native);
   const effort = input.effort?.trim();
@@ -104,7 +131,9 @@ export function grokSessionNewParams(
   return params;
 }
 
-export function grokEffort(settings?: Record<string, string>): string | undefined {
+export function grokEffort(
+  settings?: Record<string, string>,
+): string | undefined {
   const value = settings?.effort?.trim() || settings?.reasoning?.trim();
   return value || undefined;
 }
@@ -125,7 +154,10 @@ export function grokAuthMethodId(init: unknown): string | null {
         : [];
     }),
   );
-  const defaultId = stringField(asRecord(rec?._meta) ?? {}, "defaultAuthMethodId");
+  const defaultId = stringField(
+    asRecord(rec?._meta) ?? {},
+    "defaultAuthMethodId",
+  );
   if (ids.has("xai.api_key")) return "xai.api_key";
   if (defaultId && ids.has(defaultId)) return defaultId;
   if (ids.has("cached_token")) return "cached_token";
@@ -217,7 +249,9 @@ export function permissionRequestFromAcp(
     {};
   const grok = grokToolFields(tool, tool);
   const kind =
-    grok.kind ?? stringField(tool, "kind") ?? stringField(subject ?? {}, "kind");
+    grok.kind ??
+    stringField(tool, "kind") ??
+    stringField(subject ?? {}, "kind");
   const preview = extractToolPreview(tool, tool);
   const command = grok.command ?? extractShellCommand(tool);
   const title =
@@ -249,44 +283,6 @@ export function permissionRequestFromAcp(
     preview: mergePreview(preview, grok.path, grok.query, kind),
     optionIds,
   };
-}
-
-export function askQuestionsFromAcp(params: unknown): GrokAskQuestion[] {
-  const rec = asRecord(params);
-  const questions = Array.isArray(rec?.questions) ? rec.questions : [];
-  return questions.flatMap((item) => {
-    const q = asRecord(item);
-    const question = String(q?.question ?? q?.text ?? "").trim();
-    if (!question) return [];
-    const options = Array.isArray(q?.options)
-      ? q.options.flatMap((option) => {
-          const rec = asRecord(option);
-          const label = String(rec?.label ?? rec?.value ?? "").trim();
-          return label ? [label] : [];
-        })
-      : [];
-    return [
-      {
-        question,
-        multiSelect: q?.multiSelect === true,
-        options,
-      },
-    ];
-  });
-}
-
-export function askQuestionResponse(
-  decision: ApprovalDecision,
-  questions: GrokAskQuestion[],
-): Record<string, unknown> {
-  if (decision !== "allow") return { outcome: "skip_interview" };
-  const answers: Record<string, string | string[]> = {};
-  for (const question of questions) {
-    const first = question.options[0];
-    if (!first) continue;
-    answers[question.question] = question.multiSelect ? [first] : first;
-  }
-  return { outcome: "accepted", answers };
 }
 
 export function planFromExitPlan(params: unknown): string {
@@ -414,8 +410,8 @@ export function eventsFromAcpUpdate(params: unknown): HarnessEvent[] {
   }
 
   if (kind === "plan" || kind === "current_plan") {
-    const text = planText(update);
-    return text ? [{ type: "plan", text }] : [];
+    const event = planEvent(update);
+    return event ? [event] : [];
   }
 
   if (kind === "session_summary_generated") {
@@ -438,8 +434,7 @@ export function contextWindowFromSetup(result: unknown): number | undefined {
     ...modelsFromInitialize(result),
   ];
   const current = currentModelId(result);
-  const match =
-    models.find((model) => model.nativeId === current) ?? models[0];
+  const match = models.find((model) => model.nativeId === current) ?? models[0];
   return match?.contextWindow;
 }
 
@@ -572,9 +567,10 @@ function effortSetting(
     id: "effort",
     label: "Reasoning",
     kind: "select",
-    value: value && options.some((item) => item.value === value)
-      ? value
-      : (options[0]?.value ?? "high"),
+    value:
+      value && options.some((item) => item.value === value)
+        ? value
+        : (options[0]?.value ?? "high"),
     options: options.map((item) => ({
       value: item.value,
       label: EFFORT_LABELS[item.value] ?? item.label,
@@ -616,8 +612,7 @@ function grokToolFields(
   callId?: string;
   input?: Record<string, unknown>;
 } {
-  const meta =
-    nestedMeta(update, "x.ai/tool") ?? nestedMeta(tool, "x.ai/tool");
+  const meta = nestedMeta(update, "x.ai/tool") ?? nestedMeta(tool, "x.ai/tool");
   const input =
     asRecord(meta?.input) ??
     asRecord(update.rawInput) ??
@@ -715,7 +710,11 @@ function usageFromUpdate(update: Record<string, unknown>): HarnessEvent | null {
     numberField(usage, "context_window") ??
     numberField(usage, "maxTokens");
   if (used == null && window == null) return null;
-  return { type: "context", used: used ?? undefined, window: window ?? undefined };
+  return {
+    type: "context",
+    used: used ?? undefined,
+    window: window ?? undefined,
+  };
 }
 
 function hasUsageFields(rec: Record<string, unknown>): boolean {
@@ -726,29 +725,27 @@ function hasUsageFields(rec: Record<string, unknown>): boolean {
   );
 }
 
-function planText(update: Record<string, unknown>): string {
-  if (typeof update.text === "string" && update.text.trim()) return update.text;
+function planEvent(update: Record<string, unknown>): HarnessEvent | null {
   const entries = update.entries ?? update.plan;
-  if (!Array.isArray(entries)) return "";
-  return entries
-    .map((item) => {
+  if (Array.isArray(entries)) {
+    const items = entries.flatMap((item) => {
       const rec = asRecord(item);
-      if (!rec) return "";
-      const status = String(rec.status ?? "pending");
+      if (!rec) return [];
       const content = String(rec.content ?? rec.text ?? rec.title ?? "").trim();
-      if (!content) return "";
-      const mark =
-        status === "completed"
-          ? "[x]"
-          : status === "in_progress"
-            ? "[…]"
-            : status === "cancelled"
-              ? "[-]"
-              : "[ ]";
-      return `${mark} ${content}`;
-    })
-    .filter(Boolean)
-    .join("\n");
+      if (!content) return [];
+      return [
+        {
+          text: content,
+          status: normalizeTaskListStatus(rec.status),
+        },
+      ];
+    });
+    return { type: "tasks.updated", items };
+  }
+  if (typeof update.text === "string" && update.text.trim()) {
+    return { type: "plan", text: update.text };
+  }
+  return null;
 }
 
 function toolLabel(rec: Record<string, unknown>): string | undefined {
@@ -784,9 +781,7 @@ function kindFromName(name?: string): string | undefined {
 
 function humanizeToolName(name: string): string {
   const cleaned = name.replace(/[_-]+/g, " ").trim();
-  return cleaned
-    ? cleaned.replace(/\b\w/g, (ch) => ch.toUpperCase())
-    : name;
+  return cleaned ? cleaned.replace(/\b\w/g, (ch) => ch.toUpperCase()) : name;
 }
 
 function uniqueGrokModels(models: AgentModel[]): AgentModel[] {
@@ -847,7 +842,8 @@ function textFromContent(content: unknown, separator = ""): string {
   if (typeof content === "string") return content;
   const rec = asRecord(content);
   if (rec && typeof rec.text === "string") return rec.text;
-  if (rec && rec.content != null) return textFromContent(rec.content, separator);
+  if (rec && rec.content != null)
+    return textFromContent(rec.content, separator);
   if (Array.isArray(content)) {
     return content
       .map((item) => textFromContent(item, separator))
@@ -882,7 +878,9 @@ function numberField(
   key: string,
 ): number | undefined {
   const value = rec[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function sumNumbers(

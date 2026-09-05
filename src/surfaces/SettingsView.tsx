@@ -31,24 +31,19 @@ import {
   loadBodyGlass,
   loadThemePreference,
   loadSidebarBlur,
-  loadSidebarLayout,
   loadSidebarOpacity,
   loadThemeHue,
   loadThemeSaturation,
   loadTranscriptLayout,
-  loadTranscriptZen,
   loadTranscriptAnchor,
   saveBodyGlass,
   saveThemePreference,
   saveSidebarBlur,
-  saveSidebarLayout,
   saveSidebarOpacity,
   saveThemeHue,
   saveThemeSaturation,
   saveTranscriptLayout,
-  saveTranscriptZen,
   saveTranscriptAnchor,
-  TRANSCRIPT_ZEN_CHANGE_EVENT,
   TRANSCRIPT_ANCHOR_CHANGE_EVENT,
   SIDEBAR_BLUR_DEFAULT,
   SIDEBAR_BLUR_MAX,
@@ -63,7 +58,6 @@ import {
   THEME_SATURATION_MAX,
   THEME_SATURATION_MIN,
   type ThemePreference,
-  type SidebarLayout,
   type TranscriptLayout,
 } from "../lib/appearance";
 import {
@@ -88,7 +82,7 @@ import {
   subscribeModels,
 } from "../lib/models";
 import { prettyCwd, projectName } from "../lib/paths";
-import { ALT, IS_MAC, MOD } from "../lib/platform";
+import { IS_MAC } from "../lib/platform";
 import {
   loadArchivedProjects,
   looksLikeProject,
@@ -123,16 +117,22 @@ import {
   KEYBINDINGS,
   loadClaudeHooks,
   loadComposerRunner,
+  loadDiffViewer,
+  loadFollowUpBehavior,
   loadGridArcadeEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   saveClaudeHooks,
   saveComposerRunner,
+  saveDiffViewer,
+  saveFollowUpBehavior,
   saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
   settingsSectionDescription,
   settingsSectionLabel,
+  type DiffViewer,
+  type FollowUpBehavior,
   type SettingsSectionId,
 } from "../lib/settings";
 import { loadSoundsEnabled, playCue, saveSoundsEnabled } from "../lib/sounds";
@@ -260,12 +260,13 @@ function GeneralPage({
 }: {
   onOpenWhatsNew: (version: string) => void;
 }) {
-  const [layout, setLayout] = useState<SidebarLayout>(loadSidebarLayout);
   const [transcriptLayout, setTranscriptLayout] =
     useState<TranscriptLayout>(loadTranscriptLayout);
-  const [transcriptZen, setTranscriptZen] = useState(loadTranscriptZen);
   const [transcriptAnchor, setTranscriptAnchor] =
     useState(loadTranscriptAnchor);
+  const [diffViewer, setDiffViewer] = useState<DiffViewer>(loadDiffViewer);
+  const [followUpBehavior, setFollowUpBehavior] =
+    useState<FollowUpBehavior>(loadFollowUpBehavior);
   const [composerRunner, setComposerRunner] = useState(loadComposerRunner);
   const [gridArcadeEnabled, setGridArcadeEnabled] = useState(
     loadGridArcadeEnabled,
@@ -278,29 +279,14 @@ function GeneralPage({
   const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
 
   useEffect(() => {
-    const onZen = (event: Event) => {
-      setTranscriptZen((event as CustomEvent<boolean>).detail === true);
-    };
     const onAnchor = (event: Event) => {
       setTranscriptAnchor((event as CustomEvent<boolean>).detail === true);
     };
-    window.addEventListener(TRANSCRIPT_ZEN_CHANGE_EVENT, onZen);
     window.addEventListener(TRANSCRIPT_ANCHOR_CHANGE_EVENT, onAnchor);
     return () => {
-      window.removeEventListener(TRANSCRIPT_ZEN_CHANGE_EVENT, onZen);
       window.removeEventListener(TRANSCRIPT_ANCHOR_CHANGE_EVENT, onAnchor);
     };
   }, []);
-
-  const onLayout = (next: SidebarLayout) => {
-    saveSidebarLayout(next);
-    setLayout(next);
-  };
-
-  const onTranscriptZen = (next: boolean) => {
-    saveTranscriptZen(next);
-    setTranscriptZen(next);
-  };
 
   const onTranscriptLayout = (next: TranscriptLayout) => {
     saveTranscriptLayout(next);
@@ -310,6 +296,16 @@ function GeneralPage({
   const onTranscriptAnchor = (next: boolean) => {
     saveTranscriptAnchor(next);
     setTranscriptAnchor(next);
+  };
+
+  const onDiffViewer = (next: DiffViewer) => {
+    saveDiffViewer(next);
+    setDiffViewer(next);
+  };
+
+  const onFollowUpBehavior = (next: FollowUpBehavior) => {
+    saveFollowUpBehavior(next);
+    setFollowUpBehavior(next);
   };
 
   const onComposerRunner = (next: boolean) => {
@@ -345,20 +341,6 @@ function GeneralPage({
   return (
     <>
       <Row
-        label="Workspace layout"
-        description="Classic keeps a single sidebar. Deck adds the project rail, the workspace panel, and the project terminal dock."
-      >
-        <Segmented
-          label="Workspace layout"
-          value={layout}
-          options={[
-            { value: "deck", label: "Deck" },
-            { value: "classic", label: "Classic" },
-          ]}
-          onChange={onLayout}
-        />
-      </Row>
-      <Row
         label="Transcript layout"
         description="Full width keeps user prompts as a spanning card. Chat aligns them to the right with a max width, like a messaging app."
       >
@@ -373,6 +355,34 @@ function GeneralPage({
         />
       </Row>
       <Row
+        label="Diff view"
+        description="Editor keeps working-tree changes in the file. Unified stacks every changed file in one review, with sticky headers and collapsed unchanged lines."
+      >
+        <Segmented
+          label="Diff view"
+          value={diffViewer}
+          options={[
+            { value: "editor", label: "Editor" },
+            { value: "unified", label: "Unified" },
+          ]}
+          onChange={onDiffViewer}
+        />
+      </Row>
+      <Row
+        label="Follow-up behavior"
+        description="Queue follow-ups until the active turn finishes, or steer the active turn immediately."
+      >
+        <Segmented
+          label="Follow-up behavior"
+          value={followUpBehavior}
+          options={[
+            { value: "queue", label: "Queue" },
+            { value: "steer", label: "Steer" },
+          ]}
+          onChange={onFollowUpBehavior}
+        />
+      </Row>
+      <Row
         label="Anchor prompts to top"
         description="When you send, the new prompt sits at the top of the transcript and the reply grows into the space below. Turn this off to keep the classic layout, with the latest message resting on the composer."
       >
@@ -380,16 +390,6 @@ function GeneralPage({
           label="Anchor prompts to top"
           on={transcriptAnchor}
           onChange={onTranscriptAnchor}
-        />
-      </Row>
-      <Row
-        label="Zen mode"
-        description={`The agent's work reads as groups: a run of related tool calls under the line the agent wrote to introduce it. The group it is in stays open and grows a step at a time — tool calls, thinking, the notes it drops between them — and folds back to its header the moment it moves on, leaving a labelled outline above the final answer. Click any group to read it back. Edits waiting on approval still show their diff. ${MOD}${ALT}Z toggles it.`}
-      >
-        <Toggle
-          label="Zen mode"
-          on={transcriptZen}
-          onChange={onTranscriptZen}
         />
       </Row>
       <Row
@@ -1295,7 +1295,8 @@ function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="flex gap-0.5 rounded-md border border-content/10 p-0.5 text-[12px]"
+      className="grid w-40 gap-0.5 rounded-md border border-content/10 p-0.5 text-[12px]"
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => (
         <button
@@ -1304,7 +1305,7 @@ function Segmented<T extends string>({
           role="radio"
           aria-checked={value === option.value}
           onClick={() => onChange(option.value)}
-          className={`rounded-[5px] px-3 py-1 ${
+          className={`min-w-0 rounded-[5px] px-1.5 py-1 ${
             value === option.value
               ? "bg-content/10 text-content"
               : "text-content/50 hover:text-content"

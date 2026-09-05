@@ -1,5 +1,6 @@
 import {
   composeToolTitle,
+  isAgentTool,
   isEditTool,
   isExecuteTool,
   isReadTool,
@@ -85,6 +86,10 @@ export function isIncompleteTool(
 
 export function isHiddenTool(block: Block): boolean {
   if (block.role !== "tool" && block.role !== "approval") return false;
+  // Harnesses also publish todo mutations as ordinary tool calls. The
+  // canonical tasks block is the user-facing representation, so keep the
+  // provider-internal call out of the activity stack.
+  if (block.tool?.kind?.toLowerCase() === "tasks") return true;
   if (
     isEditTool(
       block.tool?.kind,
@@ -99,11 +104,11 @@ export function isHiddenTool(block: Block): boolean {
 }
 
 /**
- * Zen mode folds edits in with the reads and searches. An edit still awaiting
- * approval stays out: you cannot judge a diff you cannot see.
+ * Foldable work: tool calls, thinking, and edits. An edit still awaiting
+ * approval stays out — you cannot judge a diff you cannot see.
  */
-export function isActivityBlock(block: Block, zen = false): boolean {
-  if (zen && isThinkingBlock(block)) return true;
+export function isActivityBlock(block: Block): boolean {
+  if (isThinkingBlock(block)) return true;
   if (block.role !== "tool" && block.role !== "approval") return false;
   if (
     isEditTool(
@@ -111,14 +116,14 @@ export function isActivityBlock(block: Block, zen = false): boolean {
       block.text || block.tool?.title,
       block.tool?.preview,
     ) &&
-    (!zen || needsApproval(block))
+    needsApproval(block)
   ) {
     return false;
   }
   return !isHiddenTool(block);
 }
 
-/** Reasoning the agent streams while it works. Zen shows it, nothing else does. */
+/** Reasoning the agent streams while it works. */
 export function isThinkingBlock(block: Block): boolean {
   return block.role === "reasoning" && !!block.text.trim();
 }
@@ -127,21 +132,9 @@ export function isToolBlock(block: Block): boolean {
   return block.role === "tool" || block.role === "approval";
 }
 
-/** Assistant prose with something in it — the paragraphs between tool calls. */
+/** Assistant prose with something in it. */
 export function isProseBlock(block: Block): boolean {
   return block.role === "assistant" && !!block.text.trim();
-}
-
-/**
- * Where the turn's final answer starts: the trailing run of assistant prose.
- * Zen folds everything before it, so the last thing the agent says is the only
- * full-size thing left. A block still streaming sits in that run, which is why
- * text renders in full as it arrives and only folds once the next tool starts.
- */
-export function finalResponseStart(blocks: Block[]): number {
-  let index = blocks.length;
-  while (index > 0 && isProseBlock(blocks[index - 1])) index -= 1;
-  return index;
 }
 
 /** First paragraph of a folded prose block, stripped to one plain line. */
@@ -198,15 +191,16 @@ export function groupTurns(blocks: Block[]): Block[][] {
 }
 
 /**
- * Zen folds a turn's whole working process — tool calls and the prose between
- * them — into one activity group, leaving the final answer standing alone.
+ * Fold contiguous runs of tool calls and reasoning into activity groups.
+ * Assistant prose always stands on its own, including progress updates between
+ * groups, so the readable transcript never disappears into activity chrome.
  */
-export function groupTurnItems(blocks: Block[], zen = false): TurnItem[] {
-  const visible = blocks.filter(
-    (block) => !isIgnoredTurnBlock(block, zen) && !isHiddenTool(block),
+export function groupTurnItems(blocks: Block[]): TurnItem[] {
+  const visible = withoutSupersededInitialThinking(
+    blocks.filter(
+      (block) => !isIgnoredTurnBlock(block) && !isHiddenTool(block),
+    ),
   );
-  // Zen off: nothing folds, so every prose block counts as final.
-  const finalStart = zen ? finalResponseStart(visible) : 0;
   const items: TurnItem[] = [];
   let activity: Block[] = [];
   const flush = () => {
@@ -215,11 +209,8 @@ export function groupTurnItems(blocks: Block[], zen = false): TurnItem[] {
     }
     activity = [];
   };
-  visible.forEach((block, index) => {
-    if (
-      isActivityBlock(block, zen) ||
-      (index < finalStart && isProseBlock(block))
-    ) {
+  visible.forEach((block) => {
+    if (isActivityBlock(block)) {
       activity.push(block);
       return;
     }
@@ -230,44 +221,79 @@ export function groupTurnItems(blocks: Block[], zen = false): TurnItem[] {
   return items;
 }
 
-function isIgnoredTurnBlock(block: Block, zen: boolean): boolean {
-  // Zen keeps thinking as a step in the group, so a long think does not read
-  // as the agent having stalled. Everywhere else it stays out of the transcript.
-  if (block.role === "reasoning") return !zen || !block.text.trim();
+/**
+ * Some harnesses publish private reasoning before their first assistant text.
+ * Keep it around only while that text has not arrived; if a tool starts first,
+ * the reasoning belongs to that activity group and remains visible there.
+ */
+function withoutSupersededInitialThinking(blocks: Block[]): Block[] {
+  let start = 0;
+  while (
+    start < blocks.length &&
+    (blocks[start].role === "user" || blocks[start].role === "system")
+  ) {
+    start += 1;
+  }
+
+  let end = start;
+  while (end < blocks.length && isThinkingBlock(blocks[end])) end += 1;
+  if (end === start) return blocks;
+
+  const following = blocks.slice(end);
+  const proseIndex = following.findIndex(isProseBlock);
+  if (proseIndex < 0) return blocks;
+  const toolIndex = following.findIndex(isToolBlock);
+  if (toolIndex >= 0 && toolIndex < proseIndex) return blocks;
+
+  return [...blocks.slice(0, start), ...blocks.slice(end)];
+}
+
+/** The leading reasoning-only activity shown before the first response arrives. */
+export function initialThinkingIndex(items: TurnItem[]): number {
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    if (
+      item.type === "block" &&
+      (item.block.role === "user" || item.block.role === "system")
+    ) {
+      continue;
+    }
+    if (
+      item.type === "activity" &&
+      item.blocks.length > 0 &&
+      item.blocks.every(isThinkingBlock)
+    ) {
+      return index;
+    }
+    return -1;
+  }
+  return -1;
+}
+
+function isIgnoredTurnBlock(block: Block): boolean {
+  // Keep thinking as a step in the group, so a long think does not read as
+  // the agent having stalled.
+  if (block.role === "reasoning") return !block.text.trim();
   return block.role === "assistant" && !block.text.trim();
 }
 
-/** Markdown the user actually reads: assistant prose plus any plan, not tool chrome. */
+/** Text the user actually reads: assistant prose, tasks, and plans, not tool chrome. */
 export function turnCopyText(blocks: Block[]): string {
   return blocks
-    .filter((block) => block.role === "assistant" || block.role === "plan")
+    .filter(
+      (block) =>
+        block.role === "assistant" ||
+        block.role === "tasks" ||
+        block.role === "plan",
+    )
     .map((block) => block.text.replace(/\r\n?/g, "\n").trim())
     .filter(Boolean)
     .join("\n\n");
 }
 
 /**
- * Rows for the live stack: the newest finished call holds the line, anything
- * waiting on you sits under it, and the rest waits behind the disclosure.
- */
-export function splitActivityRows(blocks: Block[]): {
-  latest?: Block;
-  pending: Block[];
-  hidden: Block[];
-} {
-  const pending = blocks.filter(needsApproval);
-  const completed = blocks.filter((block) => !needsApproval(block));
-  const latest = completed[completed.length - 1];
-  return {
-    latest,
-    pending,
-    hidden: latest ? completed.slice(0, -1) : [],
-  };
-}
-
-/**
- * The activity group a settled zen turn hangs its "Worked for" line on: the
- * last one, which sits right above the final answer.
+ * The activity group a settled turn hangs its "Worked for" line on: the last
+ * one, which sits right above the final answer.
  */
 export function lastActivityIndex(items: TurnItem[]): number {
   for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -276,15 +302,31 @@ export function lastActivityIndex(items: TurnItem[]): number {
   return -1;
 }
 
-export function activityPreviousLabel(count: number): string {
-  return `+${count} previous ${count === 1 ? "tool call" : "tool calls"}`;
+/** True while a tool in this turn is still running or waiting on the user. */
+export function activityStillRunning(blocks: Block[]): boolean {
+  return blocks.some(
+    (block) =>
+      (isToolBlock(block) &&
+        !isHiddenTool(block) &&
+        toolCallState(block) === "pending") ||
+      needsApproval(block),
+  );
+}
+
+export function hasRunningSubagent(blocks: Block[]): boolean {
+  return blocks.some(
+    (block) =>
+      isToolBlock(block) &&
+      isAgentTool(block.tool?.kind, block.text || block.tool?.title) &&
+      toolCallState(block) === "pending",
+  );
 }
 
 /**
  * What a run of tool calls was for. Reads and searches are one thing — looking
  * around — so a grep followed by the file it turned up stays one group.
  */
-export type ActivityWorkKind = "research" | "edit" | "run" | "other";
+export type ActivityWorkKind = "research" | "edit" | "run" | "agent" | "other";
 
 /** A work kind, or a group the agent only narrated: a thought, or a note. */
 export type ActivityPhaseKind = ActivityWorkKind | "think" | "note";
@@ -305,6 +347,7 @@ export type ActivityPhase = {
 const WORK_KIND_ORDER: ActivityWorkKind[] = [
   "edit",
   "run",
+  "agent",
   "research",
   "other",
 ];
@@ -313,6 +356,7 @@ export function toolCategory(block: Block): ActivityWorkKind {
   const kind = block.tool?.kind;
   const title = block.text || block.tool?.title;
   const preview = block.tool?.preview;
+  if (isAgentTool(kind, title)) return "agent";
   if (isEditTool(kind, title, preview)) return "edit";
   if (isSearchTool(kind, title, preview)) return "research";
   if (isReadTool(kind, title, preview)) return "research";
@@ -400,7 +444,13 @@ function absorbStrayPhases(phases: ActivityPhase[]): ActivityPhase[] {
     const previous = kept[kept.length - 1];
     const stray =
       !phase.headline && phase.steps.filter(isToolBlock).length === 1;
-    if (previous && stray && previous.steps.length > 0) {
+    if (
+      previous &&
+      stray &&
+      previous.steps.length > 0 &&
+      phase.kind !== "agent" &&
+      previous.kind !== "agent"
+    ) {
       previous.steps.push(...phase.steps);
       previous.kind = dominantWorkKind(previous.steps) ?? previous.kind;
       continue;
@@ -491,6 +541,14 @@ export function activityPhaseTitle(phase: ActivityPhase, live = false): string {
           ? "Running a command"
           : "Ran a command"
         : `${live ? "Running" : "Ran"} ${tally.runs} commands`;
+    case "agent": {
+      const count = phase.steps.filter(isToolBlock).length;
+      return count <= 1
+        ? live
+          ? "Running a subagent"
+          : "Ran a subagent"
+        : `${live ? "Running" : "Ran"} ${count} subagents`;
+    }
     case "think":
       return live ? "Thinking" : "Thought";
     default:

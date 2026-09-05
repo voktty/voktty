@@ -17,9 +17,9 @@ pub fn dispatch(app: &AppHandle, id: &str) {
             let _ = crate::window::open_new_window(app);
         }
         "quit" => crate::window::request_quit(app),
-        "new_tab" | "close_tab" | "next_tab" | "prev_tab" | "back_tab" | "forward_tab"
-        | "split_right" | "split_down" | "focus_left" | "focus_right" | "focus_up"
-        | "focus_down" | "toggle_sidebar" | "toggle_zen" | "sidebar_opacity" | "open_project"
+        "new_tab" | "close_tab" | "close_other_tabs" | "next_tab" | "prev_tab" | "back_tab"
+        | "forward_tab" | "split_right" | "split_down" | "focus_left" | "focus_right"
+        | "focus_up" | "focus_down" | "toggle_sidebar" | "sidebar_opacity" | "open_project"
         | "go_to_file" | "open_search" | "open_inbox" | "open_notes" | "find_in_project"
         | "find" | "new_terminal" | "new_terminal_tab" | "toggle_terminal"
         | "open_model_picker" | "open_settings" | "check_for_updates" => {
@@ -71,6 +71,9 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let close_tab = MenuItemBuilder::with_id("close_tab", "Close Pane")
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
+    let close_other_tabs = MenuItemBuilder::with_id("close_other_tabs", "Close Other Tabs")
+        .accelerator("CmdOrCtrl+Alt+T")
+        .build(app)?;
     let next_tab = MenuItemBuilder::with_id("next_tab", "Next Tab")
         .accelerator("CmdOrCtrl+Shift+]")
         .build(app)?;
@@ -100,9 +103,6 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let toggle_sidebar = MenuItemBuilder::with_id("toggle_sidebar", "Toggle Sidebar")
         .accelerator("CmdOrCtrl+B")
         .build(app)?;
-    let toggle_zen = MenuItemBuilder::with_id("toggle_zen", "Toggle Zen Mode")
-        .accelerator("CmdOrCtrl+Alt+Z")
-        .build(app)?;
     let open_model_picker = MenuItemBuilder::with_id("open_model_picker", "Switch Model…")
         .accelerator("CmdOrCtrl+.")
         .build(app)?;
@@ -129,6 +129,7 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&split_right)
         .item(&split_down)
         .item(&close_tab)
+        .item(&close_other_tabs)
         .separator()
         .item(&prev_tab)
         .item(&next_tab)
@@ -138,7 +139,6 @@ fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 
     let view = SubmenuBuilder::new(app, "View")
         .item(&toggle_sidebar)
-        .item(&toggle_zen)
         .item(&open_inbox)
         .item(&open_notes)
         .item(&toggle_terminal)

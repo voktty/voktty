@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { ALT, MOD, SHIFT } from "../lib/platform";
-import { toggleTranscriptZen } from "../lib/appearance";
 import { runUpdateFlow } from "../lib/updater";
 
 type MenuKey = "file" | "view" | "terminal";
@@ -15,6 +14,7 @@ type Props = {
   onToggleSidebar: () => void;
   onShowSourceControl?: () => void;
   onCloseCurrentTab?: () => void;
+  onCloseOtherTabs?: () => void;
   onPickProject?: () => void;
   onFindInProject?: () => void;
   onSearch?: () => void;
@@ -30,6 +30,7 @@ export function MenuBar({
   onToggleSidebar,
   onShowSourceControl,
   onCloseCurrentTab,
+  onCloseOtherTabs,
   onPickProject,
   onFindInProject,
   onSearch,
@@ -131,11 +132,11 @@ export function MenuBar({
         case "close_tab":
           onCloseCurrentTab?.();
           break;
+        case "close_other_tabs":
+          onCloseOtherTabs?.();
+          break;
         case "toggle_sidebar":
           onToggleSidebar();
-          break;
-        case "toggle_zen":
-          toggleTranscriptZen();
           break;
         case "open_model_picker":
           window.dispatchEvent(new Event("open_model_picker"));
@@ -151,6 +152,7 @@ export function MenuBar({
     [
       closeMenu,
       onCloseCurrentTab,
+      onCloseOtherTabs,
       onFindInProject,
       onGoToFile,
       onNew,
@@ -179,13 +181,18 @@ export function MenuBar({
           { kind: "item", id: "find_in_project", label: "Find in Files…", shortcut: `${MOD}${SHIFT}F` },
           { kind: "sep" },
           { kind: "item", id: "close_tab", label: "Close Pane", shortcut: `${MOD}W` },
+          {
+            kind: "item",
+            id: "close_other_tabs",
+            label: "Close Other Tabs",
+            shortcut: `${MOD}${ALT}T`,
+          },
           { kind: "sep" },
           { kind: "item", id: "check_for_updates", label: "Check for Updates…" },
         ];
       case "view":
         return [
           { kind: "item", id: "toggle_sidebar", label: "Toggle Sidebar", shortcut: `${MOD}B` },
-          { kind: "item", id: "toggle_zen", label: "Toggle Zen Mode", shortcut: `${MOD}${ALT}Z` },
           { kind: "item", id: "open_inbox", label: "Inbox" },
           ...(onOpenNotes
             ? [{ kind: "item" as const, id: "open_notes", label: "Notes" }]

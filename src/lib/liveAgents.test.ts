@@ -83,6 +83,31 @@ describe("liveAgentsFromSessions", () => {
     );
   });
 
+  it("treats a parked clarifying question as needing approval", () => {
+    const waiting = chat("/tmp/ask", {
+      busy: true,
+      pendingQuestion: {
+        requestId: 4,
+        title: "Which file?",
+        questions: [
+          {
+            id: "q1",
+            prompt: "Which file?",
+            multiSelect: false,
+            allowCustom: true,
+            options: [{ id: "a.ts", label: "a.ts" }],
+          },
+        ],
+      },
+    });
+    expect(liveAgentsFromSessions([waiting])[0]).toMatchObject({
+      id: waiting.id,
+      activity: "Which file?",
+      needsApproval: true,
+      done: false,
+    });
+  });
+
   it("sorts working agents by longest-running turn first", () => {
     const newer = chat("/tmp/new", {
       busy: true,

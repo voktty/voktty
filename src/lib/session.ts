@@ -1,4 +1,5 @@
 import type { ContextUsage } from "./contextUsage";
+import type { UserQuestionPrompt } from "./userQuestion";
 import type { HandoffComposerCard } from "./handoff";
 import type { InboxComposerCard } from "./githubTasks";
 import type { NoteCardMeta, NoteComposerCard } from "./notes";
@@ -29,9 +30,48 @@ export type BlockRole =
   | "reasoning"
   | "tool"
   | "approval"
+  | "tasks"
   | "plan"
   | "system"
   | "handoff";
+
+export type TaskListItemStatus =
+  "pending" | "in_progress" | "completed" | "cancelled";
+
+export type TaskListItem = {
+  /** Stable provider identity, when available, for merging status-only updates. */
+  id?: string;
+  text: string;
+  status: TaskListItemStatus;
+};
+
+export type TaskListMeta = {
+  /** Provider identity for replacing later snapshots of the same list. */
+  key?: string;
+  explanation?: string;
+  items: TaskListItem[];
+};
+
+/** One-shot behavior selected in the composer for the next harness turn. */
+export type TurnIntent = "default" | "plan" | "build";
+
+export type PlanStatus = "streaming" | "ready" | "building" | "built";
+
+export type PlanBlockMeta = {
+  /** Provider or turn identity used to merge streamed snapshots. */
+  key?: string;
+  status: PlanStatus;
+  /** Provider-authored plan before any user edits. */
+  originalText?: string;
+  /** Exact markdown the user approved with Build. */
+  approvedText?: string;
+  edited?: boolean;
+};
+
+export type PlanBuildTarget = {
+  harness: HarnessId;
+  model: string;
+};
 
 export type HandoffStatus = "preparing" | "ready";
 
@@ -92,6 +132,17 @@ export type Attachment = {
   previewUrl?: string;
 };
 
+export type QueuedMessage = {
+  id: string;
+  text: string;
+  attachments: Attachment[];
+  noteCard?: NoteComposerCard;
+  handoffCard?: HandoffComposerCard;
+  intent?: TurnIntent;
+};
+
+export type MessageQueueStatus = "active" | "paused" | "resuming";
+
 export type Block = {
   id: string;
   role: BlockRole;
@@ -114,6 +165,8 @@ export type Block = {
     requestId: number;
     decided?: "allow" | "deny" | "cancelled";
   };
+  taskList?: TaskListMeta;
+  plan?: PlanBlockMeta;
   handoff?: HandoffMeta;
   secondOpinion?: SecondOpinionMeta;
   /** Note chip shown on this user turn. Body is not stored; the harness already received it. */
@@ -158,6 +211,12 @@ export type Session = {
   blocks: Block[];
   /** True while a harness turn is in flight. */
   busy?: boolean;
+  /** Follow-ups waiting for current turn. In-memory only. */
+  queuedMessages?: QueuedMessage[];
+  /** Paused after user stops current turn; resuming waits for continued turn. */
+  queueStatus?: MessageQueueStatus;
+  /** Prevent auto-dispatch while this queued row is being edited. In-memory only. */
+  editingQueuedMessageId?: string;
   /** Provider-side conversation id (Cursor ACP session id). */
   providerSessionId?: string;
   /** Context-window level reported by the harness. Absent until it reports. */
@@ -182,6 +241,11 @@ export type Session = {
   noteCard?: NoteComposerCard;
   /** Handoff chip shown above the composer. In-memory, one-shot. */
   handoffCard?: HandoffComposerCard;
+  /**
+   * Live clarifying questions from AskUserQuestion / ask_question / etc.
+   * In-memory; request ids do not survive restarts.
+   */
+  pendingQuestion?: UserQuestionPrompt;
 };
 
 export type PendingHarnessSwitch = {
@@ -213,9 +277,9 @@ export const HARNESS_TITLE: Record<HarnessId, string> = {
   fx: "fx",
 };
 
-/** fx and Grok Build ACP reject image and audio blocks. */
+/** fx ACP rejects attachment prompt blocks. */
 export function harnessSupportsAttachments(id: HarnessId): boolean {
-  return id !== "fx" && id !== "grok";
+  return id !== "fx";
 }
 
 export function newSession(
@@ -290,6 +354,10 @@ export function canReplaceSessionTitle(
 
 export function hasPendingApproval(blocks: Block[]): boolean {
   return blocks.some((block) => block.approval && !block.approval.decided);
+}
+
+export function sessionNeedsInput(session: Session): boolean {
+  return hasPendingApproval(session.blocks) || session.pendingQuestion != null;
 }
 
 /** Title without the harness prefix stored for the tab strip. */

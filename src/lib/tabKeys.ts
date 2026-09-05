@@ -1,6 +1,7 @@
 /**
  * Workspace keybindings:
  *   New tab             cmd-t
+ *   Close other tabs    cmd-opt-t
  *   Close tab           cmd-w
  *   Split pane right    cmd-d
  *   Split pane down     shift-cmd-d
@@ -20,12 +21,14 @@
  *   Next session        shift-cmd-down
  *   Previous project    shift-cmd-left
  *   Next project        shift-cmd-right
+ *   Stop focused turn   escape
  */
 
 import type { FocusDir } from "./layout";
 
 export type TabCommand =
   | "new"
+  | "close-others"
   | "close"
   | "next"
   | "prev"
@@ -49,6 +52,7 @@ export function tabCommand(e: KeyboardEvent): TabCommand | null {
   const mod = e.metaKey || e.ctrlKey;
 
   if (mod && e.altKey && !e.shiftKey) {
+    if (e.key.toLowerCase() === "t") return "close-others";
     if (e.key === "ArrowLeft") return { focus: "left" };
     if (e.key === "ArrowRight") return { focus: "right" };
     if (e.key === "ArrowUp") return { focus: "up" };
@@ -107,4 +111,75 @@ export function shouldHandleListNavigation(input: {
   surfaceOpen: boolean;
 }): boolean {
   return !input.blockedTarget && !input.surfaceOpen;
+}
+
+type EscapeKeyEvent = Pick<
+  KeyboardEvent,
+  | "key"
+  | "isComposing"
+  | "defaultPrevented"
+  | "repeat"
+  | "metaKey"
+  | "ctrlKey"
+  | "altKey"
+  | "shiftKey"
+>;
+
+type EscapeFocusTab = {
+  id: string;
+  focusedId: string;
+  diffFocused?: boolean;
+};
+
+type EscapeFocusSession = {
+  id: string;
+  busy?: boolean;
+};
+
+function isPlainEscape(e: EscapeKeyEvent): boolean {
+  return (
+    e.key === "Escape" &&
+    !e.isComposing &&
+    !e.repeat &&
+    !e.metaKey &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !e.shiftKey
+  );
+}
+
+export function shouldStopFocusedTurnOnEscape(
+  e: EscapeKeyEvent,
+  options: { inTerminal: boolean; focusedSessionBusy: boolean },
+): boolean {
+  return (
+    isPlainEscape(e) &&
+    !e.defaultPrevented &&
+    !options.inTerminal &&
+    options.focusedSessionBusy
+  );
+}
+
+export function focusedBusyAgentSessionId(
+  activeTabId: string,
+  tabs: readonly EscapeFocusTab[],
+  sessions: readonly EscapeFocusSession[],
+  projectTerminalFocused: boolean,
+): string | null {
+  if (projectTerminalFocused) return null;
+  const tab = tabs.find((entry) => entry.id === activeTabId);
+  if (!tab || tab.diffFocused) return null;
+  const session = sessions.find((entry) => entry.id === tab.focusedId);
+  return session?.busy === true ? session.id : null;
+}
+
+export function deferUnhandledEscape(
+  e: EscapeKeyEvent,
+  run: () => void,
+  defer: (callback: () => void) => void = queueMicrotask,
+): void {
+  if (!isPlainEscape(e) || e.defaultPrevented) return;
+  defer(() => {
+    if (!e.defaultPrevented) run();
+  });
 }

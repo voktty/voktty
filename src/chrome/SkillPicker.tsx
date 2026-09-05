@@ -128,7 +128,7 @@ function SkillList({
   if (skills.length === 0) {
     return (
       <p className="px-3 py-2.5 text-[12px] text-content/50">
-        {query.trim() ? "No matching skills" : "No skills yet"}
+        {query.trim() ? "No matching commands or skills" : "No commands yet"}
       </p>
     );
   }
@@ -137,7 +137,7 @@ function SkillList({
     <div
       ref={lockOverscroll}
       role="listbox"
-      aria-label="Skills"
+      aria-label="Commands and skills"
       onMouseMove={onListMouseMove}
       className="max-h-[min(240px,40vh)] overflow-y-auto overscroll-none px-1 py-1"
     >
@@ -172,6 +172,11 @@ function SkillList({
             {skill.description ? (
               <span className="line-clamp-2 text-[11px] leading-4 text-content/50">
                 {skill.description}
+              </span>
+            ) : null}
+            {skill.kind === "native" && (skill.inputHint || skill.subcommands?.length) ? (
+              <span className="line-clamp-2 text-[11px] text-content/40">
+                {skill.inputHint || skill.subcommands?.map((sub) => sub.usage || sub.name).join(" · ")}
               </span>
             ) : null}
           </button>
@@ -312,7 +317,9 @@ function ScopeButton({
 }
 
 function scopeLabel(skill: Skill): string {
-  if (skill.kind === "native") return skill.source;
+  if (skill.kind === "native") {
+    return skill.origin ? `${skill.source} · ${skill.origin}` : skill.source;
+  }
   if (skill.kind === "builtin") return "monocode";
   if (skill.scope === "user") return "personal";
   if (skill.source !== "agents" && skill.source !== "monocode") return skill.source;

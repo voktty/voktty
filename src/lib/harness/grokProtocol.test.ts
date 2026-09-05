@@ -22,14 +22,26 @@ import {
 import { harnessSupportsAttachments } from "../session";
 
 describe("grok protocol", () => {
-  it("does not support attachments", () => {
-    expect(harnessSupportsAttachments("grok")).toBe(false);
+  it("supports attachments despite Grok's stale advertised capability", () => {
+    expect(harnessSupportsAttachments("grok")).toBe(true);
     expect(harnessSupportsAttachments("cursor")).toBe(true);
   });
 
-  it("sends text-only prompt blocks", () => {
-    expect(grokPromptBlocks("  hello  ")).toEqual([
-      { type: "text", text: "hello" },
+  it("sends text and image prompt blocks", () => {
+    expect(
+      grokPromptBlocks("  describe this  ", [
+        {
+          id: "image-1",
+          name: "screenshot.png",
+          mimeType: "image/png",
+          kind: "image",
+          size: 3,
+          data: "YWJj",
+        },
+      ]),
+    ).toEqual([
+      { type: "text", text: "describe this" },
+      { type: "image", mimeType: "image/png", data: "YWJj" },
     ]);
     expect(grokPromptBlocks("   ")).toEqual([]);
   });
@@ -55,6 +67,16 @@ describe("grok protocol", () => {
     expect(grokTextSpawnArgs()[0]).toBe("--no-auto-update");
     expect(grokTextSpawnArgs().at(-1)).toBe("stdio");
     expect(grokTextSpawnArgs()).toContain("dontAsk");
+    expect(grokSpawnArgs({ model: "grok:grok-4.6", plan: true })).toEqual([
+      "--no-auto-update",
+      "--permission-mode",
+      "plan",
+      "agent",
+      "--no-leader",
+      "--model",
+      "grok-4.6",
+      "stdio",
+    ]);
   });
 
   it("sets yoloMode only for full access", () => {
@@ -101,7 +123,9 @@ describe("grok protocol", () => {
       "allow-once",
     );
     expect(pickAutoOption("auto-accept-edits", "execute", options)).toBeNull();
-    expect(pickAutoOption("full-access", "execute", options)).toBe("allow-once");
+    expect(pickAutoOption("full-access", "execute", options)).toBe(
+      "allow-once",
+    );
   });
 
   it("picks allow/reject option ids from ACP permission options", () => {
@@ -202,10 +226,16 @@ describe("grok protocol", () => {
       }),
     ).toEqual([
       {
-        type: "plan",
-        text: "[x] Inspect router\n[ ] Add test",
+        type: "tasks.updated",
+        items: [
+          { text: "Inspect router", status: "completed" },
+          { text: "Add test", status: "pending" },
+        ],
       },
     ]);
+    expect(
+      eventsFromAcpUpdate({ sessionUpdate: "plan", text: "# Approach" }),
+    ).toEqual([{ type: "plan", text: "# Approach" }]);
   });
 
   it("parses initialize and session/new model catalogs", () => {
@@ -283,7 +313,7 @@ describe("grok protocol", () => {
     expect(grokEffort({})).toBeUndefined();
   });
 
-  it("answers ask-user questions from the approval decision", () => {
+  it("answers ask-user questions from the form reply", () => {
     const questions = askQuestionsFromAcp({
       questions: [
         {
@@ -292,12 +322,20 @@ describe("grok protocol", () => {
         },
       ],
     });
-    expect(questions[0]?.question).toBe("Which colour?");
-    expect(askQuestionResponse("allow", questions)).toEqual({
+    expect(questions[0]?.prompt).toBe("Which colour?");
+    expect(
+      askQuestionResponse(
+        {
+          kind: "answered",
+          answers: { "Which colour?": ["Blue"] },
+        },
+        questions,
+      ),
+    ).toEqual({
       outcome: "accepted",
-      answers: { "Which colour?": "Red" },
+      answers: { "Which colour?": "Blue" },
     });
-    expect(askQuestionResponse("deny", questions)).toEqual({
+    expect(askQuestionResponse({ kind: "skipped" }, questions)).toEqual({
       outcome: "skip_interview",
     });
   });
