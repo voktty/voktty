@@ -62,6 +62,7 @@ lcov.info
 /skills-library/
 /.agents/
 /.codex/
+/.claude/
 /.gemini/
 /patchs/
 /web/
