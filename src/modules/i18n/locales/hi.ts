@@ -2637,6 +2637,13 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
     importConfig: "~/.ssh/config से आयात करें",
     importSuccess: "{imported} नए होस्ट आयात किए गए (कॉन्फ़िग में {total} मिले)।",
     noConfigFound: "~/.ssh/config में कोई होस्ट नहीं मिला।",
+    filesystemBackend: {
+      title: "रिमोट फ़ाइल सिस्टम बैकएंड",
+      description:
+        "कौन सा बैकएंड SSH एक्सप्लोरर और एडिटर को सेवा देता है। हेल्पर होस्ट पर अपलोड किया गया voktty-remote सर्वर है; नेटिव SFTP प्रोसेस के भीतर चलता है और होस्ट पर हेल्पर की ज़रूरत नहीं होती।",
+      helper: "हेल्पर (voktty-remote)",
+      native: "नेटिव SFTP",
+    },
     noConnectionsTitle: "अभी तक कोई SSH कनेक्शन नहीं",
     noConnectionsDesc:
       "एक क्लिक से कनेक्ट करने के लिए एक दूरस्थ सर्वर जोड़ें या ~/.ssh/config से अपने होस्ट आयात करें।",

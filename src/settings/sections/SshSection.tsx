@@ -1,4 +1,11 @@
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTranslation } from "@/modules/i18n";
 import {
   deleteSshConnection,
@@ -12,6 +19,12 @@ import {
 import { SshTunnelsManager } from "@/modules/ssh/tunnels";
 import { InlineRename } from "@/modules/spaces/components/InlineRename";
 import { useSettingsModalStore } from "@/modules/settings/settingsModalStore";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import {
+  setRemoteFilesystemBackend,
+  type RemoteFilesystemBackend,
+} from "@/modules/settings/store";
+import { SettingRow } from "../components/SettingRow";
 import {
   Add01Icon,
   Delete02Icon,
@@ -35,6 +48,9 @@ export function SshSection() {
   const [editingConn, setEditingConn] = useState<SshConnection | null>(null);
   const [renamingConnId, setRenamingConnId] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const remoteFilesystemBackend = usePreferencesStore(
+    (state) => state.remoteFilesystemBackend,
+  );
 
   const handleOpenNew = () => {
     setEditingConn(null);
@@ -253,6 +269,32 @@ export function SshSection() {
 
       {activeSubTab === "tunnels" && (
         <SshTunnelsManager />
+      )}
+
+      {activeSubTab === "servers" && (
+        <SettingRow
+          title={t("ssh.filesystemBackend.title")}
+          description={t("ssh.filesystemBackend.description")}
+        >
+          <Select
+            value={remoteFilesystemBackend}
+            onValueChange={(value) =>
+              void setRemoteFilesystemBackend(value as RemoteFilesystemBackend)
+            }
+          >
+            <SelectTrigger size="sm" className="h-8 w-44 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="helper" className="text-[12px]">
+                {t("ssh.filesystemBackend.helper")}
+              </SelectItem>
+              <SelectItem value="native" className="text-[12px]">
+                {t("ssh.filesystemBackend.native")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
       )}
 
       <SshConnectionDialog

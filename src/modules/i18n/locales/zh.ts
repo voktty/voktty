@@ -1612,6 +1612,13 @@ const zhBase = mergeLocale(en, {
     importSuccess:
       "已导入 {imported} 个新主机（在配置中总共找到 {total} 个）。",
     noConfigFound: "在 ~/.ssh/config 中未找到主机。",
+    filesystemBackend: {
+      title: "远程文件系统后端",
+      description:
+        "由哪个后端为 SSH 资源管理器和编辑器提供服务。Helper 是上传到主机的 voktty-remote 服务器；原生 SFTP 在进程内运行，主机上无需 helper。",
+      helper: "Helper (voktty-remote)",
+      native: "原生 SFTP",
+    },
     noConnectionsTitle: "暂无 SSH 连接",
     noConnectionsDesc:
       "添加远程服务器或从 ~/.ssh/config 导入主机以实现一键连接。",

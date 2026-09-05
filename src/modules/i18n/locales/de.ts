@@ -1723,6 +1723,13 @@ const deBase = mergeLocale(en, {
     importSuccess:
       "{imported} neue Hosts importiert ({total} in der Konfiguration gefunden).",
     noConfigFound: "Keine Hosts in ~/.ssh/config gefunden.",
+    filesystemBackend: {
+      title: "Backend des Remote-Dateisystems",
+      description:
+        "Welches Backend den SSH-Explorer und -Editor bedient. Der Helper ist der auf den Host hochgeladene voktty-remote-Server; natives SFTP laeuft im Prozess und benoetigt keinen Helper auf dem Host.",
+      helper: "Helper (voktty-remote)",
+      native: "Natives SFTP",
+    },
     noConnectionsTitle: "Noch keine SSH-Verbindungen",
     noConnectionsDesc:
       "Fügen Sie einen Remote-Server hinzu oder importieren Sie Hosts aus ~/.ssh/config, um sich mit einem Klick zu verbinden.",

@@ -2777,6 +2777,13 @@ export const en = {
     importConfig: "Import from ~/.ssh/config",
     importSuccess: "Imported {imported} new hosts (found {total} in config).",
     noConfigFound: "No hosts found in ~/.ssh/config.",
+    filesystemBackend: {
+      title: "Remote filesystem backend",
+      description:
+        "Which backend serves the SSH explorer and editor. The helper is the uploaded voktty-remote server; native SFTP runs in-process and needs no helper on the host.",
+      helper: "Helper (voktty-remote)",
+      native: "Native SFTP",
+    },
     noConnectionsTitle: "No SSH connections yet",
     noConnectionsDesc:
       "Add a remote server or import your hosts from ~/.ssh/config to connect with one click.",

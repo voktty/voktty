@@ -2636,6 +2636,13 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
     importConfig: "استيراد من ~/.ssh/config",
     importSuccess: "تم استيراد {imported} مضيفاً جديداً (تم العثور على {total} في الملف).",
     noConfigFound: "لم يتم العثور على أي مضيفين في ~/.ssh/config.",
+    filesystemBackend: {
+      title: "الواجهة الخلفية لنظام الملفات البعيد",
+      description:
+        "الواجهة الخلفية التي تخدم مستكشف ومحرر SSH. الوسيط هو خادم voktty-remote الذي يُرفع إلى المضيف؛ أما SFTP الأصلي فيعمل داخل العملية ولا يحتاج إلى وسيط على المضيف.",
+      helper: "الوسيط (voktty-remote)",
+      native: "SFTP الأصلي",
+    },
     noConnectionsTitle: "لا توجد اتصالات SSH بعد",
     noConnectionsDesc:
       "أضف خادماً بعيداً أو استورد مضيفيك من ~/.ssh/config للاتصال بنقرة واحدة.",

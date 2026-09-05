@@ -1710,6 +1710,13 @@ const ruBase = mergeLocale(en, {
     importSuccess:
       "Импортировано новых хостов: {imported} (всего найдено в конфигурации: {total}).",
     noConfigFound: "В файле ~/.ssh/config не найдено хостов.",
+    filesystemBackend: {
+      title: "Бэкенд удалённой файловой системы",
+      description:
+        "Какой бэкенд обслуживает проводник и редактор SSH. Helper — это сервер voktty-remote, загружаемый на хост; нативный SFTP работает внутри процесса и не требует helper на хосте.",
+      helper: "Helper (voktty-remote)",
+      native: "Нативный SFTP",
+    },
     noConnectionsTitle: "Пока нет SSH-подключений",
     noConnectionsDesc:
       "Добавьте удаленный сервер или импортируйте хосты из ~/.ssh/config, чтобы подключаться в один клик.",
