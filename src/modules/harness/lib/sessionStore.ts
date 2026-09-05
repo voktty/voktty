@@ -65,14 +65,14 @@ type SessionUpsertPayload = {
   worktreeCwd?: string;
 };
 
-/** Only real chats belong in project history — blank tabs stay ephemeral. */
+/** Only real chats belong in project history: blank tabs stay ephemeral. */
 export function shouldPersistSession(session: Session): boolean {
   return (
     session.cwd !== "~" && session.blocks.some((block) => block.role === "user")
   );
 }
 
-/** Matches Rust `validate_id` — a path here fails the whole upsert. */
+/** Matches Rust `validate_id`: a path here fails the whole upsert. */
 export function isPersistableId(value: string): boolean {
   return /^[A-Za-z0-9_-]+$/.test(value);
 }
@@ -112,34 +112,51 @@ export function sanitizeSessionForPersist(
 }
 
 /**
- * `session_upsert` runs off the main thread, so two writes for the same
+ * session write operations run off the main thread, so two writes for the same
  * session could otherwise land in either order and let an older transcript
  * overwrite a newer one. Chain them per session; different sessions still
  * write concurrently.
  */
-const upsertQueues = new Map<string, Promise<unknown>>();
+const sessionWriteQueues = new Map<string, Promise<unknown>>();
+const deletedSessionIds = new Set<string>();
+
+function enqueueSessionWrite<T>(
+  sessionId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = sessionWriteQueues.get(sessionId) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(operation);
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  sessionWriteQueues.set(sessionId, tail);
+  void tail.then(() => {
+    if (sessionWriteQueues.get(sessionId) === tail) {
+      sessionWriteQueues.delete(sessionId);
+    }
+  });
+  return run;
+}
 
 export async function upsertSession(
   session: Session,
 ): Promise<SessionSummary | null> {
-  if (!shouldPersistSession(session)) return null;
-  const payload = sanitizeSessionForPersist(session);
-  const previous = upsertQueues.get(session.id) ?? Promise.resolve();
-  const run = previous
-    .catch(() => undefined)
-    .then(() => invoke<SessionSummary>("session_upsert", { session: payload }));
-  upsertQueues.set(session.id, run);
-  try {
-    return normalizeSummary(await run);
-  } finally {
-    if (upsertQueues.get(session.id) === run) upsertQueues.delete(session.id);
+  if (!shouldPersistSession(session) || deletedSessionIds.has(session.id)) {
+    return null;
   }
+  const payload = sanitizeSessionForPersist(session);
+  const summary = await enqueueSessionWrite(session.id, async () => {
+    if (deletedSessionIds.has(session.id)) return null;
+    return invoke<SessionSummary>("session_upsert", { session: payload });
+  });
+  return summary ? normalizeSummary(summary) : null;
 }
 
 /**
  * Blocks are replaced, never mutated in place, so identity stands in for
  * content. Serializing the session here instead meant a full deep copy and a
- * `JSON.stringify` of the whole transcript — megabytes on a long chat — on the
+ * `JSON.stringify` of the whole transcript (megabytes on a long chat) on the
  * main thread every time a save was considered. Header fields go through
  * `persistableMeta` so a new persisted column cannot be forgotten here.
  */
@@ -218,14 +235,24 @@ export async function getSession(sessionId: string): Promise<Session | null> {
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
-  await invoke<void>("session_delete", { sessionId });
+  deletedSessionIds.add(sessionId);
+  try {
+    await enqueueSessionWrite(sessionId, () =>
+      invoke<void>("session_delete", { sessionId }),
+    );
+  } catch (error) {
+    deletedSessionIds.delete(sessionId);
+    throw error;
+  }
 }
 
 export async function setSessionArchived(
   sessionId: string,
   archived: boolean,
 ): Promise<void> {
-  await invoke<void>("session_set_archived", { sessionId, archived });
+  await enqueueSessionWrite(sessionId, () =>
+    invoke<void>("session_set_archived", { sessionId, archived }),
+  );
 }
 
 export async function setSessionPinned(
