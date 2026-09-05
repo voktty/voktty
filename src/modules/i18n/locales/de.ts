@@ -1712,6 +1712,29 @@ const deBase = mergeLocale(en, {
       dropSubtitle: "Dateien werden im Editor geöffnet; Ordner im Terminal",
     },
   },
+  transfers: {
+    title: "Ubertragungen",
+    clearFinished: "Abgeschlossene entfernen",
+    uploadingTo: "Hochladen nach {target}",
+    downloadingTo: "Herunterladen nach {target}",
+    cancel: "Ubertragung abbrechen",
+    progressLabel: "Ubertragungsfortschritt",
+    conflict: "{path} existiert bereits",
+    skipped: "{count} ubersprungen",
+    state: {
+      awaiting: "Wartet auf deine Antwort",
+      cancelled: "Abgebrochen",
+      failed: "Fehlgeschlagen",
+      completed: "Fertig",
+      preparing: "Wird vorbereitet",
+    },
+    policy: {
+      overwrite: "Uberschreiben",
+      skip: "Uberspringen",
+      rename: "Umbenennen",
+      resume: "Fortsetzen",
+    },
+  },
   ssh: {
     title: "SSH-Verbindungen",
     description:
