@@ -82,14 +82,21 @@ fn decode_id_token_claims(id_token: &str) -> Option<Value> {
     };
     let decoded = padded.replace('-', "+").replace('_', "/");
     use base64::Engine;
-    let bytes = base64::engine::general_purpose::STANDARD.decode(decoded).ok()?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(decoded)
+        .ok()?;
     let val: Value = serde_json::from_slice(&bytes).ok()?;
     val.get(CLAIMS_KEY).cloned()
 }
 
 pub fn collect_codex_quota(cost_engine: &CostEngine) -> ProviderQuota {
     let Some(auth) = read_codex_auth() else {
-        return fallback_offline_codex(cost_engine, "Codex auth (~/.codex/auth.json) not found", None, None);
+        return fallback_offline_codex(
+            cost_engine,
+            "Codex auth (~/.codex/auth.json) not found",
+            None,
+            None,
+        );
     };
 
     let mut plan_name = None;
@@ -107,13 +114,28 @@ pub fn collect_codex_quota(cost_engine: &CostEngine) -> ProviderQuota {
 
     let Some(ref tokens) = auth.tokens else {
         if auth.openai_api_key.is_some() {
-            return fallback_offline_codex(cost_engine, "Using API key auth", Some("OpenAI API Key".into()), None);
+            return fallback_offline_codex(
+                cost_engine,
+                "Using API key auth",
+                Some("OpenAI API Key".into()),
+                None,
+            );
         }
-        return fallback_offline_codex(cost_engine, "No authentication tokens found", plan_name, email);
+        return fallback_offline_codex(
+            cost_engine,
+            "No authentication tokens found",
+            plan_name,
+            email,
+        );
     };
 
     let Some(ref access_token) = tokens.access_token else {
-        return fallback_offline_codex(cost_engine, "No access token in auth.json", plan_name, email);
+        return fallback_offline_codex(
+            cost_engine,
+            "No access token in auth.json",
+            plan_name,
+            email,
+        );
     };
 
     let agent = ureq::AgentBuilder::new().timeout(HTTP_TIMEOUT).build();
@@ -160,7 +182,8 @@ pub fn collect_codex_quota(cost_engine: &CostEngine) -> ProviderQuota {
                     updated_at: iso_now(),
                 }
             } else if status == 429 {
-                let mut quota = fallback_offline_codex(cost_engine, "Rate limit reached", plan_name, email);
+                let mut quota =
+                    fallback_offline_codex(cost_engine, "Rate limit reached", plan_name, email);
                 quota.state = LimitState::RateLimited {
                     retry_after_secs: None,
                     message: "Codex rate limit active".into(),
@@ -170,15 +193,28 @@ pub fn collect_codex_quota(cost_engine: &CostEngine) -> ProviderQuota {
                 fallback_offline_codex(cost_engine, &format!("HTTP {status}"), plan_name, email)
             }
         }
-        Err(e) => fallback_offline_codex(cost_engine, &format!("Network error: {e}"), plan_name, email),
+        Err(e) => fallback_offline_codex(
+            cost_engine,
+            &format!("Network error: {e}"),
+            plan_name,
+            email,
+        ),
     }
 }
 
-fn format_codex_window_label(plan_type: Option<&str>, window_seconds: Option<i64>, secondary: bool) -> String {
+fn format_codex_window_label(
+    plan_type: Option<&str>,
+    window_seconds: Option<i64>,
+    secondary: bool,
+) -> String {
     let is_free = plan_type.is_some_and(|p| p.eq_ignore_ascii_case("free"));
     if let Some(sec) = window_seconds {
         if sec >= 86400 * 20 {
-            return if is_free { "Monthly Limit (Free)".into() } else { "Monthly Limit".into() };
+            return if is_free {
+                "Monthly Limit (Free)".into()
+            } else {
+                "Monthly Limit".into()
+            };
         } else if sec >= 86400 * 6 {
             return "Weekly (7d)".into();
         } else if sec >= 86400 {
@@ -210,10 +246,11 @@ fn build_quota_from_wham(
     if let Some(rl) = wham.rate_limit {
         if let Some(p) = rl.primary_window {
             let used = p.used_percent.unwrap_or(0.0);
-            let resets_at = p.reset_at.and_then(|ts| {
-                DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339())
-            });
-            let label = format_codex_window_label(plan_name.as_deref(), p.limit_window_seconds, false);
+            let resets_at = p
+                .reset_at
+                .and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339()));
+            let label =
+                format_codex_window_label(plan_name.as_deref(), p.limit_window_seconds, false);
 
             if used > worst_utilization {
                 worst_utilization = used;
@@ -228,7 +265,13 @@ fn build_quota_from_wham(
                 used_percent: used.clamp(0.0, 100.0),
                 remaining_percent: (100.0 - used).clamp(0.0, 100.0),
                 resets_at,
-                resets_in_seconds: p.reset_after_seconds.and_then(|s| if s >= 0 { Some(s as u64) } else { None }),
+                resets_in_seconds: p.reset_after_seconds.and_then(|s| {
+                    if s >= 0 {
+                        Some(s as u64)
+                    } else {
+                        None
+                    }
+                }),
                 raw_used: None,
                 raw_limit: None,
                 unit: Some("%".into()),
@@ -237,10 +280,11 @@ fn build_quota_from_wham(
 
         if let Some(s) = rl.secondary_window {
             let used = s.used_percent.unwrap_or(0.0);
-            let resets_at = s.reset_at.and_then(|ts| {
-                DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339())
-            });
-            let label = format_codex_window_label(plan_name.as_deref(), s.limit_window_seconds, true);
+            let resets_at = s
+                .reset_at
+                .and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339()));
+            let label =
+                format_codex_window_label(plan_name.as_deref(), s.limit_window_seconds, true);
 
             if used > worst_utilization {
                 worst_utilization = used;
@@ -255,7 +299,13 @@ fn build_quota_from_wham(
                 used_percent: used.clamp(0.0, 100.0),
                 remaining_percent: (100.0 - used).clamp(0.0, 100.0),
                 resets_at,
-                resets_in_seconds: s.reset_after_seconds.and_then(|s| if s >= 0 { Some(s as u64) } else { None }),
+                resets_in_seconds: s.reset_after_seconds.and_then(|s| {
+                    if s >= 0 {
+                        Some(s as u64)
+                    } else {
+                        None
+                    }
+                }),
                 raw_used: None,
                 raw_limit: None,
                 unit: Some("%".into()),
@@ -311,8 +361,10 @@ fn fallback_offline_codex(
     let mut worst_label = String::new();
 
     if let Some((used, reset_ts, window_mins)) = offline_primary {
-        let resets_at = reset_ts.and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339()));
-        let label = format_codex_window_label(plan_name.as_deref(), window_mins.map(|m| m * 60), false);
+        let resets_at =
+            reset_ts.and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339()));
+        let label =
+            format_codex_window_label(plan_name.as_deref(), window_mins.map(|m| m * 60), false);
         if used > worst_utilization {
             worst_utilization = used;
             worst_resets_at = resets_at.clone();
@@ -333,8 +385,10 @@ fn fallback_offline_codex(
     }
 
     if let Some((used, reset_ts, window_mins)) = offline_secondary {
-        let resets_at = reset_ts.and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339()));
-        let label = format_codex_window_label(plan_name.as_deref(), window_mins.map(|m| m * 60), true);
+        let resets_at =
+            reset_ts.and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.to_rfc3339()));
+        let label =
+            format_codex_window_label(plan_name.as_deref(), window_mins.map(|m| m * 60), true);
         if used > worst_utilization {
             worst_utilization = used;
             worst_resets_at = resets_at.clone();
@@ -402,7 +456,11 @@ fn fallback_offline_codex(
         account_email: email,
         cost_today_usd: if has_usage { Some(cost) } else { None },
         total_input_tokens: if in_tokens > 0 { Some(in_tokens) } else { None },
-        total_output_tokens: if out_tokens > 0 { Some(out_tokens) } else { None },
+        total_output_tokens: if out_tokens > 0 {
+            Some(out_tokens)
+        } else {
+            None
+        },
         updated_at: iso_now(),
     }
 }
@@ -423,7 +481,13 @@ fn scan_today_tokens() -> (u64, u64, u64) {
 
     let sessions_dir = codex_root.join("sessions");
     if sessions_dir.exists() {
-        scan_rollout_dirs(&sessions_dir, today, &mut total_in, &mut total_out, &mut total_cache);
+        scan_rollout_dirs(
+            &sessions_dir,
+            today,
+            &mut total_in,
+            &mut total_out,
+            &mut total_cache,
+        );
     }
 
     (total_in, total_out, total_cache)
@@ -478,10 +542,22 @@ fn scan_rollout_file(
         if v.get("type").and_then(Value::as_str) == Some("event_msg") {
             if let Some(payload) = v.get("payload") {
                 if payload.get("type").and_then(Value::as_str) == Some("token_count") {
-                    if let Some(info) = payload.pointer("/info/total_token_usage").or_else(|| payload.get("total_token_usage")) {
-                        let i = info.get("input_tokens").and_then(Value::as_u64).unwrap_or(0);
-                        let o = info.get("output_tokens").and_then(Value::as_u64).unwrap_or(0);
-                        let c = info.get("cached_input_tokens").and_then(Value::as_u64).unwrap_or(0);
+                    if let Some(info) = payload
+                        .pointer("/info/total_token_usage")
+                        .or_else(|| payload.get("total_token_usage"))
+                    {
+                        let i = info
+                            .get("input_tokens")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0);
+                        let o = info
+                            .get("output_tokens")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0);
+                        let c = info
+                            .get("cached_input_tokens")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0);
                         last_usage = Some((i, o, c));
                     }
                 }
@@ -500,10 +576,7 @@ fn scan_rollout_file(
 
 type RateLimitWindow = (f64, Option<i64>, Option<i64>);
 
-fn scan_newest_rollout_rate_limits() -> (
-    Option<RateLimitWindow>,
-    Option<RateLimitWindow>,
-) {
+fn scan_newest_rollout_rate_limits() -> (Option<RateLimitWindow>, Option<RateLimitWindow>) {
     let Some(home) = dirs_home() else {
         return (None, None);
     };
@@ -515,7 +588,11 @@ fn scan_newest_rollout_rate_limits() -> (
     // Find the latest rollout file
     let mut files = Vec::new();
     collect_files_recursive(&sessions_dir, &mut files);
-    files.sort_by_key(|f| fs::metadata(f).and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH));
+    files.sort_by_key(|f| {
+        fs::metadata(f)
+            .and_then(|m| m.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH)
+    });
 
     for file in files.iter().rev().take(10) {
         if let Ok(content) = fs::read_to_string(file) {
@@ -565,4 +642,3 @@ fn collect_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
         }
     }
 }
-

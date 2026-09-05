@@ -408,13 +408,11 @@ fn remote_shell_command(
     blocks: bool,
     connection: Option<&crate::modules::remote::RemoteSshConnection>,
 ) -> Result<String, String> {
-    let effective_cwd = cwd
-        .filter(|path| !path.trim().is_empty())
-        .or_else(|| {
-            connection
-                .and_then(|c| c.initial_directory.as_deref())
-                .filter(|path| !path.trim().is_empty())
-        });
+    let effective_cwd = cwd.filter(|path| !path.trim().is_empty()).or_else(|| {
+        connection
+            .and_then(|c| c.initial_directory.as_deref())
+            .filter(|path| !path.trim().is_empty())
+    });
     if effective_cwd.is_some_and(|path| path.chars().any(char::is_control)) {
         return Err("remote cwd contains control characters".to_string());
     }
@@ -499,7 +497,10 @@ fn remote_shell_command(
         String::new()
     };
 
-    let default_cmd = format!("tmux set -g default-command {} 2>/dev/null || true; ", shell_quote(&sh_cmd));
+    let default_cmd = format!(
+        "tmux set -g default-command {} 2>/dev/null || true; ",
+        shell_quote(&sh_cmd)
+    );
 
     let full_command = format!(
         "{cd_prefix}if command -v tmux >/dev/null 2>&1; then tmux set -g allow-passthrough on 2>/dev/null || true; {default_cmd}exec {tmux_cmd}; elif command -v screen >/dev/null 2>&1; then exec {screen_cmd}; else {base_cmd}; fi"

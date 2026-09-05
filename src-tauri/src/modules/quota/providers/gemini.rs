@@ -11,8 +11,7 @@ use crate::dirs_home;
 use crate::modules::quota::cost_engine::CostEngine;
 use crate::modules::quota::types::*;
 
-const LOAD_CODE_ASSIST_URL: &str =
-    "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
+const LOAD_CODE_ASSIST_URL: &str = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
 const QUOTA_URL: &str = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
 const HTTP_TIMEOUT: Duration = Duration::from_secs(8);
 
@@ -115,7 +114,11 @@ fn gemini_creds_path() -> Option<PathBuf> {
 }
 
 fn google_accounts_path() -> Option<PathBuf> {
-    dirs_home().map(|h| PathBuf::from(h).join(".gemini").join("google_accounts.json"))
+    dirs_home().map(|h| {
+        PathBuf::from(h)
+            .join(".gemini")
+            .join("google_accounts.json")
+    })
 }
 
 fn read_fallback_email() -> Option<String> {
@@ -143,7 +146,9 @@ fn extract_email(creds: Option<&GeminiOAuthCreds>) -> Option<String> {
         let decoded = padded.replace('-', "+").replace('_', "/");
         let bytes = base64_decode(&decoded)?;
         let val: Value = serde_json::from_slice(&bytes).ok()?;
-        val.get("email").and_then(|e| e.as_str()).map(|s| s.to_string())
+        val.get("email")
+            .and_then(|e| e.as_str())
+            .map(|s| s.to_string())
     });
     jwt_email.or_else(read_fallback_email)
 }
@@ -259,7 +264,9 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
     let email = read_fallback_email();
     let mut creds = match read_credentials() {
         Some(c) => c,
-        None => return fallback_local_transcripts(cost_engine, "Gemini credentials not found", email),
+        None => {
+            return fallback_local_transcripts(cost_engine, "Gemini credentials not found", email)
+        }
     };
 
     let user_email = extract_email(Some(&creds)).or(email);
@@ -277,7 +284,8 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
             "ideType": "GEMINI_CLI",
             "pluginType": "GEMINI"
         }
-    }).to_string();
+    })
+    .to_string();
 
     let code_assist_resp = agent
         .post(LOAD_CODE_ASSIST_URL)
@@ -306,7 +314,11 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
                         _ => cur.name.unwrap_or_else(|| "Google AI / Antigravity".into()),
                     };
                     plan_name = Some(name);
-                } else if ca.ineligible_tiers.iter().any(|t| t.reason_code.as_deref() == Some("UNSUPPORTED_CLIENT")) {
+                } else if ca
+                    .ineligible_tiers
+                    .iter()
+                    .any(|t| t.reason_code.as_deref() == Some("UNSUPPORTED_CLIENT"))
+                {
                     plan_name = Some("Individual tier (sunset)".into());
                 }
             }
@@ -334,7 +346,12 @@ pub fn collect_gemini_quota(cost_engine: &CostEngine) -> ProviderQuota {
                 if let Ok(quota) = serde_json::from_str::<QuotaResponse>(&body_str) {
                     if let Some(ref buckets) = quota.buckets {
                         if !buckets.is_empty() {
-                            return build_quota_from_response(quota, cost_engine, plan_name, user_email);
+                            return build_quota_from_response(
+                                quota,
+                                cost_engine,
+                                plan_name,
+                                user_email,
+                            );
                         }
                     }
                 }
@@ -426,7 +443,12 @@ fn build_quota_from_response(
         }
     }
 
-    let tier_order = ["Flash Models", "Pro Models", "Flash Lite Models", "Other Models"];
+    let tier_order = [
+        "Flash Models",
+        "Pro Models",
+        "Flash Lite Models",
+        "Other Models",
+    ];
     for tier in &tier_order {
         if let Some(agg) = tier_map.get(tier) {
             let used = ((1.0 - agg.remaining_fraction) * 100.0).clamp(0.0, 100.0);
@@ -451,7 +473,11 @@ fn build_quota_from_response(
                 resets_in_seconds: None,
                 raw_used,
                 raw_limit: agg.limit,
-                unit: if agg.limit.is_some() { Some("req".into()) } else { Some("%".into()) },
+                unit: if agg.limit.is_some() {
+                    Some("req".into())
+                } else {
+                    Some("%".into())
+                },
             });
         }
     }
@@ -518,9 +544,17 @@ fn fallback_local_transcripts(
             None
         },
         account_email: email,
-        cost_today_usd: if in_tokens > 0 || out_tokens > 0 { Some(cost) } else { None },
+        cost_today_usd: if in_tokens > 0 || out_tokens > 0 {
+            Some(cost)
+        } else {
+            None
+        },
         total_input_tokens: if in_tokens > 0 { Some(in_tokens) } else { None },
-        total_output_tokens: if out_tokens > 0 { Some(out_tokens) } else { None },
+        total_output_tokens: if out_tokens > 0 {
+            Some(out_tokens)
+        } else {
+            None
+        },
         updated_at: iso_now(),
     }
 }
@@ -584,9 +618,15 @@ fn parse_date_val(v: &Value) -> Option<chrono::NaiveDate> {
         Value::Number(n) => {
             let ms = n.as_i64()?;
             if ms > 0 && ms < 10_000_000_000 {
-                Local.timestamp_opt(ms, 0).single().map(|dt| dt.date_naive())
+                Local
+                    .timestamp_opt(ms, 0)
+                    .single()
+                    .map(|dt| dt.date_naive())
             } else {
-                Local.timestamp_millis_opt(ms).single().map(|dt| dt.date_naive())
+                Local
+                    .timestamp_millis_opt(ms)
+                    .single()
+                    .map(|dt| dt.date_naive())
             }
         }
         _ => None,
@@ -647,7 +687,9 @@ fn scan_chats_dir(
     model_counts: &mut HashMap<String, u64>,
     depth: u8,
 ) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -665,7 +707,9 @@ fn scan_chats_dir(
             continue;
         }
 
-        let Some(ext) = path.extension().and_then(|e| e.to_str()) else { continue };
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
         if ext != "jsonl" && ext != "json" {
             continue;
         }
@@ -675,7 +719,9 @@ fn scan_chats_dir(
             continue;
         }
 
-        let Ok(content) = fs::read_to_string(&path) else { continue };
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
 
         for line in content.lines() {
             let line = line.trim();
@@ -715,5 +761,3 @@ fn scan_chats_dir(
         }
     }
 }
-
-

@@ -306,8 +306,13 @@ impl CheckpointStore {
                 continue;
             };
             let foreign_touched = self.foreign_touched_paths(cwd, session_id);
-            let status =
-                diff_from_manifest_with(&index, &self.session_dir(session_id), &root, &manifest, &foreign_touched);
+            let status = diff_from_manifest_with(
+                &index,
+                &self.session_dir(session_id),
+                &root,
+                &manifest,
+                &foreign_touched,
+            );
             out.insert(session_id.clone(), stats_from_status(&status));
         }
         Ok(out)
@@ -611,7 +616,13 @@ fn diff_from_manifest(
     manifest: &Manifest,
     foreign_touched: &HashSet<String>,
 ) -> CheckpointStatus {
-    diff_from_manifest_with(&git_diff_files_for(root), dir, root, manifest, foreign_touched)
+    diff_from_manifest_with(
+        &git_diff_files_for(root),
+        dir,
+        root,
+        manifest,
+        foreign_touched,
+    )
 }
 
 fn diff_from_manifest_with(
@@ -1465,7 +1476,13 @@ mod tests {
         store.ensure("s1", &cwd).unwrap();
 
         // Prepare before modifying
-        store.prepare("s1", &cwd, &[repo.0.join("a.txt").to_string_lossy().into_owned()]).unwrap();
+        store
+            .prepare(
+                "s1",
+                &cwd,
+                &[repo.0.join("a.txt").to_string_lossy().into_owned()],
+            )
+            .unwrap();
 
         // Agent modifies the file
         std::fs::write(repo.0.join("a.txt"), "modified\n").unwrap();
@@ -1502,8 +1519,16 @@ mod tests {
         record(&store, "s2", &cwd, &["shared.txt"]);
 
         let s1_status = store.status("s1", &cwd).unwrap();
-        let shared_file = s1_status.files.iter().find(|f| f.relative == "shared.txt").unwrap();
-        let solo_file = s1_status.files.iter().find(|f| f.relative == "solo.txt").unwrap();
+        let shared_file = s1_status
+            .files
+            .iter()
+            .find(|f| f.relative == "shared.txt")
+            .unwrap();
+        let solo_file = s1_status
+            .files
+            .iter()
+            .find(|f| f.relative == "solo.txt")
+            .unwrap();
 
         assert!(!shared_file.exact);
         assert!(!shared_file.undoable);
