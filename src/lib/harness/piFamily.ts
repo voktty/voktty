@@ -655,7 +655,8 @@ async function handleExtensionUi(
   request: PiExtensionUiRequest,
 ): Promise<void> {
   if (!needsExtensionUiReply(request)) {
-    if (request.title) live.onEvent({ type: "status", text: request.title });
+    const text = request.title ? extensionUiTitle(request) : "";
+    if (text.trim()) live.onEvent({ type: "status", text });
     return;
   }
 
