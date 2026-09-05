@@ -1427,6 +1427,9 @@ export const es: TranslationSchema = {
     commentsCount: "comentarios",
     handoffHotkeyHint: "Presiona P desde la cola de revisión en cualquier momento",
     sendToAgent: "Enviar al Agente",
+    sendToTerminal: "Pegar en Terminal",
+    reviewSentToTerminal: "Prompt de revisión insertado en la terminal activa",
+    noTerminalCopiedToClipboard: "No hay terminal activa. Prompt copiado al portapapeles.",
   },
   activeTabs: {
     title: "Launchpad de Pestañas Activas",

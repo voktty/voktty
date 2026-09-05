@@ -1388,6 +1388,9 @@ export const en = {
     commentsCount: "comments",
     handoffHotkeyHint: "Press P from review queue anytime",
     sendToAgent: "Send to Agent",
+    sendToTerminal: "Paste in Terminal",
+    reviewSentToTerminal: "Review prompt inserted into active terminal",
+    noTerminalCopiedToClipboard: "No active terminal. Prompt copied to clipboard.",
   },
   activeTabs: {
     title: "Active Tabs Launchpad",
