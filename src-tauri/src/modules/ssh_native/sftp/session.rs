@@ -213,7 +213,7 @@ impl NativeSftp {
                 modified_ms: modified_ms(&attrs),
                 mode: attrs.permissions,
             }),
-            Err(error) if error.code == SshErrorCode::Protocol => Ok(RemoteStat {
+            Err(error) if error.code == SshErrorCode::NotFound => Ok(RemoteStat {
                 path: target,
                 exists: false,
                 is_dir: false,
@@ -273,12 +273,8 @@ impl NativeSftp {
 
     pub async fn read_text(&self, path: String) -> Result<String, SshNativeError> {
         let bytes = self.read_bytes(path, MAX_TEXT_BYTES).await?;
-        String::from_utf8(bytes).map_err(|_| {
-            SshNativeError::new(
-                SshErrorCode::Protocol,
-                "binary_file: file is not valid UTF-8",
-            )
-        })
+        String::from_utf8(bytes)
+            .map_err(|_| SshNativeError::new(SshErrorCode::BinaryFile, "file is not valid UTF-8"))
     }
 
     /// Reads a whole file with an explicit ceiling. The size is checked before
@@ -288,7 +284,7 @@ impl NativeSftp {
         let stat = self.stat(target.clone()).await?;
         if !stat.exists {
             return Err(SshNativeError::new(
-                SshErrorCode::Protocol,
+                SshErrorCode::NotFound,
                 format!("no such file: {target}"),
             ));
         }
@@ -342,7 +338,7 @@ impl NativeSftp {
         let stat = self.stat(target.clone()).await?;
         if !stat.exists {
             return Err(SshNativeError::new(
-                SshErrorCode::Protocol,
+                SshErrorCode::NotFound,
                 format!("no such path: {target}"),
             ));
         }

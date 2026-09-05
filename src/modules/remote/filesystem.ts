@@ -5,6 +5,20 @@ import {
   type RemoteSshConnection,
 } from "./client";
 import { isWslWorkspacePath, type WorkspaceEnv } from "@/modules/workspace";
+import { toDirEntries, toFileStat } from "@/modules/ssh-native/adapt";
+import { nativeHandleFor } from "@/modules/ssh-native/handles";
+import { SshNativeCallError } from "@/modules/ssh-native/client";
+import {
+  sftpCreateDir,
+  sftpCreateFile,
+  sftpDelete,
+  sftpReadBinary,
+  sftpReadDir,
+  sftpReadText,
+  sftpRename,
+  sftpStat,
+  sftpWriteText,
+} from "@/modules/ssh-native/client";
 
 const REMOTE_LIST_DIR = "fs.readDir";
 const REMOTE_READ_FILE = "fs.readFile";
@@ -106,6 +120,25 @@ export function remoteConnection(
   return env.connection;
 }
 
+/**
+ * Pick the backend once per call and run the matching implementation.
+ *
+ * One dispatcher rather than a guard inside every operation, and the helper
+ * stays the default: `nativeHandleFor` only answers when the preference asks
+ * for the native backend and its handle actually opened.
+ */
+function withRemoteBackend<A extends unknown[], T>(
+  native: (handle: string, ...args: A) => Promise<T>,
+  helper: (env: RemoteWorkspaceEnv, ...args: A) => Promise<T>,
+): (env: RemoteWorkspaceEnv, ...args: A) => Promise<T> {
+  return async (env, ...args) => {
+    const handle = await nativeHandleFor(env);
+    return handle === undefined
+      ? helper(env, ...args)
+      : native(handle, ...args);
+  };
+}
+
 export async function remoteCanonicalize(
   env: RemoteWorkspaceEnv,
   path: string,
@@ -114,7 +147,7 @@ export async function remoteCanonicalize(
   return normalizePath(path);
 }
 
-export async function remoteReadDir(
+async function helperReadDir(
   env: RemoteWorkspaceEnv,
   path: string,
 ): Promise<RemoteDirEntry[]> {
@@ -136,7 +169,12 @@ export async function remoteReadDir(
   }));
 }
 
-export function remoteReadFile(
+export const remoteReadDir = withRemoteBackend(
+  async (handle, path: string) => toDirEntries(await sftpReadDir(handle, path)),
+  helperReadDir,
+);
+
+function helperReadFile(
   env: RemoteWorkspaceEnv,
   path: string,
 ): Promise<RemoteFileText> {
@@ -144,6 +182,15 @@ export function remoteReadFile(
     path: remoteRelativePath(env, path),
   });
 }
+
+export const remoteReadFile = withRemoteBackend(
+  async (handle, path: string): Promise<RemoteFileText> => {
+    const content = await sftpReadText(handle, path);
+    const stat = await sftpStat(handle, path);
+    return { content, size: stat.size, mtime: stat.modifiedMs ?? 0 };
+  },
+  helperReadFile,
+);
 
 function decodeBase64Bytes(contentBase64: string): Uint8Array {
   const decoded = globalThis.atob(contentBase64);
@@ -154,7 +201,7 @@ function decodeBase64Bytes(contentBase64: string): Uint8Array {
   return bytes;
 }
 
-export async function remoteReadBinaryFile(
+async function helperReadBinaryFile(
   env: RemoteWorkspaceEnv,
   path: string,
 ): Promise<RemoteFileBinary> {
@@ -172,6 +219,22 @@ export async function remoteReadBinaryFile(
   return { bytes, size: result.size, mtime: result.mtime };
 }
 
+export const remoteReadBinaryFile = withRemoteBackend(
+  async (handle, path: string): Promise<RemoteFileBinary> => {
+    const bytes = decodeBase64Bytes(await sftpReadBinary(handle, path));
+    const stat = await sftpStat(handle, path);
+    return { bytes, size: bytes.length, mtime: stat.modifiedMs ?? 0 };
+  },
+  helperReadBinaryFile,
+);
+
+/** Both backends report "this is not text" with their own error shape. */
+function isBinaryFileError(error: unknown): boolean {
+  if (error instanceof RemoteRequestError) return error.code === "binary_file";
+  if (error instanceof SshNativeCallError) return error.code === "binary_file";
+  return false;
+}
+
 export async function remoteReadDocument(
   env: RemoteWorkspaceEnv,
   path: string,
@@ -184,7 +247,7 @@ export async function remoteReadDocument(
   try {
     return { kind: "text", ...(await remoteReadFile(env, path)) };
   } catch (error) {
-    if (!(error instanceof RemoteRequestError) || error.code !== "binary_file") {
+    if (!isBinaryFileError(error)) {
       throw error;
     }
     const stat = await remoteStat(env, path);
@@ -192,7 +255,7 @@ export async function remoteReadDocument(
   }
 }
 
-export async function remoteWriteFile(
+async function helperWriteFile(
   env: RemoteWorkspaceEnv,
   path: string,
   content: string,
@@ -204,7 +267,15 @@ export async function remoteWriteFile(
   return (await remoteStat(env, path)).mtime;
 }
 
-export function remoteStat(
+export const remoteWriteFile = withRemoteBackend(
+  async (handle, path: string, content: string) => {
+    await sftpWriteText(handle, path, content);
+    return (await sftpStat(handle, path)).modifiedMs ?? 0;
+  },
+  helperWriteFile,
+);
+
+function helperStat(
   env: RemoteWorkspaceEnv,
   path: string,
 ): Promise<RemoteFileStat> {
@@ -213,7 +284,12 @@ export function remoteStat(
   });
 }
 
-export function remoteCreateFile(
+export const remoteStat = withRemoteBackend(
+  async (handle, path: string) => toFileStat(await sftpStat(handle, path)),
+  helperStat,
+);
+
+function helperCreateFile(
   env: RemoteWorkspaceEnv,
   path: string,
 ): Promise<void> {
@@ -222,7 +298,12 @@ export function remoteCreateFile(
   }).then(() => undefined);
 }
 
-export function remoteCreateDir(
+export const remoteCreateFile = withRemoteBackend(
+  (handle, path: string) => sftpCreateFile(handle, path).then(() => undefined),
+  helperCreateFile,
+);
+
+function helperCreateDir(
   env: RemoteWorkspaceEnv,
   path: string,
 ): Promise<void> {
@@ -231,7 +312,12 @@ export function remoteCreateDir(
   }).then(() => undefined);
 }
 
-export function remoteRename(
+export const remoteCreateDir = withRemoteBackend(
+  (handle, path: string) => sftpCreateDir(handle, path).then(() => undefined),
+  helperCreateDir,
+);
+
+function helperRename(
   env: RemoteWorkspaceEnv,
   from: string,
   to: string,
@@ -242,7 +328,13 @@ export function remoteRename(
   }).then(() => undefined);
 }
 
-export function remoteDelete(
+export const remoteRename = withRemoteBackend(
+  (handle, from: string, to: string) =>
+    sftpRename(handle, from, to).then(() => undefined),
+  helperRename,
+);
+
+function helperDelete(
   env: RemoteWorkspaceEnv,
   path: string,
 ): Promise<void> {
@@ -250,3 +342,8 @@ export function remoteDelete(
     path: remoteRelativePath(env, path),
   }).then(() => undefined);
 }
+
+export const remoteDelete = withRemoteBackend(
+  (handle, path: string) => sftpDelete(handle, path).then(() => undefined),
+  helperDelete,
+);
