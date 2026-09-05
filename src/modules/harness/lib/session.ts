@@ -172,6 +172,17 @@ export const RUNTIME_MODE_HINT: Record<RuntimeMode, string> = {
   review: "Review diffs and code changes against the codebase.",
 };
 
+export type QueuedMessage = {
+  id: string;
+  text: string;
+  attachments: Attachment[];
+  noteCard?: NoteComposerCard;
+  handoffCard?: HandoffComposerCard;
+  intent?: RuntimeMode | string;
+};
+
+export type MessageQueueStatus = "active" | "paused" | "resuming";
+
 export type Session = {
   id: string;
   harness: HarnessId;
@@ -208,6 +219,12 @@ export type Session = {
   noteCard?: NoteComposerCard;
   /** Handoff chip shown above the composer. In-memory, one-shot. */
   handoffCard?: HandoffComposerCard;
+  /** Follow-ups queued while the session is busy. */
+  queuedMessages?: QueuedMessage[];
+  /** Queue state. Paused when the user interrupts a turn with queued items. */
+  queueStatus?: MessageQueueStatus;
+  /** Message being edited in the composer card. Holds queue auto-dispatch. */
+  editingQueuedMessageId?: string;
 };
 
 export type PendingHarnessSwitch = {

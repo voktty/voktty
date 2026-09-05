@@ -70,6 +70,7 @@ import {
 } from "../lib/fs";
 import { type InboxItem, inboxComposerCard } from "../lib/githubTasks";
 import {
+  type HandoffComposerCard,
   appendPreparingHandoff,
   buildDeterministicHandoff,
   buildHandoffComposerCard,
@@ -155,11 +156,20 @@ import {
 import { linearIssueDetails, peekLinearIssueDetails } from "../lib/linear";
 import { liveAgentsFromSessions } from "../lib/liveAgents";
 import {
+  canDispatchQueuedHead,
+  dequeueQueuedMessage,
+  queuedMessageForSubmit,
+} from "../lib/messageQueue";
+import {
   mergeModelSettings,
   preferredModelSettings,
   resolveModel,
   saveLastModelSettings,
 } from "../lib/models";
+import {
+  loadFollowUpBehavior,
+  type FollowUpBehavior,
+} from "../lib/settings";
 import {
   ADD_NOTE_TO_CHAT_EVENT,
   composeNoteMessage,
@@ -580,6 +590,7 @@ export function HarnessApp({
     canForward: false,
   });
   const turnGen = useRef(new Map<string, number>());
+  const queueDispatchingRef = useRef<Set<string>>(new Set());
   const lastPersisted = useRef(new Map<string, string>());
   const lastBoundProvider = useRef(new Map<string, string>());
   const lastPersistedUserBlock = useRef(new Map<string, string>());
@@ -3337,12 +3348,29 @@ export function HarnessApp({
       sessionId: string,
       text: string,
       attachments: Attachment[] = [],
-      options?: { secondOpinion?: SecondOpinionMeta },
+      options?: {
+        secondOpinion?: SecondOpinionMeta;
+        followUpBehavior?: FollowUpBehavior;
+        noteCard?: NoteComposerCard;
+        handoffCard?: HandoffComposerCard;
+        queuedMessageId?: string;
+      },
     ) => {
       const current = sessionsRef.current.find((s: any) => s.id === sessionId);
       if (!current) return;
-      const noteCard = current.noteCard;
-      const handoffCard = current.handoffCard;
+      if (options?.queuedMessageId) {
+        const mode =
+          options.followUpBehavior === "steer" ? "steer" : "dispatch";
+        if (!queuedMessageForSubmit(current, options.queuedMessageId, mode)) {
+          return;
+        }
+      }
+      const noteCard =
+        options && "noteCard" in options ? options.noteCard : current.noteCard;
+      const handoffCard =
+        options && "handoffCard" in options
+          ? options.handoffCard
+          : current.handoffCard;
       if (
         !text.trim() &&
         attachments.length === 0 &&
@@ -3361,6 +3389,35 @@ export function HarnessApp({
           : null;
 
       if (current.busy && !pendingSwitch) {
+        const followUpBehavior =
+          options?.followUpBehavior ?? loadFollowUpBehavior();
+        if (followUpBehavior === "queue") {
+          setSessions((prev: any) =>
+            prev.map((s: any) =>
+              s.id === sessionId
+                ? {
+                    ...s,
+                    inboxCard: undefined,
+                    noteCard: undefined,
+                    handoffCard: undefined,
+                    queuedMessages: [
+                      ...(s.queuedMessages ?? []),
+                      {
+                        id: crypto.randomUUID(),
+                        text,
+                        attachments,
+                        noteCard,
+                        handoffCard,
+                      },
+                    ],
+                    queueStatus:
+                      s.queueStatus === "paused" ? "paused" : "active",
+                  }
+                : s,
+            ),
+          );
+          return;
+        }
         if (
           !isLiveHarness(current.harness) ||
           !canSteerHarness(current.harness)
@@ -3377,21 +3434,19 @@ export function HarnessApp({
         const visible = displayAttachments(attachments);
         const cards = userTurnCards(noteCard);
         setSessions((prev: any) =>
-          prev.map((s: any) =>
-            s.id === sessionId
-              ? appendSteerUser(
-                  {
-                    ...s,
-                    inboxCard: undefined,
-                    noteCard: undefined,
-                    handoffCard: undefined,
-                  },
-                  text,
-                  visible,
-                  cards,
-                )
-              : s,
-          ),
+          prev.map((s: any) => {
+            if (s.id !== sessionId) return s;
+            let next: any = {
+              ...s,
+              inboxCard: undefined,
+              noteCard: undefined,
+              handoffCard: undefined,
+            };
+            if (options?.queuedMessageId) {
+              next = dequeueQueuedMessage(next, options.queuedMessageId);
+            }
+            return appendSteerUser(next, text, visible, cards);
+          }),
         );
         void (async () => {
           try {
@@ -3454,12 +3509,15 @@ export function HarnessApp({
         prev.map((s: any) => {
           if (s.id !== sessionId) return s;
           const titled = isFirstTurn ? titleSeed : s.title;
-          const next = {
+          let next: any = {
             ...s,
             inboxCard: undefined,
             noteCard: undefined,
             handoffCard: undefined,
           };
+          if (options?.queuedMessageId) {
+            next = dequeueQueuedMessage(next, options.queuedMessageId);
+          }
           if (!live) {
             return {
               ...next,
@@ -3817,6 +3875,150 @@ export function HarnessApp({
     return () => window.clearTimeout(timer);
   }, [autoContinueKey, onSubmit]);
 
+  useEffect(() => {
+    const timers: number[] = [];
+    const scheduled = new Set<string>();
+    for (const session of sessions) {
+      const queued = session.queuedMessages ?? [];
+      if (session.busy || queued.length === 0) continue;
+
+      if (session.queueStatus === "resuming") {
+        setSessions((prev: any) =>
+          prev.map((entry: any) =>
+            entry.id === session.id
+              ? { ...entry, queueStatus: "active" }
+              : entry,
+          ),
+        );
+        continue;
+      }
+      if (
+        !canDispatchQueuedHead(session) ||
+        queueDispatchingRef.current.has(session.id)
+      ) {
+        continue;
+      }
+
+      const next = queued[0];
+      if (!next) continue;
+      queueDispatchingRef.current.add(session.id);
+      scheduled.add(session.id);
+      timers.push(
+        window.setTimeout(() => {
+          queueDispatchingRef.current.delete(session.id);
+          const latest = sessionsRef.current.find(
+            (entry: any) => entry.id === session.id,
+          );
+          const head = latest?.queuedMessages?.[0];
+          if (
+            !latest ||
+            !head ||
+            head.id !== next.id ||
+            !canDispatchQueuedHead(latest)
+          ) {
+            return;
+          }
+          onSubmit(session.id, head.text, head.attachments, {
+            queuedMessageId: head.id,
+            noteCard: head.noteCard,
+            handoffCard: head.handoffCard,
+          });
+        }, 0),
+      );
+    }
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+      for (const id of scheduled) queueDispatchingRef.current.delete(id);
+    };
+  }, [onSubmit, sessions]);
+
+  const onDeleteQueuedMessage = useCallback(
+    (sessionId: string, messageId: string) => {
+      setSessions((prev: any) =>
+        prev.map((session: any) =>
+          session.id === sessionId
+            ? dequeueQueuedMessage(session, messageId)
+            : session,
+        ),
+      );
+    },
+    [],
+  );
+
+  const onQueuedMessageEditingChange = useCallback(
+    (sessionId: string, messageId?: string) => {
+      setSessions((prev: any) =>
+        prev.map((session: any) =>
+          session.id === sessionId
+            ? { ...session, editingQueuedMessageId: messageId }
+            : session,
+        ),
+      );
+    },
+    [],
+  );
+
+  const onEditQueuedMessage = useCallback(
+    (sessionId: string, messageId: string, text: string) => {
+      setSessions((prev: any) =>
+        prev.map((session: any) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                queuedMessages: session.queuedMessages?.map((message: any) =>
+                  message.id === messageId ? { ...message, text } : message,
+                ),
+                editingQueuedMessageId: undefined,
+              }
+            : session,
+        ),
+      );
+    },
+    [],
+  );
+
+  const onSteerQueuedMessage = useCallback(
+    (sessionId: string, messageId: string) => {
+      const session = sessionsRef.current.find(
+        (entry: any) => entry.id === sessionId,
+      );
+      const message = session
+        ? queuedMessageForSubmit(session, messageId, "steer")
+        : undefined;
+      if (!session || !message) return;
+      onSubmit(sessionId, message.text, message.attachments, {
+        followUpBehavior: "steer",
+        queuedMessageId: message.id,
+        noteCard: message.noteCard,
+        handoffCard: message.handoffCard,
+      });
+    },
+    [onSubmit],
+  );
+
+  const onResumeQueue = useCallback(
+    (sessionId: string) => {
+      const session = sessionsRef.current.find(
+        (entry: any) => entry.id === sessionId,
+      );
+      if (
+        !session ||
+        session.queueStatus !== "paused" ||
+        !session.queuedMessages?.length
+      ) {
+        return;
+      }
+      setSessions((prev: any) =>
+        prev.map((entry: any) =>
+          entry.id === sessionId
+            ? { ...entry, queueStatus: "resuming" }
+            : entry,
+        ),
+      );
+    },
+    [],
+  );
+
   const onStop = useCallback(
     (sessionId: string) => {
       const session = sessionsRef.current.find((s: any) => s.id === sessionId);
@@ -3831,10 +4033,14 @@ export function HarnessApp({
         prev.map((s: any) => {
           if (s.id !== sessionId) return s;
           const stopped = stopStreaming(s);
-          if (!isPreparingHandoff(stopped)) return stopped;
-          return consumeHandoff(
-            completeHandoff(stopped, buildDeterministicHandoff(stopped)),
-          );
+          const completed = isPreparingHandoff(stopped)
+            ? consumeHandoff(
+                completeHandoff(stopped, buildDeterministicHandoff(stopped)),
+              )
+            : stopped;
+          return completed.queuedMessages?.length
+            ? { ...completed, queueStatus: "paused" }
+            : completed;
         }),
       );
       if (session) {
@@ -4638,6 +4844,13 @@ export function HarnessApp({
                             onRuntimeModeChange={onRuntimeModeChange}
                             onSubmit={onSubmit}
                             onStop={onStop}
+                            onDeleteQueuedMessage={onDeleteQueuedMessage}
+                            onEditQueuedMessage={onEditQueuedMessage}
+                            onQueuedMessageEditingChange={
+                              onQueuedMessageEditingChange
+                            }
+                            onSteerQueuedMessage={onSteerQueuedMessage}
+                            onResumeQueue={onResumeQueue}
                             onInboxCardDismiss={onInboxCardDismiss}
                             onNoteCardDismiss={onNoteCardDismiss}
                             onHandoffCardDismiss={onHandoffCardDismiss}
