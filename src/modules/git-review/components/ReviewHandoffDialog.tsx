@@ -15,10 +15,17 @@ import {
   CheckmarkCircle02Icon,
   Comment01Icon,
   Copy01Icon,
+  TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMemo, useState } from "react";
 import { requestAddToChat } from "@/modules/harness/lib/quoteDraft";
+import { copyText } from "@/modules/harness/lib/clipboard";
+import { useChatStore } from "@/modules/ai/store/chatStore";
+import {
+  getActiveTerminalLeafId,
+  writeToSession,
+} from "@/modules/terminal/lib/useTerminalSession";
 import { toast } from "sonner";
 import { EMPTY_COMMENTS, useGitReviewStore } from "../store/gitReviewStore";
 
@@ -59,7 +66,7 @@ export function ReviewHandoffDialog({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(prompt);
+      await copyText(prompt);
       setCopied(true);
       toast.success(t("git.reviewHandoffCopied"));
       setTimeout(() => setCopied(false), 2000);
@@ -68,13 +75,37 @@ export function ReviewHandoffDialog({
     }
   };
 
+  const handleSendToTerminal = () => {
+    const leafId = getActiveTerminalLeafId();
+    if (leafId != null) {
+      const ok = writeToSession(leafId, prompt);
+      if (ok) {
+        toast.success(t("git.reviewSentToTerminal"));
+        onOpenChange(false);
+        return;
+      }
+    }
+    void handleCopy();
+    toast.info(t("git.noTerminalCopiedToClipboard"));
+  };
+
   const handleSendToAgent = () => {
+    // 1. Dispatch custom event for active AI components
     window.dispatchEvent(
       new CustomEvent("voktty:agent:insert-prompt", {
         detail: { prompt },
       }),
     );
+    // 2. Dispatch Harness chat event
     requestAddToChat(prompt, "plain");
+
+    // 3. Open integrated AI sidebar panel if closed
+    try {
+      const chat = useChatStore.getState();
+      chat.openPanel();
+      chat.focusInput();
+    } catch {}
+
     toast.success(t("git.reviewSentToAgent"));
     onOpenChange(false);
   };
@@ -126,11 +157,11 @@ export function ReviewHandoffDialog({
           </ScrollArea>
         </div>
 
-        <DialogFooter className="flex items-center justify-between sm:justify-between pt-2">
+        <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2">
           <div className="text-[11px] text-muted-foreground hidden sm:block">
             {t("git.handoffHotkeyHint")}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
             <Button
               type="button"
               variant="outline"
@@ -144,6 +175,17 @@ export function ReviewHandoffDialog({
                 className={copied ? "text-emerald-500" : ""}
               />
               <span>{copied ? t("common.copied") : t("common.copy")}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={handleSendToTerminal}
+              title={t("git.sendToTerminal")}
+            >
+              <HugeiconsIcon icon={TerminalIcon} size={14} />
+              <span>{t("git.sendToTerminal")}</span>
             </Button>
             <Button
               type="button"
