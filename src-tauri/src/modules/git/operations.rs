@@ -1521,6 +1521,75 @@ pub fn revert_commit(
     Ok(new_sha)
 }
 
+/// A branch name goes on the command line as a ref, so it gets the same
+/// treatment as a tag name: no leading dash, no `..`, no whitespace. Git
+/// itself rejects the rest via `check-ref-format` when the branch is created.
+fn branch_name_is_safe(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with('-')
+        && !name.contains("..")
+        && !name.contains(char::is_whitespace)
+}
+
+/// Creates `name` at `sha` and checks it out. Fails when the branch already
+/// exists rather than moving it, so an existing line of work is never lost.
+pub fn branch_from_commit(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    name: &str,
+    sha: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    if !branch_name_is_safe(name) {
+        return Err(GitError::command("git checkout", "invalid branch name"));
+    }
+    if !sha_is_safe(sha) {
+        return Err(GitError::command("git checkout", "invalid commit sha"));
+    }
+
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["checkout", "-b", name, sha],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git checkout failed")
+}
+
+/// Applies `sha` on top of HEAD and returns the new commit. A conflict leaves
+/// the repository mid-cherry-pick; `operation_status` reports that state and
+/// `operation_abort` backs out of it, same as a conflicted revert or merge.
+pub fn cherry_pick_commit(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    sha: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<String> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    if !sha_is_safe(sha) {
+        return Err(GitError::command("git cherry-pick", "invalid commit sha"));
+    }
+
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["cherry-pick", sha],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git cherry-pick failed")?;
+
+    let new_sha = git_stdout_line_opt(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        ["rev-parse", "HEAD"],
+    )?
+    .unwrap_or_default();
+    Ok(new_sha)
+}
+
 const STASH_FORMAT: &str = "%H%x1f%at%x1f%s";
 
 pub fn stash_list(

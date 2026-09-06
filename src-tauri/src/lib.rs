@@ -420,6 +420,8 @@ pub fn run() {
             git::commands::git_publish,
             git::commands::git_undo_commit,
             git::commands::git_revert_commit,
+            git::commands::git_branch_from_commit,
+            git::commands::git_cherry_pick_commit,
             git::commands::git_stash_list,
             git::commands::git_stash_save,
             git::commands::git_stash_apply,

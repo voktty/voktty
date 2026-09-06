@@ -410,6 +410,35 @@ pub async fn git_revert_commit(
 }
 
 #[tauri::command]
+pub async fn git_branch_from_commit(
+    repo_root: String,
+    name: String,
+    sha: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::branch_from_commit(r, &repo_root, &name, &sha, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_cherry_pick_commit(
+    repo_root: String,
+    sha: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<String, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::cherry_pick_commit(r, &repo_root, &sha, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn git_stash_list(
     repo_root: String,
     workspace: Option<WorkspaceEnv>,

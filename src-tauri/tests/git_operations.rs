@@ -1144,3 +1144,122 @@ fn compare_branches_rejects_unsafe_ref_names() {
         Ok(_) => panic!("expected error for empty compare ref"),
     }
 }
+
+#[test]
+fn branch_from_commit_starts_at_that_commit_and_checks_it_out() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "alpha\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add a"]);
+
+    fx.write_file("a.txt", "alpha\nbeta\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add beta line"]);
+
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    let first_sha = entries[1].sha.clone();
+
+    operations::branch_from_commit(
+        &fx.registry,
+        &fx.repo_str(),
+        "from-first",
+        &first_sha,
+        &fx.workspace,
+    )
+    .expect("branch_from_commit");
+
+    let resolved = operations::resolve_repo(&fx.registry, &fx.repo_str(), &fx.workspace)
+        .unwrap()
+        .expect("repo");
+    assert_eq!(resolved.branch, "from-first");
+
+    let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
+    assert_eq!(content, "alpha\n");
+}
+
+#[test]
+fn branch_from_commit_rejects_an_unsafe_name() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "alpha\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add a"]);
+
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    let sha = entries[0].sha.clone();
+
+    for name in ["--track", "a..b", "has space", ""] {
+        match operations::branch_from_commit(
+            &fx.registry,
+            &fx.repo_str(),
+            name,
+            &sha,
+            &fx.workspace,
+        ) {
+            Err(GitError::CommandFailed { .. }) => {}
+            Err(other) => panic!("expected CommandFailed for {name:?}, got {other}"),
+            Ok(()) => panic!("expected error for branch name {name:?}"),
+        }
+    }
+}
+
+#[test]
+fn cherry_pick_commit_applies_the_change_onto_the_current_branch() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "alpha\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add a"]);
+    let base = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
+        .sha
+        .clone();
+
+    // A commit that only exists on a side branch.
+    fx.run_git(&["checkout", "-q", "-b", "side"]);
+    fx.write_file("b.txt", "beta\n");
+    fx.run_git(&["add", "b.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add b"]);
+    let side_sha = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()
+        [0]
+    .sha
+    .clone();
+
+    operations::branch_from_commit(
+        &fx.registry,
+        &fx.repo_str(),
+        "target",
+        &base,
+        &fx.workspace,
+    )
+    .unwrap();
+    assert!(!fx.repo_path.join("b.txt").exists());
+
+    let new_sha =
+        operations::cherry_pick_commit(&fx.registry, &fx.repo_str(), &side_sha, &fx.workspace)
+            .expect("cherry_pick_commit");
+    assert_eq!(new_sha.len(), 40);
+    assert_ne!(new_sha, side_sha);
+
+    let content = std::fs::read_to_string(fx.repo_path.join("b.txt")).unwrap();
+    assert_eq!(content, "beta\n");
+}
+
+#[test]
+fn cherry_pick_commit_rejects_invalid_sha() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    match operations::cherry_pick_commit(&fx.registry, &fx.repo_str(), "not-a-sha", &fx.workspace) {
+        Err(GitError::CommandFailed { .. }) => {}
+        Err(other) => panic!("expected CommandFailed, got {other}"),
+        Ok(_) => panic!("expected error for invalid sha"),
+    }
+}
