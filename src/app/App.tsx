@@ -56,6 +56,11 @@ import {
   type HostShareTarget,
 } from "@/modules/collab";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
+import {
+  createLauncherItems,
+  type LauncherActionContext,
+  ToolLauncher,
+} from "@/modules/launcher";
 import { useControlBridge } from "@/modules/control";
 import {
   type EditorGroupHandle,
@@ -4283,9 +4288,9 @@ export default function App() {
     [activeTerminalTab?.activeLeafId, activeLeafId],
   );
 
-  const commandItems = useMemo(
+  const launcherContext = useMemo<LauncherActionContext>(
     () =>
-      createCommandItems({
+      ({
         aiAvailable: hasComposer,
         tabs,
         activeId: effectiveActiveId,
@@ -4296,6 +4301,9 @@ export default function App() {
         openNewBlock: openNewBlockTab,
         openNewPrivate: openNewPrivateTab,
         openSerialConnect: () => setSerialDialogOpen(true),
+        openSshConnect: () => setNewSshDialogOpen(true),
+        openRdpConnect: () => newRdpTab(),
+        openGuestConnect: () => setGuestConnectOpen(true),
         openNewEditor,
         openFileFromDisk: pickAndOpenFile,
         openQuickOpen,
@@ -4373,7 +4381,7 @@ export default function App() {
                 editorGroupHandleRef.current?.focusNext(delta),
             }
           : null,
-      }),
+      }) satisfies LauncherActionContext,
     [
       tabs,
       hasComposer,
@@ -4418,7 +4426,18 @@ export default function App() {
       extractFocusedSpaceMember,
       moveFocusedSpaceMember,
       closeFocusedSpaceMember,
+      newRdpTab,
     ],
+  );
+
+  const commandItems = useMemo(
+    () => createCommandItems(launcherContext),
+    [launcherContext],
+  );
+
+  const launcherItems = useMemo(
+    () => createLauncherItems(launcherContext),
+    [launcherContext],
   );
 
   const gitReviewConfig = useMemo(
@@ -4462,8 +4481,6 @@ export default function App() {
               onReconnectTab={handleReconnectTab}
               onRename={handleRenameTab}
               onReorder={reorderTabByGap}
-              onToggleSidebar={toggleSidebar}
-              sidebarCollapsed={sidebarCollapsed}
               onToggleTabStyle={toggleTabStyle}
               tabStyle={tabStyle}
               hideTabStyleToggle={panelOpen}
@@ -4995,6 +5012,8 @@ export default function App() {
           {switcherState && (
             <TabSwitcherHud tabs={tabs} state={switcherState} />
           )}
+
+          <ToolLauncher items={launcherItems} />
 
           <CommandPalette
             open={commandPaletteOpen}
