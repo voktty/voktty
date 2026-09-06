@@ -377,3 +377,17 @@ pub async fn git_undo_commit(
     })
     .await
 }
+
+#[tauri::command]
+pub async fn git_revert_commit(
+    repo_root: String,
+    sha: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<String, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::revert_commit(r, &repo_root, &sha, &workspace).map_err(Into::into)
+    })
+    .await
+}

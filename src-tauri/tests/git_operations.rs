@@ -343,6 +343,79 @@ fn show_commit_diff_rejects_invalid_sha() {
 }
 
 #[test]
+fn revert_commit_creates_new_commit_and_restores_content() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "alpha\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add a"]);
+
+    fx.write_file("a.txt", "alpha\nbeta\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add beta line"]);
+
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    let beta_sha = &entries[0].sha;
+
+    let new_sha = operations::revert_commit(&fx.registry, &fx.repo_str(), beta_sha, &fx.workspace)
+        .expect("revert_commit");
+    assert_eq!(new_sha.len(), 40);
+    assert_ne!(&new_sha, beta_sha);
+
+    let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
+    assert_eq!(content, "alpha\n");
+
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0].sha, new_sha);
+}
+
+#[test]
+fn revert_commit_rejects_invalid_sha() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    match operations::revert_commit(&fx.registry, &fx.repo_str(), "not-a-sha", &fx.workspace) {
+        Err(GitError::CommandFailed { .. }) => {}
+        Err(other) => panic!("expected CommandFailed, got {other}"),
+        Ok(_) => panic!("expected error for invalid sha"),
+    }
+}
+
+#[test]
+fn revert_commit_aborts_cleanly_on_conflict() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "X\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "c1"]);
+
+    fx.write_file("a.txt", "Y\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "c2"]);
+
+    fx.write_file("a.txt", "Z\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "c3"]);
+
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    let c2_sha = &entries[1].sha;
+
+    let result = operations::revert_commit(&fx.registry, &fx.repo_str(), c2_sha, &fx.workspace);
+    assert!(result.is_err(), "expected a conflicting revert to fail");
+
+    // The abort must leave no revert in progress and the worktree untouched.
+    assert!(!fx.repo_path.join(".git/REVERT_HEAD").exists());
+    let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
+    assert_eq!(content, "Z\n");
+}
+
+#[test]
 fn log_paginates_with_before_sha_cursor() {
     if skip_if_no_git() {
         return;
