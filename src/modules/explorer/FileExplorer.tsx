@@ -60,6 +60,7 @@ import { useExplorerFileDrop } from "./lib/useExplorerFileDrop";
 import { useFileTree } from "./lib/useFileTree";
 import { useGitStatus } from "./lib/useGitStatus";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
+import { entryRowAt } from "./lib/entryRow";
 import { parentPath as pathParent } from "./lib/path";
 import { nextVisibleRoot } from "./lib/visibleRoot";
 import { useTranslation } from "@/modules/i18n";
@@ -641,6 +642,15 @@ export const FileExplorer = memo(
       tree.pendingCreate?.parentPath === rootPath ? tree.pendingCreate : null;
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // The confirmation dialog and the context menu render through portals,
+      // and React sends portal events up the component tree rather than the
+      // DOM tree, so every key pressed inside them arrives here too. Without
+      // this the tree kept acting on the selection it is about to delete:
+      // Enter opened the doomed file, the arrows walked rows that were being
+      // removed, and a held Delete reopened the request. Driving the dialog
+      // with the mouse never showed it, which is why deleting from the
+      // context menu looked healthy while the Delete key did not.
+      if (deleteRequest || menuTarget) return;
       if (tree.renaming || tree.pendingCreate || isSearchOpen) return;
       const target = e.target as HTMLElement;
       if (
@@ -741,11 +751,8 @@ export const FileExplorer = memo(
         case "ArrowRight": {
           if (currentIdx < 0) return;
           e.preventDefault();
-          const path = entryPaths[currentIdx];
-          const idx = entryIndexByPath.get(path);
-          if (idx === undefined) break;
-          const row = rows[idx];
-          if (row.kind !== "entry") break;
+          const row = entryRowAt(rows, entryIndexByPath, entryPaths[currentIdx]);
+          if (!row || row.kind !== "entry") break;
           if (row.isDir) {
             if (!row.isExpanded) tree.toggle(row.path);
             else move(currentIdx + 1);
@@ -755,11 +762,8 @@ export const FileExplorer = memo(
         case "ArrowLeft": {
           if (currentIdx < 0) return;
           e.preventDefault();
-          const path = entryPaths[currentIdx];
-          const idx = entryIndexByPath.get(path);
-          if (idx === undefined) break;
-          const row = rows[idx];
-          if (row.kind !== "entry") break;
+          const row = entryRowAt(rows, entryIndexByPath, entryPaths[currentIdx]);
+          if (!row || row.kind !== "entry") break;
           if (row.isDir && row.isExpanded) {
             tree.toggle(row.path);
           } else {
@@ -774,11 +778,8 @@ export const FileExplorer = memo(
         case "Enter": {
           if (currentIdx < 0) return;
           e.preventDefault();
-          const path = entryPaths[currentIdx];
-          const idx = entryIndexByPath.get(path);
-          if (idx === undefined) break;
-          const row = rows[idx];
-          if (row.kind !== "entry") break;
+          const row = entryRowAt(rows, entryIndexByPath, entryPaths[currentIdx]);
+          if (!row || row.kind !== "entry") break;
           if (row.isDir) tree.toggle(row.path);
           else onOpenFile(row.path);
           break;
