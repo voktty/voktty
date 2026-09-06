@@ -3,8 +3,8 @@ use tauri::{AppHandle, Manager};
 use crate::modules::git::operations;
 use crate::modules::git::types::{
     DiscardEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult, GitDiffContentResult,
-    GitDiffResult, GitLogEntry, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry,
-    GitStatusSnapshot, GitTagEntry,
+    GitDiffResult, GitLogEntry, GitOperationStatus, GitPanelSnapshot, GitPushResult, GitRepoInfo,
+    GitStashEntry, GitStatusSnapshot, GitTagEntry,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
@@ -527,6 +527,47 @@ pub async fn git_tag_push(
     blocking(app, move |r| {
         operations::tag_push(r, &repo_root, &name, remote.as_deref(), &workspace)
             .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_operation_status(
+    repo_root: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<GitOperationStatus, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::operation_status(r, &repo_root, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_operation_abort(
+    repo_root: String,
+    kind: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::operation_abort(r, &repo_root, &kind, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_operation_continue(
+    repo_root: String,
+    kind: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::operation_continue(r, &repo_root, &kind, &workspace).map_err(Into::into)
     })
     .await
 }

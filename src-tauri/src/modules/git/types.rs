@@ -26,6 +26,7 @@ pub struct GitChangedFile {
     pub staged: bool,
     pub unstaged: bool,
     pub untracked: bool,
+    pub conflicted: bool,
     pub status_label: String,
 }
 
@@ -138,6 +139,12 @@ pub struct GitStashEntry {
     pub sha: String,
     pub message: String,
     pub timestamp_secs: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitOperationStatus {
+    pub kind: String, // "none" | "merge" | "revert" | "cherryPick" | "rebase"
 }
 
 #[derive(Serialize)]

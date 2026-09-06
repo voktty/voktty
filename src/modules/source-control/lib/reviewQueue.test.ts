@@ -20,6 +20,7 @@ function changed(
     staged: false,
     unstaged: true,
     untracked: false,
+    conflicted: false,
     statusLabel: "Modified",
     ...patch,
   };
