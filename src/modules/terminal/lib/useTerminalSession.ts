@@ -116,6 +116,9 @@ type Session = {
   blockMode: BlockMode;
   blockListeners: Set<() => void>;
   blockDecorations: BlockDecorations | null;
+  // Stays false on shells without the OSC 133 integration, which is how
+  // callers know to fall back to their own guess about what is on screen.
+  sawPromptMarker: boolean;
   // Set by the block shell-input; called to pull focus back when the xterm
   // grid steals it at the prompt (e.g. on a click), so typing stays in the bar.
   inputFocus: (() => void) | null;
@@ -608,6 +611,7 @@ function onLeafCommandState(
 ): void {
   const s = sessions.get(leafId);
   if (!s) return;
+  s.sawPromptMarker = true;
   if (running) {
     s.lastFailedExit = null;
     notifyLeafFailure(leafId, null);
@@ -760,6 +764,7 @@ configureRendererPool({
       cwd: s.lastCwd || s.initialCwd || null,
       shellOverride: s.shellOverride,
       isUnix,
+      atPrompt: s.sawPromptMarker ? !s.commandRunning : null,
     };
   },
 });
@@ -817,6 +822,7 @@ function ensureSession(
     everSubmitted: false,
     altScreenAtRelease: false,
     commandRunning: false,
+    sawPromptMarker: false,
     lastFailedExit: null,
     hiddenReleaseTimer: null,
     spawnFailed: false,

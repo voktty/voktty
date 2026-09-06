@@ -41,6 +41,7 @@ describe("handleTerminalWheel", () => {
             }
           : { kind: "local" as const },
         cwd: null,
+        atPrompt: null,
         isUnix: true,
       }),
     });
