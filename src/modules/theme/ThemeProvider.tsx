@@ -23,6 +23,7 @@ import { usePreferencesStore } from "@/modules/settings/preferences";
 import { SurfaceLayer } from "./SurfaceLayer";
 import { getBuiltinTheme, getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
+import { getBackdropKind } from "./vibrancy";
 
 export type { Theme };
 export type ThemeModePref = ThemePref;
@@ -138,6 +139,24 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
   const vibrancyOpacity = usePreferencesStore((s) => s.vibrancyOpacity);
 
+  // Themes with vibrancy on bake semi-transparent colors straight into
+  // inline styles, assuming the OS is actually blurring what's behind the
+  // window (Mica/Acrylic on Windows, NSVisualEffectView on macOS). Most
+  // Linux compositors have no such API, so without this check those themes
+  // would render as raw, unblurred see-through UI there regardless of the
+  // user's vibrancy preference.
+  const [backdropAvailable, setBackdropAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void getBackdropKind().then((kind) => {
+      if (alive) setBackdropAvailable(kind !== "none");
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const vibrancyActive = windowVibrancy && backdropAvailable;
+
   const effectiveId = previewId ?? themeId;
   const activeTheme = useMemo(
     () => resolveTheme(effectiveId, customThemes),
@@ -174,7 +193,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   useEffect(() => {
     if (effectiveId === DEFAULT_THEME_ID) {
       clearTheme();
-      if (windowVibrancy) {
+      if (vibrancyActive) {
         document.documentElement.style.setProperty(
           "--vibrancy-opacity",
           String(vibrancyOpacity),
@@ -182,12 +201,12 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       }
       return;
     }
-    applyTheme(activeTheme, resolvedMode, windowVibrancy, vibrancyOpacity);
+    applyTheme(activeTheme, resolvedMode, vibrancyActive, vibrancyOpacity);
   }, [
     effectiveId,
     activeTheme,
     resolvedMode,
-    windowVibrancy,
+    vibrancyActive,
     vibrancyOpacity,
   ]);
 
