@@ -72,7 +72,7 @@ export const es: TranslationSchema = {
       noResults: "No se encontraron ajustes coincidentes",
     },
     tabs: {
-    revealInFileManager: "Mostrar en el explorador de archivos",
+      revealInFileManager: "Mostrar en el explorador de archivos",
       general: "General",
       editor: "Editor",
       themes: "Temas",
@@ -793,7 +793,8 @@ export const es: TranslationSchema = {
         privateNetwork: "Permitir red privada",
         privateNetworkHint:
           "Es obligatorio para endpoints loopback o LAN. El HTTP público sin cifrar continúa bloqueado.",
-        invalid: "Revisa los campos obligatorios y los límites antes de guardar.",
+        invalid:
+          "Revisa los campos obligatorios y los límites antes de guardar.",
       },
       phase: {
         disabled: "Desactivado",
@@ -804,12 +805,15 @@ export const es: TranslationSchema = {
         error: "Error de conexión",
       },
       errors: {
-        configuration: "La configuración del servidor no es válida o está incompleta.",
-        authentication: "Hace falta una credencial válida o autorización del proveedor.",
+        configuration:
+          "La configuración del servidor no es válida o está incompleta.",
+        authentication:
+          "Hace falta una credencial válida o autorización del proveedor.",
         spawn: "No se pudo iniciar el proceso local del servidor.",
         io: "No se pudo acceder al servidor de forma segura.",
         protocol: "El servidor devolvió un mensaje MCP no válido.",
-        incompatibleVersion: "El servidor no admite una versión MCP compatible.",
+        incompatibleVersion:
+          "El servidor no admite una versión MCP compatible.",
         resourceLimit: "El servidor superó un límite de seguridad configurado.",
         timeout: "El servidor no respondió antes del tiempo límite.",
         busy: "El servidor está ocupado con otra operación limitada.",
@@ -1088,7 +1092,8 @@ export const es: TranslationSchema = {
       dailyAvg: "Promedio diario",
       weeklyChart: "Actividad semanal",
       topPaths: "Rutas más activas",
-      takeBreak: "¡Recuerda tomarte una pausa para descansar la vista y estirar!",
+      takeBreak:
+        "¡Recuerda tomarte una pausa para descansar la vista y estirar!",
       noPaths: "Aún no hay rutas registradas",
     },
     cwd: {
@@ -1213,7 +1218,8 @@ export const es: TranslationSchema = {
     previewFile: "Archivo",
     previewSize: "Tamaño",
     previewModified: "Modificado",
-    previewImageTooLarge: "La vista previa de imagen no está disponible porque el archivo es demasiado grande.",
+    previewImageTooLarge:
+      "La vista previa de imagen no está disponible porque el archivo es demasiado grande.",
     files: "Archivos",
     noFiles: "Ningún espacio de trabajo abierto",
     newFile: "Nuevo Archivo",
@@ -1273,7 +1279,8 @@ export const es: TranslationSchema = {
     pullTooltip: "Descargar {count} commits del remoto",
     pushCommits: "Subir ({count})",
     undoCommit: "Deshacer commit",
-    undoCommitTooltip: "Deshacer el último commit local manteniendo los cambios en staged (git reset --soft HEAD~1)",
+    undoCommitTooltip:
+      "Deshacer el último commit local manteniendo los cambios en staged (git reset --soft HEAD~1)",
     undoingCommit: "Deshaciendo…",
     stash: {
       title: "Stashes",
@@ -1304,7 +1311,8 @@ export const es: TranslationSchema = {
       namePlaceholder: "v1.0.0",
       messageLabel: "Mensaje de anotación (opcional)",
       messagePlaceholder: "p. ej. Notas de la versión",
-      messageHint: "Déjalo vacío para un tag ligero, o añade un mensaje para crear un tag anotado.",
+      messageHint:
+        "Déjalo vacío para un tag ligero, o añade un mensaje para crear un tag anotado.",
       createAction: "Crear tag",
       createSuccess: "Tag “{name}” creado",
       empty: "No hay tags",
@@ -1319,16 +1327,20 @@ export const es: TranslationSchema = {
       inProgressRevert: "Revert en curso",
       inProgressCherryPick: "Cherry-pick en curso",
       inProgressRebase: "Rebase en curso",
-      resolveHint: "Resuelve los archivos en conflicto de abajo y luego continúa o cancela.",
+      resolveHint:
+        "Resuelve los archivos en conflicto de abajo y luego continúa o cancela.",
       abort: "Cancelar",
       aborting: "Cancelando…",
       abortSuccess: "Operación cancelada",
       continue: "Continuar",
       continuing: "Continuando…",
       continueSuccess: "Operación completada",
-      continueBlocked: "Resuelve todos los archivos en conflicto antes de continuar.",
-      dialogDesc: "Elige qué lado conservar para cada cambio en conflicto y luego marca el archivo como resuelto.",
-      unresolvable: "Este archivo no se puede resolver aquí (contenido binario, o el conflicto no tiene marcadores visuales). Resuélvelo desde la terminal.",
+      continueBlocked:
+        "Resuelve todos los archivos en conflicto antes de continuar.",
+      dialogDesc:
+        "Elige qué lado conservar para cada cambio en conflicto y luego marca el archivo como resuelto.",
+      unresolvable:
+        "Este archivo no se puede resolver aquí (contenido binario, o el conflicto no tiene marcadores visuales). Resuélvelo desde la terminal.",
       hunkLabel: "Conflicto {n}",
       acceptOurs: "Nuestro",
       acceptTheirs: "Suyo",
@@ -1342,15 +1354,18 @@ export const es: TranslationSchema = {
     },
     blame: {
       action: "Blame",
-      dialogDesc: "Muestra quién cambió por última vez cada línea, y en qué commit.",
+      dialogDesc:
+        "Muestra quién cambió por última vez cada línea, y en qué commit.",
     },
     compare: {
       action: "Comparar ramas",
       title: "Comparar ramas",
-      dialogDesc: "Mira qué diferencia hay entre dos ramas antes de mezclar o abrir un PR.",
+      dialogDesc:
+        "Mira qué diferencia hay entre dos ramas antes de mezclar o abrir un PR.",
       selectBase: "Rama base",
       selectCompare: "Rama a comparar",
-      pickBothHint: "Elige una rama base y una para comparar y verás la diferencia.",
+      pickBothHint:
+        "Elige una rama base y una para comparar y verás la diferencia.",
       aheadTitle: "{compare} tiene ({count})",
       aheadEmpty: "Nada aquí que la rama base no tenga ya.",
       behindTitle: "{base} tiene ({count})",
@@ -1360,7 +1375,8 @@ export const es: TranslationSchema = {
     },
     cloneRepo: "Clonar repositorio",
     cloneModalTitle: "Clonar repositorio Git",
-    cloneModalDesc: "Introduce la URL del repositorio y el directorio de destino local.",
+    cloneModalDesc:
+      "Introduce la URL del repositorio y el directorio de destino local.",
     repoUrlLabel: "URL del repositorio",
     parentDirLabel: "Carpeta de destino",
     browseFolder: "Examinar",
@@ -1393,7 +1409,7 @@ export const es: TranslationSchema = {
       push: "Enviar {count} {count, plural, =1 {commit local} other {commits locales}}.",
       sync: "Sincronizar",
       fetch: "Obtener actualizaciones remotas.",
-  },
+    },
     commit: "Confirmar",
     commitPlaceholder: "Mensaje de commit (Ctrl+Enter para confirmar)",
     characterCount: "Caracteres: {count}",
@@ -1500,19 +1516,23 @@ export const es: TranslationSchema = {
     addedModified: "Añadido / Modificado",
     original: "Original",
     noReviewCommentsYet: "Aún no hay comentarios de revisión",
-    addCommentsFromDiffHint: "Usa el botón Comentar en cualquier diff para dejar feedback",
+    addCommentsFromDiffHint:
+      "Usa el botón Comentar en cualquier diff para dejar feedback",
     reviewHandoffTitle: "Traspaso de revisión al Agente",
-    reviewHandoffDescription: "Comentarios de revisión formateados como prompt accionable para agentes de IA.",
+    reviewHandoffDescription:
+      "Comentarios de revisión formateados como prompt accionable para agentes de IA.",
     reviewHandoffCopied: "Prompt de traspaso copiado al portapapeles",
     reviewSentToAgent: "Prompt de revisión enviado al agente activo",
     scope: "Alcance",
     reviewedFiles: "revisados",
     commentsCount: "comentarios",
-    handoffHotkeyHint: "Presiona P desde la cola de revisión en cualquier momento",
+    handoffHotkeyHint:
+      "Presiona P desde la cola de revisión en cualquier momento",
     sendToAgent: "Enviar al Agente",
     sendToTerminal: "Pegar en Terminal",
     reviewSentToTerminal: "Prompt de revisión insertado en la terminal activa",
-    noTerminalCopiedToClipboard: "No hay terminal activa. Prompt copiado al portapapeles.",
+    noTerminalCopiedToClipboard:
+      "No hay terminal activa. Prompt copiado al portapapeles.",
   },
   activeTabs: {
     title: "Launchpad de Pestañas Activas",
@@ -3012,7 +3032,8 @@ export const es: TranslationSchema = {
       fromVault: "Desde la Bóveda",
       multiplexerTitle: "Persistencia de Sesión Remota",
       multiplexerBadge: "tmux / screen",
-      multiplexerDescription: "Mantiene la sesión y procesos en segundo plano usando tmux / screen ante caídas de red o al reconectar.",
+      multiplexerDescription:
+        "Mantiene la sesión y procesos en segundo plano usando tmux / screen ante caídas de red o al reconectar.",
       multiplexerDisabled: "Desactivado",
       multiplexerAuto: "Automático (tmux)",
       multiplexerAsk: "Preguntar al conectar",
@@ -3032,7 +3053,8 @@ export const es: TranslationSchema = {
       joinShared: "Unirse (compartida)",
       takeControl: "Tomar Control Exclusivo",
       resume: "Retomar Sesión",
-      noExistingSessions: "No se encontraron sesiones existentes en este servidor.",
+      noExistingSessions:
+        "No se encontraron sesiones existentes en este servidor.",
       newSession: "Nueva Sesión Independiente",
       directShell: "Conectar sin tmux (shell directa)",
       refresh: "Actualizar sesiones",
@@ -3192,7 +3214,8 @@ export const es: TranslationSchema = {
     linesAbove: "{count} líneas arriba",
     history: {
       title: "Historial Global de Comandos",
-      subtitle: "Comandos unificados entre sesiones SSH, Linux, WSL y PowerShell",
+      subtitle:
+        "Comandos unificados entre sesiones SSH, Linux, WSL y PowerShell",
       searchPlaceholder: "Buscar comando por nombre, argumentos o ruta...",
       filterAll: "Todos",
       filterUnix: "Linux / SSH / WSL",
@@ -3305,6 +3328,7 @@ export const es: TranslationSchema = {
     title: "Bienvenido a Voktty",
     subtitle: "Configuremos tu terminal y entorno de IA en unos breves pasos.",
     skip: "Omitir por ahora",
+    getStarted: "Comenzar",
     back: "Atrás",
     next: "Continuar",
     finish: "Comenzar a usar Voktty",
@@ -3500,7 +3524,8 @@ export const es: TranslationSchema = {
     },
   },
   feedback: {
-    undoCommitSuccess: "Último commit deshecho con éxito. Los cambios están en staged.",
+    undoCommitSuccess:
+      "Último commit deshecho con éxito. Los cambios están en staged.",
     sessionSaveFailed:
       "No se pudo guardar la sesión. Voktty permanece abierto para que puedas intentarlo de nuevo.",
     unsavedBeforeWorkspaceSwitch:
@@ -3792,7 +3817,8 @@ export const es: TranslationSchema = {
       active: "Activo",
     },
     browser: {
-      urlPlaceholder: "Introduce la URL base (p. ej., https://dummyjson.com o http://localhost:11434/api)",
+      urlPlaceholder:
+        "Introduce la URL base (p. ej., https://dummyjson.com o http://localhost:11434/api)",
       discovering: "Descubriendo...",
       autoDiscover: "Auto-Descubrir",
       fastPresets: "Presets rápidos:",
@@ -3805,9 +3831,11 @@ export const es: TranslationSchema = {
       apiService: "Servicio API",
       openApiSpec: "OpenAPI / Swagger 3.0",
       smartRouteProbe: "Sondeo inteligente de rutas",
-      summaryBase: "Base: {base} • {count} endpoints encontrados en {duration}ms",
+      summaryBase:
+        "Base: {base} • {count} endpoints encontrados en {duration}ms",
       copyMarkdownReport: "Copiar reporte Markdown",
-      reportCopied: "¡Reporte de validación copiado al portapapeles en Markdown!",
+      reportCopied:
+        "¡Reporte de validación copiado al portapapeles en Markdown!",
       reportCopyFailed: "Error al copiar el reporte",
       all: "TODOS",
       filterPlaceholder: "Filtrar endpoints...",
@@ -3816,12 +3844,14 @@ export const es: TranslationSchema = {
       loadedInEditor: "Cargado {method} {path} en el editor",
       noEndpointsFound: "No se encontraron endpoints con el filtro actual.",
       emptyStateTitle: "Descubrimiento de API y Explorador Inteligente",
-      emptyStateDescription: "Introduce la URL base de tu API (ej. DummyJSON, Ollama, Docker o servicio web) y haz clic en Auto-Descubrir para detectar automáticamente todas las rutas, métodos y especificaciones OpenAPI disponibles.",
+      emptyStateDescription:
+        "Introduce la URL base de tu API (ej. DummyJSON, Ollama, Docker o servicio web) y haz clic en Auto-Descubrir para detectar automáticamente todas las rutas, métodos y especificaciones OpenAPI disponibles.",
     },
     discovery: {
       knownEndpoint: "Endpoint conocido: {path}",
       probeEndpoint: "Sonda de endpoint: {path}",
-      defaultCollectionDescription: "Catálogo de API REST, SSE y GraphQL de Pokémon con entornos",
+      defaultCollectionDescription:
+        "Catálogo de API REST, SSE y GraphQL de Pokémon con entornos",
       importedCollectionDescription: "Importado con {count} endpoints",
     },
     collections: {
@@ -3842,8 +3872,10 @@ export const es: TranslationSchema = {
     request: {
       invalidCurlCommand: "Comando cURL no válido",
       curlImported: "¡Comando cURL importado correctamente!",
-      noValidPostmanRequests: "No se encontraron peticiones válidas en el JSON de Postman",
-      postmanImported: "Se importaron {count} peticiones de la colección \"{name}\"",
+      noValidPostmanRequests:
+        "No se encontraron peticiones válidas en el JSON de Postman",
+      postmanImported:
+        'Se importaron {count} peticiones de la colección "{name}"',
       postmanImportFailed: "No se pudo analizar la colección de Postman",
       urlPlaceholder: "https://api.example.com/v1/resource",
       sending: "Enviando...",
@@ -3857,7 +3889,8 @@ export const es: TranslationSchema = {
       cancel: "Cancelar",
       import: "Importar",
       importPostmanJson: "Importar JSON de colección de Postman (v2.0 / v2.1):",
-      postmanPlaceholder: "Pega aquí el archivo collection.json exportado desde Postman...",
+      postmanPlaceholder:
+        "Pega aquí el archivo collection.json exportado desde Postman...",
       importCollection: "Importar colección",
       params: "Parámetros",
       headers: "Cabeceras",
@@ -3866,7 +3899,8 @@ export const es: TranslationSchema = {
       code: "Código",
       queryParameters: "Parámetros de consulta",
       addParam: "Añadir parámetro",
-      noQueryParameters: "No hay parámetros de consulta. Haz clic en Añadir parámetro para añadirlos a la URL.",
+      noQueryParameters:
+        "No hay parámetros de consulta. Haz clic en Añadir parámetro para añadirlos a la URL.",
       key: "Clave",
       value: "Valor",
       httpHeaders: "Cabeceras HTTP",
@@ -3904,7 +3938,8 @@ export const es: TranslationSchema = {
       executing: "Ejecutando petición mediante el motor nativo de Rust...",
       cancelRequest: "Cancelar petición",
       noResponse: "Aún no hay respuesta",
-      emptyDescription: "Introduce una URL y haz clic en Enviar o pulsa {shortcut} para inspeccionar la salida de la API.",
+      emptyDescription:
+        "Introduce una URL y haz clic en Enviar o pulsa {shortcut} para inspeccionar la salida de la API.",
       copied: "Respuesta copiada al portapapeles",
       networkError: "Error de red",
       diagnoseWithAi: "Diagnosticar con IA",
@@ -3935,19 +3970,22 @@ export const es: TranslationSchema = {
       simulator: "Simulador sin cuota",
       selectPreset: "Selecciona un preset de proveedor:",
       localWebhookUrl: "Tu URL de webhook local:",
-      signingSecret: "Secreto de firma (genera automáticamente Stripe-Signature / X-Hub-Signature-256):",
+      signingSecret:
+        "Secreto de firma (genera automáticamente Stripe-Signature / X-Hub-Signature-256):",
       deliveryMode: "Modo de entrega de la sonda:",
       singleDelivery: "Entrega única (1x)",
       singleDeliveryDescription: "Despacho estándar de evento webhook",
       idempotencyProbe: "Sonda de idempotencia (3x)",
-      idempotencyProbeDescription: "Prueba la deduplicación de webhooks repetidos",
+      idempotencyProbeDescription:
+        "Prueba la deduplicación de webhooks repetidos",
       payload: "Carga útil (JSON):",
       dispatching: "Enviando...",
       dispatch: "Enviar sonda de webhook",
       results: "Resultados y diagnósticos de la sonda",
       copyReceipt: "Copiar recibo de validación (.md)",
       ready: "Listo para enviar la sonda de sandbox",
-      emptyDescription: "Haz clic en \"Enviar sonda de webhook\" para probar tu endpoint local con cargas firmadas y ráfagas duplicadas.",
+      emptyDescription:
+        'Haz clic en "Enviar sonda de webhook" para probar tu endpoint local con cargas firmadas y ráfagas duplicadas.',
       passed: "Sonda de idempotencia superada",
       failed: "Sonda fallida / error",
       verified: "Verificado",
@@ -3975,7 +4013,8 @@ export const es: TranslationSchema = {
       receipt: "Recibo de ejecución",
       copyReceipt: "Copiar recibo (.md)",
       noScenario: "Aún no se ha ejecutado ningún escenario",
-      emptyDescription: "Ejecuta el escenario para generar recibos de validación deterministas antes/después para tu integración.",
+      emptyDescription:
+        "Ejecuta el escenario para generar recibos de validación deterministas antes/después para tu integración.",
       passed: "Escenario superado (verificado)",
       failed: "Escenario fallido (requiere corrección)",
       passedCount: "superados",
@@ -3986,7 +4025,8 @@ export const es: TranslationSchema = {
       presets: {
         stripeFullCycle: {
           title: "Ciclo completo de pago e idempotencia de Stripe",
-          description: "Ejecuta una prueba integral del webhook de pago seguida de una sonda de duplicados de idempotencia.",
+          description:
+            "Ejecuta una prueba integral del webhook de pago seguida de una sonda de duplicados de idempotencia.",
           dispatchPayment: "1. Enviar payment_intent.succeeded",
           idempotencyBurst: "2. Sonda de idempotencia (ráfaga duplicada 3x)",
         },
@@ -4038,13 +4078,18 @@ export const es: TranslationSchema = {
     copyMessageContent: "Copiar contenido del mensaje",
     runInTerminal: "Ejecutar / Insertar en terminal",
     selectSessionPrompt: "Selecciona una sesión para ver la transcripción",
-    emptyDescription: "Busca en las conversaciones de tus agentes o presiona {shortcut} en cualquier momento.",
+    emptyDescription:
+      "Busca en las conversaciones de tus agentes o presiona {shortcut} en cualquier momento.",
     dragToResize: "Arrastrar para redimensionar",
-    noResumeAvailable: "No hay comando de reanudación disponible para esta sesión.",
+    noResumeAvailable:
+      "No hay comando de reanudación disponible para esta sesión.",
     resumedInTerminal: "Sesión reanudada en terminal activa",
-    resumeCommandCopiedToast: "Comando de reanudación copiado (abre una terminal para ejecutar)",
-    resumeCommandCopiedClipboard: "¡Comando de reanudación copiado al portapapeles!",
-    transcriptCopiedToast: "¡Transcripción en Markdown copiada al portapapeles!",
+    resumeCommandCopiedToast:
+      "Comando de reanudación copiado (abre una terminal para ejecutar)",
+    resumeCommandCopiedClipboard:
+      "¡Comando de reanudación copiado al portapapeles!",
+    transcriptCopiedToast:
+      "¡Transcripción en Markdown copiada al portapapeles!",
     sentToTerminal: "Enviado a la terminal",
     copiedToClipboard: "Copiado al portapapeles",
     messageContentCopied: "¡Contenido del mensaje copiado!",
@@ -4059,7 +4104,8 @@ export const es: TranslationSchema = {
   },
   aliases: {
     title: "Alias y Comandos",
-    description: "Gestiona comandos de fábrica y alias personalizados disponibles en cada terminal.",
+    description:
+      "Gestiona comandos de fábrica y alias personalizados disponibles en cada terminal.",
     newAlias: "Nuevo alias",
     openFile: "Abrir aliases.json",
     refresh: "Actualizar",
@@ -4110,5 +4156,3 @@ export const es: TranslationSchema = {
     closeAgentDevelopment: "Cerrar Desarrollo de Agentes",
   },
 };
-
-
