@@ -72,6 +72,7 @@ import {
   FolderGitTwoIcon,
   FolderTreeIcon,
   GitBranchIcon,
+  GitCompareIcon,
   Refresh01Icon,
   RemoveSquareIcon,
   SparklesIcon,
@@ -79,6 +80,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { BranchCompareDialog } from "./BranchCompareDialog";
 import { ConflictsPanel } from "./ConflictsPanel";
 import { GitCloneModal } from "./GitCloneModal";
 import { StashDropdown, TagDropdown } from "./GitStashAndTags";
@@ -551,6 +553,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     () => new Set(),
   );
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -879,6 +882,15 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               headSha={null}
               onRefresh={handleRefresh}
             />
+            <button
+              type="button"
+              disabled={!scm.repo?.repoRoot}
+              title={t("git.compare.action")}
+              onClick={() => setCompareModalOpen(true)}
+              className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <HugeiconsIcon icon={GitCompareIcon} size={13} strokeWidth={1.85} />
+            </button>
             {scm.status && (scm.status.ahead > 0 || scm.status.behind > 0) ? (
               <div className="flex shrink-0 items-center gap-0.5 text-[10px] font-semibold tabular-nums leading-none text-muted-foreground">
                 {scm.status.ahead > 0 ? (
@@ -1654,6 +1666,13 @@ export const SourceControlPanel = memo(function SourceControlPanel({
         onCloned={(path) => {
           onNavigateToPath?.(path);
         }}
+      />
+
+      <BranchCompareDialog
+        open={compareModalOpen}
+        onOpenChange={setCompareModalOpen}
+        repoRoot={scm.repo?.repoRoot ?? null}
+        currentBranch={scm.status?.branch ?? scm.repo?.branch ?? null}
       />
     </TooltipProvider>
   );

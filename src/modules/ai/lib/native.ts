@@ -189,6 +189,12 @@ export type GitBlameLine = {
   content: string;
 };
 
+export type GitBranchComparison = {
+  ahead: GitLogEntry[];
+  behind: GitLogEntry[];
+  files: GitCommitFileChange[];
+};
+
 function resolveGitWorkspace(
   repoRootOrPath?: string | null,
   explicitWorkspace?: WorkspaceEnv,
@@ -771,6 +777,18 @@ export const native = {
     invoke<GitBlameLine[]>("git_blame", {
       repoRoot,
       path,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitCompareBranches: (
+    repoRoot: string,
+    base: string,
+    compare: string,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<GitBranchComparison>("git_compare_branches", {
+      repoRoot,
+      base,
+      compare,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
 };
