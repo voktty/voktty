@@ -4,6 +4,7 @@ import {
   createSessionEnvelope,
   migrateLegacySpaces,
   repairSessionSnapshot,
+  safeWorkspaceEnv,
   selectRestorableSession,
   SESSION_SCHEMA_VERSION,
   type LegacySpacesStore,
@@ -224,5 +225,56 @@ describe("session snapshot v2", () => {
     );
     expect(restored.viewSpaces[0].focusedSlotId).toBe("slot-empty");
     expect(restored.stripEntries).toEqual(snapshot.stripEntries);
+  });
+});
+
+describe("safeWorkspaceEnv", () => {
+  it("keeps a docker container across a save", () => {
+    // Losing it left the tab with no env of its own, and a terminal tab
+    // without one inherits the space env, which may be an SSH session.
+    const connection = {
+      containerId: "abc123",
+      containerName: "api",
+      image: "node:22",
+    };
+    expect(safeWorkspaceEnv({ kind: "docker", connection })).toEqual({
+      kind: "docker",
+      connection,
+    });
+  });
+
+  it("keeps a serial port across a save", () => {
+    const env = { kind: "serial", portName: "COM3", baudRate: 115200 };
+    expect(safeWorkspaceEnv(env)).toEqual(env);
+  });
+
+  it("keeps a wsl distro", () => {
+    expect(safeWorkspaceEnv({ kind: "wsl", distro: "Ubuntu" })).toEqual({
+      kind: "wsl",
+      distro: "Ubuntu",
+    });
+  });
+
+  it("drops the live session id from an ssh env", () => {
+    const env = {
+      kind: "ssh",
+      root: "/home/root",
+      sessionId: 7,
+      connection: { id: "h1", name: "Server", host: "server.test" },
+    };
+    expect(safeWorkspaceEnv(env)).not.toHaveProperty("sessionId");
+    expect(safeWorkspaceEnv(env)).toMatchObject({ kind: "ssh", root: "/home/root" });
+  });
+
+  it("falls back to local for an env it cannot trust", () => {
+    expect(safeWorkspaceEnv({ kind: "docker" })).toEqual({ kind: "local" });
+    expect(safeWorkspaceEnv({ kind: "serial", portName: "COM3" })).toEqual({
+      kind: "local",
+    });
+    expect(safeWorkspaceEnv({ kind: "ssh", root: "/x" })).toEqual({
+      kind: "local",
+    });
+    expect(safeWorkspaceEnv("nonsense")).toEqual({ kind: "local" });
+    expect(safeWorkspaceEnv(null)).toEqual({ kind: "local" });
   });
 });
