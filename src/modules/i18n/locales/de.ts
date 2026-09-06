@@ -1618,6 +1618,7 @@ const deBase = mergeLocale(en, {
     noCommitsDesc: "Dieser Branch enthält keine Commits.",
     loadingMore: "Mehr laden\u2026",
     allLoaded: "Alle Commits geladen",
+    viewChanges: "Änderungen ansehen",
     copySha: "SHA kopieren",
     copied: "Kopiert",
     loadingFiles: "Dateien werden geladen\u2026",

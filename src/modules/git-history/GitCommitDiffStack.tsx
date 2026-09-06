@@ -1,50 +1,22 @@
 import type { WorkspacePlacement } from "@/modules/spaces";
-import type { GitHistoryTab, Tab } from "@/modules/tabs";
-import type { WorkspaceEnv } from "@/modules/workspace";
-import { GitHistoryPane, type GitHistorySearchHandle } from "./GitHistoryPane";
-
-type CommitFileDiffOpenInput = {
-  repoRoot: string;
-  sha: string;
-  shortSha: string;
-  subject: string;
-  path: string;
-  originalPath: string | null;
-  workspaceEnv?: WorkspaceEnv;
-};
-
-type CommitDiffOpenInput = {
-  repoRoot: string;
-  sha: string;
-  shortSha: string;
-  subject: string;
-  workspaceEnv?: WorkspaceEnv;
-};
+import type { GitCommitDiffTab, Tab } from "@/modules/tabs";
+import { GitCommitDiffPane } from "./GitCommitDiffPane";
 
 type Props = {
   tabs: Tab[];
   activeId: number;
-  onOpenCommitFile: (input: CommitFileDiffOpenInput) => void;
-  onOpenCommitDiff: (input: CommitDiffOpenInput) => void;
-  onSearchHandle?: (handle: GitHistorySearchHandle | null) => void;
   placements?: ReadonlyMap<number, WorkspacePlacement>;
 };
 
-export function GitHistoryStack({
-  tabs,
-  activeId,
-  onOpenCommitFile,
-  onOpenCommitDiff,
-  onSearchHandle,
-  placements,
-}: Props) {
-  const histories = tabs.filter(
-    (tab): tab is GitHistoryTab => tab.kind === "git-history" && !tab.cold,
+export function GitCommitDiffStack({ tabs, activeId, placements }: Props) {
+  const commits = tabs.filter(
+    (tab): tab is GitCommitDiffTab => tab.kind === "git-commit" && !tab.cold,
   );
-  if (histories.length === 0) return null;
+  if (commits.length === 0) return null;
+
   return (
     <div className="relative h-full w-full">
-      {histories.map((tab) => {
+      {commits.map((tab) => {
         const placement = placements?.get(tab.id);
         const visible = placements
           ? placement !== undefined
@@ -75,12 +47,12 @@ export function GitHistoryStack({
                   : "invisible pointer-events-none h-full w-full"
               }
             >
-              <GitHistoryPane
+              <GitCommitDiffPane
                 repoRoot={tab.repoRoot}
+                sha={tab.sha}
+                shortSha={tab.shortSha}
+                subject={tab.subject}
                 workspaceEnv={tab.workspaceEnv}
-                onOpenCommitFile={onOpenCommitFile}
-                onOpenCommitDiff={onOpenCommitDiff}
-                onSearchHandle={visible ? onSearchHandle : undefined}
               />
             </div>
           </div>

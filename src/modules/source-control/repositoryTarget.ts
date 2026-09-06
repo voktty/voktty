@@ -80,6 +80,7 @@ export function activeRepositoryContextPath({
   if (activeTab?.kind === "editor") return dirname(activeTab.path);
   if (activeTab?.kind === "git-diff") return activeTab.repoRoot;
   if (activeTab?.kind === "git-commit-file") return activeTab.repoRoot;
+  if (activeTab?.kind === "git-commit") return activeTab.repoRoot;
   if (activeTab?.kind === "git-history") return activeTab.repoRoot;
   return explorerRoot ?? workspaceFallbackPath;
 }

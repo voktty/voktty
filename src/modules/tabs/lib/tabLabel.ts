@@ -83,6 +83,7 @@ export function labelFor(t: Tab): string {
   if (t.kind === "git-diff") return t.title;
   if (t.kind === "git-history") return t.title;
   if (t.kind === "git-commit-file") return t.title;
+  if (t.kind === "git-commit") return t.title;
   if (t.kind === "rdp") return t.title;
   if (t.kind === "api-client") return t.title;
   if (t.kind === "harness") return t.title;
@@ -173,7 +174,11 @@ export function getTabSubtitle(tab: Tab): {
     }
     return { icon: "none", text: translate("tabs.subtitles.file") };
   }
-  if (tab.kind === "git-diff" || tab.kind === "git-commit-file") {
+  if (
+    tab.kind === "git-diff" ||
+    tab.kind === "git-commit-file" ||
+    tab.kind === "git-commit"
+  ) {
     return { icon: "git", text: translate("tabs.subtitles.gitDiff") };
   }
   if (tab.kind === "git-history") {

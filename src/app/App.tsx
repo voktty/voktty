@@ -392,6 +392,7 @@ export default function App() {
     openGitDiffTab,
     openCommitHistoryTab,
     openCommitFileDiffTab,
+    openCommitDiffTab,
     closeTab,
     closeTabs,
     reopenClosedEditor,
@@ -4742,6 +4743,7 @@ export default function App() {
                               respondToApproval(id, false)
                             }
                             onOpenCommitFile={openCommitFileDiffTab}
+                            onOpenCommitDiff={openCommitDiffTab}
                             onGitHistorySearchHandle={setGitHistoryHandle}
                             onSetMarkdownView={setMarkdownView}
                             registerMarkdownHandle={registerMarkdownHandle}

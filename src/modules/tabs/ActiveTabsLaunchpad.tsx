@@ -54,7 +54,7 @@ function tabSubtitle(tab: Tab): string | null {
   if (tab.kind === "git-diff" || tab.kind === "git-commit-file") {
     return tab.path || tab.repoRoot || null;
   }
-  if (tab.kind === "git-history") {
+  if (tab.kind === "git-history" || tab.kind === "git-commit") {
     return tab.repoRoot || null;
   }
   if (tab.kind === "ai-diff") {
@@ -103,6 +103,7 @@ export function ActiveTabsLaunchpad({
         category === "git" &&
         tab.kind !== "git-diff" &&
         tab.kind !== "git-commit-file" &&
+        tab.kind !== "git-commit" &&
         tab.kind !== "git-history"
       )
         return false;
@@ -240,6 +241,7 @@ export function ActiveTabsLaunchpad({
         (t) =>
           t.kind === "git-diff" ||
           t.kind === "git-commit-file" ||
+          t.kind === "git-commit" ||
           t.kind === "git-history",
       ).length,
     };

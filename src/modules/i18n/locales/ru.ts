@@ -1609,6 +1609,7 @@ const ruBase = mergeLocale(en, {
     noCommitsDesc: "В этой ветке нет коммитов.",
     loadingMore: "Загрузка остальных\u2026",
     allLoaded: "Все коммиты загружены",
+    viewChanges: "Посмотреть изменения",
     copySha: "Копировать SHA",
     copied: "Скопировано",
     loadingFiles: "Загрузка файлов\u2026",

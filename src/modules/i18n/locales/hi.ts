@@ -2534,6 +2534,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
     noCommitsDesc: "इस शाखा में कोई कमिट नहीं है।",
     loadingMore: "और लोड हो रहा है…",
     allLoaded: "सभी कमिट लोड हो गए",
+    viewChanges: "परिवर्तन देखें",
     copySha: "SHA कॉपी करें",
     copied: "कॉपी किया गया",
     loadingFiles: "फ़ाइलें लोड हो रही हैं…",

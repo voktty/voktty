@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { AiDiffStack, EditorStack, GitDiffStack } from "@/modules/editor";
-import { GitHistoryStack } from "@/modules/git-history";
+import { GitCommitDiffStack, GitHistoryStack } from "@/modules/git-history";
 import { ApiClientStack } from "@/modules/api-client";
 import { HarnessStack } from "@/modules/harness";
 import { MarkdownStack } from "@/modules/markdown";
@@ -38,6 +38,7 @@ export type WorkspaceSurfaceProps = {
   onAiDiffAccept: AiDiffStackProps["onAccept"];
   onAiDiffReject: AiDiffStackProps["onReject"];
   onOpenCommitFile: GitHistoryStackProps["onOpenCommitFile"];
+  onOpenCommitDiff: GitHistoryStackProps["onOpenCommitDiff"];
   onGitHistorySearchHandle: GitHistoryStackProps["onSearchHandle"];
   onSetMarkdownView: EditorStackProps["onSetMarkdownView"];
   registerMarkdownHandle?: (
@@ -84,6 +85,7 @@ export function WorkspaceSurface({
   onAiDiffAccept,
   onAiDiffReject,
   onOpenCommitFile,
+  onOpenCommitDiff,
   onGitHistorySearchHandle,
   onSetMarkdownView,
   registerMarkdownHandle,
@@ -235,7 +237,22 @@ export function WorkspaceSurface({
           tabs={tabs}
           activeId={activeId}
           onOpenCommitFile={onOpenCommitFile}
+          onOpenCommitDiff={onOpenCommitDiff}
           onSearchHandle={onGitHistorySearchHandle}
+          placements={placements ? placementByTabId : undefined}
+        />
+      </div>
+      <div
+        className={cn(
+          LAYER,
+          visualLayout && "pointer-events-none",
+          !layerVisible("git-commit") && "invisible pointer-events-none",
+        )}
+        aria-hidden={!layerVisible("git-commit")}
+      >
+        <GitCommitDiffStack
+          tabs={tabs}
+          activeId={activeId}
           placements={placements ? placementByTabId : undefined}
         />
       </div>

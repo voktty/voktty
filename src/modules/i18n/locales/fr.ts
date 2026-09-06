@@ -1637,6 +1637,7 @@ const frBase = mergeLocale(en, {
     noCommitsDesc: "Cette branche ne comporte aucune validation.",
     loadingMore: "Chargement de la suite\u2026",
     allLoaded: "Toutes les validations sont chargées",
+    viewChanges: "Voir les modifications",
     copySha: "Copier le SHA",
     copied: "Copié",
     loadingFiles: "Chargement des fichiers\u2026",

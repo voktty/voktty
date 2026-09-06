@@ -2764,6 +2764,7 @@ export const es: TranslationSchema = {
     noCommitsDesc: "Esta rama no tiene commits.",
     loadingMore: "Cargando más\u2026",
     allLoaded: "Todos los commits cargados",
+    viewChanges: "Ver cambios",
     copySha: "Copiar SHA",
     copied: "Copiado",
     loadingFiles: "Cargando archivos\u2026",

@@ -1569,6 +1569,7 @@ const koBase = mergeLocale(en, {
     noCommitsDesc: "이 브랜치에는 커밋이 없습니다.",
     loadingMore: "더 로드 중\u2026",
     allLoaded: "모든 커밋이 로드됨",
+    viewChanges: "변경 사항 보기",
     copySha: "SHA 복사",
     copied: "복사됨",
     loadingFiles: "파일 로드 중\u2026",
