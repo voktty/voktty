@@ -24,7 +24,7 @@ import type {
 } from "@/modules/workspace";
 import { IncognitoIcon, Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { type RefObject, useState } from "react";
+import type { RefObject } from "react";
 import { cn } from "@/lib/utils";
 import { CwdBreadcrumb } from "./CwdBreadcrumb";
 import { DiagnosticsBadge } from "./DiagnosticsBadge";
@@ -34,6 +34,7 @@ import { WorkspaceEnvSelector } from "./WorkspaceEnvSelector";
 import { ConsoleUptimeWidget } from "./components/ConsoleUptimeWidget";
 import { ProjectToolkitPopover } from "./components/ProjectToolkitPopover";
 import { FloatingArcadeWidget } from "./components/FloatingArcadeWidget";
+import { useArcadeStore } from "./arcadeStore";
 import { PacmanIcon } from "./components/PacmanIcon";
 import { QuotaUsageWidget } from "@/modules/quota";
 
@@ -101,7 +102,9 @@ export function StatusBar({
   const miniOpen = useChatStore((s) => s.mini.open);
   const miniCollapsed = useChatStore((s) => s.mini.collapsed);
   const chatUnreadCount = useChatStore((s) => s.unreadCount);
-  const [arcadeOpen, setArcadeOpen] = useState(false);
+  const arcadeOpen = useArcadeStore((s) => s.isOpen);
+  const toggleArcade = useArcadeStore((s) => s.toggleArcade);
+  const closeArcade = useArcadeStore((s) => s.closeArcade);
 
   return (
     <footer className="flex h-7.5 shrink-0 items-center justify-between gap-2 border-t border-border/30 px-2.5 text-[10.5px]">
@@ -180,7 +183,7 @@ export function StatusBar({
             "size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
             arcadeOpen && "bg-accent text-yellow-400 hover:text-yellow-300",
           )}
-          onClick={() => setArcadeOpen((prev) => !prev)}
+          onClick={toggleArcade}
           title={t("statusbar.arcade", {
             defaultValue: "Arcade (Pac-Man & Snake)",
           })}
@@ -201,7 +204,7 @@ export function StatusBar({
         ) : null}
       </div>
       {arcadeOpen ? (
-        <FloatingArcadeWidget onClose={() => setArcadeOpen(false)} />
+        <FloatingArcadeWidget onClose={closeArcade} />
       ) : null}
     </footer>
   );

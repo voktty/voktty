@@ -5,6 +5,7 @@ import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS, fmtShortcut, MOD_KEY, SHIFT_KEY } f
 import { NotificationBell } from "@/modules/agents";
 import type { AgentLaunchRequest } from "@/modules/agents/lib/launcher";
 import { useTranslation } from "@/modules/i18n";
+import { useLauncherStore } from "@/modules/launcher";
 import { useShortcutLabel } from "@/modules/shortcuts";
 import type { ViewSpace } from "@/modules/spaces/lib/spaceLayout";
 import type {
@@ -19,8 +20,7 @@ import type { GitDiffOpenInput, Tab } from "@/modules/tabs";
 import { TabBar } from "@/modules/tabs";
 import {
   Cancel01Icon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
+  Rocket01Icon,
   SidebarRightIcon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
@@ -88,8 +88,6 @@ type Props = {
   ) => void;
   onRevealInExplorer?: (path: string) => void;
   onReconnectTab?: (tab: Tab) => void;
-  onToggleSidebar: () => void;
-  sidebarCollapsed: boolean;
   onToggleTabStyle: () => void;
   tabStyle: "horizontal" | "vertical";
   hideTabStyleToggle?: boolean;
@@ -144,8 +142,6 @@ export function Header({
   onWorkspaceDrop,
   onRevealInExplorer,
   onReconnectTab,
-  onToggleSidebar,
-  sidebarCollapsed,
   onToggleTabStyle,
   tabStyle,
   hideTabStyleToggle = false,
@@ -160,9 +156,8 @@ export function Header({
   const commandPaletteLabel = commandPaletteShortcut
     ? `${t("header.commandPalette")} (${commandPaletteShortcut})`
     : t("header.commandPalette");
-  const sidebarToggleLabel = sidebarCollapsed
-    ? t("header.expandSidebar")
-    : t("header.collapseSidebar");
+  const toggleLauncher = useLauncherStore((s) => s.toggleLauncher);
+  const launcherLabel = t("launcher.title");
   const rootRef = useRef<HTMLElement>(null);
   const [compact, setCompact] = useState(false);
 
@@ -260,19 +255,14 @@ export function Header({
         </Button>
 
         <Button
-          onClick={onToggleSidebar}
+          onClick={toggleLauncher}
           variant="ghost"
           size="icon-sm"
-          title={sidebarToggleLabel}
-          aria-label={sidebarToggleLabel}
-          aria-expanded={!sidebarCollapsed}
+          title={launcherLabel}
+          aria-label={launcherLabel}
           className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <HugeiconsIcon
-            icon={sidebarCollapsed ? PanelLeftOpenIcon : PanelLeftCloseIcon}
-            size={15}
-            strokeWidth={1.75}
-          />
+          <HugeiconsIcon icon={Rocket01Icon} size={15} strokeWidth={1.75} />
         </Button>
 
         {tabStyle === "vertical" && onNewHarness && (
