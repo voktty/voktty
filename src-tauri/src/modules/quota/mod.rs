@@ -13,6 +13,11 @@ fn coordinator() -> &'static Arc<QuotaCoordinator> {
     INSTANCE.get_or_init(QuotaCoordinator::new)
 }
 
+/// Current time as an actual ISO-8601/RFC-3339 timestamp, for `ProviderQuota.updated_at`.
+pub(crate) fn iso_now() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
 #[tauri::command]
 pub async fn get_quota_overview() -> Result<QuotaOverview, String> {
     tauri::async_runtime::spawn_blocking(|| coordinator().get_overview())

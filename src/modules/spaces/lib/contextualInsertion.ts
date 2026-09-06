@@ -8,6 +8,7 @@ export type ContextualSpaceInsertionPlan =
 export function planContextualSpaceInsertion(
   spaces: readonly ViewSpace[],
   activeStripItem: ActiveStripItem | null,
+  maxMembers = 4,
 ): ContextualSpaceInsertionPlan {
   if (activeStripItem?.kind !== "space") return { kind: "standalone" };
   const space = spaces.find(
@@ -17,7 +18,7 @@ export function planContextualSpaceInsertion(
       candidate.presentation === "composite",
   );
   if (!space) return { kind: "standalone" };
-  if (space.memberOrder.length >= 4) {
+  if (space.memberOrder.length >= maxMembers) {
     return { kind: "standalone" };
   }
   return { kind: "append", viewSpaceId: space.id };

@@ -9,7 +9,7 @@
 
 let idlePreloadStarted = false;
 
-function scheduleIdle(callback: () => void, timeoutMs: number): void {
+export function scheduleIdle(callback: () => void, timeoutMs: number): void {
   if (typeof window === "undefined") return;
   if (typeof window.requestIdleCallback === "function") {
     window.requestIdleCallback(callback, { timeout: timeoutMs });

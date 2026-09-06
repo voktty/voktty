@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use crate::dirs_home;
 use crate::modules::quota::cost_engine::CostEngine;
+use crate::modules::quota::iso_now;
 use crate::modules::quota::types::*;
 
 const WHAM_USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
@@ -53,10 +54,6 @@ struct WhamUsageResponse {
     email: Option<String>,
     plan_type: Option<String>,
     rate_limit: Option<WhamRateLimit>,
-}
-
-fn iso_now() -> String {
-    format!("{:?}", SystemTime::now())
 }
 
 fn codex_auth_path() -> Option<PathBuf> {
