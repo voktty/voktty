@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   applyDrag,
   applyResize,
@@ -23,17 +23,18 @@ export const viewport = (): Viewport => ({
   vh: window.innerHeight,
 });
 
+/** A stored entry is user-editable text, and `JSON.parse` turns an overflowing
+ * numeric literal into Infinity. That passes a `typeof` check but makes every
+ * clamp comparison false, so it would reach the style string intact. */
+const isCoord = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
 export function loadGeom(): Geom | null {
   try {
     const raw = window.localStorage.getItem(STORE_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw) as Partial<Geom>;
-    if (
-      typeof p.x === "number" &&
-      typeof p.y === "number" &&
-      typeof p.w === "number" &&
-      typeof p.h === "number"
-    ) {
+    if (isCoord(p.x) && isCoord(p.y) && isCoord(p.w) && isCoord(p.h)) {
       return { x: p.x, y: p.y, w: p.w, h: p.h };
     }
   } catch {
@@ -60,7 +61,7 @@ export function loadBadgePos(): BadgePos | null {
     const raw = window.localStorage.getItem(BADGE_STORE_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw) as Partial<BadgePos>;
-    if (typeof p.x === "number" && typeof p.y === "number") {
+    if (isCoord(p.x) && isCoord(p.y)) {
       return { x: p.x, y: p.y };
     }
   } catch {
@@ -99,23 +100,41 @@ type Compute = (start: Geom, dx: number, dy: number, vp: Viewport) => Geom;
 
 /** Drives the mini window's position and size entirely through the DOM (no
  * React state), so neither chat streaming nor any other re-render can disturb
- * an in-flight gesture. Writes are batched into a single rAF per frame. */
+ * an in-flight gesture. Writes are batched into a single rAF per frame.
+ *
+ * Geometry is applied from a callback ref instead of a mount effect because
+ * collapsing to the floating badge detaches the window node while this hook
+ * stays mounted. A mount effect runs only once, so the restored window would
+ * come back with no inline size and grow to fit its own content. */
 export function useMiniWindowGeometry() {
-  const ref = useRef<HTMLDivElement>(null);
-  const geom = useRef<Geom>({ x: 0, y: 0, w: 0, h: 0 });
+  const node = useRef<HTMLDivElement | null>(null);
+  const geom = useRef<Geom | null>(null);
   const frame = useRef(0);
   const pending = useRef<Geom | null>(null);
 
-  const flush = useCallback(() => {
-    frame.current = 0;
-    const el = ref.current;
-    const g = pending.current;
-    if (!el || !g) return;
+  /** Last known geometry, reclamped into the current viewport. Reads the
+   * stored entry the first time it is needed. */
+  const current = useCallback((): Geom => {
+    const vp = viewport();
+    const g = clampGeom(geom.current ?? loadGeom() ?? defaultGeom(vp), vp);
+    geom.current = g;
+    return g;
+  }, []);
+
+  const paint = useCallback((el: HTMLElement, g: Geom) => {
     el.style.left = `${g.x}px`;
     el.style.top = `${g.y}px`;
     el.style.width = `${g.w}px`;
     el.style.height = `${g.h}px`;
   }, []);
+
+  const flush = useCallback(() => {
+    frame.current = 0;
+    const el = node.current;
+    const g = pending.current;
+    if (!el || !g) return;
+    paint(el, g);
+  }, [paint]);
 
   const write = useCallback(
     (g: Geom) => {
@@ -126,29 +145,28 @@ export function useMiniWindowGeometry() {
     [flush],
   );
 
-  useLayoutEffect(() => {
-    const g = clampGeom(loadGeom() ?? defaultGeom(viewport()), viewport());
-    geom.current = g;
-    const el = ref.current;
-    if (el) {
-      el.style.left = `${g.x}px`;
-      el.style.top = `${g.y}px`;
-      el.style.width = `${g.w}px`;
-      el.style.height = `${g.h}px`;
-    }
+  const ref = useCallback(
+    (el: HTMLDivElement | null) => {
+      node.current = el;
+      if (el) paint(el, current());
+    },
+    [current, paint],
+  );
+
+  useEffect(() => {
     // Reclamp into the new viewport; persistence is left to the next gesture
     // since loadGeom re-clamps on startup anyway.
-    const onResize = () => write(clampGeom(geom.current, viewport()));
-    const onUnload = () => saveGeom(geom.current);
+    const onResize = () => write(current());
+    const onUnload = () => saveGeom(current());
     window.addEventListener("resize", onResize);
     window.addEventListener("beforeunload", onUnload);
     return () => {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("beforeunload", onUnload);
-      saveGeom(geom.current);
+      saveGeom(current());
       if (frame.current) cancelAnimationFrame(frame.current);
     };
-  }, [write]);
+  }, [current, write]);
 
   const beginGesture = useCallback(
     (e: React.PointerEvent, compute: Compute, threshold: number) => {
@@ -156,7 +174,7 @@ export function useMiniWindowGeometry() {
       const pointerId = e.pointerId;
       const startX = e.clientX;
       const startY = e.clientY;
-      const start = geom.current;
+      const start = current();
       // Don't capture the pointer or call preventDefault until the gesture
       // actually moves past the threshold, so a plain click on the header
       // still reaches its buttons, dropdowns and focus handlers.
@@ -185,13 +203,13 @@ export function useMiniWindowGeometry() {
         if (!armed) return;
         el.releasePointerCapture?.(pointerId);
         document.body.style.userSelect = "";
-        saveGeom(geom.current);
+        saveGeom(current());
       };
       el.addEventListener("pointermove", onMove);
       el.addEventListener("pointerup", onUp);
       el.addEventListener("pointercancel", onUp);
     },
-    [write],
+    [current, write],
   );
 
   const onHeaderPointerDown = useCallback(
@@ -219,8 +237,8 @@ export function useMiniWindowGeometry() {
   );
 
   const saveCurrentGeom = useCallback(() => {
-    saveGeom(geom.current);
-  }, []);
+    saveGeom(current());
+  }, [current]);
 
   return { ref, geom, onHeaderPointerDown, startResize, saveCurrentGeom };
 }
