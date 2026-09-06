@@ -87,7 +87,9 @@ export type RuntimeSessionState = {
 
 type EnvelopeMeta = Omit<SessionEnvelope, "schemaVersion" | "snapshot">;
 
-function safeWorkspaceEnv(value: unknown): WorkspaceEnv {
+/** Narrows a persisted env back to a shape the app trusts. Anything it does
+ * not recognise becomes local rather than being carried forward blindly. */
+export function safeWorkspaceEnv(value: unknown): WorkspaceEnv {
   if (!value || typeof value !== "object") return LOCAL_WORKSPACE;
   const env = value as Partial<WorkspaceEnv>;
   if (env.kind === "local") return LOCAL_WORKSPACE;
@@ -101,6 +103,27 @@ function safeWorkspaceEnv(value: unknown): WorkspaceEnv {
     typeof env.connection === "object"
   ) {
     return persistentWorkspaceEnv(env as WorkspaceEnv);
+  }
+  // Docker and serial used to fall through to LOCAL_WORKSPACE, which silently
+  // turned a container or a COM port into a plain local shell on restore. A
+  // terminal tab left with no env of its own then inherits the space env
+  // instead, so a restored docker tab could come back pointed at the space's
+  // SSH session.
+  if (
+    env.kind === "docker" &&
+    env.connection &&
+    typeof env.connection === "object" &&
+    typeof (env.connection as { containerId?: unknown }).containerId ===
+      "string"
+  ) {
+    return { kind: "docker", connection: env.connection };
+  }
+  if (
+    env.kind === "serial" &&
+    typeof env.portName === "string" &&
+    typeof env.baudRate === "number"
+  ) {
+    return env as WorkspaceEnv;
   }
   return LOCAL_WORKSPACE;
 }
