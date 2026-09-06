@@ -56,19 +56,31 @@ export class DormantRing {
 
   drain(write: (bytes: Uint8Array) => void): void {
     const last = this.blocks.length - 1;
-    let skip = 0;
+    // Absolute index of the block holding the resume point, and the offset
+    // within it. Defaults to "no skip" (first surviving block, offset 0),
+    // which is also the correct fallback when no LF is found at all below.
+    let cutBlock = this.head;
+    let cutOffset = 0;
     if (this.overflowed && this.head <= last) {
       write(OVERFLOW_NOTICE);
       // Cut landed mid-line, likely mid-escape-sequence; LF never occurs
-      // inside a multi-byte UTF-8 sequence so resuming there is safe.
-      const first = this.blocks[this.head];
-      const firstLen = this.head === last ? this.tailLen : first.length;
-      const lf = first.subarray(0, firstLen).indexOf(LF);
-      if (lf >= 0) skip = lf + 1;
+      // inside a multi-byte UTF-8 sequence so resuming there is safe. The
+      // surviving line can span more than one block (e.g. a long unbroken
+      // progress-bar redraw), so scan forward across blocks instead of only
+      // the first one.
+      for (let i = this.head; i <= last; i++) {
+        const len = i === last ? this.tailLen : this.blocks[i].length;
+        const lf = this.blocks[i].subarray(0, len).indexOf(LF);
+        if (lf >= 0) {
+          cutBlock = i;
+          cutOffset = lf + 1;
+          break;
+        }
+      }
     }
     for (let i = this.head; i <= last; i++) {
       const len = i === last ? this.tailLen : this.blocks[i].length;
-      const start = i === this.head ? skip : 0;
+      const start = i < cutBlock ? len : i === cutBlock ? cutOffset : 0;
       if (start < len) write(this.blocks[i].subarray(start, len));
     }
     this.blocks = [];

@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 
 use crate::dirs_home;
 use crate::modules::quota::cost_engine::CostEngine;
+use crate::modules::quota::iso_now;
 use crate::modules::quota::types::*;
 
 const LOAD_CODE_ASSIST_URL: &str = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
@@ -103,10 +104,6 @@ fn now_epoch_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
-}
-
-fn iso_now() -> String {
-    format!("{:?}", SystemTime::now())
 }
 
 fn gemini_creds_path() -> Option<PathBuf> {

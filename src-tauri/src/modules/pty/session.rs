@@ -502,15 +502,22 @@ pub fn spawn(
             if dropped_bytes > 0 {
                 log::warn!("pty backpressure: dropped {dropped_bytes} bytes (cap {MAX_PENDING})");
             }
-        })
-        .expect("spawn pty reader thread");
+        });
+    let reader_thread = match reader_thread {
+        Ok(t) => t,
+        Err(e) => {
+            log::error!("pty id={id}: failed to spawn reader thread: {e}");
+            let _ = session.killer.lock().unwrap().kill();
+            return Err(format!("failed to start terminal session: {e}"));
+        }
+    };
 
     let on_data_flush = on_data.clone();
     let pending_f = pending.clone();
     let done_f = done.clone();
     let app_flusher = app.clone();
     let output_gate_f = output_gate.clone();
-    thread::Builder::new()
+    let flusher_thread = thread::Builder::new()
         .name("voktty-pty-flusher".into())
         .spawn(move || {
             let (lock, cv) = &*pending_f;
@@ -541,8 +548,12 @@ pub fn spawn(
                     break;
                 }
             }
-        })
-        .expect("spawn pty flusher thread");
+        });
+    if let Err(e) = flusher_thread {
+        log::error!("pty id={id}: failed to spawn flusher thread: {e}");
+        let _ = session.killer.lock().unwrap().kill();
+        return Err(format!("failed to start terminal session: {e}"));
+    }
 
     let on_data_exit = on_data;
     let pending_e = pending;
@@ -550,7 +561,7 @@ pub fn spawn(
     let app_waiter = app;
     let exited_w = exited;
     let output_gate_e = output_gate;
-    thread::Builder::new()
+    let waiter_thread = thread::Builder::new()
         .name("voktty-pty-waiter".into())
         .spawn(move || {
             #[cfg(target_os = "android")]
@@ -607,8 +618,17 @@ pub fn spawn(
                     drop_session(s);
                 }
             }
-        })
-        .expect("spawn pty waiter thread");
+        });
+    if let Err(e) = waiter_thread {
+        // `child` (and the reader thread's JoinHandle, on non-Android) were
+        // already moved into the failed closure and dropped with it; killing
+        // the shell is the only cleanup still reachable from here. Extremely
+        // rare (would need a third consecutive OS thread-spawn failure) —
+        // returning Err beats panicking the whole process either way.
+        log::error!("pty id={id}: failed to spawn waiter thread: {e}");
+        let _ = session.killer.lock().unwrap().kill();
+        return Err(format!("failed to start terminal session: {e}"));
+    }
 
     Ok((session, size))
 }

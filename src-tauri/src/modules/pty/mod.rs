@@ -32,6 +32,29 @@ impl Default for PtyState {
     }
 }
 
+/// Detaches a session's teardown onto its own thread so a slow
+/// `ClosePseudoConsole` (Windows, up to ~60s) can't stall the caller.
+///
+/// If the OS can't spawn a thread right now (fd/thread exhaustion), that is
+/// itself a sign of scarce resources — panicking the whole process over one
+/// terminal close would be strictly worse than the fallback here: run the
+/// (equally fallible, but merely slow rather than fatal) teardown inline.
+fn spawn_drop_thread(id: u32, s: Arc<Session>) {
+    let spawned = thread::Builder::new()
+        .name(format!("voktty-pty-drop-{id}"))
+        .spawn(move || {
+            let t0 = std::time::Instant::now();
+            session::drop_session(s);
+            log::info!(
+                "pty session id={id} dropped in {}ms",
+                t0.elapsed().as_millis()
+            );
+        });
+    if let Err(e) = spawned {
+        log::error!("pty session id={id}: failed to spawn drop thread ({e}), dropping inline");
+    }
+}
+
 impl PtyState {
     pub(super) fn take(&self, id: u32) -> Option<Arc<Session>> {
         self.sessions.write().unwrap().remove(&id)
@@ -158,10 +181,7 @@ pub async fn pty_open(
         .unwrap_or(false);
     if exited {
         if let Some(s) = state.take(id) {
-            thread::Builder::new()
-                .name(format!("voktty-pty-drop-{id}"))
-                .spawn(move || session::drop_session(s))
-                .expect("spawn pty drop thread");
+            spawn_drop_thread(id, s);
         }
     }
     log::info!("pty opened id={id} cols={cols} rows={rows}");
@@ -241,17 +261,7 @@ pub fn pty_close(
         log::info!("pty closed id={id}");
         // Detached: on Windows `ClosePseudoConsole` can block until conhost
         // drains, which would freeze this Tauri worker thread and stall IPC.
-        thread::Builder::new()
-            .name(format!("voktty-pty-drop-{id}"))
-            .spawn(move || {
-                let t0 = std::time::Instant::now();
-                session::drop_session(s);
-                log::info!(
-                    "pty session id={id} dropped in {}ms",
-                    t0.elapsed().as_millis()
-                );
-            })
-            .expect("spawn pty drop thread");
+        spawn_drop_thread(id, s);
     } else {
         log::debug!("pty_close: unknown id={id}");
     }
@@ -355,10 +365,7 @@ pub fn pty_close_all(
         if let Err(e) = s.killer.lock().unwrap().kill() {
             log::debug!("pty_close_all: kill id={id} returned {e}");
         }
-        thread::Builder::new()
-            .name(format!("voktty-pty-drop-{id}"))
-            .spawn(move || session::drop_session(s))
-            .expect("spawn pty drop thread");
+        spawn_drop_thread(id, s);
     }
     if count > 0 {
         log::info!("pty_close_all: reaped {count} orphaned session(s)");

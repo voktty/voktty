@@ -1436,6 +1436,7 @@ export default function App() {
       const plan = planContextualSpaceInsertion(
         state.viewSpaces,
         state.activeStripItem,
+        spaceViewLimit,
       );
       if (plan.kind === "standalone") return null;
       const viewSpace = state.viewSpaces.find(
@@ -1454,7 +1455,7 @@ export default function App() {
       }
       return plan.viewSpaceId;
     },
-    [],
+    [spaceViewLimit],
   );
 
   const appendCreatedTabToViewSpace = useCallback(
@@ -1488,7 +1489,7 @@ export default function App() {
         setActiveId(tab.id);
       }, 0);
     },
-    [setActiveId, setActiveSpaceForNewTabs, t],
+    [setActiveId, setActiveSpaceForNewTabs, spaceViewLimit, t],
   );
 
   const openNewTab = useCallback(() => {

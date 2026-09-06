@@ -1,11 +1,6 @@
-use std::time::SystemTime;
-
 use crate::modules::quota::cost_engine::CostEngine;
+use crate::modules::quota::iso_now;
 use crate::modules::quota::types::*;
-
-fn iso_now() -> String {
-    format!("{:?}", SystemTime::now())
-}
 
 pub fn collect_voktty_quota(_cost_engine: &CostEngine) -> ProviderQuota {
     // Voktty native AI agent provides unlimited direct API / local orchestration

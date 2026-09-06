@@ -8,6 +8,7 @@ use modules::{
     ssh_native, tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 #[cfg(target_os = "macos")]
 use tauri::PhysicalPosition;
 use tauri::{Emitter, Manager, WindowEvent};
@@ -228,9 +229,19 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(move |_app| {
             harness::host::reap_orphaned_harness_processes();
-            if let Err(error) = control::start(_app.handle().clone(), control_for_setup.clone()) {
-                log::warn!("could not start Voktty control server: {error}");
-            }
+            // TCP bind + descriptor-file write + stale-launcher sweep + CLI
+            // launcher prep are all blocking I/O; do them off the setup()
+            // path so they can't delay the main window's first frame. The
+            // control server isn't needed until a terminal actually spawns
+            // a shell (ControlState::shell_env degrades to None gracefully
+            // until `runtime` is populated), so this is safe to background.
+            let control_app = _app.handle().clone();
+            let control_state = control_for_setup.clone();
+            thread::spawn(move || {
+                if let Err(error) = control::start(control_app, control_state) {
+                    log::warn!("could not start Voktty control server: {error}");
+                }
+            });
             if let Err(e) = tray::setup_tray(_app.handle()) {
                 log::warn!("could not setup system tray: {e}");
             }

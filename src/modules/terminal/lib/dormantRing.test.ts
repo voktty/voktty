@@ -81,6 +81,16 @@ describe("DormantRing", () => {
     expect(out.endsWith("BBBBBBBBCCCCCCCC")).toBe(true);
   });
 
+  it("finds the line boundary in a later block when the first surviving block has no LF", () => {
+    const ring = new DormantRing(24, 8);
+    ring.push(enc.encode("11111111"));
+    ring.push(enc.encode("22222222")); // survives, but has no LF anywhere
+    ring.push(enc.encode("3333\n4444")); // LF only shows up here
+    const out = drainToString(ring);
+    const afterNotice = out.slice(out.indexOf("\x1b[0m\r\n") + 6);
+    expect(afterNotice).toBe("4444");
+  });
+
   it("does not emit a notice without overflow", () => {
     const ring = new DormantRing(1024, 16);
     ring.push(enc.encode("just some output"));

@@ -5,6 +5,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { scheduleIdle } from "@/lib/idlePreload";
 import { useTranslation } from "@/modules/i18n";
 import { useQuotaStore } from "../store/quotaStore";
 import {
@@ -70,11 +71,23 @@ export function QuotaUsageWidget() {
   const [refreshingProvider, setRefreshingProvider] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetchOverview();
-    const interval = setInterval(() => {
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    // Defer off the startup critical path: this widget is always-mounted
+    // chrome, so an eager fetch here means every launch immediately hits
+    // Claude/Codex/Gemini credential files and OAuth refresh, competing for
+    // disk/CPU/network right when perceived startup latency matters most.
+    scheduleIdle(() => {
+      if (cancelled) return;
       void fetchOverview();
-    }, 60_000);
-    return () => clearInterval(interval);
+      interval = setInterval(() => {
+        void fetchOverview();
+      }, 60_000);
+    }, 3000);
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
   }, [fetchOverview]);
 
   const overallState = overview?.overallState ?? { kind: "healthy" };
