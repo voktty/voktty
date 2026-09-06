@@ -8,10 +8,10 @@ use crate::modules::git::process::{
     read_text_file, run_git,
 };
 use crate::modules::git::types::{
-    DiscardEntry, GitBranchEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
-    GitDiffContentResult, GitDiffResult, GitLogEntry, GitOperationStatus, GitOutput,
-    GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry, GitStatusSnapshot, GitTagEntry,
-    TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
+    DiscardEntry, GitBlameLine, GitBranchEntry, GitBranchListResult, GitCommitFileChange,
+    GitCommitResult, GitDiffContentResult, GitDiffResult, GitLogEntry, GitOperationStatus,
+    GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry, GitStatusSnapshot,
+    GitTagEntry, TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream, ResolvedGitDirectory,
@@ -1815,6 +1815,111 @@ pub fn operation_continue(
     ensure_success(&output, "git operation continue failed")
 }
 
+pub fn blame(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    path: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<Vec<GitBlameLine>> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let pathspec = pathspec_from_input(&repo_root.local_path, path)?;
+
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        [
+            OsStr::new("blame"),
+            OsStr::new("--porcelain"),
+            OsStr::new("--"),
+            OsStr::new(&pathspec),
+        ],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git blame failed")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(parse_blame_porcelain(&stdout))
+}
+
+/// A commit's metadata (author/time/summary) is only printed the first time
+/// that commit appears anywhere in porcelain output; every later line from
+/// the same commit is just its header coordinates, so metadata has to be
+/// cached by sha across the whole parse, not just within one contiguous run.
+fn parse_blame_porcelain(text: &str) -> Vec<GitBlameLine> {
+    struct Meta {
+        author: String,
+        author_time_secs: i64,
+        summary: String,
+    }
+
+    fn parse_header_line(line: &str) -> Option<(String, u32)> {
+        let mut parts = line.split_ascii_whitespace();
+        let sha = parts.next()?;
+        if sha.len() != 40 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+            return None;
+        }
+        let _orig_line: u32 = parts.next()?.parse().ok()?;
+        let final_line: u32 = parts.next()?.parse().ok()?;
+        Some((sha.to_string(), final_line))
+    }
+
+    let mut cache: std::collections::HashMap<String, Meta> = std::collections::HashMap::new();
+    let mut result = Vec::new();
+
+    let mut current_sha: Option<String> = None;
+    let mut current_final_line: u32 = 0;
+    let mut fresh_author: Option<String> = None;
+    let mut fresh_author_time: i64 = 0;
+    let mut fresh_summary: Option<String> = None;
+
+    for line in text.lines() {
+        if let Some((sha, final_line)) = parse_header_line(line) {
+            current_sha = Some(sha);
+            current_final_line = final_line;
+            fresh_author = None;
+            fresh_summary = None;
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("author ") {
+            fresh_author = Some(rest.to_string());
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("author-time ") {
+            fresh_author_time = rest.trim().parse().unwrap_or(0);
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("summary ") {
+            fresh_summary = Some(rest.to_string());
+            continue;
+        }
+        if let Some(content) = line.strip_prefix('\t') {
+            let Some(sha) = current_sha.clone() else {
+                continue;
+            };
+            if let (Some(author), Some(summary)) = (fresh_author.take(), fresh_summary.take()) {
+                cache.insert(
+                    sha.clone(),
+                    Meta {
+                        author,
+                        author_time_secs: fresh_author_time,
+                        summary,
+                    },
+                );
+            }
+            let meta = cache.get(&sha);
+            result.push(GitBlameLine {
+                line_number: current_final_line,
+                sha: sha.clone(),
+                author: meta.map(|m| m.author.clone()).unwrap_or_default(),
+                author_time_secs: meta.map(|m| m.author_time_secs).unwrap_or(0),
+                summary: meta.map(|m| m.summary.clone()).unwrap_or_default(),
+                content: content.to_string(),
+            });
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1833,6 +1938,62 @@ mod tests {
         assert!(!sha_is_safe("abc 123"));
         assert!(!sha_is_safe(&"a".repeat(65)));
         assert!(!sha_is_safe(";rm -rf /"));
+    }
+
+    #[test]
+    fn parse_blame_porcelain_reads_full_metadata_block() {
+        let sha = "a".repeat(40);
+        let text = format!(
+            "{sha} 1 1 1\nauthor Jane Doe\nauthor-mail <jane@example.com>\nauthor-time 1700000000\nauthor-tz +0000\ncommitter Jane Doe\ncommitter-mail <jane@example.com>\ncommitter-time 1700000000\ncommitter-tz +0000\nsummary Initial commit\nfilename src/a.rs\n\tfn main() {{}}\n"
+        );
+        let lines = parse_blame_porcelain(&text);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].line_number, 1);
+        assert_eq!(lines[0].sha, sha);
+        assert_eq!(lines[0].author, "Jane Doe");
+        assert_eq!(lines[0].author_time_secs, 1_700_000_000);
+        assert_eq!(lines[0].summary, "Initial commit");
+        assert_eq!(lines[0].content, "fn main() {}");
+    }
+
+    #[test]
+    fn parse_blame_porcelain_reuses_cached_metadata_for_abbreviated_lines() {
+        let sha = "b".repeat(40);
+        let text = format!(
+            "{sha} 1 1 3\nauthor Jane Doe\nauthor-time 1700000000\nsummary Initial commit\nfilename src/a.rs\n\tline one\n{sha} 2 2\n\tline two\n{sha} 3 3\n\tline three\n"
+        );
+        let lines = parse_blame_porcelain(&text);
+        assert_eq!(lines.len(), 3);
+        for line in &lines {
+            assert_eq!(line.author, "Jane Doe");
+            assert_eq!(line.summary, "Initial commit");
+        }
+        assert_eq!(lines[0].content, "line one");
+        assert_eq!(lines[1].content, "line two");
+        assert_eq!(lines[2].content, "line three");
+        assert_eq!(lines[1].line_number, 2);
+    }
+
+    #[test]
+    fn parse_blame_porcelain_reuses_metadata_across_non_contiguous_groups() {
+        // Same commit touches two separate regions of the file; metadata is
+        // only emitted once, the very first time that commit is mentioned.
+        let sha_a = "c".repeat(40);
+        let sha_b = "d".repeat(40);
+        let text = format!(
+            "{sha_a} 1 1 1\nauthor A\nauthor-time 1\nsummary first\nfilename f\n\tone\n{sha_b} 2 2 1\nauthor B\nauthor-time 2\nsummary second\nfilename f\n\ttwo\n{sha_a} 3 3\n\tthree\n"
+        );
+        let lines = parse_blame_porcelain(&text);
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[2].sha, sha_a);
+        assert_eq!(lines[2].author, "A");
+        assert_eq!(lines[2].summary, "first");
+        assert_eq!(lines[2].content, "three");
+    }
+
+    #[test]
+    fn parse_blame_porcelain_handles_empty_input() {
+        assert!(parse_blame_porcelain("").is_empty());
     }
 
     #[test]

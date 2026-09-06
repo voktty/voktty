@@ -97,6 +97,7 @@ type Props = {
   onRevealInTerminal?: (path: string) => void;
   onOpenInSourceControl?: (path: string) => void;
   onOpenGitHistory?: (path: string) => void;
+  onOpenBlame?: (path: string) => void;
   onAttachToAgent?: (path: string) => void;
   /** Kept for the outer workspace integration. Explorer resource drops do not
    * use it: they target terminal paths or AI context explicitly. */
@@ -256,6 +257,7 @@ export const FileExplorer = memo(
       onRevealInTerminal,
       onOpenInSourceControl,
       onOpenGitHistory,
+      onOpenBlame,
       onAttachToAgent,
       pathDropTarget,
       gitStatus,
@@ -1211,6 +1213,14 @@ export const FileExplorer = memo(
                         onSelect={() => onOpenGitHistory(menuTarget.path)}
                       >
                         {t("sidebar.gitHistory")}
+                      </ContextMenuItem>
+                    )}
+                    {!menuTarget.isDir && hasGitRepo && onOpenBlame && (
+                      <ContextMenuItem
+                        className={COMPACT_ITEM}
+                        onSelect={() => onOpenBlame(menuTarget.path)}
+                      >
+                        {t("git.blame.action")}
                       </ContextMenuItem>
                     )}
                     <ContextMenuItem

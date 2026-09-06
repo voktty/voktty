@@ -1307,6 +1307,10 @@ export const en = {
       resolveAllHunks: "Resolve all conflicts ({resolved}/{total})",
       resolvedSuccess: "{path} marked as resolved",
     },
+    blame: {
+      action: "Blame",
+      dialogDesc: "Shows who last changed each line, and in which commit.",
+    },
     cloneRepo: "Clone Repository",
     cloneModalTitle: "Clone Git Repository",
     cloneModalDesc: "Enter the repository URL and choose the destination folder.",

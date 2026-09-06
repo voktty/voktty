@@ -431,6 +431,7 @@ pub fn run() {
             git::commands::git_operation_status,
             git::commands::git_operation_abort,
             git::commands::git_operation_continue,
+            git::commands::git_blame,
             shell::shell_run_command,
             shell::shell_session_open,
             shell::shell_session_run,

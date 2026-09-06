@@ -1,4 +1,5 @@
 export { SourceControlPanel } from "./SourceControlPanelLazy";
+export { BlameDialog } from "./BlameDialog";
 export { GitCloneModal } from "./GitCloneModal";
 export type { SourceControlRepositoryTarget } from "./repositoryTarget";
 export { useRepositoryTargeting } from "./useRepositoryTargeting";
