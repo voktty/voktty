@@ -1324,7 +1324,11 @@ export function TabIcon({
       />
     );
   }
-  if (tab.kind === "git-diff" || tab.kind === "git-commit-file") {
+  if (
+    tab.kind === "git-diff" ||
+    tab.kind === "git-commit-file" ||
+    tab.kind === "git-commit"
+  ) {
     return (
       <HugeiconsIcon
         icon={GitCompareIcon}

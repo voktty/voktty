@@ -28,6 +28,7 @@ import {
   ArrowLeft01Icon,
   Copy01Icon,
   File02Icon,
+  GitCompareIcon,
   LinkSquare02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -81,6 +82,14 @@ type CommitFileDiffOpenInput = {
   workspaceEnv?: WorkspaceEnv;
 };
 
+type CommitDiffOpenInput = {
+  repoRoot: string;
+  sha: string;
+  shortSha: string;
+  subject: string;
+  workspaceEnv?: WorkspaceEnv;
+};
+
 export type GitHistorySearchHandle = {
   setQuery: (query: string) => void;
   clearQuery: () => void;
@@ -90,6 +99,7 @@ type Props = {
   repoRoot: string;
   workspaceEnv?: WorkspaceEnv;
   onOpenCommitFile: (input: CommitFileDiffOpenInput) => void;
+  onOpenCommitDiff: (input: CommitDiffOpenInput) => void;
   /** Lets the header search bar drive commit filtering for the active pane. */
   onSearchHandle?: (handle: GitHistorySearchHandle | null) => void;
 };
@@ -210,6 +220,7 @@ export function GitHistoryPane({
   repoRoot,
   workspaceEnv,
   onOpenCommitFile,
+  onOpenCommitDiff,
   onSearchHandle,
 }: Props) {
   const { t } = useTranslation();
@@ -235,6 +246,10 @@ export function GitHistoryPane({
     width: number;
     height: number;
   } | null>(null);
+  // Kept apart from `openAnchor` so the row stays marked after the popover is
+  // dismissed, including while the user is off reading a commit file in
+  // another tab. Losing it is what made the graph impossible to return to.
+  const [selectedSha, setSelectedSha] = useState<string | null>(null);
   const [remoteWeb, setRemoteWeb] = useState<RemoteWebInfo | null>(null);
   const [pendingRevert, setPendingRevert] = useState<GitLogEntry | null>(null);
   const [reverting, setReverting] = useState(false);
@@ -389,6 +404,7 @@ export function GitHistoryPane({
     bumpFiles();
     setCommits([]);
     setOpenAnchor(null);
+    setSelectedSha(null);
     void loadInitial();
   }, [bumpFiles, loadInitial]);
 
@@ -472,6 +488,7 @@ export function GitHistoryPane({
 
   const handleRowClick = useCallback(
     (sha: string, event: React.MouseEvent<HTMLElement>) => {
+      setSelectedSha(sha);
       if (openAnchor?.sha === sha) {
         setOpenAnchor(null);
         return;
@@ -513,6 +530,20 @@ export function GitHistoryPane({
       setOpenAnchor(null);
     },
     [onOpenCommitFile, repoRoot, workspaceEnv],
+  );
+
+  const handleCommitDiffOpen = useCallback(
+    (commit: GitLogEntry) => {
+      onOpenCommitDiff({
+        repoRoot,
+        sha: commit.sha,
+        shortSha: commit.shortSha,
+        subject: commit.subject,
+        workspaceEnv,
+      });
+      setOpenAnchor(null);
+    },
+    [onOpenCommitDiff, repoRoot, workspaceEnv],
   );
 
   const copyToClipboard = useCallback(async (value: string) => {
@@ -626,7 +657,7 @@ export function GitHistoryPane({
                       <CommitRow
                         commit={commit}
                         query={activeSearch}
-                        active={openAnchor?.sha === commit.sha}
+                        active={selectedSha === commit.sha}
                         graphRow={graphByCommit.get(commit.sha) ?? null}
                         maxLaneCount={maxLaneCount}
                         gridTemplate={gridTemplate}
@@ -710,6 +741,7 @@ export function GitHistoryPane({
                       remoteWeb={remoteWeb}
                       onCopySha={copyToClipboard}
                       onOpenFile={handleFileOpen}
+                      onOpenCommitDiff={handleCommitDiffOpen}
                       onRetryFiles={() => void fetchFiles(openAnchor.sha)}
                       onRevert={requestRevert}
                     />
@@ -905,6 +937,7 @@ type CommitDetailProps = {
     commit: GitLogEntry,
     file: GitCommitFileChange,
   ) => Promise<void> | void;
+  onOpenCommitDiff: (commit: GitLogEntry) => void;
   onRetryFiles: () => void;
   onRevert: (commit: GitLogEntry) => void;
 };
@@ -915,6 +948,7 @@ function CommitDetail({
   remoteWeb,
   onCopySha,
   onOpenFile,
+  onOpenCommitDiff,
   onRetryFiles,
   onRevert,
 }: CommitDetailProps) {
@@ -961,6 +995,15 @@ function CommitDetail({
         </div>
 
         <div className="mt-2.5 flex items-center gap-1">
+          <Button
+            size="xs"
+            variant="ghost"
+            className="h-6 cursor-pointer gap-1.5 px-1.5 text-[11px] font-medium text-foreground/90 hover:text-foreground"
+            onClick={() => onOpenCommitDiff(commit)}
+          >
+            <HugeiconsIcon icon={GitCompareIcon} size={11} strokeWidth={1.9} />
+            {t("gitHistory.viewChanges")}
+          </Button>
           <Button
             size="xs"
             variant="ghost"

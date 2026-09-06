@@ -2696,6 +2696,7 @@ export const en = {
     noCommitsDesc: "This branch has no commits.",
     loadingMore: "Loading more\u2026",
     allLoaded: "All commits loaded",
+    viewChanges: "View changes",
     copySha: "Copy SHA",
     copied: "Copied",
     loadingFiles: "Loading files\u2026",
