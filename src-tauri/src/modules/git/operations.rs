@@ -1419,6 +1419,50 @@ pub fn undo_commit(
     Ok(())
 }
 
+/// Reverts a single commit by creating a new commit that undoes it.
+///
+/// Unlike `undo_commit`, this never rewrites existing history, so it's safe
+/// regardless of whether `sha` was already pushed. There is deliberately no
+/// conflict resolver: on any failure (merge commit needing `-m`, conflicting
+/// hunks, dirty worktree) the in-progress revert is aborted so the repo never
+/// sits half-reverted, and git's own error text is surfaced as-is.
+pub fn revert_commit(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    sha: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<String> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    if !sha_is_safe(sha) {
+        return Err(GitError::command("git revert", "invalid commit sha"));
+    }
+
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["revert", "--no-edit", sha],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    if let Err(err) = ensure_success(&output, "git revert failed") {
+        let _ = run_git(
+            &repo_root.workspace,
+            Some(&repo_root.git_path),
+            ["revert", "--abort"],
+            DEFAULT_TIMEOUT_SECS,
+        );
+        return Err(err);
+    }
+
+    let new_sha = git_stdout_line_opt(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        ["rev-parse", "HEAD"],
+    )?
+    .unwrap_or_default();
+    Ok(new_sha)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
