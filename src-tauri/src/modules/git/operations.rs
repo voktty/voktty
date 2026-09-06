@@ -8,10 +8,10 @@ use crate::modules::git::process::{
     read_text_file, run_git,
 };
 use crate::modules::git::types::{
-    DiscardEntry, GitBlameLine, GitBranchEntry, GitBranchListResult, GitCommitFileChange,
-    GitCommitResult, GitDiffContentResult, GitDiffResult, GitLogEntry, GitOperationStatus,
-    GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry, GitStatusSnapshot,
-    GitTagEntry, TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
+    DiscardEntry, GitBlameLine, GitBranchComparison, GitBranchEntry, GitBranchListResult,
+    GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult, GitLogEntry,
+    GitOperationStatus, GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry,
+    GitStatusSnapshot, GitTagEntry, TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream, ResolvedGitDirectory,
@@ -506,6 +506,41 @@ pub fn push(
 const LOG_FORMAT: &str = "%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s";
 const MAX_LOG_LIMIT: u32 = 200;
 
+/// Parses one `LOG_FORMAT`-formatted commit header line (the shortstat line
+/// that may follow, if any, is a separate concern handled by the caller).
+fn parse_log_header_line(line: &str) -> Option<GitLogEntry> {
+    if !line.contains('\x1f') {
+        return None;
+    }
+    let mut fields = line.splitn(6, '\x1f');
+    let sha = fields.next().unwrap_or("").to_string();
+    if !sha_is_safe(&sha) {
+        return None;
+    }
+    let author = fields.next().unwrap_or("").to_string();
+    let author_email = fields.next().unwrap_or("").to_string();
+    let timestamp = fields.next().unwrap_or("0").parse::<i64>().unwrap_or(0);
+    let parents_raw = fields.next().unwrap_or("");
+    let parents: Vec<String> = parents_raw
+        .split_ascii_whitespace()
+        .map(|s| s.to_string())
+        .collect();
+    let subject = fields.next().unwrap_or("").to_string();
+    let short_sha = sha.chars().take(7).collect::<String>();
+    Some(GitLogEntry {
+        sha,
+        short_sha,
+        author,
+        author_email,
+        timestamp_secs: timestamp,
+        parents,
+        subject,
+        files_changed: 0,
+        insertions: 0,
+        deletions: 0,
+    })
+}
+
 pub fn log(
     registry: &WorkspaceRegistry,
     repo_root: &str,
@@ -571,34 +606,8 @@ pub fn log(
         if line.is_empty() {
             continue;
         }
-        if line.contains('\x1f') {
-            let mut fields = line.splitn(6, '\x1f');
-            let sha = fields.next().unwrap_or("").to_string();
-            if !sha_is_safe(&sha) {
-                continue;
-            }
-            let author = fields.next().unwrap_or("").to_string();
-            let author_email = fields.next().unwrap_or("").to_string();
-            let timestamp = fields.next().unwrap_or("0").parse::<i64>().unwrap_or(0);
-            let parents_raw = fields.next().unwrap_or("");
-            let parents: Vec<String> = parents_raw
-                .split_ascii_whitespace()
-                .map(|s| s.to_string())
-                .collect();
-            let subject = fields.next().unwrap_or("").to_string();
-            let short_sha = sha.chars().take(7).collect::<String>();
-            entries.push(GitLogEntry {
-                sha,
-                short_sha,
-                author,
-                author_email,
-                timestamp_secs: timestamp,
-                parents,
-                subject,
-                files_changed: 0,
-                insertions: 0,
-                deletions: 0,
-            });
+        if let Some(entry) = parse_log_header_line(line) {
+            entries.push(entry);
             continue;
         }
         if let Some(current) = entries.last_mut() {
@@ -1839,6 +1848,88 @@ pub fn blame(
     ensure_success(&output, "git blame failed")?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     Ok(parse_blame_porcelain(&stdout))
+}
+
+fn ref_name_is_safe(name: &str) -> bool {
+    !name.is_empty() && !name.starts_with('-')
+}
+
+/// Commits reachable from `include` but not from `exclude` (`git log
+/// exclude..include`), oldest-safe and unbounded — comparisons are between
+/// two refs a user picked, not a paginated feed, so there's no cursor here.
+fn log_range(
+    repo_root: &ResolvedGitDirectory,
+    exclude: &str,
+    include: &str,
+) -> Result<Vec<GitLogEntry>> {
+    let range = format!("{exclude}..{include}");
+    let format_arg = format!("--format={LOG_FORMAT}");
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        [
+            OsStr::new("log"),
+            OsStr::new("--no-color"),
+            OsStr::new(&format_arg),
+            OsStr::new(&range),
+        ],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git log failed")?;
+    let stdout = std::str::from_utf8(&output.stdout).unwrap_or("");
+    Ok(stdout
+        .lines()
+        .map(|l| l.trim_end_matches('\r'))
+        .filter_map(parse_log_header_line)
+        .collect())
+}
+
+/// Compares two refs: commits unique to each side, plus the file changes
+/// between their merge base and `compare` (the same "three-dot" semantics
+/// `git diff base...compare` uses, so a branch that only added commits on
+/// top of `base` shows just those commits' changes, not unrelated drift
+/// that happened on `base` in the meantime).
+pub fn compare_branches(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    base: &str,
+    compare: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<GitBranchComparison> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    if !ref_name_is_safe(base) || !ref_name_is_safe(compare) {
+        return Err(GitError::command("git compare", "invalid ref name"));
+    }
+
+    let ahead = log_range(&repo_root, base, compare)?;
+    let behind = log_range(&repo_root, compare, base)?;
+
+    let range = format!("{base}...{compare}");
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        [
+            OsStr::new("diff"),
+            OsStr::new("--no-commit-id"),
+            OsStr::new("-r"),
+            OsStr::new("-z"),
+            OsStr::new("--name-status"),
+            OsStr::new("--numstat"),
+            OsStr::new(&range),
+        ],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git diff failed")?;
+    let (name_status_bytes, numstat_bytes) = split_name_status_numstat(&output.stdout);
+    let mut files = parse_diff_tree_name_status(name_status_bytes);
+    apply_numstat(&mut files, numstat_bytes);
+
+    Ok(GitBranchComparison {
+        ahead,
+        behind,
+        files,
+    })
 }
 
 /// A commit's metadata (author/time/summary) is only printed the first time

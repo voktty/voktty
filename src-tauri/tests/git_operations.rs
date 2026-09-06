@@ -1006,3 +1006,69 @@ fn blame_rejects_path_outside_the_repository() {
         operations::blame(&fx.registry, &fx.repo_str(), "../outside.txt", &fx.workspace).is_err()
     );
 }
+
+#[test]
+fn compare_branches_reports_ahead_behind_and_files_relative_to_merge_base() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("base.txt", "base\n");
+    fx.run_git(&["add", "base.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "common ancestor"]);
+
+    fx.run_git(&["checkout", "-q", "-b", "feature"]);
+    fx.write_file("feature.txt", "feature\n");
+    fx.run_git(&["add", "feature.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add feature file"]);
+    let feature_sha =
+        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
+            .sha
+            .clone();
+
+    fx.run_git(&["checkout", "-q", "main"]);
+    fx.write_file("main-only.txt", "main only\n");
+    fx.run_git(&["add", "main-only.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "advance main"]);
+    let main_sha =
+        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
+            .sha
+            .clone();
+
+    let comparison =
+        operations::compare_branches(&fx.registry, &fx.repo_str(), "main", "feature", &fx.workspace)
+            .expect("compare_branches");
+
+    assert_eq!(comparison.ahead.len(), 1);
+    assert_eq!(comparison.ahead[0].sha, feature_sha);
+    assert_eq!(comparison.behind.len(), 1);
+    assert_eq!(comparison.behind[0].sha, main_sha);
+
+    // Three-dot semantics: only feature's own change vs. the merge base,
+    // not main's unrelated "advance main" commit.
+    assert_eq!(comparison.files.len(), 1);
+    assert_eq!(comparison.files[0].path, "feature.txt");
+    assert_eq!(comparison.files[0].status, "A");
+}
+
+#[test]
+fn compare_branches_rejects_unsafe_ref_names() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "x\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+
+    match operations::compare_branches(&fx.registry, &fx.repo_str(), "-x", "main", &fx.workspace) {
+        Err(GitError::CommandFailed { .. }) => {}
+        Err(other) => panic!("expected CommandFailed, got {other}"),
+        Ok(_) => panic!("expected error for unsafe base ref"),
+    }
+    match operations::compare_branches(&fx.registry, &fx.repo_str(), "main", "", &fx.workspace) {
+        Err(GitError::CommandFailed { .. }) => {}
+        Err(other) => panic!("expected CommandFailed, got {other}"),
+        Ok(_) => panic!("expected error for empty compare ref"),
+    }
+}
