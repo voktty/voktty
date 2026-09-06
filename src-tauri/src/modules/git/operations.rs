@@ -9,9 +9,9 @@ use crate::modules::git::process::{
 };
 use crate::modules::git::types::{
     DiscardEntry, GitBranchEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
-    GitDiffContentResult, GitDiffResult, GitLogEntry, GitOutput, GitPanelSnapshot, GitPushResult,
-    GitRepoInfo, GitStashEntry, GitStatusSnapshot, GitTagEntry, TextSource, DEFAULT_TIMEOUT_SECS,
-    NETWORK_TIMEOUT_SECS,
+    GitDiffContentResult, GitDiffResult, GitLogEntry, GitOperationStatus, GitOutput,
+    GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry, GitStatusSnapshot, GitTagEntry,
+    TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream, ResolvedGitDirectory,
@@ -1423,10 +1423,13 @@ pub fn undo_commit(
 /// Reverts a single commit by creating a new commit that undoes it.
 ///
 /// Unlike `undo_commit`, this never rewrites existing history, so it's safe
-/// regardless of whether `sha` was already pushed. There is deliberately no
-/// conflict resolver: on any failure (merge commit needing `-m`, conflicting
-/// hunks, dirty worktree) the in-progress revert is aborted so the repo never
-/// sits half-reverted, and git's own error text is surfaced as-is.
+/// regardless of whether `sha` was already pushed. On a real content
+/// conflict, the revert is deliberately left in progress (conflict markers
+/// in the worktree, `REVERT_HEAD` set) instead of auto-aborting, so it can be
+/// resolved through the conflict UI and finished with `operation_continue`
+/// or discarded with `operation_abort`. A merge-commit needing `-m`, or a
+/// dirty worktree that made git refuse outright, never starts that in-progress
+/// state in the first place — those just surface git's own error text.
 pub fn revert_commit(
     registry: &WorkspaceRegistry,
     repo_root: &str,
@@ -1445,15 +1448,7 @@ pub fn revert_commit(
         ["revert", "--no-edit", sha],
         DEFAULT_TIMEOUT_SECS,
     )?;
-    if let Err(err) = ensure_success(&output, "git revert failed") {
-        let _ = run_git(
-            &repo_root.workspace,
-            Some(&repo_root.git_path),
-            ["revert", "--abort"],
-            DEFAULT_TIMEOUT_SECS,
-        );
-        return Err(err);
-    }
+    ensure_success(&output, "git revert failed")?;
 
     let new_sha = git_stdout_line_opt(
         &repo_root.workspace,
@@ -1730,6 +1725,94 @@ pub fn tag_push(
         NETWORK_TIMEOUT_SECS,
     )?;
     ensure_success(&output, "git push tag failed")
+}
+
+/// Checks well-known refs git itself maintains while a sequencer operation
+/// is mid-flight (`MERGE_HEAD`/`CHERRY_PICK_HEAD`/`REVERT_HEAD`/`REBASE_HEAD`
+/// — the last one exists specifically so tools can detect an in-progress
+/// rebase without needing filesystem access to `.git/rebase-merge`, which
+/// would not work for a remote (SSH) workspace anyway).
+pub fn operation_status(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<GitOperationStatus> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+
+    let has_ref = |name: &str| -> bool {
+        git_stdout_line_opt(
+            &repo_root.workspace,
+            &repo_root.git_path,
+            ["rev-parse", "-q", "--verify", name],
+        )
+        .ok()
+        .flatten()
+        .is_some()
+    };
+
+    let kind = if has_ref("MERGE_HEAD") {
+        "merge"
+    } else if has_ref("CHERRY_PICK_HEAD") {
+        "cherryPick"
+    } else if has_ref("REVERT_HEAD") {
+        "revert"
+    } else if has_ref("REBASE_HEAD") {
+        "rebase"
+    } else {
+        "none"
+    };
+    Ok(GitOperationStatus { kind: kind.into() })
+}
+
+fn operation_subcommand(kind: &str) -> Result<&'static str> {
+    match kind {
+        "merge" => Ok("merge"),
+        "revert" => Ok("revert"),
+        "cherryPick" => Ok("cherry-pick"),
+        "rebase" => Ok("rebase"),
+        _ => Err(GitError::command("git operation", "unknown operation kind")),
+    }
+}
+
+pub fn operation_abort(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    kind: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let subcommand = operation_subcommand(kind)?;
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        [subcommand, "--abort"],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git operation abort failed")
+}
+
+/// Completes a merge/revert/cherry-pick/rebase after its conflicts have been
+/// staged. `GIT_EDITOR=true` (set globally in `run_git`) keeps this from
+/// trying to open an interactive editor for the commit message, which would
+/// otherwise fail since stdin is closed for every git invocation here.
+pub fn operation_continue(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    kind: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let subcommand = operation_subcommand(kind)?;
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        [subcommand, "--continue"],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git operation continue failed")
 }
 
 #[cfg(test)]

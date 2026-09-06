@@ -287,6 +287,12 @@ where
         .env("GCM_INTERACTIVE", "Never")
         .env("GCM_PROVIDER", "")
         .env("LC_ALL", "C")
+        // stdin is closed below, so any command that fell back to an
+        // interactive commit-message editor would fail confusingly instead
+        // of just completing (e.g. `merge`/`revert`/`cherry-pick --continue`
+        // reusing the message already staged from the original invocation).
+        // `true` no-ops and exits 0, which is exactly what those want here.
+        .env("GIT_EDITOR", "true")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

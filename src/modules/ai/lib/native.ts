@@ -75,6 +75,7 @@ export type GitChangedFile = {
   staged: boolean;
   unstaged: boolean;
   untracked: boolean;
+  conflicted: boolean;
   statusLabel: string;
 };
 
@@ -171,6 +172,12 @@ export type GitTagEntry = {
   annotated: boolean;
   message: string | null;
   timestampSecs: number;
+};
+
+export type GitOperationKind = "none" | "merge" | "revert" | "cherryPick" | "rebase";
+
+export type GitOperationStatus = {
+  kind: GitOperationKind;
 };
 
 function resolveGitWorkspace(
@@ -724,6 +731,31 @@ export const native = {
       repoRoot,
       name,
       remote: remote ?? null,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitOperationStatus: (repoRoot: string, workspace?: WorkspaceEnv) =>
+    invoke<GitOperationStatus>("git_operation_status", {
+      repoRoot,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitOperationAbort: (
+    repoRoot: string,
+    kind: GitOperationKind,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<void>("git_operation_abort", {
+      repoRoot,
+      kind,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitOperationContinue: (
+    repoRoot: string,
+    kind: GitOperationKind,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<void>("git_operation_continue", {
+      repoRoot,
+      kind,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
 };

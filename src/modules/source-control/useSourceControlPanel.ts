@@ -413,6 +413,7 @@ function optimisticUnstage(
         staged: false,
         unstaged: true,
         untracked: false,
+        conflicted: false,
         statusLabel: "Deleted",
       });
       next.push({
@@ -423,6 +424,7 @@ function optimisticUnstage(
         staged: false,
         unstaged: true,
         untracked: true,
+        conflicted: false,
         statusLabel: "Untracked",
       });
       continue;

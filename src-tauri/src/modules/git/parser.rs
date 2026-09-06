@@ -59,7 +59,7 @@ pub fn parse_porcelain_v2(stdout: &str) -> PorcelainV2 {
             continue;
         }
         if let Some(rest) = tok.strip_prefix("? ") {
-            out.files.push(make_file('?', '?', rest, None));
+            out.files.push(make_file('?', '?', rest, None, false));
             continue;
         }
     }
@@ -79,21 +79,24 @@ fn parse_ordinary(rest: &str) -> Option<GitChangedFile> {
     let xy = rest.get(..2)?;
     let path = skip_fields(rest, 7)?;
     let (i, w) = xy_chars(xy);
-    Some(make_file(i, w, path, None))
+    Some(make_file(i, w, path, None, false))
 }
 
 fn parse_renamed(rest: &str, orig_path: String) -> Option<GitChangedFile> {
     let xy = rest.get(..2)?;
     let after = skip_fields(rest, 8)?;
     let (i, w) = xy_chars(xy);
-    Some(make_file(i, w, after, Some(orig_path)))
+    Some(make_file(i, w, after, Some(orig_path), false))
 }
 
+// Porcelain v2's `u` record type is emitted ONLY for unmerged paths — every
+// XY combination it uses (DD, AU, UD, UA, DU, AA, UU) is a conflict, so the
+// record type itself is the signal, not the specific characters.
 fn parse_unmerged(rest: &str) -> Option<GitChangedFile> {
     let xy = rest.get(..2)?;
     let path = skip_fields(rest, 9)?;
     let (i, w) = xy_chars(xy);
-    Some(make_file(i, w, path, None))
+    Some(make_file(i, w, path, None, true))
 }
 
 // porcelain v2 uses '.' to mean "unchanged"; downstream logic mirrors v1 spaces.
@@ -111,6 +114,7 @@ fn make_file(
     worktree_status: char,
     path: &str,
     original_path: Option<String>,
+    conflicted: bool,
 ) -> GitChangedFile {
     GitChangedFile {
         path: path.to_string(),
@@ -120,6 +124,7 @@ fn make_file(
         staged: is_staged(index_status, worktree_status),
         unstaged: is_unstaged(index_status, worktree_status),
         untracked: index_status == '?' && worktree_status == '?',
+        conflicted,
         status_label: status_label(index_status, worktree_status),
     }
 }
@@ -238,6 +243,28 @@ mod tests {
         assert_eq!(f.status_label, "Unmerged");
         assert!(f.staged);
         assert!(f.unstaged);
+        assert!(f.conflicted);
+    }
+
+    // Every XY combination the `u` record type can carry (both-added,
+    // both-deleted, one-side-only, both-modified) is a conflict — the record
+    // type is the signal, not the specific characters, unlike ordinary `1 `
+    // entries where none of these combinations can even occur.
+    #[test]
+    fn unmerged_entry_is_conflicted_regardless_of_xy_combination() {
+        for xy in ["DD", "AU", "UD", "UA", "DU", "AA", "UU"] {
+            let stdout = format!("u {xy} N... 100644 100644 100644 100644 a b c f.rs\0");
+            let parsed = parse_porcelain_v2(&stdout);
+            assert!(parsed.files[0].conflicted, "expected conflicted for {xy}");
+        }
+    }
+
+    #[test]
+    fn non_unmerged_entries_are_never_conflicted() {
+        let parsed = parse_porcelain_v2(&ordinary(".M", "f.rs"));
+        assert!(!parsed.files[0].conflicted);
+        let parsed = parse_porcelain_v2("? new.rs\0");
+        assert!(!parsed.files[0].conflicted);
     }
 
     #[test]

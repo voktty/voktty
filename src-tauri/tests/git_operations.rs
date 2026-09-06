@@ -386,7 +386,7 @@ fn revert_commit_rejects_invalid_sha() {
 }
 
 #[test]
-fn revert_commit_aborts_cleanly_on_conflict() {
+fn revert_commit_leaves_conflict_in_progress_for_resolution() {
     if skip_if_no_git() {
         return;
     }
@@ -409,10 +409,130 @@ fn revert_commit_aborts_cleanly_on_conflict() {
     let result = operations::revert_commit(&fx.registry, &fx.repo_str(), c2_sha, &fx.workspace);
     assert!(result.is_err(), "expected a conflicting revert to fail");
 
-    // The abort must leave no revert in progress and the worktree untouched.
+    // Left in progress, not auto-aborted: a real conflict-resolution UI can
+    // now take over instead of the repo just snapping back to normal.
+    assert!(fx.repo_path.join(".git/REVERT_HEAD").exists());
+    let status = operations::operation_status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(status.kind, "revert");
+    let snapshot = operations::status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert!(snapshot.changed_files.iter().any(|f| f.conflicted));
+
+    // Resolve to something that actually differs from HEAD ("Z"), or the
+    // completion commit would have nothing to record.
+    fx.write_file("a.txt", "Z-resolved\n");
+    fx.run_git(&["add", "a.txt"]);
+    operations::operation_continue(&fx.registry, &fx.repo_str(), "revert", &fx.workspace)
+        .expect("operation_continue");
+
+    let status = operations::operation_status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(status.kind, "none");
+    assert!(!fx.repo_path.join(".git/REVERT_HEAD").exists());
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    assert_eq!(entries.len(), 4, "the completed revert adds a new commit");
+}
+
+#[test]
+fn revert_commit_conflict_can_be_aborted_instead() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "X\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "c1"]);
+    fx.write_file("a.txt", "Y\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "c2"]);
+    fx.write_file("a.txt", "Z\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "c3"]);
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    let c2_sha = &entries[1].sha;
+    operations::revert_commit(&fx.registry, &fx.repo_str(), c2_sha, &fx.workspace).unwrap_err();
+
+    operations::operation_abort(&fx.registry, &fx.repo_str(), "revert", &fx.workspace)
+        .expect("operation_abort");
+
     assert!(!fx.repo_path.join(".git/REVERT_HEAD").exists());
     let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
-    assert_eq!(content, "Z\n");
+    assert_eq!(content, "Z\n", "abort restores the pre-revert content");
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    assert_eq!(entries.len(), 3, "abort must not add a commit");
+}
+
+#[test]
+fn operation_status_is_none_outside_any_sequencer_operation() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+
+    let status = operations::operation_status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(status.kind, "none");
+}
+
+#[test]
+fn operation_status_detects_merge_conflict_and_continue_completes_it() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "base\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "base"]);
+    fx.run_git(&["checkout", "-q", "-b", "feature"]);
+    fx.write_file("a.txt", "feature change\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "feature change"]);
+    fx.run_git(&["checkout", "-q", "main"]);
+    fx.write_file("a.txt", "main change\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "main change"]);
+
+    // Deliberately not fx.run_git: that helper asserts success, but this
+    // merge is *expected* to conflict. Merge itself is out of Voktty's own
+    // command surface for now — only operation_status/abort/continue react
+    // to it once it exists (e.g. from a merge started in a real terminal).
+    let merge_output = std::process::Command::new("git")
+        .args(["merge", "feature", "-q", "-m", "merge attempt"])
+        .current_dir(&fx.repo_path)
+        .output()
+        .expect("run git merge");
+    assert!(
+        !merge_output.status.success(),
+        "expected the merge to conflict"
+    );
+
+    let status = operations::operation_status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(status.kind, "merge");
+    let snapshot = operations::status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert!(snapshot.changed_files.iter().any(|f| f.conflicted));
+
+    fx.write_file("a.txt", "resolved\n");
+    fx.run_git(&["add", "a.txt"]);
+    operations::operation_continue(&fx.registry, &fx.repo_str(), "merge", &fx.workspace)
+        .expect("operation_continue");
+
+    let status = operations::operation_status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(status.kind, "none");
+    let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
+    assert_eq!(content, "resolved\n");
+}
+
+#[test]
+fn operation_abort_rejects_unknown_kind() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    match operations::operation_abort(&fx.registry, &fx.repo_str(), "bogus", &fx.workspace) {
+        Err(GitError::CommandFailed { .. }) => {}
+        Err(other) => panic!("expected CommandFailed, got {other}"),
+        Ok(_) => panic!("expected error for unknown operation kind"),
+    }
 }
 
 #[test]
