@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 
 use crate::dirs_home;
 use crate::modules::quota::cost_engine::CostEngine;
+use crate::modules::quota::iso_now;
 use crate::modules::quota::types::*;
 
 const OAUTH_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -51,10 +52,6 @@ fn now_epoch_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
-}
-
-fn iso_now() -> String {
-    format!("{:?}", SystemTime::now())
 }
 
 fn read_credentials() -> Option<ClaudeCredentials> {

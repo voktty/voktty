@@ -58,4 +58,23 @@ describe("planContextualSpaceInsertion", () => {
       }),
     ).toEqual({ kind: "standalone" });
   });
+
+  it("honors a configured max-members limit instead of the hardcoded default", () => {
+    const target = {
+      kind: "space" as const,
+      spaceId: asViewSpaceId("view-workspace"),
+      focusedSlotId: null,
+    };
+    // Below the user's lower limit (2): still standalone even under the
+    // hardcoded default of 4.
+    expect(planContextualSpaceInsertion([space(2)], target, 2)).toEqual({
+      kind: "standalone",
+    });
+    // Above the hardcoded default of 4: still appends when the user raised
+    // their limit to 6.
+    expect(planContextualSpaceInsertion([space(4)], target, 6)).toEqual({
+      kind: "append",
+      viewSpaceId: "view-workspace",
+    });
+  });
 });
