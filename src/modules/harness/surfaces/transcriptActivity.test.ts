@@ -6,6 +6,9 @@ import {
   activityStillRunning,
   buildActivityPhases,
   editVerb,
+  firstFoldableIndex,
+  foldableWork,
+  foldedBlocks,
   groupTurnItems,
   groupTurns,
   initialThinkingIndex,
@@ -466,14 +469,23 @@ describe("buildActivityPhases", () => {
     expect(phases[1].steps.map((block) => block.id)).toEqual(["e1", "e2"]);
   });
 
-  it("starts a group when the work changes shape, narrated or not", () => {
+  it("keeps a run of mixed work in one group", () => {
     const phases = buildActivityPhases([
       read("r1", "a.ts"),
       read("r2", "b.ts"),
       edit("e1", "a.ts"),
       edit("e2", "b.ts"),
+      shell("c1"),
     ]);
-    expect(phases.map((phase) => phase.kind)).toEqual(["research", "edit"]);
+    expect(phases).toHaveLength(1);
+    expect(phases[0].kind).toBe("edit");
+    expect(phases[0].steps.map((block) => block.id)).toEqual([
+      "r1",
+      "r2",
+      "e1",
+      "e2",
+      "c1",
+    ]);
   });
 
   it("folds a lone uninvited call into the group before it", () => {
@@ -539,7 +551,7 @@ describe("buildActivityPhases", () => {
     ]);
   });
 
-  it("moves a thought at the end of a group into the group it introduced", () => {
+  it("keeps a thought between two kinds of work inside the group", () => {
     const phases = buildActivityPhases([
       read("r1", "a.ts"),
       read("r2", "b.ts"),
@@ -547,9 +559,10 @@ describe("buildActivityPhases", () => {
       edit("e1", "a.ts"),
       edit("e2", "b.ts"),
     ]);
-    expect(phases.map((phase) => phase.kind)).toEqual(["research", "edit"]);
-    expect(phases[0].steps.map((block) => block.id)).toEqual(["r1", "r2"]);
-    expect(phases[1].steps.map((block) => block.id)).toEqual([
+    expect(phases).toHaveLength(1);
+    expect(phases[0].steps.map((block) => block.id)).toEqual([
+      "r1",
+      "r2",
       "t1",
       "e1",
       "e2",
@@ -600,6 +613,102 @@ describe("activityPhaseTitle", () => {
     );
     expect(title([shell("a"), shell("b")])).toBe("Ran 2 commands");
     expect(title([shell("a")], true)).toBe("Running a command");
+  });
+
+  it("adds up a group of mixed work, one clause per kind", () => {
+    expect(
+      title([
+        shell("c1"),
+        shell("c2"),
+        shell("c3"),
+        search("s1"),
+        edit("e1", "a.ts"),
+        edit("e2", "b.ts"),
+      ]),
+    ).toBe("Ran 3 commands · Searched the project · Edited 2 files");
+  });
+
+  it("puts only the call in flight in the present tense", () => {
+    expect(
+      title([edit("e1", "a.ts"), edit("e2", "b.ts"), shell("c1")], true),
+    ).toBe("Edited 2 files · Running a command");
+  });
+});
+
+describe("foldableWork", () => {
+  const items = (blocks: Block[]) => groupTurnItems(blocks);
+
+  it("folds the work the agent has already answered for", () => {
+    const turn = items([
+      { id: "u", role: "user", text: "go" },
+      shell("c1"),
+      note("n1", "Checking the other half now."),
+      shell("c2"),
+      { id: "done", role: "assistant", text: "All set." },
+    ]);
+    const fold = foldableWork(turn);
+    expect(fold).toEqual({ start: 1, end: 3 });
+    expect(foldedBlocks(turn, fold!).map((block) => block.id)).toEqual([
+      "c1",
+      "n1",
+      "c2",
+    ]);
+  });
+
+  it("leaves work the agent has not answered for alone", () => {
+    expect(
+      foldableWork(items([{ id: "u", role: "user", text: "go" }, shell("c1")])),
+    ).toBeUndefined();
+    expect(
+      foldableWork(
+        items([
+          { id: "u", role: "user", text: "go" },
+          { id: "a", role: "assistant", text: "On it." },
+          shell("c1"),
+        ]),
+      ),
+    ).toBeUndefined();
+  });
+
+  it("keeps the live group outside the fold while the agent works on", () => {
+    const turn = items([
+      { id: "u", role: "user", text: "go" },
+      shell("c1"),
+      note("n1", "That worked. Running the tests."),
+      shell("c2", "pending"),
+    ]);
+    expect(foldableWork(turn)).toEqual({ start: 1, end: 1 });
+  });
+
+  it("never folds a plan or anything under it", () => {
+    const turn = items([
+      { id: "u", role: "user", text: "go" },
+      shell("c1"),
+      { id: "p", role: "plan", text: "## Plan" },
+      shell("c2"),
+      { id: "done", role: "assistant", text: "Built it." },
+    ]);
+    expect(foldableWork(turn)).toEqual({ start: 3, end: 3 });
+  });
+
+  it("gives the fold line a place to sit before there is a fold", () => {
+    const turn = items([{ id: "u", role: "user", text: "go" }, shell("c1")]);
+    expect(foldableWork(turn)).toBeUndefined();
+    expect(firstFoldableIndex(turn)).toBe(1);
+    expect(
+      firstFoldableIndex(items([{ id: "u", role: "user", text: "go" }])),
+    ).toBe(-1);
+  });
+
+  it("has nothing to fold in a turn that only answered", () => {
+    expect(
+      foldableWork(
+        items([
+          { id: "u", role: "user", text: "go" },
+          { id: "a", role: "assistant", text: "Here you go." },
+        ]),
+      ),
+    ).toBeUndefined();
   });
 });
 
