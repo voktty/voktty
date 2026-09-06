@@ -1531,12 +1531,15 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     }) => {
       const resolvedEnv = input.workspaceEnv ?? currentWorkspaceEnv();
       const curr = tabsRef.current;
+      // One tab per commit, retargeted to whichever file you click, instead of
+      // one tab per file. Browsing a ten file commit used to leave ten tabs
+      // behind; reading the whole thing at once is what the git-commit tab is
+      // for.
       const existing = curr.find(
         (t): t is GitCommitFileDiffTab =>
           t.kind === "git-commit-file" &&
           t.repoRoot === input.repoRoot &&
-          t.sha === input.sha &&
-          t.path === input.path,
+          t.sha === input.sha,
       );
       const title = `${basename(input.path)} @ ${input.shortSha}`;
       if (existing) {
@@ -1546,6 +1549,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
                 ...existing,
                 title,
                 subject: input.subject,
+                path: input.path,
                 originalPath: input.originalPath,
                 workspaceEnv:
                   input.workspaceEnv ?? existing.workspaceEnv ?? resolvedEnv,
