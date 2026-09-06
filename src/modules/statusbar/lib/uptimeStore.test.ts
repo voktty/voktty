@@ -6,6 +6,7 @@ import {
   getTopActivePaths,
   getUptimeColorLevel,
   getWeeklyBreakdown,
+  getTodayKey,
   useUptimeStore,
 } from "./uptimeStore";
 
@@ -53,8 +54,7 @@ describe("uptimeStore", () => {
   });
 
   it("generates weekly breakdown", () => {
-    const today = new Date();
-    const todayKey = today.toISOString().slice(0, 10);
+    const todayKey = getTodayKey();
     const history = {
       [todayKey]: {
         seconds: 7200,
@@ -70,8 +70,7 @@ describe("uptimeStore", () => {
   });
 
   it("aggregates top active paths", () => {
-    const today = new Date();
-    const todayKey = today.toISOString().slice(0, 10);
+    const todayKey = getTodayKey();
     const history = {
       [todayKey]: {
         seconds: 10000,

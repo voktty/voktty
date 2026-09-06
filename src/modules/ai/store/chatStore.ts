@@ -96,6 +96,7 @@ const IDLE_META: AgentMeta = {
 
 export type MiniState = {
   open: boolean;
+  collapsed: boolean;
 };
 
 export type PendingSelection = {
@@ -131,6 +132,7 @@ type StoreState = {
 
   mini: MiniState;
   openMini: () => void;
+  collapseMini: () => void;
   closeMini: () => void;
   toggleMini: () => void;
 
@@ -299,16 +301,22 @@ export const useChatStore = create<StoreState>((set, get) => ({
     void pushRecentModel(id);
   },
 
-  mini: { open: false },
+  mini: { open: false, collapsed: false },
   openMini: () => {
     if (!isAiRuntimeAvailable()) return;
-    set({ mini: { open: true }, unreadCount: 0 });
+    set({ mini: { open: true, collapsed: false }, unreadCount: 0 });
   },
-  closeMini: () => set({ mini: { open: false } }),
+  collapseMini: () => {
+    set({ mini: { open: true, collapsed: true } });
+  },
+  closeMini: () => set({ mini: { open: false, collapsed: false } }),
   toggleMini: () =>
     set((s) => {
-      const next = !s.mini.open && isAiRuntimeAvailable();
-      return { mini: { open: next }, unreadCount: next ? 0 : s.unreadCount };
+      if (!isAiRuntimeAvailable()) return s;
+      if (s.mini.open && !s.mini.collapsed) {
+        return { mini: { open: false, collapsed: false } };
+      }
+      return { mini: { open: true, collapsed: false }, unreadCount: 0 };
     }),
 
   panelOpen: readInitialPanelOpen() && isAiRuntimeAvailable(),
@@ -331,7 +339,8 @@ export const useChatStore = create<StoreState>((set, get) => ({
   presentChat: () => {
     const s = get();
     if (!isAiRuntimeAvailable()) return;
-    if (s.panelOpen || s.mini.open) return;
+    if (s.panelOpen) return;
+    if (s.mini.open && !s.mini.collapsed) return;
     s.openMini();
   },
 
@@ -339,7 +348,7 @@ export const useChatStore = create<StoreState>((set, get) => ({
   markChatRead: () => set({ unreadCount: 0 }),
   noteUnreadMessage: () =>
     set((s) => {
-      if (s.panelOpen || s.mini.open) return s;
+      if (s.panelOpen || (s.mini.open && !s.mini.collapsed)) return s;
       return { unreadCount: s.unreadCount + 1 };
     }),
 

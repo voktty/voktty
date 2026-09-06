@@ -753,6 +753,7 @@ export function useSourceControlPanel(
     summary.hasRepo,
     summary.isLoading,
     summary.localError,
+    summary.dubiousOwnershipPath,
     summary.repo,
     summary.status,
   ]);

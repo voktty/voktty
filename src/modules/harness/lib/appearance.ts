@@ -8,7 +8,6 @@ const BLUR_KEY = "monocode.sidebarBlur";
 const OPEN_KEY = "monocode.sidebarOpen";
 const PROJECT_RAIL_OPEN_KEY = "monocode.projectRailOpen";
 const BODY_KEY = "monocode.bodyGlass";
-const SCHEME_KEY = "monocode.colorScheme";
 const SIDEBAR_TAB_ORDER_KEY = "monocode.sidebarTabOrder";
 const PROJECT_RAIL_WIDTH_KEY = "monocode.projectRailWidth";
 const SIDEBAR_LAYOUT_KEY = "monocode.sidebarLayout";
@@ -17,14 +16,8 @@ const TRANSCRIPT_ZEN_KEY = "monocode.transcriptZen";
 const TRANSCRIPT_ANCHOR_KEY = "monocode.transcriptAnchor";
 
 export type ColorScheme = "dark" | "light";
-export type ThemePreference = ColorScheme | "system";
 export type SidebarLayout = "classic" | "deck";
 export type TranscriptLayout = "full" | "chat";
-
-export const THEME_PREFERENCE_DEFAULT: ThemePreference = "dark";
-
-/** Fired on `window` whenever the color scheme flips (detail: ColorScheme). */
-export const SCHEME_CHANGE_EVENT = "monocode:schemechange";
 
 /** Fired on `window` whenever the sidebar layout flips (detail: SidebarLayout). */
 export const LAYOUT_CHANGE_EVENT = "monocode:layoutchange";
@@ -170,68 +163,17 @@ export function applyThemeTint(hue: number, saturation: number) {
 export function initAppearance() {
   document.documentElement.classList.toggle("is-mac", IS_MAC);
   applyThemeTint(loadThemeHue(), loadThemeSaturation());
-  applyThemePreference(loadThemePreference());
-  watchSystemColorScheme();
   applySidebarOpacity(loadSidebarOpacity());
   applySidebarBlur(loadSidebarBlur());
   applyBodyGlass(loadBodyGlass());
 }
 
-function isThemePreference(value: unknown): value is ThemePreference {
-  return value === "dark" || value === "light" || value === "system";
-}
-
-export function loadThemePreference(): ThemePreference {
-  try {
-    const raw = localStorage.getItem(SCHEME_KEY);
-    return isThemePreference(raw) ? raw : THEME_PREFERENCE_DEFAULT;
-  } catch {
-    return THEME_PREFERENCE_DEFAULT;
-  }
-}
-
-export function saveThemePreference(value: ThemePreference) {
-  try {
-    localStorage.setItem(SCHEME_KEY, value);
-  } catch {
-    // private mode / quota
-  }
-}
-
-function systemQuery(): MediaQueryList | null {
-  if (typeof window === "undefined" || !window.matchMedia) return null;
-  return window.matchMedia("(prefers-color-scheme: light)");
-}
-
-function systemColorScheme(): ColorScheme {
-  return systemQuery()?.matches ? "light" : "dark";
-}
-
-export function resolveColorScheme(value: ThemePreference): ColorScheme {
-  return value === "system" ? systemColorScheme() : value;
-}
-
+/** The harness has no color-scheme preference of its own: it reads whichever
+ * mode Voktty's own ThemeProvider resolved (`.dark`/`.light` on
+ * `<html>`, see `applyTheme.ts`), so its embedded editor/terminal always
+ * match the app's active theme instead of drifting independently. */
 export function isLightScheme(): boolean {
-  return document.documentElement.classList.contains("theme-light");
-}
-
-export function applyThemePreference(value: ThemePreference): ColorScheme {
-  const next = resolveColorScheme(value);
-  document.documentElement.classList.toggle("theme-light", next === "light");
-  window.dispatchEvent(
-    new CustomEvent<ColorScheme>(SCHEME_CHANGE_EVENT, { detail: next }),
-  );
-  return next;
-}
-
-/** Keeps the "system" preference in sync when the OS flips appearance. */
-export function watchSystemColorScheme() {
-  const query = systemQuery();
-  if (!query) return;
-  query.addEventListener("change", () => {
-    const preference = loadThemePreference();
-    if (preference === "system") applyThemePreference(preference);
-  });
+  return document.documentElement.classList.contains("light");
 }
 
 export function loadSidebarOpacity(): number {

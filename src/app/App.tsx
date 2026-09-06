@@ -188,6 +188,7 @@ import {
   clearFocusedTerminal,
   disposeSession,
   findLeafCwd,
+  focusLeafInput,
   getActiveTerminalLeafId,
   getLeafTerminalStats,
   getLiveLeafCwd,
@@ -198,6 +199,7 @@ import {
   markLeafFocused,
   ptyIdForLeaf,
   respawnSession,
+  setLeafBlocks,
   type TerminalPaneHandle,
   useAgentActivityStore,
   useTerminalCopilotStore,
@@ -625,6 +627,7 @@ export default function App() {
   const tabStyle = usePreferencesStore((s) => s.tabStyle);
   const panelOpen = useChatStore((s) => s.panelOpen);
   const miniOpen = useChatStore((s) => s.mini.open);
+  const miniCollapsed = useChatStore((s) => s.mini.collapsed);
   const miniPresence = usePresence(miniOpen, 200);
 
   const verticalTabsPanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -1294,7 +1297,7 @@ export default function App() {
     }
     if (panelOpen) {
       closePanel();
-    } else if (miniOpen) {
+    } else if (miniOpen && !miniCollapsed) {
       closeMini();
     } else {
       openMini();
@@ -1305,6 +1308,7 @@ export default function App() {
     closePanel,
     hasComposer,
     miniOpen,
+    miniCollapsed,
     openMini,
     panelOpen,
     focusInput,
@@ -1319,7 +1323,7 @@ export default function App() {
         return;
       }
       // Dispatch a window event the composer listens for. Same pattern as
-      // selections — keeps file-explorer decoupled from the AI module.
+      // selections - keeps file-explorer decoupled from the AI module.
       window.dispatchEvent(
         new CustomEvent<string>("voktty:ai-attach-file", { detail: path }),
       );
@@ -2711,6 +2715,24 @@ export default function App() {
     }
   }, []);
 
+  const handleToggleTabBlocks = useCallback(
+    (tabId: number) => {
+      const tab = tabsRef.current.find((t) => t.id === tabId);
+      if (!tab || tab.kind !== "terminal") return;
+      const nextBlocks = !tab.blocks;
+      toggleTabBlocks(tabId);
+      setActiveId(tabId);
+      const ids = leafIds(tab.paneTree);
+      for (const lid of ids) {
+        setLeafBlocks(lid, nextBlocks);
+        if (nextBlocks) {
+          requestAnimationFrame(() => focusLeafInput(lid));
+        }
+      }
+    },
+    [toggleTabBlocks, setActiveId],
+  );
+
   const splitActivePaneInActiveTab = useCallback(
     (_dir: "row" | "col") => {
       const activeTab = tabsRef.current.find((x) => x.id === effectiveActiveId);
@@ -2894,7 +2916,7 @@ export default function App() {
           (t) => t.id === effectiveActiveId,
         );
         if (currentTab?.kind === "terminal") {
-          toggleTabBlocks(currentTab.id);
+          handleToggleTabBlocks(currentTab.id);
         }
       },
       "terminal.history": () => {
@@ -3009,7 +3031,7 @@ export default function App() {
       focusNextPaneInTab,
       swapActivePane,
       toggleSourceControl,
-      toggleTabBlocks,
+      handleToggleTabBlocks,
       hasComposer,
       togglePanelAndFocus,
       onAskFromSelection,
@@ -4531,7 +4553,7 @@ export default function App() {
               onOverrideLanguage={setOverrideLanguage}
               onSetColor={handleSetTabColor}
               onToggleLock={handleToggleLockTab}
-              onToggleBlocks={toggleTabBlocks}
+              onToggleBlocks={handleToggleTabBlocks}
               stripEntries={stripEntries}
               viewSpaces={viewSpaces}
               activeStripItem={activeStripItem}
@@ -4823,6 +4845,7 @@ export default function App() {
                       home={home}
                       hasComposer={hasComposer}
                       panelOpen={panelOpen}
+                      miniOpen={miniOpen && !miniCollapsed}
                       keysLoaded={keysLoaded}
                       onConnect={() => void openSettingsWindow("models")}
                     />
@@ -4879,7 +4902,7 @@ export default function App() {
                           onReorder={reorderTabByGap}
                           onSetColor={handleSetTabColor}
                           onToggleLock={handleToggleLockTab}
-                          onToggleBlocks={toggleTabBlocks}
+                          onToggleBlocks={handleToggleTabBlocks}
                           stripEntries={stripEntries}
                           viewSpaces={viewSpaces}
                           activeStripItem={activeStripItem}
@@ -4925,6 +4948,7 @@ export default function App() {
                                   home={home}
                                   hasComposer={hasComposer}
                                   panelOpen
+                                  miniOpen={miniOpen}
                                   keysLoaded={keysLoaded}
                                   onConnect={() =>
                                     void openSettingsWindow("models")
@@ -5009,7 +5033,24 @@ export default function App() {
           ) : null}
 
           {hasComposer && miniPresence.mounted ? (
-            <AiMiniWindow state={miniPresence.state} />
+            <AiMiniWindow
+              state={miniPresence.state}
+              composer={
+                <WorkspaceInputBar
+                  isBlockTab={isBlockTab}
+                  isTerminalTab={isTerminalTab}
+                  activeLeafId={activeLeafId}
+                  cwd={activeCwd}
+                  home={home}
+                  hasComposer={hasComposer}
+                  panelOpen={false}
+                  miniOpen={miniOpen}
+                  keysLoaded={keysLoaded}
+                  onConnect={() => void openSettingsWindow("models")}
+                  placement="mini"
+                />
+              }
+            />
           ) : null}
 
           {hasComposer && askPresence.mounted ? (

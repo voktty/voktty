@@ -15,6 +15,7 @@ import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
   Add01Icon,
   AiBookIcon,
+  AiContentGenerator02Icon,
   AppleIcon,
   ArrowDown01Icon,
   ArrowUpIcon,
@@ -127,23 +128,26 @@ export function AiOpenButton({
   const label = open ? t("ai.closePanel") : t("ai.openAgent");
   const hasUnread = !open && unreadCount > 0;
   const accessibleLabel = hasUnread
-    ? `${label} — ${t("ai.unreadMessages", { count: unreadCount })}`
+    ? `${label} - ${t("ai.unreadMessages", { count: unreadCount })}`
     : label;
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="icon"
       data-ai-mini-window-trigger
       onClick={onOpen}
       className={cn(
-        "relative flex h-5.5 items-center gap-1 rounded-md border border-border/60 bg-card px-1.5 text-[10.5px]",
-        "text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground",
-        "animate-in slide-in-from-top-2 duration-200 ease-out",
+        "relative size-6 shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+        open && "bg-accent text-foreground",
       )}
-      title={accessibleLabel}
+      title={`${accessibleLabel} (${fmtShortcut(MOD_KEY, "I")})`}
       aria-label={accessibleLabel}
     >
-      <span>{label}</span>
-      <Kbd className="h-3.5 min-w-3.5 px-0.5 text-[9px]">{fmtShortcut(MOD_KEY, "I")}</Kbd>
+      <HugeiconsIcon
+        icon={AiContentGenerator02Icon}
+        size={14}
+        strokeWidth={1.75}
+      />
       {hasUnread ? (
         <span
           aria-hidden
@@ -152,7 +156,7 @@ export function AiOpenButton({
           {unreadCount > 9 ? "9+" : unreadCount}
         </span>
       ) : null}
-    </button>
+    </Button>
   );
 }
 
@@ -516,7 +520,7 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
         </div>
 
         <div className="flex max-h-104 min-h-0">
-          {/* Provider sidebar — only active providers */}
+          {/* Provider sidebar - only active providers */}
           <div className="flex w-11 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border/70 bg-muted/20 py-1.5">
             <ProviderPill
               icon={AiBookIcon}
