@@ -672,6 +672,28 @@ export const native = {
       repoRoot,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
+  gitBranchFromCommit: (
+    repoRoot: string,
+    name: string,
+    sha: string,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<void>("git_branch_from_commit", {
+      repoRoot,
+      name,
+      sha,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitCherryPickCommit: (
+    repoRoot: string,
+    sha: string,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<string>("git_cherry_pick_commit", {
+      repoRoot,
+      sha,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
   gitRevertCommit: (repoRoot: string, sha: string, workspace?: WorkspaceEnv) =>
     invoke<string>("git_revert_commit", {
       repoRoot,

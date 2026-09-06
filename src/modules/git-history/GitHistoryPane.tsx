@@ -10,6 +10,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
   Popover,
   PopoverAnchor,
   PopoverContent,
@@ -26,8 +35,10 @@ import { useTranslation } from "@/modules/i18n";
 import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
 import {
   ArrowLeft01Icon,
+  ArrowRight01Icon,
   Copy01Icon,
   File02Icon,
+  GitBranchIcon,
   GitCompareIcon,
   LinkSquare02Icon,
 } from "@hugeicons/core-free-icons";
@@ -253,6 +264,12 @@ export function GitHistoryPane({
   const [remoteWeb, setRemoteWeb] = useState<RemoteWebInfo | null>(null);
   const [pendingRevert, setPendingRevert] = useState<GitLogEntry | null>(null);
   const [reverting, setReverting] = useState(false);
+  const [pendingCherryPick, setPendingCherryPick] =
+    useState<GitLogEntry | null>(null);
+  const [cherryPicking, setCherryPicking] = useState(false);
+  const [pendingBranch, setPendingBranch] = useState<GitLogEntry | null>(null);
+  const [branchName, setBranchName] = useState("");
+  const [branching, setBranching] = useState(false);
   const filesCacheRef = useRef(new Map<string, FilesEntry>());
   const [filesTick, setFilesTick] = useState(0);
   const bumpFiles = useCallback(() => setFilesTick((n) => n + 1), []);
@@ -554,6 +571,25 @@ export function GitHistoryPane({
     }
   }, []);
 
+  const copyPatch = useCallback(
+    async (commit: GitLogEntry) => {
+      try {
+        const result = await native.gitShowCommit(
+          repoRoot,
+          commit.sha,
+          workspaceEnv,
+        );
+        await navigator.clipboard.writeText(result.diffText);
+        if (result.truncated) toast.warning(t("gitHistory.patchTruncated"));
+      } catch (err) {
+        toast.error(t("gitHistory.copyPatchFailed"), {
+          description: normalizeError(err),
+        });
+      }
+    },
+    [repoRoot, t, workspaceEnv],
+  );
+
   const requestRevert = useCallback((commit: GitLogEntry) => {
     setOpenAnchor(null);
     setPendingRevert(commit);
@@ -580,6 +616,61 @@ export function GitHistoryPane({
       setReverting(false);
     }
   }, [handleRefresh, pendingRevert, repoRoot, t, workspaceEnv]);
+
+  const requestCherryPick = useCallback((commit: GitLogEntry) => {
+    setOpenAnchor(null);
+    setPendingCherryPick(commit);
+  }, []);
+
+  const confirmCherryPick = useCallback(async () => {
+    if (!pendingCherryPick) return;
+    setCherryPicking(true);
+    try {
+      await native.gitCherryPickCommit(
+        repoRoot,
+        pendingCherryPick.sha,
+        workspaceEnv,
+      );
+      toast.success(t("gitHistory.cherryPickSuccess"));
+      setPendingCherryPick(null);
+      handleRefresh();
+    } catch (err) {
+      toast.error(t("gitHistory.cherryPickFailed"), {
+        description: normalizeError(err),
+      });
+    } finally {
+      setCherryPicking(false);
+    }
+  }, [handleRefresh, pendingCherryPick, repoRoot, t, workspaceEnv]);
+
+  const requestBranch = useCallback((commit: GitLogEntry) => {
+    setOpenAnchor(null);
+    setBranchName(`commit-${commit.shortSha}`);
+    setPendingBranch(commit);
+  }, []);
+
+  const confirmBranch = useCallback(async () => {
+    const name = branchName.trim();
+    if (!pendingBranch || !name) return;
+    setBranching(true);
+    try {
+      await native.gitBranchFromCommit(
+        repoRoot,
+        name,
+        pendingBranch.sha,
+        workspaceEnv,
+      );
+      toast.success(t("gitHistory.branchCreated", { name }));
+      setPendingBranch(null);
+      handleRefresh();
+    } catch (err) {
+      toast.error(t("gitHistory.branchFailed"), {
+        description: normalizeError(err),
+      });
+    } finally {
+      setBranching(false);
+    }
+  }, [branchName, handleRefresh, pendingBranch, repoRoot, t, workspaceEnv]);
 
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={200}>
@@ -740,8 +831,11 @@ export function GitHistoryPane({
                       filesEntry={openFilesEntry}
                       remoteWeb={remoteWeb}
                       onCopySha={copyToClipboard}
+                      onCopyPatch={copyPatch}
                       onOpenFile={handleFileOpen}
                       onOpenCommitDiff={handleCommitDiffOpen}
+                      onCherryPick={requestCherryPick}
+                      onCreateBranch={requestBranch}
                       onRetryFiles={() => void fetchFiles(openAnchor.sha)}
                       onRevert={requestRevert}
                     />
@@ -793,6 +887,98 @@ export function GitHistoryPane({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <AlertDialog
+          open={pendingCherryPick !== null}
+          onOpenChange={(open) => {
+            if (!open && !cherryPicking) setPendingCherryPick(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t("gitHistory.cherryPickConfirmTitle")}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {pendingCherryPick
+                  ? t("gitHistory.cherryPickConfirmDescription", {
+                      subject:
+                        pendingCherryPick.subject || t("gitHistory.noSubject"),
+                      sha: pendingCherryPick.shortSha,
+                    })
+                  : null}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                disabled={cherryPicking}
+                onClick={() => setPendingCherryPick(null)}
+              >
+                {t("common.cancel")}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={cherryPicking}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void confirmCherryPick();
+                }}
+              >
+                {cherryPicking
+                  ? t("common.loading")
+                  : t("gitHistory.cherryPick")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Dialog
+          open={pendingBranch !== null}
+          onOpenChange={(open) => {
+            if (!open && !branching) setPendingBranch(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t("gitHistory.createBranch")}</DialogTitle>
+              <DialogDescription>
+                {pendingBranch
+                  ? t("gitHistory.createBranchDescription", {
+                      subject: pendingBranch.subject || t("gitHistory.noSubject"),
+                      sha: pendingBranch.shortSha,
+                    })
+                  : null}
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              value={branchName}
+              disabled={branching}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={t("gitHistory.branchNamePlaceholder")}
+              onChange={(e) => setBranchName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || branching) return;
+                e.preventDefault();
+                void confirmBranch();
+              }}
+            />
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                disabled={branching}
+                onClick={() => setPendingBranch(null)}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                disabled={branching || branchName.trim().length === 0}
+                onClick={() => void confirmBranch()}
+              >
+                {branching ? t("common.loading") : t("gitHistory.createBranch")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
@@ -933,11 +1119,14 @@ type CommitDetailProps = {
   filesEntry: FilesEntry | null;
   remoteWeb: RemoteWebInfo | null;
   onCopySha: (value: string) => Promise<void> | void;
+  onCopyPatch: (commit: GitLogEntry) => Promise<void> | void;
   onOpenFile: (
     commit: GitLogEntry,
     file: GitCommitFileChange,
   ) => Promise<void> | void;
   onOpenCommitDiff: (commit: GitLogEntry) => void;
+  onCherryPick: (commit: GitLogEntry) => void;
+  onCreateBranch: (commit: GitLogEntry) => void;
   onRetryFiles: () => void;
   onRevert: (commit: GitLogEntry) => void;
 };
@@ -947,8 +1136,11 @@ function CommitDetail({
   filesEntry,
   remoteWeb,
   onCopySha,
+  onCopyPatch,
   onOpenFile,
   onOpenCommitDiff,
+  onCherryPick,
+  onCreateBranch,
   onRetryFiles,
   onRevert,
 }: CommitDetailProps) {
@@ -994,7 +1186,7 @@ function CommitDetail({
           <span className="shrink-0 tabular-nums">{absolute}</span>
         </div>
 
-        <div className="mt-2.5 flex items-center gap-1">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1">
           <Button
             size="xs"
             variant="ghost"
@@ -1016,6 +1208,15 @@ function CommitDetail({
             <HugeiconsIcon icon={Copy01Icon} size={11} strokeWidth={1.9} />
             {copied ? t("gitHistory.copied") : t("gitHistory.copySha")}
           </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            className="h-6 cursor-pointer gap-1.5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={() => void onCopyPatch(commit)}
+          >
+            <HugeiconsIcon icon={File02Icon} size={11} strokeWidth={1.9} />
+            {t("gitHistory.copyPatch")}
+          </Button>
           {webUrl && remoteWeb ? (
             <Button
               size="xs"
@@ -1031,6 +1232,24 @@ function CommitDetail({
               {hostLabel(remoteWeb)}
             </Button>
           ) : null}
+          <Button
+            size="xs"
+            variant="ghost"
+            className="h-6 cursor-pointer gap-1.5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={() => onCreateBranch(commit)}
+          >
+            <HugeiconsIcon icon={GitBranchIcon} size={11} strokeWidth={1.9} />
+            {t("gitHistory.createBranch")}
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            className="h-6 cursor-pointer gap-1.5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={() => onCherryPick(commit)}
+          >
+            <HugeiconsIcon icon={ArrowRight01Icon} size={11} strokeWidth={1.9} />
+            {t("gitHistory.cherryPick")}
+          </Button>
           <Button
             size="xs"
             variant="ghost"
