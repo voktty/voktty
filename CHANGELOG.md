@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Settings: Notifications, off by default. With it on, a system notification appears when a turn finishes or an agent waits on an approval or question in a session that is not on screen, whether MonoCode is in the background or another session is open; clicking it jumps to that session. Turning it on asks macOS for permission, and a blocked state links to System Settings. The Sounds setting decides whether the notification plays a sound, and the in-app cue is skipped when the banner fires.
+
 ## [0.1.34] - 2026-09-05
 
 ### Added

@@ -10,6 +10,7 @@ mod linear;
 mod macos;
 mod menu;
 mod notes;
+mod notifications;
 mod project_logo;
 mod pty;
 mod rate_limits;
@@ -195,6 +196,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             default_cwd,
             home_dir,
+            notifications::notification_permission,
+            notifications::request_notification_permission,
+            notifications::show_notification,
+            notifications::open_notification_settings,
             fs::list_dir,
             fs::list_project_files,
             fs::git_diff_stats,
@@ -330,6 +335,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
                 macos::request_badge_authorization();
+                notifications::install_delegate(handle);
                 #[cfg(debug_assertions)]
                 macos::prefer_bundle_dock_icon();
             }
