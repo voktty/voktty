@@ -945,13 +945,14 @@ header[data-tauri-drag-region] button {
   background: var(--zen-rail);
 }
 
-/* The last row is where the spine leaves off: with the content, not the gap. */
+/* The last row is where the spine ends, at its final branch. */
 .zen-fold-tail::before {
-  bottom: 4px;
+  bottom: auto;
+  height: 7px;
 }
 
-/* The curve into the first row, a quarter circle tangent to spine and row. */
-.zen-fold-head::after {
+/* Every row branches off the spine on the same curve as an activity step. */
+.zen-fold-rail::after {
   content: "";
   position: absolute;
   left: 23px;
@@ -963,31 +964,65 @@ header[data-tauri-drag-region] button {
   border-bottom-left-radius: 8px;
 }
 
-/*
- * A turn's rows fold in place. The content the fold swallows was on screen a
- * moment ago, so it sinks behind the fold line on its own height instead of
- * being yanked out from under the text that replaced it. Rows animate as one
- * run, which is why they share the phase timing rather than staggering.
- */
-.zen-fold-item {
+.zen-fold-item[data-fold-state="closed"] {
   display: grid;
-  grid-template-rows: 1fr;
-  transition:
-    grid-template-rows 340ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease;
-}
-
-.zen-fold-item[data-folded="true"] {
   grid-template-rows: 0fr;
   opacity: 0;
   pointer-events: none;
-  /* Nothing invisible should end up in a selection dragged past the fold. */
   user-select: none;
 }
 
-.zen-fold-item > * {
+.zen-fold-item[data-fold-state="open"] {
+  /* Match Grid's non-collapsing margins without participating in Grid sizing. */
+  display: flow-root;
+}
+
+/*
+ * Expanded rows stay in ordinary block flow so text rewraps naturally when a
+ * pane is resized. Grid exists only during the fold animation, then gets out
+ * of the layout again.
+ */
+.zen-fold-item[data-fold-state="opening"],
+.zen-fold-item[data-fold-state="closing"] {
+  display: grid;
+}
+
+.zen-fold-item[data-fold-state="opening"] {
+  animation: zen-fold-open 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.zen-fold-item[data-fold-state="closing"] {
+  pointer-events: none;
+  user-select: none;
+  animation: zen-fold-close 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.zen-fold-item:is([data-fold-state="opening"], [data-fold-state="closing"]) > *,
+.zen-fold-item[data-fold-state="closed"] > * {
   min-height: 0;
   overflow: hidden;
+}
+
+@keyframes zen-fold-open {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
+@keyframes zen-fold-close {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
 }
 
 /* Live steps fade in place. A slide or blur hitch the autoscroll. */
@@ -1037,9 +1072,19 @@ header[data-tauri-drag-region] button {
     animation: none;
   }
 
-  .zen-phase-body,
-  .zen-fold-item {
+  .zen-phase-body {
     transition: none;
+  }
+
+  .zen-fold-item[data-fold-state="opening"] {
+    display: flow-root;
+    animation: none;
+  }
+
+  .zen-fold-item[data-fold-state="closing"] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    animation: none;
   }
 }
 
@@ -1197,9 +1242,7 @@ header[data-tauri-drag-region] button {
   }
 }
 
-[data-session-review-shell]
-  + [data-message-queue]
-  [data-message-queue-card] {
+[data-session-review-shell] + [data-message-queue] [data-message-queue-card] {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }

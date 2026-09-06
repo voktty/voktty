@@ -312,10 +312,14 @@ import {
   turnUserRequest,
 } from "./lib/secondOpinion";
 import { PaneTree } from "./surfaces/PaneTree";
+import { SessionPane } from "./surfaces/SessionPane";
+import { SessionSurface } from "./surfaces/SessionSurface";
 import { ProjectTerminalDock } from "./surfaces/ProjectTerminalDock";
 import { SearchView } from "./surfaces/SearchView";
 import { SettingsView } from "./surfaces/SettingsView";
 import { InboxView } from "./surfaces/InboxView";
+import type { InboxSessionPortal } from "./surfaces/InboxDiscussionPanel";
+import { inboxAskKey, inboxAskPrompt } from "./lib/inboxAsk";
 import { NotesView } from "./surfaces/NotesView";
 import { inboxComposerCard, type InboxItem } from "./lib/githubTasks";
 import { linearIssueDetails, peekLinearIssueDetails } from "./lib/linear";
@@ -606,6 +610,8 @@ export default function App({
   const [searchViewOpen, setSearchViewOpen] = useState(false);
   const [searchViewFocusToken, setSearchViewFocusToken] = useState(0);
   const [inboxViewOpen, setInboxViewOpen] = useState(false);
+  const [inboxAskPortal, setInboxAskPortal] = useState<InboxSessionPortal | null>(null);
+  const openingInboxSessions = useRef(new Map<string, Promise<string>>());
   const [notesViewOpen, setNotesViewOpen] = useState(false);
   const notesEnabled = useSyncExternalStore(
     subscribeNotesEnabled,
@@ -959,7 +965,7 @@ export default function App({
   }
   const approvalSessionIds = approvalSessionIdsRef.current;
 
-  const activeSessionId = active?.id;
+  const activeSessionId = inboxViewOpen ? inboxAskPortal?.sessionId : active?.id;
   const activeSessionIdRef = useRef(activeSessionId);
   activeSessionIdRef.current = activeSessionId;
 
@@ -1279,6 +1285,11 @@ export default function App({
   // then parks it and resumes on the next prompt.
   useEffect(() => {
     const visibleIds = openSessionIds(tabs);
+    // Inbox owns these panes independently of project tabs. Keep their drafts
+    // and attachments mounted when the panel closes or switches items.
+    for (const session of sessions) {
+      if (session.inboxAsk) visibleIds.add(session.id);
+    }
     const keepUnseen = liveAgentsEnabled;
     const idleDetached = sessions.filter(
       (session) =>
@@ -2271,6 +2282,10 @@ export default function App({
   const onFocusPane = useCallback(
     (paneId: string) => {
       setProjectTerminalFocused(false);
+      if (inboxAskPortal?.sessionId === paneId) {
+        setComposerFocused(true);
+        return;
+      }
       setTabs((prev) =>
         prev.map((t) =>
           t.id === activeTabId
@@ -2282,7 +2297,7 @@ export default function App({
         sessionsRef.current.some((session) => session.id === paneId),
       );
     },
-    [activeTabId],
+    [activeTabId, inboxAskPortal],
   );
 
   const onOpenDiff = useCallback(
@@ -2491,11 +2506,68 @@ export default function App({
     [refreshHistory, sidebarCwd],
   );
 
+  const onAskInboxItem = useCallback((item: InboxItem): Promise<string> => {
+    const key = inboxAskKey(item);
+    const pending = openingInboxSessions.current.get(key);
+    if (pending) return pending;
+    const opening = (async () => {
+      let session = sessionsRef.current.find(entry => entry.inboxAsk?.key === key);
+      if (!session) {
+        const candidate = item.projectPath || sidebarCwd;
+        const cwd = candidate && candidate !== "~" ? candidate : await invoke<string>("default_cwd");
+        const description = item.provider === "linear" && item.id
+          ? (peekLinearIssueDetails(item.id) ?? await linearIssueDetails(item.id)).body
+          : undefined;
+        session = {
+          ...newDefaultSession(cwd),
+          title: `Ask · ${item.title}`,
+          inboxAsk: { key, title: item.title, url: item.url, provider: item.provider, description },
+        };
+        sessionsRef.current = [...sessionsRef.current, session];
+        setSessions(sessionsRef.current);
+      }
+      return session.id;
+    })();
+    openingInboxSessions.current.set(key, opening);
+    void opening.then(
+      () => openingInboxSessions.current.delete(key),
+      () => openingInboxSessions.current.delete(key),
+    );
+    return opening;
+  }, [sidebarCwd]);
+
+  const onRestartInboxAsk = useCallback(async (item: InboxItem): Promise<string> => {
+    const id = await onAskInboxItem(item);
+    const current = sessionsRef.current.find(session => session.id === id)!;
+    removingSessionIds.current.add(id);
+    try {
+      await stopSessionForRemoval(id);
+      await Promise.all(sessionChildHarnesses(current).map(harness => forgetHarnessSession(harness, id)));
+      const fresh = {
+        ...newSession(current.harness, current.cwd, current.model, current.runtimeMode, current.modelSettings),
+        title: current.title,
+        inboxAsk: current.inboxAsk,
+      };
+      const next = sessionsRef.current.map(session => session.id === id ? fresh : session);
+      sessionsRef.current = next;
+      setSessions(next);
+      setInboxAskPortal(portal => portal?.sessionId === id ? { ...portal, sessionId: fresh.id } : portal);
+      return fresh.id;
+    } finally {
+      removingSessionIds.current.delete(id);
+    }
+  }, [onAskInboxItem, stopSessionForRemoval]);
+
+  useEffect(() => {
+    if (!inboxAskPortal || !inboxViewOpen) return;
+    setComposerFocused(true);
+  }, [inboxAskPortal, inboxViewOpen]);
+
   const onSelectHistorySession = useCallback(
     async (sessionId: string) => {
       if (focusOpenSession(sessionId)) return;
       const session = await ensureOpenSession(sessionId);
-      if (!session) return;
+      if (!session || session.inboxAsk) return;
       if (replaceBlankPaneWithSession(session)) return;
       const tab = newTab(session.id);
       appendTab(tab, session.cwd);
@@ -3438,7 +3510,7 @@ export default function App({
               cwd: workCwd,
               model: current.model,
               modelSettings: current.modelSettings,
-              text: prompt,
+              text: inboxAskPrompt(rawCommand ? undefined : current.inboxAsk, prompt),
               attachments: prepared,
             });
           } catch (error: unknown) {
@@ -3660,7 +3732,9 @@ export default function App({
           return event;
         };
 
-        await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
+        if (!current.inboxAsk) {
+          await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
+        }
         if (turnGen.current.get(sessionId) !== gen) return;
         let buildSucceeded = false;
         try {
@@ -3686,14 +3760,14 @@ export default function App({
             modelSettings: current.modelSettings,
             runtimeMode: current.runtimeMode,
             intent,
-            text: wrap && !rawCommand
+            text: inboxAskPrompt(rawCommand ? undefined : current.inboxAsk, wrap && !rawCommand
               ? wrapHandoffPrompt(
                   wrap.text,
                   wrap.from,
                   turnPrompt.trim() || CONTINUE_PROMPT,
                   earlier,
                 )
-              : turnPrompt,
+              : turnPrompt),
             attachments: prepared,
             onEvent: (event) => {
               if (turnGen.current.get(sessionId) !== gen) return;
@@ -4358,7 +4432,7 @@ export default function App({
   const openProjectSessions = useMemo(
     () =>
       sessions
-        .filter((session) => sameProjectPath(session.cwd, sidebarCwd))
+        .filter((session) => !session.inboxAsk && sameProjectPath(session.cwd, sidebarCwd))
         .map((session) =>
           summaryFromSession(session, {
             ...(projectBranches?.current
@@ -4912,6 +4986,38 @@ export default function App({
     );
   }, [currentProjectDock, dockVisible]);
 
+  const sessionPaneProps = {
+    recents,
+    hideProjectPicker: true,
+    onFocus: onFocusPane,
+    onClose: onClosePane,
+    onCwdChange,
+    onBranchChange,
+    onModelChange,
+    onModelSettingsChange,
+    onRuntimeModeChange,
+    onSubmit,
+    onStop,
+    onCompactContext,
+    onDeleteQueuedMessage,
+    onEditQueuedMessage,
+    onQueuedMessageEditingChange,
+    onSteerQueuedMessage,
+    onResumeQueue,
+    onInboxCardDismiss,
+    onNoteCardDismiss,
+    onHandoffCardDismiss,
+    onApproval,
+    onQuestionReply,
+    onOpenFile,
+    onOpenDiff,
+    onOpenPlan,
+    onBuildPlan,
+    onSecondOpinion,
+    onHandoff,
+    onNewTerminal: onNewTerminalInSession,
+  };
+
   return (
     <div
       className={`flex h-full text-content ${
@@ -5123,7 +5229,8 @@ export default function App({
                     >
                       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                         <PaneTree
-                          visible={tab.id === activeTabId}
+                          {...sessionPaneProps}
+                          visible={tab.id === activeTabId && !inboxViewOpen}
                           layout={tab.layout}
                           sessions={sessions}
                           editorPanes={[
@@ -5134,6 +5241,7 @@ export default function App({
                           fileErrorCounts={fileErrorCounts}
                           focusedId={
                             tab.id === activeTabId &&
+                            !inboxViewOpen &&
                             !tab.diffFocused &&
                             !projectTerminalFocused
                               ? tab.focusedId
@@ -5145,10 +5253,6 @@ export default function App({
                           composerFocused={
                             composerFocused && !projectTerminalFocused
                           }
-                          recents={recents}
-                          hideProjectPicker
-                          onFocus={onFocusPane}
-                          onClose={onClosePane}
                           onSelectFile={onSelectFileSurface}
                           onCloseFile={onCloseFile}
                           onReorderFiles={onReorderFiles}
@@ -5157,36 +5261,9 @@ export default function App({
                           onRatio={(splitId, index, ratio) =>
                             onRatio(tab.id, splitId, index, ratio)
                           }
-                          onCwdChange={onCwdChange}
-                          onBranchChange={onBranchChange}
-                          onModelChange={onModelChange}
-                          onModelSettingsChange={onModelSettingsChange}
-                          onRuntimeModeChange={onRuntimeModeChange}
-                          onSubmit={onSubmit}
-                          onStop={onStop}
-                          onCompactContext={onCompactContext}
-                          onDeleteQueuedMessage={onDeleteQueuedMessage}
-                          onEditQueuedMessage={onEditQueuedMessage}
-                          onQueuedMessageEditingChange={
-                            onQueuedMessageEditingChange
-                          }
-                          onSteerQueuedMessage={onSteerQueuedMessage}
-                          onResumeQueue={onResumeQueue}
-                          onInboxCardDismiss={onInboxCardDismiss}
-                          onNoteCardDismiss={onNoteCardDismiss}
-                          onHandoffCardDismiss={onHandoffCardDismiss}
-                          onApproval={onApproval}
-                          onQuestionReply={onQuestionReply}
-                          onOpenFile={onOpenFile}
                           editorNavigation={editorNavigation}
-                          onOpenDiff={onOpenDiff}
-                          onOpenPlan={onOpenPlan}
                           onUpdatePlan={onUpdatePlan}
-                          onBuildPlan={onBuildPlan}
-                          onSecondOpinion={onSecondOpinion}
-                          onHandoff={onHandoff}
                           onMovePane={onMovePane}
-                          onNewTerminal={onNewTerminalInSession}
                           onTerminalMetaChange={onTerminalMetaChange}
                         />
                       </div>
@@ -5203,7 +5280,7 @@ export default function App({
             cwd={sidebarCwd}
             recents={recents}
             history={projectHistory}
-            sessions={sessions}
+            sessions={sessions.filter(session => !session.inboxAsk)}
             focusToken={searchViewFocusToken}
             besideRail={projectRailOpen}
             onClose={onLeaveSearch}
@@ -5213,6 +5290,28 @@ export default function App({
             onOpenProject={onSelectProject}
           />
         ) : null}
+        <div className="hidden" aria-hidden>
+          {sessions
+            .filter(session => session.inboxAsk)
+            .map(session => {
+              const visible = inboxViewOpen && inboxAskPortal?.sessionId === session.id;
+              return (
+                <SessionSurface
+                  key={session.id}
+                  host={visible ? inboxAskPortal.host : undefined}
+                >
+                  <SessionPane
+                    {...sessionPaneProps}
+                    session={session}
+                    visible={visible}
+                    focused={visible}
+                    inSplit={false}
+                    composerFocused={composerFocused}
+                  />
+                </SessionSurface>
+              );
+            })}
+        </div>
         {inboxViewOpen ? (
           <InboxView
             cwd={sidebarCwd}
@@ -5221,6 +5320,9 @@ export default function App({
             onClose={onLeaveInbox}
             onToggleSidebar={onToggleSidebar}
             onStart={onStartInboxItem}
+            onAsk={onAskInboxItem}
+            onAskRestart={onRestartInboxAsk}
+            onAskMount={setInboxAskPortal}
           />
         ) : null}
         {notesViewOpen ? (

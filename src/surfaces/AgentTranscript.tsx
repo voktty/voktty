@@ -464,7 +464,6 @@ export function AgentTranscript({
                     key={turnItemKey(item)}
                     folded={!workOpen && inFold}
                     indented={inFold}
-                    railHead={inFold && itemIndex === fold?.start}
                     railTail={inFold && itemIndex === fold?.end}
                   >
                     {renderItem(item, itemIndex)}
@@ -941,40 +940,58 @@ function UserMessageBlock({
 }
 
 /**
- * One row of a turn, in a box that never moves. Folding is then a height on a
- * stable element: nothing is reparented and nothing remounts, so a run of work
- * sinks behind the fold line instead of blinking out from under the text that
- * replaced it. The row owns the gap below it too, so the space folds away with
- * the work rather than stacking up as a column of nothing.
+ * One row of a turn, kept in place while folded so opening it does not remount
+ * nested controls. Folded rows take no space; visible rows stay out of Grid
+ * so they rewrap naturally when their pane changes width.
  */
 function TurnRow({
   folded,
   indented = false,
-  railHead = false,
   railTail = false,
   children,
 }: {
   folded: boolean;
   /** Work that hangs off the fold line, indented to sit under its title. */
   indented?: boolean;
-  /** The first row under the fold line: where the connector curves in. */
-  railHead?: boolean;
   /** The last row the fold holds: where the spine leaves off. */
   railTail?: boolean;
   children: ReactNode;
 }) {
+  const [foldState, setFoldState] = useState<
+    "open" | "opening" | "closing" | "closed"
+  >(folded ? "closed" : "open");
+
+  useLayoutEffect(() => {
+    setFoldState((current) => {
+      if (folded) {
+        return current === "closed" || current === "closing"
+          ? current
+          : "closing";
+      }
+      return current === "open" || current === "opening" ? current : "opening";
+    });
+  }, [folded]);
+
   return (
-    // `inert` keeps folded work out of tab order and off the screen reader
-    // while it is only a height away from view.
-    <div className="zen-fold-item" data-folded={folded} inert={folded}>
+    // `inert` keeps folded work out of tab order and off the screen reader.
+    <div
+      className="zen-fold-item"
+      data-fold-state={foldState}
+      inert={folded}
+      onAnimationEnd={(event) => {
+        if (event.target !== event.currentTarget) return;
+        setFoldState(folded ? "closed" : "open");
+      }}
+    >
+      {/* Keep padding off the Grid item itself. Otherwise its 4px bottom
+       * padding survives a 0fr track and every folded row leaves a gap. */}
       <div>
-        {/* 20px puts the row under the fold line's title rather than its
-         * mark, so opened work reads as hanging off that line instead of
-         * running on from the answer below it. */}
+        {/* 20px puts the row under the fold line's title rather than its mark,
+         * so opened work reads as hanging off that line. */}
         <div
           className={`pb-1 ${indented ? "pl-5 zen-fold-rail" : ""} ${
-            railHead ? "zen-fold-head" : ""
-          } ${railTail ? "zen-fold-tail" : ""}`}
+            railTail ? "zen-fold-tail" : ""
+          }`}
         >
           {children}
         </div>

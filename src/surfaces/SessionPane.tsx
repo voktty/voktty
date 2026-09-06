@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Composer } from "../chrome/Composer";
+import { DiscussionEmpty } from "../chrome/DiscussionEmpty";
 import { SessionReview } from "../chrome/SessionReview";
 import {
   canCompactHarnessContext,
@@ -235,7 +236,7 @@ export const SessionPane = memo(function SessionPane({
   const workCwd = sessionWorkCwd(session);
   const isEmpty = session.blocks.length === 0;
   const showDeckProjectPicker = isEmpty && !looksLikeProject(session.cwd);
-  const dockComposer = !isEmpty || inSplit;
+  const dockComposer = !isEmpty || inSplit || !!session.inboxAsk;
   const draftRef = useRef<string | undefined>(undefined);
   const composer = (
     <Composer
@@ -252,7 +253,12 @@ export const SessionPane = memo(function SessionPane({
       sessionId={session.id}
       compactSupported={canCompactHarnessContext(session.harness)}
       recents={recents}
-      hideProjectPicker={hideProjectPicker ? !showDeckProjectPicker : false}
+      hideProjectPicker={
+        !!session.inboxAsk ||
+        (hideProjectPicker ? !showDeckProjectPicker : false)
+      }
+      hideBranchPicker={!!session.inboxAsk}
+      hideTopBar={!!session.inboxAsk}
       context={session.context}
       quoteRequest={quoteRequest}
       initialDraft={
@@ -312,14 +318,16 @@ export const SessionPane = memo(function SessionPane({
       onOpenFile={onOpenFile}
       busy={!!session.busy}
     >
-      <SessionReview
-        sessionId={session.id}
-        cwd={workCwd}
-        enabled={visible}
-        busy={!!session.busy}
-        undoLocked={reviewUndoLocked}
-        onOpenDiff={onOpenDiff}
-      />
+      {session.inboxAsk ? null : (
+        <SessionReview
+          sessionId={session.id}
+          cwd={workCwd}
+          enabled={visible}
+          busy={!!session.busy}
+          undoLocked={reviewUndoLocked}
+          onOpenDiff={onOpenDiff}
+        />
+      )}
     </Composer>
   );
 
@@ -381,10 +389,16 @@ export const SessionPane = memo(function SessionPane({
       ) : null}
       <div className="relative min-h-0 flex-1">
         {isEmpty ? (
-          <EmptySession
-            cwd={session.cwd}
-            composer={dockComposer ? undefined : composer}
-          />
+          session.inboxAsk ? (
+            <div className="scrollbar-none h-full min-h-0 overflow-y-auto">
+              <DiscussionEmpty message="Explore this item with your agent." />
+            </div>
+          ) : (
+            <EmptySession
+              cwd={session.cwd}
+              composer={dockComposer ? undefined : composer}
+            />
+          )
         ) : (
           <>
             <AgentTranscript
@@ -403,13 +417,13 @@ export const SessionPane = memo(function SessionPane({
               onOpenPlan={openPlan}
               onBuildPlan={buildPlan}
               onSecondOpinion={
-                onSecondOpinion
+                !session.inboxAsk && onSecondOpinion
                   ? (harness, turn, model) =>
                       onSecondOpinion(session.id, harness, turn, model)
                   : undefined
               }
               onHandoff={
-                onHandoff
+                !session.inboxAsk && onHandoff
                   ? (harness, turn, model) =>
                       onHandoff(session.id, harness, turn, model)
                   : undefined

@@ -169,6 +169,7 @@ export async function notifySession(
   event: NotificationEvent,
   sessionVisible: boolean,
 ): Promise<boolean> {
+  if (session.inboxAsk) return false;
   const decision = shouldNotify({
     enabled: loadNotificationsEnabled(),
     permission,
