@@ -2602,6 +2602,12 @@ export const en = {
     filesChangedCount:
       "{count} {count, plural, =1 {file} other {files}} changed",
     noSubject: "(no subject)",
+    revertCommit: "Revert commit",
+    revertConfirmTitle: "Revert this commit?",
+    revertConfirmDescription:
+      "This creates a new commit that undoes \u201c{subject}\u201d ({sha}). It won't rewrite history, but it can conflict if later commits touched the same lines \u2014 if that happens, nothing is changed and you'll need to resolve it from the terminal.",
+    revertSuccess: "Commit reverted",
+    revertFailed: "Could not revert commit",
     headers: {
       subject: "Subject",
       author: "Author",

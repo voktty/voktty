@@ -633,4 +633,10 @@ export const native = {
       repoRoot,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
+  gitRevertCommit: (repoRoot: string, sha: string, workspace?: WorkspaceEnv) =>
+    invoke<string>("git_revert_commit", {
+      repoRoot,
+      sha,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
 };

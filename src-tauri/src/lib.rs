@@ -418,6 +418,7 @@ pub fn run() {
             git::commands::git_clone,
             git::commands::git_publish,
             git::commands::git_undo_commit,
+            git::commands::git_revert_commit,
             shell::shell_run_command,
             shell::shell_session_open,
             shell::shell_session_run,

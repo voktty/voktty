@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -15,6 +25,7 @@ import {
 import { useTranslation } from "@/modules/i18n";
 import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
 import {
+  ArrowLeft01Icon,
   Copy01Icon,
   File02Icon,
   LinkSquare02Icon,
@@ -33,6 +44,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { GraphRail, MAX_VISIBLE_LANES, railWidth } from "./GraphRail";
 import {
   EMPTY_GRAPH_STATE,
@@ -224,6 +236,8 @@ export function GitHistoryPane({
     height: number;
   } | null>(null);
   const [remoteWeb, setRemoteWeb] = useState<RemoteWebInfo | null>(null);
+  const [pendingRevert, setPendingRevert] = useState<GitLogEntry | null>(null);
+  const [reverting, setReverting] = useState(false);
   const filesCacheRef = useRef(new Map<string, FilesEntry>());
   const [filesTick, setFilesTick] = useState(0);
   const bumpFiles = useCallback(() => setFilesTick((n) => n + 1), []);
@@ -509,6 +523,33 @@ export function GitHistoryPane({
     }
   }, []);
 
+  const requestRevert = useCallback((commit: GitLogEntry) => {
+    setOpenAnchor(null);
+    setPendingRevert(commit);
+  }, []);
+
+  const cancelPendingRevert = useCallback(() => {
+    if (reverting) return;
+    setPendingRevert(null);
+  }, [reverting]);
+
+  const confirmPendingRevert = useCallback(async () => {
+    if (!pendingRevert) return;
+    setReverting(true);
+    try {
+      await native.gitRevertCommit(repoRoot, pendingRevert.sha, workspaceEnv);
+      toast.success(t("gitHistory.revertSuccess"));
+      setPendingRevert(null);
+      handleRefresh();
+    } catch (err) {
+      toast.error(t("gitHistory.revertFailed"), {
+        description: normalizeError(err),
+      });
+    } finally {
+      setReverting(false);
+    }
+  }, [handleRefresh, pendingRevert, repoRoot, t, workspaceEnv]);
+
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={200}>
       <div className="flex h-full min-h-0 flex-col bg-background [contain:layout_style]">
@@ -670,12 +711,56 @@ export function GitHistoryPane({
                       onCopySha={copyToClipboard}
                       onOpenFile={handleFileOpen}
                       onRetryFiles={() => void fetchFiles(openAnchor.sha)}
+                      onRevert={requestRevert}
                     />
                   );
                 })()
               : null}
           </PopoverContent>
         </Popover>
+
+        <AlertDialog
+          open={pendingRevert !== null}
+          onOpenChange={(open) => {
+            if (!open) cancelPendingRevert();
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t("gitHistory.revertConfirmTitle")}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {pendingRevert
+                  ? t("gitHistory.revertConfirmDescription", {
+                      subject:
+                        pendingRevert.subject || t("gitHistory.noSubject"),
+                      sha: pendingRevert.shortSha,
+                    })
+                  : null}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                disabled={reverting}
+                onClick={cancelPendingRevert}
+              >
+                {t("common.cancel")}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={reverting}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void confirmPendingRevert();
+                }}
+              >
+                {reverting
+                  ? t("common.loading")
+                  : t("gitHistory.revertCommit")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   );
@@ -821,6 +906,7 @@ type CommitDetailProps = {
     file: GitCommitFileChange,
   ) => Promise<void> | void;
   onRetryFiles: () => void;
+  onRevert: (commit: GitLogEntry) => void;
 };
 
 function CommitDetail({
@@ -830,6 +916,7 @@ function CommitDetail({
   onCopySha,
   onOpenFile,
   onRetryFiles,
+  onRevert,
 }: CommitDetailProps) {
   const { t } = useTranslation();
   const absolute = absoluteTime(commit.timestampSecs);
@@ -901,6 +988,15 @@ function CommitDetail({
               {hostLabel(remoteWeb)}
             </Button>
           ) : null}
+          <Button
+            size="xs"
+            variant="ghost"
+            className="h-6 cursor-pointer gap-1.5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={() => onRevert(commit)}
+          >
+            <HugeiconsIcon icon={ArrowLeft01Icon} size={11} strokeWidth={1.9} />
+            {t("gitHistory.revertCommit")}
+          </Button>
         </div>
       </div>
 

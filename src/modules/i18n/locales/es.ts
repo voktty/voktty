@@ -2668,6 +2668,12 @@ export const es: TranslationSchema = {
     unknownAuthor: "Desconocido",
     filesChangedCount: "{count} archivo(s) cambiados",
     noSubject: "(sin asunto)",
+    revertCommit: "Revertir commit",
+    revertConfirmTitle: "¿Revertir este commit?",
+    revertConfirmDescription:
+      "Esto crea un nuevo commit que deshace “{subject}” ({sha}). No reescribe el historial, pero puede haber conflicto si commits posteriores tocaron las mismas líneas — si pasa eso, no se cambia nada y tendrás que resolverlo desde la terminal.",
+    revertSuccess: "Commit revertido",
+    revertFailed: "No se pudo revertir el commit",
     headers: {
       subject: "Asunto",
       author: "Autor",
