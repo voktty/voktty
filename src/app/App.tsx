@@ -273,6 +273,70 @@ function clampRightPanelWidth(width: number): number {
   );
 }
 
+/**
+ * Native, single source of truth for "opening something split creates or
+ * joins a Space": every entry point that can open a tab side-by-side with
+ * the active one (preview/dev-server launch from the top or bottom menu,
+ * duplicate tab, split-pane shortcut) resolves the same target view space
+ * through this pair of helpers, instead of re-deriving it per call site.
+ */
+function resolveSpaceJoinTarget(referenceTab: Tab) {
+  const spaceId = referenceTab.spaceId;
+  const spacesState = useSpaces.getState();
+  const existingOwner = spacesState.viewSpaces.find(
+    (vs) => !vs.deleted && vs.memberOrder.includes(referenceTab.tabKey),
+  );
+  const workspaceViewSpace = spacesState.viewSpaces.find(
+    (vs) => !vs.deleted && vs.id === `view-${spaceId}`,
+  );
+  const targetViewSpace = existingOwner ?? workspaceViewSpace;
+  const currentMemberCount = targetViewSpace
+    ? targetViewSpace.memberOrder.length
+    : 1;
+  return { spaceId, spacesState, targetViewSpace, currentMemberCount };
+}
+
+function hasRoomToSplit(referenceTab: Tab, limit: number): boolean {
+  return resolveSpaceJoinTarget(referenceTab).currentMemberCount < limit;
+}
+
+/** Joins `newTab` into the space `referenceTab` lives in, creating that
+ * space on first use. Returns false (no-op) once the space is at `limit`. */
+function joinTabIntoSpaceNextTo(
+  referenceTab: Tab,
+  newTab: Tab,
+  limit: number,
+): boolean {
+  const { spaceId, spacesState, targetViewSpace, currentMemberCount } =
+    resolveSpaceJoinTarget(referenceTab);
+  if (currentMemberCount >= limit) return false;
+
+  const targetViewSpaceId = targetViewSpace
+    ? targetViewSpace.id
+    : spacesState.ensureViewSpace({
+        workspaceId: spaceId,
+        name: spacesState.spaces.find((s) => s.id === spaceId)?.name ?? spaceId,
+        color: spacesState.spaces.find((s) => s.id === spaceId)?.color,
+        initialMember: referenceTab.tabKey,
+      });
+
+  if (
+    !spacesState.viewSpaces
+      .find((vs) => vs.id === targetViewSpaceId)
+      ?.memberOrder.includes(referenceTab.tabKey)
+  ) {
+    spacesState.addMemberToViewSpace(
+      targetViewSpaceId,
+      referenceTab.tabKey,
+      limit,
+    );
+  }
+  spacesState.addMemberToViewSpace(targetViewSpaceId, newTab.tabKey, limit);
+  spacesState.openViewSpace(targetViewSpaceId);
+  spacesState.focusVisualMember(newTab.tabKey);
+  return true;
+}
+
 function readRightPanelWidth(): number {
   try {
     const stored = window.localStorage.getItem(RIGHT_PANEL_WIDTH_STORAGE_KEY);
@@ -2289,54 +2353,9 @@ export default function App() {
         if (!shouldSplit) return;
         const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
         if (!activeTab) return;
-        const spaceId = activeTab.spaceId;
-        const spacesState = useSpaces.getState();
         const newTab = tabsRef.current.find((t) => t.id === newTabId);
         if (!newTab) return;
-
-        const existingOwner = spacesState.viewSpaces.find(
-          (vs) => !vs.deleted && vs.memberOrder.includes(activeTab.tabKey),
-        );
-        const workspaceViewSpace = spacesState.viewSpaces.find(
-          (vs) => !vs.deleted && vs.id === `view-${spaceId}`,
-        );
-        const targetViewSpace = existingOwner ?? workspaceViewSpace;
-        const currentMemberCount = targetViewSpace
-          ? targetViewSpace.memberOrder.length
-          : 1;
-
-        if (currentMemberCount < spaceViewLimit) {
-          const targetViewSpaceId = targetViewSpace
-            ? targetViewSpace.id
-            : spacesState.ensureViewSpace({
-                workspaceId: spaceId,
-                name:
-                  spacesState.spaces.find((s) => s.id === spaceId)?.name ??
-                  spaceId,
-                color: spacesState.spaces.find((s) => s.id === spaceId)?.color,
-                initialMember: activeTab.tabKey,
-              });
-
-          if (
-            !spacesState.viewSpaces
-              .find((vs) => vs.id === targetViewSpaceId)
-              ?.memberOrder.includes(activeTab.tabKey)
-          ) {
-            spacesState.addMemberToViewSpace(
-              targetViewSpaceId,
-              activeTab.tabKey,
-              spaceViewLimit,
-            );
-          }
-
-          spacesState.addMemberToViewSpace(
-            targetViewSpaceId,
-            newTab.tabKey,
-            spaceViewLimit,
-          );
-          spacesState.openViewSpace(targetViewSpaceId);
-          spacesState.focusVisualMember(newTab.tabKey);
-        }
+        joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
       };
 
       if (/^https?:\/\//i.test(explicit)) {
@@ -2536,53 +2555,9 @@ export default function App() {
       });
       const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
       if (activeTab) {
-        const spaceId = activeTab.spaceId;
-        const spacesState = useSpaces.getState();
         const newTab = tabsRef.current.find((t) => t.id === id);
         if (newTab) {
-          const existingOwner = spacesState.viewSpaces.find(
-            (vs) => !vs.deleted && vs.memberOrder.includes(activeTab.tabKey),
-          );
-          const workspaceViewSpace = spacesState.viewSpaces.find(
-            (vs) => !vs.deleted && vs.id === `view-${spaceId}`,
-          );
-          const targetViewSpace = existingOwner ?? workspaceViewSpace;
-          const currentMemberCount = targetViewSpace
-            ? targetViewSpace.memberOrder.length
-            : 1;
-
-          if (currentMemberCount < spaceViewLimit) {
-            const targetViewSpaceId = targetViewSpace
-              ? targetViewSpace.id
-              : spacesState.ensureViewSpace({
-                  workspaceId: spaceId,
-                  name:
-                    spacesState.spaces.find((s) => s.id === spaceId)?.name ??
-                    spaceId,
-                  color: spacesState.spaces.find((s) => s.id === spaceId)?.color,
-                  initialMember: activeTab.tabKey,
-                });
-
-            if (
-              !spacesState.viewSpaces
-                .find((vs) => vs.id === targetViewSpaceId)
-                ?.memberOrder.includes(activeTab.tabKey)
-            ) {
-              spacesState.addMemberToViewSpace(
-                targetViewSpaceId,
-                activeTab.tabKey,
-                spaceViewLimit,
-              );
-            }
-
-            spacesState.addMemberToViewSpace(
-              targetViewSpaceId,
-              newTab.tabKey,
-              spaceViewLimit,
-            );
-            spacesState.openViewSpace(targetViewSpaceId);
-            spacesState.focusVisualMember(newTab.tabKey);
-          }
+          joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
         }
       }
       return id;
@@ -2644,27 +2619,17 @@ export default function App() {
     (id: number) => {
       const source = tabsRef.current.find((tab) => tab.id === id);
       if (source?.kind !== "terminal") return;
-      const spaceId = source.spaceId;
-      const spacesState = useSpaces.getState();
 
-      const existingOwner = spacesState.viewSpaces.find(
-        (vs) => !vs.deleted && vs.memberOrder.includes(source.tabKey),
-      );
-      const workspaceViewSpace = spacesState.viewSpaces.find(
-        (vs) => !vs.deleted && vs.id === `view-${spaceId}`,
-      );
-      const targetViewSpace = existingOwner ?? workspaceViewSpace;
-      const currentMemberCount = targetViewSpace
-        ? targetViewSpace.memberOrder.length
-        : 1;
-
-      if (currentMemberCount >= spaceViewLimit) {
+      if (!hasRoomToSplit(source, spaceViewLimit)) {
         playErrorTone();
         toast.error(t("spaces.maxSlots"));
         return;
       }
 
-      const spaceEnv = spacesState.spaces.find((space) => space.id === spaceId)?.env;
+      const spacesState = useSpaces.getState();
+      const spaceEnv = spacesState.spaces.find(
+        (space) => space.id === source.spaceId,
+      )?.env;
       const env = source.workspaceEnv ?? spaceEnv ?? LOCAL_WORKSPACE;
       setWorkspaceEnv(env);
       const newTabId = duplicateTab(id, env);
@@ -2672,34 +2637,7 @@ export default function App() {
 
       const newTab = tabsRef.current.find((t) => t.id === newTabId);
       if (newTab) {
-        const targetViewSpaceId = targetViewSpace
-          ? targetViewSpace.id
-          : spacesState.ensureViewSpace({
-              workspaceId: spaceId,
-              name: spacesState.spaces.find((s) => s.id === spaceId)?.name ?? spaceId,
-              color: spacesState.spaces.find((s) => s.id === spaceId)?.color,
-              initialMember: source.tabKey,
-            });
-
-        if (
-          !spacesState.viewSpaces
-            .find((vs) => vs.id === targetViewSpaceId)
-            ?.memberOrder.includes(source.tabKey)
-        ) {
-          spacesState.addMemberToViewSpace(
-            targetViewSpaceId,
-            source.tabKey,
-            spaceViewLimit,
-          );
-        }
-
-        spacesState.addMemberToViewSpace(
-          targetViewSpaceId,
-          newTab.tabKey,
-          spaceViewLimit,
-        );
-        spacesState.openViewSpace(targetViewSpaceId);
-        spacesState.focusVisualMember(newTab.tabKey);
+        joinTabIntoSpaceNextTo(source, newTab, spaceViewLimit);
         setActiveId(newTabId);
       }
     },
@@ -2740,20 +2678,7 @@ export default function App() {
       if (activeTab.kind === "terminal") {
         handleDuplicateTab(activeTab.id);
       } else if (activeTab.kind === "editor" && activeTab.path) {
-        const spaceId = activeTab.spaceId;
-        const spacesState = useSpaces.getState();
-        const existingOwner = spacesState.viewSpaces.find(
-          (vs) => !vs.deleted && vs.memberOrder.includes(activeTab.tabKey),
-        );
-        const workspaceViewSpace = spacesState.viewSpaces.find(
-          (vs) => !vs.deleted && vs.id === `view-${spaceId}`,
-        );
-        const targetViewSpace = existingOwner ?? workspaceViewSpace;
-        const currentMemberCount = targetViewSpace
-          ? targetViewSpace.memberOrder.length
-          : 1;
-
-        if (currentMemberCount >= spaceViewLimit) {
+        if (!hasRoomToSplit(activeTab, spaceViewLimit)) {
           playErrorTone();
           toast.error(t("spaces.maxSlots"));
           return;
@@ -2762,35 +2687,7 @@ export default function App() {
         const newTabId = openFileTab(activeTab.path, true, { spaceId: activeTab.spaceId });
         const newTab = tabsRef.current.find((tab) => tab.id === newTabId);
         if (newTab) {
-          const targetViewSpaceId = targetViewSpace
-            ? targetViewSpace.id
-            : spacesState.ensureViewSpace({
-                workspaceId: spaceId,
-                name:
-                  spacesState.spaces.find((s) => s.id === spaceId)?.name ??
-                  spaceId,
-                color: spacesState.spaces.find((s) => s.id === spaceId)?.color,
-                initialMember: activeTab.tabKey,
-              });
-
-          if (
-            !spacesState.viewSpaces
-              .find((vs) => vs.id === targetViewSpaceId)
-              ?.memberOrder.includes(activeTab.tabKey)
-          ) {
-            spacesState.addMemberToViewSpace(
-              targetViewSpaceId,
-              activeTab.tabKey,
-              spaceViewLimit,
-            );
-          }
-          spacesState.addMemberToViewSpace(
-            targetViewSpaceId,
-            newTab.tabKey,
-            spaceViewLimit,
-          );
-          spacesState.openViewSpace(targetViewSpaceId);
-          spacesState.focusVisualMember(newTab.tabKey);
+          joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
           setActiveId(newTabId);
         }
       }
