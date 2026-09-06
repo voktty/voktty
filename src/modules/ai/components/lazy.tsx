@@ -32,10 +32,16 @@ export function AgentRunBridge(props: AgentRunBridgeProps) {
   );
 }
 
-export function AiMiniWindow({ state }: { state: PresenceState }) {
+export function AiMiniWindow({
+  state,
+  composer,
+}: {
+  state: PresenceState;
+  composer?: ReactNode;
+}) {
   return (
     <Suspense fallback={null}>
-      <AiMiniWindowInner state={state} />
+      <AiMiniWindowInner state={state} composer={composer} />
     </Suspense>
   );
 }

@@ -3126,9 +3126,31 @@ pub async fn read_text_file(path: String) -> Result<String, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// Short retry ladder for a file that an external agent CLI (a separate
+/// process, its own I/O) just reported writing: the "tool call completed"
+/// event can reach the frontend and trigger an open before that process's
+/// write is visible to ours, surfacing a raw NotFound instead of a real
+/// error. Only NotFound is retried; anything else (permissions, etc.) is a
+/// genuine failure and returns immediately.
+const REOPEN_RETRY_DELAYS_MS: [u64; 3] = [40, 90, 150];
+
+fn metadata_with_reopen_retry(path: &Path) -> std::io::Result<std::fs::Metadata> {
+    for delay_ms in REOPEN_RETRY_DELAYS_MS {
+        match std::fs::metadata(path) {
+            Ok(meta) => return Ok(meta),
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                std::thread::sleep(Duration::from_millis(delay_ms));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    std::fs::metadata(path)
+}
+
 fn read_text_file_sync(path: &str) -> Result<String, String> {
     let path = expand_home(path);
-    let meta = std::fs::metadata(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let meta =
+        metadata_with_reopen_retry(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     if !meta.is_file() {
         return Err("Not a file".into());
     }
@@ -3518,6 +3540,37 @@ mod tests {
             .collect();
         assert_eq!(names, vec![std::ffi::OsString::from("example.rs")]);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn read_text_file_retries_through_a_late_write() {
+        let dir = tmp("read-retry");
+        let path = dir.0.join("just-written.md");
+        let path_string = path.to_string_lossy().into_owned();
+
+        // The file does not exist yet when the read starts, simulating the
+        // external agent CLI's "tool call completed" event reaching us
+        // before its own write is visible to this process.
+        let writer_path = path.clone();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(70));
+            std::fs::write(&writer_path, "# Just written\n").unwrap();
+        });
+
+        assert_eq!(
+            read_text_file_sync(&path_string).unwrap(),
+            "# Just written\n"
+        );
+        writer.join().unwrap();
+    }
+
+    #[test]
+    fn read_text_file_still_fails_when_the_file_never_appears() {
+        let dir = tmp("read-retry-missing");
+        let path = dir.0.join("never-written.md").to_string_lossy().into_owned();
+
+        let err = read_text_file_sync(&path).unwrap_err();
+        assert!(err.contains(&path));
     }
 
     #[test]

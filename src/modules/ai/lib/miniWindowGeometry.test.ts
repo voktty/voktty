@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyDrag,
   applyResize,
+  clampBadgePos,
   clampGeom,
   defaultGeom,
   MIN_H,
@@ -105,5 +106,24 @@ describe("applyResize", () => {
 
   it("east handle never moves the top edge", () => {
     expect(applyResize(start, "e", 50, 50, vp).y).toBe(start.y);
+  });
+});
+
+describe("clampBadgePos", () => {
+  it("keeps badge within viewport margins", () => {
+    const clamped = clampBadgePos({ x: 5000, y: 5000 }, vp);
+    expect(clamped.x).toBe(vp.vw - 48 - 12);
+    expect(clamped.y).toBe(vp.vh - 48 - 12);
+  });
+
+  it("clamps negative coordinates to the margin", () => {
+    const clamped = clampBadgePos({ x: -100, y: -50 }, vp);
+    expect(clamped.x).toBe(12);
+    expect(clamped.y).toBe(12);
+  });
+
+  it("leaves valid positions unchanged", () => {
+    const clamped = clampBadgePos({ x: 300, y: 400 }, vp);
+    expect(clamped).toEqual({ x: 300, y: 400 });
   });
 });

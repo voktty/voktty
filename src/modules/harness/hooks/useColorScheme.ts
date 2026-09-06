@@ -1,23 +1,8 @@
-import { useEffect, useState } from "react";
-import {
-  loadThemePreference,
-  resolveColorScheme,
-  SCHEME_CHANGE_EVENT,
-  type ColorScheme,
-} from "../lib/appearance";
+import { useTheme } from "@/modules/theme";
+import type { ColorScheme } from "../lib/appearance";
 
-/** Subscribes to color scheme changes triggered by applyThemePreference(). */
+/** Mirrors Voktty's own resolved theme mode - the harness has no color
+ * scheme of its own, see `lib/appearance.ts#isLightScheme`. */
 export function useColorScheme(): ColorScheme {
-  const [scheme, setScheme] = useState<ColorScheme>(() =>
-    resolveColorScheme(loadThemePreference()),
-  );
-  useEffect(() => {
-    const onChange = (event: Event) => {
-      const detail = (event as CustomEvent<ColorScheme>).detail;
-      setScheme(detail === "light" ? "light" : "dark");
-    };
-    window.addEventListener(SCHEME_CHANGE_EVENT, onChange);
-    return () => window.removeEventListener(SCHEME_CHANGE_EVENT, onChange);
-  }, []);
-  return scheme;
+  return useTheme().resolvedMode;
 }

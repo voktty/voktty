@@ -5,6 +5,11 @@ export type ResizeDir = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 export const MIN_W = 400;
 export const MIN_H = 420;
 
+export const BADGE_SIZE = 48;
+export const BADGE_MARGIN = 12;
+
+export type BadgePos = { x: number; y: number };
+
 const MARGIN_X = 16;
 const BOTTOM_GAP = 96;
 const TOP_GAP = 16;
@@ -12,6 +17,12 @@ const DEFAULT_H = 760;
 
 const clamp = (v: number, lo: number, hi: number) =>
   v < lo ? lo : v > hi ? hi : v;
+
+export function clampBadgePos(p: BadgePos, vp: Viewport): BadgePos {
+  const x = clamp(p.x, BADGE_MARGIN, Math.max(BADGE_MARGIN, vp.vw - BADGE_SIZE - BADGE_MARGIN));
+  const y = clamp(p.y, BADGE_MARGIN, Math.max(BADGE_MARGIN, vp.vh - BADGE_SIZE - BADGE_MARGIN));
+  return { x, y };
+}
 
 export function defaultGeom(vp: Viewport): Geom {
   const w = Math.max(MIN_W, Math.min(500, vp.vw - MARGIN_X * 2));

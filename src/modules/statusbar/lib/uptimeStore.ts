@@ -33,7 +33,7 @@ export type UptimeState = {
   resetSession: () => void;
 };
 
-function getTodayKey(): string {
+export function getTodayKey(): string {
   const d = new Date();
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");

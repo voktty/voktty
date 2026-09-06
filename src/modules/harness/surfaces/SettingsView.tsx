@@ -21,14 +21,11 @@ import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   applyBodyGlass,
-  applyThemePreference,
   applySidebarBlur,
   applySidebarOpacity,
   applyThemeTint,
   BODY_GLASS_DEFAULT,
-  THEME_PREFERENCE_DEFAULT,
   loadBodyGlass,
-  loadThemePreference,
   loadSidebarBlur,
   loadSidebarLayout,
   loadSidebarOpacity,
@@ -38,7 +35,6 @@ import {
   loadTranscriptZen,
   loadTranscriptAnchor,
   saveBodyGlass,
-  saveThemePreference,
   saveSidebarBlur,
   saveSidebarLayout,
   saveSidebarOpacity,
@@ -61,7 +57,6 @@ import {
   THEME_SATURATION_DEFAULT,
   THEME_SATURATION_MAX,
   THEME_SATURATION_MIN,
-  type ThemePreference,
   type SidebarLayout,
   type TranscriptLayout,
 } from "../lib/appearance";
@@ -716,19 +711,11 @@ function UpdateRow({
 type AppearanceSettings = ReturnType<typeof useAppearanceSettings>;
 
 function useAppearanceSettings() {
-  const [themePreference, setThemePreference] =
-    useState<ThemePreference>(loadThemePreference);
   const [opacity, setOpacity] = useState(loadSidebarOpacity);
   const [blur, setBlur] = useState(loadSidebarBlur);
   const [themeHue, setThemeHue] = useState(loadThemeHue);
   const [themeSaturation, setThemeSaturation] = useState(loadThemeSaturation);
   const [bodyGlass, setBodyGlass] = useState(loadBodyGlass);
-
-  const onThemePreference = useCallback((next: ThemePreference) => {
-    applyThemePreference(next);
-    saveThemePreference(next);
-    setThemePreference(next);
-  }, []);
 
   const onOpacity = useCallback((percent: number) => {
     const next = applySidebarOpacity(percent / 100);
@@ -757,21 +744,18 @@ function useAppearanceSettings() {
   }, []);
 
   const restoreDefaults = useCallback(() => {
-    onThemePreference(THEME_PREFERENCE_DEFAULT);
     onOpacity(Math.round(SIDEBAR_OPACITY_DEFAULT * 100));
     onBlur(SIDEBAR_BLUR_DEFAULT);
     onTint(THEME_HUE_DEFAULT, THEME_SATURATION_DEFAULT);
     onBodyGlass(BODY_GLASS_DEFAULT);
-  }, [onBlur, onBodyGlass, onThemePreference, onOpacity, onTint]);
+  }, [onBlur, onBodyGlass, onOpacity, onTint]);
 
   return {
-    themePreference,
     opacity,
     blur,
     themeHue,
     themeSaturation,
     bodyGlass,
-    onThemePreference,
     onOpacity,
     onBlur,
     onTint,
@@ -785,21 +769,6 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
 
   return (
     <>
-      <Row
-        label="Theme"
-        description="System follows the OS appearance. Dark and light share the same tint, so the hue below applies to both."
-      >
-        <Segmented
-          label="Theme"
-          value={appearance.themePreference}
-          options={[
-            { value: "system", label: "System" },
-            { value: "dark", label: "Dark" },
-            { value: "light", label: "Light" },
-          ]}
-          onChange={appearance.onThemePreference}
-        />
-      </Row>
       <Row
         label="Sidebar opacity"
         description="How much of the desktop shows through the sidebar and the project rail."
