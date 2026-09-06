@@ -128,6 +128,22 @@ pub async fn git_unstage(
 }
 
 #[tauri::command]
+pub async fn git_stage_hunk(
+    repo_root: String,
+    path: String,
+    contents: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::stage_contents(r, &repo_root, &path, contents.as_bytes(), &workspace)
+            .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn git_discard(
     repo_root: String,
     entries: Vec<DiscardEntry>,
