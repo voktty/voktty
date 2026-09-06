@@ -3,7 +3,8 @@ use tauri::{AppHandle, Manager};
 use crate::modules::git::operations;
 use crate::modules::git::types::{
     DiscardEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult, GitDiffContentResult,
-    GitDiffResult, GitLogEntry, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStatusSnapshot,
+    GitDiffResult, GitLogEntry, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry,
+    GitStatusSnapshot, GitTagEntry,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
@@ -388,6 +389,144 @@ pub async fn git_revert_commit(
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
         operations::revert_commit(r, &repo_root, &sha, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_stash_list(
+    repo_root: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<Vec<GitStashEntry>, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::stash_list(r, &repo_root, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_stash_save(
+    repo_root: String,
+    message: Option<String>,
+    include_untracked: bool,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::stash_save(r, &repo_root, message.as_deref(), include_untracked, &workspace)
+            .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_stash_apply(
+    repo_root: String,
+    index: u32,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::stash_apply(r, &repo_root, index, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_stash_pop(
+    repo_root: String,
+    index: u32,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::stash_pop(r, &repo_root, index, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_stash_drop(
+    repo_root: String,
+    index: u32,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::stash_drop(r, &repo_root, index, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_tag_list(
+    repo_root: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<Vec<GitTagEntry>, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::tag_list(r, &repo_root, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_tag_create(
+    repo_root: String,
+    name: String,
+    target_sha: Option<String>,
+    message: Option<String>,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::tag_create(
+            r,
+            &repo_root,
+            &name,
+            target_sha.as_deref(),
+            message.as_deref(),
+            &workspace,
+        )
+        .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_tag_delete(
+    repo_root: String,
+    name: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::tag_delete(r, &repo_root, &name, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_tag_push(
+    repo_root: String,
+    name: String,
+    remote: Option<String>,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::tag_push(r, &repo_root, &name, remote.as_deref(), &workspace)
+            .map_err(Into::into)
     })
     .await
 }
