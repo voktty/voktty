@@ -10,7 +10,8 @@ use crate::modules::git::process::{
 use crate::modules::git::types::{
     DiscardEntry, GitBranchEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
     GitDiffContentResult, GitDiffResult, GitLogEntry, GitOutput, GitPanelSnapshot, GitPushResult,
-    GitRepoInfo, GitStatusSnapshot, TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
+    GitRepoInfo, GitStashEntry, GitStatusSnapshot, GitTagEntry, TextSource, DEFAULT_TIMEOUT_SECS,
+    NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream, ResolvedGitDirectory,
@@ -1461,6 +1462,274 @@ pub fn revert_commit(
     )?
     .unwrap_or_default();
     Ok(new_sha)
+}
+
+const STASH_FORMAT: &str = "%H%x1f%at%x1f%s";
+
+pub fn stash_list(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<Vec<GitStashEntry>> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let format_arg = format!("--format={STASH_FORMAT}");
+    let lines = git_stdout_lines(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        ["stash", "list", format_arg.as_str()],
+    )?;
+    let mut entries = Vec::with_capacity(lines.len());
+    for (index, line) in lines.iter().enumerate() {
+        let mut fields = line.splitn(3, '\x1f');
+        let sha = fields.next().unwrap_or("").to_string();
+        if !sha_is_safe(&sha) {
+            continue;
+        }
+        let timestamp = fields.next().unwrap_or("0").parse::<i64>().unwrap_or(0);
+        let message = fields.next().unwrap_or("").to_string();
+        entries.push(GitStashEntry {
+            index: index as u32,
+            sha,
+            message,
+            timestamp_secs: timestamp,
+        });
+    }
+    Ok(entries)
+}
+
+/// `message` is optional: an empty stash still gets git's own default
+/// "WIP on <branch>: <sha> <subject>" message when none is given.
+pub fn stash_save(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    message: Option<&str>,
+    include_untracked: bool,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+
+    let mut args: Vec<&str> = vec!["stash", "push"];
+    if include_untracked {
+        args.push("--include-untracked");
+    }
+    if let Some(msg) = message.filter(|m| !m.is_empty()) {
+        args.push("-m");
+        args.push(msg);
+    }
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        args,
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git stash push failed")
+}
+
+fn stash_ref(index: u32) -> String {
+    format!("stash@{{{index}}}")
+}
+
+pub fn stash_apply(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    index: u32,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["stash", "apply", stash_ref(index).as_str()],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git stash apply failed")
+}
+
+pub fn stash_pop(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    index: u32,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["stash", "pop", stash_ref(index).as_str()],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git stash pop failed")
+}
+
+pub fn stash_drop(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    index: u32,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["stash", "drop", stash_ref(index).as_str()],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git stash drop failed")
+}
+
+fn tag_name_is_safe(name: &str) -> bool {
+    !name.is_empty() && !name.starts_with('-') && !name.contains("..") && !name.contains(char::is_whitespace)
+}
+
+// `for-each-ref`/`tag --format` use their own mini-language (`%(field)`),
+// distinct from `log --pretty=format`'s `%x1f`-style hex escapes — `%00` is
+// the one control-character escape it actually supports, so that's the
+// field separator here (matches `list_branches`'s `%(refname:short)%00%(HEAD)`).
+// `%(objectname)` is the ref's direct target (the tag object itself, for an
+// annotated tag); `%(*objectname)` peels one level to the commit it actually
+// points at. Lightweight tags point straight at a commit, so `*objectname`
+// is empty for those and `objectname` is already the commit sha.
+const TAG_FORMAT: &str = "%(refname:short)%00%(objectname)%00%(*objectname)%00%(objecttype)%00%(creatordate:unix)%00%(contents:subject)";
+
+pub fn tag_list(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<Vec<GitTagEntry>> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    let format_arg = format!("--format={TAG_FORMAT}");
+    let lines = git_stdout_lines(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        ["tag", "--sort=-creatordate", format_arg.as_str()],
+    )?;
+    let mut entries = Vec::with_capacity(lines.len());
+    for line in &lines {
+        let mut fields = line.splitn(6, '\0');
+        let name = fields.next().unwrap_or("").to_string();
+        if name.is_empty() {
+            continue;
+        }
+        let direct_sha = fields.next().unwrap_or("");
+        let peeled_sha = fields.next().unwrap_or("");
+        let object_type = fields.next().unwrap_or("");
+        let annotated = object_type == "tag";
+        let sha = if annotated && !peeled_sha.is_empty() {
+            peeled_sha.to_string()
+        } else {
+            direct_sha.to_string()
+        };
+        let timestamp = fields.next().unwrap_or("0").parse::<i64>().unwrap_or(0);
+        let subject = fields.next().unwrap_or("").trim().to_string();
+        entries.push(GitTagEntry {
+            name,
+            sha,
+            annotated,
+            message: if annotated && !subject.is_empty() {
+                Some(subject)
+            } else {
+                None
+            },
+            timestamp_secs: timestamp,
+        });
+    }
+    Ok(entries)
+}
+
+/// Creates a lightweight tag, or an annotated one when `message` is given.
+pub fn tag_create(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    name: &str,
+    target_sha: Option<&str>,
+    message: Option<&str>,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    if !tag_name_is_safe(name) {
+        return Err(GitError::command("git tag", "invalid tag name"));
+    }
+    if let Some(sha) = target_sha {
+        if !sha_is_safe(sha) {
+            return Err(GitError::command("git tag", "invalid target commit"));
+        }
+    }
+
+    let mut args: Vec<&str> = vec!["tag"];
+    let msg = message.filter(|m| !m.is_empty());
+    if msg.is_some() {
+        args.push("-a");
+    }
+    args.push(name);
+    if let Some(m) = msg {
+        args.push("-m");
+        args.push(m);
+    }
+    if let Some(sha) = target_sha {
+        args.push(sha);
+    }
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        args,
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git tag failed")
+}
+
+pub fn tag_delete(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    name: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    if !tag_name_is_safe(name) {
+        return Err(GitError::command("git tag", "invalid tag name"));
+    }
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["tag", "-d", name],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git tag -d failed")
+}
+
+/// Pushes a single tag to `remote` (defaults to "origin"). Never force-pushes:
+/// if the tag already exists on the remote with different history, this
+/// fails with git's own error instead of silently overwriting it.
+pub fn tag_push(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    name: &str,
+    remote: Option<&str>,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    if !tag_name_is_safe(name) {
+        return Err(GitError::command("git tag", "invalid tag name"));
+    }
+    let remote_name = remote.filter(|r| !r.is_empty()).unwrap_or("origin");
+    if remote_name.len() > 64 || !remote_name.chars().all(is_remote_name_char) {
+        return Err(GitError::command("git push", "invalid remote name"));
+    }
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        ["push", remote_name, name],
+        NETWORK_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git push tag failed")
 }
 
 #[cfg(test)]

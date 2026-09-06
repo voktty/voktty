@@ -642,3 +642,197 @@ fn list_branches_keeps_current_branch_local_and_surfaces_worktrees() {
     assert!(!feature[0].is_head);
     assert!(feature[0].worktree_path.is_some());
 }
+
+#[test]
+fn stash_save_lists_entry_and_restores_worktree() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    fx.write_file("a.txt", "2\n");
+
+    operations::stash_save(&fx.registry, &fx.repo_str(), Some("wip"), false, &fx.workspace)
+        .expect("stash_save");
+
+    let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
+    assert_eq!(content, "1\n", "stash should restore the committed content");
+
+    let entries = operations::stash_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].index, 0);
+    assert!(entries[0].message.contains("wip"));
+}
+
+#[test]
+fn stash_apply_restores_changes_and_keeps_stash() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    fx.write_file("a.txt", "2\n");
+    operations::stash_save(&fx.registry, &fx.repo_str(), None, false, &fx.workspace).unwrap();
+
+    operations::stash_apply(&fx.registry, &fx.repo_str(), 0, &fx.workspace).expect("stash_apply");
+
+    let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
+    assert_eq!(content, "2\n");
+    let entries = operations::stash_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(entries.len(), 1, "apply must not remove the stash entry");
+}
+
+#[test]
+fn stash_pop_restores_changes_and_removes_stash() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    fx.write_file("a.txt", "2\n");
+    operations::stash_save(&fx.registry, &fx.repo_str(), None, false, &fx.workspace).unwrap();
+
+    operations::stash_pop(&fx.registry, &fx.repo_str(), 0, &fx.workspace).expect("stash_pop");
+
+    let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
+    assert_eq!(content, "2\n");
+    let entries = operations::stash_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert!(entries.is_empty(), "pop must remove the stash entry");
+}
+
+#[test]
+fn stash_drop_removes_without_restoring_worktree() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    fx.write_file("a.txt", "2\n");
+    operations::stash_save(&fx.registry, &fx.repo_str(), None, false, &fx.workspace).unwrap();
+
+    operations::stash_drop(&fx.registry, &fx.repo_str(), 0, &fx.workspace).expect("stash_drop");
+
+    let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
+    assert_eq!(content, "1\n", "drop must not touch the worktree");
+    let entries = operations::stash_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert!(entries.is_empty());
+}
+
+#[test]
+fn stash_save_can_include_untracked_files() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    fx.write_file("untracked.txt", "new\n");
+
+    operations::stash_save(&fx.registry, &fx.repo_str(), None, true, &fx.workspace)
+        .expect("stash_save with untracked");
+
+    assert!(!fx.repo_path.join("untracked.txt").exists());
+    let entries = operations::stash_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(entries.len(), 1);
+}
+
+#[test]
+fn tag_create_lightweight_points_at_commit() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    let head = entries[0].sha.clone();
+
+    operations::tag_create(&fx.registry, &fx.repo_str(), "v1", None, None, &fx.workspace)
+        .expect("tag_create");
+
+    let tags = operations::tag_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].name, "v1");
+    assert_eq!(tags[0].sha, head);
+    assert!(!tags[0].annotated);
+    assert!(tags[0].message.is_none());
+}
+
+#[test]
+fn tag_create_annotated_has_message_and_peeled_sha() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+    let head = entries[0].sha.clone();
+
+    operations::tag_create(
+        &fx.registry,
+        &fx.repo_str(),
+        "v2",
+        None,
+        Some("release notes"),
+        &fx.workspace,
+    )
+    .expect("tag_create annotated");
+
+    let tags = operations::tag_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert_eq!(tags.len(), 1);
+    assert!(tags[0].annotated);
+    assert_eq!(tags[0].message.as_deref(), Some("release notes"));
+    assert_eq!(tags[0].sha, head, "sha must be the peeled commit, not the tag object");
+}
+
+#[test]
+fn tag_delete_removes_it() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    operations::tag_create(&fx.registry, &fx.repo_str(), "v1", None, None, &fx.workspace).unwrap();
+
+    operations::tag_delete(&fx.registry, &fx.repo_str(), "v1", &fx.workspace).expect("tag_delete");
+
+    let tags = operations::tag_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    assert!(tags.is_empty());
+}
+
+#[test]
+fn tag_create_rejects_unsafe_names() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "1\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+
+    match operations::tag_create(&fx.registry, &fx.repo_str(), "-x", None, None, &fx.workspace) {
+        Err(GitError::CommandFailed { .. }) => {}
+        Err(other) => panic!("expected CommandFailed, got {other}"),
+        Ok(_) => panic!("expected error for unsafe tag name"),
+    }
+
+    match operations::tag_create(&fx.registry, &fx.repo_str(), "", None, None, &fx.workspace) {
+        Err(GitError::CommandFailed { .. }) => {}
+        Err(other) => panic!("expected CommandFailed, got {other}"),
+        Ok(_) => panic!("expected error for empty tag name"),
+    }
+}

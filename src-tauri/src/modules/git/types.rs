@@ -131,6 +131,25 @@ pub struct GitBranchListResult {
     pub branches: Vec<GitBranchEntry>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStashEntry {
+    pub index: u32,
+    pub sha: String,
+    pub message: String,
+    pub timestamp_secs: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitTagEntry {
+    pub name: String,
+    pub sha: String,
+    pub annotated: bool,
+    pub message: Option<String>,
+    pub timestamp_secs: i64,
+}
+
 pub(crate) struct GitOutput {
     pub(crate) stdout: Vec<u8>,
     pub(crate) stderr: Vec<u8>,
