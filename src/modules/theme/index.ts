@@ -1,4 +1,9 @@
-export { ThemeProvider, useTheme, type Theme } from "./ThemeProvider";
+export {
+  ThemeProvider,
+  useTheme,
+  THEME_CHANGED_EVENT,
+  type Theme,
+} from "./ThemeProvider";
 export { WindowVibrancyBridge } from "./WindowVibrancyBridge";
 export {
   resolveTerminalFont,

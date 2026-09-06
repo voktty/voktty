@@ -114,7 +114,7 @@ export function QuickOpenDialog({
       onOpenChange={onOpenChange}
       title={t("quickOpen.title")}
       description={t("quickOpen.description")}
-      className="top-1/3 w-[min(680px,calc(100vw-32px))] translate-y-0"
+      className="top-1/2 w-[min(760px,calc(100vw-32px))] -translate-y-1/2"
     >
       <Command
         shouldFilter={false}
@@ -203,10 +203,13 @@ function QuickOpenGroup({
             alt=""
             className="size-4 shrink-0"
           />
-          <span className="min-w-0 flex-1 truncate font-medium">
+          <span className="min-w-0 max-w-[42%] shrink truncate font-medium">
             {match.name}
           </span>
-          <span className="max-w-[55%] truncate font-mono text-[10.5px] font-normal text-muted-foreground">
+          <span
+            dir="rtl"
+            className="min-w-0 flex-1 truncate text-left font-mono text-[10.5px] font-normal text-muted-foreground"
+          >
             {match.directory || "."}
           </span>
           <CommandShortcut className="flex items-center gap-1 normal-case tracking-normal">

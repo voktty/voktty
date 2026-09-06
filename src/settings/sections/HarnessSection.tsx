@@ -3,20 +3,16 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   applyBodyGlass,
-  applyThemePreference,
   applySidebarBlur,
   applySidebarOpacity,
   applyThemeTint,
   BODY_GLASS_DEFAULT,
-  THEME_PREFERENCE_DEFAULT,
   loadBodyGlass,
-  loadThemePreference,
   loadSidebarBlur,
   loadSidebarOpacity,
   loadThemeHue,
   loadThemeSaturation,
   saveBodyGlass,
-  saveThemePreference,
   saveSidebarBlur,
   saveSidebarOpacity,
   saveThemeHue,
@@ -45,7 +41,6 @@ import {
   saveTranscriptAnchor,
   type SidebarLayout,
   type TranscriptLayout,
-  type ThemePreference,
 } from "@/modules/harness/lib/appearance";
 import {
   getHarnessAvailabilitySnapshot,
@@ -307,7 +302,6 @@ function GeneralBlock() {
 }
 
 function AppearanceBlock() {
-  const [themePreference, setThemePreference] = useState<ThemePreference>(loadThemePreference);
   const [opacity, setOpacity] = useState(loadSidebarOpacity);
   const [blur, setBlur] = useState(loadSidebarBlur);
   const [themeHue, setThemeHue] = useState(loadThemeHue);
@@ -324,9 +318,6 @@ function AppearanceBlock() {
   };
 
   const restoreDefaults = () => {
-    applyThemePreference(THEME_PREFERENCE_DEFAULT);
-    saveThemePreference(THEME_PREFERENCE_DEFAULT);
-    setThemePreference(THEME_PREFERENCE_DEFAULT);
     const op = applySidebarOpacity(SIDEBAR_OPACITY_DEFAULT);
     saveSidebarOpacity(op); setOpacity(op);
     const bl = applySidebarBlur(SIDEBAR_BLUR_DEFAULT);
@@ -344,18 +335,6 @@ function AppearanceBlock() {
           Restore defaults
         </Button>
       </div>
-      <Row label="Theme" description="System follows the OS. Dark and light share the same tint.">
-        <Segmented
-          label="Theme"
-          value={themePreference}
-          options={[
-            { value: "system", label: "System" },
-            { value: "dark", label: "Dark" },
-            { value: "light", label: "Light" },
-          ]}
-          onChange={(next) => { applyThemePreference(next); saveThemePreference(next); setThemePreference(next); }}
-        />
-      </Row>
       <Row label="Sidebar opacity" description="How much of the desktop shows through the sidebar.">
         <HarnessSlider label="Sidebar opacity" value={percent} display={`${percent}%`} min={Math.round(SIDEBAR_OPACITY_MIN * 100)} max={Math.round(SIDEBAR_OPACITY_MAX * 100)} onChange={(val) => { const next = applySidebarOpacity(val / 100); saveSidebarOpacity(next); setOpacity(next); }} />
       </Row>

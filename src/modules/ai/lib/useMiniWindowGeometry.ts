@@ -2,6 +2,10 @@ import { useCallback, useLayoutEffect, useRef } from "react";
 import {
   applyDrag,
   applyResize,
+  BADGE_MARGIN,
+  BADGE_SIZE,
+  type BadgePos,
+  clampBadgePos,
   clampGeom,
   defaultGeom,
   type Geom,
@@ -9,14 +13,17 @@ import {
   type Viewport,
 } from "./miniWindowGeometry";
 
-const STORE_KEY = "voktty-ui-mini-window-geom";
+export { BADGE_MARGIN, BADGE_SIZE, type BadgePos, clampBadgePos };
 
-const viewport = (): Viewport => ({
+export const STORE_KEY = "voktty-ui-mini-window-geom";
+export const BADGE_STORE_KEY = "voktty-ui-mini-badge-pos";
+
+export const viewport = (): Viewport => ({
   vw: window.innerWidth,
   vh: window.innerHeight,
 });
 
-function loadGeom(): Geom | null {
+export function loadGeom(): Geom | null {
   try {
     const raw = window.localStorage.getItem(STORE_KEY);
     if (!raw) return null;
@@ -30,17 +37,62 @@ function loadGeom(): Geom | null {
       return { x: p.x, y: p.y, w: p.w, h: p.h };
     }
   } catch {
-    // corrupt entry — fall back to default placement
+    // corrupt entry - fall back to default placement
   }
   return null;
 }
 
-function saveGeom(g: Geom) {
+export function saveGeom(g: Geom) {
   try {
     window.localStorage.setItem(STORE_KEY, JSON.stringify(g));
   } catch {
-    // private mode / quota — geometry just won't persist
+    // private mode / quota - geometry just will not persist
   }
+}
+
+export function getSavedGeom(): Geom {
+  const vp = viewport();
+  return clampGeom(loadGeom() ?? defaultGeom(vp), vp);
+}
+
+export function loadBadgePos(): BadgePos | null {
+  try {
+    const raw = window.localStorage.getItem(BADGE_STORE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<BadgePos>;
+    if (typeof p.x === "number" && typeof p.y === "number") {
+      return { x: p.x, y: p.y };
+    }
+  } catch {
+    // corrupt entry - fall back to default placement
+  }
+  return null;
+}
+
+export function saveBadgePos(pos: BadgePos) {
+  try {
+    window.localStorage.setItem(BADGE_STORE_KEY, JSON.stringify(pos));
+  } catch {
+    // private mode / quota - geometry just will not persist
+  }
+}
+
+export function getSavedBadgePos(): BadgePos {
+  const vp = viewport();
+  const saved = loadBadgePos();
+  if (saved) {
+    return clampBadgePos(saved, vp);
+  }
+  const g = getSavedGeom();
+  const x = Math.max(
+    BADGE_MARGIN,
+    Math.min(vp.vw - BADGE_SIZE - BADGE_MARGIN, g.x + g.w - BADGE_SIZE),
+  );
+  const y = Math.max(
+    BADGE_MARGIN,
+    Math.min(vp.vh - BADGE_SIZE - BADGE_MARGIN, g.y),
+  );
+  return { x, y };
 }
 
 type Compute = (start: Geom, dx: number, dy: number, vp: Viewport) => Geom;
@@ -87,9 +139,13 @@ export function useMiniWindowGeometry() {
     // Reclamp into the new viewport; persistence is left to the next gesture
     // since loadGeom re-clamps on startup anyway.
     const onResize = () => write(clampGeom(geom.current, viewport()));
+    const onUnload = () => saveGeom(geom.current);
     window.addEventListener("resize", onResize);
+    window.addEventListener("beforeunload", onUnload);
     return () => {
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("beforeunload", onUnload);
+      saveGeom(geom.current);
       if (frame.current) cancelAnimationFrame(frame.current);
     };
   }, [write]);
@@ -162,5 +218,9 @@ export function useMiniWindowGeometry() {
     [beginGesture],
   );
 
-  return { ref, onHeaderPointerDown, startResize };
+  const saveCurrentGeom = useCallback(() => {
+    saveGeom(geom.current);
+  }, []);
+
+  return { ref, geom, onHeaderPointerDown, startResize, saveCurrentGeom };
 }

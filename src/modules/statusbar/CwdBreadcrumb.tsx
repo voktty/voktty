@@ -29,19 +29,21 @@ import { useCallback, useEffect, useState } from "react";
 import { segmentsFromCwd } from "./lib/pathUtils";
 
 type Props = {
-  cwd: string | null;
+  cwd?: string | null;
   filePath?: string | null;
-  home: string | null;
+  home?: string | null;
   onCd: (path: string) => void;
 };
 
-function dirname(path: string): string {
+function dirname(path: string | null | undefined): string {
+  if (typeof path !== "string" || !path) return "/";
   const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   if (i <= 0) return "/";
   return path.slice(0, i);
 }
 
-function basename(path: string): string {
+function basename(path: string | null | undefined): string {
+  if (typeof path !== "string" || !path) return "";
   const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return i === -1 ? path : path.slice(i + 1);
 }
@@ -49,7 +51,7 @@ function basename(path: string): string {
 export function CwdBreadcrumb({ cwd, filePath, home, onCd }: Props) {
   const { t } = useTranslation();
   // File mode: dir segments navigate; filename is the terminal leaf.
-    if (filePath) {
+  if (typeof filePath === "string" && filePath.trim() !== "") {
     const dir = dirname(filePath);
     const name = basename(filePath);
     const segments = segmentsFromCwd(dir, home);
@@ -85,16 +87,27 @@ export function CwdBreadcrumb({ cwd, filePath, home, onCd }: Props) {
     );
   }
 
-  if (!cwd) {
+  if (typeof cwd !== "string" || cwd.trim() === "") {
     return (
       <span className="text-[10.5px] text-muted-foreground/70">{t("statusbar.cwd.noDirectory")}</span>
     );
   }
 
   const segments = segmentsFromCwd(cwd, home);
-  const current = segments[segments.length - 1];
-  const parents = segments.slice(0, -1);
+  if (segments.length === 0) {
+    return (
+      <span className="text-[10.5px] text-muted-foreground/70">{t("statusbar.cwd.noDirectory")}</span>
+    );
+  }
 
+  const current = segments[segments.length - 1];
+  if (!current) {
+    return (
+      <span className="text-[10.5px] text-muted-foreground/70">{t("statusbar.cwd.noDirectory")}</span>
+    );
+  }
+
+  const parents = segments.slice(0, -1);
   const firstParent = parents[0];
   const middleParents = parents.slice(1);
   return (

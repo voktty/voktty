@@ -14,7 +14,8 @@ import {
   scanOscCwd,
   type TerminalMetaPatch,
 } from "../lib/terminalTab";
-import { isLightScheme, SCHEME_CHANGE_EVENT } from "../lib/appearance";
+import { isLightScheme } from "../lib/appearance";
+import { THEME_CHANGED_EVENT } from "@/modules/theme";
 import {
   applyTerminalChrome,
   fitTerminal,
@@ -219,7 +220,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     const onSchemeChange = () => {
       term.options.theme = terminalTheme(isLightScheme());
     };
-    window.addEventListener(SCHEME_CHANGE_EVENT, onSchemeChange);
+    window.addEventListener(THEME_CHANGED_EVENT, onSchemeChange);
 
     term.attachCustomWheelEventHandler(() => {
       if (term.element?.classList.contains("enable-mouse-events")) return true;
@@ -292,7 +293,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
       applySizeRef.current = () => {};
       host.removeEventListener("copy", onCopy);
       host.removeEventListener("paste", onPaste);
-      window.removeEventListener(SCHEME_CHANGE_EVENT, onSchemeChange);
+      window.removeEventListener(THEME_CHANGED_EVENT, onSchemeChange);
       dataSub.dispose();
       oscFg.dispose();
       oscBg.dispose();

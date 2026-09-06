@@ -27,10 +27,18 @@ import {
   Cancel01Icon,
   Delete02Icon,
   FilterIcon,
+  MinusSignIcon,
   TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useMemo, useRef } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   estimateCost,
   getModel,
@@ -44,13 +52,22 @@ import {
 } from "../lib/conversationPerformance";
 import type { ResizeDir } from "../lib/miniWindowGeometry";
 import type { SessionMeta } from "../lib/sessions";
-import { useMiniWindowGeometry } from "../lib/useMiniWindowGeometry";
+import {
+  BADGE_MARGIN,
+  BADGE_SIZE,
+  clampBadgePos,
+  getSavedBadgePos,
+  saveBadgePos,
+  useMiniWindowGeometry,
+  viewport,
+} from "../lib/useMiniWindowGeometry";
 import { useAgentsStore } from "../store/agentsStore";
 import { getOrCreateChat } from "../store/chatRuntime";
 import { useChatStore } from "../store/chatStore";
 import { usePlanStore } from "../store/planStore";
 import { AgentSwitcher } from "./AgentSwitcher";
 import { AiChatView } from "./AiChat";
+import { AiStatusBarControls } from "./AiStatusBarControls";
 import { PlanDiffReview } from "./PlanDiffReview";
 import { TodoStrip } from "./TodoStrip";
 
@@ -75,8 +92,17 @@ const SUGGESTIONS = [
   },
 ];
 
-export function AiMiniWindow({ state }: { state: PresenceState }) {
+export function AiMiniWindow({
+  state,
+  composer,
+}: {
+  state: PresenceState;
+  composer?: ReactNode;
+}) {
   const closeMini = useChatStore((s) => s.closeMini);
+  const collapseMini = useChatStore((s) => s.collapseMini);
+  const openMini = useChatStore((s) => s.openMini);
+  const collapsed = useChatStore((s) => s.mini.collapsed);
   const sessionId = useChatStore((s) => s.activeSessionId);
   const openPanel = useChatStore((s) => s.openPanel);
   const expandToPanel = () => {
@@ -84,41 +110,22 @@ export function AiMiniWindow({ state }: { state: PresenceState }) {
     openPanel();
   };
 
-  const { ref, onHeaderPointerDown, startResize } = useMiniWindowGeometry();
+  const { ref, onHeaderPointerDown, startResize, saveCurrentGeom } =
+    useMiniWindowGeometry();
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        const target = e.target as HTMLElement | null;
-        const tag = target?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA") return;
-        closeMini();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [closeMini]);
+  const handleCollapse = useCallback(() => {
+    saveCurrentGeom();
+    collapseMini();
+  }, [saveCurrentGeom, collapseMini]);
 
-  // Dismiss on an outside click, but never for a Radix popper portal (model
-  // dropdown, session picker, context hovercard — rendered outside this DOM
-  // subtree) and never for the button that toggles the window itself, or the
-  // close-here / reopen-there race would cancel the toggle out.
-  useEffect(() => {
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (ref.current?.contains(target)) return;
-      if (
-        target.closest(
-          "[data-ai-mini-window-trigger], [data-radix-popper-content-wrapper]",
-        )
-      )
-        return;
-      closeMini();
-    };
-    window.addEventListener("pointerdown", onPointerDown, true);
-    return () => window.removeEventListener("pointerdown", onPointerDown, true);
-  }, [closeMini, ref]);
+  const handleClose = useCallback(() => {
+    saveCurrentGeom();
+    closeMini();
+  }, [saveCurrentGeom, closeMini]);
+
+  if (collapsed) {
+    return <AiFloatingBadge onExpand={openMini} />;
+  }
 
   return (
     <div
@@ -146,18 +153,168 @@ export function AiMiniWindow({ state }: { state: PresenceState }) {
       {sessionId ? (
         <AiChatBody
           sessionId={sessionId}
-          onClose={closeMini}
+          onClose={handleClose}
+          onCollapse={handleCollapse}
           onExpand={expandToPanel}
           onHeaderPointerDown={onHeaderPointerDown}
         />
       ) : (
         <EmptyShell
-          onClose={closeMini}
+          onClose={handleClose}
+          onCollapse={handleCollapse}
           onExpand={expandToPanel}
           onHeaderPointerDown={onHeaderPointerDown}
         />
       )}
+      {composer}
+      <div className="shrink-0 overflow-x-auto border-t border-border/60 bg-foreground/[0.02] px-2 py-1">
+        <AiStatusBarControls hidePanelClose compact />
+      </div>
       <PlanDiffReview />
+    </div>
+  );
+}
+
+function AiFloatingBadge({ onExpand }: { onExpand: () => void }) {
+  const { t } = useTranslation();
+  const unreadCount = useChatStore((s) => s.unreadCount);
+  const step = useChatStore((s) => s.agentMeta.step);
+  const isBusy = step !== null;
+  const badgeRef = useRef<HTMLDivElement>(null);
+
+  const [pos, setPos] = useState(() => getSavedBadgePos());
+
+  useEffect(() => {
+    const onResize = () => {
+      setPos((prev) => {
+        const next = clampBadgePos(prev, viewport());
+        saveBadgePos(next);
+        return next;
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const gestureRef = useRef<{
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    didDrag: boolean;
+    pointerId: number;
+  } | null>(null);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    gestureRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: pos.x,
+      origY: pos.y,
+      didDrag: false,
+      pointerId: e.pointerId,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture) return;
+    const dx = e.clientX - gesture.startX;
+    const dy = e.clientY - gesture.startY;
+    if (!gesture.didDrag) {
+      if (Math.hypot(dx, dy) < 4) return;
+      gesture.didDrag = true;
+      document.body.style.userSelect = "none";
+    }
+    const vp = viewport();
+    const nx = Math.max(
+      BADGE_MARGIN,
+      Math.min(vp.vw - BADGE_SIZE - BADGE_MARGIN, gesture.origX + dx),
+    );
+    const ny = Math.max(
+      BADGE_MARGIN,
+      Math.min(vp.vh - BADGE_SIZE - BADGE_MARGIN, gesture.origY + dy),
+    );
+    if (badgeRef.current) {
+      badgeRef.current.style.left = `${nx}px`;
+      badgeRef.current.style.top = `${ny}px`;
+    }
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture) return;
+    gestureRef.current = null;
+    document.body.style.userSelect = "";
+    try {
+      e.currentTarget.releasePointerCapture(gesture.pointerId);
+    } catch {
+      // fallback if capture already released
+    }
+    if (gesture.didDrag) {
+      const el = badgeRef.current;
+      if (el) {
+        const nx = parseFloat(el.style.left) || pos.x;
+        const ny = parseFloat(el.style.top) || pos.y;
+        const nextPos = { x: nx, y: ny };
+        setPos(nextPos);
+        saveBadgePos(nextPos);
+      }
+    } else {
+      onExpand();
+    }
+  };
+
+  return (
+    <div
+      ref={badgeRef}
+      role="button"
+      tabIndex={0}
+      data-ai-mini-window-trigger
+      data-ai-floating-badge
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onExpand();
+        }
+      }}
+      style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
+      aria-label={t("ai.openAgent")}
+      title={t("ai.openAgent")}
+      className={cn(
+        "fixed z-40 flex size-12 cursor-grab select-none items-center justify-center",
+        "rounded-2xl border border-border/80 bg-card/95 p-2 shadow-2xl backdrop-blur-md",
+        "transition-transform active:cursor-grabbing hover:scale-105 active:scale-95",
+        "ring-1 ring-black/10 dark:ring-white/10",
+        "animate-in fade-in-0 zoom-in-90 duration-150",
+      )}
+    >
+      <img
+        src="/voktty.svg"
+        alt="Voktty AI"
+        className="size-7 pointer-events-none select-none drop-shadow"
+      />
+
+      {isBusy && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -m-0.5 animate-ping rounded-2xl border border-primary/40"
+        />
+      )}
+
+      {unreadCount > 0 && (
+        <span
+          aria-hidden
+          className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold leading-none text-primary-foreground shadow-md"
+        >
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      )}
     </div>
   );
 }
@@ -197,12 +354,14 @@ function ResizeHandle({
 export function AiChatBody({
   sessionId,
   onClose,
+  onCollapse,
   onExpand,
   onHeaderPointerDown,
   sidebar = false,
 }: {
   sessionId: string;
   onClose: () => void;
+  onCollapse?: () => void;
   onExpand: () => void;
   onHeaderPointerDown: (e: React.PointerEvent) => void;
   sidebar?: boolean;
@@ -222,6 +381,7 @@ export function AiChatBody({
         step={step}
         isBusy={isBusy}
         onClose={onClose}
+        onCollapse={onCollapse}
         onExpand={onExpand}
         messages={helpers.messages}
         onHeaderPointerDown={onHeaderPointerDown}
@@ -284,10 +444,12 @@ function PlanModeStrip() {
 
 function EmptyShell({
   onClose,
+  onCollapse,
   onExpand,
   onHeaderPointerDown,
 }: {
   onClose: () => void;
+  onCollapse?: () => void;
   onExpand: () => void;
   onHeaderPointerDown: (e: React.PointerEvent) => void;
 }) {
@@ -298,6 +460,7 @@ function EmptyShell({
         step={null}
         isBusy={false}
         onClose={onClose}
+        onCollapse={onCollapse}
         onExpand={onExpand}
         onHeaderPointerDown={onHeaderPointerDown}
       />
@@ -313,6 +476,7 @@ function Header({
   step,
   isBusy,
   onClose,
+  onCollapse,
   messages,
   onHeaderPointerDown,
   isSidebar = false,
@@ -321,6 +485,7 @@ function Header({
   step: string | null;
   isBusy: boolean;
   onClose: () => void;
+  onCollapse?: () => void;
   onExpand: () => void;
   messages?: UIMessage[];
   onHeaderPointerDown: (e: React.PointerEvent) => void;
@@ -354,6 +519,23 @@ function Header({
         {messages !== undefined && sessionId ? (
           <ContextIndicator sessionId={sessionId} messages={messages} />
         ) : null}
+        {onCollapse && !isSidebar ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            onClick={onCollapse}
+            className="size-6 rounded-md text-muted-foreground hover:text-foreground"
+            aria-label={t("ai.collapseToBadge", {
+              defaultValue: "Minimizar a icono flotante",
+            })}
+            title={t("ai.collapseToBadge", {
+              defaultValue: "Minimizar a icono flotante",
+            })}
+          >
+            <HugeiconsIcon icon={MinusSignIcon} size={12} strokeWidth={1.75} />
+          </Button>
+        ) : null}
         <Button
           type="button"
           size="icon"
@@ -361,7 +543,7 @@ function Header({
           onClick={onClose}
           className="size-6 rounded-md text-muted-foreground hover:text-foreground"
           aria-label={t("common.close")}
-          title={t("ai.closeEsc")}
+          title={t("common.close")}
         >
           <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={1.75} />
         </Button>
@@ -568,7 +750,7 @@ function SessionRow({
   return (
     <DropdownMenuItem
       onSelect={(e) => {
-        // Don't dismiss if user clicked the trash icon — handle below.
+        // Don't dismiss if user clicked the trash icon - handle below.
         const target = e.target as HTMLElement | null;
         if (target?.closest("[data-session-delete]")) {
           e.preventDefault();

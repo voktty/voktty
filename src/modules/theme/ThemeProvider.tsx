@@ -27,6 +27,12 @@ import type { Theme } from "./types";
 export type { Theme };
 export type ThemeModePref = ThemePref;
 
+/** Fired on `window` whenever the app's resolved theme mode changes (detail:
+ * "dark" | "light"). Lets plain-JS consumers outside the React tree (e.g. the
+ * harness's imperative xterm setup) react without re-running a `useTheme()`
+ * effect that would remount their own resource. */
+export const THEME_CHANGED_EVENT = "voktty:theme-changed";
+
 type ThemeProviderProps = {
   children: React.ReactNode;
   defaultMode?: ThemePref;
@@ -184,6 +190,14 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     windowVibrancy,
     vibrancyOpacity,
   ]);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent<"dark" | "light">(THEME_CHANGED_EVENT, {
+        detail: resolvedMode,
+      }),
+    );
+  }, [resolvedMode]);
 
   const setMode = useCallback((next: ThemePref) => {
     setModeState(next);

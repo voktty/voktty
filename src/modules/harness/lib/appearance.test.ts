@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  isLightScheme,
   loadTranscriptLayout,
   loadTranscriptZen,
   saveTranscriptLayout,
@@ -10,14 +11,9 @@ import {
   loadTranscriptAnchor,
   saveTranscriptAnchor,
   TRANSCRIPT_ANCHOR_DEFAULT,
-  loadThemePreference,
-  saveThemePreference,
-  resolveColorScheme,
-  THEME_PREFERENCE_DEFAULT,
 } from "./appearance";
 
 const KEY = "monocode.transcriptLayout";
-const SCHEME_KEY = "monocode.colorScheme";
 const ZEN_KEY = "monocode.transcriptZen";
 const ANCHOR_KEY = "monocode.transcriptAnchor";
 
@@ -115,57 +111,34 @@ describe("transcript prompt-to-top setting", () => {
   });
 });
 
-function mockSystemScheme(scheme: "dark" | "light") {
-  Object.defineProperty(globalThis, "window", {
+function mockDocumentElementClasses() {
+  const classes = new Set<string>();
+  Object.defineProperty(globalThis, "document", {
     value: {
-      matchMedia: (query: string) => ({
-        matches: query.includes("light") && scheme === "light",
-      }),
+      documentElement: {
+        classList: {
+          contains: (name: string) => classes.has(name),
+          add: (...names: string[]) => names.forEach((n) => classes.add(n)),
+          remove: (...names: string[]) => names.forEach((n) => classes.delete(n)),
+        },
+      },
     },
     configurable: true,
   });
+  return classes;
 }
 
-describe("theme preference setting", () => {
-  beforeEach(mockLocalStorage);
+describe("isLightScheme", () => {
   afterEach(() => {
-    localStorage.removeItem(SCHEME_KEY);
-    Reflect.deleteProperty(globalThis, "window");
+    Reflect.deleteProperty(globalThis, "document");
   });
 
-  it("defaults to dark", () => {
-    expect(THEME_PREFERENCE_DEFAULT).toBe("dark");
-    expect(loadThemePreference()).toBe("dark");
-  });
-
-  it("persists each preference", () => {
-    for (const value of ["system", "light", "dark"] as const) {
-      saveThemePreference(value);
-      expect(localStorage.getItem(SCHEME_KEY)).toBe(value);
-      expect(loadThemePreference()).toBe(value);
-    }
-  });
-
-  it("ignores unknown stored values", () => {
-    localStorage.setItem(SCHEME_KEY, "solarized");
-    expect(loadThemePreference()).toBe(THEME_PREFERENCE_DEFAULT);
-  });
-
-  it("resolves system against the OS appearance", () => {
-    mockSystemScheme("light");
-    expect(resolveColorScheme("system")).toBe("light");
-    mockSystemScheme("dark");
-    expect(resolveColorScheme("system")).toBe("dark");
-  });
-
-  it("keeps explicit picks regardless of the OS appearance", () => {
-    mockSystemScheme("light");
-    expect(resolveColorScheme("dark")).toBe("dark");
-    mockSystemScheme("dark");
-    expect(resolveColorScheme("light")).toBe("light");
-  });
-
-  it("falls back to dark without matchMedia", () => {
-    expect(resolveColorScheme("system")).toBe("dark");
+  it("mirrors the real app theme's resolved class, not a scheme of its own", () => {
+    const classes = mockDocumentElementClasses();
+    classes.add("light");
+    expect(isLightScheme()).toBe(true);
+    classes.delete("light");
+    classes.add("dark");
+    expect(isLightScheme()).toBe(false);
   });
 });

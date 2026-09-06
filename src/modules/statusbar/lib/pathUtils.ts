@@ -6,13 +6,28 @@ export type Segment = {
 
 const WINDOWS_DRIVE = /^([A-Za-z]:)(.*)$/;
 
-function normalize(p: string): string {
+function normalize(p: string | null | undefined): string {
+  if (typeof p !== "string") {
+    return "";
+  }
   return p.replace(/\\/g, "/");
 }
 
-export function segmentsFromCwd(cwd: string, home: string | null): Segment[] {
+export function segmentsFromCwd(
+  cwd: string | null | undefined,
+  home: string | null | undefined,
+): Segment[] {
+  if (typeof cwd !== "string" || cwd.trim() === "") {
+    return [];
+  }
+
   const normCwd = normalize(cwd);
-  const normHome = home !== null ? normalize(home) : null;
+  if (!normCwd) {
+    return [];
+  }
+
+  const normHome =
+    typeof home === "string" && home.trim() !== "" ? normalize(home) : null;
 
   const usingHome =
     normHome !== null &&

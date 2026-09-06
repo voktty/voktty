@@ -38,9 +38,9 @@ import { PacmanIcon } from "./components/PacmanIcon";
 import { QuotaUsageWidget } from "@/modules/quota";
 
 type Props = {
-  cwd: string | null;
+  cwd?: string | null;
   filePath?: string | null;
-  home: string | null;
+  home?: string | null;
   onCd: (path: string) => void;
   onWorkspaceChange: (env: WorkspaceEnv) => void;
   onConnectSsh?: (conn: SshConnection, forcePickSession?: boolean) => void;
@@ -99,6 +99,7 @@ export function StatusBar({
   const { t } = useTranslation();
   const panelOpen = useChatStore((s) => s.panelOpen);
   const miniOpen = useChatStore((s) => s.mini.open);
+  const miniCollapsed = useChatStore((s) => s.mini.collapsed);
   const chatUnreadCount = useChatStore((s) => s.unreadCount);
   const [arcadeOpen, setArcadeOpen] = useState(false);
 
@@ -193,7 +194,7 @@ export function StatusBar({
             <AgentStatusPill onClick={onToggleAi} />
             <AiOpenButton
               onOpen={onOpenAi}
-              open={panelOpen || miniOpen}
+              open={panelOpen || (miniOpen && !miniCollapsed)}
               unreadCount={chatUnreadCount}
             />
           </>

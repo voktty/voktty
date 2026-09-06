@@ -65,4 +65,16 @@ describe("segmentsFromCwd", () => {
       { label: "/", fullPath: "/", isHome: false },
     ]);
   });
+
+  it("handles undefined, null, and empty inputs without throwing", () => {
+    expect(segmentsFromCwd(undefined, undefined)).toEqual([]);
+    expect(segmentsFromCwd(null, null)).toEqual([]);
+    expect(segmentsFromCwd("", null)).toEqual([]);
+    expect(segmentsFromCwd("   ", null)).toEqual([]);
+    expect(segmentsFromCwd("/usr/bin", undefined)).toEqual([
+      { label: "/", fullPath: "/", isHome: false },
+      { label: "usr", fullPath: "/usr", isHome: false },
+      { label: "bin", fullPath: "/usr/bin", isHome: false },
+    ]);
+  });
 });

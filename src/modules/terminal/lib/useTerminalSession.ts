@@ -452,6 +452,24 @@ export function subscribeLeafBlockMode(
   };
 }
 
+export function setLeafBlocks(leafId: number, blocks: boolean): void {
+  const s = sessions.get(leafId);
+  if (!s) return;
+  if (s.blocks === blocks) return;
+  s.blocks = blocks;
+  if (blocks) {
+    applyBlockMode(leafId, s.blockMode);
+  } else {
+    const slot = getSlotForLeaf(leafId);
+    if (slot) {
+      slot.term.options.disableStdin = false;
+      if (slot.term.textarea) slot.term.textarea.disabled = false;
+      if (s.visibleNow && s.focusedNow) slot.term.focus();
+    }
+  }
+  void respawnSession(leafId);
+}
+
 export function setLeafInputFocus(
   leafId: number,
   fn: (() => void) | null,
@@ -759,6 +777,9 @@ function ensureSession(
     if (!existing.pty && !existing.ptyOpening) {
       existing.workspaceEnv = workspaceEnv;
       if (shellOverride) existing.shellOverride = shellOverride;
+    }
+    if (existing.blocks !== blocks) {
+      existing.blocks = blocks;
     }
     return existing;
   }

@@ -29,6 +29,7 @@ export {
 export {
   clearFocusedTerminal,
   disposeSession,
+  focusLeafInput,
   getActiveTerminalLeafId,
   getAnyLiveTerminalLeafId,
   getLeafTerminalStats,
@@ -41,6 +42,7 @@ export {
   navigateFocusedBlocks,
   ptyIdForLeaf,
   respawnSession,
+  setLeafBlocks,
   waitForLeafConnection,
   whenSessionReady,
   writeToSession,
