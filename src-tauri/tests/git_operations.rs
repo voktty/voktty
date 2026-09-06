@@ -166,6 +166,78 @@ fn unstage_clears_index_entry() {
 }
 
 #[test]
+fn stage_contents_stages_partial_changes_leaving_the_working_tree_alone() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "one\ntwo\nthree\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "init"]);
+    // The working tree changes two lines; only one is reconstructed as the
+    // partial content to stage, simulating "stage just this hunk".
+    fx.write_file("a.txt", "ONE\ntwo\nTHREE\n");
+
+    operations::stage_contents(
+        &fx.registry,
+        &fx.repo_str(),
+        "a.txt",
+        b"ONE\ntwo\nthree\n",
+        &fx.workspace,
+    )
+    .expect("stage_contents");
+
+    let show_output = std::process::Command::new("git")
+        .args(["show", ":a.txt"])
+        .current_dir(&fx.repo_path)
+        .output()
+        .expect("git show :a.txt");
+    assert_eq!(
+        String::from_utf8_lossy(&show_output.stdout),
+        "ONE\ntwo\nthree\n"
+    );
+
+    let snap = operations::status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    let entry = snap
+        .changed_files
+        .iter()
+        .find(|f| f.path == "a.txt")
+        .expect("a.txt present");
+    assert!(entry.staged);
+    assert!(entry.unstaged, "the other hunk is still unstaged");
+
+    let worktree = std::fs::read_to_string(fx.repo_path.join("a.txt")).expect("read worktree");
+    assert_eq!(
+        worktree, "ONE\ntwo\nTHREE\n",
+        "staging via the index must not touch the working tree file"
+    );
+}
+
+#[test]
+fn stage_contents_rejects_content_over_the_size_limit() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "alpha\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "init"]);
+
+    let oversized = vec![b'a'; 3 * 1024 * 1024];
+    match operations::stage_contents(
+        &fx.registry,
+        &fx.repo_str(),
+        "a.txt",
+        &oversized,
+        &fx.workspace,
+    ) {
+        Err(GitError::FileTooLarge { .. }) => {}
+        Err(other) => panic!("expected FileTooLarge, got {other}"),
+        Ok(_) => panic!("expected error for oversized content"),
+    }
+}
+
+#[test]
 fn commit_with_empty_message_is_rejected() {
     if skip_if_no_git() {
         return;

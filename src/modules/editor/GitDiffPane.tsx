@@ -1,15 +1,9 @@
-import { toast } from "sonner";
-import { native } from "@/modules/ai/lib/native";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/modules/i18n";
-import {
-  GitReviewQueue,
-  type GitReviewQueueConfig,
-} from "@/modules/source-control/GitReviewQueue";
+import { native } from "@/modules/ai/lib/native";
 import {
   EMPTY_COMMENTS,
   fileKey,
@@ -17,19 +11,29 @@ import {
   sessionKey,
   useGitReviewStore,
 } from "@/modules/git-review";
-import { CheckmarkCircle02Icon, Comment01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { useTranslation } from "@/modules/i18n";
+import {
+  GitReviewQueue,
+  type GitReviewQueueConfig,
+} from "@/modules/source-control/GitReviewQueue";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { unifiedMergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import {
+  CheckmarkCircle02Icon,
+  Comment01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   commitDiffKey,
   fetchCommitDiff,
   fetchWorkingDiff,
   getCachedDiff,
+  invalidateDiff,
   workingDiffKey,
 } from "./lib/diffCache";
 import {
@@ -37,6 +41,8 @@ import {
   DEFAULT_INDENT,
   languageCompartment,
 } from "./lib/extensions";
+import { stageChunkText } from "./lib/gitChunkStaging";
+import { gitHunkStageGutter } from "./lib/gitHunkGutter";
 import { resolveLanguage, resolveLanguageSync } from "./lib/languageResolver";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 
@@ -114,6 +120,28 @@ const DIFF_THEME = EditorView.theme({
     fontSize: "10.5px",
     padding: "2px 8px",
     opacity: 0.7,
+  },
+  ".cm-stageHunkGutter": {
+    width: "16px",
+  },
+  ".cm-stageHunkMarker": {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "14px",
+    height: "14px",
+    marginTop: "1px",
+    padding: 0,
+    border: "none",
+    borderRadius: "3px",
+    background: "rgba(110, 200, 120, 0.18)",
+    color: "rgb(80, 170, 100)",
+    fontSize: "11px",
+    lineHeight: "1",
+    cursor: "pointer",
+  },
+  ".cm-stageHunkMarker:hover": {
+    background: "rgba(110, 200, 120, 0.32)",
   },
 });
 
@@ -350,7 +378,9 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   const setViewMode = useGitReviewStore((s) => s.setViewMode);
   const markFile = useGitReviewStore((s) => s.markFile);
   const comments = useGitReviewStore(
-    (s) => s.comments[sKey] ?? (EMPTY_COMMENTS as unknown as typeof s.comments[string]),
+    (s) =>
+      s.comments[sKey] ??
+      (EMPTY_COMMENTS as unknown as (typeof s.comments)[string]),
   );
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
 
@@ -403,19 +433,50 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
 
   const handleToggleReview = useCallback(async () => {
     if (source.kind !== "working" || !loaded) return;
-    await markFile(
-      repoRoot,
-      "worktree",
-      path,
-      modifiedContent,
-      !isReviewed,
-    );
-  }, [isReviewed, loaded, markFile, modifiedContent, path, repoRoot, source.kind]);
+    await markFile(repoRoot, "worktree", path, modifiedContent, !isReviewed);
+  }, [
+    isReviewed,
+    loaded,
+    markFile,
+    modifiedContent,
+    path,
+    repoRoot,
+    source.kind,
+  ]);
 
   const isTooLarge =
     originalContent.length > LARGE_FILE_THRESHOLD ||
     modifiedContent.length > LARGE_FILE_THRESHOLD;
   const useFallback = isBinary || isTooLarge;
+
+  // Staging a single hunk only makes sense out of the unstaged (working tree
+  // vs. index) diff — the "+" mode already shows what is staged.
+  const canStageHunk =
+    source.kind === "working" && source.mode === "-" && !useFallback;
+
+  const handleStageHunk = useCallback(
+    (pos: number) => {
+      if (source.kind !== "working") return;
+      const next = stageChunkText(originalContent, modifiedContent, pos);
+      if (next == null) return;
+      void (async () => {
+        try {
+          await native.gitStageHunk(repoRoot, path, next, source.workspaceEnv);
+          invalidateDiff(
+            workingDiffKey(repoRoot, path, "-", source.workspaceEnv),
+          );
+          invalidateDiff(
+            workingDiffKey(repoRoot, path, "+", source.workspaceEnv),
+          );
+          setReloadKey((k) => k + 1);
+          await review?.sourceControl.refresh({ remote: "never" });
+        } catch (error) {
+          toast.error(String(error));
+        }
+      })();
+    },
+    [modifiedContent, originalContent, path, repoRoot, review, source],
+  );
 
   const extensions = useMemo(
     () => [
@@ -431,9 +492,10 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
         syntaxHighlightDeletions: true,
         collapseUnchanged: { margin: 3, minSize: 6 },
       }),
+      canStageHunk ? gitHunkStageGutter(handleStageHunk) : [],
       DIFF_THEME,
     ],
-    [effectiveOriginal, langExt],
+    [effectiveOriginal, langExt, canStageHunk, handleStageHunk],
   );
 
   const stats = useMemo(
@@ -443,7 +505,10 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
   );
 
   return (
-    <div dir="ltr" className="flex h-full min-h-0 flex-col bg-background text-left">
+    <div
+      dir="ltr"
+      className="flex h-full min-h-0 flex-col bg-background text-left"
+    >
       <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge
@@ -487,9 +552,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  setViewMode(repoRoot, "worktree", path, "full")
-                }
+                onClick={() => setViewMode(repoRoot, "worktree", path, "full")}
                 className={cn(
                   "rounded px-2 py-0.5 font-medium transition-colors",
                   viewMode === "full"
@@ -511,7 +574,11 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
                 className="h-7 gap-1.5 px-2 text-[10.5px]"
                 onClick={() => setCommentDialogOpen(true)}
               >
-                <HugeiconsIcon icon={Comment01Icon} size={13} className="text-amber-500" />
+                <HugeiconsIcon
+                  icon={Comment01Icon}
+                  size={13}
+                  className="text-amber-500"
+                />
                 <span>{t("git.addComment")}</span>
                 {fileComments.length > 0 ? (
                   <span className="rounded bg-amber-500/20 px-1 py-0.2 font-mono text-[9px] font-semibold text-amber-600 dark:text-amber-400">
@@ -634,4 +701,3 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     </div>
   );
 }
-

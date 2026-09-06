@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import {
   isPathInRemoteWorkspace,
   remoteCanonicalize,
@@ -14,9 +13,10 @@ import {
   currentWorkspaceEnv,
   isWindowsNativePath,
   LOCAL_WORKSPACE,
-  workspaceForNativeFs,
   type WorkspaceEnv,
+  workspaceForNativeFs,
 } from "@/modules/workspace";
+import { invoke } from "@tauri-apps/api/core";
 
 export type ReadResult =
   | { kind: "text"; content: string; size: number }
@@ -174,7 +174,12 @@ export type GitTagEntry = {
   timestampSecs: number;
 };
 
-export type GitOperationKind = "none" | "merge" | "revert" | "cherryPick" | "rebase";
+export type GitOperationKind =
+  | "none"
+  | "merge"
+  | "revert"
+  | "cherryPick"
+  | "rebase";
 
 export type GitOperationStatus = {
   kind: GitOperationKind;
@@ -402,11 +407,7 @@ export const native = {
       maxResults: params.maxResults ?? null,
       workspace: currentWorkspaceEnv(),
     }),
-  runCommand: (
-    command: string,
-    cwd?: string | null,
-    timeoutSecs?: number,
-  ) =>
+  runCommand: (command: string, cwd?: string | null, timeoutSecs?: number) =>
     invoke<CommandOutput>("shell_run_command", {
       command,
       cwd: cwd ?? null,
@@ -547,11 +548,20 @@ export const native = {
       entries,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
-  gitCommit: (
+  /** Stages `contents` as the full new blob for `path`, leaving the working tree untouched. */
+  gitStageHunk: (
     repoRoot: string,
-    message: string,
+    path: string,
+    contents: string,
     workspace?: WorkspaceEnv,
   ) =>
+    invoke<void>("git_stage_hunk", {
+      repoRoot,
+      path,
+      contents,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitCommit: (repoRoot: string, message: string, workspace?: WorkspaceEnv) =>
     invoke<GitCommitResult>("git_commit", {
       repoRoot,
       message,
@@ -608,11 +618,7 @@ export const native = {
       originalPath: originalPath ?? null,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
-  gitRemoteUrl: (
-    repoRoot: string,
-    name?: string,
-    workspace?: WorkspaceEnv,
-  ) =>
+  gitRemoteUrl: (repoRoot: string, name?: string, workspace?: WorkspaceEnv) =>
     invoke<string | null>("git_remote_url", {
       repoRoot,
       name: name ?? null,
@@ -655,11 +661,7 @@ export const native = {
       targetName: targetName ?? null,
       workspace: resolveGitWorkspace(parentDir, workspace),
     }),
-  gitPublish: (
-    repoRoot: string,
-    remote?: string,
-    workspace?: WorkspaceEnv,
-  ) =>
+  gitPublish: (repoRoot: string, remote?: string, workspace?: WorkspaceEnv) =>
     invoke<GitPushResult>("git_publish", {
       repoRoot,
       remote: remote ?? null,
