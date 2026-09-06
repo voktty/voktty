@@ -1340,6 +1340,10 @@ export const es: TranslationSchema = {
       resolveAllHunks: "Resuelve todos los conflictos ({resolved}/{total})",
       resolvedSuccess: "{path} marcado como resuelto",
     },
+    blame: {
+      action: "Blame",
+      dialogDesc: "Muestra quién cambió por última vez cada línea, y en qué commit.",
+    },
     cloneRepo: "Clonar repositorio",
     cloneModalTitle: "Clonar repositorio Git",
     cloneModalDesc: "Introduce la URL del repositorio y el directorio de destino local.",

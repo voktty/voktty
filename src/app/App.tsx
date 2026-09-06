@@ -125,6 +125,7 @@ import {
   useSidebarPanel,
 } from "@/modules/sidebar";
 import {
+  BlameDialog,
   GitCloneModal,
   SourceControlPanel,
   useRepositoryTargeting,
@@ -1395,6 +1396,28 @@ export default function App() {
       focusInput(null);
     },
     [hasComposer, presentChat, focusInput],
+  );
+
+  const [blameTarget, setBlameTarget] = useState<{
+    repoRoot: string;
+    path: string;
+  } | null>(null);
+  const handleOpenBlameForPath = useCallback(
+    async (path: string) => {
+      try {
+        const repo = await native.gitResolveRepo(path, workspaceEnv);
+        if (!repo) {
+          toast.error(t("feedback.noGitRepository"));
+          return;
+        }
+        setBlameTarget({ repoRoot: repo.repoRoot, path });
+      } catch (err) {
+        toast.error(t("feedback.resolveGitRepositoryFailed"), {
+          description: String(err),
+        });
+      }
+    },
+    [workspaceEnv, t],
   );
 
   const askFromSelection = useCallback(() => {
@@ -4562,6 +4585,7 @@ export default function App() {
                             handleOpenRepositoryInSourceControl
                           }
                           onOpenGitHistory={handleOpenGitHistoryForPath}
+                          onOpenBlame={(path) => void handleOpenBlameForPath(path)}
                           onAttachToAgent={handleAttachFileToAgent}
                           onWorkspaceDrop={(source, target) => {
                             void handleWorkspaceDrop(source, target);
@@ -5093,6 +5117,17 @@ export default function App() {
               cdInNewTab(clonedPath);
             }}
           />
+
+          {blameTarget ? (
+            <BlameDialog
+              open={blameTarget !== null}
+              onOpenChange={(open) => {
+                if (!open) setBlameTarget(null);
+              }}
+              repoRoot={blameTarget.repoRoot}
+              path={blameTarget.path}
+            />
+          ) : null}
 
           <CloseDialogs
             tabs={tabs}

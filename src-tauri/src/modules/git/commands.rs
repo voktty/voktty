@@ -2,9 +2,9 @@ use tauri::{AppHandle, Manager};
 
 use crate::modules::git::operations;
 use crate::modules::git::types::{
-    DiscardEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult, GitDiffContentResult,
-    GitDiffResult, GitLogEntry, GitOperationStatus, GitPanelSnapshot, GitPushResult, GitRepoInfo,
-    GitStashEntry, GitStatusSnapshot, GitTagEntry,
+    DiscardEntry, GitBlameLine, GitBranchListResult, GitCommitFileChange, GitCommitResult,
+    GitDiffContentResult, GitDiffResult, GitLogEntry, GitOperationStatus, GitPanelSnapshot,
+    GitPushResult, GitRepoInfo, GitStashEntry, GitStatusSnapshot, GitTagEntry,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
@@ -568,6 +568,20 @@ pub async fn git_operation_continue(
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
         operations::operation_continue(r, &repo_root, &kind, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_blame(
+    repo_root: String,
+    path: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<Vec<GitBlameLine>, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::blame(r, &repo_root, &path, &workspace).map_err(Into::into)
     })
     .await
 }

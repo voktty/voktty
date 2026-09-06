@@ -149,6 +149,17 @@ pub struct GitOperationStatus {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitBlameLine {
+    pub line_number: u32,
+    pub sha: String,
+    pub author: String,
+    pub author_time_secs: i64,
+    pub summary: String,
+    pub content: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitTagEntry {
     pub name: String,
     pub sha: String,

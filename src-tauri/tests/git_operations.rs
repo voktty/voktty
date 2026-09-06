@@ -956,3 +956,53 @@ fn tag_create_rejects_unsafe_names() {
         Ok(_) => panic!("expected error for empty tag name"),
     }
 }
+
+#[test]
+fn blame_attributes_each_line_to_the_commit_that_introduced_it() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "line one\nline two\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "first commit"]);
+    let first_sha =
+        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
+            .sha
+            .clone();
+
+    fx.write_file("a.txt", "line one\nline two\nline three\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "second commit"]);
+    let second_sha =
+        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
+            .sha
+            .clone();
+
+    let lines = operations::blame(&fx.registry, &fx.repo_str(), "a.txt", &fx.workspace)
+        .expect("blame");
+    assert_eq!(lines.len(), 3);
+    assert_eq!(lines[0].sha, first_sha);
+    assert_eq!(lines[0].content, "line one");
+    assert_eq!(lines[0].summary, "first commit");
+    assert_eq!(lines[1].sha, first_sha);
+    assert_eq!(lines[2].sha, second_sha);
+    assert_eq!(lines[2].content, "line three");
+    assert_eq!(lines[2].summary, "second commit");
+    assert_eq!(lines[2].line_number, 3);
+}
+
+#[test]
+fn blame_rejects_path_outside_the_repository() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "x\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+
+    assert!(
+        operations::blame(&fx.registry, &fx.repo_str(), "../outside.txt", &fx.workspace).is_err()
+    );
+}
