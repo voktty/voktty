@@ -3258,6 +3258,7 @@ export const en = {
     deepseekApiKey: "DeepSeek API Key",
     deepseekKeyPlaceholder: "sk-...",
     getDeepseekKey: "Get an API key on platform.deepseek.com",
+    getProviderKey: "Get a {provider} API key",
     keySavedNotice: "Keys are stored securely in your OS keychain.",
     otherProviders: "Other AI providers",
     configureLater: "You can configure or change AI keys anytime in Settings.",

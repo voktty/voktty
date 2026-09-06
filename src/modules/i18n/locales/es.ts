@@ -3332,6 +3332,7 @@ export const es: TranslationSchema = {
     deepseekApiKey: "API Key de DeepSeek",
     deepseekKeyPlaceholder: "sk-...",
     getDeepseekKey: "Obtener clave en platform.deepseek.com",
+    getProviderKey: "Obtener una clave de {provider}",
     keySavedNotice:
       "Las claves se guardan de forma segura en el llavero nativo del SO.",
     otherProviders: "Otros proveedores de IA",
