@@ -80,6 +80,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { GitCloneModal } from "./GitCloneModal";
+import { StashDropdown, TagDropdown } from "./GitStashAndTags";
 import {
   memo,
   useCallback,
@@ -862,6 +863,15 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               repositoryTarget={repositoryTarget}
               onFollowRepositoryContext={onFollowRepositoryContext}
               onNavigateToPath={onNavigateToPath}
+              onRefresh={handleRefresh}
+            />
+            <StashDropdown
+              repoRoot={scm.repo?.repoRoot ?? null}
+              onRefresh={handleRefresh}
+            />
+            <TagDropdown
+              repoRoot={scm.repo?.repoRoot ?? null}
+              headSha={null}
               onRefresh={handleRefresh}
             />
             {scm.status && (scm.status.ahead > 0 || scm.status.behind > 0) ? (

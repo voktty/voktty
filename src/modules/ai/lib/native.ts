@@ -158,6 +158,21 @@ export type GitBranchListResult = {
   branches: GitBranchEntry[];
 };
 
+export type GitStashEntry = {
+  index: number;
+  sha: string;
+  message: string;
+  timestampSecs: number;
+};
+
+export type GitTagEntry = {
+  name: string;
+  sha: string;
+  annotated: boolean;
+  message: string | null;
+  timestampSecs: number;
+};
+
 function resolveGitWorkspace(
   repoRootOrPath?: string | null,
   explicitWorkspace?: WorkspaceEnv,
@@ -637,6 +652,78 @@ export const native = {
     invoke<string>("git_revert_commit", {
       repoRoot,
       sha,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitStashList: (repoRoot: string, workspace?: WorkspaceEnv) =>
+    invoke<GitStashEntry[]>("git_stash_list", {
+      repoRoot,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitStashSave: (
+    repoRoot: string,
+    message: string | undefined,
+    includeUntracked: boolean,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<void>("git_stash_save", {
+      repoRoot,
+      message: message ?? null,
+      includeUntracked,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitStashApply: (repoRoot: string, index: number, workspace?: WorkspaceEnv) =>
+    invoke<void>("git_stash_apply", {
+      repoRoot,
+      index,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitStashPop: (repoRoot: string, index: number, workspace?: WorkspaceEnv) =>
+    invoke<void>("git_stash_pop", {
+      repoRoot,
+      index,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitStashDrop: (repoRoot: string, index: number, workspace?: WorkspaceEnv) =>
+    invoke<void>("git_stash_drop", {
+      repoRoot,
+      index,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitTagList: (repoRoot: string, workspace?: WorkspaceEnv) =>
+    invoke<GitTagEntry[]>("git_tag_list", {
+      repoRoot,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitTagCreate: (
+    repoRoot: string,
+    name: string,
+    targetSha: string | undefined,
+    message: string | undefined,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<void>("git_tag_create", {
+      repoRoot,
+      name,
+      targetSha: targetSha ?? null,
+      message: message ?? null,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitTagDelete: (repoRoot: string, name: string, workspace?: WorkspaceEnv) =>
+    invoke<void>("git_tag_delete", {
+      repoRoot,
+      name,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitTagPush: (
+    repoRoot: string,
+    name: string,
+    remote: string | undefined,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<void>("git_tag_push", {
+      repoRoot,
+      name,
+      remote: remote ?? null,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
 };
