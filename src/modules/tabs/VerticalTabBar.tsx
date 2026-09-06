@@ -178,7 +178,8 @@ function TabBadgeIcon({ tab }: { tab: Tab }) {
   if (
     tab.kind === "git-diff" ||
     tab.kind === "git-history" ||
-    tab.kind === "git-commit-file"
+    tab.kind === "git-commit-file" ||
+    tab.kind === "git-commit"
   ) {
     return (
       <HugeiconsIcon

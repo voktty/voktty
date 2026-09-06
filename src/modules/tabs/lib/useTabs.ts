@@ -171,6 +171,20 @@ export type GitCommitFileDiffTab = TabBase & {
   workspaceEnv?: WorkspaceEnv;
 };
 
+/** Every file touched by one commit, in a single unified diff. The per-file
+ * `GitCommitFileDiffTab` stays as it is: opening ten files should not be the
+ * only way to read a ten file commit. */
+export type GitCommitDiffTab = TabBase & {
+  id: number;
+  kind: "git-commit";
+  title: string;
+  repoRoot: string;
+  sha: string;
+  shortSha: string;
+  subject: string;
+  workspaceEnv?: WorkspaceEnv;
+};
+
 export type RdpTab = TabBase & {
   id: number;
   kind: "rdp";
@@ -205,6 +219,7 @@ export type Tab =
   | GitDiffTab
   | GitHistoryTab
   | GitCommitFileDiffTab
+  | GitCommitDiffTab
   | RdpTab
   | ApiClientTab
   | HarnessTab;
@@ -1568,6 +1583,66 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     [],
   );
 
+  const openCommitDiffTab = useCallback(
+    (input: {
+      repoRoot: string;
+      sha: string;
+      shortSha: string;
+      subject: string;
+      workspaceEnv?: WorkspaceEnv;
+    }) => {
+      const resolvedEnv = input.workspaceEnv ?? currentWorkspaceEnv();
+      const curr = tabsRef.current;
+      const existing = curr.find(
+        (t): t is GitCommitDiffTab =>
+          t.kind === "git-commit" &&
+          t.repoRoot === input.repoRoot &&
+          t.sha === input.sha,
+      );
+      const title = input.subject
+        ? `${input.shortSha} ${input.subject}`
+        : input.shortSha;
+      if (existing) {
+        const nextTabs = curr.map((t) =>
+          t.id === existing.id
+            ? {
+                ...existing,
+                title,
+                subject: input.subject,
+                workspaceEnv:
+                  input.workspaceEnv ?? existing.workspaceEnv ?? resolvedEnv,
+              }
+            : t,
+        );
+        tabsRef.current = nextTabs;
+        setTabs(nextTabs);
+        setActiveId(existing.id);
+        return existing.id;
+      }
+      const id = nextIdRef.current++;
+      const nextTabs = [
+        ...curr,
+        {
+          id,
+          ...createTabIdentity(activeSpaceIdRef.current),
+          kind: "git-commit",
+          spaceId: activeSpaceIdRef.current,
+          title,
+          repoRoot: input.repoRoot,
+          sha: input.sha,
+          shortSha: input.shortSha,
+          subject: input.subject,
+          workspaceEnv: resolvedEnv,
+        } satisfies GitCommitDiffTab,
+      ];
+      tabsRef.current = nextTabs;
+      setTabs(nextTabs);
+      setActiveId(id);
+      return id;
+    },
+    [],
+  );
+
   const newApiClientTab = useCallback((spaceId?: string) => {
     const targetSpace = spaceId ?? activeSpaceIdRef.current;
     const curr = tabsRef.current;
@@ -2059,6 +2134,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     openGitDiffTab,
     openCommitHistoryTab,
     openCommitFileDiffTab,
+    openCommitDiffTab,
     setAiDiffStatus,
     closeAiDiffTab,
     closeTab,

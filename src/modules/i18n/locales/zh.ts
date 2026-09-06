@@ -1516,6 +1516,7 @@ const zhBase = mergeLocale(en, {
     noCommitsDesc: "此分支暂无提交记录。",
     loadingMore: "正在加载更多…",
     allLoaded: "已加载所有提交",
+    viewChanges: "查看更改",
     copySha: "复制 SHA",
     copied: "已复制",
     loadingFiles: "正在加载文件…",

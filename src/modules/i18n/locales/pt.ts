@@ -1627,6 +1627,7 @@ const ptBase = mergeLocale(en, {
     noCommitsDesc: "Esta branch não possui commits.",
     loadingMore: "Carregando mais\u2026",
     allLoaded: "Todos os commits carregados",
+    viewChanges: "Ver alterações",
     copySha: "Copiar SHA",
     copied: "Copiado",
     loadingFiles: "Carregando arquivos\u2026",

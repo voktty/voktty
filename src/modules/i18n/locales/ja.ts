@@ -1606,6 +1606,7 @@ const jaBase = mergeLocale(en, {
     noCommitsDesc: "このブランチにはコミットがありません。",
     loadingMore: "さらに読み込み中\u2026",
     allLoaded: "すべてのコミットを読み込みました",
+    viewChanges: "変更を表示",
     copySha: "SHA をコピー",
     copied: "コピーしました",
     loadingFiles: "ファイルを読み込み中\u2026",

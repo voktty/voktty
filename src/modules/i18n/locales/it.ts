@@ -1633,6 +1633,7 @@ const itBase = mergeLocale(en, {
     noCommitsDesc: "Questo ramo non ha commit.",
     loadingMore: "Caricamento altri\u2026",
     allLoaded: "Tutti i commit caricati",
+    viewChanges: "Vedi modifiche",
     copySha: "Copia SHA",
     copied: "Copiato",
     loadingFiles: "Caricamento file\u2026",

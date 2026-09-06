@@ -62,7 +62,8 @@ export function useSourceControlContext({
         (t) =>
           t.kind === "git-diff" ||
           t.kind === "git-history" ||
-          t.kind === "git-commit-file",
+          t.kind === "git-commit-file" ||
+          t.kind === "git-commit",
       ),
     [tabs],
   );

@@ -2533,6 +2533,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
     noCommitsDesc: "هذا الفرع لا يحتوي على تضمينات.",
     loadingMore: "جارٍ تحميل المزيد…",
     allLoaded: "تم تحميل جميع التضمينات",
+    viewChanges: "عرض التغييرات",
     copySha: "نسخ SHA",
     copied: "تم النسخ",
     loadingFiles: "جارٍ تحميل الملفات…",
