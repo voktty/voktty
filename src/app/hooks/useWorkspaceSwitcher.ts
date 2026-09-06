@@ -18,6 +18,7 @@ import {
   useState,
 } from "react";
 import {
+  releasableSessionId,
   reusableWorkspaceEnv,
   sameRemoteHost,
   sameWorkspace,
@@ -255,6 +256,10 @@ export function useWorkspaceSwitcher({
         activationGenerationRef.current === generation &&
         activationRequestsRef.current.get(resourceKey) === requestId;
       let prepared = env;
+      // Set only when this call dials a new session, so the failure paths
+      // below never tear down one that was borrowed from the active env and
+      // is still carrying other tabs.
+      let openedSessionId: number | undefined;
       const target = workspaceTarget(env);
       if (env.kind === "ssh") {
         useWorkspaceEnvStore.getState().beginConnection(env, target);
@@ -272,6 +277,7 @@ export function useWorkspaceSwitcher({
           };
         } else if (env.kind === "ssh" && env.sessionId === undefined) {
           prepared = await connectRemoteEnv(env);
+          openedSessionId = prepared.sessionId;
         }
       } catch (err) {
         if (!isCurrentRequest()) return null;
@@ -280,15 +286,21 @@ export function useWorkspaceSwitcher({
         throw err;
       }
 
+      const releaseOwnSession = async () => {
+        const sessionId = releasableSessionId(prepared, openedSessionId);
+        if (sessionId === undefined) return;
+        await closeRemoteWorkspace(sessionId).catch(() => {});
+      };
+
       let nextHome: string;
       try {
         nextHome = await resolveEnvHome(prepared);
       } catch {
-        if (prepared !== workspaceEnv) await closeRemoteEnv(prepared);
+        await releaseOwnSession();
         return null;
       }
       if (!isCurrentRequest()) {
-        if (prepared !== workspaceEnv) await closeRemoteEnv(prepared);
+        await releaseOwnSession();
         return null;
       }
 

@@ -30,6 +30,23 @@ export function sameRemoteHost(
   );
 }
 
+/** Which remote session, if any, an activation is allowed to close on its
+ * failure paths. Only the one it opened itself.
+ *
+ * Tabs on the same host share a single Rust session: `activateWorkspaceEnv`
+ * borrows the active env's `sessionId` instead of dialing again. The borrowed
+ * env is still a fresh object, so deciding ownership by object identity closed
+ * the session every other tab was using, and those tabs then failed with
+ * `remote session not found` until something reconnected them. */
+export function releasableSessionId(
+  prepared: WorkspaceEnv,
+  openedSessionId: number | undefined,
+): number | undefined {
+  if (openedSessionId === undefined) return undefined;
+  if (prepared.kind !== "ssh") return undefined;
+  return prepared.sessionId === openedSessionId ? openedSessionId : undefined;
+}
+
 export function reusableWorkspaceEnv(
   requested: WorkspaceEnv,
   current: WorkspaceEnv,
