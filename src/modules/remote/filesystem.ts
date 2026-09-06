@@ -100,6 +100,28 @@ export function isPathInWorkspace(
   return isPathInRemoteWorkspace(env, path);
 }
 
+/**
+ * Whether `path` falls under the session's current `env.root` — the
+ * explorer's "did the remote cwd leave the scoped session root" check.
+ *
+ * Deliberately distinct from `isPathInWorkspace`: that one only asks "does
+ * this look like a path this environment's backend should handle" for
+ * fs-operation routing (fetch/create/rename/delete) and must stay permissive
+ * for any absolute remote path, or navigating outside the tracked root would
+ * wrongly fall back to the local filesystem. This one gates whether
+ * `prepareRemoteExplorerEnv` needs to widen the session instead.
+ */
+export function isPathWithinRemoteRoot(
+  env: RemoteWorkspaceEnv,
+  path: string,
+): boolean {
+  const root = normalizePath(env.root).replace(/\/+$/, "") || "/";
+  if (root === "/") return true;
+  const candidate = normalizePath(path);
+  if (candidate === "." || candidate === root) return true;
+  return candidate.startsWith(`${root}/`);
+}
+
 export function remoteRelativePath(
   env: RemoteWorkspaceEnv,
   path: string,

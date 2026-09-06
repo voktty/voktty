@@ -1,5 +1,5 @@
 import {
-  isPathInWorkspace,
+  isPathWithinRemoteRoot,
   type RemoteSessionInfo,
   type RemoteSshConnection,
 } from "@/modules/remote";
@@ -18,10 +18,27 @@ export async function prepareRemoteExplorerEnv(
   if (workspaceEnv.kind !== "ssh") {
     return { workspaceEnv, opened: false };
   }
-  if (workspaceEnv.sessionId !== undefined && isPathInWorkspace(workspaceEnv, cwd)) {
+  if (workspaceEnv.sessionId === undefined) {
+    const session = await openRemoteWorkspace(
+      workspaceEnv.connection,
+      cwd || "/",
+    );
+    return {
+      workspaceEnv: {
+        ...workspaceEnv,
+        root: session.workspace_root,
+        sessionId: session.session_id,
+      },
+      opened: true,
+    };
+  }
+  if (isPathWithinRemoteRoot(workspaceEnv, cwd)) {
     return { workspaceEnv, opened: false };
   }
-  const session = await openRemoteWorkspace(workspaceEnv.connection, cwd || "/");
+  // The remote cwd moved outside the session's current root (e.g. `cd` from
+  // ~/project to /opt/data): widen to "/" instead of the new cwd itself, so
+  // navigating elsewhere later on the same host never needs another session.
+  const session = await openRemoteWorkspace(workspaceEnv.connection, "/");
   return {
     workspaceEnv: {
       ...workspaceEnv,

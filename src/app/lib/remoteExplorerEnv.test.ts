@@ -38,12 +38,35 @@ describe("prepareRemoteExplorerEnv", () => {
     expect(open).toHaveBeenCalledWith(remote.connection, "/opt/data");
   });
 
-  it("reuses the active remote session for any remote directory", async () => {
+  it("reuses the active remote session for a directory still under its root", async () => {
     const open = vi.fn();
     await expect(
-      prepareRemoteExplorerEnv(remote, "/opt/data", open),
+      prepareRemoteExplorerEnv(remote, "/root/project", open),
+    ).resolves.toEqual({ workspaceEnv: remote, opened: false });
+    await expect(
+      prepareRemoteExplorerEnv(remote, "/root", open),
     ).resolves.toEqual({ workspaceEnv: remote, opened: false });
     expect(open).not.toHaveBeenCalled();
+  });
+
+  it("widens to a root-level session when the cwd leaves the current root", async () => {
+    const open = vi.fn(async () => ({
+      session_id: 9,
+      architecture: "x86_64",
+      workspace_root: "/",
+      helper_version: "1.0.0",
+      capabilities: [],
+    }));
+
+    await expect(
+      prepareRemoteExplorerEnv(remote, "/opt/data", open),
+    ).resolves.toEqual({
+      workspaceEnv: { ...remote, root: "/", sessionId: 9 },
+      opened: true,
+    });
+    // Widens to "/", not to the new cwd itself, so a later cd elsewhere on
+    // the same host never needs yet another auxiliary session.
+    expect(open).toHaveBeenCalledWith(remote.connection, "/");
   });
 
   it("does not create a remote session for local workspaces", async () => {
