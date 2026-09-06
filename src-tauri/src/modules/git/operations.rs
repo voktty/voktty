@@ -4,14 +4,15 @@ use std::path::Path;
 use crate::modules::git::errors::{GitError, Result};
 use crate::modules::git::parser::parse_porcelain_v2;
 use crate::modules::git::process::{
-    ensure_git_available, ensure_success, git_show_text, git_stdout_line_opt, git_stdout_lines,
-    read_text_file, run_git,
+    ensure_git_available, ensure_success, git_hash_object_stdin, git_show_text,
+    git_stdout_line_opt, git_stdout_lines, read_text_file, run_git,
 };
 use crate::modules::git::types::{
     DiscardEntry, GitBlameLine, GitBranchComparison, GitBranchEntry, GitBranchListResult,
     GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult, GitLogEntry,
     GitOperationStatus, GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry,
-    GitStatusSnapshot, GitTagEntry, TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
+    GitStatusSnapshot, GitTagEntry, TextSource, DEFAULT_TIMEOUT_SECS, MAX_FILE_BYTES,
+    NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream, ResolvedGitDirectory,
@@ -364,6 +365,58 @@ pub fn unstage(
         DEFAULT_TIMEOUT_SECS,
     )?;
     ensure_success(&output, "git rm --cached failed")
+}
+
+/// Stages `contents` as the full new blob for `relative_path`, without
+/// touching the working tree file. Used to stage a single hunk: the caller
+/// reconstructs what the file would look like with just that hunk applied
+/// (via `unifiedDiff`/CodeMirror's `Chunk` machinery on the frontend) and this
+/// writes that reconstruction straight into the index.
+pub fn stage_contents(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    relative_path: &str,
+    contents: &[u8],
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    if contents.len() as u64 > MAX_FILE_BYTES {
+        return Err(GitError::FileTooLarge {
+            path: Path::new(relative_path).to_path_buf(),
+            size: contents.len() as u64,
+            max: MAX_FILE_BYTES,
+        });
+    }
+    let resolved = pathspec_from_input(&repo_root.local_path, relative_path)?;
+    let hash = git_hash_object_stdin(&repo_root.workspace, &repo_root.git_path, &resolved, contents)?;
+    let mode = git_index_mode(&repo_root.workspace, &repo_root.git_path, &resolved)
+        .unwrap_or_else(|| "100644".to_string());
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        [
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &mode,
+            &hash,
+            &resolved,
+        ],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git update-index failed")
+}
+
+fn git_index_mode(workspace: &WorkspaceEnv, cwd: &str, relative: &str) -> Option<String> {
+    let lines =
+        git_stdout_lines(workspace, cwd, ["ls-files", "--stage", "--", relative]).ok()?;
+    let mode = lines.first()?.split_whitespace().next()?;
+    if mode.len() == 6 && mode.bytes().all(|b| b.is_ascii_digit()) {
+        Some(mode.to_string())
+    } else {
+        None
+    }
 }
 
 fn looks_like_no_head(output: &GitOutput) -> bool {

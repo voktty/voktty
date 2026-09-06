@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
@@ -338,6 +338,74 @@ where
         timed_out,
         truncated: stdout_truncated,
     })
+}
+
+/// Writes `contents` into the object database as a blob and returns its hash,
+/// without touching the working tree. Used to stage a reconstructed partial
+/// file (e.g. a single hunk) straight into the index via `update-index`.
+///
+/// SSH sessions execute git through a request/response RPC that has no stdin
+/// channel, so this is local/WSL only for now.
+pub fn git_hash_object_stdin(
+    workspace: &WorkspaceEnv,
+    cwd: &str,
+    relative: &str,
+    contents: &[u8],
+) -> Result<String> {
+    if let WorkspaceEnv::Ssh { .. } = workspace {
+        return Err(GitError::Spawn(
+            "staging part of a file is not supported over SSH sessions yet".into(),
+        ));
+    }
+    let mut cmd = build_git_command(
+        workspace,
+        Some(cwd),
+        &[
+            OsString::from("hash-object"),
+            OsString::from("-w"),
+            OsString::from("--path"),
+            OsString::from(relative),
+            OsString::from("--stdin"),
+        ],
+    )?;
+    cmd.env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("LC_ALL", "C")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    crate::modules::proc::hide_console(&mut cmd);
+    let mut child = cmd.spawn().map_err(|e| GitError::Spawn(e.to_string()))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| GitError::Spawn("hash-object stdin".into()))?;
+    stdin.write_all(contents)?;
+    drop(stdin);
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            "unknown error".to_string()
+        };
+        return Err(GitError::CommandFailed {
+            context: "git hash-object failed",
+            detail,
+        });
+    }
+    let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if hash.len() != 40 && hash.len() != 64 {
+        return Err(GitError::CommandFailed {
+            context: "git hash-object failed",
+            detail: "returned an invalid object hash".to_string(),
+        });
+    }
+    Ok(hash)
 }
 
 fn build_git_command(
