@@ -79,6 +79,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { ConflictsPanel } from "./ConflictsPanel";
 import { GitCloneModal } from "./GitCloneModal";
 import { StashDropdown, TagDropdown } from "./GitStashAndTags";
 import {
@@ -536,6 +537,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     sourceControl,
     onOpenDiff,
     dirtyPaths,
+  );
+  const conflictedFiles = useMemo(
+    () => scm.status?.changedFiles.filter((f) => f.conflicted) ?? [],
+    [scm.status],
   );
   const refreshAnimationRef = useRef<number | null>(null);
   const [refreshAnimating, setRefreshAnimating] = useState(false);
@@ -1009,6 +1014,12 @@ export const SourceControlPanel = memo(function SourceControlPanel({
             </IconActionButton>
           </div>
         </header>
+
+        <ConflictsPanel
+          repoRoot={scm.repo?.repoRoot ?? null}
+          conflictedFiles={conflictedFiles}
+          onRefresh={handleRefresh}
+        />
 
         {onOpenGitGraph ? (
           <button

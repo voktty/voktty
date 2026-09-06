@@ -16,6 +16,7 @@ function file(overrides: Partial<GitChangedFile>): GitChangedFile {
     staged: false,
     unstaged: false,
     untracked: false,
+    conflicted: false,
     statusLabel: "",
     ...overrides,
   };
