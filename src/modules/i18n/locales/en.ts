@@ -70,7 +70,7 @@ export const en = {
       noResults: "No matching settings found",
     },
     tabs: {
-    revealInFileManager: "Reveal in File Explorer",
+      revealInFileManager: "Reveal in File Explorer",
       general: "General",
       editor: "Editor",
       themes: "Themes",
@@ -751,7 +751,8 @@ export const en = {
         transport: "Transport",
         executable: "Executable",
         args: "Arguments",
-        argsHint: "One argument per line. Commands are launched without a shell.",
+        argsHint:
+          "One argument per line. Commands are launched without a shell.",
         cwd: "Working directory",
         authorizedRoot: "Authorized workspace root",
         endpoint: "Endpoint",
@@ -759,7 +760,8 @@ export const en = {
         bearerToken: "Bearer token",
         bearerPlaceholder: "Enter a token",
         credentialStored: "A credential is already stored",
-        secretHint: "The token is sent directly to the native credential store and is never persisted with this form.",
+        secretHint:
+          "The token is sent directly to the native credential store and is never persisted with this form.",
         oauthHint:
           "After enabling the server, Authorize opens the provider in your browser and receives the callback on a temporary loopback port.",
         oauthClientId: "OAuth client ID",
@@ -779,11 +781,13 @@ export const en = {
       },
       errors: {
         configuration: "The server configuration is invalid or incomplete.",
-        authentication: "A valid credential or provider authorization is required.",
+        authentication:
+          "A valid credential or provider authorization is required.",
         spawn: "The local server process could not be started.",
         io: "The server could not be reached safely.",
         protocol: "The server returned an invalid MCP message.",
-        incompatibleVersion: "The server does not support a compatible MCP version.",
+        incompatibleVersion:
+          "The server does not support a compatible MCP version.",
         resourceLimit: "The server exceeded a configured safety limit.",
         timeout: "The server did not respond before the timeout.",
         busy: "The server is busy with another bounded operation.",
@@ -1059,7 +1063,8 @@ export const en = {
       dailyAvg: "Daily avg",
       weeklyChart: "Weekly Activity",
       topPaths: "Most active workspaces",
-      takeBreak: "Remember to take a short break to rest your eyes and stretch!",
+      takeBreak:
+        "Remember to take a short break to rest your eyes and stretch!",
       noPaths: "No recorded workspace activity yet",
     },
     cwd: {
@@ -1182,7 +1187,8 @@ export const en = {
     previewFile: "File",
     previewSize: "Size",
     previewModified: "Modified",
-    previewImageTooLarge: "Image preview is unavailable because this file is too large.",
+    previewImageTooLarge:
+      "Image preview is unavailable because this file is too large.",
     files: "Files",
     noFiles: "No workspace opened",
     newFile: "New File",
@@ -1204,7 +1210,8 @@ export const en = {
     openToSide: "Open to Side",
     revealInFinder: "Reveal in Finder",
     revealInExplorer: "Reveal in File Explorer",
-    fileOutsideWorkspace: "This file is outside the current explorer workspace.",
+    fileOutsideWorkspace:
+      "This file is outside the current explorer workspace.",
     openContainingFolder: "Open containing folder",
     collapseAll: "Collapse All",
     refresh: "Refresh Explorer",
@@ -1240,13 +1247,15 @@ export const en = {
     pullTooltip: "Pull {count} remote commits",
     pushCommits: "Push ({count})",
     undoCommit: "Undo commit",
-    undoCommitTooltip: "Undo the last local commit while keeping changes staged (git reset --soft HEAD~1)",
+    undoCommitTooltip:
+      "Undo the last local commit while keeping changes staged (git reset --soft HEAD~1)",
     undoingCommit: "Undoing…",
     stash: {
       title: "Stashes",
       new: "New",
       newTitle: "Save stash",
-      newDesc: "Set aside your current changes so you can bring them back later.",
+      newDesc:
+        "Set aside your current changes so you can bring them back later.",
       messageLabel: "Message (optional)",
       messagePlaceholder: "e.g. work in progress on the login form",
       includeUntracked: "Include untracked files",
@@ -1271,7 +1280,8 @@ export const en = {
       namePlaceholder: "v1.0.0",
       messageLabel: "Annotation message (optional)",
       messagePlaceholder: "e.g. Release notes",
-      messageHint: "Leave empty for a lightweight tag, or add a message to create an annotated tag.",
+      messageHint:
+        "Leave empty for a lightweight tag, or add a message to create an annotated tag.",
       createAction: "Create tag",
       createSuccess: "Tag “{name}” created",
       empty: "No tags",
@@ -1286,7 +1296,8 @@ export const en = {
       inProgressRevert: "Revert in progress",
       inProgressCherryPick: "Cherry-pick in progress",
       inProgressRebase: "Rebase in progress",
-      resolveHint: "Resolve the conflicted files below, then continue or abort.",
+      resolveHint:
+        "Resolve the conflicted files below, then continue or abort.",
       abort: "Abort",
       aborting: "Aborting…",
       abortSuccess: "Operation aborted",
@@ -1294,8 +1305,10 @@ export const en = {
       continuing: "Continuing…",
       continueSuccess: "Operation completed",
       continueBlocked: "Resolve every conflicted file before continuing.",
-      dialogDesc: "Choose which side to keep for each conflicting change, then mark the file resolved.",
-      unresolvable: "This file can't be resolved here (binary content, or the conflict has no visual markers). Resolve it from the terminal.",
+      dialogDesc:
+        "Choose which side to keep for each conflicting change, then mark the file resolved.",
+      unresolvable:
+        "This file can't be resolved here (binary content, or the conflict has no visual markers). Resolve it from the terminal.",
       hunkLabel: "Conflict {n}",
       acceptOurs: "Ours",
       acceptTheirs: "Theirs",
@@ -1314,7 +1327,8 @@ export const en = {
     compare: {
       action: "Compare branches",
       title: "Compare branches",
-      dialogDesc: "See what's different between two branches before merging or opening a PR.",
+      dialogDesc:
+        "See what's different between two branches before merging or opening a PR.",
       selectBase: "Base branch",
       selectCompare: "Compare branch",
       pickBothHint: "Pick a base and a compare branch to see the difference.",
@@ -1327,7 +1341,8 @@ export const en = {
     },
     cloneRepo: "Clone Repository",
     cloneModalTitle: "Clone Git Repository",
-    cloneModalDesc: "Enter the repository URL and choose the destination folder.",
+    cloneModalDesc:
+      "Enter the repository URL and choose the destination folder.",
     repoUrlLabel: "Repository URL",
     parentDirLabel: "Destination Folder",
     browseFolder: "Browse",
@@ -1359,7 +1374,7 @@ export const en = {
       push: "Push {count} local {count, plural, =1 {commit} other {commits}}.",
       sync: "Sync",
       fetch: "Fetch remote updates.",
-  },
+    },
     commit: "Commit",
     commitPlaceholder: "Commit message (Ctrl+Enter to commit)",
     characterCount: "Characters: {count}",
@@ -1461,9 +1476,11 @@ export const en = {
     addedModified: "Added / Modified",
     original: "Original",
     noReviewCommentsYet: "No review comments yet",
-    addCommentsFromDiffHint: "Use the Comment button on any diff to leave feedback",
+    addCommentsFromDiffHint:
+      "Use the Comment button on any diff to leave feedback",
     reviewHandoffTitle: "Code Review Handoff",
-    reviewHandoffDescription: "Review comments formatted as actionable prompt for AI coding agents.",
+    reviewHandoffDescription:
+      "Review comments formatted as actionable prompt for AI coding agents.",
     reviewHandoffCopied: "Handoff prompt copied to clipboard",
     reviewSentToAgent: "Review prompt sent to active agent",
     scope: "Scope",
@@ -1473,7 +1490,8 @@ export const en = {
     sendToAgent: "Send to Agent",
     sendToTerminal: "Paste in Terminal",
     reviewSentToTerminal: "Review prompt inserted into active terminal",
-    noTerminalCopiedToClipboard: "No active terminal. Prompt copied to clipboard.",
+    noTerminalCopiedToClipboard:
+      "No active terminal. Prompt copied to clipboard.",
   },
   activeTabs: {
     title: "Active Tabs Launchpad",
@@ -2130,7 +2148,8 @@ export const en = {
       readCancelled: "File loading was cancelled.",
       readOffline: "The network location is unavailable or timed out.",
       readNotFound: "The file or its path no longer exists.",
-      readPermissionDenied: "Voktty does not have permission to read this file.",
+      readPermissionDenied:
+        "Voktty does not have permission to read this file.",
       readFailed: "Voktty could not read this file.",
     },
     context: {
@@ -2939,7 +2958,8 @@ export const en = {
       fromVault: "From Vault",
       multiplexerTitle: "Remote Session Persistence",
       multiplexerBadge: "tmux / screen",
-      multiplexerDescription: "Keeps remote sessions, background builds, and tasks running if connection drops or when reconnecting using tmux / screen.",
+      multiplexerDescription:
+        "Keeps remote sessions, background builds, and tasks running if connection drops or when reconnecting using tmux / screen.",
       multiplexerDisabled: "Disabled",
       multiplexerAuto: "Automatic (tmux)",
       multiplexerAsk: "Ask on connect",
@@ -3118,7 +3138,8 @@ export const en = {
     linesAbove: "{count} lines above",
     history: {
       title: "Global Command History",
-      subtitle: "Unified commands across SSH, Linux, WSL and PowerShell sessions",
+      subtitle:
+        "Unified commands across SSH, Linux, WSL and PowerShell sessions",
       searchPlaceholder: "Search command by name, arguments or path...",
       filterAll: "All",
       filterUnix: "Linux / SSH / WSL",
@@ -3231,6 +3252,7 @@ export const en = {
     subtitle:
       "Let's set up your terminal and AI workspace in a few quick steps.",
     skip: "Skip for now",
+    getStarted: "Get started",
     back: "Back",
     next: "Continue",
     finish: "Launch Voktty",
@@ -3422,7 +3444,8 @@ export const en = {
     },
   },
   feedback: {
-    undoCommitSuccess: "Last commit undone successfully. Changes are now staged.",
+    undoCommitSuccess:
+      "Last commit undone successfully. Changes are now staged.",
     sessionSaveFailed:
       "The session could not be saved. Voktty remains open so you can try again.",
     unsavedBeforeWorkspaceSwitch:
@@ -3707,7 +3730,8 @@ export const en = {
       active: "Active",
     },
     browser: {
-      urlPlaceholder: "Enter Base URL (e.g. https://dummyjson.com or http://localhost:11434/api)",
+      urlPlaceholder:
+        "Enter Base URL (e.g. https://dummyjson.com or http://localhost:11434/api)",
       discovering: "Discovering...",
       autoDiscover: "Auto-Discover",
       fastPresets: "Quick Presets:",
@@ -3731,12 +3755,14 @@ export const en = {
       loadedInEditor: "Loaded {method} {path} into editor",
       noEndpointsFound: "No endpoints found matching the filter.",
       emptyStateTitle: "API Discovery & Smart Browser",
-      emptyStateDescription: "Enter the base URL of your API (e.g., DummyJSON, Ollama, Docker, or web service) and click Auto-Discover to automatically detect all available routes, methods, and OpenAPI specs.",
+      emptyStateDescription:
+        "Enter the base URL of your API (e.g., DummyJSON, Ollama, Docker, or web service) and click Auto-Discover to automatically detect all available routes, methods, and OpenAPI specs.",
     },
     discovery: {
       knownEndpoint: "Known endpoint: {path}",
       probeEndpoint: "Endpoint probe: {path}",
-      defaultCollectionDescription: "Pokémon REST, SSE & GraphQL API catalog with environments",
+      defaultCollectionDescription:
+        "Pokémon REST, SSE & GraphQL API catalog with environments",
       importedCollectionDescription: "Imported with {count} endpoints",
     },
     collections: {
@@ -3758,7 +3784,7 @@ export const en = {
       invalidCurlCommand: "Invalid cURL command",
       curlImported: "cURL command imported successfully!",
       noValidPostmanRequests: "No valid requests found in Postman JSON",
-      postmanImported: "Imported {count} requests from collection \"{name}\"",
+      postmanImported: 'Imported {count} requests from collection "{name}"',
       postmanImportFailed: "Failed to parse Postman collection",
       urlPlaceholder: "https://api.example.com/v1/resource",
       sending: "Sending...",
@@ -3772,7 +3798,8 @@ export const en = {
       cancel: "Cancel",
       import: "Import",
       importPostmanJson: "Import Postman collection JSON (v2.0 / v2.1):",
-      postmanPlaceholder: "Paste your collection.json exported from Postman here...",
+      postmanPlaceholder:
+        "Paste your collection.json exported from Postman here...",
       importCollection: "Import collection",
       params: "Params",
       headers: "Headers",
@@ -3781,7 +3808,8 @@ export const en = {
       code: "Code",
       queryParameters: "Query parameters",
       addParam: "Add parameter",
-      noQueryParameters: "No query parameters. Click Add parameter to append parameters to the URL.",
+      noQueryParameters:
+        "No query parameters. Click Add parameter to append parameters to the URL.",
       key: "Key",
       value: "Value",
       httpHeaders: "HTTP headers",
@@ -3819,7 +3847,8 @@ export const en = {
       executing: "Executing request via native Rust engine...",
       cancelRequest: "Cancel request",
       noResponse: "No response yet",
-      emptyDescription: "Enter a URL and click Send or press {shortcut} to inspect the API output.",
+      emptyDescription:
+        "Enter a URL and click Send or press {shortcut} to inspect the API output.",
       copied: "Response copied to clipboard",
       networkError: "Network error",
       diagnoseWithAi: "Diagnose with AI",
@@ -3850,7 +3879,8 @@ export const en = {
       simulator: "Zero-quota simulator",
       selectPreset: "Select provider preset:",
       localWebhookUrl: "Your local webhook URL:",
-      signingSecret: "Signing secret (automatically generates Stripe-Signature / X-Hub-Signature-256):",
+      signingSecret:
+        "Signing secret (automatically generates Stripe-Signature / X-Hub-Signature-256):",
       deliveryMode: "Probe delivery mode:",
       singleDelivery: "Single delivery (1x)",
       singleDeliveryDescription: "Standard webhook event dispatch",
@@ -3862,7 +3892,8 @@ export const en = {
       results: "Probe results & diagnostics",
       copyReceipt: "Copy validation receipt (.md)",
       ready: "Ready to dispatch sandbox probe",
-      emptyDescription: "Click \"Dispatch webhook probe\" to test your local endpoint against signed payloads and burst duplicates.",
+      emptyDescription:
+        'Click "Dispatch webhook probe" to test your local endpoint against signed payloads and burst duplicates.',
       passed: "Idempotency probe passed",
       failed: "Probe failed / error",
       verified: "Verified",
@@ -3890,7 +3921,8 @@ export const en = {
       receipt: "Execution receipt",
       copyReceipt: "Copy receipt (.md)",
       noScenario: "No scenario executed yet",
-      emptyDescription: "Run the scenario to generate deterministic before/after validation receipts for your integration.",
+      emptyDescription:
+        "Run the scenario to generate deterministic before/after validation receipts for your integration.",
       passed: "Scenario passed (verified)",
       failed: "Scenario failed (fix needed)",
       passedCount: "passed",
@@ -3901,7 +3933,8 @@ export const en = {
       presets: {
         stripeFullCycle: {
           title: "Stripe full checkout & idempotency",
-          description: "Runs an end-to-end payment webhook test followed by an idempotency duplicate probe.",
+          description:
+            "Runs an end-to-end payment webhook test followed by an idempotency duplicate probe.",
           dispatchPayment: "1. Dispatch payment_intent.succeeded",
           idempotencyBurst: "2. Idempotency probe (3x duplicate burst)",
         },
@@ -3954,7 +3987,8 @@ export const en = {
     copyMessageContent: "Copy Message Content",
     runInTerminal: "Run / Insert into Terminal",
     selectSessionPrompt: "Select a session to view transcript",
-    emptyDescription: "Search across your coding agent conversations or press {shortcut} anytime.",
+    emptyDescription:
+      "Search across your coding agent conversations or press {shortcut} anytime.",
     dragToResize: "Drag to resize",
     noResumeAvailable: "No resume command available for this session.",
     resumedInTerminal: "Resumed session in active terminal",
@@ -3975,7 +4009,8 @@ export const en = {
   },
   aliases: {
     title: "Aliases & Commands",
-    description: "Manage built-in factory commands and custom aliases available in every terminal.",
+    description:
+      "Manage built-in factory commands and custom aliases available in every terminal.",
     newAlias: "New alias",
     openFile: "Open aliases.json",
     refresh: "Refresh",
