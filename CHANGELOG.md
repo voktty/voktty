@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-09-06
+
 ### Added
 
-- Settings: Notifications, off by default. With it on, a system notification appears when a turn finishes or an agent waits on an approval or question in a session that is not on screen, whether MonoCode is in the background or another session is open; clicking it jumps to that session. Turning it on asks macOS for permission, and a blocked state links to System Settings. The Sounds setting decides whether the notification plays a sound, and the in-app cue is skipped when the banner fires.
+- Inbox items have an **Ask** panel for discussing and analyzing GitHub and Linear issues and pull requests without leaving the Inbox. Discussions remain available while switching items, can be restarted, and stay out of project history, recovery, and notifications.
+- Settings → Appearance → Interface scale zooms the full UI from 50–200% and persists the choice. Use Command/Ctrl with `+`, `-`, or `0`, the View menu, or the settings slider. In #86 by @xaccefy.
+- Settings: Notifications, off by default. With it on, a system notification appears when a turn finishes or an agent waits on an approval or question in a session that is not on screen, whether MonoCode is in the background or another session is open; clicking it jumps to that session. Turning it on asks macOS for permission, and a blocked state links to System Settings. The Sounds setting decides whether the notification plays a sound, and the in-app cue is skipped when the banner fires. In #62 by @emircan-sahin.
+- Windows is a supported desktop target. Terminals, agent CLIs, and the rest of the macOS/Linux feature set run there, the window uses Tauri Acrylic in place of macOS vibrancy, and releases include an x86_64 NSIS installer. In #46.
+
+### Changed
+
+- Completed agent work folds into a concise summary in the transcript, keeping the prompt and final answer prominent. Expand the summary to inspect the reasoning and tool activity behind it.
+- Unified diff code, line numbers, and hunk headers are vertically centered within their rows. In #72 by @tcmarkfeld.
+
+### Fixed
+
+- Archiving or deleting an open conversation closes its related workspace panes, safely stops in-progress work, preserves the latest output when archiving, and cannot be undone by a queued background save. Unrelated tabs and files remain open. In #70.
+- The sole blank workspace tab no longer shows a close control. Closing while an auxiliary pane is focused closes that pane without removing the blank tab.
+- Composer highlights for commands and mentions stay aligned when editing moves the textarea's scroll position.
 
 ## [0.1.34] - 2026-09-05
 
@@ -88,7 +104,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Windows is a supported desktop target. Terminals, agent CLIs, and the rest of the macOS/Linux feature set run there, and the window uses Tauri Acrylic in place of macOS vibrancy.
 - Settings → General → Diff view: Editor or Unified. Unified stacks every working-tree change in one **Changes** tab — GitHub-style review, editor syntax colours, sticky file headers and line numbers, and a single horizontal scroll that stops at the end of the line. Editor keeps the previous per-file working-tree tabs.
 
 ### Fixed
@@ -539,7 +554,8 @@ First public release. macOS (Apple Silicon) only.
 - Updater endpoint and minisign public key are injected at release time rather than committed, so forks do not inherit the maintainer's update channel.
 - macOS release builds sign with `APPLE_SIGNING_IDENTITY` via a config overlay; the committed default remains ad-hoc `-` for community builds.
 
-[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.34...HEAD
+[Unreleased]: https://github.com/hardbeat920/monocode/compare/v0.1.35...HEAD
+[0.1.35]: https://github.com/hardbeat920/monocode/compare/v0.1.34...v0.1.35
 [0.1.34]: https://github.com/hardbeat920/monocode/compare/v0.1.33...v0.1.34
 [0.1.33]: https://github.com/hardbeat920/monocode/compare/v0.1.32...v0.1.33
 [0.1.32]: https://github.com/hardbeat920/monocode/compare/v0.1.31...v0.1.32
