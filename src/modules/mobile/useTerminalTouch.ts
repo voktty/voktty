@@ -88,40 +88,47 @@ export function useTerminalTouch(
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
     let startPos: TouchPosition | null = null;
     let lastY = 0;
+    let isDragging = false;
 
     const onTouchStart = (e: TouchEvent) => {
-      e.stopPropagation();
+      // No stopPropagation/preventDefault here: a plain tap must still
+      // reach xterm's own touch handling on its hidden textarea so it can
+      // focus and open the on-screen keyboard. Only a confirmed vertical
+      // drag (recognized in onTouchMove below) is treated as our custom
+      // scroll gesture and intercepted from that point on.
       const touch = e.touches[0];
       startPos = { x: touch.clientX, y: touch.clientY };
       lastY = touch.clientY;
+      isDragging = false;
       longPressTimer = setTimeout(() => {
         // Long press handled silently
       }, 500);
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
       if (!startPos) return;
       const touch = e.touches[0];
       const dx = Math.abs(touch.clientX - startPos.x);
       const dy = Math.abs(touch.clientY - startPos.y);
-      if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
+      if (!isDragging && (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD)) {
         if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+        if (dy > MOVE_THRESHOLD && dy > dx) isDragging = true;
       }
-      if (dy > MOVE_THRESHOLD && dy > dx) {
-        const deltaY = lastY - touch.clientY;
-        if (Math.abs(deltaY) >= 3) {
-          const lines = Math.round(deltaY / 6);
-          if (lines !== 0) { scrollVisibleTerminal(lines); lastY = touch.clientY; }
-        }
+      if (!isDragging) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const deltaY = lastY - touch.clientY;
+      if (Math.abs(deltaY) >= 3) {
+        const lines = Math.round(deltaY / 6);
+        if (lines !== 0) { scrollVisibleTerminal(lines); lastY = touch.clientY; }
       }
     };
 
     const onTouchEnd = (e: TouchEvent) => {
-      e.stopPropagation();
+      if (isDragging) e.stopPropagation();
       if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
       startPos = null;
+      isDragging = false;
     };
 
     el.addEventListener("touchstart", onTouchStart, { passive: true, capture: true });
