@@ -59,6 +59,9 @@ export type LeafSessionInfo = {
   cwd: string | null;
   shellOverride?: string;
   isUnix: boolean;
+  /** From OSC 133: true at a prompt, false while a command runs, null when
+   * the shell integration has never reported a marker on this leaf. */
+  atPrompt: boolean | null;
 };
 
 export type SlotAdapter = {
@@ -263,10 +266,51 @@ export function applyBackgroundActive(active: boolean): void {
 
 let suggestDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** True when the screen belongs to a full-screen program rather than a shell
+ * prompt. The alternate buffer alone is not the answer: a multiplexer keeps
+ * the whole session on it, which is why suggestions never appeared on an SSH
+ * pane, since those default to `tmux new-session -A`. When the shell
+ * integration reports OSC 133 markers, and it does over SSH because the
+ * scripts wrap them in tmux passthrough, that is the honest signal. Shells
+ * without the integration keep the old buffer heuristic. */
+export function screenBelongsToTui(
+  altScreen: boolean,
+  atPrompt: boolean | null,
+): boolean {
+  if (!altScreen) return false;
+  return atPrompt === null ? true : !atPrompt;
+}
+
+function isTuiScreen(slot: Slot, leafId: number): boolean {
+  return screenBelongsToTui(
+    isAltScreen(slot),
+    adapter?.getSessionInfo?.(leafId)?.atPrompt ?? null,
+  );
+}
+
+/** The ghost only ever extends what you are typing, so the caret has to be at
+ * the end of the line. The query is the text to the left of the caret, so
+ * without this an ArrowRight pressed to move the caret would splice a history
+ * entry into the middle of the command. */
+export function caretIsAtLineEnd(cursorX: number, lineText: string): boolean {
+  return cursorX >= lineText.length;
+}
+
+function caretAtLineEnd(slot: Slot): boolean {
+  try {
+    const buf = slot.term.buffer.active;
+    const line = buf.getLine(buf.cursorY + buf.baseY);
+    if (!line) return true;
+    return caretIsAtLineEnd(buf.cursorX, line.translateToString(true));
+  } catch {
+    return true;
+  }
+}
+
 function syncTerminalSuggestions(slot: Slot): void {
   const leafId = slot.currentLeafId;
   if (leafId === null) return;
-  if (isAltScreen(slot)) {
+  if (isTuiScreen(slot, leafId)) {
     useTerminalSuggestStore.getState().clear(leafId);
     return;
   }
@@ -292,7 +336,7 @@ function syncTerminalSuggestions(slot: Slot): void {
     suggestDebounceTimer = null;
     if (
       slot.currentLeafId !== leafId ||
-      isAltScreen(slot) ||
+      isTuiScreen(slot, leafId) ||
       !slot.isDirectTyping ||
       !usePreferencesStore.getState().terminalSuggestEnabled
     ) {
@@ -307,6 +351,11 @@ function syncTerminalSuggestions(slot: Slot): void {
     const baseY = buf.baseY;
     const line = buf.getLine(cursorY + baseY);
     const lineText = line ? line.translateToString(true) : "";
+
+    if (!caretIsAtLineEnd(cursorX, lineText)) {
+      useTerminalSuggestStore.getState().clear(leafId);
+      return;
+    }
 
     const query = extractCurrentPromptInput(lineText, cursorX).trim();
     if (!query || query.length < 1) {
@@ -645,7 +694,11 @@ function createSlot(): Slot {
         !event.altKey &&
         !event.metaKey &&
         !event.shiftKey &&
-        suggest.ghostTail
+        suggest.ghostTail &&
+        // The store can still hold a suggestion from just before the caret
+        // moved, since the sync that clears it is debounced. Re-check here so
+        // an ArrowRight meant to move the caret never accepts instead.
+        caretAtLineEnd(slot)
       ) {
         event.preventDefault();
         if (event.type === "keydown") {

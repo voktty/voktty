@@ -1,4 +1,9 @@
-import { Prec, StateEffect, StateField } from "@codemirror/state";
+import {
+  type EditorState,
+  Prec,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -11,17 +16,29 @@ import {
 
 const setSuggestion = StateEffect.define<string>();
 
+/** A suggestion is only ever offered for a line being typed forward, so the
+ * caret has to sit at the very end with nothing selected. */
+export function atLineEnd(state: EditorState): boolean {
+  const sel = state.selection.main;
+  return sel.empty && sel.head === state.doc.length;
+}
+
 const suggestionField = StateField.define<string>({
   create: () => "",
   update(value, tr) {
     for (const e of tr.effects) if (e.is(setSuggestion)) return e.value;
+    if (!value) return value;
     if (tr.docChanged) {
-      if (!value) return value;
       const doc = tr.state.doc.toString();
       return doc.length > 0 && value.startsWith(doc) && value.length > doc.length
         ? value
         : "";
     }
+    // Moving the caret off the end retires the suggestion rather than just
+    // hiding it. Otherwise arrowing back through your own line would revive
+    // it, and the next ArrowRight - pressed to move, not to accept - would
+    // dump a history entry into a command you were still editing.
+    if (tr.selection && !atLineEnd(tr.state)) return "";
     return value;
   },
 });
@@ -44,11 +61,10 @@ class GhostWidget extends WidgetType {
   }
 }
 
-function tail(state: EditorView["state"]): string | null {
+function tail(state: EditorState): string | null {
   const sugg = state.field(suggestionField, false);
   if (!sugg) return null;
-  const sel = state.selection.main;
-  if (!sel.empty || sel.head !== state.doc.length) return null;
+  if (!atLineEnd(state)) return null;
   const doc = state.doc.toString();
   if (doc.length === 0) return null;
   if (!sugg.startsWith(doc) || sugg.length <= doc.length) return null;
@@ -107,11 +123,18 @@ function fetcherPlugin(fetch: (line: string) => Promise<string | null>) {
         const view = update.view;
         const line = view.state.doc.toString();
         if (!line) return;
+        if (!atLineEnd(view.state)) return;
         this.timer = setTimeout(() => {
           if (view.state.doc.toString() !== line) return;
           fetch(line)
             .then((sugg) => {
-              if (sugg && view.state.doc.toString() === line) {
+              // The caret can have moved into the line while the lookup was in
+              // flight; landing a suggestion then would arm the same accident.
+              if (
+                sugg &&
+                view.state.doc.toString() === line &&
+                atLineEnd(view.state)
+              ) {
                 view.dispatch({ effects: setSuggestion.of(sugg) });
               }
             })
