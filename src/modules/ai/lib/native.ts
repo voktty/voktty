@@ -180,6 +180,15 @@ export type GitOperationStatus = {
   kind: GitOperationKind;
 };
 
+export type GitBlameLine = {
+  lineNumber: number;
+  sha: string;
+  author: string;
+  authorTimeSecs: number;
+  summary: string;
+  content: string;
+};
+
 function resolveGitWorkspace(
   repoRootOrPath?: string | null,
   explicitWorkspace?: WorkspaceEnv,
@@ -756,6 +765,12 @@ export const native = {
     invoke<void>("git_operation_continue", {
       repoRoot,
       kind,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitBlame: (repoRoot: string, path: string, workspace?: WorkspaceEnv) =>
+    invoke<GitBlameLine[]>("git_blame", {
+      repoRoot,
+      path,
       workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
 };
