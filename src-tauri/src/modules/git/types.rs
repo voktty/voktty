@@ -149,6 +149,17 @@ pub struct GitOperationStatus {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitBranchComparison {
+    /// Commits reachable from `compare` but not from `base` ("ahead").
+    pub ahead: Vec<GitLogEntry>,
+    /// Commits reachable from `base` but not from `compare` ("behind").
+    pub behind: Vec<GitLogEntry>,
+    /// File changes between the merge base of the two refs and `compare`.
+    pub files: Vec<GitCommitFileChange>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitBlameLine {
     pub line_number: u32,
     pub sha: String,
