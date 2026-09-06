@@ -200,7 +200,8 @@ export const SHORTCUTS: Shortcut[] = [
     id: "pane.splitDown",
     labelKey: "shortcuts.labels.paneSplitDown",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "d" }],
+    // Not Mod+Shift+D: that combo is already "tab.newHarness".
+    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "d" }],
   },
   {
     id: "pane.focusNext",
