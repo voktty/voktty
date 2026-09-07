@@ -76,13 +76,17 @@ fn set_backdrop(window: &tauri::Window, enabled: bool, dark: bool) -> Result<(),
 }
 
 #[cfg(target_os = "windows")]
-pub fn apply_rounded_corners(window: &tauri::Window) -> Result<(), String> {
+pub fn apply_corner_preference(window: &tauri::Window, square: bool) -> Result<(), String> {
     use windows_sys::Win32::Graphics::Dwm::{
-        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND, DWMWCP_ROUND,
     };
 
     let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as _;
-    let preference = DWMWCP_ROUND;
+    let preference = if square {
+        DWMWCP_DONOTROUND
+    } else {
+        DWMWCP_ROUND
+    };
     unsafe {
         let hr = DwmSetWindowAttribute(
             hwnd,
@@ -98,8 +102,17 @@ pub fn apply_rounded_corners(window: &tauri::Window) -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn apply_rounded_corners(_window: &tauri::Window) -> Result<(), String> {
+pub fn apply_corner_preference(_window: &tauri::Window, _square: bool) -> Result<(), String> {
     Ok(())
+}
+
+pub fn apply_rounded_corners(window: &tauri::Window) -> Result<(), String> {
+    apply_corner_preference(window, false)
+}
+
+#[tauri::command]
+pub fn window_set_corner_preference(window: tauri::Window, square: bool) -> Result<(), String> {
+    apply_corner_preference(&window, square)
 }
 
 #[cfg(target_os = "windows")]
