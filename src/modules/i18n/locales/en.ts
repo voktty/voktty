@@ -420,6 +420,22 @@ export const en = {
         vibrancyOpacityDesc:
           "Adjust how much the native Mica or Vibrancy backdrop shines through app surfaces.",
       },
+      pack: {
+        title: "Appearance Pack",
+        desc: "Preconfigured combination of theme palette, surface elevation and typography.",
+      },
+      typography: {
+        title: "Typography Profile",
+        desc: "UI font family, size and density.",
+      },
+      surface: {
+        title: "Surface Profile",
+        desc: "Canvas, sidebar and panel surface transparency and elevation.",
+      },
+      variations: {
+        title: "Color Variations",
+        matrixHint: "Matrix Theme",
+      },
     },
     shortcuts: {
       title: "Shortcuts",

@@ -4,12 +4,12 @@ import type { ThemeSkin } from "../../types";
  * Macintosh System 1.0 (1984) Radical Skin
  *
  * Scoped CSS and structural traits reproducing the iconic 1-bit monochrome
- * interface designed by Susan Kare and Bill Atkinson:
+ * interface with strict legibility:
  * - 6-line horizontal pinstriped titlebar
- * - Centered title badge cutting through pinstripes
+ * - Isolated window title badge
  * - Square go-away close box and zoom/minimize boxes
  * - Flat 1-bit drop shadows (2px solid black down/right)
- * - Stadium rounded buttons with 1px / 3px borders
+ * - Stadium rounded buttons with 1px / 3px borders and crisp black text
  * - 50% dither checkerboard pattern scrollbars
  */
 export const MAC1_SKIN_CSS = `
@@ -30,8 +30,7 @@ export const MAC1_SKIN_CSS = `
   padding: 3px 6px !important;
 }
 
-[data-theme-skin="mac1"] header span,
-[data-theme-skin="mac1"] .title-bar span {
+[data-theme-skin="mac1"] .window-title {
   background: #ffffff !important;
   color: #000000 !important;
   padding: 0 8px !important;
@@ -112,7 +111,7 @@ export const MAC1_SKIN_CSS = `
   border-color: #ffffff;
 }
 
-/* Buttons (Classic Mac Rounded Rectangle) */
+/* Buttons (Classic Mac Rounded Rectangle with crisp text) */
 [data-theme-skin="mac1"] button:not(.window-control-button) {
   border-radius: 6px !important;
   background: #ffffff !important;
@@ -123,13 +122,21 @@ export const MAC1_SKIN_CSS = `
   font-weight: 500 !important;
 }
 
+[data-theme-skin="mac1"] button:not(.window-control-button) * {
+  color: #000000 !important;
+}
+
 [data-theme-skin="mac1"] button:not(.window-control-button):active {
   background: #000000 !important;
   color: #ffffff !important;
   box-shadow: none !important;
 }
 
-/* Tabs */
+[data-theme-skin="mac1"] button:not(.window-control-button):active * {
+  color: #ffffff !important;
+}
+
+/* Tabs: High Contrast */
 [data-theme-skin="mac1"] .tab-item,
 [data-theme-skin="mac1"] [data-tab-id] {
   border-radius: 4px 4px 0 0 !important;
@@ -140,11 +147,32 @@ export const MAC1_SKIN_CSS = `
   margin-right: 2px !important;
 }
 
+[data-theme-skin="mac1"] .tab-item *,
+[data-theme-skin="mac1"] [data-tab-id] * {
+  color: #000000 !important;
+}
+
 [data-theme-skin="mac1"] .tab-active,
 [data-theme-skin="mac1"] [data-tab-active="true"] {
   background: #000000 !important;
   color: #ffffff !important;
   font-weight: bold !important;
+}
+
+[data-theme-skin="mac1"] .tab-active *,
+[data-theme-skin="mac1"] [data-tab-active="true"] * {
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+/* Breadcrumbs & Statusbar */
+[data-theme-skin="mac1"] [data-slot="breadcrumb"] *,
+[data-theme-skin="mac1"] [data-slot="breadcrumb-item"] *,
+[data-theme-skin="mac1"] footer,
+[data-theme-skin="mac1"] footer *,
+[data-theme-skin="mac1"] .status-bar,
+[data-theme-skin="mac1"] .status-bar * {
+  color: #000000 !important;
 }
 
 /* Panels, Surfaces & Terminal Slot: 1-bit crisp borders & drop shadow */
