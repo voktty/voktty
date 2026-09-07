@@ -3,20 +3,14 @@ import type { ThemeSkin } from "../../types";
 /**
  * Windows 3.1 Radical Skin
  *
- * NOTAS DE AUDITORIA DE TOKENS (Fase 4):
- * Reglas que fue necesario escribir en CSS porque ningun token de Nivel 2 llegaba:
- * 1. Biseles 3D duales (highlight #ffffff + shadow #808080 + inner #dfdfdf / #000000):
- *    Los tokens actuales solo soportan un solo color para border. Los biseles de epoca
- *    requieren 4 colores distintos por direccion (top/left claro, bottom/right oscuro)
- *    y dobles sombras de relieve con inset.
- * 2. Sustitucion de glifos en controles de ventana (.window-control-icon svg -> ::after):
- *    No existe un token para cambiar el glifo vectorial por caracteres retro (▲, ▼, ×).
- * 3. Fusion de la solapa de pestana activa con el marco de contenido (.tab-active sin borde inferior):
- *    Requiere solapar el borde inferior con el fondo del panel para dar la ilusion de carpeta fisica.
- * 4. Patrones de textura de scrollbar y tramas de semitono:
- *    La barra de desplazamiento clasica de Windows 3.1 usa una trama cuadriculada (checkerboard)
- *    de 2x2px en el track y botones con flechas en los extremos.
- * 5. Barra de titulo con color de acento solido clasico (#000080 azul marino) y texto blanco en negrita.
+ * NOTAS DE AUDITORIA DE TOKENS (Fase 4 & Refinamiento de Legibilidad):
+ * Reglas de alta fidelidad 16-bit con legibilidad y contraste estricto:
+ * 1. Biseles 3D duales (highlight #ffffff + shadow #808080 + inner #dfdfdf / #000000).
+ * 2. Glifos retro en controles (▲, ▼, ×) con colores de alto contraste.
+ * 3. Aislamiento estricto de texto: nunca aplicar reglas globales como 'header span'
+ *    que inviertan los titulos de pestanas o iconos a blanco sobre fondos claros.
+ * 4. Texto negro solido (#000000) forzado en todos los elementos hijos de botones,
+ *    pestanas, breadcrumbs, barras de estado y dialogos.
  */
 export const WIN31_SKIN_CSS = `
 /* Window Chrome & Header */
@@ -30,8 +24,7 @@ export const WIN31_SKIN_CSS = `
   padding: 2px 4px !important;
 }
 
-[data-theme-skin="win31"] header span,
-[data-theme-skin="win31"] .title-bar span {
+[data-theme-skin="win31"] .window-title {
   color: #ffffff !important;
 }
 
@@ -104,7 +97,7 @@ export const WIN31_SKIN_CSS = `
   line-height: 1;
 }
 
-/* Notebook Tabs */
+/* Notebook Tabs: High Contrast Black Text */
 [data-theme-skin="win31"] .tab-item,
 [data-theme-skin="win31"] [data-tab-id] {
   border-radius: 0 !important;
@@ -117,12 +110,23 @@ export const WIN31_SKIN_CSS = `
   margin-right: 2px !important;
 }
 
+[data-theme-skin="win31"] .tab-item *,
+[data-theme-skin="win31"] [data-tab-id] * {
+  color: #000000 !important;
+}
+
 [data-theme-skin="win31"] .tab-active,
 [data-theme-skin="win31"] [data-tab-active="true"] {
   background: #ffffff !important;
   color: #000000 !important;
   font-weight: bold !important;
   border-bottom: 2px solid #ffffff !important;
+}
+
+[data-theme-skin="win31"] .tab-active *,
+[data-theme-skin="win31"] [data-tab-active="true"] * {
+  color: #000000 !important;
+  background: transparent !important;
 }
 
 /* Buttons */
@@ -135,6 +139,10 @@ export const WIN31_SKIN_CSS = `
   border-right: 2px solid #808080 !important;
   border-bottom: 2px solid #808080 !important;
   box-shadow: inset 1px 1px 0px #dfdfdf, inset -1px -1px 0px #000000 !important;
+}
+
+[data-theme-skin="win31"] button:not(.window-control-button) * {
+  color: #000000 !important;
 }
 
 [data-theme-skin="win31"] button:not(.window-control-button):active {
@@ -153,6 +161,22 @@ export const WIN31_SKIN_CSS = `
   border-right: 2px solid #ffffff !important;
   border-bottom: 2px solid #ffffff !important;
   box-shadow: inset 1px 1px 0px #000000 !important;
+}
+
+/* Breadcrumbs & Statusbar: Crisp Black Text */
+[data-theme-skin="win31"] [data-slot="breadcrumb"] *,
+[data-theme-skin="win31"] [data-slot="breadcrumb-item"] *,
+[data-theme-skin="win31"] footer,
+[data-theme-skin="win31"] footer *,
+[data-theme-skin="win31"] .status-bar,
+[data-theme-skin="win31"] .status-bar * {
+  color: #000000 !important;
+}
+
+/* Dialogs & Modals: Crisp Black Text */
+[data-theme-skin="win31"] [role="dialog"],
+[data-theme-skin="win31"] [role="dialog"] * {
+  color: #000000 !important;
 }
 
 /* Input Fields */

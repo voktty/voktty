@@ -17,7 +17,7 @@ export const win31Theme: Theme = {
   variants: {
     light: {
       colors: {
-        background: "#008080",
+        background: "#c0c0c0",
         foreground: "#000000",
         card: "#ffffff",
         cardForeground: "#000000",
@@ -28,7 +28,7 @@ export const win31Theme: Theme = {
         secondary: "#c0c0c0",
         secondaryForeground: "#000000",
         muted: "#d4d0c8",
-        mutedForeground: "#808080",
+        mutedForeground: "#222222",
         accent: "#000080",
         accentForeground: "#ffffff",
         destructive: "#ff0000",
@@ -44,7 +44,7 @@ export const win31Theme: Theme = {
         sidebarBorder: "#808080",
         sidebarRing: "#000080",
         radius: "0px",
-        surfaceCanvas: "#008080",
+        surfaceCanvas: "#c0c0c0",
         surfaceSidebar: "#c0c0c0",
         surfaceToolbar: "#c0c0c0",
         surfaceCard: "#ffffff",
@@ -74,7 +74,7 @@ export const win31Theme: Theme = {
     },
     dark: {
       colors: {
-        background: "#008080",
+        background: "#c0c0c0",
         foreground: "#000000",
         card: "#ffffff",
         cardForeground: "#000000",
@@ -85,7 +85,7 @@ export const win31Theme: Theme = {
         secondary: "#c0c0c0",
         secondaryForeground: "#000000",
         muted: "#d4d0c8",
-        mutedForeground: "#808080",
+        mutedForeground: "#222222",
         accent: "#000080",
         accentForeground: "#ffffff",
         destructive: "#ff0000",
@@ -101,7 +101,7 @@ export const win31Theme: Theme = {
         sidebarBorder: "#808080",
         sidebarRing: "#000080",
         radius: "0px",
-        surfaceCanvas: "#008080",
+        surfaceCanvas: "#c0c0c0",
         surfaceSidebar: "#c0c0c0",
         surfaceToolbar: "#c0c0c0",
         surfaceCard: "#ffffff",

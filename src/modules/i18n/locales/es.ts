@@ -427,6 +427,22 @@ export const es: TranslationSchema = {
         vibrancyOpacityDesc:
           "Ajusta cuánto se trasluce el fondo nativo Mica o Vibrancy a través de las superficies de la aplicación.",
       },
+      pack: {
+        title: "Pack de apariencia",
+        desc: "Combinacion preconfigurada de paleta, relieve de superficie y tipografia.",
+      },
+      typography: {
+        title: "Perfil tipografico",
+        desc: "Familia de fuentes, tamano y densidad de la interfaz.",
+      },
+      surface: {
+        title: "Perfil de superficie",
+        desc: "Transparencia y relieve de las superficies del lienzo, barra lateral y paneles.",
+      },
+      variations: {
+        title: "Variaciones de color",
+        matrixHint: "Tema matriz",
+      },
     },
     shortcuts: {
       title: "Atajos",
