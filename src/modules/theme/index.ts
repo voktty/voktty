@@ -40,4 +40,8 @@ export {
   type TypographyProfile,
   type FileIconTheme,
   type ProductIconTheme,
+  type ThemeSkin,
+  type SkinFontDefinition,
 } from "./types";
+export * from "./skins";
+
