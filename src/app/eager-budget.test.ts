@@ -33,4 +33,26 @@ describe("startup bundle budget", () => {
       ).toEqual([]);
     }
   }, 15000);
+
+  // The agent harness (Agent Development panel: HarnessApp, its store, the
+  // per-CLI protocol adapters, and the diff/arcade surfaces it renders) must
+  // stay behind React.lazy so every launch doesn't pay for a feature most
+  // sessions never open. Only thin leaf helpers (recents, fs, platform) are
+  // allowed eager, via HarnessStack.tsx and the header's new-harness button.
+  const HARNESS_HEAVY_PREFIXES = [
+    "/modules/harness/components/HarnessApp",
+    "/modules/harness/store/",
+    "/modules/harness/protocols/",
+    "/modules/harness/surfaces/",
+    "/modules/harness/chrome/",
+    "/modules/harness/harnessClient",
+  ];
+  it("keeps the agent harness runtime out of the main window's eager graph", () => {
+    const { files } = traceEager("src/main.tsx");
+    const normalized = files.map((f) => f.replace(/\\/g, "/"));
+    const offenders = normalized.filter((file) =>
+      HARNESS_HEAVY_PREFIXES.some((prefix) => file.includes(prefix)),
+    );
+    expect(offenders).toEqual([]);
+  }, 15000);
 });
