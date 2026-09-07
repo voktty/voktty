@@ -327,7 +327,11 @@ export function migrateLegacySpaces(
 
   for (const context of legacy.spaces) {
     const state = legacy.states.get(context.id);
-    const contextTabs = (state?.tabs ?? []).map((tab, index) => {
+    const contextTabs = (state?.tabs ?? [])
+      .filter(
+        (tab) => !("workspaceEnv" in tab && tab.workspaceEnv?.kind === "ssh"),
+      )
+      .map((tab, index) => {
       const normalized = uniqueTabIdentity(
         tab,
         context.id,
@@ -522,6 +526,13 @@ export function repairSessionSnapshot(input: SessionSnapshot): SessionSnapshot {
   const tabs: SessionSerializedTab[] = [];
   for (const value of Array.isArray(input.tabs) ? input.tabs : []) {
     if (!validSerializedTab(value)) continue;
+    if (
+      "workspaceEnv" in value &&
+      (value as { workspaceEnv?: { kind?: string } }).workspaceEnv?.kind ===
+        "ssh"
+    ) {
+      continue;
+    }
     try {
       tabs.push(
         uniqueTabIdentity(

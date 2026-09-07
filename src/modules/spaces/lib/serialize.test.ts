@@ -112,6 +112,44 @@ describe("serializeTabs", () => {
     expect(serializeTabs([shared])).toEqual([]);
   });
 
+  it("drops ephemeral ssh terminals and remote documents from serialization", () => {
+    const sshTerminal = term({
+      workspaceEnv: {
+        kind: "ssh",
+        connection: {
+          id: "conn-1",
+          name: "Remote Server",
+          host: "remote.example.com",
+          user: "deploy",
+        },
+        root: "/home/deploy",
+      },
+    });
+    const sshEditor: Tab = {
+      id: 99,
+      tabKey: asTabKey("tab-ssh-editor"),
+      workspaceScopeId: asWorkspaceScopeId("s1"),
+      kind: "editor",
+      spaceId: "s1",
+      title: "remote.ts",
+      path: "/home/deploy/remote.ts",
+      dirty: false,
+      preview: false,
+      workspaceEnv: {
+        kind: "ssh",
+        connection: {
+          id: "conn-1",
+          name: "Remote Server",
+          host: "remote.example.com",
+          user: "deploy",
+        },
+        root: "/home/deploy",
+      },
+    };
+
+    expect(serializeTabs([sshTerminal, sshEditor])).toEqual([]);
+  });
+
   it("marks the active leaf in a split tree", () => {
     const tree: PaneNode = {
       kind: "split",
@@ -153,7 +191,7 @@ describe("serializeTabs", () => {
     expect(restored.cwd).toBe("/pane-8");
   });
 
-  it("persists a terminal environment without a live SSH session id", () => {
+  it("omits terminal tabs with SSH environment from serialization", () => {
     const ssh = {
       kind: "ssh" as const,
       connection: {
@@ -165,32 +203,11 @@ describe("serializeTabs", () => {
       root: "/srv/app",
       sessionId: 42,
     };
-    const [serialized] = serializeTabs([term({ workspaceEnv: ssh })]);
-    expect(serialized).toMatchObject({
-      workspaceEnv: {
-        kind: "ssh",
-        connection: ssh.connection,
-        root: ssh.root,
-      },
-    });
-    expect(serialized).toEqual(
-      expect.objectContaining({
-        workspaceEnv: expect.not.objectContaining({ sessionId: 42 }),
-      }),
-    );
-
-    const [restored] = hydrateTabs([serialized], "s1", counter());
-    expect(restored.kind).toBe("terminal");
-    if (restored.kind === "terminal") {
-      expect(restored.workspaceEnv).toEqual({
-        kind: "ssh",
-        connection: ssh.connection,
-        root: ssh.root,
-      });
-    }
+    const serialized = serializeTabs([term({ workspaceEnv: ssh })]);
+    expect(serialized).toEqual([]);
   });
 
-  it("persists an editor filesystem identity without a live SSH session id", () => {
+  it("omits editor tabs with SSH environment from serialization", () => {
     const ssh = {
       kind: "ssh" as const,
       connection: {
@@ -214,30 +231,8 @@ describe("serializeTabs", () => {
       workspaceEnv: ssh,
     };
 
-    const [serialized] = serializeTabs([editor]);
-    expect(serialized).toMatchObject({
-      kind: "editor",
-      workspaceEnv: {
-        kind: "ssh",
-        connection: ssh.connection,
-        root: ssh.root,
-      },
-    });
-    expect(serialized).toEqual(
-      expect.objectContaining({
-        workspaceEnv: expect.not.objectContaining({ sessionId: 77 }),
-      }),
-    );
-
-    const [restored] = hydrateTabs([serialized], "s1", counter());
-    expect(restored).toMatchObject({
-      kind: "editor",
-      workspaceEnv: {
-        kind: "ssh",
-        connection: ssh.connection,
-        root: ssh.root,
-      },
-    });
+    const serialized = serializeTabs([editor]);
+    expect(serialized).toEqual([]);
   });
 });
 
@@ -347,5 +342,28 @@ describe("hydrateTabs", () => {
       "localhost:5173",
       "README.md",
     ]);
+  });
+
+  it("drops legacy serialized ssh tabs during hydration", () => {
+    const serialized: SerializedTab[] = [
+      {
+        kind: "terminal",
+        tree: { kind: "leaf", cwd: "/home/root" },
+        workspaceEnv: {
+          kind: "ssh",
+          connection: {
+            id: "conn-2",
+            name: "Server 2",
+            host: "srv.example.com",
+            user: "root",
+          },
+          root: "/home/root",
+        },
+      },
+      { kind: "editor", path: "/a/foo.ts" },
+    ];
+    const out = hydrateTabs(serialized, "s1", counter());
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe("editor");
   });
 });
