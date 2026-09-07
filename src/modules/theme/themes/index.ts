@@ -29,6 +29,12 @@ import { pocket89Theme } from "./pocket89Theme";
 import { pilotPdaTheme } from "./pilotPdaTheme";
 import { clickWheelPodTheme } from "./clickWheelPodTheme";
 import { station94Theme } from "./station94Theme";
+import { audioAmpClassicTheme } from "./audioAmpClassicTheme";
+import { cyberCafe99Theme } from "./cyberCafe99Theme";
+import { tigerAquaTheme } from "./tigerAquaTheme";
+import { mediaStation9Theme } from "./mediaStation9Theme";
+import { instantChat7Theme } from "./instantChat7Theme";
+import { bbsDialupTheme } from "./bbsDialupTheme";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
 import { xcode } from "./xcode";
@@ -51,6 +57,12 @@ export {
   pilotPdaTheme,
   clickWheelPodTheme,
   station94Theme,
+  audioAmpClassicTheme,
+  cyberCafe99Theme,
+  tigerAquaTheme,
+  mediaStation9Theme,
+  instantChat7Theme,
+  bbsDialupTheme,
 };
 
 const BUILTIN: Theme[] = [
@@ -70,6 +82,12 @@ const BUILTIN: Theme[] = [
   pilotPdaTheme,
   clickWheelPodTheme,
   station94Theme,
+  audioAmpClassicTheme,
+  cyberCafe99Theme,
+  tigerAquaTheme,
+  mediaStation9Theme,
+  instantChat7Theme,
+  bbsDialupTheme,
 ];
 
 const LEGACY_FALLBACKS: Record<string, Theme> = {
@@ -144,6 +162,12 @@ export function getBuiltinTheme(id: string): Theme | undefined {
   if (id === "pilot-pda") return pilotPdaTheme;
   if (id === "clickwheel-pod") return clickWheelPodTheme;
   if (id === "station-94") return station94Theme;
+  if (id === "audioamp-classic") return audioAmpClassicTheme;
+  if (id === "cybercafe-99") return cyberCafe99Theme;
+  if (id === "tiger-aqua") return tigerAquaTheme;
+  if (id === "media-station-9") return mediaStation9Theme;
+  if (id === "instant-chat-7") return instantChat7Theme;
+  if (id === "bbs-dialup") return bbsDialupTheme;
   if (LEGACY_FALLBACKS[id]) return LEGACY_FALLBACKS[id];
   const variation = VOKTTY_VARIATIONS.find((v) => v.id === id);
   if (variation) {
