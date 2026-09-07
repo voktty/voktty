@@ -160,6 +160,10 @@ type Props = {
   onRevealInExplorer?: (path: string) => void;
   onReconnectTab?: (tab: Tab) => void;
   compact?: boolean;
+  /** Fires whenever the strip's own icon-collapse state changes, so sibling
+   * chrome (e.g. the harness pill rendered outside this component) can
+   * collapse to match instead of overflowing on its own. */
+  onOverflowChange?: (overflowing: boolean) => void;
 };
 
 export function TabBar({
@@ -205,6 +209,7 @@ export function TabBar({
   onWorkspaceDrop,
   onRevealInExplorer,
   compact,
+  onOverflowChange,
 }: Props) {
   const { t: translate } = useTranslation();
   const pulsingTabs = useAgentStore((s) => s.pulsingTabs);
@@ -286,6 +291,53 @@ export function TabBar({
     ro.observe(list);
     return () => ro.disconnect();
   }, [measurePill]);
+
+  // Whether every tab fits in the strip at full size. Driven by real layout
+  // instead of a tab-count guess or the app's overall window-width, so a
+  // handful of tabs crowded out by other header widgets collapse just as
+  // reliably as a genuinely large tab count does.
+  //
+  // Collapsing shrinks scrollWidth, so once collapsed we can't tell from the
+  // current DOM whether expanding would fit again — measuring that requires
+  // rendering expanded first. So a re-expand is only ever attempted right
+  // after an event that could plausibly free up room (the strip grew, or a
+  // tab closed); if it still doesn't fit, the very next measurement (before
+  // paint) collapses it straight back, so there's nothing to see flash.
+  const [overflowing, setOverflowing] = useState(false);
+  const lastAvailableRef = useRef(0);
+  const lastItemCountRef = useRef(projectedItems.length);
+
+  const checkFit = useCallback(() => {
+    const scroller = scrollRef.current;
+    const list = listRef.current;
+    if (!scroller || !list) return;
+    const available = scroller.clientWidth;
+    const grew = available > lastAvailableRef.current;
+    const fewerItems = projectedItems.length < lastItemCountRef.current;
+    lastAvailableRef.current = available;
+    lastItemCountRef.current = projectedItems.length;
+
+    setOverflowing((prev) => {
+      if (prev) return !(grew || fewerItems);
+      return list.scrollWidth > available;
+    });
+  }, [projectedItems.length]);
+
+  useLayoutEffect(() => {
+    checkFit();
+  });
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(checkFit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [checkFit]);
+
+  useEffect(() => {
+    onOverflowChange?.(overflowing);
+  }, [overflowing, onOverflowChange]);
 
   // Hold the transition off until the pill is first placed, so it never slides
   // in from the origin on mount.
@@ -415,7 +467,7 @@ export function TabBar({
                 : t.id === activeId;
               const isNew = !firstRender && !seen.has(t.id);
               const isPulsing = !!pulsingTabs[t.id];
-              const isCompressible = compact || visibleTabs.length >= 7;
+              const isCompressible = compact || overflowing;
               const isCollapsed =
                 isCompressible && !isActive && editingId !== t.id;
 
