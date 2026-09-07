@@ -15,12 +15,25 @@ export { resolveEditorThemeId } from "./resolveEditorTheme";
 export {
   listBuiltinAppearancePacks,
   getBuiltinAppearancePack,
+  listBuiltinSurfaceProfiles,
+  getBuiltinSurfaceProfile,
+  listBuiltinTypographyProfiles,
+  getBuiltinTypographyProfile,
   BUILTIN_APPEARANCE_PACKS,
   BUILTIN_SURFACE_PROFILES,
   BUILTIN_TYPOGRAPHY_PROFILES,
 } from "./packs";
 export {
+  resolveStructuralTraits,
+  applyStructuralTraits,
+  DEFAULT_STRUCTURAL_TRAITS,
+  type StructuralTraits,
+  type UserStructuralOverrides,
+  type ResolvedAppearance,
+} from "./resolveStructuralTraits";
+export {
   DEFAULT_THEME_ID,
+  DEFAULT_VARIATION_ID,
   DEFAULT_PACK_ID,
   type AppearancePack,
   type SurfaceProfile,

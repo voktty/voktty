@@ -96,7 +96,7 @@ export function HostSessionBadgeView({
             <HugeiconsIcon icon={UserMultiple02Icon} size={11} />
             {session.participants.length}
             {requestedCount > 0 ? (
-              <span className="rounded-full bg-amber-400 px-1 text-[9px] font-bold text-black">
+              <span className="rounded-pill bg-amber-400 px-1 text-[9px] font-bold text-black">
                 {requestedCount}
               </span>
             ) : null}
