@@ -75,6 +75,30 @@ export function resolveStructuralTraits(
     ? (getBuiltinSurfaceProfile(pack.surfaceProfileId) ?? null)
     : null;
 
+  const themeTypoId =
+    input.variation?.typographyProfileId ?? input.theme?.typographyProfileId;
+  if (themeTypoId) {
+    const candidate = getBuiltinTypographyProfile(themeTypoId);
+    if (candidate) typographyProfile = candidate;
+  }
+
+  const themeSurfaceId =
+    input.variation?.surfaceProfileId ?? input.theme?.surfaceProfileId;
+  if (themeSurfaceId) {
+    const candidate = getBuiltinSurfaceProfile(themeSurfaceId);
+    if (candidate) surfaceProfile = candidate;
+  }
+
+  if (typographyProfile) {
+    traits.uiFontFamily = typographyProfile.uiFontFamily;
+    traits.uiFontSize = typographyProfile.uiFontSize;
+    traits.uiLineHeight = typographyProfile.lineHeight;
+    traits.density = typographyProfile.density;
+    if (typographyProfile.fontSmoothing) {
+      traits.uiFontSmoothing = typographyProfile.fontSmoothing;
+    }
+  }
+
   if (pack?.elevationStyle) traits.elevationStyle = pack.elevationStyle;
   if (pack?.pillRadius) traits.pillRadius = pack.pillRadius;
   if (pack?.borderWidth) traits.borderWidth = pack.borderWidth;
@@ -101,20 +125,6 @@ export function resolveStructuralTraits(
   if (skin?.windowCorners) traits.windowCorners = skin.windowCorners;
 
   // 4. Theme & variation overrides
-  const themeTypoId =
-    input.variation?.typographyProfileId ?? input.theme?.typographyProfileId;
-  if (themeTypoId) {
-    const candidate = getBuiltinTypographyProfile(themeTypoId);
-    if (candidate) typographyProfile = candidate;
-  }
-
-  const themeSurfaceId =
-    input.variation?.surfaceProfileId ?? input.theme?.surfaceProfileId;
-  if (themeSurfaceId) {
-    const candidate = getBuiltinSurfaceProfile(themeSurfaceId);
-    if (candidate) surfaceProfile = candidate;
-  }
-
   const elevationOverride =
     input.variation?.elevationStyle ?? input.theme?.elevationStyle;
   if (elevationOverride) traits.elevationStyle = elevationOverride;
@@ -142,17 +152,6 @@ export function resolveStructuralTraits(
   const densityOverride =
     input.variation?.density ?? input.theme?.density;
   if (densityOverride) traits.density = densityOverride;
-
-  // 4. Apply typography profile tokens
-  if (typographyProfile) {
-    traits.uiFontFamily = typographyProfile.uiFontFamily;
-    traits.uiFontSize = typographyProfile.uiFontSize;
-    traits.uiLineHeight = typographyProfile.lineHeight;
-    traits.density = typographyProfile.density;
-    if (typographyProfile.fontSmoothing) {
-      traits.uiFontSmoothing = typographyProfile.fontSmoothing;
-    }
-  }
 
   // 5. User explicit overrides (highest precedence)
   const userOverrides = input.userOverrides;
