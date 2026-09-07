@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseOpenRequest } from "./useControlBridge";
+import { dispatchBrowserMethod, parseOpenRequest } from "./useControlBridge";
 
 describe("parseOpenRequest", () => {
   it("defaults focus only when it is absent", () => {
@@ -17,4 +17,22 @@ describe("parseOpenRequest", () => {
       );
     },
   );
+});
+
+describe("dispatchBrowserMethod", () => {
+  it("rejects type and eval without required fields", async () => {
+    await expect(dispatchBrowserMethod("browser.type", {})).rejects.toThrow(
+      "browser type requires text",
+    );
+    await expect(dispatchBrowserMethod("browser.eval", {})).rejects.toThrow(
+      "browser eval requires a script",
+    );
+  });
+
+  it("returns no_active_preview when no preview is mounted", async () => {
+    const result = (await dispatchBrowserMethod("browser.snapshot", {})) as {
+      error: string;
+    };
+    expect(result.error).toBe("no_active_preview");
+  });
 });

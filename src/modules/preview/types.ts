@@ -100,6 +100,19 @@ export type ConsoleEntry = {
   };
 };
 
+export type NetworkEntry = {
+  id: string;
+  method: string;
+  url: string;
+  status: number;
+  durationMs: number;
+  size: number;
+  timestamp: number;
+  count: number;
+  body?: string;
+  error?: string;
+};
+
 export type ViewportMode =
   | "responsive"
   | "mobile"
@@ -132,21 +145,26 @@ export type InspectorInboundMessage =
       payload: ConsoleEntry;
     }
   | {
-      type: "VOKTTY_INSPECTOR_HOVER";
-      payload: {
-        tagName: string;
-        componentName?: string;
-        filePath?: string;
-        lineNumber?: number;
-        rect: ComponentRect;
-      } | null;
+      type: "VOKTTY_NETWORK_ENTRY";
+      payload: Omit<NetworkEntry, "count">;
     }
   | {
-      type: "VOKTTY_NAVIGATED";
+      type: "VOKTTY_PROXY_NAVIGATE";
       payload: { url: string };
     }
   | {
       type: "VOKTTY_RELOAD_PREVIEW";
+    }
+  | {
+      type: "VOKTTY_INSPECTOR_READY";
+      payload?: { ready: boolean };
+    }
+  | {
+      type: "VOKTTY_BROWSER_RESULT";
+      requestId: string;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
     };
 
 export type InspectorOutboundMessage =
@@ -162,5 +180,11 @@ export type InspectorOutboundMessage =
       type: "VOKTTY_SELECT_ELEMENT_BY_SELECTOR";
       selector: string;
       autoJump?: boolean;
+    }
+  | {
+      type: "VOKTTY_BROWSER_COMMAND";
+      requestId: string;
+      command: string;
+      args?: unknown;
     };
 

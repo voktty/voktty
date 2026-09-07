@@ -1,4 +1,12 @@
 import { controlLaunchRequest, type LaunchRequest } from "@/lib/launchRequest";
+import {
+  getBrowserSelected,
+  runBrowserClick,
+  runBrowserEval,
+  runBrowserNavigate,
+  runBrowserSnapshot,
+  runBrowserType,
+} from "@/modules/preview";
 import { DEFAULT_SPACE_ID, type Tab } from "@/modules/tabs/lib/useTabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -47,6 +55,68 @@ class RequestError extends Error {
     message: string,
   ) {
     super(message);
+  }
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function optionalRef(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+export async function dispatchBrowserMethod(
+  method: string,
+  params: unknown,
+): Promise<unknown> {
+  const value =
+    typeof params === "object" && params !== null
+      ? (params as Record<string, unknown>)
+      : {};
+  const target = {
+    selector: optionalString(value.selector),
+    ref: optionalRef(value.ref),
+  };
+  switch (method) {
+    case "browser.snapshot":
+      return runBrowserSnapshot();
+    case "browser.selected":
+      return getBrowserSelected();
+    case "browser.click":
+      return runBrowserClick(target);
+    case "browser.type": {
+      const text = optionalString(value.text);
+      if (text == null) {
+        throw new RequestError("invalid_params", "browser type requires text");
+      }
+      return runBrowserType({
+        ...target,
+        text,
+        submit: value.submit === true,
+      });
+    }
+    case "browser.navigate": {
+      const url = optionalString(value.url);
+      if (url == null) {
+        throw new RequestError("invalid_params", "browser navigate requires a url");
+      }
+      return runBrowserNavigate(url);
+    }
+    case "browser.eval": {
+      const script = optionalString(value.script);
+      if (script == null) {
+        throw new RequestError("invalid_params", "browser eval requires a script");
+      }
+      return runBrowserEval(script);
+    }
+    default:
+      throw new RequestError(
+        "unknown_method",
+        `unsupported frontend method '${method}'`,
+      );
   }
 }
 
@@ -163,6 +233,18 @@ export function useControlBridge({
               focused,
             },
           });
+          return;
+        }
+        if (request.method.startsWith("browser.")) {
+          const result = await dispatchBrowserMethod(request.method, request.params);
+          if (result && typeof result === "object" && "ok" in result && result.ok === false) {
+            const failed = result as { error?: string; message?: string };
+            throw new RequestError(
+              failed.error || "browser_failed",
+              failed.message || failed.error || "browser command failed",
+            );
+          }
+          await respond(request.id, { ok: true, result });
           return;
         }
         throw new RequestError(

@@ -13,8 +13,9 @@ import {
   formatConsoleErrorPrompt,
   usePreviewDevtoolsStore,
   type ConsoleFilter,
+  type DevtoolsTab,
 } from "../store/previewDevtoolsStore";
-import type { ConsoleEntry } from "../types";
+import type { ConsoleEntry, NetworkEntry } from "../types";
 
 export function PreviewConsoleDrawer() {
   const { t } = useTranslation();
@@ -22,11 +23,15 @@ export function PreviewConsoleDrawer() {
   const filter = usePreviewDevtoolsStore((s) => s.consoleFilter);
   const search = usePreviewDevtoolsStore((s) => s.consoleSearch);
   const isOpen = usePreviewDevtoolsStore((s) => s.isConsoleOpen);
+  const tab = usePreviewDevtoolsStore((s) => s.devtoolsTab);
+  const networkEntries = usePreviewDevtoolsStore((s) => s.networkEntries);
 
   const clearConsole = usePreviewDevtoolsStore((s) => s.clearConsole);
+  const clearNetwork = usePreviewDevtoolsStore((s) => s.clearNetwork);
   const setFilter = usePreviewDevtoolsStore((s) => s.setConsoleFilter);
   const setSearch = usePreviewDevtoolsStore((s) => s.setConsoleSearch);
   const toggleConsole = usePreviewDevtoolsStore((s) => s.toggleConsole);
+  const setDevtoolsTab = usePreviewDevtoolsStore((s) => s.setDevtoolsTab);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -91,9 +96,28 @@ export function PreviewConsoleDrawer() {
             </span>
             <span>{t("preview.console.heading")}</span>
             <span className="text-[10px] text-muted-foreground font-mono">
-              ({entries.length})
+              ({tab === "network" ? networkEntries.length : entries.length})
             </span>
           </button>
+          {isOpen
+            ? (["console", "network"] as DevtoolsTab[]).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setDevtoolsTab(name)}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                    tab === name
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {name === "console"
+                    ? t("preview.console.tabConsole")
+                    : t("preview.console.tabNetwork")}
+                </button>
+              ))
+            : null}
 
           {/* Quick Badges */}
           <div className="flex items-center gap-1 text-[10px] font-mono">
@@ -137,7 +161,8 @@ export function PreviewConsoleDrawer() {
 
         {isOpen ? (
           <div className="flex items-center gap-1.5">
-            {/* Filter Tabs */}
+            {tab === "console" ? (
+              <>
             <div className="flex items-center rounded-md bg-muted/60 p-0.5 text-[10px]">
               {(["all", "error", "warn", "log"] as ConsoleFilter[]).map((f) => (
                 <button
@@ -162,7 +187,6 @@ export function PreviewConsoleDrawer() {
               ))}
             </div>
 
-            {/* Search Input */}
             <Input
               type="text"
               placeholder={t("preview.console.searchPlaceholder")}
@@ -170,14 +194,19 @@ export function PreviewConsoleDrawer() {
               onChange={(e) => setSearch(e.target.value)}
               className="h-5 w-32 border-border/40 bg-background/60 px-1.5 text-[10px] placeholder:text-muted-foreground/60 shadow-none"
             />
+              </>
+            ) : null}
 
-            {/* Clear Button */}
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              onClick={clearConsole}
-              title={t("preview.console.clearConsole")}
+              onClick={tab === "network" ? clearNetwork : clearConsole}
+              title={
+                tab === "network"
+                  ? t("preview.console.clearNetwork")
+                  : t("preview.console.clearConsole")
+              }
               className="size-5 rounded text-muted-foreground hover:text-foreground"
             >
               <HugeiconsIcon icon={Cancel01Icon} size={11} />
@@ -187,7 +216,11 @@ export function PreviewConsoleDrawer() {
       </div>
 
       {/* Console Log Stream (When open) */}
-      {isOpen ? (
+      {isOpen && tab === "network" ? (
+        <NetworkLog entries={networkEntries} />
+      ) : null}
+
+      {isOpen && tab === "console" ? (
         <div className="flex-1 overflow-y-auto font-mono text-[11px] divide-y divide-border/30 bg-background/80">
           {filteredEntries.length === 0 ? (
             <div className="flex h-full items-center justify-center text-muted-foreground/60 text-xs italic py-8">
@@ -302,6 +335,49 @@ export function PreviewConsoleDrawer() {
           )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function NetworkLog({ entries }: { entries: NetworkEntry[] }) {
+  const { t } = useTranslation();
+  if (entries.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-muted-foreground/60 text-xs italic py-8">
+        {t("preview.console.emptyNetwork")}
+      </div>
+    );
+  }
+  return (
+    <div className="flex-1 overflow-y-auto font-mono text-[11px] divide-y divide-border/30 bg-background/80">
+      {entries.map((entry) => (
+        <div key={entry.id} className="flex items-start gap-2 px-3 py-1.5">
+          <span
+            className={cn(
+              "shrink-0 w-12 font-semibold",
+              entry.status >= 400 || entry.error
+                ? "text-red-400"
+                : entry.status >= 300
+                  ? "text-amber-400"
+                  : "text-emerald-400",
+            )}
+          >
+            {entry.method}
+          </span>
+          <span className="shrink-0 w-8 text-muted-foreground">
+            {entry.error ? "ERR" : entry.status}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-foreground/90" title={entry.url}>
+            {entry.url}
+          </span>
+          {entry.count > 1 ? (
+            <span className="shrink-0 text-[9px] text-muted-foreground">x{entry.count}</span>
+          ) : null}
+          <span className="shrink-0 text-[10px] text-muted-foreground/70">
+            {entry.durationMs}ms
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

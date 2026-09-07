@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { useLiveComponentStore } from "@/modules/preview";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  useLiveComponentStore,
+  usePreviewDevtoolsStore,
+  usePreviewHandleStore,
+} from "@/modules/preview";
+import type { PreviewPaneHandle } from "@/modules/preview";
 import { buildBrowserTools } from "./browser";
 import type { ToolContext } from "./context";
 
@@ -16,6 +21,19 @@ const mockContext: ToolContext = {
   getSessionId: () => "test-session",
 };
 
+function fakeHandle(
+  send: (command: string, args?: unknown) => Promise<unknown>,
+): PreviewPaneHandle {
+  return {
+    reload: () => {},
+    focusAddressBar: () => {},
+    getUrl: () => "http://localhost:3000",
+    navigate: vi.fn(),
+    sendBrowserCommand: <T>(command: string, args?: unknown) =>
+      send(command, args) as Promise<T>,
+  };
+}
+
 describe("browser AI tools", () => {
   beforeEach(() => {
     useLiveComponentStore.setState({
@@ -23,6 +41,7 @@ describe("browser AI tools", () => {
       isInspectorActive: false,
       history: [],
     });
+    usePreviewHandleStore.setState({ handles: new Map(), activeTabId: null });
   });
 
   it("reports no selected component when store is empty", async () => {
@@ -115,5 +134,101 @@ describe("browser AI tools", () => {
 
     expect(res.ok).toBe(true);
     expect(useLiveComponentStore.getState().selectedComponent).toBeNull();
+  });
+
+  it("reports no active preview for snapshot and click", async () => {
+    const tools = buildBrowserTools(mockContext);
+    const snapshot = (await tools.browser_snapshot.execute!(
+      {},
+      { toolCallId: "test", messages: [] },
+    )) as { error: string };
+    expect(snapshot.error).toBe("no_active_preview");
+
+    const click = (await tools.browser_click.execute!(
+      { selector: "button" },
+      { toolCallId: "test", messages: [] },
+    )) as { error: string };
+    expect(click.error).toBe("no_active_preview");
+  });
+
+  it("runs snapshot, click, type, eval and navigate against the active handle", async () => {
+    const send = vi.fn(async (command: string) => {
+      if (command === "snapshot") return { nodes: [{ ref: 1, tag: "button" }] };
+      if (command === "eval") return { result: 4 };
+      return { ok: true };
+    });
+    const handle = fakeHandle(send);
+    usePreviewHandleStore.getState().registerHandle(7, handle);
+    const tools = buildBrowserTools(mockContext);
+
+    const snapshot = (await tools.browser_snapshot.execute!(
+      {},
+      { toolCallId: "test", messages: [] },
+    )) as { ok: boolean; result: { nodes: unknown[] } };
+    expect(snapshot.ok).toBe(true);
+    expect(snapshot.result.nodes).toHaveLength(1);
+
+    const missing = (await tools.browser_click.execute!(
+      { ref: 99 },
+      { toolCallId: "test", messages: [] },
+    )) as { ok: boolean };
+    expect(send).toHaveBeenCalledWith("click", { ref: 99, selector: undefined });
+    expect(missing.ok).toBe(true);
+
+    send.mockRejectedValueOnce(new Error("element_not_found"));
+    const notFound = (await tools.browser_click.execute!(
+      { selector: "#gone" },
+      { toolCallId: "test", messages: [] },
+    )) as { error: string };
+    expect(notFound.error).toBe("element_not_found");
+
+    await tools.browser_type.execute!(
+      { selector: "input", text: "hi", submit: true },
+      { toolCallId: "test", messages: [] },
+    );
+    expect(send).toHaveBeenCalledWith("type", {
+      ref: undefined,
+      selector: "input",
+      text: "hi",
+      submit: true,
+    });
+
+    const evaluated = (await tools.browser_eval.execute!(
+      { script: "2+2" },
+      { toolCallId: "test", messages: [] },
+    )) as { ok: boolean; result: { result: number } };
+    expect(evaluated.result.result).toBe(4);
+
+    const nav = (await tools.browser_navigate.execute!(
+      { url: "http://localhost:5173" },
+      { toolCallId: "test", messages: [] },
+    )) as { ok: boolean };
+    expect(nav.ok).toBe(true);
+    expect(handle.navigate).toHaveBeenCalledWith("http://localhost:5173");
+
+    const blocked = (await tools.browser_navigate.execute!(
+      { url: "https://example.com" },
+      { toolCallId: "test", messages: [] },
+    )) as { error: string };
+    expect(blocked.error).toBe("url_not_local");
+  });
+
+  it("returns the captured network log", async () => {
+    usePreviewDevtoolsStore.getState().clearNetwork();
+    usePreviewDevtoolsStore.getState().addNetworkEntry({
+      id: "n1",
+      method: "GET",
+      url: "/health",
+      status: 200,
+      durationMs: 3,
+      size: 2,
+      timestamp: 1,
+    });
+    const tools = buildBrowserTools(mockContext);
+    const log = (await tools.browser_get_network_log.execute!(
+      {},
+      { toolCallId: "test", messages: [] },
+    )) as { entries: Array<{ url: string }> };
+    expect(log.entries[0].url).toBe("/health");
   });
 });
