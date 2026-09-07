@@ -186,7 +186,8 @@ export function DockerControlPill({ onConnectDocker, onOpenSettings }: Props) {
         <PopoverContent
           align="start"
           side="top"
-          className="w-96 max-h-[480px] p-0 flex flex-col bg-card/95 backdrop-blur-md border border-border/40 shadow-2xl rounded-xl"
+          collisionPadding={8}
+          className="w-96 max-w-[min(95vw,var(--radix-popover-content-available-width))] max-h-[min(480px,var(--radix-popover-content-available-height))] p-0 flex flex-col bg-card/95 backdrop-blur-md border border-border/40 shadow-2xl rounded-xl"
         >
           {/* Header */}
           <div className="flex flex-col gap-2 p-3 border-b border-border/30 bg-muted/20">
