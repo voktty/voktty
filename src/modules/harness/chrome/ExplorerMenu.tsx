@@ -2,6 +2,7 @@ import {
   useMemo,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import { Check } from "./icons";
 import { Popover } from "./Popover";
@@ -23,6 +24,8 @@ type Props = {
   y: number;
   items: ExplorerMenuItem[];
   ariaLabel?: string;
+  header?: ReactNode;
+  width?: number;
   onPick: (id: string) => void;
   onClose: () => void;
 };
@@ -44,6 +47,8 @@ export function ExplorerMenu({
   y,
   items,
   ariaLabel = "File actions",
+  header,
+  width = MENU_WIDTH,
   onPick,
   onClose,
 }: Props) {
@@ -85,7 +90,7 @@ export function ExplorerMenu({
     <Popover
       anchor={{ x, y }}
       gap={0}
-      width={MENU_WIDTH}
+      width={width}
       autoFocus
       onDismiss={onClose}
       role="menu"
@@ -95,6 +100,12 @@ export function ExplorerMenu({
       onContextMenu={(e) => e.preventDefault()}
       className="overflow-y-auto overscroll-none p-1"
     >
+      {header ? (
+        <>
+          {header}
+          <div role="separator" className="my-1 h-px bg-content/10" />
+        </>
+      ) : null}
       {items.map((item, index) => {
         if (item.kind === "sep") {
           return (
