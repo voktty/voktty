@@ -22,15 +22,22 @@ export function resolveEditorThemeId(
   themeId: string,
   customThemes: Theme[],
   mode: "light" | "dark",
+  variationId?: string,
 ): EditorThemeId {
   if (pref !== EDITOR_THEME_AUTO) return pref;
   const theme =
     customThemes.find((t) => t.id === themeId) ??
     getBuiltinTheme(themeId) ??
     getDefaultTheme();
+  const variation =
+    variationId && theme.variations
+      ? theme.variations.find((v) => v.id === variationId)
+      : null;
+  const editorTheme = variation?.editorTheme ?? theme.editorTheme;
   const mapped =
-    theme.editorTheme?.[mode] ??
-    theme.editorTheme?.dark ??
-    theme.editorTheme?.light;
+    editorTheme?.[mode] ??
+    editorTheme?.dark ??
+    editorTheme?.light;
   return isEditorThemeId(mapped) ? mapped : FALLBACK[mode];
 }
+

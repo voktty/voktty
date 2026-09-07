@@ -29,10 +29,12 @@ import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { getOptimalInitialZoomLevel } from "@/lib/optimalZoom";
 import { ensureStorageMigrated } from "@/lib/storageMigration";
+import { isLegacyVariationId } from "@/modules/theme/themes";
 
 export type ThemePref = "system" | "light" | "dark";
 
 export const DEFAULT_THEME_ID = "voktty-default";
+export const DEFAULT_THEME_VARIATION = "default";
 
 export type BackgroundKind = "none" | "image";
 
@@ -165,6 +167,7 @@ export type Preferences = {
   language: LanguageId;
   theme: ThemePref;
   themeId: string;
+  themeVariation: string;
   backgroundKind: BackgroundKind;
   backgroundImageId: string | null;
   backgroundOpacity: number;
@@ -297,6 +300,7 @@ const KEY_SSH_TUNNELS = "ssh_tunnels";
 const KEY_TAB_STYLE = "tabStyle";
 const KEY_THEME = "theme";
 const KEY_THEME_ID = "themeId";
+const KEY_THEME_VARIATION = "themeVariation";
 const KEY_BG_KIND = "backgroundKind";
 const KEY_BG_IMAGE_ID = "backgroundImageId";
 const KEY_BG_OPACITY = "backgroundOpacity";
@@ -445,6 +449,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   language: "en",
   theme: "system",
   themeId: DEFAULT_THEME_ID,
+  themeVariation: DEFAULT_THEME_VARIATION,
   backgroundKind: "none",
   backgroundImageId: null,
   backgroundOpacity: 0.5,
@@ -611,7 +616,22 @@ export async function loadPreferences(): Promise<Preferences> {
         : DEFAULT_PREFERENCES.language;
     })(),
     theme: get<ThemePref>(KEY_THEME) ?? DEFAULT_PREFERENCES.theme,
-    themeId: get<string>(KEY_THEME_ID) ?? DEFAULT_PREFERENCES.themeId,
+    themeId: (() => {
+      const raw = get<string>(KEY_THEME_ID);
+      if (!raw) return DEFAULT_PREFERENCES.themeId;
+      if (isLegacyVariationId(raw)) return DEFAULT_THEME_ID;
+      return raw;
+    })(),
+    themeVariation: (() => {
+      const storedVar = get<string>(KEY_THEME_VARIATION);
+      if (storedVar) return storedVar;
+      const rawThemeId = get<string>(KEY_THEME_ID);
+      if (rawThemeId) {
+        const legacyVar = isLegacyVariationId(rawThemeId);
+        if (legacyVar) return legacyVar;
+      }
+      return DEFAULT_PREFERENCES.themeVariation;
+    })(),
     backgroundKind:
       get<BackgroundKind>(KEY_BG_KIND) ?? DEFAULT_PREFERENCES.backgroundKind,
     backgroundImageId:
@@ -935,8 +955,19 @@ export async function setTheme(value: ThemePref): Promise<void> {
 }
 
 export async function setThemeId(value: string): Promise<void> {
+  const legacyVar = isLegacyVariationId(value);
+  if (legacyVar) {
+    await writePref(KEY_THEME_ID, DEFAULT_THEME_ID);
+    await writePref(KEY_THEME_VARIATION, legacyVar);
+    return;
+  }
   await writePref(KEY_THEME_ID, value);
 }
+
+export async function setThemeVariation(value: string): Promise<void> {
+  await writePref(KEY_THEME_VARIATION, value);
+}
+
 
 /** Slider stores 0..1. Actual rendered opacity is halved in SurfaceLayer
  *  so the image never exceeds 50% — keeps UI/terminal readable at any setting. */
@@ -1552,6 +1583,7 @@ export const PREF_KEY_TO_STORAGE_KEY: Record<PrefKey, string> = {
   language: KEY_LANGUAGE,
   theme: KEY_THEME,
   themeId: KEY_THEME_ID,
+  themeVariation: KEY_THEME_VARIATION,
   backgroundKind: KEY_BG_KIND,
   backgroundImageId: KEY_BG_IMAGE_ID,
   backgroundOpacity: KEY_BG_OPACITY,

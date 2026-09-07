@@ -17,7 +17,7 @@ import {
   SHORTCUTS,
   type ShortcutId,
 } from "@/modules/shortcuts";
-import { listBuiltinThemes, useTheme } from "@/modules/theme";
+import { DEFAULT_THEME_ID, listBuiltinThemes, useTheme } from "@/modules/theme";
 import {
   AlertCircleIcon,
   ArrowTurnBackwardIcon,
@@ -65,7 +65,14 @@ export function CommandPalette({
   const [value, setValue] = useState("");
   const [page, setPage] = useState<"root" | "themes">("root");
   const userShortcuts = usePreferencesStore((s) => s.shortcuts);
-  const { themeId, customThemes, setThemeId, previewThemeId } = useTheme();
+  const {
+    themeId,
+    themeVariation,
+    customThemes,
+    setThemeId,
+    previewThemeId,
+    previewVariation,
+  } = useTheme();
 
   const parsed = parseQuery(query);
   const inThemes = page === "themes";
@@ -88,24 +95,38 @@ export function CommandPalette({
     return rankCommands(commandItems, parsed.term, mru);
   }, [commandItems, parsed.term, parsed.mode, inThemes, mru]);
 
-  const themes = useMemo(() => {
+  const themeItems = useMemo(() => {
     if (!inThemes) return [];
-    const all = [...listBuiltinThemes(), ...customThemes];
+    const builtin = listBuiltinThemes();
+    const variations = builtin[0]?.variations ?? [];
+    const items: Array<{ id: string; name: string; isSelected: boolean }> = [
+      ...customThemes.map((t) => ({
+        id: t.id,
+        name: t.name,
+        isSelected: themeId === t.id,
+      })),
+      ...variations.map((v) => ({
+        id: v.id,
+        name: `Voktty: ${v.name}`,
+        isSelected: themeId === DEFAULT_THEME_ID && themeVariation === v.id,
+      })),
+    ];
     const q = themeFilter.toLowerCase();
-    if (!q) return all;
-    return all
+    if (!q) return items;
+    return items
       .map((t) => ({ t, s: fuzzyBest(q, [t.name, t.id]) }))
       .filter((x) => x.s !== null)
       .sort((a, b) => (b.s ?? 0) - (a.s ?? 0))
       .map((x) => x.t);
-  }, [inThemes, themeFilter, customThemes]);
+  }, [inThemes, themeFilter, customThemes, themeId, themeVariation]);
 
   const resetPalette = useCallback(() => {
     setQuery("");
     setValue("");
     setPage("root");
     previewThemeId(null);
-  }, [previewThemeId]);
+    previewVariation(null);
+  }, [previewThemeId, previewVariation]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -249,7 +270,7 @@ export function CommandPalette({
                   />
                   <span>{t("commandPalette.status.back")}</span>
                 </CommandItem>
-                {themes.map((tItem) => (
+                {themeItems.map((tItem) => (
                   <CommandItem
                     key={tItem.id}
                     value={`theme:${tItem.id}`}
@@ -257,7 +278,7 @@ export function CommandPalette({
                     className="text-[12.5px]"
                   >
                     <span className="truncate">{tItem.name}</span>
-                    {tItem.id === themeId ? (
+                    {tItem.isSelected ? (
                       <HugeiconsIcon
                         icon={Tick02Icon}
                         size={14}
@@ -267,7 +288,7 @@ export function CommandPalette({
                     ) : null}
                   </CommandItem>
                 ))}
-                {themes.length === 0 ? (
+                {themeItems.length === 0 ? (
                   <StatusItem label={t("commandPalette.status.noThemes")} />
                 ) : null}
               </CommandGroup>

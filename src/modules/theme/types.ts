@@ -62,6 +62,21 @@ export type ThemeVariant = {
   terminal?: TerminalPalette;
 };
 
+export type ThemeVariation = {
+  id: string;
+  name: string;
+  description?: string;
+  variants: {
+    light?: ThemeVariant;
+    dark?: ThemeVariant;
+  };
+  editorTheme?: {
+    light?: string;
+    dark?: string;
+  };
+  accentColor?: string;
+};
+
 export type Theme = {
   id: string;
   name: string;
@@ -75,6 +90,8 @@ export type Theme = {
     light?: string;
     dark?: string;
   };
+  variations?: ThemeVariation[];
+  defaultVariation?: string;
 };
 
 export type SurfaceProfile = {
@@ -128,4 +145,5 @@ export type AppearancePack = {
 };
 
 export const DEFAULT_THEME_ID = "voktty-default";
+export const DEFAULT_VARIATION_ID = "default";
 export const DEFAULT_PACK_ID = "fluent-dark";
