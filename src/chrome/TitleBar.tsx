@@ -18,6 +18,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
 import { basename } from "../lib/fs";
@@ -33,6 +34,7 @@ import { TerminalSpinner } from "./TerminalSpinner";
 import { WindowControls } from "./WindowControls";
 import { IS_MAC, MOD } from "../lib/platform";
 import type { RecentProject } from "../lib/recents";
+import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 
 export type Tab = {
   id: string;
@@ -75,6 +77,7 @@ type Props = {
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
   onClose: (id: string) => void;
+  onCloseMany: (ids: string[], fallbackId: string) => void;
   onReorder: (ids: string[], movedId?: string) => void;
   onGoToFile?: () => void;
   recents?: RecentProject[];
@@ -151,6 +154,25 @@ export function titleTabClosable(tab: Tab, tabCount: number): boolean {
   return tabCount > 1 || !tab.blank;
 }
 
+export type TitleTabContextAction = "others" | "right" | "left";
+
+/** Tab ids affected by a context-menu action relative to its clicked tab. */
+export function titleTabContextCloseIds(
+  tabs: readonly Tab[],
+  targetId: string,
+  action: TitleTabContextAction,
+): string[] {
+  const targetIndex = tabs.findIndex((tab) => tab.id === targetId);
+  if (targetIndex < 0) return [];
+  if (action === "left") {
+    return tabs.slice(0, targetIndex).map((tab) => tab.id);
+  }
+  if (action === "right") {
+    return tabs.slice(targetIndex + 1).map((tab) => tab.id);
+  }
+  return tabs.filter((tab) => tab.id !== targetId).map((tab) => tab.id);
+}
+
 function TabHarnesses({
   harnesses,
   busyHarnesses,
@@ -203,6 +225,7 @@ function TitleTabItem({
   sortable,
   onSelect,
   onClose,
+  onContextMenu,
   itemRef,
 }: {
   tab: Tab;
@@ -213,6 +236,7 @@ function TitleTabItem({
   sortable: SortableApi;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
+  onContextMenu: (id: string, event: ReactMouseEvent<HTMLDivElement>) => void;
   itemRef?: (el: HTMLDivElement | null) => void;
 }) {
   const dragging = canDrag && sortable.draggingId === tab.id;
@@ -239,6 +263,11 @@ function TitleTabItem({
       }}
       className={`group @container relative flex h-full cursor-default touch-none items-center self-stretch min-w-0 w-full ${dragging ? "opacity-40" : ""}`}
       data-tauri-drag-region="false"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onContextMenu(tab.id, event);
+      }}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         if ((event.target as HTMLElement | null)?.closest("[data-no-drag]")) {
@@ -514,6 +543,7 @@ function TitleBarComponent({
   onOpenInbox,
   onOpenNotes,
   onClose,
+  onCloseMany,
   onReorder,
   onGoToFile,
   recents = [],
@@ -531,6 +561,11 @@ function TitleBarComponent({
     [lockOverscroll],
   );
   const [tabOverflow, setTabOverflow] = useState({ left: false, right: false });
+  const [tabMenu, setTabMenu] = useState<{
+    tabId: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const syncTabOverflow = useCallback(() => {
     const el = tabStripRef.current;
     const next = el
@@ -600,6 +635,59 @@ function TitleBarComponent({
       void getCurrentWindow().setTitle(systemTitle);
     } catch {}
   }, [systemTitle]);
+
+  const contextTab = tabMenu
+    ? tabs.find((tab) => tab.id === tabMenu.tabId)
+    : undefined;
+  const contextCloseIds = contextTab
+    ? {
+        others: titleTabContextCloseIds(tabs, contextTab.id, "others"),
+        right: titleTabContextCloseIds(tabs, contextTab.id, "right"),
+        left: titleTabContextCloseIds(tabs, contextTab.id, "left"),
+      }
+    : null;
+  const contextMenuItems: ExplorerMenuItem[] = contextTab
+    ? [
+        {
+          kind: "item",
+          id: "close",
+          label: "Close Tab",
+          shortcut: `${MOD}W`,
+          disabled: !titleTabClosable(contextTab, tabs.length),
+        },
+        { kind: "sep" },
+        {
+          kind: "item",
+          id: "others",
+          label: "Close Other Tabs",
+          disabled: contextCloseIds?.others.length === 0,
+        },
+        {
+          kind: "item",
+          id: "right",
+          label: "Close Tabs to the Right",
+          disabled: contextCloseIds?.right.length === 0,
+        },
+        {
+          kind: "item",
+          id: "left",
+          label: "Close Tabs to the Left",
+          disabled: contextCloseIds?.left.length === 0,
+        },
+      ]
+    : [];
+
+  const onPickTabMenu = (id: string) => {
+    if (!contextTab || !contextCloseIds) return;
+    setTabMenu(null);
+    if (id === "close") {
+      onClose(contextTab.id);
+      return;
+    }
+    if (id === "others" || id === "right" || id === "left") {
+      onCloseMany(contextCloseIds[id], contextTab.id);
+    }
+  };
 
   const railClosed = !projectRailOpen;
   const showCurrentProject = looksLikeProject(cwd);
@@ -734,6 +822,13 @@ function TitleBarComponent({
                   sortable={sortable}
                   onSelect={onSelect}
                   onClose={onClose}
+                  onContextMenu={(tabId, event) =>
+                    setTabMenu({
+                      tabId,
+                      x: event.clientX,
+                      y: event.clientY,
+                    })
+                  }
                   itemRef={
                     tab.id === activeId
                       ? (el) => {
@@ -756,6 +851,17 @@ function TitleBarComponent({
         )}
         {trailingControls}
       </div>
+      {tabMenu && contextTab ? (
+        <ExplorerMenu
+          x={tabMenu.x}
+          y={tabMenu.y}
+          width={244}
+          items={contextMenuItems}
+          ariaLabel={`Tab actions for ${tabCopy(contextTab).headline}`}
+          onPick={onPickTabMenu}
+          onClose={() => setTabMenu(null)}
+        />
+      ) : null}
     </header>
   );
 }

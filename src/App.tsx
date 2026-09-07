@@ -1884,62 +1884,74 @@ export default function App({
     [activateTab, persistSession, refreshHistory, sidebarCwd, tabCloseScope],
   );
 
+  const onCloseTabs = useCallback(
+    (ids: string[], fallbackId: string) => {
+      const current = tabsRef.current;
+      const closingIds = new Set(ids);
+      const closing = current.filter((tab) => closingIds.has(tab.id));
+      const fallback = current.find(
+        (tab) => tab.id === fallbackId && !closingIds.has(tab.id),
+      );
+      if (!fallback || closing.length === 0) return;
+
+      const closingFiles = closing.flatMap((tab) => [
+        ...tab.editorPanes.flatMap((pane) => pane.files),
+        ...(tab.terminalPanes ?? []).flatMap((pane) => pane.files),
+      ]);
+      const unsaved = closingFiles.filter(
+        (file) => isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
+      );
+      const terminals = closingFiles.filter((file) => file.terminal);
+
+      const finishClose = () => {
+        const sessionIds = new Set(
+          closing.flatMap((tab) =>
+            leafIds(tab.layout).filter((paneId) =>
+              sessionsRef.current.some((session) => session.id === paneId),
+            ),
+          ),
+        );
+        for (const sessionId of sessionIds) {
+          persistSession(
+            sessionsRef.current.find((session) => session.id === sessionId),
+          );
+        }
+        setDirtyFiles((prev) => {
+          const next = new Set(prev);
+          for (const file of closingFiles) next.delete(file.id);
+          return next;
+        });
+        setTabs((prev) => prev.filter((tab) => !closingIds.has(tab.id)));
+        if (closingIds.has(activeTabIdRef.current)) activateTab(fallback.id);
+        void refreshHistory(sidebarCwd);
+      };
+
+      void (async () => {
+        if (unsaved.length > 0) {
+          const ok = await confirmDiscardUnsaved(
+            "Close these tabs with unsaved files?",
+          );
+          if (!ok) return;
+        }
+        if (terminals.length > 0) {
+          const ok = await confirmCloseTerminals(terminals);
+          if (!ok) return;
+        }
+        finishClose();
+      })();
+    },
+    [activateTab, persistSession, refreshHistory, sidebarCwd],
+  );
+
   const onCloseOtherTabs = useCallback(() => {
     const current = tabsRef.current;
     const activeId = activeTabIdRef.current;
-    const closing = current.filter((tab) => tab.id !== activeId);
-    if (!current.some((tab) => tab.id === activeId) || closing.length === 0) {
-      return;
-    }
-
-    const closingIds = new Set(closing.map((tab) => tab.id));
-    const closingFiles = closing.flatMap((tab) => [
-      ...tab.editorPanes.flatMap((pane) => pane.files),
-      ...(tab.terminalPanes ?? []).flatMap((pane) => pane.files),
-    ]);
-    const unsaved = closingFiles.filter(
-      (file) => isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
+    if (!current.some((tab) => tab.id === activeId)) return;
+    onCloseTabs(
+      current.filter((tab) => tab.id !== activeId).map((tab) => tab.id),
+      activeId,
     );
-    const terminals = closingFiles.filter((file) => file.terminal);
-
-    const finishClose = () => {
-      const sessionIds = new Set(
-        closing.flatMap((tab) =>
-          leafIds(tab.layout).filter((paneId) =>
-            sessionsRef.current.some((session) => session.id === paneId),
-          ),
-        ),
-      );
-      for (const sessionId of sessionIds) {
-        persistSession(
-          sessionsRef.current.find((session) => session.id === sessionId),
-        );
-      }
-      setDirtyFiles((prev) => {
-        const next = new Set(prev);
-        for (const file of closingFiles) next.delete(file.id);
-        return next;
-      });
-      setTabs((prev) =>
-        prev.filter((tab) => tab.id === activeId || !closingIds.has(tab.id)),
-      );
-      void refreshHistory(sidebarCwd);
-    };
-
-    void (async () => {
-      if (unsaved.length > 0) {
-        const ok = await confirmDiscardUnsaved(
-          "Close other tabs with unsaved files?",
-        );
-        if (!ok) return;
-      }
-      if (terminals.length > 0) {
-        const ok = await confirmCloseTerminals(terminals);
-        if (!ok) return;
-      }
-      finishClose();
-    })();
-  }, [persistSession, refreshHistory, sidebarCwd]);
+  }, [onCloseTabs]);
 
   const onCloseFile = useCallback(
     (paneId: string, fileId: string) => {
@@ -5168,6 +5180,7 @@ export default function App({
             onOpenInbox={onOpenInbox}
             onOpenNotes={notesEnabled ? onOpenNotes : undefined}
             onClose={onCloseTitleTab}
+            onCloseMany={onCloseTabs}
             onReorder={onReorderTabs}
             onGoToFile={onGoToFile}
             recents={recents}
