@@ -536,6 +536,7 @@ mod unix {
     use std::ffi::OsString;
     use std::fs;
     use std::path::{Path, PathBuf};
+    use std::sync::OnceLock;
 
     use portable_pty::CommandBuilder;
 
@@ -733,34 +734,54 @@ mod unix {
         Ok(root)
     }
 
+    // The scripts written below are `include_str!` compile-time constants, so
+    // once one PTY in this process has written and verified them on disk,
+    // every later terminal open of the same shell can skip the read-and-diff
+    // entirely instead of re-checking the filesystem on every spawn.
     fn prepare_zdotdir() -> Result<PathBuf, String> {
-        let dir = integration_root()?.join("zsh");
-        fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-        write_if_changed(&dir.join(".zshenv"), ZSHENV)?;
-        write_if_changed(&dir.join(".zprofile"), ZPROFILE)?;
-        write_if_changed(&dir.join(".zshrc"), ZSHRC)?;
-        write_if_changed(&dir.join(".zlogin"), ZLOGIN)?;
-        Ok(dir)
+        static CACHE: OnceLock<Result<PathBuf, String>> = OnceLock::new();
+        CACHE
+            .get_or_init(|| {
+                let dir = integration_root()?.join("zsh");
+                fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+                write_if_changed(&dir.join(".zshenv"), ZSHENV)?;
+                write_if_changed(&dir.join(".zprofile"), ZPROFILE)?;
+                write_if_changed(&dir.join(".zshrc"), ZSHRC)?;
+                write_if_changed(&dir.join(".zlogin"), ZLOGIN)?;
+                Ok(dir)
+            })
+            .clone()
     }
 
     fn prepare_bash_rcfile() -> Result<PathBuf, String> {
-        let dir = integration_root()?.join("bash");
-        fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-        let rc = dir.join("bashrc");
-        write_if_changed(&rc, BASHRC)?;
-        Ok(rc)
+        static CACHE: OnceLock<Result<PathBuf, String>> = OnceLock::new();
+        CACHE
+            .get_or_init(|| {
+                let dir = integration_root()?.join("bash");
+                fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+                let rc = dir.join("bashrc");
+                write_if_changed(&rc, BASHRC)?;
+                Ok(rc)
+            })
+            .clone()
     }
 
     fn prepare_fish_conf_d() -> Result<(), String> {
-        #[cfg(target_os = "android")]
-        let home = crate::modules::bootstrap::home_dir();
-        #[cfg(not(target_os = "android"))]
-        let home = dirs::home_dir().ok_or_else(|| "could not resolve home dir".to_string())?;
+        static CACHE: OnceLock<Result<(), String>> = OnceLock::new();
+        CACHE
+            .get_or_init(|| {
+                #[cfg(target_os = "android")]
+                let home = crate::modules::bootstrap::home_dir();
+                #[cfg(not(target_os = "android"))]
+                let home =
+                    dirs::home_dir().ok_or_else(|| "could not resolve home dir".to_string())?;
 
-        let dir = home.join(".config").join("fish").join("conf.d");
-        fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-        write_if_changed(&dir.join("voktty.fish"), FISH_INIT)?;
-        Ok(())
+                let dir = home.join(".config").join("fish").join("conf.d");
+                fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+                write_if_changed(&dir.join("voktty.fish"), FISH_INIT)?;
+                Ok(())
+            })
+            .clone()
     }
 
     fn write_if_changed(path: &Path, content: &str) -> Result<(), String> {
