@@ -8,12 +8,14 @@ import {
 import { validateTheme } from "./validateTheme";
 
 describe("Theme Variations & Legacy Resolution", () => {
-  it("listBuiltinThemes returns the consolidated voktty theme", () => {
+  it("listBuiltinThemes returns the consolidated voktty theme and radical skins", () => {
     const builtin = listBuiltinThemes();
-    expect(builtin).toHaveLength(1);
-    expect(builtin[0].id).toBe("voktty-default");
-    expect(builtin[0].variations).toBeDefined();
-    expect(builtin[0].variations!.length).toBeGreaterThanOrEqual(17);
+    expect(builtin.length).toBeGreaterThanOrEqual(2);
+    const voktty = builtin.find((t) => t.id === "voktty-default");
+    expect(voktty).toBeDefined();
+    expect(voktty!.variations).toBeDefined();
+    expect(voktty!.variations!.length).toBeGreaterThanOrEqual(17);
+    expect(builtin.some((t) => t.id === "win31")).toBe(true);
   });
 
   it("getDefaultTheme returns voktty-default", () => {

@@ -222,7 +222,7 @@ describe("skinLoader", () => {
       };
       registerSkin(skin);
       expect(getSkin("test-skin")).toEqual(skin);
-      expect(listSkins()).toEqual([skin]);
+      expect(listSkins()).toContainEqual(skin);
     });
   });
 });

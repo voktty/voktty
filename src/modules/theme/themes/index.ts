@@ -14,13 +14,14 @@ import { rosePine } from "./rose-pine";
 import { sage } from "./sage";
 import { solarized } from "./solarized";
 import { vokttyDefault, VOKTTY_VARIATIONS } from "./voktty-default";
+import { win31Theme } from "./win31Theme";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
 import { xcode } from "./xcode";
 
-export { VOKTTY_VARIATIONS, vokttyDefault };
+export { VOKTTY_VARIATIONS, vokttyDefault, win31Theme };
 
-const BUILTIN: Theme[] = [vokttyDefault];
+const BUILTIN: Theme[] = [vokttyDefault, win31Theme];
 
 const LEGACY_FALLBACKS: Record<string, Theme> = {
   "fluent-dark": fluentDark,
@@ -79,6 +80,7 @@ export function getBuiltinVariations(): ThemeVariation[] {
 
 export function getBuiltinTheme(id: string): Theme | undefined {
   if (id === DEFAULT_THEME_ID || id === "voktty") return vokttyDefault;
+  if (id === "win31") return win31Theme;
   if (LEGACY_FALLBACKS[id]) return LEGACY_FALLBACKS[id];
   const variation = VOKTTY_VARIATIONS.find((v) => v.id === id);
   if (variation) {
