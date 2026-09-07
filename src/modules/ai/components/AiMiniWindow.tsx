@@ -296,7 +296,7 @@ function AiFloatingBadge({ onExpand }: { onExpand: () => void }) {
     >
       <img
         src="/voktty.svg"
-        alt="Voktty AI"
+        alt=""
         className="size-7 pointer-events-none select-none drop-shadow"
       />
 
