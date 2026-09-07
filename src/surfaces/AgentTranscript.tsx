@@ -910,6 +910,10 @@ function UserMessageBlock({
   const textOnly =
     Boolean(text) && !block.attachments?.length && !card && !note;
 
+  // Only the chat layout rounds a single line; the document layout always uses
+  // the square corners, so it never needs the measurement at all.
+  const roundsSingleLine = chat && textOnly;
+
   useLayoutEffect(() => {
     const el = textRef.current;
     if (!el || !text) {
@@ -918,16 +922,25 @@ function UserMessageBlock({
       return;
     }
 
+    // Every user message carries one of these observers, so the callback runs
+    // once per message whenever the transcript reflows. `getComputedStyle`
+    // forces a style recalculation on each call and the line height only moves
+    // with the font or the UI scale — never with a resize — so it is resolved
+    // once here rather than on every delivery.
+    let lineHeight = 0;
     const measure = () => {
       if (!expanded) {
         setOverflows(el.scrollHeight > el.clientHeight + 1);
       }
-
-      const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight);
+      if (!roundsSingleLine) {
+        setSingleLine(false);
+        return;
+      }
+      if (!lineHeight) {
+        lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight);
+      }
       setSingleLine(
-        textOnly &&
-          Number.isFinite(lineHeight) &&
-          el.scrollHeight <= lineHeight + 1,
+        Number.isFinite(lineHeight) && el.scrollHeight <= lineHeight + 1,
       );
     };
 
@@ -935,7 +948,7 @@ function UserMessageBlock({
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [text, textOnly, expanded]);
+  }, [text, roundsSingleLine, expanded]);
 
   const toggle = () => {
     if (overflows) setExpanded((value) => !value);
