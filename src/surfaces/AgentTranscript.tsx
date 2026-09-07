@@ -116,11 +116,11 @@ type Props = {
   onHandoff?: (harness: HarnessId, turn: Block[], model: string) => void;
   onJumpToBottomChange?: (show: boolean) => void;
   onJumpToBottomReady?: (jump: () => void) => void;
-  /** False while another tab is in front. Hidden tabs stay laid out. */
+  /** False while another tab is in front; local transcript state is retained. */
   visible?: boolean;
 };
 
-export function AgentTranscript({
+function AgentTranscriptComponent({
   blocks,
   busy,
   cwd,
@@ -220,7 +220,7 @@ export function AgentTranscript({
   }, [jumpToBottom, onJumpToBottomReady]);
 
   useEffect(() => {
-    if (!scrollerEl) return;
+    if (!visible || !scrollerEl) return;
     syncPinned(scrollerEl);
     const onScroll = () => syncPinned(scrollerEl);
     const onWheel = (e: WheelEvent) => {
@@ -235,7 +235,7 @@ export function AgentTranscript({
       scrollerEl.removeEventListener("scroll", onScroll);
       scrollerEl.removeEventListener("wheel", onWheel);
     };
-  }, [scrollerEl, setShowJump, syncPinned]);
+  }, [scrollerEl, setShowJump, syncPinned, visible]);
 
   useLayoutEffect(() => {
     stickToBottom.current = true;
@@ -252,8 +252,8 @@ export function AgentTranscript({
     const el = scroller.current;
     if (!el) return;
     syncTranscriptViewport(el);
-    // Hidden tabs stay laid out, so scroll is already correct. Only pin when
-    // the scroller looks empty (a leftover from `display: none`).
+    // Previously opened tabs normally retain their scroll position. Only pin
+    // when the scroller looks empty after being hidden with `display: none`.
     if (el.scrollHeight <= el.clientHeight + NEAR_BOTTOM_PX) {
       stickToBottom.current = true;
       setShowJump(false);
@@ -262,16 +262,16 @@ export function AgentTranscript({
   }, [visible, setShowJump]);
 
   useLayoutEffect(() => {
-    if (!stickToBottom.current) return;
+    if (!visible || !stickToBottom.current) return;
     const el = scroller.current;
     syncTranscriptViewport(el);
     pinToBottom(el);
-  }, [blocks, busy]);
+  }, [blocks, busy, visible]);
 
   useLayoutEffect(() => {
     const el = scrollerEl;
     const inner = el?.firstElementChild;
-    if (!el || !inner) return;
+    if (!visible || !el || !inner) return;
     const onResize = () => {
       syncTranscriptViewport(el);
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -288,7 +288,7 @@ export function AgentTranscript({
     observer.observe(el);
     onResize();
     return () => observer.disconnect();
-  }, [scrollerEl, setShowJump]);
+  }, [scrollerEl, setShowJump, visible]);
 
   const turns = groupTurns(blocks);
   const firstVisibleTurn = Math.max(0, turns.length - visibleTurnCount);
@@ -364,7 +364,7 @@ export function AgentTranscript({
           // The fold line is the turn's status line from the first token to
           // the last: the mark, and the clock beside it. It never moves, so a
           // turn settling does not shuffle the layout around the answer.
-          const live = !settled && !preparingHandoff;
+          const live = visible && !settled && !preparingHandoff;
           const foldTitle: ReactNode = live ? (
             <LiveFoldTitle
               startedAt={startedAt}
@@ -391,13 +391,17 @@ export function AgentTranscript({
           const renderItem = (item: TurnItem, itemIndex: number) =>
             item.type === "activity" ? (
               itemIndex === initialThinkingAt ? (
-                <InitialThinking key={item.blocks[0].id} live={!settled} />
+                <InitialThinking
+                  key={item.blocks[0].id}
+                  live={visible && !settled}
+                />
               ) : (
                 <ActivityPhases
                   key={item.blocks[0].id}
                   blocks={item.blocks}
                   cwd={cwd}
                   done={
+                    !visible ||
                     settled ||
                     itemIndex < foldedAt ||
                     (answering && !workStillRunning)
@@ -459,15 +463,34 @@ export function AgentTranscript({
               {items.flatMap((item, itemIndex) => {
                 const inFold =
                   !!fold && itemIndex >= fold.start && itemIndex <= fold.end;
+                if (inFold) {
+                  if (itemIndex !== fold.start) return [];
+                  return [
+                    foldLineRow,
+                    <TurnRow key="work-details" folded={!workOpen}>
+                      {() =>
+                        items
+                          .slice(fold.start, fold.end + 1)
+                          .map((entry, offset) => (
+                            <div
+                              key={turnItemKey(entry)}
+                              className={`flow-root pb-1 last:pb-0 pl-5 zen-fold-rail ${
+                                fold.start + offset === fold.end
+                                  ? "zen-fold-tail"
+                                  : ""
+                              }`}
+                            >
+                              {renderItem(entry, fold.start + offset)}
+                            </div>
+                          ))
+                      }
+                    </TurnRow>,
+                  ];
+                }
                 const row = (
-                  <TurnRow
-                    key={turnItemKey(item)}
-                    folded={!workOpen && inFold}
-                    indented={inFold}
-                    railTail={inFold && itemIndex === fold?.end}
-                  >
+                  <div key={turnItemKey(item)} className="flow-root pb-1">
                     {renderItem(item, itemIndex)}
-                  </TurnRow>
+                  </div>
                 );
                 if (itemIndex !== foldLineAt) return row;
                 return [foldLineRow, row];
@@ -511,6 +534,12 @@ export function AgentTranscript({
     </div>
   );
 }
+
+// Keep hidden panes' local state, and catch up with current props on activation.
+export const AgentTranscript = memo(
+  AgentTranscriptComponent,
+  (previous, next) => previous.visible === false && next.visible === false,
+);
 
 /** Placeholder for private reasoning before the first assistant text arrives. */
 function InitialThinking({ live }: { live: boolean }) {
@@ -878,7 +907,8 @@ function UserMessageBlock({
   const note = block.noteCard;
   const text = card && card.kind !== "handoff" ? "" : block.text;
   const chat = layout === "chat";
-  const textOnly = Boolean(text) && !block.attachments?.length && !card && !note;
+  const textOnly =
+    Boolean(text) && !block.attachments?.length && !card && !note;
 
   useLayoutEffect(() => {
     const el = textRef.current;
@@ -959,22 +989,16 @@ function UserMessageBlock({
 }
 
 /**
- * One row of a turn, kept in place while folded so opening it does not remount
- * nested controls. Folded rows take no space; visible rows stay out of Grid
- * so they rewrap naturally when their pane changes width.
+ * Animate one fold, then release its contents. Closed work must not retain
+ * a component and DOM tree for every tool; only expansion builds those rows.
+ * Visible rows stay out of Grid so they rewrap when their pane changes width.
  */
 function TurnRow({
   folded,
-  indented = false,
-  railTail = false,
   children,
 }: {
   folded: boolean;
-  /** Work that hangs off the fold line, indented to sit under its title. */
-  indented?: boolean;
-  /** The last row the fold holds: where the spine leaves off. */
-  railTail?: boolean;
-  children: ReactNode;
+  children: ReactNode | (() => ReactNode);
 }) {
   const [foldState, setFoldState] = useState<
     "open" | "opening" | "closing" | "closed"
@@ -991,6 +1015,17 @@ function TurnRow({
     });
   }, [folded]);
 
+  useEffect(() => {
+    if (foldState !== "opening" && foldState !== "closing") return;
+    // Hidden tabs and reduced-motion styles may never fire animationend.
+    const timer = window.setTimeout(() => {
+      setFoldState(folded ? "closed" : "open");
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [foldState, folded]);
+
+  if (folded && foldState === "closed") return null;
+
   return (
     // `inert` keeps folded work out of tab order and off the screen reader.
     <div
@@ -1005,14 +1040,8 @@ function TurnRow({
       {/* Keep padding off the Grid item itself. Otherwise its 4px bottom
        * padding survives a 0fr track and every folded row leaves a gap. */}
       <div>
-        {/* 20px puts the row under the fold line's title rather than its mark,
-         * so opened work reads as hanging off that line. */}
-        <div
-          className={`pb-1 ${indented ? "pl-5 zen-fold-rail" : ""} ${
-            railTail ? "zen-fold-tail" : ""
-          }`}
-        >
-          {children}
+        <div className="pb-1">
+          {typeof children === "function" ? children() : children}
         </div>
       </div>
     </div>
@@ -1343,42 +1372,44 @@ function ActivityPhaseGroup({
         {label}
       </button>
       <div className="zen-phase-body" data-open={open}>
-        <div
-          ref={setLiveScroller}
-          className={active || !open ? "zen-phase-live" : undefined}
-        >
-          <div className="flex min-w-0 flex-col">
-            {headline ? (
-              <div className="zen-phase-step py-1">
-                <AgentMarkdown
-                  className={
-                    headline.role === "reasoning"
-                      ? "agent-reasoning"
-                      : undefined
-                  }
-                  text={headline.text}
-                  cwd={cwd}
-                  onOpenFile={onOpenFile}
-                />
-              </div>
-            ) : null}
-            {phase.steps.map((block) => (
-              <div
-                key={block.id}
-                className={`zen-phase-step${active ? " zen-step-in" : ""}`}
-              >
-                <ActivityRow
-                  block={block}
-                  cwd={cwd}
-                  live={active}
-                  onApproval={onApproval}
-                  onOpenFile={onOpenFile}
-                  onOpenDiff={onOpenDiff}
-                />
-              </div>
-            ))}
+        {open ? (
+          <div
+            ref={setLiveScroller}
+            className={active || !open ? "zen-phase-live" : undefined}
+          >
+            <div className="flex min-w-0 flex-col">
+              {headline ? (
+                <div className="zen-phase-step py-1">
+                  <AgentMarkdown
+                    className={
+                      headline.role === "reasoning"
+                        ? "agent-reasoning"
+                        : undefined
+                    }
+                    text={headline.text}
+                    cwd={cwd}
+                    onOpenFile={onOpenFile}
+                  />
+                </div>
+              ) : null}
+              {phase.steps.map((block) => (
+                <div
+                  key={block.id}
+                  className={`zen-phase-step${active ? " zen-step-in" : ""}`}
+                >
+                  <ActivityRow
+                    block={block}
+                    cwd={cwd}
+                    live={active}
+                    onApproval={onApproval}
+                    onOpenFile={onOpenFile}
+                    onOpenDiff={onOpenDiff}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </div>
   );

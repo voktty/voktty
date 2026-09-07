@@ -677,6 +677,36 @@ describe("foldableWork", () => {
     expect(foldableWork(turn)).toEqual({ start: 3, end: 3 });
   });
 
+  it("leaves an approval attached to earlier work outside the fold", () => {
+    const turn = items([
+      shell("pending", "pending", { requestId: 1 }),
+      note("n1", "I need permission to run that command."),
+    ]);
+    expect(foldableWork(turn)).toBeUndefined();
+  });
+
+  it("does not swallow an earlier approval when later work folds", () => {
+    const turn = items([
+      shell("pending", "pending", { requestId: 1 }),
+      note("n1", "Checking something else meanwhile."),
+      shell("finished"),
+      note("n2", "That check passed."),
+    ]);
+    const fold = foldableWork(turn)!;
+    expect(foldedBlocks(turn, fold).map((block) => block.id)).toEqual([
+      "n1",
+      "finished",
+    ]);
+  });
+
+  it("folds work normally once its approval has been resolved", () => {
+    const turn = items([
+      shell("approved", "completed", { requestId: 1, decided: "allow" }),
+      note("n1", "The command succeeded."),
+    ]);
+    expect(foldableWork(turn)).toEqual({ start: 0, end: 0 });
+  });
+
   it("gives the fold line a place to sit before there is a fold", () => {
     const turn = items([{ id: "u", role: "user", text: "go" }, shell("c1")]);
     expect(foldableWork(turn)).toBeUndefined();
