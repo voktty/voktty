@@ -51,11 +51,22 @@ import { SectionHeader } from "../components/SectionHeader";
 
 export function ThemesSection() {
   const { t } = useTranslation();
-  const { themeId, setThemeId, resolvedMode, customThemes } = useTheme();
+  const {
+    themeId,
+    setThemeId,
+    themeVariation,
+    setThemeVariation,
+    resolvedMode,
+    customThemes,
+  } = useTheme();
   const builtinThemes = listBuiltinThemes();
   const themes = useMemo(
     () => [...builtinThemes, ...customThemes],
     [builtinThemes, customThemes],
+  );
+  const selectedTheme = useMemo(
+    () => themes.find((t) => t.id === themeId) ?? themes[0],
+    [themes, themeId],
   );
   const customIds = useMemo(
     () => new Set(customThemes.map((t) => t.id)),
@@ -264,22 +275,32 @@ export function ThemesSection() {
         ) : null}
         <div className="grid grid-cols-2 gap-2">
           {themes.map((theme) => {
+            const isSelected = themeId === theme.id;
+            const activeVar =
+              isSelected && theme.variations
+                ? theme.variations.find((va) => va.id === themeVariation) ??
+                  theme.variations[0]
+                : theme.variations?.[0];
+
             const v =
+              activeVar?.variants[resolvedMode] ??
+              activeVar?.variants.dark ??
+              activeVar?.variants.light ??
               theme.variants[resolvedMode] ??
               theme.variants.dark ??
               theme.variants.light;
             const c = v?.colors;
-            const swatchBg = c?.background ?? "var(--background)";
-            const swatchFg = c?.foreground ?? "var(--foreground)";
-            const swatchAccent = c?.primary ?? c?.accent ?? "var(--accent)";
-            const swatchMuted = c?.muted ?? "var(--muted)";
-            const selected = themeId === theme.id;
+            const swatchBg = c?.background ?? (resolvedMode === "light" ? "#f4f5f8" : "#121214");
+            const swatchFg = c?.foreground ?? (resolvedMode === "light" ? "#18191c" : "#f4f4f6");
+            const swatchAccent =
+              activeVar?.accentColor ?? c?.primary ?? c?.accent ?? "var(--accent)";
+            const swatchMuted = c?.muted ?? (resolvedMode === "light" ? "#e5e7eb" : "#262932");
             const isCustom = customIds.has(theme.id);
             const description = isCustom
               ? theme.description
-              : t(
-                  `settings.themes.builtinDescriptions.${theme.id.replace(/-/g, "_")}`,
-                );
+              : isSelected && activeVar
+                ? activeVar.description
+                : theme.description;
             return (
               <button
                 key={theme.id}
@@ -287,13 +308,13 @@ export function ThemesSection() {
                 onClick={() => setThemeId(theme.id)}
                 className={cn(
                   "group flex items-center gap-3 rounded-lg border p-2.5 text-left transition-all",
-                  selected
+                  isSelected
                     ? "border-foreground/60 ring-1 ring-foreground/20"
                     : "border-border/60 hover:border-border",
                 )}
               >
                 <div
-                  className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border border-border/40"
+                  className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border border-border/40 shadow-xs"
                   style={{ background: swatchBg }}
                 >
                   <span
@@ -357,6 +378,85 @@ export function ThemesSection() {
             );
           })}
         </div>
+
+        {selectedTheme?.variations && selectedTheme.variations.length > 0 ? (
+          <div className="flex flex-col gap-2 pt-2">
+            <div className="flex items-center justify-between">
+              <Label>
+                {t("settings.themes.variations.title") || "Color Variations"}
+              </Label>
+              <span className="text-[11px] text-muted-foreground">
+                {selectedTheme.variations.length} palettes
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {selectedTheme.variations.map((variation) => {
+                const varVariant =
+                  variation.variants[resolvedMode] ??
+                  variation.variants.dark ??
+                  variation.variants.light;
+                const varColors = varVariant?.colors;
+                const varBg =
+                  varColors?.background ??
+                  (resolvedMode === "light" ? "#f4f5f8" : "#121214");
+                const varFg =
+                  varColors?.foreground ??
+                  (resolvedMode === "light" ? "#18191c" : "#f4f4f6");
+                const varAccent =
+                  variation.accentColor ??
+                  varColors?.primary ??
+                  varColors?.accent ??
+                  "var(--accent)";
+                const varMuted =
+                  varColors?.muted ??
+                  (resolvedMode === "light" ? "#e5e7eb" : "#262932");
+                const isVariationSelected = themeVariation === variation.id;
+
+                return (
+                  <button
+                    key={variation.id}
+                    type="button"
+                    onClick={() => setThemeVariation(variation.id)}
+                    className={cn(
+                      "group flex items-center gap-2.5 rounded-lg border p-2 text-left transition-all cursor-pointer",
+                      isVariationSelected
+                        ? "border-foreground/60 ring-1 ring-foreground/20 bg-accent/30"
+                        : "border-border/60 hover:border-border hover:bg-accent/10",
+                    )}
+                  >
+                    <div
+                      className="flex h-8 w-11 shrink-0 items-center justify-center gap-0.5 rounded border border-border/40 shadow-xs"
+                      style={{ background: varBg }}
+                    >
+                      <span
+                        className="h-4 w-1.5 rounded-xs"
+                        style={{ background: varAccent }}
+                      />
+                      <span
+                        className="h-4 w-1.5 rounded-xs"
+                        style={{ background: varFg, opacity: 0.7 }}
+                      />
+                      <span
+                        className="h-4 w-1.5 rounded-xs"
+                        style={{ background: varMuted }}
+                      />
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-[12px] font-medium">
+                        {variation.name}
+                      </span>
+                      {variation.description ? (
+                        <span className="truncate text-[10.5px] text-muted-foreground">
+                          {variation.description}
+                        </span>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-2">

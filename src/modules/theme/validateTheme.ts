@@ -1,4 +1,10 @@
-import type { Theme, ThemeColors, ThemeVariant, TerminalPalette } from "./types";
+import type {
+  Theme,
+  ThemeColors,
+  ThemeVariant,
+  TerminalPalette,
+  ThemeVariation,
+} from "./types";
 
 export type ValidationResult =
   | { ok: true; theme: Theme }
@@ -19,6 +25,17 @@ const COLOR_KEYS: readonly (keyof ThemeColors)[] = [
   "sidebarAccent", "sidebarAccentForeground",
   "sidebarBorder", "sidebarRing",
   "radius",
+  "surfaceCanvas",
+  "surfaceSidebar",
+  "surfaceToolbar",
+  "surfaceCard",
+  "surfacePane",
+  "surfaceHeader",
+  "surfacePopover",
+  "surfaceActiveItem",
+  "accentAction",
+  "accentIndicator",
+  "borderSubtle",
 ];
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
@@ -129,6 +146,45 @@ function parseVariant(raw: unknown, path: string): ThemeVariant | string {
   return { colors, terminal };
 }
 
+function parseVariation(raw: unknown, path: string): ThemeVariation | string {
+  if (!isObj(raw)) return `${path} must be an object`;
+  if (!isStr(raw.id) || !ID_RE.test(raw.id)) {
+    return `${path}.id must be a kebab-case string (a-z, 0-9, -)`;
+  }
+  if (!isStr(raw.name) || raw.name.trim().length === 0) {
+    return `${path}.name must be a non-empty string`;
+  }
+  if (!isObj(raw.variants)) return `${path}.variants must be an object`;
+  const variants: ThemeVariation["variants"] = {};
+  if (raw.variants.light !== undefined) {
+    const v = parseVariant(raw.variants.light, `${path}.variants.light`);
+    if (typeof v === "string") return v;
+    variants.light = v;
+  }
+  if (raw.variants.dark !== undefined) {
+    const v = parseVariant(raw.variants.dark, `${path}.variants.dark`);
+    if (typeof v === "string") return v;
+    variants.dark = v;
+  }
+  if (!variants.light && !variants.dark) {
+    return `${path}.variants must contain at least one of: light, dark`;
+  }
+  const variation: ThemeVariation = {
+    id: raw.id,
+    name: raw.name.trim(),
+    variants,
+  };
+  if (isStr(raw.description)) variation.description = raw.description;
+  if (isStr(raw.accentColor)) variation.accentColor = raw.accentColor;
+  if (isObj(raw.editorTheme)) {
+    const et: ThemeVariation["editorTheme"] = {};
+    if (isStr(raw.editorTheme.light)) et.light = raw.editorTheme.light;
+    if (isStr(raw.editorTheme.dark)) et.dark = raw.editorTheme.dark;
+    if (et.light || et.dark) variation.editorTheme = et;
+  }
+  return variation;
+}
+
 export function validateTheme(raw: unknown): ValidationResult {
   if (!isObj(raw)) return { ok: false, error: "Theme must be a JSON object" };
   if (!isStr(raw.id) || !ID_RE.test(raw.id)) {
@@ -137,26 +193,54 @@ export function validateTheme(raw: unknown): ValidationResult {
   if (!isStr(raw.name) || raw.name.trim().length === 0) {
     return { ok: false, error: "name must be a non-empty string" };
   }
-  if (!isObj(raw.variants)) return { ok: false, error: "variants must be an object" };
+
+  let variations: ThemeVariation[] | undefined;
+  if (raw.variations !== undefined) {
+    if (!Array.isArray(raw.variations)) {
+      return { ok: false, error: "variations must be an array" };
+    }
+    variations = [];
+    for (let i = 0; i < raw.variations.length; i++) {
+      const v = parseVariation(raw.variations[i], `variations[${i}]`);
+      if (typeof v === "string") return { ok: false, error: v };
+      variations.push(v);
+    }
+  }
+
+  if (raw.variants !== undefined && !isObj(raw.variants)) {
+    return { ok: false, error: "variants must be an object" };
+  }
+  if (raw.variants === undefined && (!variations || variations.length === 0)) {
+    return { ok: false, error: "variants must be an object" };
+  }
+
   const variants: Theme["variants"] = {};
-  if (raw.variants.light !== undefined) {
-    const v = parseVariant(raw.variants.light, "variants.light");
-    if (typeof v === "string") return { ok: false, error: v };
-    variants.light = v;
+  if (isObj(raw.variants)) {
+    if (raw.variants.light !== undefined) {
+      const v = parseVariant(raw.variants.light, "variants.light");
+      if (typeof v === "string") return { ok: false, error: v };
+      variants.light = v;
+    }
+    if (raw.variants.dark !== undefined) {
+      const v = parseVariant(raw.variants.dark, "variants.dark");
+      if (typeof v === "string") return { ok: false, error: v };
+      variants.dark = v;
+    }
   }
-  if (raw.variants.dark !== undefined) {
-    const v = parseVariant(raw.variants.dark, "variants.dark");
-    if (typeof v === "string") return { ok: false, error: v };
-    variants.dark = v;
-  }
-  if (!variants.light && !variants.dark) {
+
+  if (!variants.light && !variants.dark && (!variations || variations.length === 0)) {
     return { ok: false, error: "variants must contain at least one of: light, dark" };
   }
+
   const theme: Theme = {
     id: raw.id,
     name: raw.name.trim(),
     variants,
   };
+  if (variations && variations.length > 0) {
+    theme.variations = variations;
+  }
+  if (isStr(raw.defaultVariation)) theme.defaultVariation = raw.defaultVariation;
   if (isStr(raw.author)) theme.author = raw.author;
   if (isStr(raw.description)) theme.description = raw.description;
   if (isObj(raw.editorTheme)) {

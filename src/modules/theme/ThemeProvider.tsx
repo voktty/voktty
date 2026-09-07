@@ -8,10 +8,12 @@ import {
 } from "react";
 import {
   DEFAULT_THEME_ID,
+  DEFAULT_THEME_VARIATION,
   loadPreferences,
   onPreferencesChange,
   setTheme as persistTheme,
   setThemeId as persistThemeId,
+  setThemeVariation as persistThemeVariation,
   type ThemePref,
 } from "@/modules/settings/store";
 import { applyTheme, clearTheme, isDarkColor } from "./applyTheme";
@@ -21,7 +23,11 @@ import {
 } from "./customThemes";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { SurfaceLayer } from "./SurfaceLayer";
-import { getBuiltinTheme, getDefaultTheme } from "./themes";
+import {
+  getBuiltinTheme,
+  getDefaultTheme,
+  isLegacyVariationId,
+} from "./themes";
 import type { Theme } from "./types";
 import { getBackdropKind } from "./vibrancy";
 
@@ -43,18 +49,22 @@ type ThemeProviderState = {
   mode: ThemePref;
   resolvedMode: "dark" | "light";
   themeId: string;
+  themeVariation: string;
   activeTheme: Theme;
   customThemes: Theme[];
   setMode: (mode: ThemePref) => void;
   setThemeId: (id: string) => void;
+  setThemeVariation: (variation: string) => void;
   /** Apply a theme transiently without persisting; null reverts to committed. */
   previewThemeId: (id: string | null) => void;
+  previewVariation: (variation: string | null) => void;
 };
 
 const ThemeProviderContext = createContext<ThemeProviderState | null>(null);
 
 const FAST_PATH_KEY = "voktty-ui-theme-shadow";
 const FAST_PATH_THEME_ID = "voktty-ui-theme-id-shadow";
+const FAST_PATH_THEME_VARIATION = "voktty-ui-theme-variation-shadow";
 
 function readFastMode(fallback: ThemePref): ThemePref {
   if (typeof window === "undefined") return fallback;
@@ -75,6 +85,22 @@ function writeFastThemeId(id: string): void {
   try { window.localStorage.setItem(FAST_PATH_THEME_ID, id); } catch { /* ignore */ }
 }
 
+function readFastThemeVariation(): string {
+  if (typeof window === "undefined") return DEFAULT_THEME_VARIATION;
+  return (
+    window.localStorage.getItem(FAST_PATH_THEME_VARIATION) ??
+    DEFAULT_THEME_VARIATION
+  );
+}
+
+function writeFastThemeVariation(variation: string): void {
+  try {
+    window.localStorage.setItem(FAST_PATH_THEME_VARIATION, variation);
+  } catch {
+    /* ignore */
+  }
+}
+
 function resolveTheme(id: string, custom: Theme[]): Theme {
   return custom.find((t) => t.id === id) ?? getBuiltinTheme(id) ?? getDefaultTheme();
 }
@@ -82,7 +108,13 @@ function resolveTheme(id: string, custom: Theme[]): Theme {
 export function ThemeProvider({ children, defaultMode = "system" }: ThemeProviderProps) {
   const [mode, setModeState] = useState<ThemePref>(() => readFastMode(defaultMode));
   const [themeId, setThemeIdState] = useState<string>(() => readFastThemeId());
+  const [themeVariation, setThemeVariationState] = useState<string>(() =>
+    readFastThemeVariation(),
+  );
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewVariationId, setPreviewVariationId] = useState<string | null>(
+    null,
+  );
   const [customThemes, setCustomThemes] = useState<Theme[]>([]);
   const [systemDark, setSystemDark] = useState<boolean>(() =>
     typeof window === "undefined"
@@ -96,8 +128,10 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       if (!alive) return;
       setModeState(p.theme);
       setThemeIdState(p.themeId);
+      setThemeVariationState(p.themeVariation);
       writeFastMode(p.theme);
       writeFastThemeId(p.themeId);
+      writeFastThemeVariation(p.themeVariation);
     });
     const unlistenP = onPreferencesChange((key, value) => {
       if (key === "theme" && (value === "system" || value === "light" || value === "dark")) {
@@ -106,6 +140,9 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       } else if (key === "themeId" && typeof value === "string") {
         setThemeIdState(value);
         writeFastThemeId(value);
+      } else if (key === "themeVariation" && typeof value === "string") {
+        setThemeVariationState(value);
+        writeFastThemeVariation(value);
       }
     });
     return () => {
@@ -158,40 +195,75 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   const vibrancyActive = windowVibrancy && backdropAvailable;
 
   const effectiveId = previewId ?? themeId;
-  const activeTheme = useMemo(
+  const effectiveVariationId = previewVariationId ?? themeVariation;
+
+  const baseTheme = useMemo(
     () => resolveTheme(effectiveId, customThemes),
     [effectiveId, customThemes],
   );
 
+  const activeVariation = useMemo(() => {
+    if (!baseTheme.variations || baseTheme.variations.length === 0) return null;
+    return (
+      baseTheme.variations.find((v) => v.id === effectiveVariationId) ??
+      baseTheme.variations.find((v) => v.id === baseTheme.defaultVariation) ??
+      baseTheme.variations[0]
+    );
+  }, [baseTheme, effectiveVariationId]);
+
+  const activeTheme: Theme = useMemo(() => {
+    if (!activeVariation) return baseTheme;
+    return {
+      ...baseTheme,
+      variants: activeVariation.variants,
+      editorTheme: activeVariation.editorTheme ?? baseTheme.editorTheme,
+    };
+  }, [baseTheme, activeVariation]);
+
+  const isDefaultObsidian =
+    effectiveId === DEFAULT_THEME_ID &&
+    (!activeVariation || activeVariation.id === "default");
+
   const resolvedMode: "dark" | "light" = useMemo(() => {
-    if (effectiveId === DEFAULT_THEME_ID) return rawResolvedMode;
+    if (isDefaultObsidian) return rawResolvedMode;
     const directVariant = activeTheme.variants[rawResolvedMode];
-    if (directVariant && (Object.keys(directVariant.colors ?? {}).length > 0 || directVariant.terminal)) {
+    if (
+      directVariant &&
+      (Object.keys(directVariant.colors ?? {}).length > 0 || directVariant.terminal)
+    ) {
       const bg = directVariant.colors?.background;
       return bg ? (isDarkColor(bg) ? "dark" : "light") : rawResolvedMode;
     }
-    if (activeTheme.variants.dark && (!activeTheme.variants.light || Object.keys(activeTheme.variants.light?.colors ?? {}).length === 0)) {
+    if (
+      activeTheme.variants.dark &&
+      (!activeTheme.variants.light ||
+        Object.keys(activeTheme.variants.light?.colors ?? {}).length === 0)
+    ) {
       const bg = activeTheme.variants.dark.colors?.background;
       return bg ? (isDarkColor(bg) ? "dark" : "light") : "dark";
     }
-    if (activeTheme.variants.light && (!activeTheme.variants.dark || Object.keys(activeTheme.variants.dark?.colors ?? {}).length === 0)) {
+    if (
+      activeTheme.variants.light &&
+      (!activeTheme.variants.dark ||
+        Object.keys(activeTheme.variants.dark?.colors ?? {}).length === 0)
+    ) {
       const bg = activeTheme.variants.light.colors?.background;
       return bg ? (isDarkColor(bg) ? "dark" : "light") : "light";
     }
     return rawResolvedMode;
-  }, [effectiveId, activeTheme, rawResolvedMode]);
+  }, [isDefaultObsidian, activeTheme, rawResolvedMode]);
 
   useEffect(() => {
-    if (effectiveId === DEFAULT_THEME_ID) {
+    if (isDefaultObsidian) {
       const root = document.documentElement;
       root.classList.remove("light", "dark", "theme-light");
       root.classList.add(resolvedMode);
       root.classList.toggle("theme-light", resolvedMode === "light");
     }
-  }, [resolvedMode, effectiveId]);
+  }, [resolvedMode, isDefaultObsidian]);
 
   useEffect(() => {
-    if (effectiveId === DEFAULT_THEME_ID) {
+    if (isDefaultObsidian) {
       clearTheme();
       if (vibrancyActive) {
         document.documentElement.style.setProperty(
@@ -203,7 +275,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     }
     applyTheme(activeTheme, resolvedMode, vibrancyActive, vibrancyOpacity);
   }, [
-    effectiveId,
+    isDefaultObsidian,
     activeTheme,
     resolvedMode,
     vibrancyActive,
@@ -225,14 +297,38 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   }, []);
 
   const setThemeId = useCallback((id: string) => {
+    const legacyVar = isLegacyVariationId(id);
+    if (legacyVar) {
+      setPreviewId(null);
+      setPreviewVariationId(null);
+      setThemeIdState(DEFAULT_THEME_ID);
+      setThemeVariationState(legacyVar);
+      writeFastThemeId(DEFAULT_THEME_ID);
+      writeFastThemeVariation(legacyVar);
+      void persistThemeId(DEFAULT_THEME_ID);
+      void persistThemeVariation(legacyVar);
+      return;
+    }
     setPreviewId(null);
+    setPreviewVariationId(null);
     setThemeIdState(id);
     writeFastThemeId(id);
     void persistThemeId(id);
   }, []);
 
+  const setThemeVariation = useCallback((variation: string) => {
+    setPreviewVariationId(null);
+    setThemeVariationState(variation);
+    writeFastThemeVariation(variation);
+    void persistThemeVariation(variation);
+  }, []);
+
   const previewThemeId = useCallback((id: string | null) => {
     setPreviewId(id);
+  }, []);
+
+  const previewVariation = useCallback((variation: string | null) => {
+    setPreviewVariationId(variation);
   }, []);
 
   const value = useMemo<ThemeProviderState>(
@@ -240,21 +336,27 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       mode,
       resolvedMode,
       themeId,
+      themeVariation,
       activeTheme,
       customThemes,
       setMode,
       setThemeId,
+      setThemeVariation,
       previewThemeId,
+      previewVariation,
     }),
     [
       mode,
       resolvedMode,
       themeId,
+      themeVariation,
       activeTheme,
       customThemes,
       setMode,
       setThemeId,
+      setThemeVariation,
       previewThemeId,
+      previewVariation,
     ],
   );
 

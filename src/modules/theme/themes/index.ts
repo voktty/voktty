@@ -1,4 +1,4 @@
-import { DEFAULT_THEME_ID, type Theme } from "../types";
+import { DEFAULT_THEME_ID, type Theme, type ThemeVariation } from "../types";
 import { caffeine } from "./caffeine";
 import { catppuccin } from "./catppuccin";
 import { claude } from "./claude";
@@ -13,42 +13,87 @@ import { nord } from "./nord";
 import { rosePine } from "./rose-pine";
 import { sage } from "./sage";
 import { solarized } from "./solarized";
-import { vokttyDefault } from "./voktty-default";
+import { vokttyDefault, VOKTTY_VARIATIONS } from "./voktty-default";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
 import { xcode } from "./xcode";
 
-const BUILTIN: Theme[] = [
-  fluentDark,
-  fluentLight,
-  vokttyDefault,
-  xcode,
-  claude,
-  kanagawa,
-  kanagawaDragon,
-  tokyoNight,
-  catppuccin,
-  rosePine,
-  everforest,
+export { VOKTTY_VARIATIONS, vokttyDefault };
+
+const BUILTIN: Theme[] = [vokttyDefault];
+
+const LEGACY_FALLBACKS: Record<string, Theme> = {
+  "fluent-dark": fluentDark,
+  "fluent-light": fluentLight,
   nord,
-  gruvbox,
   dracula,
+  "tokyo-night": tokyoNight,
+  catppuccin,
+  "rose-pine": rosePine,
+  everforest,
+  gruvbox,
   solarized,
+  kanagawa,
+  "kanagawa-dragon": kanagawaDragon,
+  claude,
+  xcode,
   tide,
   sage,
   caffeine,
-];
+};
 
-const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));
+export const LEGACY_THEME_TO_VARIATION: Record<string, string> = {
+  "voktty-default": "default",
+  voktty: "default",
+  "fluent-dark": "fluent",
+  "fluent-light": "fluent",
+  fluent: "fluent",
+  nord: "nord",
+  dracula: "dracula",
+  "tokyo-night": "tokyo-night",
+  catppuccin: "catppuccin",
+  "rose-pine": "rose-pine",
+  everforest: "everforest",
+  gruvbox: "gruvbox",
+  solarized: "solarized",
+  kanagawa: "kanagawa",
+  "kanagawa-dragon": "kanagawa-dragon",
+  claude: "claude",
+  xcode: "xcode",
+  tide: "tide",
+  sage: "sage",
+  caffeine: "caffeine",
+};
+
+export function isLegacyVariationId(id: string): string | null {
+  return LEGACY_THEME_TO_VARIATION[id] ?? null;
+}
 
 export function listBuiltinThemes(): Theme[] {
   return BUILTIN;
 }
 
+export function getBuiltinVariations(): ThemeVariation[] {
+  return VOKTTY_VARIATIONS;
+}
+
 export function getBuiltinTheme(id: string): Theme | undefined {
-  return BY_ID.get(id);
+  if (id === DEFAULT_THEME_ID || id === "voktty") return vokttyDefault;
+  if (LEGACY_FALLBACKS[id]) return LEGACY_FALLBACKS[id];
+  const variation = VOKTTY_VARIATIONS.find((v) => v.id === id);
+  if (variation) {
+    return {
+      id: variation.id,
+      name: variation.name,
+      description: variation.description,
+      editorTheme: variation.editorTheme,
+      variants: variation.variants,
+    };
+  }
+  return undefined;
 }
 
 export function getDefaultTheme(): Theme {
-  return BY_ID.get(DEFAULT_THEME_ID) ?? BUILTIN[0];
+  return vokttyDefault;
 }
+
