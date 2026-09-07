@@ -26,7 +26,12 @@ import {
   setVibrancyOpacity,
   setWindowVibrancy,
 } from "@/modules/settings/store";
-import { useTheme } from "@/modules/theme";
+import {
+  useTheme,
+  listBuiltinAppearancePacks,
+  listBuiltinSurfaceProfiles,
+  listBuiltinTypographyProfiles,
+} from "@/modules/theme";
 import {
   deleteBgImage,
   importBgImageFromFile,
@@ -56,6 +61,12 @@ export function ThemesSection() {
     setThemeId,
     themeVariation,
     setThemeVariation,
+    appearancePack,
+    setAppearancePack,
+    surfaceProfile,
+    setSurfaceProfile,
+    typographyProfile,
+    setTypographyProfile,
     resolvedMode,
     customThemes,
   } = useTheme();
@@ -457,6 +468,97 @@ export function ThemesSection() {
             </div>
           </div>
         ) : null}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-col">
+            <Label>{t("settings.themes.pack.title") || "Appearance Pack"}</Label>
+            <span className="text-[11px] text-muted-foreground">
+              {t("settings.themes.pack.desc") ||
+                "Preconfigured combination of theme palette, surface elevation and typography"}
+            </span>
+          </div>
+          <Select
+            value={appearancePack || "default"}
+            onValueChange={(v) => void setAppearancePack(v)}
+          >
+            <SelectTrigger size="sm" className="h-8 w-44 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {listBuiltinAppearancePacks().map((p) => (
+                <SelectItem key={p.id} value={p.id} className="text-[12px]">
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-col">
+            <Label>
+              {t("settings.themes.typography.title") || "Typography Profile"}
+            </Label>
+            <span className="text-[11px] text-muted-foreground">
+              {t("settings.themes.typography.desc") ||
+                "UI font family, size and density"}
+            </span>
+          </div>
+          <Select
+            value={typographyProfile || "auto"}
+            onValueChange={(v) => void setTypographyProfile(v)}
+          >
+            <SelectTrigger size="sm" className="h-8 w-44 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto" className="text-[12px]">
+                Auto (Follow pack/theme)
+              </SelectItem>
+              <SelectSeparator />
+              {listBuiltinTypographyProfiles().map((tp) => (
+                <SelectItem key={tp.id} value={tp.id} className="text-[12px]">
+                  {tp.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-col">
+            <Label>{t("settings.themes.surface.title") || "Surface Profile"}</Label>
+            <span className="text-[11px] text-muted-foreground">
+              {t("settings.themes.surface.desc") ||
+                "Canvas, sidebar and panel surface transparency and elevation"}
+            </span>
+          </div>
+          <Select
+            value={surfaceProfile || "auto"}
+            onValueChange={(v) => void setSurfaceProfile(v)}
+          >
+            <SelectTrigger size="sm" className="h-8 w-44 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto" className="text-[12px]">
+                Auto (Follow pack/theme)
+              </SelectItem>
+              <SelectSeparator />
+              {listBuiltinSurfaceProfiles().map((sp) => (
+                <SelectItem key={sp.id} value={sp.id} className="text-[12px]">
+                  {sp.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
