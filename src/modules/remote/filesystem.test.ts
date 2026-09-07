@@ -7,7 +7,7 @@ vi.mock("./client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./client")>()),
   requestRemoteResult: requestRemoteResultMock,
 }));
-
+import { IS_WINDOWS } from "@/lib/platform";
 import { RemoteRequestError } from "./client";
 import {
   isPathInWorkspace,
@@ -51,7 +51,7 @@ describe("remote filesystem paths", () => {
     expect(isPathInWorkspace(env, "/srv/other/main.rs")).toBe(true);
     expect(isPathInWorkspace(env, "C:/project")).toBe(false);
     expect(isPathInWorkspace(local, "C:/project")).toBe(true);
-    expect(isPathInWorkspace(local, "/srv/project")).toBe(false);
+    expect(isPathInWorkspace(local, "/srv/project")).toBe(!IS_WINDOWS);
   });
 
   it("reads remote binary files without passing through UTF-8", async () => {
