@@ -151,7 +151,7 @@ export function AiOpenButton({
       {hasUnread ? (
         <span
           aria-hidden
-          className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold leading-none text-primary-foreground"
+          className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-pill bg-primary px-0.5 text-[9px] font-semibold leading-none text-primary-foreground"
         >
           {unreadCount > 9 ? "9+" : unreadCount}
         </span>
@@ -631,7 +631,7 @@ function TabButton({
       <HugeiconsIcon icon={icon} size={12} strokeWidth={1.75} />
       {label}
       {count != null ? (
-        <span className="rounded-full bg-muted/60 px-1.5 text-[9.5px] tabular-nums text-muted-foreground">
+        <span className="rounded-pill bg-muted/60 px-1.5 text-[9.5px] tabular-nums text-muted-foreground">
           {count}
         </span>
       ) : null}

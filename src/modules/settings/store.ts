@@ -168,6 +168,9 @@ export type Preferences = {
   theme: ThemePref;
   themeId: string;
   themeVariation: string;
+  appearancePack: string;
+  surfaceProfile: string;
+  typographyProfile: string;
   backgroundKind: BackgroundKind;
   backgroundImageId: string | null;
   backgroundOpacity: number;
@@ -301,6 +304,9 @@ const KEY_TAB_STYLE = "tabStyle";
 const KEY_THEME = "theme";
 const KEY_THEME_ID = "themeId";
 const KEY_THEME_VARIATION = "themeVariation";
+const KEY_APPEARANCE_PACK = "appearancePack";
+const KEY_SURFACE_PROFILE = "surfaceProfile";
+const KEY_TYPOGRAPHY_PROFILE = "typographyProfile";
 const KEY_BG_KIND = "backgroundKind";
 const KEY_BG_IMAGE_ID = "backgroundImageId";
 const KEY_BG_OPACITY = "backgroundOpacity";
@@ -450,6 +456,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   theme: "system",
   themeId: DEFAULT_THEME_ID,
   themeVariation: DEFAULT_THEME_VARIATION,
+  appearancePack: "default",
+  surfaceProfile: "auto",
+  typographyProfile: "auto",
   backgroundKind: "none",
   backgroundImageId: null,
   backgroundOpacity: 0.5,
@@ -632,6 +641,12 @@ export async function loadPreferences(): Promise<Preferences> {
       }
       return DEFAULT_PREFERENCES.themeVariation;
     })(),
+    appearancePack:
+      get<string>(KEY_APPEARANCE_PACK) ?? DEFAULT_PREFERENCES.appearancePack,
+    surfaceProfile:
+      get<string>(KEY_SURFACE_PROFILE) ?? DEFAULT_PREFERENCES.surfaceProfile,
+    typographyProfile:
+      get<string>(KEY_TYPOGRAPHY_PROFILE) ?? DEFAULT_PREFERENCES.typographyProfile,
     backgroundKind:
       get<BackgroundKind>(KEY_BG_KIND) ?? DEFAULT_PREFERENCES.backgroundKind,
     backgroundImageId:
@@ -966,6 +981,18 @@ export async function setThemeId(value: string): Promise<void> {
 
 export async function setThemeVariation(value: string): Promise<void> {
   await writePref(KEY_THEME_VARIATION, value);
+}
+
+export async function setAppearancePack(value: string): Promise<void> {
+  await writePref(KEY_APPEARANCE_PACK, value);
+}
+
+export async function setSurfaceProfile(value: string): Promise<void> {
+  await writePref(KEY_SURFACE_PROFILE, value);
+}
+
+export async function setTypographyProfile(value: string): Promise<void> {
+  await writePref(KEY_TYPOGRAPHY_PROFILE, value);
 }
 
 
@@ -1584,6 +1611,9 @@ export const PREF_KEY_TO_STORAGE_KEY: Record<PrefKey, string> = {
   theme: KEY_THEME,
   themeId: KEY_THEME_ID,
   themeVariation: KEY_THEME_VARIATION,
+  appearancePack: KEY_APPEARANCE_PACK,
+  surfaceProfile: KEY_SURFACE_PROFILE,
+  typographyProfile: KEY_TYPOGRAPHY_PROFILE,
   backgroundKind: KEY_BG_KIND,
   backgroundImageId: KEY_BG_IMAGE_ID,
   backgroundOpacity: KEY_BG_OPACITY,

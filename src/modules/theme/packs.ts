@@ -2,6 +2,23 @@ import type { AppearancePack, SurfaceProfile, TypographyProfile } from "./types"
 
 export const BUILTIN_SURFACE_PROFILES: SurfaceProfile[] = [
   {
+    id: "default",
+    name: "Default (Theme Native)",
+    description: "Derive surface tokens directly from the active theme colors.",
+    canvas: "var(--background-base)",
+    sidebar: "var(--sidebar)",
+    toolbar: "var(--frame)",
+    pane: "var(--card)",
+    header: "var(--secondary)",
+    popover: "var(--popover)",
+    activeItem: "var(--accent)",
+    borderSubtle: "var(--border)",
+    opacity: 1.0,
+    elevationStyle: "soft",
+    borderWidth: "1px",
+    borderStyle: "solid",
+  },
+  {
     id: "fluent-solid",
     name: "Fluent Solid",
     description: "Deep Carbon solid elevation with crisp 1px borders.",
@@ -14,6 +31,9 @@ export const BUILTIN_SURFACE_PROFILES: SurfaceProfile[] = [
     activeItem: "#262932",
     borderSubtle: "rgba(255, 255, 255, 0.07)",
     opacity: 1.0,
+    elevationStyle: "soft",
+    borderWidth: "1px",
+    borderStyle: "solid",
   },
   {
     id: "fluent-acrylic",
@@ -28,10 +48,24 @@ export const BUILTIN_SURFACE_PROFILES: SurfaceProfile[] = [
     activeItem: "rgba(38, 41, 50, 0.80)",
     borderSubtle: "rgba(255, 255, 255, 0.09)",
     opacity: 0.85,
+    elevationStyle: "soft",
+    borderWidth: "1px",
+    borderStyle: "solid",
   },
 ];
 
 export const BUILTIN_TYPOGRAPHY_PROFILES: TypographyProfile[] = [
+  {
+    id: "default",
+    name: "Default (Inter)",
+    uiFontFamily: "'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    editorFontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    terminalFontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
+    uiFontSize: 13,
+    lineHeight: 1.5,
+    density: "comfortable",
+    fontSmoothing: "antialiased",
+  },
   {
     id: "fluent-compact",
     name: "Fluent Compact",
@@ -41,6 +75,7 @@ export const BUILTIN_TYPOGRAPHY_PROFILES: TypographyProfile[] = [
     uiFontSize: 12,
     lineHeight: 1.4,
     density: "compact",
+    fontSmoothing: "antialiased",
   },
   {
     id: "fluent-comfortable",
@@ -51,37 +86,88 @@ export const BUILTIN_TYPOGRAPHY_PROFILES: TypographyProfile[] = [
     uiFontSize: 13,
     lineHeight: 1.5,
     density: "comfortable",
+    fontSmoothing: "antialiased",
   },
 ];
 
 export const BUILTIN_APPEARANCE_PACKS: AppearancePack[] = [
   {
+    id: "default",
+    name: "Default (Obsidian)",
+    description: "Canonical Voktty desktop experience with Inter typography.",
+    colorThemeId: "voktty-default",
+    variationId: "default",
+    surfaceProfileId: "default",
+    typographyProfileId: "default",
+    elevationStyle: "soft",
+    pillRadius: "9999px",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    focusStyle: "ring",
+  },
+  {
     id: "fluent-dark",
     name: "Fluent Dark",
     description: "Canon Windows Fluent Dark desktop experience with Carbon surfaces.",
-    colorThemeId: "fluent-dark",
+    colorThemeId: "voktty-default",
+    variationId: "fluent",
     surfaceProfileId: "fluent-solid",
     typographyProfileId: "fluent-compact",
+    elevationStyle: "soft",
+    pillRadius: "9999px",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    focusStyle: "ring",
   },
   {
     id: "fluent-light",
     name: "Fluent Light",
     description: "Crisp Windows Fluent Light desktop experience with clean surfaces.",
-    colorThemeId: "fluent-light",
+    colorThemeId: "voktty-default",
+    variationId: "fluent",
     surfaceProfileId: "fluent-solid",
     typographyProfileId: "fluent-compact",
+    elevationStyle: "soft",
+    pillRadius: "9999px",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    focusStyle: "ring",
   },
   {
     id: "kanagawa",
     name: "Kanagawa",
     description: "Inky dark aesthetic inspired by Hokusai with Lotus light fallback.",
-    colorThemeId: "kanagawa",
+    colorThemeId: "voktty-default",
+    variationId: "kanagawa",
     surfaceProfileId: "fluent-solid",
     typographyProfileId: "fluent-compact",
+    elevationStyle: "soft",
+    pillRadius: "9999px",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    focusStyle: "ring",
   },
 ];
 
+const SURFACES_BY_ID = new Map(BUILTIN_SURFACE_PROFILES.map((s) => [s.id, s]));
+const TYPOGRAPHY_BY_ID = new Map(BUILTIN_TYPOGRAPHY_PROFILES.map((t) => [t.id, t]));
 const PACKS_BY_ID = new Map(BUILTIN_APPEARANCE_PACKS.map((p) => [p.id, p]));
+
+export function listBuiltinSurfaceProfiles(): SurfaceProfile[] {
+  return BUILTIN_SURFACE_PROFILES;
+}
+
+export function getBuiltinSurfaceProfile(id: string): SurfaceProfile | undefined {
+  return SURFACES_BY_ID.get(id);
+}
+
+export function listBuiltinTypographyProfiles(): TypographyProfile[] {
+  return BUILTIN_TYPOGRAPHY_PROFILES;
+}
+
+export function getBuiltinTypographyProfile(id: string): TypographyProfile | undefined {
+  return TYPOGRAPHY_BY_ID.get(id);
+}
 
 export function listBuiltinAppearancePacks(): AppearancePack[] {
   return BUILTIN_APPEARANCE_PACKS;

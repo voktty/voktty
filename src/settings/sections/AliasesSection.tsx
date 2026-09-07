@@ -188,7 +188,7 @@ export function AliasesSection() {
               type="button"
               onClick={() => setFilter(f)}
               className={cn(
-                "px-2.5 py-0.5 rounded-full text-[10.5px] font-medium transition-colors cursor-pointer border",
+                "px-2.5 py-0.5 rounded-pill text-[10.5px] font-medium transition-colors cursor-pointer border",
                 filter === f
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-transparent text-muted-foreground border-border/50 hover:border-border hover:text-foreground",
@@ -288,7 +288,7 @@ function AliasRow({
           </span>
           <span
             className={cn(
-              "shrink-0 rounded-full px-1.5 py-px text-[9.5px] font-medium border",
+              "shrink-0 rounded-pill px-1.5 py-px text-[9.5px] font-medium border",
               isFactory
                 ? "bg-blue-500/10 text-blue-600 border-blue-400/30 dark:text-blue-400"
                 : "bg-violet-500/10 text-violet-600 border-violet-400/30 dark:text-violet-400",

@@ -14,6 +14,9 @@ import {
   setTheme as persistTheme,
   setThemeId as persistThemeId,
   setThemeVariation as persistThemeVariation,
+  setAppearancePack as persistAppearancePack,
+  setSurfaceProfile as persistSurfaceProfile,
+  setTypographyProfile as persistTypographyProfile,
   type ThemePref,
 } from "@/modules/settings/store";
 import { applyTheme, clearTheme, isDarkColor } from "./applyTheme";
@@ -30,6 +33,11 @@ import {
 } from "./themes";
 import type { Theme } from "./types";
 import { getBackdropKind } from "./vibrancy";
+import {
+  applyStructuralTraits,
+  resolveStructuralTraits,
+  type ResolvedAppearance,
+} from "./resolveStructuralTraits";
 
 export type { Theme };
 export type ThemeModePref = ThemePref;
@@ -50,11 +58,18 @@ type ThemeProviderState = {
   resolvedMode: "dark" | "light";
   themeId: string;
   themeVariation: string;
+  appearancePack: string;
+  surfaceProfile: string;
+  typographyProfile: string;
+  resolvedAppearance: ResolvedAppearance;
   activeTheme: Theme;
   customThemes: Theme[];
   setMode: (mode: ThemePref) => void;
   setThemeId: (id: string) => void;
   setThemeVariation: (variation: string) => void;
+  setAppearancePack: (pack: string) => void;
+  setSurfaceProfile: (profile: string) => void;
+  setTypographyProfile: (profile: string) => void;
   /** Apply a theme transiently without persisting; null reverts to committed. */
   previewThemeId: (id: string | null) => void;
   previewVariation: (variation: string | null) => void;
@@ -253,6 +268,28 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     return rawResolvedMode;
   }, [isDefaultObsidian, activeTheme, rawResolvedMode]);
 
+  const appearancePackPref = usePreferencesStore((s) => s.appearancePack);
+  const surfaceProfilePref = usePreferencesStore((s) => s.surfaceProfile);
+  const typographyProfilePref = usePreferencesStore((s) => s.typographyProfile);
+
+  const resolvedAppearance = useMemo(() => {
+    return resolveStructuralTraits({
+      theme: activeTheme,
+      variation: activeVariation,
+      userOverrides: {
+        appearancePack: appearancePackPref,
+        surfaceProfile: surfaceProfilePref,
+        typographyProfile: typographyProfilePref,
+      },
+    });
+  }, [
+    activeTheme,
+    activeVariation,
+    appearancePackPref,
+    surfaceProfilePref,
+    typographyProfilePref,
+  ]);
+
   useEffect(() => {
     if (isDefaultObsidian) {
       const root = document.documentElement;
@@ -265,6 +302,10 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   useEffect(() => {
     if (isDefaultObsidian) {
       clearTheme();
+      applyStructuralTraits(
+        resolvedAppearance.traits,
+        resolvedAppearance.surfaceProfile,
+      );
       if (vibrancyActive) {
         document.documentElement.style.setProperty(
           "--vibrancy-opacity",
@@ -274,12 +315,17 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       return;
     }
     applyTheme(activeTheme, resolvedMode, vibrancyActive, vibrancyOpacity);
+    applyStructuralTraits(
+      resolvedAppearance.traits,
+      resolvedAppearance.surfaceProfile,
+    );
   }, [
     isDefaultObsidian,
     activeTheme,
     resolvedMode,
     vibrancyActive,
     vibrancyOpacity,
+    resolvedAppearance,
   ]);
 
   useEffect(() => {
@@ -323,6 +369,18 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     void persistThemeVariation(variation);
   }, []);
 
+  const setAppearancePack = useCallback((pack: string) => {
+    void persistAppearancePack(pack);
+  }, []);
+
+  const setSurfaceProfile = useCallback((profile: string) => {
+    void persistSurfaceProfile(profile);
+  }, []);
+
+  const setTypographyProfile = useCallback((profile: string) => {
+    void persistTypographyProfile(profile);
+  }, []);
+
   const previewThemeId = useCallback((id: string | null) => {
     setPreviewId(id);
   }, []);
@@ -337,11 +395,18 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolvedMode,
       themeId,
       themeVariation,
+      appearancePack: appearancePackPref,
+      surfaceProfile: surfaceProfilePref,
+      typographyProfile: typographyProfilePref,
+      resolvedAppearance,
       activeTheme,
       customThemes,
       setMode,
       setThemeId,
       setThemeVariation,
+      setAppearancePack,
+      setSurfaceProfile,
+      setTypographyProfile,
       previewThemeId,
       previewVariation,
     }),
@@ -350,11 +415,18 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolvedMode,
       themeId,
       themeVariation,
+      appearancePackPref,
+      surfaceProfilePref,
+      typographyProfilePref,
+      resolvedAppearance,
       activeTheme,
       customThemes,
       setMode,
       setThemeId,
       setThemeVariation,
+      setAppearancePack,
+      setSurfaceProfile,
+      setTypographyProfile,
       previewThemeId,
       previewVariation,
     ],

@@ -75,6 +75,16 @@ export type ThemeVariation = {
     dark?: string;
   };
   accentColor?: string;
+  surfaceProfileId?: string;
+  typographyProfileId?: string;
+  appearancePackId?: string;
+  elevationStyle?: "soft" | "bevel" | "flat";
+  pillRadius?: string;
+  borderWidth?: string;
+  borderStyle?: string;
+  focusStyle?: "ring" | "dotted" | "invert";
+  uiFontSmoothing?: "antialiased" | "subpixel-antialiased" | "none";
+  density?: "compact" | "normal" | "comfortable";
 };
 
 export type Theme = {
@@ -92,6 +102,16 @@ export type Theme = {
   };
   variations?: ThemeVariation[];
   defaultVariation?: string;
+  surfaceProfileId?: string;
+  typographyProfileId?: string;
+  appearancePackId?: string;
+  elevationStyle?: "soft" | "bevel" | "flat";
+  pillRadius?: string;
+  borderWidth?: string;
+  borderStyle?: string;
+  focusStyle?: "ring" | "dotted" | "invert";
+  uiFontSmoothing?: "antialiased" | "subpixel-antialiased" | "none";
+  density?: "compact" | "normal" | "comfortable";
 };
 
 export type SurfaceProfile = {
@@ -106,7 +126,11 @@ export type SurfaceProfile = {
   popover: string;
   activeItem: string;
   borderSubtle: string;
+  card?: string;
   opacity?: number;
+  elevationStyle?: "soft" | "bevel" | "flat";
+  borderWidth?: string;
+  borderStyle?: string;
 };
 
 export type TypographyProfile = {
@@ -117,6 +141,20 @@ export type TypographyProfile = {
   terminalFontFamily: string;
   uiFontSize: number;
   lineHeight: number;
+  density: "compact" | "normal" | "comfortable";
+  fontSmoothing?: "antialiased" | "subpixel-antialiased" | "none";
+};
+
+export type StructuralTraits = {
+  elevationStyle: "soft" | "bevel" | "flat";
+  pillRadius: string;
+  borderWidth: string;
+  borderStyle: string;
+  focusStyle: "ring" | "dotted" | "invert";
+  uiFontFamily: string;
+  uiFontSize: number;
+  uiLineHeight: number;
+  uiFontSmoothing: "antialiased" | "subpixel-antialiased" | "none";
   density: "compact" | "normal" | "comfortable";
 };
 
@@ -138,12 +176,18 @@ export type AppearancePack = {
   name: string;
   description?: string;
   colorThemeId: string;
+  variationId?: string;
   surfaceProfileId?: string;
   typographyProfileId?: string;
   fileIconThemeId?: string;
   productIconThemeId?: string;
+  elevationStyle?: "soft" | "bevel" | "flat";
+  pillRadius?: string;
+  borderWidth?: string;
+  borderStyle?: string;
+  focusStyle?: "ring" | "dotted" | "invert";
 };
 
 export const DEFAULT_THEME_ID = "voktty-default";
 export const DEFAULT_VARIATION_ID = "default";
-export const DEFAULT_PACK_ID = "fluent-dark";
+export const DEFAULT_PACK_ID = "default";
