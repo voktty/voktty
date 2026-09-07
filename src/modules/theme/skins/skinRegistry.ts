@@ -6,6 +6,10 @@ import { commanderBlueSkin } from "./commander-blue/commanderBlueSkin";
 import { phosphorCrtSkin } from "./phosphor-crt/phosphorCrtSkin";
 import { whistlerBlissSkin } from "./whistler-bliss/whistlerBlissSkin";
 import { boingWorkbenchSkin } from "./boing-workbench/boingWorkbenchSkin";
+import { cubeStepSkin } from "./cubestep/cubeStepSkin";
+import { yellowTabOsSkin } from "./yellowtab-os/yellowTabOsSkin";
+import { solarCdeSkin } from "./solar-cde/solarCdeSkin";
+import { humanity2006Skin } from "./humanity-2006/humanity2006Skin";
 
 const builtinSkins: ThemeSkin[] = [
   win31Skin,
@@ -15,6 +19,10 @@ const builtinSkins: ThemeSkin[] = [
   phosphorCrtSkin,
   whistlerBlissSkin,
   boingWorkbenchSkin,
+  cubeStepSkin,
+  yellowTabOsSkin,
+  solarCdeSkin,
+  humanity2006Skin,
 ];
 const skinRegistry = new Map<string, ThemeSkin>(
   builtinSkins.map((s) => [s.id, s]),
