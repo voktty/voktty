@@ -128,6 +128,8 @@ type Props = {
   branch?: string;
   recents?: RecentProject[];
   hideProjectPicker?: boolean;
+  hideBranchPicker?: boolean;
+  hideTopBar?: boolean;
   context?: ContextUsage;
   compactSupported?: boolean;
   quoteRequest?: QuoteRequest;
@@ -373,6 +375,8 @@ export function Composer({
   branch,
   recents = [],
   hideProjectPicker = false,
+  hideBranchPicker = false,
+  hideTopBar = false,
   context,
   compactSupported = false,
   quoteRequest,
@@ -1106,33 +1110,37 @@ export function Composer({
               Drop files to attach
             </div>
           ) : null}
-          <div className="flex min-w-0 items-center gap-2.5 px-3 pt-2.5">
-            {hideProjectPicker ? null : (
-              <CwdPicker
-                cwd={cwd}
-                recents={recents}
-                projectLogoPath={projectLogoPath}
-                enabled={enabled}
-                onCwdChange={onCwdChange}
-                onNewTerminal={onNewTerminal}
-                onClose={() => ref.current?.focus()}
-              />
-            )}
-            <BranchPicker
-              cwd={cwd}
-              branch={branch}
-              enabled={enabled && !busy}
-              onChange={onBranchChange}
-              onClose={() => ref.current?.focus()}
-            />
-            <div className="ml-auto flex shrink-0 items-center">
-              <ContextMeter
-                usage={context}
-                onCompact={compactSupported ? onCompactContext : undefined}
-                compactDisabled={busy}
-              />
+          {hideTopBar ? null : (
+            <div className="flex min-w-0 items-center gap-2.5 px-3 pt-2.5">
+              {hideProjectPicker ? null : (
+                <CwdPicker
+                  cwd={cwd}
+                  recents={recents}
+                  projectLogoPath={projectLogoPath}
+                  enabled={enabled}
+                  onCwdChange={onCwdChange}
+                  onNewTerminal={onNewTerminal}
+                  onClose={() => ref.current?.focus()}
+                />
+              )}
+              {hideBranchPicker ? null : (
+                <BranchPicker
+                  cwd={cwd}
+                  branch={branch}
+                  enabled={enabled && !busy}
+                  onChange={onBranchChange}
+                  onClose={() => ref.current?.focus()}
+                />
+              )}
+              <div className="ml-auto flex shrink-0 items-center">
+                <ContextMeter
+                  usage={context}
+                  onCompact={compactSupported ? onCompactContext : undefined}
+                  compactDisabled={busy}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {attachments.length > 0 ? (
             <div className="flex flex-wrap gap-1.5 px-3 pt-2">

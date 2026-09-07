@@ -88,13 +88,14 @@ export function markTurnInterrupted(session: Session): Session {
 export function workspaceFromResumed(
   sessions: Session[],
 ): ResumedWorkspace | null {
-  if (sessions.length === 0) return null;
-  const tabs = sessions.map((session) => newTab(session.id));
+  const eligible = sessions.filter((session) => !session.inboxAsk);
+  if (eligible.length === 0) return null;
+  const tabs = eligible.map((session) => newTab(session.id));
   return {
-    sessions,
+    sessions: eligible,
     tabs,
     activeTabId: tabs[0].id,
-    projectCwd: sessions[0].cwd,
+    projectCwd: eligible[0].cwd,
   };
 }
 
@@ -137,6 +138,7 @@ export function shouldWriteInFlightSnapshot(
 
 function canResumeAfterQuit(session: Session): boolean {
   return (
+    !session.inboxAsk &&
     session.cwd !== "~" &&
     session.blocks.some((block) => block.role === "user")
   );

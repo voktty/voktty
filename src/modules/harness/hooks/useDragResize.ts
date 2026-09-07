@@ -12,6 +12,7 @@ type Options = {
   max: () => number;
   defaultWidth: number;
   initial: number;
+  direction?: "left" | "right";
   onCommit?: (width: number) => void;
 };
 
@@ -25,6 +26,7 @@ export function useDragResize({
   max,
   defaultWidth,
   initial,
+  direction = "right",
   onCommit,
 }: Options) {
   const minRef = useRef(min);
@@ -35,6 +37,8 @@ export function useDragResize({
   onCommitRef.current = onCommit;
   const defaultRef = useRef(defaultWidth);
   defaultRef.current = defaultWidth;
+  const directionRef = useRef(direction);
+  directionRef.current = direction;
 
   const clamp = useCallback((value: number) => {
     return clampTo(value, minRef.current, maxRef.current());
@@ -81,7 +85,8 @@ export function useDragResize({
 
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return;
-      apply(clamp(startW + (ev.clientX - startX)));
+      const delta = ev.clientX - startX;
+      apply(clamp(startW + (directionRef.current === "left" ? -delta : delta)));
     };
 
     const stop = () => {

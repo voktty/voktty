@@ -1,6 +1,7 @@
 import type { ContextUsage } from "./contextUsage";
 import type { HandoffComposerCard } from "./handoff";
 import type { InboxComposerCard } from "./githubTasks";
+import type { InboxAskContext } from "./inboxAsk";
 import type { NoteCardMeta, NoteComposerCard } from "./notes";
 import type { UserQuestionPrompt } from "./userQuestion";
 import {
@@ -275,6 +276,8 @@ export type Session = {
    * In-memory; request ids do not survive restarts.
    */
   pendingQuestion?: UserQuestionPrompt;
+  /** Ephemeral Inbox discussion context. Sessions marked with this are not persisted. */
+  inboxAsk?: InboxAskContext;
 };
 
 export type PendingHarnessSwitch = {

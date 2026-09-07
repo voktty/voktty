@@ -6,9 +6,14 @@ import {
   Inbox,
   ListFilter,
   LoaderCircle,
+  MessageSquare,
   RefreshCw,
   Search,
 } from "../chrome/icons";
+import {
+  InboxDiscussionPanel,
+  type InboxSessionPortal,
+} from "./InboxDiscussionPanel";
 import {
   useEffect,
   useMemo,
@@ -250,6 +255,9 @@ type Props = {
   onClose?: () => void;
   onToggleSidebar?: () => void;
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
+  onAsk?: (item: InboxItem) => Promise<string>;
+  onAskRestart?: (item: InboxItem) => Promise<string>;
+  onAskMount?: (portal: InboxSessionPortal | null) => void;
 };
 
 export function InboxView({
@@ -260,7 +268,11 @@ export function InboxView({
   onClose,
   onToggleSidebar,
   onStart,
+  onAsk,
+  onAskRestart,
+  onAskMount,
 }: Props) {
+  const [discussionOpen, setDiscussionOpen] = useState(false);
   const sidebar = variant === "sidebar";
   const listLock = useLockOverscroll<HTMLDivElement>();
   const detailLock = useLockOverscroll<HTMLDivElement>();
@@ -684,8 +696,19 @@ export function InboxView({
             projects={projectOptions}
             revision={refresh}
             onStart={onStart}
+            onAsk={onAsk ? () => setDiscussionOpen(true) : undefined}
+            asking={discussionOpen}
           />
         </div>
+        {discussionOpen && selected && onAsk && onAskRestart && onAskMount ? (
+          <InboxDiscussionPanel
+            item={selected}
+            onClose={() => setDiscussionOpen(false)}
+            onOpen={onAsk}
+            onRestart={onAskRestart}
+            onMount={onAskMount}
+          />
+        ) : null}
       </div>
       {filtersPortal}
     </div>
@@ -733,12 +756,16 @@ function InboxDetailBody({
   projects,
   revision = 0,
   onStart,
+  onAsk,
+  asking,
 }: {
   item: InboxItem | null;
   cwd: string;
   projects: InboxProjectOption[];
   revision?: number;
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
+  onAsk?: () => void;
+  asking?: boolean;
 }) {
   if (!item) {
     return (
@@ -758,6 +785,8 @@ function InboxDetailBody({
       projects={projects}
       revision={revision}
       onStart={onStart}
+      onAsk={onAsk}
+      asking={asking}
     />
   );
 }
@@ -871,12 +900,16 @@ function InboxDetail({
   projects,
   revision,
   onStart,
+  onAsk,
+  asking,
 }: {
   item: InboxItem;
   cwd: string;
   projects: InboxProjectOption[];
   revision: number;
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
+  onAsk?: () => void;
+  asking?: boolean;
 }) {
   const linear = item.provider === "linear";
   const isPr = !linear && item.kind === "pr";
@@ -1272,6 +1305,21 @@ function InboxDetail({
                 />
               ) : null}
             </>
+          ) : null}
+          {onAsk ? (
+            <button
+              type="button"
+              aria-pressed={asking}
+              onClick={onAsk}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 h-7 text-[12px] ${
+                asking
+                  ? "bg-content/15 text-content"
+                  : "text-content/70 hover:bg-content/10 hover:text-content"
+              }`}
+            >
+              <MessageSquare className="size-3.5" strokeWidth={1.75} />
+              Ask
+            </button>
           ) : null}
           <button
             type="button"
