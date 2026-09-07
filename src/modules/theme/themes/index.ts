@@ -21,6 +21,10 @@ import { commanderBlueTheme } from "./commanderBlueTheme";
 import { phosphorCrtTheme } from "./phosphorCrtTheme";
 import { whistlerBlissTheme } from "./whistlerBlissTheme";
 import { boingWorkbenchTheme } from "./boingWorkbenchTheme";
+import { cubeStepTheme } from "./cubeStepTheme";
+import { yellowTabOsTheme } from "./yellowTabOsTheme";
+import { solarCdeTheme } from "./solarCdeTheme";
+import { humanity2006Theme } from "./humanity2006Theme";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
 import { xcode } from "./xcode";
@@ -35,6 +39,10 @@ export {
   phosphorCrtTheme,
   whistlerBlissTheme,
   boingWorkbenchTheme,
+  cubeStepTheme,
+  yellowTabOsTheme,
+  solarCdeTheme,
+  humanity2006Theme,
 };
 
 const BUILTIN: Theme[] = [
@@ -46,6 +54,10 @@ const BUILTIN: Theme[] = [
   phosphorCrtTheme,
   whistlerBlissTheme,
   boingWorkbenchTheme,
+  cubeStepTheme,
+  yellowTabOsTheme,
+  solarCdeTheme,
+  humanity2006Theme,
 ];
 
 const LEGACY_FALLBACKS: Record<string, Theme> = {
@@ -112,6 +124,10 @@ export function getBuiltinTheme(id: string): Theme | undefined {
   if (id === "phosphor-crt") return phosphorCrtTheme;
   if (id === "whistler-bliss") return whistlerBlissTheme;
   if (id === "boing-workbench") return boingWorkbenchTheme;
+  if (id === "cubestep") return cubeStepTheme;
+  if (id === "yellowtab-os") return yellowTabOsTheme;
+  if (id === "solar-cde") return solarCdeTheme;
+  if (id === "humanity-2006") return humanity2006Theme;
   if (LEGACY_FALLBACKS[id]) return LEGACY_FALLBACKS[id];
   const variation = VOKTTY_VARIATIONS.find((v) => v.id === id);
   if (variation) {
