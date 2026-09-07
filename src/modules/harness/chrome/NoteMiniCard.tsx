@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
+import { projectKey } from "../lib/paths";
 import {
   noteSourceProject,
   type NoteCardMeta,
@@ -28,10 +29,11 @@ export function NoteMiniCard({ card, onDismiss, embedded = false }: Props) {
   const [colors] = useState(loadTabGroupColors);
   const [customColors] = useState(loadTabGroupCustomColors);
   const project = noteSourceProject(card.sourceCwd);
-  const logoPath = project ? resolveTabGroupLogo(project, logos) : null;
-  const mascotName = project ? resolveTabGroupMascot(project, mascots) : null;
-  const mascotColor = project
-    ? resolveTabGroupColor(project, colors, customColors, project)
+  const key = card.sourceCwd ? projectKey(card.sourceCwd) : null;
+  const logoPath = key ? resolveTabGroupLogo(key, logos) : null;
+  const mascotName = key ? resolveTabGroupMascot(key, mascots) : null;
+  const mascotColor = key
+    ? resolveTabGroupColor(key, colors, customColors, project ?? undefined)
     : undefined;
 
   const inner = (

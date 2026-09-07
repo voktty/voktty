@@ -6,6 +6,8 @@ export const IS_WINDOWS =
   typeof navigator !== "undefined" &&
   /Win/.test(navigator.userAgent || navigator.platform);
 
+export const IS_WIN = IS_WINDOWS;
+
 export const MOD = IS_MAC ? "⌘" : "Ctrl+";
 export const ALT = IS_MAC ? "⌥" : "Alt+";
 export const SHIFT = IS_MAC ? "⇧" : "Shift+";
