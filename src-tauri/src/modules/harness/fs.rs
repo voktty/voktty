@@ -1216,13 +1216,15 @@ fn git_range_context_for(root: &Path) -> Result<GitRangeContext, String> {
 
 fn git_pr_status_for(root: &Path) -> Option<GitPr> {
     let branch = git_branch(root)?;
+    let repo = git_github_repo_for(root).ok()?;
+    let head = github_pr_head_filter(&repo, &branch)?;
     let json = gh_stdout(
         root,
         &[
             "pr",
             "list",
             "--head",
-            &branch,
+            &head,
             "--json",
             "number,title,url,state",
             "--limit",
@@ -1232,6 +1234,11 @@ fn git_pr_status_for(root: &Path) -> Option<GitPr> {
         ],
     )?;
     parse_gh_pr_list(&json)
+}
+
+fn github_pr_head_filter(repo: &str, branch: &str) -> Option<String> {
+    let (owner, _) = split_github_repo(repo).ok()?;
+    Some(format!("{owner}:{branch}"))
 }
 
 fn git_github_repo_for(root: &Path) -> Result<String, String> {
@@ -4366,6 +4373,14 @@ mod tests {
         );
         assert!(split_github_repo("monocode").is_err());
         assert!(split_github_repo("acme/web extra").is_err());
+    }
+
+    #[test]
+    fn pr_head_filter_qualifies_branch_with_repo_owner() {
+        assert_eq!(
+            github_pr_head_filter("hardbeat920/monocode", "main").as_deref(),
+            Some("hardbeat920:main")
+        );
     }
 
     #[test]
