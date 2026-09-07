@@ -120,7 +120,7 @@ type Props = {
   visible?: boolean;
 };
 
-export function AgentTranscript({
+function AgentTranscriptComponent({
   blocks,
   busy,
   cwd,
@@ -389,13 +389,17 @@ export function AgentTranscript({
             item.type === "activity" ? (
               zen ? (
                 itemIndex === initialThinkingAt ? (
-                  <InitialThinking key={item.blocks[0].id} live={!settled} />
+                  <InitialThinking
+                    key={item.blocks[0].id}
+                    live={visible && !settled}
+                  />
                 ) : (
                   <ActivityPhases
                     key={item.blocks[0].id}
                     blocks={item.blocks}
                     cwd={cwd}
                     done={
+                      !visible ||
                       settled ||
                       itemIndex < foldedAt ||
                       (answering && !workStillRunning)
@@ -467,16 +471,36 @@ export function AgentTranscript({
               {items.flatMap((item, itemIndex) => {
                 const inFold =
                   !!fold && itemIndex >= fold.start && itemIndex <= fold.end;
+                if (inFold) {
+                  if (itemIndex !== fold.start) return [];
+                  return [
+                    foldLineRow,
+                    <TurnRow key="work-details" folded={!workOpen}>
+                      {() =>
+                        items
+                          .slice(fold.start, fold.end + 1)
+                          .map((entry, offset) => (
+                            <div
+                              key={turnItemKey(entry)}
+                              className={`flow-root pb-1 last:pb-0 pl-5 zen-fold-rail ${
+                                offset === 0 ? "zen-fold-head " : ""
+                              }${
+                                fold.start + offset === fold.end
+                                  ? "zen-fold-tail"
+                                  : ""
+                              }`}
+                            >
+                              {renderItem(entry, fold.start + offset)}
+                            </div>
+                          ))
+                      }
+                    </TurnRow>,
+                  ];
+                }
                 const row = (
-                  <TurnRow
-                    key={turnItemKey(item)}
-                    folded={!workOpen && inFold}
-                    indented={inFold}
-                    railHead={inFold && itemIndex === fold?.start}
-                    railTail={inFold && itemIndex === fold?.end}
-                  >
+                  <div key={turnItemKey(item)} className="flow-root pb-1">
                     {renderItem(item, itemIndex)}
-                  </TurnRow>
+                  </div>
                 );
                 if (itemIndex !== foldLineAt) return row;
                 return [foldLineRow, row];
@@ -520,6 +544,12 @@ export function AgentTranscript({
     </div>
   );
 }
+
+// Keep hidden panes' local state, and catch up with current props on activation.
+export const AgentTranscript = memo(
+  AgentTranscriptComponent,
+  (previous, next) => previous.visible === false && next.visible === false,
+);
 
 /** Placeholder for private reasoning before the first assistant text arrives. */
 function InitialThinking({ live }: { live: boolean }) {
@@ -877,21 +907,46 @@ function UserMessageBlock({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
+  const [singleLine, setSingleLine] = useState(false);
   const textRef = useRef<HTMLPreElement>(null);
   const card = block.secondOpinion;
   const note = block.noteCard;
   const text = card && card.kind !== "handoff" ? "" : block.text;
   const chat = layout === "chat";
+  const textOnly =
+    Boolean(text) && !block.attachments?.length && !card && !note;
+  const roundsSingleLine = chat && textOnly;
 
   useLayoutEffect(() => {
     const el = textRef.current;
     if (!el || !text) {
       setOverflows(false);
+      setSingleLine(false);
       return;
     }
-    if (expanded) return;
-    setOverflows(el.scrollHeight > el.clientHeight + 1);
-  }, [text, expanded]);
+
+    let lineHeight = 0;
+    const measure = () => {
+      if (!expanded) {
+        setOverflows(el.scrollHeight > el.clientHeight + 1);
+      }
+      if (!roundsSingleLine) {
+        setSingleLine(false);
+        return;
+      }
+      if (!lineHeight) {
+        lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight);
+      }
+      setSingleLine(
+        Number.isFinite(lineHeight) && el.scrollHeight <= lineHeight + 1,
+      );
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text, roundsSingleLine, expanded]);
 
   const toggle = () => {
     if (overflows) setExpanded((value) => !value);
@@ -902,8 +957,10 @@ function UserMessageBlock({
       className={chat ? "flex justify-end pt-2 pr-4 pb-4 pl-14" : "p-1.5 pb-3"}
     >
       <div
-        className={`min-w-0 rounded-[14px] border border-zinc-700/60 bg-[#222228] px-4 py-3 shadow-lg shadow-black/30 transition-colors hover:border-zinc-600/80 ${
-          chat ? "w-fit max-w-xl" : "w-full"
+        className={`min-w-0 border border-zinc-700/60 bg-[#222228] px-4 shadow-lg shadow-black/30 transition-colors hover:border-zinc-600/80 ${
+          chat
+            ? `w-fit max-w-xl ${singleLine ? "rounded-full py-2" : "rounded-[14px] py-3"}`
+            : "w-full rounded-[14px] py-3"
         }`}
         style={{ zIndex: stickyIndex }}
         onClick={overflows ? toggle : undefined}
@@ -1038,34 +1095,47 @@ function ActivityGroup({
  */
 function TurnRow({
   folded,
-  indented = false,
-  railHead = false,
-  railTail = false,
   children,
 }: {
   folded: boolean;
-  /** Work that hangs off the fold line, indented to sit under its title. */
-  indented?: boolean;
-  /** The first row under the fold line: where the connector curves in. */
-  railHead?: boolean;
-  /** The last row the fold holds: where the spine leaves off. */
-  railTail?: boolean;
-  children: ReactNode;
+  children: ReactNode | (() => ReactNode);
 }) {
+  const [foldState, setFoldState] = useState<
+    "open" | "opening" | "closing" | "closed"
+  >(folded ? "closed" : "open");
+
+  useEffect(() => {
+    setFoldState((current) => {
+      if (folded) return current === "open" ? "closing" : current;
+      return current === "closed" ? "opening" : current;
+    });
+  }, [folded]);
+
+  useEffect(() => {
+    if (foldState !== "opening" && foldState !== "closing") return;
+    // Hidden tabs and reduced-motion styles may never fire animationend.
+    const timer = window.setTimeout(() => {
+      setFoldState(folded ? "closed" : "open");
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [foldState, folded]);
+
+  if (folded && foldState === "closed") return null;
+
   return (
-    // `inert` keeps folded work out of tab order and off the screen reader
-    // while it is only a height away from view.
-    <div className="zen-fold-item" data-folded={folded} inert={folded}>
+    // `inert` keeps folded work out of tab order and off the screen reader.
+    <div
+      className="zen-fold-item"
+      data-folded={folded}
+      inert={folded}
+      onAnimationEnd={(event) => {
+        if (event.target !== event.currentTarget) return;
+        setFoldState(folded ? "closed" : "open");
+      }}
+    >
       <div>
-        {/* 20px puts the row under the fold line's title rather than its
-         * mark, so opened work reads as hanging off that line instead of
-         * running on from the answer below it. */}
-        <div
-          className={`pb-1 ${indented ? "pl-5 zen-fold-rail" : ""} ${
-            railHead ? "zen-fold-head" : ""
-          } ${railTail ? "zen-fold-tail" : ""}`}
-        >
-          {children}
+        <div className="pb-1">
+          {typeof children === "function" ? children() : children}
         </div>
       </div>
     </div>
@@ -1399,43 +1469,45 @@ function ActivityPhaseGroup({
         {label}
       </button>
       <div className="zen-phase-body" data-open={open}>
-        <div
-          ref={setLiveScroller}
-          className={active || !open ? "zen-phase-live" : undefined}
-        >
-          <div className="flex min-w-0 flex-col">
-            {headline ? (
-              <div className="zen-phase-step py-1">
-                <AgentMarkdown
-                  className={
-                    headline.role === "reasoning"
-                      ? "agent-reasoning"
-                      : undefined
-                  }
-                  text={headline.text}
-                  cwd={cwd}
-                  onOpenFile={onOpenFile}
-                />
-              </div>
-            ) : null}
-            {phase.steps.map((block) => (
-              <div
-                key={block.id}
-                className={`zen-phase-step${active ? " zen-step-in" : ""}`}
-              >
-                <ActivityRow
-                  block={block}
-                  cwd={cwd}
-                  variant="phase"
-                  live={active}
-                  onApproval={onApproval}
-                  onOpenFile={onOpenFile}
-                  onOpenDiff={onOpenDiff}
-                />
-              </div>
-            ))}
+        {open ? (
+          <div
+            ref={setLiveScroller}
+            className={active ? "zen-phase-live" : undefined}
+          >
+            <div className="flex min-w-0 flex-col">
+              {headline ? (
+                <div className="zen-phase-step py-1">
+                  <AgentMarkdown
+                    className={
+                      headline.role === "reasoning"
+                        ? "agent-reasoning"
+                        : undefined
+                    }
+                    text={headline.text}
+                    cwd={cwd}
+                    onOpenFile={onOpenFile}
+                  />
+                </div>
+              ) : null}
+              {phase.steps.map((block) => (
+                <div
+                  key={block.id}
+                  className={`zen-phase-step${active ? " zen-step-in" : ""}`}
+                >
+                  <ActivityRow
+                    block={block}
+                    cwd={cwd}
+                    variant="phase"
+                    live={active}
+                    onApproval={onApproval}
+                    onOpenFile={onOpenFile}
+                    onOpenDiff={onOpenDiff}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </div>
   );
