@@ -148,6 +148,21 @@ export function useSpacesBoot({
           restored.push(...hydrateTabs(st.tabs, space.id, allocId, space.env));
         }
 
+        for (const space of spaces) {
+          if (space.env.kind === "ssh") {
+            space.env = LOCAL_WORKSPACE;
+            space.root = launchCwd ?? home ?? null;
+          }
+          const spaceTabs = restored.filter((t) => t.spaceId === space.id);
+          if (spaceTabs.length === 0) {
+            const root =
+              space.root ??
+              (space.id === DEFAULT_SPACE_ID ? (launchCwd ?? home) : null);
+            const freshTab = freshTerminalTab(space.id, root, allocId);
+            restored.push(freshTab);
+          }
+        }
+
         const active =
           activeId && spaces.some((s) => s.id === activeId)
             ? activeId
