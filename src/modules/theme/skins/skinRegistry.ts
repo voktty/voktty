@@ -14,6 +14,12 @@ import { pocket89Skin } from "./pocket-89/pocket89Skin";
 import { pilotPdaSkin } from "./pilot-pda/pilotPdaSkin";
 import { clickWheelPodSkin } from "./clickwheel-pod/clickWheelPodSkin";
 import { station94Skin } from "./station-94/station94Skin";
+import { audioAmpClassicSkin } from "./audioamp-classic/audioAmpClassicSkin";
+import { cyberCafe99Skin } from "./cybercafe-99/cyberCafe99Skin";
+import { tigerAquaSkin } from "./tiger-aqua/tigerAquaSkin";
+import { mediaStation9Skin } from "./media-station-9/mediaStation9Skin";
+import { instantChat7Skin } from "./instant-chat-7/instantChat7Skin";
+import { bbsDialupSkin } from "./bbs-dialup/bbsDialupSkin";
 
 const builtinSkins: ThemeSkin[] = [
   win31Skin,
@@ -31,6 +37,12 @@ const builtinSkins: ThemeSkin[] = [
   pilotPdaSkin,
   clickWheelPodSkin,
   station94Skin,
+  audioAmpClassicSkin,
+  cyberCafe99Skin,
+  tigerAquaSkin,
+  mediaStation9Skin,
+  instantChat7Skin,
+  bbsDialupSkin,
 ];
 const skinRegistry = new Map<string, ThemeSkin>(
   builtinSkins.map((s) => [s.id, s]),
