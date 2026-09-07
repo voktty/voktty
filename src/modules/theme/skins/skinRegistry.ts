@@ -10,6 +10,10 @@ import { cubeStepSkin } from "./cubestep/cubeStepSkin";
 import { yellowTabOsSkin } from "./yellowtab-os/yellowTabOsSkin";
 import { solarCdeSkin } from "./solar-cde/solarCdeSkin";
 import { humanity2006Skin } from "./humanity-2006/humanity2006Skin";
+import { pocket89Skin } from "./pocket-89/pocket89Skin";
+import { pilotPdaSkin } from "./pilot-pda/pilotPdaSkin";
+import { clickWheelPodSkin } from "./clickwheel-pod/clickWheelPodSkin";
+import { station94Skin } from "./station-94/station94Skin";
 
 const builtinSkins: ThemeSkin[] = [
   win31Skin,
@@ -23,6 +27,10 @@ const builtinSkins: ThemeSkin[] = [
   yellowTabOsSkin,
   solarCdeSkin,
   humanity2006Skin,
+  pocket89Skin,
+  pilotPdaSkin,
+  clickWheelPodSkin,
+  station94Skin,
 ];
 const skinRegistry = new Map<string, ThemeSkin>(
   builtinSkins.map((s) => [s.id, s]),

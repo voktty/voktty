@@ -25,6 +25,10 @@ import { cubeStepTheme } from "./cubeStepTheme";
 import { yellowTabOsTheme } from "./yellowTabOsTheme";
 import { solarCdeTheme } from "./solarCdeTheme";
 import { humanity2006Theme } from "./humanity2006Theme";
+import { pocket89Theme } from "./pocket89Theme";
+import { pilotPdaTheme } from "./pilotPdaTheme";
+import { clickWheelPodTheme } from "./clickWheelPodTheme";
+import { station94Theme } from "./station94Theme";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
 import { xcode } from "./xcode";
@@ -43,6 +47,10 @@ export {
   yellowTabOsTheme,
   solarCdeTheme,
   humanity2006Theme,
+  pocket89Theme,
+  pilotPdaTheme,
+  clickWheelPodTheme,
+  station94Theme,
 };
 
 const BUILTIN: Theme[] = [
@@ -58,6 +66,10 @@ const BUILTIN: Theme[] = [
   yellowTabOsTheme,
   solarCdeTheme,
   humanity2006Theme,
+  pocket89Theme,
+  pilotPdaTheme,
+  clickWheelPodTheme,
+  station94Theme,
 ];
 
 const LEGACY_FALLBACKS: Record<string, Theme> = {
@@ -128,6 +140,10 @@ export function getBuiltinTheme(id: string): Theme | undefined {
   if (id === "yellowtab-os") return yellowTabOsTheme;
   if (id === "solar-cde") return solarCdeTheme;
   if (id === "humanity-2006") return humanity2006Theme;
+  if (id === "pocket-89") return pocket89Theme;
+  if (id === "pilot-pda") return pilotPdaTheme;
+  if (id === "clickwheel-pod") return clickWheelPodTheme;
+  if (id === "station-94") return station94Theme;
   if (LEGACY_FALLBACKS[id]) return LEGACY_FALLBACKS[id];
   const variation = VOKTTY_VARIATIONS.find((v) => v.id === id);
   if (variation) {
