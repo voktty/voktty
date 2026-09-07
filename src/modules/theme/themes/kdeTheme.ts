@@ -2,9 +2,9 @@ import type { Theme } from "../types";
 
 export const kdeTheme: Theme = {
   id: "kde",
-  name: "KDE Classic",
-  author: "KDE Community / Voktty Team",
-  description: "Classic KDE 2/3 desktop with blue gradient titlebar and beveled Qt controls",
+  name: "K-Desktop Classic",
+  author: "Voktty Team",
+  description: "Classic K-Desktop 2/3 with blue gradient titlebar and beveled Qt controls",
   skinId: "kde",
   windowCorners: "round",
   elevationStyle: "bevel",

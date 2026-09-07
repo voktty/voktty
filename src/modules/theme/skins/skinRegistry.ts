@@ -2,8 +2,20 @@ import type { ThemeSkin } from "../types";
 import { win31Skin } from "./win31/win31Skin";
 import { mac1Skin } from "./mac1/mac1Skin";
 import { kdeSkin } from "./kde/kdeSkin";
+import { commanderBlueSkin } from "./commander-blue/commanderBlueSkin";
+import { phosphorCrtSkin } from "./phosphor-crt/phosphorCrtSkin";
+import { whistlerBlissSkin } from "./whistler-bliss/whistlerBlissSkin";
+import { boingWorkbenchSkin } from "./boing-workbench/boingWorkbenchSkin";
 
-const builtinSkins: ThemeSkin[] = [win31Skin, mac1Skin, kdeSkin];
+const builtinSkins: ThemeSkin[] = [
+  win31Skin,
+  mac1Skin,
+  kdeSkin,
+  commanderBlueSkin,
+  phosphorCrtSkin,
+  whistlerBlissSkin,
+  boingWorkbenchSkin,
+];
 const skinRegistry = new Map<string, ThemeSkin>(
   builtinSkins.map((s) => [s.id, s]),
 );
