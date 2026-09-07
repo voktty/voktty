@@ -1408,6 +1408,7 @@ export function HarnessApp({
     appendTab(tab, cwd);
     setActiveTabId(tab.id);
     setComposerFocused(true);
+    return session.id;
   }, [
     active?.cwd,
     appendTab,
@@ -4628,6 +4629,23 @@ export function HarnessApp({
     [history, projectBranches, sessions, sidebarCwd],
   );
 
+  const openProjectSessions = useMemo(
+    () =>
+      sessions
+        .filter((session) => sameProjectPath(session.cwd, sidebarCwd))
+        .map((session) =>
+          summaryFromSession(session, {
+            ...(projectBranches?.current
+              ? { branch: projectBranches.current }
+              : {}),
+            ...(sidebarCwd && sidebarCwd !== "~"
+              ? { repo: projectName(sidebarCwd) }
+              : {}),
+          }),
+        ),
+    [projectBranches, sessions, sidebarCwd],
+  );
+
   const onToggleSidebar = useCallback(() => {
     if (deckLayout) {
       setProjectRailOpen((open: any) => {
@@ -5253,7 +5271,8 @@ export function HarnessApp({
         onSelectProject={deckLayout ? onSelectProject : undefined}
         onOpenProject={deckLayout ? pickProject : undefined}
         onRemoveProject={deckLayout ? onRemoveProject : undefined}
-        onNew={deckLayout ? onNew : undefined}
+        onNew={onNew}
+        openSessions={openProjectSessions}
         onNewTerminal={deckLayout ? onNewTerminal : undefined}
         onSearch={onOpenSearch}
         onOpenInbox={onOpenInbox}
