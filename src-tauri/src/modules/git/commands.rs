@@ -461,8 +461,14 @@ pub async fn git_stash_save(
 ) -> Result<(), String> {
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
-        operations::stash_save(r, &repo_root, message.as_deref(), include_untracked, &workspace)
-            .map_err(Into::into)
+        operations::stash_save(
+            r,
+            &repo_root,
+            message.as_deref(),
+            include_untracked,
+            &workspace,
+        )
+        .map_err(Into::into)
     })
     .await
 }
@@ -641,8 +647,7 @@ pub async fn git_compare_branches(
 ) -> Result<GitBranchComparison, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
-        operations::compare_branches(r, &repo_root, &base, &compare, &workspace)
-            .map_err(Into::into)
+        operations::compare_branches(r, &repo_root, &base, &compare, &workspace).map_err(Into::into)
     })
     .await
 }

@@ -21,8 +21,10 @@ const HTTP_TIMEOUT: Duration = Duration::from_secs(8);
 // flow can complete the Google OAuth handshake without a server component.
 // `~/.gemini/oauth_creds.json` does not include it, so it must be supplied
 // here (overridable via GEMINI_OAUTH_CLIENT_ID/SECRET) or refresh never runs.
-const GEMINI_OAUTH_CLIENT_ID: &str =
-    concat!("681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j", ".apps.googleusercontent.com");
+const GEMINI_OAUTH_CLIENT_ID: &str = concat!(
+    "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j",
+    ".apps.googleusercontent.com"
+);
 const GEMINI_OAUTH_CLIENT_SECRET: &str = concat!("GOCSPX-", "4uHgMPm-1o7Sk-geV6Cu5clXFsxl");
 
 #[derive(Deserialize, Debug, Clone)]

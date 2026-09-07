@@ -846,8 +846,14 @@ fn stash_save_lists_entry_and_restores_worktree() {
     fx.run_git(&["commit", "-q", "-m", "seed"]);
     fx.write_file("a.txt", "2\n");
 
-    operations::stash_save(&fx.registry, &fx.repo_str(), Some("wip"), false, &fx.workspace)
-        .expect("stash_save");
+    operations::stash_save(
+        &fx.registry,
+        &fx.repo_str(),
+        Some("wip"),
+        false,
+        &fx.workspace,
+    )
+    .expect("stash_save");
 
     let content = std::fs::read_to_string(fx.repo_path.join("a.txt")).unwrap();
     assert_eq!(content, "1\n", "stash should restore the committed content");
@@ -949,8 +955,15 @@ fn tag_create_lightweight_points_at_commit() {
     let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
     let head = entries[0].sha.clone();
 
-    operations::tag_create(&fx.registry, &fx.repo_str(), "v1", None, None, &fx.workspace)
-        .expect("tag_create");
+    operations::tag_create(
+        &fx.registry,
+        &fx.repo_str(),
+        "v1",
+        None,
+        None,
+        &fx.workspace,
+    )
+    .expect("tag_create");
 
     let tags = operations::tag_list(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
     assert_eq!(tags.len(), 1);
@@ -986,7 +999,10 @@ fn tag_create_annotated_has_message_and_peeled_sha() {
     assert_eq!(tags.len(), 1);
     assert!(tags[0].annotated);
     assert_eq!(tags[0].message.as_deref(), Some("release notes"));
-    assert_eq!(tags[0].sha, head, "sha must be the peeled commit, not the tag object");
+    assert_eq!(
+        tags[0].sha, head,
+        "sha must be the peeled commit, not the tag object"
+    );
 }
 
 #[test]
@@ -998,7 +1014,15 @@ fn tag_delete_removes_it() {
     fx.write_file("a.txt", "1\n");
     fx.run_git(&["add", "a.txt"]);
     fx.run_git(&["commit", "-q", "-m", "seed"]);
-    operations::tag_create(&fx.registry, &fx.repo_str(), "v1", None, None, &fx.workspace).unwrap();
+    operations::tag_create(
+        &fx.registry,
+        &fx.repo_str(),
+        "v1",
+        None,
+        None,
+        &fx.workspace,
+    )
+    .unwrap();
 
     operations::tag_delete(&fx.registry, &fx.repo_str(), "v1", &fx.workspace).expect("tag_delete");
 
@@ -1016,7 +1040,14 @@ fn tag_create_rejects_unsafe_names() {
     fx.run_git(&["add", "a.txt"]);
     fx.run_git(&["commit", "-q", "-m", "seed"]);
 
-    match operations::tag_create(&fx.registry, &fx.repo_str(), "-x", None, None, &fx.workspace) {
+    match operations::tag_create(
+        &fx.registry,
+        &fx.repo_str(),
+        "-x",
+        None,
+        None,
+        &fx.workspace,
+    ) {
         Err(GitError::CommandFailed { .. }) => {}
         Err(other) => panic!("expected CommandFailed, got {other}"),
         Ok(_) => panic!("expected error for unsafe tag name"),
@@ -1038,21 +1069,21 @@ fn blame_attributes_each_line_to_the_commit_that_introduced_it() {
     fx.write_file("a.txt", "line one\nline two\n");
     fx.run_git(&["add", "a.txt"]);
     fx.run_git(&["commit", "-q", "-m", "first commit"]);
-    let first_sha =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
-            .sha
-            .clone();
+    let first_sha = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()
+        [0]
+    .sha
+    .clone();
 
     fx.write_file("a.txt", "line one\nline two\nline three\n");
     fx.run_git(&["add", "a.txt"]);
     fx.run_git(&["commit", "-q", "-m", "second commit"]);
-    let second_sha =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
-            .sha
-            .clone();
+    let second_sha = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace)
+        .unwrap()[0]
+        .sha
+        .clone();
 
-    let lines = operations::blame(&fx.registry, &fx.repo_str(), "a.txt", &fx.workspace)
-        .expect("blame");
+    let lines =
+        operations::blame(&fx.registry, &fx.repo_str(), "a.txt", &fx.workspace).expect("blame");
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0].sha, first_sha);
     assert_eq!(lines[0].content, "line one");
@@ -1074,9 +1105,13 @@ fn blame_rejects_path_outside_the_repository() {
     fx.run_git(&["add", "a.txt"]);
     fx.run_git(&["commit", "-q", "-m", "seed"]);
 
-    assert!(
-        operations::blame(&fx.registry, &fx.repo_str(), "../outside.txt", &fx.workspace).is_err()
-    );
+    assert!(operations::blame(
+        &fx.registry,
+        &fx.repo_str(),
+        "../outside.txt",
+        &fx.workspace
+    )
+    .is_err());
 }
 
 #[test]
@@ -1093,23 +1128,28 @@ fn compare_branches_reports_ahead_behind_and_files_relative_to_merge_base() {
     fx.write_file("feature.txt", "feature\n");
     fx.run_git(&["add", "feature.txt"]);
     fx.run_git(&["commit", "-q", "-m", "add feature file"]);
-    let feature_sha =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
-            .sha
-            .clone();
+    let feature_sha = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace)
+        .unwrap()[0]
+        .sha
+        .clone();
 
     fx.run_git(&["checkout", "-q", "main"]);
     fx.write_file("main-only.txt", "main only\n");
     fx.run_git(&["add", "main-only.txt"]);
     fx.run_git(&["commit", "-q", "-m", "advance main"]);
-    let main_sha =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()[0]
-            .sha
-            .clone();
+    let main_sha = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap()
+        [0]
+    .sha
+    .clone();
 
-    let comparison =
-        operations::compare_branches(&fx.registry, &fx.repo_str(), "main", "feature", &fx.workspace)
-            .expect("compare_branches");
+    let comparison = operations::compare_branches(
+        &fx.registry,
+        &fx.repo_str(),
+        "main",
+        "feature",
+        &fx.workspace,
+    )
+    .expect("compare_branches");
 
     assert_eq!(comparison.ahead.len(), 1);
     assert_eq!(comparison.ahead[0].sha, feature_sha);
@@ -1231,14 +1271,8 @@ fn cherry_pick_commit_applies_the_change_onto_the_current_branch() {
     .sha
     .clone();
 
-    operations::branch_from_commit(
-        &fx.registry,
-        &fx.repo_str(),
-        "target",
-        &base,
-        &fx.workspace,
-    )
-    .unwrap();
+    operations::branch_from_commit(&fx.registry, &fx.repo_str(), "target", &base, &fx.workspace)
+        .unwrap();
     assert!(!fx.repo_path.join("b.txt").exists());
 
     // Diverge target from base so the cherry-picked commit gets a different

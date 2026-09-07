@@ -389,7 +389,12 @@ pub fn stage_contents(
         });
     }
     let resolved = pathspec_from_input(&repo_root.local_path, relative_path)?;
-    let hash = git_hash_object_stdin(&repo_root.workspace, &repo_root.git_path, &resolved, contents)?;
+    let hash = git_hash_object_stdin(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        &resolved,
+        contents,
+    )?;
     let mode = git_index_mode(&repo_root.workspace, &repo_root.git_path, &resolved)
         .unwrap_or_else(|| "100644".to_string());
     let output = run_git(
@@ -409,8 +414,7 @@ pub fn stage_contents(
 }
 
 fn git_index_mode(workspace: &WorkspaceEnv, cwd: &str, relative: &str) -> Option<String> {
-    let lines =
-        git_stdout_lines(workspace, cwd, ["ls-files", "--stage", "--", relative]).ok()?;
+    let lines = git_stdout_lines(workspace, cwd, ["ls-files", "--stage", "--", relative]).ok()?;
     let mode = lines.first()?.split_whitespace().next()?;
     if mode.len() == 6 && mode.bytes().all(|b| b.is_ascii_digit()) {
         Some(mode.to_string())
@@ -1709,7 +1713,10 @@ pub fn stash_drop(
 }
 
 fn tag_name_is_safe(name: &str) -> bool {
-    !name.is_empty() && !name.starts_with('-') && !name.contains("..") && !name.contains(char::is_whitespace)
+    !name.is_empty()
+        && !name.starts_with('-')
+        && !name.contains("..")
+        && !name.contains(char::is_whitespace)
 }
 
 // `for-each-ref`/`tag --format` use their own mini-language (`%(field)`),
