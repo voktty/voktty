@@ -522,7 +522,7 @@ export function ThemesSection() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="auto" className="text-[12px]">
-                Auto (Follow pack/theme)
+                {t("settings.themes.autoFollow")}
               </SelectItem>
               <SelectSeparator />
               {listBuiltinTypographyProfiles().map((tp) => (
@@ -559,7 +559,7 @@ export function ThemesSection() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="auto" className="text-[12px]">
-                Auto (Follow pack/theme)
+                {t("settings.themes.autoFollow")}
               </SelectItem>
               <SelectSeparator />
               {listBuiltinSurfaceProfiles().map((sp) => (

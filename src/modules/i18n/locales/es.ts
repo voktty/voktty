@@ -431,6 +431,7 @@ export const es: TranslationSchema = {
         title: "Pack de apariencia",
         desc: "Combinacion preconfigurada de paleta, relieve de superficie y tipografia.",
       },
+      autoFollow: "Automático (seguir pack/tema)",
       typography: {
         title: "Perfil tipografico",
         desc: "Familia de fuentes, tamano y densidad de la interfaz.",
