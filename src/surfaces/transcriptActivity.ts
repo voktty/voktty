@@ -373,9 +373,11 @@ export function toolCategory(block: Block): ActivityWorkKind {
 export function buildActivityPhases(blocks: Block[]): ActivityPhase[] {
   const phases: ActivityPhase[] = [];
   let current: ActivityPhase | undefined;
+  const counts = new Map<ActivityWorkKind, number>();
 
   const open = (kind: ActivityPhaseKind, headline?: Block) => {
     current = { id: headline?.id ?? "", kind, headline, steps: [] };
+    counts.clear();
     phases.push(current);
     return current;
   };
@@ -408,8 +410,13 @@ export function buildActivityPhases(blocks: Block[]): ActivityPhase[] {
     }
     if (!current) current = open(toolCategory(block));
     current.steps.push(block);
-    // The icon follows whatever the group did most of.
-    current.kind = dominantWorkKind(current.steps) ?? current.kind;
+    // Count each call once. Rescanning the growing group here makes long
+    // tool runs quadratic, including work hidden behind a transcript fold.
+    if (isToolBlock(block)) {
+      const kind = toolCategory(block);
+      counts.set(kind, (counts.get(kind) ?? 0) + 1);
+      current.kind = dominantCountedWorkKind(counts) ?? current.kind;
+    }
     if (!current.id) current.id = block.id;
   }
 
@@ -423,6 +430,12 @@ function dominantWorkKind(steps: Block[]): ActivityWorkKind | undefined {
     const kind = toolCategory(block);
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
+  return dominantCountedWorkKind(counts);
+}
+
+function dominantCountedWorkKind(
+  counts: ReadonlyMap<ActivityWorkKind, number>,
+): ActivityWorkKind | undefined {
   let best: ActivityWorkKind | undefined;
   for (const kind of WORK_KIND_ORDER) {
     const count = counts.get(kind) ?? 0;
