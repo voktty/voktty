@@ -78,6 +78,8 @@ export type ThemeVariation = {
   surfaceProfileId?: string;
   typographyProfileId?: string;
   appearancePackId?: string;
+  skinId?: string;
+  windowCorners?: "round" | "square" | "default";
   elevationStyle?: "soft" | "bevel" | "flat";
   pillRadius?: string;
   borderWidth?: string;
@@ -105,6 +107,8 @@ export type Theme = {
   surfaceProfileId?: string;
   typographyProfileId?: string;
   appearancePackId?: string;
+  skinId?: string;
+  windowCorners?: "round" | "square" | "default";
   elevationStyle?: "soft" | "bevel" | "flat";
   pillRadius?: string;
   borderWidth?: string;
@@ -156,6 +160,26 @@ export type StructuralTraits = {
   uiLineHeight: number;
   uiFontSmoothing: "antialiased" | "subpixel-antialiased" | "none";
   density: "compact" | "normal" | "comfortable";
+  windowCorners?: "round" | "square" | "default";
+};
+
+export type SkinFontDefinition = {
+  family: string;
+  src: string;
+  weight?: string;
+  style?: string;
+  display?: "auto" | "block" | "swap" | "fallback" | "optional";
+};
+
+export type ThemeSkin = {
+  id: string;
+  name: string;
+  description?: string;
+  author?: string;
+  css: string;
+  fonts?: SkinFontDefinition[];
+  windowCorners?: "round" | "square" | "default";
+  structuralTraits?: Partial<StructuralTraits>;
 };
 
 export type FileIconTheme = {
@@ -177,6 +201,8 @@ export type AppearancePack = {
   description?: string;
   colorThemeId: string;
   variationId?: string;
+  skinId?: string;
+  windowCorners?: "round" | "square" | "default";
   surfaceProfileId?: string;
   typographyProfileId?: string;
   fileIconThemeId?: string;

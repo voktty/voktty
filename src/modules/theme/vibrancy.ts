@@ -64,3 +64,16 @@ async function run(
     applied = null;
   }
 }
+
+let currentCornerSquare: boolean | null = null;
+
+export async function setWindowCornerPreference(square: boolean): Promise<void> {
+  if (currentCornerSquare === square) return;
+  try {
+    await invoke("window_set_corner_preference", { square });
+    currentCornerSquare = square;
+  } catch {
+    // Graceful fallback when outside Tauri or unsupported platform
+  }
+}
+

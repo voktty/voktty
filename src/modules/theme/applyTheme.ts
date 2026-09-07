@@ -1,4 +1,7 @@
 import type { Theme, ThemeColors, ThemeMode, TerminalPalette } from "./types";
+import { applySkin, clearSkin } from "./skins/skinLoader";
+import { getSkin } from "./skins/skinRegistry";
+import { setWindowCornerPreference } from "./vibrancy";
 
 const COLOR_VAR: Record<keyof ThemeColors, string> = {
   background: "--background",
@@ -153,6 +156,23 @@ export function applyTheme(
   vibrancyOpacity = 0.85,
 ): void {
   const root = document.documentElement;
+
+  if (theme.skinId) {
+    root.setAttribute("data-theme-skin", theme.skinId);
+    const skin = getSkin(theme.skinId);
+    if (skin) {
+      applySkin(skin);
+    }
+  } else {
+    root.removeAttribute("data-theme-skin");
+    clearSkin();
+  }
+
+  const skin = theme.skinId ? getSkin(theme.skinId) : undefined;
+  const isSquare =
+    theme.windowCorners === "square" || skin?.windowCorners === "square";
+  void setWindowCornerPreference(isSquare);
+
   const variant =
     theme.variants[mode] ?? theme.variants.dark ?? theme.variants.light;
   if (
@@ -185,8 +205,11 @@ export function applyTheme(
 }
 
 export function clearTheme(): void {
-  if (lastAppliedKey === null) return;
   const root = document.documentElement;
+  root.removeAttribute("data-theme-skin");
+  clearSkin();
+  void setWindowCornerPreference(false);
+  if (lastAppliedKey === null) return;
   for (const v of ALL_VARS) root.style.removeProperty(v);
   lastAppliedKey = null;
 }

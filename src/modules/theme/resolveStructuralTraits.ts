@@ -3,6 +3,7 @@ import {
   getBuiltinSurfaceProfile,
   getBuiltinTypographyProfile,
 } from "./packs";
+import { getSkin } from "./skins/skinRegistry";
 import type {
   AppearancePack,
   StructuralTraits,
@@ -79,8 +80,27 @@ export function resolveStructuralTraits(
   if (pack?.borderWidth) traits.borderWidth = pack.borderWidth;
   if (pack?.borderStyle) traits.borderStyle = pack.borderStyle;
   if (pack?.focusStyle) traits.focusStyle = pack.focusStyle;
+  if (pack?.windowCorners) traits.windowCorners = pack.windowCorners;
 
-  // 3. Theme & variation overrides
+  // 3. Skin structural traits (if theme/variation specifies a skin)
+  const skinId = input.variation?.skinId ?? input.theme?.skinId ?? pack?.skinId;
+  const skin = skinId ? getSkin(skinId) : undefined;
+  if (skin?.structuralTraits) {
+    const st = skin.structuralTraits;
+    if (st.elevationStyle) traits.elevationStyle = st.elevationStyle;
+    if (st.pillRadius) traits.pillRadius = st.pillRadius;
+    if (st.borderWidth) traits.borderWidth = st.borderWidth;
+    if (st.borderStyle) traits.borderStyle = st.borderStyle;
+    if (st.focusStyle) traits.focusStyle = st.focusStyle;
+    if (st.uiFontFamily) traits.uiFontFamily = st.uiFontFamily;
+    if (st.uiFontSize) traits.uiFontSize = st.uiFontSize;
+    if (st.uiLineHeight) traits.uiLineHeight = st.uiLineHeight;
+    if (st.uiFontSmoothing) traits.uiFontSmoothing = st.uiFontSmoothing;
+    if (st.density) traits.density = st.density;
+  }
+  if (skin?.windowCorners) traits.windowCorners = skin.windowCorners;
+
+  // 4. Theme & variation overrides
   const themeTypoId =
     input.variation?.typographyProfileId ?? input.theme?.typographyProfileId;
   if (themeTypoId) {
@@ -213,6 +233,11 @@ export function applyStructuralTraits(
   root.setAttribute("data-elevation", traits.elevationStyle);
   root.setAttribute("data-focus-style", traits.focusStyle);
   root.setAttribute("data-density", traits.density);
+  if (traits.windowCorners) {
+    root.setAttribute("data-window-corners", traits.windowCorners);
+  } else {
+    root.removeAttribute("data-window-corners");
+  }
 
   if (surfaceProfile && surfaceProfile.id !== "default") {
     if (surfaceProfile.canvas)

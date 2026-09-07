@@ -11,12 +11,19 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 
-type Props = {
+export type WindowControlsProps = {
   /** Render only the close button (used by the settings window). */
   closeOnly?: boolean;
+  /** Visual presentation: 'standard' (floating buttons) or 'strip' (edge-to-edge buttons). */
+  variant?: "standard" | "strip";
+  className?: string;
 };
 
-export function WindowControls({ closeOnly = false }: Props) {
+export function WindowControls({
+  closeOnly = false,
+  variant = "standard",
+  className,
+}: WindowControlsProps) {
   const { t } = useTranslation();
   const [maximized, setMaximized] = useState(false);
 
@@ -48,11 +55,21 @@ export function WindowControls({ closeOnly = false }: Props) {
   const w = getCurrentWindow();
 
   return (
-    <div className="flex h-full shrink-0 items-center gap-0.5 pr-1">
+    <div
+      className={cn(
+        "window-controls",
+        variant === "strip" && "window-controls-strip",
+        variant === "standard" && "pr-1",
+        className,
+      )}
+      data-tauri-drag-region="false"
+    >
       {!closeOnly && (
         <>
           <CtlButton
             ariaLabel={t("windowControls.minimize")}
+            variant={variant}
+            className="window-control-button-minimize"
             onClick={() => void w.minimize()}
           >
             <HugeiconsIcon icon={MinusSignIcon} size={12} strokeWidth={2} />
@@ -63,6 +80,8 @@ export function WindowControls({ closeOnly = false }: Props) {
                 ? t("windowControls.restore")
                 : t("windowControls.maximize")
             }
+            variant={variant}
+            className="window-control-button-maximize"
             onClick={() => void w.toggleMaximize()}
           >
             <HugeiconsIcon
@@ -75,6 +94,8 @@ export function WindowControls({ closeOnly = false }: Props) {
       )}
       <CtlButton
         ariaLabel={t("windowControls.close")}
+        variant={variant}
+        className="window-control-button-close"
         onClick={() => void w.close()}
         danger
       >
@@ -89,11 +110,15 @@ function CtlButton({
   onClick,
   children,
   danger,
+  variant,
+  className,
 }: {
   ariaLabel: string;
   onClick: () => void;
   children: React.ReactNode;
   danger?: boolean;
+  variant: "standard" | "strip";
+  className?: string;
 }) {
   return (
     <button
@@ -101,14 +126,19 @@ function CtlButton({
       aria-label={ariaLabel}
       title={ariaLabel}
       onClick={onClick}
+      data-tauri-drag-region="false"
       className={cn(
-        "grid size-7 place-items-center rounded-md text-muted-foreground transition-colors",
-        danger
-          ? "hover:bg-destructive/15 hover:text-destructive"
-          : "hover:bg-accent hover:text-foreground",
+        "window-control-button",
+        variant === "strip"
+          ? "window-control-button-strip"
+          : "window-control-button-standard",
+        danger && "window-control-button-close",
+        className,
       )}
     >
-      {children}
+      <span className="window-control-icon flex items-center justify-center pointer-events-none">
+        {children}
+      </span>
     </button>
   );
 }

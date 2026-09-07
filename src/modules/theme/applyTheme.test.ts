@@ -5,6 +5,7 @@ import type { Theme } from "./types";
 function createMockRoot() {
   const styles = new Map<string, string>();
   const classes = new Set<string>();
+  const attributes = new Map<string, string>();
 
   return {
     style: {
@@ -12,6 +13,9 @@ function createMockRoot() {
       getPropertyValue: (name: string) => styles.get(name) ?? "",
       removeProperty: (name: string) => styles.delete(name),
     },
+    setAttribute: (name: string, value: string) => attributes.set(name, value),
+    removeAttribute: (name: string) => attributes.delete(name),
+    getAttribute: (name: string) => attributes.get(name) ?? null,
     classList: {
       add: (...tokens: string[]) => tokens.forEach((t) => classes.add(t)),
       remove: (...tokens: string[]) => tokens.forEach((t) => classes.delete(t)),
@@ -63,7 +67,10 @@ describe("applyTheme", () => {
   beforeEach(() => {
     mockRoot = createMockRoot();
     Object.defineProperty(globalThis, "document", {
-      value: { documentElement: mockRoot },
+      value: {
+        documentElement: mockRoot,
+        getElementById: () => null,
+      },
       configurable: true,
     });
   });
@@ -143,5 +150,35 @@ describe("applyTheme", () => {
     expect(mockRoot.style.getPropertyValue("--content")).toBe("");
     expect(mockRoot.style.getPropertyValue("--background")).toBe("");
     expect(mockRoot.style.getPropertyValue("--foreground")).toBe("");
+  });
+
+  it("stamps data-theme-skin when theme has skinId, and cleans it when switching or clearing", () => {
+    const skinTheme: Theme = {
+      id: "win31-theme",
+      name: "Windows 3.1",
+      skinId: "win31",
+      variants: {
+        dark: {
+          colors: {
+            background: "#000080",
+            foreground: "#ffffff",
+          },
+        },
+      },
+    };
+
+    applyTheme(skinTheme, "dark");
+    expect(mockRoot.getAttribute("data-theme-skin")).toBe("win31");
+
+    // Switching to a regular theme cleans data-theme-skin
+    applyTheme(darkOnlyTheme, "dark");
+    expect(mockRoot.getAttribute("data-theme-skin")).toBeNull();
+
+    // Re-applying and clearing
+    applyTheme(skinTheme, "dark");
+    expect(mockRoot.getAttribute("data-theme-skin")).toBe("win31");
+
+    clearTheme();
+    expect(mockRoot.getAttribute("data-theme-skin")).toBeNull();
   });
 });

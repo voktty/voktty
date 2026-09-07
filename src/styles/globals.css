@@ -143,6 +143,13 @@
     --elevation-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
     --elevation-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
     --elevation-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+    /* Window Controls Geometry Tokens */
+    --window-control-width: 1.75rem;
+    --window-control-height: 1.75rem;
+    --window-control-radius: var(--radius-md, 0.375rem);
+    --window-control-gap: 0.125rem;
+    --window-control-icon-size: 0.875rem;
 }
 
 .dark {
@@ -274,6 +281,66 @@
 .border-r {
     border-right-width: var(--border-width, 1px);
     border-right-style: var(--border-style, solid);
+}
+
+/* Tokenized Window Controls */
+.window-controls {
+    display: flex;
+    height: 100%;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--window-control-gap, 0.125rem);
+}
+
+.window-controls-strip {
+    border-left: 1px solid var(--border-subtle, var(--border, rgba(255, 255, 255, 0.1)));
+    gap: 0;
+    align-items: stretch;
+}
+
+.window-control-button {
+    display: grid;
+    place-items: center;
+    color: var(--muted-foreground, currentColor);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    cursor: pointer;
+    user-select: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+}
+
+.window-control-button-standard {
+    width: var(--window-control-width, 1.75rem);
+    height: var(--window-control-height, 1.75rem);
+    border-radius: var(--window-control-radius, var(--radius-md, 0.375rem));
+}
+
+.window-control-button-standard:hover {
+    background-color: var(--accent);
+    color: var(--foreground);
+}
+
+.window-control-button-strip {
+    width: var(--window-control-width, 2.5rem);
+    height: 100%;
+    border-radius: 0;
+    color: color-mix(in srgb, var(--content) 60%, transparent);
+}
+
+.window-control-button-strip:hover {
+    background-color: color-mix(in srgb, var(--content) 10%, transparent);
+    color: var(--content);
+}
+
+.window-control-button-close:hover {
+    background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+    color: var(--destructive);
+}
+
+.window-controls-strip .window-control-button-close:hover {
+    background-color: var(--destructive);
+    color: var(--destructive-foreground, #ffffff);
 }
 
 @layer base {
