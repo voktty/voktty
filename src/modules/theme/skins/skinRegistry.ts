@@ -1,7 +1,9 @@
 import type { ThemeSkin } from "../types";
 import { win31Skin } from "./win31/win31Skin";
+import { mac1Skin } from "./mac1/mac1Skin";
+import { kdeSkin } from "./kde/kdeSkin";
 
-const builtinSkins: ThemeSkin[] = [win31Skin];
+const builtinSkins: ThemeSkin[] = [win31Skin, mac1Skin, kdeSkin];
 const skinRegistry = new Map<string, ThemeSkin>(
   builtinSkins.map((s) => [s.id, s]),
 );
