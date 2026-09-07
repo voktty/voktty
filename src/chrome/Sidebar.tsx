@@ -35,6 +35,11 @@ import { resolveModel } from "../lib/models";
 import { prettyParent, projectKey, projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
+import {
+  orderedSessionActionIds,
+  pruneSessionSelection,
+  toggleSessionSelection,
+} from "../lib/sessionSelection";
 import { paneDropFromPoint, setExternalPaneDrop } from "../lib/paneDrop";
 import type { PaneEdge } from "../lib/layout";
 import { suppressTextSelection } from "../lib/drag";
@@ -175,8 +180,14 @@ type Props = {
   ) => void;
   onRenameSession?: (sessionId: string, title: string) => void;
   onArchiveSession?: (sessionId: string, archived: boolean) => void;
+  onArchiveSessions?: (
+    sessionIds: readonly string[],
+    archived: boolean,
+  ) => void;
   onPinSession?: (sessionId: string, pinned: boolean) => void;
+  onPinSessions?: (sessionIds: readonly string[], pinned: boolean) => void;
   onDeleteSession?: (sessionId: string) => void;
+  onDeleteSessions?: (sessionIds: readonly string[]) => void;
   onOpenFile: (path: string) => void;
   onOpenTerminal?: (cwd: string) => void;
   onFileMoved?: (from: string, to: string) => void;
@@ -244,8 +255,11 @@ function SidebarComponent({
   onPlaceSessionOnPane,
   onRenameSession,
   onArchiveSession,
+  onArchiveSessions,
   onPinSession,
+  onPinSessions,
   onDeleteSession,
+  onDeleteSessions,
   onOpenFile,
   onOpenTerminal,
   onFileMoved,
@@ -314,6 +328,9 @@ function SidebarComponent({
     y: number;
     sessionId: string;
   } | null>(null);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [folderMenu, setFolderMenu] = useState<{
     x: number;
     y: number;
@@ -421,6 +438,16 @@ function SidebarComponent({
   useEffect(() => {
     onSessionNavigationOrder?.(sessionNavigationIds);
   }, [onSessionNavigationOrder, sessionNavigationKey]);
+  useEffect(() => {
+    if (tab !== "sessions") {
+      setSelectedSessionIds(new Set());
+      return;
+    }
+    const available = new Set(sessionNavigationIds);
+    setSelectedSessionIds((current) =>
+      pruneSessionSelection(current, available),
+    );
+  }, [cwd, tab, sessionNavigationKey]);
   const hasMoreSessions = shownUngroupedCount < ungroupedVisible.length;
   const sessionListKey = `${cwd}\0${sessionFilters.showArchived}\0${sessionFilters.time}\0${sessionFilters.hiddenHarnesses.join(",")}\0${sessionFilters.status.working}\0${sessionFilters.status.needsApproval}\0${sessionFilters.status.done}\0${searchQuery}`;
   const sessionHarnesses = harnessesInSessions(sessions);
@@ -543,6 +570,17 @@ function SidebarComponent({
     return () => scrollParent.removeEventListener("scroll", onScroll, true);
   }, [sessionMenu, folderMenu, filterMenu]);
 
+  useEffect(() => {
+    if (selectedSessionIds.size === 0) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setSelectedSessionIds(new Set());
+      setSessionMenu(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedSessionIds.size]);
+
   const commitSessionFolders = (next: SessionFolder[]) => {
     setSessionFolders(next);
     saveSessionFolders(cwd, next);
@@ -564,12 +602,33 @@ function SidebarComponent({
     });
   };
 
-  const menuSession = sessionMenu
-    ? sessions.find((session) => session.id === sessionMenu.sessionId)
-    : undefined;
-  const menuSessionFolder = sessionMenu
-    ? folderContaining(sessionFolders, sessionMenu.sessionId)
-    : undefined;
+  const menuSessionIds = sessionMenu
+    ? orderedSessionActionIds(
+        sessionMenu.sessionId,
+        selectedSessionIds,
+        sessionNavigationIds,
+      )
+    : [];
+  const menuSessions = menuSessionIds.flatMap((sessionId) => {
+    const session = listedSessions.find((entry) => entry.id === sessionId);
+    return session ? [session] : [];
+  });
+  const multipleMenuSessions = menuSessionIds.length > 1;
+  const allMenuSessionsPinned =
+    menuSessions.length > 0 && menuSessions.every((session) => session.pinned);
+  const allMenuSessionsArchived =
+    menuSessions.length > 0 &&
+    menuSessions.every((session) => session.archived);
+  const menuSessionFolder =
+    menuSessionIds.length === 1
+      ? folderContaining(sessionFolders, menuSessionIds[0])
+      : undefined;
+  const anyMenuSessionFoldered = menuSessionIds.some((sessionId) =>
+    sessionFolders.some((folder) => folder.sessionIds.includes(sessionId)),
+  );
+  const canRemoveMenuSessionsFromFolders = multipleMenuSessions
+    ? anyMenuSessionFoldered
+    : !!menuSessionFolder;
   const menuFolder = folderMenu
     ? sessionFolders.find((folder) => folder.id === folderMenu.folderId)
     : undefined;
@@ -579,16 +638,16 @@ function SidebarComponent({
     { kind: "item", id: "ungroup", label: "Ungroup" },
   ];
   const sessionMenuItems: ExplorerMenuItem[] = [
-    ...(onPinSession
+    ...(onPinSession || onPinSessions
       ? [
           {
             kind: "item" as const,
             id: "pin",
-            label: menuSession?.pinned ? "Unpin" : "Pin",
+            label: allMenuSessionsPinned ? "Unpin" : "Pin",
           },
         ]
       : []),
-    ...(onRenameSession
+    ...(!multipleMenuSessions && onRenameSession
       ? [
           {
             kind: "item" as const,
@@ -605,30 +664,39 @@ function SidebarComponent({
       kind: "item" as const,
       id: `folder-add:${folder.id}`,
       label: `Add to ${folder.name}`,
-      checked: menuSessionFolder?.id === folder.id,
+      checked:
+        menuSessionIds.length > 0 &&
+        menuSessionIds.every((sessionId) =>
+          folder.sessionIds.includes(sessionId),
+        ),
     })),
-    ...(menuSessionFolder
+    ...(canRemoveMenuSessionsFromFolders
       ? [
           {
             kind: "item" as const,
             id: "folder-remove",
-            label: "Remove from folder",
+            label: multipleMenuSessions
+              ? "Remove from folders"
+              : "Remove from folder",
           },
         ]
       : []),
-    ...(onArchiveSession || onDeleteSession
+    ...(onArchiveSession ||
+    onArchiveSessions ||
+    onDeleteSession ||
+    onDeleteSessions
       ? [
           { kind: "sep" as const },
-          ...(onArchiveSession
+          ...(onArchiveSession || onArchiveSessions
             ? [
                 {
                   kind: "item" as const,
                   id: "archive",
-                  label: menuSession?.archived ? "Unarchive" : "Archive",
+                  label: allMenuSessionsArchived ? "Unarchive" : "Archive",
                 },
               ]
             : []),
-          ...(onDeleteSession
+          ...(onDeleteSession || onDeleteSessions
             ? [
                 {
                   kind: "item" as const,
@@ -649,6 +717,9 @@ function SidebarComponent({
   ) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!selectedSessionIds.has(sessionId)) {
+      setSelectedSessionIds(new Set([sessionId]));
+    }
     setFilterMenu(null);
     setFolderMenu(null);
     setSessionMenu({ x: e.clientX, y: e.clientY, sessionId });
@@ -668,11 +739,16 @@ function SidebarComponent({
   const onSessionMenuPick = (id: string) => {
     if (!sessionMenu) return;
     const sessionId = sessionMenu.sessionId;
-    const archived = !!menuSession?.archived;
-    const pinned = !!menuSession?.pinned;
+    const sessionIds = menuSessionIds;
+    const archived = allMenuSessionsArchived;
+    const pinned = allMenuSessionsPinned;
     setSessionMenu(null);
     if (id === "pin") {
-      onPinSession?.(sessionId, !pinned);
+      if (sessionIds.length > 1 && onPinSessions) {
+        onPinSessions(sessionIds, !pinned);
+      } else {
+        for (const id of sessionIds) onPinSession?.(id, !pinned);
+      }
       return;
     }
     if (id === "rename") {
@@ -682,7 +758,7 @@ function SidebarComponent({
     if (id === "folder-new") {
       const { folders, id: createdId } = createFolderWithSessions(
         sessionFolders,
-        [sessionId],
+        sessionIds,
       );
       if (!createdId) return;
       commitSessionFolders(folders);
@@ -691,24 +767,37 @@ function SidebarComponent({
     }
     if (id.startsWith("folder-add:")) {
       const folderId = id.slice("folder-add:".length);
+      const folders = sessionIds.reduce(
+        (current, id) => addSessionToFolder(current, folderId, id),
+        sessionFolders,
+      );
+      commitSessionFolders(setFolderCollapsed(folders, folderId, false));
+      return;
+    }
+    if (id === "folder-remove") {
       commitSessionFolders(
-        setFolderCollapsed(
-          addSessionToFolder(sessionFolders, folderId, sessionId),
-          folderId,
-          false,
+        sessionIds.reduce(
+          (current, id) => removeSessionFromFolder(current, id),
+          sessionFolders,
         ),
       );
       return;
     }
-    if (id === "folder-remove") {
-      commitSessionFolders(removeSessionFromFolder(sessionFolders, sessionId));
-      return;
-    }
     if (id === "archive") {
-      onArchiveSession?.(sessionId, !archived);
+      if (sessionIds.length > 1 && onArchiveSessions) {
+        onArchiveSessions(sessionIds, !archived);
+      } else {
+        for (const id of sessionIds) onArchiveSession?.(id, !archived);
+      }
       return;
     }
-    if (id === "delete") onDeleteSession?.(sessionId);
+    if (id === "delete") {
+      if (sessionIds.length > 1 && onDeleteSessions) {
+        onDeleteSessions(sessionIds);
+      } else {
+        for (const id of sessionIds) onDeleteSession?.(id);
+      }
+    }
   };
 
   const onFolderMenuPick = (id: string) => {
@@ -755,6 +844,21 @@ function SidebarComponent({
   const isSessionDrop = (kind: "folder" | "session", id: string) =>
     sessionDrop?.kind === kind && sessionDrop.id === id;
 
+  const onSessionCardSelect = (
+    sessionId: string,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    if (event.shiftKey) {
+      setSessionMenu(null);
+      setSelectedSessionIds((current) =>
+        toggleSessionSelection(current, sessionId),
+      );
+      return;
+    }
+    setSelectedSessionIds(new Set());
+    onSelectSession(sessionId);
+  };
+
   const renderSessionCard = (session: SessionSummary, compact = false) =>
     renamingSessionId === session.id && onRenameSession ? (
       <SessionRenameRow
@@ -772,13 +876,14 @@ function SidebarComponent({
       <SessionCard
         session={session}
         isActive={session.id === activeSessionId}
+        isSelected={selectedSessionIds.has(session.id)}
         busy={busySessionIds.has(session.id)}
         done={unseenFinishedIds.has(session.id)}
         needsApproval={approvalSessionIds.has(session.id)}
         dropTarget={isSessionDrop("session", session.id)}
         compact={compact}
         now={now}
-        onSelect={onSelectSession}
+        onSelect={onSessionCardSelect}
         onPrefetch={onPrefetchSession}
         onPlaceOnPane={onPlaceSessionOnPane}
         onListDrop={onSessionListDrop}
@@ -1298,7 +1403,11 @@ function SidebarComponent({
           x={sessionMenu.x}
           y={sessionMenu.y}
           items={sessionMenuItems}
-          ariaLabel="Session actions"
+          ariaLabel={
+            multipleMenuSessions
+              ? `${menuSessionIds.length} selected session actions`
+              : "Session actions"
+          }
           onPick={onSessionMenuPick}
           onClose={() => setSessionMenu(null)}
         />
@@ -1987,6 +2096,7 @@ function FolderRenameRow({
 function SessionCard({
   session,
   isActive,
+  isSelected,
   busy,
   done,
   needsApproval,
@@ -2005,13 +2115,17 @@ function SessionCard({
 }: {
   session: SessionSummary;
   isActive: boolean;
+  isSelected: boolean;
   busy: boolean;
   done: boolean;
   needsApproval: boolean;
   dropTarget?: boolean;
   compact?: boolean;
   now: number;
-  onSelect: (sessionId: string) => void;
+  onSelect: (
+    sessionId: string,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => void;
   onPrefetch?: (sessionId: string) => void;
   onPlaceOnPane?: (sessionId: string, targetId: string, edge: PaneEdge) => void;
   onListDrop?: (draggedId: string, target: SessionListDropTarget) => void;
@@ -2180,13 +2294,15 @@ function SessionCard({
         type="button"
         title={title}
         aria-current={isActive ? "true" : undefined}
+        aria-pressed={isSelected}
         data-session-card={session.id}
+        data-session-selected={isSelected ? "true" : undefined}
         data-tauri-drag-region="false"
         onPointerDown={onPointerDown}
         onPointerEnter={() => onPrefetch?.(session.id)}
-        onClick={() => {
+        onClick={(event) => {
           if (performance.now() < skipClickUntil.current) return;
-          onSelect(session.id);
+          onSelect(session.id, event);
         }}
         onContextMenu={onContextMenu}
         onKeyDown={onKeyDown}
@@ -2195,11 +2311,13 @@ function SessionCard({
         } ${dragging ? "opacity-40" : ""} ${
           dropTarget
             ? "text-content border-transparent"
-            : needsApproval
-              ? "bg-content/20 text-content border-content/30 border-dashed"
-              : isActive
-                ? "bg-content/10 text-content border-transparent"
-                : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
+            : isSelected
+              ? "bg-accent/15 text-content border-transparent"
+              : needsApproval
+                ? "bg-content/20 text-content border-content/30 border-dashed"
+                : isActive
+                  ? "bg-content/10 text-content border-transparent"
+                  : "text-content/80 hover:bg-content/5 hover:text-content border-transparent"
         }`}
       >
         {dropTarget ? (
