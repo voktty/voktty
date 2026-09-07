@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { AiDiffStack, EditorStack, GitDiffStack } from "@/modules/editor";
 import { GitCommitDiffStack, GitHistoryStack } from "@/modules/git-history";
 import { ApiClientStack } from "@/modules/api-client";
-import { HarnessStack } from "@/modules/harness";
+import { HarnessStack } from "@/modules/harness/components/HarnessStack";
 import { MarkdownStack } from "@/modules/markdown";
 import { PreviewStack } from "@/modules/preview";
 import { RdpStack } from "@/modules/rdp";
