@@ -17,13 +17,36 @@ import { vokttyDefault, VOKTTY_VARIATIONS } from "./voktty-default";
 import { win31Theme } from "./win31Theme";
 import { mac1Theme } from "./mac1Theme";
 import { kdeTheme } from "./kdeTheme";
+import { commanderBlueTheme } from "./commanderBlueTheme";
+import { phosphorCrtTheme } from "./phosphorCrtTheme";
+import { whistlerBlissTheme } from "./whistlerBlissTheme";
+import { boingWorkbenchTheme } from "./boingWorkbenchTheme";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
 import { xcode } from "./xcode";
 
-export { VOKTTY_VARIATIONS, vokttyDefault, win31Theme, mac1Theme, kdeTheme };
+export {
+  VOKTTY_VARIATIONS,
+  vokttyDefault,
+  win31Theme,
+  mac1Theme,
+  kdeTheme,
+  commanderBlueTheme,
+  phosphorCrtTheme,
+  whistlerBlissTheme,
+  boingWorkbenchTheme,
+};
 
-const BUILTIN: Theme[] = [vokttyDefault, win31Theme, mac1Theme, kdeTheme];
+const BUILTIN: Theme[] = [
+  vokttyDefault,
+  win31Theme,
+  mac1Theme,
+  kdeTheme,
+  commanderBlueTheme,
+  phosphorCrtTheme,
+  whistlerBlissTheme,
+  boingWorkbenchTheme,
+];
 
 const LEGACY_FALLBACKS: Record<string, Theme> = {
   "fluent-dark": fluentDark,
@@ -85,6 +108,10 @@ export function getBuiltinTheme(id: string): Theme | undefined {
   if (id === "win31") return win31Theme;
   if (id === "mac1") return mac1Theme;
   if (id === "kde") return kdeTheme;
+  if (id === "commander-blue") return commanderBlueTheme;
+  if (id === "phosphor-crt") return phosphorCrtTheme;
+  if (id === "whistler-bliss") return whistlerBlissTheme;
+  if (id === "boing-workbench") return boingWorkbenchTheme;
   if (LEGACY_FALLBACKS[id]) return LEGACY_FALLBACKS[id];
   const variation = VOKTTY_VARIATIONS.find((v) => v.id === id);
   if (variation) {
