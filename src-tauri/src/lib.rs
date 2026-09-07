@@ -699,6 +699,7 @@ pub fn run() {
             harness::cursor_store::cursor_tool_calls,
             harness::project_logo::save_project_logo,
             harness::project_logo::remove_project_logo,
+            harness::project_logo::forget_logo_file,
             harness::window_transfer::stage_window_transfer,
             harness::window_transfer::take_window_transfer,
         ])

@@ -27,6 +27,7 @@ import {
   requestAddNoteToChat,
   type Note,
 } from "../lib/notes";
+import { projectKey, projectName } from "../lib/paths";
 import { IS_MAC } from "../lib/platform";
 import { looksLikeProject } from "../lib/recents";
 import {
@@ -322,16 +323,18 @@ type ProjectMarks = {
 };
 
 function NoteProjectMark({
-  project,
+  cwd,
   logos,
   mascots,
   colors,
   customColors,
-}: { project: string } & ProjectMarks) {
-  const logoPath = resolveTabGroupLogo(project, logos);
-  const mascotName = resolveTabGroupMascot(project, mascots);
+}: { cwd: string } & ProjectMarks) {
+  const project = projectName(cwd);
+  const key = projectKey(cwd);
+  const logoPath = resolveTabGroupLogo(key, logos);
+  const mascotName = resolveTabGroupMascot(key, mascots);
   const mascotColor = resolveTabGroupColor(
-    project,
+    key,
     colors,
     customColors,
     project,
@@ -414,10 +417,10 @@ function NoteCard({
       }`}
     >
       <span className="flex items-center gap-2">
-        {project ? (
+        {note.sourceCwd ? (
           <span className="min-w-0 flex-1 text-[11px] text-content/50">
             <NoteProjectMark
-              project={project}
+              cwd={note.sourceCwd}
               logos={logos}
               mascots={mascots}
               colors={colors}
@@ -515,7 +518,6 @@ function NoteEditor({
   bodyRef.current = body;
   noteRef.current = note;
   onSavedRef.current = onSaved;
-  const project = noteSourceProject(note.sourceCwd);
   const time = formatRelativeTime(new Date(note.updatedAt).toISOString());
 
   useEffect(() => {
@@ -590,9 +592,9 @@ function NoteEditor({
             {note.slug ? (
               <span className="min-w-0 truncate">{note.slug}</span>
             ) : null}
-            {project ? (
+            {note.sourceCwd ? (
               <NoteProjectMark
-                project={project}
+                cwd={note.sourceCwd}
                 logos={logos}
                 mascots={mascots}
                 colors={colors}

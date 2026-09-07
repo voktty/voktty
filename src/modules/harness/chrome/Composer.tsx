@@ -88,7 +88,7 @@ import { HandoffMiniCard } from "./HandoffMiniCard";
 import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
 import { SkillPicker } from "./SkillPicker";
-import { projectName } from "../lib/paths";
+import { projectKey } from "../lib/paths";
 import { consumeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import {
@@ -445,7 +445,7 @@ export function Composer({
   );
   const selectedComponent = useLiveComponentStore((s) => s.selectedComponent);
   const groupLogos = useTabGroupLogos();
-  const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
+  const projectLogoPath = resolveTabGroupLogo(projectKey(cwd), groupLogos);
 
   slashRef.current = slash;
   mentionRef.current = mention;

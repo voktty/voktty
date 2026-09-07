@@ -1,5 +1,5 @@
 import { IS_WINDOWS } from "./platform";
-import { prettyCwd } from "./paths";
+import { pathKey, prettyCwd } from "./paths";
 
 const KEY = "monocode.recentProjects";
 const RAIL_ORDER_KEY = "monocode.projectRailOrder";
@@ -220,6 +220,25 @@ export function loadPinnedProjects(): string[] {
 
 export function savePinnedProjects(pinned: string[]) {
   savePathList(RAIL_PINNED_KEY, pinned.map(normalize));
+}
+
+/** Every project path we still remember - rail, pins, saved order, archive. */
+export function knownProjectPaths(): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const paths = [
+    ...loadRecents().map((item) => item.path),
+    ...loadProjectRailOrder(),
+    ...loadPinnedProjects(),
+    ...loadArchivedProjects().map((item) => item.path),
+  ];
+  for (const path of paths) {
+    const key = pathKey(path);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalize(path));
+  }
+  return out;
 }
 
 /** All projects for the rail, keyed by normalized path. Retains pinned and ordered paths so no project is lost. */

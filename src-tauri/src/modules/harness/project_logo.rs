@@ -6,6 +6,17 @@ use super::fs::expand_home;
 
 const MAX_LOGO_BYTES: u64 = 2 * 1024 * 1024;
 const ALLOWED_EXT: [&str; 6] = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
+const MAX_STEM_CHARS: usize = 96;
+const HASH_CHARS: usize = 17; // '-' plus 16 hex chars
+
+fn fnv1a_64(text: &str) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in text.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
 
 fn project_logos_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
@@ -19,10 +30,12 @@ fn project_logos_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn sanitize_project_key(project: &str) -> String {
     let trimmed = project.trim();
+    let hash = format!("-{:016x}", fnv1a_64(trimmed));
     if trimmed.is_empty() {
-        return "project".into();
+        return format!("project{hash}");
     }
-    trimmed
+    let max_safe = MAX_STEM_CHARS.saturating_sub(HASH_CHARS).max(1);
+    let safe: String = trimmed
         .chars()
         .map(|ch| {
             if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
@@ -31,7 +44,11 @@ fn sanitize_project_key(project: &str) -> String {
                 '-'
             }
         })
-        .collect()
+        .take(max_safe)
+        .collect();
+    let safe = safe.trim_matches('-');
+    let stem = if safe.is_empty() { "project" } else { safe };
+    format!("{stem}{hash}")
 }
 
 fn logo_stem(project: &str) -> String {
@@ -50,6 +67,17 @@ fn remove_existing_logos(dir: &Path, project: &str) -> Result<(), String> {
         };
         if name == stem || name.starts_with(&prefix) {
             std::fs::remove_file(entry.path()).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn forget_logo_file_sync(app: &AppHandle, logo_path: &str) -> Result<(), String> {
+    let dir = project_logos_dir(app)?;
+    let target = Path::new(logo_path);
+    if let (Ok(target_canon), Ok(dir_canon)) = (target.canonicalize(), dir.canonicalize()) {
+        if target_canon.parent() == Some(&dir_canon) && target_canon.is_file() {
+            let _ = std::fs::remove_file(target_canon);
         }
     }
     Ok(())
@@ -118,14 +146,39 @@ pub async fn remove_project_logo(app: AppHandle, project: String) -> Result<(), 
         .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn forget_logo_file(app: AppHandle, path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || forget_logo_file_sync(&app, &path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn sanitize_project_key_replaces_unsafe_characters() {
-        assert_eq!(sanitize_project_key("agent-terminal"), "agent-terminal");
-        assert_eq!(sanitize_project_key("foo/bar"), "foo-bar");
-        assert_eq!(sanitize_project_key("  "), "project");
+        let key = sanitize_project_key("agent-terminal");
+        assert!(key.starts_with("agent-terminal-"));
+        assert_eq!(key.len(), "agent-terminal-".len() + 16);
+
+        let key = sanitize_project_key("foo/bar");
+        assert!(key.starts_with("foo-bar-"));
+
+        let key = sanitize_project_key("  ");
+        assert!(key.starts_with("project-"));
+    }
+
+    #[test]
+    fn sanitize_project_key_is_deterministic_and_unique() {
+        assert_eq!(
+            sanitize_project_key("/repo/foo"),
+            sanitize_project_key("/repo/foo")
+        );
+        assert_ne!(
+            sanitize_project_key("/repo/foo"),
+            sanitize_project_key("/other/foo")
+        );
     }
 }

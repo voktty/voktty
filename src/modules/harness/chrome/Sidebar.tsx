@@ -60,7 +60,7 @@ import {
 import { basename } from "../lib/fs";
 import { IS_MAC, MOD } from "../lib/platform";
 import { resolveModel } from "../lib/models";
-import { projectName } from "../lib/paths";
+import { projectKey, projectName } from "../lib/paths";
 import { sessionDisplayTitle } from "../lib/session";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
 import {
@@ -526,7 +526,7 @@ function SidebarComponent({
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
   const changeStats = useProjectDiffStats(gitRoot, open);
   const groupLogos = useTabGroupLogos();
-  const projectLogoPath = resolveTabGroupLogo(projectName(cwd), groupLogos);
+  const projectLogoPath = resolveTabGroupLogo(projectKey(cwd), groupLogos);
   const sessionDiffs = useSessionDiffStats(
     cwd,
     sessions.map((session) => session.id),
@@ -1549,18 +1549,19 @@ function SidebarProjectPicker({
   const [groupCustomColors] = useState(loadTabGroupCustomColors);
   const [groupMascots] = useState(loadTabGroupMascots);
   const groupLogos = useTabGroupLogos();
-  const projectKey = projectName(cwd);
+  const seed = projectName(cwd);
+  const key = projectKey(cwd);
   const label = resolveTabGroupLabel(
-    projectKey,
+    key,
     groupLabels,
-    basename(cwd) || projectKey,
+    basename(cwd) || seed,
   );
-  const logoPath = resolveTabGroupLogo(projectKey, groupLogos);
+  const logoPath = resolveTabGroupLogo(key, groupLogos);
   const color = resolveTabGroupColor(
-    projectKey,
+    key,
     groupColors,
     groupCustomColors,
-    projectKey,
+    seed,
   );
 
   return (
@@ -1586,9 +1587,9 @@ function SidebarProjectPicker({
           />
         ) : (
           <ProjectMascot
-            project={projectKey}
+            project={seed}
             color={color}
-            name={resolveTabGroupMascot(projectKey, groupMascots)}
+            name={resolveTabGroupMascot(key, groupMascots)}
             className="size-3 shrink-0"
             active={busy}
           />
