@@ -10,12 +10,16 @@ import { validateTheme } from "./validateTheme";
 describe("Theme Variations & Legacy Resolution", () => {
   it("listBuiltinThemes returns the consolidated voktty theme and radical skins", () => {
     const builtin = listBuiltinThemes();
-    expect(builtin.length).toBeGreaterThanOrEqual(2);
+    expect(builtin.length).toBeGreaterThanOrEqual(4);
     const voktty = builtin.find((t) => t.id === "voktty-default");
     expect(voktty).toBeDefined();
     expect(voktty!.variations).toBeDefined();
     expect(voktty!.variations!.length).toBeGreaterThanOrEqual(17);
     expect(builtin.some((t) => t.id === "win31")).toBe(true);
+    expect(builtin.some((t) => t.id === "mac1")).toBe(true);
+    expect(builtin.some((t) => t.id === "kde")).toBe(true);
+    expect(getBuiltinTheme("mac1")?.skinId).toBe("mac1");
+    expect(getBuiltinTheme("kde")?.skinId).toBe("kde");
   });
 
   it("getDefaultTheme returns voktty-default", () => {
