@@ -5,8 +5,8 @@ import type { ThemeSkin } from "../../types";
  *
  * Scoped CSS and structural traits reproducing classic KDE 2/3 / Keramik desktop:
  * - Signature royal blue horizontal gradient titlebar
- * - Beveled metallic buttons and window controls
- * - Qt-style beveled tabs with blue active indicator
+ * - Beveled metallic buttons and window controls with crisp dark icons
+ * - Qt-style beveled tabs with blue active indicator and high-contrast text
  * - Inset 3D panels with subtle slate borders
  * - KDE Konsole terminal styling
  */
@@ -23,8 +23,7 @@ export const KDE_SKIN_CSS = `
   text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.6) !important;
 }
 
-[data-theme-skin="kde"] header span,
-[data-theme-skin="kde"] .title-bar span {
+[data-theme-skin="kde"] .window-title {
   color: #ffffff !important;
 }
 
@@ -40,7 +39,7 @@ export const KDE_SKIN_CSS = `
   min-width: 18px !important;
   border-radius: 3px !important;
   background: linear-gradient(to bottom, #f2f5f8 0%, #d8e2ea 50%, #c4d0dc 100%) !important;
-  color: #2b4255 !important;
+  color: #1c2b36 !important;
   border: 1px solid #5a748c !important;
   box-shadow: inset 1px 1px 0px #ffffff, inset -1px -1px 0px #9bb0c2 !important;
   position: relative !important;
@@ -50,8 +49,16 @@ export const KDE_SKIN_CSS = `
   justify-content: center !important;
 }
 
+[data-theme-skin="kde"] .window-control-button * {
+  color: #1c2b36 !important;
+}
+
 [data-theme-skin="kde"] .window-control-button:hover {
   background: linear-gradient(to bottom, #ffffff 0%, #e3ecf5 100%) !important;
+  color: #0a5f9e !important;
+}
+
+[data-theme-skin="kde"] .window-control-button:hover * {
   color: #0a5f9e !important;
 }
 
@@ -66,15 +73,24 @@ export const KDE_SKIN_CSS = `
   color: #ffffff !important;
 }
 
-/* Notebook Tabs (Qt / KDE 3 Style) */
+[data-theme-skin="kde"] .window-control-button-close:hover * {
+  color: #ffffff !important;
+}
+
+/* Notebook Tabs (Qt / KDE 3 Style): High-Contrast */
 [data-theme-skin="kde"] .tab-item,
 [data-theme-skin="kde"] [data-tab-id] {
   border-radius: 3px 3px 0 0 !important;
   background: #d8e0e8 !important;
-  color: #2b4255 !important;
+  color: #1c2b36 !important;
   border: 1px solid #99aab8 !important;
   border-bottom: none !important;
   margin-right: 2px !important;
+}
+
+[data-theme-skin="kde"] .tab-item *,
+[data-theme-skin="kde"] [data-tab-id] * {
+  color: #1c2b36 !important;
 }
 
 [data-theme-skin="kde"] .tab-active,
@@ -86,14 +102,24 @@ export const KDE_SKIN_CSS = `
   border-bottom: none !important;
 }
 
+[data-theme-skin="kde"] .tab-active *,
+[data-theme-skin="kde"] [data-tab-active="true"] * {
+  color: #0a5f9e !important;
+  background: transparent !important;
+}
+
 /* Buttons */
 [data-theme-skin="kde"] button:not(.window-control-button) {
   border-radius: 3px !important;
   background: linear-gradient(to bottom, #f6f8fa 0%, #e2e8ee 50%, #ccd7e2 100%) !important;
-  color: #203545 !important;
+  color: #1c2b36 !important;
   border: 1px solid #758f9e !important;
   box-shadow: inset 1px 1px 0px #ffffff, 0 1px 1px rgba(0, 0, 0, 0.1) !important;
   font-family: 'DejaVu Sans', 'Liberation Sans', sans-serif !important;
+}
+
+[data-theme-skin="kde"] button:not(.window-control-button) * {
+  color: #1c2b36 !important;
 }
 
 [data-theme-skin="kde"] button:not(.window-control-button):hover {
@@ -104,6 +130,16 @@ export const KDE_SKIN_CSS = `
 [data-theme-skin="kde"] button:not(.window-control-button):active {
   background: linear-gradient(to bottom, #ccd7e2 0%, #e2e8ee 100%) !important;
   box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Breadcrumbs & Statusbar */
+[data-theme-skin="kde"] [data-slot="breadcrumb"] *,
+[data-theme-skin="kde"] [data-slot="breadcrumb-item"] *,
+[data-theme-skin="kde"] footer,
+[data-theme-skin="kde"] footer *,
+[data-theme-skin="kde"] .status-bar,
+[data-theme-skin="kde"] .status-bar * {
+  color: #1c2b36 !important;
 }
 
 /* Panels, Surfaces & Terminal Slot: Inset 3D frame */

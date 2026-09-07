@@ -342,9 +342,24 @@ export function ThemesSection() {
                   />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-[12.5px] font-medium">
-                    {theme.name}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-[12.5px] font-medium">
+                      {theme.name}
+                    </span>
+                    {theme.variations && theme.variations.length > 0 ? (
+                      <span
+                        className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[9.5px] font-medium text-primary border border-primary/20 shrink-0"
+                        title={`${theme.variations.length} ${t("settings.themes.variations.title", { defaultValue: "variaciones" })}`}
+                      >
+                        <span className="flex items-center -space-x-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        </span>
+                        <span>{t("settings.themes.variations.matrixHint", { defaultValue: "Matriz" })}</span>
+                      </span>
+                    ) : null}
+                  </div>
                   {description ? (
                     <span className="truncate text-[11px] text-muted-foreground">
                       {description}
@@ -391,16 +406,23 @@ export function ThemesSection() {
         </div>
 
         {selectedTheme?.variations && selectedTheme.variations.length > 0 ? (
-          <div className="flex flex-col gap-2 pt-2">
+          <div className="flex flex-col gap-2 rounded-lg border border-border/50 bg-muted/20 p-2.5">
             <div className="flex items-center justify-between">
-              <Label>
-                {t("settings.themes.variations.title") || "Color Variations"}
-              </Label>
-              <span className="text-[11px] text-muted-foreground">
-                {selectedTheme.variations.length} palettes
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11.5px] font-medium text-foreground">
+                  {t("settings.themes.variations.title", {
+                    defaultValue: "Variaciones de color",
+                  })}
+                </span>
+                <span className="text-[10.5px] text-muted-foreground">
+                  ({selectedTheme.variations.length})
+                </span>
+              </div>
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {selectedTheme.variations.find((v) => v.id === themeVariation)?.name ?? ""}
               </span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               {selectedTheme.variations.map((variation) => {
                 const varVariant =
                   variation.variants[resolvedMode] ??
@@ -410,57 +432,33 @@ export function ThemesSection() {
                 const varBg =
                   varColors?.background ??
                   (resolvedMode === "light" ? "#f4f5f8" : "#121214");
-                const varFg =
-                  varColors?.foreground ??
-                  (resolvedMode === "light" ? "#18191c" : "#f4f4f6");
                 const varAccent =
                   variation.accentColor ??
                   varColors?.primary ??
                   varColors?.accent ??
                   "var(--accent)";
-                const varMuted =
-                  varColors?.muted ??
-                  (resolvedMode === "light" ? "#e5e7eb" : "#262932");
                 const isVariationSelected = themeVariation === variation.id;
 
                 return (
                   <button
                     key={variation.id}
                     type="button"
+                    title={variation.name}
+                    aria-label={variation.name}
                     onClick={() => setThemeVariation(variation.id)}
                     className={cn(
-                      "group flex items-center gap-2.5 rounded-lg border p-2 text-left transition-all cursor-pointer",
+                      "relative flex h-6.5 w-6.5 items-center justify-center rounded-full transition-all cursor-pointer p-0.5",
                       isVariationSelected
-                        ? "border-foreground/60 ring-1 ring-foreground/20 bg-accent/30"
-                        : "border-border/60 hover:border-border hover:bg-accent/10",
+                        ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110 shadow-xs"
+                        : "opacity-75 hover:opacity-100 hover:scale-105",
                     )}
                   >
                     <div
-                      className="flex h-8 w-11 shrink-0 items-center justify-center gap-0.5 rounded border border-border/40 shadow-xs"
+                      className="h-full w-full rounded-full border border-border/60 overflow-hidden flex shadow-xs"
                       style={{ background: varBg }}
                     >
-                      <span
-                        className="h-4 w-1.5 rounded-xs"
-                        style={{ background: varAccent }}
-                      />
-                      <span
-                        className="h-4 w-1.5 rounded-xs"
-                        style={{ background: varFg, opacity: 0.7 }}
-                      />
-                      <span
-                        className="h-4 w-1.5 rounded-xs"
-                        style={{ background: varMuted }}
-                      />
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-[12px] font-medium">
-                        {variation.name}
-                      </span>
-                      {variation.description ? (
-                        <span className="truncate text-[10.5px] text-muted-foreground">
-                          {variation.description}
-                        </span>
-                      ) : null}
+                      <div className="h-full w-1/2" style={{ background: varBg }} />
+                      <div className="h-full w-1/2" style={{ background: varAccent }} />
                     </div>
                   </button>
                 );
@@ -473,10 +471,14 @@ export function ThemesSection() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
-            <Label>{t("settings.themes.pack.title") || "Appearance Pack"}</Label>
+            <Label>
+              {t("settings.themes.pack.title", { defaultValue: "Pack de apariencia" })}
+            </Label>
             <span className="text-[11px] text-muted-foreground">
-              {t("settings.themes.pack.desc") ||
-                "Preconfigured combination of theme palette, surface elevation and typography"}
+              {t("settings.themes.pack.desc", {
+                defaultValue:
+                  "Combinacion preconfigurada de paleta, relieve de superficie y tipografia.",
+              })}
             </span>
           </div>
           <Select
@@ -501,11 +503,14 @@ export function ThemesSection() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
             <Label>
-              {t("settings.themes.typography.title") || "Typography Profile"}
+              {t("settings.themes.typography.title", {
+                defaultValue: "Perfil tipografico",
+              })}
             </Label>
             <span className="text-[11px] text-muted-foreground">
-              {t("settings.themes.typography.desc") ||
-                "UI font family, size and density"}
+              {t("settings.themes.typography.desc", {
+                defaultValue: "Familia de fuentes, tamano y densidad de la interfaz.",
+              })}
             </span>
           </div>
           <Select
@@ -533,10 +538,16 @@ export function ThemesSection() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
-            <Label>{t("settings.themes.surface.title") || "Surface Profile"}</Label>
+            <Label>
+              {t("settings.themes.surface.title", {
+                defaultValue: "Perfil de superficie",
+              })}
+            </Label>
             <span className="text-[11px] text-muted-foreground">
-              {t("settings.themes.surface.desc") ||
-                "Canvas, sidebar and panel surface transparency and elevation"}
+              {t("settings.themes.surface.desc", {
+                defaultValue:
+                  "Transparencia y relieve de las superficies del lienzo, barra lateral y paneles.",
+              })}
             </span>
           </div>
           <Select
