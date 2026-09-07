@@ -424,6 +424,7 @@ export const en = {
         title: "Appearance Pack",
         desc: "Preconfigured combination of theme palette, surface elevation and typography.",
       },
+      autoFollow: "Auto (Follow pack/theme)",
       typography: {
         title: "Typography Profile",
         desc: "UI font family, size and density.",
