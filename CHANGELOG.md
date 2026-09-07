@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.37] - 2026-09-07
+
+### Fixed
+
+- Improved transcript performance by rendering collapsed work only when opened, skipping hidden-tab layout work, and reusing line-height measurements across reflows.
+- Pending approval controls remain visible when completed transcript work folds, and switching tabs preserves transcript state.
+
 ## [0.1.36] - 2026-09-07
 
 ### Added
