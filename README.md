@@ -211,6 +211,11 @@ Voktty is an independent hard fork and derivative work based on Terax,
 originally developed by Crynta. It is maintained independently by
 sergewinters and is not affiliated with or endorsed by Crynta.
 
+The agent harness (the "Agent Development" panel and its multi-CLI protocol
+adapters) is derived from [MonoCode](https://github.com/hardbeat920/monocode),
+originally developed by Nick and distributed under the MIT License. This
+attribution does not imply affiliation with or endorsement by its author.
+
 See [NOTICE](NOTICE) for the complete attribution and [LICENSE](LICENSE) for
 the applicable Apache-2.0 terms.
 
