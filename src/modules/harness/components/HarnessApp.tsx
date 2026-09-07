@@ -70,7 +70,17 @@ import {
   pickFolder,
   restoreSessionCheckout,
 } from "../lib/fs";
-import { type InboxItem, inboxComposerCard } from "../lib/githubTasks";
+import {
+  type InboxItem,
+  inboxComposerCard,
+  githubWorkItemDetails,
+  peekGithubWorkItemDetails,
+} from "../lib/githubTasks";
+import {
+  inboxAskKey,
+  inboxAskPrompt,
+  type InboxAskContext,
+} from "../lib/inboxAsk";
 import {
   type HandoffComposerCard,
   appendPreparingHandoff,
@@ -356,10 +366,13 @@ import {
   openFindInActiveEditor,
 } from "../surfaces/editorSearch";
 import { InboxDetailPane, InboxView } from "../surfaces/InboxView";
+import type { InboxSessionPortal } from "../surfaces/InboxDiscussionPanel";
 import { NotesView } from "../surfaces/NotesView";
 import { PaneTree } from "../surfaces/PaneTree";
 import { ProjectTerminalDock } from "../surfaces/ProjectTerminalDock";
 import { SearchView } from "../surfaces/SearchView";
+import { SessionPane } from "../surfaces/SessionPane";
+import { SessionSurface } from "../surfaces/SessionSurface";
 import { SettingsView } from "../surfaces/SettingsView";
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
@@ -610,6 +623,9 @@ export function HarnessApp({
   const [searchViewOpen, setSearchViewOpen] = useState(false);
   const [searchViewFocusToken, setSearchViewFocusToken] = useState(0);
   const [inboxViewOpen, setInboxViewOpen] = useState(false);
+  const [inboxAskPortal, setInboxAskPortal] =
+    useState<InboxSessionPortal | null>(null);
+  const openingInboxSessions = useRef(new Map<string, Promise<string>>());
   const [notesViewOpen, setNotesViewOpen] = useState(false);
   const notesEnabled = useSyncExternalStore(
     subscribeNotesEnabled,
@@ -1467,6 +1483,108 @@ export function HarnessApp({
       sessionDefaults?.runtimeMode,
       projectCwd,
     ],
+  );
+
+  const onAskInboxItem = useCallback(
+    async (item: InboxItem): Promise<string> => {
+      const key = inboxAskKey(item);
+      const existing = sessionsRef.current.find(
+        (session) => session.inboxAsk?.key === key,
+      );
+      if (existing) return existing.id;
+      const inFlight = openingInboxSessions.current.get(key);
+      if (inFlight) return inFlight;
+
+      const run = (async () => {
+        let description: string | undefined;
+        if (item.provider === "linear") {
+          if (item.id) {
+            const cached = peekLinearIssueDetails(item.id);
+            description = cached
+              ? cached.body
+              : (await linearIssueDetails(item.id).catch(() => undefined))?.body;
+          }
+        } else {
+          const kind =
+            item.kind === "issue" || item.kind === "pr" ? item.kind : null;
+          if (kind) {
+            const cached = peekGithubWorkItemDetails(
+              item.projectPath,
+              kind,
+              item.number,
+            );
+            description = cached
+              ? cached.body
+              : (
+                  await githubWorkItemDetails(
+                    item.projectPath,
+                    kind,
+                    item.number,
+                  ).catch(() => undefined)
+                )?.body;
+          }
+        }
+
+        const cwd =
+          (item.projectPath && looksLikeProject(item.projectPath)
+            ? item.projectPath
+            : undefined) ||
+          active?.cwd ||
+          sessionDefaults?.cwd ||
+          projectCwd;
+
+        const ref =
+          item.provider === "linear"
+            ? item.identifier?.trim() || `#${item.number}`
+            : `#${item.number}`;
+
+        const askContext: InboxAskContext = {
+          key,
+          title: `${ref} ${item.title}`,
+          url: item.url,
+          provider: item.provider,
+          ...(description?.trim() ? { description: description.trim() } : {}),
+        };
+
+        const session: Session = {
+          ...newDefaultSession(cwd, sessionDefaults?.runtimeMode),
+          title: `Ask · ${ref}`,
+          inboxAsk: askContext,
+        };
+
+        setSessions((prev) => [...prev, session]);
+        return session.id;
+      })().finally(() => {
+        openingInboxSessions.current.delete(key);
+      });
+
+      openingInboxSessions.current.set(key, run);
+      return run;
+    },
+    [
+      active?.cwd,
+      projectCwd,
+      sessionDefaults?.cwd,
+      sessionDefaults?.runtimeMode,
+    ],
+  );
+
+  const onRestartInboxAsk = useCallback(
+    async (item: InboxItem): Promise<string> => {
+      const key = inboxAskKey(item);
+      openingInboxSessions.current.delete(key);
+      const existing = sessionsRef.current.find(
+        (session) => session.inboxAsk?.key === key,
+      );
+      if (existing) {
+        for (const harness of sessionChildHarnesses(existing)) {
+          void forgetHarnessSession(harness, existing.id);
+        }
+        setSessions((prev) => prev.filter((s) => s.id !== existing.id));
+      }
+      return onAskInboxItem(item);
+    },
+    [onAskInboxItem],
   );
 
   const onAddNoteToChat = useCallback(
@@ -3749,10 +3867,13 @@ export function HarnessApp({
         void (async () => {
           try {
             const prepared = await prepareAttachments(attachments);
-            const prompt = await preparePrompt(harnessText, {
-              harness: current.harness,
-              cwd: workCwd,
-            });
+            const prompt = await preparePrompt(
+              inboxAskPrompt(current.inboxAsk, harnessText),
+              {
+                harness: current.harness,
+                cwd: workCwd,
+              },
+            );
             await steerHarnessTurn({
               harness: current.harness,
               sessionId,
@@ -3789,6 +3910,7 @@ export function HarnessApp({
         isFirstTurn &&
         !current.inboxCard &&
         !current.noteCard &&
+        !current.inboxAsk &&
         placeholderTitle
           ? titleFromPrompt(submittedText, current.harness, attachments)
           : current.title;
@@ -3885,7 +4007,7 @@ export function HarnessApp({
         }),
       );
 
-      if (isFirstTurn && live && placeholderTitle) {
+      if (isFirstTurn && live && placeholderTitle && !current.inboxAsk) {
         void generateHarnessTitle(current.harness, {
           sessionId,
           cwd: workCwd,
@@ -3982,16 +4104,21 @@ export function HarnessApp({
             };
           }
 
-          await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
+          if (!current.inboxAsk) {
+            await beginSessionTurn(sessionId, workCwd).catch(() => undefined);
+          }
           if (turnGen.current.get(sessionId) !== gen) return;
           const prepared = await prepareAttachments(attachments);
           const prompt =
             intent === "build" && approvedPlan
               ? buildPlanPrompt(approvedPlan.text)
-              : await preparePrompt(harnessText, {
-                  harness: current.harness,
-                  cwd: workCwd,
-                });
+              : await preparePrompt(
+                  inboxAskPrompt(current.inboxAsk, harnessText),
+                  {
+                    harness: current.harness,
+                    cwd: workCwd,
+                  },
+                );
           const turnPrompt =
             intent === "plan" ? planTurnPrompt(prompt) : prompt;
           const earlier = queuedHandoff
@@ -5533,6 +5660,9 @@ export function HarnessApp({
             onClose={onLeaveInbox}
             onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
             onStart={onStartInboxItem}
+            onAsk={onAskInboxItem}
+            onAskRestart={onRestartInboxAsk}
+            onAskMount={setInboxAskPortal}
           />
         ) : null}
         {notesViewOpen ? (
@@ -5594,6 +5724,45 @@ export function HarnessApp({
         onOpen={onOpenWhatsNew}
         onDismiss={() => setUpdateNotice(null)}
       />
+      <div className="hidden" aria-hidden="true">
+        {sessions
+          .filter((session) => session.inboxAsk)
+          .map((session) => (
+            <SessionSurface
+              key={session.id}
+              host={
+                inboxAskPortal?.sessionId === session.id
+                  ? inboxAskPortal.host
+                  : undefined
+              }
+            >
+              <SessionPane
+                session={session}
+                visible={inboxAskPortal?.sessionId === session.id}
+                focused={inboxAskPortal?.sessionId === session.id}
+                inSplit={false}
+                composerFocused={inboxAskPortal?.sessionId === session.id}
+                recents={recents}
+                hideProjectPicker
+                onFocus={() => {}}
+                onClose={() => {}}
+                onCwdChange={onCwdChange}
+                onBranchChange={onBranchChange}
+                onModelChange={onModelChange}
+                onModelSettingsChange={onModelSettingsChange}
+                onRuntimeModeChange={onRuntimeModeChange}
+                onSubmit={onSubmit}
+                onStop={onStop}
+                onCompactContext={onCompactContext}
+                onApproval={onApproval}
+                onOpenFile={onOpenFile}
+                onOpenDiff={onOpenDiff}
+                onOpenPlan={onOpenPlan}
+                onNewTerminal={onNewTerminalInSession}
+              />
+            </SessionSurface>
+          ))}
+      </div>
     </div>
   );
 }

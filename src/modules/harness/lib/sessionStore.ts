@@ -66,10 +66,12 @@ type SessionUpsertPayload = {
   worktreeCwd?: string;
 };
 
-/** Only real chats belong in project history: blank tabs stay ephemeral. */
+/** Only real chats belong in project history: blank tabs and inbox discussions stay ephemeral. */
 export function shouldPersistSession(session: Session): boolean {
   return (
-    session.cwd !== "~" && session.blocks.some((block) => block.role === "user")
+    !session.inboxAsk &&
+    session.cwd !== "~" &&
+    session.blocks.some((block) => block.role === "user")
   );
 }
 
