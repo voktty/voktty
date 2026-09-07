@@ -3149,8 +3149,7 @@ fn metadata_with_reopen_retry(path: &Path) -> std::io::Result<std::fs::Metadata>
 
 fn read_text_file_sync(path: &str) -> Result<String, String> {
     let path = expand_home(path);
-    let meta =
-        metadata_with_reopen_retry(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let meta = metadata_with_reopen_retry(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     if !meta.is_file() {
         return Err("Not a file".into());
     }
@@ -3567,7 +3566,11 @@ mod tests {
     #[test]
     fn read_text_file_still_fails_when_the_file_never_appears() {
         let dir = tmp("read-retry-missing");
-        let path = dir.0.join("never-written.md").to_string_lossy().into_owned();
+        let path = dir
+            .0
+            .join("never-written.md")
+            .to_string_lossy()
+            .into_owned();
 
         let err = read_text_file_sync(&path).unwrap_err();
         assert!(err.contains(&path));
