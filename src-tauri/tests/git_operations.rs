@@ -1241,6 +1241,18 @@ fn cherry_pick_commit_applies_the_change_onto_the_current_branch() {
     .unwrap();
     assert!(!fx.repo_path.join("b.txt").exists());
 
+    // Diverge target from base so the cherry-picked commit gets a different
+    // parent (and tree) than the original: otherwise, when target's HEAD is
+    // an unmodified `base`, cherry-picking `side`'s commit reproduces the
+    // exact same tree/parent/message/author as `side_sha`, and on a fast
+    // CI runner the author/committer timestamps (1s git granularity) can
+    // coincide too, making the two commits byte-identical objects with the
+    // same hash. Committing a change on target first guarantees a distinct
+    // parent regardless of timing.
+    fx.write_file("c.txt", "gamma\n");
+    fx.run_git(&["add", "c.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "add c on target"]);
+
     let new_sha =
         operations::cherry_pick_commit(&fx.registry, &fx.repo_str(), &side_sha, &fx.workspace)
             .expect("cherry_pick_commit");
