@@ -148,4 +148,84 @@ describe("validateTheme", () => {
       expect(result.theme.editorTheme).toEqual({ dark: "tokyo" });
     }
   });
+
+  it("accepts surface hierarchy and accent tokens in colors", () => {
+    const result = validateTheme(
+      baseTheme({
+        variants: {
+          dark: {
+            colors: {
+              background: "#121214",
+              surfaceCanvas: "#121214",
+              surfaceSidebar: "#16171a",
+              surfaceToolbar: "#191a1e",
+              surfaceCard: "#1e2025",
+              surfacePane: "#1e2025",
+              surfaceHeader: "#1c1d22",
+              surfacePopover: "#22252a",
+              surfaceActiveItem: "#262932",
+              accentAction: "#8b5cf6",
+              accentIndicator: "#38bdf8",
+              borderSubtle: "rgba(255, 255, 255, 0.07)",
+            },
+          },
+        },
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts and validates variations within a theme", () => {
+    const result = validateTheme({
+      id: "voktty-base",
+      name: "Voktty Base",
+      variants: { dark: { colors: { background: "#000" } } },
+      defaultVariation: "nord",
+      variations: [
+        {
+          id: "nord",
+          name: "Nord",
+          description: "Arctic theme",
+          variants: { dark: { colors: { background: "#2e3440" } } },
+        },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.theme.variations).toHaveLength(1);
+      expect(result.theme.variations?.[0].id).toBe("nord");
+      expect(result.theme.defaultVariation).toBe("nord");
+    }
+  });
+
+  it("rejects invalid variations", () => {
+    const invalidId = validateTheme({
+      id: "voktty-base",
+      name: "Voktty Base",
+      variants: { dark: {} },
+      variations: [
+        {
+          id: "Invalid Id",
+          name: "Bad",
+          variants: { dark: {} },
+        },
+      ],
+    });
+    expect(invalidId.ok).toBe(false);
+
+    const emptyVariants = validateTheme({
+      id: "voktty-base",
+      name: "Voktty Base",
+      variants: { dark: {} },
+      variations: [
+        {
+          id: "valid-id",
+          name: "Valid",
+          variants: {},
+        },
+      ],
+    });
+    expect(emptyVariants.ok).toBe(false);
+  });
 });
+
