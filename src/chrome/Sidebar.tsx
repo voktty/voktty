@@ -968,6 +968,7 @@ function SidebarComponent({
               busy={projectPathBusy(busyProjectPaths, cwd)}
               onSelectProject={onSelectProject}
               onOpenProject={onOpenProject}
+              onNew={onNew}
               onSearch={onSearch}
               onOpenInbox={onOpenInbox}
               onOpenNotes={notesEnabled ? onOpenNotes : undefined}
@@ -1400,6 +1401,7 @@ function SidebarProjectPicker({
   busy,
   onSelectProject,
   onOpenProject,
+  onNew,
   onSearch,
   onOpenInbox,
   onOpenNotes,
@@ -1413,6 +1415,7 @@ function SidebarProjectPicker({
   busy: boolean;
   onSelectProject: (path: string) => void;
   onOpenProject?: () => void;
+  onNew?: () => void;
   onSearch?: () => void;
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
@@ -1658,6 +1661,11 @@ function SidebarProjectPicker({
         ) : null}
       </div>
       <div className="flex items-center ml-auto">
+        {onNew ? (
+          <IconButton label={`New tab (${MOD}T)`} onClick={onNew}>
+            <Plus className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
         {onSearch ? (
           <IconButton
             label={`Search (${MOD}K)`}
