@@ -189,7 +189,8 @@ export function QuotaUsageWidget() {
         align="end"
         side="top"
         sideOffset={6}
-        className="w-84 max-w-[92vw] max-h-[80vh] flex flex-col p-3 overflow-hidden rounded-xl border border-border/70 bg-popover/95 shadow-2xl backdrop-blur-xl text-xs"
+        collisionPadding={8}
+        className="w-84 max-w-[min(92vw,var(--radix-popover-content-available-width))] max-h-[min(80vh,var(--radix-popover-content-available-height))] flex flex-col p-3 overflow-hidden rounded-xl border border-border/70 bg-popover/95 shadow-2xl backdrop-blur-xl text-xs"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-2">

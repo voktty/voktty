@@ -325,7 +325,8 @@ export function ProjectToolkitPopover({
           side="top"
           align="end"
           sideOffset={8}
-          className="flex max-h-[540px] w-[420px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border/60 bg-popover/95 p-0 shadow-2xl backdrop-blur-xl"
+          collisionPadding={8}
+          className="flex max-h-[min(540px,var(--radix-popover-content-available-height))] w-[420px] max-w-[min(95vw,var(--radix-popover-content-available-width))] flex-col overflow-hidden rounded-xl border border-border/60 bg-popover/95 p-0 shadow-2xl backdrop-blur-xl"
         >
           {/* Header */}
           <div className="flex flex-col gap-2 border-b border-border/40 bg-muted/20 p-3">
