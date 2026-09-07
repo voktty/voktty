@@ -75,6 +75,7 @@ function serializeNode(node: PaneNode, activeLeafId: number): SerializedNode {
 }
 
 export function isSerializableTab(tab: Tab): boolean {
+  if ("workspaceEnv" in tab && tab.workspaceEnv?.kind === "ssh") return false;
   switch (tab.kind) {
     case "terminal":
       return !tab.private && !tab.collaboration;
@@ -206,6 +207,9 @@ function hydrateTab(
   allocId: () => number,
   fallbackWorkspaceEnv: WorkspaceEnv,
 ): Tab | null {
+  if ("workspaceEnv" in s && s.workspaceEnv?.kind === "ssh") {
+    return null;
+  }
   switch (s.kind) {
     case "terminal": {
       const { tree, activeLeafId, firstLeafCwd } = hydrateTree(s.tree, allocId);
