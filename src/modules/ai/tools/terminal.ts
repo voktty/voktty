@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { isLocalUrl } from "@/modules/preview";
 import { checkShellCommand } from "../lib/security";
 import type { ToolContext } from "./context";
 
@@ -80,15 +81,7 @@ export function buildTerminalTools(ctx: ToolContext) {
         if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
           return { error: "only http/https URLs are allowed", url };
         }
-        const host = parsed.hostname;
-        const isLocal =
-          host === "localhost" ||
-          host === "127.0.0.1" ||
-          host === "0.0.0.0" ||
-          host === "[::1]" ||
-          host === "::1" ||
-          host.endsWith(".localhost");
-        if (!isLocal) {
+        if (!isLocalUrl(url)) {
           return {
             error:
               "open_preview is restricted to localhost URLs. Ask the user to paste the external URL into the preview address bar instead.",

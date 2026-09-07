@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   ConsoleEntry,
   ConsoleLogLevel,
+  NetworkEntry,
   ViewportMode,
   ViewportPreset,
 } from "../types";
@@ -66,6 +67,8 @@ export const VIEWPORT_PRESETS: readonly ViewportPreset[] = [
 ];
 
 export type ConsoleFilter = "all" | ConsoleLogLevel;
+export type DevtoolsTab = "console" | "network";
+const NETWORK_CAP = 200;
 
 export interface PreviewDevtoolsState {
   // Viewport emulation state
@@ -82,6 +85,8 @@ export interface PreviewDevtoolsState {
   consoleFilter: ConsoleFilter;
   consoleSearch: string;
   isConsoleOpen: boolean;
+  devtoolsTab: DevtoolsTab;
+  networkEntries: NetworkEntry[];
 
   // Viewport actions
   setViewportMode: (mode: ViewportMode) => void;
@@ -98,6 +103,9 @@ export interface PreviewDevtoolsState {
   setConsoleFilter: (filter: ConsoleFilter) => void;
   setConsoleSearch: (query: string) => void;
   toggleConsole: (open?: boolean) => void;
+  setDevtoolsTab: (tab: DevtoolsTab) => void;
+  addNetworkEntry: (entry: Omit<NetworkEntry, "count">) => void;
+  clearNetwork: () => void;
 }
 
 export const usePreviewDevtoolsStore = create<PreviewDevtoolsState>((set, get) => ({
@@ -113,6 +121,8 @@ export const usePreviewDevtoolsStore = create<PreviewDevtoolsState>((set, get) =
   consoleFilter: "all",
   consoleSearch: "",
   isConsoleOpen: false,
+  devtoolsTab: "console",
+  networkEntries: [],
 
   setViewportMode: (mode) => {
     if (mode === "responsive") {
@@ -218,6 +228,34 @@ export const usePreviewDevtoolsStore = create<PreviewDevtoolsState>((set, get) =
     set((state) => ({
       isConsoleOpen: typeof open === "boolean" ? open : !state.isConsoleOpen,
     })),
+  setDevtoolsTab: (devtoolsTab) => set({ devtoolsTab }),
+  addNetworkEntry: (newEntry) => {
+    set((state) => {
+      const last = state.networkEntries[state.networkEntries.length - 1];
+      if (
+        last &&
+        last.method === newEntry.method &&
+        last.url === newEntry.url &&
+        last.status === newEntry.status
+      ) {
+        const updated = [...state.networkEntries];
+        updated[updated.length - 1] = {
+          ...last,
+          count: last.count + 1,
+          timestamp: newEntry.timestamp,
+          durationMs: newEntry.durationMs,
+          size: newEntry.size,
+          body: newEntry.body,
+          error: newEntry.error,
+        };
+        return { networkEntries: updated };
+      }
+      const nextEntries = [...state.networkEntries, { ...newEntry, count: 1 }];
+      if (nextEntries.length > NETWORK_CAP) nextEntries.shift();
+      return { networkEntries: nextEntries };
+    });
+  },
+  clearNetwork: () => set({ networkEntries: [] }),
 }));
 
 export function formatConsoleErrorPrompt(entry: ConsoleEntry): string {

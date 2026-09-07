@@ -7,6 +7,8 @@ import {
   FileEditIcon,
   FilePlusIcon,
   FolderAddIcon,
+  Globe02Icon,
+  SourceCodeIcon,
   TerminalIcon,
   Tick02Icon,
   ToolsIcon,
@@ -29,6 +31,9 @@ const TOOL_META: Record<string, { icon: typeof FilePlusIcon }> = {
   bash_run: { icon: TerminalIcon },
   bash_background: { icon: TerminalIcon },
   run_development_check: { icon: TerminalIcon },
+  browser_click: { icon: Globe02Icon },
+  browser_type: { icon: Globe02Icon },
+  browser_eval: { icon: SourceCodeIcon },
 };
 
 function AiToolApprovalImpl({ part, toolName, onRespond }: Props) {
@@ -60,7 +65,13 @@ function AiToolApprovalImpl({ part, toolName, onRespond }: Props) {
                 ? t("ai.approvals.spawnBackground")
                 : toolName === "run_development_check"
                   ? t("ai.approvals.runDevelopmentCheck")
-                  : toolName;
+                  : toolName === "browser_click"
+                    ? t("ai.approvals.browserClick")
+                    : toolName === "browser_type"
+                      ? t("ai.approvals.browserType")
+                      : toolName === "browser_eval"
+                        ? t("ai.approvals.browserEval")
+                        : toolName;
   const Icon = meta?.icon ?? ToolsIcon;
   const input = part.input as Record<string, unknown>;
 
@@ -217,6 +228,30 @@ function PreviewBlock({
       <div className="font-mono text-[11px] text-muted-foreground">
         {String(input.path ?? "")}
       </div>
+    );
+  }
+  if (toolName === "browser_click") {
+    return (
+      <div className="font-mono text-[11px] text-muted-foreground">
+        {String(input.selector ?? (input.ref != null ? `ref ${String(input.ref)}` : ""))}
+      </div>
+    );
+  }
+  if (toolName === "browser_type") {
+    return (
+      <div className="space-y-0.5 font-mono text-[11px] text-muted-foreground">
+        <div>
+          {String(input.selector ?? (input.ref != null ? `ref ${String(input.ref)}` : ""))}
+        </div>
+        <div className="text-foreground">{String(input.text ?? "")}</div>
+      </div>
+    );
+  }
+  if (toolName === "browser_eval") {
+    return (
+      <pre className="max-h-40 overflow-auto rounded-md bg-muted/60 p-2 font-mono text-[11px] leading-relaxed">
+        {String(input.script ?? "")}
+      </pre>
     );
   }
   return (

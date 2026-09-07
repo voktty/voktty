@@ -173,13 +173,31 @@ describe("inspectorScript: DOM & Framework extraction", () => {
   });
 
   it("produces valid injected script string with console and selector handling", () => {
-    const script = getInspectorInjectedScript();
+    const script = getInspectorInjectedScript("https://tauri.localhost");
     expect(typeof script).toBe("string");
     expect(script).toContain("VOKTTY_LIVE_COMPONENT_SELECTED");
     expect(script).toContain("VOKTTY_SET_INSPECTOR_ACTIVE");
     expect(script).toContain("VOKTTY_CONSOLE_ENTRY");
     expect(script).toContain("VOKTTY_SELECT_ELEMENT_BY_SELECTOR");
     expect(script).toContain("voktty-inspector-root");
+  });
+
+  it("pins postMessage to the given host origin and never uses *", () => {
+    const origin = "https://tauri.localhost";
+    const script = getInspectorInjectedScript(origin);
+    expect(script).toContain(origin);
+    expect(script).toContain("var __VOKTTY_HOST_ORIGIN__");
+    expect(script).not.toMatch(/postMessage\([^)]*,\s*"\*"\s*\)/);
+    expect(script).toContain("e.source !== window.parent");
+    expect(script).toContain("VOKTTY_BROWSER_COMMAND");
+    expect(script).toContain('"ping"');
+    expect(script).toContain("unknown_command");
+    expect(script).toContain("VOKTTY_NETWORK_ENTRY");
+    expect(script).toContain('command === "snapshot"');
+    expect(script).toContain('command === "click"');
+    expect(script).toContain('command === "type"');
+    expect(script).toContain('command === "eval"');
+    expect(script).toContain("element_not_found");
   });
 });
 

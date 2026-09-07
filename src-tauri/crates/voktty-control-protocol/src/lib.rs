@@ -7,12 +7,24 @@ pub const METHOD_PING: &str = "ping";
 pub const METHOD_CAPABILITIES: &str = "capabilities";
 pub const METHOD_IDENTIFY: &str = "identify";
 pub const METHOD_OPEN: &str = "open";
+pub const METHOD_BROWSER_SNAPSHOT: &str = "browser.snapshot";
+pub const METHOD_BROWSER_CLICK: &str = "browser.click";
+pub const METHOD_BROWSER_TYPE: &str = "browser.type";
+pub const METHOD_BROWSER_NAVIGATE: &str = "browser.navigate";
+pub const METHOD_BROWSER_SELECTED: &str = "browser.selected";
+pub const METHOD_BROWSER_EVAL: &str = "browser.eval";
 pub const SERVER_RESPONSE_ID: &str = "server";
 pub const METHODS: &[&str] = &[
     METHOD_PING,
     METHOD_CAPABILITIES,
     METHOD_IDENTIFY,
     METHOD_OPEN,
+    METHOD_BROWSER_SNAPSHOT,
+    METHOD_BROWSER_CLICK,
+    METHOD_BROWSER_TYPE,
+    METHOD_BROWSER_NAVIGATE,
+    METHOD_BROWSER_SELECTED,
+    METHOD_BROWSER_EVAL,
 ];
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -126,6 +138,35 @@ fn default_focus() -> bool {
     true
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct BrowserNavigateParams {
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct BrowserClickParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "ref")]
+    pub element_ref: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct BrowserTypeParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "ref")]
+    pub element_ref: Option<u64>,
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submit: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct BrowserEvalParams {
+    pub script: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,5 +204,23 @@ mod tests {
         let params: OpenParams =
             serde_json::from_value(json!({ "path": "/tmp/a" })).expect("deserialize open params");
         assert!(params.focus);
+    }
+
+    #[test]
+    fn browser_methods_are_advertised() {
+        assert!(METHODS.contains(&METHOD_BROWSER_SNAPSHOT));
+        assert!(METHODS.contains(&METHOD_BROWSER_CLICK));
+        assert!(METHODS.contains(&METHOD_BROWSER_EVAL));
+    }
+
+    #[test]
+    fn browser_click_params_rename_ref() {
+        let params: BrowserClickParams = serde_json::from_value(json!({
+            "ref": 3,
+            "selector": "#pay"
+        }))
+        .expect("deserialize click params");
+        assert_eq!(params.element_ref, Some(3));
+        assert_eq!(params.selector.as_deref(), Some("#pay"));
     }
 }

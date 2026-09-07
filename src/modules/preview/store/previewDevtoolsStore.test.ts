@@ -8,6 +8,7 @@ describe("previewDevtoolsStore", () => {
   beforeEach(() => {
     usePreviewDevtoolsStore.getState().resetViewport();
     usePreviewDevtoolsStore.getState().clearConsole();
+    usePreviewDevtoolsStore.getState().clearNetwork();
   });
 
   it("handles viewport preset selection", () => {
@@ -81,5 +82,39 @@ describe("previewDevtoolsStore", () => {
     expect(prompt).toContain("Failed to fetch /api/users");
     expect(prompt).toContain("UserService.ts:15");
     expect(prompt).toContain("Stack Trace");
+  });
+
+  it("caps and groups consecutive network entries", () => {
+    usePreviewDevtoolsStore.getState().addNetworkEntry({
+      id: "a",
+      method: "GET",
+      url: "/api",
+      status: 200,
+      durationMs: 10,
+      size: 4,
+      timestamp: 1,
+    });
+    usePreviewDevtoolsStore.getState().addNetworkEntry({
+      id: "b",
+      method: "GET",
+      url: "/api",
+      status: 200,
+      durationMs: 11,
+      size: 4,
+      timestamp: 2,
+    });
+    expect(usePreviewDevtoolsStore.getState().networkEntries).toHaveLength(1);
+    expect(usePreviewDevtoolsStore.getState().networkEntries[0].count).toBe(2);
+
+    usePreviewDevtoolsStore.getState().addNetworkEntry({
+      id: "c",
+      method: "POST",
+      url: "/api",
+      status: 201,
+      durationMs: 8,
+      size: 2,
+      timestamp: 3,
+    });
+    expect(usePreviewDevtoolsStore.getState().networkEntries).toHaveLength(2);
   });
 });

@@ -12,8 +12,10 @@ use serde_json::{json, Value};
 use tauri::{Emitter, Manager};
 use voktty_control_protocol::{
     ControlDescriptor, ControlRequest, ControlResponse, FrontendRequest, FrontendResponse,
-    OpenParams, MAX_MESSAGE_BYTES, METHODS, METHOD_CAPABILITIES, METHOD_IDENTIFY, METHOD_OPEN,
-    METHOD_PING, PROTOCOL_VERSION, SERVER_RESPONSE_ID,
+    OpenParams, MAX_MESSAGE_BYTES, METHODS, METHOD_BROWSER_CLICK, METHOD_BROWSER_EVAL,
+    METHOD_BROWSER_NAVIGATE, METHOD_BROWSER_SELECTED, METHOD_BROWSER_SNAPSHOT, METHOD_BROWSER_TYPE,
+    METHOD_CAPABILITIES, METHOD_IDENTIFY, METHOD_OPEN, METHOD_PING, PROTOCOL_VERSION,
+    SERVER_RESPONSE_ID,
 };
 
 use crate::modules::{fs, workspace};
@@ -365,6 +367,12 @@ fn route_request(
                 Err((code, message)) => ControlResponse::failure(request.id, code, message),
             }
         }
+        METHOD_BROWSER_SNAPSHOT
+        | METHOD_BROWSER_CLICK
+        | METHOD_BROWSER_TYPE
+        | METHOD_BROWSER_NAVIGATE
+        | METHOD_BROWSER_SELECTED
+        | METHOD_BROWSER_EVAL => forward_to_frontend(request, app, state),
         _ => ControlResponse::failure(request.id, "unknown_method", "unknown control method"),
     }
 }

@@ -3,6 +3,7 @@ import type { WorkspacePlacement } from "@/modules/spaces";
 import type { PreviewTab, Tab } from "@/modules/tabs";
 import { useEffect, useRef } from "react";
 import { PreviewPane, type PreviewPaneHandle } from "./PreviewPane";
+import { usePreviewHandleStore } from "./store/previewHandleStore";
 
 type Props = {
   tabs: Tab[];
@@ -40,7 +41,10 @@ export function PreviewStack({
   const getRefCallback = (id: number) => {
     let cb = refCallbacks.current.get(id);
     if (!cb) {
-      cb = (h: PreviewPaneHandle | null) => registerRef.current(id, h);
+      cb = (h: PreviewPaneHandle | null) => {
+        registerRef.current(id, h);
+        usePreviewHandleStore.getState().registerHandle(id, h);
+      };
       refCallbacks.current.set(id, cb);
     }
     return cb;
@@ -63,6 +67,13 @@ export function PreviewStack({
       if (!live.has(id)) urlCallbacks.current.delete(id);
     }
   }, [previews]);
+
+  const isActivePreview = previews.some((tab) => tab.id === activeId);
+  useEffect(() => {
+    usePreviewHandleStore
+      .getState()
+      .setActiveTabId(isActivePreview ? activeId : null);
+  }, [activeId, isActivePreview]);
 
   if (previews.length === 0) return null;
   return (

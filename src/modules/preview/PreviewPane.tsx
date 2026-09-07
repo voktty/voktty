@@ -19,7 +19,9 @@ import {
   sendHighlightElement,
   sendInspectorActive,
   sendSelectElementBySelector,
+  type InspectorBridge,
 } from "./lib/inspectorBridge";
+import { isLocalUrl } from "./lib/urlSafety";
 import { useLiveComponentStore } from "./store/liveComponentStore";
 import { usePreviewDevtoolsStore } from "./store/previewDevtoolsStore";
 
@@ -31,6 +33,12 @@ export type PreviewPaneHandle = {
   reload: () => void;
   focusAddressBar: () => void;
   getUrl: () => string;
+  navigate: (url: string) => void;
+  sendBrowserCommand: <T>(
+    command: string,
+    args?: unknown,
+    timeoutMs?: number,
+  ) => Promise<T>;
 };
 
 type Props = {
@@ -54,6 +62,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
     const [effectiveSrc, setEffectiveSrc] = useState(url);
     const addressRef = useRef<PreviewAddressBarHandle>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const sendCommandRef = useRef<InspectorBridge["sendCommand"] | null>(null);
 
     const isInspectorActive = useLiveComponentStore((s) => s.isInspectorActive);
     const selectedComponent = useLiveComponentStore((s) => s.selectedComponent);
@@ -71,6 +80,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
     const scale = usePreviewDevtoolsStore((s) => s.scale);
     const showDeviceFrame = usePreviewDevtoolsStore((s) => s.showDeviceFrame);
     const addConsoleEntry = usePreviewDevtoolsStore((s) => s.addConsoleEntry);
+    const addNetworkEntry = usePreviewDevtoolsStore((s) => s.addNetworkEntry);
 
     const isFixedViewport =
       viewportMode !== "responsive" && Boolean(customWidth && customHeight);
@@ -198,7 +208,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       const iframe = iframeRef.current;
       if (!iframe || !loaded) return;
 
-      const detach = attachInspectorBridge(
+      const bridge = attachInspectorBridge(
         iframe,
         (meta, autoJump) => {
           setSelectedComponent(
@@ -225,10 +235,15 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
         (entry) => {
           addConsoleEntry(entry);
         },
+        (entry) => {
+          addNetworkEntry(entry);
+        },
       );
+      sendCommandRef.current = bridge.sendCommand;
 
       return () => {
-        detach();
+        sendCommandRef.current = null;
+        bridge.detach();
       };
     }, [
       loaded,
@@ -238,6 +253,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
       setInspectorActive,
       onUrlChange,
       addConsoleEntry,
+      addNetworkEntry,
     ]);
 
     // Sync active state with iframe
@@ -256,8 +272,18 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
         },
         focusAddressBar: () => addressRef.current?.focus(),
         getUrl: () => url,
+        navigate: (nextUrl) => {
+          onUrlChange(nextUrl);
+        },
+        sendBrowserCommand: (command, args, timeoutMs) => {
+          const send = sendCommandRef.current;
+          if (!send) {
+            return Promise.reject(new Error("preview_bridge_unavailable"));
+          }
+          return send(command, args, timeoutMs);
+        },
       }),
-      [url],
+      [url, onUrlChange],
     );
 
     return (
@@ -394,18 +420,4 @@ function EmptyState() {
   );
 }
 
-function isLocalUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    const h = u.hostname;
-    return (
-      h === "localhost" ||
-      h === "127.0.0.1" ||
-      h === "0.0.0.0" ||
-      h === "[::1]" ||
-      h.endsWith(".localhost")
-    );
-  } catch {
-    return false;
-  }
-}
+

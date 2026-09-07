@@ -15,8 +15,9 @@ use voktty_aliases::{
 };
 use voktty_control_protocol::{
     CallerContext, ControlDescriptor, ControlRequest, ControlResponse, OpenParams,
-    MAX_MESSAGE_BYTES, METHOD_CAPABILITIES, METHOD_IDENTIFY, METHOD_OPEN, METHOD_PING,
-    PROTOCOL_VERSION, SERVER_RESPONSE_ID,
+    MAX_MESSAGE_BYTES, METHOD_BROWSER_CLICK, METHOD_BROWSER_EVAL, METHOD_BROWSER_NAVIGATE,
+    METHOD_BROWSER_SELECTED, METHOD_BROWSER_SNAPSHOT, METHOD_BROWSER_TYPE, METHOD_CAPABILITIES,
+    METHOD_IDENTIFY, METHOD_OPEN, METHOD_PING, PROTOCOL_VERSION, SERVER_RESPONSE_ID,
 };
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -150,6 +151,7 @@ fn parse_args(mut args: Vec<OsString>) -> Result<Config, CliError> {
         Some("ping") => request_without_params(args, METHOD_PING)?,
         Some("capabilities") => request_without_params(args, METHOD_CAPABILITIES)?,
         Some("identify") => request_without_params(args, METHOD_IDENTIFY)?,
+        Some("browser") => parse_browser(args)?,
         Some("open") => parse_open(args)?,
         Some("review") => parse_review(args)?,
         Some("alias") => Action::Alias(parse_alias(args)?),
@@ -292,6 +294,114 @@ fn strip_verbatim(path: &std::path::Path) -> PathBuf {
         s.to_string()
     };
     PathBuf::from(stripped)
+}
+
+fn parse_browser(mut args: Vec<OsString>) -> Result<Action, CliError> {
+    if args.is_empty() {
+        return Err(usage_error(
+            "browser requires a subcommand: open|selected|snapshot|click|type|navigate|eval",
+        ));
+    }
+    let subcommand = args.remove(0);
+    match subcommand.to_str() {
+        Some("open" | "navigate") => {
+            let url = args
+                .first()
+                .and_then(|value| value.to_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| usage_error("browser open requires a URL"))?
+                .to_string();
+            if args.len() != 1 {
+                return Err(usage_error("browser open accepts exactly one URL"));
+            }
+            Ok(Action::Request {
+                method: METHOD_BROWSER_NAVIGATE,
+                params: json!({ "url": url }),
+            })
+        }
+        Some("selected") => no_extra_request(args, METHOD_BROWSER_SELECTED),
+        Some("snapshot") => no_extra_request(args, METHOD_BROWSER_SNAPSHOT),
+        Some("click") => {
+            let target = args
+                .first()
+                .and_then(|value| value.to_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| usage_error("browser click requires a ref or selector"))?;
+            if args.len() != 1 {
+                return Err(usage_error("browser click accepts exactly one target"));
+            }
+            Ok(Action::Request {
+                method: METHOD_BROWSER_CLICK,
+                params: browser_target_params(target),
+            })
+        }
+        Some("type") => {
+            let mut submit = false;
+            if args.first().is_some_and(|value| value == "--submit") {
+                submit = true;
+                args.remove(0);
+            }
+            let target = args
+                .first()
+                .and_then(|value| value.to_str())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| usage_error("browser type requires a ref or selector and text"))?
+                .to_string();
+            args.remove(0);
+            if args.is_empty() {
+                return Err(usage_error("browser type requires text"));
+            }
+            let text = args
+                .iter()
+                .map(|value| value.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let mut params = browser_target_params(&target);
+            params["text"] = json!(text);
+            if submit {
+                params["submit"] = json!(true);
+            }
+            Ok(Action::Request {
+                method: METHOD_BROWSER_TYPE,
+                params,
+            })
+        }
+        Some("eval") => {
+            if args.is_empty() {
+                return Err(usage_error("browser eval requires a script"));
+            }
+            let script = args
+                .iter()
+                .map(|value| value.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join(" ");
+            Ok(Action::Request {
+                method: METHOD_BROWSER_EVAL,
+                params: json!({ "script": script }),
+            })
+        }
+        Some(value) => Err(usage_error(format!("unknown browser command '{value}'"))),
+        None => Err(usage_error("browser command must be valid UTF-8")),
+    }
+}
+
+fn no_extra_request(args: Vec<OsString>, method: &'static str) -> Result<Action, CliError> {
+    if args.is_empty() {
+        Ok(Action::Request {
+            method,
+            params: json!({}),
+        })
+    } else {
+        Err(usage_error("unexpected browser arguments"))
+    }
+}
+
+fn browser_target_params(target: &str) -> Value {
+    if let Ok(element_ref) = target.parse::<u64>() {
+        json!({ "ref": element_ref })
+    } else {
+        json!({ "selector": target })
+    }
 }
 
 fn parse_open(args: Vec<OsString>) -> Result<Action, CliError> {
@@ -1677,7 +1787,7 @@ fn print_result(method: &str, result: Value, as_json: bool) {
 fn print_help() {
     println!(
         "Voktty command line interface\n\n\
-Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\
+Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty browser open|navigate <url> [--json]\n  voktty browser selected|snapshot [--json]\n  voktty browser click <ref|selector> [--json]\n  voktty browser type [--submit] <ref|selector> <text> [--json]\n  voktty browser eval <script> [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\
 Alias execution is tokenized and never evaluated by a shell. Public IP lookup only runs\n\
 when ipme receives --public. App control commands require Voktty to be running."
     );
@@ -1708,6 +1818,52 @@ mod tests {
                 assert_eq!(params.get("base").and_then(Value::as_str), Some("main"));
             }
             other => panic!("expected Request action, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parses_browser_commands() {
+        let snapshot = parse_args(args(&["browser", "snapshot"])).expect("parse snapshot");
+        match snapshot.action {
+            Action::Request { method, params } => {
+                assert_eq!(method, METHOD_BROWSER_SNAPSHOT);
+                assert_eq!(params, json!({}));
+            }
+            other => panic!("expected Request, got {other:?}"),
+        }
+
+        let click = parse_args(args(&["browser", "click", "#pay"])).expect("parse click");
+        match click.action {
+            Action::Request { method, params } => {
+                assert_eq!(method, METHOD_BROWSER_CLICK);
+                assert_eq!(params.get("selector").and_then(Value::as_str), Some("#pay"));
+            }
+            other => panic!("expected Request, got {other:?}"),
+        }
+
+        let by_ref = parse_args(args(&["browser", "click", "4"])).expect("parse click ref");
+        match by_ref.action {
+            Action::Request { params, .. } => {
+                assert_eq!(params.get("ref").and_then(Value::as_u64), Some(4));
+            }
+            other => panic!("expected Request, got {other:?}"),
+        }
+
+        let typed = parse_args(args(&[
+            "browser",
+            "type",
+            "--submit",
+            "input.email",
+            "a@b.c",
+        ]))
+        .expect("parse type");
+        match typed.action {
+            Action::Request { method, params } => {
+                assert_eq!(method, METHOD_BROWSER_TYPE);
+                assert_eq!(params.get("text").and_then(Value::as_str), Some("a@b.c"));
+                assert_eq!(params.get("submit").and_then(Value::as_bool), Some(true));
+            }
+            other => panic!("expected Request, got {other:?}"),
         }
     }
 

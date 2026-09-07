@@ -454,10 +454,16 @@ export function extractDomMetadata(
   };
 }
 
-export function getInspectorInjectedScript(): string {
+export function getInspectorInjectedScript(hostOrigin: string): string {
   return `(function() {
   if (window.__VOKTTY_INSPECTOR_INSTALLED__) return;
   window.__VOKTTY_INSPECTOR_INSTALLED__ = true;
+  var __VOKTTY_HOST_ORIGIN__ = ${JSON.stringify(hostOrigin)};
+  function postToHost(msg) {
+    try {
+      window.parent.postMessage(msg, __VOKTTY_HOST_ORIGIN__);
+    } catch(_) {}
+  }
 
   // Console & Runtime Error Interception
   (function initConsoleBridge() {
@@ -487,10 +493,10 @@ export function getInspectorInjectedScript(): string {
           stack: stack || undefined,
           timestamp: Date.now()
         };
-        window.parent.postMessage({
+        postToHost({
           type: "VOKTTY_CONSOLE_ENTRY",
           payload: entry
-        }, "*");
+        });
       } catch(_) {}
     }
 
@@ -530,6 +536,104 @@ export function getInspectorInjectedScript(): string {
       var stack = reason instanceof Error && reason.stack ? reason.stack : undefined;
       emitLog("error", [msg], stack);
     });
+  })();
+
+  (function initNetworkBridge() {
+    if (window.__voktty_network_inited) return;
+    window.__voktty_network_inited = true;
+    var BODY_CAP = 2048;
+
+    function truncateBody(value) {
+      if (value == null) return undefined;
+      var text = typeof value === "string" ? value : "";
+      if (typeof value !== "string") {
+        try { text = JSON.stringify(value); } catch (_) { text = String(value); }
+      }
+      if (text.length > BODY_CAP) return text.slice(0, BODY_CAP) + "...";
+      return text;
+    }
+
+    function emitNetwork(entry) {
+      postToHost({ type: "VOKTTY_NETWORK_ENTRY", payload: entry });
+    }
+
+    var origFetch = window.fetch;
+    if (typeof origFetch === "function") {
+      window.fetch = function() {
+        var input = arguments[0];
+        var init = arguments[1] || {};
+        var method = String(init.method || (input && input.method) || "GET").toUpperCase();
+        var url = typeof input === "string" ? input : (input && input.url) ? input.url : String(input);
+        var started = Date.now();
+        var id = "net_" + started + "_" + Math.random().toString(36).slice(2, 6);
+        return origFetch.apply(this, arguments).then(function(res) {
+          var clone = res.clone();
+          var sizeHeader = Number(res.headers.get("content-length")) || 0;
+          clone.text().then(function(text) {
+            emitNetwork({
+              id: id,
+              method: method,
+              url: url,
+              status: res.status,
+              durationMs: Date.now() - started,
+              size: sizeHeader || text.length,
+              body: truncateBody(text),
+              timestamp: started
+            });
+          }).catch(function() {
+            emitNetwork({
+              id: id,
+              method: method,
+              url: url,
+              status: res.status,
+              durationMs: Date.now() - started,
+              size: sizeHeader,
+              timestamp: started
+            });
+          });
+          return res;
+        }, function(err) {
+          emitNetwork({
+            id: id,
+            method: method,
+            url: url,
+            status: 0,
+            durationMs: Date.now() - started,
+            size: 0,
+            error: String(err && err.message ? err.message : err),
+            timestamp: started
+          });
+          throw err;
+        });
+      };
+    }
+
+    var origOpen = XMLHttpRequest.prototype.open;
+    var origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method, url) {
+      this.__voktty_method = method;
+      this.__voktty_url = url;
+      this.__voktty_start = Date.now();
+      return origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function() {
+      var xhr = this;
+      xhr.addEventListener("loadend", function() {
+        var bodyText = "";
+        try { bodyText = xhr.responseText || ""; } catch (_) {}
+        emitNetwork({
+          id: "net_" + (xhr.__voktty_start || Date.now()) + "_" + Math.random().toString(36).slice(2, 6),
+          method: String(xhr.__voktty_method || "GET").toUpperCase(),
+          url: xhr.__voktty_url || "",
+          status: xhr.status || 0,
+          durationMs: Date.now() - (xhr.__voktty_start || Date.now()),
+          size: bodyText.length,
+          body: truncateBody(bodyText),
+          timestamp: xhr.__voktty_start || Date.now()
+        });
+      });
+      return origSend.apply(this, arguments);
+    };
   })();
 
   ${generateCssSelector.toString()}
@@ -650,21 +754,21 @@ export function getInspectorInjectedScript(): string {
 
     menu.appendChild(createMenuItem("🎯", "Inspeccionar elemento (IA)", () => {
       try {
-        window.parent.postMessage({
+        postToHost({
           type: "VOKTTY_LIVE_COMPONENT_SELECTED",
           payload: meta
-        }, "*");
+        });
         showToast("Elemento seleccionado");
       } catch(_) {}
     }));
 
     menu.appendChild(createMenuItem("💻", "Ir al código en el editor", () => {
       try {
-        window.parent.postMessage({
+        postToHost({
           type: "VOKTTY_LIVE_COMPONENT_SELECTED",
           payload: meta,
           autoJump: true
-        }, "*");
+        });
         showToast("Abriendo en editor...");
       } catch(_) {}
     }));
@@ -725,7 +829,7 @@ export function getInspectorInjectedScript(): string {
 
     menu.appendChild(createMenuItem("🔄", "Recargar Vista Previa", () => {
       try {
-        window.parent.postMessage({ type: "VOKTTY_RELOAD_PREVIEW" }, "*");
+        postToHost({ type: "VOKTTY_RELOAD_PREVIEW" });
       } catch(_) {
         window.location.reload();
       }
@@ -830,10 +934,10 @@ export function getInspectorInjectedScript(): string {
     if (target && target !== overlayHost && !overlayHost.contains(target)) {
       const meta = extractDomMetadata(target, window.location.href);
       try {
-        window.parent.postMessage({
+        postToHost({
           type: "VOKTTY_LIVE_COMPONENT_SELECTED",
           payload: meta
-        }, "*");
+        });
       } catch (err) {
         console.warn("[Voktty Inspector] PostMessage failed", err);
       }
@@ -873,16 +977,142 @@ export function getInspectorInjectedScript(): string {
     if (active && hoveredEl) updateHighlight(hoveredEl);
   }, { passive: true });
 
+  var SNAPSHOT_LIMIT = 300;
+  var snapshotRefs = new Map();
+  var snapshotRefSeq = 0;
+
+  function resetSnapshotRefs() {
+    snapshotRefs = new Map();
+    snapshotRefSeq = 0;
+  }
+
+  function rememberRef(el) {
+    snapshotRefSeq += 1;
+    snapshotRefs.set(
+      snapshotRefSeq,
+      typeof WeakRef === "function" ? new WeakRef(el) : { deref: function() { return el; } }
+    );
+    return snapshotRefSeq;
+  }
+
+  function resolveCommandTarget(args) {
+    args = args || {};
+    if (args.ref != null && args.ref !== "") {
+      var slot = snapshotRefs.get(Number(args.ref));
+      var fromRef = slot && slot.deref ? slot.deref() : null;
+      if (fromRef) return fromRef;
+    }
+    if (args.selector) {
+      try { return document.querySelector(args.selector); } catch (_) { return null; }
+    }
+    return null;
+  }
+
+  function accessibleName(el) {
+    return (
+      el.getAttribute("aria-label") ||
+      el.getAttribute("alt") ||
+      el.getAttribute("title") ||
+      el.getAttribute("placeholder") ||
+      (el.innerText || el.textContent || "").trim().slice(0, 80)
+    );
+  }
+
+  function isInteractive(el) {
+    var tag = (el.tagName || "").toLowerCase();
+    if (tag === "a" || tag === "button" || tag === "input" || tag === "select" || tag === "textarea" || tag === "summary") {
+      return true;
+    }
+    if (el.getAttribute("role") || el.getAttribute("onclick") || el.tabIndex >= 0) return true;
+    return false;
+  }
+
+  function nodeRecord(el) {
+    var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0 };
+    return {
+      ref: rememberRef(el),
+      tag: (el.tagName || "").toLowerCase(),
+      role: el.getAttribute("role") || undefined,
+      name: accessibleName(el) || undefined,
+      selector: generateCssSelector(el),
+      attributes: {
+        id: el.id || undefined,
+        className: el.className && typeof el.className === "string" ? el.className : undefined,
+        testId: el.getAttribute("data-testid") || undefined,
+        href: el.getAttribute("href") || undefined,
+        type: el.getAttribute("type") || undefined,
+        value: el.value != null && String(el.value).length < 120 ? String(el.value) : undefined
+      },
+      rect: {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        top: rect.top,
+        left: rect.left
+      }
+    };
+  }
+
+  function takeSnapshot() {
+    resetSnapshotRefs();
+    var all = Array.prototype.slice.call(document.querySelectorAll("body *"));
+    var interactive = [];
+    var rest = [];
+    for (var i = 0; i < all.length; i++) {
+      var node = all[i];
+      if (!node || node.id === "voktty-inspector-root") continue;
+      if (isInteractive(node) || accessibleName(node)) {
+        if (isInteractive(node)) interactive.push(node);
+        else rest.push(node);
+      }
+    }
+    var picked = interactive.concat(rest).slice(0, SNAPSHOT_LIMIT);
+    var nodes = [];
+    for (var j = 0; j < picked.length; j++) nodes.push(nodeRecord(picked[j]));
+    return { url: window.location.href, nodes: nodes };
+  }
+
+  function nativeSetValue(el, text) {
+    var proto = el instanceof HTMLTextAreaElement
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+    var desc = Object.getOwnPropertyDescriptor(proto, "value");
+    if (desc && desc.set) desc.set.call(el, text);
+    else el.value = text;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function serializeEval(value) {
+    if (value == null || typeof value === "number" || typeof value === "boolean") return value;
+    if (typeof value === "string") return value.length > 4000 ? value.slice(0, 4000) + "..." : value;
+    try {
+      var seen = [];
+      return JSON.parse(JSON.stringify(value, function(_key, nested) {
+        if (typeof nested === "function") return "[function]";
+        if (typeof nested === "object" && nested !== null) {
+          if (seen.indexOf(nested) >= 0) return "[cyclic]";
+          seen.push(nested);
+        }
+        return nested;
+      }));
+    } catch (_) {
+      return String(value);
+    }
+  }
+
+  window.addEventListener("pagehide", resetSnapshotRefs);
+
   window.addEventListener("message", function(e) {
+    if (e.source !== window.parent) return;
     if (!e.data || typeof e.data !== "object") return;
     if (e.data.type === "VOKTTY_SET_INSPECTOR_ACTIVE") {
       setActive(Boolean(e.data.active));
-      try {
-        window.parent.postMessage({
-          type: "VOKTTY_INSPECTOR_STATE_CHANGE",
-          payload: { active: active }
-        }, "*");
-      } catch (_) {}
+      postToHost({
+        type: "VOKTTY_INSPECTOR_STATE_CHANGE",
+        payload: { active: active }
+      });
     } else if (e.data.type === "VOKTTY_HIGHLIGHT_ELEMENT") {
       if (e.data.selector) {
         try {
@@ -896,13 +1126,60 @@ export function getInspectorInjectedScript(): string {
           const el = document.querySelector(e.data.selector);
           if (el) {
             const meta = extractDomMetadata(el, window.location.href);
-            window.parent.postMessage({
+            postToHost({
               type: "VOKTTY_LIVE_COMPONENT_SELECTED",
               payload: meta,
               autoJump: Boolean(e.data.autoJump)
-            }, "*");
+            });
           }
         } catch(_) {}
+      }
+    } else if (e.data.type === "VOKTTY_BROWSER_COMMAND") {
+      var requestId = e.data.requestId;
+      var args = e.data.args || {};
+      function reply(ok, result, error) {
+        postToHost({
+          type: "VOKTTY_BROWSER_RESULT",
+          requestId: requestId,
+          ok: ok,
+          result: result,
+          error: error
+        });
+      }
+      try {
+        if (e.data.command === "ping") {
+          reply(true, { ts: Date.now() });
+        } else if (e.data.command === "snapshot") {
+          reply(true, takeSnapshot());
+        } else if (e.data.command === "click") {
+          var clickEl = resolveCommandTarget(args);
+          if (!clickEl) { reply(false, undefined, "element_not_found"); return; }
+          if (clickEl.scrollIntoView) clickEl.scrollIntoView({ block: "center", inline: "nearest" });
+          clickEl.click();
+          reply(true, { ok: true });
+        } else if (e.data.command === "type") {
+          var typeEl = resolveCommandTarget(args);
+          if (!typeEl) { reply(false, undefined, "element_not_found"); return; }
+          if (typeEl.scrollIntoView) typeEl.scrollIntoView({ block: "center", inline: "nearest" });
+          typeEl.focus();
+          nativeSetValue(typeEl, args.text == null ? "" : String(args.text));
+          if (args.submit) {
+            var form = typeEl.form || (typeEl.closest && typeEl.closest("form"));
+            if (form && typeof form.requestSubmit === "function") form.requestSubmit();
+            else if (form) form.submit();
+            else {
+              typeEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+            }
+          }
+          reply(true, { ok: true });
+        } else if (e.data.command === "eval") {
+          var evaluated = (0, eval)(String(args.script || ""));
+          reply(true, { result: serializeEval(evaluated) });
+        } else {
+          reply(false, undefined, "unknown_command");
+        }
+      } catch (err) {
+        reply(false, undefined, String(err && err.message ? err.message : err));
       }
     }
   });
@@ -918,10 +1195,10 @@ export function getInspectorInjectedScript(): string {
   }
 
   try {
-    window.parent.postMessage({
+    postToHost({
       type: "VOKTTY_INSPECTOR_READY",
       payload: { ready: true }
-    }, "*");
+    });
   } catch(_) {}
 })();`;
 }
