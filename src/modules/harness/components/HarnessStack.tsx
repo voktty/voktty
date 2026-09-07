@@ -7,17 +7,6 @@ export function preloadHarnessApp() {
   void import("./HarnessApp");
 }
 
-if (typeof window !== "undefined") {
-  const schedule =
-    typeof window.requestIdleCallback === "function"
-      ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 2500 })
-      : (cb: () => void) => setTimeout(cb, 1200);
-
-  schedule(() => {
-    preloadHarnessApp();
-  });
-}
-
 const LazyHarnessApp = lazy(() =>
   import("./HarnessApp").then((m) => ({
     default: m.HarnessApp,

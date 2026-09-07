@@ -24,7 +24,7 @@ import type {
 } from "@/modules/workspace";
 import { IncognitoIcon, Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { RefObject } from "react";
+import { lazy, Suspense, type RefObject } from "react";
 import { cn } from "@/lib/utils";
 import { CwdBreadcrumb } from "./CwdBreadcrumb";
 import { DiagnosticsBadge } from "./DiagnosticsBadge";
@@ -33,10 +33,15 @@ import { WorkspaceEnvSelector } from "./WorkspaceEnvSelector";
 
 import { ConsoleUptimeWidget } from "./components/ConsoleUptimeWidget";
 import { ProjectToolkitPopover } from "./components/ProjectToolkitPopover";
-import { FloatingArcadeWidget } from "./components/FloatingArcadeWidget";
 import { useArcadeStore } from "./arcadeStore";
 import { PacmanIcon } from "./components/PacmanIcon";
 import { QuotaUsageWidget } from "@/modules/quota";
+
+const LazyFloatingArcadeWidget = lazy(() =>
+  import("./components/FloatingArcadeWidget").then((m) => ({
+    default: m.FloatingArcadeWidget,
+  })),
+);
 
 type Props = {
   cwd?: string | null;
@@ -184,6 +189,7 @@ export function StatusBar({
             arcadeOpen && "bg-accent text-yellow-400 hover:text-yellow-300",
           )}
           onClick={toggleArcade}
+          onMouseEnter={() => void import("./components/FloatingArcadeWidget")}
           title={t("statusbar.arcade", {
             defaultValue: "Arcade (Pac-Man & Snake)",
           })}
@@ -204,7 +210,9 @@ export function StatusBar({
         ) : null}
       </div>
       {arcadeOpen ? (
-        <FloatingArcadeWidget onClose={closeArcade} />
+        <Suspense fallback={null}>
+          <LazyFloatingArcadeWidget onClose={closeArcade} />
+        </Suspense>
       ) : null}
     </footer>
   );

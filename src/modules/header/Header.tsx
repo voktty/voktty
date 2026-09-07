@@ -6,6 +6,7 @@ import { NotificationBell } from "@/modules/agents";
 import type { AgentLaunchRequest } from "@/modules/agents/lib/launcher";
 import { useTranslation } from "@/modules/i18n";
 import { useLauncherStore } from "@/modules/launcher";
+import { preloadHarnessApp } from "@/modules/harness/components/HarnessStack";
 import { useShortcutLabel } from "@/modules/shortcuts";
 import type { ViewSpace } from "@/modules/spaces/lib/spaceLayout";
 import type {
@@ -268,6 +269,8 @@ export function Header({
         {tabStyle === "vertical" && onNewHarness && (
           <Button
             onClick={onNewHarness}
+            onMouseEnter={preloadHarnessApp}
+            onFocus={preloadHarnessApp}
             variant="ghost"
             size="icon-sm"
             title={`${t("harness.agentDevelopment", { defaultValue: "Agent Development" })} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
@@ -350,6 +353,8 @@ export function Header({
               ) : (
                 <Button
                   onClick={onNewHarness}
+                  onMouseEnter={preloadHarnessApp}
+                  onFocus={preloadHarnessApp}
                   variant="ghost"
                   size="icon-sm"
                   title={`${t("harness.agentDevelopment", { defaultValue: "Agent Development" })} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
