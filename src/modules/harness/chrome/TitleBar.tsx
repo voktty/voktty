@@ -115,6 +115,7 @@ type Props = {
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
   onClose: (id: string) => void;
+  onCloseMany?: (ids: string[], fallbackId: string) => void;
   onReorder: (ids: string[], movedId?: string) => void;
   onGoToFile?: () => void;
   onJoinTab?: (draggedId: string, targetId: string) => void;
@@ -206,6 +207,25 @@ export function tabStripOverflow(
 
 export function titleTabClosable(tab: Tab, tabCount: number): boolean {
   return tabCount > 1 || !tab.blank;
+}
+
+export type TitleTabContextAction = "others" | "right" | "left";
+
+/** Tab ids affected by a context-menu action relative to its clicked tab. */
+export function titleTabContextCloseIds(
+  tabs: readonly Tab[],
+  targetId: string,
+  action: TitleTabContextAction,
+): string[] {
+  const targetIndex = tabs.findIndex((tab) => tab.id === targetId);
+  if (targetIndex < 0) return [];
+  if (action === "left") {
+    return tabs.slice(0, targetIndex).map((tab) => tab.id);
+  }
+  if (action === "right") {
+    return tabs.slice(targetIndex + 1).map((tab) => tab.id);
+  }
+  return tabs.filter((tab) => tab.id !== targetId).map((tab) => tab.id);
 }
 
 function TabHarnesses({
@@ -856,6 +876,7 @@ function TitleBarComponent({
   onOpenInbox,
   onOpenNotes,
   onClose,
+  onCloseMany,
   onReorder,
   onGoToFile,
   onJoinTab,
@@ -1025,51 +1046,113 @@ function TitleBarComponent({
 
   const onTabContextMenu = useCallback(
     (tab: Tab, event: ReactMouseEvent<HTMLDivElement>) => {
-      if (deckLayout) return;
       setTabMenu({ x: event.clientX, y: event.clientY, tabId: tab.id });
     },
-    [deckLayout],
+    [],
   );
 
+  const contextTab = tabMenu
+    ? tabs.find((tab) => tab.id === tabMenu.tabId)
+    : undefined;
+  const contextCloseIds = contextTab
+    ? {
+        others: titleTabContextCloseIds(tabs, contextTab.id, "others"),
+        right: titleTabContextCloseIds(tabs, contextTab.id, "right"),
+        left: titleTabContextCloseIds(tabs, contextTab.id, "left"),
+      }
+    : null;
+
   const tabMenuItems: ExplorerMenuItem[] = (() => {
-    if (!tabMenu || deckLayout) return [];
-    const tab = tabs.find((entry) => entry.id === tabMenu.tabId);
-    if (!tab) return [];
+    if (!tabMenu || !contextTab) return [];
     const items: ExplorerMenuItem[] = [
-      { kind: "item", id: "new-group", label: "Add to new group" },
+      {
+        kind: "item",
+        id: "close",
+        label: "Close Tab",
+        shortcut: `${MOD}W`,
+        disabled: !titleTabClosable(contextTab, tabs.length),
+      },
+      { kind: "sep" },
+      {
+        kind: "item",
+        id: "others",
+        label: "Close Other Tabs",
+        disabled: contextCloseIds?.others.length === 0,
+      },
+      {
+        kind: "item",
+        id: "right",
+        label: "Close Tabs to the Right",
+        disabled: contextCloseIds?.right.length === 0,
+      },
+      {
+        kind: "item",
+        id: "left",
+        label: "Close Tabs to the Left",
+        disabled: contextCloseIds?.left.length === 0,
+      },
     ];
-    const others = groupSummaries.filter(
-      (group) =>
-        group.id !== tab.groupId &&
-        canJoinTabGroup(tabs, tab.id, group.id, projectOf),
-    );
-    if (others.length > 0) {
+
+    if (!deckLayout) {
       items.push({ kind: "sep" });
-      for (const group of others) {
-        items.push({
-          kind: "item",
-          id: `add:${group.id}`,
-          label: `Add to ${group.label}`,
-        });
+      items.push({
+        kind: "item",
+        id: "new-group",
+        label: "Add to new group",
+      });
+      const others = groupSummaries.filter(
+        (group) =>
+          group.id !== contextTab.groupId &&
+          canJoinTabGroup(tabs, contextTab.id, group.id, projectOf),
+      );
+      if (others.length > 0) {
+        items.push({ kind: "sep" });
+        for (const group of others) {
+          items.push({
+            kind: "item",
+            id: `add:${group.id}`,
+            label: `Add to ${group.label}`,
+          });
+        }
+      }
+      if (contextTab.groupId) {
+        items.push({ kind: "sep" });
+        items.push({ kind: "item", id: "remove", label: "Remove from group" });
       }
     }
-    if (tab.groupId) {
-      items.push({ kind: "sep" });
-      items.push({ kind: "item", id: "remove", label: "Remove from group" });
-    }
+
     return items;
   })();
 
   const onTabMenuPick = useCallback(
     (id: string) => {
-      if (!tabMenu) return;
+      if (!tabMenu || !contextTab) return;
       const tabId = tabMenu.tabId;
       setTabMenu(null);
+      if (id === "close") {
+        onClose(contextTab.id);
+        return;
+      }
+      if (id === "others" || id === "right" || id === "left") {
+        if (contextCloseIds && onCloseMany) {
+          onCloseMany(contextCloseIds[id], contextTab.id);
+        }
+        return;
+      }
       if (id === "new-group") onAddToNewGroup?.(tabId);
       else if (id === "remove") onRemoveFromGroup?.(tabId);
       else if (id.startsWith("add:")) onAddToGroup?.(tabId, id.slice(4));
     },
-    [onAddToGroup, onAddToNewGroup, onRemoveFromGroup, tabMenu],
+    [
+      contextCloseIds,
+      contextTab,
+      onAddToGroup,
+      onAddToNewGroup,
+      onClose,
+      onCloseMany,
+      onRemoveFromGroup,
+      tabMenu,
+    ],
   );
 
   const onGroupRename = useCallback((projectKey: string, label: string) => {
@@ -1443,12 +1526,13 @@ function TitleBarComponent({
           />
         ) : null}
 
-        {tabMenu ? (
+        {tabMenu && contextTab ? (
           <ExplorerMenu
             x={tabMenu.x}
             y={tabMenu.y}
+            width={244}
             items={tabMenuItems}
-            ariaLabel="Tab actions"
+            ariaLabel={`Tab actions for ${tabCopy(contextTab).headline}`}
             onPick={onTabMenuPick}
             onClose={() => setTabMenu(null)}
           />
