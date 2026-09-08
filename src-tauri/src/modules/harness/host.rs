@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use super::fs::expand_home;
 use crate::dirs_home;
+use crate::modules::control;
 use crate::passwd_identity;
 
 const STDOUT_EVENT: &str = "harness-stdout";
@@ -514,6 +515,13 @@ pub fn harness_spawn(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     prepare_child(&mut cmd, &command);
+    // After prepare_child: apply_gui_env unconditionally overwrites PATH, so
+    // control env (and any PATH prepend for the bundled CLI) must come last.
+    if let Some(control) = app.try_state::<control::ControlState>() {
+        if let Some(env) = control.harness_env(&session_id) {
+            apply_harness_control_env(&mut cmd, &env);
+        }
+    }
 
     let mut child = cmd
         .spawn()
@@ -2131,6 +2139,44 @@ fn prepare_child(cmd: &mut Command, command: &str) {
     isolate_child(cmd);
 }
 
+const HARNESS_CLI_HELP: &str = "Voktty control CLI: $VOKTTY_CLI (or `voktty` on PATH). \
+    Read $VOKTTY_SESSION_ID for this session's id. Useful: \
+    `voktty harness status <id>`, `voktty harness result <id>`, \
+    `voktty harness send <id> <text>`, \
+    `voktty harness wait <id> --state done --timeout <seconds>`.";
+
+/// Gives an agent spawned as a harness session the same control-plane access
+/// a terminal pane gets via `ShellControlEnv`, keyed by session id instead of
+/// pane id so `voktty harness *` can target this session from inside it.
+fn apply_harness_control_env(cmd: &mut Command, env: &control::HarnessControlEnv) {
+    cmd.env("VOKTTY_CONTROL_ADDR", &env.address);
+    cmd.env("VOKTTY_CONTROL_TOKEN", &env.token);
+    cmd.env("VOKTTY_SESSION_ID", &env.session_id);
+    cmd.env("VOKTTY_CLI_HELP", HARNESS_CLI_HELP);
+    if let Some(path) = &env.cli_path {
+        cmd.env("VOKTTY_CLI", path);
+    }
+    if let Some(bin_dir) = &env.cli_bin_dir {
+        // `prepare_child` (via `apply_gui_env`) already staged this command's
+        // PATH; read that staged value back rather than the host process's
+        // own PATH, or this would undo the GUI-launch PATH fix on macOS.
+        let existing = cmd
+            .get_envs()
+            .find(|(key, _)| *key == std::ffi::OsStr::new("PATH"))
+            .and_then(|(_, value)| value.map(|v| v.to_os_string()))
+            .or_else(|| std::env::var_os("PATH"));
+        let paths = std::iter::once(bin_dir.clone()).chain(
+            existing
+                .as_deref()
+                .into_iter()
+                .flat_map(std::env::split_paths),
+        );
+        if let Ok(path) = std::env::join_paths(paths) {
+            cmd.env("PATH", path);
+        }
+    }
+}
+
 /// fx keeps its Gateway credential in the macOS Keychain and reads it by
 /// shelling out to `osascript`. From a bundled app that read can block on a
 /// SecurityAgent prompt nobody ever sees, and fx then rejects `initialize`
@@ -2687,6 +2733,79 @@ mod exec_allowlist_tests {
             args.iter().any(|a| a == "--version"),
             "Exec command should contain --version argument: {:?}",
             args
+        );
+    }
+}
+
+#[cfg(test)]
+mod harness_control_env_tests {
+    use super::*;
+
+    fn env_value(cmd: &Command, key: &str) -> Option<String> {
+        cmd.get_envs().find_map(|(k, v)| {
+            if k == std::ffi::OsStr::new(key) {
+                v.map(|v| v.to_string_lossy().into_owned())
+            } else {
+                None
+            }
+        })
+    }
+
+    #[test]
+    fn injects_control_credentials_and_session_id() {
+        let mut cmd = Command::new("true");
+        let env = control::HarnessControlEnv {
+            address: "127.0.0.1:4312".into(),
+            token: "a".repeat(64),
+            session_id: "session-42".into(),
+            cli_path: Some("/opt/voktty/bin/voktty".into()),
+            cli_bin_dir: None,
+        };
+        apply_harness_control_env(&mut cmd, &env);
+
+        assert_eq!(
+            env_value(&cmd, "VOKTTY_CONTROL_ADDR").as_deref(),
+            Some("127.0.0.1:4312")
+        );
+        assert_eq!(
+            env_value(&cmd, "VOKTTY_CONTROL_TOKEN").as_deref(),
+            Some(env.token.as_str())
+        );
+        assert_eq!(
+            env_value(&cmd, "VOKTTY_SESSION_ID").as_deref(),
+            Some("session-42")
+        );
+        assert_eq!(
+            env_value(&cmd, "VOKTTY_CLI").as_deref(),
+            Some("/opt/voktty/bin/voktty")
+        );
+        assert!(env_value(&cmd, "VOKTTY_CLI_HELP").is_some());
+    }
+
+    #[test]
+    fn prepends_the_bundled_cli_dir_to_the_staged_path_not_the_host_path() {
+        let mut cmd = Command::new("true");
+        #[cfg(windows)]
+        let staged = "C:\\staged\\gui\\path";
+        #[cfg(not(windows))]
+        let staged = "/staged/gui/path";
+        cmd.env("PATH", staged);
+
+        let env = control::HarnessControlEnv {
+            address: "127.0.0.1:4312".into(),
+            token: "a".repeat(64),
+            session_id: "session-42".into(),
+            cli_path: None,
+            cli_bin_dir: Some(PathBuf::from("/opt/voktty/launcher")),
+        };
+        apply_harness_control_env(&mut cmd, &env);
+
+        let path = env_value(&cmd, "PATH").expect("path set");
+        let parts: Vec<_> = std::env::split_paths(&path).collect();
+        assert_eq!(parts[0], PathBuf::from("/opt/voktty/launcher"));
+        assert!(
+            parts.contains(&PathBuf::from(staged)),
+            "expected the staged PATH to survive, got {parts:?}"
         );
     }
 }
