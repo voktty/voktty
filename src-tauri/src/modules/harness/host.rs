@@ -14,6 +14,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use super::fs::expand_home;
 use crate::dirs_home;
 use crate::modules::control;
+use crate::modules::net_proxy;
 use crate::passwd_identity;
 
 const STDOUT_EVENT: &str = "harness-stdout";
@@ -76,6 +77,9 @@ struct LiveSse {
 struct HarnessInner {
     children: HashMap<String, Arc<LiveChild>>,
     epochs: HashMap<String, u64>,
+    /// Network sandbox proxies, one per session that opted in. Torn down
+    /// (via `Drop`) whenever the entry is replaced or removed.
+    proxies: HashMap<String, net_proxy::ProxyHandle>,
 }
 
 pub struct HarnessHost {
@@ -97,6 +101,7 @@ impl HarnessHost {
             inner: Mutex::new(HarnessInner {
                 children: HashMap::new(),
                 epochs: HashMap::new(),
+                proxies: HashMap::new(),
             }),
             sse: Mutex::new(HashMap::new()),
             kill_all_gen: AtomicU64::new(0),
@@ -120,6 +125,11 @@ impl HarnessHost {
         let epoch = *epoch;
         let prev = inner.children.remove(session_id);
         (epoch, kill_all, prev)
+    }
+
+    #[cfg(test)]
+    fn has_proxy(&self, session_id: &str) -> bool {
+        self.lock_inner().proxies.contains_key(session_id)
     }
 
     #[cfg(test)]
@@ -154,6 +164,7 @@ impl HarnessHost {
     fn kill_session(&self, session_id: &str) -> Option<Arc<LiveChild>> {
         let mut inner = self.lock_inner();
         *inner.epochs.entry(session_id.to_string()).or_insert(0) += 1;
+        inner.proxies.remove(session_id);
         inner.children.remove(session_id)
     }
 
@@ -162,13 +173,40 @@ impl HarnessHost {
         if inner.children.get(session_id).map(|live| live.pid) != Some(pid) {
             return None;
         }
+        // Only torn down here because the pid check above proves this is the
+        // session's current child; a fresher respawn already replaced this
+        // entry (different pid) and owns its own proxy by then.
+        inner.proxies.remove(session_id);
         inner.children.remove(session_id)
+    }
+
+    /// Mirrors `install_spawn`'s epoch/kill_all guard for the proxy half of
+    /// a spawn, kept separate so proxy support doesn't change
+    /// `install_spawn`'s existing contract or tests. Replacing an entry
+    /// drops (stops) whatever proxy was there before.
+    fn install_proxy(
+        &self,
+        session_id: &str,
+        epoch: u64,
+        kill_all: u64,
+        proxy: net_proxy::ProxyHandle,
+    ) -> Option<net_proxy::ProxyHandle> {
+        let mut inner = self.lock_inner();
+        if self.kill_all_gen.load(Ordering::SeqCst) != kill_all {
+            return Some(proxy);
+        }
+        if inner.epochs.get(session_id) != Some(&epoch) {
+            return Some(proxy);
+        }
+        inner.proxies.insert(session_id.to_string(), proxy);
+        None
     }
 
     pub(crate) fn kill_all(&self) {
         let kids: Vec<Arc<LiveChild>> = {
             let mut inner = self.lock_inner();
             self.kill_all_gen.fetch_add(1, Ordering::SeqCst);
+            inner.proxies.clear();
             inner.children.drain().map(|(_, child)| child).collect()
         };
         self.stop_all_sse();
@@ -494,6 +532,7 @@ pub fn harness_spawn(
     command: String,
     args: Vec<String>,
     cwd: String,
+    network_allowlist: Option<Vec<String>>,
 ) -> Result<u32, String> {
     let (epoch, kill_all, prev) = host.begin_spawn(&session_id);
     if let Some(prev) = prev {
@@ -521,6 +560,16 @@ pub fn harness_spawn(
         if let Some(env) = control.harness_env(&session_id) {
             apply_harness_control_env(&mut cmd, &env);
         }
+    }
+
+    let mut network_proxy: Option<net_proxy::ProxyHandle> = None;
+    if let Some(hosts) = &network_allowlist {
+        let allowlist = net_proxy::compile_allowlist_hosts(hosts)
+            .map_err(|e| format!("invalid network allowlist: {e}"))?;
+        let proxy = net_proxy::start(allowlist)
+            .map_err(|e| format!("failed to start network sandbox proxy: {e}"))?;
+        apply_network_proxy_env(&mut cmd, &proxy);
+        network_proxy = Some(proxy);
     }
 
     let mut child = cmd
@@ -555,6 +604,11 @@ pub fn harness_spawn(
             let _ = child.wait();
         });
         return Err(SPAWN_CANCELLED.to_string());
+    }
+    if let Some(proxy) = network_proxy.take() {
+        // Lost the same race as above: nobody references `proxy` past this
+        // point, so dropping it here stops it.
+        drop(host.install_proxy(&session_id, epoch, kill_all, proxy));
     }
 
     let stdout_app = app.clone();
@@ -2177,6 +2231,24 @@ fn apply_harness_control_env(cmd: &mut Command, env: &control::HarnessControlEnv
     }
 }
 
+/// Points the child's HTTP(S) traffic at the session's network sandbox
+/// proxy. Sets both cases since tooling is split on which it reads (most
+/// Node/Windows tooling expects uppercase, many POSIX tools expect
+/// lowercase).
+fn apply_network_proxy_env(cmd: &mut Command, proxy: &net_proxy::ProxyHandle) {
+    let proxy_url = format!("http://{}", proxy.addr());
+    for key in [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ] {
+        cmd.env(key, &proxy_url);
+    }
+}
+
 /// fx keeps its Gateway credential in the macOS Keychain and reads it by
 /// shelling out to `osascript`. From a bundled app that read can block on a
 /// SecurityAgent prompt nobody ever sees, and fx then rejects `initialize`
@@ -2807,6 +2879,126 @@ mod harness_control_env_tests {
             parts.contains(&PathBuf::from(staged)),
             "expected the staged PATH to survive, got {parts:?}"
         );
+    }
+}
+
+/// Cross-platform on purpose (unlike the unix-only `mod tests` above, which
+/// signal-tests real process groups): this exercises `HarnessInner`'s proxy
+/// bookkeeping directly, needing only real pids/handles, not process-group
+/// semantics.
+#[cfg(test)]
+mod proxy_lifecycle_tests {
+    use super::*;
+
+    fn live_child() -> (Arc<LiveChild>, std::process::Child) {
+        #[cfg(windows)]
+        let mut child = Command::new("cmd")
+            .args(["/C", "ping -n 31 127.0.0.1 >NUL"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn test process");
+        #[cfg(not(windows))]
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn test process");
+        let pid = child.id();
+        let stdin = child.stdin.take().expect("test child stdin");
+        (
+            Arc::new(LiveChild {
+                stdin: Mutex::new(stdin),
+                pid,
+            }),
+            child,
+        )
+    }
+
+    fn reap(mut child: std::process::Child) {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    #[test]
+    fn install_proxy_keeps_the_handle_when_nothing_cancelled() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        let proxy = net_proxy::start(Vec::new()).expect("start proxy");
+        assert!(host.install_proxy("s1", epoch, kill_all, proxy).is_none());
+        assert!(host.has_proxy("s1"));
+    }
+
+    #[test]
+    fn install_proxy_rejects_and_returns_it_after_kill_all() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        host.kill_all();
+        let proxy = net_proxy::start(Vec::new()).expect("start proxy");
+        assert!(host.install_proxy("s1", epoch, kill_all, proxy).is_some());
+        assert!(!host.has_proxy("s1"));
+    }
+
+    #[test]
+    fn kill_session_stops_its_proxy() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        let proxy = net_proxy::start(Vec::new()).expect("start proxy");
+        host.install_proxy("s1", epoch, kill_all, proxy);
+        assert!(host.has_proxy("s1"));
+        host.kill_session("s1");
+        assert!(!host.has_proxy("s1"));
+    }
+
+    #[test]
+    fn kill_all_stops_every_proxy() {
+        let host = HarnessHost::new();
+        let (epoch, kill_all, _) = host.begin_spawn("s1");
+        let proxy = net_proxy::start(Vec::new()).expect("start proxy");
+        host.install_proxy("s1", epoch, kill_all, proxy);
+        assert!(host.has_proxy("s1"));
+        host.kill_all();
+        assert!(!host.has_proxy("s1"));
+    }
+
+    #[test]
+    fn a_stale_exit_does_not_clobber_a_fresher_respawns_proxy() {
+        let host = HarnessHost::new();
+
+        let (epoch1, kill_all, _) = host.begin_spawn("s1");
+        let (live1, child1) = live_child();
+        let pid1 = live1.pid;
+        assert!(host
+            .install_spawn("s1".into(), epoch1, kill_all, live1)
+            .is_none());
+        let proxy1 = net_proxy::start(Vec::new()).expect("start proxy 1");
+        assert!(host.install_proxy("s1", epoch1, kill_all, proxy1).is_none());
+
+        // A respawn replaces both the child and the proxy under the same id.
+        let (epoch2, kill_all, prev) = host.begin_spawn("s1");
+        assert_eq!(prev.map(|live| live.pid), Some(pid1));
+        let (live2, child2) = live_child();
+        let pid2 = live2.pid;
+        assert!(host
+            .install_spawn("s1".into(), epoch2, kill_all, live2)
+            .is_none());
+        let proxy2 = net_proxy::start(Vec::new()).expect("start proxy 2");
+        assert!(host.install_proxy("s1", epoch2, kill_all, proxy2).is_none());
+
+        // The old child's exit-wait thread finally runs with the stale pid:
+        // it must not touch the fresher proxy.
+        assert!(host.remove_if_pid("s1", pid1).is_none());
+        assert!(host.has_proxy("s1"));
+
+        // The real current child exiting does clean it up.
+        assert!(host.remove_if_pid("s1", pid2).is_some());
+        assert!(!host.has_proxy("s1"));
+
+        reap(child1);
+        reap(child2);
     }
 }
 

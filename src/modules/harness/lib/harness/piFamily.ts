@@ -517,6 +517,7 @@ async function startLive(
       plan: input.intent === "plan",
     }),
     input.cwd,
+    input.networkAllowlist,
   );
 
   liveByThread.set(input.sessionId, live);

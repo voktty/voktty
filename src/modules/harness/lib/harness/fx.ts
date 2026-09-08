@@ -258,7 +258,13 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
     },
   );
 
-  await spawnChild(input.sessionId, path, fxSpawnArgs(input.model), input.cwd);
+  await spawnChild(
+    input.sessionId,
+    path,
+    fxSpawnArgs(input.model),
+    input.cwd,
+    input.networkAllowlist,
+  );
 
   try {
     try {

@@ -20,6 +20,7 @@ import {
   type Attachment,
   type Block,
   type HarnessId,
+  type NetworkSandboxConfig,
   type PlanBuildTarget,
   type RuntimeMode,
   type Session,
@@ -60,6 +61,10 @@ type Props = {
     settings: Record<string, string>,
   ) => void;
   onRuntimeModeChange: (sessionId: string, mode: RuntimeMode) => void;
+  onNetworkSandboxChange?: (
+    sessionId: string,
+    config: NetworkSandboxConfig,
+  ) => void;
   onSubmit: (
     sessionId: string,
     text: string,
@@ -134,6 +139,7 @@ export const SessionPane = memo(function SessionPane({
   onModelChange,
   onModelSettingsChange,
   onRuntimeModeChange,
+  onNetworkSandboxChange,
   onSubmit,
   onStop,
   onCompactContext,
@@ -244,6 +250,7 @@ export const SessionPane = memo(function SessionPane({
       model={session.model}
       modelSettings={session.modelSettings}
       runtimeMode={session.runtimeMode}
+      networkSandbox={session.networkSandbox}
       cwd={session.cwd}
       executionCwd={workCwd}
       recents={recents}
@@ -281,6 +288,9 @@ export const SessionPane = memo(function SessionPane({
         onModelSettingsChange(session.id, settings)
       }
       onRuntimeModeChange={(mode) => onRuntimeModeChange(session.id, mode)}
+      onNetworkSandboxChange={(config) =>
+        onNetworkSandboxChange?.(session.id, config)
+      }
       onSubmit={(text, attachments) => onSubmit(session.id, text, attachments)}
       onStop={() => onStop(session.id)}
       compactSupported={canCompactHarnessContext(session.harness)}

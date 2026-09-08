@@ -238,6 +238,7 @@ export async function spawnChild(
   command: string,
   args: string[],
   cwd: string,
+  networkAllowlist?: string[] | null,
 ): Promise<void> {
   livePid.delete(sessionId);
   pendingExit.delete(sessionId);
@@ -246,6 +247,7 @@ export async function spawnChild(
     command,
     args,
     cwd,
+    networkAllowlist: networkAllowlist ?? null,
   });
   if (typeof pid !== "number" || pid <= 0) return;
   livePid.set(sessionId, pid);
