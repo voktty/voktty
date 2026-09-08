@@ -123,7 +123,7 @@ export function SshTunnelsManager({
       toast.success(t("ssh.tunnels.toast.deleted"));
       setTunnelToDelete(null);
     } catch (err) {
-      toast.error(String(err));
+      toast.error(t("common.unknownError"), { description: String(err) });
     }
   };
 

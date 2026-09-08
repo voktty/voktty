@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { MessageSquarePlus, X } from "../chrome/icons";
 import { Popover, type PopoverAnchor } from "../chrome/Popover";
 import { diffCommentLocation, formatDiffComment } from "../lib/diffComment";
@@ -20,6 +21,7 @@ export function DiffCommentComposer({
   target: DiffCommentComposerTarget;
   onDismiss: () => void;
 }) {
+  const { t } = useTranslation();
   const [comment, setComment] = useState("");
   const location = diffCommentLocation({ path, line: target.line });
   const addToChat = () => {
@@ -56,8 +58,8 @@ export function DiffCommentComposer({
           </span>
           <button
             type="button"
-            title="Cancel comment"
-            aria-label="Cancel comment"
+            title={t("harness.chrome.cancelComment")}
+            aria-label={t("harness.chrome.cancelComment")}
             onClick={onDismiss}
             className="grid size-5 shrink-0 place-items-center rounded text-content/45 hover:bg-content/10 hover:text-content"
           >
@@ -79,7 +81,7 @@ export function DiffCommentComposer({
               addToChat();
             }
           }}
-          placeholder="Leave a comment…"
+          placeholder={t("harness.chrome.leaveComment")}
           className="max-h-40 min-h-18 w-full resize-y rounded-lg border border-content/10 bg-background-base/70 px-2.5 py-2 text-[13px] leading-5 text-content outline-none placeholder:text-content/35 focus:border-content/20"
         />
         <div className="mt-2 flex items-center justify-between gap-3">

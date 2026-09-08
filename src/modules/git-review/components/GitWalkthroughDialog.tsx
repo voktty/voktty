@@ -55,7 +55,7 @@ export function GitWalkthroughDialog({
       const generated = generateSyntheticWalkthrough(changedFiles);
       setDoc(generated);
     } catch (err) {
-      toast.error(String(err));
+      toast.error(t("common.unknownError"), { description: String(err) });
     } finally {
       setIsGenerating(false);
     }

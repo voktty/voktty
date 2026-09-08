@@ -1,5 +1,9 @@
 import type { ConsoleEntry, LiveComponentMetadata, NetworkEntry } from "../types";
-import { getInspectorInjectedScript } from "./inspectorScript";
+import { t } from "@/modules/i18n";
+import {
+  getInspectorInjectedScript,
+  resolveInspectorUiStrings,
+} from "./inspectorScript";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 5_000;
 
@@ -123,7 +127,10 @@ export function attachInspectorBridge(
       if (doc && !doc.getElementById("voktty-injected-inspector")) {
         const script = doc.createElement("script");
         script.id = "voktty-injected-inspector";
-        script.textContent = getInspectorInjectedScript(window.location.origin);
+        script.textContent = getInspectorInjectedScript(
+          window.location.origin,
+          resolveInspectorUiStrings(t),
+        );
         (doc.head || doc.body || doc.documentElement)?.appendChild(script);
       }
     } catch {

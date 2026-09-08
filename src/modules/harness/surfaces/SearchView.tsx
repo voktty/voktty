@@ -39,6 +39,7 @@ import { IS_MAC } from "../lib/platform";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import { searchProject, type OpenFileFn } from "../lib/search";
 import type { Session } from "../lib/session";
+import { useTranslation } from "@/modules/i18n";
 import { searchSessions, type SessionSummary } from "../lib/sessionStore";
 
 const SCOPES: { id: SearchScope; label: string }[] = [
@@ -77,6 +78,7 @@ export function SearchView({
   onOpenSession,
   onOpenProject,
 }: Props) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -314,7 +316,7 @@ export function SearchView({
   return (
     <div
       role="search"
-      aria-label="Search"
+      aria-label={t("harness.chrome.search")}
       data-app-search
       className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
     >
@@ -333,8 +335,8 @@ export function SearchView({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onQueryKeyDown}
-            placeholder="Search everything..."
-            aria-label="Search"
+            placeholder={t("harness.chrome.searchEverything")}
+            aria-label={t("harness.chrome.search")}
             spellCheck={false}
             autoComplete="off"
             autoCorrect="off"
@@ -366,7 +368,15 @@ export function SearchView({
                   : "text-content/50 hover:bg-content/5 hover:text-content"
               }`}
             >
-              {item.label}
+              {t(
+                item.id === "all"
+                  ? "harness.chrome.all"
+                  : item.id === "conversations"
+                    ? "harness.chrome.conversations"
+                    : item.id === "files"
+                      ? "harness.chrome.searchScopeFiles"
+                      : "harness.chrome.projects",
+              )}
             </button>
           );
         })}
@@ -448,6 +458,7 @@ function ResultList({
   onActive: (index: number) => void;
   onOpen: (hit: AppSearchHit) => void;
 }) {
+  const { t } = useTranslation();
   const activeRef = useRef<HTMLButtonElement>(null);
   const pointer = useRef({ x: Number.NaN, y: Number.NaN, allow: false });
   const fromPointer = useRef(false);
@@ -484,7 +495,7 @@ function ResultList({
   return (
     <div
       role="listbox"
-      aria-label="Search results"
+      aria-label={t("harness.chrome.searchResults")}
       onMouseMove={onListMouseMove}
     >
       {hits.map((hit, index) => {

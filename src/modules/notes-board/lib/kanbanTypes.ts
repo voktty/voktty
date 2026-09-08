@@ -33,29 +33,25 @@ export type KanbanCard = {
 
 export type KanbanColumn = {
   id: KanbanColumnId;
-  title: string;
-  description: string;
 };
 
 export const DEFAULT_COLUMNS: KanbanColumn[] = [
-  {
-    id: "ideas",
-    title: "Ideas",
-    description: "Borradores, conceptos y notas rapidas",
-  },
-  {
-    id: "todo",
-    title: "Por Hacer",
-    description: "Tareas planificadas y pendientes",
-  },
-  {
-    id: "in_progress",
-    title: "En Progreso",
-    description: "Tareas en desarrollo o ejecutadas por agente",
-  },
-  {
-    id: "done",
-    title: "Completado",
-    description: "Tareas finalizadas y verificadas",
-  },
+  { id: "ideas" },
+  { id: "todo" },
+  { id: "in_progress" },
+  { id: "done" },
 ];
+
+export const COLUMN_TITLE_KEYS: Record<KanbanColumnId, string> = {
+  ideas: "notesBoard.columns.ideas",
+  todo: "notesBoard.columns.todo",
+  in_progress: "notesBoard.columns.inProgress",
+  done: "notesBoard.columns.done",
+};
+
+export const PRIORITY_LABEL_KEYS: Record<KanbanPriority, string> = {
+  low: "notesBoard.priority.low",
+  medium: "notesBoard.priority.medium",
+  high: "notesBoard.priority.high",
+  urgent: "notesBoard.priority.urgent",
+};

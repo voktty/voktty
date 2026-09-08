@@ -8,6 +8,7 @@ import {
   Undo2,
   UnfoldVertical,
 } from "../chrome/icons";
+import { useTranslation } from "@/modules/i18n";
 import {
   memo,
   useCallback,
@@ -90,6 +91,7 @@ export function UnifiedDiffView({
   onDiscardFile,
   onStageHunk,
 }: Props) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const colorScheme = useColorScheme();
   const [open, setOpen] = useState<Set<string>>(() =>
@@ -189,8 +191,8 @@ export function UnifiedDiffView({
         <span className="ml-auto flex items-center gap-0.5">
           <button
             type="button"
-            title="Expand all files"
-            aria-label="Expand all files"
+            title={t("harness.chrome.expandAllFiles")}
+            aria-label={t("harness.chrome.expandAllFiles")}
             onClick={() => setOpen(new Set(files.map((file) => file.id)))}
             className="grid size-7 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
           >
@@ -198,8 +200,8 @@ export function UnifiedDiffView({
           </button>
           <button
             type="button"
-            title="Collapse all files"
-            aria-label="Collapse all files"
+            title={t("harness.chrome.collapseAllFiles")}
+            aria-label={t("harness.chrome.collapseAllFiles")}
             disabled={open.size === 0}
             onClick={() => setOpen(new Set())}
             className="grid size-7 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content disabled:opacity-40"
@@ -292,6 +294,7 @@ const FileSection = memo(function FileSection({
   onStageHunk,
   bindRef,
 }: FileSectionProps) {
+  const { t } = useTranslation();
   const Chevron = expanded ? ChevronDown : ChevronRight;
   const name = basename(file.path);
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -382,7 +385,7 @@ const FileSection = memo(function FileSection({
         </button>
         {file.canDiscard && onDiscardFile ? (
           <IconButton
-            title="Discard file"
+            title={t("harness.chrome.discardFile")}
             disabled={busy}
             onClick={() => onDiscardFile(file.id)}
           >
@@ -392,8 +395,8 @@ const FileSection = memo(function FileSection({
         {file.canStage && onStageFile ? (
           <button
             type="button"
-            title="Stage file"
-            aria-label="Stage file"
+            title={t("harness.chrome.stageFile")}
+            aria-label={t("harness.chrome.stageFile")}
             disabled={busy}
             onClick={() => onStageFile(file.id)}
             className="grid size-4 place-items-center rounded-[3px] bg-content text-background-base hover:opacity-80 disabled:opacity-40"
@@ -841,6 +844,7 @@ function FoldBar({
   hidden: number;
   onReveal: (direction: "up" | "down" | "all") => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="flex items-center gap-1 bg-content/8 px-2"
@@ -848,8 +852,8 @@ function FoldBar({
     >
       <button
         type="button"
-        title="Expand upward"
-        aria-label="Expand unmodified lines upward"
+        title={t("harness.chrome.expandUp")}
+        aria-label={t("harness.chrome.expandUp")}
         onClick={() => onReveal("up")}
         className="grid size-5 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content"
       >
@@ -857,8 +861,8 @@ function FoldBar({
       </button>
       <button
         type="button"
-        title="Expand downward"
-        aria-label="Expand unmodified lines downward"
+        title={t("harness.chrome.expandDown")}
+        aria-label={t("harness.chrome.expandDown")}
         onClick={() => onReveal("down")}
         className="grid size-5 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content"
       >
@@ -892,6 +896,7 @@ const DiffLineRow = memo(function DiffLineRow({
   onStage?: () => void;
   onComment?: (anchor: DOMRect) => void;
 }) {
+  const { t } = useTranslation();
   if (line.kind === "hunk") {
     return (
       <div
@@ -957,8 +962,8 @@ const DiffLineRow = memo(function DiffLineRow({
         {onStage ? (
           <button
             type="button"
-            title="Stage hunk"
-            aria-label="Stage hunk"
+            title={t("harness.chrome.stageHunk")}
+            aria-label={t("harness.chrome.stageHunk")}
             onClick={onStage}
             className={`absolute top-0.5 left-full z-10 ml-0.5 grid size-4 place-items-center rounded-[3px] bg-white text-[11px] font-bold text-black ${
               hovered ? "opacity-100" : "pointer-events-none opacity-0"

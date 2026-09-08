@@ -135,10 +135,8 @@ export function QuotaUsageWidget() {
                 : "text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none",
             open && "bg-accent text-foreground",
           )}
-          title={t("statusbar.quota.widgetTitle", {
-            defaultValue: "AI Quotas & Token Usage",
-          })}
-          aria-label={t("statusbar.quota.widgetLabel", { defaultValue: "AI Quotas" })}
+          title={t("statusbar.quota.widgetTitle")}
+          aria-label={t("statusbar.quota.widgetLabel")}
         >
           {loading && !overview ? (
             <HugeiconsIcon
@@ -179,7 +177,6 @@ export function QuotaUsageWidget() {
               ? `${displayPercent}%`
               : t("statusbar.quota.costUsd", {
                   cost: totalCost.toFixed(2),
-                  defaultValue: `$${totalCost.toFixed(2)}`,
                 })}
           </span>
         </button>
@@ -197,16 +194,13 @@ export function QuotaUsageWidget() {
           <div className="flex items-center gap-1.5">
             <HugeiconsIcon icon={Activity01Icon} size={14} className="text-primary" />
             <span className="font-semibold text-foreground">
-              {t("statusbar.quota.header", {
-                defaultValue: "AI Quotas & Consumption",
-              })}
+              {t("statusbar.quota.header")}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10.5px] font-mono text-muted-foreground">
               {t("statusbar.quota.today", {
                 cost: `$${totalCost.toFixed(3)}`,
-                defaultValue: `Today: $${totalCost.toFixed(3)}`,
               })}
             </span>
             <Button
@@ -215,7 +209,7 @@ export function QuotaUsageWidget() {
               className="size-5 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
               onClick={() => void fetchOverview()}
               disabled={loading}
-              title={t("common.refresh", { defaultValue: "Refresh all" })}
+              title={t("common.refresh")}
             >
               <HugeiconsIcon
                 icon={Refresh01Icon}
@@ -280,7 +274,7 @@ export function QuotaUsageWidget() {
                     className="size-4.5 rounded text-muted-foreground hover:text-foreground"
                     onClick={(e) => handleRefresh(p.providerId, e)}
                     disabled={isRefreshing}
-                    title={t("common.refresh", { defaultValue: "Refresh" })}
+                    title={t("common.refresh")}
                   >
                     <HugeiconsIcon
                       icon={Refresh01Icon}
@@ -362,7 +356,6 @@ export function QuotaUsageWidget() {
                       {t("statusbar.quota.tokensSummary", {
                         inTokens: (p.totalInputTokens ?? 0).toLocaleString(),
                         outTokens: (p.totalOutputTokens ?? 0).toLocaleString(),
-                        defaultValue: `In: ${(p.totalInputTokens ?? 0).toLocaleString()} · Out: ${(p.totalOutputTokens ?? 0).toLocaleString()}`,
                       })}
                     </span>
                     {p.costTodayUsd !== undefined && p.costTodayUsd !== null && (

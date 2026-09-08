@@ -1,5 +1,6 @@
 import { Check } from "./icons";
 import type { ReactNode } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { Popover } from "./Popover";
 import {
   DEFAULT_SESSION_SIDEBAR_FILTERS,
@@ -36,6 +37,7 @@ export function SessionFiltersMenu({
   onChange,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const hiddenHarnesses = new Set(filters.hiddenHarnesses);
 
   const toggleHarness = (harness: HarnessId) => {
@@ -69,38 +71,38 @@ export function SessionFiltersMenu({
       maxHeight={480}
       onDismiss={onClose}
       role="menu"
-      aria-label="Filter sessions"
+      aria-label={t("harness.chrome.filterSessions")}
       onContextMenu={(event) => event.preventDefault()}
       className="overflow-y-auto overscroll-none p-1"
     >
       <FilterItem
-        label="Archived"
+        label={t("harness.chrome.archived")}
         checked={filters.showArchived}
         onClick={toggleArchived}
       />
 
-      <SectionLabel>Status</SectionLabel>
+      <SectionLabel>{t("harness.chrome.status")}</SectionLabel>
       <FilterItem
-        label="Working"
+        label={t("harness.working")}
         checked={filters.status.working}
         onClick={() => toggleStatus("working")}
       />
       <FilterItem
-        label="Needs approval"
+        label={t("harness.chrome.needsApproval")}
         checked={filters.status.needsApproval}
         onClick={() => toggleStatus("needsApproval")}
       />
       <FilterItem
-        label="Done"
+        label={t("harness.chrome.done")}
         checked={filters.status.done}
         onClick={() => toggleStatus("done")}
       />
 
-      <SectionLabel>Time</SectionLabel>
+      <SectionLabel>{t("harness.chrome.time")}</SectionLabel>
       {TIME_OPTIONS.map((option) => (
         <FilterItem
           key={option.id}
-          label={option.label}
+          label={t(`harness.chrome.${option.id === "all" ? "allTime" : option.id === "today" ? "today" : option.id === "7d" ? "last7Days" : "last30Days"}`)}
           checked={filters.time === option.id}
           onClick={() => setTime(option.id)}
         />

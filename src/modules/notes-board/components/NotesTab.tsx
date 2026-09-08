@@ -21,6 +21,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
+import { useTranslation } from "@/modules/i18n";
 import { useAgentStore } from "@/modules/agents/store/agentStore";
 import { submitToLeaf } from "@/modules/terminal";
 import {
@@ -51,6 +52,7 @@ export function NotesTab({
   tabs,
   onActivateAgent,
 }: Props) {
+  const { t } = useTranslation();
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -117,7 +119,7 @@ export function NotesTab({
       const newDraft: Note = {
         id: `note_${now}`,
         slug: `note-${now.toString(36)}`,
-        title: initialTitle ?? "Nueva Nota",
+        title: initialTitle ?? t("notesBoard.newNote"),
         body: initialBody ?? "",
         sourceCwd: cwd ?? undefined,
         createdAt: now,
@@ -164,7 +166,7 @@ export function NotesTab({
     if (!selectedId) return;
     const noteUpsert = {
       id: selectedId,
-      title: title.trim() || "Sin titulo",
+      title: title.trim() || t("notesBoard.untitledNote"),
       body,
       sourceCwd: cwd ?? undefined,
     };
@@ -186,7 +188,7 @@ export function NotesTab({
     if (!selectedNote && !title.trim()) return;
     const noteData = {
       id: selectedId || `note_${Date.now()}`,
-      title: title.trim() || "Nota",
+      title: title.trim() || t("notesBoard.noteFallback"),
       body,
       sourceCwd: cwd ?? undefined,
     };
@@ -207,14 +209,16 @@ export function NotesTab({
       payload = detectedCommand;
     } else {
       payload = formatTaskForAgent({
-        title: title.trim() || "Nota",
+        title: title.trim() || t("notesBoard.noteFallback"),
         description: body.trim(),
       });
     }
 
     submitToLeaf(target.leafId, payload);
     onActivateAgent?.(target.tabId, target.leafId);
-    toast.success(`Enviado a ${target.displayName} (${target.tabTitle})`);
+    toast.success(
+      t("notesBoard.sentTo", { name: target.displayName, tab: target.tabTitle }),
+    );
   };
 
   return (
@@ -226,7 +230,7 @@ export function NotesTab({
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filtrar notas..."
+              placeholder={t("notesBoard.filterNotes")}
               className="h-7 pl-6 pr-2 text-xs bg-background/50"
             />
             <HugeiconsIcon
@@ -240,7 +244,7 @@ export function NotesTab({
             size="icon"
             className="size-7 shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
             onClick={() => void handleCreateAndSave()}
-            title="Crear y guardar nueva nota (Alt+N)"
+            title={t("notesBoard.createNoteTitle")}
           >
             <HugeiconsIcon icon={Add01Icon} size={13} />
           </Button>
@@ -249,7 +253,7 @@ export function NotesTab({
         <div className="flex flex-1 flex-col overflow-y-auto p-1.5 gap-1">
           {filteredNotes.length === 0 ? (
             <div className="p-4 text-center text-xs text-muted-foreground">
-              {loading ? "Cargando..." : "No hay notas"}
+              {loading ? t("common.loading") : t("notesBoard.noNotes")}
             </div>
           ) : (
             filteredNotes.map((note) => (
@@ -269,10 +273,10 @@ export function NotesTab({
                 )}
               >
                 <span className="truncate font-medium text-foreground">
-                  {note.title || "Sin titulo"}
+                  {note.title || t("notesBoard.untitledNote")}
                 </span>
                 <span className="truncate text-[10.5px] text-muted-foreground/70">
-                  {note.body.slice(0, 40) || "Nota vacia"}
+                  {note.body.slice(0, 40) || t("notesBoard.emptyNote")}
                 </span>
               </button>
             ))
@@ -290,7 +294,7 @@ export function NotesTab({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleSave}
-              placeholder="Titulo de la nota o comando..."
+              placeholder={t("notesBoard.noteTitlePlaceholder")}
               className="h-7 text-xs font-semibold"
             />
 
@@ -301,10 +305,10 @@ export function NotesTab({
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1 px-2 text-[11px] font-medium cursor-pointer"
-                    title="Enviar nota o comando a un agente CLI activo"
+                    title={t("notesBoard.sendToAgentTitle")}
                   >
                     <HugeiconsIcon icon={ChatBotIcon} size={12} className="text-primary" />
-                    <span>Enviar a agente</span>
+                    <span>{t("notesBoard.sendToAgent")}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -315,11 +319,11 @@ export function NotesTab({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
-                    Enviar a agente o terminal activo
+                    {t("notesBoard.sendToAgentOrTerminal")}
                   </DropdownMenuLabel>
                   {availableAgents.length === 0 ? (
                     <div className="px-2 py-1.5 text-[11px] text-muted-foreground italic">
-                      Sin terminales o agentes activos
+                      {t("notesBoard.noActiveAgents")}
                     </div>
                   ) : (
                     availableAgents.map((target) => (
@@ -352,7 +356,7 @@ export function NotesTab({
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
-                        Solo comando detectado:
+                        {t("notesBoard.commandOnly")}
                       </DropdownMenuLabel>
                       {availableAgents.map((target) => (
                         <DropdownMenuItem
@@ -364,7 +368,7 @@ export function NotesTab({
                             {detectedCommand.slice(0, 24)}
                           </span>
                           <span className="text-[9.5px] text-muted-foreground shrink-0">
-                            en {target.tabTitle}
+                            {t("notesBoard.commandOnTab", { tab: target.tabTitle })}
                           </span>
                         </DropdownMenuItem>
                       ))}
@@ -378,10 +382,10 @@ export function NotesTab({
                 size="sm"
                 className="h-7 gap-1 px-2 text-[11px] font-medium"
                 onClick={handleConvertToKanban}
-                title="Convertir esta nota en una tarjeta del tablero Kanban"
+                title={t("notesBoard.toKanbanTitle")}
               >
                 <HugeiconsIcon icon={SparklesIcon} size={12} className="text-primary" />
-                <span>A Kanban</span>
+                <span>{t("notesBoard.toKanban")}</span>
               </Button>
 
               {detectedCommand && onRunCommand && (
@@ -390,10 +394,10 @@ export function NotesTab({
                   size="sm"
                   className="h-7 gap-1 px-2 text-[11px]"
                   onClick={() => onRunCommand(detectedCommand)}
-                  title={`Ejecutar en terminal: ${detectedCommand}`}
+                  title={t("notesBoard.runInTerminalTitle", { command: detectedCommand })}
                 >
                   <HugeiconsIcon icon={ComputerTerminal01Icon} size={12} />
-                  <span>Ejecutar</span>
+                  <span>{t("notesBoard.run")}</span>
                 </Button>
               )}
 
@@ -406,7 +410,7 @@ export function NotesTab({
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
-                title={copied ? "Copiado!" : "Copiar texto"}
+                title={copied ? t("common.copied") : t("notesBoard.copyText")}
               >
                 <HugeiconsIcon icon={Copy01Icon} size={13} />
               </Button>
@@ -416,7 +420,7 @@ export function NotesTab({
                 size="icon"
                 className="size-7 text-muted-foreground hover:text-destructive"
                 onClick={() => handleDelete(selectedId)}
-                title="Eliminar nota"
+                title={t("notesBoard.deleteNote")}
               >
                 <HugeiconsIcon icon={Delete02Icon} size={13} />
               </Button>
@@ -429,14 +433,14 @@ export function NotesTab({
               value={body}
               onChange={(e) => setBody(e.target.value)}
               onBlur={handleSave}
-              placeholder="Escribe notas en Markdown, comandos o ideas..."
+              placeholder={t("notesBoard.noteBodyPlaceholder")}
               className="flex-1 resize-none rounded-lg border border-border/40 bg-muted/10 p-3 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center text-xs text-muted-foreground">
-          Selecciona una nota de la izquierda o crea una nueva
+          {t("notesBoard.selectOrCreateNote")}
         </div>
       )}
     </div>

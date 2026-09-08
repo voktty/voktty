@@ -23,10 +23,9 @@ const internalMetadataPaths = [
   /\/modules\/i18n\/types\.ts$/,
   /\/modules\/terminal\/scripts\/discoverProjectScripts\.ts$/,
   /\/modules\/api-client\/lib\/presets\.ts$/,
+  /\/modules\/notes-board\/lib\/mcpKanbanTools\.ts$/,
   /\/modules\/theme\//,
   /\/modules\/harness\//,
-  /\/settings\/sections\/HarnessSection\.tsx$/,
-  /\/modules\/statusbar\/components\/FloatingArcadeWidget\.tsx$/,
 ];
 
 
@@ -82,7 +81,8 @@ const technicalPatterns = [
   /^(?:https?|wss?):\/\//i,
   /^(?:[A-Z]:[\\/]|[.~]?[\\/]|--?[a-z\d-]+\b)/i,
   /^(?:[\d./:_*{}()[\]<>|+%=,@#-]+|[A-Z\d_-]{1,8})$/,
-  /^(?:sk-|ssh-|ecdsa-|gpt-|qwen|glm-|whisper-|127\.0\.0\.1|192\.168\.)/i,
+  /^(?:sk-|ssh-|ecdsa-|ghp_|gpt-|qwen|glm-|whisper-|127\.0\.0\.1|192\.168\.)/i,
+  /^(?:…\s*\{…\})$/,
   /^(?:dev\.voktty|voktty\/voktty|voktty\.dev|Apache 2\.0|Microsoft mstsc\.exe|package\.json|utf-8)$/i,
   /^(?:px|ms|s|v|x|of|line|active|[⇧↵↑↓×✕✓·•−—→$?❯]+)$/i,
   /^(?:CPU|RAM|MEM|DISK|NET|NETWORK|TCP EST|WSL):?$/i,

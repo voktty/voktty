@@ -77,10 +77,7 @@ export function LiveComponentBadge({
           },
         }),
       );
-      toast.success(
-        t("preview.jumpingToCode") ||
-          `Abriendo ${comp.filePath || targetPath}:${comp.lineNumber || 1}`,
-      );
+      toast.success(t("preview.jumpingToCode"));
     }
   };
 
@@ -98,7 +95,7 @@ export function LiveComponentBadge({
     void navigator.clipboard.writeText(refText);
     triggerCopyFeedback("ref");
     toast.success(
-      t("preview.copiedReference") || "Referencia copiada al portapapeles",
+      t("preview.copiedReference"),
     );
   };
 
@@ -107,7 +104,7 @@ export function LiveComponentBadge({
     const promptText = formatComponentDebugPrompt(comp);
     void navigator.clipboard.writeText(promptText);
     triggerCopyFeedback("debug");
-    toast.success(t("preview.copiedDebugPrompt") || "Prompt de Debug copiado");
+    toast.success(t("preview.copiedDebugPrompt"));
   };
 
   const handleCopyModifyPrompt = (e: React.MouseEvent) => {
@@ -116,7 +113,7 @@ export function LiveComponentBadge({
     void navigator.clipboard.writeText(promptText);
     triggerCopyFeedback("modify");
     toast.success(
-      t("preview.copiedModifyPrompt") || "Prompt de Modificación copiado",
+      t("preview.copiedModifyPrompt"),
     );
   };
 
@@ -190,7 +187,7 @@ export function LiveComponentBadge({
           <button
             type="button"
             onClick={handleCopyReference}
-            title={t("preview.copyReference") || "Copiar Referencia"}
+            title={t("preview.copyReference")}
             className="rounded p-1 text-cyan-300 hover:bg-cyan-500/20 transition-colors"
           >
             <HugeiconsIcon
@@ -202,7 +199,7 @@ export function LiveComponentBadge({
           <button
             type="button"
             onClick={handleCopyDebugPrompt}
-            title={t("preview.copyDebugPrompt") || "Copiar Prompt Debug"}
+            title={t("preview.copyDebugPrompt")}
             className="rounded p-1 text-rose-300 hover:bg-rose-500/20 transition-colors"
           >
             <HugeiconsIcon
@@ -214,7 +211,7 @@ export function LiveComponentBadge({
           <button
             type="button"
             onClick={handleCopyModifyPrompt}
-            title={t("preview.copyModifyPrompt") || "Copiar Prompt Modificar"}
+            title={t("preview.copyModifyPrompt")}
             className="rounded p-1 text-amber-300 hover:bg-amber-500/20 transition-colors"
           >
             <HugeiconsIcon
@@ -227,7 +224,7 @@ export function LiveComponentBadge({
             <button
               type="button"
               onClick={handleJumpToCode}
-              title={t("preview.jumpToCode") || "Ir al Código"}
+              title={t("preview.jumpToCode")}
               className="rounded p-1 text-cyan-300 hover:bg-cyan-500/20 transition-colors"
             >
               <HugeiconsIcon icon={CodeIcon} size={12} strokeWidth={2} />
@@ -236,7 +233,7 @@ export function LiveComponentBadge({
           <button
             type="button"
             onClick={handleClear}
-            title={t("preview.clearSelection") || "Cerrar"}
+            title={t("preview.clearSelection")}
             className="rounded p-1 text-muted-foreground hover:bg-cyan-500/20 hover:text-foreground transition-colors"
           >
             <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={2} />
@@ -323,7 +320,7 @@ export function LiveComponentBadge({
         <button
           type="button"
           onClick={handleClear}
-          title={t("preview.clearSelection") || "Cerrar inspector"}
+          title={t("preview.closeInspector")}
           className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0 ml-1"
         >
           <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} />
@@ -386,7 +383,7 @@ export function LiveComponentBadge({
         <button
           type="button"
           onClick={handleCopyReference}
-          title={t("preview.copyReference") || "Copiar referencia técnica"}
+          title={t("preview.copyReference")}
           className="flex items-center gap-1.5 rounded-lg bg-secondary/80 hover:bg-secondary text-secondary-foreground px-2.5 py-1 text-xs font-medium transition-colors border border-border/60 active:scale-95 shadow-sm whitespace-nowrap shrink-0"
         >
           <HugeiconsIcon
@@ -405,10 +402,7 @@ export function LiveComponentBadge({
         <button
           type="button"
           onClick={handleCopyDebugPrompt}
-          title={
-            t("preview.copyDebugPrompt") ||
-            "Copiar prompt estructurado para depurar"
-          }
+          title={t("preview.copyDebugPrompt")}
           className="flex items-center gap-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/30 px-2.5 py-1 text-xs font-medium transition-colors active:scale-95 shadow-sm whitespace-nowrap shrink-0"
         >
           <HugeiconsIcon
@@ -427,10 +421,7 @@ export function LiveComponentBadge({
         <button
           type="button"
           onClick={handleCopyModifyPrompt}
-          title={
-            t("preview.copyModifyPrompt") ||
-            "Copiar prompt de instrucción para modificar"
-          }
+          title={t("preview.copyModifyPrompt")}
           className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 px-2.5 py-1 text-xs font-medium transition-colors active:scale-95 shadow-sm whitespace-nowrap shrink-0"
         >
           <HugeiconsIcon
@@ -469,9 +460,7 @@ export function LiveComponentBadge({
           <button
             type="button"
             onClick={handleJumpToCode}
-            title={
-              t("preview.jumpToCode") || "Abrir archivo y línea en el editor"
-            }
+            title={t("preview.jumpToCode")}
             className="flex items-center gap-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 hover:text-cyan-100 border border-cyan-500/40 px-2.5 py-1 text-xs font-medium transition-colors active:scale-95 shadow-sm whitespace-nowrap shrink-0"
           >
             <HugeiconsIcon icon={CodeIcon} size={13} strokeWidth={2} />

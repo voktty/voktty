@@ -16,6 +16,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
@@ -188,6 +189,7 @@ export function SettingsView({
   onDeleteProject,
   onOpenWhatsNew,
 }: Props) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -207,7 +209,7 @@ export function SettingsView({
   return (
     <div
       role="region"
-      aria-label="Settings"
+      aria-label={t("harness.chrome.settings")}
       data-app-settings
       className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
     >
@@ -277,6 +279,7 @@ function GeneralPage({
 }: {
   onOpenWhatsNew: (version: string) => void;
 }) {
+  const { t } = useTranslation();
   const [layout, setLayout] = useState<SidebarLayout>(loadSidebarLayout);
   const [transcriptLayout, setTranscriptLayout] =
     useState<TranscriptLayout>(loadTranscriptLayout);
@@ -369,11 +372,11 @@ function GeneralPage({
   return (
     <>
       <Row
-        label="Workspace layout"
+        label={t("harness.settings.workspaceLayout")}
         description="Classic keeps a single sidebar. Deck adds the project rail, the workspace panel, and the project terminal dock."
       >
         <Segmented
-          label="Workspace layout"
+          label={t("harness.settings.workspaceLayout")}
           value={layout}
           options={[
             { value: "deck", label: "Deck" },
@@ -383,11 +386,11 @@ function GeneralPage({
         />
       </Row>
       <Row
-        label="Transcript layout"
+        label={t("harness.settings.transcriptLayout")}
         description="Full width keeps user prompts as a spanning card. Chat aligns them to the right with a max width, like a messaging app."
       >
         <Segmented
-          label="Transcript layout"
+          label={t("harness.settings.transcriptLayout")}
           value={transcriptLayout}
           options={[
             { value: "full", label: "Full width" },
@@ -397,11 +400,11 @@ function GeneralPage({
         />
       </Row>
       <Row
-        label="Follow-up behavior"
+        label={t("harness.chrome.followUpBehavior")}
         description="Queue follow-ups until the active turn finishes, or steer the active turn immediately."
       >
         <Segmented
-          label="Follow-up behavior"
+          label={t("harness.chrome.followUpBehavior")}
           value={followUpBehavior}
           options={[
             { value: "queue", label: "Queue" },
@@ -411,88 +414,89 @@ function GeneralPage({
         />
       </Row>
       <Row
-        label="Anchor prompts to top"
+        label={t("harness.settings.anchorPrompts")}
         description="When you send, the new prompt sits at the top of the transcript and the reply grows into the space below. Turn this off to keep the classic layout, with the latest message resting on the composer."
       >
         <Toggle
-          label="Anchor prompts to top"
+          label={t("harness.settings.anchorPrompts")}
           on={transcriptAnchor}
           onChange={onTranscriptAnchor}
         />
       </Row>
       <Row
-        label="Zen mode"
+        label={t("harness.settings.zenMode")}
         description={`The agent's work reads as groups: a run of related tool calls under the line the agent wrote to introduce it. The group it is in stays open and grows a step at a time — tool calls, thinking, the notes it drops between them — and folds back to its header the moment it moves on, leaving a labelled outline above the final answer. Click any group to read it back. Edits waiting on approval still show their diff. ${MOD}${ALT}Z toggles it.`}
       >
         <Toggle
-          label="Zen mode"
+          label={t("harness.settings.zenMode")}
           on={transcriptZen}
           onChange={onTranscriptZen}
         />
       </Row>
       <Row
-        label="Composer mascot"
+        label={t("harness.settings.composerMascot")}
         description="When a turn is running, the project mascot runs along the composer, bonks the scroll-to-latest button the first time, then jumps it, and sometimes grabs a coin."
       >
         <Toggle
-          label="Composer mascot"
+          label={t("harness.settings.composerMascot")}
           on={composerRunner}
           onChange={onComposerRunner}
         />
       </Row>
       <Row
-        label="Empty session games"
+        label={t("harness.settings.emptySessionGames")}
         description="Pac-man and snake idle on the empty-session grid. Hover the band to take control of whichever is on screen. Turn this off to keep the pane still."
       >
         <Toggle
-          label="Empty session games"
+          label={t("harness.settings.emptySessionGames")}
           on={gridArcadeEnabled}
           onChange={onGridArcadeEnabled}
         />
       </Row>
       <Row
-        label="Notes"
+        label={t("harness.settings.notes")}
         description="A global markdown notebook on the project rail. Save a finished turn from the transcript, then mention it later with @note or add it to chat. Turn this off to hide Notes from the UI."
       >
         <Toggle label="Notes" on={notesEnabled} onChange={onNotesEnabled} />
       </Row>
       <Row
-        label="Working agents"
+        label={t("harness.settings.workingAgents")}
         description="When two or more chats are in flight, a card on the project rail lists them so you can jump across projects. Finished turns stay until you open that session. Turn this off to hide the card."
       >
         <Toggle
-          label="Working agents"
+          label={t("harness.settings.workingAgents")}
           on={liveAgentsEnabled}
           onChange={onLiveAgentsEnabled}
         />
       </Row>
       <Row
-        label="Sounds"
+        label={t("harness.settings.sounds")}
         description="Short cues when a turn finishes, a new inbox item appears on the project rail, or an update is available. Switches and Copy on a finished turn also play."
       >
         <Toggle label="Sounds" on={soundsEnabled} onChange={onSoundsEnabled} />
       </Row>
       <Row
-        label="Claude Code hooks"
+        label={t("harness.settings.claudeHooks")}
         description="Run the hooks configured in your settings.json files — PreToolUse command rewrites, blocks, notifications, and the rest — just as the Claude Code CLI would. Turn this off if a hook is misbehaving and you need the session back. Takes effect on the next turn."
       >
         <Toggle
-          label="Claude Code hooks"
+          label={t("harness.settings.claudeHooks")}
           on={claudeHooks}
           onChange={onClaudeHooks}
         />
       </Row>
 
-      <Heading title="Linear" />
+      <Heading title={t("harness.chrome.linear")} />
       <LinearSettings />
 
-      <Heading title="About" />
+      <Heading title={t("harness.chrome.about")} />
       <UpdateRow onOpenWhatsNew={onOpenWhatsNew} />
     </>
   );
 }
 
 function LinearSettings() {
+  const { t } = useTranslation();
   const [token, setToken] = useState("");
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -600,7 +604,7 @@ function LinearSettings() {
                   if (event.key === "Enter") void onSave();
                 }}
                 placeholder="lin_api_…"
-                aria-label="Linear API key"
+                aria-label={t("harness.chrome.linearApiKey")}
                 autoComplete="off"
                 spellCheck={false}
                 className="min-w-0 flex-1 bg-transparent text-[12px] text-content outline-none placeholder:text-content/35"
@@ -873,16 +877,17 @@ function useAppearanceSettings() {
 }
 
 function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
+  const { t } = useTranslation();
   const percent = Math.round(appearance.opacity * 100);
 
   return (
     <>
       <Row
-        label="Sidebar opacity"
+        label={t("harness.settings.sidebarOpacity")}
         description="How much of the desktop shows through the sidebar and the project rail."
       >
         <Slider
-          label="Sidebar opacity"
+          label={t("harness.settings.sidebarOpacity")}
           value={percent}
           display={`${percent}%`}
           min={Math.round(SIDEBAR_OPACITY_MIN * 100)}
@@ -891,11 +896,11 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
         />
       </Row>
       <Row
-        label="Blur radius"
+        label={t("harness.settings.blurRadius")}
         description="Background blur behind the window. Higher values cost more to composite."
       >
         <Slider
-          label="Blur radius"
+          label={t("harness.settings.blurRadius")}
           value={appearance.blur}
           display={String(appearance.blur)}
           min={SIDEBAR_BLUR_MIN}
@@ -903,9 +908,9 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
           onChange={appearance.onBlur}
         />
       </Row>
-      <Row label="Hue" description="Base hue for accents and tinted surfaces.">
+      <Row label={t("harness.settings.hue")} description={t("harness.settings.hueDesc")}>
         <Slider
-          label="Hue"
+          label={t("harness.settings.hue")}
           value={appearance.themeHue}
           display={`${appearance.themeHue}°`}
           min={THEME_HUE_MIN}
@@ -916,11 +921,11 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
         />
       </Row>
       <Row
-        label="Saturation"
+        label={t("harness.settings.saturation")}
         description="How strongly the hue tints the interface. Zero keeps it neutral."
       >
         <Slider
-          label="Saturation"
+          label={t("harness.settings.saturation")}
           value={appearance.themeSaturation}
           display={`${appearance.themeSaturation}%`}
           min={THEME_SATURATION_MIN}
@@ -929,11 +934,11 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
         />
       </Row>
       <Row
-        label="Main pane glass"
+        label={t("harness.settings.mainPaneGlass")}
         description="Extend the translucent treatment to the main pane behind sessions and editors."
       >
         <Toggle
-          label="Main pane glass"
+          label={t("harness.settings.mainPaneGlass")}
           on={appearance.bodyGlass}
           onChange={appearance.onBodyGlass}
         />
@@ -1063,6 +1068,7 @@ function ChatBackgroundCard({
 }
 
 function KeybindingsPage() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const rows = useMemo(() => filterKeybindings(KEYBINDINGS, query), [query]);
 
@@ -1077,8 +1083,8 @@ function KeybindingsPage() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter"
-            aria-label="Filter keybindings"
+            placeholder={t("harness.chrome.filter")}
+            aria-label={t("harness.chrome.filterKeybindings")}
             spellCheck={false}
             autoComplete="off"
             className="min-w-0 flex-1 bg-transparent text-[12px] text-content outline-none placeholder:text-content/35"
@@ -1294,6 +1300,7 @@ function ArchivePage({
   onRestoreProject?: (path: string) => void;
   onDeleteProject?: (path: string) => void;
 }) {
+  const { t } = useTranslation();
   const [filters, setFilters] = useState(loadSessionSidebarFilters);
   const [deleting, setDeleting] = useState<ArchivedProject | null>(null);
   const archivedProjects = useArchivedProjects();
@@ -1313,7 +1320,7 @@ function ArchivePage({
 
   return (
     <>
-      <Heading title="Archived projects" first />
+      <Heading title={t("harness.chrome.archivedProjects")} first />
       {archivedProjects.length === 0 ? (
         <p className="py-3 text-[12px] text-content/45">
           Archive a project from the rail to keep its chats without listing it
@@ -1350,11 +1357,11 @@ function ArchivePage({
       )}
 
       <Row
-        label="Show archived in the sidebar"
+        label={t("harness.chrome.showArchivedSidebar")}
         description="Keep archived conversations listed alongside the active ones."
       >
         <Toggle
-          label="Show archived in the sidebar"
+          label={t("harness.chrome.showArchivedSidebar")}
           on={filters.showArchived}
           onChange={onShowArchived}
         />

@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { Composer } from "../chrome/Composer";
 import { DiscussionEmpty } from "../chrome/DiscussionEmpty";
 import { SessionReview } from "../chrome/SessionReview";
@@ -197,6 +198,7 @@ export const SessionPane = memo(function SessionPane({
   const onJumpToBottomReady = useCallback((jump: () => void) => {
     jumpToBottomRef.current = jump;
   }, []);
+  const { t } = useTranslation();
   const addSelectionToChat = useCallback((text: string, mode?: QuoteRequest["mode"]) => {
     quoteRequestId.current += 1;
     setQuoteRequest({ id: quoteRequestId.current, text, mode });
@@ -369,7 +371,7 @@ export const SessionPane = memo(function SessionPane({
           <button
             type="button"
             title={`Close Pane (${MOD}W)`}
-            aria-label="Close pane"
+            aria-label={t("harness.chrome.closePane")}
             data-no-drag
             className="grid size-5 shrink-0 place-items-center rounded text-content/50 hover:bg-content/10 hover:text-content"
             onPointerDown={(e) => e.stopPropagation()}
@@ -430,8 +432,8 @@ export const SessionPane = memo(function SessionPane({
               <div className="pointer-events-none absolute inset-x-0 bottom-2 z-30 flex justify-center">
                 <button
                   type="button"
-                  title="Jump to latest"
-                  aria-label="Jump to latest"
+                  title={t("harness.chrome.jumpToLatest")}
+                  aria-label={t("harness.chrome.jumpToLatest")}
                   data-jump-to-bottom
                   onClick={() => jumpToBottomRef.current?.()}
                   className="pointer-events-auto grid size-6 place-items-center rounded-md border border-content/15 bg-content/10 text-content shadow-md hover:bg-content/5 backdrop-blur-md"

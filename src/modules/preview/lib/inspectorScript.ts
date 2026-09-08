@@ -454,11 +454,82 @@ export function extractDomMetadata(
   };
 }
 
-export function getInspectorInjectedScript(hostOrigin: string): string {
+export type InspectorUiStrings = {
+  copied: string;
+  copyError: string;
+  inspectElement: string;
+  elementSelected: string;
+  jumpToCode: string;
+  openingEditor: string;
+  copyReference: string;
+  referenceCopied: string;
+  copyDebugPrompt: string;
+  debugPromptCopied: string;
+  copyModifyPrompt: string;
+  modifyPromptCopied: string;
+  copyCssSelector: string;
+  cssCopied: string;
+  copyHtml: string;
+  htmlCopied: string;
+  reloadPreview: string;
+  nativeMenuHint: string;
+};
+
+const DEFAULT_INSPECTOR_UI: InspectorUiStrings = {
+  copied: "Copied to clipboard",
+  copyError: "Failed to copy",
+  inspectElement: "Inspect element (AI)",
+  elementSelected: "Element selected",
+  jumpToCode: "Jump to source in the editor",
+  openingEditor: "Opening in editor...",
+  copyReference: "Copy reference (@component)",
+  referenceCopied: "Reference copied",
+  copyDebugPrompt: "Copy debug prompt",
+  debugPromptCopied: "Debug prompt copied",
+  copyModifyPrompt: "Copy modify prompt",
+  modifyPromptCopied: "Modify prompt copied",
+  copyCssSelector: "Copy CSS selector",
+  cssCopied: "CSS selector copied",
+  copyHtml: "Copy HTML snippet",
+  htmlCopied: "HTML copied",
+  reloadPreview: "Reload preview",
+  nativeMenuHint: "Shift + right-click for the native menu",
+};
+
+export function resolveInspectorUiStrings(
+  translate: (key: string) => string,
+): InspectorUiStrings {
+  return {
+    copied: translate("common.textCopied"),
+    copyError: translate("preview.copyError"),
+    inspectElement: translate("preview.inspectElement"),
+    elementSelected: translate("preview.elementSelected"),
+    jumpToCode: translate("preview.jumpToCode"),
+    openingEditor: translate("preview.jumpingToCode"),
+    copyReference: translate("preview.copyReferenceMenu"),
+    referenceCopied: translate("preview.referenceCopied"),
+    copyDebugPrompt: translate("preview.copyDebugPromptMenu"),
+    debugPromptCopied: translate("preview.debugPromptCopied"),
+    copyModifyPrompt: translate("preview.copyModifyPromptMenu"),
+    modifyPromptCopied: translate("preview.modifyPromptCopied"),
+    copyCssSelector: translate("preview.copyCssSelector"),
+    cssCopied: translate("preview.badge.cssSelectorCopiedToast"),
+    copyHtml: translate("preview.copyHtmlSnippet"),
+    htmlCopied: translate("preview.htmlCopied"),
+    reloadPreview: translate("preview.reloadPreview"),
+    nativeMenuHint: translate("preview.nativeMenuHint"),
+  };
+}
+
+export function getInspectorInjectedScript(
+  hostOrigin: string,
+  ui: InspectorUiStrings = DEFAULT_INSPECTOR_UI,
+): string {
   return `(function() {
   if (window.__VOKTTY_INSPECTOR_INSTALLED__) return;
   window.__VOKTTY_INSPECTOR_INSTALLED__ = true;
   var __VOKTTY_HOST_ORIGIN__ = ${JSON.stringify(hostOrigin)};
+  var I18N = ${JSON.stringify(ui)};
   function postToHost(msg) {
     try {
       window.parent.postMessage(msg, __VOKTTY_HOST_ORIGIN__);
@@ -687,7 +758,7 @@ export function getInspectorInjectedScript(hostOrigin: string): string {
   function copyText(text, successMsg) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(() => {
-        showToast(successMsg || "Copiado al portapapeles");
+        showToast(successMsg || I18N.copied);
       }).catch(() => {
         fallbackCopy(text, successMsg);
       });
@@ -707,9 +778,9 @@ export function getInspectorInjectedScript(hostOrigin: string): string {
       ta.select();
       const ok = document.execCommand("copy");
       document.body.removeChild(ta);
-      if (ok) showToast(successMsg || "Copiado al portapapeles");
+      if (ok) showToast(successMsg || I18N.copied);
     } catch (_) {
-      showToast("Error al copiar");
+      showToast(I18N.copyError);
     }
   }
 
@@ -752,30 +823,30 @@ export function getInspectorInjectedScript(hostOrigin: string): string {
     header.innerHTML = "<span style=\"overflow:hidden;text-overflow:ellipsis;\">" + tagTitle + "</span><span style=\"font-size:9px;text-transform:uppercase;color:#94a3b8;font-family:sans-serif;margin-left:6px;\">" + (meta.framework || "DOM") + "</span>";
     menu.appendChild(header);
 
-    menu.appendChild(createMenuItem("🎯", "Inspeccionar elemento (IA)", () => {
+    menu.appendChild(createMenuItem("🎯", I18N.inspectElement, () => {
       try {
         postToHost({
           type: "VOKTTY_LIVE_COMPONENT_SELECTED",
           payload: meta
         });
-        showToast("Elemento seleccionado");
+        showToast(I18N.elementSelected);
       } catch(_) {}
     }));
 
-    menu.appendChild(createMenuItem("💻", "Ir al código en el editor", () => {
+    menu.appendChild(createMenuItem("💻", I18N.jumpToCode, () => {
       try {
         postToHost({
           type: "VOKTTY_LIVE_COMPONENT_SELECTED",
           payload: meta,
           autoJump: true
         });
-        showToast("Abriendo en editor...");
+        showToast(I18N.openingEditor);
       } catch(_) {}
     }));
 
     menu.appendChild(createMenuDivider());
 
-    menu.appendChild(createMenuItem("📋", "Copiar Referencia (@component)", () => {
+    menu.appendChild(createMenuItem("📋", I18N.copyReference, () => {
       const tagLabel = meta.componentName ? ("<" + meta.componentName + "/>") : (meta.idAttr ? ("<" + meta.tagName + "#" + meta.idAttr + "/>") : (meta.classList && meta.classList.length > 0 ? ("<" + meta.tagName + "." + meta.classList.join(".") + "/>") : ("<" + meta.tagName + "/>")));
       let ref = "@component " + tagLabel;
       if (meta.filePath) {
@@ -784,10 +855,10 @@ export function getInspectorInjectedScript(hostOrigin: string): string {
       if (meta.selector && meta.selector !== meta.tagName) {
         ref += " (selector: " + meta.selector + ")";
       }
-      copyText(ref, "Referencia copiada");
+      copyText(ref, I18N.referenceCopied);
     }));
 
-    menu.appendChild(createMenuItem("🐛", "Copiar Prompt para Depurar", () => {
+    menu.appendChild(createMenuItem("🐛", I18N.copyDebugPrompt, () => {
       const prompt = [
         "### 🐛 Solicitud de Diagnóstico y Depuración",
         "- **Elemento**: <" + (meta.componentName || meta.tagName) + ">",
@@ -797,10 +868,10 @@ export function getInspectorInjectedScript(hostOrigin: string): string {
         meta.htmlSnippet ? ("- **HTML del elemento**:\n" + meta.htmlSnippet) : "",
         "- **Problema**: [Describe aquí el error o fallo visual]"
       ].filter(Boolean).join("\n");
-      copyText(prompt, "Prompt de depuración copiado");
+      copyText(prompt, I18N.debugPromptCopied);
     }));
 
-    menu.appendChild(createMenuItem("💡", "Copiar Prompt para Modificar", () => {
+    menu.appendChild(createMenuItem("💡", I18N.copyModifyPrompt, () => {
       const prompt = [
         "### 💡 Instrucción de Modificación de Componente",
         "- **Elemento**: <" + (meta.componentName || meta.tagName) + ">",
@@ -810,24 +881,24 @@ export function getInspectorInjectedScript(hostOrigin: string): string {
         meta.htmlSnippet ? ("- **HTML actual**:\n" + meta.htmlSnippet) : "",
         "- **Cambios solicitados**: [Describe aquí los cambios deseados]"
       ].filter(Boolean).join("\n");
-      copyText(prompt, "Prompt de modificación copiado");
+      copyText(prompt, I18N.modifyPromptCopied);
     }));
 
     menu.appendChild(createMenuDivider());
 
-    menu.appendChild(createMenuItem("🔍", "Copiar Selector CSS", () => {
-      copyText(meta.selector, "Selector CSS copiado");
+    menu.appendChild(createMenuItem("🔍", I18N.copyCssSelector, () => {
+      copyText(meta.selector, I18N.cssCopied);
     }));
 
     if (meta.htmlSnippet) {
-      menu.appendChild(createMenuItem("📄", "Copiar Fragmento HTML", () => {
-        copyText(meta.htmlSnippet, "HTML copiado");
+      menu.appendChild(createMenuItem("📄", I18N.copyHtml, () => {
+        copyText(meta.htmlSnippet, I18N.htmlCopied);
       }));
     }
 
     menu.appendChild(createMenuDivider());
 
-    menu.appendChild(createMenuItem("🔄", "Recargar Vista Previa", () => {
+    menu.appendChild(createMenuItem("🔄", I18N.reloadPreview, () => {
       try {
         postToHost({ type: "VOKTTY_RELOAD_PREVIEW" });
       } catch(_) {
@@ -837,7 +908,7 @@ export function getInspectorInjectedScript(hostOrigin: string): string {
 
     const footer = document.createElement("div");
     footer.style.cssText = "padding:4px 6px 2px;font-size:10px;color:#64748b;text-align:center;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;";
-    footer.textContent = "Shift + Clic derecho para menú nativo";
+    footer.textContent = I18N.nativeMenuHint;
     menu.appendChild(footer);
 
     menu.style.display = "block";

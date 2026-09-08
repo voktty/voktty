@@ -1,5 +1,6 @@
 import { displayAgent } from "@/modules/agents/lib/format";
 import type { AgentSession } from "@/modules/agents/lib/types";
+import { t } from "@/modules/i18n";
 
 export type ActiveAgentTarget = {
   leafId: number;
@@ -25,9 +26,9 @@ export function formatTaskForAgent(card: {
   const title = card.title.trim();
   const desc = (card.description || "").trim();
   if (!desc) {
-    return `Tarea: ${title}`;
+    return t("notesBoard.taskPrompt", { title });
   }
-  return `Tarea: ${title}\n\nDetalles:\n${desc}`;
+  return t("notesBoard.taskPromptWithDetails", { title, details: desc });
 }
 
 /**
@@ -45,7 +46,7 @@ export function resolveActiveAgentTargets(
   for (const session of Object.values(sessions)) {
     claimedLeaves.add(session.leafId);
     const tab = tabs?.find((t) => t.id === session.tabId);
-    const tabTitle = tab?.title?.trim() || `Pestana ${session.tabId}`;
+    const tabTitle = tab?.title?.trim() || t("notesBoard.tabFallback", { id: session.tabId });
     const displayName = displayAgent(session.agent);
 
     targets.push({
@@ -66,12 +67,12 @@ export function resolveActiveAgentTargets(
         tab.activeLeafId !== undefined &&
         !claimedLeaves.has(tab.activeLeafId)
       ) {
-        const tabTitle = tab.title?.trim() || `Pestana ${tab.id}`;
+        const tabTitle = tab.title?.trim() || t("notesBoard.tabFallback", { id: tab.id });
         targets.push({
           leafId: tab.activeLeafId,
           tabId: tab.id,
           agent: "terminal",
-          displayName: "Terminal",
+          displayName: t("statusbar.terminal"),
           tabTitle,
           status: "idle",
         });

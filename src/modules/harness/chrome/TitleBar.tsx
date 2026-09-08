@@ -22,6 +22,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { t, useTranslation } from "@/modules/i18n";
 import { looksLikeProject } from "../lib/recents";
 import type { HarnessId } from "../lib/session";
 import {
@@ -151,7 +152,11 @@ export function tabCopy(
   const conversation = tab.title.trim();
   const file = tab.files[0] ?? "";
   const sessions = sessionMeta(tab);
-  const untitled = deckLayout ? "New session" : inGroup ? "New chat" : project;
+  const untitled = deckLayout
+    ? t("harness.chrome.newSession")
+    : inGroup
+      ? t("harness.chrome.newChat")
+      : project;
 
   let headline: string;
   const metaParts: string[] = [];
@@ -186,7 +191,7 @@ export function tabCopy(
   if (conversation) tooltipParts.push(conversation);
   tooltipParts.push(...tab.more);
   if (tab.files.length > 0) tooltipParts.push(tab.files.join(", "));
-  if (tab.dirty) tooltipParts.push("Unsaved changes");
+  if (tab.dirty) tooltipParts.push(t("harness.chrome.unsavedChanges"));
 
   return { headline, meta, tooltip: tooltipParts.join(" · ") };
 }
@@ -320,6 +325,7 @@ function TitleTabItem({
   itemRef?: (el: HTMLDivElement | null) => void;
   deckLayout?: boolean;
 }) {
+  const { t } = useTranslation();
   const dragging = canDrag && sortable.draggingId === tab.id;
   const inGroup = groupPosition != null;
   const { headline, meta, tooltip } = tabCopy(tab, { inGroup, deckLayout });
@@ -425,8 +431,8 @@ function TitleTabItem({
             {tab.dirty ? (
               <span
                 className="size-1.5 shrink-0 rounded-full bg-content/70"
-                title="Unsaved changes"
-                aria-label="Unsaved changes"
+                title={t("harness.chrome.unsavedChanges")}
+                aria-label={t("harness.chrome.unsavedChanges")}
               />
             ) : null}
           </span>
@@ -440,8 +446,8 @@ function TitleTabItem({
       {closable ? (
         <button
           type="button"
-          title="Close Tab"
-          aria-label={`Close ${headline}`}
+          title={t("harness.chrome.closeTab")}
+          aria-label={t("harness.chrome.closeNamed", { name: headline })}
           data-no-drag
           data-tauri-drag-region="false"
           onPointerDown={(event) => event.stopPropagation()}
@@ -891,6 +897,7 @@ function TitleBarComponent({
   recents = [],
   onSelectProject,
 }: Props) {
+  const { t } = useTranslation();
   const tabIds = tabs.map((tab) => tab.id);
   const segments = deckLayout
     ? tabs.map((tab, index) => ({ kind: "single" as const, tab, index }))
@@ -1068,7 +1075,7 @@ function TitleBarComponent({
       {
         kind: "item",
         id: "close",
-        label: "Close Tab",
+        label: t("harness.chrome.closeTab"),
         shortcut: `${MOD}W`,
         disabled: !titleTabClosable(contextTab, tabs.length),
       },
@@ -1076,19 +1083,19 @@ function TitleBarComponent({
       {
         kind: "item",
         id: "others",
-        label: "Close Other Tabs",
+        label: t("harness.chrome.closeOtherTabs"),
         disabled: contextCloseIds?.others.length === 0,
       },
       {
         kind: "item",
         id: "right",
-        label: "Close Tabs to the Right",
+        label: t("harness.chrome.closeTabsRight"),
         disabled: contextCloseIds?.right.length === 0,
       },
       {
         kind: "item",
         id: "left",
-        label: "Close Tabs to the Left",
+        label: t("harness.chrome.closeTabsLeft"),
         disabled: contextCloseIds?.left.length === 0,
       },
     ];
@@ -1098,7 +1105,7 @@ function TitleBarComponent({
       items.push({
         kind: "item",
         id: "new-group",
-        label: "Add to new group",
+        label: t("harness.chrome.addToNewGroup"),
       });
       const others = groupSummaries.filter(
         (group) =>
@@ -1234,21 +1241,21 @@ function TitleBarComponent({
     <div className="flex h-full shrink-0 items-stretch">
       <div className="flex items-center gap-1 px-2">
         {projectless && railClosed && onOpenInbox ? (
-          <IconButton label="Inbox" onClick={onOpenInbox}>
+          <IconButton label={t("harness.chrome.inbox")} onClick={onOpenInbox}>
             <Inbox className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
         {projectless && railClosed && onOpenNotes ? (
-          <IconButton label="Notes" onClick={onOpenNotes}>
+          <IconButton label={t("harness.chrome.notes")} onClick={onOpenNotes}>
             <StickyNote className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
         {railClosed && !projectless ? (
           <>
-            <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+            <IconButton label={t("harness.chrome.goToFileShortcut", { shortcut: `${MOD}P` })} onClick={onGoToFile}>
               <Search className="size-3.5" strokeWidth={1.75} />
             </IconButton>
-            <IconButton label={`New session (${MOD}T)`} onClick={onNew}>
+            <IconButton label={t("harness.chrome.newSessionShortcut", { shortcut: `${MOD}T` })} onClick={onNew}>
               <Plus className="size-3.5" strokeWidth={1.75} />
             </IconButton>
           </>
@@ -1257,8 +1264,8 @@ function TitleBarComponent({
           <IconButton
             label={
               projectTerminalActive
-                ? `Hide Terminal (${MOD}J)`
-                : `Terminal (${MOD}\`)`
+                ? t("harness.chrome.hideTerminalShortcut", { shortcut: `${MOD}J` })
+                : t("harness.chrome.terminalShortcut", { shortcut: `${MOD}\`` })
             }
             accent={projectTerminalActive}
             onClick={onShowTerminal ?? onNewTerminal}
@@ -1277,7 +1284,7 @@ function TitleBarComponent({
         !projectRailOpen &&
         !showCurrentProject &&
         onOpenSettings ? (
-          <IconButton label={`Settings (${MOD},)`} onClick={onOpenSettings}>
+          <IconButton label={t("harness.chrome.settingsShortcut", { shortcut: `${MOD},` })} onClick={onOpenSettings}>
             <Settings className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
@@ -1532,7 +1539,7 @@ function TitleBarComponent({
             y={tabMenu.y}
             width={244}
             items={tabMenuItems}
-            ariaLabel={`Tab actions for ${tabCopy(contextTab).headline}`}
+            ariaLabel={t("harness.chrome.tabActionsFor", { name: tabCopy(contextTab).headline })}
             onPick={onTabMenuPick}
             onClose={() => setTabMenu(null)}
           />
@@ -1542,12 +1549,12 @@ function TitleBarComponent({
             so the strip carries no trailing actions. */}
         {deckLayout ? null : (
           <div className="flex shrink-0 items-center gap-0.5 border-l border-content/10 px-1.5">
-            <IconButton label={`New Tab (${MOD}T)`} onClick={onNew}>
+            <IconButton label={t("harness.chrome.newTabShortcut", { shortcut: `${MOD}T` })} onClick={onNew}>
               <Plus className="size-3.5" strokeWidth={1.75} />
             </IconButton>
             {onNewTerminal ? (
               <IconButton
-                label={`New Terminal (${MOD}\`)`}
+                label={t("harness.chrome.newTerminalShortcut", { shortcut: `${MOD}\`` })}
                 onClick={onNewTerminal}
               >
                 <Terminal className="size-3.5" strokeWidth={1.75} />

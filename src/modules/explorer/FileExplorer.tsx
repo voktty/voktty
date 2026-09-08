@@ -922,7 +922,7 @@ export const FileExplorer = memo(
                   }
                   toast.success(t("git.initRepoSuccess"));
                 } catch (err) {
-                  toast.error(String(err));
+                  toast.error(t("common.unknownError"), { description: String(err) });
                 }
               }}
               title={t("git.initializeRepo")}
@@ -1352,7 +1352,7 @@ export const FileExplorer = memo(
                           }
                           toast.success(t("git.initRepoSuccess"));
                         } catch (err) {
-                          toast.error(String(err));
+                          toast.error(t("common.unknownError"), { description: String(err) });
                         }
                       }}
                     >

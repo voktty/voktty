@@ -223,12 +223,8 @@ export function StatusBar({
           onMouseEnter={() =>
             void import("@/modules/notes-board/components/FloatingWorkspaceWidget")
           }
-          title={t("statusbar.notesBoard", {
-            defaultValue: "Notas & Tablero Kanban",
-          })}
-          aria-label={t("statusbar.notesBoardLabel", {
-            defaultValue: "Notas y Tablero",
-          })}
+          title={t("statusbar.notesBoard")}
+          aria-label={t("statusbar.notesBoardLabel")}
         >
           <HugeiconsIcon icon={Note01Icon} size={14} strokeWidth={1.75} />
         </Button>
@@ -241,10 +237,8 @@ export function StatusBar({
           )}
           onClick={toggleArcade}
           onMouseEnter={() => void import("./components/FloatingArcadeWidget")}
-          title={t("statusbar.arcade", {
-            defaultValue: "Arcade (Pac-Man & Snake)",
-          })}
-          aria-label={t("statusbar.arcadeLabel", { defaultValue: "Arcade" })}
+          title={t("statusbar.arcade")}
+          aria-label={t("statusbar.arcadeLabel")}
         >
           <PacmanIcon size={14} className={arcadeOpen ? "text-yellow-400" : undefined} />
         </Button>

@@ -14,6 +14,7 @@ import {
   Undo2,
   WandSparkles,
 } from "./icons";
+import { useTranslation } from "@/modules/i18n";
 import {
   useCallback,
   useEffect,
@@ -69,12 +70,13 @@ export function GitChangesPanel({
   selectedPath,
   onOpenFile,
 }: Props) {
+  const { t } = useTranslation();
   const { index, reload } = useDiffIndex(cwd, enabled);
   const files = index?.files ?? [];
 
   if (!cwd || cwd === "~") {
     return (
-      <p className="px-3 py-2 text-[12px] text-content/50">No project folder</p>
+      <p className="px-3 py-2 text-[12px] text-content/50">{t("harness.chrome.noProjectFolder")}</p>
     );
   }
 
@@ -146,6 +148,7 @@ function ChangedFiles({
   onOpenFile: (path: string) => void;
   onMutated: (paths?: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const menuRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
@@ -363,8 +366,8 @@ function ChangedFiles({
           />
           <button
             type="button"
-            title="Generate commit message"
-            aria-label="Generate commit message"
+            title={t("harness.chrome.generateCommit")}
+            aria-label={t("harness.chrome.generateCommit")}
             disabled={!canGenerate}
             onClick={() => void generate()}
             className="absolute top-1 right-1 grid size-5 place-items-center rounded-md text-content bg-content/10 hover:bg-content/20 hover:text-content disabled:opacity-40"
@@ -389,8 +392,8 @@ function ChangedFiles({
 
           <button
             type="button"
-            title="Commit options"
-            aria-label="Commit options"
+            title={t("harness.chrome.commitOptions")}
+            aria-label={t("harness.chrome.commitOptions")}
             disabled={!canCommit}
             onClick={() => setMenuOpen((open) => !open)}
             className="grid h-7 w-7 shrink-0 place-items-center rounded-r-md border-l border-background-base/10 bg-content text-background-base disabled:opacity-40"
@@ -454,7 +457,7 @@ function ChangedFiles({
           <>
             {staged.length > 0 ? (
               <FileSection
-                title="Staged Changes"
+                title={t("harness.chrome.stagedChanges")}
                 count={staged.length}
                 open={stagedExpanded}
                 onToggle={() => {
@@ -482,7 +485,7 @@ function ChangedFiles({
             ) : null}
             {unstaged.length > 0 ? (
               <FileSection
-                title="Changes"
+                title={t("harness.chrome.changes")}
                 count={unstaged.length}
                 open={changesExpanded}
                 onToggle={() => {
@@ -788,6 +791,7 @@ function ChangeRow({
     action: "stage" | "unstage" | "discard",
   ) => void;
 }) {
+  const { t } = useTranslation();
   const name = basename(file.relative);
   const dir = dirname(file.relative);
   const canOpen = file.status !== "deleted";
@@ -823,7 +827,7 @@ function ChangeRow({
         >
           {kind === "unstaged" ? (
             <IconAction
-              title="Discard Changes"
+              title={t("harness.chrome.discardChanges")}
               disabled={busy}
               onClick={() => onAction(file, "discard")}
             >
@@ -832,7 +836,7 @@ function ChangeRow({
           ) : null}
           {kind === "staged" ? (
             <IconAction
-              title="Unstage Changes"
+              title={t("harness.chrome.unstageChanges")}
               disabled={busy}
               onClick={() => onAction(file, "unstage")}
             >
@@ -840,7 +844,7 @@ function ChangeRow({
             </IconAction>
           ) : (
             <IconAction
-              title="Stage Changes"
+              title={t("harness.chrome.stageChanges")}
               disabled={busy}
               onClick={() => onAction(file, "stage")}
             >

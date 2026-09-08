@@ -9,6 +9,7 @@ import {
   Note01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useTranslation } from "@/modules/i18n";
 import type { TabSummary } from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
 import {
@@ -44,6 +45,7 @@ export function FloatingWorkspaceWidget({
   const requestNewNote = useNotesBoardStore((s) => s.requestNewNote);
   const cardCount = useKanbanStore((s) => s.cards.length);
   const [isDragging, setIsDragging] = useState(false);
+  const { t } = useTranslation();
 
   const isFloating = position !== null;
 
@@ -154,8 +156,8 @@ export function FloatingWorkspaceWidget({
     icon: typeof Note01Icon;
     badge?: number;
   }[] = [
-    { id: "notes", label: "Notas & Ideas", icon: Note01Icon },
-    { id: "kanban", label: "Kanban", icon: Layout01Icon, badge: cardCount },
+    { id: "notes", label: t("notesBoard.tabNotes"), icon: Note01Icon },
+    { id: "kanban", label: t("notesBoard.tabKanban"), icon: Layout01Icon, badge: cardCount },
   ];
 
   return (
@@ -163,7 +165,7 @@ export function FloatingWorkspaceWidget({
       ref={rootRef}
       tabIndex={0}
       role="region"
-      aria-label="Notas y Tablero Kanban Flotante"
+      aria-label={t("notesBoard.regionLabel")}
       style={
         isFloating
           ? {
@@ -189,7 +191,7 @@ export function FloatingWorkspaceWidget({
         onMouseDown={handleHeaderMouseDown}
         onDoubleClick={handleHeaderDoubleClick}
         className="flex h-10 shrink-0 items-center justify-between border-b border-border/40 px-3 bg-muted/20 cursor-move select-none"
-        title="Arrastra para mover · Doble clic para acoplar o liberar"
+        title={t("notesBoard.dragToMove")}
       >
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-md bg-muted/60 p-0.5 text-xs">
@@ -225,8 +227,8 @@ export function FloatingWorkspaceWidget({
             onClick={handleToggleFloat}
             title={
               isFloating
-                ? "Acoplar abajo (Doble clic)"
-                : "Ventana flotante libre (Doble clic)"
+                ? t("notesBoard.dockBelow")
+                : t("notesBoard.undockWindow")
             }
           >
             <HugeiconsIcon
@@ -240,7 +242,7 @@ export function FloatingWorkspaceWidget({
             size="icon"
             className="size-6 text-muted-foreground hover:bg-accent hover:text-destructive cursor-pointer"
             onClick={onClose}
-            title="Cerrar (Esc)"
+            title={t("notesBoard.closeEsc")}
           >
             <HugeiconsIcon icon={Cancel01Icon} size={13} />
           </Button>
@@ -268,11 +270,11 @@ export function FloatingWorkspaceWidget({
 
       {/* Subtle Footer */}
       <div className="flex h-6 shrink-0 items-center justify-between border-t border-border/30 bg-muted/15 px-3 font-mono text-[10px] text-muted-foreground">
-        <span>Voktty Workspace Hub · Arrastra la barra superior para mover</span>
+        <span>{t("notesBoard.footerHint")}</span>
         <div className="flex items-center gap-2">
-          <span>Alt+N: Nueva nota</span>
+          <span>{t("notesBoard.newNoteShortcut")}</span>
           <span>·</span>
-          <span>Esc para cerrar</span>
+          <span>{t("notesBoard.escToClose")}</span>
         </div>
       </div>
     </div>

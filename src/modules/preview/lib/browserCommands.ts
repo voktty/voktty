@@ -1,3 +1,4 @@
+import { t } from "@/modules/i18n";
 import type { LiveComponentMetadata } from "../types";
 import { useLiveComponentStore } from "../store/liveComponentStore";
 import { usePreviewDevtoolsStore } from "../store/previewDevtoolsStore";
@@ -7,8 +8,9 @@ import { isLocalUrl } from "./urlSafety";
 export const NO_ACTIVE_PREVIEW = {
   ok: false as const,
   error: "no_active_preview",
-  message:
-    "No active preview tab is available. Open a localhost preview first.",
+  get message() {
+    return t("preview.noActivePreview");
+  },
 };
 
 export type BrowserTarget = {
@@ -46,8 +48,7 @@ export function getBrowserSelected():
   if (!component) {
     return {
       selected: false,
-      message:
-        "No live component is currently selected in the browser. Toggle inspection with Ctrl+G and click an element.",
+      message: t("preview.noLiveComponent"),
     };
   }
   return { selected: true, component };
@@ -92,8 +93,7 @@ export function runBrowserNavigate(url: string, tabId?: number) {
     return {
       ok: false as const,
       error: "url_not_local",
-      message:
-        "Preview navigation is restricted to localhost URLs. Paste an external URL into the address bar instead.",
+      message: t("preview.navigationLocalhostOnly"),
       url,
     };
   }

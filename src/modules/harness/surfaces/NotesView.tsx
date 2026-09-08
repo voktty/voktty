@@ -8,6 +8,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { useMarkdownMode } from "../chrome/MarkdownModeToggle";
 import { ProjectLogoIcon } from "../chrome/ProjectLogoIcon";
 import { ProjectMascot } from "../chrome/ProjectMascot";
@@ -60,6 +61,7 @@ export function NotesView({
   onClose,
   onToggleSidebar,
 }: Props) {
+  const { t } = useTranslation();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const listLock = useLockOverscroll<HTMLDivElement>();
@@ -199,8 +201,8 @@ export function NotesView({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter notes"
-            aria-label="Filter notes"
+            placeholder={t("harness.chrome.filterNotes")}
+            aria-label={t("harness.chrome.filterNotes")}
             spellCheck={false}
             autoComplete="off"
             className="h-7 w-full rounded-md bg-transparent pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/40"
@@ -208,8 +210,8 @@ export function NotesView({
         </div>
         <button
           type="button"
-          title="New note"
-          aria-label="New note"
+          title={t("harness.chrome.newNote")}
+          aria-label={t("harness.chrome.newNote")}
           disabled={creating}
           onClick={() => void onCreate()}
           className="grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content disabled:opacity-40"
@@ -261,7 +263,7 @@ export function NotesView({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize notes list"
+        aria-label={t("harness.chrome.resizeNotes")}
         aria-valuenow={Math.round(resize.width)}
         aria-valuemin={MIN_WIDTH}
         aria-valuemax={MAX_WIDTH}
@@ -278,7 +280,7 @@ export function NotesView({
   return (
     <div
       role="region"
-      aria-label="Notes"
+      aria-label={t("harness.chrome.notes")}
       data-app-notes
       className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
     >
@@ -501,6 +503,7 @@ function NoteEditor({
   onDelete: (id: string) => void | Promise<void>;
   onAddToChat: (note: Note) => void;
 } & ProjectMarks) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const blank = !note.body.trim() && note.title === "Untitled";
   const [mode, setMode] = useMarkdownMode(note.id);
@@ -614,9 +617,9 @@ function NoteEditor({
               void persist();
             }}
             onKeyDown={onTitleKeyDown}
-            aria-label="Note title"
+            aria-label={t("harness.chrome.noteTitle")}
             className="w-full border-0 bg-transparent p-0 text-[20px] font-semibold leading-tight text-content outline-none placeholder:text-content/35"
-            placeholder="Untitled"
+            placeholder={t("harness.chrome.untitled")}
           />
           {time ? (
             <div className="text-[12px] text-content/50">Updated {time}</div>
@@ -650,16 +653,16 @@ function NoteEditor({
         </header>
         <div
           role="tablist"
-          aria-label="Note sections"
+          aria-label={t("harness.chrome.noteSections")}
           className="flex h-9 items-stretch gap-4 border-b border-content/10"
         >
           <NoteDetailTab
-            label="Preview"
+            label={t("harness.chrome.preview")}
             selected={mode === "preview"}
             onSelect={() => setMode("preview")}
           />
           <NoteDetailTab
-            label="Source"
+            label={t("harness.chrome.source")}
             selected={mode === "source"}
             onSelect={() => setMode("source")}
           />
@@ -692,6 +695,7 @@ function NoteSource({
   onChange: (value: string) => void;
   autoFocus?: boolean;
 }) {
+  const { t } = useTranslation();
   const lines = value.split("\n");
   const gutterWidth = `calc(${Math.max(String(lines.length).length, 2)}ch + 0.75rem)`;
   const textOffset = `calc(${gutterWidth} + 0.75rem)`;
@@ -727,7 +731,7 @@ function NoteSource({
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
         spellCheck={false}
-        placeholder="Write markdown…"
+        placeholder={t("harness.chrome.writeMarkdown")}
         className="markdown-source-field absolute inset-0 h-full w-full resize-none overflow-hidden border-0 bg-transparent py-0 pr-0 font-mono text-[13px] leading-5 whitespace-pre-wrap wrap-break-word outline-none"
         style={{ paddingLeft: textOffset }}
       />

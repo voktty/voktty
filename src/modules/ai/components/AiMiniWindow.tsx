@@ -526,12 +526,8 @@ function Header({
             variant="ghost"
             onClick={onCollapse}
             className="size-6 rounded-md text-muted-foreground hover:text-foreground"
-            aria-label={t("ai.collapseToBadge", {
-              defaultValue: "Minimizar a icono flotante",
-            })}
-            title={t("ai.collapseToBadge", {
-              defaultValue: "Minimizar a icono flotante",
-            })}
+            aria-label={t("ai.collapseToBadge")}
+            title={t("ai.collapseToBadge")}
           >
             <HugeiconsIcon icon={MinusSignIcon} size={12} strokeWidth={1.75} />
           </Button>

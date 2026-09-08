@@ -1692,9 +1692,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         ...createTabIdentity(targetSpace),
         kind: "harness",
         spaceId: targetSpace,
-        title: t("harness.agentDevelopment", {
-          defaultValue: "Agent Development",
-        }),
+        title: t("harness.agentDevelopment"),
         cwd,
         sessionId,
       },

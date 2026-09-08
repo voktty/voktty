@@ -167,7 +167,7 @@ export function TunnelDialog({
       );
       onOpenChange(false);
     } catch (err) {
-      toast.error(String(err));
+      toast.error(t("common.unknownError"), { description: String(err) });
     } finally {
       setIsSaving(false);
     }

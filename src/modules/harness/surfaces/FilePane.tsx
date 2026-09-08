@@ -1,5 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { memo } from "react";
+import { useTranslation } from "@/modules/i18n";
 import {
   MarkdownViewShell,
   useMarkdownMode,
@@ -73,6 +74,7 @@ function FilePaneComponent({
   onTerminalMetaChange,
   onAddTerminal,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <div
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
@@ -91,7 +93,7 @@ function FilePaneComponent({
           onAddTerminal ? (
             <div className="flex shrink-0 items-center border-l border-content/10 px-1">
               <IconButton
-                label="New Terminal Tab"
+                label={t("harness.chrome.newTerminalTab")}
                 onClick={() => onAddTerminal(pane.id)}
               >
                 <Terminal className="size-3.5" strokeWidth={1.75} />
