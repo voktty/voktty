@@ -15,6 +15,7 @@ import {
   promptBlocks,
   promptLabel,
   promptPreview,
+  NEAR_END_PX,
   RIPPLE_SPAN,
   type OutlineAnchor,
   type OutlineBand,
@@ -66,6 +67,8 @@ export function PromptOutline({
   const frame = useRef<number | null>(null);
   const openTimer = useRef<number | null>(null);
   const pointerInside = useRef(false);
+  const lastPromptId = useRef<string | null>(null);
+  lastPromptId.current = prompts[prompts.length - 1]?.id ?? null;
 
   const measure = useCallback(() => {
     const scroller = scope.current?.querySelector<HTMLElement>(SCROLLER);
@@ -82,6 +85,15 @@ export function PromptOutline({
         Math.floor(viewport.height * BAR_STACK_PANE_SHARE),
       ),
     );
+    // Streaming re-measures on every frame, and it almost always lands here:
+    // pinned to the end, where the last prompt wins whatever the anchors say.
+    // Answer from the block list and skip the walk.
+    const distanceToEnd =
+      scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    if (distanceToEnd <= NEAR_END_PX) {
+      setActiveId(lastPromptId.current);
+      return;
+    }
     const anchors: OutlineAnchor[] = [];
     for (const el of scroller.querySelectorAll<HTMLElement>(ANCHOR)) {
       const id = el.dataset.promptAnchor;
@@ -91,7 +103,7 @@ export function PromptOutline({
       activePromptId(
         { top: viewport.top, bottom: viewport.bottom },
         anchors,
-        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight,
+        distanceToEnd,
       ),
     );
   }, [scope]);
@@ -167,6 +179,12 @@ export function PromptOutline({
     close();
   };
 
+  const hoverId = hover?.id ?? null;
+  const preview = useMemo(
+    () => (hoverId ? promptPreview(blocks, hoverId) : null),
+    [blocks, hoverId],
+  );
+
   const jumpTo = (id: string) => {
     const scroller = scope.current?.querySelector<HTMLElement>(SCROLLER);
     if (!scroller) return;
@@ -206,7 +224,6 @@ export function PromptOutline({
   );
   const bars = prompts.slice(stack.start, stack.end);
   const hoverIndex = hover ? bars.findIndex((bar) => bar.id === hover.id) : -1;
-  const preview = hover ? promptPreview(blocks, hover.id) : null;
   // One tab stop for the whole rail. Arrow keys walk it from there.
   const tabId =
     [focusId, activeId].find((id) => bars.some((bar) => bar.id === id)) ??

@@ -480,6 +480,12 @@ export const SessionPane = memo(function SessionPane({
               onJumpToBottomReady={onJumpToBottomReady}
               onRevealReady={onRevealReady}
             />
+            {/* Layered blur that carries scrolled content into the title bar. */}
+            <div className="transcript-top-fade" aria-hidden="true">
+              <div />
+              <div />
+              <div />
+            </div>
             <PromptOutline
               blocks={session.blocks}
               scope={transcriptScope}

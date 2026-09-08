@@ -96,6 +96,7 @@ import {
 } from "./transcriptActivity";
 
 const NEAR_BOTTOM_PX = 16;
+const TOP_FADE_PX = 4;
 const INITIAL_TURNS = 20;
 const TURN_PAGE_SIZE = 20;
 
@@ -193,6 +194,7 @@ function AgentTranscriptComponent({
   const syncPinned = useCallback(
     (el: HTMLElement) => {
       const near = isNearBottom(el);
+      syncTopFade(el);
       stickToBottom.current = near;
       distanceFromBottom.current =
         el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -278,6 +280,7 @@ function AgentTranscriptComponent({
     if (!visible || !el || !inner) return;
     const onResize = () => {
       syncTranscriptViewport(el);
+      syncTopFade(el);
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
       if (stickToBottom.current) {
         pinToBottom(el);
@@ -2170,6 +2173,12 @@ function turnUserBlock(blocks: Block[]): Block | undefined {
 
 function isNearBottom(el: HTMLElement): boolean {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+}
+
+/** Flags the top fade on once content has scrolled under it. */
+function syncTopFade(el: HTMLElement) {
+  const scrolled = el.scrollTop > TOP_FADE_PX ? "true" : "false";
+  if (el.dataset.scrolled !== scrolled) el.dataset.scrolled = scrolled;
 }
 
 function pinToBottom(el: HTMLElement | null) {

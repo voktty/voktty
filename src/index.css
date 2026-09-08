@@ -168,6 +168,102 @@ html.chat-background-empty-only
   min-height: var(--transcript-viewport, 0px);
 }
 
+/*
+ * Scrolled content used to end in a hard cut against the title bar. Three
+ * stacked backdrop layers, each masked to a shorter band than the one under
+ * it, ramp the blur up toward the top edge, and a tint of the pane background
+ * carries the last of it away. Only paints once the reader has scrolled: at
+ * rest the first line stays sharp.
+ */
+.transcript-top-fade {
+  --transcript-fade-tint: 76%;
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  height: 56px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease-out;
+}
+
+.agent-transcript[data-scrolled="true"] + .transcript-top-fade {
+  opacity: 1;
+}
+
+/* The window is see-through here, so a full-strength tint would read as a
+   bright band under the glass instead of a fade. */
+html.has-native-glass.glass-body:not(.theme-light) .transcript-top-fade {
+  --transcript-fade-tint: 44%;
+}
+
+.transcript-top-fade > div {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(var(--transcript-fade-blur));
+  -webkit-backdrop-filter: blur(var(--transcript-fade-blur));
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 var(--transcript-fade-hold),
+    transparent var(--transcript-fade-end)
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 var(--transcript-fade-hold),
+    transparent var(--transcript-fade-end)
+  );
+}
+
+.transcript-top-fade > div:nth-child(1) {
+  --transcript-fade-blur: 1px;
+  --transcript-fade-hold: 55%;
+  --transcript-fade-end: 100%;
+}
+
+.transcript-top-fade > div:nth-child(2) {
+  --transcript-fade-blur: 3px;
+  --transcript-fade-hold: 25%;
+  --transcript-fade-end: 68%;
+}
+
+.transcript-top-fade > div:nth-child(3) {
+  --transcript-fade-blur: 8px;
+  --transcript-fade-hold: 4%;
+  --transcript-fade-end: 38%;
+}
+
+.transcript-top-fade::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(
+        in srgb,
+        var(--color-background-base) var(--transcript-fade-tint),
+        transparent
+      )
+      0%,
+    color-mix(
+        in srgb,
+        var(--color-background-base) calc(var(--transcript-fade-tint) * 0.3),
+        transparent
+      )
+      48%,
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .transcript-top-fade > div {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 html.has-native-glass.glass-body:not(.theme-light) .body-glass {
   background: color-mix(
     in srgb,
