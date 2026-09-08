@@ -9,9 +9,18 @@ import {
   startHarnessBridge,
   stopStreaming,
 } from "../lib/harness";
-import type { ApprovalDecision, HarnessEvent, SendTurnInput } from "../lib/harness/types";
+import type {
+  ApprovalDecision,
+  HarnessEvent,
+  SendTurnInput,
+} from "../lib/harness/types";
+import { registerHarnessSessionHandle } from "../lib/harnessControlBridge";
 import { defaultSessionChoice } from "../lib/models";
-import { loadRecents, rememberProject, type RecentProject } from "../lib/recents";
+import {
+  loadRecents,
+  type RecentProject,
+  rememberProject,
+} from "../lib/recents";
 import type {
   Attachment,
   HarnessId,
@@ -77,7 +86,9 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
   }, [session.cwd]);
 
   const handleCwdChange = useCallback((sessionId: string, newCwd: string) => {
-    setSession((prev) => (prev && prev.id === sessionId ? { ...prev, cwd: newCwd } : prev));
+    setSession((prev) =>
+      prev && prev.id === sessionId ? { ...prev, cwd: newCwd } : prev,
+    );
     setRecents(rememberProject(newCwd));
   }, []);
 
@@ -164,6 +175,16 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
     },
     [],
   );
+
+  // Expose this mounted session to the control plane (voktty harness.* CLI
+  // verbs) without changing how session state is stored.
+  useEffect(() => {
+    return registerHarnessSessionHandle(session.id, {
+      getSession: () => sessionRef.current,
+      submit: (text, attachments = []) =>
+        handleSubmit(session.id, text, attachments),
+    });
+  }, [session.id, handleSubmit]);
 
   const handleStop = useCallback((sessionId: string) => {
     const current = sessionRef.current;

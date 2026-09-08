@@ -5,7 +5,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use serde_json::{json, Value};
@@ -17,7 +17,9 @@ use voktty_control_protocol::{
     CallerContext, ControlDescriptor, ControlRequest, ControlResponse, OpenParams,
     MAX_MESSAGE_BYTES, METHOD_BROWSER_CLICK, METHOD_BROWSER_EVAL, METHOD_BROWSER_NAVIGATE,
     METHOD_BROWSER_SELECTED, METHOD_BROWSER_SNAPSHOT, METHOD_BROWSER_TYPE, METHOD_CAPABILITIES,
-    METHOD_IDENTIFY, METHOD_OPEN, METHOD_PING, PROTOCOL_VERSION, SERVER_RESPONSE_ID,
+    METHOD_HARNESS_LIST, METHOD_HARNESS_RESULT, METHOD_HARNESS_SEND, METHOD_HARNESS_STATUS,
+    METHOD_HARNESS_WAIT, METHOD_IDENTIFY, METHOD_OPEN, METHOD_PING, PROTOCOL_VERSION,
+    SERVER_RESPONSE_ID,
 };
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -32,8 +34,16 @@ static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 enum Action {
     Help,
     Version,
-    Request { method: &'static str, params: Value },
+    Request {
+        method: &'static str,
+        params: Value,
+    },
     Alias(AliasCommand),
+    HarnessWait {
+        session_id: String,
+        states: Vec<String>,
+        timeout: Duration,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -131,6 +141,61 @@ fn run(args: Vec<OsString>) -> Result<ExitCode, CliError> {
             Ok(ExitCode::SUCCESS)
         }
         Action::Alias(command) => run_alias(command, config.json),
+        Action::HarnessWait {
+            session_id,
+            states,
+            timeout,
+        } => run_harness_wait(session_id, states, timeout, config.json),
+    }
+}
+
+/// `voktty.wait` polls the control plane instead of blocking on one request:
+/// each round trip is capped by the server's own frontend timeout, so a wait
+/// longer than that is only possible by calling `harness.wait` repeatedly.
+fn run_harness_wait(
+    session_id: String,
+    states: Vec<String>,
+    timeout: Duration,
+    json: bool,
+) -> Result<ExitCode, CliError> {
+    const PER_CALL_TIMEOUT_MS: u64 = 4_000;
+    let endpoint = load_endpoint()?;
+    let caller = env::var("VOKTTY_PANE_ID")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok());
+    let deadline = Instant::now() + timeout;
+    loop {
+        let request = ControlRequest {
+            protocol: PROTOCOL_VERSION,
+            id: request_id(),
+            token: endpoint.token.clone(),
+            method: METHOD_HARNESS_WAIT.to_string(),
+            params: json!({
+                "session_id": session_id,
+                "states": states,
+                "timeout_ms": PER_CALL_TIMEOUT_MS,
+            }),
+            caller: CallerContext { pane_id: caller },
+        };
+        let response = send_request(&endpoint.address, &request)?;
+        if !response.ok {
+            let error = response.error.unwrap_or_else(|| {
+                voktty_control_protocol::ControlError::new(
+                    "request_failed",
+                    "Voktty rejected the request",
+                )
+            });
+            return Err(CliError::new(error.code, error.message, EXIT_REQUEST));
+        }
+        let result = response.result.unwrap_or(Value::Null);
+        let reached = result
+            .get("reached")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if reached || Instant::now() >= deadline {
+            print_result(METHOD_HARNESS_WAIT, result, json);
+            return Ok(ExitCode::SUCCESS);
+        }
     }
 }
 
@@ -152,6 +217,7 @@ fn parse_args(mut args: Vec<OsString>) -> Result<Config, CliError> {
         Some("capabilities") => request_without_params(args, METHOD_CAPABILITIES)?,
         Some("identify") => request_without_params(args, METHOD_IDENTIFY)?,
         Some("browser") => parse_browser(args)?,
+        Some("harness") => parse_harness(args)?,
         Some("open") => parse_open(args)?,
         Some("review") => parse_review(args)?,
         Some("alias") => Action::Alias(parse_alias(args)?),
@@ -383,6 +449,119 @@ fn parse_browser(mut args: Vec<OsString>) -> Result<Action, CliError> {
         Some(value) => Err(usage_error(format!("unknown browser command '{value}'"))),
         None => Err(usage_error("browser command must be valid UTF-8")),
     }
+}
+
+fn parse_harness(mut args: Vec<OsString>) -> Result<Action, CliError> {
+    if args.is_empty() {
+        return Err(usage_error(
+            "harness requires a subcommand: list|status|result|send|wait",
+        ));
+    }
+    let subcommand = args.remove(0);
+    match subcommand.to_str() {
+        Some("list") => no_extra_request(args, METHOD_HARNESS_LIST),
+        Some("status") => harness_session_request(args, METHOD_HARNESS_STATUS, "status"),
+        Some("result") => harness_session_request(args, METHOD_HARNESS_RESULT, "result"),
+        Some("send") => {
+            if args.is_empty() {
+                return Err(usage_error("harness send requires a session id"));
+            }
+            let session_id = args
+                .remove(0)
+                .to_str()
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| usage_error("harness send requires a session id"))?
+                .to_string();
+            if args.is_empty() {
+                return Err(usage_error("harness send requires text"));
+            }
+            let text = args
+                .iter()
+                .map(|value| value.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join(" ");
+            Ok(Action::Request {
+                method: METHOD_HARNESS_SEND,
+                params: json!({ "session_id": session_id, "text": text }),
+            })
+        }
+        Some("wait") => parse_harness_wait(args),
+        Some(value) => Err(usage_error(format!("unknown harness command '{value}'"))),
+        None => Err(usage_error("harness command must be valid UTF-8")),
+    }
+}
+
+fn harness_session_request(
+    args: Vec<OsString>,
+    method: &'static str,
+    label: &'static str,
+) -> Result<Action, CliError> {
+    if args.len() != 1 {
+        return Err(usage_error(format!(
+            "harness {label} requires exactly one session id"
+        )));
+    }
+    let session_id = args[0]
+        .to_str()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| usage_error(format!("harness {label} requires a session id")))?
+        .to_string();
+    Ok(Action::Request {
+        method,
+        params: json!({ "session_id": session_id }),
+    })
+}
+
+fn parse_harness_wait(mut args: Vec<OsString>) -> Result<Action, CliError> {
+    if args.is_empty() {
+        return Err(usage_error("harness wait requires a session id"));
+    }
+    let session_id = args
+        .remove(0)
+        .to_str()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| usage_error("harness wait requires a session id"))?
+        .to_string();
+    let mut states = Vec::new();
+    let mut timeout = Duration::from_secs(120);
+    while !args.is_empty() {
+        let arg = args.remove(0);
+        match arg.to_str() {
+            Some("--state") => {
+                if args.is_empty() {
+                    return Err(usage_error("--state requires a value"));
+                }
+                let value = args
+                    .remove(0)
+                    .to_str()
+                    .ok_or_else(|| usage_error("--state must be valid UTF-8"))?
+                    .to_string();
+                states.push(value);
+            }
+            Some("--timeout") => {
+                if args.is_empty() {
+                    return Err(usage_error("--timeout requires seconds as a number"));
+                }
+                let value = args
+                    .remove(0)
+                    .to_str()
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .ok_or_else(|| usage_error("--timeout requires seconds as a number"))?;
+                timeout = Duration::from_secs(value);
+            }
+            Some(other) => {
+                return Err(usage_error(format!(
+                    "unknown harness wait option '{other}'"
+                )));
+            }
+            None => return Err(usage_error("harness wait arguments must be valid UTF-8")),
+        }
+    }
+    Ok(Action::HarnessWait {
+        session_id,
+        states,
+        timeout,
+    })
 }
 
 fn no_extra_request(args: Vec<OsString>, method: &'static str) -> Result<Action, CliError> {
@@ -1787,7 +1966,7 @@ fn print_result(method: &str, result: Value, as_json: bool) {
 fn print_help() {
     println!(
         "Voktty command line interface\n\n\
-Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty browser open|navigate <url> [--json]\n  voktty browser selected|snapshot [--json]\n  voktty browser click <ref|selector> [--json]\n  voktty browser type [--submit] <ref|selector> <text> [--json]\n  voktty browser eval <script> [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\
+Usage:\n  voktty <file> [--line <n>] [--no-focus] [--json]\n  voktty open <file> [--line <n>] [--no-focus] [--json]\n  voktty review [path] [--unstaged|--last-commit|--base <ref>] [--wait] [--json]\n  voktty ping|capabilities|identify [--json]\n  voktty browser open|navigate <url> [--json]\n  voktty browser selected|snapshot [--json]\n  voktty browser click <ref|selector> [--json]\n  voktty browser type [--submit] <ref|selector> <text> [--json]\n  voktty browser eval <script> [--json]\n  voktty harness list [--json]\n  voktty harness status|result <session-id> [--json]\n  voktty harness send <session-id> <text> [--json]\n  voktty harness wait <session-id> [--state <working|waiting|done>]... [--timeout <seconds>] [--json]\n  voktty alias list|path|edit [--json]\n  voktty alias run|test <name> [--] [args...] [--json]\n  voktty alias import <file> [--json]\n  voktty alias export <file> [--force] [--json]\n  voktty ipme [--public] [--json]\n  voktty --version\n\n\
 Alias execution is tokenized and never evaluated by a shell. Public IP lookup only runs\n\
 when ipme receives --public. App control commands require Voktty to be running."
     );
@@ -1864,6 +2043,89 @@ mod tests {
                 assert_eq!(params.get("submit").and_then(Value::as_bool), Some(true));
             }
             other => panic!("expected Request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_harness_commands() {
+        let list = parse_args(args(&["harness", "list"])).expect("parse harness list");
+        assert_eq!(
+            list.action,
+            Action::Request {
+                method: METHOD_HARNESS_LIST,
+                params: json!({}),
+            }
+        );
+
+        let status = parse_args(args(&["harness", "status", "s1"])).expect("parse harness status");
+        match status.action {
+            Action::Request { method, params } => {
+                assert_eq!(method, METHOD_HARNESS_STATUS);
+                assert_eq!(params.get("session_id").and_then(Value::as_str), Some("s1"));
+            }
+            other => panic!("expected Request, got {other:?}"),
+        }
+
+        let send =
+            parse_args(args(&["harness", "send", "s1", "hello", "world"])).expect("parse send");
+        match send.action {
+            Action::Request { method, params } => {
+                assert_eq!(method, METHOD_HARNESS_SEND);
+                assert_eq!(params.get("session_id").and_then(Value::as_str), Some("s1"));
+                assert_eq!(
+                    params.get("text").and_then(Value::as_str),
+                    Some("hello world")
+                );
+            }
+            other => panic!("expected Request, got {other:?}"),
+        }
+
+        assert!(parse_args(args(&["harness", "status"])).is_err());
+        assert!(parse_args(args(&["harness", "status", "s1", "s2"])).is_err());
+    }
+
+    #[test]
+    fn parses_harness_wait_with_states_and_timeout() {
+        let config = parse_args(args(&[
+            "harness",
+            "wait",
+            "s1",
+            "--state",
+            "waiting",
+            "--state",
+            "done",
+            "--timeout",
+            "30",
+        ]))
+        .expect("parse harness wait");
+        match config.action {
+            Action::HarnessWait {
+                session_id,
+                states,
+                timeout,
+            } => {
+                assert_eq!(session_id, "s1");
+                assert_eq!(states, vec!["waiting".to_string(), "done".to_string()]);
+                assert_eq!(timeout, Duration::from_secs(30));
+            }
+            other => panic!("expected HarnessWait, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_harness_wait_defaults() {
+        let config = parse_args(args(&["harness", "wait", "s1"])).expect("parse harness wait");
+        match config.action {
+            Action::HarnessWait {
+                session_id,
+                states,
+                timeout,
+            } => {
+                assert_eq!(session_id, "s1");
+                assert!(states.is_empty());
+                assert_eq!(timeout, Duration::from_secs(120));
+            }
+            other => panic!("expected HarnessWait, got {other:?}"),
         }
     }
 
