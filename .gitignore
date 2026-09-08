@@ -66,6 +66,7 @@ lcov.info
 /.gemini/
 /patchs/
 /web/
+/scripts/
 
 # Editor directories and files
 .vscode/*
