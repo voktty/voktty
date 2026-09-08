@@ -124,6 +124,7 @@ type Props = {
   ) => void;
   onRevealInExplorer?: (path: string) => void;
   onReconnectTab?: (tab: Tab) => void;
+  onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
 };
 
 function tabCategory(t: Tab): "terminals" | "files" | "tools" {
@@ -240,6 +241,7 @@ export function VerticalTabBar({
   onReorderVisual,
   onWorkspaceDrop,
   onRevealInExplorer,
+  onCardDrop,
 }: Props) {
   const { t } = useTranslation();
   const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
@@ -249,6 +251,9 @@ export function VerticalTabBar({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
+  const [cardDropTargetTabId, setCardDropTargetTabId] = useState<number | null>(
+    null,
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{
     pointerId: number;
@@ -593,6 +598,36 @@ export function VerticalTabBar({
                   onDoubleClick={handleDoubleClick}
                   onKeyDown={handleKeyDown}
                   onAuxClick={handleAuxClick}
+                  onDragOver={(e) => {
+                    if (
+                      e.dataTransfer.types.includes("application/voktty-card-id") ||
+                      e.dataTransfer.types.includes("application/voktty-card-prompt")
+                    ) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.dataTransfer.dropEffect = "copy";
+                      if (cardDropTargetTabId !== tab.id) {
+                        setCardDropTargetTabId(tab.id);
+                      }
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (cardDropTargetTabId === tab.id) {
+                      setCardDropTargetTabId(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    const cardId = e.dataTransfer.getData("application/voktty-card-id");
+                    const prompt =
+                      e.dataTransfer.getData("application/voktty-card-prompt") ||
+                      e.dataTransfer.getData("text/plain");
+                    if (cardId && prompt) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCardDropTargetTabId(null);
+                      onCardDrop?.(tab, cardId, prompt);
+                    }
+                  }}
                   style={
                     tab.color
                       ? {
@@ -605,6 +640,8 @@ export function VerticalTabBar({
                     "group relative flex min-h-[44px] shrink-0 cursor-pointer items-center gap-2.5 rounded-xl border px-2.5 py-1.5 transition-all",
                     draggingId === tab.id && "opacity-50",
                     isPulsing && "voktty-tab-finished-pulse",
+                    cardDropTargetTabId === tab.id &&
+                      "ring-2 ring-primary bg-primary/20",
                     isActive
                       ? "border-border/50 bg-foreground/[0.07] text-foreground shadow-xs"
                       : "border-transparent text-muted-foreground hover:border-border/30 hover:bg-foreground/[0.035] hover:text-foreground/90",

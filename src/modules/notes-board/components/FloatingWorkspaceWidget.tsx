@@ -7,8 +7,12 @@ import {
   Note01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useNotesBoardStore, type WorkspaceTab } from "../store/notesBoardStore";
+import type { TabSummary } from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
+import {
+  useNotesBoardStore,
+  type WorkspaceTab,
+} from "../store/notesBoardStore";
 import { KanbanTab } from "./KanbanTab";
 import { NotesTab } from "./NotesTab";
 
@@ -16,9 +20,17 @@ type Props = {
   onClose: () => void;
   onRunCommand?: (command: string) => void;
   cwd?: string | null;
+  tabs?: TabSummary[];
+  onActivateAgent?: (tabId: number, leafId: number) => void;
 };
 
-export function FloatingWorkspaceWidget({ onClose, onRunCommand, cwd }: Props) {
+export function FloatingWorkspaceWidget({
+  onClose,
+  onRunCommand,
+  cwd,
+  tabs,
+  onActivateAgent,
+}: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const activeTab = useNotesBoardStore((s) => s.activeTab);
   const setTab = useNotesBoardStore((s) => s.setTab);
@@ -40,7 +52,12 @@ export function FloatingWorkspaceWidget({ onClose, onRunCommand, cwd }: Props) {
     };
   }, [onClose]);
 
-  const tabs: { id: WorkspaceTab; label: string; icon: typeof Note01Icon; badge?: number }[] = [
+  const workspaceTabs: {
+    id: WorkspaceTab;
+    label: string;
+    icon: typeof Note01Icon;
+    badge?: number;
+  }[] = [
     { id: "kanban", label: "Kanban", icon: Layout01Icon, badge: cardCount },
     { id: "notes", label: "Notas & Ideas", icon: Note01Icon },
   ];
@@ -61,23 +78,23 @@ export function FloatingWorkspaceWidget({ onClose, onRunCommand, cwd }: Props) {
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/40 px-3 bg-muted/20">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-md bg-muted/60 p-0.5 text-xs">
-            {tabs.map((tab) => (
+            {workspaceTabs.map((item) => (
               <button
-                key={tab.id}
+                key={item.id}
                 type="button"
-                onClick={() => setTab(tab.id)}
+                onClick={() => setTab(item.id)}
                 className={cn(
                   "flex items-center gap-1.5 cursor-pointer rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
-                  activeTab === tab.id
+                  activeTab === item.id
                     ? "bg-background text-foreground shadow-xs font-semibold"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <HugeiconsIcon icon={tab.icon} size={12} />
-                <span>{tab.label}</span>
-                {tab.badge !== undefined && tab.badge > 0 && (
+                <HugeiconsIcon icon={item.icon} size={12} />
+                <span>{item.label}</span>
+                {item.badge !== undefined && item.badge > 0 && (
                   <span className="flex size-4 items-center justify-center rounded-full bg-muted text-[9.5px] font-mono text-muted-foreground">
-                    {tab.badge}
+                    {item.badge}
                   </span>
                 )}
               </button>
@@ -101,7 +118,12 @@ export function FloatingWorkspaceWidget({ onClose, onRunCommand, cwd }: Props) {
       {/* Main Tab Content */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === "kanban" ? (
-          <KanbanTab onRunCommand={onRunCommand} cwd={cwd} />
+          <KanbanTab
+            onRunCommand={onRunCommand}
+            cwd={cwd}
+            tabs={tabs}
+            onActivateAgent={onActivateAgent}
+          />
         ) : (
           <NotesTab onRunCommand={onRunCommand} cwd={cwd} />
         )}
@@ -115,5 +137,3 @@ export function FloatingWorkspaceWidget({ onClose, onRunCommand, cwd }: Props) {
     </div>
   );
 }
-
-export default FloatingWorkspaceWidget;

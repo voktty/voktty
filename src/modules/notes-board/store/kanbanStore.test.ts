@@ -112,4 +112,72 @@ texto cualquiera
     expect(stats.total).toBe(4);
     expect(stats.completed).toBe(2);
   });
+
+  it("assigns card to an agent and moves it to in_progress", () => {
+    const card = useKanbanStore.getState().addCard({
+      title: "Tarea para Agente",
+      description: "Detalles",
+      columnId: "todo",
+    });
+
+    useKanbanStore.getState().assignCardToAgent(card.id, {
+      leafId: 42,
+      tabId: 3,
+      agentName: "Claude Code",
+      startedAt: 123456,
+      lastObservedStatus: "working",
+    });
+
+    const updated = useKanbanStore.getState().cards.find((c) => c.id === card.id);
+    expect(updated?.columnId).toBe("in_progress");
+    expect(updated?.assignedExecution).toEqual({
+      leafId: 42,
+      tabId: 3,
+      agentName: "Claude Code",
+      startedAt: 123456,
+      lastObservedStatus: "working",
+    });
+  });
+
+  it("updates card execution status reactively", () => {
+    const card = useKanbanStore.getState().addCard({
+      title: "Tarea reactiva",
+      description: "Detalles",
+      columnId: "todo",
+    });
+
+    useKanbanStore.getState().assignCardToAgent(card.id, {
+      leafId: 42,
+      tabId: 3,
+      agentName: "Claude Code",
+      startedAt: 123456,
+      lastObservedStatus: "working",
+    });
+
+    useKanbanStore.getState().updateCardExecutionStatus(card.id, "waiting");
+
+    const updated = useKanbanStore.getState().cards.find((c) => c.id === card.id);
+    expect(updated?.assignedExecution?.lastObservedStatus).toBe("waiting");
+  });
+
+  it("unassigns card from agent cleanly", () => {
+    const card = useKanbanStore.getState().addCard({
+      title: "Desvincular",
+      description: "Detalles",
+      columnId: "in_progress",
+    });
+
+    useKanbanStore.getState().assignCardToAgent(card.id, {
+      leafId: 42,
+      tabId: 3,
+      agentName: "Claude Code",
+      startedAt: 123456,
+      lastObservedStatus: "working",
+    });
+
+    useKanbanStore.getState().unassignCard(card.id);
+
+    const updated = useKanbanStore.getState().cards.find((c) => c.id === card.id);
+    expect(updated?.assignedExecution).toBeUndefined();
+  });
 });

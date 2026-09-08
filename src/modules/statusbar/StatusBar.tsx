@@ -18,6 +18,7 @@ import { LspStatusPill } from "@/modules/lsp";
 import { DevServerPill, type DevServerCapture } from "@/modules/preview";
 import { SerialControlPill } from "@/modules/serial";
 import type { SshConnection } from "@/modules/ssh";
+import type { Tab } from "@/modules/tabs";
 import type {
   DockerWorkspaceConnection,
   WorkspaceEnv,
@@ -80,6 +81,8 @@ type Props = {
   /** True only after AI is enabled and the current configuration is verified. */
   hasComposer: boolean;
   privateActive: boolean;
+  tabs?: Tab[];
+  onActivateAgent?: (tabId: number, leafId: number) => void;
 };
 
 export function StatusBar({
@@ -109,6 +112,8 @@ export function StatusBar({
   searchRef,
   hasComposer,
   privateActive,
+  tabs,
+  onActivateAgent,
 }: Props) {
   const { t } = useTranslation();
   const panelOpen = useChatStore((s) => s.panelOpen);
@@ -251,6 +256,8 @@ export function StatusBar({
             onClose={closeNotesBoard}
             onRunCommand={onRunCommand}
             cwd={cwd}
+            tabs={tabs}
+            onActivateAgent={onActivateAgent}
           />
         </Suspense>
       ) : null}

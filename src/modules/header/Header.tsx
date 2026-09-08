@@ -99,6 +99,7 @@ type Props = {
   onActivateLocalAgent: () => void;
   onOpenDiff?: (input: GitDiffOpenInput, pin?: boolean) => void;
   spaceSwitcher: ReactNode;
+  onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
 };
 
 const COMPACT_WIDTH = 720;
@@ -155,6 +156,7 @@ export function Header({
   onActivateLocalAgent,
   onOpenDiff,
   spaceSwitcher,
+  onCardDrop,
 }: Props) {
   const { t } = useTranslation();
   const commandPaletteShortcut = useShortcutLabel("commandPalette.open");
@@ -440,6 +442,7 @@ export function Header({
               onRevealInExplorer={onRevealInExplorer}
               compact={compact}
               onOverflowChange={setTabsOverflowing}
+              onCardDrop={onCardDrop}
             />
           </>
         )}
