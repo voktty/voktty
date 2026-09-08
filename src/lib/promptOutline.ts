@@ -74,3 +74,68 @@ function firstLine(text: string): string {
     .find(Boolean);
   return (line ?? "").replace(/\s+/g, " ");
 }
+
+/** How far the hover ripple reaches, in bars on each side. */
+export const RIPPLE_SPAN = 2;
+
+/** Dock-style magnification: 1 on the hovered bar, tapering to 0 past the ripple span. */
+export function barLift(index: number, hoverIndex: number | null): number {
+  if (hoverIndex == null || hoverIndex < 0) return 0;
+  const distance = Math.abs(index - hoverIndex);
+  if (distance > RIPPLE_SPAN) return 0;
+  return (RIPPLE_SPAN + 1 - distance) / (RIPPLE_SPAN + 1);
+}
+
+/** The prompt and the head of its reply, shown while a bar is hovered. */
+export type PromptPreview = {
+  title: string;
+  reply?: string;
+  detail?: string;
+};
+
+const REPLY_SCAN_CHARS = 2000;
+
+export function promptPreview(
+  blocks: Block[],
+  promptId: string,
+): PromptPreview | null {
+  const index = blocks.findIndex((block) => block.id === promptId);
+  if (index < 0) return null;
+  let reply: string[] = [];
+  for (let i = index + 1; i < blocks.length; i += 1) {
+    const block = blocks[i];
+    if (block.role === "user") break;
+    if (block.role !== "assistant") continue;
+    reply = previewLines(block.text, 2);
+    if (reply.length > 0) break;
+  }
+  return {
+    title: promptLabel(blocks[index]),
+    reply: reply[0],
+    detail: reply[1],
+  };
+}
+
+/** The first `max` prose lines of a reply. Markers, fenced code and rules drop out. */
+export function previewLines(text: string, max: number): string[] {
+  const lines: string[] = [];
+  let fenced = false;
+  for (const raw of text.slice(0, REPLY_SCAN_CHARS).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.startsWith("```")) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    const plain = line
+      .replace(/^(?:[#>]+|[-*+]|\d+[.)])\s+/, "")
+      .replace(/\*\*|`/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    // Rules, table separators and lone punctuation read as noise in a preview.
+    if (!/[\p{L}\p{N}]/u.test(plain)) continue;
+    lines.push(plain);
+    if (lines.length === max) break;
+  }
+  return lines;
+}

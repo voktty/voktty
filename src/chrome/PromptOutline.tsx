@@ -4,14 +4,18 @@ import {
   useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
+  type FocusEvent as ReactFocusEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
 } from "react";
 import {
   activePromptId,
+  barLift,
   barWindow,
   promptBlocks,
   promptLabel,
+  promptPreview,
+  RIPPLE_SPAN,
   type OutlineAnchor,
   type OutlineBand,
 } from "../lib/promptOutline";
@@ -19,19 +23,24 @@ import type { Block } from "../lib/session";
 import { Popover } from "./Popover";
 
 const OPEN_DELAY_MS = 25;
-const CLOSE_DELAY_MS = 100;
 const SCROLL_INSET_PX = 8;
 const POPOVER_WIDTH = 288;
-const POPOVER_MAX_HEIGHT = 360;
 const MIN_PROMPTS = 2;
 const BAR_HEIGHT_PX = 2;
-const BAR_GAP_PX = 5;
+const BAR_WIDTH_PX = 11;
+const BAR_WIDTH_LIFTED_PX = 24;
+const BAR_OPACITY_IDLE = 0.15;
+const BAR_OPACITY_LIT = 0.85;
+const RIPPLE_STEP_MS = 18;
+const BAR_GAP_PX = 10;
 const BAR_GAP_MIN_PX = 1;
 const BAR_STACK_MAX_PX = 330;
 const BAR_STACK_PANE_SHARE = 0.75;
 const SCROLLER = ".agent-transcript";
 const TURN = ".transcript-turn";
 const ANCHOR = "[data-prompt-anchor]";
+
+type Hover = { id: string; el: HTMLElement };
 
 type Props = {
   blocks: Block[];
@@ -50,15 +59,13 @@ export function PromptOutline({
   const prompts = useMemo(() => promptBlocks(blocks), [blocks]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [stackBudget, setStackBudget] = useState(BAR_STACK_MAX_PX);
+  const [hover, setHover] = useState<Hover | null>(null);
   const [open, setOpen] = useState(false);
-  const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const list = useRef<HTMLDivElement>(null);
-  const activeRow = useRef<HTMLButtonElement>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const rail = useRef<HTMLDivElement>(null);
   const frame = useRef<number | null>(null);
   const openTimer = useRef<number | null>(null);
-  const closeTimer = useRef<number | null>(null);
-  const reopenBlockedUntilLeave = useRef(false);
+  const pointerInside = useRef(false);
 
   const measure = useCallback(() => {
     const scroller = scope.current?.querySelector<HTMLElement>(SCROLLER);
@@ -126,73 +133,39 @@ export function PromptOutline({
     window.clearTimeout(openTimer.current);
     openTimer.current = null;
   };
-  const cancelClose = () => {
-    if (closeTimer.current == null) return;
-    window.clearTimeout(closeTimer.current);
-    closeTimer.current = null;
-  };
-  useEffect(
-    () => () => {
-      cancelOpen();
-      cancelClose();
-    },
-    [],
-  );
+  useEffect(() => cancelOpen, []);
 
-  const openNow = () => {
-    cancelOpen();
-    cancelClose();
-    const rect = trigger.current?.getBoundingClientRect();
-    if (!rect) return;
-    // Anchor the list at the top-right corner of the trigger. The list covers
-    // the trigger, so the pointer crosses no gap.
-    setPoint({ x: rect.right, y: rect.top });
-    setOpen(true);
-  };
-  const closeNow = () => {
-    cancelOpen();
-    cancelClose();
-    setOpen(false);
-  };
-  const scheduleClose = () => {
-    cancelClose();
-    closeTimer.current = window.setTimeout(() => {
-      closeTimer.current = null;
-      setOpen(false);
-    }, CLOSE_DELAY_MS);
-  };
-  const enterTrigger = () => {
-    cancelClose();
-    if (open || reopenBlockedUntilLeave.current || openTimer.current != null) {
-      return;
-    }
+  /** The ripple follows the pointer at once. The card waits out a pass-through. */
+  const hoverBar = (id: string, el: HTMLElement) => {
+    setHover({ id, el });
+    if (open || openTimer.current != null) return;
     openTimer.current = window.setTimeout(() => {
       openTimer.current = null;
-      openNow();
+      setOpen(true);
     }, OPEN_DELAY_MS);
   };
-  const leaveTrigger = () => {
-    reopenBlockedUntilLeave.current = false;
+  const showBar = (id: string, el: HTMLElement) => {
     cancelOpen();
-    if (open) scheduleClose();
+    setHover({ id, el });
+    setOpen(true);
+  };
+  const close = () => {
+    cancelOpen();
+    setHover(null);
+    setOpen(false);
   };
 
-  useEffect(() => {
-    if (!open) return;
-    // Wait one frame for placement. Then the list has its final height.
-    const id = window.requestAnimationFrame(() => {
-      const row = activeRow.current;
-      const box = list.current;
-      if (!row || !box) return;
-      const top = row.offsetTop;
-      const bottom = top + row.offsetHeight;
-      if (top < box.scrollTop) box.scrollTop = top;
-      else if (bottom > box.scrollTop + box.clientHeight) {
-        box.scrollTop = bottom - box.clientHeight;
-      }
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [open]);
+  const leaveRail = () => {
+    pointerInside.current = false;
+    // Keyboard focus holds the card open after the pointer moves away.
+    if (keyboardFocused(rail.current)) return;
+    close();
+  };
+  const blurRail = (event: ReactFocusEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    if (pointerInside.current) return;
+    close();
+  };
 
   const jumpTo = (id: string) => {
     const scroller = scope.current?.querySelector<HTMLElement>(SCROLLER);
@@ -223,18 +196,6 @@ export function PromptOutline({
     window.requestAnimationFrame(align);
   };
 
-  const onRowClick = (event: ReactMouseEvent, id: string) => {
-    jumpTo(id);
-    const rect = trigger.current?.getBoundingClientRect();
-    reopenBlockedUntilLeave.current =
-      !!rect &&
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-    closeNow();
-  };
-
   if (prompts.length < MIN_PROMPTS) return null;
 
   const activeIndex = prompts.findIndex((prompt) => prompt.id === activeId);
@@ -244,74 +205,122 @@ export function PromptOutline({
     stackBudget,
   );
   const bars = prompts.slice(stack.start, stack.end);
+  const hoverIndex = hover ? bars.findIndex((bar) => bar.id === hover.id) : -1;
+  const preview = hover ? promptPreview(blocks, hover.id) : null;
+  // One tab stop for the whole rail. Arrow keys walk it from there.
+  const tabId =
+    [focusId, activeId].find((id) => bars.some((bar) => bar.id === id)) ??
+    bars[0].id;
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step =
+      event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const from = bars.findIndex((bar) => bar.id === tabId);
+    const next = bars[from + step];
+    if (!next) return;
+    setFocusId(next.id);
+    rail.current
+      ?.querySelector<HTMLElement>(`[data-prompt-bar="${CSS.escape(next.id)}"]`)
+      ?.focus();
+  };
 
   return (
     <div
-      className="absolute top-3 right-4 z-30"
-      onMouseEnter={enterTrigger}
-      onMouseLeave={leaveTrigger}
+      ref={rail}
+      role="toolbar"
+      aria-label="Prompts"
+      aria-orientation="vertical"
+      style={{ width: BAR_WIDTH_LIFTED_PX }}
+      onMouseEnter={() => {
+        pointerInside.current = true;
+      }}
+      onMouseLeave={leaveRail}
+      onBlur={blurRail}
+      onKeyDown={onKeyDown}
+      className="absolute top-1/2 right-4 z-30 flex -translate-y-1/2 flex-col items-end @max-[62rem]:hidden"
     >
-      <button
-        ref={trigger}
-        type="button"
-        aria-label="Prompts"
-        aria-expanded={open}
-        onClick={openNow}
-        style={{ gap: stack.gap }}
-        className="flex flex-col items-end rounded-lg p-1 hover:bg-content/6"
-      >
-        {bars.map((prompt) => (
-          <span
+      {bars.map((prompt, index) => {
+        const lift = barLift(index, hoverIndex);
+        const distance = hoverIndex < 0 ? 0 : Math.abs(index - hoverIndex);
+        // The pointer owns the fill while it is on the rail. Off the rail, the
+        // fill goes back to marking the scroll position.
+        const lit =
+          hoverIndex >= 0 ? index === hoverIndex : prompt.id === activeId;
+        return (
+          <button
             key={prompt.id}
-            aria-hidden="true"
-            style={{ height: BAR_HEIGHT_PX }}
-            className={`w-5.5 rounded-full ${
-              prompt.id === activeId ? "bg-content/85" : "bg-content/15"
-            }`}
-          />
-        ))}
-      </button>
-      {open && point ? (
-        <Popover
-          anchor={point}
-          side="left"
-          align="start"
-          gap={0}
-          width={POPOVER_WIDTH}
-          maxHeight={POPOVER_MAX_HEIGHT}
-          onDismiss={closeNow}
-          aria-label="Prompts"
-          className="flex flex-col"
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}
-        >
-          <div
-            ref={list}
-            className="prompt-outline-list relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-none p-1"
+            type="button"
+            data-prompt-bar={prompt.id}
+            tabIndex={prompt.id === tabId ? 0 : -1}
+            aria-label={promptLabel(prompt)}
+            aria-current={prompt.id === activeId ? "true" : undefined}
+            onMouseEnter={(event) => hoverBar(prompt.id, event.currentTarget)}
+            onFocus={(event) => {
+              setFocusId(prompt.id);
+              // A click focuses the bar too, and the pointer already opened
+              // the card. Only arrow keys and Tab open it from here.
+              if (event.currentTarget.matches(":focus-visible")) {
+                showBar(prompt.id, event.currentTarget);
+              }
+            }}
+            onClick={() => jumpTo(prompt.id)}
+            style={{ height: BAR_HEIGHT_PX + stack.gap }}
+            className="flex w-full shrink-0 items-center justify-end outline-none"
           >
-            {prompts.map((prompt) => {
-              const active = prompt.id === activeId;
-              return (
-                <button
-                  key={prompt.id}
-                  ref={active ? activeRow : undefined}
-                  type="button"
-                  aria-current={active ? "true" : undefined}
-                  onClick={(event) => onRowClick(event, prompt.id)}
-                  className={`block w-full shrink-0 truncate rounded-lg px-3 py-1 text-left font-sans text-sm ${
-                    active
-                      ? "bg-content/10 text-content"
-                      : "text-content/85 hover:bg-content/6"
-                  }`}
-                >
-                  {promptLabel(prompt)}
-                </button>
-              );
-            })}
-          </div>
+            <span
+              aria-hidden="true"
+              style={{
+                height: BAR_HEIGHT_PX,
+                width:
+                  BAR_WIDTH_PX + (BAR_WIDTH_LIFTED_PX - BAR_WIDTH_PX) * lift,
+                opacity: lit ? BAR_OPACITY_LIT : BAR_OPACITY_IDLE,
+                // The wave reaches the outer bars a beat after the hovered one.
+                transitionDelay: `${Math.min(distance, RIPPLE_SPAN) * RIPPLE_STEP_MS}ms`,
+              }}
+              className="rounded-full bg-content transition-[width,opacity] duration-200 ease-out"
+            />
+          </button>
+        );
+      })}
+      {open && preview && hoverIndex >= 0 ? (
+        <Popover
+          anchor={hover?.el ?? null}
+          side="left"
+          align="center"
+          gap={10}
+          width={POPOVER_WIDTH}
+          onDismiss={close}
+          aria-label="Prompt preview"
+          className="pointer-events-none flex flex-col gap-1.5 p-3 font-sans"
+        >
+          <p className="line-clamp-2 text-sm leading-snug text-content">
+            {preview.title}
+          </p>
+          {preview.reply ? (
+            <p className="line-clamp-2 text-sm leading-snug text-content/45">
+              {preview.reply}
+            </p>
+          ) : null}
+          {preview.detail ? (
+            <p className="line-clamp-2 border-l-2 border-content/15 pl-3 text-sm leading-snug text-content/35">
+              {preview.detail}
+            </p>
+          ) : null}
         </Popover>
       ) : null}
     </div>
+  );
+}
+
+/** Clicking a bar focuses it as well. Only a keyboard focus holds the card open. */
+function keyboardFocused(rail: HTMLElement | null): boolean {
+  const el = document.activeElement;
+  return (
+    el instanceof HTMLElement &&
+    !!rail?.contains(el) &&
+    el.matches(":focus-visible")
   );
 }
 
