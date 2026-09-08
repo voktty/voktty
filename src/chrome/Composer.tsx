@@ -72,6 +72,7 @@ import type {
   UserQuestionPrompt,
   UserQuestionReply,
 } from "../lib/userQuestion";
+import { isImeComposition } from "../lib/keyboard";
 import {
   createBlankSkill,
   rankSkills,
@@ -302,6 +303,7 @@ function MessageQueue({
                     rows={1}
                     onChange={(event) => setEditDraft(event.target.value)}
                     onKeyDown={(event) => {
+                      if (isImeComposition(event.nativeEvent)) return;
                       if (event.key === "Escape") {
                         event.preventDefault();
                         cancelEdit();
@@ -941,6 +943,7 @@ export function Composer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isImeComposition(e.nativeEvent)) return;
     if (creatingSkill) return;
 
     if (mentionOpen) {
