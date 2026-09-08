@@ -701,6 +701,10 @@ pub fn run() {
             harness::project_logo::save_project_logo,
             harness::project_logo::remove_project_logo,
             harness::project_logo::forget_logo_file,
+            harness::chat_background::save_chat_background,
+            harness::chat_background::remove_chat_background,
+            harness::chat_background::save_project_chat_background,
+            harness::chat_background::remove_project_chat_background,
             harness::window_transfer::stage_window_transfer,
             harness::window_transfer::take_window_transfer,
         ])

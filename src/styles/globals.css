@@ -122,6 +122,7 @@
     --color-background-base: #fafafc;
     --theme-hue: 240;
     --theme-saturation: 0%;
+    --chat-background-opacity: 0.24;
     /* Level 2 Structural tokens */
     --ui-font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --ui-font-size: 13px;
@@ -206,6 +207,7 @@
     --color-background-base: #121214;
     --theme-hue: 240;
     --theme-saturation: 0%;
+    --chat-background-opacity: 0.24;
     --content-lightness: 92%;
     --background-lightness: 9%;
 
@@ -1326,6 +1328,30 @@ html *::-webkit-scrollbar {
     animation: none;
     opacity: var(--voktty-pixel-peak, 1);
   }
+}
+
+.chat-pane-background::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--chat-background-image, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.has-chat-background .chat-pane-background::before,
+.chat-pane-background[data-project-chat-background="true"]::before {
+  opacity: var(--chat-background-opacity);
+}
+
+html.chat-background-empty-only
+  .chat-pane-background[data-project-chat-background="false"][data-session-empty="false"]::before,
+.chat-pane-background[data-project-chat-background="true"][data-project-background-scope="empty"][data-session-empty="false"]::before {
+  opacity: 0;
 }
 
 

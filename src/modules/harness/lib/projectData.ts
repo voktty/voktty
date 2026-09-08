@@ -1,5 +1,7 @@
 import { projectKey } from "./paths";
 import { clearProjectLogo } from "./projectLogos";
+import { clearProjectChatBackground } from "./chatBackground";
+import { clearProjectChatBackgroundSetting } from "./projectChatBackground";
 import { normalizeProjectPath } from "./recents";
 import { deleteSession, listSessionsByProject } from "./sessionStore";
 import { clearTabGroupSettings } from "./tabGroups";
@@ -20,5 +22,7 @@ export async function removeProjectData(path: string): Promise<void> {
   }
   // Drops the copied image from app data; the localStorage entry goes with it.
   await clearProjectLogo(key).catch(() => undefined);
+  await clearProjectChatBackground(key).catch(() => undefined);
+  clearProjectChatBackgroundSetting(key);
   clearTabGroupSettings(key);
 }

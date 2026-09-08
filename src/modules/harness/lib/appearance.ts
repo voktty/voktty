@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { IS_MAC } from "./platform";
 
 const THEME_HUE_KEY = "monocode.themeHue";
@@ -14,10 +14,15 @@ const SIDEBAR_LAYOUT_KEY = "monocode.sidebarLayout";
 const TRANSCRIPT_LAYOUT_KEY = "monocode.transcriptLayout";
 const TRANSCRIPT_ZEN_KEY = "monocode.transcriptZen";
 const TRANSCRIPT_ANCHOR_KEY = "monocode.transcriptAnchor";
+const CHAT_BACKGROUND_PATH_KEY = "monocode.chatBackgroundPath";
+const CHAT_BACKGROUND_OPACITY_KEY = "monocode.chatBackgroundOpacity";
+const CHAT_BACKGROUND_SCOPE_KEY = "monocode.chatBackgroundScope";
+let chatBackgroundRevision = Date.now();
 
 export type ColorScheme = "dark" | "light";
 export type SidebarLayout = "classic" | "deck";
 export type TranscriptLayout = "full" | "chat";
+export type ChatBackgroundScope = "empty" | "all";
 
 /** Fired on `window` whenever the sidebar layout flips (detail: SidebarLayout). */
 export const LAYOUT_CHANGE_EVENT = "monocode:layoutchange";
@@ -69,6 +74,11 @@ export const PROJECT_RAIL_WIDTH_MAX = 360;
 export const PROJECT_RAIL_WIDTH_DEFAULT = 200;
 
 export const BODY_GLASS_DEFAULT = true;
+
+export const CHAT_BACKGROUND_OPACITY_MIN = 0.05;
+export const CHAT_BACKGROUND_OPACITY_MAX = 0.65;
+export const CHAT_BACKGROUND_OPACITY_DEFAULT = 0.24;
+export const CHAT_BACKGROUND_SCOPE_DEFAULT: ChatBackgroundScope = "all";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -166,6 +176,9 @@ export function initAppearance() {
   applySidebarOpacity(loadSidebarOpacity());
   applySidebarBlur(loadSidebarBlur());
   applyBodyGlass(loadBodyGlass());
+  applyChatBackground(loadChatBackgroundPath());
+  applyChatBackgroundOpacity(loadChatBackgroundOpacity());
+  applyChatBackgroundScope(loadChatBackgroundScope());
 }
 
 /** The harness has no color-scheme preference of its own: it reads whichever
@@ -232,6 +245,100 @@ export function saveBodyGlass(value: boolean) {
 
 export function applyBodyGlass(value: boolean) {
   document.documentElement.classList.toggle("glass-body", value);
+  return value;
+}
+
+export function loadChatBackgroundPath(): string | null {
+  try {
+    return localStorage.getItem(CHAT_BACKGROUND_PATH_KEY)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveChatBackgroundPath(value: string | null) {
+  try {
+    if (value) localStorage.setItem(CHAT_BACKGROUND_PATH_KEY, value);
+    else localStorage.removeItem(CHAT_BACKGROUND_PATH_KEY);
+  } catch {
+    // private mode / quota
+  }
+}
+
+export function applyChatBackground(path: string | null) {
+  const root = document.documentElement;
+  root.classList.toggle("has-chat-background", !!path);
+  if (!path) {
+    root.style.removeProperty("--chat-background-image");
+    return null;
+  }
+  chatBackgroundRevision += 1;
+  const src = chatBackgroundSrc(path);
+  root.style.setProperty(
+    "--chat-background-image",
+    `url(${JSON.stringify(src)})`,
+  );
+  return path;
+}
+
+export function chatBackgroundSrc(path: string | null): string | null {
+  return path ? `${convertFileSrc(path)}?v=${chatBackgroundRevision}` : null;
+}
+
+export function loadChatBackgroundOpacity(): number {
+  return clamp(
+    readNumber(CHAT_BACKGROUND_OPACITY_KEY) ?? CHAT_BACKGROUND_OPACITY_DEFAULT,
+    CHAT_BACKGROUND_OPACITY_MIN,
+    CHAT_BACKGROUND_OPACITY_MAX,
+  );
+}
+
+export function saveChatBackgroundOpacity(value: number) {
+  writeNumber(
+    CHAT_BACKGROUND_OPACITY_KEY,
+    clamp(value, CHAT_BACKGROUND_OPACITY_MIN, CHAT_BACKGROUND_OPACITY_MAX),
+  );
+}
+
+export function applyChatBackgroundOpacity(value: number) {
+  const next = clamp(
+    value,
+    CHAT_BACKGROUND_OPACITY_MIN,
+    CHAT_BACKGROUND_OPACITY_MAX,
+  );
+  document.documentElement.style.setProperty(
+    "--chat-background-opacity",
+    String(next),
+  );
+  return next;
+}
+
+function isChatBackgroundScope(value: unknown): value is ChatBackgroundScope {
+  return value === "empty" || value === "all";
+}
+
+export function loadChatBackgroundScope(): ChatBackgroundScope {
+  try {
+    const raw = localStorage.getItem(CHAT_BACKGROUND_SCOPE_KEY);
+    return isChatBackgroundScope(raw) ? raw : CHAT_BACKGROUND_SCOPE_DEFAULT;
+  } catch {
+    return CHAT_BACKGROUND_SCOPE_DEFAULT;
+  }
+}
+
+export function saveChatBackgroundScope(value: ChatBackgroundScope) {
+  try {
+    localStorage.setItem(CHAT_BACKGROUND_SCOPE_KEY, value);
+  } catch {
+    // private mode / quota
+  }
+}
+
+export function applyChatBackgroundScope(value: ChatBackgroundScope) {
+  document.documentElement.classList.toggle(
+    "chat-background-empty-only",
+    value === "empty",
+  );
   return value;
 }
 
