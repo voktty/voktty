@@ -35,11 +35,19 @@ import { ConsoleUptimeWidget } from "./components/ConsoleUptimeWidget";
 import { ProjectToolkitPopover } from "./components/ProjectToolkitPopover";
 import { useArcadeStore } from "./arcadeStore";
 import { PacmanIcon } from "./components/PacmanIcon";
+import Note01Icon from "@hugeicons/core-free-icons/Note01Icon";
+import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore";
 import { QuotaUsageWidget } from "@/modules/quota";
 
 const LazyFloatingArcadeWidget = lazy(() =>
   import("./components/FloatingArcadeWidget").then((m) => ({
     default: m.FloatingArcadeWidget,
+  })),
+);
+
+const LazyFloatingWorkspaceWidget = lazy(() =>
+  import("@/modules/notes-board/components/FloatingWorkspaceWidget").then((m) => ({
+    default: m.FloatingWorkspaceWidget,
   })),
 );
 
@@ -110,6 +118,9 @@ export function StatusBar({
   const arcadeOpen = useArcadeStore((s) => s.isOpen);
   const toggleArcade = useArcadeStore((s) => s.toggleArcade);
   const closeArcade = useArcadeStore((s) => s.closeArcade);
+  const notesBoardOpen = useNotesBoardStore((s) => s.isOpen);
+  const toggleNotesBoard = useNotesBoardStore((s) => s.toggle);
+  const closeNotesBoard = useNotesBoardStore((s) => s.close);
 
   return (
     <footer className="flex h-7.5 shrink-0 items-center justify-between gap-2 border-t border-border/30 px-2.5 text-[10.5px]">
@@ -186,6 +197,26 @@ export function StatusBar({
           size="icon"
           className={cn(
             "size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+            notesBoardOpen && "bg-accent text-primary font-semibold",
+          )}
+          onClick={toggleNotesBoard}
+          onMouseEnter={() =>
+            void import("@/modules/notes-board/components/FloatingWorkspaceWidget")
+          }
+          title={t("statusbar.notesBoard", {
+            defaultValue: "Notas & Tablero Kanban",
+          })}
+          aria-label={t("statusbar.notesBoardLabel", {
+            defaultValue: "Notas y Tablero",
+          })}
+        >
+          <HugeiconsIcon icon={Note01Icon} size={14} strokeWidth={1.75} />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
             arcadeOpen && "bg-accent text-yellow-400 hover:text-yellow-300",
           )}
           onClick={toggleArcade}
@@ -212,6 +243,15 @@ export function StatusBar({
       {arcadeOpen ? (
         <Suspense fallback={null}>
           <LazyFloatingArcadeWidget onClose={closeArcade} />
+        </Suspense>
+      ) : null}
+      {notesBoardOpen ? (
+        <Suspense fallback={null}>
+          <LazyFloatingWorkspaceWidget
+            onClose={closeNotesBoard}
+            onRunCommand={onRunCommand}
+            cwd={cwd}
+          />
         </Suspense>
       ) : null}
     </footer>
