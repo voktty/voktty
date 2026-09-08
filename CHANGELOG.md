@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.38] - 2026-09-08
+
+### Added
+
+- The sidebar project picker is now searchable and keyboard navigable, shows each project's parent path, and includes actions for opening a new project or starting a new tab.
+- Right-click a title-bar tab to close that tab, the other tabs, or every tab to its left or right. Bulk closing still protects unsaved files and running terminals.
+- Shift-click conversations in the sidebar to select several at once, then pin, unpin, archive, unarchive, move into or out of folders, or delete them together.
+- Settings → Appearance → Chat background adds an on-device image behind empty sessions or every conversation, with adjustable visibility. Each project can override the global image from its project-rail menu.
+- Long transcripts have a vertical prompt outline for jumping between turns. Hover or keyboard-focus a marker to preview its prompt and reply. In #90 by @kartava.
+- Drag image files into a note to copy them into MonoCode's local note storage and insert them into the note at the cursor.
+- Archive the focused conversation with Shift+Command/Ctrl+A. The shortcut stays out of editors, terminals, diffs, and open overlays. In #89 by @kualta.
+
+### Changed
+
+- Scrolled transcripts fade and blur smoothly beneath the title bar, and popover backdrops now use theme-aware tints.
+- Light mode uses an opaque native window for legibility, preserves the dark-mode glass settings, and gives the composer theme-specific shadows and send-button states.
+
+### Fixed
+
+- Enabling Sounds now plays the switch cue immediately. In #111 by @kartava.
+- Sidebar multi-selection clears reliably when its menu closes or the pointer moves outside the selected conversation cards.
+- Chat background changes appear across open session panes immediately, and the empty-session arcade stays hidden when a background is visible.
+- Composer keyboard handlers ignore active IME composition, preventing Enter, Escape, and picker actions from firing while composing text.
+
 ## [0.1.37] - 2026-09-07
 
 ### Fixed
