@@ -71,6 +71,17 @@ pub struct ShellControlEnv {
     pub cli_bin_dir: Option<PathBuf>,
 }
 
+/// Same control credentials as `ShellControlEnv`, keyed by harness session id
+/// instead of a terminal pane id, for agents spawned via `harness_spawn`.
+#[derive(Clone)]
+pub struct HarnessControlEnv {
+    pub address: String,
+    pub token: String,
+    pub session_id: String,
+    pub cli_path: Option<String>,
+    pub cli_bin_dir: Option<PathBuf>,
+}
+
 impl ControlState {
     pub fn shell_env(&self, pane_id: u32) -> Option<ShellControlEnv> {
         if self.0.shutting_down.load(Ordering::Acquire) {
@@ -84,6 +95,23 @@ impl ControlState {
             address: runtime.address.clone(),
             token: runtime.token.clone(),
             pane_id,
+            cli_path: runtime.cli_path.as_ref().map(fs::to_canon),
+            cli_bin_dir: runtime.launcher_dir.clone(),
+        })
+    }
+
+    pub fn harness_env(&self, session_id: &str) -> Option<HarnessControlEnv> {
+        if self.0.shutting_down.load(Ordering::Acquire) {
+            return None;
+        }
+        let runtime = self.0.runtime.get()?;
+        if self.0.shutting_down.load(Ordering::Acquire) {
+            return None;
+        }
+        Some(HarnessControlEnv {
+            address: runtime.address.clone(),
+            token: runtime.token.clone(),
+            session_id: session_id.to_string(),
             cli_path: runtime.cli_path.as_ref().map(fs::to_canon),
             cli_bin_dir: runtime.launcher_dir.clone(),
         })
@@ -948,6 +976,29 @@ mod tests {
         assert!(state.shell_env(7).is_some());
         state.shutdown();
         assert!(state.shell_env(7).is_none());
+    }
+
+    #[test]
+    fn harness_env_carries_the_session_id_and_stops_after_shutdown() {
+        let state = ControlState::default();
+        assert!(state
+            .0
+            .runtime
+            .set(RuntimeInfo {
+                address: "127.0.0.1:4312".into(),
+                token: "a".repeat(64),
+                descriptor_path: PathBuf::from("unused-control.json"),
+                cli_path: None,
+                launcher_dir: None,
+            })
+            .is_ok());
+
+        let env = state.harness_env("session-42").expect("harness env");
+        assert_eq!(env.session_id, "session-42");
+        assert_eq!(env.token, "a".repeat(64));
+
+        state.shutdown();
+        assert!(state.harness_env("session-42").is_none());
     }
 
     #[test]

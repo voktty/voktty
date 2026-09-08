@@ -28,6 +28,22 @@ const EXIT_USAGE: u8 = 2;
 const EXIT_UNAVAILABLE: u8 = 3;
 const EXIT_PROTOCOL: u8 = 4;
 const EXIT_REQUEST: u8 = 5;
+/// `harness.wait` reached the session but it is now waiting on approval/input.
+const EXIT_HARNESS_NEEDS_INPUT: u8 = 6;
+/// `harness.wait` did not reach a target state before the caller's timeout.
+const EXIT_HARNESS_TIMEOUT: u8 = 7;
+/// `harness.send` had no mounted session to deliver the message to.
+const EXIT_HARNESS_NOT_DELIVERED: u8 = 8;
+
+/// `harness.*` request failures that deserve a more specific exit code than
+/// the generic `EXIT_REQUEST`. `None` means the caller should keep the
+/// default, matching every other control-plane method's behavior.
+fn harness_error_exit_code(method: &str, error_code: &str) -> Option<u8> {
+    if method == METHOD_HARNESS_SEND && error_code == "not_found" {
+        return Some(EXIT_HARNESS_NOT_DELIVERED);
+    }
+    None
+}
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, PartialEq)]
@@ -134,7 +150,8 @@ fn run(args: Vec<OsString>) -> Result<ExitCode, CliError> {
                         "Voktty rejected the request",
                     )
                 });
-                return Err(CliError::new(error.code, error.message, EXIT_REQUEST));
+                let exit = harness_error_exit_code(method, &error.code).unwrap_or(EXIT_REQUEST);
+                return Err(CliError::new(error.code, error.message, exit));
             }
             let result = response.result.unwrap_or(Value::Null);
             print_result(method, result, config.json);
@@ -193,7 +210,19 @@ fn run_harness_wait(
             .and_then(Value::as_bool)
             .unwrap_or(false);
         if reached || Instant::now() >= deadline {
+            let state = result
+                .get("snapshot")
+                .and_then(|snapshot| snapshot.get("state"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
             print_result(METHOD_HARNESS_WAIT, result, json);
+            if !reached {
+                return Ok(ExitCode::from(EXIT_HARNESS_TIMEOUT));
+            }
+            if state == "waiting" {
+                return Ok(ExitCode::from(EXIT_HARNESS_NEEDS_INPUT));
+            }
             return Ok(ExitCode::SUCCESS);
         }
     }
@@ -2044,6 +2073,22 @@ mod tests {
             }
             other => panic!("expected Request, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn harness_send_not_found_gets_a_dedicated_exit_code() {
+        assert_eq!(
+            harness_error_exit_code(METHOD_HARNESS_SEND, "not_found"),
+            Some(EXIT_HARNESS_NOT_DELIVERED)
+        );
+        assert_eq!(
+            harness_error_exit_code(METHOD_HARNESS_SEND, "invalid_params"),
+            None
+        );
+        assert_eq!(
+            harness_error_exit_code(METHOD_HARNESS_STATUS, "not_found"),
+            None
+        );
     }
 
     #[test]
