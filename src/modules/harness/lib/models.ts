@@ -30,7 +30,7 @@ export const MODELS: AgentModel[] = [
     id: "claude:fable-5.1",
     harness: "claude",
     name: "Claude Fable 5.1",
-    nativeId: "claude-fable-5.1",
+    nativeId: "claude-fable-5-1",
     contextWindow: 1_000_000,
   },
   {
