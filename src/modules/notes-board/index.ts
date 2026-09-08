@@ -1,4 +1,7 @@
 export * from "./lib/kanbanTypes";
 export * from "./store/kanbanStore";
 export * from "./store/notesBoardStore";
-export { FloatingWorkspaceWidget } from "./components/FloatingWorkspaceWidget";
+export * from "./lib/agentHandoff";
+export * from "./lib/useKanbanAgentBridge";
+export { KanbanAgentBridge } from "./components/KanbanAgentBridge";
+

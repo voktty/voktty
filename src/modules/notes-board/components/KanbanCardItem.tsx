@@ -2,17 +2,20 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
+  Alert02Icon,
+  ArrowRight01Icon,
+  CancelCircleIcon,
+  Cancel01Icon,
+  ChatBotIcon,
   CheckmarkCircle02Icon,
   ComputerTerminal01Icon,
   Delete02Icon,
-  ArrowRight01Icon,
-  ChatBotIcon,
-  Cancel01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { KanbanCard, KanbanColumnId } from "../lib/kanbanTypes";
 import {
   type ActiveAgentTarget,
+  formatExecutionDuration,
   formatTaskForAgent,
 } from "../lib/agentHandoff";
 import { extractTaskStats, useKanbanStore } from "../store/kanbanStore";
@@ -114,6 +117,11 @@ export function KanbanCardItem({
       className={cn(
         "group relative flex flex-col gap-1.5 rounded-lg border border-border/40 bg-card/60 p-2.5 text-xs shadow-xs transition-all hover:border-border/80 hover:bg-card hover:shadow-md cursor-grab active:cursor-grabbing",
         card.columnId === "done" && "opacity-75 bg-card/40",
+        (card.assignedExecution?.requiresAttention ||
+          card.assignedExecution?.lastObservedStatus === "waiting") &&
+          "border-amber-500/60 bg-amber-500/5 ring-1 ring-amber-500/30",
+        card.assignedExecution?.lastObservedStatus === "error" &&
+          "border-rose-500/50 bg-rose-500/5 ring-1 ring-rose-500/20",
       )}
     >
       {/* Title and actions header */}
@@ -163,6 +171,55 @@ export function KanbanCardItem({
         </p>
       ) : null}
 
+      {/* Attention alert banner */}
+      {(card.assignedExecution?.requiresAttention ||
+        card.assignedExecution?.lastObservedStatus === "waiting") && (
+        <div
+          onClick={() =>
+            onActivateAgent?.(
+              card.assignedExecution!.tabId,
+              card.assignedExecution!.leafId,
+            )
+          }
+          className="flex items-center gap-1.5 rounded bg-amber-500/15 px-2 py-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 transition-colors"
+          title="Requiere intervencion en consola. Clic para enfocar la terminal"
+        >
+          <HugeiconsIcon
+            icon={Alert02Icon}
+            size={11}
+            className="shrink-0 animate-pulse"
+          />
+          <span className="truncate">Requiere atencion en consola</span>
+        </div>
+      )}
+
+      {/* Error alert banner */}
+      {card.assignedExecution?.lastObservedStatus === "error" && (
+        <div className="flex items-center justify-between gap-1.5 rounded bg-rose-500/10 px-2 py-1 text-[10px] font-medium text-rose-600 dark:text-rose-400 border border-rose-500/25">
+          <div className="flex items-center gap-1 truncate">
+            <HugeiconsIcon
+              icon={CancelCircleIcon}
+              size={11}
+              className="shrink-0"
+            />
+            <span className="truncate">
+              {card.assignedExecution.errorReason ||
+                "Terminal cerrada antes de finalizar"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              unassignCard(card.id);
+            }}
+            className="text-rose-600 dark:text-rose-400 underline hover:text-rose-700 cursor-pointer shrink-0 ml-1"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
       {/* Footer Badges & Actions */}
       <div className="mt-1 flex flex-wrap items-center justify-between gap-1 pt-1 border-t border-border/20 text-[10px]">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -203,27 +260,40 @@ export function KanbanCardItem({
               }
               className={cn(
                 "flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium transition-colors cursor-pointer",
-                card.assignedExecution.lastObservedStatus === "waiting"
+                card.assignedExecution.requiresAttention ||
+                  card.assignedExecution.lastObservedStatus === "waiting"
                   ? "border-amber-500/40 bg-amber-500/15 text-amber-500 hover:bg-amber-500/25"
-                  : card.assignedExecution.lastObservedStatus === "idle"
-                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25"
-                    : "border-primary/40 bg-primary/15 text-primary hover:bg-primary/25",
+                  : card.assignedExecution.lastObservedStatus === "error"
+                    ? "border-rose-500/40 bg-rose-500/15 text-rose-500 hover:bg-rose-500/25"
+                    : card.assignedExecution.lastObservedStatus === "idle" ||
+                        card.columnId === "done"
+                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25"
+                      : "border-primary/40 bg-primary/15 text-primary hover:bg-primary/25",
               )}
               title={`Asignado a ${card.assignedExecution.agentName} (Pestaña ${card.assignedExecution.tabId}). Clic para enfocar`}
             >
               <span
                 className={cn(
                   "size-1.5 rounded-full shrink-0",
-                  card.assignedExecution.lastObservedStatus === "waiting"
+                  card.assignedExecution.requiresAttention ||
+                    card.assignedExecution.lastObservedStatus === "waiting"
                     ? "bg-amber-500 animate-ping"
-                    : card.assignedExecution.lastObservedStatus === "idle"
-                      ? "bg-emerald-500"
-                      : "bg-primary animate-pulse",
+                    : card.assignedExecution.lastObservedStatus === "error"
+                      ? "bg-rose-500"
+                      : card.assignedExecution.lastObservedStatus === "idle" ||
+                          card.columnId === "done"
+                        ? "bg-emerald-500"
+                        : "bg-primary animate-pulse",
                 )}
               />
               <span className="truncate max-w-[85px]">
                 {card.assignedExecution.agentName}
               </span>
+              {card.assignedExecution.durationMs ? (
+                <span className="text-[9px] font-mono opacity-80 shrink-0">
+                  ({formatExecutionDuration(card.assignedExecution.durationMs)})
+                </span>
+              ) : null}
               <button
                 type="button"
                 onClick={(e) => {
