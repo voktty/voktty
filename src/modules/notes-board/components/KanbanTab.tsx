@@ -244,7 +244,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
               onDragLeave={() => handleDragLeave(col.id)}
               onDrop={(e) => handleDrop(e, col.id)}
               className={cn(
-                "flex flex-1 min-w-[210px] max-w-[320px] flex-col rounded-xl border border-border/40 bg-muted/20 transition-all duration-150 overflow-hidden",
+                "flex flex-1 min-w-[200px] flex-col rounded-xl border border-border/50 bg-muted/25 transition-all duration-150 overflow-hidden",
                 isOver && "border-primary/60 bg-primary/5 ring-1 ring-primary/30",
               )}
             >
@@ -262,7 +262,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-6 text-muted-foreground hover:text-foreground"
+                  className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
                   onClick={() => setActiveColInput(isAdding ? null : col.id)}
                   title="Nueva tarjeta"
                 >
@@ -272,7 +272,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
 
               {/* Card Creation Inline Panel */}
               {isAdding && (
-                <div className="border-b border-border/40 bg-card p-2.5 flex flex-col gap-2 shadow-xs">
+                <div className="border-b border-border/40 bg-card p-2.5 flex flex-col gap-2 shadow-xs shrink-0">
                   <Input
                     autoFocus
                     placeholder="Titulo de la tarea..."
@@ -286,14 +286,14 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                         setActiveColInput(null);
                       }
                     }}
-                    className="h-7 text-xs"
+                    className="h-7 text-xs bg-background"
                   />
                   <textarea
                     placeholder="Descripcion (soporta checklists - [ ])"
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}
                     rows={2}
-                    className="w-full resize-none rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   />
                   <div className="flex items-center justify-between gap-1">
                     <select
@@ -331,7 +331,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
               )}
 
               {/* Column Cards List */}
-              <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
+              <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2 min-h-0">
                 {colCards.length === 0 && !isAdding ? (
                   <div className="flex flex-1 items-center justify-center p-4 text-center">
                     <span className="text-[11px] text-muted-foreground/50">
