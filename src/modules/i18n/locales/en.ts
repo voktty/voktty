@@ -3417,6 +3417,12 @@ export const en = {
     shortcutChat: "AI Chat",
     shortcutNewTab: "New Tab",
     shortcutCommands: "Commands",
+    shortcutSplitRight: "Split Right",
+    shortcutSplitDown: "Split Down",
+    shortcutQuickOpen: "Quick Open",
+    shortcutClearTerminal: "Clear Terminal",
+    shortcutSidebar: "Toggle Sidebar",
+    shortcutZenMode: "Zen Mode",
   },
   vault: {
     title: "Key Vault",

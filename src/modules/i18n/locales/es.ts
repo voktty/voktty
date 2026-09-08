@@ -3496,6 +3496,12 @@ export const es: TranslationSchema = {
     shortcutChat: "Chat de IA",
     shortcutNewTab: "Nueva pestaña",
     shortcutCommands: "Comandos",
+    shortcutSplitRight: "Dividir a la derecha",
+    shortcutSplitDown: "Dividir abajo",
+    shortcutQuickOpen: "Apertura rápida",
+    shortcutClearTerminal: "Limpiar terminal",
+    shortcutSidebar: "Alternar barra lateral",
+    shortcutZenMode: "Modo zen",
   },
   vault: {
     title: "Bóveda de Claves",

@@ -14,10 +14,12 @@ import {
   setLanguage,
   setTabStyle,
   setTerminalFontSize,
-  setThemeId,
   usePreferencesStore,
 } from "@/modules/settings";
 import { emitKeysChanged } from "@/modules/settings/store";
+import { shortcutLabel } from "@/modules/shortcuts";
+import { listBuiltinThemes, useTheme } from "@/modules/theme";
+import { formatThemeAppearanceLabel, resolveThemeSwatch } from "@/modules/theme/themeSwatch";
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
@@ -34,6 +36,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useState } from "react";
+import { OnboardingThemePicker } from "./OnboardingThemePicker";
 import { VokttyAnimatedLogo } from "./VokttyAnimatedLogo";
 
 interface OnboardingWizardProps {
@@ -41,26 +44,17 @@ interface OnboardingWizardProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const FEATURED_THEMES = [
-  {
-    id: "voktty-default",
-    name: "Voktty Dark",
-    bg: "#0d0f12",
-    accent: "#6366f1",
-  },
-  { id: "tokyo-night", name: "Tokyo Night", bg: "#1a1b26", accent: "#7aa2f7" },
-  {
-    id: "catppuccin",
-    name: "Catppuccin Mocha",
-    bg: "#1e1e2e",
-    accent: "#cba6f7",
-  },
-  { id: "nord", name: "Nord", bg: "#2e3440", accent: "#88c0d0" },
-  { id: "everforest", name: "Everforest", bg: "#2d353b", accent: "#a7c080" },
-  { id: "rose-pine", name: "Rosé Pine", bg: "#191724", accent: "#ebbcba" },
-  { id: "dracula", name: "Dracula", bg: "#282a36", accent: "#bd93f9" },
-  { id: "xcode", name: "Xcode Light", bg: "#ffffff", accent: "#007aff" },
-];
+const ESSENTIAL_SHORTCUTS = [
+  { id: "ai.toggle", labelKey: "shortcutChat" },
+  { id: "tab.new", labelKey: "shortcutNewTab" },
+  { id: "commandPalette.open", labelKey: "shortcutCommands" },
+  { id: "pane.splitRight", labelKey: "shortcutSplitRight" },
+  { id: "pane.splitDown", labelKey: "shortcutSplitDown" },
+  { id: "file.quickOpen", labelKey: "shortcutQuickOpen" },
+  { id: "terminal.clear", labelKey: "shortcutClearTerminal" },
+  { id: "sidebar.toggle", labelKey: "shortcutSidebar" },
+  { id: "view.zenMode", labelKey: "shortcutZenMode" },
+] as const;
 
 const FONT_PRESETS = [
   { labelKey: "compact" as const, size: 12 },
@@ -152,6 +146,7 @@ export function OnboardingWizard({
 }: OnboardingWizardProps) {
   const { t, language } = useTranslation();
   const prefs = usePreferencesStore();
+  const { themeId, themeVariation, resolvedMode, customThemes } = useTheme();
 
   const [step, setStep] = useState<number>(1);
   const [phase, setPhase] = useState<"welcome" | "wizard">("welcome");
@@ -200,6 +195,13 @@ export function OnboardingWizard({
   const handleLanguageSelect = (langId: LanguageId) => {
     void setLanguage(langId);
   };
+
+  const activeThemes = [...listBuiltinThemes(), ...customThemes];
+  const activeTheme =
+    activeThemes.find((theme) => theme.id === themeId) ?? activeThemes[0];
+  const activeSwatch = activeTheme
+    ? resolveThemeSwatch(activeTheme, themeVariation, resolvedMode)
+    : null;
 
   const providerKeyState = (id: ProviderId): ProviderKeyState =>
     providerKeys[id] ?? EMPTY_PROVIDER_KEY_STATE;
@@ -513,43 +515,8 @@ export function OnboardingWizard({
                         </p>
                       </div>
 
-                      {/* Theme Grid */}
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-medium text-foreground/80">
-                          {t("onboarding.themeLabel")}
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                          {FEATURED_THEMES.map((th) => {
-                            const selected = prefs.themeId === th.id;
-                            return (
-                              <button
-                                key={th.id}
-                                type="button"
-                                onClick={() => void setThemeId(th.id)}
-                                className={cn(
-                                  "flex items-center gap-2 p-1.5 rounded-lg border text-left transition-all cursor-pointer",
-                                  selected
-                                    ? "bg-primary/10 border-primary shadow-xs ring-1 ring-primary/30"
-                                    : "bg-secondary/30 border-border/60 hover:bg-secondary/70 hover:border-border",
-                                )}
-                              >
-                                <div
-                                  className="size-3.5 rounded-full border border-white/10 shrink-0 shadow-xs flex items-center justify-center"
-                                  style={{ backgroundColor: th.bg }}
-                                >
-                                  <div
-                                    className="size-1 rounded-full"
-                                    style={{ backgroundColor: th.accent }}
-                                  />
-                                </div>
-                                <span className="text-[11px] font-medium text-foreground truncate">
-                                  {th.name}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      {/* Theme Picker */}
+                      <OnboardingThemePicker />
 
                       {/* Font Size Presets */}
                       <div className="space-y-1.5 pt-0.5">
@@ -587,8 +554,20 @@ export function OnboardingWizard({
                       </div>
 
                       {/* Live Preview Box */}
-                      <div className="rounded-xl border border-border/60 bg-black/40 p-2.5 font-mono text-foreground/90 space-y-0.5 shadow-inner">
-                        <div className="flex items-center justify-between text-[9.5px] text-muted-foreground pb-0.5 border-b border-border/20">
+                      <div
+                        className="rounded-xl border border-border/60 p-2.5 font-mono space-y-0.5 shadow-inner"
+                        style={{
+                          backgroundColor: activeSwatch?.background,
+                          color: activeSwatch?.foreground,
+                        }}
+                      >
+                        <div
+                          className="flex items-center justify-between text-[9.5px] pb-0.5 border-b"
+                          style={{
+                            borderColor: activeSwatch?.muted,
+                            opacity: 0.8,
+                          }}
+                        >
                           <span>{t("onboarding.terminalPreview")}</span>
                           <span>utf-8</span>
                         </div>
@@ -596,8 +575,10 @@ export function OnboardingWizard({
                           style={{ fontSize: `${prefs.terminalFontSize}px` }}
                           className="leading-snug"
                         >
-                          <p className="text-emerald-400">$ voktty --ready</p>
-                          <p className="text-muted-foreground">
+                          <p style={{ color: activeSwatch?.accent }}>
+                            $ voktty --ready
+                          </p>
+                          <p className="opacity-70">
                             {t("onboarding.environmentReady")}
                           </p>
                         </div>
@@ -761,9 +742,12 @@ export function OnboardingWizard({
                             {t("onboarding.summaryTheme")}
                           </span>
                           <p className="font-medium text-foreground mt-0.5 truncate">
-                            {FEATURED_THEMES.find(
-                              (th) => th.id === prefs.themeId,
-                            )?.name || prefs.themeId}
+                            {activeTheme
+                              ? formatThemeAppearanceLabel(
+                                  activeTheme,
+                                  themeVariation,
+                                )
+                              : themeId}
                           </p>
                         </div>
 
@@ -783,30 +767,19 @@ export function OnboardingWizard({
                           {t("onboarding.shortcutsTitle")}
                         </span>
                         <div className="grid grid-cols-3 gap-1.5 text-[10px]">
-                          <div className="flex flex-col items-center p-1.5 rounded-md bg-background/50 border border-border/30 text-center">
-                            <kbd className="font-mono text-[9px] bg-muted px-1 py-0.2 rounded border border-border">
-                              Ctrl + I
-                            </kbd>
-                            <span className="text-muted-foreground mt-0.5 text-[9.5px]">
-                              {t("onboarding.shortcutChat")}
-                            </span>
-                          </div>
-                          <div className="flex flex-col items-center p-1.5 rounded-md bg-background/50 border border-border/30 text-center">
-                            <kbd className="font-mono text-[9px] bg-muted px-1 py-0.2 rounded border border-border">
-                              Ctrl + T
-                            </kbd>
-                            <span className="text-muted-foreground mt-0.5 text-[9.5px]">
-                              {t("onboarding.shortcutNewTab")}
-                            </span>
-                          </div>
-                          <div className="flex flex-col items-center p-1.5 rounded-md bg-background/50 border border-border/30 text-center">
-                            <kbd className="font-mono text-[9px] bg-muted px-1 py-0.2 rounded border border-border">
-                              Ctrl + Shift + P
-                            </kbd>
-                            <span className="text-muted-foreground mt-0.5 text-[9.5px]">
-                              {t("onboarding.shortcutCommands")}
-                            </span>
-                          </div>
+                          {ESSENTIAL_SHORTCUTS.map((s) => (
+                            <div
+                              key={s.id}
+                              className="flex flex-col items-center p-1.5 rounded-md bg-background/50 border border-border/30 text-center"
+                            >
+                              <kbd className="font-mono text-[9px] bg-muted px-1 py-0.2 rounded border border-border">
+                                {shortcutLabel(s.id)}
+                              </kbd>
+                              <span className="text-muted-foreground mt-0.5 text-[9.5px]">
+                                {t(`onboarding.${s.labelKey}`)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>

@@ -11,6 +11,13 @@ export {
 } from "./resolveTerminalFont";
 export { useThemeFileEditing } from "./useThemeFileEditing";
 export { listBuiltinThemes } from "./themes";
+export {
+  resolveThemeSwatch,
+  formatThemeAppearanceLabel,
+  nextVariationIdForTheme,
+  resolveActiveVariation,
+  type ThemeSwatch,
+} from "./themeSwatch";
 export { resolveEditorThemeId } from "./resolveEditorTheme";
 export {
   listBuiltinAppearancePacks,
