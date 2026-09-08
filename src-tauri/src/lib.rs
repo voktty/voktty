@@ -1,5 +1,6 @@
 use tauri::Manager;
 
+mod chat_background;
 mod checkpoint;
 mod cursor_store;
 mod fs;
@@ -317,6 +318,10 @@ pub fn run() {
             window::enable_window_glass,
             window_transfer::stage_window_transfer,
             window_transfer::take_window_transfer,
+            chat_background::save_chat_background,
+            chat_background::remove_chat_background,
+            chat_background::save_project_chat_background,
+            chat_background::remove_project_chat_background,
             project_logo::save_project_logo,
             project_logo::remove_project_logo,
             project_logo::forget_logo_file,

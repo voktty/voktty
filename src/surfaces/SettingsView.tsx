@@ -1,6 +1,7 @@
 import {
   ArrowDownCircle,
   Check,
+  ImagePlus,
   Loader,
   RefreshCw,
   RotateCcw,
@@ -21,14 +22,25 @@ import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
 import { WindowControls } from "../chrome/WindowControls";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
+  applyChatBackground,
+  applyChatBackgroundOpacity,
+  applyChatBackgroundScope,
   applyBodyGlass,
   applyThemePreference,
   applySidebarBlur,
   applySidebarOpacity,
   applyThemeTint,
   BODY_GLASS_DEFAULT,
+  CHAT_BACKGROUND_OPACITY_DEFAULT,
+  CHAT_BACKGROUND_OPACITY_MAX,
+  CHAT_BACKGROUND_OPACITY_MIN,
+  CHAT_BACKGROUND_SCOPE_DEFAULT,
   THEME_PREFERENCE_DEFAULT,
+  chatBackgroundSrc,
   loadBodyGlass,
+  loadChatBackgroundOpacity,
+  loadChatBackgroundPath,
+  loadChatBackgroundScope,
   loadThemePreference,
   loadSidebarBlur,
   loadSidebarOpacity,
@@ -37,6 +49,9 @@ import {
   loadTranscriptLayout,
   loadTranscriptAnchor,
   saveBodyGlass,
+  saveChatBackgroundOpacity,
+  saveChatBackgroundPath,
+  saveChatBackgroundScope,
   saveThemePreference,
   saveSidebarBlur,
   saveSidebarOpacity,
@@ -58,8 +73,13 @@ import {
   THEME_SATURATION_MAX,
   THEME_SATURATION_MIN,
   type ThemePreference,
+  type ChatBackgroundScope,
   type TranscriptLayout,
 } from "../lib/appearance";
+import {
+  pickAndSaveChatBackground,
+  removeChatBackground,
+} from "../lib/chatBackground";
 import {
   applyUiScale,
   loadUiScale,
@@ -769,6 +789,18 @@ function useAppearanceSettings() {
   const [themeHue, setThemeHue] = useState(loadThemeHue);
   const [themeSaturation, setThemeSaturation] = useState(loadThemeSaturation);
   const [bodyGlass, setBodyGlass] = useState(loadBodyGlass);
+  const [chatBackgroundPath, setChatBackgroundPath] = useState(
+    loadChatBackgroundPath,
+  );
+  const [chatBackgroundOpacity, setChatBackgroundOpacity] = useState(
+    loadChatBackgroundOpacity,
+  );
+  const [chatBackgroundScope, setChatBackgroundScope] =
+    useState<ChatBackgroundScope>(loadChatBackgroundScope);
+  const [chatBackgroundBusy, setChatBackgroundBusy] = useState(false);
+  const [chatBackgroundError, setChatBackgroundError] = useState<string | null>(
+    null,
+  );
   const [uiScale, setUiScale] = useState(loadUiScale);
 
   useEffect(() => subscribeUiScale(() => setUiScale(loadUiScale())), []);
@@ -805,6 +837,53 @@ function useAppearanceSettings() {
     setBodyGlass(next);
   }, []);
 
+  const onChooseChatBackground = useCallback(async () => {
+    setChatBackgroundBusy(true);
+    setChatBackgroundError(null);
+    try {
+      const path = await pickAndSaveChatBackground();
+      if (!path) return;
+      saveChatBackgroundPath(path);
+      applyChatBackground(path);
+      setChatBackgroundPath(path);
+    } catch (error) {
+      setChatBackgroundError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setChatBackgroundBusy(false);
+    }
+  }, []);
+
+  const onClearChatBackground = useCallback(async () => {
+    setChatBackgroundBusy(true);
+    setChatBackgroundError(null);
+    try {
+      await removeChatBackground();
+      saveChatBackgroundPath(null);
+      applyChatBackground(null);
+      setChatBackgroundPath(null);
+    } catch (error) {
+      setChatBackgroundError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setChatBackgroundBusy(false);
+    }
+  }, []);
+
+  const onChatBackgroundOpacity = useCallback((percent: number) => {
+    const next = applyChatBackgroundOpacity(percent / 100);
+    saveChatBackgroundOpacity(next);
+    setChatBackgroundOpacity(next);
+  }, []);
+
+  const onChatBackgroundScope = useCallback((next: ChatBackgroundScope) => {
+    applyChatBackgroundScope(next);
+    saveChatBackgroundScope(next);
+    setChatBackgroundScope(next);
+  }, []);
+
   const onUiScale = useCallback((percent: number) => {
     const next = saveUiScale(percent / 100);
     setUiScale(next);
@@ -817,8 +896,22 @@ function useAppearanceSettings() {
     onBlur(SIDEBAR_BLUR_DEFAULT);
     onTint(THEME_HUE_DEFAULT, THEME_SATURATION_DEFAULT);
     onBodyGlass(BODY_GLASS_DEFAULT);
+    onChatBackgroundOpacity(Math.round(CHAT_BACKGROUND_OPACITY_DEFAULT * 100));
+    onChatBackgroundScope(CHAT_BACKGROUND_SCOPE_DEFAULT);
+    if (chatBackgroundPath) void onClearChatBackground();
     onUiScale(Math.round(UI_SCALE_DEFAULT * 100));
-  }, [onBlur, onBodyGlass, onThemePreference, onOpacity, onTint, onUiScale]);
+  }, [
+    chatBackgroundPath,
+    onBlur,
+    onBodyGlass,
+    onChatBackgroundOpacity,
+    onChatBackgroundScope,
+    onClearChatBackground,
+    onThemePreference,
+    onOpacity,
+    onTint,
+    onUiScale,
+  ]);
 
   return {
     themePreference,
@@ -827,12 +920,21 @@ function useAppearanceSettings() {
     themeHue,
     themeSaturation,
     bodyGlass,
+    chatBackgroundPath,
+    chatBackgroundOpacity,
+    chatBackgroundScope,
+    chatBackgroundBusy,
+    chatBackgroundError,
     uiScale,
     onThemePreference,
     onOpacity,
     onBlur,
     onTint,
     onBodyGlass,
+    onChooseChatBackground,
+    onClearChatBackground,
+    onChatBackgroundOpacity,
+    onChatBackgroundScope,
     onUiScale,
     restoreDefaults,
   };
@@ -919,6 +1021,7 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
           onChange={appearance.onBodyGlass}
         />
       </Row>
+      <ChatBackgroundCard appearance={appearance} />
       <Row
         label="Interface scale"
         description="Zoom the whole interface. You can also use Ctrl+=, Ctrl+-, and Ctrl+0 (Cmd on macOS)."
@@ -934,6 +1037,125 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
         />
       </Row>
     </>
+  );
+}
+
+function ChatBackgroundCard({
+  appearance,
+}: {
+  appearance: AppearanceSettings;
+}) {
+  const src = chatBackgroundSrc(appearance.chatBackgroundPath);
+  const hasImage = Boolean(appearance.chatBackgroundPath && src);
+  const visibility = Math.round(appearance.chatBackgroundOpacity * 100);
+  const busy = appearance.chatBackgroundBusy;
+
+  return (
+    <div className="border-b border-content/5 py-4 last:border-b-0">
+      <div className="flex items-start gap-6">
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-medium text-content">
+            Chat background
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed text-content/45">
+            An image behind your chat panes. It stays on this device.
+          </p>
+        </div>
+        {hasImage ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <SecondaryButton
+              onClick={() => void appearance.onChooseChatBackground()}
+              disabled={busy}
+            >
+              {busy ? (
+                <Loader className="size-3.5 animate-spin" aria-hidden />
+              ) : null}
+              Change
+            </SecondaryButton>
+            <SecondaryButton
+              onClick={() => void appearance.onClearChatBackground()}
+              disabled={busy}
+              danger
+            >
+              Remove
+            </SecondaryButton>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-xl border border-content/10">
+        {hasImage ? (
+          <div className="relative h-36">
+            <img
+              src={src ?? undefined}
+              alt=""
+              draggable={false}
+              className="size-full object-cover"
+              style={{ opacity: appearance.chatBackgroundOpacity }}
+            />
+            <span className="pointer-events-none absolute bottom-2 left-2 text-[11px] text-content/40">
+              Preview at {visibility}%
+            </span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void appearance.onChooseChatBackground()}
+            disabled={busy}
+            className="flex h-36 w-full flex-col items-center justify-center gap-2 text-content/40 hover:bg-content/5 hover:text-content/70 disabled:cursor-default disabled:opacity-40"
+          >
+            {busy ? (
+              <Loader className="size-5 animate-spin" aria-hidden />
+            ) : (
+              <ImagePlus className="size-5" aria-hidden />
+            )}
+            <span className="text-[12px]">Choose an image</span>
+          </button>
+        )}
+        {hasImage ? (
+          <div className="border-t border-content/8">
+            <div className="flex items-center justify-between gap-4 px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="text-[12px] text-content">Show on</div>
+                <p className="text-[11px] text-content/40">
+                  Empty sessions only, or every conversation.
+                </p>
+              </div>
+              <Segmented
+                label="Show background on"
+                value={appearance.chatBackgroundScope}
+                options={[
+                  { value: "empty", label: "Empty only" },
+                  { value: "all", label: "All sessions" },
+                ]}
+                onChange={appearance.onChatBackgroundScope}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 border-t border-content/5 px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="text-[12px] text-content">Visibility</div>
+                <p className="text-[11px] text-content/40">
+                  Keep it subtle so long conversations stay readable.
+                </p>
+              </div>
+              <Slider
+                label="Background visibility"
+                value={visibility}
+                display={`${visibility}%`}
+                min={Math.round(CHAT_BACKGROUND_OPACITY_MIN * 100)}
+                max={Math.round(CHAT_BACKGROUND_OPACITY_MAX * 100)}
+                onChange={appearance.onChatBackgroundOpacity}
+              />
+            </div>
+          </div>
+        ) : null}
+      </div>
+      {appearance.chatBackgroundError ? (
+        <p className="mt-2 text-[12px] text-red-400">
+          {appearance.chatBackgroundError}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1389,7 +1611,7 @@ function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="grid w-40 gap-0.5 rounded-md border border-content/10 p-0.5 text-[12px]"
+      className="inline-grid shrink-0 gap-0.5 rounded-md border border-content/10 p-0.5 text-[12px]"
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => (
@@ -1399,7 +1621,7 @@ function Segmented<T extends string>({
           role="radio"
           aria-checked={value === option.value}
           onClick={() => onChange(option.value)}
-          className={`min-w-0 rounded-[5px] px-1.5 py-1 ${
+          className={`min-w-0 whitespace-nowrap rounded-[5px] px-2.5 py-1 ${
             value === option.value
               ? "bg-content/10 text-content"
               : "text-content/50 hover:text-content"

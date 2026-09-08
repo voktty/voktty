@@ -5,6 +5,7 @@ import {
   ChevronUp,
   CircleAlert,
   FolderOpen,
+  ImagePlus,
   Inbox,
   MoreHorizontal,
   Pin,
@@ -61,6 +62,7 @@ import {
 import { formatLiveElapsed, type LiveAgent } from "../lib/liveAgents";
 import { HarnessIcon } from "./HarnessIcon";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
+import { ProjectBackgroundDialog } from "./ProjectBackgroundDialog";
 import { ProjectMascot } from "./ProjectMascot";
 import { RailAction, RailSearch } from "./RailAction";
 import { RemoveProjectDialog } from "./RemoveProjectDialog";
@@ -84,6 +86,11 @@ function projectMenuExtraItems(
   canRemove: boolean,
 ): TabGroupMenuExtraItem[] {
   const items: TabGroupMenuExtraItem[] = [
+    {
+      id: "background",
+      label: "Background image",
+      icon: ImagePlus,
+    },
     pinned
       ? { id: "unpin", label: "Unpin project", icon: PinOff }
       : { id: "pin", label: "Pin project", icon: Pin },
@@ -187,6 +194,10 @@ export function ProjectRail({
   } | null>(null);
   const [removing, setRemoving] = useState<{
     path: string;
+    name: string;
+  } | null>(null);
+  const [backgroundProject, setBackgroundProject] = useState<{
+    project: string;
     name: string;
   } | null>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
@@ -323,7 +334,12 @@ export function ProjectRail({
     if (!projectMenu) return;
     const { path, projectKey } = projectMenu;
     if (action === "pin" || action === "unpin") onTogglePin(path);
-    else if (action === "reveal") void revealPath(path);
+    else if (action === "background") {
+      setBackgroundProject({
+        project: projectKey,
+        name: resolveTabGroupLabel(projectKey, groupLabels, basename(path)),
+      });
+    } else if (action === "reveal") void revealPath(path);
     else if (action === "archive") {
       onRemoveProject?.(path, { purgeData: false });
     } else if (action === "delete") {
@@ -538,6 +554,13 @@ export function ProjectRail({
           path={removing.path}
           onConfirm={onConfirmDelete}
           onCancel={() => setRemoving(null)}
+        />
+      ) : null}
+      {backgroundProject ? (
+        <ProjectBackgroundDialog
+          project={backgroundProject.project}
+          name={backgroundProject.name}
+          onClose={() => setBackgroundProject(null)}
         />
       ) : null}
       <div

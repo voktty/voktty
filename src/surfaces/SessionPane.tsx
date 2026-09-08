@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Composer } from "../chrome/Composer";
@@ -42,6 +43,13 @@ import { loadNotesEnabled, subscribeNotesEnabled } from "../lib/settings";
 import { resolveModel } from "../lib/models";
 import { isAstraModel } from "../lib/astraWelcome";
 import { AstraWelcome } from "./AstraWelcome";
+import { projectKey } from "../lib/paths";
+import {
+  loadProjectChatBackground,
+  projectChatBackgroundRevision,
+  subscribeProjectChatBackground,
+} from "../lib/projectChatBackground";
+import { projectChatBackgroundSrc } from "../lib/chatBackground";
 
 type Props = {
   session: Session;
@@ -160,6 +168,20 @@ export const SessionPane = memo(function SessionPane({
   onPaneDragStart,
 }: Props) {
   const title = sessionDisplayTitle(session.title, session.harness);
+  const backgroundRevision = useSyncExternalStore(
+    subscribeProjectChatBackground,
+    projectChatBackgroundRevision,
+    projectChatBackgroundRevision,
+  );
+  const projectBackground = loadProjectChatBackground(projectKey(session.cwd));
+  const projectBackgroundStyle = projectBackground
+    ? ({
+        "--chat-background-image": `url(${JSON.stringify(
+          projectChatBackgroundSrc(projectBackground.path, backgroundRevision),
+        )})`,
+        "--chat-background-opacity": String(projectBackground.opacity),
+      } as CSSProperties)
+    : undefined;
   const approve = useCallback(
     (requestId: number, decision: ApprovalDecision) =>
       onApproval(session.id, requestId, decision),
@@ -334,7 +356,11 @@ export const SessionPane = memo(function SessionPane({
   return (
     <div
       data-session-drop={session.id}
-      className="relative isolate flex h-full min-h-0 min-w-0 flex-1 flex-col"
+      data-session-empty={isEmpty}
+      data-project-chat-background={!!projectBackground}
+      data-project-background-scope={projectBackground?.scope}
+      style={projectBackgroundStyle}
+      className="chat-pane-background relative isolate flex h-full min-h-0 min-w-0 flex-1 flex-col"
       onMouseDown={() => onFocus(session.id)}
     >
       {astraWelcomeRun !== null && visible ? (

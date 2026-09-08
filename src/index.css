@@ -25,6 +25,7 @@
   --theme-hue: 240;
   --theme-saturation: 0%;
   --sidebar-opacity: 0.85;
+  --chat-background-opacity: 0.24;
   --background-lightness: 9%;
   --content-lightness: 92%;
   --link-color: #7dd3fc;
@@ -118,6 +119,30 @@ html.has-native-glass .sidebar-glass {
 
 .body-glass {
   background: var(--color-background-base);
+}
+
+.chat-pane-background::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--chat-background-image, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.has-chat-background .chat-pane-background::before,
+.chat-pane-background[data-project-chat-background="true"]::before {
+  opacity: var(--chat-background-opacity);
+}
+
+html.chat-background-empty-only
+  .chat-pane-background[data-project-chat-background="false"][data-session-empty="false"]::before,
+.chat-pane-background[data-project-chat-background="true"][data-project-background-scope="empty"][data-session-empty="false"]::before {
+  opacity: 0;
 }
 
 .transcript-turn {
