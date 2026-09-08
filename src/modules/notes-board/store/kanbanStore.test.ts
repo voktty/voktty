@@ -236,5 +236,39 @@ texto cualquiera
     );
     expect(updated?.assignedExecution?.requiresAttention).toBe(false);
   });
+
+  it("merges incoming cards updating existing ones if newer and appending new ones", () => {
+    const existingCard = useKanbanStore.getState().addCard({
+      title: "Tarjeta original",
+      description: "Version 1",
+      columnId: "todo",
+    });
+
+    const newerCard = {
+      ...existingCard,
+      description: "Version 2 actualizada",
+      updatedAt: existingCard.updatedAt + 1000,
+    };
+
+    const brandNewCard = {
+      id: "vault-card-new",
+      title: "Tarjeta desde vault",
+      description: "Nueva",
+      columnId: "ideas" as const,
+      order: 0,
+      priority: "high" as const,
+      createdAt: 5000,
+      updatedAt: 5000,
+    };
+
+    useKanbanStore.getState().mergeCards([newerCard, brandNewCard]);
+
+    const cards = useKanbanStore.getState().cards;
+    const mergedExisting = cards.find((c) => c.id === existingCard.id);
+    const mergedBrandNew = cards.find((c) => c.id === "vault-card-new");
+
+    expect(mergedExisting?.description).toBe("Version 2 actualizada");
+    expect(mergedBrandNew?.title).toBe("Tarjeta desde vault");
+  });
 });
 

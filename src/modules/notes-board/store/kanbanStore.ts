@@ -47,6 +47,7 @@ type KanbanStoreState = {
   completeCardExecution: (id: string, finishedAt?: number) => void;
   failCardExecution: (id: string, reason?: string) => void;
   resetCards: (cards: KanbanCard[]) => void;
+  mergeCards: (cards: KanbanCard[]) => void;
 };
 
 function loadStoredCards(): KanbanCard[] {
@@ -327,6 +328,24 @@ export const useKanbanStore = create<KanbanStoreState>((set) => ({
   resetCards: (cards) => {
     persistCards(cards);
     set({ cards });
+  },
+
+  mergeCards: (incoming) => {
+    set((state) => {
+      const cardMap = new Map<string, KanbanCard>();
+      for (const card of state.cards) {
+        cardMap.set(card.id, card);
+      }
+      for (const card of incoming) {
+        const existing = cardMap.get(card.id);
+        if (!existing || card.updatedAt >= existing.updatedAt) {
+          cardMap.set(card.id, card);
+        }
+      }
+      const next = Array.from(cardMap.values());
+      persistCards(next);
+      return { cards: next };
+    });
   },
 }));
 
