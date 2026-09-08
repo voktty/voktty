@@ -2190,6 +2190,49 @@ export default function App() {
     newHarnessTab,
   ]);
 
+  const openNewHarnessInWorktree = useCallback(async () => {
+    const isLocalSpace = !activeSpace?.env || activeSpace.env.kind === "local";
+    const repoRoot =
+      (isLocalSpace && activeSpace?.root) ||
+      localLaunchCwd ||
+      localHome ||
+      initialLaunchCwd ||
+      undefined;
+    if (!repoRoot) {
+      toast.error("Open a project first to create an isolated worktree session");
+      return;
+    }
+    try {
+      const worktreePath = await native.gitWorktreeAdd(
+        repoRoot,
+        crypto.randomUUID(),
+      );
+      const hasHarnessTab = tabs.some(
+        (tab) => tab.kind === "harness" && tab.spaceId === activeSpaceId,
+      );
+      if (hasHarnessTab) {
+        window.dispatchEvent(
+          new CustomEvent("voktty:harness-select-project", {
+            detail: { path: worktreePath },
+          }),
+        );
+      } else {
+        newHarnessTab(undefined, worktreePath);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  }, [
+    activeSpace?.env,
+    activeSpace?.root,
+    activeSpaceId,
+    initialLaunchCwd,
+    localHome,
+    localLaunchCwd,
+    newHarnessTab,
+    tabs,
+  ]);
+
   const pickAndOpenProjectInHarness = useCallback(async () => {
     const isLocalSpace = !activeSpace?.env || activeSpace.env.kind === "local";
     if (isLocalSpace && activeSpace?.root) {
@@ -4368,6 +4411,7 @@ export default function App() {
         openNewPreview: () => openPreviewTab(""),
         openNewApiClient: () => newApiClientTab(),
         openNewHarness,
+        openNewHarnessInWorktree: () => void openNewHarnessInWorktree(),
         openBroadcastToAgents: () => setBroadcastToAgentsOpen(true),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,

@@ -116,6 +116,15 @@ pub struct GitPushResult {
     pub pushed: bool,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeRemoveOutcome {
+    pub removed: bool,
+    /// Set when `removed` is false, e.g. "uncommitted changes" — cleanup is
+    /// best-effort and never force-discards a session's work silently.
+    pub reason: Option<String>,
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchEntry {

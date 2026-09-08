@@ -414,6 +414,8 @@ pub fn run() {
             git::commands::git_remote_url,
             git::commands::git_list_branches,
             git::commands::git_checkout_branch,
+            git::commands::git_worktree_add,
+            git::commands::git_worktree_remove,
             git::commands::git_add_safe_directory,
             git::commands::git_init,
             git::commands::git_clone,

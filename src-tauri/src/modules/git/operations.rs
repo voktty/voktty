@@ -11,8 +11,8 @@ use crate::modules::git::types::{
     DiscardEntry, GitBlameLine, GitBranchComparison, GitBranchEntry, GitBranchListResult,
     GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult, GitLogEntry,
     GitOperationStatus, GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry,
-    GitStatusSnapshot, GitTagEntry, TextSource, DEFAULT_TIMEOUT_SECS, MAX_FILE_BYTES,
-    NETWORK_TIMEOUT_SECS,
+    GitStatusSnapshot, GitTagEntry, TextSource, WorktreeRemoveOutcome, DEFAULT_TIMEOUT_SECS,
+    MAX_FILE_BYTES, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream, ResolvedGitDirectory,
@@ -1271,6 +1271,208 @@ pub fn checkout_branch(
         DEFAULT_TIMEOUT_SECS,
     )?;
     ensure_success(&output, "git checkout failed")
+}
+
+/// Branch prefix for a Voktty-managed session worktree, e.g. `voktty/<session_id>`.
+/// Namespaced so it never collides with a user's own branches and stays
+/// identifiable if a worktree removal is ever interrupted.
+const WORKTREE_BRANCH_PREFIX: &str = "voktty/";
+
+fn is_safe_worktree_session_id(session_id: &str) -> bool {
+    !session_id.is_empty()
+        && session_id.len() <= 128
+        && session_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// All of a repo's Voktty-managed worktrees live under one cache-dir slug so
+/// `worktree_remove` can verify a path is ours before touching it, without
+/// needing a side-table anywhere.
+fn worktree_repo_slug(repo_root: &Path) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let name = repo_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("repo");
+    let mut hasher = DefaultHasher::new();
+    repo_root.to_string_lossy().hash(&mut hasher);
+    format!("{name}-{:08x}", hasher.finish() as u32)
+}
+
+/// Overridable via `VOKTTY_WORKTREES_DIR` so tests never touch the real
+/// user cache dir; unset in production.
+fn worktrees_base_dir() -> Result<std::path::PathBuf> {
+    if let Ok(dir) = std::env::var("VOKTTY_WORKTREES_DIR") {
+        return Ok(std::path::PathBuf::from(dir));
+    }
+    dirs::cache_dir()
+        .map(|dir| dir.join("voktty").join("worktrees"))
+        .ok_or_else(|| {
+            GitError::command("git worktree", "could not locate the user cache directory")
+        })
+}
+
+/// Creates an isolated worktree for one harness session, on a new
+/// `voktty/<session_id>` branch based on the repo's current `HEAD`. The
+/// worktree lives outside the repo (under the user's cache dir), so it never
+/// shows up as untracked content in the main checkout.
+pub fn worktree_add(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    session_id: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<String> {
+    if workspace.is_remote() {
+        return Err(GitError::command(
+            "git worktree add",
+            "isolated worktrees are not supported for remote workspaces yet",
+        ));
+    }
+    if !is_safe_worktree_session_id(session_id) {
+        return Err(GitError::InvalidPath(session_id.into()));
+    }
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+
+    let worktree_path = worktrees_base_dir()?
+        .join(worktree_repo_slug(&repo_root.local_path))
+        .join(session_id);
+    if worktree_path.exists() {
+        return Err(GitError::command(
+            "git worktree add",
+            "a worktree for this session already exists",
+        ));
+    }
+    if let Some(parent) = worktree_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            GitError::command(
+                "git worktree add",
+                format!("could not prepare the worktrees directory: {e}"),
+            )
+        })?;
+    }
+
+    let branch_name = format!("{WORKTREE_BRANCH_PREFIX}{session_id}");
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        [
+            OsStr::new("worktree"),
+            OsStr::new("add"),
+            worktree_path.as_os_str(),
+            OsStr::new("-b"),
+            OsStr::new(&branch_name),
+            OsStr::new("HEAD"),
+        ],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git worktree add failed")?;
+
+    let _ = registry.authorize(&worktree_path);
+    Ok(worktree_path.to_string_lossy().to_string())
+}
+
+/// Removes a session worktree created by `worktree_add`, plus its branch.
+/// Refuses to touch anything outside Voktty's own worktrees cache dir, and
+/// — unless `force` — refuses to remove a worktree with uncommitted changes
+/// rather than silently discarding a session's work; the caller decides
+/// what "not removed" should mean (leave it for the user to find later via
+/// the existing worktree list, in this first cut).
+pub fn worktree_remove(
+    registry: &WorkspaceRegistry,
+    worktree_path: &str,
+    force: bool,
+    workspace: &WorkspaceEnv,
+) -> Result<WorktreeRemoveOutcome> {
+    if workspace.is_remote() {
+        return Err(GitError::command(
+            "git worktree remove",
+            "isolated worktrees are not supported for remote workspaces yet",
+        ));
+    }
+    let canonical = std::fs::canonicalize(worktree_path)
+        .map_err(|_| GitError::InvalidPath(worktree_path.into()))?;
+    if !registry.is_authorized(&canonical) {
+        return Err(GitError::PathOutsideWorkspace(canonical));
+    }
+    let base = std::fs::canonicalize(worktrees_base_dir()?).map_err(|_| {
+        GitError::command(
+            "git worktree remove",
+            "the worktrees cache dir does not exist",
+        )
+    })?;
+    if !canonical.starts_with(&base) {
+        return Err(GitError::command(
+            "git worktree remove",
+            "not a Voktty-managed worktree",
+        ));
+    }
+
+    let path_str = canonical.to_string_lossy().to_string();
+    let common_dir = git_stdout_line_opt(workspace, &path_str, ["rev-parse", "--git-common-dir"])?
+        .ok_or_else(|| {
+            GitError::command(
+                "git worktree remove",
+                "could not resolve the repository for this worktree",
+            )
+        })?;
+    let common_dir_path = {
+        let p = Path::new(&common_dir);
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            canonical.join(p)
+        }
+    };
+    // `--git-common-dir` resolves to the main repo's `.git`; its parent is
+    // the main worktree root. Removal must run from there, never from
+    // inside `canonical` itself — deleting a directory that is a running
+    // process's own cwd fails on Windows.
+    let main_root = common_dir_path
+        .parent()
+        .ok_or_else(|| {
+            GitError::command(
+                "git worktree remove",
+                "could not resolve the main repository root",
+            )
+        })?
+        .to_path_buf();
+    let main_root_str = main_root.to_string_lossy().to_string();
+
+    if !force {
+        let status = git_stdout_lines(workspace, &path_str, ["status", "--porcelain"])?;
+        if !status.is_empty() {
+            return Ok(WorktreeRemoveOutcome {
+                removed: false,
+                reason: Some("uncommitted changes".into()),
+            });
+        }
+    }
+
+    let mut args: Vec<&OsStr> = vec![OsStr::new("worktree"), OsStr::new("remove")];
+    if force {
+        args.push(OsStr::new("--force"));
+    }
+    args.push(canonical.as_os_str());
+    let output = run_git(workspace, Some(&main_root_str), args, DEFAULT_TIMEOUT_SECS)?;
+    ensure_success(&output, "git worktree remove failed")?;
+
+    if let Some(session_id) = canonical.file_name().and_then(|n| n.to_str()) {
+        let branch_name = format!("{WORKTREE_BRANCH_PREFIX}{session_id}");
+        let _ = run_git(
+            workspace,
+            Some(&main_root_str),
+            ["branch", "-D", &branch_name],
+            DEFAULT_TIMEOUT_SECS,
+        );
+    }
+
+    Ok(WorktreeRemoveOutcome {
+        removed: true,
+        reason: None,
+    })
 }
 
 pub fn add_safe_directory(

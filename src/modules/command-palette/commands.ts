@@ -20,6 +20,7 @@ import {
   File02Icon,
   FileEditIcon,
   FileSearchIcon,
+  GitBranchPlusIcon,
   GlobalIcon,
   Globe02Icon,
   HierarchyIcon,
@@ -84,6 +85,7 @@ export type CommandPaletteActionContext = {
   openNewPreview: () => void;
   openNewApiClient?: () => void;
   openNewHarness?: () => void;
+  openNewHarnessInWorktree?: () => void;
   openBroadcastToAgents?: () => void;
   openActiveTabs: () => void;
   openGitGraph: () => void;
@@ -496,6 +498,27 @@ export function createCommandItems(
       ],
       icon: SparklesIcon,
       run: () => ctx.openNewHarness?.(),
+    },
+    {
+      id: "ai.openHarnessInWorktree",
+      title: t("commandPalette.commands.openHarnessInWorktree", {
+        defaultValue: "New Agent Session in Isolated Worktree",
+      }),
+      group: "AI",
+      keywords: [
+        "harness",
+        "agent",
+        "worktree",
+        "isolated",
+        "branch",
+        "parallel",
+        "multiple",
+        "aislado",
+        "paralelo",
+        "rama",
+      ],
+      icon: GitBranchPlusIcon,
+      run: () => ctx.openNewHarnessInWorktree?.(),
     },
     {
       id: "ai.broadcastToAgents",

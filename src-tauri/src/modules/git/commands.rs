@@ -5,6 +5,7 @@ use crate::modules::git::types::{
     DiscardEntry, GitBlameLine, GitBranchComparison, GitBranchListResult, GitCommitFileChange,
     GitCommitResult, GitDiffContentResult, GitDiffResult, GitLogEntry, GitOperationStatus,
     GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry, GitStatusSnapshot, GitTagEntry,
+    WorktreeRemoveOutcome,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
@@ -322,6 +323,34 @@ pub async fn git_checkout_branch(
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
         operations::checkout_branch(r, &repo_root, &branch, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_worktree_add(
+    repo_root: String,
+    session_id: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<String, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::worktree_add(r, &repo_root, &session_id, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_worktree_remove(
+    worktree_path: String,
+    force: bool,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<WorktreeRemoveOutcome, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::worktree_remove(r, &worktree_path, force, &workspace).map_err(Into::into)
     })
     .await
 }
