@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { native } from "@/modules/ai/lib/native";
+import { listenFsChanged, watchAdd, watchRemove } from "@/modules/explorer/lib/watch";
 import {
   EMPTY_COMMENTS,
   fileKey,
@@ -16,7 +17,7 @@ import {
   GitReviewQueue,
   type GitReviewQueueConfig,
 } from "@/modules/source-control/GitReviewQueue";
-import type { WorkspaceEnv } from "@/modules/workspace";
+import { currentWorkspaceEnv, type WorkspaceEnv } from "@/modules/workspace";
 import { unifiedMergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -339,6 +340,43 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
     sourceEnvKey,
     reloadKey,
   ]);
+
+  // Live tracking, working-tree diffs only (a past commit's diff never
+  // changes): watches this file's directory and refetches when the file
+  // itself — or its rename-original — changes on disk, without waiting for
+  // the user to hit Retry.
+  useEffect(() => {
+    if (!active || sourceKind !== "working") return;
+    const dir = source.path.replace(/[\\/][^\\/]*$/, "") || source.path;
+    const env = source.workspaceEnv ?? currentWorkspaceEnv();
+    const normalize = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+    const targets = new Set(
+      [source.path, source.originalPath]
+        .filter((p): p is string => Boolean(p))
+        .map(normalize),
+    );
+    watchAdd([dir], env);
+
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listenFsChanged((paths) => {
+      if (paths.some((p) => targets.has(normalize(p)))) {
+        setReloadKey((k) => k + 1);
+      }
+    }, env).then((stop) => {
+      if (disposed) {
+        stop();
+        return;
+      }
+      unlisten = stop;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+      watchRemove([dir], env);
+    };
+  }, [active, sourceKind, source.path, source.originalPath, source.workspaceEnv]);
 
   const handleAuthorize = async () => {
     setAuthorizing(true);
