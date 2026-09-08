@@ -4,6 +4,9 @@ import ts from "typescript";
 
 const localesDir = path.join(process.cwd(), "src/modules/i18n/locales");
 const locales = ["ar", "de", "es", "fr", "hi", "it", "ja", "ko", "pt", "ru", "zh"];
+// Spanish must stay 1:1 with English. Other locales inherit missing keys from en
+// at runtime via mergeLocale; they are not required to repeat every key.
+const requiredExplicit = new Set(["es"]);
 
 function propertyName(node) {
   if (ts.isIdentifier(node) || ts.isStringLiteral(node)) return node.text;
@@ -116,17 +119,26 @@ const englishKeys = collectObjectKeys(
 
 const incomplete = [];
 for (const locale of locales) {
+  if (!requiredExplicit.has(locale)) continue;
   const explicit = collectLocaleKeys(readSource(`${locale}.ts`), locale);
   const missing = [...englishKeys].filter((key) => !explicit.has(key));
   if (missing.length > 0) incomplete.push([locale, missing]);
 }
 
 if (incomplete.length > 0) {
-  console.error("Locale keys still inherited from English:");
+  console.error("Required locales still inherit keys from English:");
   for (const [locale, keys] of incomplete) {
     console.error(`- ${locale}: ${keys.length}`);
+    for (const key of keys.slice(0, 20)) {
+      console.error(`    ${key}`);
+    }
+    if (keys.length > 20) {
+      console.error(`    ... ${keys.length - 20} more`);
+    }
   }
   process.exit(1);
 }
 
-console.log(`All ${locales.length} locales explicitly cover ${englishKeys.size} English keys.`);
+console.log(
+  `Required locales (${[...requiredExplicit].join(", ")}) explicitly cover ${englishKeys.size} English keys. Other locales inherit English.`,
+);

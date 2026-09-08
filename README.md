@@ -41,19 +41,9 @@ Voktty is a lightweight open-source terminal-first AI-native development environ
 
 The current product captures are maintained in [`docs/images`](docs/images/README.md) and grouped by feature in the [official screenshot gallery](docs/screenshots.md).
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/images/voktty_6LhZMEZPC6.png" width="480" alt="Voktty API Client and Sandbox" /><br/><sub>API Client and Sandbox with request builder and response inspection</sub></td>
-    <td align="center"><img src="docs/images/voktty_E7ePo9A5ka.png" width="480" alt="Voktty agent operational history" /><br/><sub>Agent history and recovery with searchable sessions and transcripts</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/images/voktty_k5Xr4AqgSA.png" width="480" alt="Voktty environment selector" /><br/><sub>Local, WSL, SSH, RDP, and serial environment selection</sub></td>
-    <td align="center"><img src="docs/images/voktty_MAZn6eHFXb.png" width="480" alt="Voktty editor and terminal workspace" /><br/><sub>Code editor, terminal, AI panel, and file details on hover</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/images/voktty_vPOlZrpa70.png" width="720" alt="Voktty file preview" /><br/><sub>Image preview and file metadata shown from the explorer</sub></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/images/voktty_mAWbBJ9q4Y.png" width="800" alt="Voktty workspace" /><br/><sub>Terminal, AI assistant, and multi-environment session picker</sub>
+</p>
 
 ## Features
 

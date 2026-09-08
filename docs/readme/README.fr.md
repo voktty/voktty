@@ -23,11 +23,9 @@ Voktty est un environnement de développement (ADE) léger, open source, axé su
 
 ## Captures d'écran
 
-<table>
-  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="Client API et sandbox" /><br/><sub>Client API et sandbox avec générateur de requêtes et analyse des réponses</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Historique opérationnel des agents" /><br/><sub>Historique et récupération des agents avec sessions consultables</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Sélecteur d’environnements" /><br/><sub>Sélection des environnements local, WSL, SSH, RDP et série</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Éditeur et terminal" /><br/><sub>Éditeur de code, terminal, panneau IA et informations au survol</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Aperçu de fichier" /><br/><sub>Aperçu des images et métadonnées depuis l’explorateur de fichiers</sub></td></tr>
-</table>
+<p align="center">
+  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Espace de travail Voktty" /><br/><sub>Terminal, assistant IA et sélecteur de sessions multi-environnements</sub>
+</p>
 
 ## Fonctionnalités
 

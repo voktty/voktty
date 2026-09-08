@@ -23,11 +23,9 @@ Voktty представляет собой легковесную среду р�
 
 ## Снимки экрана
 
-<table>
-  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API-клиент и песочница" /><br/><sub>API-клиент и песочница с конструктором запросов и просмотром ответов</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Операционная история агентов" /><br/><sub>История и восстановление агентов с поиском по сессиям</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Выбор окружения" /><br/><sub>Выбор локального окружения, WSL, SSH, RDP и последовательного порта</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Редактор и терминал" /><br/><sub>Редактор кода, терминал, панель ИИ и сведения о файле при наведении</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Предпросмотр файла" /><br/><sub>Предпросмотр изображения и метаданные файла в проводнике</sub></td></tr>
-</table>
+<p align="center">
+  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Рабочее пространство Voktty" /><br/><sub>Терминал, ИИ-ассистент и выбор сеанса в нескольких средах</sub>
+</p>
 
 ## Возможности
 

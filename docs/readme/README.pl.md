@@ -23,11 +23,9 @@ Voktty to lekkie, otwartoźródłowe, terminalowe środowisko programistyczne (A
 
 ## Zrzuty ekranu
 
-<table>
-  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="Klient API i sandbox" /><br/><sub>Klient API i sandbox z konstruktorem żądań oraz analizą odpowiedzi</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Historia operacyjna agentów" /><br/><sub>Historia i odzyskiwanie agentów z przeszukiwalnymi sesjami</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Wybór środowiska" /><br/><sub>Wybór środowisk lokalnych, WSL, SSH, RDP i szeregowych</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Edytor i terminal" /><br/><sub>Edytor kodu, terminal, panel AI i informacje o pliku po najechaniu</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Podgląd pliku" /><br/><sub>Podgląd obrazu i metadane pliku w eksploratorze</sub></td></tr>
-</table>
+<p align="center">
+  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Przestrzeń robocza Voktty" /><br/><sub>Terminal, asystent AI i selektor sesji wielu środowisk</sub>
+</p>
 
 ## Funkcje
 
