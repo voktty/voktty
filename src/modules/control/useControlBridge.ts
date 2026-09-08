@@ -1,5 +1,13 @@
 import { controlLaunchRequest, type LaunchRequest } from "@/lib/launchRequest";
 import {
+  getHarnessSessionResult,
+  getHarnessSessionSnapshot,
+  type HarnessSessionState,
+  listHarnessSessionSnapshots,
+  sendHarnessSessionMessage,
+  waitForHarnessSession,
+} from "@/modules/harness/lib/harnessControlBridge";
+import {
   getBrowserSelected,
   runBrowserClick,
   runBrowserEval,
@@ -101,17 +109,117 @@ export async function dispatchBrowserMethod(
     case "browser.navigate": {
       const url = optionalString(value.url);
       if (url == null) {
-        throw new RequestError("invalid_params", "browser navigate requires a url");
+        throw new RequestError(
+          "invalid_params",
+          "browser navigate requires a url",
+        );
       }
       return runBrowserNavigate(url);
     }
     case "browser.eval": {
       const script = optionalString(value.script);
       if (script == null) {
-        throw new RequestError("invalid_params", "browser eval requires a script");
+        throw new RequestError(
+          "invalid_params",
+          "browser eval requires a script",
+        );
       }
       return runBrowserEval(script);
     }
+    default:
+      throw new RequestError(
+        "unknown_method",
+        `unsupported frontend method '${method}'`,
+      );
+  }
+}
+
+function requireSessionId(value: Record<string, unknown>): string {
+  const sessionId = optionalString(value.session_id);
+  if (sessionId == null) {
+    throw new RequestError("invalid_params", "session_id is required");
+  }
+  return sessionId;
+}
+
+export async function dispatchHarnessMethod(
+  method: string,
+  params: unknown,
+): Promise<unknown> {
+  const value =
+    typeof params === "object" && params !== null
+      ? (params as Record<string, unknown>)
+      : {};
+  switch (method) {
+    case "harness.list":
+      return listHarnessSessionSnapshots();
+    case "harness.status": {
+      const sessionId = requireSessionId(value);
+      const snapshot = getHarnessSessionSnapshot(sessionId);
+      if (!snapshot) {
+        throw new RequestError(
+          "not_found",
+          `no mounted harness session "${sessionId}"`,
+        );
+      }
+      return snapshot;
+    }
+    case "harness.result": {
+      const sessionId = requireSessionId(value);
+      const result = getHarnessSessionResult(sessionId);
+      if (!result) {
+        throw new RequestError(
+          "not_found",
+          `no mounted harness session "${sessionId}"`,
+        );
+      }
+      return result;
+    }
+    case "harness.send": {
+      const sessionId = requireSessionId(value);
+      const text = optionalString(value.text);
+      if (text == null) {
+        throw new RequestError("invalid_params", "harness send requires text");
+      }
+      try {
+        await sendHarnessSessionMessage(sessionId, text);
+      } catch (error) {
+        throw new RequestError(
+          "not_found",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+      return { ok: true };
+    }
+    case "harness.wait": {
+      const sessionId = requireSessionId(value);
+      const states = Array.isArray(value.states)
+        ? value.states.filter(
+            (entry): entry is string => typeof entry === "string",
+          )
+        : [];
+      const timeoutMs =
+        typeof value.timeout_ms === "number" && value.timeout_ms >= 0
+          ? value.timeout_ms
+          : 4000;
+      try {
+        return await waitForHarnessSession(
+          sessionId,
+          states as HarnessSessionState[],
+          timeoutMs,
+        );
+      } catch (error) {
+        throw new RequestError(
+          "not_found",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+    case "harness.new":
+      throw new RequestError(
+        "unsupported_method",
+        "harness.new is not implemented yet; open a harness session in Voktty first",
+      );
     default:
       throw new RequestError(
         "unknown_method",
@@ -236,14 +344,30 @@ export function useControlBridge({
           return;
         }
         if (request.method.startsWith("browser.")) {
-          const result = await dispatchBrowserMethod(request.method, request.params);
-          if (result && typeof result === "object" && "ok" in result && result.ok === false) {
+          const result = await dispatchBrowserMethod(
+            request.method,
+            request.params,
+          );
+          if (
+            result &&
+            typeof result === "object" &&
+            "ok" in result &&
+            result.ok === false
+          ) {
             const failed = result as { error?: string; message?: string };
             throw new RequestError(
               failed.error || "browser_failed",
               failed.message || failed.error || "browser command failed",
             );
           }
+          await respond(request.id, { ok: true, result });
+          return;
+        }
+        if (request.method.startsWith("harness.")) {
+          const result = await dispatchHarnessMethod(
+            request.method,
+            request.params,
+          );
           await respond(request.id, { ok: true, result });
           return;
         }

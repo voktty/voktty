@@ -13,6 +13,12 @@ pub const METHOD_BROWSER_TYPE: &str = "browser.type";
 pub const METHOD_BROWSER_NAVIGATE: &str = "browser.navigate";
 pub const METHOD_BROWSER_SELECTED: &str = "browser.selected";
 pub const METHOD_BROWSER_EVAL: &str = "browser.eval";
+pub const METHOD_HARNESS_NEW: &str = "harness.new";
+pub const METHOD_HARNESS_SEND: &str = "harness.send";
+pub const METHOD_HARNESS_WAIT: &str = "harness.wait";
+pub const METHOD_HARNESS_STATUS: &str = "harness.status";
+pub const METHOD_HARNESS_RESULT: &str = "harness.result";
+pub const METHOD_HARNESS_LIST: &str = "harness.list";
 pub const SERVER_RESPONSE_ID: &str = "server";
 pub const METHODS: &[&str] = &[
     METHOD_PING,
@@ -25,6 +31,12 @@ pub const METHODS: &[&str] = &[
     METHOD_BROWSER_NAVIGATE,
     METHOD_BROWSER_SELECTED,
     METHOD_BROWSER_EVAL,
+    METHOD_HARNESS_NEW,
+    METHOD_HARNESS_SEND,
+    METHOD_HARNESS_WAIT,
+    METHOD_HARNESS_STATUS,
+    METHOD_HARNESS_RESULT,
+    METHOD_HARNESS_LIST,
 ];
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -167,6 +179,49 @@ pub struct BrowserEvalParams {
     pub script: String,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct HarnessNewParams {
+    pub harness: String,
+    pub cwd: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct HarnessSendParams {
+    pub session_id: String,
+    pub text: String,
+}
+
+fn default_harness_wait_timeout_ms() -> u64 {
+    4_000
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct HarnessWaitParams {
+    pub session_id: String,
+    /// Target states to stop waiting on; empty means any state change from "working".
+    #[serde(default)]
+    pub states: Vec<String>,
+    #[serde(default = "default_harness_wait_timeout_ms")]
+    pub timeout_ms: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct HarnessStatusParams {
+    pub session_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct HarnessResultParams {
+    pub session_id: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct HarnessListParams {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,6 +266,24 @@ mod tests {
         assert!(METHODS.contains(&METHOD_BROWSER_SNAPSHOT));
         assert!(METHODS.contains(&METHOD_BROWSER_CLICK));
         assert!(METHODS.contains(&METHOD_BROWSER_EVAL));
+    }
+
+    #[test]
+    fn harness_methods_are_advertised() {
+        assert!(METHODS.contains(&METHOD_HARNESS_NEW));
+        assert!(METHODS.contains(&METHOD_HARNESS_SEND));
+        assert!(METHODS.contains(&METHOD_HARNESS_WAIT));
+        assert!(METHODS.contains(&METHOD_HARNESS_STATUS));
+        assert!(METHODS.contains(&METHOD_HARNESS_RESULT));
+        assert!(METHODS.contains(&METHOD_HARNESS_LIST));
+    }
+
+    #[test]
+    fn harness_wait_params_default_timeout_and_states() {
+        let params: HarnessWaitParams =
+            serde_json::from_value(json!({ "session_id": "s1" })).expect("deserialize");
+        assert_eq!(params.timeout_ms, 4_000);
+        assert!(params.states.is_empty());
     }
 
     #[test]

@@ -2717,7 +2717,10 @@ mod binary_resolution_tests {
         assert!(!path_has_component(path, "grok"));
         // A component-based check must not be tripped up by a name that only
         // partially matches a path segment, unlike a raw substring search.
-        assert!(!path_has_component(Path::new("/home/user/.grokfoo/bin"), ".grok"));
+        assert!(!path_has_component(
+            Path::new("/home/user/.grokfoo/bin"),
+            ".grok"
+        ));
     }
 
     #[cfg(windows)]

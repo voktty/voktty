@@ -14,8 +14,9 @@ use voktty_control_protocol::{
     ControlDescriptor, ControlRequest, ControlResponse, FrontendRequest, FrontendResponse,
     OpenParams, MAX_MESSAGE_BYTES, METHODS, METHOD_BROWSER_CLICK, METHOD_BROWSER_EVAL,
     METHOD_BROWSER_NAVIGATE, METHOD_BROWSER_SELECTED, METHOD_BROWSER_SNAPSHOT, METHOD_BROWSER_TYPE,
-    METHOD_CAPABILITIES, METHOD_IDENTIFY, METHOD_OPEN, METHOD_PING, PROTOCOL_VERSION,
-    SERVER_RESPONSE_ID,
+    METHOD_CAPABILITIES, METHOD_HARNESS_LIST, METHOD_HARNESS_NEW, METHOD_HARNESS_RESULT,
+    METHOD_HARNESS_SEND, METHOD_HARNESS_STATUS, METHOD_HARNESS_WAIT, METHOD_IDENTIFY, METHOD_OPEN,
+    METHOD_PING, PROTOCOL_VERSION, SERVER_RESPONSE_ID,
 };
 
 use crate::modules::{fs, workspace};
@@ -372,7 +373,13 @@ fn route_request(
         | METHOD_BROWSER_TYPE
         | METHOD_BROWSER_NAVIGATE
         | METHOD_BROWSER_SELECTED
-        | METHOD_BROWSER_EVAL => forward_to_frontend(request, app, state),
+        | METHOD_BROWSER_EVAL
+        | METHOD_HARNESS_NEW
+        | METHOD_HARNESS_SEND
+        | METHOD_HARNESS_WAIT
+        | METHOD_HARNESS_STATUS
+        | METHOD_HARNESS_RESULT
+        | METHOD_HARNESS_LIST => forward_to_frontend(request, app, state),
         _ => ControlResponse::failure(request.id, "unknown_method", "unknown control method"),
     }
 }
