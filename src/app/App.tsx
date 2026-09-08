@@ -31,8 +31,10 @@ import { cn, isMarkdownPath } from "@/lib/utils";
 import {
   type AgentLaunchRequest,
   AgentNotificationsBridge,
+  displayAgent,
   findAgentLauncher,
   nextAttentionTarget,
+  useAgentStore,
   validateAgentLaunchCommand,
 } from "@/modules/agents";
 import { AgentHistoryModal, useAgentHistoryStore } from "@/modules/agent-history";
@@ -213,9 +215,11 @@ import {
   waitForLeafConnection,
   whenSessionReady,
   writeToSession,
+  submitToLeaf,
   CommandHistoryModal,
   useCommandHistoryStore,
 } from "@/modules/terminal";
+import { useKanbanStore } from "@/modules/notes-board/store/kanbanStore";
 import {
   ThemeProvider,
   useThemeFileEditing,
@@ -2798,6 +2802,30 @@ export default function App() {
     [setActiveId, focusPane],
   );
 
+  const handleCardDropOnTab = useCallback(
+    (tab: Tab, cardId: string, prompt: string) => {
+      if (tab.kind !== "terminal" || !tab.activeLeafId) return;
+      const leafId = tab.activeLeafId;
+      const session = useAgentStore.getState().sessions[leafId];
+      const agentName = session?.agent
+        ? displayAgent(session.agent)
+        : "Terminal";
+
+      submitToLeaf(leafId, prompt);
+
+      useKanbanStore.getState().assignCardToAgent(cardId, {
+        leafId,
+        tabId: tab.id,
+        agentName,
+        startedAt: Date.now(),
+        lastObservedStatus: session?.status ?? "working",
+      });
+
+      activateAgentTarget(tab.id, leafId);
+    },
+    [activateAgentTarget],
+  );
+
   const shortcutHandlers = useMemo<ShortcutHandlers>(
     () => ({
       "commandPalette.open": openCommandPalette,
@@ -4519,6 +4547,7 @@ export default function App() {
                   pinTab(id);
                 }
               }}
+              onCardDrop={handleCardDropOnTab}
             />
           )}
 
@@ -4881,6 +4910,7 @@ export default function App() {
                           onNewGitGraph={openGitGraphFromContext}
                           onLaunchAgents={launchAgentGroup}
                           onRevealInExplorer={handleRevealInExplorer}
+                          onCardDrop={handleCardDropOnTab}
                         />
                       </div>
                       {aiSidebarMounted && hasComposer && (
@@ -4961,6 +4991,8 @@ export default function App() {
               privateActive={
                 activeTab?.kind === "terminal" && activeTab.private === true
               }
+              tabs={tabs}
+              onActivateAgent={onActivateAgent}
             />
           )}
 

@@ -46,6 +46,7 @@ export {
   waitForLeafConnection,
   whenSessionReady,
   writeToSession,
+  submitToLeaf,
 } from "./lib/useTerminalSession";
 export { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 export { TerminalStack } from "./TerminalStack";

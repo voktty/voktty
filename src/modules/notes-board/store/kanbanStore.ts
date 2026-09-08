@@ -30,6 +30,21 @@ type KanbanStoreState = {
     priority?: KanbanPriority,
   ) => KanbanCard;
   clearCompleted: () => void;
+  assignCardToAgent: (
+    id: string,
+    execution: {
+      leafId: number;
+      tabId: number;
+      agentName: string;
+      startedAt: number;
+      lastObservedStatus: "working" | "waiting" | "idle";
+    },
+  ) => void;
+  unassignCard: (id: string) => void;
+  updateCardExecutionStatus: (
+    id: string,
+    status: "working" | "waiting" | "idle",
+  ) => void;
   resetCards: (cards: KanbanCard[]) => void;
 };
 
@@ -166,6 +181,55 @@ export const useKanbanStore = create<KanbanStoreState>((set) => ({
   clearCompleted: () => {
     set((state) => {
       const next = state.cards.filter((card) => card.columnId !== "done");
+      persistCards(next);
+      return { cards: next };
+    });
+  },
+
+  assignCardToAgent: (id, execution) => {
+    set((state) => {
+      const next = state.cards.map((card) => {
+        if (card.id !== id) return card;
+        return {
+          ...card,
+          columnId: "in_progress" as const,
+          assignedExecution: execution,
+          updatedAt: Date.now(),
+        };
+      });
+      persistCards(next);
+      return { cards: next };
+    });
+  },
+
+  unassignCard: (id) => {
+    set((state) => {
+      const next = state.cards.map((card) => {
+        if (card.id !== id) return card;
+        const { assignedExecution: _, ...rest } = card;
+        return {
+          ...rest,
+          updatedAt: Date.now(),
+        };
+      });
+      persistCards(next);
+      return { cards: next };
+    });
+  },
+
+  updateCardExecutionStatus: (id, status) => {
+    set((state) => {
+      const next = state.cards.map((card) => {
+        if (card.id !== id || !card.assignedExecution) return card;
+        return {
+          ...card,
+          assignedExecution: {
+            ...card.assignedExecution,
+            lastObservedStatus: status,
+          },
+          updatedAt: Date.now(),
+        };
+      });
       persistCards(next);
       return { cards: next };
     });

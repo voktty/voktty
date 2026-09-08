@@ -1,29 +1,65 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useAgentStore } from "@/modules/agents/store/agentStore";
+import { submitToLeaf } from "@/modules/terminal";
 import {
   DEFAULT_COLUMNS,
+  type KanbanCard,
   type KanbanColumnId,
   type KanbanPriority,
 } from "../lib/kanbanTypes";
+import {
+  type ActiveAgentTarget,
+  formatTaskForAgent,
+  resolveActiveAgentTargets,
+  type TabSummary,
+} from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
 import { KanbanCardItem } from "./KanbanCardItem";
 
 type Props = {
   onRunCommand?: (command: string) => void;
   cwd?: string | null;
+  tabs?: TabSummary[];
+  onActivateAgent?: (tabId: number, leafId: number) => void;
 };
 
-export function KanbanTab({ onRunCommand, cwd }: Props) {
+export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
   const cards = useKanbanStore((s) => s.cards);
   const addCard = useKanbanStore((s) => s.addCard);
   const moveCard = useKanbanStore((s) => s.moveCard);
+  const assignCardToAgent = useKanbanStore((s) => s.assignCardToAgent);
+
+  const agentSessions = useAgentStore((s) => s.sessions);
+
+  const availableAgents = useMemo(
+    () => resolveActiveAgentTargets(agentSessions, tabs),
+    [agentSessions, tabs],
+  );
+
+  // Reactively track agent session statuses and reflect them in Kanban cards
+  useEffect(() => {
+    const unsubscribe = useAgentStore.subscribe((state) => {
+      const currentCards = useKanbanStore.getState().cards;
+      for (const card of currentCards) {
+        if (!card.assignedExecution) continue;
+        const session = state.sessions[card.assignedExecution.leafId];
+        if (session && session.status !== card.assignedExecution.lastObservedStatus) {
+          useKanbanStore.getState().updateCardExecutionStatus(card.id, session.status);
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   const [query, setQuery] = useState("");
-  const [activeColInput, setActiveColInput] = useState<KanbanColumnId | null>(null);
+  const [activeColInput, setActiveColInput] = useState<KanbanColumnId | null>(
+    null,
+  );
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newPriority, setNewPriority] = useState<KanbanPriority>("medium");
@@ -68,68 +104,101 @@ export function KanbanTab({ onRunCommand, cwd }: Props) {
     });
     setNewTitle("");
     setNewDesc("");
+    setNewPriority("medium");
     setActiveColInput(null);
   };
 
+  const handleAssignToAgent = (card: KanbanCard, target: ActiveAgentTarget) => {
+    const prompt = formatTaskForAgent(card);
+    submitToLeaf(target.leafId, prompt);
+    assignCardToAgent(card.id, {
+      leafId: target.leafId,
+      tabId: target.tabId,
+      agentName: target.displayName,
+      startedAt: Date.now(),
+      lastObservedStatus: target.status === "waiting" ? "waiting" : "working",
+    });
+    onActivateAgent?.(target.tabId, target.leafId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, colId: KanbanColumnId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (overCol !== colId) {
+      setOverCol(colId);
+    }
+  };
+
+  const handleDragLeave = (colId: KanbanColumnId) => {
+    if (overCol === colId) {
+      setOverCol(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, colId: KanbanColumnId) => {
+    e.preventDefault();
+    setOverCol(null);
+    const cardId =
+      e.dataTransfer.getData("application/voktty-card-id") ||
+      e.dataTransfer.getData("text/plain");
+    if (cardId) {
+      moveCard(cardId, colId);
+    }
+  };
+
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      {/* Search and control bar */}
-      <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border/30 px-3 bg-muted/10">
-        <div className="relative flex-1 max-w-xs">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
+      {/* Board Top Toolbar */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/40 px-3 py-2 bg-muted/10">
+        <div className="relative flex-1 max-w-sm">
+          <HugeiconsIcon
+            icon={Search01Icon}
+            size={13}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar tarjetas..."
-            className="h-7 pl-7 pr-2 text-xs bg-background/50"
-          />
-          <HugeiconsIcon
-            icon={Search01Icon}
-            size={12}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            className="h-7 pl-8 text-xs bg-background/60"
           />
         </div>
 
         <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <span>{cards.length} {cards.length === 1 ? "tarjeta" : "tarjetas"}</span>
+          <span>{filteredCards.length} tarjetas</span>
+          {availableAgents.length > 0 && (
+            <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-primary text-[10px] font-medium">
+              {availableAgents.length} agentes listos
+            </span>
+          )}
         </div>
       </div>
 
-      {/* 4-column Board Grid */}
-      <div className="grid flex-1 min-h-0 grid-cols-4 gap-2.5 p-3 overflow-x-auto">
+      {/* Columns Container */}
+      <div className="flex flex-1 gap-2.5 overflow-x-auto p-3 min-h-0">
         {DEFAULT_COLUMNS.map((col) => {
-          const colCards = cardsByCol[col.id] ?? [];
-          const isOver = overCol === col.id;
+          const colCards = cardsByCol[col.id] || [];
           const isAdding = activeColInput === col.id;
+          const isOver = overCol === col.id;
 
           return (
             <div
               key={col.id}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setOverCol(col.id);
-              }}
-              onDragLeave={() => setOverCol(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setOverCol(null);
-                const cardId = e.dataTransfer.getData("application/voktty-card-id");
-                if (cardId) {
-                  moveCard(cardId, col.id);
-                }
-              }}
+              onDragOver={(e) => handleDragOver(e, col.id)}
+              onDragLeave={() => handleDragLeave(col.id)}
+              onDrop={(e) => handleDrop(e, col.id)}
               className={cn(
-                "flex flex-col min-h-0 rounded-lg border border-border/30 bg-muted/15 p-2 transition-colors",
-                isOver && "border-primary/50 bg-primary/5",
+                "flex flex-1 min-w-[210px] max-w-[320px] flex-col rounded-xl border border-border/40 bg-muted/20 transition-all duration-150 overflow-hidden",
+                isOver && "border-primary/60 bg-primary/5 ring-1 ring-primary/30",
               )}
             >
               {/* Column Header */}
-              <div className="flex items-center justify-between pb-1.5 border-b border-border/20">
-                <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex shrink-0 items-center justify-between border-b border-border/30 px-3 py-2 bg-muted/30">
+                <div className="flex items-center gap-1.5 truncate">
                   <span className="font-semibold text-xs text-foreground truncate">
                     {col.title}
                   </span>
-                  <span className="flex size-4.5 items-center justify-center rounded-full bg-muted text-[10px] font-mono text-muted-foreground">
+                  <span className="flex size-4 items-center justify-center rounded-full bg-muted text-[10px] font-mono text-muted-foreground font-medium">
                     {colCards.length}
                   </span>
                 </div>
@@ -137,51 +206,46 @@ export function KanbanTab({ onRunCommand, cwd }: Props) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-5 text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setActiveColInput(isAdding ? null : col.id);
-                    setNewTitle("");
-                    setNewDesc("");
-                  }}
+                  className="size-6 text-muted-foreground hover:text-foreground"
+                  onClick={() => setActiveColInput(isAdding ? null : col.id)}
                   title="Nueva tarjeta"
                 >
                   <HugeiconsIcon icon={Add01Icon} size={12} />
                 </Button>
               </div>
 
-              {/* Inline card creation form */}
+              {/* Card Creation Inline Panel */}
               {isAdding && (
-                <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border/60 bg-card p-2 shadow-xs">
+                <div className="border-b border-border/40 bg-card p-2.5 flex flex-col gap-2 shadow-xs">
                   <Input
                     autoFocus
                     placeholder="Titulo de la tarea..."
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !newDesc)) {
+                      if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleCreate(col.id);
-                      }
-                      if (e.key === "Escape") {
+                      } else if (e.key === "Escape") {
                         setActiveColInput(null);
                       }
                     }}
                     className="h-7 text-xs"
                   />
                   <textarea
-                    placeholder="Detalles, comandos o - [ ] checklists..."
+                    placeholder="Descripcion (soporta checklists - [ ])"
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}
                     rows={2}
-                    className="w-full resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full resize-none rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   />
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-1">
                     <select
                       value={newPriority}
                       onChange={(e) =>
                         setNewPriority(e.target.value as KanbanPriority)
                       }
-                      className="rounded border border-border/40 bg-background px-1.5 py-0.5 text-[10px] text-foreground"
+                      className="rounded border border-border/50 bg-background px-1.5 py-0.5 text-[11px] text-foreground"
                     >
                       <option value="low">Baja</option>
                       <option value="medium">Media</option>
@@ -193,17 +257,17 @@ export function KanbanTab({ onRunCommand, cwd }: Props) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 px-2 text-[10px]"
+                        className="h-6 px-2 text-[11px]"
                         onClick={() => setActiveColInput(null)}
                       >
                         Cancelar
                       </Button>
                       <Button
                         size="sm"
-                        className="h-6 px-2 text-[10px]"
+                        className="h-6 px-2 text-[11px]"
                         onClick={() => handleCreate(col.id)}
                       >
-                        Crear
+                        Guardar
                       </Button>
                     </div>
                   </div>
@@ -211,7 +275,7 @@ export function KanbanTab({ onRunCommand, cwd }: Props) {
               )}
 
               {/* Column Cards List */}
-              <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto pt-2 min-h-0">
+              <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
                 {colCards.length === 0 && !isAdding ? (
                   <div className="flex flex-1 items-center justify-center p-4 text-center">
                     <span className="text-[11px] text-muted-foreground/50">
@@ -224,6 +288,9 @@ export function KanbanTab({ onRunCommand, cwd }: Props) {
                       key={card.id}
                       card={card}
                       onRunCommand={onRunCommand}
+                      onActivateAgent={onActivateAgent}
+                      availableAgents={availableAgents}
+                      onAssignToAgent={handleAssignToAgent}
                     />
                   ))
                 )}

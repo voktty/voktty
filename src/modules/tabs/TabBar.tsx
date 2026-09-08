@@ -170,6 +170,7 @@ type Props = {
    * chrome (e.g. the harness pill rendered outside this component) can
    * collapse to match instead of overflowing on its own. */
   onOverflowChange?: (overflowing: boolean) => void;
+  onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
 };
 
 export function TabBar({
@@ -218,6 +219,7 @@ export function TabBar({
   onRevealInExplorer,
   compact,
   onOverflowChange,
+  onCardDrop,
 }: Props) {
   const { t: translate } = useTranslation();
   const pulsingTabs = useAgentStore((s) => s.pulsingTabs);
@@ -226,6 +228,9 @@ export function TabBar({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
+  const [cardDropTargetTabId, setCardDropTargetTabId] = useState<number | null>(
+    null,
+  );
   const [showAllLanguages, setShowAllLanguages] = useState(false);
   const drag = useRef<{
     pointerId: number;
@@ -640,6 +645,36 @@ export function TabBar({
                       e.preventDefault();
                     }
                   }}
+                  onDragOver={(e) => {
+                    if (
+                      e.dataTransfer.types.includes("application/voktty-card-id") ||
+                      e.dataTransfer.types.includes("application/voktty-card-prompt")
+                    ) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.dataTransfer.dropEffect = "copy";
+                      if (cardDropTargetTabId !== t.id) {
+                        setCardDropTargetTabId(t.id);
+                      }
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (cardDropTargetTabId === t.id) {
+                      setCardDropTargetTabId(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    const cardId = e.dataTransfer.getData("application/voktty-card-id");
+                    const prompt =
+                      e.dataTransfer.getData("application/voktty-card-prompt") ||
+                      e.dataTransfer.getData("text/plain");
+                    if (cardId && prompt) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCardDropTargetTabId(null);
+                      onCardDrop?.(t, cardId, prompt);
+                    }
+                  }}
                   style={
                     t.color
                       ? {
@@ -653,6 +688,8 @@ export function TabBar({
                     "group relative z-[1] h-6.5 shrink-0 justify-between gap-1 rounded-md bg-transparent text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent",
                     isNew && "voktty-tab-in",
                     isPulsing && "voktty-tab-finished-pulse",
+                    cardDropTargetTabId === t.id &&
+                      "ring-2 ring-primary bg-primary/20",
                     t.color && "border",
                     isActive
                       ? "text-foreground dark:text-foreground"
