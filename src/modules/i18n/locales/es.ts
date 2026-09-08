@@ -1794,6 +1794,7 @@ export const es: TranslationSchema = {
       moveFocusedSpaceMember: "Espacios: mover miembro enfocado...",
       closeFocusedSpaceMember: "Espacios: cerrar miembro enfocado",
       openHarness: "Agent Harness",
+      openHarnessInWorktree: "Nueva sesión de agente en worktree aislado",
       broadcastToAgents: "Enviar mensaje a todos los agentes",
       newTerminal: "Nueva terminal",
       dropPrompt: "Suelta el archivo o carpeta aquí para abrirlo",

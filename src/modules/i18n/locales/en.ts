@@ -1748,6 +1748,7 @@ export const en = {
       moveFocusedSpaceMember: "Spaces: Move focused member...",
       closeFocusedSpaceMember: "Spaces: Close focused member",
       openHarness: "Open Agent Development Harness",
+      openHarnessInWorktree: "New Agent Session in Isolated Worktree",
       broadcastToAgents: "Send message to all agents",
       newTerminal: "New terminal",
       dropPrompt: "Drop file or folder here to open",

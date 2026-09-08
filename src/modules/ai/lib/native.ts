@@ -159,6 +159,11 @@ export type GitBranchListResult = {
   branches: GitBranchEntry[];
 };
 
+export type WorktreeRemoveOutcome = {
+  removed: boolean;
+  reason: string | null;
+};
+
 export type GitStashEntry = {
   index: number;
   sha: string;
@@ -638,6 +643,26 @@ export const native = {
       repoRoot,
       branch,
       workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitWorktreeAdd: (
+    repoRoot: string,
+    sessionId: string,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<string>("git_worktree_add", {
+      repoRoot,
+      sessionId,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
+    }),
+  gitWorktreeRemove: (
+    worktreePath: string,
+    force: boolean,
+    workspace?: WorkspaceEnv,
+  ) =>
+    invoke<WorktreeRemoveOutcome>("git_worktree_remove", {
+      worktreePath,
+      force,
+      workspace: resolveGitWorkspace(worktreePath, workspace),
     }),
   gitAddSafeDirectory: (path: string, workspace?: WorkspaceEnv) =>
     invoke<void>("git_add_safe_directory", {

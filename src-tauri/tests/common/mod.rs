@@ -44,6 +44,20 @@ impl GitRepoFixture {
         run_git_in(&self.repo_path, args);
     }
 
+    pub fn run_git_output(&self, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .output()
+            .expect("git on PATH");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
     pub fn write_file(&self, rel: &str, content: &str) {
         let p = self.repo_path.join(rel);
         if let Some(parent) = p.parent() {
