@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
   Add01Icon,
+  ChatBotIcon,
   ComputerTerminal01Icon,
   Copy01Icon,
   Delete02Icon,
@@ -11,21 +20,37 @@ import {
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { toast } from "sonner";
+import { useAgentStore } from "@/modules/agents/store/agentStore";
+import { submitToLeaf } from "@/modules/terminal";
 import {
   deleteNote,
   loadNotes,
   upsertNote,
   type Note,
 } from "@/modules/harness/lib/notes";
+import {
+  type ActiveAgentTarget,
+  formatTaskForAgent,
+  resolveActiveAgentTargets,
+  type TabSummary,
+} from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
 import { useNotesBoardStore } from "../store/notesBoardStore";
 
 type Props = {
   onRunCommand?: (command: string) => void;
   cwd?: string | null;
+  tabs?: TabSummary[];
+  onActivateAgent?: (tabId: number, leafId: number) => void;
 };
 
-export function NotesTab({ onRunCommand, cwd }: Props) {
+export function NotesTab({
+  onRunCommand,
+  cwd,
+  tabs,
+  onActivateAgent,
+}: Props) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -33,9 +58,18 @@ export function NotesTab({ onRunCommand, cwd }: Props) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [copied, setCopied] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const convertNoteToCard = useKanbanStore((s) => s.convertNoteToCard);
   const setTab = useNotesBoardStore((s) => s.setTab);
+  const pendingNewNote = useNotesBoardStore((s) => s.pendingNewNote);
+  const clearPendingNewNote = useNotesBoardStore((s) => s.clearPendingNewNote);
+
+  const agentSessions = useAgentStore((s) => s.sessions);
+  const availableAgents = useMemo(
+    () => resolveActiveAgentTargets(agentSessions, tabs),
+    [agentSessions, tabs],
+  );
 
   const refreshNotes = useCallback(async () => {
     try {
@@ -76,21 +110,55 @@ export function NotesTab({ onRunCommand, cwd }: Props) {
     );
   }, [notes, query]);
 
-  const handleCreateNew = () => {
-    const newDraft: Note = {
-      id: `note_${Date.now()}`,
-      slug: `note-${Date.now().toString(36)}`,
-      title: "Nueva Nota",
-      body: "",
-      sourceCwd: cwd ?? undefined,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+  // Quick note: creates and immediately persists note to disk, then focuses title
+  const handleCreateAndSave = useCallback(
+    async (initialTitle?: string, initialBody?: string) => {
+      const now = Date.now();
+      const newDraft: Note = {
+        id: `note_${now}`,
+        slug: `note-${now.toString(36)}`,
+        title: initialTitle ?? "Nueva Nota",
+        body: initialBody ?? "",
+        sourceCwd: cwd ?? undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await upsertNote(newDraft);
+      await refreshNotes();
+      setSelectedId(newDraft.id);
+      setTitle(newDraft.title);
+      setBody(newDraft.body);
+      setTimeout(() => {
+        titleInputRef.current?.focus();
+        titleInputRef.current?.select();
+      }, 50);
+    },
+    [cwd, refreshNotes],
+  );
+
+  // Triggered via global store request (e.g. statusbar Alt+N)
+  useEffect(() => {
+    if (pendingNewNote) {
+      clearPendingNewNote();
+      void handleCreateAndSave();
+    }
+  }, [pendingNewNote, clearPendingNewNote, handleCreateAndSave]);
+
+  // Keyboard shortcut Alt+N within the notes tab
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        (e.altKey && e.key.toLowerCase() === "n") ||
+        (e.ctrlKey && e.altKey && e.key.toLowerCase() === "n")
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        void handleCreateAndSave();
+      }
     };
-    setNotes((prev) => [newDraft, ...prev]);
-    setSelectedId(newDraft.id);
-    setTitle(newDraft.title);
-    setBody("");
-  };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [handleCreateAndSave]);
 
   const handleSave = async () => {
     if (!selectedId) return;
@@ -131,6 +199,24 @@ export function NotesTab({ onRunCommand, cwd }: Props) {
     return match?.[1]?.trim() ?? null;
   }, [body]);
 
+  const handleSendToAgent = (target: ActiveAgentTarget, forceCommand = false) => {
+    let payload = "";
+    if (forceCommand && detectedCommand) {
+      payload = detectedCommand;
+    } else if (detectedCommand && !body.trim().includes("\n\n")) {
+      payload = detectedCommand;
+    } else {
+      payload = formatTaskForAgent({
+        title: title.trim() || "Nota",
+        description: body.trim(),
+      });
+    }
+
+    submitToLeaf(target.leafId, payload);
+    onActivateAgent?.(target.tabId, target.leafId);
+    toast.success(`Enviado a ${target.displayName} (${target.tabTitle})`);
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-background">
       {/* Sidebar list of notes */}
@@ -152,9 +238,9 @@ export function NotesTab({ onRunCommand, cwd }: Props) {
           <Button
             variant="ghost"
             size="icon"
-            className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-            onClick={handleCreateNew}
-            title="Crear nueva nota"
+            className="size-7 shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={() => void handleCreateAndSave()}
+            title="Crear y guardar nueva nota (Alt+N)"
           >
             <HugeiconsIcon icon={Add01Icon} size={13} />
           </Button>
@@ -200,6 +286,7 @@ export function NotesTab({ onRunCommand, cwd }: Props) {
           {/* Action Header */}
           <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/20">
             <Input
+              ref={titleInputRef}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleSave}
@@ -208,6 +295,84 @@ export function NotesTab({ onRunCommand, cwd }: Props) {
             />
 
             <div className="flex items-center gap-1 shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-[11px] font-medium cursor-pointer"
+                    title="Enviar nota o comando a un agente CLI activo"
+                  >
+                    <HugeiconsIcon icon={ChatBotIcon} size={12} className="text-primary" />
+                    <span>Enviar a agente</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  side="bottom"
+                  sideOffset={4}
+                  className="w-56 p-1 text-popover-foreground z-50 rounded-xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
+                    Enviar a agente o terminal activo
+                  </DropdownMenuLabel>
+                  {availableAgents.length === 0 ? (
+                    <div className="px-2 py-1.5 text-[11px] text-muted-foreground italic">
+                      Sin terminales o agentes activos
+                    </div>
+                  ) : (
+                    availableAgents.map((target) => (
+                      <DropdownMenuItem
+                        key={`${target.tabId}-${target.leafId}`}
+                        onClick={() => handleSendToAgent(target)}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] cursor-pointer"
+                      >
+                        <div className="flex items-center gap-1.5 truncate">
+                          <HugeiconsIcon
+                            icon={
+                              target.agent === "terminal"
+                                ? ComputerTerminal01Icon
+                                : ChatBotIcon
+                            }
+                            size={12}
+                            className="shrink-0 text-primary"
+                          />
+                          <span className="font-medium truncate">
+                            {target.displayName}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0">
+                          {target.tabTitle}
+                        </span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                  {detectedCommand && availableAgents.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
+                        Solo comando detectado:
+                      </DropdownMenuLabel>
+                      {availableAgents.map((target) => (
+                        <DropdownMenuItem
+                          key={`cmd-${target.tabId}-${target.leafId}`}
+                          onClick={() => handleSendToAgent(target, true)}
+                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[10.5px] cursor-pointer"
+                        >
+                          <span className="font-mono text-primary truncate">
+                            {detectedCommand.slice(0, 24)}
+                          </span>
+                          <span className="text-[9.5px] text-muted-foreground shrink-0">
+                            en {target.tabTitle}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <Button
                 variant="outline"
                 size="sm"

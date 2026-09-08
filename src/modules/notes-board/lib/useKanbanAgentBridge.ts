@@ -21,6 +21,8 @@ export function handleAgentSignalForKanban(
 
   const shouldPlaySound = options?.playCompletionSound ?? true;
   const store = useKanbanStore.getState();
+  if (!store.isObserving) return;
+
   const matchingCards = store.cards.filter(
     (card) => card.assignedExecution?.leafId === leafId,
   );
@@ -81,6 +83,8 @@ export function syncKanbanWithAgentStore(
 ): void {
   const shouldPlaySound = options?.playCompletionSound ?? true;
   const store = useKanbanStore.getState();
+  if (!store.isObserving) return;
+
   const inProgressCards = store.cards.filter(
     (c) => c.columnId === "in_progress" && c.assignedExecution,
   );

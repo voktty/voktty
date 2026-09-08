@@ -1,5 +1,12 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
   Alert02Icon,
@@ -69,7 +76,6 @@ export function KanbanCardItem({
   onAssignToAgent,
 }: Props) {
   const [isHovered, setIsHovered] = useState(false);
-  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const deleteCard = useKanbanStore((s) => s.deleteCard);
   const moveCard = useKanbanStore((s) => s.moveCard);
   const unassignCard = useKanbanStore((s) => s.unassignCard);
@@ -110,10 +116,7 @@ export function KanbanCardItem({
       draggable
       onDragStart={handleDragStart}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        setIsHovered(false);
-        setAgentMenuOpen(false);
-      }}
+      onMouseLeave={() => setIsHovered(false)}
       className={cn(
         "group relative flex flex-col gap-1.5 rounded-lg border border-border/40 bg-card/60 p-2.5 text-xs shadow-xs transition-all hover:border-border/80 hover:bg-card hover:shadow-md cursor-grab active:cursor-grabbing",
         card.columnId === "done" && "opacity-75 bg-card/40",
@@ -138,7 +141,7 @@ export function KanbanCardItem({
         <div
           className={cn(
             "flex shrink-0 items-center gap-0.5 transition-opacity",
-            isHovered || agentMenuOpen ? "opacity-100" : "opacity-0",
+            isHovered ? "opacity-100" : "opacity-0",
           )}
         >
           {nextCol && (
@@ -312,69 +315,62 @@ export function KanbanCardItem({
         <div className="flex items-center gap-1">
           {/* Agent execution selector when unassigned */}
           {!card.assignedExecution && onAssignToAgent && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setAgentMenuOpen((v) => !v);
-                }}
-                className={cn(
-                  "flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground transition-colors cursor-pointer hover:bg-accent hover:text-foreground",
-                  agentMenuOpen && "bg-accent text-foreground",
-                )}
-                title="Ejecutar con agente..."
-              >
-                <HugeiconsIcon icon={ChatBotIcon} size={11} />
-                <span>Agente</span>
-              </button>
-
-              {agentMenuOpen && (
-                <div
-                  className="absolute right-0 bottom-full mb-1 z-30 min-w-[190px] rounded-lg border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-lg backdrop-blur-md"
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
                   onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground transition-colors cursor-pointer hover:bg-accent hover:text-foreground focus:outline-none"
+                  title="Ejecutar con agente..."
                 >
-                  <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
-                    Enviar tarea a agente
+                  <HugeiconsIcon icon={ChatBotIcon} size={11} />
+                  <span>Agente</span>
+                </button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                align="end"
+                side="top"
+                sideOffset={4}
+                className="w-52 p-1 text-popover-foreground z-50 rounded-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
+                  Enviar tarea a agente
+                </DropdownMenuLabel>
+                {availableAgents.length === 0 ? (
+                  <div className="px-2 py-1.5 text-[11px] text-muted-foreground italic">
+                    Sin terminales activas
                   </div>
-                  {availableAgents.length === 0 ? (
-                    <div className="px-2 py-1.5 text-[11px] text-muted-foreground italic">
-                      Sin terminales activas
-                    </div>
-                  ) : (
-                    availableAgents.map((target) => (
-                      <button
-                        key={`${target.tabId}-${target.leafId}`}
-                        type="button"
-                        onClick={() => {
-                          onAssignToAgent(card, target);
-                          setAgentMenuOpen(false);
-                        }}
-                        className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[11px] hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-1.5 truncate">
-                          <HugeiconsIcon
-                            icon={
-                              target.agent === "terminal"
-                                ? ComputerTerminal01Icon
-                                : ChatBotIcon
-                            }
-                            size={11}
-                            className="shrink-0 text-primary"
-                          />
-                          <span className="font-medium truncate">
-                            {target.displayName}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground shrink-0">
-                          {target.tabTitle}
+                ) : (
+                  availableAgents.map((target) => (
+                    <DropdownMenuItem
+                      key={`${target.tabId}-${target.leafId}`}
+                      onClick={() => onAssignToAgent(card, target)}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] cursor-pointer"
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <HugeiconsIcon
+                          icon={
+                            target.agent === "terminal"
+                              ? ComputerTerminal01Icon
+                              : ChatBotIcon
+                          }
+                          size={11}
+                          className="shrink-0 text-primary"
+                        />
+                        <span className="font-medium truncate">
+                          {target.displayName}
                         </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {target.tabTitle}
+                      </span>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
 
           {detectedCommand && onRunCommand && (
