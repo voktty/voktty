@@ -62,6 +62,8 @@ type Props = {
   onCloseOtherTabs: (id: number) => void;
   /** Duplicate a terminal tab, preserving its environment and cwd. */
   onDuplicate: (id: number) => void;
+  onSplitRight?: (id: number) => void;
+  onSplitDown?: (id: number) => void;
   /** Set a terminal tab's custom label; empty string resets to default. */
   onRename: (id: number, title: string) => void;
   /** Move a dragged tab to a new position (insertion gap index). */
@@ -124,6 +126,8 @@ export function Header({
   onCloseTabsToRight,
   onCloseOtherTabs,
   onDuplicate,
+  onSplitRight,
+  onSplitDown,
   onRename,
   onReorder,
   onOverrideLanguage,
@@ -398,6 +402,8 @@ export function Header({
               onCloseTabsToRight={onCloseTabsToRight}
               onCloseOtherTabs={onCloseOtherTabs}
               onDuplicate={onDuplicate}
+              onSplitRight={onSplitRight}
+              onSplitDown={onSplitDown}
               onRename={onRename}
               onReorder={onReorder}
               onOverrideLanguage={onOverrideLanguage}

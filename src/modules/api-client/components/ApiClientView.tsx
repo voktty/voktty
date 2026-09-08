@@ -207,20 +207,26 @@ export function ApiClientView() {
           <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
             {!sidebarCollapsed && (
               <>
-                <ResizablePanel defaultSize={20} minSize={14} maxSize={32}>
+                <ResizablePanel defaultSize="20%" minSize="14%" maxSize="32%">
                   <ApiCollectionExplorer />
                 </ResizablePanel>
                 <ResizableHandle />
               </>
             )}
 
-            <ResizablePanel defaultSize={sidebarCollapsed ? 50 : 42} minSize={25}>
+            <ResizablePanel
+              defaultSize={sidebarCollapsed ? "50%" : "42%"}
+              minSize="25%"
+            >
               <RequestEditor />
             </ResizablePanel>
 
             <ResizableHandle />
 
-            <ResizablePanel defaultSize={sidebarCollapsed ? 50 : 38} minSize={25}>
+            <ResizablePanel
+              defaultSize={sidebarCollapsed ? "50%" : "38%"}
+              minSize="25%"
+            >
               <ResponseViewer />
             </ResizablePanel>
           </ResizablePanelGroup>

@@ -62,6 +62,8 @@ import {
   GitCompareIcon,
   Globe02Icon,
   IncognitoIcon,
+  LayoutTwoColumnIcon,
+  LayoutTwoRowIcon,
   Loading03Icon,
   Message02Icon,
   PanelLeftOpenIcon,
@@ -132,6 +134,10 @@ type Props = {
   /** Chrome-style: close every tab except the given tab. */
   onCloseOtherTabs: (id: number) => void;
   onDuplicate: (id: number) => void;
+  /** Duplicates the given terminal tab and joins it into a composite space
+   * next to the original, so both stay visible at once. */
+  onSplitRight?: (id: number) => void;
+  onSplitDown?: (id: number) => void;
   /** Set a terminal tab's custom label; empty string resets to default. */
   onRename: (id: number, title: string) => void;
   /** Move a dragged tab to a new position (insertion gap index 0..tabs.length). */
@@ -189,6 +195,8 @@ export function TabBar({
   onCloseTabsToRight,
   onCloseOtherTabs,
   onDuplicate,
+  onSplitRight,
+  onSplitDown,
   onRename,
   onReorder,
   onOverrideLanguage,
@@ -1016,6 +1024,36 @@ export function TabBar({
                             {translate("tabs.duplicateTab")}
                           </span>
                         </ContextMenuItem>
+                        {onSplitRight ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            onSelect={() => onSplitRight(t.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={LayoutTwoColumnIcon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {translate("commandPalette.commands.splitPaneRight")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
+                        {onSplitDown ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            onSelect={() => onSplitDown(t.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={LayoutTwoRowIcon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {translate("commandPalette.commands.splitPaneDown")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
                         <ContextMenuItem
                           className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
                           onSelect={() => setEditingId(t.id)}

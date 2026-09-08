@@ -43,6 +43,8 @@ import {
   GitBranchIcon,
   GitCompareIcon,
   Globe02Icon,
+  LayoutTwoColumnIcon,
+  LayoutTwoRowIcon,
   PanelLeftOpenIcon,
   PencilEdit02Icon,
   PlusSignIcon,
@@ -72,6 +74,8 @@ type Props = {
   onSelect: (id: number) => void;
   onClose: (id: number) => void;
   onDuplicate: (id: number) => void;
+  onSplitRight?: (id: number) => void;
+  onSplitDown?: (id: number) => void;
   onPin: (id: number) => void;
   onRename: (id: number, title: string) => void;
   onReorder: (fromId: number, toGapIndex: number) => void;
@@ -199,6 +203,8 @@ export function VerticalTabBar({
   onSelect,
   onClose,
   onDuplicate,
+  onSplitRight,
+  onSplitDown,
   onPin,
   onRename,
   onReorder,
@@ -918,6 +924,36 @@ export function VerticalTabBar({
                             {t("tabs.duplicateTab")}
                           </span>
                         </ContextMenuItem>
+                        {onSplitRight ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                            onSelect={() => onSplitRight(tab.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={LayoutTwoColumnIcon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {t("commandPalette.commands.splitPaneRight")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
+                        {onSplitDown ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                            onSelect={() => onSplitDown(tab.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={LayoutTwoRowIcon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {t("commandPalette.commands.splitPaneDown")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
                         <ContextMenuItem
                           className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
                           onSelect={() => setEditingId(tab.id)}
