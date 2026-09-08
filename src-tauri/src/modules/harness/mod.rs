@@ -1,3 +1,4 @@
+pub mod chat_background;
 pub mod checkpoint;
 pub mod cursor_store;
 pub mod external_history;

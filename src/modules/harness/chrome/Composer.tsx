@@ -1099,7 +1099,7 @@ export function Composer({
         <div
           ref={boxRef}
           data-composer-box
-          className={`relative z-10 rounded-lg border bg-content/3 ${
+          className={`relative z-10 rounded-lg border bg-content/3 backdrop-blur-sm ${
             fileDrag
               ? "border-accent/60"
               : "border-content/10 has-focus:border-content/20"
@@ -1203,7 +1203,7 @@ export function Composer({
                     : handoffCard
                       ? "Add context, or send to continue…"
                       : shell
-                        ? "How can I help you today?"
+                        ? "Ask, build, / for commands, @ for references... "
                         : "Ask, build, / for skills, @ for references... "
               }
               className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
