@@ -11,9 +11,10 @@ import { TerminalGridBackground } from "./TerminalGridBackground";
 type Props = {
   cwd: string;
   composer?: ReactNode;
+  hasChatBackground?: boolean;
 };
 
-export function EmptySession({ cwd, composer }: Props) {
+export function EmptySession({ cwd, composer, hasChatBackground }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const arcadeEnabled = useSyncExternalStore(
     subscribeGridArcadeEnabled,
@@ -30,7 +31,7 @@ export function EmptySession({ cwd, composer }: Props) {
       ref={lockOverscroll}
       className="relative flex h-full min-h-0 overflow-y-auto overscroll-none"
     >
-      {arcadeEnabled ? <TerminalGridBackground /> : null}
+      {arcadeEnabled && !hasChatBackground ? <TerminalGridBackground /> : null}
       {composer ? (
         <div className="pointer-events-none relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6 py-12">
           <div className="pointer-events-auto mb-4 px-2.5">

@@ -18,6 +18,9 @@ const CHAT_BACKGROUND_OPACITY_KEY = "monocode.chatBackgroundOpacity";
 const CHAT_BACKGROUND_SCOPE_KEY = "monocode.chatBackgroundScope";
 let chatBackgroundRevision = Date.now();
 
+export const CHAT_BACKGROUND_PATH_CHANGE_EVENT =
+  "monocode:chat-background-path-change";
+
 export type ColorScheme = "dark" | "light";
 export type ThemePreference = ColorScheme | "system";
 export type TranscriptLayout = "full" | "chat";
@@ -310,6 +313,18 @@ export function saveChatBackgroundPath(value: string | null) {
   } catch {
     // private mode / quota
   }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(CHAT_BACKGROUND_PATH_CHANGE_EVENT));
+}
+
+export function subscribeChatBackgroundPath(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(CHAT_BACKGROUND_PATH_CHANGE_EVENT, onStoreChange);
+  return () =>
+    window.removeEventListener(
+      CHAT_BACKGROUND_PATH_CHANGE_EVENT,
+      onStoreChange,
+    );
 }
 
 export function applyChatBackground(path: string | null) {

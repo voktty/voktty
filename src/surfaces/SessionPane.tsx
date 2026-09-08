@@ -50,6 +50,10 @@ import {
   subscribeProjectChatBackground,
 } from "../lib/projectChatBackground";
 import { projectChatBackgroundSrc } from "../lib/chatBackground";
+import {
+  loadChatBackgroundPath,
+  subscribeChatBackgroundPath,
+} from "../lib/appearance";
 
 type Props = {
   session: Session;
@@ -172,6 +176,11 @@ export const SessionPane = memo(function SessionPane({
     subscribeProjectChatBackground,
     projectChatBackgroundRevision,
     projectChatBackgroundRevision,
+  );
+  const globalBackgroundPath = useSyncExternalStore(
+    subscribeChatBackgroundPath,
+    loadChatBackgroundPath,
+    loadChatBackgroundPath,
   );
   const projectBackground = loadProjectChatBackground(projectKey(session.cwd));
   const projectBackgroundStyle = projectBackground
@@ -422,6 +431,9 @@ export const SessionPane = memo(function SessionPane({
           ) : (
             <EmptySession
               cwd={session.cwd}
+              hasChatBackground={Boolean(
+                projectBackground || globalBackgroundPath,
+              )}
               composer={dockComposer ? undefined : composer}
             />
           )
