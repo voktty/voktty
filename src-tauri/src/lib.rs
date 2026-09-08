@@ -377,6 +377,8 @@ pub fn run() {
             fs::mutate::fs_copy,
             fs::watch::fs_watch_add,
             fs::watch::fs_watch_remove,
+            fs::watch::fs_watch_add_tree,
+            fs::watch::fs_watch_remove_tree,
             lsp::lsp_detect,
             lsp::lsp_host_pid,
             lsp::lsp_resolve_root,

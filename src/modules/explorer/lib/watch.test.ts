@@ -3,10 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   isNetworkFilesystemPath,
+  isPathWithinTree,
   matchesWatchEvent,
   normalizeWorkspaceEventPath,
   watchAdd,
+  watchAddTree,
   watchRemove,
+  watchRemoveTree,
 } from "./watch";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -104,5 +107,35 @@ describe("filesystem watches", () => {
     expect(normalizeWorkspaceEventPath("C:/project/file.ts", wsl)).toBe(
       "C:/project/file.ts",
     );
+  });
+
+  it("watches a whole tree only for local workspaces", () => {
+    watchAddTree("C:/project", { kind: "local" });
+    watchRemoveTree("C:/project", { kind: "local" });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "fs_watch_add_tree", {
+      root: "C:/project",
+      workspace: { kind: "local" },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "fs_watch_remove_tree", {
+      root: "C:/project",
+      workspace: { kind: "local" },
+    });
+  });
+
+  it("does not watch a tree for remote workspaces or UNC roots", () => {
+    watchAddTree("/srv/app", remote);
+    watchAddTree("//server/share/project", { kind: "local" });
+
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("matches the tree root and anything under it, case-insensitively", () => {
+    expect(isPathWithinTree("C:/project", "C:/project")).toBe(true);
+    expect(isPathWithinTree("C:/project/src/a.ts", "C:/project")).toBe(true);
+    expect(isPathWithinTree("C:/PROJECT/src/a.ts", "c:/project")).toBe(true);
+    expect(isPathWithinTree("C:\\project\\src\\a.ts", "C:/project")).toBe(true);
+    expect(isPathWithinTree("C:/projectx/a.ts", "C:/project")).toBe(false);
+    expect(isPathWithinTree("C:/other/a.ts", "C:/project")).toBe(false);
   });
 });

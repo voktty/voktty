@@ -107,6 +107,50 @@ export function watchRemove(
   }
 }
 
+/**
+ * Whole-tree watch for a repo root (git diff/review surfaces): every
+ * non-skipped directory under it, kept current server-side as
+ * subdirectories come and go. Local workspaces only for now — mirrors the
+ * scope of `fs_watch_add_tree` itself.
+ */
+export function watchAddTree(
+  root: string,
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
+): void {
+  if (workspace.kind !== "local" || isNetworkFilesystemPath(root)) return;
+  void invoke("fs_watch_add_tree", { root, workspace: LOCAL_WORKSPACE }).catch(
+    () => {},
+  );
+}
+
+export function watchRemoveTree(
+  root: string,
+  workspace: WorkspaceEnv = currentWorkspaceEnv(),
+): void {
+  if (workspace.kind !== "local") return;
+  void invoke("fs_watch_remove_tree", {
+    root,
+    workspace: LOCAL_WORKSPACE,
+  }).catch(() => {});
+}
+
+/**
+ * Is `path` the tree root or somewhere under it? Case-insensitive so a
+ * Windows drive-letter casing difference (`C:` vs `c:`) never breaks live
+ * updates; on case-sensitive filesystems both sides come from the same
+ * canonicalization pipeline, so an actual casing collision isn't expected.
+ */
+export function isPathWithinTree(path: string, root: string): boolean {
+  const normalize = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalizedRoot = normalize(root).toLowerCase();
+  if (!normalizedRoot) return false;
+  const normalizedPath = normalize(path).toLowerCase();
+  return (
+    normalizedPath === normalizedRoot ||
+    normalizedPath.startsWith(`${normalizedRoot}/`)
+  );
+}
+
 export function matchesWatchEvent(
   event: FsChangedPayload,
   workspace: WorkspaceEnv,

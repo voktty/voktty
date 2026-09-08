@@ -1,10 +1,16 @@
 import {
-  native,
   type GitRepoInfo,
   type GitStatusSnapshot,
+  native,
 } from "@/modules/ai/lib/native";
-import { useWorkspaceEnvStore, workspaceScopeKey } from "@/modules/workspace";
+import {
+  isPathWithinTree,
+  listenFsChanged,
+  watchAddTree,
+  watchRemoveTree,
+} from "@/modules/explorer/lib/watch";
 import { t as translate } from "@/modules/i18n";
+import { useWorkspaceEnvStore, workspaceScopeKey } from "@/modules/workspace";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const AUTO_FETCH_THROTTLE_MS = 5 * 60_000;
@@ -44,9 +50,7 @@ export type SourceControlSummary = {
   applyStatus: (
     updater: (status: GitStatusSnapshot) => GitStatusSnapshot,
   ) => void;
-  refresh: (options?: {
-    remote?: SourceControlRefreshMode;
-  }) => Promise<void>;
+  refresh: (options?: { remote?: SourceControlRefreshMode }) => Promise<void>;
   trustRepository: (path?: string) => Promise<void>;
   initRepository: (path?: string) => Promise<void>;
   undoCommit: () => Promise<void>;
@@ -180,7 +184,13 @@ export function getSourceControlRemoteIndicator(
   >,
 ): SourceControlRemoteIndicator {
   if (!summary.hasRepo) {
-    return { visible: false, label: "", title: "", disabled: true, action: null };
+    return {
+      visible: false,
+      label: "",
+      title: "",
+      disabled: true,
+      action: null,
+    };
   }
   if (!summary.upstream && !summary.status?.isDetached) {
     return {
@@ -256,7 +266,9 @@ function extractDubiousOwnershipPath(
     lower.includes("unsafe repository") ||
     lower.includes("unauthorized")
   ) {
-    const match = msg.match(/(?:repository\s+at|workspace:)\s+('[^']+'|"[^"]+"|[^\s,]+)/i);
+    const match = msg.match(
+      /(?:repository\s+at|workspace:)\s+('[^']+'|"[^"]+"|[^\s,]+)/i,
+    );
     if (match) {
       const extracted = match[1].replace(/^['"]|['"]$/g, "").trim();
       if (extracted.length > 0) return extracted;
@@ -365,7 +377,9 @@ export function useSourceControl(
         activeContextPath,
       );
 
-      setState((s) => beginSourceControlRefresh(s, activeContextPath, canReuseRepo));
+      setState((s) =>
+        beginSourceControlRefresh(s, activeContextPath, canReuseRepo),
+      );
 
       const isCurrentContext = () =>
         requestId === requestIdRef.current &&
@@ -610,6 +624,35 @@ export function useSourceControl(
     };
   }, [doRefresh]);
 
+  // Live tracking: a disk change anywhere under the repo (an agent editing
+  // files, a save from another app, a branch switch outside Voktty) refreshes
+  // this view without waiting for window focus or an explicit action.
+  useEffect(() => {
+    const repoRoot = state.repo?.repoRoot;
+    if (!repoRoot) return;
+    watchAddTree(repoRoot, workspaceEnv);
+
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listenFsChanged((paths) => {
+      if (paths.some((path) => isPathWithinTree(path, repoRoot))) {
+        void doRefresh("never");
+      }
+    }, workspaceEnv).then((stop) => {
+      if (disposed) {
+        stop();
+        return;
+      }
+      unlisten = stop;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+      watchRemoveTree(repoRoot, workspaceEnv);
+    };
+  }, [state.repo?.repoRoot, workspaceEnv, doRefresh]);
+
   const runRemoteAction = useCallback(
     async (
       mode: SourceControlRemoteActionMode = "contextual",
@@ -629,8 +672,7 @@ export function useSourceControl(
 
       setState((current) => ({ ...current, busyAction: action }));
       const actionContextKey = contextKeyRef.current;
-      const isCurrentContext = () =>
-        actionContextKey === contextKeyRef.current;
+      const isCurrentContext = () => actionContextKey === contextKeyRef.current;
 
       try {
         if (action === "fetch") {
