@@ -270,5 +270,19 @@ texto cualquiera
     expect(mergedExisting?.description).toBe("Version 2 actualizada");
     expect(mergedBrandNew?.title).toBe("Tarjeta desde vault");
   });
+
+  it("toggles and sets observation mode", () => {
+    useKanbanStore.getState().setObserving(true);
+    expect(useKanbanStore.getState().isObserving).toBe(true);
+
+    useKanbanStore.getState().toggleObserving();
+    expect(useKanbanStore.getState().isObserving).toBe(false);
+
+    useKanbanStore.getState().toggleObserving();
+    expect(useKanbanStore.getState().isObserving).toBe(true);
+
+    useKanbanStore.getState().setObserving(false);
+    expect(useKanbanStore.getState().isObserving).toBe(false);
+  });
 });
 

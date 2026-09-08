@@ -232,5 +232,39 @@ describe("useKanbanAgentBridge", () => {
       expect(updated?.assignedExecution?.lastObservedStatus).toBe("waiting");
       expect(updated?.assignedExecution?.requiresAttention).toBe(true);
     });
+
+    it("does not update cards or play sound when isObserving is false", () => {
+      useKanbanStore.getState().setObserving(false);
+
+      const card = useKanbanStore.getState().addCard({
+        title: "Tarea ignorada sin observacion",
+        description: "",
+        columnId: "in_progress",
+      });
+
+      useKanbanStore.getState().assignCardToAgent(card.id, {
+        leafId: 70,
+        tabId: 1,
+        agentName: "Claude",
+        startedAt: 1000,
+        lastObservedStatus: "working",
+      });
+
+      handleAgentSignalForKanban({
+        id: 70,
+        kind: "finished",
+        agent: "claude",
+      });
+
+      syncKanbanWithAgentStore({
+        sessions: {},
+        pulsingLeaves: { 70: 1 },
+      });
+
+      const updated = useKanbanStore.getState().cards.find((c) => c.id === card.id);
+      expect(updated?.columnId).toBe("in_progress");
+      expect(updated?.assignedExecution?.lastObservedStatus).toBe("working");
+      expect(mockPlaySound).not.toHaveBeenCalled();
+    });
   });
 });

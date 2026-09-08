@@ -25,7 +25,7 @@ import type {
 } from "@/modules/workspace";
 import { IncognitoIcon, Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { lazy, Suspense, type RefObject } from "react";
+import { lazy, Suspense, useEffect, type RefObject } from "react";
 import { cn } from "@/lib/utils";
 import { CwdBreadcrumb } from "./CwdBreadcrumb";
 import { DiagnosticsBadge } from "./DiagnosticsBadge";
@@ -126,6 +126,21 @@ export function StatusBar({
   const notesBoardOpen = useNotesBoardStore((s) => s.isOpen);
   const toggleNotesBoard = useNotesBoardStore((s) => s.toggle);
   const closeNotesBoard = useNotesBoardStore((s) => s.close);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        (event.altKey && event.key.toLowerCase() === "n") ||
+        (event.ctrlKey && event.altKey && event.key.toLowerCase() === "n")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        useNotesBoardStore.getState().requestNewNote();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
 
   return (
     <footer className="flex h-7.5 shrink-0 items-center justify-between gap-2 border-t border-border/30 px-2.5 text-[10.5px]">

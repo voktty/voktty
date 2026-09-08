@@ -8,9 +8,13 @@ import type {
 } from "../lib/kanbanTypes";
 
 const STORAGE_KEY = "voktty-kanban-cards-v1";
+const OBSERVING_STORAGE_KEY = "voktty-kanban-observing-v1";
 
 type KanbanStoreState = {
   cards: KanbanCard[];
+  isObserving: boolean;
+  setObserving: (observing: boolean) => void;
+  toggleObserving: () => void;
   addCard: (
     input: Omit<KanbanCard, "id" | "createdAt" | "updatedAt" | "order">,
   ) => KanbanCard;
@@ -50,6 +54,26 @@ type KanbanStoreState = {
   mergeCards: (cards: KanbanCard[]) => void;
 };
 
+function loadStoredObserving(): boolean {
+  try {
+    if (typeof localStorage === "undefined") return true;
+    const raw = localStorage.getItem(OBSERVING_STORAGE_KEY);
+    if (raw === null) return true;
+    return raw !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function persistObserving(observing: boolean) {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(OBSERVING_STORAGE_KEY, String(observing));
+  } catch {
+    // Ignore storage quota or disabled storage
+  }
+}
+
 function loadStoredCards(): KanbanCard[] {
   try {
     if (typeof localStorage === "undefined") return [];
@@ -74,6 +98,19 @@ function persistCards(cards: KanbanCard[]) {
 
 export const useKanbanStore = create<KanbanStoreState>((set) => ({
   cards: loadStoredCards(),
+  isObserving: loadStoredObserving(),
+
+  setObserving: (observing) => {
+    persistObserving(observing);
+    set({ isObserving: observing });
+  },
+
+  toggleObserving: () =>
+    set((s) => {
+      const next = !s.isObserving;
+      persistObserving(next);
+      return { isObserving: next };
+    }),
 
   addCard: (input) => {
     const now = Date.now();

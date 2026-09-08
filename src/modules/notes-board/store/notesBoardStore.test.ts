@@ -37,4 +37,26 @@ describe("notesBoardStore", () => {
     expect(useNotesBoardStore.getState().width).toBe(420); // clamped to min
     expect(useNotesBoardStore.getState().height).toBe(800); // clamped to max
   });
+
+  it("updates and resets draggable position", () => {
+    expect(useNotesBoardStore.getState().position).toBeNull();
+    useNotesBoardStore.getState().setPosition({ x: 120, y: 80 });
+    expect(useNotesBoardStore.getState().position).toEqual({ x: 120, y: 80 });
+    useNotesBoardStore.getState().resetPosition();
+    expect(useNotesBoardStore.getState().position).toBeNull();
+  });
+
+  it("requests a new note and clears pending request", () => {
+    useNotesBoardStore.getState().close();
+    useNotesBoardStore.getState().setTab("kanban");
+    expect(useNotesBoardStore.getState().pendingNewNote).toBeNull();
+
+    useNotesBoardStore.getState().requestNewNote();
+    expect(useNotesBoardStore.getState().isOpen).toBe(true);
+    expect(useNotesBoardStore.getState().activeTab).toBe("notes");
+    expect(useNotesBoardStore.getState().pendingNewNote).toBeTypeOf("number");
+
+    useNotesBoardStore.getState().clearPendingNewNote();
+    expect(useNotesBoardStore.getState().pendingNewNote).toBeNull();
+  });
 });

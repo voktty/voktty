@@ -44,6 +44,8 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
   const moveCard = useKanbanStore((s) => s.moveCard);
   const assignCardToAgent = useKanbanStore((s) => s.assignCardToAgent);
   const mergeCards = useKanbanStore((s) => s.mergeCards);
+  const isObserving = useKanbanStore((s) => s.isObserving);
+  const toggleObserving = useKanbanStore((s) => s.toggleObserving);
 
   const agentSessions = useAgentStore((s) => s.sessions);
 
@@ -195,6 +197,31 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
         </div>
 
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-6 px-2 text-[11px] gap-1.5 cursor-pointer transition-colors",
+              isObserving
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium hover:bg-emerald-500/20"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            onClick={toggleObserving}
+            title={
+              isObserving
+                ? "Observacion activa: Voktty sincroniza estados y avanza tarjetas automaticamente al finalizar (Clic para pausar)"
+                : "Observacion en pausa: Voktty no vigila procesos para ahorrar recursos (Clic para activar)"
+            }
+          >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                isObserving ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/50",
+              )}
+            />
+            <span>{isObserving ? "Observando" : "Observar"}</span>
+          </Button>
+
           <span>{filteredCards.length} tarjetas</span>
           {availableAgents.length > 0 && (
             <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary text-[10px] font-medium">

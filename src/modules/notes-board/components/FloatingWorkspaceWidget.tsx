@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
+  ArrowDown01Icon,
+  ArrowUp01Icon,
   Cancel01Icon,
   Layout01Icon,
   Note01Icon,
@@ -34,22 +36,117 @@ export function FloatingWorkspaceWidget({
   const rootRef = useRef<HTMLDivElement>(null);
   const activeTab = useNotesBoardStore((s) => s.activeTab);
   const setTab = useNotesBoardStore((s) => s.setTab);
+  const width = useNotesBoardStore((s) => s.width);
   const height = useNotesBoardStore((s) => s.height);
+  const position = useNotesBoardStore((s) => s.position);
+  const setPosition = useNotesBoardStore((s) => s.setPosition);
+  const resetPosition = useNotesBoardStore((s) => s.resetPosition);
+  const requestNewNote = useNotesBoardStore((s) => s.requestNewNote);
   const cardCount = useKanbanStore((s) => s.cards.length);
+  const [isDragging, setIsDragging] = useState(false);
 
+  const isFloating = position !== null;
+
+  // Keyboard shortcuts: Escape to close, Alt+N for quick new note
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
         onClose();
+        return;
+      }
+      if (
+        (event.altKey && event.key.toLowerCase() === "n") ||
+        (event.ctrlKey && event.altKey && event.key.toLowerCase() === "n")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        requestNewNote();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [onClose]);
+  }, [onClose, requestNewNote]);
+
+  // Keep floating window clamped within viewport on resize
+  useEffect(() => {
+    const onResize = () => {
+      if (!position) return;
+      const maxX = Math.max(8, window.innerWidth - width - 8);
+      const maxY = Math.max(8, window.innerHeight - height - 8);
+      if (position.x > maxX || position.y > maxY) {
+        setPosition({
+          x: Math.min(position.x, maxX),
+          y: Math.min(position.y, maxY),
+        });
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [position, width, height, setPosition]);
+
+  const handleHeaderMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, textarea, a, [role=button], [role=tab]")) {
+      return;
+    }
+
+    e.preventDefault();
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialLeft = rect.left;
+    const initialTop = rect.top;
+    const elWidth = rect.width;
+    const elHeight = rect.height;
+
+    setIsDragging(true);
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+
+      const maxX = Math.max(8, window.innerWidth - elWidth - 8);
+      const maxY = Math.max(8, window.innerHeight - elHeight - 8);
+      const nextX = Math.max(8, Math.min(maxX, initialLeft + deltaX));
+      const nextY = Math.max(8, Math.min(maxY, initialTop + deltaY));
+
+      setPosition({ x: nextX, y: nextY });
+    };
+
+    const onMouseUp = () => {
+      setIsDragging(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleToggleFloat = useCallback(() => {
+    if (isFloating) {
+      resetPosition();
+    } else {
+      const centerX = Math.max(8, Math.round((window.innerWidth - width) / 2));
+      const centerY = Math.max(8, Math.round((window.innerHeight - height) / 2));
+      setPosition({ x: centerX, y: centerY });
+    }
+  }, [isFloating, resetPosition, setPosition, width, height]);
+
+  const handleHeaderDoubleClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, textarea, a, [role=button], [role=tab]")) {
+      return;
+    }
+    handleToggleFloat();
+  };
 
   const workspaceTabs: {
     id: WorkspaceTab;
@@ -67,13 +164,33 @@ export function FloatingWorkspaceWidget({
       tabIndex={0}
       role="region"
       aria-label="Notas y Tablero Kanban Flotante"
-      style={{
-        height: `min(${height}px, calc(100vh - 64px))`,
-      }}
-      className="fixed bottom-8.5 left-3 right-3 z-50 flex flex-col overflow-hidden rounded-xl border border-border/70 bg-popover text-popover-foreground shadow-2xl outline-none ring-1 ring-border/25 transition-all animate-in fade-in slide-in-from-bottom-2 duration-150"
+      style={
+        isFloating
+          ? {
+              left: position.x,
+              top: position.y,
+              width: Math.min(width, window.innerWidth - 16),
+              height: `min(${height}px, calc(100vh - 48px))`,
+            }
+          : {
+              height: `min(${height}px, calc(100vh - 64px))`,
+            }
+      }
+      className={cn(
+        "z-50 flex flex-col overflow-hidden rounded-xl border border-border/70 bg-popover text-popover-foreground shadow-2xl outline-none ring-1 ring-border/25 transition-all duration-150",
+        isFloating
+          ? "fixed"
+          : "fixed bottom-8.5 left-3 right-3 animate-in fade-in slide-in-from-bottom-2",
+        isDragging && "select-none ring-2 ring-primary/40",
+      )}
     >
-      {/* Header bar */}
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/40 px-3 bg-muted/20">
+      {/* Header bar - serves as drag handle */}
+      <div
+        onMouseDown={handleHeaderMouseDown}
+        onDoubleClick={handleHeaderDoubleClick}
+        className="flex h-10 shrink-0 items-center justify-between border-b border-border/40 px-3 bg-muted/20 cursor-move select-none"
+        title="Arrastra para mover · Doble clic para acoplar o liberar"
+      >
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-md bg-muted/60 p-0.5 text-xs">
             {workspaceTabs.map((item) => (
@@ -104,6 +221,23 @@ export function FloatingWorkspaceWidget({
           <Button
             variant="ghost"
             size="icon"
+            className="size-6 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+            onClick={handleToggleFloat}
+            title={
+              isFloating
+                ? "Acoplar abajo (Doble clic)"
+                : "Ventana flotante libre (Doble clic)"
+            }
+          >
+            <HugeiconsIcon
+              icon={isFloating ? ArrowDown01Icon : ArrowUp01Icon}
+              size={13}
+            />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
             className="size-6 text-muted-foreground hover:bg-accent hover:text-destructive cursor-pointer"
             onClick={onClose}
             title="Cerrar (Esc)"
@@ -123,14 +257,23 @@ export function FloatingWorkspaceWidget({
             onActivateAgent={onActivateAgent}
           />
         ) : (
-          <NotesTab onRunCommand={onRunCommand} cwd={cwd} />
+          <NotesTab
+            onRunCommand={onRunCommand}
+            cwd={cwd}
+            tabs={tabs}
+            onActivateAgent={onActivateAgent}
+          />
         )}
       </div>
 
       {/* Subtle Footer */}
       <div className="flex h-6 shrink-0 items-center justify-between border-t border-border/30 bg-muted/15 px-3 font-mono text-[10px] text-muted-foreground">
-        <span>Voktty Workspace Hub · Arrastra tarjetas o pega comandos</span>
-        <span>Esc para cerrar</span>
+        <span>Voktty Workspace Hub · Arrastra la barra superior para mover</span>
+        <div className="flex items-center gap-2">
+          <span>Alt+N: Nueva nota</span>
+          <span>·</span>
+          <span>Esc para cerrar</span>
+        </div>
       </div>
     </div>
   );
