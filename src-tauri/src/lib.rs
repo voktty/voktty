@@ -606,6 +606,7 @@ pub fn run() {
             harness::host::harness_resolve_fx,
             harness::host::harness_resolve_grok,
             harness::host::harness_resolve_gemini,
+            harness::host::harness_resolve_hermes,
             harness::host::harness_free_port,
             harness::host::harness_spawn,
             harness::host::harness_write,

@@ -324,6 +324,19 @@ pub fn harness_resolve_gemini() -> Result<CursorBinary, String> {
         })
 }
 
+/// Resolve the Hermes Agent local CLI (`hermes`).
+#[tauri::command(async)]
+pub fn harness_resolve_hermes() -> Result<CursorBinary, String> {
+    resolve_hermes()
+        .map(|path| CursorBinary {
+            path: path.to_string_lossy().into_owned(),
+        })
+        .ok_or_else(|| {
+            "Hermes CLI not found. Ensure `hermes` is installed and in your PATH, then retry."
+                .into()
+        })
+}
+
 /// Bind an ephemeral loopback port for `opencode serve`.
 #[tauri::command]
 pub fn harness_free_port() -> Result<u16, String> {
@@ -341,6 +354,8 @@ fn build_exec_command(command: &str, args: &[String]) -> Command {
         resolve_claude()
     } else if command == "agy" || command == "gemini" {
         resolve_agy()
+    } else if command == "hermes" {
+        resolve_hermes()
     } else {
         None
     };
@@ -1346,11 +1361,13 @@ fn resolve_cursor_agent() -> Option<PathBuf> {
     candidates.push(PathBuf::from("/usr/local/bin/cursor-agent"));
     candidates.push(PathBuf::from("/usr/bin/cursor-agent"));
     candidates.push(PathBuf::from("/snap/bin/cursor-agent"));
+    #[cfg(windows)]
+    push_windows_npm_candidates(&mut candidates, "cursor-agent");
     if let Some(from_shell) = which_via_login_shell("cursor-agent") {
         candidates.push(from_shell);
     }
 
-    candidates.into_iter().find(|path| is_cursor_agent(path))
+    first_binary_matching(candidates, is_cursor_agent)
 }
 
 fn resolve_codex() -> Option<PathBuf> {
@@ -1399,7 +1416,7 @@ fn resolve_codex() -> Option<PathBuf> {
         candidates.push(from_gui);
     }
 
-    candidates.into_iter().find(|path| path.is_file())
+    first_binary(candidates)
 }
 
 fn resolve_opencode() -> Option<PathBuf> {
@@ -1417,11 +1434,13 @@ fn resolve_opencode() -> Option<PathBuf> {
     candidates.push(PathBuf::from("/usr/local/bin/opencode"));
     candidates.push(PathBuf::from("/usr/bin/opencode"));
     candidates.push(PathBuf::from("/snap/bin/opencode"));
+    #[cfg(windows)]
+    push_windows_npm_candidates(&mut candidates, "opencode");
     if let Some(from_shell) = which_via_login_shell("opencode") {
         candidates.push(from_shell);
     }
 
-    candidates.into_iter().find(|path| path.is_file())
+    first_binary(candidates)
 }
 
 fn resolve_claude() -> Option<PathBuf> {
@@ -1461,7 +1480,7 @@ fn resolve_claude() -> Option<PathBuf> {
         candidates.push(from_shell);
     }
 
-    candidates.into_iter().find(|path| path.is_file())
+    first_binary(candidates)
 }
 
 fn resolve_pi() -> Option<PathBuf> {
@@ -1482,6 +1501,8 @@ fn resolve_pi() -> Option<PathBuf> {
         candidates.push(PathBuf::from("/usr/local/bin").join(name));
         candidates.push(PathBuf::from("/usr/bin").join(name));
         candidates.push(PathBuf::from("/snap/bin").join(name));
+        #[cfg(windows)]
+        push_windows_npm_candidates(&mut candidates, name);
     }
     if let Some(from_shell) = which_via_login_shell("pi-coding-agent") {
         candidates.push(from_shell);
@@ -1490,7 +1511,7 @@ fn resolve_pi() -> Option<PathBuf> {
         candidates.push(from_shell);
     }
 
-    candidates.into_iter().find(|path| is_pi_coding_agent(path))
+    first_binary_matching(candidates, is_pi_coding_agent)
 }
 
 fn resolve_omp() -> Option<PathBuf> {
@@ -1510,11 +1531,13 @@ fn resolve_omp() -> Option<PathBuf> {
     candidates.push(PathBuf::from("/usr/local/bin/omp"));
     candidates.push(PathBuf::from("/usr/bin/omp"));
     candidates.push(PathBuf::from("/snap/bin/omp"));
+    #[cfg(windows)]
+    push_windows_npm_candidates(&mut candidates, "omp");
     if let Some(from_shell) = which_via_login_shell("omp") {
         candidates.push(from_shell);
     }
 
-    candidates.into_iter().find(|path| is_omp_agent(path))
+    first_binary_matching(candidates, is_omp_agent)
 }
 
 /// omp ships as a ~126MB compiled binary, so the cheap string scan that
@@ -1524,8 +1547,7 @@ fn is_omp_agent(path: &Path) -> bool {
     if !path.is_file() {
         return false;
     }
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    if name != "omp" {
+    if !binary_name_eq(path, "omp") {
         return false;
     }
     help_mentions_rpc_mode(path)
@@ -1548,11 +1570,13 @@ fn resolve_fx() -> Option<PathBuf> {
     candidates.push(PathBuf::from("/usr/local/bin/fx"));
     candidates.push(PathBuf::from("/usr/bin/fx"));
     candidates.push(PathBuf::from("/snap/bin/fx"));
+    #[cfg(windows)]
+    push_windows_npm_candidates(&mut candidates, "fx");
     if let Some(from_shell) = which_via_login_shell("fx") {
         candidates.push(from_shell);
     }
 
-    candidates.into_iter().find(|path| is_fx_agent(path))
+    first_binary_matching(candidates, is_fx_agent)
 }
 
 fn resolve_grok() -> Option<PathBuf> {
@@ -1571,11 +1595,13 @@ fn resolve_grok() -> Option<PathBuf> {
     candidates.push(PathBuf::from("/usr/local/bin/grok"));
     candidates.push(PathBuf::from("/usr/bin/grok"));
     candidates.push(PathBuf::from("/snap/bin/grok"));
+    #[cfg(windows)]
+    push_windows_npm_candidates(&mut candidates, "grok");
     if let Some(from_shell) = which_via_login_shell("grok") {
         candidates.push(from_shell);
     }
 
-    candidates.into_iter().find(|path| is_grok_agent(path))
+    first_binary_matching(candidates, is_grok_agent)
 }
 
 fn resolve_agy() -> Option<PathBuf> {
@@ -1615,19 +1641,46 @@ fn resolve_agy() -> Option<PathBuf> {
         candidates.push(from_shell);
     }
 
-    candidates.into_iter().find(|path| path.is_file())
+    first_binary(candidates)
+}
+
+/// Resolve the Hermes Agent local CLI (`hermes`). This is a lightweight
+/// launcher-only mode: it detects and spawns a local `hermes` binary the same
+/// way as the other CLI agents. It is not the full Hermes Gateway integration
+/// (HTTP API, session continuity) proposed separately.
+fn resolve_hermes() -> Option<PathBuf> {
+    let home = dirs_home().map(PathBuf::from);
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Some(home) = &home {
+        candidates.push(home.join(".local/bin/hermes"));
+        candidates.push(home.join(".npm-global/bin/hermes"));
+        candidates.push(home.join(".cargo/bin/hermes"));
+        candidates.push(home.join("n/bin/hermes"));
+    }
+    #[cfg(target_os = "macos")]
+    candidates.push(PathBuf::from("/opt/homebrew/bin/hermes"));
+    candidates.push(PathBuf::from("/usr/local/bin/hermes"));
+    candidates.push(PathBuf::from("/usr/bin/hermes"));
+    candidates.push(PathBuf::from("/snap/bin/hermes"));
+    #[cfg(windows)]
+    push_windows_npm_candidates(&mut candidates, "hermes");
+    if let Some(from_shell) = which_via_login_shell("hermes") {
+        candidates.push(from_shell);
+    }
+
+    first_binary(candidates)
 }
 
 fn is_pi_coding_agent(path: &Path) -> bool {
     if !path.is_file() {
         return false;
     }
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    if name != "pi" && name != "pi-coding-agent" {
-        return false;
-    }
-    if name == "pi-coding-agent" {
+    if binary_name_eq(path, "pi-coding-agent") {
         return true;
+    }
+    if !binary_name_eq(path, "pi") {
+        return false;
     }
     file_mentions_pi_coding_agent(path) || help_mentions_rpc_mode(path)
 }
@@ -1685,8 +1738,7 @@ fn is_fx_agent(path: &Path) -> bool {
     if !path.is_file() {
         return false;
     }
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    if name != "fx" {
+    if !binary_name_eq(path, "fx") {
         return false;
     }
     file_mentions_fx_agent(path) || fx_help_mentions_acp(path)
@@ -1696,12 +1748,11 @@ fn is_grok_agent(path: &Path) -> bool {
     if !path.is_file() {
         return false;
     }
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    if name != "grok" {
+    if !binary_name_eq(path, "grok") {
         return false;
     }
     // Official installer: ~/.grok/bin/grok
-    if path.to_string_lossy().contains("/.grok/") {
+    if path_has_component(path, ".grok") {
         return true;
     }
     file_mentions_grok_agent(path) || grok_help_mentions_agent(path)
@@ -1837,15 +1888,13 @@ fn is_cursor_agent(path: &Path) -> bool {
     if !path.is_file() {
         return false;
     }
-    let text = path.to_string_lossy();
-    if text.contains("/.grok/") {
+    if path_has_component(path, ".grok") {
         return false;
     }
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    if name == "cursor-agent" || name == "cursor-agent.cmd" || name == "cursor-agent.exe" {
+    if binary_name_eq(path, "cursor-agent") {
         return true;
     }
-    if name == "agent" {
+    if binary_name_eq(path, "agent") {
         // One symlink hop. canonicalize() can walk into another .app
         // and trip macOS "data from other apps" TCC.
         if let Ok(target) = std::fs::read_link(path) {
@@ -1854,7 +1903,11 @@ fn is_cursor_agent(path: &Path) -> bool {
             } else {
                 path.parent().unwrap_or(path).join(target)
             };
-            return resolved.to_string_lossy().contains("cursor-agent");
+            return path_has_component(&resolved, "cursor-agent")
+                || resolved
+                    .to_string_lossy()
+                    .to_ascii_lowercase()
+                    .contains("cursor-agent");
         }
     }
     false
@@ -1901,7 +1954,6 @@ fn which_in_path(path: &str, name: &str) -> Option<PathBuf> {
     }
 }
 
-#[cfg_attr(windows, allow(dead_code))]
 fn is_executable_file(path: &Path) -> bool {
     #[cfg(unix)]
     {
@@ -1913,6 +1965,87 @@ fn is_executable_file(path: &Path) -> bool {
     #[cfg(not(unix))]
     {
         path.is_file()
+            && path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| {
+                    ["exe", "cmd", "bat", "com"]
+                        .iter()
+                        .any(|allowed| ext.eq_ignore_ascii_case(allowed))
+                })
+    }
+}
+
+/// A resolver's candidate is often extensionless (`.cargo/bin/grok`), because
+/// the same list is shared with Unix where that is the real file. On Windows
+/// the actual install is `grok.cmd`/`grok.exe`; try the common launcher
+/// extensions before giving up on a bare candidate.
+fn existing_binary(path: PathBuf) -> Option<PathBuf> {
+    #[cfg(windows)]
+    if path.extension().is_none() {
+        for ext in ["exe", "cmd", "bat", "com"] {
+            let candidate = path.with_extension(ext);
+            if is_executable_file(&candidate) {
+                return Some(candidate);
+            }
+        }
+    }
+    is_executable_file(&path).then_some(path)
+}
+
+fn first_binary(candidates: Vec<PathBuf>) -> Option<PathBuf> {
+    candidates.into_iter().find_map(existing_binary)
+}
+
+fn first_binary_matching(
+    candidates: Vec<PathBuf>,
+    pred: impl Fn(&Path) -> bool,
+) -> Option<PathBuf> {
+    candidates.into_iter().find_map(|path| {
+        let path = existing_binary(path)?;
+        pred(&path).then_some(path)
+    })
+}
+
+/// Compares a resolved binary's stem against `expected`, so a Windows launcher
+/// extension (`grok.cmd`, `grok.exe`) never fails an identity check that a
+/// Unix build would pass on the bare name.
+fn binary_name_eq(path: &Path, expected: &str) -> bool {
+    path.file_stem()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            if cfg!(windows) {
+                name.eq_ignore_ascii_case(expected)
+            } else {
+                name == expected
+            }
+        })
+}
+
+/// Component-wise path containment, unlike a raw substring check this is not
+/// tripped up by Windows' `\` separator or partial-name collisions.
+fn path_has_component(path: &Path, needle: &str) -> bool {
+    path.components().any(|component| {
+        component
+            .as_os_str()
+            .to_str()
+            .is_some_and(|name| name == needle)
+    })
+}
+
+/// npm's Windows global prefix (`%APPDATA%\npm`) and Scoop's shim directory
+/// are not the same location as any Unix candidate a resolver already lists,
+/// so a resolver relying only on those plus the inherited PATH misses a CLI
+/// installed there before this process last refreshed its environment.
+/// `existing_binary` appends the launcher extension, so the bare name is
+/// enough here.
+#[cfg(windows)]
+fn push_windows_npm_candidates(candidates: &mut Vec<PathBuf>, name: &str) {
+    if let Some(appdata) = std::env::var_os("APPDATA").map(PathBuf::from) {
+        candidates.push(appdata.join("npm").join(name));
+    }
+    if let Some(userprofile) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
+        candidates.push(userprofile.join("scoop").join("shims").join(name));
     }
 }
 
@@ -2555,5 +2688,54 @@ mod exec_allowlist_tests {
             "Exec command should contain --version argument: {:?}",
             args
         );
+    }
+}
+
+#[cfg(test)]
+mod binary_resolution_tests {
+    use super::*;
+
+    #[test]
+    fn binary_name_eq_matches_bare_name() {
+        assert!(binary_name_eq(Path::new("/usr/local/bin/grok"), "grok"));
+        assert!(!binary_name_eq(Path::new("/usr/local/bin/grok"), "fx"));
+    }
+
+    #[test]
+    fn binary_name_eq_strips_windows_launcher_extension() {
+        // A Windows npm shim (`grok.cmd`) must still identify as `grok`, the
+        // exact regression that left resolve_grok() unable to select an
+        // otherwise correctly discovered binary.
+        assert!(binary_name_eq(Path::new("C:\\npm\\grok.cmd"), "grok"));
+        assert!(binary_name_eq(Path::new("C:\\npm\\grok.exe"), "grok"));
+    }
+
+    #[test]
+    fn path_has_component_requires_exact_segment() {
+        let path = Path::new("/home/user/.grok/bin/other-tool");
+        assert!(path_has_component(path, ".grok"));
+        assert!(!path_has_component(path, "grok"));
+        // A component-based check must not be tripped up by a name that only
+        // partially matches a path segment, unlike a raw substring search.
+        assert!(!path_has_component(Path::new("/home/user/.grokfoo/bin"), ".grok"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn existing_binary_finds_launcher_extension_for_bare_candidate() {
+        let dir = std::env::temp_dir().join(format!(
+            "voktty-harness-launcher-test-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bare = dir.join("hermes");
+        let cmd = bare.with_extension("cmd");
+        std::fs::write(&cmd, b"@echo off\n").unwrap();
+
+        assert_eq!(existing_binary(bare.clone()), Some(cmd.clone()));
+
+        std::fs::remove_file(&cmd).unwrap();
+        assert_eq!(existing_binary(bare), None);
+        std::fs::remove_dir(dir).unwrap();
     }
 }
