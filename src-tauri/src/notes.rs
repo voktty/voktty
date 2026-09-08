@@ -1,11 +1,18 @@
+use std::path::{Component, Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
+use crate::fs::expand_home;
 use crate::session_store::{now_millis, validate_id, SessionStore};
 
 const TITLE_MAX: usize = 200;
 const BODY_MAX: usize = 1_000_000;
+const IMAGE_MAX_BYTES: u64 = 20 * 1024 * 1024;
+const IMAGE_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
+const NOTE_ASSET_DIR: &str = "note-assets";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +39,13 @@ pub struct NoteUpsert {
     pub source_session_id: Option<String>,
     #[serde(default)]
     pub source_cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteImageAsset {
+    pub name: String,
+    pub markdown_path: String,
 }
 
 pub fn ensure_notes_table(conn: &Connection) -> rusqlite::Result<()> {
@@ -80,10 +94,160 @@ pub fn notes_upsert(store: State<'_, SessionStore>, note: NoteUpsert) -> Result<
 }
 
 #[tauri::command(async)]
-pub fn notes_delete(store: State<'_, SessionStore>, id: String) -> Result<(), String> {
+pub fn notes_delete(
+    app: AppHandle,
+    store: State<'_, SessionStore>,
+    id: String,
+) -> Result<(), String> {
     validate_id(&id, "note")?;
     let conn = store.lock_conn()?;
-    delete_note(&conn, &id).map_err(|e| e.to_string())
+    delete_note(&conn, &id).map_err(|e| e.to_string())?;
+    drop(conn);
+    // The note deletion is authoritative. A cleanup failure should not leave a
+    // successfully deleted note visible in the UI.
+    let _ = remove_note_assets(&app, &id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn notes_save_image(
+    app: AppHandle,
+    note_id: String,
+    source_path: String,
+) -> Result<NoteImageAsset, String> {
+    tauri::async_runtime::spawn_blocking(move || save_note_image_sync(&app, &note_id, &source_path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command(async)]
+pub fn notes_image_path(app: AppHandle, asset: String) -> Result<String, String> {
+    let relative = validate_note_asset_path(&asset)?;
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(relative);
+    if !path.is_file() {
+        return Err("Note image was not found".into());
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
+fn note_assets_dir(app: &AppHandle, note_id: &str) -> Result<PathBuf, String> {
+    validate_id(note_id, "note")?;
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(NOTE_ASSET_DIR)
+        .join(note_id))
+}
+
+fn save_note_image_sync(
+    app: &AppHandle,
+    note_id: &str,
+    source_path: &str,
+) -> Result<NoteImageAsset, String> {
+    let source = expand_home(source_path);
+    let meta = std::fs::metadata(&source).map_err(|e| format!("{}: {e}", source.display()))?;
+    if !meta.is_file() {
+        return Err("Not a file".into());
+    }
+    if meta.len() > IMAGE_MAX_BYTES {
+        return Err(format!(
+            "Image is too large (maximum {} MB).",
+            IMAGE_MAX_BYTES / 1024 / 1024
+        ));
+    }
+
+    let (display_name, safe_name) = note_image_names(&source)?;
+    let dir = note_assets_dir(app, note_id)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let stored_name = format!("{stamp}-{safe_name}");
+    let destination = dir.join(&stored_name);
+    std::fs::copy(&source, &destination).map_err(|e| format!("{}: {e}", destination.display()))?;
+
+    Ok(NoteImageAsset {
+        name: display_name,
+        markdown_path: format!("/{NOTE_ASSET_DIR}/{note_id}/{stored_name}"),
+    })
+}
+
+fn note_image_names(source: &Path) -> Result<(String, String), String> {
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !IMAGE_EXTENSIONS.contains(&extension.as_str()) {
+        return Err("Image must be a PNG, JPG, GIF, WebP, or SVG file.".into());
+    }
+    let display_name = source
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("image")
+        .to_string();
+    let stem = source
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("image");
+    let mut safe_stem: String = stem
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .take(80)
+        .collect();
+    safe_stem = safe_stem.trim_matches('-').to_string();
+    if safe_stem.is_empty() {
+        safe_stem = "image".into();
+    }
+    Ok((display_name, format!("{safe_stem}.{extension}")))
+}
+
+fn validate_note_asset_path(asset: &str) -> Result<PathBuf, String> {
+    let relative = asset
+        .strip_prefix('/')
+        .ok_or_else(|| "Invalid note image path".to_string())?;
+    let path = Path::new(relative);
+    let parts = path
+        .components()
+        .map(|part| match part {
+            Component::Normal(value) => value.to_str().map(str::to_string),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| "Invalid note image path".to_string())?;
+    if parts.len() != 3 || parts[0] != NOTE_ASSET_DIR {
+        return Err("Invalid note image path".into());
+    }
+    validate_id(&parts[1], "note")?;
+    if parts[2].is_empty()
+        || !parts[2]
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err("Invalid note image path".into());
+    }
+    Ok(path.to_path_buf())
+}
+
+fn remove_note_assets(app: &AppHandle, note_id: &str) -> Result<(), String> {
+    let dir = note_assets_dir(app, note_id)?;
+    match std::fs::remove_dir_all(dir) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 fn list_notes(conn: &Connection) -> rusqlite::Result<Vec<Note>> {
@@ -352,6 +516,28 @@ mod tests {
         let note = upsert(&store, "n1", "   ", "");
         assert_eq!(note.title, "Untitled");
         assert_eq!(note.slug, "untitled");
+    }
+
+    #[test]
+    fn note_image_names_are_safe_and_keep_supported_extensions() {
+        assert_eq!(
+            note_image_names(Path::new("/tmp/Architecture draft [2].PNG")).unwrap(),
+            (
+                "Architecture draft [2].PNG".into(),
+                "Architecture-draft--2.png".into()
+            )
+        );
+        assert!(note_image_names(Path::new("/tmp/archive.zip")).is_err());
+    }
+
+    #[test]
+    fn note_asset_paths_cannot_escape_app_data() {
+        assert_eq!(
+            validate_note_asset_path("/note-assets/note-1/123-image.png").unwrap(),
+            PathBuf::from("note-assets/note-1/123-image.png")
+        );
+        assert!(validate_note_asset_path("/note-assets/note-1/../secret.png").is_err());
+        assert!(validate_note_asset_path("/other/note-1/image.png").is_err());
     }
 
     #[test]

@@ -66,3 +66,18 @@ describe("AgentMarkdown inline code", () => {
     expect(classes).not.toContain("h-6");
   });
 });
+
+describe("AgentMarkdown note images", () => {
+  it("keeps app-owned note image references for the async image resolver", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentMarkdown, {
+        text: "![Diagram](/note-assets/note-1/123-diagram.png)",
+      }),
+    );
+
+    expect(markup).toContain(
+      'data-note-image="/note-assets/note-1/123-diagram.png"',
+    );
+    expect(markup).toContain('alt="Diagram"');
+  });
+});

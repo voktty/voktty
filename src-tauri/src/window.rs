@@ -42,22 +42,31 @@ pub fn open_new_window(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Desktop blur goes on after the first UI paint, not during the dock bounce.
+/// Desktop blur goes on after the first UI paint and only in dark mode.
 #[tauri::command]
-pub fn enable_window_glass(window: WebviewWindow) {
+pub fn set_window_glass_enabled(window: WebviewWindow, enabled: bool) {
     #[cfg(target_os = "macos")]
     {
-        let _ = window.set_background_color(Some(Color(0, 0, 0, 3)));
-        crate::macos::enable_glass(&window);
+        if enabled {
+            let _ = window.set_background_color(Some(Color(0, 0, 0, 3)));
+            crate::macos::enable_glass(&window);
+        } else {
+            crate::macos::disable_glass(&window);
+        }
     }
     #[cfg(target_os = "windows")]
     {
-        let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
-        let _ = window.set_effects(EffectsBuilder::new().effect(Effect::Acrylic).build());
+        if enabled {
+            let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
+            let _ = window.set_effects(EffectsBuilder::new().effect(Effect::Acrylic).build());
+        } else {
+            let _ = window.set_effects(None);
+            let _ = window.set_background_color(Some(Color(247, 247, 247, 255)));
+        }
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let _ = window;
+        let _ = (window, enabled);
     }
 }
 

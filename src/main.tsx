@@ -1,9 +1,8 @@
 import React, { useLayoutEffect } from "react";
 import ReactDOM from "react-dom/client";
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import App from "./App";
-import { initAppearance } from "./lib/appearance";
+import { activateWindowAppearance, initAppearance } from "./lib/appearance";
 import { initSounds } from "./lib/sounds";
 import { handleQuitRequested, loadBootWorkspace } from "./lib/appLifecycle";
 import { consumeInstalledUpdate } from "./lib/updateNotice";
@@ -17,7 +16,7 @@ function dismissBootSplash() {
   if (!splash || splash.dataset.dismissed === "1") return;
   splash.dataset.dismissed = "1";
   const fade = () => {
-    void invoke("enable_window_glass");
+    activateWindowAppearance();
     splash.classList.add("boot-splash-out");
     window.setTimeout(() => splash.remove(), 180);
   };

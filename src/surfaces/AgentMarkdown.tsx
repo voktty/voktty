@@ -1,4 +1,5 @@
 import { code } from "@streamdown/code";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import {
   createContext,
   isValidElement,
@@ -28,6 +29,7 @@ import { useColorScheme } from "../hooks/useColorScheme";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { copyText } from "../lib/clipboard";
 import { INBOX_MEDIA_PREFIXES, isInboxMediaUrl } from "../lib/inboxMedia";
+import { isNoteImagePath } from "../lib/noteImages";
 import { InboxMedia } from "./InboxMedia";
 
 const MERMAID_BASE_CONFIG = {
@@ -51,7 +53,9 @@ const MARKDOWN_REHYPE_PLUGINS: PluggableList = [
   [
     harden,
     {
-      allowedImagePrefixes: [] as string[],
+      // MarkdownImage remains the final allowlist. The wildcard lets app-owned
+      // relative note URLs reach that component without changing link parsing.
+      allowedImagePrefixes: ["*"],
       allowedLinkPrefixes: ["*"],
       allowDataImages: true,
       imageBlockPolicy: "remove" as const,
@@ -302,6 +306,42 @@ function CodeCopyButton({ code }: { code: string }) {
 
 type MarkdownImageProps = ComponentProps<"img"> & { node?: unknown };
 
+const noteImageSrcCache = new Map<string, string>();
+
+function NoteAssetImage({
+  asset,
+  alt,
+  ...props
+}: Omit<MarkdownImageProps, "src" | "node"> & { asset: string }) {
+  const [src, setSrc] = useState(() => noteImageSrcCache.get(asset));
+
+  useEffect(() => {
+    if (src) return;
+    let cancelled = false;
+    void invoke<string>("notes_image_path", { asset })
+      .then((path) => {
+        const next = convertFileSrc(path);
+        noteImageSrcCache.set(asset, next);
+        if (!cancelled) setSrc(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [asset, src]);
+
+  return (
+    <img
+      {...props}
+      src={src}
+      alt={alt ?? ""}
+      data-note-image={asset}
+      draggable={false}
+      loading="lazy"
+    />
+  );
+}
+
 function MarkdownImage({
   src,
   alt,
@@ -312,6 +352,9 @@ function MarkdownImage({
   const url = typeof src === "string" ? src.trim() : "";
   if (url.startsWith("data:image/")) {
     return <img {...props} src={url} alt={alt ?? ""} />;
+  }
+  if (isNoteImagePath(url)) {
+    return <NoteAssetImage {...props} asset={url} alt={alt} />;
   }
   if (!allowRemoteMedia || !url || !isInboxMediaUrl(url)) return null;
   return <InboxMedia src={url} alt={alt} />;

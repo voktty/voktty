@@ -19,7 +19,7 @@
 //! shadow without that outline.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -54,6 +54,7 @@ const RTLD_DEFAULT: *mut c_void = -2isize as *mut c_void;
 static PINNED: AtomicBool = AtomicBool::new(false);
 static BLUR_RADIUS: AtomicU8 = AtomicU8::new(BLUR_DEFAULT);
 static WINDOW_BADGES: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
+static GLASS_WINDOWS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 type CgsConnection = usize;
 type SetBlurFn = unsafe extern "C" fn(CgsConnection, c_int, c_int) -> c_int;
@@ -77,7 +78,10 @@ pub fn install(window: &WebviewWindow) {
         WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
             stretch_titlebar(&event_window);
         }
-        WindowEvent::Destroyed => set_window_badge(&event_window, 0),
+        WindowEvent::Destroyed => {
+            set_window_badge(&event_window, 0);
+            set_glass_enabled(&event_window, false);
+        }
         _ => {}
     });
 }
@@ -148,7 +152,31 @@ pub fn set_visible(window: &WebviewWindow, visible: bool) {
 pub fn set_background_blur_radius(window: &WebviewWindow, radius: u8) {
     let radius = radius.clamp(BLUR_MIN, BLUR_MAX);
     BLUR_RADIUS.store(radius, Ordering::Relaxed);
-    apply_blur(window, radius);
+    if glass_enabled(window) {
+        apply_blur(window, radius);
+    }
+}
+
+fn glass_windows() -> &'static Mutex<HashSet<String>> {
+    GLASS_WINDOWS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn glass_enabled(window: &WebviewWindow) -> bool {
+    glass_windows()
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .contains(window.label())
+}
+
+fn set_glass_enabled(window: &WebviewWindow, enabled: bool) {
+    let mut windows = glass_windows()
+        .lock()
+        .unwrap_or_else(|err| err.into_inner());
+    if enabled {
+        windows.insert(window.label().to_string());
+    } else {
+        windows.remove(window.label());
+    }
 }
 
 /// Solid field behind the dock bounce. Same colour as the HTML sheet.
@@ -177,8 +205,16 @@ fn set_launch_background(window: &WebviewWindow, r: u8, g: u8, b: u8) {
 
 /// Turn on desktop blur after the first UI paint.
 pub fn enable_glass(window: &WebviewWindow) {
+    set_glass_enabled(window, true);
     prepare_glass(window);
     apply_blur(window, BLUR_RADIUS.load(Ordering::Relaxed));
+}
+
+/// Light mode stays opaque because pale desktop content makes translucent UI illegible.
+pub fn disable_glass(window: &WebviewWindow) {
+    set_glass_enabled(window, false);
+    apply_blur(window, 0);
+    set_launch_background(window, 247, 247, 247);
 }
 
 fn prepare_glass(window: &WebviewWindow) {
@@ -208,11 +244,7 @@ fn apply_blur(window: &WebviewWindow, radius: u8) {
         return;
     }
     unsafe {
-        set_blur(
-            connection,
-            window_number as c_int,
-            radius.max(BLUR_MIN) as c_int,
-        );
+        set_blur(connection, window_number as c_int, radius as c_int);
     }
 }
 
