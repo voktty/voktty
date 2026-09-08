@@ -1509,6 +1509,26 @@ export const en = {
     reviewSentToTerminal: "Review prompt inserted into active terminal",
     noTerminalCopiedToClipboard:
       "No active terminal. Prompt copied to clipboard.",
+    githubReviewTitle: "Review GitHub Pull Request",
+    githubReviewDescription:
+      "Connect a GitHub account to list, view and review pull requests without leaving Voktty.",
+    githubReviewScope: "Repository: {repo}",
+    githubConnectHelp:
+      "Paste a personal access token with repo scope. It's stored in your OS keychain, never sent anywhere but api.github.com.",
+    githubCreateToken: "Create a token on GitHub",
+    githubConnect: "Connect",
+    githubDisconnect: "Disconnect",
+    githubOpenPrs: "{count} open pull requests",
+    githubNoOpenPrs: "No open pull requests",
+    githubNoRemote: "This repository has no GitHub remote",
+    githubDraft: "draft",
+    githubDiffTruncated: "diff truncated",
+    githubReviewBodyPlaceholder: "Add a comment (required to request changes)...",
+    githubReviewBodyRequired: "Add a comment explaining what needs to change",
+    githubComment: "Comment",
+    githubRequestChanges: "Request Changes",
+    githubApprove: "Approve",
+    githubReviewSubmitted: "Review submitted to GitHub",
   },
   activeTabs: {
     title: "Active Tabs Launchpad",

@@ -26,6 +26,7 @@ import {
   BotIcon,
   Comment01Icon,
   Delete02Icon,
+  GithubIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -37,6 +38,7 @@ import {
   sessionKey,
   useGitReviewStore,
 } from "@/modules/git-review";
+import { GitHubReviewDialog } from "@/modules/git-review/components/GitHubReviewDialog";
 import { GitWalkthroughDialog } from "@/modules/git-review/components/GitWalkthroughDialog";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import {
@@ -217,6 +219,7 @@ export function GitReviewQueue({
 
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
+  const [githubOpen, setGithubOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"files" | "comments">("files");
 
   const sKey = sessionKey(repoRoot, "worktree");
@@ -382,6 +385,16 @@ export function GitReviewQueue({
         </div>
 
         <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            disabled={sourceControl.isLoading || !!busy}
+            aria-label={t("git.githubReviewTitle")}
+            title={t("git.githubReviewTitle")}
+            onClick={() => setGithubOpen(true)}
+          >
+            <HugeiconsIcon icon={GithubIcon} size={13} strokeWidth={1.9} />
+          </button>
           <button
             type="button"
             className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
@@ -685,6 +698,12 @@ export function GitReviewQueue({
         repoRoot={repoRoot}
         target="worktree"
         totalChangedFiles={entries.length}
+      />
+
+      <GitHubReviewDialog
+        open={githubOpen}
+        onOpenChange={setGithubOpen}
+        repoRoot={repoRoot}
       />
     </aside>
   );

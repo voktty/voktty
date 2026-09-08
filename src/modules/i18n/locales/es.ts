@@ -1550,6 +1550,26 @@ export const es: TranslationSchema = {
     reviewSentToTerminal: "Prompt de revisión insertado en la terminal activa",
     noTerminalCopiedToClipboard:
       "No hay terminal activa. Prompt copiado al portapapeles.",
+    githubReviewTitle: "Revisar Pull Request de GitHub",
+    githubReviewDescription:
+      "Conecta una cuenta de GitHub para listar, ver y revisar pull requests sin salir de Voktty.",
+    githubReviewScope: "Repositorio: {repo}",
+    githubConnectHelp:
+      "Pega un token de acceso personal con scope repo. Se guarda en el keychain del sistema, nunca se envía a ningún sitio salvo api.github.com.",
+    githubCreateToken: "Crear un token en GitHub",
+    githubConnect: "Conectar",
+    githubDisconnect: "Desconectar",
+    githubOpenPrs: "{count} pull requests abiertos",
+    githubNoOpenPrs: "No hay pull requests abiertos",
+    githubNoRemote: "Este repositorio no tiene remoto de GitHub",
+    githubDraft: "borrador",
+    githubDiffTruncated: "diff truncado",
+    githubReviewBodyPlaceholder: "Añade un comentario (obligatorio para solicitar cambios)...",
+    githubReviewBodyRequired: "Añade un comentario explicando qué hace falta cambiar",
+    githubComment: "Comentar",
+    githubRequestChanges: "Solicitar cambios",
+    githubApprove: "Aprobar",
+    githubReviewSubmitted: "Revisión enviada a GitHub",
   },
   activeTabs: {
     title: "Launchpad de Pestañas Activas",
