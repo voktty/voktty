@@ -267,15 +267,13 @@ export function OnboardingWizard({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        onEscapeKeyDown={(e) => {
-          if (phase === "welcome") e.preventDefault();
-        }}
-        onPointerDownOutside={(e) => {
-          if (phase === "welcome") e.preventDefault();
-        }}
-        onInteractOutside={(e) => {
-          if (phase === "welcome") e.preventDefault();
-        }}
+        // Escape/outside-click must never silently close the wizard: onOpenChange
+        // here is setOnboardingOpen, not handleFinish, so a stray dismissal would
+        // leave hasCompletedOnboarding false and reopen the whole flow next launch.
+        // Skip and Finish are the only intended exits, at every phase.
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
         className="z-50 flex h-[84vh] max-h-[84vh] w-[min(94vw,1180px)] max-w-none sm:max-w-none flex-row overflow-hidden rounded-2xl border border-border/60 bg-card/95 p-0 shadow-2xl backdrop-blur-2xl gap-0 select-none"
       >
         <DialogTitle className="sr-only">{t("onboarding.title")}</DialogTitle>

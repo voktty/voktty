@@ -22,15 +22,19 @@ import { useEffect, useRef, useState } from "react";
 import { useDapStore } from "./dapStore";
 import { useTaskStore } from "./taskStore";
 
+export type WorkbenchBuiltinTab = "tasks" | "tests" | "debug";
+
 type Props = {
   active: boolean;
   root: string | null;
   workspaceKey: string;
   activeFilePath: string | null;
   onNavigate: (path: string, line: number, column: number) => void;
+  /** Which built-in tab to land on when the panel mounts. Defaults to "tasks". */
+  initialTab?: WorkbenchBuiltinTab;
 };
 
-type BuiltinTab = "tasks" | "tests" | "debug";
+type BuiltinTab = WorkbenchBuiltinTab;
 
 function IconButton({ label, icon, onClick, disabled = false }: {
   label: string;
@@ -200,9 +204,9 @@ function ExtensionPanelHost({ panel }: { panel: ExtensionPanelDefinition }) {
   return <div ref={ref} className="h-full min-h-0 overflow-auto" />;
 }
 
-export function WorkbenchPanel({ active, root, workspaceKey, activeFilePath, onNavigate }: Props) {
+export function WorkbenchPanel({ active, root, workspaceKey, activeFilePath, onNavigate, initialTab }: Props) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<BuiltinTab | `extension:${string}`>("tasks");
+  const [tab, setTab] = useState<BuiltinTab | `extension:${string}`>(initialTab ?? "tasks");
   const load = useTaskStore((state) => state.load);
   const pollTasks = useTaskStore((state) => state.poll);
   const taskRun = useTaskStore((state) => state.run);

@@ -75,7 +75,7 @@ export type CommandPaletteActionContext = {
   openOutline: () => void;
   openProblems: () => void;
   revealActiveFileInExplorer?: () => void;
-  openRunDebug?: () => void;
+  openRunDebug?: (tab?: "tasks" | "tests" | "debug") => void;
   navigateBack: () => void;
   navigateForward: () => void;
   canNavigateBack: boolean;
@@ -638,7 +638,40 @@ export function createCommandItems(
       disabledReason: noWorkspaceRoot
         ? t("commandPalette.disabled.noWorkspaceRoot")
         : undefined,
-      run: ctx.openRunDebug ?? noop,
+      run: () => ctx.openRunDebug?.(),
+    },
+    {
+      id: "workbench.openTasks",
+      title: t("commandPalette.commands.openTasksPanel"),
+      group: "View",
+      keywords: ["task", "run", "ejecutar", "tareas"],
+      icon: CodeIcon,
+      disabledReason: noWorkspaceRoot
+        ? t("commandPalette.disabled.noWorkspaceRoot")
+        : undefined,
+      run: () => ctx.openRunDebug?.("tasks"),
+    },
+    {
+      id: "workbench.openTests",
+      title: t("commandPalette.commands.openTestsPanel"),
+      group: "View",
+      keywords: ["test", "pruebas", "vitest"],
+      icon: CodeIcon,
+      disabledReason: noWorkspaceRoot
+        ? t("commandPalette.disabled.noWorkspaceRoot")
+        : undefined,
+      run: () => ctx.openRunDebug?.("tests"),
+    },
+    {
+      id: "workbench.openDebugger",
+      title: t("commandPalette.commands.openDebugPanel"),
+      group: "View",
+      keywords: ["debug", "dap", "depurar", "breakpoint"],
+      icon: CodeIcon,
+      disabledReason: noWorkspaceRoot
+        ? t("commandPalette.disabled.noWorkspaceRoot")
+        : undefined,
+      run: () => ctx.openRunDebug?.("debug"),
     },
     {
       id: "editor.problems",

@@ -222,7 +222,7 @@ import {
   WindowVibrancyBridge,
 } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
-import { WorkbenchPanel } from "@/modules/workbench";
+import { WorkbenchPanel, type WorkbenchBuiltinTab } from "@/modules/workbench";
 import {
   type DockerWorkspaceConnection,
   getWslHome,
@@ -767,9 +767,15 @@ export default function App() {
   const openProblems = useCallback(() => {
     openSidebarView("problems");
   }, [openSidebarView]);
-  const openRunDebug = useCallback(() => {
-    openSidebarView("run-debug");
-  }, [openSidebarView]);
+  const [runDebugInitialTab, setRunDebugInitialTab] =
+    useState<WorkbenchBuiltinTab | null>(null);
+  const openRunDebug = useCallback(
+    (tab?: WorkbenchBuiltinTab) => {
+      setRunDebugInitialTab(tab ?? null);
+      openSidebarView("run-debug");
+    },
+    [openSidebarView],
+  );
   const handleSidebarViewSelect = useCallback(
     (view: SidebarViewId) => {
       if (view === "search") {
@@ -2702,8 +2708,10 @@ export default function App() {
   );
 
   const splitActivePaneInActiveTab = useCallback(
-    (_dir: "row" | "col") => {
-      const activeTab = tabsRef.current.find((x) => x.id === effectiveActiveId);
+    (_dir: "row" | "col", tabId?: number) => {
+      const activeTab = tabsRef.current.find(
+        (x) => x.id === (tabId ?? effectiveActiveId),
+      );
       if (!activeTab) return;
       if (activeTab.kind === "terminal") {
         handleDuplicateTab(activeTab.id);
@@ -4478,6 +4486,8 @@ export default function App() {
               onCloseTabsToRight={handleCloseTabsToRight}
               onCloseOtherTabs={handleCloseOtherTabs}
               onDuplicate={handleDuplicateTab}
+              onSplitRight={(id) => splitActivePaneInActiveTab("row", id)}
+              onSplitDown={(id) => splitActivePaneInActiveTab("col", id)}
               onReconnectTab={handleReconnectTab}
               onRename={handleRenameTab}
               onReorder={reorderTabByGap}
@@ -4651,6 +4661,7 @@ export default function App() {
                           )}
                           activeFilePath={activeFilePath}
                           onNavigate={openDapLocation}
+                          initialTab={runDebugInitialTab ?? undefined}
                         />
                       ) : null}
                       {workspaceSearchMounted ? (
@@ -4829,6 +4840,8 @@ export default function App() {
                           onCloseTabsToRight={handleCloseTabsToRight}
                           onCloseOtherTabs={handleCloseOtherTabs}
                           onDuplicate={handleDuplicateTab}
+                          onSplitRight={(id) => splitActivePaneInActiveTab("row", id)}
+                          onSplitDown={(id) => splitActivePaneInActiveTab("col", id)}
                           onReconnectTab={handleReconnectTab}
                           onPin={(id) => {
                             const tab = tabs.find((t) => t.id === id);
