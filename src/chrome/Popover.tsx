@@ -57,7 +57,7 @@ type Props = Omit<ComponentPropsWithoutRef<"div">, "style"> & {
 const FRAME =
   "isolate overflow-hidden rounded-xl border border-content/10 shadow-xl";
 const BACKDROP =
-  "pointer-events-none absolute inset-0 z-0 bg-content/10 backdrop-blur-xl [backface-visibility:hidden] [transform:translateZ(0)]";
+  "popover-backdrop pointer-events-none absolute inset-0 z-0 backdrop-blur-xl [backface-visibility:hidden] [transform:translateZ(0)]";
 
 /** Which corner the open animation grows from, so it reads as anchored. */
 function origin(side: PopoverSide, align: PopoverAlign): string {
