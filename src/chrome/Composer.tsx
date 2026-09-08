@@ -1503,7 +1503,7 @@ function ComposerAction({
             title="Send"
             aria-label="Send"
             onClick={onSend}
-            className="grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90"
+            className="composer-send grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90"
           >
             <ArrowUp className="size-3.5" strokeWidth={2.25} />
           </button>
@@ -1528,7 +1528,7 @@ function ComposerAction({
       aria-label="Send"
       disabled={!hasValue}
       onClick={onSend}
-      className="grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90 disabled:cursor-default disabled:bg-white/30 disabled:text-black/40 disabled:hover:bg-white/30"
+      className="composer-send grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90 disabled:cursor-default disabled:bg-white/30 disabled:text-black/40 disabled:hover:bg-white/30"
     >
       <ArrowUp className="size-3.5" strokeWidth={2.25} />
     </button>
