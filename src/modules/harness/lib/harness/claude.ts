@@ -414,6 +414,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     path,
     buildClaudeSpawnArgs(launch),
     input.cwd,
+    input.networkAllowlist,
   );
 
   liveByThread.set(input.sessionId, live);

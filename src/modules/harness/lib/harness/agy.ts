@@ -195,6 +195,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       path,
       buildAgySpawnArgs(input, canResume ? resume?.conversationId : undefined),
       input.cwd,
+      input.networkAllowlist,
     );
   } catch (error) {
     liveBySession.delete(input.sessionId);

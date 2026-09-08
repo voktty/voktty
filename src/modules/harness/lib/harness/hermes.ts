@@ -109,6 +109,7 @@ export async function sendHermesTurn(input: SendTurnInput): Promise<void> {
       path,
       buildHermesSpawnArgs(input),
       input.cwd,
+      input.networkAllowlist,
     );
   } catch (error) {
     liveBySession.delete(input.sessionId);

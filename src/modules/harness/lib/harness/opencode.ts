@@ -334,6 +334,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     path,
     ["serve", `--hostname=127.0.0.1`, `--port=${port}`],
     input.cwd,
+    input.networkAllowlist,
   );
 
   try {

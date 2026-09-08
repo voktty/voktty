@@ -100,6 +100,8 @@ export type HarnessSessionInput = {
   runtimeMode: RuntimeMode;
   intent?: TurnIntent;
   onEvent: (event: HarnessEvent) => void;
+  /** Host patterns the spawned CLI's outbound network is restricted to, when set. */
+  networkAllowlist?: string[] | null;
 };
 
 export type SendTurnInput = HarnessSessionInput & {

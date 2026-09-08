@@ -67,6 +67,25 @@ pub fn compile_allowlist(patterns: &[&str]) -> Result<Vec<Regex>, regex::Error> 
         .collect()
 }
 
+/// Compiles a user-facing hostname allowlist: entries are literal hostnames
+/// unless prefixed with `*.`, meaning "this host or any subdomain of it".
+/// Unlike `compile_allowlist`, entries are never treated as raw regex —
+/// this is what session settings should feed with, so a host containing
+/// regex metacharacters (most don't, but `.` is one) can't accidentally
+/// match more than intended.
+pub fn compile_allowlist_hosts(hosts: &[String]) -> Result<Vec<Regex>, regex::Error> {
+    hosts
+        .iter()
+        .map(|host| {
+            let host = host.trim().to_ascii_lowercase();
+            match host.strip_prefix("*.") {
+                Some(rest) => Regex::new(&format!("(?i)^([a-z0-9-]+\\.)*{}$", regex::escape(rest))),
+                None => Regex::new(&format!("(?i)^{}$", regex::escape(&host))),
+            }
+        })
+        .collect()
+}
+
 /// Starts the proxy on a loopback-only random port. `allowlist` is matched
 /// against the hostname of every CONNECT target; a host matching none of
 /// the patterns is refused before any DNS lookup or outbound connection.
@@ -396,6 +415,32 @@ mod tests {
         assert!(allowlist[0].is_match("API.EXAMPLE.COM"));
         assert!(!allowlist[0].is_match("evil-api.example.com.attacker.net"));
         assert!(!allowlist[0].is_match("notapi.example.com"));
+    }
+
+    #[test]
+    fn host_allowlist_matches_the_exact_host_only() {
+        let allowlist = compile_allowlist_hosts(&["api.example.com".to_string()]).unwrap();
+        assert!(allowlist[0].is_match("API.EXAMPLE.COM"));
+        assert!(!allowlist[0].is_match("evil-api.example.com.attacker.net"));
+        assert!(!allowlist[0].is_match("sub.api.example.com"));
+    }
+
+    #[test]
+    fn host_allowlist_wildcard_matches_the_apex_and_any_subdomain() {
+        let allowlist = compile_allowlist_hosts(&["*.githubusercontent.com".to_string()]).unwrap();
+        assert!(allowlist[0].is_match("raw.githubusercontent.com"));
+        assert!(allowlist[0].is_match("a.b.githubusercontent.com"));
+        assert!(allowlist[0].is_match("githubusercontent.com"));
+        assert!(!allowlist[0].is_match("githubusercontent.com.attacker.net"));
+        assert!(!allowlist[0].is_match("notgithubusercontent.com"));
+    }
+
+    #[test]
+    fn host_allowlist_treats_dots_literally_not_as_regex() {
+        // A raw regex would let "." match any character; the host compiler
+        // must not let "exampleXcom" slip through for an "example.com" entry.
+        let allowlist = compile_allowlist_hosts(&["example.com".to_string()]).unwrap();
+        assert!(!allowlist[0].is_match("exampleXcom"));
     }
 
     #[test]

@@ -278,6 +278,14 @@ export type Session = {
   pendingQuestion?: UserQuestionPrompt;
   /** Ephemeral Inbox discussion context. Sessions marked with this are not persisted. */
   inboxAsk?: InboxAskContext;
+  /** Off by default. When on, the spawned CLI's outbound network is restricted to `allowlist`. */
+  networkSandbox?: NetworkSandboxConfig;
+};
+
+export type NetworkSandboxConfig = {
+  enabled: boolean;
+  /** Hostnames or `*.domain` wildcards. Compiled and enforced by the Rust proxy. */
+  allowlist: string[];
 };
 
 export type PendingHarnessSwitch = {

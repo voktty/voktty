@@ -24,6 +24,7 @@ import {
 import type {
   Attachment,
   HarnessId,
+  NetworkSandboxConfig,
   RuntimeMode,
   Session,
 } from "../lib/session";
@@ -125,6 +126,17 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
     [],
   );
 
+  const handleNetworkSandboxChange = useCallback(
+    (sessionId: string, config: NetworkSandboxConfig) => {
+      setSession((prev) =>
+        prev && prev.id === sessionId
+          ? { ...prev, networkSandbox: config }
+          : prev,
+      );
+    },
+    [],
+  );
+
   const handleSubmit = useCallback(
     async (sessionId: string, text: string, attachments: Attachment[]) => {
       let current = sessionRef.current;
@@ -150,6 +162,9 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
         text,
         attachments,
         onEvent,
+        networkAllowlist: current.networkSandbox?.enabled
+          ? current.networkSandbox.allowlist
+          : null,
       };
 
       try {
@@ -266,6 +281,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
         onModelChange={handleModelChange}
         onModelSettingsChange={handleModelSettingsChange}
         onRuntimeModeChange={handleRuntimeModeChange}
+        onNetworkSandboxChange={handleNetworkSandboxChange}
         onSubmit={handleSubmit}
         onStop={handleStop}
         onCompactContext={() => false}

@@ -72,6 +72,8 @@ import ReplaceIcon from "@hugeicons/core-free-icons/ReplaceIcon";
 import RotateCcwIcon from "@hugeicons/core-free-icons/RotateCcwIcon";
 import Search01Icon from "@hugeicons/core-free-icons/Search01Icon";
 import Settings01Icon from "@hugeicons/core-free-icons/Settings01Icon";
+import Shield01Icon from "@hugeicons/core-free-icons/Shield01Icon";
+import ShieldOffIcon from "@hugeicons/core-free-icons/ShieldOffIcon";
 import SidebarRight01Icon from "@hugeicons/core-free-icons/SidebarRight01Icon";
 import SparklesIcon from "@hugeicons/core-free-icons/SparklesIcon";
 import SquareIcon from "@hugeicons/core-free-icons/SquareIcon";
@@ -220,6 +222,8 @@ export const Replace = wrap(ReplaceIcon, "Replace");
 export const RotateCcw = wrap(RotateCcwIcon, "RotateCcw");
 export const Search = wrap(Search01Icon, "Search");
 export const Settings = wrap(Settings01Icon, "Settings");
+export const Shield = wrap(Shield01Icon, "Shield");
+export const ShieldOff = wrap(ShieldOffIcon, "ShieldOff");
 export const SlidersHorizontal = wrap(
   PreferenceHorizontalIcon,
   "SlidersHorizontal",

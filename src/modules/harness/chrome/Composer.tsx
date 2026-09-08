@@ -61,6 +61,7 @@ import type {
   Attachment,
   HarnessId,
   MessageQueueStatus,
+  NetworkSandboxConfig,
   QueuedMessage,
   RuntimeMode,
 } from "../lib/session";
@@ -75,6 +76,7 @@ import {
   type SlashToken,
 } from "../lib/skills";
 import { AccessPicker } from "./AccessPicker";
+import { NetworkSandboxPicker } from "./NetworkSandboxPicker";
 import { ComposerRunner } from "./ComposerRunner";
 import { ContextMeter } from "./ContextMeter";
 import { AttachmentChip } from "./AttachmentChip";
@@ -123,6 +125,7 @@ type Props = {
   model: string;
   modelSettings?: Record<string, string>;
   runtimeMode: RuntimeMode;
+  networkSandbox?: NetworkSandboxConfig;
   cwd?: string;
   executionCwd: string;
   branch?: string;
@@ -148,6 +151,7 @@ type Props = {
   onModelChange: (harness: HarnessId, model: string) => void;
   onModelSettingsChange?: (settings: Record<string, string>) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
+  onNetworkSandboxChange?: (config: NetworkSandboxConfig) => void;
   onQuoteRequestConsumed?: (id: number) => void;
   onInboxCardDismiss?: () => void;
   onNoteCardDismiss?: () => void;
@@ -370,6 +374,7 @@ export function Composer({
   model,
   modelSettings = {},
   runtimeMode,
+  networkSandbox,
   cwd = "~",
   executionCwd,
   branch,
@@ -394,6 +399,7 @@ export function Composer({
   onModelChange,
   onModelSettingsChange,
   onRuntimeModeChange,
+  onNetworkSandboxChange,
   onQuoteRequestConsumed,
   onInboxCardDismiss,
   onNoteCardDismiss,
@@ -1276,6 +1282,12 @@ export function Composer({
                     onClose={() => ref.current?.focus()}
                   />
                 ) : null}
+                <NetworkSandboxPicker
+                  harness={harness}
+                  value={networkSandbox}
+                  onChange={(config) => onNetworkSandboxChange?.(config)}
+                  onClose={() => ref.current?.focus()}
+                />
               </div>
             </div>
 

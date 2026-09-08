@@ -277,7 +277,13 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     },
   );
 
-  await spawnChild(input.sessionId, path, ["app-server"], input.cwd);
+  await spawnChild(
+    input.sessionId,
+    path,
+    ["app-server"],
+    input.cwd,
+    input.networkAllowlist,
+  );
 
   try {
     await rpc.request("initialize", {
