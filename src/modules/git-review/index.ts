@@ -7,4 +7,6 @@ export * from "./lib/walkthroughGenerator";
 export * from "./components/GitWalkthroughDialog";
 export * from "./components/ReviewHandoffDialog";
 export * from "./components/ReviewCommentDialog";
+export * from "./components/GitHubReviewDialog";
+export * from "./lib/githubProvider";
 

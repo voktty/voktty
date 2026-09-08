@@ -1,6 +1,7 @@
 pub mod blob_store;
 pub mod db;
 pub mod diff;
+pub mod github;
 pub mod models;
 pub mod reconcile;
 
