@@ -17,6 +17,7 @@ pub mod history;
 pub mod lsp;
 pub mod mcp;
 pub mod net;
+pub mod net_proxy;
 pub mod proc;
 pub mod pty;
 pub mod quota;
