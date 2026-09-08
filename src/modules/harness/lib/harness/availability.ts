@@ -5,7 +5,9 @@ import {
   resolveCodexBinary,
   resolveCursorBinary,
   resolveFxBinary,
+  resolveGeminiBinary,
   resolveGrokBinary,
+  resolveHermesBinary,
   resolveOmpBinary,
   resolveOpenCodeBinary,
   resolvePiBinary,
@@ -52,7 +54,7 @@ let probedAt = 0;
 const listeners = new Set<() => void>();
 
 /**
- * A probe stats ~100 paths across eight resolvers. The model picker and the
+ * A probe stats ~100 paths across ten resolvers. The model picker and the
  * providers pane both probe on open, so without a TTL every open pays for it
  * again to learn what it already knows. Installing a CLI mid-session is rare,
  * and `force` covers it.
@@ -158,6 +160,22 @@ export function probeHarnessAvailability(
       if (id === "grok") {
         try {
           await resolveGrokBinary();
+          return [id, true] as const;
+        } catch {
+          return [id, false] as const;
+        }
+      }
+      if (id === "gemini") {
+        try {
+          await resolveGeminiBinary();
+          return [id, true] as const;
+        } catch {
+          return [id, false] as const;
+        }
+      }
+      if (id === "hermes") {
+        try {
+          await resolveHermesBinary();
           return [id, true] as const;
         } catch {
           return [id, false] as const;

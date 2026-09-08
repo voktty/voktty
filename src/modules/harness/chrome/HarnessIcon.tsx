@@ -128,6 +128,15 @@ export function HarnessIcon({
       </MonoIcon>
     );
   }
+  if (harness === "hermes") {
+    return (
+      <MonoIcon className={className}>
+        <path d="M14.5 0L17.2 2.7L14.5 5.4L11.8 2.7L14.5 0Z" />
+        <path d="M13 6H16V29H13V6Z" />
+        <path d="M13 11.5L1.2 4L0 7.6L11 15L13 11.5ZM16 11.5L27.8 4L29 7.6L18 15L16 11.5Z" />
+      </MonoIcon>
+    );
+  }
   return (
     <img
       src={HARNESS_ICONS[harness]}
