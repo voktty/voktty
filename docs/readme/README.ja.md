@@ -23,11 +23,9 @@ Voktty は、Tauri 2 + Rust と React 19 で構築された、軽量かつオー
 
 ## スクリーンショット
 
-<table>
-  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API クライアントとサンドボックス" /><br/><sub>リクエストビルダーとレスポンス確認に対応した API クライアントとサンドボックス</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="エージェントの操作履歴" /><br/><sub>検索可能なセッションとトランスクリプトによるエージェント履歴と復元</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="環境セレクター" /><br/><sub>ローカル、WSL、SSH、RDP、シリアル環境の選択</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="エディターとターミナル" /><br/><sub>コードエディター、ターミナル、AI パネル、ホバー時のファイル情報</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="ファイルプレビュー" /><br/><sub>エクスプローラーに表示される画像プレビューとファイルメタデータ</sub></td></tr>
-</table>
+<p align="center">
+  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Voktty ワークスペース" /><br/><sub>ターミナル、AI アシスタント、マルチ環境セッションピッカー</sub>
+</p>
 
 ## 機能
 

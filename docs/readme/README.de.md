@@ -39,11 +39,9 @@ Voktty ist eine leichtgewichtige, quelloffene, terminalorientierte und KI-native
 
 ## Screenshots
 
-<table>
-  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API-Client und Sandbox" /><br/><sub>API-Client und Sandbox mit Request-Builder und Antwortanalyse</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Verlauf von Agenten" /><br/><sub>Agentenverlauf und Wiederherstellung mit durchsuchbaren Sitzungen</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Umgebungsauswahl" /><br/><sub>Auswahl lokaler, WSL-, SSH-, RDP- und serieller Umgebungen</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Editor und Terminal" /><br/><sub>Code-Editor, Terminal, KI-Panel und Dateiinformationen beim Überfahren</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Dateivorschau" /><br/><sub>Bildvorschau und Dateimetadaten aus dem Datei-Explorer</sub></td></tr>
-</table>
+<p align="center">
+  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Voktty-Arbeitsbereich" /><br/><sub>Terminal, KI-Assistent und Umgebungsauswahl für mehrere Sitzungen</sub>
+</p>
 
 ## Funktionen
 

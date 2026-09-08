@@ -23,11 +23,9 @@ Voktty adalah lingkungan pengembangan (ADE) ringan, sumber terbuka, berfokus pad
 
 ## Tangkapan layar
 
-<table>
-  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="Klien API dan sandbox" /><br/><sub>Klien API dan sandbox dengan pembuat permintaan dan pemeriksaan respons</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="Riwayat operasional agen" /><br/><sub>Riwayat dan pemulihan agen dengan sesi yang dapat dicari</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="Pemilih lingkungan" /><br/><sub>Pemilihan lingkungan lokal, WSL, SSH, RDP, dan serial</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="Editor dan terminal" /><br/><sub>Editor kode, terminal, panel AI, dan informasi berkas saat diarahkan</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="Pratinjau berkas" /><br/><sub>Pratinjau gambar dan metadata berkas dari penjelajah</sub></td></tr>
-</table>
+<p align="center">
+  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Ruang kerja Voktty" /><br/><sub>Terminal, asisten AI, dan pemilih sesi multi-lingkungan</sub>
+</p>
 
 ## Fitur
 

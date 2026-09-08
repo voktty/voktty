@@ -23,11 +23,9 @@ Voktty एक हल्का, ओपन-सोर्स, टर्मिनल-
 
 ## स्क्रीनशॉट
 
-<table>
-  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API क्लाइंट और सैंडबॉक्स" /><br/><sub>रिक्वेस्ट बिल्डर और रिस्पॉन्स निरीक्षण वाला API क्लाइंट और सैंडबॉक्स</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="एजेंट ऑपरेशनल हिस्ट्री" /><br/><sub>खोज योग्य सेशन और ट्रांसक्रिप्ट के साथ एजेंट हिस्ट्री और रिकवरी</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="एनवायरनमेंट चयन" /><br/><sub>लोकल, WSL, SSH, RDP और सीरियल एनवायरनमेंट का चयन</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="एडिटर और टर्मिनल" /><br/><sub>कोड एडिटर, टर्मिनल, AI पैनल और होवर पर फ़ाइल जानकारी</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="फ़ाइल प्रीव्यू" /><br/><sub>एक्सप्लोरर से दिखाई गई इमेज प्रीव्यू और फ़ाइल मेटाडेटा</sub></td></tr>
-</table>
+<p align="center">
+  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Voktty कार्यक्षेत्र" /><br/><sub>टर्मिनल, AI असिस्टेंट और मल्टी-एनवायरनमेंट सेशन पिकर</sub>
+</p>
 
 ## सुविधाएँ
 

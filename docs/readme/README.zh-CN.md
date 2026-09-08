@@ -41,11 +41,9 @@ Voktty 是一个轻量、开源、终端优先的 AI 原生开发环境（ADE）
 
 ## 截图
 
-<table>
-  <tr><td align="center"><img src="../images/voktty_6LhZMEZPC6.png" alt="API 客户端和沙盒" /><br/><sub>带请求构建器和响应检查的 API 客户端与沙盒</sub></td><td align="center"><img src="../images/voktty_E7ePo9A5ka.png" alt="智能体操作历史" /><br/><sub>支持搜索会话和记录的智能体历史与恢复</sub></td></tr>
-  <tr><td align="center"><img src="../images/voktty_k5Xr4AqgSA.png" alt="环境选择器" /><br/><sub>选择本地、WSL、SSH、RDP 和串行环境</sub></td><td align="center"><img src="../images/voktty_MAZn6eHFXb.png" alt="编辑器和终端" /><br/><sub>代码编辑器、终端、AI 面板以及悬停时显示的文件信息</sub></td></tr>
-  <tr><td colspan="2" align="center"><img src="../images/voktty_vPOlZrpa70.png" alt="文件预览" /><br/><sub>从文件浏览器显示图像预览和文件元数据</sub></td></tr>
-</table>
+<p align="center">
+  <img src="../images/voktty_mAWbBJ9q4Y.png" width="800" alt="Voktty 工作区" /><br/><sub>终端、AI 助手和多环境会话选择器</sub>
+</p>
 
 ## 功能
 
