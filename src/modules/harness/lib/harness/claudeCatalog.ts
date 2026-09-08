@@ -116,6 +116,13 @@ function contextWindow(defaultValue: "200k" | "1m"): ModelSetting {
 /** Fallback catalog when `list_models` is unavailable. */
 export const CLAUDE_MODEL_CATALOG: AgentModel[] = [
   {
+    id: "claude:fable-5.1",
+    harness: "claude",
+    name: "Claude Fable 5.1",
+    nativeId: "claude-fable-5-1",
+    settings: [EFFORT_WITH_XHIGH, contextWindow("1m")],
+  },
+  {
     id: "claude:fable-5",
     harness: "claude",
     name: "Claude Fable 5",
@@ -451,7 +458,7 @@ export function modelsForClaudeVersion(
         ? compareSemver(version, MINIMUM_CLAUDE_OPUS_5_VERSION) >= 0
         : false;
     }
-    if (slug === "claude-fable-5") {
+    if (slug === "claude-fable-5-1" || slug === "claude-fable-5") {
       return version
         ? compareSemver(version, MINIMUM_CLAUDE_FABLE_5_VERSION) >= 0
         : false;
