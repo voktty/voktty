@@ -180,4 +180,61 @@ texto cualquiera
     const updated = useKanbanStore.getState().cards.find((c) => c.id === card.id);
     expect(updated?.assignedExecution).toBeUndefined();
   });
+
+  it("completes card execution, moves card to done, and computes duration", () => {
+    const card = useKanbanStore.getState().addCard({
+      title: "Tarea en ejecucion",
+      description: "Detalles",
+      columnId: "todo",
+    });
+
+    const startTime = 10000;
+    const finishTime = 45000;
+
+    useKanbanStore.getState().assignCardToAgent(card.id, {
+      leafId: 42,
+      tabId: 3,
+      agentName: "Claude Code",
+      startedAt: startTime,
+      lastObservedStatus: "working",
+    });
+
+    useKanbanStore.getState().completeCardExecution(card.id, finishTime);
+
+    const updated = useKanbanStore.getState().cards.find((c) => c.id === card.id);
+    expect(updated?.columnId).toBe("done");
+    expect(updated?.assignedExecution?.lastObservedStatus).toBe("idle");
+    expect(updated?.assignedExecution?.finishedAt).toBe(finishTime);
+    expect(updated?.assignedExecution?.durationMs).toBe(35000);
+    expect(updated?.assignedExecution?.requiresAttention).toBe(false);
+  });
+
+  it("marks card execution as failed without removing it from in_progress", () => {
+    const card = useKanbanStore.getState().addCard({
+      title: "Tarea fallida",
+      description: "Detalles",
+      columnId: "todo",
+    });
+
+    useKanbanStore.getState().assignCardToAgent(card.id, {
+      leafId: 42,
+      tabId: 3,
+      agentName: "Claude Code",
+      startedAt: 1000,
+      lastObservedStatus: "working",
+    });
+
+    useKanbanStore
+      .getState()
+      .failCardExecution(card.id, "Terminal cerrada abruptamente");
+
+    const updated = useKanbanStore.getState().cards.find((c) => c.id === card.id);
+    expect(updated?.columnId).toBe("in_progress");
+    expect(updated?.assignedExecution?.lastObservedStatus).toBe("error");
+    expect(updated?.assignedExecution?.errorReason).toBe(
+      "Terminal cerrada abruptamente",
+    );
+    expect(updated?.assignedExecution?.requiresAttention).toBe(false);
+  });
 });
+

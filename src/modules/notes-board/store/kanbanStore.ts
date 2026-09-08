@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type {
+  AgentExecutionStatus,
+  AssignedExecution,
   KanbanCard,
   KanbanColumnId,
   KanbanPriority,
@@ -30,21 +32,20 @@ type KanbanStoreState = {
     priority?: KanbanPriority,
   ) => KanbanCard;
   clearCompleted: () => void;
-  assignCardToAgent: (
-    id: string,
-    execution: {
-      leafId: number;
-      tabId: number;
-      agentName: string;
-      startedAt: number;
-      lastObservedStatus: "working" | "waiting" | "idle";
-    },
-  ) => void;
+  assignCardToAgent: (id: string, execution: AssignedExecution) => void;
   unassignCard: (id: string) => void;
   updateCardExecutionStatus: (
     id: string,
-    status: "working" | "waiting" | "idle",
+    status: AgentExecutionStatus,
+    details?: {
+      requiresAttention?: boolean;
+      errorReason?: string;
+      finishedAt?: number;
+      durationMs?: number;
+    },
   ) => void;
+  completeCardExecution: (id: string, finishedAt?: number) => void;
+  failCardExecution: (id: string, reason?: string) => void;
   resetCards: (cards: KanbanCard[]) => void;
 };
 
@@ -217,16 +218,104 @@ export const useKanbanStore = create<KanbanStoreState>((set) => ({
     });
   },
 
-  updateCardExecutionStatus: (id, status) => {
+  updateCardExecutionStatus: (id, status, details) => {
     set((state) => {
-      const next = state.cards.map((card) => {
+      const next: KanbanCard[] = state.cards.map((card) => {
         if (card.id !== id || !card.assignedExecution) return card;
+        const updatedExecution: AssignedExecution = {
+          ...card.assignedExecution,
+          lastObservedStatus: status,
+          requiresAttention:
+            details?.requiresAttention ?? (status === "waiting"),
+          errorReason:
+            details?.errorReason ?? card.assignedExecution.errorReason,
+          finishedAt:
+            details?.finishedAt ?? card.assignedExecution.finishedAt,
+          durationMs:
+            details?.durationMs ?? card.assignedExecution.durationMs,
+        };
         return {
           ...card,
-          assignedExecution: {
-            ...card.assignedExecution,
-            lastObservedStatus: status,
-          },
+          assignedExecution: updatedExecution,
+          updatedAt: Date.now(),
+        };
+      });
+      persistCards(next);
+      return { cards: next };
+    });
+  },
+
+  completeCardExecution: (id, finishedAt) => {
+    const now = finishedAt ?? Date.now();
+    set((state) => {
+      const target = state.cards.find((c) => c.id === id);
+      if (!target) return state;
+
+      const durationMs = target.assignedExecution
+        ? Math.max(0, now - target.assignedExecution.startedAt)
+        : undefined;
+
+      const updatedExecution: AssignedExecution | undefined =
+        target.assignedExecution
+          ? {
+              ...target.assignedExecution,
+              lastObservedStatus: "idle",
+              finishedAt: now,
+              durationMs,
+              requiresAttention: false,
+            }
+          : undefined;
+
+      if (target.columnId === "in_progress") {
+        const remaining = state.cards.filter((c) => c.id !== id);
+        const doneColCards = remaining
+          .filter((c) => c.columnId === "done")
+          .sort((a, b) => a.order - b.order);
+
+        const updatedCard: KanbanCard = {
+          ...target,
+          columnId: "done",
+          assignedExecution: updatedExecution,
+          order: doneColCards.length,
+          updatedAt: now,
+        };
+
+        const otherCards = remaining.filter((c) => c.columnId !== "done");
+        const next = [...otherCards, ...doneColCards, updatedCard];
+        persistCards(next);
+        return { cards: next };
+      } else {
+        const next = state.cards.map((card) =>
+          card.id === id
+            ? {
+                ...card,
+                assignedExecution: updatedExecution,
+                updatedAt: now,
+              }
+            : card,
+        );
+        persistCards(next);
+        return { cards: next };
+      }
+    });
+  },
+
+  failCardExecution: (
+    id,
+    reason = "Terminal o proceso cerrado antes de finalizar",
+  ) => {
+    set((state) => {
+      const next: KanbanCard[] = state.cards.map((card) => {
+        if (card.id !== id || !card.assignedExecution) return card;
+        const updatedExecution: AssignedExecution = {
+          ...card.assignedExecution,
+          lastObservedStatus: "error",
+          errorReason: reason,
+          requiresAttention: false,
+        };
+        return {
+          ...card,
+          assignedExecution: updatedExecution,
           updatedAt: Date.now(),
         };
       });

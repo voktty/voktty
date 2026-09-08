@@ -15,3 +15,4 @@ export {
 } from "./lib/launcher";
 export { nextAttentionTarget, useAgentStore } from "./store/agentStore";
 export { displayAgent } from "./lib/format";
+export { playAgentNotificationSound } from "./lib/sound";

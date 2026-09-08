@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatExecutionDuration,
   formatTaskForAgent,
   resolveActiveAgentTargets,
 } from "./agentHandoff";
@@ -105,4 +106,18 @@ describe("agentHandoff", () => {
       expect(targets[0].displayName).toBe("Gemini");
     });
   });
+
+  describe("formatExecutionDuration", () => {
+    it("formats durations accurately for various ranges", () => {
+      expect(formatExecutionDuration(0)).toBe("<1s");
+      expect(formatExecutionDuration(500)).toBe("<1s");
+      expect(formatExecutionDuration(1200)).toBe("1s");
+      expect(formatExecutionDuration(45000)).toBe("45s");
+      expect(formatExecutionDuration(60000)).toBe("1m");
+      expect(formatExecutionDuration(135000)).toBe("2m 15s");
+      expect(formatExecutionDuration(3600000)).toBe("1h");
+      expect(formatExecutionDuration(3900000)).toBe("1h 5m");
+    });
+  });
 });
+

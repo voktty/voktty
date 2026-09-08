@@ -2,6 +2,20 @@ export type KanbanColumnId = "ideas" | "todo" | "in_progress" | "done";
 
 export type KanbanPriority = "low" | "medium" | "high" | "urgent";
 
+export type AgentExecutionStatus = "working" | "waiting" | "idle" | "error";
+
+export type AssignedExecution = {
+  leafId: number;
+  tabId: number;
+  agentName: string;
+  startedAt: number;
+  lastObservedStatus: AgentExecutionStatus;
+  finishedAt?: number;
+  durationMs?: number;
+  requiresAttention?: boolean;
+  errorReason?: string;
+};
+
 export type KanbanCard = {
   id: string;
   title: string;
@@ -14,13 +28,7 @@ export type KanbanCard = {
   sourceNoteId?: string;
   sourceCwd?: string;
   tags?: string[];
-  assignedExecution?: {
-    leafId: number;
-    tabId: number;
-    agentName: string;
-    startedAt: number;
-    lastObservedStatus: "working" | "waiting" | "idle";
-  };
+  assignedExecution?: AssignedExecution;
 };
 
 export type KanbanColumn = {

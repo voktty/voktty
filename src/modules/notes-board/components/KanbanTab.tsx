@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -40,21 +40,6 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
     () => resolveActiveAgentTargets(agentSessions, tabs),
     [agentSessions, tabs],
   );
-
-  // Reactively track agent session statuses and reflect them in Kanban cards
-  useEffect(() => {
-    const unsubscribe = useAgentStore.subscribe((state) => {
-      const currentCards = useKanbanStore.getState().cards;
-      for (const card of currentCards) {
-        if (!card.assignedExecution) continue;
-        const session = state.sessions[card.assignedExecution.leafId];
-        if (session && session.status !== card.assignedExecution.lastObservedStatus) {
-          useKanbanStore.getState().updateCardExecutionStatus(card.id, session.status);
-        }
-      }
-    });
-    return unsubscribe;
-  }, []);
 
   const [query, setQuery] = useState("");
   const [activeColInput, setActiveColInput] = useState<KanbanColumnId | null>(

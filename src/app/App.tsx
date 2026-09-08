@@ -97,6 +97,7 @@ import {
 import { useTranslation } from "@/modules/i18n";
 import { setLspNavigator } from "@/modules/lsp";
 import type { MarkdownSearchHandle } from "@/modules/markdown";
+import { KanbanAgentBridge } from "@/modules/notes-board";
 import { OnboardingWizard } from "@/modules/onboarding";
 import {
   type DevServerCapture,
@@ -4997,6 +4998,7 @@ export default function App() {
           )}
 
           <WindowVibrancyBridge />
+          <KanbanAgentBridge />
 
           {hasComposer ? (
             <AgentNotificationsBridge
