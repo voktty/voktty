@@ -255,6 +255,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { SearchAddon } from "@xterm/addon-search";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -359,6 +361,14 @@ function readRightPanelWidth(): number {
     return RIGHT_PANEL_DEFAULT_WIDTH;
   }
 }
+
+// Lazy: pulls in the harness icon catalog (chrome/icons.tsx), which must
+// stay out of the main window's eager graph (see eager-budget.test.ts).
+const LazyBroadcastToAgentsDialog = lazy(() =>
+  import("@/modules/harness/components/BroadcastToAgentsDialog").then(
+    (m) => ({ default: m.BroadcastToAgentsDialog }),
+  ),
+);
 
 export default function App() {
   const initialLaunchRequest = getInitialLaunchRequest();
@@ -2384,6 +2394,7 @@ export default function App() {
     (s) => s.explorerGitDecorations,
   );
   const [gitCloneModalOpen, setGitCloneModalOpen] = useState(false);
+  const [broadcastToAgentsOpen, setBroadcastToAgentsOpen] = useState(false);
 
   const openPreviewTab = useCallback(
     (target?: string, options?: { splitWithActive?: boolean }) => {
@@ -2927,6 +2938,7 @@ export default function App() {
         togglePanelAndFocus();
       },
       "ai.askSelection": onAskFromSelection,
+      "ai.broadcastToAgents": () => setBroadcastToAgentsOpen(true),
       "agentHistory.open": () => useAgentHistoryStore.getState().openHistory(),
       "agent.focusAttention": () => {
         const t = nextAttentionTarget();
@@ -4356,6 +4368,7 @@ export default function App() {
         openNewPreview: () => openPreviewTab(""),
         openNewApiClient: () => newApiClientTab(),
         openNewHarness,
+        openBroadcastToAgents: () => setBroadcastToAgentsOpen(true),
         openActiveTabs: openActiveTabsLaunchpad,
         openGitGraph: openGitGraphFromContext,
         openGitClone: () => setGitCloneModalOpen(true),
@@ -5185,6 +5198,13 @@ export default function App() {
               cdInNewTab(clonedPath);
             }}
           />
+
+          <Suspense fallback={null}>
+            <LazyBroadcastToAgentsDialog
+              open={broadcastToAgentsOpen}
+              onOpenChange={setBroadcastToAgentsOpen}
+            />
+          </Suspense>
 
           {blameTarget ? (
             <BlameDialog

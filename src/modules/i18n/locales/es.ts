@@ -1564,8 +1564,10 @@ export const es: TranslationSchema = {
     githubNoRemote: "Este repositorio no tiene remoto de GitHub",
     githubDraft: "borrador",
     githubDiffTruncated: "diff truncado",
-    githubReviewBodyPlaceholder: "Añade un comentario (obligatorio para solicitar cambios)...",
-    githubReviewBodyRequired: "Añade un comentario explicando qué hace falta cambiar",
+    githubReviewBodyPlaceholder:
+      "Añade un comentario (obligatorio para solicitar cambios)...",
+    githubReviewBodyRequired:
+      "Añade un comentario explicando qué hace falta cambiar",
     githubComment: "Comentar",
     githubRequestChanges: "Solicitar cambios",
     githubApprove: "Aprobar",
@@ -1792,6 +1794,7 @@ export const es: TranslationSchema = {
       moveFocusedSpaceMember: "Espacios: mover miembro enfocado...",
       closeFocusedSpaceMember: "Espacios: cerrar miembro enfocado",
       openHarness: "Agent Harness",
+      broadcastToAgents: "Enviar mensaje a todos los agentes",
       newTerminal: "Nueva terminal",
       dropPrompt: "Suelta el archivo o carpeta aquí para abrirlo",
       dropSubtitle:
@@ -2748,6 +2751,7 @@ export const es: TranslationSchema = {
       aiToggle: "Alternar agente de IA",
       aiToggleMini: "Alternar ventana de chat de IA",
       aiAskSelection: "Preguntar a la IA sobre la selección",
+      aiBroadcastToAgents: "Enviar mensaje a todos los agentes",
       agentHistoryOpen: "Historial operativo de agentes",
       agentFocusAttention: "Ir al agente que necesita atención",
       sidebarToggle: "Alternar explorador de archivos",
@@ -2791,7 +2795,8 @@ export const es: TranslationSchema = {
   },
   launcher: {
     title: "Launchpad",
-    description: "Abre cualquier herramienta de Voktty. Escribe para filtrar, cursores para moverte, Enter para abrir.",
+    description:
+      "Abre cualquier herramienta de Voktty. Escribe para filtrar, cursores para moverte, Enter para abrir.",
     placeholder: "Buscar herramientas...",
     empty: "Ninguna herramienta coincide.",
     hints: {
@@ -2872,11 +2877,13 @@ export const es: TranslationSchema = {
     viewChanges: "Ver cambios",
     cherryPick: "Cherry-pick",
     cherryPickConfirmTitle: "¿Aplicar este commit?",
-    cherryPickConfirmDescription: "{subject} ({sha}) se aplicará encima de la rama actual.",
+    cherryPickConfirmDescription:
+      "{subject} ({sha}) se aplicará encima de la rama actual.",
     cherryPickSuccess: "Commit aplicado",
     cherryPickFailed: "No se pudo aplicar el commit",
     createBranch: "Nueva rama",
-    createBranchDescription: "La rama empezará en {subject} ({sha}) y se activará.",
+    createBranchDescription:
+      "La rama empezará en {subject} ({sha}) y se activará.",
     branchNamePlaceholder: "Nombre de la rama",
     branchCreated: "Rama {name} creada",
     branchFailed: "No se pudo crear la rama",
@@ -4283,5 +4290,15 @@ export const es: TranslationSchema = {
   harness: {
     agentDevelopment: "Desarrollo de Agentes",
     closeAgentDevelopment: "Cerrar Desarrollo de Agentes",
+    broadcast: {
+      title: "Enviar a todos los agentes",
+      description:
+        "Envía el mismo mensaje a todas las sesiones de agentes abiertas en Voktty. Desmarca la sesión que quieras omitir antes de enviar.",
+      noSessions: "No hay sesiones de agentes abiertas.",
+      placeholder: "Mensaje para los agentes seleccionados...",
+      send: "Enviar a {count} agente(s)",
+      resultAllSent: "Enviado a {count} agente(s)",
+      resultPartial: "Enviado a {sent} agente(s), {failed} fallaron",
+    },
   },
 };

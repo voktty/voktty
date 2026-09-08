@@ -1,9 +1,5 @@
 /** Hugeicons chrome set. Glyphs are deep-imported so the 5MB catalog is not bundled. */
-import {
-  HugeiconsIcon,
-  type HugeiconsIconProps,
-  type IconSvgElement,
-} from "@hugeicons/react";
+
 import Add01Icon from "@hugeicons/core-free-icons/Add01Icon";
 import AddSquareIcon from "@hugeicons/core-free-icons/AddSquareIcon";
 import AiIdeaIcon from "@hugeicons/core-free-icons/AiIdeaIcon";
@@ -57,6 +53,7 @@ import LinkSquare02Icon from "@hugeicons/core-free-icons/LinkSquare02Icon";
 import ListEndIcon from "@hugeicons/core-free-icons/ListEndIcon";
 import Loading03Icon from "@hugeicons/core-free-icons/Loading03Icon";
 import MagicWand01Icon from "@hugeicons/core-free-icons/MagicWand01Icon";
+import Megaphone01Icon from "@hugeicons/core-free-icons/Megaphone01Icon";
 import MessageMultiple01Icon from "@hugeicons/core-free-icons/MessageMultiple01Icon";
 import MinusSignIcon from "@hugeicons/core-free-icons/MinusSignIcon";
 import MoreHorizontalIcon from "@hugeicons/core-free-icons/MoreHorizontalIcon";
@@ -86,6 +83,11 @@ import UndoIcon from "@hugeicons/core-free-icons/UndoIcon";
 import UngroupItemsIcon from "@hugeicons/core-free-icons/UngroupItemsIcon";
 import WholeWordIcon from "@hugeicons/core-free-icons/WholeWordIcon";
 import Wrench01Icon from "@hugeicons/core-free-icons/Wrench01Icon";
+import {
+  HugeiconsIcon,
+  type HugeiconsIconProps,
+  type IconSvgElement,
+} from "@hugeicons/react";
 import { forwardRef, type Ref } from "react";
 
 /** Props shared by every chrome icon. `icon` is filled in by the named wrappers. */
@@ -193,6 +195,7 @@ export const LoaderCircle = wrap(Loading03Icon, "LoaderCircle");
 export const Lock = wrap(SquareLock02Icon, "Lock");
 export const LockOpen = wrap(SquareUnlock01Icon, "LockOpen");
 export const Maximize2 = wrap(ArrowExpand01Icon, "Maximize2");
+export const Megaphone = wrap(Megaphone01Icon, "Megaphone");
 export const MessageMultiple = wrap(MessageMultiple01Icon, "MessageMultiple");
 export const MessageSquare = wrap(Comment01Icon, "MessageSquare");
 export const MessageSquarePlus = wrap(CommentAdd01Icon, "MessageSquarePlus");
