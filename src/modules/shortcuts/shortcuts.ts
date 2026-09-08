@@ -50,6 +50,7 @@ export type ShortcutId =
   | "ai.toggle"
   | "ai.toggleMini"
   | "ai.askSelection"
+  | "ai.broadcastToAgents"
   | "agentHistory.open"
   | "agent.focusAttention"
   | "settings.open"
@@ -356,6 +357,12 @@ export const SHORTCUTS: Shortcut[] = [
     // Keep Mod+L available to the shell for clear-screen, including when
     // terminal text is selected and this shortcut is otherwise eligible.
     defaultBindings: [{ [MOD_PROP]: true, key: "j" }],
+  },
+  {
+    id: "ai.broadcastToAgents",
+    labelKey: "shortcuts.labels.aiBroadcastToAgents",
+    group: "AI",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "m" }],
   },
   {
     id: "agentHistory.open",

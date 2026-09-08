@@ -1523,7 +1523,8 @@ export const en = {
     githubNoRemote: "This repository has no GitHub remote",
     githubDraft: "draft",
     githubDiffTruncated: "diff truncated",
-    githubReviewBodyPlaceholder: "Add a comment (required to request changes)...",
+    githubReviewBodyPlaceholder:
+      "Add a comment (required to request changes)...",
     githubReviewBodyRequired: "Add a comment explaining what needs to change",
     githubComment: "Comment",
     githubRequestChanges: "Request Changes",
@@ -1747,6 +1748,7 @@ export const en = {
       moveFocusedSpaceMember: "Spaces: Move focused member...",
       closeFocusedSpaceMember: "Spaces: Close focused member",
       openHarness: "Open Agent Development Harness",
+      broadcastToAgents: "Send message to all agents",
       newTerminal: "New terminal",
       dropPrompt: "Drop file or folder here to open",
       dropSubtitle:
@@ -2680,6 +2682,7 @@ export const en = {
       aiToggle: "Toggle AI agent",
       aiToggleMini: "Toggle AI chat window",
       aiAskSelection: "Ask AI about selection",
+      aiBroadcastToAgents: "Send message to all agents",
       agentHistoryOpen: "Agent operational history",
       agentFocusAttention: "Jump to agent needing attention",
       sidebarToggle: "Toggle file explorer",
@@ -2723,7 +2726,8 @@ export const en = {
   },
   launcher: {
     title: "Launchpad",
-    description: "Open any Voktty tool. Type to filter, arrows to move, Enter to launch.",
+    description:
+      "Open any Voktty tool. Type to filter, arrows to move, Enter to launch.",
     placeholder: "Search tools...",
     empty: "No tool matches that.",
     hints: {
@@ -2804,11 +2808,13 @@ export const en = {
     viewChanges: "View changes",
     cherryPick: "Cherry-pick",
     cherryPickConfirmTitle: "Cherry-pick this commit?",
-    cherryPickConfirmDescription: "{subject} ({sha}) will be applied on top of the current branch.",
+    cherryPickConfirmDescription:
+      "{subject} ({sha}) will be applied on top of the current branch.",
     cherryPickSuccess: "Commit cherry-picked",
     cherryPickFailed: "Could not cherry-pick the commit",
     createBranch: "New branch",
-    createBranchDescription: "The branch will start at {subject} ({sha}) and be checked out.",
+    createBranchDescription:
+      "The branch will start at {subject} ({sha}) and be checked out.",
     branchNamePlaceholder: "Branch name",
     branchCreated: "Branch {name} created",
     branchFailed: "Could not create the branch",
@@ -4188,6 +4194,16 @@ export const en = {
   harness: {
     agentDevelopment: "Agent Development",
     closeAgentDevelopment: "Close Agent Development",
+    broadcast: {
+      title: "Send to all agents",
+      description:
+        "Sends the same message to every agent session currently open in Voktty. Uncheck any session you want to skip before sending.",
+      noSessions: "No agent sessions are currently open.",
+      placeholder: "Message to send to the selected agents...",
+      send: "Send to {count} agent(s)",
+      resultAllSent: "Sent to {count} agent(s)",
+      resultPartial: "Sent to {sent} agent(s), {failed} failed",
+    },
   },
 };
 
