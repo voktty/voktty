@@ -23,7 +23,7 @@ const MAX_HEIGHT = 800;
 
 export const useNotesBoardStore = create<NotesBoardState>((set) => ({
   isOpen: false,
-  activeTab: "kanban",
+  activeTab: "notes",
   width: DEFAULT_WIDTH,
   height: DEFAULT_HEIGHT,
 

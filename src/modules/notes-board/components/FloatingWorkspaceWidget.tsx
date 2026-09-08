@@ -34,7 +34,6 @@ export function FloatingWorkspaceWidget({
   const rootRef = useRef<HTMLDivElement>(null);
   const activeTab = useNotesBoardStore((s) => s.activeTab);
   const setTab = useNotesBoardStore((s) => s.setTab);
-  const width = useNotesBoardStore((s) => s.width);
   const height = useNotesBoardStore((s) => s.height);
   const cardCount = useKanbanStore((s) => s.cards.length);
 
@@ -58,8 +57,8 @@ export function FloatingWorkspaceWidget({
     icon: typeof Note01Icon;
     badge?: number;
   }[] = [
-    { id: "kanban", label: "Kanban", icon: Layout01Icon, badge: cardCount },
     { id: "notes", label: "Notas & Ideas", icon: Note01Icon },
+    { id: "kanban", label: "Kanban", icon: Layout01Icon, badge: cardCount },
   ];
 
   return (
@@ -69,10 +68,9 @@ export function FloatingWorkspaceWidget({
       role="region"
       aria-label="Notas y Tablero Kanban Flotante"
       style={{
-        width: `min(${width}px, calc(100vw - 24px))`,
         height: `min(${height}px, calc(100vh - 64px))`,
       }}
-      className="fixed bottom-8 right-3 z-50 flex flex-col overflow-hidden rounded-xl border border-border/60 bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-xl outline-none ring-1 ring-border/20 transition-all animate-in fade-in zoom-in-95 duration-150"
+      className="fixed bottom-8.5 left-3 right-3 z-50 flex flex-col overflow-hidden rounded-xl border border-border/70 bg-popover text-popover-foreground shadow-2xl outline-none ring-1 ring-border/25 transition-all animate-in fade-in slide-in-from-bottom-2 duration-150"
     >
       {/* Header bar */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/40 px-3 bg-muted/20">

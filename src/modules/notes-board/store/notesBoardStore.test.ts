@@ -5,7 +5,7 @@ describe("notesBoardStore", () => {
   beforeEach(() => {
     useNotesBoardStore.setState({
       isOpen: false,
-      activeTab: "kanban",
+      activeTab: "notes",
       width: 640,
       height: 540,
     });
