@@ -10,6 +10,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
+import { useTranslation } from "@/modules/i18n";
 import { useAgentStore } from "@/modules/agents/store/agentStore";
 import { submitToLeaf } from "@/modules/terminal";
 import {
@@ -17,6 +18,7 @@ import {
   importCardsFromProjectVault,
 } from "../lib/kanbanFsSync";
 import {
+  COLUMN_TITLE_KEYS,
   DEFAULT_COLUMNS,
   type KanbanCard,
   type KanbanColumnId,
@@ -39,6 +41,7 @@ type Props = {
 };
 
 export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
+  const { t } = useTranslation();
   const cards = useKanbanStore((s) => s.cards);
   const addCard = useKanbanStore((s) => s.addCard);
   const moveCard = useKanbanStore((s) => s.moveCard);
@@ -69,9 +72,9 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
     setIsSyncing(true);
     try {
       const res = await exportCardsToProjectVault(cwd, cards);
-      toast.success(`Exportadas ${res.count} tarjetas a .voktty/tasks/`);
+      toast.success(t("notesBoard.exportedToast", { count: res.count }));
     } catch {
-      toast.error("Error al exportar tarjetas al vault");
+      toast.error(t("notesBoard.exportError"));
     } finally {
       setIsSyncing(false);
     }
@@ -85,13 +88,13 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
       if (imported.length > 0) {
         mergeCards(imported);
         toast.success(
-          `Sincronizadas ${imported.length} tarjetas desde .voktty/tasks/`,
+          t("notesBoard.importedToast", { count: imported.length }),
         );
       } else {
-        toast.info("No se encontraron tarjetas en .voktty/tasks/");
+        toast.info(t("notesBoard.importEmpty"));
       }
     } catch {
-      toast.error("Error al importar tarjetas desde el vault");
+      toast.error(t("notesBoard.importError"));
     } finally {
       setIsSyncing(false);
     }
@@ -191,7 +194,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar tarjetas..."
+            placeholder={t("notesBoard.searchCards")}
             className="h-7 pl-8 text-xs bg-background/60"
           />
         </div>
@@ -209,8 +212,8 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
             onClick={toggleObserving}
             title={
               isObserving
-                ? "Observacion activa: Voktty sincroniza estados y avanza tarjetas automaticamente al finalizar (Clic para pausar)"
-                : "Observacion en pausa: Voktty no vigila procesos para ahorrar recursos (Clic para activar)"
+                ? t("notesBoard.observingOn")
+                : t("notesBoard.observingOff")
             }
           >
             <span
@@ -219,13 +222,13 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                 isObserving ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/50",
               )}
             />
-            <span>{isObserving ? "Observando" : "Observar"}</span>
+            <span>{isObserving ? t("notesBoard.observing") : t("notesBoard.observe")}</span>
           </Button>
 
-          <span>{filteredCards.length} tarjetas</span>
+          <span>{t("notesBoard.cardsCount", { count: filteredCards.length })}</span>
           {availableAgents.length > 0 && (
             <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary text-[10px] font-medium">
-              {availableAgents.length} agentes listos
+              {t("notesBoard.agentsReady", { count: availableAgents.length })}
             </span>
           )}
           {cwd && (
@@ -236,10 +239,10 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                 className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={handleExportVault}
                 disabled={isSyncing}
-                title="Exportar tarjetas a .voktty/tasks/ (Git)"
+                title={t("notesBoard.exportVaultTitle")}
               >
                 <HugeiconsIcon icon={Upload01Icon} size={12} />
-                <span>Exportar</span>
+                <span>{t("notesBoard.exportVault")}</span>
               </Button>
               <Button
                 variant="ghost"
@@ -247,10 +250,10 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                 className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={handleImportVault}
                 disabled={isSyncing}
-                title="Importar tarjetas desde .voktty/tasks/ (Git)"
+                title={t("notesBoard.importVaultTitle")}
               >
                 <HugeiconsIcon icon={Download01Icon} size={12} />
-                <span>Importar</span>
+                <span>{t("notesBoard.importVault")}</span>
               </Button>
             </div>
           )}
@@ -279,7 +282,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
               <div className="flex shrink-0 items-center justify-between border-b border-border/30 px-3 py-2 bg-muted/30">
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="font-semibold text-xs text-foreground truncate">
-                    {col.title}
+                    {t(COLUMN_TITLE_KEYS[col.id])}
                   </span>
                   <span className="flex size-4 items-center justify-center rounded-full bg-muted text-[10px] font-mono text-muted-foreground font-medium">
                     {colCards.length}
@@ -291,7 +294,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                   size="icon"
                   className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
                   onClick={() => setActiveColInput(isAdding ? null : col.id)}
-                  title="Nueva tarjeta"
+                  title={t("notesBoard.newCard")}
                 >
                   <HugeiconsIcon icon={Add01Icon} size={12} />
                 </Button>
@@ -302,7 +305,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                 <div className="border-b border-border/40 bg-card p-2.5 flex flex-col gap-2 shadow-xs shrink-0">
                   <Input
                     autoFocus
-                    placeholder="Titulo de la tarea..."
+                    placeholder={t("notesBoard.taskTitlePlaceholder")}
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     onKeyDown={(e) => {
@@ -316,7 +319,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                     className="h-7 text-xs bg-background"
                   />
                   <textarea
-                    placeholder="Descripcion (soporta checklists - [ ])"
+                    placeholder={t("notesBoard.taskDescPlaceholder")}
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}
                     rows={2}
@@ -330,10 +333,10 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                       }
                       className="rounded border border-border/50 bg-background px-1.5 py-0.5 text-[11px] text-foreground"
                     >
-                      <option value="low">Baja</option>
-                      <option value="medium">Media</option>
-                      <option value="high">Alta</option>
-                      <option value="urgent">Urgente</option>
+                      <option value="low">{t("notesBoard.priority.low")}</option>
+                      <option value="medium">{t("notesBoard.priority.medium")}</option>
+                      <option value="high">{t("notesBoard.priority.high")}</option>
+                      <option value="urgent">{t("notesBoard.priority.urgent")}</option>
                     </select>
 
                     <div className="flex items-center gap-1">
@@ -343,14 +346,14 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                         className="h-6 px-2 text-[11px]"
                         onClick={() => setActiveColInput(null)}
                       >
-                        Cancelar
+                        {t("common.cancel")}
                       </Button>
                       <Button
                         size="sm"
                         className="h-6 px-2 text-[11px]"
                         onClick={() => handleCreate(col.id)}
                       >
-                        Guardar
+                        {t("common.save")}
                       </Button>
                     </div>
                   </div>
@@ -362,7 +365,7 @@ export function KanbanTab({ onRunCommand, cwd, tabs, onActivateAgent }: Props) {
                 {colCards.length === 0 && !isAdding ? (
                   <div className="flex flex-1 items-center justify-center p-4 text-center">
                     <span className="text-[11px] text-muted-foreground/50">
-                      Sin tarjetas
+                      {t("notesBoard.emptyColumn")}
                     </span>
                   </div>
                 ) : (

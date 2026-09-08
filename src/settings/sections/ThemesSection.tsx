@@ -349,14 +349,14 @@ export function ThemesSection() {
                     {theme.variations && theme.variations.length > 0 ? (
                       <span
                         className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[9.5px] font-medium text-primary border border-primary/20 shrink-0"
-                        title={`${theme.variations.length} ${t("settings.themes.variations.title", { defaultValue: "variaciones" })}`}
+                        title={`${theme.variations.length} ${t("settings.themes.variations.title")}`}
                       >
                         <span className="flex items-center -space-x-1">
                           <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                         </span>
-                        <span>{t("settings.themes.variations.matrixHint", { defaultValue: "Matriz" })}</span>
+                        <span>{t("settings.themes.variations.matrixHint")}</span>
                       </span>
                     ) : null}
                   </div>
@@ -410,9 +410,7 @@ export function ThemesSection() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11.5px] font-medium text-foreground">
-                  {t("settings.themes.variations.title", {
-                    defaultValue: "Variaciones de color",
-                  })}
+                  {t("settings.themes.variations.title")}
                 </span>
                 <span className="text-[10.5px] text-muted-foreground">
                   ({selectedTheme.variations.length})
@@ -472,13 +470,10 @@ export function ThemesSection() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
             <Label>
-              {t("settings.themes.pack.title", { defaultValue: "Pack de apariencia" })}
+              {t("settings.themes.pack.title")}
             </Label>
             <span className="text-[11px] text-muted-foreground">
-              {t("settings.themes.pack.desc", {
-                defaultValue:
-                  "Combinacion preconfigurada de paleta, relieve de superficie y tipografia.",
-              })}
+              {t("settings.themes.pack.desc")}
             </span>
           </div>
           <Select
@@ -503,14 +498,10 @@ export function ThemesSection() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
             <Label>
-              {t("settings.themes.typography.title", {
-                defaultValue: "Perfil tipografico",
-              })}
+              {t("settings.themes.typography.title")}
             </Label>
             <span className="text-[11px] text-muted-foreground">
-              {t("settings.themes.typography.desc", {
-                defaultValue: "Familia de fuentes, tamano y densidad de la interfaz.",
-              })}
+              {t("settings.themes.typography.desc")}
             </span>
           </div>
           <Select
@@ -539,15 +530,10 @@ export function ThemesSection() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
             <Label>
-              {t("settings.themes.surface.title", {
-                defaultValue: "Perfil de superficie",
-              })}
+              {t("settings.themes.surface.title")}
             </Label>
             <span className="text-[11px] text-muted-foreground">
-              {t("settings.themes.surface.desc", {
-                defaultValue:
-                  "Transparencia y relieve de las superficies del lienzo, barra lateral y paneles.",
-              })}
+              {t("settings.themes.surface.desc")}
             </span>
           </div>
           <Select

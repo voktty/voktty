@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { t } from "@/modules/i18n";
 import type {
   AgentExecutionStatus,
   AssignedExecution,
@@ -193,7 +194,7 @@ export const useKanbanStore = create<KanbanStoreState>((set) => ({
     const id = `card_${now}_${Math.random().toString(36).slice(2, 7)}`;
     let created: KanbanCard = {
       id,
-      title: note.title.trim() || "Nota sin titulo",
+      title: note.title.trim() || t("notesBoard.untitledNote"),
       description: note.body,
       columnId: targetColumnId,
       priority,

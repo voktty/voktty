@@ -1,3 +1,4 @@
+import { useTranslation } from "@/modules/i18n";
 import { X } from "./icons";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -34,6 +35,7 @@ export function ModalPanel({
   className,
   children,
 }: Props) {
+  const { t } = useTranslation();
   const closeRef = useRef<HTMLButtonElement>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const uid = useId();
@@ -87,7 +89,7 @@ export function ModalPanel({
           <button
             ref={closeRef}
             type="button"
-            aria-label="Close"
+            aria-label={t("common.close")}
             onClick={onClose}
             className="grid size-7 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/8 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >

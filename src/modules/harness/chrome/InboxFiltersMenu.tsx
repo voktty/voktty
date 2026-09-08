@@ -10,6 +10,7 @@ import {
   type LinearProjectOption,
 } from "../lib/inboxFilters";
 import type { LinearTeam } from "../lib/linear";
+import { useTranslation } from "@/modules/i18n";
 import { Popover } from "./Popover";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 
@@ -73,6 +74,7 @@ export function InboxFiltersMenu({
   onLinearTeamsChange,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const hiddenProjects = new Set(filters.hiddenProjects);
   const hiddenLinearProjects = new Set(filters.hiddenLinearProjects);
   const hiddenTeams = new Set(hiddenLinearTeamIds);
@@ -130,47 +132,47 @@ export function InboxFiltersMenu({
       maxHeight={480}
       onDismiss={onClose}
       role="menu"
-      aria-label="Filter inbox"
+      aria-label={t("harness.chrome.filterInbox")}
       onContextMenu={(event) => event.preventDefault()}
       className="overflow-y-auto overscroll-none p-1"
     >
       <FilterItem
-        label="Assigned to me"
+        label={t("harness.chrome.assignedToMe")}
         checked={filters.assignedToMe}
         onClick={toggleAssigned}
       />
 
-      <SectionLabel>Status</SectionLabel>
+      <SectionLabel>{t("harness.chrome.status")}</SectionLabel>
       <FilterItem
-        label="Open"
+        label={t("harness.chrome.open")}
         checked={filters.status.open}
         onClick={() => toggleStatus("open")}
       />
       {source === "github" ? (
         <FilterItem
-          label="Draft"
+          label={t("harness.chrome.draft")}
           checked={filters.status.draft}
           onClick={() => toggleStatus("draft")}
         />
       ) : null}
       <FilterItem
-        label="Closed"
+        label={t("harness.chrome.closed")}
         checked={filters.status.closed}
         onClick={() => toggleStatus("closed")}
       />
       {source === "github" ? (
         <FilterItem
-          label="Merged"
+          label={t("harness.chrome.merged")}
           checked={filters.status.merged}
           onClick={() => toggleStatus("merged")}
         />
       ) : null}
 
-      <SectionLabel>Time</SectionLabel>
+      <SectionLabel>{t("harness.chrome.time")}</SectionLabel>
       {TIME_OPTIONS.map((option) => (
         <FilterItem
           key={option.id}
-          label={option.label}
+          label={t(`harness.chrome.${option.id === "all" ? "allTime" : option.id === "today" ? "today" : option.id === "7d" ? "last7Days" : "last30Days"}`)}
           checked={filters.time === option.id}
           onClick={() => setTime(option.id)}
         />
@@ -178,11 +180,11 @@ export function InboxFiltersMenu({
 
       {source === "github" ? (
         <>
-          <SectionLabel>Type</SectionLabel>
+          <SectionLabel>{t("harness.chrome.type")}</SectionLabel>
           {KIND_OPTIONS.map((option) => (
             <FilterItem
               key={option.id}
-              label={option.label}
+              label={option.id === "issue" ? t("harness.chrome.issues") : t("harness.chrome.pullRequests")}
               checked={!hiddenKinds.has(option.id)}
               icon={option.icon}
               onClick={() => toggleKind(option.id)}

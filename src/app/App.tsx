@@ -2199,7 +2199,7 @@ export default function App() {
       initialLaunchCwd ||
       undefined;
     if (!repoRoot) {
-      toast.error("Open a project first to create an isolated worktree session");
+      toast.error(t("commandPalette.commands.worktreeNeedsProject"));
       return;
     }
     try {
@@ -2824,10 +2824,7 @@ export default function App() {
       void import("sonner").then(({ toast }) => {
         void import("@/modules/i18n").then(({ t: translate }) => {
           toast.warning(
-            translate("tabs.tabIsLockedWarning", {
-              defaultValue:
-                "This tab is locked. Please unlock it before closing.",
-            }),
+            translate("tabs.tabIsLockedWarning"),
             { id: `tab-locked-${effectiveActiveId}` },
           );
         });

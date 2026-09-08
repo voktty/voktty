@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "./icons";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { t } from "@/modules/i18n";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectAvailability } from "../hooks/useProjectAvailability";
@@ -1032,8 +1033,8 @@ function ProjectCard({
         )}
         {unavailable ? (
           <span
-            title="Directorio no disponible en disco"
-            aria-label="Directorio no disponible"
+            title={t("harness.unavailableDir")}
+            aria-label={t("harness.unavailableDirShort")}
             className="flex shrink-0 items-center justify-center text-amber-500 dark:text-amber-400 group-hover:hidden"
           >
             <CircleAlert className="size-3.5 shrink-0 text-amber-400" strokeWidth={2} />
@@ -1127,8 +1128,8 @@ function projectCardTitle(
   unavailable = false,
 ): string {
   const parts = [name, path];
-  if (unavailable) parts.push("[Directorio no disponible en disco]");
-  if (busy) parts.push("Working");
+  if (unavailable) parts.push(t("harness.unavailableDirTag"));
+  if (busy) parts.push(t("harness.working"));
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
   const deletions = stats?.deletions ?? 0;

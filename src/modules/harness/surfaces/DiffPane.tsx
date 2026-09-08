@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { SourceControlPanel } from "@/modules/source-control/SourceControlPanel";
 import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import type { HarnessId } from "../lib/session";
@@ -31,6 +32,7 @@ export function DiffPane({
   onFocus,
   onOpenFile,
 }: Props) {
+  const { t } = useTranslation();
   const [width, setWidth] = useState(() => rememberedWidth);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ startX: number; startW: number } | null>(null);
@@ -126,7 +128,7 @@ export function DiffPane({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize changes pane"
+        aria-label={t("harness.chrome.resizeChanges")}
         aria-valuenow={width}
         aria-valuemin={MIN_WIDTH}
         className={`absolute inset-y-0 -left-px z-10 w-1.5 cursor-col-resize touch-none ${

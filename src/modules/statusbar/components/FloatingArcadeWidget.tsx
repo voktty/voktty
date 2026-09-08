@@ -3,6 +3,7 @@ import { Cancel01Icon, Refresh01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/modules/i18n";
 import { PacmanIcon } from "./PacmanIcon";
 import {
   ARCADE_MODES,
@@ -190,6 +191,7 @@ type Props = {
 };
 
 export function FloatingArcadeWidget({ onClose }: Props) {
+  const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const arcadeRef = useRef<GridArcade | null>(null);
@@ -421,7 +423,7 @@ export function FloatingArcadeWidget({ onClose }: Props) {
       ref={rootRef}
       tabIndex={0}
       role="region"
-      aria-label="Arcade Mini Window"
+      aria-label={t("statusbar.arcadeWindow")}
       className="fixed bottom-8 right-3 z-50 flex h-[360px] w-[440px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-border/60 bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-xl outline-none ring-1 ring-border/20 transition-all animate-in fade-in zoom-in-95 duration-150"
     >
       {/* Header bar */}
@@ -461,7 +463,7 @@ export function FloatingArcadeWidget({ onClose }: Props) {
             size="icon"
             className="size-6 text-muted-foreground hover:bg-accent hover:text-foreground"
             onClick={restartGame}
-            title="Reiniciar (Espacio / Enter)"
+            title={t("statusbar.arcadeRestart")}
           >
             <HugeiconsIcon icon={Refresh01Icon} size={13} strokeWidth={1.75} />
           </Button>
@@ -470,7 +472,7 @@ export function FloatingArcadeWidget({ onClose }: Props) {
             size="icon"
             className="size-6 text-muted-foreground hover:bg-accent hover:text-destructive"
             onClick={onClose}
-            title="Cerrar (Esc)"
+            title={t("statusbar.arcadeClose")}
           >
             <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={1.75} />
           </Button>
@@ -487,10 +489,11 @@ export function FloatingArcadeWidget({ onClose }: Props) {
         {isOver && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/80 backdrop-blur-xs p-4 text-center">
             <p className="font-mono text-sm font-bold tracking-widest text-red-400 uppercase mb-1">
-              Game Over
+              {t("statusbar.arcadeGameOver")}
             </p>
             <p className="font-mono text-xs text-muted-foreground mb-3">
-              Puntuación final: <span className="font-semibold text-foreground">{score}</span>
+              {t("statusbar.arcadeFinalScore")}{" "}
+              <span className="font-semibold text-foreground">{score}</span>
             </p>
             <Button
               size="sm"
@@ -498,7 +501,7 @@ export function FloatingArcadeWidget({ onClose }: Props) {
               onClick={restartGame}
               className="h-7 text-xs font-medium cursor-pointer"
             >
-              Jugar de nuevo (Enter)
+              {t("statusbar.arcadePlayAgain")}
             </Button>
           </div>
         )}
@@ -506,7 +509,7 @@ export function FloatingArcadeWidget({ onClose }: Props) {
 
       {/* Subtle Footer hint */}
       <div className="flex h-6.5 shrink-0 items-center justify-between border-t border-border/30 bg-muted/15 px-2.5 font-mono text-[10px] text-muted-foreground">
-        <span>Usa ↑ ↓ ← → o WASD para jugar</span>
+        <span>{t("statusbar.arcadeControlsHint")}</span>
         <div className="flex items-center gap-1">
           {ARCADE_MODES.map((m) => (
             <button
@@ -524,7 +527,9 @@ export function FloatingArcadeWidget({ onClose }: Props) {
               {m}
             </button>
           ))}
-          <span className="text-muted-foreground/40 ml-1">· Esc</span>
+          <span className="text-muted-foreground/40 ml-1">
+            · {t("statusbar.arcadeEscHint")}
+          </span>
         </div>
       </div>
     </div>

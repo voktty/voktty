@@ -1,6 +1,7 @@
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { useTranslation } from "@/modules/i18n";
 import {
   applyBodyGlass,
   applySidebarBlur,
@@ -243,59 +244,60 @@ function GeneralBlock() {
     };
   }, []);
 
+  const { t } = useTranslation();
   return (
     <>
       <Row
-        label="Workspace layout"
-        description="Classic keeps a single sidebar. Deck adds the project rail, workspace panel, and terminal dock."
+        label={t("harness.settings.workspaceLayout")}
+        description={t("harness.settings.workspaceLayoutDesc")}
       >
         <Segmented
-          label="Workspace layout"
+          label={t("harness.settings.workspaceLayout")}
           value={layout}
           options={[
-            { value: "deck", label: "Deck" },
-            { value: "classic", label: "Classic" },
+            { value: "deck", label: t("harness.settings.deck") },
+            { value: "classic", label: t("harness.settings.classic") },
           ]}
           onChange={(next) => { saveSidebarLayout(next); setLayout(next); }}
         />
       </Row>
       <Row
-        label="Transcript layout"
-        description="Full width keeps prompts as a spanning card. Chat aligns them to the right."
+        label={t("harness.settings.transcriptLayout")}
+        description={t("harness.settings.transcriptLayoutDesc")}
       >
         <Segmented
-          label="Transcript layout"
+          label={t("harness.settings.transcriptLayout")}
           value={transcriptLayout}
           options={[
-            { value: "full", label: "Full width" },
-            { value: "chat", label: "Chat" },
+            { value: "full", label: t("harness.settings.fullWidth") },
+            { value: "chat", label: t("harness.settings.chat") },
           ]}
           onChange={(next) => { saveTranscriptLayout(next); setTranscriptLayout(next); }}
         />
       </Row>
-      <Row label="Anchor prompts to top" description="New prompts sit at the top of the transcript and replies grow below.">
-        <HarnessToggle label="Anchor prompts to top" on={transcriptAnchor} onChange={(next) => { saveTranscriptAnchor(next); setTranscriptAnchor(next); }} />
+      <Row label={t("harness.settings.anchorPrompts")} description={t("harness.settings.anchorPromptsDesc")}>
+        <HarnessToggle label={t("harness.settings.anchorPrompts")} on={transcriptAnchor} onChange={(next) => { saveTranscriptAnchor(next); setTranscriptAnchor(next); }} />
       </Row>
-      <Row label="Zen mode" description={`The agent work reads as collapsible groups. ${MOD}${ALT}Z toggles it.`}>
-        <HarnessToggle label="Zen mode" on={transcriptZen} onChange={(next) => { saveTranscriptZen(next); setTranscriptZen(next); }} />
+      <Row label={t("harness.settings.zenMode")} description={t("harness.settings.zenModeDesc", { shortcut: `${MOD}${ALT}Z` })}>
+        <HarnessToggle label={t("harness.settings.zenMode")} on={transcriptZen} onChange={(next) => { saveTranscriptZen(next); setTranscriptZen(next); }} />
       </Row>
-      <Row label="Composer mascot" description="When a turn is running, the project mascot runs along the composer.">
-        <HarnessToggle label="Composer mascot" on={composerRunner} onChange={(next) => { saveComposerRunner(next); setComposerRunner(next); }} />
+      <Row label={t("harness.settings.composerMascot")} description={t("harness.settings.composerMascotDesc")}>
+        <HarnessToggle label={t("harness.settings.composerMascot")} on={composerRunner} onChange={(next) => { saveComposerRunner(next); setComposerRunner(next); }} />
       </Row>
-      <Row label="Empty session games" description="Pac-man and snake idle on the empty-session grid. Hover to take control.">
-        <HarnessToggle label="Empty session games" on={gridArcadeEnabled} onChange={(next) => { saveGridArcadeEnabled(next); setGridArcadeEnabled(next); }} />
+      <Row label={t("harness.settings.emptySessionGames")} description={t("harness.settings.emptySessionGamesDesc")}>
+        <HarnessToggle label={t("harness.settings.emptySessionGames")} on={gridArcadeEnabled} onChange={(next) => { saveGridArcadeEnabled(next); setGridArcadeEnabled(next); }} />
       </Row>
-      <Row label="Notes" description="A global markdown notebook on the project rail.">
-        <HarnessToggle label="Notes" on={notesEnabled} onChange={(next) => { saveNotesEnabled(next); setNotesEnabled(next); }} />
+      <Row label={t("harness.settings.notes")} description={t("harness.settings.notesDesc")}>
+        <HarnessToggle label={t("harness.settings.notes")} on={notesEnabled} onChange={(next) => { saveNotesEnabled(next); setNotesEnabled(next); }} />
       </Row>
-      <Row label="Working agents" description="When multiple chats are in flight, a card on the rail lists them.">
-        <HarnessToggle label="Working agents" on={liveAgentsEnabled} onChange={(next) => { saveLiveAgentsEnabled(next); setLiveAgentsEnabled(next); }} />
+      <Row label={t("harness.settings.workingAgents")} description={t("harness.settings.workingAgentsDesc")}>
+        <HarnessToggle label={t("harness.settings.workingAgents")} on={liveAgentsEnabled} onChange={(next) => { saveLiveAgentsEnabled(next); setLiveAgentsEnabled(next); }} />
       </Row>
-      <Row label="Sounds" description="Short cues when a turn finishes or a new inbox item appears.">
-        <HarnessToggle label="Sounds" on={soundsEnabled} onChange={(next) => { saveSoundsEnabled(next); setSoundsEnabled(next); }} />
+      <Row label={t("harness.settings.sounds")} description={t("harness.settings.soundsDesc")}>
+        <HarnessToggle label={t("harness.settings.sounds")} on={soundsEnabled} onChange={(next) => { saveSoundsEnabled(next); setSoundsEnabled(next); }} />
       </Row>
-      <Row label="Claude Code hooks" description="Run hooks from settings.json (PreToolUse, blocks, notifications). Takes effect on the next turn.">
-        <HarnessToggle label="Claude Code hooks" on={claudeHooks} onChange={(next) => { saveClaudeHooks(next); setClaudeHooks(next); }} />
+      <Row label={t("harness.settings.claudeHooks")} description={t("harness.settings.claudeHooksDesc")}>
+        <HarnessToggle label={t("harness.settings.claudeHooks")} on={claudeHooks} onChange={(next) => { saveClaudeHooks(next); setClaudeHooks(next); }} />
       </Row>
     </>
   );
@@ -328,27 +330,28 @@ function AppearanceBlock() {
     setBodyGlass(BODY_GLASS_DEFAULT);
   };
 
+  const { t } = useTranslation();
   return (
     <>
       <div className="flex justify-end">
         <Button size="sm" variant="ghost" className="h-7 text-[11px] text-muted-foreground" onClick={restoreDefaults}>
-          Restore defaults
+          {t("harness.settings.restoreDefaults")}
         </Button>
       </div>
-      <Row label="Sidebar opacity" description="How much of the desktop shows through the sidebar.">
-        <HarnessSlider label="Sidebar opacity" value={percent} display={`${percent}%`} min={Math.round(SIDEBAR_OPACITY_MIN * 100)} max={Math.round(SIDEBAR_OPACITY_MAX * 100)} onChange={(val) => { const next = applySidebarOpacity(val / 100); saveSidebarOpacity(next); setOpacity(next); }} />
+      <Row label={t("harness.settings.sidebarOpacity")} description={t("harness.settings.sidebarOpacityDesc")}>
+        <HarnessSlider label={t("harness.settings.sidebarOpacity")} value={percent} display={`${percent}%`} min={Math.round(SIDEBAR_OPACITY_MIN * 100)} max={Math.round(SIDEBAR_OPACITY_MAX * 100)} onChange={(val) => { const next = applySidebarOpacity(val / 100); saveSidebarOpacity(next); setOpacity(next); }} />
       </Row>
-      <Row label="Blur radius" description="Background blur behind the window.">
-        <HarnessSlider label="Blur radius" value={blur} display={String(blur)} min={SIDEBAR_BLUR_MIN} max={SIDEBAR_BLUR_MAX} onChange={(val) => { const next = applySidebarBlur(val); saveSidebarBlur(next); setBlur(next); }} />
+      <Row label={t("harness.settings.blurRadius")} description={t("harness.settings.blurRadiusDesc")}>
+        <HarnessSlider label={t("harness.settings.blurRadius")} value={blur} display={String(blur)} min={SIDEBAR_BLUR_MIN} max={SIDEBAR_BLUR_MAX} onChange={(val) => { const next = applySidebarBlur(val); saveSidebarBlur(next); setBlur(next); }} />
       </Row>
-      <Row label="Hue" description="Base hue for accents and tinted surfaces.">
-        <HarnessSlider label="Hue" value={themeHue} display={`${themeHue}°`} min={THEME_HUE_MIN} max={THEME_HUE_MAX} onChange={(val) => onTint(val, themeSaturation)} />
+      <Row label={t("harness.settings.hue")} description={t("harness.settings.hueDesc")}>
+        <HarnessSlider label={t("harness.settings.hue")} value={themeHue} display={`${themeHue}°`} min={THEME_HUE_MIN} max={THEME_HUE_MAX} onChange={(val) => onTint(val, themeSaturation)} />
       </Row>
-      <Row label="Saturation" description="How strongly the hue tints the interface.">
-        <HarnessSlider label="Saturation" value={themeSaturation} display={`${themeSaturation}%`} min={THEME_SATURATION_MIN} max={THEME_SATURATION_MAX} onChange={(val) => onTint(themeHue, val)} />
+      <Row label={t("harness.settings.saturation")} description={t("harness.settings.saturationDesc")}>
+        <HarnessSlider label={t("harness.settings.saturation")} value={themeSaturation} display={`${themeSaturation}%`} min={THEME_SATURATION_MIN} max={THEME_SATURATION_MAX} onChange={(val) => onTint(themeHue, val)} />
       </Row>
-      <Row label="Main pane glass" description="Extend the translucent treatment to the main pane behind sessions.">
-        <HarnessToggle label="Main pane glass" on={bodyGlass} onChange={(next) => { applyBodyGlass(next); saveBodyGlass(next); setBodyGlass(next); }} />
+      <Row label={t("harness.settings.mainPaneGlass")} description={t("harness.settings.mainPaneGlassDesc")}>
+        <HarnessToggle label={t("harness.settings.mainPaneGlass")} on={bodyGlass} onChange={(next) => { applyBodyGlass(next); saveBodyGlass(next); setBodyGlass(next); }} />
       </Row>
     </>
   );
@@ -370,6 +373,7 @@ function ProviderRow({
   const models = modelsFor(harness);
   const available = isHarnessAvailable(harness);
   const current = models.length > 0 ? resolveModel(harness, selectedModel) : null;
+  const { t } = useTranslation();
   const [inPicker, setInPicker] = useState(() => isPickerProviderVisible(harness));
 
   useEffect(() => {
@@ -385,16 +389,16 @@ function ProviderRow({
           {HARNESS_TITLE[harness]}
           {isDefault ? (
             <span className="rounded-pill bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-              Default
+              {t("harness.settings.defaultBadge")}
             </span>
           ) : null}
         </span>
       }
-      description={available ? `${models.length} ${models.length === 1 ? "model" : "models"} available.` : harnessUnavailableHint(harness)}
+      description={available ? t("harness.settings.modelsAvailable", { count: models.length }) : harnessUnavailableHint(harness)}
     >
       {current ? (
         <select
-          aria-label={`${HARNESS_TITLE[harness]} model`}
+          aria-label={t("harness.settings.modelAria", { name: HARNESS_TITLE[harness] })}
           value={current.id}
           onChange={(e) => onModelChange(harness, e.target.value)}
           className="max-w-52 rounded-md border border-border/60 bg-card/60 px-2 py-1 text-[12px] text-foreground outline-none hover:border-border"
@@ -405,12 +409,12 @@ function ProviderRow({
         </select>
       ) : null}
       <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => current && onDefault(harness, current.id)} disabled={isDefault || !current}>
-        {isDefault ? "Default" : "Use by default"}
+        {isDefault ? t("harness.settings.defaultBadge") : t("harness.settings.useByDefault")}
       </Button>
       {available ? (
         <div className="flex items-center gap-2">
-          <span className="text-[12px] text-muted-foreground">Show in picker</span>
-          <HarnessToggle label={`Show ${HARNESS_TITLE[harness]} in picker`} on={inPicker} onChange={(visible) => { savePickerProviderVisible(harness, visible); setInPicker(visible); }} />
+          <span className="text-[12px] text-muted-foreground">{t("harness.settings.showInPicker")}</span>
+          <HarnessToggle label={t("harness.settings.showInPickerAria", { name: HARNESS_TITLE[harness] })} on={inPicker} onChange={(visible) => { savePickerProviderVisible(harness, visible); setInPicker(visible); }} />
         </div>
       ) : null}
     </Row>
@@ -437,10 +441,11 @@ function ProvidersBlock() {
     setChoice({ harness, model });
   };
 
+  const { t } = useTranslation();
   return (
     <>
       <p className="pb-3 text-[12px] leading-relaxed text-muted-foreground">
-        A provider is listed as installed once its CLI is found on your PATH. The model beside each provider is used for new sessions.
+        {t("harness.settings.providersIntro")}
       </p>
       {HARNESSES.map((harness) => (
         <ProviderRow
@@ -457,19 +462,20 @@ function ProvidersBlock() {
 }
 
 export function HarnessSection({ hideHeader }: { hideHeader?: boolean } = {}) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-2">
       {!hideHeader && (
         <SectionHeader
-          title="Agent Harness"
-          description="Behavior, appearance, and AI provider settings for the Agent Harness session pane."
+          title={t("harness.settings.title")}
+          description={t("harness.settings.description")}
         />
       )}
-      <SubHeading title="General" />
+      <SubHeading title={t("harness.settings.general")} />
       <GeneralBlock />
-      <SubHeading title="Appearance" />
+      <SubHeading title={t("harness.settings.appearance")} />
       <AppearanceBlock />
-      <SubHeading title="Providers" />
+      <SubHeading title={t("harness.settings.providers")} />
       <ProvidersBlock />
     </div>
   );

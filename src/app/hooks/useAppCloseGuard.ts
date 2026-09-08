@@ -86,8 +86,6 @@ export function useAppCloseGuard(
           toast.error(
             translate("tabs.cannotCloseAppWithLockedTabs", {
               count: lockedTabs,
-              defaultValue:
-                "Cannot close the application while tabs are locked. Please unlock them first.",
             }),
             { id: "locked-tabs-app-close-guard" },
           );
@@ -142,8 +140,6 @@ export function useAppCloseGuard(
       toast.error(
         translate("tabs.cannotCloseAppWithLockedTabs", {
           count: lockedTabs,
-          defaultValue:
-            "Cannot close the application while tabs are locked. Please unlock them first.",
         }),
         { id: "locked-tabs-app-close-guard" },
       );

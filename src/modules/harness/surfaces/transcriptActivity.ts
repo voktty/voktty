@@ -1,3 +1,4 @@
+import { t } from "@/modules/i18n";
 import { leafName } from "../lib/fileName";
 import {
   composeToolTitle,
@@ -63,7 +64,7 @@ export function toolCallLabel(block: Block, cwd?: string): string {
       query: preview?.query,
       previewKind: preview?.kind,
       cwd,
-    }) || "Working"
+    }) || t("harness.working")
   );
 }
 

@@ -1,6 +1,7 @@
 import { GripVertical, Terminal, X } from "./icons";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { basename } from "../lib/fs";
 import {
   isChangesTab,
@@ -107,6 +108,7 @@ export function SurfaceTabs({
   label = "Open files",
   trailing,
 }: Props) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeTabRef = useRef<HTMLDivElement | null>(null);
   const fileIds = files.map((file) => file.id);
@@ -132,8 +134,8 @@ export function SurfaceTabs({
       {onPaneDragStart ? (
         <div
           role="button"
-          title="Drag to reorder pane"
-          aria-label="Drag to reorder pane"
+          title={t("harness.chrome.dragReorderPane")}
+          aria-label={t("harness.chrome.dragReorderPane")}
           tabIndex={-1}
           className="grid h-full w-5 shrink-0 cursor-grab place-items-center text-content/35 hover:bg-content/5 hover:text-content/70 active:cursor-grabbing touch-none"
           onPointerDown={(event) => {
@@ -227,8 +229,8 @@ export function SurfaceTabs({
               {dirty ? (
                 <span
                   className="size-1.5 shrink-0 rounded-full bg-content/75"
-                  title="Unsaved changes"
-                  aria-label="Unsaved changes"
+                  title={t("harness.chrome.unsavedChanges")}
+                  aria-label={t("harness.chrome.unsavedChanges")}
                 />
               ) : null}
             </button>

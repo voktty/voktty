@@ -384,11 +384,11 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
       await native.workspaceAuthorize(source.repoRoot).catch(() => {});
       await native.gitAddSafeDirectory(source.repoRoot, source.workspaceEnv);
       toast.success(
-        t("git.authorizedSuccess", { defaultValue: "Directorio autorizado" }),
+        t("git.authorizedSuccess"),
       );
       setReloadKey((k) => k + 1);
     } catch (e) {
-      toast.error(String(e));
+      toast.error(t("common.unknownError"), { description: String(e) });
     } finally {
       setAuthorizing(false);
     }
@@ -509,7 +509,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           setReloadKey((k) => k + 1);
           await review?.sourceControl.refresh({ remote: "never" });
         } catch (error) {
-          toast.error(String(error));
+          toast.error(t("common.unknownError"), { description: String(error) });
         }
       })();
     },
@@ -684,9 +684,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
                   className="h-7 text-[11px]"
                 >
                   {authorizing ? <Spinner className="mr-1.5 size-3" /> : null}
-                  {t("git.authorizeDirectory", {
-                    defaultValue: "Autorizar Directorio",
-                  })}
+                  {t("git.authorizeDirectory")}
                 </Button>
                 <Button
                   size="sm"
@@ -694,7 +692,7 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
                   onClick={() => setReloadKey((k) => k + 1)}
                   className="h-7 text-[11px]"
                 >
-                  {t("common.retry", { defaultValue: "Reintentar" })}
+                  {t("common.retry")}
                 </Button>
               </div>
             </div>

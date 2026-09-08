@@ -1,3 +1,4 @@
+import { t } from "@/modules/i18n";
 import type {
   KanbanCard,
   KanbanColumnId,
@@ -212,7 +213,7 @@ export function parseMarkdownToCard(
         .replace(/[-_]+/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase());
     } else {
-      title = "Tarea sin titulo";
+      title = t("notesBoard.untitledTask");
     }
   }
 

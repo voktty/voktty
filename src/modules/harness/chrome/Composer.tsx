@@ -24,6 +24,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   attachmentsFromFiles,
@@ -186,6 +187,7 @@ function MessageQueue({
   onSteer?: (messageId: string) => void;
   onResume?: () => void;
 }) {
+  const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string>();
   const [editDraft, setEditDraft] = useState("");
   const onEditingChangeRef = useRef(onEditingChange);
@@ -227,7 +229,7 @@ function MessageQueue({
           <div className="flex h-7 items-center gap-2 border-b border-content/10 text-[12px]">
             <Pause className="size-3.5" />
             <span className="min-w-0 flex-1 truncate">
-              Queue paused because you interrupted
+              {t("harness.chrome.queuePaused")}
             </span>
             <button
               type="button"
@@ -235,7 +237,7 @@ function MessageQueue({
               className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 hover:bg-content/10 hover:text-content"
             >
               <Play className="size-3.5" />
-              Resume
+              {t("harness.chrome.resume")}
             </button>
           </div>
         ) : null}
@@ -243,7 +245,7 @@ function MessageQueue({
           const editing = editingId === message.id;
           const label =
             message.text.trim() ||
-            `${message.attachments.length} attachment${message.attachments.length === 1 ? "" : "s"}`;
+            t("harness.chrome.attachmentCount", { count: message.attachments.length });
           return (
             <div
               key={message.id}
@@ -256,7 +258,7 @@ function MessageQueue({
                 <>
                   <textarea
                     autoFocus
-                    aria-label="Edit queued message"
+                    aria-label={t("harness.chrome.editQueued")}
                     value={editDraft}
                     rows={1}
                     onChange={(event) => setEditDraft(event.target.value)}
@@ -273,8 +275,8 @@ function MessageQueue({
                   />
                   <button
                     type="button"
-                    title="Save queued message"
-                    aria-label="Save queued message"
+                    title={t("harness.chrome.saveQueued")}
+                    aria-label={t("harness.chrome.saveQueued")}
                     disabled={
                       !editDraft.trim() && message.attachments.length === 0
                     }
@@ -285,8 +287,8 @@ function MessageQueue({
                   </button>
                   <button
                     type="button"
-                    title="Cancel queued message edit"
-                    aria-label="Cancel queued message edit"
+                    title={t("harness.chrome.cancelQueuedEdit")}
+                    aria-label={t("harness.chrome.cancelQueuedEdit")}
                     onClick={cancelEdit}
                     className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-content/10 hover:text-content"
                   >
@@ -304,12 +306,12 @@ function MessageQueue({
                     className="flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 hover:bg-content/10 hover:text-content"
                   >
                     <CornerDownRight className="size-3.5" />
-                    Steer
+                    {t("harness.chrome.steer")}
                   </button>
                   <button
                     type="button"
-                    title="Edit queued message"
-                    aria-label="Edit queued message"
+                    title={t("harness.chrome.editQueued")}
+                    aria-label={t("harness.chrome.editQueued")}
                     onClick={() => startEdit(message)}
                     className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-content/10 hover:text-content"
                   >
@@ -317,8 +319,8 @@ function MessageQueue({
                   </button>
                   <button
                     type="button"
-                    title="Remove queued message"
-                    aria-label="Remove queued message"
+                    title={t("harness.chrome.removeQueued")}
+                    aria-label={t("harness.chrome.removeQueued")}
                     onClick={() => onDelete?.(message.id)}
                     className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-content/10 hover:text-content"
                   >
@@ -453,6 +455,7 @@ export function Composer({
   const [runnerLive, setRunnerLive] = useState(
     () => busy && loadComposerRunner(),
   );
+  const { t } = useTranslation();
   const selectedComponent = useLiveComponentStore((s) => s.selectedComponent);
   const groupLogos = useTabGroupLogos();
   const projectLogoPath = resolveTabGroupLogo(projectKey(cwd), groupLogos);
@@ -1203,14 +1206,14 @@ export function Composer({
               defaultValue={initialDraft}
               placeholder={
                 inboxCard
-                  ? "Add a note, or send to start…"
+                  ? t("harness.chrome.placeholderNote")
                   : noteCard
-                    ? "Add a message, or send…"
+                    ? t("harness.chrome.placeholderMessage")
                     : handoffCard
-                      ? "Add context, or send to continue…"
+                      ? t("harness.chrome.placeholderContinue")
                       : shell
-                        ? "Ask, build, / for commands, @ for references... "
-                        : "Ask, build, / for skills, @ for references... "
+                        ? t("harness.chrome.placeholderAskCommands")
+                        : t("harness.chrome.placeholderAskSkills")
               }
               className={`composer-field relative max-h-40 w-full resize-none overflow-x-hidden whitespace-pre-wrap break-words bg-transparent px-3 text-sm leading-5.5 outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap font-sans ${
                 shell ? "py-4" : "py-3"
@@ -1236,8 +1239,8 @@ export function Composer({
             <ToolButton
               label={
                 attachmentsSupported
-                  ? "Attach files"
-                  : "fx does not support attachments"
+                  ? t("harness.chrome.attachFiles")
+                  : t("harness.chrome.fxNoAttachments")
               }
               disabled={!attachmentsSupported}
               onClick={attachFromPicker}
@@ -1393,14 +1396,15 @@ function ComposerAction({
   onSend: () => void;
   onStop: () => void;
 }) {
+  const { t } = useTranslation();
   if (busy) {
     return (
       <>
         {hasValue ? (
           <button
             type="button"
-            title="Send"
-            aria-label="Send"
+            title={t("harness.chrome.send")}
+            aria-label={t("harness.chrome.send")}
             onClick={onSend}
             className="grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90"
           >
@@ -1409,8 +1413,8 @@ function ComposerAction({
         ) : null}
         <button
           type="button"
-          title="Stop"
-          aria-label="Stop"
+          title={t("harness.chrome.stop")}
+          aria-label={t("harness.chrome.stop")}
           onClick={onStop}
           className="grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90"
         >
@@ -1423,8 +1427,8 @@ function ComposerAction({
   return (
     <button
       type="button"
-      title="Send"
-      aria-label="Send"
+      title={t("harness.chrome.send")}
+      aria-label={t("harness.chrome.send")}
       disabled={!hasValue}
       onClick={onSend}
       className="grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90 disabled:cursor-default disabled:bg-white/30 disabled:text-black/40 disabled:hover:bg-white/30"

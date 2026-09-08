@@ -15,7 +15,7 @@ describe("agentHandoff", () => {
       });
 
       expect(prompt).toBe(
-        "Tarea: Implementar autenticacion\n\nDetalles:\n- [ ] Crear endpoints\n- [ ] Agregar tests",
+        "Task: Implementar autenticacion\n\nDetails:\n- [ ] Crear endpoints\n- [ ] Agregar tests",
       );
     });
 
@@ -25,7 +25,7 @@ describe("agentHandoff", () => {
         description: "   ",
       });
 
-      expect(prompt).toBe("Tarea: Tarea simple");
+      expect(prompt).toBe("Task: Tarea simple");
     });
   });
 
@@ -102,7 +102,7 @@ describe("agentHandoff", () => {
 
       const targets = resolveActiveAgentTargets(sessions, []);
       expect(targets).toHaveLength(1);
-      expect(targets[0].tabTitle).toBe("Pestana 5");
+      expect(targets[0].tabTitle).toBe("Tab 5");
       expect(targets[0].displayName).toBe("Gemini");
     });
   });

@@ -68,10 +68,7 @@ export function useTabCloseGuards({
         const { toast } = await import("sonner");
         const { t: translate } = await import("@/modules/i18n");
         toast.warning(
-          translate("tabs.tabIsLockedWarning", {
-            defaultValue:
-              "This tab is locked. Please unlock it before closing.",
-          }),
+          translate("tabs.tabIsLockedWarning"),
           { id: `tab-locked-${id}` },
         );
         return;

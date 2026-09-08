@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import type { InstalledUpdate } from "../lib/updateNotice";
+import { useTranslation } from "@/modules/i18n";
 import { X } from "./icons";
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function UpdateToastCard({ update, onOpen, onDismiss }: Props) {
+  const { t } = useTranslation();
   if (!update) return null;
 
   return (
@@ -17,18 +19,18 @@ export function UpdateToastCard({ update, onOpen, onDismiss }: Props) {
       className="pointer-events-auto flex w-80 items-center gap-3 rounded-xl border border-content/15 bg-content/10 px-3 py-2.5 text-content shadow-xl backdrop-blur-xl"
     >
       <p className="min-w-0 flex-1 text-[13px] font-medium">
-        MonoCode updated to {update.version}
+        {t("harness.chrome.updatedTo", { version: update.version })}
       </p>
       <button
         type="button"
         onClick={() => onOpen(update.version)}
         className="min-h-6 shrink-0 rounded-md px-2 text-[12px] font-medium text-accent hover:bg-content/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        What's new
+        {t("harness.chrome.whatsNew")}
       </button>
       <button
         type="button"
-        aria-label="Dismiss update notification"
+        aria-label={t("harness.chrome.dismissUpdate")}
         onClick={onDismiss}
         className="grid size-6 shrink-0 place-items-center rounded-md text-content/55 hover:bg-content/8 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >

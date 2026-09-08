@@ -207,9 +207,7 @@ export function getTabSubtitle(tab: Tab): {
   if (tab.kind === "harness") {
     return {
       icon: "status",
-      text: translate("tabs.subtitles.harness", {
-        defaultValue: "agent development harness",
-      }),
+      text: translate("tabs.subtitles.harness"),
     };
   }
   return { icon: "none", text: "" };

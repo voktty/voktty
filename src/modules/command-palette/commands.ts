@@ -479,9 +479,7 @@ export function createCommandItems(
     },
     {
       id: "ai.openHarness",
-      title: t("commandPalette.commands.openHarness", {
-        defaultValue: "Open Agent Development Harness",
-      }),
+      title: t("commandPalette.commands.openHarness"),
       group: "AI",
       keywords: [
         "harness",
@@ -501,9 +499,7 @@ export function createCommandItems(
     },
     {
       id: "ai.openHarnessInWorktree",
-      title: t("commandPalette.commands.openHarnessInWorktree", {
-        defaultValue: "New Agent Session in Isolated Worktree",
-      }),
+      title: t("commandPalette.commands.openHarnessInWorktree"),
       group: "AI",
       keywords: [
         "harness",
@@ -522,9 +518,7 @@ export function createCommandItems(
     },
     {
       id: "ai.broadcastToAgents",
-      title: t("commandPalette.commands.broadcastToAgents", {
-        defaultValue: "Send message to all agents",
-      }),
+      title: t("commandPalette.commands.broadcastToAgents"),
       group: "AI",
       keywords: [
         "broadcast",

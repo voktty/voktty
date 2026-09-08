@@ -1,3 +1,5 @@
+import { t } from "@/modules/i18n";
+
 export type DapMessage = Record<string, unknown>;
 
 export type DapThread = { id: number; name: string };
@@ -77,7 +79,7 @@ export function findDapResponseError(
     if (message.type !== "response" || message.success !== false) continue;
     return {
       command: text(message.command, 256) || "unknown",
-      message: text(message.message, 8_192) || "Debug adapter request failed",
+      message: text(message.message, 8_192) || t("workbench.dapRequestFailed"),
     };
   }
   return null;

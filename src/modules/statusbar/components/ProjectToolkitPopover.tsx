@@ -391,8 +391,8 @@ export function ProjectToolkitPopover({
                   size="icon-xs"
                   className="size-6 text-muted-foreground hover:text-foreground"
                   onClick={() => setOpen(false)}
-                  title={t("common.close") || "Close"}
-                  aria-label={t("common.close") || "Close"}
+                  title={t("common.close")}
+                  aria-label={t("common.close")}
                 >
                   <HugeiconsIcon
                     icon={Cancel01Icon}
@@ -682,7 +682,7 @@ function DiscoveredSkillCard({
             size="icon-xs"
             className="size-6 text-muted-foreground hover:text-foreground"
             onClick={onCopy}
-            title={t("projectToolkit.copyInvocation") || "Copy slash command"}
+            title={t("projectToolkit.copyInvocation")}
           >
             <HugeiconsIcon
               icon={copied ? CheckmarkCircle01Icon : Copy01Icon}
@@ -697,7 +697,7 @@ function DiscoveredSkillCard({
               size="xs"
               className="h-6 gap-1 px-2 text-[10.5px] font-medium"
               onClick={onOpen}
-              title={t("projectToolkit.openSkillFile") || "Open skill file in editor"}
+              title={t("projectToolkit.openSkillFile")}
             >
               <HugeiconsIcon icon={File01Icon} size={11} strokeWidth={1.75} />
               <span>{t("common.open")}</span>

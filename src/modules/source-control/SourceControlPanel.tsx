@@ -359,7 +359,7 @@ function BranchDropdown({
         setOpen(false);
         onRefresh();
       } catch (e) {
-        toast.error(String(e));
+        toast.error(t("common.unknownError"), { description: String(e) });
       } finally {
         checkoutInFlight.current = false;
         setCheckingOut(false);
@@ -1088,19 +1088,15 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                           undefined,
                       );
                       toast.success(
-                        t("git.authorizedSuccess", {
-                          defaultValue: t("git.trustRepositorySuccess"),
-                        }),
+                        t("git.authorizedSuccess"),
                       );
                     } catch (err) {
-                      toast.error(String(err));
+                      toast.error(t("common.unknownError"), { description: String(err) });
                     }
                   }}
                 >
                   <HugeiconsIcon icon={CheckmarkCircle01Icon} size={14} />
-                  {t("git.authorizeDirectory", {
-                    defaultValue: t("git.trustRepository"),
-                  })}
+                  {t("git.authorizeDirectory")}
                 </Button>
                 <Button
                   size="sm"
@@ -1139,7 +1135,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                       );
                       toast.success(t("git.initRepoSuccess"));
                     } catch (err) {
-                      toast.error(String(err));
+                      toast.error(t("common.unknownError"), { description: String(err) });
                     }
                   }}
                 >
@@ -1168,19 +1164,15 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                           sourceControl.contextPath ?? undefined,
                         );
                         toast.success(
-                          t("git.authorizedSuccess", {
-                            defaultValue: t("git.trustRepositorySuccess"),
-                          }),
+                          t("git.authorizedSuccess"),
                         );
                       } catch (err) {
-                        toast.error(String(err));
+                        toast.error(t("common.unknownError"), { description: String(err) });
                       }
                     }}
                   >
                     <HugeiconsIcon icon={CheckmarkCircle01Icon} size={13} />
-                    {t("git.authorizeDirectory", {
-                      defaultValue: t("git.trustRepository"),
-                    })}
+                    {t("git.authorizeDirectory")}
                   </Button>
                 ) : null}
               </div>
@@ -1207,19 +1199,15 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                             undefined,
                         );
                         toast.success(
-                          t("git.authorizedSuccess", {
-                            defaultValue: t("git.trustRepositorySuccess"),
-                          }),
+                          t("git.authorizedSuccess"),
                         );
                       } catch (err) {
-                        toast.error(String(err));
+                        toast.error(t("common.unknownError"), { description: String(err) });
                       }
                     }}
                   >
                     <HugeiconsIcon icon={CheckmarkCircle01Icon} size={14} />
-                    {t("git.authorizeDirectory", {
-                      defaultValue: t("git.trustRepository"),
-                    })}
+                    {t("git.authorizeDirectory")}
                   </Button>
                 ) : null}
                 <Button

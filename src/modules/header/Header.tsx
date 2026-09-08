@@ -284,8 +284,8 @@ export function Header({
             onFocus={preloadHarnessApp}
             variant="ghost"
             size="icon-sm"
-            title={`${t("harness.agentDevelopment", { defaultValue: "Agent Development" })} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
-            aria-label={t("harness.agentDevelopment", { defaultValue: "Agent Development" })}
+            title={`${t("harness.agentDevelopment")} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+            aria-label={t("harness.agentDevelopment")}
             className={cn(
               "shrink-0 rounded-md transition-colors",
               isHarnessActive
@@ -328,7 +328,7 @@ export function Header({
                       onSelect(harnessTab.id);
                     }
                   }}
-                  title={`${t("harness.agentDevelopment", { defaultValue: "Agent Development" })} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+                  title={`${t("harness.agentDevelopment")} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
                   className={cn(
                     "group relative flex h-6.5 shrink-0 items-center gap-1.5 rounded-md text-xs font-medium cursor-pointer select-none transition-all duration-150 outline-none",
                     tabsOverflowing
@@ -358,7 +358,7 @@ export function Header({
                         : "max-w-[140px]",
                     )}
                   >
-                    {t("harness.agentDevelopment", { defaultValue: "Agent Development" })}
+                    {t("harness.agentDevelopment")}
                   </span>
                   <button
                     type="button"
@@ -366,8 +366,8 @@ export function Header({
                       e.stopPropagation();
                       onClose(harnessTab.id);
                     }}
-                    title={t("tabs.closeTab") || "Close tab"}
-                    aria-label={t("harness.closeAgentDevelopment", { defaultValue: "Close Agent Development" })}
+                    title={t("tabs.closeTab")}
+                    aria-label={t("harness.closeAgentDevelopment")}
                     className={cn(
                       "ml-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-foreground/10 hover:text-foreground transition-colors",
                       tabsOverflowing && "hidden group-hover:flex",
@@ -383,8 +383,8 @@ export function Header({
                   onFocus={preloadHarnessApp}
                   variant="ghost"
                   size="icon-sm"
-                  title={`${t("harness.agentDevelopment", { defaultValue: "Agent Development" })} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
-                  aria-label={t("harness.agentDevelopment", { defaultValue: "Agent Development" })}
+                  title={`${t("harness.agentDevelopment")} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
+                  aria-label={t("harness.agentDevelopment")}
                   className="h-6.5 w-6.5 shrink-0 rounded-md text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground transition-all duration-150"
                 >
                   <HugeiconsIcon

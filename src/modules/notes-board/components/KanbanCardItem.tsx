@@ -19,7 +19,9 @@ import {
   Delete02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useTranslation } from "@/modules/i18n";
 import type { KanbanCard, KanbanColumnId } from "../lib/kanbanTypes";
+import { PRIORITY_LABEL_KEYS } from "../lib/kanbanTypes";
 import {
   type ActiveAgentTarget,
   formatExecutionDuration,
@@ -42,29 +44,22 @@ const NEXT_COLUMN: Record<KanbanColumnId, KanbanColumnId | null> = {
   done: null,
 };
 
-const PRIORITY_STYLES: Record<
-  string,
-  { bg: string; text: string; label: string }
-> = {
+const PRIORITY_STYLES: Record<string, { bg: string; fg: string }> = {
   low: {
     bg: "bg-blue-500/10 dark:bg-blue-400/15",
-    text: "text-blue-600 dark:text-blue-300",
-    label: "Baja",
+    fg: "text-blue-600 dark:text-blue-300",
   },
   medium: {
     bg: "bg-amber-500/10 dark:bg-amber-400/15",
-    text: "text-amber-600 dark:text-amber-300",
-    label: "Media",
+    fg: "text-amber-600 dark:text-amber-300",
   },
   high: {
     bg: "bg-orange-500/10 dark:bg-orange-400/15",
-    text: "text-orange-600 dark:text-orange-300",
-    label: "Alta",
+    fg: "text-orange-600 dark:text-orange-300",
   },
   urgent: {
     bg: "bg-red-500/10 dark:bg-red-400/15",
-    text: "text-red-600 dark:text-red-300",
-    label: "Urgente",
+    fg: "text-red-600 dark:text-red-300",
   },
 };
 
@@ -75,6 +70,7 @@ export function KanbanCardItem({
   availableAgents = [],
   onAssignToAgent,
 }: Props) {
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const deleteCard = useKanbanStore((s) => s.deleteCard);
   const moveCard = useKanbanStore((s) => s.moveCard);
@@ -150,7 +146,7 @@ export function KanbanCardItem({
               size="icon"
               className="size-5 text-muted-foreground hover:text-foreground"
               onClick={() => moveCard(card.id, nextCol)}
-              title="Avanzar columna"
+              title={t("notesBoard.advanceColumn")}
             >
               <HugeiconsIcon icon={ArrowRight01Icon} size={11} />
             </Button>
@@ -160,7 +156,7 @@ export function KanbanCardItem({
             size="icon"
             className="size-5 text-muted-foreground hover:text-destructive"
             onClick={() => deleteCard(card.id)}
-            title="Eliminar tarjeta"
+            title={t("notesBoard.deleteCard")}
           >
             <HugeiconsIcon icon={Delete02Icon} size={11} />
           </Button>
@@ -170,7 +166,7 @@ export function KanbanCardItem({
       {/* Description snippet */}
       {card.description.trim() ? (
         <p className="line-clamp-2 text-[11px] text-muted-foreground break-words">
-          {card.description.replace(/```[\s\S]*?```/g, "[codigo]").trim()}
+          {card.description.replace(/```[\s\S]*?```/g, t("notesBoard.codePlaceholder")).trim()}
         </p>
       ) : null}
 
@@ -185,14 +181,14 @@ export function KanbanCardItem({
             )
           }
           className="flex items-center gap-1.5 rounded bg-amber-500/15 px-2 py-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 transition-colors"
-          title="Requiere intervencion en consola. Clic para enfocar la terminal"
+          title={t("notesBoard.needsConsoleTitle")}
         >
           <HugeiconsIcon
             icon={Alert02Icon}
             size={11}
             className="shrink-0 animate-pulse"
           />
-          <span className="truncate">Requiere atencion en consola</span>
+          <span className="truncate">{t("notesBoard.needsConsole")}</span>
         </div>
       )}
 
@@ -207,7 +203,7 @@ export function KanbanCardItem({
             />
             <span className="truncate">
               {card.assignedExecution.errorReason ||
-                "Terminal cerrada antes de finalizar"}
+                t("notesBoard.terminalClosedEarly")}
             </span>
           </div>
           <button
@@ -218,7 +214,7 @@ export function KanbanCardItem({
             }}
             className="text-rose-600 dark:text-rose-400 underline hover:text-rose-700 cursor-pointer shrink-0 ml-1"
           >
-            Reintentar
+            {t("common.retry")}
           </button>
         </div>
       )}
@@ -231,10 +227,12 @@ export function KanbanCardItem({
               className={cn(
                 "rounded px-1.5 py-0.5 font-medium",
                 priorityMeta.bg,
-                priorityMeta.text,
+                priorityMeta.fg,
               )}
             >
-              {priorityMeta.label}
+              {card.priority
+                ? t(PRIORITY_LABEL_KEYS[card.priority])
+                : null}
             </span>
           )}
 
@@ -273,7 +271,10 @@ export function KanbanCardItem({
                       ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25"
                       : "border-primary/40 bg-primary/15 text-primary hover:bg-primary/25",
               )}
-              title={`Asignado a ${card.assignedExecution.agentName} (Pestaña ${card.assignedExecution.tabId}). Clic para enfocar`}
+              title={t("notesBoard.assignedTo", {
+                agent: card.assignedExecution.agentName,
+                tabId: card.assignedExecution.tabId,
+              })}
             >
               <span
                 className={cn(
@@ -304,7 +305,7 @@ export function KanbanCardItem({
                   unassignCard(card.id);
                 }}
                 className="ml-0.5 text-muted-foreground hover:text-destructive cursor-pointer"
-                title="Desvincular agente"
+                title={t("notesBoard.unassignAgent")}
               >
                 <HugeiconsIcon icon={Cancel01Icon} size={9} />
               </button>
@@ -321,10 +322,10 @@ export function KanbanCardItem({
                   type="button"
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground transition-colors cursor-pointer hover:bg-accent hover:text-foreground focus:outline-none"
-                  title="Ejecutar con agente..."
+                  title={t("notesBoard.runWithAgent")}
                 >
                   <HugeiconsIcon icon={ChatBotIcon} size={11} />
-                  <span>Agente</span>
+                  <span>{t("notesBoard.agent")}</span>
                 </button>
               </DropdownMenuTrigger>
 
@@ -336,11 +337,11 @@ export function KanbanCardItem({
                 onClick={(e) => e.stopPropagation()}
               >
                 <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
-                  Enviar tarea a agente
+                  {t("notesBoard.sendTaskToAgent")}
                 </DropdownMenuLabel>
                 {availableAgents.length === 0 ? (
                   <div className="px-2 py-1.5 text-[11px] text-muted-foreground italic">
-                    Sin terminales activas
+                    {t("notesBoard.noActiveTerminals")}
                   </div>
                 ) : (
                   availableAgents.map((target) => (
@@ -378,10 +379,10 @@ export function KanbanCardItem({
               type="button"
               onClick={() => onRunCommand(detectedCommand)}
               className="flex items-center gap-1 rounded bg-accent/60 px-1.5 py-0.5 text-foreground hover:bg-accent hover:text-primary transition-colors cursor-pointer"
-              title={`Pegar y ejecutar en terminal: ${detectedCommand}`}
+              title={t("notesBoard.runInTerminal", { command: detectedCommand })}
             >
               <HugeiconsIcon icon={ComputerTerminal01Icon} size={10} />
-              <span>Ejecutar</span>
+              <span>{t("notesBoard.run")}</span>
             </button>
           )}
         </div>
