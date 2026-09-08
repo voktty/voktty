@@ -3011,8 +3011,12 @@ export function HarnessApp({
   );
 
   const onRemoveHistorySession = useCallback(
-    async (sessionId: string, mode: "archive" | "delete") => {
-      if (removingSessionIds.current.has(sessionId)) return;
+    async (
+      sessionId: string,
+      mode: "archive" | "delete",
+      skipDeleteConfirm = false,
+    ): Promise<boolean> => {
+      if (removingSessionIds.current.has(sessionId)) return false;
       const open = sessionsRef.current.find(
         (session) => session.id === sessionId,
       );
@@ -3021,13 +3025,18 @@ export function HarnessApp({
       const label = seed
         ? sessionDisplayTitle(seed.title, seed.harness)
         : "this session";
-      if (mode === "delete" && !window.confirm(`Delete "${label}"?`)) return;
+      if (
+        mode === "delete" &&
+        !skipDeleteConfirm &&
+        !window.confirm(`Delete "${label}"?`)
+      )
+        return false;
 
       removingSessionIds.current.add(sessionId);
       pendingPersist.current.delete(sessionId);
       let savedSummary: SessionSummary | undefined;
       try {
-        await runSessionRemoval({
+        return await runSessionRemoval({
           sessionId,
           scope: tabCloseScope,
           readWorkspace: () => ({
@@ -3143,6 +3152,7 @@ export function HarnessApp({
           title: "MonoCode",
           kind: "error",
         });
+        return false;
       } finally {
         removingSessionIds.current.delete(sessionId);
       }
@@ -3160,7 +3170,7 @@ export function HarnessApp({
   const onArchiveHistorySession = useCallback(
     async (sessionId: string, archived: boolean) => {
       if (archived) return onRemoveHistorySession(sessionId, "archive");
-      if (removingSessionIds.current.has(sessionId)) return;
+      if (removingSessionIds.current.has(sessionId)) return false;
       try {
         await setSessionArchived(sessionId, false);
         setHistory((current) =>
@@ -3168,6 +3178,7 @@ export function HarnessApp({
             entry.id === sessionId ? { ...entry, archived: false } : entry,
           ),
         );
+        return true;
       } catch (error) {
         void message(
           `Could not unarchive this conversation.\n\n${String(error)}`,
@@ -3176,6 +3187,7 @@ export function HarnessApp({
             kind: "error",
           },
         );
+        return false;
       }
     },
     [onRemoveHistorySession],
@@ -3205,8 +3217,42 @@ export function HarnessApp({
     [],
   );
 
+  const onArchiveHistorySessions = useCallback(
+    async (sessionIds: readonly string[], archived: boolean) => {
+      for (const sessionId of sessionIds) {
+        if (!(await onArchiveHistorySession(sessionId, archived))) break;
+      }
+    },
+    [onArchiveHistorySession],
+  );
+
+  const onPinHistorySessions = useCallback(
+    async (sessionIds: readonly string[], pinned: boolean) => {
+      await Promise.all(
+        sessionIds.map((sessionId) => onPinHistorySession(sessionId, pinned)),
+      );
+    },
+    [onPinHistorySession],
+  );
+
   const onDeleteHistorySession = useCallback(
     (sessionId: string) => onRemoveHistorySession(sessionId, "delete"),
+    [onRemoveHistorySession],
+  );
+
+  const onDeleteHistorySessions = useCallback(
+    async (sessionIds: readonly string[]) => {
+      if (sessionIds.length === 0) return;
+      if (
+        !window.confirm(
+          `Delete ${sessionIds.length} selected conversations? This can't be undone.`,
+        )
+      )
+        return;
+      for (const sessionId of sessionIds) {
+        if (!(await onRemoveHistorySession(sessionId, "delete", true))) break;
+      }
+    },
     [onRemoveHistorySession],
   );
 
@@ -5383,8 +5429,11 @@ export function HarnessApp({
         onPlaceSessionOnPane={onPlaceSessionOnPane}
         onRenameSession={onRenameHistorySession}
         onArchiveSession={onArchiveHistorySession}
+        onArchiveSessions={onArchiveHistorySessions}
         onPinSession={onPinHistorySession}
+        onPinSessions={onPinHistorySessions}
         onDeleteSession={onDeleteHistorySession}
+        onDeleteSessions={onDeleteHistorySessions}
         onOpenFile={onOpenFile}
         onOpenTerminal={(cwd: string) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
