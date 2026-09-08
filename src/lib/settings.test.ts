@@ -157,9 +157,7 @@ describe("grid arcade enabled setting", () => {
 describe("workspace navigation keybindings", () => {
   it("documents session and project cycling in the shortcut list", () => {
     const rows = KEYBINDINGS.filter(
-      (row) =>
-        row.command.startsWith("Session:") ||
-        row.command.startsWith("Project:"),
+      (row) => /^(Session|Project): (Previous|Next)$/.test(row.command),
     );
     expect(rows.map((row) => row.command)).toEqual([
       "Session: Previous",
