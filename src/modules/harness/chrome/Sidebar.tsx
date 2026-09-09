@@ -2629,7 +2629,7 @@ function DiffStat({
 
   return (
     <span
-      title={`${label} uncommitted`}
+      title={t("harness.chrome.uncommittedSummary", { label })}
       className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] font-semibold tabular-nums"
     >
       {additions > 0 ? (

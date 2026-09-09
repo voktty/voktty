@@ -4543,6 +4543,7 @@ export const en = {
       release: "Release",
       takeControl: "Take control",
       unmodifiedLines: "{count} unmodified {count, plural, one {line} other {lines}}",
+      uncommittedSummary: "{label} uncommitted",
       toolCallWithState: "{state} tool call: {text}",
       closePaneShortcut: "Close Pane ({shortcut})",
       sessionChangesTooltip: "Changes captured for this session only",
