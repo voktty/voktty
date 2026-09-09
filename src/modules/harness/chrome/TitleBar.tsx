@@ -801,17 +801,18 @@ export function TabVisitNav({
   panelActive?: boolean;
   panelLabel?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex shrink-0 items-center">
       <IconButton
-        label={`Back (${MOD}[)`}
+        label={t("harness.chrome.backShortcut", { shortcut: `${MOD}[` })}
         disabled={!canGoBack}
         onClick={onGoBack}
       >
         <ChevronLeft className="size-3.5" strokeWidth={1.75} />
       </IconButton>
       <IconButton
-        label={`Forward (${MOD}])`}
+        label={t("harness.chrome.forwardShortcut", { shortcut: `${MOD}]` })}
         disabled={!canGoForward}
         onClick={onGoForward}
       >
@@ -838,17 +839,23 @@ export function OverlayNav({
   onBack?: () => void;
   onToggleSidebar?: () => void;
 }) {
+  const { t } = useTranslation();
   if (!onBack && !onToggleSidebar) return null;
   return (
     <div className="flex shrink-0 items-center px-1.5">
       {onBack ? (
-        <IconButton label={`Back (${MOD}[)`} onClick={onBack}>
+        <IconButton
+          label={t("harness.chrome.backShortcut", { shortcut: `${MOD}[` })}
+          onClick={onBack}
+        >
           <ChevronLeft className="size-3.5" strokeWidth={1.75} />
         </IconButton>
       ) : null}
       {onToggleSidebar ? (
         <IconButton
-          label={`Toggle Sidebar (${MOD}B)`}
+          label={t("harness.chrome.toggleSidebarShortcut", {
+            shortcut: `${MOD}B`,
+          })}
           onClick={onToggleSidebar}
         >
           <PanelLeft className="size-3.5" strokeWidth={1.75} />
@@ -1033,7 +1040,10 @@ function TitleBarComponent({
           tabs.find((tab) => tab.groupId === groupId)?.project ?? "Group";
         if (
           window.confirm(
-            `Delete “${resolveTabGroupLabel(groupId, groupLabels, shared)}” and close ${tabIds.length} tabs?`,
+            t("harness.chrome.deleteGroupAndTabs", {
+              name: resolveTabGroupLabel(groupId, groupLabels, shared),
+              count: tabIds.length,
+            }),
           )
         ) {
           onGroupClose?.(tabIds);
@@ -1118,13 +1128,17 @@ function TitleBarComponent({
           items.push({
             kind: "item",
             id: `add:${group.id}`,
-            label: `Add to ${group.label}`,
+            label: t("harness.chrome.addToGroup", { name: group.label }),
           });
         }
       }
       if (contextTab.groupId) {
         items.push({ kind: "sep" });
-        items.push({ kind: "item", id: "remove", label: "Remove from group" });
+        items.push({
+          kind: "item",
+          id: "remove",
+          label: t("harness.chrome.removeFromGroup"),
+        });
       }
     }
 
