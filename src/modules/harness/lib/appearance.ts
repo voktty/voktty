@@ -501,3 +501,29 @@ export function saveTranscriptAnchor(value: boolean) {
     }),
   );
 }
+
+const CHANGES_VIEW_KEY = "monocode.changesView";
+export type ChangesView = "list" | "tree";
+export const CHANGES_VIEW_DEFAULT: ChangesView = "list";
+
+function isChangesView(value: unknown): value is ChangesView {
+  return value === "list" || value === "tree";
+}
+
+export function loadChangesView(): ChangesView {
+  try {
+    const raw = localStorage.getItem(CHANGES_VIEW_KEY);
+    return isChangesView(raw) ? raw : CHANGES_VIEW_DEFAULT;
+  } catch {
+    return CHANGES_VIEW_DEFAULT;
+  }
+}
+
+export function saveChangesView(value: ChangesView) {
+  try {
+    localStorage.setItem(CHANGES_VIEW_KEY, value);
+  } catch {
+    // private mode / quota
+  }
+}
+
