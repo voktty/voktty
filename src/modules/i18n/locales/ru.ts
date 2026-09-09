@@ -4287,7 +4287,63 @@ const ruCoveragePatch: TranslationSchema = mergeLocale(ruCoverageBase, {
   },
 });
 
-export const ru: TranslationSchema = mergeLocale(ruCoveragePatch, {
+const ruWorkbenchTranslations = { workbench: { dapRequestFailed: "Запрос адаптера отладки не выполнен." } };
+
+const ruCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"Новый сеанс агента в изолированном рабочем дереве","worktreeNeedsProject":"Сначала откройте проект, чтобы создать изолированный сеанс рабочего дерева.","broadcastToAgents":"Отправить сообщение всем агентам"} } };
+
+const ruStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "Аркадное мини-окно",
+    "arcadeRestart": "Перезапустить (Пробел/Ввод)",
+    "arcadeClose": "Закрыть (Esc)",
+    "arcadeGameOver": "Игра закончена",
+    "arcadeFinalScore": "Итоговый счет:",
+    "arcadePlayAgain": "Играй еще раз (Ввод)",
+    "arcadeControlsHint": "Для игры используйте клавиши со стрелками или WASD.",
+    "arcadeEscHint": "Esc",
+    "notesBoard": "Заметки и канбан-доска",
+    "notesBoardLabel": "Заметки и доска"
+}
+};
+
+const ruThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "Единая тема Voktty с тщательно подобранными цветовыми вариациями.",
+      "win31": "Классический 16-разрядный интерфейс Windows 3.1 с трехмерным скошенным хромом, темно-синим заголовком и квадратными углами.",
+      "mac1": "Аутентичный 1-битный монохромный интерфейс 1984 года с полосатым заголовком и закрывающимся окном.",
+      "kde": "Классический рабочий стол KDE 2/3 с синей градиентной полосой заголовка и скошенными элементами управления Qt.",
+      "commander-blue": "Классический двухпанельный файловый менеджер DOS с темно-синими, голубыми рамками и желтыми акцентами.",
+      "phosphor-crt": "Монохромный ЭЛТ-терминал со светящимся люминофором, линиями развертки и изогнутой рамкой.",
+      "whistler-bliss": "Рабочий стол Y2K с изогнутыми заголовками королевского синего цвета, изумрудными акцентами «Пуск» и глянцевыми элементами управления.",
+      "boing-workbench": "Легендарная творческая рабочая станция 1985 года с синим сапфиром, янтарным топазом, белым и обсидианом.",
+      "cubestep": "Легендарная рабочая станция в форме черного куба со скошенными титановыми плитками, плавающими заголовками и высокой контрастностью.",
+      "yellowtab-os": "Адаптивный рабочий стол с фирменными заголовками окон в виде желтых вкладок и чистым сине-серым хромом.",
+      "solar-cde": "Общая рабочая среда рабочего стола Unix с геометрическими панелями, глубоким сланцем и сливовыми акцентами.",
+      "humanity-2006": "Рабочий стол в теплом коричневом цвете эспрессо и сияющем оранжевом, вдохновленный классической версией GNOME 2 2006 года.",
+      "pocket-89": "Четырехцветный зеленый ЖК-дисплей с контрастностью пикселей и ностальгией по ретро-играм.",
+      "pilot-pda": "Классический монохромный органайзер-стилус с оливково-серым ЖК-дисплеем, компактными кнопками и строками списка.",
+      "clickwheel-pod": "Плеер из полированной стали и белого фарфора с голубыми бликами и компактным шрифтом без шрифта.",
+      "station-94": "Классическая 32-битная консоль с матовым серым корпусом, картой памяти цвета индиго и геометрическими символами действий.",
+      "audioamp-classic": "Легендарный MP3-плеер 90-х годов с матовым титаном, зелеными светодиодными цифрами и визуализатором спектра.",
+      "cybercafe-99": "Ностальгическое интернет-кафе 1999 года с бирюзовым модемом, ярлыками на рабочем столе и веб-эстетикой в ​​стиле ретро.",
+      "tiger-aqua": "Рабочий стол из полированного алюминия 2005 года с глянцевыми капсульными кнопками и плавной глубиной теней.",
+      "media-station-9": "Электрический медиаплеер кобальтового цвета с глянцевыми изогнутыми линиями, светящимися индикаторами воспроизведения и голубыми акцентами.",
+      "instant-chat-7": "Эстетика мессенджера середины 2000-х годов с небесно-голубыми заголовками, тактильными карточками и акцентами онлайн-присутствия.",
+      "bbs-dialup": "Доска объявлений 1980-х годов с ячейками символов ANSI, меню ASCII и цветами телеметрии модема."
+}
+  }
+};
+
+const ruCommonTranslations = { common: { noResults: "Результаты не найдены" } };
+
+const ruShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "Отправить сообщение всем агентам" } } };
+
+const ruOnboardingTranslations = { onboarding: {"shortcutSplitRight":"Разделить вправо","shortcutSplitDown":"Разделить вниз","shortcutQuickOpen":"Быстрое открытие","shortcutClearTerminal":"Очистить терминал","shortcutSidebar":"Переключить боковую панель","shortcutZenMode":"Режим Дзен"} };
+
+const ruGitTranslations = { git: { githubDraft: "черновик" } };
+
+export const ru: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(ruCoveragePatch, ruGitTranslations), ruOnboardingTranslations), ruShortcutTranslations), ruCommonTranslations), ruCommandPaletteTranslations), ruWorkbenchTranslations), ruStatusTranslations), ruThemeTranslations), {
   commandPalette: {
     commands: {
       openTasksPanel: "Вид: задачи",

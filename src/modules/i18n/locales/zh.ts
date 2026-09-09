@@ -4051,7 +4051,63 @@ const zhCoveragePatch: TranslationSchema = mergeLocale(zhCoverageBase, {
   },
 });
 
-export const zh: TranslationSchema = mergeLocale(zhCoveragePatch, {
+const zhWorkbenchTranslations = { workbench: { dapRequestFailed: "调试适配器请求失败" } };
+
+const zhCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"独立工作树中的新代理会话","worktreeNeedsProject":"首先打开一个项目来创建一个独立的工作树会话","broadcastToAgents":"向所有代理发送消息"} } };
+
+const zhStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "街机迷你窗口",
+    "arcadeRestart": "重新启动（空格/输入）",
+    "arcadeClose": "关闭（Esc）",
+    "arcadeGameOver": "游戏结束",
+    "arcadeFinalScore": "最终成绩：",
+    "arcadePlayAgain": "再次播放（输入）",
+    "arcadeControlsHint": "使用方向键或WASD来玩",
+    "arcadeEscHint": "Esc键",
+    "notesBoard": "笔记和看板",
+    "notesBoardLabel": "笔记和黑板"
+}
+};
+
+const zhThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "统一的 Voktty 主题与精心设计的颜色变化。",
+      "win31": "经典 16 位 Windows 3.1 外观，带有 3D 斜角镀铬、海军蓝标题栏和方角。",
+      "mac1": "正宗的 1984 年 1 位单色界面，带有细条纹标题栏和消失关闭框。",
+      "kde": "经典 KDE 2/3 桌面，带有蓝色渐变标题栏和斜面 Qt 控件。",
+      "commander-blue": "经典 DOS 双窗格文件命令器，带有深海军蓝、青色边框和黄色装饰。",
+      "phosphor-crt": "单色 CRT 终端，带有发光荧光粉、扫描线和弧形边框。",
+      "whistler-bliss": "Y2K 桌面，带有宝蓝色弧形标题栏、翠绿色 Start 装饰和光面控件。",
+      "boing-workbench": "1985 年传奇创意工作站，采用宝石蓝、琥珀托帕石、白色和黑曜石材质。",
+      "cubestep": "标志性的黑色立方体工作站，带有斜面钛瓷砖、浮动标题栏和高对比度。",
+      "yellowtab-os": "响应式桌面，带有标志性的黄色标签窗口标题和干净的蓝灰色镀铬。",
+      "solar-cde": "通用桌面环境 Unix 工作站，带有几何面板、深石板和梅子装饰。",
+      "humanity-2006": "温暖的浓咖啡棕色和光芒四射的橙色桌面，灵感源自经典的 2006 GNOME 2。",
+      "pocket-89": "四色绿色 LCD 手持设备，具有像素对比度和复古游戏怀旧气息。",
+      "pilot-pda": "经典的单色手写笔整理器，配有橄榄灰色 LCD、紧凑按钮和列表行。",
+      "clickwheel-pod": "抛光钢和白瓷播放器，带有青色高光和紧凑的无版式。",
+      "station-94": "经典 32 位控制台，采用哑光灰色外壳、靛蓝色存储卡和几何动作符号。",
+      "audioamp-classic": "传奇的 90 年代 MP3 播放器，配有拉丝钛金属、绿色 LED 数字和光谱可视化器。",
+      "cybercafe-99": "怀旧的 1999 年网吧，拨号上网、桌面快捷方式和复古的网络美学。",
+      "tiger-aqua": "2005 拉丝铝制桌面，带有光滑的胶囊按钮和平滑的阴影深度。",
+      "media-station-9": "电动钴媒体播放器，具有光滑的药丸曲线、发光的播放指示器和青色装饰。",
+      "instant-chat-7": "2000 年代中期的信使美学，带有天蓝色标题、触觉卡片和在线状态强调。",
+      "bbs-dialup": "20 世纪 80 年代的公告板，带有 ANSI 字符单元、ASCII 菜单和调制解调器遥测颜色。"
+}
+  }
+};
+
+const zhCommonTranslations = { common: { noResults: "没有找到结果" } };
+
+const zhShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "向所有代理发送消息" } } };
+
+const zhOnboardingTranslations = { onboarding: {"shortcutSplitRight":"右分割","shortcutSplitDown":"分裂","shortcutQuickOpen":"快速打开","shortcutClearTerminal":"清除终端","shortcutSidebar":"切换侧边栏","shortcutZenMode":"禅宗模式"} };
+
+const zhGitTranslations = { git: { githubDraft: "草稿" } };
+
+export const zh: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(zhCoveragePatch, zhGitTranslations), zhOnboardingTranslations), zhShortcutTranslations), zhCommonTranslations), zhCommandPaletteTranslations), zhWorkbenchTranslations), zhStatusTranslations), zhThemeTranslations), {
   commandPalette: {
     commands: {
       openTasksPanel: "视图：任务",

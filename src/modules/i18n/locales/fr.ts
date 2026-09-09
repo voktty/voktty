@@ -4479,7 +4479,63 @@ const frCoveragePatch: TranslationSchema = mergeLocale(frCoverageBase, {
   },
 });
 
-export const fr: TranslationSchema = mergeLocale(frCoveragePatch, {
+const frWorkbenchTranslations = { workbench: { dapRequestFailed: "La demande d'adaptateur de débogage a échoué" } };
+
+const frCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"Nouvelle session d'agent dans un arbre de travail isolé","worktreeNeedsProject":"Ouvrez d'abord un projet pour créer une session d'arbre de travail isolée","broadcastToAgents":"Envoyer un message à tous les agents"} } };
+
+const frStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "Mini-fenêtre Arcade",
+    "arcadeRestart": "Redémarrer (Espace / Entrée)",
+    "arcadeClose": "Fermer (Échap)",
+    "arcadeGameOver": "Jeu terminé",
+    "arcadeFinalScore": "Score final:",
+    "arcadePlayAgain": "Rejouer (Entrée)",
+    "arcadeControlsHint": "Utilisez les touches fléchées ou WASD pour jouer",
+    "arcadeEscHint": "Échap",
+    "notesBoard": "Notes et tableau Kanban",
+    "notesBoardLabel": "Notes et tableau"
+}
+};
+
+const frThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "Thème Voktty unifié avec des variations de couleurs organisées.",
+      "win31": "Habillage classique de Windows 3.1 16 bits avec chrome biseauté 3D, barre de titre bleu marine et coins carrés.",
+      "mac1": "Authentique interface monochrome 1 bit de 1984 avec une barre de titre à fines rayures et une boîte de fermeture de départ.",
+      "kde": "Bureau KDE 2/3 classique avec une barre de titre dégradée bleue et des commandes Qt biseautées.",
+      "commander-blue": "Commande de fichiers DOS classique à double volet avec des bordures bleu marine foncé, cyan et des accents jaunes.",
+      "phosphor-crt": "Terminal CRT monochrome avec phosphore brillant, lignes de balayage et lunette incurvée.",
+      "whistler-bliss": "Bureau de l'an 2000 avec barres de titre incurvées bleu royal, accents Start émeraude et commandes brillantes.",
+      "boing-workbench": "Poste de travail créatif légendaire de 1985 avec bleu saphir, topaze ambre, blanc et obsidienne.",
+      "cubestep": "Poste de travail cube noir emblématique avec dalles en titane biseautées, barres de titre flottantes et contraste élevé.",
+      "yellowtab-os": "Bureau réactif avec des titres de fenêtre à onglets jaunes caractéristiques et un chrome bleu-gris épuré.",
+      "solar-cde": "Poste de travail Unix pour environnement de bureau commun avec panneaux géométriques, ardoise profonde et accents prune.",
+      "humanity-2006": "Bureau marron expresso chaleureux et orange éclatant inspiré du classique GNOME 2 de 2006.",
+      "pocket-89": "Ordinateur de poche LCD vert quatre tons avec contraste de pixels et nostalgie du jeu rétro.",
+      "pilot-pda": "Organisateur de stylet monochrome classique avec un écran LCD gris olive, des boutons compacts et des lignes de liste.",
+      "clickwheel-pod": "Joueur en acier poli et porcelaine blanche avec reflets cyan et typographie compacte sans.",
+      "station-94": "Console 32 bits classique avec boîtier gris mat, indigo de carte mémoire et symboles d'action géométriques.",
+      "audioamp-classic": "Lecteur MP3 légendaire des années 90 avec titane brossé, chiffres LED verts et visualiseur de spectre.",
+      "cybercafe-99": "Café Internet nostalgique de 1999 avec connexion Internet bleu sarcelle, raccourcis sur le bureau et esthétique Web rétro.",
+      "tiger-aqua": "Bureau en aluminium brossé 2005 avec boutons capsules brillants et profondeur d'ombre portée lisse.",
+      "media-station-9": "Lecteur multimédia électrique en cobalt avec courbes de pilule brillantes, indicateurs de lecture lumineux et accents cyan.",
+      "instant-chat-7": "Esthétique de messagerie du milieu des années 2000 avec en-têtes bleu ciel, cartes tactiles et accents de présence en ligne.",
+      "bbs-dialup": "Tableau d'affichage des années 1980 avec cellules de caractères ANSI, menus ASCII et couleurs de télémétrie du modem."
+}
+  }
+};
+
+const frCommonTranslations = { common: { noResults: "Aucun résultat trouvé" } };
+
+const frShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "Envoyer un message à tous les agents" } } };
+
+const frOnboardingTranslations = { onboarding: {"shortcutSplitRight":"Diviser à droite","shortcutSplitDown":"Divisé","shortcutQuickOpen":"Ouverture rapide","shortcutClearTerminal":"Effacer le terminal","shortcutSidebar":"Basculer la barre latérale","shortcutZenMode":"Mode Zen"} };
+
+const frGitTranslations = { git: { githubDraft: "brouillon" } };
+
+export const fr: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(frCoveragePatch, frGitTranslations), frOnboardingTranslations), frShortcutTranslations), frCommonTranslations), frCommandPaletteTranslations), frWorkbenchTranslations), frStatusTranslations), frThemeTranslations), {
   common: {
     paste: "Coller",
   },
