@@ -40,7 +40,7 @@ export function DiffCommentComposer({
       width={320}
       onDismiss={onDismiss}
       role="dialog"
-      aria-label={`Comment on ${location}`}
+      aria-label={t("harness.chrome.commentOn", { location })}
       className="p-2"
     >
       <form
@@ -85,14 +85,16 @@ export function DiffCommentComposer({
           className="max-h-40 min-h-18 w-full resize-y rounded-lg border border-content/10 bg-background-base/70 px-2.5 py-2 text-[13px] leading-5 text-content outline-none placeholder:text-content/35 focus:border-content/20"
         />
         <div className="mt-2 flex items-center justify-between gap-3">
-          <span className="text-[10px] text-content/35">{MOD}↩ to add</span>
+          <span className="text-[10px] text-content/35">
+            {t("harness.chrome.addCommentShortcut", { shortcut: MOD })}
+          </span>
           <button
             type="submit"
             disabled={!comment.trim()}
             className="inline-flex h-7 items-center gap-1.5 rounded-md bg-content px-2.5 text-[12px] font-medium text-background-base hover:opacity-80 disabled:cursor-default disabled:opacity-40"
           >
             <MessageSquarePlus className="size-3.5" strokeWidth={1.75} />
-            Add to chat
+            {t("harness.addToChat")}
           </button>
         </div>
       </form>
