@@ -509,7 +509,7 @@ export function GitReviewTab({ cwd = null }: Props) {
                 <div className="flex flex-col items-center justify-center p-6 text-center text-muted-foreground text-[11px]">
                   {entries.length === 0
                     ? t("notesBoard.noChangesDesc")
-                    : t("common.noResults")}
+                    : t("notesBoard.noResults")}
                 </div>
               ) : (
                 <div className="flex flex-col p-1 gap-0.5">
