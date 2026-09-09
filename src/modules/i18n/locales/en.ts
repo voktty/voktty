@@ -938,6 +938,12 @@ export const en = {
       agentOnlyDescription:
         "This app never opens the desktop workbench, terminals, SSH sessions, files, or editor.",
       waitingForPairing: "Pairing with your desktop will be available here.",
+      payloadLabel: "Pairing payload",
+      payloadPlaceholder: "Paste the pairing payload from your desktop",
+      connect: "Request pairing",
+      connecting: "Requesting pairing...",
+      waitingForApproval: "Waiting for approval on your desktop.",
+      connectionError: "The pairing request could not be sent. Check the payload and tunnel.",
     },
   },
   docker: {

@@ -1,4 +1,65 @@
 import { useTranslation } from "@/modules/i18n";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useState } from "react";
+
+type Invitation = {
+  protocol: number;
+  publicUrl: string;
+  invitationId: string;
+  secret: string;
+};
+
+const PROOF_CONTEXT = new TextEncoder().encode("voktty-companion-pair-v1");
+
+function decodeBase64Url(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+}
+
+function encodeBase64Url(value: ArrayBuffer): string {
+  const bytes = new Uint8Array(value);
+  let text = "";
+  for (const byte of bytes) text += String.fromCharCode(byte);
+  return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function lengthPrefix(value: Uint8Array): Uint8Array {
+  const prefix = new Uint8Array(8);
+  new DataView(prefix.buffer).setBigUint64(0, BigInt(value.length));
+  return prefix;
+}
+
+async function pairingProof(invitation: Invitation, deviceName: string, deviceKey: string) {
+  const encoder = new TextEncoder();
+  const fields = [
+    PROOF_CONTEXT,
+    encoder.encode(invitation.invitationId),
+    encoder.encode(deviceName),
+    encoder.encode(deviceKey),
+  ];
+  const payload = new Uint8Array(
+    fields.reduce((total, field) => total + 8 + field.length, 0),
+  );
+  let offset = 0;
+  for (const field of fields) {
+    payload.set(lengthPrefix(field), offset);
+    offset += 8;
+    payload.set(field, offset);
+    offset += field.length;
+  }
+  const key = await crypto.subtle.importKey(
+    "raw",
+    decodeBase64Url(invitation.secret).buffer as ArrayBuffer,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return encodeBase64Url(
+    await crypto.subtle.sign("HMAC", key, payload.buffer as ArrayBuffer),
+  );
+}
 
 /**
  * Android intentionally has no desktop workbench fallback. Until a device is
@@ -6,6 +67,44 @@ import { useTranslation } from "@/modules/i18n";
  */
 export function CompanionMobileApp() {
   const { t } = useTranslation();
+  const [payload, setPayload] = useState("");
+  const [state, setState] = useState<"idle" | "connecting" | "pending" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const connect = async () => {
+    setState("connecting");
+    setError(null);
+    try {
+      const parsed = JSON.parse(payload) as { type?: string; invitation?: Invitation };
+      if (parsed.type !== "voktty-companion" || !parsed.invitation) throw new Error("invalid-payload");
+      const invitation = parsed.invitation;
+      const pair = await crypto.subtle.generateKey(
+        { name: "ECDH", namedCurve: "P-256" },
+        false,
+        ["deriveBits"],
+      );
+      const publicKey = await crypto.subtle.exportKey("raw", pair.publicKey);
+      const deviceName = "Android companion";
+      const devicePublicKey = encodeBase64Url(publicKey);
+      const proof = await pairingProof(invitation, deviceName, devicePublicKey);
+      const response = await fetch(new URL("/v1/companion/pair", invitation.publicUrl), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          protocol: invitation.protocol,
+          invitationId: invitation.invitationId,
+          deviceName,
+          devicePublicKey,
+          proof,
+        }),
+      });
+      if (response.status !== 202) throw new Error("pairing-rejected");
+      setState("pending");
+    } catch (reason) {
+      setState("error");
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
 
   return (
     <main className="min-h-dvh bg-background px-5 py-10 text-foreground">
@@ -31,9 +130,39 @@ export function CompanionMobileApp() {
               {t("companion.mobile.agentOnlyDescription")}
             </p>
           </div>
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            {t("companion.mobile.waitingForPairing")}
-          </p>
+          {state === "pending" ? (
+            <p className="mt-6 text-center text-xs text-muted-foreground">
+              {t("companion.mobile.waitingForApproval")}
+            </p>
+          ) : (
+            <div className="mt-6">
+              <label className="text-xs font-medium" htmlFor="companion-payload">
+                {t("companion.mobile.payloadLabel")}
+              </label>
+              <Textarea
+                id="companion-payload"
+                className="mt-2 min-h-24 text-xs"
+                value={payload}
+                onChange={(event) => setPayload(event.target.value)}
+                placeholder={t("companion.mobile.payloadPlaceholder")}
+                disabled={state === "connecting"}
+              />
+              <Button
+                className="mt-3 w-full"
+                disabled={!payload.trim() || state === "connecting"}
+                onClick={() => void connect()}
+              >
+                {state === "connecting"
+                  ? t("companion.mobile.connecting")
+                  : t("companion.mobile.connect")}
+              </Button>
+              {state === "error" && error ? (
+                <p className="mt-3 text-center text-xs text-destructive">
+                  {t("companion.mobile.connectionError")}
+                </p>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
     </main>
