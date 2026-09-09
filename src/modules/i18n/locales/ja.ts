@@ -4395,7 +4395,63 @@ const jaCoveragePatch: TranslationSchema = mergeLocale(jaCoverageBase, {
   },
 });
 
-export const ja: TranslationSchema = mergeLocale(jaCoveragePatch, {
+const jaWorkbenchTranslations = { workbench: { dapRequestFailed: "デバッグアダプターリクエストが失敗しました" } };
+
+const jaCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"分離されたワークツリーでの新しいエージェント セッション","worktreeNeedsProject":"最初にプロジェクトを開いて、分離されたワークツリー セッションを作成します","broadcastToAgents":"すべてのエージェントにメッセージを送信する"} } };
+
+const jaStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "アーケードミニウィンドウ",
+    "arcadeRestart": "再起動（スペース/Enter）",
+    "arcadeClose": "閉じる (Esc)",
+    "arcadeGameOver": "ゲームオーバー",
+    "arcadeFinalScore": "最終スコア:",
+    "arcadePlayAgain": "もう一度再生します (Enter)",
+    "arcadeControlsHint": "矢印キーまたはWASDを使用して再生します",
+    "arcadeEscHint": "ESC",
+    "notesBoard": "メモとカンバンボード",
+    "notesBoardLabel": "ノートとボード"
+}
+};
+
+const jaThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "厳選されたカラーバリエーションを備えた統一された Voktty テーマ。",
+      "win31": "3D ベベルクロム、ネイビーのタイトルバー、四角いコーナーを備えたクラシックな 16 ビット Windows 3.1 スキン。",
+      "mac1": "ピンストライプのタイトルバーとゴーアウェイ クローズ ボックスを備えた、1984 年の本格的な 1 ビット モノクロ インターフェイス。",
+      "kde": "青のグラデーションのタイトルバーと面取りされた Qt コントロールを備えたクラシックな KDE 2/3 デスクトップ。",
+      "commander-blue": "深いネイビー、シアンのボーダー、黄色のアクセントが付いたクラシックな DOS デュアルペイン ファイル コマンダー。",
+      "phosphor-crt": "輝く蛍光体、走査線、湾曲したベゼルを備えたモノクロ CRT 端末。",
+      "whistler-bliss": "ロイヤル ブルーの湾曲したタイトルバー、エメラルド色のスタート アクセント、光沢のあるコントロールを備えた Y2K デスクトップ。",
+      "boing-workbench": "サファイア ブルー、アンバー トパーズ、ホワイト、オブシディアンを備えた伝説的な 1985 年のクリエイティブ ワークステーション。",
+      "cubestep": "面取りされたチタン タイル、フローティング タイトルバー、ハイ コントラストを備えた象徴的なブラック キューブ ワークステーション。",
+      "yellowtab-os": "特徴的なイエロータブのウィンドウタイトルとクリーンなブルーグレーのクロムを備えたレスポンシブデスクトップ。",
+      "solar-cde": "共通デスクトップ環境 幾何学的なパネル、深いスレート、プラムのアクセントを備えた Unix ワークステーション。",
+      "humanity-2006": "クラシックな 2006 GNOME 2 からインスピレーションを得た、温かみのあるエスプレッソ ブラウンと輝くオレンジのデスクトップ。",
+      "pocket-89": "ピクセル コントラストとレトロ ゲームのノスタルジーを備えた 4 トーン グリーン LCD ハンドヘルド。",
+      "pilot-pda": "オリーブグレーの LCD、コンパクトなボタン、リスト行を備えたクラシックなモノクロ スタイラス オーガナイザー。",
+      "clickwheel-pod": "シアンのハイライトとコンパクトなタイポグラフィーを備えた、磨かれたスチールと白磁のプレーヤー。",
+      "station-94": "マットグレーの筐体、インディゴのメモリーカード、幾何学的なアクションシンボルを備えたクラシックな 32 ビットコンソール。",
+      "audioamp-classic": "ブラッシュチタン、緑色の LED 数字、スペクトル ビジュアライザーを備えた伝説の 90 年代 MP3 プレーヤー。",
+      "cybercafe-99": "ダイヤルアップ ティール、デスクトップ ショートカット、レトロな Web の美学を備えた、1999 年に建てられたノスタルジックなインターネット カフェ。",
+      "tiger-aqua": "光沢のあるカプセル ボタンと滑らかなドロップ シャドウの深さを備えた 2005 つや消しアルミニウム デスクトップ。",
+      "media-station-9": "光沢のある錠剤の曲線、光る再生インジケーター、シアンのアクセントを備えた電動コバルト メディア プレーヤー。",
+      "instant-chat-7": "スカイブルーのヘッダー、触覚カード、オンライン プレゼンスのアクセントを備えた 2000 年代半ばのメッセンジャーの美学。",
+      "bbs-dialup": "ANSI 文字セル、ASCII メニュー、モデム テレメトリ カラーを備えた 1980 年代の掲示板。"
+}
+  }
+};
+
+const jaCommonTranslations = { common: { noResults: "結果が見つかりませんでした" } };
+
+const jaShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "すべてのエージェントにメッセージを送信する" } } };
+
+const jaOnboardingTranslations = { onboarding: {"shortcutSplitRight":"右に分割","shortcutSplitDown":"スプリットダウン","shortcutQuickOpen":"クイックオープン","shortcutClearTerminal":"クリアターミナル","shortcutSidebar":"サイドバーの切り替え","shortcutZenMode":"禅モード"} };
+
+const jaGitTranslations = { git: { githubDraft: "下書き" } };
+
+export const ja: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(jaCoveragePatch, jaGitTranslations), jaOnboardingTranslations), jaShortcutTranslations), jaCommonTranslations), jaCommandPaletteTranslations), jaWorkbenchTranslations), jaStatusTranslations), jaThemeTranslations), {
   common: {
     paste: "貼り付け",
   },
