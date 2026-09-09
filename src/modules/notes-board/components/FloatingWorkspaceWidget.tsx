@@ -5,17 +5,20 @@ import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   Cancel01Icon,
+  GitCompareIcon,
   Layout01Icon,
   Note01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
+import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import type { TabSummary } from "../lib/agentHandoff";
 import { useKanbanStore } from "../store/kanbanStore";
 import {
   useNotesBoardStore,
   type WorkspaceTab,
 } from "../store/notesBoardStore";
+import { GitReviewTab } from "./GitReviewTab";
 import { KanbanTab } from "./KanbanTab";
 import { NotesTab } from "./NotesTab";
 
@@ -44,12 +47,14 @@ export function FloatingWorkspaceWidget({
   const resetPosition = useNotesBoardStore((s) => s.resetPosition);
   const requestNewNote = useNotesBoardStore((s) => s.requestNewNote);
   const cardCount = useKanbanStore((s) => s.cards.length);
+  const sourceControl = useSourceControl(cwd ?? null);
+  const changedCount = sourceControl.changedCount;
   const [isDragging, setIsDragging] = useState(false);
   const { t } = useTranslation();
 
   const isFloating = position !== null;
 
-  // Keyboard shortcuts: Escape to close, Alt+N for quick new note
+  // Keyboard shortcuts: Escape to close, Alt+N for new note, Alt+D for git review
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -65,13 +70,23 @@ export function FloatingWorkspaceWidget({
         event.preventDefault();
         event.stopPropagation();
         requestNewNote();
+        return;
+      }
+      if (
+        (event.altKey && event.key.toLowerCase() === "d") ||
+        (event.ctrlKey && event.altKey && event.key.toLowerCase() === "d")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        setTab("review");
+        return;
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [onClose, requestNewNote]);
+  }, [onClose, requestNewNote, setTab]);
 
   // Keep floating window clamped within viewport on resize
   useEffect(() => {
@@ -158,6 +173,12 @@ export function FloatingWorkspaceWidget({
   }[] = [
     { id: "notes", label: t("notesBoard.tabNotes"), icon: Note01Icon },
     { id: "kanban", label: t("notesBoard.tabKanban"), icon: Layout01Icon, badge: cardCount },
+    {
+      id: "review",
+      label: t("notesBoard.tabReview"),
+      icon: GitCompareIcon,
+      badge: changedCount > 0 ? changedCount : undefined,
+    },
   ];
 
   return (
@@ -179,7 +200,7 @@ export function FloatingWorkspaceWidget({
             }
       }
       className={cn(
-        "z-50 flex flex-col overflow-hidden rounded-xl border border-border/70 bg-popover text-popover-foreground shadow-2xl outline-none ring-1 ring-border/25 transition-all duration-150",
+        "z-50 flex flex-col overflow-hidden rounded-xl border border-border/70 bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-xl outline-none ring-1 ring-border/25 transition-all duration-150",
         isFloating
           ? "fixed"
           : "fixed bottom-8.5 left-3 right-3 animate-in fade-in slide-in-from-bottom-2",
@@ -210,7 +231,14 @@ export function FloatingWorkspaceWidget({
                 <HugeiconsIcon icon={item.icon} size={12} />
                 <span>{item.label}</span>
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="flex size-4 items-center justify-center rounded-full bg-muted text-[9.5px] font-mono text-muted-foreground">
+                  <span
+                    className={cn(
+                      "flex size-4 items-center justify-center rounded-full text-[9.5px] font-mono",
+                      item.id === "review"
+                        ? "bg-primary/20 text-primary font-bold"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
                     {item.badge}
                   </span>
                 )}
@@ -251,7 +279,14 @@ export function FloatingWorkspaceWidget({
 
       {/* Main Tab Content */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === "kanban" ? (
+        {activeTab === "review" ? (
+          <GitReviewTab
+            onRunCommand={onRunCommand}
+            cwd={cwd}
+            tabs={tabs}
+            onActivateAgent={onActivateAgent}
+          />
+        ) : activeTab === "kanban" ? (
           <KanbanTab
             onRunCommand={onRunCommand}
             cwd={cwd}
@@ -273,6 +308,8 @@ export function FloatingWorkspaceWidget({
         <span>{t("notesBoard.footerHint")}</span>
         <div className="flex items-center gap-2">
           <span>{t("notesBoard.newNoteShortcut")}</span>
+          <span>·</span>
+          <span>{t("notesBoard.newReviewShortcut")}</span>
           <span>·</span>
           <span>{t("notesBoard.escToClose")}</span>
         </div>

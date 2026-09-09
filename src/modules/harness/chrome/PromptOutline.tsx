@@ -20,6 +20,7 @@ import {
   type OutlineBand,
 } from "../lib/promptOutline";
 import type { Block } from "../lib/session";
+import { useTranslation } from "@/modules/i18n";
 import { Popover } from "./Popover";
 
 const OPEN_DELAY_MS = 25;
@@ -56,6 +57,7 @@ export function PromptOutline({
   visible = true,
   revealBlock,
 }: Props) {
+  const { t } = useTranslation();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -220,7 +222,7 @@ export function PromptOutline({
     <div
       ref={rail}
       role="toolbar"
-      aria-label="Prompts"
+      aria-label={t("harness.promptOutline")}
       aria-orientation="vertical"
       style={{ width: BAR_WIDTH_LIFTED_PX }}
       onMouseEnter={() => {
@@ -282,7 +284,7 @@ export function PromptOutline({
           gap={10}
           width={POPOVER_WIDTH}
           onDismiss={close}
-          aria-label="Prompt preview"
+          aria-label={t("harness.promptPreview")}
           className="pointer-events-none flex flex-col gap-1.5 p-3 font-sans"
         >
           <p className="line-clamp-2 text-sm leading-snug text-content">

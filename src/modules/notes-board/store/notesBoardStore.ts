@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type WorkspaceTab = "notes" | "kanban";
+export type WorkspaceTab = "notes" | "kanban" | "review";
 
 export type Position = { x: number; y: number };
 
@@ -15,6 +15,7 @@ type NotesBoardState = {
   pendingNewNote: number | null;
   toggle: () => void;
   open: (tab?: WorkspaceTab) => void;
+  openReview: () => void;
   close: () => void;
   setTab: (tab: WorkspaceTab) => void;
   setSize: (size: { width?: number; height?: number }) => void;
@@ -24,8 +25,8 @@ type NotesBoardState = {
   clearPendingNewNote: () => void;
 };
 
-const DEFAULT_WIDTH = 760;
-const DEFAULT_HEIGHT = 540;
+const DEFAULT_WIDTH = 840;
+const DEFAULT_HEIGHT = 580;
 const MIN_WIDTH = 420;
 const MIN_HEIGHT = 380;
 const MAX_WIDTH = 1000;
@@ -80,6 +81,12 @@ export const useNotesBoardStore = create<NotesBoardState>((set) => ({
       isOpen: true,
       activeTab: tab ?? s.activeTab,
     })),
+
+  openReview: () =>
+    set({
+      isOpen: true,
+      activeTab: "review",
+    }),
 
   close: () => set({ isOpen: false }),
 
