@@ -6,7 +6,7 @@ describe("preferredTabBarWidth", () => {
     expect(preferredTabBarWidth(0, false)).toBe(28);
   });
 
-  it("allows every visible item to reach its preferred width", () => {
+  it("reserves one fixed-width icon cell per visible item", () => {
     expect(preferredTabBarWidth(1, false)).toBe(
       TAB_PREFERRED_WIDTH_PX + 26 + 2,
     );

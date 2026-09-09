@@ -17,8 +17,9 @@ import type {
   WorkspaceDragSource,
   WorkspaceDropTarget,
 } from "@/modules/spaces/lib/workspaceDrag";
-import type { GitDiffOpenInput, Tab } from "@/modules/tabs";
 import { TabBar } from "@/modules/tabs";
+import type { GitDiffOpenInput, Tab } from "@/modules/tabs";
+import type { TabIconId } from "@/modules/tabs/lib/tabIcon";
 import {
   Cancel01Icon,
   Rocket01Icon,
@@ -74,6 +75,7 @@ type Props = {
   onReorder: (fromId: number, toGapIndex: number) => void;
   onOverrideLanguage?: (id: number, lang: string | null) => void;
   onSetColor?: (id: number, color: string | null) => void;
+  onSetIcon?: (id: number, icon: TabIconId | null) => void;
   onPin?: (id: number) => void;
   onToggleLock?: (id: number) => void;
   onToggleBlocks?: (id: number) => void;
@@ -141,6 +143,7 @@ export function Header({
   onReorder,
   onOverrideLanguage,
   onSetColor,
+  onSetIcon,
   onPin,
   onToggleLock,
   onToggleBlocks,
@@ -175,11 +178,6 @@ export function Header({
   const launcherLabel = t("launcher.title");
   const rootRef = useRef<HTMLElement>(null);
   const [compact, setCompact] = useState(false);
-  // Whether the tab strip itself is out of room and has collapsed its tabs
-  // to icons; the harness pill sits outside that strip but should shrink the
-  // same way once there's genuinely no space left, rather than staying full
-  // width and pushing tabs into scroll.
-  const [tabsOverflowing, setTabsOverflowing] = useState(false);
 
   const activeSpaceId =
     activeStripItem?.kind === "space" ? activeStripItem.spaceId : null;
@@ -338,10 +336,7 @@ export function Header({
                   }}
                   title={`${t("harness.agentDevelopment")} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
                   className={cn(
-                    "group relative flex h-6.5 shrink-0 items-center gap-1.5 rounded-md text-xs font-medium cursor-pointer select-none transition-all duration-150 outline-none",
-                    tabsOverflowing
-                      ? "max-w-8.5 justify-center px-1.5 hover:max-w-64 hover:justify-between hover:px-2"
-                      : "px-2",
+                    "group relative flex h-6.5 w-9 shrink-0 cursor-pointer select-none items-center justify-center rounded-md text-xs font-medium outline-none transition-all duration-150",
                     isHarnessActive
                       ? "bg-foreground/[0.08] text-foreground shadow-xs ring-1 ring-inset ring-foreground/[0.06]"
                       : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
@@ -359,12 +354,7 @@ export function Header({
                     )}
                   />
                   <span
-                    className={cn(
-                      "truncate transition-all duration-150",
-                      tabsOverflowing
-                        ? "max-w-0 opacity-0 group-hover:ml-0.5 group-hover:max-w-[140px] group-hover:opacity-100"
-                        : "max-w-[140px]",
-                    )}
+                    className="sr-only"
                   >
                     {t("harness.agentDevelopment")}
                   </span>
@@ -376,10 +366,7 @@ export function Header({
                     }}
                     title={t("tabs.closeTab")}
                     aria-label={t("harness.closeAgentDevelopment")}
-                    className={cn(
-                      "ml-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-foreground/10 hover:text-foreground transition-colors",
-                      tabsOverflowing && "hidden group-hover:flex",
-                    )}
+                    className="absolute right-0.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-background/90 text-muted-foreground/60 opacity-0 shadow-sm transition-opacity hover:bg-foreground/10 hover:text-foreground group-hover:opacity-100"
                   >
                     <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
                   </button>
@@ -421,6 +408,7 @@ export function Header({
               onReorder={onReorder}
               onOverrideLanguage={onOverrideLanguage}
               onSetColor={onSetColor}
+              onSetIcon={onSetIcon}
               onPin={onPin}
               onToggleLock={onToggleLock}
               onToggleBlocks={onToggleBlocks}
@@ -453,7 +441,6 @@ export function Header({
               onLaunchAgents={onLaunchAgents}
               onRevealInExplorer={onRevealInExplorer}
               compact={compact}
-              onOverflowChange={setTabsOverflowing}
               onCardDrop={onCardDrop}
             />
           </>

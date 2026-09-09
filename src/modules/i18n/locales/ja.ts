@@ -570,6 +570,8 @@ const jaBase = mergeLocale(en, {
     notifications: "通知",
   },
   tabs: {
+    iconPicker: "アイコン",
+    automaticIcon: "自動",
     revealInSideBar: "サイドバーで表示",
     revealInFileManager: "エクスプローラーで表示",
     newTab: "新しいタブ",

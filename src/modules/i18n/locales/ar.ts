@@ -876,6 +876,8 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
     notifications: "الإشعارات",
   },
   tabs: {
+    iconPicker: "الأيقونة",
+    automaticIcon: "تلقائي",
     revealInSideBar: "إظهار في الشريط الجانبي",
     revealInFileManager: "إظهار في مستكشف الملفات",
     newTab: "علامة تبويب جديدة",

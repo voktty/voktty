@@ -590,6 +590,8 @@ const frBase = mergeLocale(en, {
     notifications: "Notifications",
   },
   tabs: {
+    iconPicker: "Icône",
+    automaticIcon: "Automatique",
     revealInSideBar: "Révéler dans la barre latérale",
     revealInFileManager: "Révéler dans l'explorateur de fichiers",
     newTab: "Nouvel onglet",

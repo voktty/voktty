@@ -1,4 +1,4 @@
-export const TAB_PREFERRED_WIDTH_PX = 220;
+export const TAB_PREFERRED_WIDTH_PX = 36;
 
 const NEW_TAB_CONTROL_WIDTH_PX = 26;
 const OVERFLOW_CONTROL_WIDTH_PX = 40;
@@ -6,8 +6,8 @@ const STRIP_GAP_PX = 2;
 
 /**
  * Returns the ideal width of the horizontal tab group. Flexbox may shrink the
- * group below this value, but it should not grow beyond the width its tabs can
- * actually use. This keeps trailing controls beside the final tab.
+ * group below this value, but it should not grow beyond the width its icon
+ * cells can actually use. This keeps trailing controls beside the final tab.
  */
 export function preferredTabBarWidth(
   itemCount: number,

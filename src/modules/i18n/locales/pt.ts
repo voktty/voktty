@@ -581,6 +581,8 @@ const ptBase = mergeLocale(en, {
     notifications: "Notificações",
   },
   tabs: {
+    iconPicker: "Ícone",
+    automaticIcon: "Automático",
     revealInSideBar: "Revelar na barra lateral",
     revealInFileManager: "Revelar no Explorador de Arquivos",
     newTab: "Nova Aba",

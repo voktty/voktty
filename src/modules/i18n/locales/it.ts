@@ -589,6 +589,8 @@ const itBase = mergeLocale(en, {
     notifications: "Notifiche",
   },
   tabs: {
+    iconPicker: "Icona",
+    automaticIcon: "Automatico",
     revealInSideBar: "Mostra nella barra laterale",
     revealInFileManager: "Mostra in Esplora file",
     newTab: "Nuova scheda",

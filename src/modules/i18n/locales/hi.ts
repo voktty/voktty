@@ -877,6 +877,8 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
     notifications: "सूचनाएं",
   },
   tabs: {
+    iconPicker: "आइकन",
+    automaticIcon: "स्वचालित",
     revealInSideBar: "साइडबार में दिखाएं",
     revealInFileManager: "फ़ाइल एक्सप्लोरर में दिखाएं",
     newTab: "नया टैब",

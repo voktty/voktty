@@ -50,6 +50,7 @@ import {
   type TabKey,
   type WorkspaceScopeId,
 } from "./tabIdentity";
+import type { TabIconId } from "./tabIcon";
 
 export { MAX_PANES_PER_TAB } from "@/modules/terminal/lib/paneLimits";
 
@@ -61,6 +62,8 @@ type TabBase = {
   cold?: boolean;
   /** Classification color / visual tag. */
   color?: string | null;
+  /** Explicit icon selection. Automatic detection is used when absent. */
+  icon?: TabIconId | null;
   /** If locked, tab cannot be closed until unlocked. */
   locked?: boolean;
   /** Timestamp in ms when tab was opened. */
@@ -236,6 +239,7 @@ export type TabPatch = Partial<{
   overrideLanguage: string | null;
   workspaceEnv: WorkspaceEnv;
   color: string | null;
+  icon: TabIconId | null;
   locked: boolean;
 }>;
 
@@ -1775,6 +1779,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         if (x.id !== id) return x;
         const basePatch = {
           ...(patch.color !== undefined && { color: patch.color }),
+          ...(patch.icon !== undefined && {
+            icon: patch.icon === null ? undefined : patch.icon,
+          }),
           ...(patch.locked !== undefined && { locked: patch.locked }),
         };
         let updated = x;

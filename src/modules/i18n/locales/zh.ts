@@ -535,6 +535,8 @@ const zhBase = mergeLocale(en, {
     notifications: "通知",
   },
   tabs: {
+    iconPicker: "图标",
+    automaticIcon: "自动",
     revealInSideBar: "在侧边栏中显示",
     revealInFileManager: "在文件资源管理器中显示",
     newTab: "新建标签页",

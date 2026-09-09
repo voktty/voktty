@@ -580,6 +580,8 @@ const deBase = mergeLocale(en, {
     notifications: "Benachrichtigungen",
   },
   tabs: {
+    iconPicker: "Symbol",
+    automaticIcon: "Automatisch",
     revealInSideBar: "In der Seitenleiste anzeigen",
     revealInFileManager: "Im Datei-Explorer anzeigen",
     newTab: "Neuer Tab",
