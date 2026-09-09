@@ -939,7 +939,7 @@ export function TabBar({
                     </div>
                     <ContextMenuSeparator />
                     <ContextMenuItem
-                      className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                      className="gap-2 rounded-md px-2 py-1.5 text-xs"
                       onSelect={() => onToggleLock?.(t.id)}
                     >
                       <HugeiconsIcon
@@ -960,7 +960,7 @@ export function TabBar({
                       return (
                         <>
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => onRevealInExplorer?.(tabPath)}
                           >
                             <HugeiconsIcon
@@ -973,7 +973,7 @@ export function TabBar({
                             </span>
                           </ContextMenuItem>
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => void revealInFinder(tabPath)}
                           >
                             <HugeiconsIcon
@@ -993,7 +993,7 @@ export function TabBar({
                       <>
                         {isSshTab(t, workspaceEnv) && (
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => {
                               if (onReconnectTab) {
                                 onReconnectTab(t);
@@ -1017,7 +1017,7 @@ export function TabBar({
                         )}
                         {!t.collaboration && onShareTerminal ? (
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => onShareTerminal(t.id)}
                           >
                             <HugeiconsIcon
@@ -1031,7 +1031,7 @@ export function TabBar({
                           </ContextMenuItem>
                         ) : null}
                         <ContextMenuItem
-                          className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                          className="gap-2 rounded-md px-2 py-1.5 text-xs"
                           onSelect={() => onDuplicate(t.id)}
                         >
                           <HugeiconsIcon
@@ -1045,7 +1045,7 @@ export function TabBar({
                         </ContextMenuItem>
                         {onSplitRight ? (
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => onSplitRight(t.id)}
                           >
                             <HugeiconsIcon
@@ -1060,7 +1060,7 @@ export function TabBar({
                         ) : null}
                         {onSplitDown ? (
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => onSplitDown(t.id)}
                           >
                             <HugeiconsIcon
@@ -1075,7 +1075,7 @@ export function TabBar({
                         ) : null}
                         {onOpenPreviewSplit ? (
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => onOpenPreviewSplit(t.id)}
                           >
                             <HugeiconsIcon
@@ -1091,7 +1091,7 @@ export function TabBar({
                         ) : null}
                         {onOpenGitGraphSplit ? (
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => onOpenGitGraphSplit(t.id)}
                           >
                             <HugeiconsIcon
@@ -1107,7 +1107,7 @@ export function TabBar({
                         ) : null}
                         {onOpenEditorSplit ? (
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs"
                             onSelect={() => onOpenEditorSplit(t.id)}
                           >
                             <HugeiconsIcon
@@ -1121,7 +1121,7 @@ export function TabBar({
                           </ContextMenuItem>
                         ) : null}
                         <ContextMenuItem
-                          className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                          className="gap-2 rounded-md px-2 py-1.5 text-xs"
                           onSelect={() => setEditingId(t.id)}
                         >
                           <HugeiconsIcon
@@ -1135,7 +1135,7 @@ export function TabBar({
                         </ContextMenuItem>
                         {onToggleBlocks ? (
                           <ContextMenuItem
-                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px] font-medium"
+                            className="gap-2 rounded-md px-2 py-1.5 text-xs font-medium"
                             onSelect={() => onToggleBlocks(t.id)}
                           >
                             <HugeiconsIcon
@@ -1161,7 +1161,7 @@ export function TabBar({
                     )}
                     {!t.locked && (
                       <ContextMenuItem
-                        className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                        className="gap-2 rounded-md px-2 py-1.5 text-xs"
                         onSelect={() => onClose(t.id)}
                       >
                         <HugeiconsIcon
@@ -1175,7 +1175,7 @@ export function TabBar({
                       </ContextMenuItem>
                     )}
                     <ContextMenuItem
-                      className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                      className="gap-2 rounded-md px-2 py-1.5 text-xs"
                       disabled={!hasTabsToRight}
                       onSelect={() => onCloseTabsToRight(t.id)}
                     >
@@ -1189,7 +1189,7 @@ export function TabBar({
                       </span>
                     </ContextMenuItem>
                     <ContextMenuItem
-                      className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                      className="gap-2 rounded-md px-2 py-1.5 text-xs"
                       disabled={tabs.length <= 1}
                       onSelect={() => onCloseOtherTabs(t.id)}
                     >
