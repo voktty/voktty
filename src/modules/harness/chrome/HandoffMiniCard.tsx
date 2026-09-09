@@ -1,3 +1,4 @@
+import { useTranslation } from "@/modules/i18n";
 import { ChevronRight, Replace, X } from "./icons";
 import { HARNESS_TITLE, type HarnessId } from "../lib/session";
 import { HarnessIcon } from "./HarnessIcon";
@@ -15,6 +16,7 @@ type Props = {
 };
 
 export function HandoffMiniCard({ card, onDismiss }: Props) {
+  const { t } = useTranslation();
   const files =
     card.files != null && card.files > 0
       ? `${card.files} ${card.files === 1 ? "file" : "files"}`
@@ -61,8 +63,8 @@ export function HandoffMiniCard({ card, onDismiss }: Props) {
         {onDismiss ? (
           <button
             type="button"
-            title="Remove"
-            aria-label="Remove handoff"
+            title={t("common.remove")}
+            aria-label={t("harness.chrome.removeHandoff")}
             onClick={onDismiss}
             className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content"
           >

@@ -37,26 +37,23 @@ type Props = {
   onClose: () => void;
 };
 
-const TIME_OPTIONS: { id: InboxTimeFilter; label: string }[] = [
-  { id: "all", label: "All time" },
-  { id: "today", label: "Today" },
-  { id: "7d", label: "Last 7 days" },
-  { id: "30d", label: "Last 30 days" },
+const TIME_OPTIONS: { id: InboxTimeFilter }[] = [
+  { id: "all" },
+  { id: "today" },
+  { id: "7d" },
+  { id: "30d" },
 ];
 
 const KIND_OPTIONS: {
   id: InboxKind;
-  label: string;
   icon: ReactNode;
 }[] = [
   {
     id: "issue",
-    label: "Issues",
     icon: <CircleDot className="size-3.5 shrink-0" strokeWidth={1.75} />,
   },
   {
     id: "pr",
-    label: "Pull requests",
     icon: <GitPullRequest className="size-3.5 shrink-0" strokeWidth={1.75} />,
   },
 ];
@@ -195,7 +192,7 @@ export function InboxFiltersMenu({
 
       {source === "linear" && linearTeams.length > 0 ? (
         <>
-          <SectionLabel>Teams</SectionLabel>
+          <SectionLabel>{t("harness.chrome.teams")}</SectionLabel>
           {linearTeams.map((team) => (
             <FilterItem
               key={team.id}
@@ -209,7 +206,7 @@ export function InboxFiltersMenu({
 
       {source === "linear" && linearProjects.length > 0 ? (
         <>
-          <SectionLabel>Projects</SectionLabel>
+          <SectionLabel>{t("harness.chrome.projects")}</SectionLabel>
           {linearProjects.map((project) => (
             <FilterItem
               key={project.id}
@@ -223,7 +220,7 @@ export function InboxFiltersMenu({
 
       {source === "github" && projects.length > 0 ? (
         <>
-          <SectionLabel>Projects</SectionLabel>
+          <SectionLabel>{t("harness.chrome.projects")}</SectionLabel>
           {projects.map((project) => (
             <FilterItem
               key={project.path}
@@ -257,7 +254,7 @@ export function InboxFiltersMenu({
             }}
             className="flex h-7 w-full items-center rounded-lg px-2 text-left text-[13px] leading-none text-content/70 hover:bg-content/5 hover:text-content"
           >
-            Clear filters
+            {t("harness.chrome.clearFilters")}
           </button>
         </>
       ) : null}

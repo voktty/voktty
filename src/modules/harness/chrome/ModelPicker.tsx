@@ -8,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import {
   coerceModelPickerTab,
   findModel,
@@ -65,6 +66,7 @@ export function ModelPicker({
   onChange,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const catalogVersion = useSyncExternalStore(
     subscribeModels,
     getModelSnapshot,
@@ -333,19 +335,19 @@ export function ModelPicker({
           onDismiss={() => dismiss(false)}
           dismissOnEscape={false}
           role="dialog"
-          aria-label="Model picker"
+          aria-label={t("harness.chrome.modelPicker")}
           data-model-picker
           className="flex flex-col overflow-hidden"
         >
           <div
             role="tablist"
-            aria-label="Providers"
+            aria-label={t("harness.chrome.providers")}
             aria-keyshortcuts="ArrowLeft ArrowRight"
             aria-orientation="horizontal"
             className="flex w-full shrink-0 items-stretch border-b border-content/10"
           >
             <ProviderTabButton
-              title="Favorites"
+              title={t("harness.chrome.favorites")}
               selected={visibleTab === "favorites"}
               onSelect={() => selectTab("favorites")}
             >
@@ -375,8 +377,8 @@ export function ModelPicker({
                   ref={search}
                   type="text"
                   value={query}
-                  placeholder="Search models..."
-                  aria-label="Search models"
+                  placeholder={t("harness.chrome.searchModels")}
+                  aria-label={t("harness.chrome.searchModels")}
                   className="min-w-0 flex-1 bg-transparent text-[12px] text-content outline-none placeholder:text-content/40"
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={onSearchKey}
@@ -390,13 +392,13 @@ export function ModelPicker({
               favorites={favorites}
               emptyLabel={
                 visibleTab === "favorites" && !query.trim()
-                  ? "No favorite models"
+                  ? t("harness.chrome.noFavoriteModels")
                   : visibleTab !== "favorites" &&
                       !isHarnessAvailable(visibleTab)
                     ? harnessUnavailableHint(visibleTab)
                     : visibleTab === "codex" && !query.trim()
-                      ? "Loading Codex models…"
-                      : "No matching models"
+                      ? t("harness.chrome.loadingCodexModels")
+                      : t("harness.chrome.noMatchingModels")
               }
               onActive={setActive}
               onPick={pick}
@@ -471,6 +473,7 @@ function ModelList({
   onPick: (model: AgentModel) => void;
   onToggleFavorite: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeRef = useRef<HTMLDivElement>(null);
@@ -507,7 +510,7 @@ function ModelList({
     <div
       ref={setListRef}
       role="listbox"
-      aria-label="Models"
+      aria-label={t("harness.chrome.models")}
       className="min-h-0 flex-1 overflow-y-auto overscroll-none px-1.5 pb-1.5"
     >
       {models.map((item, index) => {
@@ -570,9 +573,15 @@ function ModelList({
             </button>
             <button
               type="button"
-              title={favorited ? "Remove from favorites" : "Add to favorites"}
+              title={
+                favorited
+                  ? t("harness.chrome.removeFromFavorites")
+                  : t("harness.chrome.addToFavorites")
+              }
               aria-label={
-                favorited ? "Remove from favorites" : "Add to favorites"
+                favorited
+                  ? t("harness.chrome.removeFromFavorites")
+                  : t("harness.chrome.addToFavorites")
               }
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {

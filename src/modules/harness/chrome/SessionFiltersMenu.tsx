@@ -22,11 +22,11 @@ type Props = {
   onClose: () => void;
 };
 
-const TIME_OPTIONS: { id: SessionTimeFilter; label: string }[] = [
-  { id: "all", label: "All time" },
-  { id: "today", label: "Today" },
-  { id: "7d", label: "Last 7 days" },
-  { id: "30d", label: "Last 30 days" },
+const TIME_OPTIONS: { id: SessionTimeFilter }[] = [
+  { id: "all" },
+  { id: "today" },
+  { id: "7d" },
+  { id: "30d" },
 ];
 
 export function SessionFiltersMenu({
@@ -110,7 +110,7 @@ export function SessionFiltersMenu({
 
       {harnesses.length > 0 ? (
         <>
-          <SectionLabel>Provider</SectionLabel>
+          <SectionLabel>{t("harness.chrome.provider")}</SectionLabel>
           {harnesses.map((harness) => (
             <FilterItem
               key={harness}
@@ -135,7 +135,7 @@ export function SessionFiltersMenu({
             onClick={() => onChange(DEFAULT_SESSION_SIDEBAR_FILTERS)}
             className="flex h-7 w-full items-center rounded-lg px-2 text-left text-[13px] leading-none text-content/70 hover:bg-content/5 hover:text-content"
           >
-            Clear filters
+            {t("harness.chrome.clearFilters")}
           </button>
         </>
       ) : null}

@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight } from "./icons";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "@/modules/i18n";
 import {
   keepSessionChanges,
   sessionCheckpointStatus,
@@ -32,6 +33,7 @@ export function SessionReview({
   undoLocked = false,
   onOpenDiff,
 }: Props) {
+  const { t } = useTranslation();
   const [files, setFiles] = useState<CheckpointFile[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState<"keep" | "undo" | null>(null);
@@ -120,7 +122,11 @@ export function SessionReview({
           {many ? (
             <button
               type="button"
-              title={expanded ? "Collapse files" : "Expand files"}
+              title={
+                expanded
+                  ? t("harness.chrome.collapseFiles")
+                  : t("harness.chrome.expandFiles")
+              }
               aria-expanded={expanded}
               onClick={() => setExpanded((open) => !open)}
               className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left text-content/70 hover:text-content"
@@ -133,7 +139,9 @@ export function SessionReview({
                   strokeWidth={1.75}
                 />
               )}
-              <span className="truncate text-[12px]">{files.length} Files</span>
+              <span className="truncate text-[12px]">
+                {t("harness.chrome.filesCount", { count: files.length })}
+              </span>
             </button>
           ) : (
             <FileLabel
@@ -148,33 +156,33 @@ export function SessionReview({
               type="button"
               title={
                 canUndoAll
-                  ? "Undo all session changes"
+                  ? t("harness.chrome.undoAllSessionChanges")
                   : undoLocked
-                    ? "Undo is unavailable while another session is running in this project"
-                    : "Undo is unavailable because a file changed outside this session"
+                    ? t("harness.chrome.undoLockedOtherSession")
+                    : t("harness.chrome.undoUnavailableExternal")
               }
               disabled={disabled || !canUndoAll}
               onClick={() => run("undo")}
               className="h-6 rounded-md px-1.5  text-[11px] text-content/55 hover:bg-content/10 hover:text-content disabled:opacity-40"
             >
-              Undo All
+              {t("harness.chrome.undoAll")}
             </button>
             <button
               type="button"
-              title="Keep all session changes"
+              title={t("harness.chrome.keepAllSessionChanges")}
               disabled={disabled}
               onClick={() => run("keep")}
               className="h-6 rounded-md px-1.5  text-[11px] text-content/55 hover:bg-content/10 hover:text-content disabled:opacity-40"
             >
-              Keep All
+              {t("harness.chrome.keepAll")}
             </button>
             <button
               type="button"
-              title="Review changes"
+              title={t("harness.chrome.reviewChanges")}
               onClick={() => onOpenDiff(undefined, { sessionId, cwd })}
               className="h-6 rounded-md bg-content/15 px-2 text-[11px] text-content/80 hover:bg-content/20 hover:text-content"
             >
-              Review
+              {t("harness.chrome.review")}
             </button>
           </div>
         </div>
@@ -258,10 +266,11 @@ function FileRow({
 }
 
 function DiffCounts({ file }: { file: CheckpointFile }) {
+  const { t } = useTranslation();
   if (!file.exact) {
     return (
       <span className="shrink-0 text-[11px] font-medium text-amber-300/80">
-        Shared file
+        {t("harness.chrome.sharedFile")}
       </span>
     );
   }

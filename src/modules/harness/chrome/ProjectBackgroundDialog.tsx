@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { Loader } from "./icons";
 import { Modal } from "./Modal";
 import {
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export function ProjectBackgroundDialog({ project, name, onClose }: Props) {
+  const { t } = useTranslation();
   const initial = loadProjectChatBackground(project);
   const [path, setPath] = useState(initial?.path ?? null);
   const [opacity, setOpacity] = useState(
@@ -106,8 +108,8 @@ export function ProjectBackgroundDialog({ project, name, onClose }: Props) {
 
   return (
     <Modal
-      title="Background Image"
-      description={`Choose a background image for ${name}`}
+      title={t("harness.chrome.backgroundImage")}
+      description={t("harness.chrome.chooseBackgroundFor", { name })}
       size="sm"
       onClose={onClose}
     >
@@ -123,7 +125,7 @@ export function ProjectBackgroundDialog({ project, name, onClose }: Props) {
               />
             ) : (
               <div className="grid h-56 place-items-center text-[12px] text-content/40">
-                No background selected
+                {t("harness.chrome.noBackgroundSelected")}
               </div>
             )}
           </div>
@@ -136,27 +138,27 @@ export function ProjectBackgroundDialog({ project, name, onClose }: Props) {
             {busy ? (
               <Loader className="size-3.5 animate-spin" aria-hidden />
             ) : null}
-            {path ? "Change image" : "Choose image"}
+            {path ? t("harness.chrome.changeImage") : t("harness.chrome.chooseImage")}
           </button>
           <p className="mt-1.5 text-[11px] leading-relaxed text-content/45">
             {path
-              ? "This image overrides the global background for this project."
-              : "This project currently follows the global Appearance setting."}
+              ? t("harness.chrome.backgroundOverridesGlobal")
+              : t("harness.chrome.backgroundFollowsGlobal")}
           </p>
           {error ? (
             <p className="mt-1.5 text-[12px] text-red-400">{error}</p>
           ) : null}
         </div>
 
-        <ProjectBackgroundRow label="Show on">
+        <ProjectBackgroundRow label={t("harness.chrome.showOn")}>
           <div
             role="radiogroup"
-            aria-label="Show project background on"
+            aria-label={t("harness.chrome.showBackgroundOn")}
             className="grid w-44 grid-cols-2 gap-0.5 rounded-md border border-content/10 p-0.5 text-[12px]"
           >
             {[
-              { value: "empty" as const, label: "Empty only" },
-              { value: "all" as const, label: "All sessions" },
+              { value: "empty" as const, label: t("harness.chrome.emptyOnly") },
+              { value: "all" as const, label: t("harness.chrome.allSessions") },
             ].map((option) => (
               <button
                 key={option.value}
@@ -176,14 +178,14 @@ export function ProjectBackgroundDialog({ project, name, onClose }: Props) {
           </div>
         </ProjectBackgroundRow>
 
-        <ProjectBackgroundRow label="Visibility">
+        <ProjectBackgroundRow label={t("harness.chrome.visibility")}>
           <div className="flex w-56 items-center gap-3">
             <input
               type="range"
               min={Math.round(CHAT_BACKGROUND_OPACITY_MIN * 100)}
               max={Math.round(CHAT_BACKGROUND_OPACITY_MAX * 100)}
               value={Math.round(opacity * 100)}
-              aria-label="Project background visibility"
+              aria-label={t("harness.chrome.backgroundVisibility")}
               className="sidebar-opacity-slider min-w-0 flex-1"
               onChange={(event) => updateOpacity(Number(event.target.value))}
             />
@@ -200,7 +202,7 @@ export function ProjectBackgroundDialog({ project, name, onClose }: Props) {
             disabled={busy}
             className="w-full rounded-md border border-content/10 px-2.5 py-1.5 text-[12px] text-red-400 hover:border-red-400/40 hover:bg-red-400/10 disabled:opacity-40"
           >
-            Remove background image
+            {t("harness.chrome.removeBackgroundImage")}
           </button>
         ) : null}
       </div>

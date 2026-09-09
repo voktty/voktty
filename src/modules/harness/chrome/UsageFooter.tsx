@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { HarnessIcon } from "./HarnessIcon";
 import { Popover } from "./Popover";
 import type { RateLimitProvider } from "../lib/rateLimits";
@@ -81,6 +82,7 @@ function RunningTerminalChip({
   open: boolean;
   onToggle?: (fileId: string) => void;
 }) {
+  const { t } = useTranslation();
   const root = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const label = runningTerminalChipLabel(terminals);
@@ -135,7 +137,7 @@ function RunningTerminalChip({
           autoFocus
           onDismiss={() => setMenuOpen(false)}
           role="menu"
-          aria-label="Running terminals"
+          aria-label={t("harness.chrome.runningTerminals")}
           className="min-w-[12rem] p-1"
         >
           {terminals.map((terminal) => (

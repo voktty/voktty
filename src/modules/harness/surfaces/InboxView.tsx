@@ -21,6 +21,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import {
   InboxFiltersMenu,
   INBOX_FILTER_MENU_WIDTH,
@@ -272,6 +273,7 @@ export function InboxView({
   onAskRestart,
   onAskMount,
 }: Props) {
+  const { t } = useTranslation();
   const [discussionOpen, setDiscussionOpen] = useState(false);
   const sidebar = variant === "sidebar";
   const listLock = useLockOverscroll<HTMLDivElement>();
@@ -500,7 +502,7 @@ export function InboxView({
     >
       <div
         role="tablist"
-        aria-label="Inbox source"
+        aria-label={t("harness.chrome.inboxSource")}
         className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-2"
       >
         <InboxSourceTab
@@ -520,8 +522,8 @@ export function InboxView({
           <input
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Filter inbox"
-            aria-label="Filter inbox"
+            placeholder={t("harness.chrome.filterInbox")}
+            aria-label={t("harness.chrome.filterInbox")}
             spellCheck={false}
             autoComplete="off"
             className="h-7 w-full rounded-md bg-transparent pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/40"
@@ -529,8 +531,8 @@ export function InboxView({
         </div>
         <button
           type="button"
-          title="Filter inbox"
-          aria-label="Filter inbox"
+          title={t("harness.chrome.filterInbox")}
+          aria-label={t("harness.chrome.filterInbox")}
           aria-expanded={!!filterMenu}
           aria-haspopup="menu"
           onClick={onFilterButtonClick}
@@ -542,7 +544,7 @@ export function InboxView({
         </button>
         <button
           type="button"
-          aria-label="Refresh"
+          aria-label={t("common.refresh")}
           onClick={() => setRefresh((value) => value + 1)}
           className="grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
         >
@@ -571,16 +573,16 @@ export function InboxView({
             {narrowedByUser
               ? searchNarrowed
                 ? source === "linear"
-                  ? "No matching Linear issues"
-                  : "No matching issues or pull requests"
+                  ? t("harness.chrome.noMatchingLinearIssues")
+                  : t("harness.chrome.noMatchingIssuesOrPrs")
                 : source === "linear"
-                  ? "No Linear issues match these filters"
-                  : "No issues or pull requests match these filters"
+                  ? t("harness.chrome.noLinearIssuesMatchFilters")
+                  : t("harness.chrome.noIssuesOrPrsMatchFilters")
               : source === "linear"
-                ? "No Linear issues"
+                ? t("harness.chrome.noLinearIssues")
                 : projects.length === 0
-                  ? "Open a project to fill the inbox"
-                  : "No matching issues or pull requests"}
+                  ? t("harness.chrome.openProjectToFillInbox")
+                  : t("harness.chrome.noMatchingIssuesOrPrs")}
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5 p-1.5">
@@ -618,7 +620,7 @@ export function InboxView({
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize inbox list"
+          aria-label={t("harness.chrome.resizeInbox")}
           aria-valuenow={Math.round(resize.width)}
           tabIndex={0}
           className={`absolute inset-y-0 -right-px z-10 w-1.5 cursor-col-resize touch-none ${
@@ -651,7 +653,7 @@ export function InboxView({
     return (
       <div
         role="region"
-        aria-label="Inbox"
+        aria-label={t("harness.chrome.inbox")}
         className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
       >
         {list}
@@ -663,7 +665,7 @@ export function InboxView({
   return (
     <div
       role="region"
-      aria-label="Inbox"
+      aria-label={t("harness.chrome.inbox")}
       data-app-inbox
       className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
     >
@@ -724,6 +726,7 @@ export function InboxDetailPane({
   recents: RecentProject[];
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
 }) {
+  const { t } = useTranslation();
   const item = useInboxSelection();
   const logos = useTabGroupLogos();
   const projects = useMemo(
@@ -737,7 +740,7 @@ export function InboxDetailPane({
   return (
     <div
       role="region"
-      aria-label="Inbox"
+      aria-label={t("harness.chrome.inbox")}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-none text-content"
     >
       <InboxDetailBody
@@ -806,6 +809,7 @@ function InboxCard({
   mascotColor: string;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation();
   useInboxSeenTick();
   const time = formatRelativeTime(item.updatedAt);
   const name = projectName(item.projectPath);
@@ -844,7 +848,7 @@ function InboxCard({
             className="size-3 shrink-0"
           />
           <span className="min-w-0 truncate text-[11px] text-content/50">
-            {item.kind === "pr" ? "Pull request" : "Issue"} ·{" "}
+            {item.kind === "pr" ? t("harness.chrome.pullRequest") : t("harness.chrome.issue")} ·{" "}
             {inboxItemRef(item)}
           </span>
         </span>
@@ -911,6 +915,7 @@ function InboxDetail({
   onAsk?: () => void;
   asking?: boolean;
 }) {
+  const { t } = useTranslation();
   const linear = item.provider === "linear";
   const isPr = !linear && item.kind === "pr";
   const githubKind =
@@ -1188,7 +1193,7 @@ function InboxDetail({
             provider={item.provider}
             className="size-3.5"
           />
-          <span>{item.kind === "pr" ? "Pull request" : "Issue"}</span>
+          <span>{item.kind === "pr" ? t("harness.chrome.pullRequest") : t("harness.chrome.issue")}</span>
           <span className="tabular-nums">{inboxItemRef(item)}</span>
           <span className={statusClass}>{status}</span>
           {source ? <span className="truncate">{source}</span> : null}
@@ -1295,7 +1300,7 @@ function InboxDetail({
                 }}
                 className="inline-flex items-center gap-1 rounded-md bg-content px-3 h-6.5 text-[12px] text-background-base hover:bg-content/80 disabled:cursor-default disabled:opacity-40"
               >
-                {starting ? "Sending..." : "Send to agent"}
+                {starting ? t("harness.chrome.sending") : t("harness.chrome.sendToAgent")}
               </button>
               {linear ? (
                 <InboxProjectPicker
@@ -1318,7 +1323,7 @@ function InboxDetail({
               }`}
             >
               <MessageSquare className="size-3.5" strokeWidth={1.75} />
-              Ask
+              {t("harness.chrome.ask")}
             </button>
           ) : null}
           <button
@@ -1332,10 +1337,10 @@ function InboxDetail({
           >
             <ExternalLink className="size-3.5" strokeWidth={1.75} />
             {item.kind === "pr"
-              ? "Review on GitHub"
+              ? t("harness.chrome.reviewOnGitHub")
               : linear
-                ? "Open in Linear"
-                : "Open on GitHub"}
+                ? t("harness.chrome.openInLinear")
+                : t("harness.chrome.openOnGitHub")}
           </button>
         </div>
         {startError ? (
@@ -1345,16 +1350,16 @@ function InboxDetail({
       {isPr ? (
         <div
           role="tablist"
-          aria-label="Pull request sections"
+          aria-label={t("harness.chrome.prSections")}
           className="flex h-9 gap-4 items-stretch border-b border-content/10"
         >
           <InboxDetailTab
-            label="Summary"
+            label={t("harness.chrome.summary")}
             selected={tab === "summary"}
             onSelect={() => setTab("summary")}
           />
           <InboxDetailTab
-            label="Code"
+            label={t("harness.chrome.code")}
             selected={tab === "code"}
             onSelect={() => setTab("code")}
           />
@@ -1474,6 +1479,7 @@ function InboxProjectPicker({
   value: string;
   onChange: (path: string) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -1515,7 +1521,7 @@ function InboxProjectPicker({
       >
         {selected ? <InboxProjectMark project={selected} /> : null}
         <span className="min-w-0 truncate">
-          {selected?.name ?? "Choose project"}
+          {selected?.name ?? t("harness.chrome.chooseProject")}
         </span>
         <ChevronDown
           className="size-3 shrink-0 text-content/45"

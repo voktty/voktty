@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { PanelLeft, RotateCcw } from "../chrome/icons";
 import { IconButton } from "../chrome/TitleBar";
 import { useDragResize } from "../hooks/useDragResize";
@@ -22,6 +23,7 @@ export function InboxDiscussionPanel({
   onRestart: (item: InboxItem) => Promise<string>;
   onMount: (portal: InboxSessionPortal | null) => void;
 }) {
+  const { t } = useTranslation();
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,12 +63,12 @@ export function InboxDiscussionPanel({
   return (
     <aside
       ref={resize.setPaneRef}
-      aria-label={`Ask about ${inboxItemRef(item)}`}
+      aria-label={t("harness.chrome.askAbout", { name: inboxItemRef(item) })}
       className="relative flex min-h-0 shrink-0 flex-col border-l border-content/10 max-[1100px]:absolute max-[1100px]:inset-0 max-[1100px]:z-10 max-[1100px]:!w-auto"
     >
       <div
         role="separator"
-        aria-label="Resize discussion"
+        aria-label={t("harness.chrome.resizeDiscussion")}
         aria-orientation="vertical"
         onPointerDown={resize.onPointerDown}
         onDoubleClick={resize.onDoubleClick}
@@ -74,10 +76,10 @@ export function InboxDiscussionPanel({
       />
       <header className="flex h-11 shrink-0 items-center border-b border-content/10 px-3">
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-          Ask · {inboxItemRef(item)}
+          {t("harness.chrome.askDot", { name: inboxItemRef(item) })}
         </span>
         <IconButton
-          label="Restart conversation"
+          label={t("harness.chrome.restartConversation")}
           disabled={loading}
           onClick={() => {
             setLoading(true);
@@ -92,7 +94,7 @@ export function InboxDiscussionPanel({
         >
           <RotateCcw className="size-3.5" />
         </IconButton>
-        <IconButton label="Close panel" onClick={onClose}>
+        <IconButton label={t("harness.chrome.closePanel")} onClick={onClose}>
           <PanelLeft className="size-3.5" />
         </IconButton>
       </header>

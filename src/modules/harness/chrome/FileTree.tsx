@@ -17,6 +17,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
+import { t, useTranslation } from "@/modules/i18n";
 import {
   leafName,
   validateFileName,
@@ -79,12 +80,6 @@ type Creating = { id: number; parent: string; isDir: boolean };
 type Clip = { mode: "copy" | "cut"; path: string; isDir: boolean };
 type MenuTarget = { path: string; isDir: boolean; isRoot: boolean };
 type MenuState = { x: number; y: number; target: MenuTarget };
-
-const REVEAL_LABEL = IS_MAC
-  ? "Reveal in Finder"
-  : typeof navigator !== "undefined" && /Win/.test(navigator.platform)
-    ? "Reveal in File Explorer"
-    : "Open Containing Folder";
 
 type TreeCtxValue = {
   expanded: Set<string>;
@@ -149,51 +144,51 @@ function explorerItems(
     (clip.isDir &&
       (pasteParent === clip.path || pasteParent.startsWith(`${clip.path}/`)));
   return [
-    { kind: "item", id: "new-file", label: "New File" },
-    { kind: "item", id: "new-folder", label: "New Folder" },
+    { kind: "item", id: "new-file", label: t("harness.chrome.newFile") },
+    { kind: "item", id: "new-folder", label: t("harness.chrome.newFolder") },
     { kind: "sep" },
     {
       kind: "item",
       id: "cut",
-      label: "Cut",
+      label: t("harness.chrome.cut"),
       shortcut: `${MOD}X`,
       disabled: target.isRoot,
     },
     {
       kind: "item",
       id: "copy",
-      label: "Copy",
+      label: t("common.copy"),
       shortcut: `${MOD}C`,
       disabled: target.isRoot,
     },
     {
       kind: "item",
       id: "paste",
-      label: "Paste",
+      label: t("common.paste"),
       shortcut: `${MOD}V`,
       disabled: pasteBlocked,
     },
     {
       kind: "item",
       id: "duplicate",
-      label: "Duplicate",
+      label: t("harness.chrome.duplicate"),
       disabled: target.isRoot,
     },
     { kind: "sep" },
-    { kind: "item", id: "copy-path", label: "Copy Path" },
-    { kind: "item", id: "copy-relative-path", label: "Copy Relative Path" },
+    { kind: "item", id: "copy-path", label: t("harness.chrome.copyPath") },
+    { kind: "item", id: "copy-relative-path", label: t("harness.chrome.copyRelativePath") },
     { kind: "sep" },
     {
       kind: "item",
       id: "rename",
-      label: "Rename",
+      label: t("common.rename"),
       shortcut: "F2",
       disabled: target.isRoot,
     },
     {
       kind: "item",
       id: "delete",
-      label: "Delete",
+      label: t("common.delete"),
       shortcut: "⌫",
       disabled: target.isRoot,
       danger: true,
@@ -204,11 +199,19 @@ function explorerItems(
           {
             kind: "item" as const,
             id: "open-terminal",
-            label: "Open in Terminal",
+            label: t("harness.chrome.openInTerminal"),
           },
         ]
       : []),
-    { kind: "item", id: "reveal", label: REVEAL_LABEL },
+    {
+      kind: "item",
+      id: "reveal",
+      label: IS_MAC
+        ? t("harness.chrome.revealInFinder")
+        : typeof navigator !== "undefined" && /Win/.test(navigator.platform)
+          ? t("harness.chrome.revealInFileExplorer")
+          : t("harness.chrome.openContainingFolder"),
+    },
   ];
 }
 
@@ -223,6 +226,7 @@ export function FileTree({
   sourceControlActive = false,
   onShowSourceControl,
 }: Props) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(() => loadExpanded(cwd));
   const [selectedPath, setSelectedPath] = useState(() => loadSelected(cwd));
   const [children, setChildren] = useState<FsEntry[] | null>(() =>
@@ -620,14 +624,14 @@ export function FileTree({
           className="flex h-9 shrink-0 items-center gap-px overflow-visible border-b border-content/10 px-2"
           onContextMenu={(e) => e.stopPropagation()}
         >
-          <HeaderIcon label="New File" onClick={() => startCreate(false)}>
+          <HeaderIcon label={t("harness.chrome.newFile")} onClick={() => startCreate(false)}>
             <FilePlus className="size-3.5" strokeWidth={1.75} />
           </HeaderIcon>
-          <HeaderIcon label="New Folder" onClick={() => startCreate(true)}>
+          <HeaderIcon label={t("harness.chrome.newFolder")} onClick={() => startCreate(true)}>
             <FolderPlus className="size-3.5" strokeWidth={1.75} />
           </HeaderIcon>
           <HeaderIcon
-            label="Collapse All"
+            label={t("harness.chrome.collapseAll")}
             onClick={() => {
               setCreating(null);
               setRenaming(null);
@@ -640,7 +644,9 @@ export function FileTree({
           </HeaderIcon>
           {onSearch ? (
             <HeaderIcon
-              label={`Search in files (${MOD}Shift+F)`}
+              label={t("harness.chrome.searchInFilesShortcut", {
+                shortcut: `${MOD}Shift+F`,
+              })}
               onClick={onSearch}
             >
               <Search className="size-3.5" strokeWidth={1.75} />
@@ -696,7 +702,7 @@ export function FileTree({
             </p>
           ) : null}
           {rootOpen ? (
-            <div role="tree" aria-label={`${name} files`}>
+            <div role="tree" aria-label={t("harness.chrome.treeFiles", { name })}>
               <TreeChildren
                 parent={cwd}
                 depth={0}
@@ -764,6 +770,7 @@ function FileTreeDiffButton({
   active: boolean;
   onClick: () => void;
 }) {
+  const { t } = useTranslation();
   const enabled = Boolean(cwd) && cwd !== "~";
   const stats = useProjectDiffStats(cwd, enabled);
   const files = stats?.files ?? 0;
@@ -772,10 +779,10 @@ function FileTreeDiffButton({
   const empty = files <= 0 && additions <= 0 && deletions <= 0;
   const label = empty
     ? active
-      ? "Hide changes"
-      : "Show changes"
+      ? t("harness.chrome.hideChanges")
+      : t("harness.chrome.showChanges")
     : [
-        `${files} ${files === 1 ? "file" : "files"} changed`,
+        t("harness.chrome.filesChanged", { count: files }),
         additions > 0 ? `+${additions}` : "",
         deletions > 0 ? `-${deletions}` : "",
       ]
@@ -1006,6 +1013,7 @@ function NameRow({
   onCommit: (raw: string) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const finished = useRef(false);
   const [value, setValue] = useState(initial);
@@ -1077,7 +1085,7 @@ function NameRow({
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
-          aria-label="Type file name. Press Enter to confirm or Escape to cancel."
+          aria-label={t("harness.chrome.typeFileName")}
           onChange={(e) => {
             setValue(e.target.value);
             setSubmitError(null);

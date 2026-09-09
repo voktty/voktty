@@ -1,5 +1,6 @@
 import { File, X } from "./icons";
 import { useState } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
@@ -24,6 +25,7 @@ type Props = {
 };
 
 export function NoteMiniCard({ card, onDismiss, embedded = false }: Props) {
+  const { t } = useTranslation();
   const logos = useTabGroupLogos();
   const [mascots] = useState(loadTabGroupMascots);
   const [colors] = useState(loadTabGroupColors);
@@ -78,8 +80,10 @@ export function NoteMiniCard({ card, onDismiss, embedded = false }: Props) {
       {onDismiss ? (
         <button
           type="button"
-          title="Remove"
-          aria-label={`Remove note ${card.title || "Untitled"}`}
+          title={t("common.remove")}
+          aria-label={t("harness.chrome.removeNamed", {
+            name: card.title || t("harness.chrome.untitled"),
+          })}
           onClick={onDismiss}
           className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content"
         >
