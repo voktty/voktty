@@ -55,7 +55,7 @@ type Props = Omit<ComponentPropsWithoutRef<"div">, "style"> & {
 };
 
 const FRAME =
-  "isolate overflow-hidden rounded-xl border border-zinc-700/60 shadow-2xl shadow-black/80";
+  "isolate overflow-hidden rounded-lg border border-content/10 shadow-xl";
 const BACKDROP =
   "popover-backdrop pointer-events-none absolute inset-0 z-0 backdrop-blur-xl [backface-visibility:hidden] [transform:translateZ(0)]";
 

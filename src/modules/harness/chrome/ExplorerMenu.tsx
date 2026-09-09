@@ -30,7 +30,7 @@ type Props = {
   onClose: () => void;
 };
 
-const MENU_WIDTH = 228;
+const MENU_WIDTH = 216;
 
 function itemIndexAt(items: ExplorerMenuItem[], start: number, dir: 1 | -1): number {
   let i = start;
@@ -129,7 +129,7 @@ export function ExplorerMenu({
             onClick={() => {
               if (!item.disabled) onPick(item.id);
             }}
-            className={`flex h-7 w-full items-center gap-3 rounded-lg px-2 text-left text-[13px] leading-none ${
+            className={`flex h-6.5 w-full items-center gap-2.5 rounded-md px-2 text-left text-[12.5px] leading-none ${
               item.disabled
                 ? "text-content/30"
                 : item.danger
