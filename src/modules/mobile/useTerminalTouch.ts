@@ -91,11 +91,17 @@ export function useTerminalTouch(
     let isDragging = false;
 
     const onTouchStart = (e: TouchEvent) => {
-      // No stopPropagation/preventDefault here: a plain tap must still
-      // reach xterm's own touch handling on its hidden textarea so it can
-      // focus and open the on-screen keyboard. Only a confirmed vertical
-      // drag (recognized in onTouchMove below) is treated as our custom
-      // scroll gesture and intercepted from that point on.
+      // Android WebView does not reliably synthesize the mouse interaction
+      // xterm normally uses to focus its hidden textarea. Focus it directly
+      // during the trusted touch event so the system IME is allowed to open.
+      // Do not prevent the event: a vertical drag can still become our scroll
+      // gesture in onTouchMove below.
+      if (activeLeafId !== null) {
+        const slot = getSlotForLeaf(activeLeafId);
+        if (slot && !slot.term.options.disableStdin && !slot.term.textarea?.disabled) {
+          slot.term.focus();
+        }
+      }
       const touch = e.touches[0];
       startPos = { x: touch.clientX, y: touch.clientY };
       lastY = touch.clientY;
