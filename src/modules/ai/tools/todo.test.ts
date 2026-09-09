@@ -10,9 +10,10 @@ vi.mock("../store/todoStore", () => ({
 
 import { buildTodoTools } from "./todo";
 
-const toolOptions: ToolExecutionOptions = {
+const toolOptions: ToolExecutionOptions<Record<string, unknown>> = {
   toolCallId: "tool-call",
   messages: [],
+  context: {},
 };
 
 function makeContext(sessionId: string | null = "session"): ToolContext {

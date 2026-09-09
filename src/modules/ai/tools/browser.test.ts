@@ -48,7 +48,7 @@ describe("browser AI tools", () => {
     const tools = buildBrowserTools(mockContext);
     const result = await tools.browser_get_selected_component.execute!(
       {},
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     );
     expect(result).toEqual({
       selected: false,
@@ -78,7 +78,7 @@ describe("browser AI tools", () => {
     const tools = buildBrowserTools(mockContext);
     const result = (await tools.browser_get_selected_component.execute!(
       {},
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as {
       selected: boolean;
       component: { componentName: string };
@@ -98,14 +98,14 @@ describe("browser AI tools", () => {
 
     const res1 = (await tools.browser_inspect.execute!(
       { active: true },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { ok: boolean; active: boolean; message: string };
     expect(res1.active).toBe(true);
     expect(useLiveComponentStore.getState().isInspectorActive).toBe(true);
 
     const res2 = (await tools.browser_inspect.execute!(
       { active: false },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { ok: boolean; active: boolean; message: string };
     expect(res2.active).toBe(false);
     expect(useLiveComponentStore.getState().isInspectorActive).toBe(false);
@@ -129,7 +129,7 @@ describe("browser AI tools", () => {
     const tools = buildBrowserTools(mockContext);
     const res = (await tools.browser_clear_selection.execute!(
       {},
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { ok: boolean; message: string };
 
     expect(res.ok).toBe(true);
@@ -140,13 +140,13 @@ describe("browser AI tools", () => {
     const tools = buildBrowserTools(mockContext);
     const snapshot = (await tools.browser_snapshot.execute!(
       {},
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { error: string };
     expect(snapshot.error).toBe("no_active_preview");
 
     const click = (await tools.browser_click.execute!(
       { selector: "button" },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { error: string };
     expect(click.error).toBe("no_active_preview");
   });
@@ -163,14 +163,14 @@ describe("browser AI tools", () => {
 
     const snapshot = (await tools.browser_snapshot.execute!(
       {},
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { ok: boolean; result: { nodes: unknown[] } };
     expect(snapshot.ok).toBe(true);
     expect(snapshot.result.nodes).toHaveLength(1);
 
     const missing = (await tools.browser_click.execute!(
       { ref: 99 },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { ok: boolean };
     expect(send).toHaveBeenCalledWith("click", { ref: 99, selector: undefined });
     expect(missing.ok).toBe(true);
@@ -178,13 +178,13 @@ describe("browser AI tools", () => {
     send.mockRejectedValueOnce(new Error("element_not_found"));
     const notFound = (await tools.browser_click.execute!(
       { selector: "#gone" },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { error: string };
     expect(notFound.error).toBe("element_not_found");
 
     await tools.browser_type.execute!(
       { selector: "input", text: "hi", submit: true },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     );
     expect(send).toHaveBeenCalledWith("type", {
       ref: undefined,
@@ -195,20 +195,20 @@ describe("browser AI tools", () => {
 
     const evaluated = (await tools.browser_eval.execute!(
       { script: "2+2" },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { ok: boolean; result: { result: number } };
     expect(evaluated.result.result).toBe(4);
 
     const nav = (await tools.browser_navigate.execute!(
       { url: "http://localhost:5173" },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { ok: boolean };
     expect(nav.ok).toBe(true);
     expect(handle.navigate).toHaveBeenCalledWith("http://localhost:5173");
 
     const blocked = (await tools.browser_navigate.execute!(
       { url: "https://example.com" },
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { error: string };
     expect(blocked.error).toBe("url_not_local");
   });
@@ -227,7 +227,7 @@ describe("browser AI tools", () => {
     const tools = buildBrowserTools(mockContext);
     const log = (await tools.browser_get_network_log.execute!(
       {},
-      { toolCallId: "test", messages: [] },
+      { toolCallId: "test", messages: [], context: {} },
     )) as { entries: Array<{ url: string }> };
     expect(log.entries[0].url).toBe("/health");
   });
