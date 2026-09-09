@@ -2918,6 +2918,40 @@ export default function App() {
     ],
   );
 
+  const handleOpenCommitDiffWithSplit = useCallback(
+    (input: Parameters<typeof openCommitDiffTab>[0] & { split?: boolean }) => {
+      const activeTab = getTab(effectiveActiveId);
+      const newTabId = openCommitDiffTab(input);
+      if (input.split && activeTab && newTabId) {
+        setTimeout(() => {
+          const newTab = getTab(newTabId);
+          if (newTab && newTab.id !== activeTab.id) {
+            joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
+          }
+        }, 0);
+      }
+      return newTabId;
+    },
+    [effectiveActiveId, getTab, openCommitDiffTab, spaceViewLimit],
+  );
+
+  const handleOpenCommitFileWithSplit = useCallback(
+    (input: Parameters<typeof openCommitFileDiffTab>[0] & { split?: boolean }) => {
+      const activeTab = getTab(effectiveActiveId);
+      const newTabId = openCommitFileDiffTab(input);
+      if (input.split && activeTab && newTabId) {
+        setTimeout(() => {
+          const newTab = getTab(newTabId);
+          if (newTab && newTab.id !== activeTab.id) {
+            joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
+          }
+        }, 0);
+      }
+      return newTabId;
+    },
+    [effectiveActiveId, getTab, openCommitFileDiffTab, spaceViewLimit],
+  );
+
   const livePaneBounds = useCallback((tabId: number): PaneBounds[] => {
     const tab = document.querySelector<HTMLElement>(
       `[data-terminal-tab="${tabId}"]`,
@@ -4984,8 +5018,8 @@ export default function App() {
                             onAiDiffReject={(id) =>
                               respondToApproval(id, false)
                             }
-                            onOpenCommitFile={openCommitFileDiffTab}
-                            onOpenCommitDiff={openCommitDiffTab}
+                            onOpenCommitFile={handleOpenCommitFileWithSplit}
+                            onOpenCommitDiff={handleOpenCommitDiffWithSplit}
                             onGitHistorySearchHandle={setGitHistoryHandle}
                             onSetMarkdownView={setMarkdownView}
                             registerMarkdownHandle={registerMarkdownHandle}

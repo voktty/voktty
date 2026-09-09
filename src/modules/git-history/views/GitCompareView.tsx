@@ -11,6 +11,7 @@ import {
 } from "@/modules/ai/lib/native";
 import {
   GitCompareIcon,
+  LayoutTwoColumnIcon,
   Refresh01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -22,7 +23,12 @@ type Props = {
   repoRoot: string;
   workspaceEnv?: WorkspaceEnv;
   currentBranch?: string;
-  onOpenFileDiff?: (file: GitCommitFileChange, base: string, compare: string) => void;
+  onOpenFileDiff?: (
+    file: GitCommitFileChange,
+    base: string,
+    compare: string,
+    split?: boolean,
+  ) => void;
 };
 
 function basename(path: string): string {
@@ -285,10 +291,27 @@ export const GitCompareView = memo(function GitCompareView({
 
                       <button
                         type="button"
-                        onClick={() => onOpenFileDiff?.(file, baseBranch, compareBranch)}
+                        onClick={() =>
+                          onOpenFileDiff?.(file, baseBranch, compareBranch)
+                        }
                         className="rounded px-2 py-0.5 bg-muted/20 hover:bg-accent text-[11px]"
                       >
                         {t("gitHistory.compare.diff")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenFileDiff?.(
+                            file,
+                            baseBranch,
+                            compareBranch,
+                            true,
+                          )
+                        }
+                        title={t("gitHistory.contextMenu.openSplitDiff")}
+                        className="rounded p-1 bg-muted/20 hover:bg-accent text-[11px]"
+                      >
+                        <HugeiconsIcon icon={LayoutTwoColumnIcon} size={12} />
                       </button>
                     </div>
                   </div>

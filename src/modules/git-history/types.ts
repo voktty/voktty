@@ -6,7 +6,8 @@ export type GitWorkbenchSection =
   | "worktrees"
   | "tags-stashes"
   | "remotes"
-  | "compare";
+  | "compare"
+  | "pulls";
 
 export type CommitFileDiffOpenInput = {
   repoRoot: string;
@@ -16,6 +17,7 @@ export type CommitFileDiffOpenInput = {
   path: string;
   originalPath: string | null;
   workspaceEnv?: WorkspaceEnv;
+  split?: boolean;
 };
 
 export type CommitDiffOpenInput = {
@@ -24,6 +26,7 @@ export type CommitDiffOpenInput = {
   shortSha: string;
   subject: string;
   workspaceEnv?: WorkspaceEnv;
+  split?: boolean;
 };
 
 export type GitHistorySearchHandle = {

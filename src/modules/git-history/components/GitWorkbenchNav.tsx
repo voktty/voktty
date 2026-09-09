@@ -12,6 +12,7 @@ import {
   FolderTreeIcon,
   GitBranchIcon,
   GitCompareIcon,
+  GitPullRequestIcon,
   Tag01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -38,6 +39,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: "branches",
     labelKey: "gitHistory.workbench.sections.branches",
     icon: GitBranchIcon,
+  },
+  {
+    id: "pulls",
+    labelKey: "gitHistory.workbench.sections.pulls",
+    icon: GitPullRequestIcon,
   },
   {
     id: "worktrees",
