@@ -24,7 +24,7 @@ type Props = {
   size?: ModalSize;
   /** Extra classes on the panel (fixed height, etc). */
   className?: string;
-  children: ReactNode;
+  children?: ReactNode;
 };
 
 export function ModalPanel({
