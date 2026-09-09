@@ -8,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import {
   activePromptId,
   barLift,
@@ -20,7 +21,6 @@ import {
   type OutlineBand,
 } from "../lib/promptOutline";
 import type { Block } from "../lib/session";
-import { useTranslation } from "@/modules/i18n";
 import { Popover } from "./Popover";
 
 const OPEN_DELAY_MS = 25;

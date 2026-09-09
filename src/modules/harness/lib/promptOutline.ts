@@ -55,9 +55,10 @@ export function promptLabel(block: Block): string {
   const text = textShown ? firstLine(block.text) : "";
   if (text) return text;
   if (card) {
-    if (card.kind === "handoff") return t("harness.transcript.handoff") || "Handoff";
+    if (card.kind === "handoff") return t("harness.chrome.handoff");
     const request = firstLine(card.request ?? "");
-    return request ? `${t("harness.transcript.secondOpinion") || "Second opinion"}: ${request}` : (t("harness.transcript.secondOpinion") || "Second opinion");
+    const secondOpinion = t("harness.chrome.secondOpinion");
+    return request ? `${secondOpinion}: ${request}` : secondOpinion;
   }
   if (block.noteCard?.title) return block.noteCard.title;
   const files = block.attachments ?? [];
@@ -65,7 +66,7 @@ export function promptLabel(block: Block): string {
     const [first] = files;
     return files.length > 1 ? `${first.name} +${files.length - 1}` : first.name;
   }
-  return t("harness.transcript.emptyMessage") || "Empty message";
+  return t("harness.chrome.emptyMessage");
 }
 
 function firstLine(text: string): string {
