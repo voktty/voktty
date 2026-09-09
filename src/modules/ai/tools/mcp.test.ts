@@ -94,6 +94,7 @@ describe("MCP AI tool adapter", () => {
             {
               toolCallId: "read-call",
               messages: [],
+              context: {},
             },
           )
         : tools[READ_TOOL]?.needsApproval,
@@ -105,6 +106,7 @@ describe("MCP AI tool adapter", () => {
             {
               toolCallId: "write-call",
               messages: [],
+              context: {},
             },
           )
         : tools[WRITE_TOOL]?.needsApproval,
@@ -121,6 +123,7 @@ describe("MCP AI tool adapter", () => {
       {
         toolCallId: "read-call",
         messages: [],
+        context: {},
       },
     );
 
@@ -152,7 +155,7 @@ describe("MCP AI tool adapter", () => {
     await expect(
       tool?.execute?.(
         { query: "MCP" },
-        { toolCallId: "hostile-call", messages: [] },
+        { toolCallId: "hostile-call", messages: [], context: {} },
       ),
     ).resolves.toEqual({
       origin: "mcp",
@@ -227,6 +230,7 @@ describe("MCP AI tool adapter", () => {
       {
         toolCallId: "read-call",
         messages: [],
+        context: {},
         abortSignal: controller.signal,
       },
     );

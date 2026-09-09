@@ -25,9 +25,10 @@ vi.mock("../store/planStore", () => ({
 
 import { buildEditTools } from "./edit";
 
-const toolOptions: ToolExecutionOptions = {
+const toolOptions: ToolExecutionOptions<Record<string, unknown>> = {
   toolCallId: "tool-call",
   messages: [],
+  context: {},
 };
 
 const FILE = "/workspace/a.txt";

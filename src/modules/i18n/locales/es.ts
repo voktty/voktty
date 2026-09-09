@@ -4338,6 +4338,8 @@ export const es: TranslationSchema = {
     liveDiff: "Diff en vivo",
     staged: "Preparados",
     unstaged: "Sin preparar",
+    renamedFrom: "(← {path})",
+    noResults: "No se encontraron archivos coincidentes.",
     allChanges: "Todos los cambios",
     stageAll: "Preparar todo",
     unstageAll: "Despreparar todo",
