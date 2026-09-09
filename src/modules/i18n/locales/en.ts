@@ -4989,6 +4989,9 @@ export const en = {
       openKindInProvider: "Open {kind} {id} in {provider}",
       removeKindId: "Remove {kind} {id}",
       restore: "Restore",
+      promptOutline: "Prompts",
+      promptPreview: "Prompt preview",
+      emptyMessage: "Empty message",
     },
   },
   gitHistory: {

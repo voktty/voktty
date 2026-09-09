@@ -5087,6 +5087,9 @@ export const es: TranslationSchema = {
       openKindInProvider: "Abrir {kind} {id} en {provider}",
       removeKindId: "Quitar {kind} {id}",
       restore: "Restaurar",
+      promptOutline: "Prompts",
+      promptPreview: "Vista previa del prompt",
+      emptyMessage: "Mensaje vacio",
     },
   },
   gitHistory: {
