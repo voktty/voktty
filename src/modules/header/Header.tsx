@@ -336,7 +336,7 @@ export function Header({
                   }}
                   title={`${t("harness.agentDevelopment")} (${fmtShortcut(MOD_KEY, SHIFT_KEY, "D")})`}
                   className={cn(
-                    "group relative flex h-6.5 w-9 shrink-0 cursor-pointer select-none items-center justify-center rounded-md text-xs font-medium outline-none transition-all duration-150",
+                    "group relative flex h-6.5 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-md px-2 text-xs font-medium outline-none transition-all duration-150",
                     isHarnessActive
                       ? "bg-foreground/[0.08] text-foreground shadow-xs ring-1 ring-inset ring-foreground/[0.06]"
                       : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
@@ -353,9 +353,7 @@ export function Header({
                         : "text-violet-400/80 group-hover:text-violet-400",
                     )}
                   />
-                  <span
-                    className="sr-only"
-                  >
+                  <span className="max-w-40 whitespace-nowrap">
                     {t("harness.agentDevelopment")}
                   </span>
                   <button
@@ -366,7 +364,7 @@ export function Header({
                     }}
                     title={t("tabs.closeTab")}
                     aria-label={t("harness.closeAgentDevelopment")}
-                    className="absolute right-0.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-background/90 text-muted-foreground/60 opacity-0 shadow-sm transition-opacity hover:bg-foreground/10 hover:text-foreground group-hover:opacity-100"
+                    className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 opacity-0 transition-opacity hover:bg-foreground/10 hover:text-foreground group-hover:opacity-100"
                   >
                     <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
                   </button>
@@ -445,7 +443,13 @@ export function Header({
             />
           </>
         )}
-        <div data-tauri-drag-region className="h-full min-w-2 flex-1" />
+        <div
+          data-tauri-drag-region
+          className={cn(
+            "h-full min-w-2",
+            tabStyle === "vertical" ? "flex-1" : "shrink-0",
+          )}
+        />
       </div>
 
       <div className="flex shrink-0 items-center gap-1">

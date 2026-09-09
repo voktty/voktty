@@ -27,6 +27,8 @@ type Props = {
   active: boolean;
   compact?: boolean;
   iconOnly?: boolean;
+  fitIndex?: number;
+  hiddenFromStrip?: boolean;
   className?: string;
   onSelect: (spaceId: string) => void;
   onExpand: (spaceId: string) => void;
@@ -39,6 +41,8 @@ export function CompositeSpaceChip({
   active,
   compact = false,
   iconOnly = false,
+  fitIndex,
+  hiddenFromStrip = false,
   onSelect,
   onExpand,
   onRename,
@@ -77,6 +81,9 @@ export function CompositeSpaceChip({
       <ContextMenuTrigger asChild>
         <div
           data-space-id={item.space.id}
+          data-tab-fit-index={fitIndex}
+          data-tab-hidden={hiddenFromStrip ? "true" : undefined}
+          aria-hidden={hiddenFromStrip || undefined}
           data-tab-active={active ? "true" : undefined}
           className={cn(
             "group relative z-[1] flex h-6.5 shrink-0 items-center gap-1 rounded-md px-1 text-[11.5px] transition-colors",
@@ -86,6 +93,7 @@ export function CompositeSpaceChip({
             compact && "px-0.5",
             iconOnly && !editing && "w-9 justify-center px-0",
             iconOnly && editing && "w-32",
+            hiddenFromStrip && "hidden",
             className,
           )}
         >
@@ -129,8 +137,8 @@ export function CompositeSpaceChip({
               <SpaceAvatar space={item.space} size="sm" active={active} />
               <span
                 className={cn(
-                  "max-w-32 truncate font-medium text-[11.5px]",
-                  iconOnly && "sr-only",
+                  "font-medium text-[11.5px]",
+                  iconOnly ? "sr-only" : "whitespace-nowrap",
                 )}
               >
                 {item.space.name}
