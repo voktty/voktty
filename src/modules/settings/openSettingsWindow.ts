@@ -15,6 +15,7 @@ export type SettingsTab =
   | "vault"
   | "aliases"
   | "harness"
+  | "companion"
   | "about";
 
 export async function openSettingsWindow(tab?: SettingsTab): Promise<void> {
