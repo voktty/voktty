@@ -951,6 +951,17 @@ export const es: TranslationSchema = {
       },
     },
   },
+  companion: {
+    mobile: {
+      title: "Companion móvil",
+      description:
+        "Conecta este teléfono a un escritorio Voktty aprobado para seguir conversaciones de agentes activos.",
+      agentOnlyTitle: "Solo conversaciones de agentes",
+      agentOnlyDescription:
+        "Esta app nunca abre el workbench de escritorio, terminales, sesiones SSH, archivos ni editor.",
+      waitingForPairing: "El emparejamiento con tu escritorio estará disponible aquí.",
+    },
+  },
   docker: {
     activeLabel: "Activos",
     title: "Servicios Docker",
