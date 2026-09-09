@@ -152,6 +152,10 @@ export const es: TranslationSchema = {
       expires: "El emparejamiento caduca a las {{time}}",
       tunnel: "Túnel temporal de Cloudflare",
       error: "No se pudo iniciar el companion: {{message}}",
+      pendingTitle: "Solicitudes de emparejamiento",
+      fingerprint: "Huella: {{fingerprint}}",
+      approve: "Aprobar",
+      reject: "Rechazar",
     },
     general: {
       title: "General",

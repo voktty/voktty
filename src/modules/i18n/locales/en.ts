@@ -150,6 +150,10 @@ export const en = {
       expires: "Pairing expires at {{time}}",
       tunnel: "Temporary Cloudflare tunnel",
       error: "Could not start the companion: {{message}}",
+      pendingTitle: "Pairing requests",
+      fingerprint: "Fingerprint: {{fingerprint}}",
+      approve: "Approve",
+      reject: "Reject",
     },
     general: {
       title: "General",

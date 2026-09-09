@@ -27,3 +27,19 @@ pub fn companion_status(
 ) -> state::CompanionStatus {
     state.status()
 }
+
+#[tauri::command]
+pub fn companion_pending_pairings(
+    state: tauri::State<'_, CompanionState>,
+) -> Vec<state::PendingPairingInfo> {
+    state.pending_pairings()
+}
+
+#[tauri::command]
+pub fn companion_decide_pairing(
+    state: tauri::State<'_, CompanionState>,
+    request_id: String,
+    approved: bool,
+) -> Result<(), String> {
+    state.decide_pairing(&request_id, approved)
+}

@@ -10,11 +10,13 @@ use base64::Engine;
 use ring::agreement::{EphemeralPrivateKey, X25519};
 use ring::rand::SystemRandom;
 use serde::Serialize;
-use voktty_companion_protocol::{QrInvitation, INVITATION_TTL_SECS, PROTOCOL_VERSION};
+use voktty_companion_protocol::{
+    PairingRequest, QrInvitation, INVITATION_TTL_SECS, PROTOCOL_VERSION,
+};
 
 use crate::modules::collab::quick_tunnel::{verified_executable, CloudflaredTunnel};
 
-use super::pairing::PairingRegistry;
+use super::pairing::{PairingError, PairingRegistry};
 
 const ACCEPT_POLL: Duration = Duration::from_millis(20);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
@@ -24,7 +26,7 @@ struct CompanionRuntime {
     _server: CompanionLoopback,
     _tunnel: CloudflaredTunnel,
     _host_private_key: EphemeralPrivateKey,
-    _pairing: PairingRegistry,
+    pairing: PairingRegistry,
     invite: QrInvitation,
 }
 
@@ -45,6 +47,15 @@ pub struct CompanionStatus {
     pub active: bool,
     pub expires_at_ms: Option<u64>,
     pub public_url: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPairingInfo {
+    pub id: String,
+    pub device_name: String,
+    pub fingerprint: String,
+    pub expires_at_ms: u64,
 }
 
 impl CompanionState {
@@ -88,7 +99,7 @@ impl CompanionState {
             _server: server,
             _tunnel: tunnel,
             _host_private_key: private_key,
-            _pairing: pairing,
+            pairing,
             invite,
         });
         Ok(response)
@@ -122,6 +133,80 @@ impl CompanionState {
             expires_at_ms: Some(runtime.invite.expires_at_ms),
             public_url: Some(runtime.invite.public_url.clone()),
         }
+    }
+
+    pub(crate) fn submit_pairing(
+        &self,
+        request: PairingRequest,
+        request_id: String,
+    ) -> Result<PendingPairingInfo, String> {
+        let mut runtime = self
+            .runtime
+            .lock()
+            .map_err(|_| "companion state is unavailable".to_string())?;
+        let runtime = runtime
+            .as_mut()
+            .ok_or_else(|| "companion is not active".to_string())?;
+        let pending = runtime
+            .pairing
+            .request(request, now_ms(), request_id)
+            .map_err(pairing_error)?;
+        Ok(PendingPairingInfo {
+            id: pending.id,
+            device_name: pending.device_name,
+            fingerprint: pending.fingerprint,
+            expires_at_ms: pending.expires_at_ms,
+        })
+    }
+
+    pub fn pending_pairings(&self) -> Vec<PendingPairingInfo> {
+        let Ok(runtime) = self.runtime.lock() else {
+            return Vec::new();
+        };
+        let Some(runtime) = runtime.as_ref() else {
+            return Vec::new();
+        };
+        runtime
+            .pairing
+            .pending()
+            .into_iter()
+            .map(|pending| PendingPairingInfo {
+                id: pending.id,
+                device_name: pending.device_name,
+                fingerprint: pending.fingerprint,
+                expires_at_ms: pending.expires_at_ms,
+            })
+            .collect()
+    }
+
+    pub fn decide_pairing(&self, request_id: &str, approved: bool) -> Result<(), String> {
+        let mut runtime = self
+            .runtime
+            .lock()
+            .map_err(|_| "companion state is unavailable".to_string())?;
+        let runtime = runtime
+            .as_mut()
+            .ok_or_else(|| "companion is not active".to_string())?;
+        if approved {
+            runtime
+                .pairing
+                .approve(request_id, now_ms())
+                .map_err(pairing_error)?;
+            Ok(())
+        } else if runtime.pairing.reject(request_id) {
+            Ok(())
+        } else {
+            Err("pairing request was not found".to_string())
+        }
+    }
+}
+
+fn pairing_error(error: PairingError) -> String {
+    match error {
+        PairingError::Consumed => "pairing invitation was already used".to_string(),
+        PairingError::Expired => "pairing invitation expired".to_string(),
+        PairingError::Rejected => "pairing request was rejected".to_string(),
+        PairingError::UnsupportedProtocol => "unsupported companion protocol".to_string(),
     }
 }
 

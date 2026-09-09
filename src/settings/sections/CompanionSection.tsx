@@ -21,6 +21,13 @@ type CompanionStatus = {
   publicUrl: string | null;
 };
 
+type PendingPairing = {
+  id: string;
+  deviceName: string;
+  fingerprint: string;
+  expiresAtMs: number;
+};
+
 function pairingPayload(invitation: Invitation): string {
   return JSON.stringify({ type: "voktty-companion", invitation });
 }
@@ -29,6 +36,7 @@ export function CompanionSection() {
   const { t } = useTranslation();
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [status, setStatus] = useState<CompanionStatus | null>(null);
+  const [pending, setPending] = useState<PendingPairing[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +44,8 @@ export function CompanionSection() {
     const next = await invoke<CompanionStatus>("companion_status");
     setStatus(next);
     if (!next.active) setInvitation(null);
+    const requests = await invoke<PendingPairing[]>("companion_pending_pairings");
+    setPending(requests);
   }, []);
 
   useEffect(() => {
@@ -70,6 +80,11 @@ export function CompanionSection() {
   const copy = async () => {
     if (!invitation) return;
     await navigator.clipboard.writeText(pairingPayload(invitation));
+  };
+
+  const decide = async (requestId: string, approved: boolean) => {
+    await invoke("companion_decide_pairing", { requestId, approved });
+    await refreshStatus();
   };
 
   const expiry = invitation?.expiresAtMs ?? status?.expiresAtMs;
@@ -128,6 +143,40 @@ export function CompanionSection() {
           </p>
         ) : null}
       </section>
+      {pending.length > 0 ? (
+        <section className="rounded-xl border border-border/50 bg-card/40 p-4">
+          <h2 className="text-sm font-medium">{t("settings.companion.pendingTitle")}</h2>
+          <div className="mt-3 flex flex-col gap-2">
+            {pending.map((request) => (
+              <div
+                key={request.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/40 bg-background/40 p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">{request.deviceName}</p>
+                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                    {t("settings.companion.fingerprint", {
+                      fingerprint: request.fingerprint,
+                    })}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void decide(request.id, false)}
+                  >
+                    {t("settings.companion.reject")}
+                  </Button>
+                  <Button size="sm" onClick={() => void decide(request.id, true)}>
+                    {t("settings.companion.approve")}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

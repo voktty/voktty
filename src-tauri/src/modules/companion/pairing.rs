@@ -4,6 +4,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
+use serde::Serialize;
 use voktty_companion_protocol::{
     AuthorizedDevice, PairingRequest, INVITATION_TTL_SECS, MAX_DEVICE_NAME_BYTES,
     PROTOCOL_VERSION,
@@ -13,7 +14,8 @@ type HmacSha256 = Hmac<Sha256>;
 
 const PROOF_CONTEXT: &[u8] = b"voktty-companion-pair-v1";
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(super) struct PendingPairing {
     pub id: String,
     pub device_name: String,
@@ -112,6 +114,12 @@ impl PairingRegistry {
 
     pub fn reject(&mut self, request_id: &str) -> bool {
         self.pending.remove(request_id).is_some()
+    }
+
+    pub fn pending(&self) -> Vec<PendingPairing> {
+        let mut pending: Vec<_> = self.pending.values().cloned().collect();
+        pending.sort_by(|left, right| left.id.cmp(&right.id));
+        pending
     }
 
     pub fn devices(&self) -> Vec<AuthorizedDevice> {
