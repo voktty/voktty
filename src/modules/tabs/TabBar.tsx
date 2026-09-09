@@ -3,6 +3,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
@@ -100,13 +103,16 @@ import {
   type TabIconId,
 } from "./lib/tabIcon";
 import { isSshOrRemoteSession, isSshTab, labelFor } from "./lib/tabLabel";
-import { preferredTabBarWidth } from "./lib/tabStripSizing";
+import {
+  fitTabStripItems,
+  originalGapForFittedItems,
+} from "./lib/tabStripSizing";
 import {
   type TabProcessStatus,
   useTabProcessStatus,
 } from "./lib/useTabProcessStatus";
 import { detectAgentFromName } from "@/modules/terminal";
-import type { EditorTab, Tab } from "./lib/useTabs";
+import type { Tab } from "./lib/useTabs";
 import { NewTabMenu } from "./NewTabMenu";
 import { TabColorBubbles } from "./TabColorBubbles";
 import { TabIconGlyph, TabIconPicker } from "./TabIconPicker";
@@ -183,6 +189,12 @@ type Props = {
   onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
 };
 
+function projectedItemKey(item: ProjectedStripItem): string {
+  return item.kind === "space"
+    ? `space:${item.space.id}`
+    : `tab:${item.tabKey}`;
+}
+
 export function TabBar({
   tabs,
   activeId,
@@ -239,6 +251,11 @@ export function TabBar({
   const pulsingTabs = useAgentStore((s) => s.pulsingTabs);
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const [measuredItems, setMeasuredItems] = useState<{
+    signature: string;
+    widths: number[];
+  }>({ signature: "", widths: [] });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
@@ -291,6 +308,30 @@ export function TabBar({
     [projectedItems],
   );
   const activeTabKey = tabs.find((tab) => tab.id === activeId)?.tabKey ?? null;
+  const measurementSignature = `${compact ? 1 : 0}:${activeId}|${projectedItems
+    .map((item) =>
+      item.kind === "space"
+        ? `${projectedItemKey(item)}:${item.space.name}:${item.tabs.length}:${item.space.color ?? ""}`
+        : `${projectedItemKey(item)}:${labelFor(item.tab)}:${item.tab.locked ? 1 : 0}:${item.tab.color ?? ""}:${"preview" in item.tab && item.tab.preview ? 1 : 0}:${item.tab.kind === "editor" && item.tab.dirty ? 1 : 0}`,
+    )
+    .join("\u0000")}`;
+  const activeProjectedIndex = projectedItems.findIndex((item) =>
+    isProjectedStripItemActive(item, activeTabKey),
+  );
+  const fittedIndices =
+    measuredItems.signature === measurementSignature
+      ? fitTabStripItems(
+          measuredItems.widths,
+          availableWidth,
+          activeProjectedIndex,
+        )
+      : projectedItems.map((_, index) => index);
+  const fittedIndexSet = new Set(fittedIndices);
+  const hiddenItemCount = projectedItems.length - fittedIndices.length;
+  const fittedTabs = fittedIndices.flatMap((index) => {
+    const item = projectedItems[index];
+    return item?.kind === "tab" ? [item.tab] : [];
+  });
 
   // Single shared pill slides to the active tab instead of each tab toggling
   // its own background. Measured relative to the list (its offsetParent) so it
@@ -302,7 +343,7 @@ export function TabBar({
 
   const measurePill = useCallback(() => {
     const el = listRef.current?.querySelector<HTMLElement>(
-      '[data-tab-active="true"]',
+      '[data-tab-active="true"]:not([data-tab-hidden])',
     );
     setPill(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
   }, []);
@@ -319,6 +360,34 @@ export function TabBar({
     return () => ro.disconnect();
   }, [measurePill]);
 
+  useLayoutEffect(() => {
+    const viewport = scrollRef.current;
+    if (!viewport) return;
+    const measure = () => setAvailableWidth(Math.floor(viewport.clientWidth));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (measuredItems.signature === measurementSignature) return;
+    const nodes = Array.from(
+      listRef.current?.querySelectorAll<HTMLElement>("[data-tab-fit-index]") ??
+        [],
+    );
+    if (nodes.length !== projectedItems.length) return;
+    const widths = Array.from<number>({ length: projectedItems.length }).fill(0);
+    for (const node of nodes) {
+      const index = Number(node.dataset.tabFitIndex);
+      if (Number.isInteger(index) && index >= 0 && index < widths.length) {
+        widths[index] = node.offsetWidth;
+      }
+    }
+    if (widths.some((width) => width <= 0)) return;
+    setMeasuredItems({ signature: measurementSignature, widths });
+  }, [measurementSignature, measuredItems.signature, projectedItems.length]);
+
   // Hold the transition off until the pill is first placed, so it never slides
   // in from the origin on mount.
   useEffect(() => {
@@ -330,7 +399,9 @@ export function TabBar({
 
   const gapAtX = (clientX: number) => {
     const els = Array.from(
-      scrollRef.current?.querySelectorAll<HTMLElement>("[data-tab-id]") ?? [],
+      scrollRef.current?.querySelectorAll<HTMLElement>(
+        "[data-tab-id]:not([data-tab-hidden])",
+      ) ?? [],
     );
     for (let i = 0; i < els.length; i++) {
       const r = els[i].getBoundingClientRect();
@@ -348,28 +419,6 @@ export function TabBar({
     document.body.style.userSelect = "";
   };
 
-  // Horizontal wheel scroll without holding shift.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-      if (el.scrollWidth <= el.clientWidth) return;
-      e.preventDefault();
-      el.scrollLeft += e.deltaY;
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
-
-  // Keep the active tab visible after selection / open.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const active = el.querySelector<HTMLElement>('[data-tab-active="true"]');
-    active?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [activeId, activeStripItem]);
-
   const activeValue =
     activeStripItem?.kind === "space"
       ? `space:${activeStripItem.spaceId}`
@@ -377,11 +426,6 @@ export function TabBar({
 
   const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const workspaceDrag = useWorkspaceDrag();
-  const showOverflowControl = tabs.length > 5;
-  const preferredWidth = preferredTabBarWidth(
-    projectedItems.length,
-    showOverflowControl,
-  );
 
   useEffect(() => () => cancelWorkspaceDrag(), []);
 
@@ -389,12 +433,11 @@ export function TabBar({
     <div
       data-tabs-header
       data-tauri-drag-region
-      className="group flex min-w-0 shrink items-center gap-0.5"
-      style={{ flexBasis: preferredWidth }}
+      className="group flex min-w-0 flex-1 items-center gap-0.5"
     >
       <div
         ref={scrollRef}
-        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden"
       >
         <Tabs
           value={activeValue}
@@ -428,7 +471,8 @@ export function TabBar({
                   : { opacity: 0 }
               }
             />
-            {projectedItems.map((item) => {
+            {projectedItems.map((item, itemIndex) => {
+              const hiddenFromStrip = !fittedIndexSet.has(itemIndex);
               if (item.kind === "space") {
                 const isActive = isProjectedStripItemActive(item, activeTabKey);
                 return (
@@ -437,7 +481,8 @@ export function TabBar({
                     item={item}
                     active={isActive}
                     compact={compact}
-                    iconOnly
+                    fitIndex={itemIndex}
+                    hiddenFromStrip={hiddenFromStrip}
                     onSelect={onSelectSpace ?? (() => undefined)}
                     onExpand={onExpandSpace ?? (() => undefined)}
                     onRename={onRenameSpace}
@@ -447,7 +492,7 @@ export function TabBar({
               }
 
               const t = item.tab;
-              const tabIndex = visibleTabs.findIndex(
+              const tabIndex = fittedTabs.findIndex(
                 (visibleTab) => visibleTab.id === t.id,
               );
               const isPreview =
@@ -460,10 +505,11 @@ export function TabBar({
               const selectedIcon =
                 t.icon ?? loadTabIconPreference(tabIconRouteKey(t));
 
-              const srcIndex = visibleTabs.findIndex(
+              const srcIndex = fittedTabs.findIndex(
                 (x) => x.id === draggingId,
               );
               const showGap = (gap: number) =>
+                !hiddenFromStrip &&
                 draggingId !== null &&
                 dropGap === gap &&
                 gap !== srcIndex &&
@@ -478,6 +524,9 @@ export function TabBar({
                     {showGap(tabIndex) && <DropIndicator />}
                     <div
                       data-tab-id={t.id}
+                      data-tab-fit-index={itemIndex}
+                      data-tab-hidden={hiddenFromStrip ? "true" : undefined}
+                      aria-hidden={hiddenFromStrip || undefined}
                       style={
                         t.color
                           ? {
@@ -491,6 +540,7 @@ export function TabBar({
                         "flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-accent text-xs text-foreground",
                         t.color && "border",
                         compact ? "px-1.5" : "px-2",
+                        hiddenFromStrip && "hidden",
                       )}
                     >
                       {t.color && (
@@ -509,8 +559,8 @@ export function TabBar({
                         onCancel={() => setEditingId(null)}
                       />
                     </div>
-                    {tabIndex === visibleTabs.length - 1 &&
-                      showGap(visibleTabs.length) && <DropIndicator />}
+                    {tabIndex === fittedTabs.length - 1 &&
+                      showGap(fittedTabs.length) && <DropIndicator />}
                   </Fragment>
                 );
               }
@@ -519,6 +569,9 @@ export function TabBar({
                 <TabsTrigger
                   value={String(t.id)}
                   data-tab-id={t.id}
+                  data-tab-fit-index={itemIndex}
+                  data-tab-hidden={hiddenFromStrip ? "true" : undefined}
+                  aria-hidden={hiddenFromStrip || undefined}
                   data-tab-active={isActive ? "true" : undefined}
                   title={labelFor(t)}
                   onPointerDown={(e) => {
@@ -574,13 +627,18 @@ export function TabBar({
                     }
                     if (workspaceDrag.source) finishWorkspaceDrag();
                     if (st?.active && dropGap !== null) {
+                      const originalGap = originalGapForFittedItems(
+                        visibleTabs.map((tab) => tab.id),
+                        fittedTabs.map((tab) => tab.id),
+                        dropGap,
+                      );
                       onReorderVisual
                         ? onReorderVisual(
                             st.fromId,
-                            dropGap,
+                            originalGap,
                             visibleTabs.map((tab) => tab.id),
                           )
-                        : onReorder(st.fromId, dropGap);
+                        : onReorder(st.fromId, originalGap);
                     } else if (st && !st.active) {
                       onSelect(t.id);
                     }
@@ -661,7 +719,7 @@ export function TabBar({
                       : undefined
                   }
                   className={cn(
-                    "group relative z-[1] h-6.5 w-9 shrink-0 justify-center overflow-hidden rounded-md bg-transparent p-0 text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent",
+                    "group relative z-[1] h-6.5 flex-none justify-start gap-1.5 overflow-hidden rounded-md bg-transparent px-2 py-0 text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent",
                     isNew && "voktty-tab-in",
                     isPulsing && "voktty-tab-finished-pulse",
                     cardDropTargetTabId === t.id &&
@@ -671,9 +729,10 @@ export function TabBar({
                       ? "text-foreground dark:text-foreground font-medium"
                       : "text-muted-foreground hover:text-foreground/80 dark:text-muted-foreground",
                     draggingId === t.id && "opacity-50",
+                    hiddenFromStrip && "hidden",
                   )}
                 >
-                  <span className="flex size-full min-w-0 items-center justify-center transition-all duration-150">
+                  <span className="flex min-w-0 items-center gap-1.5 transition-all duration-150">
                     {t.color && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -711,125 +770,25 @@ export function TabBar({
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
-                    {t.kind === "editor" ? (
-                      <DropdownMenu
-                        onOpenChange={(open) => {
-                          if (!open) setShowAllLanguages(false);
-                        }}
-                      >
-                        <DropdownMenuTrigger asChild>
-                          {/* span, not button: a button nested in the TabsTrigger button is invalid DOM and breaks WebKit focus. */}
-                          <span
-                            role="button"
-                            tabIndex={-1}
-                            data-no-drag
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }}
-                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/30 hover:shadow-[0_0_4px_var(--color-popover-foreground)]"
-                          >
-                            <TabIcon tab={t} />
-                          </span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          side="bottom"
-                          sideOffset={6}
-                          alignOffset={-4}
-                          className="max-h-75 w-48 overflow-y-auto rounded-xl border border-border/40 bg-popover/90 p-1 backdrop-blur-md shadow-lg"
-                          onClick={(e) => e.stopPropagation()}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onPointerUp={(e) => e.stopPropagation()}
-                        >
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              onOverrideLanguage?.(t.id, null);
-                            }}
-                            className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg cursor-default focus:bg-accent focus:text-accent-foreground"
-                          >
-                            <img
-                              src={fileIconUrl(t.title)}
-                              className="size-3.5 shrink-0 object-contain"
-                              alt=""
-                            />
-                            <div className="flex flex-1 flex-col">
-                              <span>
-                                {translate("tabs.autoDetectLanguage")}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground italic">
-                                {translate("tabs.modeLanguage", {
-                                  name: resolveDisplayName(t.title),
-                                })}
-                              </span>
-                            </div>
-                            {!(t as EditorTab).overrideLanguage && (
-                              <HugeiconsIcon
-                                icon={Tick02Icon}
-                                className="size-3.5 text-primary"
-                              />
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              setShowAllLanguages((v) => !v);
-                            }}
-                            className="w-full px-2.5 py-1.5 text-left text-xs text-primary/60 hover:text-primary rounded-lg transition-colors hover:bg-accent"
-                          >
-                            {showAllLanguages
-                              ? translate("tabs.fewerLanguages")
-                              : translate("tabs.allLanguages")}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="my-1 border-t border-border/30" />
-                          {(showAllLanguages
-                            ? ALL_LANGUAGES
-                            : EXPOSED_LANGUAGES
-                          ).map((lang) => {
-                            const isSelected =
-                              (t as EditorTab).overrideLanguage === lang.ext;
-                            return (
-                              <DropdownMenuItem
-                                key={lang.ext}
-                                onSelect={() =>
-                                  onOverrideLanguage?.(t.id, lang.ext)
-                                }
-                                className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg cursor-default focus:bg-accent focus:text-accent-foreground"
-                              >
-                                <img
-                                  src={fileIconUrl(`dummy.${lang.ext}`)}
-                                  className="size-3.5 shrink-0 object-contain"
-                                  alt=""
-                                />
-                                <span className="flex-1">{lang.name}</span>
-                                {isSelected && (
-                                  <HugeiconsIcon
-                                    icon={Tick02Icon}
-                                    className="size-3.5 text-primary"
-                                  />
-                                )}
-                              </DropdownMenuItem>
-                            );
-                          })}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ) : (
-                      <TabIcon tab={t} animatedAgent />
-                    )}
+                    <TabIcon tab={t} animatedAgent />
                     {/* Preview tabs use italic to signal the transient state,
                         matching the visual convention from VSCode. */}
-                    <span className="sr-only">
+                    <span
+                      className={cn(
+                        "whitespace-nowrap text-left",
+                        isPreview && "italic",
+                      )}
+                    >
                       {labelFor(t)}
                     </span>
                     {t.kind === "editor" && t.dirty ? (
                       <span
                         aria-label={translate("tabs.unsavedChanges")}
-                        className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-foreground/70"
+                        className="size-1.5 shrink-0 rounded-full bg-foreground/70"
                       />
                     ) : null}
                   </span>
-                  <div className="absolute right-0.5 top-1/2 flex -translate-y-1/2 items-center">
+                  <div className="flex size-4 shrink-0 items-center justify-center">
                     {t.locked ? (
                       <span
                         className="inline-flex items-center text-muted-foreground/75 p-0.5"
@@ -859,7 +818,7 @@ export function TabBar({
                           e.stopPropagation();
                           onClose(t.id);
                         }}
-                        className="shrink-0 rounded bg-background/90 p-0.5 opacity-0 shadow-sm transition-opacity hover:bg-accent group-hover:opacity-100"
+                        className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
                       >
                         <HugeiconsIcon
                           icon={Cancel01Icon}
@@ -907,6 +866,83 @@ export function TabBar({
                         }}
                       />
                     </div>
+                    {t.kind === "editor" && (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuSub
+                          onOpenChange={(open) => {
+                            if (!open) setShowAllLanguages(false);
+                          }}
+                        >
+                          <ContextMenuSubTrigger className="gap-2 rounded-md px-2 py-1.5 text-xs">
+                            <TabIcon tab={t} />
+                            <span className="flex-1">
+                              {translate("tabs.modeLanguage", {
+                                name: resolveDisplayName(t.title),
+                              })}
+                            </span>
+                          </ContextMenuSubTrigger>
+                          <ContextMenuSubContent className="max-h-75 w-52 overflow-y-auto p-1">
+                            <ContextMenuItem
+                              onSelect={() => onOverrideLanguage?.(t.id, null)}
+                              className="gap-2 rounded-md px-2 py-1.5 text-xs"
+                            >
+                              <img
+                                src={fileIconUrl(t.title)}
+                                className="size-3.5 shrink-0 object-contain"
+                                alt=""
+                              />
+                              <span className="flex-1">
+                                {translate("tabs.autoDetectLanguage")}
+                              </span>
+                              {!t.overrideLanguage && (
+                                <HugeiconsIcon
+                                  icon={Tick02Icon}
+                                  className="size-3.5 text-primary"
+                                />
+                              )}
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                setShowAllLanguages((value) => !value);
+                              }}
+                              className="rounded-md px-2 py-1.5 text-xs text-primary/70"
+                            >
+                              {showAllLanguages
+                                ? translate("tabs.fewerLanguages")
+                                : translate("tabs.allLanguages")}
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
+                            {(showAllLanguages
+                              ? ALL_LANGUAGES
+                              : EXPOSED_LANGUAGES
+                            ).map((language) => (
+                              <ContextMenuItem
+                                key={language.ext}
+                                onSelect={() =>
+                                  onOverrideLanguage?.(t.id, language.ext)
+                                }
+                                className="gap-2 rounded-md px-2 py-1.5 text-xs"
+                              >
+                                <img
+                                  src={fileIconUrl(`dummy.${language.ext}`)}
+                                  className="size-3.5 shrink-0 object-contain"
+                                  alt=""
+                                />
+                                <span className="flex-1">{language.name}</span>
+                                {t.overrideLanguage === language.ext && (
+                                  <HugeiconsIcon
+                                    icon={Tick02Icon}
+                                    className="size-3.5 text-primary"
+                                  />
+                                )}
+                              </ContextMenuItem>
+                            ))}
+                          </ContextMenuSubContent>
+                        </ContextMenuSub>
+                      </>
+                    )}
                     <ContextMenuSeparator />
                     <ContextMenuItem
                       className="gap-2 rounded-md px-2 py-1.5 text-xs"
@@ -1191,8 +1227,8 @@ export function TabBar({
                 <Fragment key={t.id}>
                   {showGap(tabIndex) && <DropIndicator />}
                   {renderedTabNode}
-                  {tabIndex === visibleTabs.length - 1 &&
-                    showGap(visibleTabs.length) && <DropIndicator />}
+                  {tabIndex === fittedTabs.length - 1 &&
+                    showGap(fittedTabs.length) && <DropIndicator />}
                 </Fragment>
               );
             })}
@@ -1207,7 +1243,8 @@ export function TabBar({
           </span>
         )}
       </div>
-        {showOverflowControl && (
+      <div className="flex h-6.5 w-10 shrink-0 items-center justify-center">
+        {hiddenItemCount > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -1221,7 +1258,7 @@ export function TabBar({
                   strokeWidth={2}
                 />
                 <span className="text-[10.5px] font-mono font-medium">
-                  {tabs.length}
+                  {hiddenItemCount}
                 </span>
               </button>
             </DropdownMenuTrigger>
@@ -1270,24 +1307,25 @@ export function TabBar({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <NewTabMenu
-          onNew={onNew}
-          onNewShell={onNewShell}
-          onNewWsl={onNewWsl}
-          onNewBlock={onNewBlock}
-          onNewPrivate={onNewPrivate}
-          onNewPreview={onNewPreview}
-          onNewBrowser={onNewBrowser}
-          onNewEditor={onNewEditor}
-          onNewApiClient={onNewApiClient}
-          onNewHarness={onNewHarness}
-          onNewRdp={onNewRdp}
-          onConnectRemote={onConnectRemote}
-          onOpenFile={onOpenFile}
-          onOpenFolder={onOpenFolder}
-          onNewGitGraph={onNewGitGraph}
-          onLaunchAgents={onLaunchAgents}
-        />
+      </div>
+      <NewTabMenu
+        onNew={onNew}
+        onNewShell={onNewShell}
+        onNewWsl={onNewWsl}
+        onNewBlock={onNewBlock}
+        onNewPrivate={onNewPrivate}
+        onNewPreview={onNewPreview}
+        onNewBrowser={onNewBrowser}
+        onNewEditor={onNewEditor}
+        onNewApiClient={onNewApiClient}
+        onNewHarness={onNewHarness}
+        onNewRdp={onNewRdp}
+        onConnectRemote={onConnectRemote}
+        onOpenFile={onOpenFile}
+        onOpenFolder={onOpenFolder}
+        onNewGitGraph={onNewGitGraph}
+        onLaunchAgents={onLaunchAgents}
+      />
     </div>
   );
 }
