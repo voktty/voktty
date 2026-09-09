@@ -5,38 +5,12 @@ const SECTION_KEY = "monocode.settingsSection";
 export type SettingsSectionId =
   "general" | "appearance" | "keybindings" | "providers" | "archive";
 
-export const SETTINGS_SECTIONS: {
-  id: SettingsSectionId;
-  label: string;
-  description: string;
-}[] = [
-  {
-    id: "general",
-    label: "General",
-    description: "App-wide behavior and the build you are running.",
-  },
-  {
-    id: "appearance",
-    label: "Appearance",
-    description: "Theme, translucency, and the tint applied to the chrome.",
-  },
-  {
-    id: "keybindings",
-    label: "Keybindings",
-    description:
-      "Every shortcut the workspace handles, from the app menu and the key handler.",
-  },
-  {
-    id: "providers",
-    label: "Providers",
-    description:
-      "Agent CLIs MonoCode can drive, and the model new sessions start with.",
-  },
-  {
-    id: "archive",
-    label: "Archive",
-    description: "Projects and conversations you have archived.",
-  },
+export const SETTINGS_SECTIONS: { id: SettingsSectionId }[] = [
+  { id: "general" },
+  { id: "appearance" },
+  { id: "keybindings" },
+  { id: "providers" },
+  { id: "archive" },
 ];
 
 export const SETTINGS_SECTION_DEFAULT: SettingsSectionId = "general";
@@ -45,18 +19,6 @@ export function isSettingsSectionId(
   value: unknown,
 ): value is SettingsSectionId {
   return SETTINGS_SECTIONS.some((section) => section.id === value);
-}
-
-export function settingsSectionLabel(id: SettingsSectionId): string {
-  return (
-    SETTINGS_SECTIONS.find((section) => section.id === id)?.label ?? "General"
-  );
-}
-
-export function settingsSectionDescription(id: SettingsSectionId): string {
-  return (
-    SETTINGS_SECTIONS.find((section) => section.id === id)?.description ?? ""
-  );
 }
 
 export function loadSettingsSection(): SettingsSectionId {
