@@ -51,11 +51,12 @@ export function NoteMiniCard({ card, onDismiss, embedded = false }: Props) {
             strokeWidth={1.75}
           />
           <span className="min-w-0 truncate text-[11px] text-content/50">
-            Note{!embedded && card.slug ? ` · ${card.slug}` : ""}
+            {t("harness.chrome.note")}
+            {!embedded && card.slug ? ` · ${card.slug}` : ""}
           </span>
         </span>
         <span className="mt-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
-          {card.title || "Untitled"}
+          {card.title || t("harness.chrome.untitled")}
         </span>
         {!embedded && project ? (
           <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-content/45">

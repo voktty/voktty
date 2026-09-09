@@ -19,7 +19,7 @@ export function HandoffMiniCard({ card, onDismiss }: Props) {
   const { t } = useTranslation();
   const files =
     card.files != null && card.files > 0
-      ? `${card.files} ${card.files === 1 ? "file" : "files"}`
+      ? t("harness.chrome.fileCount", { count: card.files })
       : null;
 
   return (
@@ -36,7 +36,7 @@ export function HandoffMiniCard({ card, onDismiss }: Props) {
               strokeWidth={1.75}
             />
             <span className="min-w-0 truncate text-[11px] text-content/50">
-              Handoff
+              {t("harness.chrome.handoff")}
             </span>
           </span>
           <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[13px] font-semibold leading-snug text-content">
