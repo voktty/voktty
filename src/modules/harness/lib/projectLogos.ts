@@ -1,3 +1,4 @@
+import { t } from "@/modules/i18n";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -11,7 +12,7 @@ export async function pickImageFile(): Promise<string | null> {
   const selected = await open({
     multiple: false,
     directory: false,
-    title: "Choose project logo",
+    title: t("harness.chrome.chooseProjectLogo"),
     filters: [
       {
         name: "Images",

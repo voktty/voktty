@@ -239,8 +239,8 @@ export function NotesView({
         ) : visible.length === 0 ? (
           <p className="px-3 py-2 text-[12px] text-content/50">
             {query.trim()
-              ? "No matching notes"
-              : "No notes yet. Save a turn from the transcript, or create one here."}
+              ? t("harness.chrome.noMatchingFilesOrNotes")
+              : t("harness.chrome.noFilesOrNotesFound")}
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5 p-1.5">
