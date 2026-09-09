@@ -326,28 +326,15 @@ export function TabBar({
   // tab closed); if it still doesn't fit, the very next measurement (before
   // paint) collapses it straight back, so there's nothing to see flash.
   const [overflowing, setOverflowing] = useState(false);
-  const lastAvailableRef = useRef(0);
-  const lastItemCountRef = useRef(projectedItems.length);
 
   const checkFit = useCallback(() => {
     const scroller = scrollRef.current;
     const list = listRef.current;
     if (!scroller || !list) return;
     const available = scroller.clientWidth;
-    const grew = available > lastAvailableRef.current;
-    const fewerItems = projectedItems.length < lastItemCountRef.current;
-    lastAvailableRef.current = available;
-    lastItemCountRef.current = projectedItems.length;
-
-    setOverflowing((prev) => {
-      if (prev) return !(grew || fewerItems);
-      return list.scrollWidth > available;
-    });
-  }, [projectedItems.length]);
-
-  useLayoutEffect(() => {
-    checkFit();
-  });
+    const isOverflow = list.scrollWidth > available + 2;
+    setOverflowing((prev) => (prev !== isOverflow ? isOverflow : prev));
+  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -356,6 +343,10 @@ export function TabBar({
     ro.observe(el);
     return () => ro.disconnect();
   }, [checkFit]);
+
+  useEffect(() => {
+    checkFit();
+  }, [checkFit, projectedItems.length]);
 
   useEffect(() => {
     onOverflowChange?.(overflowing);
@@ -429,10 +420,10 @@ export function TabBar({
       data-tauri-drag-region
       className="group min-w-0 flex-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      <div className="flex w-full min-w-0 items-center gap-0.5">
+      <div className="flex w-max min-w-0 items-center gap-0.5">
         <Tabs
           value={activeValue}
-          className="flex-1 min-w-0"
+          className="min-w-0"
           onValueChange={(value) => {
             if (value.startsWith("space:")) {
               onSelectSpace?.(value.slice("space:".length));
@@ -443,7 +434,7 @@ export function TabBar({
         >
           <TabsList
             ref={listRef}
-            className="relative flex h-6.5 w-full min-w-0 items-center gap-0.5 bg-transparent p-0"
+            className="relative flex h-6.5 w-max min-w-0 items-center gap-0.5 bg-transparent p-0"
           >
             <span
               aria-hidden
@@ -692,7 +683,7 @@ export function TabBar({
                       : undefined
                   }
                   className={cn(
-                    "group relative z-[1] h-6.5 min-w-[32px] max-w-[220px] flex-1 shrink basis-0 justify-between gap-1 rounded-md bg-transparent text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent px-1.5",
+                    "group relative z-[1] h-6.5 min-w-[36px] max-w-[180px] shrink justify-between gap-1 rounded-md bg-transparent text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent px-2",
                     isNew && "voktty-tab-in",
                     isPulsing && "voktty-tab-finished-pulse",
                     cardDropTargetTabId === t.id &&
