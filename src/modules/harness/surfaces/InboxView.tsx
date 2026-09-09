@@ -682,7 +682,9 @@ export function InboxView({
             className="size-3.5 shrink-0 text-content/45"
             strokeWidth={1.75}
           />
-          <span className="min-w-0 truncate text-content">Inbox</span>
+          <span className="min-w-0 truncate text-content">
+            {t("harness.chrome.inbox")}
+          </span>
         </div>
       </div>
 
@@ -770,12 +772,13 @@ function InboxDetailBody({
   onAsk?: () => void;
   asking?: boolean;
 }) {
+  const { t } = useTranslation();
   if (!item) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 text-center">
         <Inbox className="mb-3 size-6 text-content/30" strokeWidth={1.75} />
         <p className="text-[13px] text-content/45">
-          Select an issue or pull request
+          {t("harness.chrome.selectIssueOrPullRequest")}
         </p>
       </div>
     );
@@ -1232,7 +1235,7 @@ function InboxDetail({
                   ))}
                 </span>
               ) : (
-                <span>Unassigned</span>
+                <span>{t("harness.chrome.unassigned")}</span>
               )}
             </>
           ) : null}
@@ -1245,7 +1248,11 @@ function InboxDetail({
           {formatRelativeTime(item.updatedAt) ? (
             <>
               <span aria-hidden>·</span>
-              <span>Updated {formatRelativeTime(item.updatedAt)}</span>
+              <span>
+                {t("harness.chrome.updatedAt", {
+                  time: formatRelativeTime(item.updatedAt),
+                })}
+              </span>
             </>
           ) : null}
           {baseRef && headRef ? (
@@ -1380,7 +1387,9 @@ function InboxDetail({
             diff={prDiff}
           />
         ) : (
-          <p className="text-[13px] text-content/45">No file changes</p>
+          <p className="text-[13px] text-content/45">
+            {t("harness.chrome.noFileChanges")}
+          </p>
         )
       ) : loading ? (
         <div className="flex justify-center py-10 text-content/40">
@@ -1393,7 +1402,9 @@ function InboxDetail({
           {details?.body.trim() ? (
             <AgentMarkdown text={details.body} cwd={markdownCwd} />
           ) : (
-            <p className="text-[13px] text-content/45">No description</p>
+            <p className="text-[13px] text-content/45">
+              {t("harness.chrome.noDescription")}
+            </p>
           )}
           <InboxComments
             thread={thread}

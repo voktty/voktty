@@ -874,7 +874,7 @@ function FoldBar({
         onClick={() => onReveal("all")}
         className="min-w-0 flex-1 py-1 text-left font-mono text-[11px] text-content/45 hover:text-content/70"
       >
-        {hidden} unmodified {hidden === 1 ? "line" : "lines"}
+        {t("harness.chrome.unmodifiedLines", { count: hidden })}
       </button>
     </div>
   );
