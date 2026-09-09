@@ -749,6 +749,9 @@ pub fn run() {
                     if let Some(state) = app.try_state::<control::ControlState>() {
                         state.shutdown();
                     }
+                    if let Some(state) = app.try_state::<companion::CompanionState>() {
+                        state.stop();
+                    }
                 }
                 tauri::RunEvent::ExitRequested { api, .. } => {
                     let allowed = app
