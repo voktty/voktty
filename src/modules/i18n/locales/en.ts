@@ -131,7 +131,25 @@ export const en = {
       vault: "Vault",
       aliases: "Aliases",
       harness: "Agent Harness",
+      companion: "Mobile Companion",
       about: "About",
+    },
+    companion: {
+      title: "Mobile Companion",
+      description:
+        "Share only active agent conversations with an approved Android companion.",
+      scopeTitle: "Agent-only access",
+      scopeDescription:
+        "The companion never exposes terminals, SSH, files, editors, Git, or desktop controls.",
+      start: "Start companion",
+      stop: "Stop companion",
+      starting: "Starting secure tunnel...",
+      active: "Ready to pair",
+      inactive: "Companion is off",
+      copyPayload: "Copy pairing payload",
+      expires: "Pairing expires at {{time}}",
+      tunnel: "Temporary Cloudflare tunnel",
+      error: "Could not start the companion: {{message}}",
     },
     general: {
       title: "General",

@@ -133,7 +133,25 @@ export const es: TranslationSchema = {
       vault: "Bóveda",
       aliases: "Alias",
       harness: "Agent Harness",
+      companion: "Companion móvil",
       about: "Acerca de",
+    },
+    companion: {
+      title: "Companion móvil",
+      description:
+        "Comparte solo conversaciones de agentes activos con un companion Android aprobado.",
+      scopeTitle: "Acceso solo a agentes",
+      scopeDescription:
+        "El companion nunca expone terminales, SSH, archivos, editor, Git ni controles del escritorio.",
+      start: "Iniciar companion",
+      stop: "Detener companion",
+      starting: "Iniciando túnel seguro...",
+      active: "Listo para emparejar",
+      inactive: "El companion está desactivado",
+      copyPayload: "Copiar payload de emparejamiento",
+      expires: "El emparejamiento caduca a las {{time}}",
+      tunnel: "Túnel temporal de Cloudflare",
+      error: "No se pudo iniciar el companion: {{message}}",
     },
     general: {
       title: "General",

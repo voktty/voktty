@@ -99,6 +99,11 @@ const HarnessSection = React.lazy(() =>
     default: m.HarnessSection,
   })),
 );
+const CompanionSection = React.lazy(() =>
+  import("./sections/CompanionSection").then((m) => ({
+    default: m.CompanionSection,
+  })),
+);
 
 const TABS: {
   id: SettingsTab;
@@ -118,6 +123,7 @@ const TABS: {
   { id: "vault", icon: Key01Icon, component: VaultSection },
   { id: "aliases", icon: CommandLineIcon, component: AliasesSection },
   { id: "harness", icon: AiScanIcon, component: HarnessSection },
+  { id: "companion", icon: AiScanIcon, component: CompanionSection },
   { id: "about", icon: InformationCircleIcon, component: AboutSection },
 ];
 
