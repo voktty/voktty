@@ -4575,6 +4575,7 @@ export const en = {
       deleteGroupAndTabs: "Delete “{name}” and close {count} tabs?",
       addToGroup: "Add to {name}",
       removeFromGroup: "Remove from group",
+      couldntLoadSessions: "Couldn't load sessions",
       addProjectLogo: "Add project logo",
       changeProjectLogo: "Change project logo",
       projectLogo: "Project logo",

@@ -4671,6 +4671,7 @@ export const es: TranslationSchema = {
       deleteGroupAndTabs: "¿Eliminar “{name}” y cerrar {count} pestañas?",
       addToGroup: "Añadir a {name}",
       removeFromGroup: "Quitar del grupo",
+      couldntLoadSessions: "No se pudieron cargar las sesiones",
       addProjectLogo: "Añadir logo del proyecto",
       changeProjectLogo: "Cambiar logo del proyecto",
       projectLogo: "Logo del proyecto",

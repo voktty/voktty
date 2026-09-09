@@ -1090,7 +1090,7 @@ function SidebarComponent({
             data-tauri-drag-region="deep"
           >
             <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
-              Sessions
+              {t("harness.chrome.sessions")}
             </span>
             <WorkspaceTitleActions onSearch={onGoToFile} onNew={onNew} />
           </div>
@@ -1204,7 +1204,7 @@ function SidebarComponent({
               </div>
             ) : (
               <p className="px-3 py-2 text-[12px] text-content/50">
-                No project folder
+                {t("harness.chrome.noProjectFolder")}
               </p>
             )}
           </div>
@@ -1286,7 +1286,7 @@ function SidebarComponent({
           >
             {!cwd || cwd === "~" ? (
               <p className="px-3 py-2 text-[12px] text-content/50">
-                No project folder
+                {t("harness.chrome.noProjectFolder")}
               </p>
             ) : (
               <div>
@@ -1300,7 +1300,7 @@ function SidebarComponent({
                 {pendingFirstLoad ? null : status === "error" &&
                   sessions.length === 0 ? (
                   <p className="px-3 py-2 text-[12px] text-content/50">
-                    Couldn’t load sessions
+                    {t("harness.chrome.couldntLoadSessions")}
                   </p>
                 ) : visibleSessions.length === 0 ? (
                   // A narrowed-down result is a transient answer to what the user
