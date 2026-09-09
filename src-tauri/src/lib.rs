@@ -350,6 +350,8 @@ pub fn run() {
             remote::remote_pty_get_cwd,
             remote::remote_watch_add,
             remote::remote_watch_remove,
+            remote::remote_watch_add_tree,
+            remote::remote_watch_remove_tree,
             remote::ssh_ping,
             remote::ssh_fetch_metrics,
             remote::ssh_upload_files,

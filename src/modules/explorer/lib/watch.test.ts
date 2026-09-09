@@ -123,8 +123,21 @@ describe("filesystem watches", () => {
     });
   });
 
-  it("does not watch a tree for remote workspaces or UNC roots", () => {
+  it("routes remote tree watches through their helper session", () => {
     watchAddTree("/srv/app", remote);
+    watchRemoveTree("/srv/app", remote);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "remote_watch_add_tree", {
+      root: "/srv/app",
+      sessionId: 7,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, "remote_watch_remove_tree", {
+      root: "/srv/app",
+      sessionId: 7,
+    });
+  });
+
+  it("does not watch a tree for UNC roots", () => {
     watchAddTree("//server/share/project", { kind: "local" });
 
     expect(invoke).not.toHaveBeenCalled();

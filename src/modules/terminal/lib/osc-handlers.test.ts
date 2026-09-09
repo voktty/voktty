@@ -26,7 +26,9 @@ function makeFakeTerm() {
         return { dispose: () => handlers.delete(code) };
       },
     },
-    registerMarker: vi.fn().mockReturnValue({ isDisposed: false, dispose: vi.fn() }),
+    registerMarker: vi
+      .fn()
+      .mockReturnValue({ isDisposed: false, dispose: vi.fn() }),
   } as unknown as Terminal;
   return { term, handlers };
 }
@@ -43,9 +45,9 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
     registerPromptTracker(term, state);
     registerCwdHandler(term, onCwd, state);
 
-    // OSC 133 A means "new prompt is about to be drawn" — we're between
-    // commands and OSC 7 from the shell is legitimate here.
-    handlers.get(133)?.("A");
+    // The shell emits its cwd after command completion and before drawing the
+    // next prompt.
+    handlers.get(133)?.("D;0");
     handlers.get(7)?.("file://host/home/me/project");
 
     expect(onCwd).toHaveBeenCalledWith("/home/me/project");
@@ -58,7 +60,7 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
     registerPromptTracker(term, state);
     registerCwdHandler(term, onCwd, state);
 
-    handlers.get(133)?.("A");
+    handlers.get(133)?.("D;0");
     handlers.get(7)?.("file:///c/Users/leo/project");
 
     expect(onCwd).toHaveBeenCalledWith("C:/Users/leo/project");
@@ -95,6 +97,19 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
 
     expect(onCwd).toHaveBeenCalledTimes(1);
     expect(onCwd).toHaveBeenCalledWith("/home/me/new-cwd");
+  });
+
+  it("rejects OSC 7 outside the shell prompt sequence once markers are known", () => {
+    const { term, handlers } = makeFakeTerm();
+    const state = createShellIntegrationState();
+    const onCwd = vi.fn();
+    registerCwdHandler(term, onCwd, state);
+    registerPromptTracker(term, state);
+
+    handlers.get(133)?.("A");
+    handlers.get(7)?.("file://host/home/me/.codex");
+
+    expect(onCwd).not.toHaveBeenCalled();
   });
 
   it("works without state for backwards compatibility (legacy callers)", () => {
