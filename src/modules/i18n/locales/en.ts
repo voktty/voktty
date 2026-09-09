@@ -4809,6 +4809,9 @@ export const en = {
       explorer: "Explorer",
       hideChanges: "Hide changes",
       showChanges: "Show changes",
+      viewAsList: "View as list",
+      viewAsTree: "View as tree",
+      openAllChanges: "Open all changes",
       filesChanged:
         "{count, plural, one {# file changed} other {# files changed}}",
       ungroup: "Ungroup",

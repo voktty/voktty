@@ -4907,6 +4907,9 @@ export const es: TranslationSchema = {
       explorer: "Explorador",
       hideChanges: "Ocultar cambios",
       showChanges: "Mostrar cambios",
+      viewAsList: "Ver como lista",
+      viewAsTree: "Ver como arbol",
+      openAllChanges: "Abrir todos los cambios",
       filesChanged:
         "{count, plural, one {# archivo cambiado} other {# archivos cambiados}}",
       ungroup: "Desagrupar",
