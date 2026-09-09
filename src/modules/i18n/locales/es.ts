@@ -4640,6 +4640,7 @@ export const es: TranslationSchema = {
       release: "Soltar",
       takeControl: "Tomar el control",
       unmodifiedLines: "{count} {count, plural, one {línea sin modificar} other {líneas sin modificar}}",
+      uncommittedSummary: "{label} sin confirmar",
       toolCallWithState: "Llamada de herramienta {state}: {text}",
       closePaneShortcut: "Cerrar panel ({shortcut})",
       sessionChangesTooltip: "Cambios capturados solo para esta sesión",

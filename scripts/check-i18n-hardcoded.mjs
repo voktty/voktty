@@ -24,8 +24,10 @@ const internalMetadataPaths = [
   /\/modules\/terminal\/scripts\/discoverProjectScripts\.ts$/,
   /\/modules\/api-client\/lib\/presets\.ts$/,
   /\/modules\/notes-board\/lib\/mcpKanbanTools\.ts$/,
-  /\/modules\/theme\//,
-  /\/modules\/harness\//,
+  /\/modules\/theme\/(?:packs\.ts|themes\/|skins\/)/,
+  /\/modules\/harness\/lib\/harness\//,
+  /\/modules\/harness\/lib\/models\.ts$/,
+  /\/modules\/harness\/lib\/(?:appLifecycle|compact|createSkill|fileMentions|handoff|inFlight|plan|secondOpinion|terminalClose)\.ts$/,
 ];
 
 
@@ -72,7 +74,7 @@ const feedbackCalls = new Set([
 ]);
 
 const technicalPatterns = [
-  /^(?:Voktty|Git|GitHub|SSH|RDP|Docker|Redis|LSP|AI|CPU|RAM|MEM|DISK|NET|NETWORK|SHA|URL|Shell|WSL|Windows|DTR|RTS|TCP EST|cwd|exit|ping|binary)$/i,
+  /^(?:Voktty|MonoCode|Git|GitHub|SSH|RDP|Docker|Redis|LSP|AI|CPU|RAM|MEM|DISK|NET|NETWORK|SHA|URL|Shell|WSL|Windows|DTR|RTS|TCP EST|cwd|exit|ping|binary|main|pac-man|snake)$/i,
   /^(?:Postman|gRPC|GraphQL|JSON|Bearer|AKIA\.\.\.|sk_test_\.\.\.|oauth2_access_token\.\.\.|whsec_\.\.\.|X-API-Key|us-east-1|s3 \/ execute-api|user|password|Value)$/i,
   /^(?:text|bg|border|from|to|dark:text|hover:text)-[a-z]+-\d+(?:\/\d+)?$/,
   /^(?:JSON|GraphQL) \(application\/json\)$/,
@@ -101,6 +103,7 @@ const technicalPatterns = [
   /^(?:unhandled method \{…\}|Space|←|↑\{…\} ↓\{…\}|[↑↓]\{…\}|~)$/,
   /^(?:ssh\s+\{…\}|ssh \{…\}@\{…\}|serial · \{…\}|docker · \{…\}|wsl · \{…\}|\{…\} \(WSL\)|\{…\} · localhost:\{…\}|\{…\} :\{…\}|🐳 \{…\}|\{…\} \(AI diff\)|\{…\} @ \{…\}|\{…\} — \{…\})$/,
   /^(?:, \{…\}|\{…\}%|\{…\}…|\{…\}@|· \{…\}|\{…\}% — \{…\}|\{…\} · v\{…\}|v\{…\}|\+\{…\})$/,
+  /^(?:`|&gt;_|lin_api_…|\{…\} · \{…\} \(\{…\}\.\)|\{…\} models|Ask · \{…\})$/,
 ];
 
 function normalizeText(value) {
