@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { memo, useSyncExternalStore } from "react";
 
 type Props = {
   name: string;
@@ -41,7 +41,7 @@ function getSnapshot() {
 }
 
 /** VS Code Material Icon Theme — filename maps to the matching icon. */
-export function FileTypeIcon({
+export const FileTypeIcon = memo(function FileTypeIcon({
   name,
   isDir,
   isOpen = false,
@@ -79,7 +79,7 @@ export function FileTypeIcon({
       className="shrink-0"
     />
   );
-}
+});
 
 /**
  * The package only checks `fileExtension` when that prop is set — it does not
