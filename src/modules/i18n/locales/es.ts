@@ -969,6 +969,7 @@ export const es: TranslationSchema = {
       connect: "Solicitar emparejamiento",
       connecting: "Solicitando emparejamiento...",
       waitingForApproval: "Esperando aprobación en tu escritorio.",
+      paired: "Emparejado correctamente. El escritorio hará disponibles aquí los agentes activos.",
       connectionError: "No se pudo enviar la solicitud. Comprueba el payload y el túnel.",
     },
   },

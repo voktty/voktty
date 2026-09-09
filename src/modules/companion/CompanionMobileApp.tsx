@@ -7,6 +7,7 @@ type Invitation = {
   protocol: number;
   publicUrl: string;
   invitationId: string;
+  hostPublicKey: string;
   secret: string;
 };
 
@@ -61,6 +62,17 @@ async function pairingProof(invitation: Invitation, deviceName: string, deviceKe
   );
 }
 
+async function waitForDecision(publicUrl: string, requestId: string): Promise<"approved"> {
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => window.setTimeout(resolve, 1_500));
+    const response = await fetch(new URL(`/v1/companion/pair/${encodeURIComponent(requestId)}`, publicUrl));
+    if (response.status === 200) return "approved";
+    if (response.status !== 202) throw new Error("pairing-rejected");
+  }
+  throw new Error("pairing-expired");
+}
+
 /**
  * Android intentionally has no desktop workbench fallback. Until a device is
  * paired it exposes no local files, terminals, workspace state, or controls.
@@ -68,7 +80,7 @@ async function pairingProof(invitation: Invitation, deviceName: string, deviceKe
 export function CompanionMobileApp() {
   const { t } = useTranslation();
   const [payload, setPayload] = useState("");
-  const [state, setState] = useState<"idle" | "connecting" | "pending" | "error">("idle");
+  const [state, setState] = useState<"idle" | "connecting" | "pending" | "approved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const connect = async () => {
@@ -99,7 +111,12 @@ export function CompanionMobileApp() {
         }),
       });
       if (response.status !== 202) throw new Error("pairing-rejected");
+      const { requestId } = (await response.json()) as { requestId?: string };
+      if (!requestId) throw new Error("missing-pairing-request");
       setState("pending");
+      const decision = await waitForDecision(invitation.publicUrl, requestId);
+      if (decision !== "approved") throw new Error("pairing-rejected");
+      setState("approved");
     } catch (reason) {
       setState("error");
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -130,9 +147,11 @@ export function CompanionMobileApp() {
               {t("companion.mobile.agentOnlyDescription")}
             </p>
           </div>
-          {state === "pending" ? (
+          {state === "pending" || state === "approved" ? (
             <p className="mt-6 text-center text-xs text-muted-foreground">
-              {t("companion.mobile.waitingForApproval")}
+              {state === "pending"
+                ? t("companion.mobile.waitingForApproval")
+                : t("companion.mobile.paired")}
             </p>
           ) : (
             <div className="mt-6">

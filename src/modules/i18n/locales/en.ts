@@ -943,6 +943,7 @@ export const en = {
       connect: "Request pairing",
       connecting: "Requesting pairing...",
       waitingForApproval: "Waiting for approval on your desktop.",
+      paired: "Paired successfully. Your desktop will make active agents available here.",
       connectionError: "The pairing request could not be sent. Check the payload and tunnel.",
     },
   },
