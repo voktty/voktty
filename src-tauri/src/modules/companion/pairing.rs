@@ -30,6 +30,7 @@ pub(super) struct PairingRegistry {
     expires_at_ms: u64,
     consumed: bool,
     pending: HashMap<String, PendingPairing>,
+    decisions: HashMap<String, PairingDecision>,
     devices: HashMap<String, AuthorizedDevice>,
 }
 
@@ -47,6 +48,7 @@ impl PairingRegistry {
             expires_at_ms,
             consumed: false,
             pending: HashMap::new(),
+            decisions: HashMap::new(),
             devices: HashMap::new(),
         })
     }
@@ -93,6 +95,8 @@ impl PairingRegistry {
             expires_at_ms: now_ms.saturating_add(INVITATION_TTL_SECS.saturating_mul(1000)),
         };
         self.pending.insert(pending.id.clone(), pending.clone());
+        self.decisions
+            .insert(pending.id.clone(), PairingDecision::Pending);
         Ok(pending)
     }
 
@@ -109,11 +113,19 @@ impl PairingRegistry {
             last_connected_at_ms: Some(now_ms),
         };
         self.devices.insert(device.id.clone(), device.clone());
+        self.decisions
+            .insert(request_id.to_string(), PairingDecision::Approved);
         Ok(device)
     }
 
     pub fn reject(&mut self, request_id: &str) -> bool {
-        self.pending.remove(request_id).is_some()
+        if self.pending.remove(request_id).is_some() {
+            self.decisions
+                .insert(request_id.to_string(), PairingDecision::Rejected);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn pending(&self) -> Vec<PendingPairing> {
@@ -125,6 +137,27 @@ impl PairingRegistry {
     pub fn devices(&self) -> Vec<AuthorizedDevice> {
         self.devices.values().cloned().collect()
     }
+
+    pub fn decision(&mut self, request_id: &str, now_ms: u64) -> Option<PairingDecision> {
+        let expired = self
+            .pending
+            .get(request_id)
+            .is_some_and(|pending| now_ms >= pending.expires_at_ms);
+        if expired {
+            self.pending.remove(request_id);
+            self.decisions
+                .insert(request_id.to_string(), PairingDecision::Expired);
+        }
+        self.decisions.get(request_id).copied()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum PairingDecision {
+    Pending,
+    Approved,
+    Rejected,
+    Expired,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

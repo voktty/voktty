@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use ring::agreement::{EphemeralPrivateKey, X25519};
+use ring::agreement::{EphemeralPrivateKey, ECDH_P256};
 use ring::rand::SystemRandom;
 use serde::Serialize;
 use voktty_companion_protocol::{
@@ -16,7 +16,7 @@ use voktty_companion_protocol::{
 
 use crate::modules::collab::quick_tunnel::{verified_executable, CloudflaredTunnel};
 
-use super::pairing::{PairingError, PairingRegistry};
+use super::pairing::{PairingDecision, PairingError, PairingRegistry};
 
 const ACCEPT_POLL: Duration = Duration::from_millis(20);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
@@ -70,7 +70,9 @@ impl CompanionState {
 
         let pairing = Arc::new(Mutex::new(None));
         let server = CompanionLoopback::start(pairing.clone()).map_err(|error| error.to_string())?;
-        let private_key = EphemeralPrivateKey::generate(&X25519, &SystemRandom::new())
+        // Android WebCrypto supports P-256 ECDH across current WebView versions.
+        // Keeping both ends on this curve is required before a session key can be derived.
+        let private_key = EphemeralPrivateKey::generate(&ECDH_P256, &SystemRandom::new())
             .map_err(|_| "could not create companion host key".to_string())?;
         let public_key = private_key
             .compute_public_key()
@@ -289,9 +291,8 @@ fn handle_request(
 ) -> io::Result<()> {
     stream.set_read_timeout(Some(REQUEST_TIMEOUT))?;
     stream.set_write_timeout(Some(REQUEST_TIMEOUT))?;
-    let mut request = [0_u8; MAX_REQUEST_BYTES];
-    let read = stream.read(&mut request)?;
-    let request = &request[..read];
+    let request = read_http_request(&mut stream)?;
+    let request = request.as_slice();
     let health = request.starts_with(b"GET /health HTTP/");
     let response = if health {
         b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".as_slice()
@@ -303,10 +304,40 @@ fn handle_request(
         let response = handle_pairing_request(request, pairing);
         stream.write_all(&response)?;
         return Ok(());
+    } else if request.starts_with(b"GET /v1/companion/pair/") {
+        let response = handle_pairing_status_request(request, pairing);
+        stream.write_all(&response)?;
+        return Ok(());
     } else {
         b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".as_slice()
     };
     stream.write_all(response)
+}
+
+fn read_http_request(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+    let mut request = Vec::with_capacity(1024);
+    let mut chunk = [0_u8; 1024];
+    loop {
+        let read = stream.read(&mut chunk)?;
+        if read == 0 {
+            return Err(io::Error::new(ErrorKind::UnexpectedEof, "incomplete HTTP request"));
+        }
+        if request.len().saturating_add(read) > MAX_REQUEST_BYTES {
+            return Err(io::Error::new(ErrorKind::InvalidData, "HTTP request too large"));
+        }
+        request.extend_from_slice(&chunk[..read]);
+        let Some(body_start) = request.windows(4).position(|part| part == b"\r\n\r\n").map(|offset| offset + 4) else {
+            continue;
+        };
+        let content_length = std::str::from_utf8(&request[..body_start])
+            .ok()
+            .and_then(|headers| headers.lines().find_map(|line| line.strip_prefix("Content-Length:").or_else(|| line.strip_prefix("content-length:"))))
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            .unwrap_or(0);
+        if request.len() >= body_start.saturating_add(content_length) {
+            return Ok(request);
+        }
+    }
 }
 
 fn handle_pairing_request(
@@ -330,7 +361,7 @@ fn handle_pairing_request(
         .ok()
         .and_then(|mut registry| registry.as_mut().map(|registry| registry.request(request, now_ms(), request_id)));
     match result {
-        Some(Ok(_)) => http_response(202, "Accepted", b""),
+        Some(Ok(pending)) => json_response(202, "Accepted", &serde_json::json!({ "requestId": pending.id })),
         Some(Err(PairingError::Expired | PairingError::Consumed)) => {
             http_response(410, "Gone", b"")
         }
@@ -339,15 +370,52 @@ fn handle_pairing_request(
     }
 }
 
+fn handle_pairing_status_request(
+    request: &[u8],
+    pairing: &Arc<Mutex<Option<PairingRegistry>>>,
+) -> Vec<u8> {
+    let Some(line_end) = request.windows(2).position(|part| part == b"\r\n") else {
+        return http_response(400, "Bad Request", b"");
+    };
+    let Some(path) = std::str::from_utf8(&request[..line_end])
+        .ok()
+        .and_then(|line| line.strip_prefix("GET /v1/companion/pair/"))
+        .and_then(|rest| rest.strip_suffix(" HTTP/1.1").or_else(|| rest.strip_suffix(" HTTP/1.0")))
+    else {
+        return http_response(400, "Bad Request", b"");
+    };
+    let result = pairing
+        .lock()
+        .ok()
+        .and_then(|mut registry| registry.as_mut().and_then(|registry| registry.decision(path, now_ms())));
+    match result {
+        Some(PairingDecision::Pending) => json_response(202, "Accepted", &serde_json::json!({ "status": "pending" })),
+        Some(PairingDecision::Approved) => json_response(200, "OK", &serde_json::json!({ "status": "approved" })),
+        Some(PairingDecision::Rejected) => json_response(403, "Forbidden", &serde_json::json!({ "status": "rejected" })),
+        Some(PairingDecision::Expired) | None => http_response(410, "Gone", b""),
+    }
+}
+
 fn http_response(status: u16, reason: &str, body: &[u8]) -> Vec<u8> {
     format!(
-        "HTTP/1.1 {status} {reason}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {status} {reason}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
     .into_bytes()
     .into_iter()
     .chain(body.iter().copied())
     .collect()
+}
+
+fn json_response(status: u16, reason: &str, value: &serde_json::Value) -> Vec<u8> {
+    let body = serde_json::to_vec(value).unwrap_or_default();
+    let mut response = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    response.extend(body);
+    response
 }
 
 fn random_token(bytes: usize) -> Result<String, String> {
