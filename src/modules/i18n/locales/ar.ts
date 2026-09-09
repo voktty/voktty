@@ -4183,7 +4183,126 @@ const arCoveragePatch: TranslationSchema = mergeLocale(arCoverageBase, {
   },
 });
 
-export const ar: TranslationSchema = mergeLocale(arCoveragePatch, {
+const arWorkbenchTranslations = { workbench: { dapRequestFailed: "فشل طلب محول التصحيح" } };
+
+const arCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"جلسة وكيل جديدة في شجرة العمل المعزولة","worktreeNeedsProject":"افتح المشروع أولاً لإنشاء جلسة شجرة عمل معزولة","broadcastToAgents":"إرسال رسالة إلى جميع الوكلاء"} } };
+
+const arStatusTranslations = {
+  statusbar: {
+    "terminal": "صالة",
+    "editor": "محرر",
+    "spaces": "المساحات",
+    "serial": "مسلسل",
+    "encoding": "ترميز UTF-8",
+    "line": "Ln",
+    "col": "العقيد",
+    "selection": "سيل: {عدد}",
+    "positionTooltip": "اذهب إلى السطر",
+    "selectionTooltip": "{characters} أحرف مختارة عبر {lines} أسطر و{ranges} اختيارات",
+    "spacesCount": "المسافات: {عدد}",
+    "lspActive": "LSP: نشط",
+    "lspOff": "LSP: معطل",
+    "aiIdle": "منظمة العفو الدولية: جاهز",
+    "aiBusy": "علي: أفكر...",
+    "privateHidden": "خاص: مخفي عن الذكاء الاصطناعي",
+    "privateHiddenTooltip": "لا يستطيع الذكاء الاصطناعي رؤية مخرجات هذه المحطة. استخدمه للأسرار أو SSH أو أي شيء لا تريد إرساله إلى النموذج.",
+    "arcade": "أركيد (باك مان والأفعى)",
+    "arcadeLabel": "أركيد",
+    "arcadeWindow": "نافذة آركيد البسيطة",
+    "arcadeRestart": "إعادة التشغيل (مسافة / أدخل)",
+    "arcadeClose": "إغلاق (خروج)",
+    "arcadeGameOver": "انتهت اللعبة",
+    "arcadeFinalScore": "النتيجة النهائية:",
+    "arcadePlayAgain": "العب مرة أخرى (أدخل)",
+    "arcadeControlsHint": "استخدم مفاتيح الأسهم أو WASD للعب",
+    "arcadeEscHint": "خروج",
+    "notesBoard": "الملاحظات ولوحة كانبان",
+    "notesBoardLabel": "الملاحظات والمجلس",
+    "quota": {
+        "widgetTitle": "حصص الذكاء الاصطناعي واستخدام الرمز المميز",
+        "widgetLabel": "حصص الذكاء الاصطناعي",
+        "header": "حصص الذكاء الاصطناعي والاستهلاك",
+        "today": "اليوم: {التكلفة}",
+        "resets": "إعادة الضبط: {الوقت}",
+        "tokensSummary": "في: {inTokens} · خارج: {outTokens}",
+        "costUsd": "${التكلفة}"
+    },
+    "uptime": {
+        "title": "نشاط وحدة التحكم",
+        "subtitle": "وقت الشاشة والإحصائيات الأسبوعية",
+        "activeNow": "نشط الآن",
+        "today": "اليوم",
+        "thisWeek": "هذا الاسبوع",
+        "dailyAvg": "المتوسط ​​اليومي",
+        "weeklyChart": "النشاط الأسبوعي",
+        "topPaths": "مساحات العمل الأكثر نشاطا",
+        "takeBreak": "تذكر أن تأخذ استراحة قصيرة لتريح عينيك وتمتد!",
+        "noPaths": "لم يتم تسجيل أي نشاط في مساحة العمل حتى الآن"
+    },
+    "cwd": {
+        "noDirectory": "لا يوجد دليل",
+        "home": "بيت",
+        "loading": "تحميل…",
+        "noSubfolders": "لا توجد مجلدات فرعية",
+        "showHidden": "إظهار المجلدات المخفية"
+    },
+    "stacks": {
+        "typescript": "تايب سكريبت / العقدة",
+        "javascript": "جافا سكريبت",
+        "python": "بايثون",
+        "rust": "الصدأ",
+        "go": "يذهب",
+        "php": "PHP",
+        "cCpp": "ج/سي++",
+        "ruby": "روبي",
+        "zig": "منعرج",
+        "swift": "سويفت",
+        "vue": "Vue.js",
+        "svelte": "ممشوق",
+        "docker": "عامل ميناء",
+        "general": "عام"
+    }
+}
+};
+
+const arThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "سمة Voktty موحدة مع اختلافات الألوان المنسقة.",
+      "win31": "واجهة Windows 3.1 كلاسيكية 16 بت مع كروم مشطوف ثلاثي الأبعاد وشريط عنوان باللون الأزرق الداكن وزوايا مربعة.",
+      "mac1": "واجهة أصلية أحادية اللون 1 بت لعام 1984 مع شريط عنوان مقلم ومربع إغلاق سريع.",
+      "kde": "سطح المكتب الكلاسيكي KDE 2/3 مع شريط عنوان متدرج أزرق وعناصر تحكم Qt مشطوفة.",
+      "commander-blue": "قائد ملفات DOS الكلاسيكي ثنائي الجزء مع حدود بحرية عميقة وحدود سماوية ولهجات صفراء.",
+      "phosphor-crt": "محطة CRT أحادية اللون مع فوسفور متوهج وخطوط مسح ضوئي وإطار منحني.",
+      "whistler-bliss": "سطح مكتب Y2K مزود بأشرطة عناوين منحنية باللون الأزرق الملكي ولمسات Start باللون الزمردي وعناصر تحكم لامعة.",
+      "boing-workbench": "محطة عمل إبداعية أسطورية لعام 1985 مع اللون الأزرق الياقوتي والتوباز العنبر والأبيض والسج.",
+      "cubestep": "محطة عمل مكعبة سوداء مميزة تتميز ببلاطات مشطوفة من التيتانيوم وأشرطة عناوين عائمة وتباين عالٍ.",
+      "yellowtab-os": "سطح مكتب سريع الاستجابة مع عناوين نوافذ ذات علامات تبويب صفراء مميزة وكروم أزرق رمادي نظيف.",
+      "solar-cde": "محطة عمل Unix لبيئة سطح المكتب الشائعة مع لوحات هندسية وألواح عميقة ولمسات برقوقية.",
+      "humanity-2006": "سطح مكتب بني إسبرسو دافئ وبرتقالي مشع مستوحى من الإصدار الكلاسيكي 2006 جنوم 2.",
+      "pocket-89": "شاشة LCD خضراء بأربعة ألوان محمولة باليد مع تباين البكسل والحنين إلى الألعاب القديمة.",
+      "pilot-pda": "منظم قلم كلاسيكي أحادي اللون مزود بشاشة LCD باللون الرمادي الزيتوني وأزرار مدمجة وصفوف قائمة.",
+      "clickwheel-pod": "مشغل من الفولاذ المصقول والخزف الأبيض مع لمسات سماوية وطباعة بلا مدمجة.",
+      "station-94": "وحدة تحكم كلاسيكية 32 بت مع غلاف رمادي غير لامع وبطاقة ذاكرة نيلي ورموز حركة هندسية.",
+      "audioamp-classic": "مشغل MP3 أسطوري من التسعينيات مزود بالتيتانيوم المصقول وأرقام LED خضراء ومتخيل الطيف.",
+      "cybercafe-99": "مقهى إنترنت يبعث على الحنين إلى عام 1999 مع اتصال هاتفي باللون الأزرق المخضر واختصارات سطح المكتب وجماليات الويب القديمة.",
+      "tiger-aqua": "سطح مكتب من الألومنيوم المصقول لعام 2005 مزود بأزرار كبسولة لامعة وعمق ظل سلس.",
+      "media-station-9": "مشغل وسائط كوبالت كهربائي مع منحنيات قرصية لامعة ومؤشرات تشغيل متوهجة ولمسات سماوية.",
+      "instant-chat-7": "جمالية الرسائل في منتصف العقد الأول من القرن الحادي والعشرين مع رؤوس باللون الأزرق السماوي، وبطاقات اللمس، ولهجات الحضور عبر الإنترنت.",
+      "bbs-dialup": "لوحة إعلانات من الثمانينيات تحتوي على خلايا أحرف ANSI وقوائم ASCII وألوان القياس عن بعد للمودم."
+}
+  }
+};
+
+const arCommonTranslations = { common: { noResults: "لم يتم العثور على نتائج" } };
+
+const arShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "إرسال رسالة إلى جميع الوكلاء" } } };
+
+const arOnboardingTranslations = { onboarding: {"shortcutSplitRight":"انقسام الحق","shortcutSplitDown":"انقسمت","shortcutQuickOpen":"فتح سريع","shortcutClearTerminal":"مسح المحطة","shortcutSidebar":"تبديل الشريط الجانبي","shortcutZenMode":"وضع زين"} };
+
+const arGitTranslations = { git: { githubDraft: "مسودة" } };
+
+export const ar: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(arCoveragePatch, arGitTranslations), arOnboardingTranslations), arShortcutTranslations), arCommonTranslations), arCommandPaletteTranslations), arWorkbenchTranslations), arStatusTranslations), arThemeTranslations), {
   common: {
     paste: "لصق",
   },

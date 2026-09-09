@@ -4379,7 +4379,63 @@ const deCoveragePatch: TranslationSchema = mergeLocale(deCoverageBase, {
   },
 });
 
-export const de: TranslationSchema = mergeLocale(deCoveragePatch, {
+const deWorkbenchTranslations = { workbench: { dapRequestFailed: "Die Debug-Adapteranforderung ist fehlgeschlagen" } };
+
+const deCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"Neue Agentensitzung im isolierten Arbeitsbaum","worktreeNeedsProject":"Öffnen Sie zunächst ein Projekt, um eine isolierte Arbeitsbaumsitzung zu erstellen","broadcastToAgents":"Senden Sie eine Nachricht an alle Agenten"} } };
+
+const deStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "Arcade Mini-Fenster",
+    "arcadeRestart": "Neustart (Leertaste / Eingabetaste)",
+    "arcadeClose": "Schließen (Esc)",
+    "arcadeGameOver": "Spiel vorbei",
+    "arcadeFinalScore": "Endergebnis:",
+    "arcadePlayAgain": "Nochmals abspielen (Eingabe)",
+    "arcadeControlsHint": "Verwenden Sie zum Spielen die Pfeiltasten oder WASD",
+    "arcadeEscHint": "Esc",
+    "notesBoard": "Notizen und Kanban-Board",
+    "notesBoardLabel": "Notizen und Tafel"
+}
+};
+
+const deThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "Einheitliches Voktty-Theme mit kuratierten Farbvariationen.",
+      "win31": "Klassische 16-Bit-Windows 3.1-Oberfläche mit abgeschrägtem 3D-Chrom, marineblauer Titelleiste und eckigen Ecken.",
+      "mac1": "Authentische 1-Bit-Monochrom-Schnittstelle von 1984 mit Nadelstreifen-Titelleiste und Go-Away-Close-Box.",
+      "kde": "Klassischer KDE 2/3-Desktop mit blauer Titelleiste mit Farbverlauf und abgeschrägten Qt-Steuerelementen.",
+      "commander-blue": "Klassischer DOS-Dual-Pane-File-Commander mit tiefem Marineblau, cyanfarbenen Rändern und gelben Akzenten.",
+      "phosphor-crt": "Monochromes CRT-Terminal mit leuchtendem Phosphor, Scanlinien und gebogenem Rahmen.",
+      "whistler-bliss": "Y2K-Desktop mit königsblauen, geschwungenen Titelleisten, smaragdgrünen Startakzenten und glänzenden Bedienelementen.",
+      "boing-workbench": "Legendäre Kreativ-Workstation von 1985 mit Saphirblau, Bernsteintopas, Weiß und Obsidian.",
+      "cubestep": "Kultige Black-Cube-Workstation mit abgeschrägten Titankacheln, schwebenden Titelleisten und hohem Kontrast.",
+      "yellowtab-os": "Reaktionsschneller Desktop mit charakteristischen gelben Fenstertiteln und klarem blaugrauem Chrom.",
+      "solar-cde": "Gemeinsame Desktop-Umgebung Unix-Workstation mit geometrischen Panels, tiefem Schiefer und pflaumenfarbenen Akzenten.",
+      "humanity-2006": "Warmer Espressobraun- und strahlender Orange-Desktop, inspiriert vom Klassiker GNOME 2 aus dem Jahr 2006.",
+      "pocket-89": "Vierfarbiger grüner LCD-Handheld mit Pixelkontrast und Retro-Gaming-Nostalgie.",
+      "pilot-pda": "Klassischer monochromer Stylus-Organizer mit olivgrauem LCD, kompakten Tasten und Listenzeilen.",
+      "clickwheel-pod": "Player aus poliertem Stahl und weißem Porzellan mit Cyan-Akzenten und kompakter typografischer Schrift.",
+      "station-94": "Klassische 32-Bit-Konsole mit mattgrauem Gehäuse, Speicherkarten-Indigo und geometrischen Aktionssymbolen.",
+      "audioamp-classic": "Legendärer MP3-Player aus den 90ern mit gebürstetem Titan, grünen LED-Ziffern und einem Spektrum-Visualizer.",
+      "cybercafe-99": "Nostalgisches Internetcafé von 1999 mit blaugrüner Einwahl, Desktop-Verknüpfungen und Retro-Webästhetik.",
+      "tiger-aqua": "2005-Desktop aus gebürstetem Aluminium mit glänzenden Kapseltasten und sanfter Schattentiefe.",
+      "media-station-9": "Elektrischer kobaltfarbener Mediaplayer mit glänzenden Pillenkurven, leuchtenden Wiedergabeanzeigen und cyanfarbenen Akzenten.",
+      "instant-chat-7": "Messenger-Ästhetik aus der Mitte der 2000er Jahre mit himmelblauen Kopfzeilen, taktilen Karten und Online-Präsenzakzenten.",
+      "bbs-dialup": "Schwarzes Brett aus den 1980er Jahren mit ANSI-Zeichenfeldern, ASCII-Menüs und modernen Telemetriefarben."
+}
+  }
+};
+
+const deCommonTranslations = { common: { noResults: "Keine Ergebnisse gefunden" } };
+
+const deShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "Senden Sie eine Nachricht an alle Agenten" } } };
+
+const deOnboardingTranslations = { onboarding: {"shortcutSplitRight":"Rechts teilen","shortcutSplitDown":"Aufteilen","shortcutQuickOpen":"Schnell öffnen","shortcutClearTerminal":"Terminal löschen","shortcutSidebar":"Seitenleiste umschalten","shortcutZenMode":"Zen-Modus"} };
+
+const deGitTranslations = { git: { githubDraft: "Entwurf" } };
+
+export const de: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(deCoveragePatch, deGitTranslations), deOnboardingTranslations), deShortcutTranslations), deCommonTranslations), deCommandPaletteTranslations), deWorkbenchTranslations), deStatusTranslations), deThemeTranslations), {
   commandPalette: {
     commands: {
       openTasksPanel: "Ansicht: Aufgaben",

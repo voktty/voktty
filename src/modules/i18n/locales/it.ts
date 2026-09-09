@@ -4481,7 +4481,63 @@ const itCoveragePatch: TranslationSchema = mergeLocale(itCoverageBase, {
   },
 });
 
-export const it: TranslationSchema = mergeLocale(itCoveragePatch, {
+const itWorkbenchTranslations = { workbench: { dapRequestFailed: "Richiesta di debug dell'adattatore non riuscita" } };
+
+const itCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"Nuova sessione dell'agente nell'albero di lavoro isolato","worktreeNeedsProject":"Apri prima un progetto per creare una sessione isolata dell'albero di lavoro","broadcastToAgents":"Invia un messaggio a tutti gli agenti"} } };
+
+const itStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "Mini finestra arcade",
+    "arcadeRestart": "Riavvia (Spazio/Invio)",
+    "arcadeClose": "Chiudi (Esc)",
+    "arcadeGameOver": "Game Over",
+    "arcadeFinalScore": "Punteggio finale:",
+    "arcadePlayAgain": "Riproduci di nuovo (Invio)",
+    "arcadeControlsHint": "Usa i tasti freccia o WASD per giocare",
+    "arcadeEscHint": "Esc",
+    "notesBoard": "Note e bacheca Kanban",
+    "notesBoardLabel": "Note e lavagna"
+}
+};
+
+const itThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "Tema Voktty unificato con variazioni di colore curate.",
+      "win31": "Classica skin per Windows 3.1 a 16 bit con cromatura smussata 3D, barra del titolo blu scuro e angoli squadrati.",
+      "mac1": "Autentica interfaccia monocromatica a 1 bit del 1984 con barra del titolo gessata e casella di chiusura.",
+      "kde": "Desktop KDE 2/3 classico con barra del titolo sfumata blu e controlli Qt smussati.",
+      "commander-blue": "Classico file comandante DOS a doppio riquadro con blu intenso, bordi ciano e accenti gialli.",
+      "phosphor-crt": "Terminale CRT monocromatico con fosforo luminoso, linee di scansione e cornice curva.",
+      "whistler-bliss": "Desktop Y2K con barre del titolo curve blu reale, accenti Start color smeraldo e controlli lucidi.",
+      "boing-workbench": "Leggendaria workstation creativa del 1985 con blu zaffiro, topazio ambrato, bianco e ossidiana.",
+      "cubestep": "Iconica workstation a cubo nero con piastrelle in titanio smussate, barre del titolo fluttuanti e contrasto elevato.",
+      "yellowtab-os": "Desktop reattivo con titoli delle finestre con linguetta gialla e cromatura blu-grigio pulita.",
+      "solar-cde": "Workstation Unix per l'ambiente desktop comune con pannelli geometrici, ardesia profonda e accenti prugna.",
+      "humanity-2006": "Desktop marrone caffè caldo e arancione brillante ispirato al classico GNOME 2 del 2006.",
+      "pocket-89": "Palmare LCD verde a quattro tonalità con contrasto pixel e nostalgia dei giochi retrò.",
+      "pilot-pda": "Classico organizer con stilo monocromatico con display LCD grigio oliva, pulsanti compatti e righe di elenco.",
+      "clickwheel-pod": "Lettore in acciaio lucido e porcellana bianca con riflessi ciano e tipografia sans compatta.",
+      "station-94": "Classica console a 32 bit con case grigio opaco, scheda di memoria indaco e simboli di azione geometrici.",
+      "audioamp-classic": "Leggendario lettore MP3 degli anni '90 con titanio spazzolato, cifre LED verdi e visualizzatore di spettro.",
+      "cybercafe-99": "Internet café nostalgico del 1999 con connessione remota verde acqua, scorciatoie sul desktop ed estetica web retrò.",
+      "tiger-aqua": "Desktop in alluminio spazzolato del 2005 con pulsanti della capsula lucidi e profondità di ombra uniforme.",
+      "media-station-9": "Lettore multimediale elettrico in cobalto con curve lucide, indicatori di riproduzione luminosi e accenti ciano.",
+      "instant-chat-7": "Estetica da messenger della metà degli anni 2000 con intestazioni azzurre, schede tattili e accenti di presenza online.",
+      "bbs-dialup": "Bacheca degli anni '80 con celle di caratteri ANSI, menu ASCII e colori di telemetria del modem."
+}
+  }
+};
+
+const itCommonTranslations = { common: { noResults: "Nessun risultato trovato" } };
+
+const itShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "Invia un messaggio a tutti gli agenti" } } };
+
+const itOnboardingTranslations = { onboarding: {"shortcutSplitRight":"Dividi a destra","shortcutSplitDown":"Diviso","shortcutQuickOpen":"Apertura rapida","shortcutClearTerminal":"Cancella terminale","shortcutSidebar":"Attiva/disattiva la barra laterale","shortcutZenMode":"Modalità Zen"} };
+
+const itGitTranslations = { git: { githubDraft: "bozza" } };
+
+export const it: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(itCoveragePatch, itGitTranslations), itOnboardingTranslations), itShortcutTranslations), itCommonTranslations), itCommandPaletteTranslations), itWorkbenchTranslations), itStatusTranslations), itThemeTranslations), {
   common: {
     paste: "Incolla",
   },

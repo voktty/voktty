@@ -4170,7 +4170,63 @@ const hiCoveragePatch: TranslationSchema = mergeLocale(hiCoverageBase, {
   },
 });
 
-export const hi: TranslationSchema = mergeLocale(hiCoveragePatch, {
+const hiWorkbenchTranslations = { workbench: { dapRequestFailed: "डिबग एडाप्टर अनुरोध विफल रहा" } };
+
+const hiCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"पृथक वर्कट्री में नया एजेंट सत्र","worktreeNeedsProject":"एक पृथक वर्कट्री सत्र बनाने के लिए पहले एक प्रोजेक्ट खोलें","broadcastToAgents":"सभी एजेंटों को संदेश भेजें"} } };
+
+const hiStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "आर्केड मिनी विंडो",
+    "arcadeRestart": "पुनरारंभ करें (स्पेस / एंटर करें)",
+    "arcadeClose": "बंद करें (Esc)",
+    "arcadeGameOver": "खेल खत्म",
+    "arcadeFinalScore": "अंतिम स्कोर:",
+    "arcadePlayAgain": "पुनः चलाएँ (प्रवेश करें)",
+    "arcadeControlsHint": "खेलने के लिए तीर कुंजी या WASD का उपयोग करें",
+    "arcadeEscHint": "ईएससी",
+    "notesBoard": "नोट्स और कानबन बोर्ड",
+    "notesBoardLabel": "नोट्स और बोर्ड"
+}
+};
+
+const hiThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "क्यूरेटेड रंग विविधताओं के साथ एकीकृत वोक्टी थीम।",
+      "win31": "3डी बेवेल्ड क्रोम, नेवी टाइटलबार और चौकोर कोनों के साथ क्लासिक 16-बिट विंडोज 3.1 स्किन।",
+      "mac1": "पिनस्ट्रिप्ड टाइटलबार और गो-अवे क्लोज बॉक्स के साथ प्रामाणिक 1984 1-बिट मोनोक्रोम इंटरफ़ेस।",
+      "kde": "नीले ग्रेडिएंट टाइटलबार और बेवेल्ड क्यूटी नियंत्रण के साथ क्लासिक केडीई 2/3 डेस्कटॉप।",
+      "commander-blue": "गहरे नेवी, सियान बॉर्डर और पीले रंग के एक्सेंट के साथ क्लासिक डॉस डुअल-पेन फ़ाइल कमांडर।",
+      "phosphor-crt": "चमकते फॉस्फोर, स्कैनलाइन और घुमावदार बेज़ल के साथ मोनोक्रोम सीआरटी टर्मिनल।",
+      "whistler-bliss": "शाही नीले घुमावदार टाइटलबार, पन्ना स्टार्ट एक्सेंट और चमकदार नियंत्रण के साथ Y2K डेस्कटॉप।",
+      "boing-workbench": "नीलमणि नीले, एम्बर पुखराज, सफेद और ओब्सीडियन के साथ प्रसिद्ध 1985 रचनात्मक कार्य केंद्र।",
+      "cubestep": "बेवेल्ड टाइटेनियम टाइल्स, फ्लोटिंग टाइटलबार और उच्च कंट्रास्ट के साथ प्रतिष्ठित ब्लैक क्यूब वर्कस्टेशन।",
+      "yellowtab-os": "सिग्नेचर येलो-टैब विंडो टाइटल और साफ नीले-ग्रे क्रोम के साथ रिस्पॉन्सिव डेस्कटॉप।",
+      "solar-cde": "ज्यामितीय पैनलों, गहरे स्लेट और प्लम एक्सेंट के साथ सामान्य डेस्कटॉप पर्यावरण यूनिक्स वर्कस्टेशन।",
+      "humanity-2006": "क्लासिक 2006 गनोम 2 से प्रेरित गर्म एस्प्रेसो ब्राउन और दीप्तिमान नारंगी डेस्कटॉप।",
+      "pocket-89": "पिक्सेल कंट्रास्ट और रेट्रो गेमिंग नॉस्टेल्जिया के साथ चार-टोन हरा एलसीडी हैंडहेल्ड।",
+      "pilot-pda": "ऑलिव-ग्रे एलसीडी, कॉम्पैक्ट बटन और सूची पंक्तियों के साथ क्लासिक मोनोक्रोम स्टाइलस आयोजक।",
+      "clickwheel-pod": "सियान हाइलाइट्स और कॉम्पैक्ट बिना टाइपोग्राफी के साथ पॉलिश स्टील और सफेद चीनी मिट्टी के खिलाड़ी।",
+      "station-94": "मैट ग्रे केसिंग, मेमोरी-कार्ड इंडिगो और ज्यामितीय एक्शन प्रतीकों के साथ क्लासिक 32-बिट कंसोल।",
+      "audioamp-classic": "ब्रश्ड टाइटेनियम, हरे एलईडी अंक और एक स्पेक्ट्रम विज़ुअलाइज़र के साथ 90 के दशक का प्रसिद्ध एमपी3 प्लेयर।",
+      "cybercafe-99": "डायल-अप टील, डेस्कटॉप शॉर्टकट और रेट्रो वेब सौंदर्यशास्त्र के साथ उदासीन 1999 इंटरनेट कैफे।",
+      "tiger-aqua": "चमकदार कैप्सूल बटन और चिकनी ड्रॉप-शैडो गहराई के साथ 2005 ब्रश एल्यूमीनियम डेस्कटॉप।",
+      "media-station-9": "चमकदार पिल कर्व्स, चमकते प्लेबैक संकेतक और सियान एक्सेंट के साथ इलेक्ट्रिक कोबाल्ट मीडिया प्लेयर।",
+      "instant-chat-7": "2000 के दशक के मध्य में आकाश-नीले हेडर, स्पर्श कार्ड और ऑनलाइन उपस्थिति लहजे के साथ मैसेंजर सौंदर्य।",
+      "bbs-dialup": "एएनएसआई कैरेक्टर सेल, एएससीआईआई मेनू और मॉडेम टेलीमेट्री रंगों के साथ 1980 के दशक का बुलेटिन बोर्ड।"
+}
+  }
+};
+
+const hiCommonTranslations = { common: { noResults: "कोई परिणाम नहीं मिला" } };
+
+const hiShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "सभी एजेंटों को संदेश भेजें" } } };
+
+const hiOnboardingTranslations = { onboarding: {"shortcutSplitRight":"दाएँ विभाजित करें","shortcutSplitDown":"विभाजित हो जाओ","shortcutQuickOpen":"त्वरित खुला","shortcutClearTerminal":"साफ़ टर्मिनल","shortcutSidebar":"साइडबार टॉगल करें","shortcutZenMode":"ज़ेन मोड"} };
+
+const hiGitTranslations = { git: { githubDraft: "मसौदा" } };
+
+export const hi: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(hiCoveragePatch, hiGitTranslations), hiOnboardingTranslations), hiShortcutTranslations), hiCommonTranslations), hiCommandPaletteTranslations), hiWorkbenchTranslations), hiStatusTranslations), hiThemeTranslations), {
   common: {
     paste: "चिपकाएँ",
   },

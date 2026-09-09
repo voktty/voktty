@@ -4319,7 +4319,63 @@ const koCoveragePatch: TranslationSchema = mergeLocale(koCoverageBase, {
   },
 });
 
-export const ko: TranslationSchema = mergeLocale(koCoveragePatch, {
+const koWorkbenchTranslations = { workbench: { dapRequestFailed: "디버그 어댑터 요청이 실패했습니다." } };
+
+const koCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"격리된 작업 트리의 새 에이전트 세션","worktreeNeedsProject":"격리된 작업 트리 세션을 만들려면 먼저 프로젝트를 엽니다.","broadcastToAgents":"모든 상담원에게 메시지 보내기"} } };
+
+const koStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "아케이드 미니 창문",
+    "arcadeRestart": "다시 시작(스페이스바/Enter)",
+    "arcadeClose": "닫기(Esc)",
+    "arcadeGameOver": "게임 오버",
+    "arcadeFinalScore": "최종 점수:",
+    "arcadePlayAgain": "다시 재생(Enter)",
+    "arcadeControlsHint": "화살표 키나 WASD를 사용하여 플레이하세요",
+    "arcadeEscHint": "Esc",
+    "notesBoard": "메모 및 칸반 보드",
+    "notesBoardLabel": "메모 및 보드"
+}
+};
+
+const koThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "엄선된 색상 변형이 포함된 통합 Voktty 테마입니다.",
+      "win31": "3D 베벨 크롬, 남색 제목 표시줄 및 사각형 모서리를 갖춘 클래식 16비트 Windows 3.1 스킨입니다.",
+      "mac1": "핀스트라이프 제목 표시줄과 사라지는 닫기 상자를 갖춘 정통 1984년 1비트 흑백 인터페이스입니다.",
+      "kde": "파란색 그라데이션 제목 표시줄과 경사진 Qt 컨트롤이 있는 클래식 KDE 2/3 데스크탑입니다.",
+      "commander-blue": "진한 남색, 청록색 테두리 및 노란색 액센트가 있는 클래식 DOS 이중 창 파일 커맨더입니다.",
+      "phosphor-crt": "빛나는 형광체, 스캔라인, 곡선형 베젤을 갖춘 흑백 CRT 터미널입니다.",
+      "whistler-bliss": "감청색 곡선 제목 표시줄, 에메랄드색 시작 액센트 및 광택 컨트롤을 갖춘 Y2K 데스크탑입니다.",
+      "boing-workbench": "사파이어 블루, 앰버 토파즈, 화이트, 흑요석으로 장식된 전설적인 1985년 크리에이티브 워크스테이션입니다.",
+      "cubestep": "경사진 티타늄 타일, 떠다니는 제목 표시줄, 고대비를 갖춘 상징적인 블랙 큐브 워크스테이션입니다.",
+      "yellowtab-os": "시그니처 노란색 탭 창 제목과 깔끔한 ​​청회색 크롬이 적용된 반응형 데스크탑입니다.",
+      "solar-cde": "기하학적 패널, 딥 슬레이트, 자두색 액센트를 갖춘 공통 데스크탑 환경 Unix 워크스테이션입니다.",
+      "humanity-2006": "클래식 2006 GNOME 2에서 영감을 받은 따뜻한 에스프레소 브라운과 빛나는 오렌지 데스크탑입니다.",
+      "pocket-89": "픽셀 대비와 복고풍 게임 향수를 선사하는 4톤 그린 LCD 핸드헬드입니다.",
+      "pilot-pda": "올리브 그레이 LCD, 소형 버튼, 목록 행을 갖춘 클래식 흑백 스타일러스 정리함입니다.",
+      "clickwheel-pod": "청록색 하이라이트와 콤팩트한 산세 타이포그래피를 갖춘 광택 처리된 강철 및 백자 플레이어입니다.",
+      "station-94": "무광택 회색 케이스, 메모리 카드 인디고 및 기하학적 동작 기호가 있는 클래식 32비트 콘솔입니다.",
+      "audioamp-classic": "브러시드 티타늄, 녹색 LED 숫자 및 스펙트럼 시각화 기능을 갖춘 전설적인 90년대 MP3 플레이어입니다.",
+      "cybercafe-99": "전화 접속 청록색, 바탕 화면 바로 가기 및 복고풍 웹 미학을 갖춘 향수를 불러일으키는 1999년 인터넷 카페입니다.",
+      "tiger-aqua": "광택 있는 캡슐 버튼과 부드러운 그림자 깊이를 갖춘 2005년 브러시드 알루미늄 데스크탑입니다.",
+      "media-station-9": "광택 있는 알약 곡선, 빛나는 재생 표시기 및 청록색 액센트가 있는 전기 코발트 미디어 플레이어입니다.",
+      "instant-chat-7": "하늘색 헤더, 촉각 카드, 온라인 존재감을 강조하는 2000년대 중반 메신저 미학입니다.",
+      "bbs-dialup": "ANSI 문자 셀, ASCII 메뉴 및 모뎀 원격 측정 색상이 포함된 1980년대 게시판."
+}
+  }
+};
+
+const koCommonTranslations = { common: { noResults: "검색결과가 없습니다" } };
+
+const koShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "모든 상담원에게 메시지 보내기" } } };
+
+const koOnboardingTranslations = { onboarding: {"shortcutSplitRight":"오른쪽 분할","shortcutSplitDown":"분할","shortcutQuickOpen":"빠른 열기","shortcutClearTerminal":"터미널 지우기","shortcutSidebar":"사이드바 전환","shortcutZenMode":"젠 모드"} };
+
+const koGitTranslations = { git: { githubDraft: "초안" } };
+
+export const ko: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(koCoveragePatch, koGitTranslations), koOnboardingTranslations), koShortcutTranslations), koCommonTranslations), koCommandPaletteTranslations), koWorkbenchTranslations), koStatusTranslations), koThemeTranslations), {
   common: {
     paste: "붙여넣기",
   },
