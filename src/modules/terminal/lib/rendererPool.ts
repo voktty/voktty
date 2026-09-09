@@ -49,7 +49,7 @@ import { predictTerminalSuggestions } from "./terminalPredictor";
 import { historyRecord } from "../block/lib/history";
 import { SHORTCUTS, matchBinding } from "@/modules/shortcuts";
 import type { WorkspaceEnv } from "@/modules/workspace";
-import { IS_WINDOWS } from "@/lib/platform";
+import { IS_ANDROID, IS_WINDOWS } from "@/lib/platform";
 
 const PTY_RESIZE_DEBOUNCE_MS = 256;
 const SNAPSHOT_SCROLLBACK_CAP = 5_000;
@@ -503,9 +503,9 @@ function createSlot(): Slot {
     tmuxCopyModeActive: false,
   };
 
-  // Some WKWebView builds bypass xterm's composition events. The pure bridge
+  // Mobile WebViews can bypass xterm's composition events. The pure bridge
   // repairs that path and stands down when native composition is observed.
-  if (IS_MAC) {
+  if (IS_MAC || IS_ANDROID) {
     const ta = slot.term.textarea;
     if (ta) {
       const imeState = slot.imeState;

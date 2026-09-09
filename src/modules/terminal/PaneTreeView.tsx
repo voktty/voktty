@@ -48,6 +48,12 @@ export const PaneTreeView = memo(function PaneTreeView(props: Props) {
     const b = getBundle(node.id);
     return (
       <section
+        onPointerDownCapture={() => {
+          // Touch devices do not consistently synthesize mousedown before
+          // their IME focus path. Keep the terminal targeted by a tap as
+          // the active pane before its input receives that touch.
+          onFocusLeaf(node.id);
+        }}
         onMouseDownCapture={() => {
           onFocusLeaf(node.id);
         }}
