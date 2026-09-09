@@ -8,7 +8,7 @@ import {
   Undo2,
   UnfoldVertical,
 } from "../chrome/icons";
-import { useTranslation } from "@/modules/i18n";
+import { t, useTranslation } from "@/modules/i18n";
 import {
   memo,
   useCallback,
@@ -165,7 +165,9 @@ export function UnifiedDiffView({
 
   if (files.length === 0) {
     return (
-      <p className="px-4 py-6 text-[13px] text-content/45">No file changes</p>
+      <p className="px-4 py-6 text-[13px] text-content/45">
+        {t("harness.chrome.noFileChanges")}
+      </p>
     );
   }
 
@@ -220,8 +222,7 @@ export function UnifiedDiffView({
       >
         {truncated ? (
           <p className="px-3 py-3 text-[12px] text-content/45">
-            Diff is too large to display in full. File list is shown without
-            patches.
+            {t("harness.chrome.diffTooLargeFull")}
           </p>
         ) : null}
         <div
@@ -488,10 +489,10 @@ function FileBody({
   onReveal: (foldId: string, direction: "up" | "down" | "all") => void;
   onStageHunk?: (id: string, pos: number) => void;
 }) {
-  if (file.binary) return <EmptyBody>Binary file changed</EmptyBody>;
-  if (file.tooLarge) return <EmptyBody>Diff is too large to display</EmptyBody>;
+  if (file.binary) return <EmptyBody>{t("harness.chrome.binaryFileChanged")}</EmptyBody>;
+  if (file.tooLarge) return <EmptyBody>{t("harness.chrome.diffTooLarge")}</EmptyBody>;
   if (file.emptyMessage) return <EmptyBody>{file.emptyMessage}</EmptyBody>;
-  if (file.blocks.length === 0) return <EmptyBody>No textual diff</EmptyBody>;
+  if (file.blocks.length === 0) return <EmptyBody>{t("harness.chrome.noTextualDiff")}</EmptyBody>;
 
   return (
     <VirtualRows
