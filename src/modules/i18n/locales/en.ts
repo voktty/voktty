@@ -4576,6 +4576,8 @@ export const en = {
       addToGroup: "Add to {name}",
       removeFromGroup: "Remove from group",
       couldntLoadSessions: "Couldn't load sessions",
+      couldntLoadSessionChanges: "Couldn't load session changes",
+      noSessionChanges: "No session changes",
       addProjectLogo: "Add project logo",
       changeProjectLogo: "Change project logo",
       projectLogo: "Project logo",

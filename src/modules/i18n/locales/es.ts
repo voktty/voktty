@@ -4672,6 +4672,8 @@ export const es: TranslationSchema = {
       addToGroup: "Añadir a {name}",
       removeFromGroup: "Quitar del grupo",
       couldntLoadSessions: "No se pudieron cargar las sesiones",
+      couldntLoadSessionChanges: "No se pudieron cargar los cambios de sesión",
+      noSessionChanges: "No hay cambios de sesión",
       addProjectLogo: "Añadir logo del proyecto",
       changeProjectLogo: "Cambiar logo del proyecto",
       projectLogo: "Logo del proyecto",
