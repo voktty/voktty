@@ -925,6 +925,17 @@ export const en = {
       },
     },
   },
+  companion: {
+    mobile: {
+      title: "Mobile Companion",
+      description:
+        "Connect this phone to an approved Voktty desktop to follow active agent conversations.",
+      agentOnlyTitle: "Agent conversations only",
+      agentOnlyDescription:
+        "This app never opens the desktop workbench, terminals, SSH sessions, files, or editor.",
+      waitingForPairing: "Pairing with your desktop will be available here.",
+    },
+  },
   docker: {
     activeLabel: "Active",
     title: "Docker Services",
