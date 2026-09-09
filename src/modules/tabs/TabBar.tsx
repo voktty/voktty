@@ -94,6 +94,7 @@ import {
 import { TabDetailsHoverCard } from "./components/TabDetailsHoverCard";
 import { useTabContextMenuStore } from "./lib/tabContextMenuState";
 import { isSshOrRemoteSession, isSshTab, labelFor } from "./lib/tabLabel";
+import { preferredTabBarWidth } from "./lib/tabStripSizing";
 import {
   type TabProcessStatus,
   useTabProcessStatus,
@@ -314,46 +315,28 @@ export function TabBar({
     return () => ro.disconnect();
   }, [measurePill]);
 
-  // Whether every tab fits in the strip at full size. Driven by real layout
-  // instead of a tab-count guess or the app's overall window-width, so a
-  // handful of tabs crowded out by other header widgets collapse just as
-  // reliably as a genuinely large tab count does.
-  //
-  // Collapsing shrinks scrollWidth, so once collapsed we can't tell from the
-  // current DOM whether expanding would fit again — measuring that requires
-  // rendering expanded first. So a re-expand is only ever attempted right
-  // after an event that could plausibly free up room (the strip grew, or a
-  // tab closed); if it still doesn't fit, the very next measurement (before
-  // paint) collapses it straight back, so there's nothing to see flash.
+  // The tabs progressively shrink down to their CSS minimum. Report overflow
+  // only when even that compact layout no longer fits, so sibling header
+  // controls can yield their own space without causing resize oscillation.
   const [overflowing, setOverflowing] = useState(false);
-  const lastAvailableRef = useRef(0);
-  const lastItemCountRef = useRef(projectedItems.length);
 
   const checkFit = useCallback(() => {
-    const scroller = scrollRef.current;
     const list = listRef.current;
-    if (!scroller || !list) return;
-    const available = scroller.clientWidth;
-    const grew = available > lastAvailableRef.current;
-    const fewerItems = projectedItems.length < lastItemCountRef.current;
-    lastAvailableRef.current = available;
-    lastItemCountRef.current = projectedItems.length;
-
-    setOverflowing((prev) => {
-      if (prev) return !(grew || fewerItems);
-      return list.scrollWidth > available;
-    });
-  }, [projectedItems.length]);
+    if (!list) return;
+    setOverflowing(list.scrollWidth > list.clientWidth);
+  }, []);
 
   useLayoutEffect(() => {
     checkFit();
   });
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
+    const scroller = scrollRef.current;
+    const list = listRef.current;
+    if (!scroller || !list) return;
     const ro = new ResizeObserver(checkFit);
-    ro.observe(el);
+    ro.observe(scroller);
+    ro.observe(list);
     return () => ro.disconnect();
   }, [checkFit]);
 
@@ -419,6 +402,11 @@ export function TabBar({
 
   const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const workspaceDrag = useWorkspaceDrag();
+  const showOverflowControl = tabs.length > 5;
+  const preferredWidth = preferredTabBarWidth(
+    projectedItems.length,
+    showOverflowControl,
+  );
 
   useEffect(() => () => cancelWorkspaceDrag(), []);
 
@@ -427,7 +415,8 @@ export function TabBar({
       ref={scrollRef}
       data-tabs-header
       data-tauri-drag-region
-      className="group min-w-0 flex-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="group min-w-0 shrink overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={{ flexBasis: preferredWidth }}
     >
       <div className="flex w-full min-w-0 items-center gap-0.5">
         <Tabs
@@ -692,7 +681,7 @@ export function TabBar({
                       : undefined
                   }
                   className={cn(
-                    "group relative z-[1] h-6.5 min-w-[32px] max-w-[220px] flex-1 shrink basis-0 justify-between gap-1 rounded-md bg-transparent text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent px-1.5",
+                    "group relative z-[1] h-6.5 min-w-[32px] max-w-[220px] flex-1 shrink basis-0 justify-between gap-1 overflow-hidden rounded-md bg-transparent text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent px-1.5",
                     isNew && "voktty-tab-in",
                     isPulsing && "voktty-tab-finished-pulse",
                     cardDropTargetTabId === t.id &&
@@ -1236,13 +1225,13 @@ export function TabBar({
             {translate("spaces.extractMember")}
           </span>
         )}
-        {tabs.length > 5 && (
+        {showOverflowControl && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 title={translate("tabs.allOpenTabs")}
-                className="flex h-6.5 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                className="flex h-6.5 w-10 items-center justify-center gap-1 rounded-md px-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
               >
                 <HugeiconsIcon
                   icon={ArrowDown01Icon}
