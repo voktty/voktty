@@ -57,7 +57,7 @@ async function gitContext(root: string): Promise<DevelopmentGitContext | null> {
 async function waitForCheck(
   handle: number,
   timeoutMs: number,
-  options: ToolExecutionOptions,
+  options: ToolExecutionOptions<Record<string, unknown>>,
 ) {
   const started = Date.now();
   let offset = 0;

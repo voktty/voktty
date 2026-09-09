@@ -46,7 +46,7 @@ describe("run_development_check", () => {
     if (!execute) throw new Error("execute missing");
     const result = (await execute(
       { kind: "tests", command: "rm -rf /" },
-      { toolCallId: "call", messages: [] },
+      { toolCallId: "call", messages: [], context: {} },
     )) as { error?: string };
     expect(result.error).toContain("not a discovered workspace check");
     expect(nativeMock.shellBgSpawn).not.toHaveBeenCalled();
@@ -55,9 +55,10 @@ describe("run_development_check", () => {
   it("kills the background process when the agent run is cancelled", async () => {
     const controller = new AbortController();
     controller.abort();
-    const options: ToolExecutionOptions = {
+    const options: ToolExecutionOptions<Record<string, unknown>> = {
       toolCallId: "call",
       messages: [],
+      context: {},
       abortSignal: controller.signal,
     };
     const execute = buildDevelopmentTools(context()).run_development_check

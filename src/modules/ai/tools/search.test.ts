@@ -14,9 +14,10 @@ vi.mock("../lib/native", () => ({
 
 import { buildSearchTools } from "./search";
 
-const toolOptions: ToolExecutionOptions = {
+const toolOptions: ToolExecutionOptions<Record<string, unknown>> = {
   toolCallId: "tool-call",
   messages: [],
+  context: {},
 };
 
 function makeContext(root = "/workspace"): ToolContext {
