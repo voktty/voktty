@@ -222,7 +222,7 @@ export function PromptOutline({
     <div
       ref={rail}
       role="toolbar"
-      aria-label={t("harness.promptOutline")}
+      aria-label={t("harness.chrome.promptOutline")}
       aria-orientation="vertical"
       style={{ width: BAR_WIDTH_LIFTED_PX }}
       onMouseEnter={() => {
@@ -284,7 +284,7 @@ export function PromptOutline({
           gap={10}
           width={POPOVER_WIDTH}
           onDismiss={close}
-          aria-label={t("harness.promptPreview")}
+          aria-label={t("harness.chrome.promptPreview")}
           className="pointer-events-none flex flex-col gap-1.5 p-3 font-sans"
         >
           <p className="line-clamp-2 text-sm leading-snug text-content">
