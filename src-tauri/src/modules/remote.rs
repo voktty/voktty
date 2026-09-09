@@ -15,7 +15,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteRequest, RemoteResponse, METHOD_GIT_EXEC,
     METHOD_HANDSHAKE, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
-    METHOD_READ_FILE, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, PROTOCOL_VERSION,
+    METHOD_READ_FILE, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD,
+    METHOD_WATCH_TREE_REMOVE, PROTOCOL_VERSION,
     REMOTE_SHELL_INTEGRATION_VERSION,
 };
 
@@ -596,6 +597,24 @@ pub async fn remote_watch_remove(
     remote_watch_request(&state, session_id, METHOD_WATCH_REMOVE, paths).await
 }
 
+#[tauri::command]
+pub async fn remote_watch_add_tree(
+    state: State<'_, RemoteState>,
+    session_id: u64,
+    root: String,
+) -> Result<(), String> {
+    remote_watch_tree_request(&state, session_id, METHOD_WATCH_TREE_ADD, root).await
+}
+
+#[tauri::command]
+pub async fn remote_watch_remove_tree(
+    state: State<'_, RemoteState>,
+    session_id: u64,
+    root: String,
+) -> Result<(), String> {
+    remote_watch_tree_request(&state, session_id, METHOD_WATCH_TREE_REMOVE, root).await
+}
+
 impl RemoteState {
     fn next_request_id(&self, operation: &str) -> String {
         let id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
@@ -657,6 +676,28 @@ async fn remote_watch_request(
         }),
         method: method.to_string(),
         params: serde_json::json!({ "paths": paths }),
+    };
+    response_result(
+        remote_request_for_session(remote_session(state, session_id)?, request).await?,
+    )?;
+    Ok(())
+}
+
+async fn remote_watch_tree_request(
+    state: &RemoteState,
+    session_id: u64,
+    method: &str,
+    root: String,
+) -> Result<(), String> {
+    let request = RemoteRequest {
+        protocol: PROTOCOL_VERSION,
+        id: state.next_request_id(if method == METHOD_WATCH_TREE_ADD {
+            "watch-tree-add"
+        } else {
+            "watch-tree-remove"
+        }),
+        method: method.to_string(),
+        params: serde_json::json!({ "root": root }),
     };
     response_result(
         remote_request_for_session(remote_session(state, session_id)?, request).await?,

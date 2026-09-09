@@ -110,28 +110,41 @@ export function watchRemove(
 /**
  * Whole-tree watch for a repo root (git diff/review surfaces): every
  * non-skipped directory under it, kept current server-side as
- * subdirectories come and go. Local workspaces only for now — mirrors the
- * scope of `fs_watch_add_tree` itself.
+ * subdirectories come and go.
  */
 export function watchAddTree(
   root: string,
   workspace: WorkspaceEnv = currentWorkspaceEnv(),
 ): void {
-  if (workspace.kind !== "local" || isNetworkFilesystemPath(root)) return;
-  void invoke("fs_watch_add_tree", { root, workspace: LOCAL_WORKSPACE }).catch(
-    () => {},
-  );
+  if (workspace.kind === "local") {
+    if (isNetworkFilesystemPath(root)) return;
+    void invoke("fs_watch_add_tree", {
+      root,
+      workspace: LOCAL_WORKSPACE,
+    }).catch(() => {});
+  } else if (workspace.kind === "ssh" && workspace.sessionId !== undefined) {
+    void invoke("remote_watch_add_tree", {
+      root,
+      sessionId: workspace.sessionId,
+    }).catch(() => {});
+  }
 }
 
 export function watchRemoveTree(
   root: string,
   workspace: WorkspaceEnv = currentWorkspaceEnv(),
 ): void {
-  if (workspace.kind !== "local") return;
-  void invoke("fs_watch_remove_tree", {
-    root,
-    workspace: LOCAL_WORKSPACE,
-  }).catch(() => {});
+  if (workspace.kind === "local") {
+    void invoke("fs_watch_remove_tree", {
+      root,
+      workspace: LOCAL_WORKSPACE,
+    }).catch(() => {});
+  } else if (workspace.kind === "ssh" && workspace.sessionId !== undefined) {
+    void invoke("remote_watch_remove_tree", {
+      root,
+      sessionId: workspace.sessionId,
+    }).catch(() => {});
+  }
 }
 
 /**

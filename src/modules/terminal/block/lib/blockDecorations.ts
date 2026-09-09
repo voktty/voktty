@@ -456,19 +456,27 @@ export class BlockDecorations {
     switch (marker) {
       case "A":
         this.shellState.inCommand = false;
+        this.shellState.promptCwdPending = false;
+        this.shellState.sawPromptMarkers = true;
         this.mode = reduceMode(this.mode, { type: "osc133", marker: "A" });
         break;
       case "B":
         this.shellState.inCommand = true;
+        this.shellState.promptCwdPending = false;
+        this.shellState.sawPromptMarkers = true;
         this.mode = reduceMode(this.mode, { type: "osc133", marker: "B" });
         break;
       case "C":
         this.shellState.inCommand = true;
+        this.shellState.promptCwdPending = false;
+        this.shellState.sawPromptMarkers = true;
         this.mode = reduceMode(this.mode, { type: "osc133", marker: "C" });
         this.startBlock(rest);
         break;
       case "D":
         this.shellState.inCommand = false;
+        this.shellState.promptCwdPending = true;
+        this.shellState.sawPromptMarkers = true;
         this.finishBlock(rest);
         this.mode = reduceMode(this.mode, { type: "osc133", marker: "D" });
         break;

@@ -1,9 +1,6 @@
 import { IS_WINDOWS } from "@/lib/platform";
 import type { IMarker, Terminal } from "@xterm/xterm";
-import {
-  parseOsc9Progress,
-  type Osc9Progress,
-} from "./terminalProgressStore";
+import { parseOsc9Progress, type Osc9Progress } from "./terminalProgressStore";
 
 const MAX_OSC52_CLIPBOARD_BYTES = 1024 * 1024;
 
@@ -17,10 +14,12 @@ const MAX_OSC52_CLIPBOARD_BYTES = 1024 * 1024;
  */
 export type ShellIntegrationState = {
   inCommand: boolean;
+  promptCwdPending: boolean;
+  sawPromptMarkers: boolean;
 };
 
 export function createShellIntegrationState(): ShellIntegrationState {
-  return { inCommand: false };
+  return { inCommand: false, promptCwdPending: false, sawPromptMarkers: false };
 }
 
 export function registerCwdHandler(
@@ -34,8 +33,16 @@ export function registerCwdHandler(
     // of attacker-controlled bytes). The local shell only emits OSC 7
     // between commands via its precmd/PROMPT_COMMAND hook.
     if (state?.inCommand) return true;
+    // Our shell integrations always publish the prompt cwd between OSC 133 D
+    // and A. Once that protocol is present, reject every other OSC 7. This
+    // stops agents and multiplexers from making the workspace follow their
+    // private runtime directory while preserving ordinary `cd` updates.
+    if (state?.sawPromptMarkers && !state.promptCwdPending) return true;
     const cwd = parseOsc7(data);
-    if (cwd) onCwd(cwd);
+    if (cwd) {
+      if (state) state.promptCwdPending = false;
+      onCwd(cwd);
+    }
     return true;
   });
   return () => d.dispose();
@@ -57,21 +64,37 @@ export function registerPromptTracker(
   const d = term.parser.registerOscHandler(133, (data) => {
     // OSC 133 A — start of new prompt (between commands).
     if (data.startsWith("A")) {
-      if (state) state.inCommand = false;
+      if (state) {
+        state.inCommand = false;
+        state.promptCwdPending = false;
+        state.sawPromptMarkers = true;
+      }
       onCommandState?.(false);
       marker?.dispose();
       marker = term.registerMarker(0);
     } else if (data.startsWith("B")) {
       // OSC 133 B — command begins. From here on, treat all output as
       // untrusted until we see D (command exit) or the next A (new prompt).
-      if (state) state.inCommand = true;
+      if (state) {
+        state.inCommand = true;
+        state.promptCwdPending = false;
+        state.sawPromptMarkers = true;
+      }
     } else if (data.startsWith("C")) {
       // OSC 133 C — command pre-execution marker; still inside command.
-      if (state) state.inCommand = true;
+      if (state) {
+        state.inCommand = true;
+        state.promptCwdPending = false;
+        state.sawPromptMarkers = true;
+      }
       onCommandState?.(true);
     } else if (data.startsWith("D")) {
       // OSC 133 D — command ends.
-      if (state) state.inCommand = false;
+      if (state) {
+        state.inCommand = false;
+        state.promptCwdPending = true;
+        state.sawPromptMarkers = true;
+      }
       const rest = data.length > 2 && data[1] === ";" ? data.slice(2) : "";
       const code = rest ? parseInt(rest, 10) : null;
       const exitCode = Number.isFinite(code) ? code : null;
@@ -145,7 +168,10 @@ function parseOsc7(data: string): string | null {
     // git-bash (MSYS) reports cwd as /c/Users/foo; map it to C:/Users/foo only for localhost
     // and when not referring to top-level unix directories like /var, /root, /home, /opt, /usr, /srv, /etc.
     const drive = path.match(/^\/([A-Za-z])(\/.*)?$/);
-    if (drive && !/^\/(var|etc|home|root|usr|opt|srv|tmp|proc|sys|dev)(\/|$)/i.test(path)) {
+    if (
+      drive &&
+      !/^\/(var|etc|home|root|usr|opt|srv|tmp|proc|sys|dev)(\/|$)/i.test(path)
+    ) {
       path = `${drive[1].toUpperCase()}:${drive[2] ?? "/"}`;
     }
   }
