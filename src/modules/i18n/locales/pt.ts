@@ -4429,7 +4429,63 @@ const ptCoveragePatch: TranslationSchema = mergeLocale(ptCoverageBase, {
   },
 });
 
-export const pt: TranslationSchema = mergeLocale(ptCoveragePatch, {
+const ptWorkbenchTranslations = { workbench: { dapRequestFailed: "Falha na solicitação do adaptador de depuração" } };
+
+const ptCommandPaletteTranslations = { commandPalette: { commands: {"openHarnessInWorktree":"Nova sessão de agente na árvore de trabalho isolada","worktreeNeedsProject":"Abra um projeto primeiro para criar uma sessão de árvore de trabalho isolada","broadcastToAgents":"Enviar mensagem para todos os agentes"} } };
+
+const ptStatusTranslations = {
+  statusbar: {
+    "arcadeWindow": "Minijanela de fliperama",
+    "arcadeRestart": "Reiniciar (Espaço / Enter)",
+    "arcadeClose": "Fechar (Esc)",
+    "arcadeGameOver": "Game Over",
+    "arcadeFinalScore": "Pontuação final:",
+    "arcadePlayAgain": "Jogue novamente (Entrar)",
+    "arcadeControlsHint": "Use as setas ou WASD para jogar",
+    "arcadeEscHint": "Esc",
+    "notesBoard": "Notas e quadro Kanban",
+    "notesBoardLabel": "Notas e Quadro"
+}
+};
+
+const ptThemeTranslations = {
+  themes: {
+    descriptions: {
+      "voktty-default": "Tema Voktty unificado com variações de cores selecionadas.",
+      "win31": "Skin clássica do Windows 3.1 de 16 bits com cromo chanfrado 3D, barra de título azul marinho e cantos quadrados.",
+      "mac1": "Interface monocromática autêntica de 1984 de 1 bit com uma barra de título listrada e caixa de fechamento.",
+      "kde": "Área de trabalho clássica do KDE 2/3 com uma barra de título gradiente azul e controles Qt chanfrados.",
+      "commander-blue": "Comandante de arquivo de painel duplo clássico do DOS com azul marinho profundo, bordas ciano e detalhes em amarelo.",
+      "phosphor-crt": "Terminal CRT monocromático com fósforo brilhante, scanlines e moldura curva.",
+      "whistler-bliss": "Área de trabalho Y2K com barras de título curvas em azul royal, detalhes iniciais esmeralda e controles brilhantes.",
+      "boing-workbench": "Estação de trabalho criativa lendária de 1985 com azul safira, topázio âmbar, branco e obsidiana.",
+      "cubestep": "Estação de trabalho icônica em cubo preto com blocos de titânio chanfrados, barras de título flutuantes e alto contraste.",
+      "yellowtab-os": "Área de trabalho responsiva com títulos de janela com guias amarelas exclusivas e cromo azul-cinza limpo.",
+      "solar-cde": "Estação de trabalho Unix de ambiente de área de trabalho comum com painéis geométricos, ardósia profunda e detalhes em ameixa.",
+      "humanity-2006": "Área de trabalho marrom expresso quente e laranja radiante inspirada no clássico GNOME 2 de 2006.",
+      "pocket-89": "Portátil LCD verde de quatro tons com contraste de pixel e nostalgia de jogos retrô.",
+      "pilot-pda": "Organizador clássico de caneta monocromática com LCD cinza oliva, botões compactos e linhas de lista.",
+      "clickwheel-pod": "Tocador de aço polido e porcelana branca com destaques em ciano e tipografia sans compacta.",
+      "station-94": "Console clássico de 32 bits com caixa cinza fosco, cartão de memória índigo e símbolos de ação geométrica.",
+      "audioamp-classic": "Lendário leitor de MP3 dos anos 90 com titânio escovado, dígitos LED verdes e um visualizador de espectro.",
+      "cybercafe-99": "Internet café nostálgico de 1999 com acesso discado, atalhos na área de trabalho e estética retrô da web.",
+      "tiger-aqua": "Mesa de alumínio escovado de 2005 com botões de cápsula brilhantes e profundidade de sombra suave.",
+      "media-station-9": "Media player elétrico em cobalto com curvas brilhantes, indicadores de reprodução brilhantes e detalhes em ciano.",
+      "instant-chat-7": "Estética de mensageiro de meados dos anos 2000 com cabeçalhos azul-celeste, cartões táteis e detalhes de presença online.",
+      "bbs-dialup": "Quadro de avisos da década de 1980 com células de caracteres ANSI, menus ASCII e cores de telemetria de modem."
+}
+  }
+};
+
+const ptCommonTranslations = { common: { noResults: "Nenhum resultado encontrado" } };
+
+const ptShortcutTranslations = { shortcuts: { labels: { aiBroadcastToAgents: "Enviar mensagem para todos os agentes" } } };
+
+const ptOnboardingTranslations = { onboarding: {"shortcutSplitRight":"Dividir à direita","shortcutSplitDown":"Dividir","shortcutQuickOpen":"Abertura rápida","shortcutClearTerminal":"Limpar terminal","shortcutSidebar":"Alternar barra lateral","shortcutZenMode":"Modo Zen"} };
+
+const ptGitTranslations = { git: { githubDraft: "rascunho" } };
+
+export const pt: TranslationSchema = mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(mergeLocale(ptCoveragePatch, ptGitTranslations), ptOnboardingTranslations), ptShortcutTranslations), ptCommonTranslations), ptCommandPaletteTranslations), ptWorkbenchTranslations), ptStatusTranslations), ptThemeTranslations), {
   commandPalette: {
     commands: {
       openTasksPanel: "Ver: Tarefas",
