@@ -147,7 +147,7 @@ export function NotesView({
     setCreating(true);
     try {
       const note = await createNote({
-        title: "Untitled",
+        title: t("harness.chrome.untitled"),
         body: "",
         ...(cwd && looksLikeProject(cwd) ? { sourceCwd: cwd } : {}),
       });
@@ -297,7 +297,9 @@ export function NotesView({
             className="size-3.5 shrink-0 text-content/45"
             strokeWidth={1.75}
           />
-          <span className="min-w-0 truncate text-content">Notes</span>
+          <span className="min-w-0 truncate text-content">
+            {t("harness.chrome.notes")}
+          </span>
         </div>
       </div>
       <div className="flex min-h-0 min-w-0 flex-1">
@@ -465,11 +467,14 @@ function NoteDetail({
   onDelete: (id: string) => void | Promise<void>;
   onAddToChat: (note: Note) => void;
 } & ProjectMarks) {
+  const { t } = useTranslation();
   if (!note) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-center px-6 text-center">
         <File className="mb-3 size-6 text-content/30" strokeWidth={1.75} />
-        <p className="text-[13px] text-content/45">Select a note</p>
+        <p className="text-[13px] text-content/45">
+          {t("harness.chrome.selectNote")}
+        </p>
       </div>
     );
   }
@@ -505,7 +510,7 @@ function NoteEditor({
 } & ProjectMarks) {
   const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
-  const blank = !note.body.trim() && note.title === "Untitled";
+  const blank = !note.body.trim() && note.title === t("harness.chrome.untitled");
   const [mode, setMode] = useMarkdownMode(note.id);
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
@@ -591,7 +596,7 @@ function NoteEditor({
         <header className="flex flex-col gap-3">
           <div className="flex min-w-0 items-center gap-2 text-[12px] text-content/50">
             <File className="size-3.5 shrink-0" strokeWidth={1.75} />
-            <span>Note</span>
+            <span>{t("harness.chrome.note")}</span>
             {note.slug ? (
               <span className="min-w-0 truncate">{note.slug}</span>
             ) : null}
@@ -622,7 +627,9 @@ function NoteEditor({
             placeholder={t("harness.chrome.untitled")}
           />
           {time ? (
-            <div className="text-[12px] text-content/50">Updated {time}</div>
+            <div className="text-[12px] text-content/50">
+              {t("harness.chrome.updatedAt", { time })}
+            </div>
           ) : null}
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
@@ -631,7 +638,7 @@ function NoteEditor({
               onClick={() => onAddToChat(draft)}
               className="inline-flex items-center gap-1 rounded-md bg-content px-3 h-6.5 text-[12px] text-background-base hover:bg-content/80 disabled:cursor-default disabled:opacity-40"
             >
-              Add to chat
+              {t("harness.addToChat")}
             </button>
             <button
               type="button"
@@ -644,7 +651,7 @@ function NoteEditor({
               className="inline-flex items-center gap-1.5 rounded-md px-3 h-7 text-[12px] text-content/70 hover:bg-content/10 hover:text-red-400"
             >
               <Trash2 className="size-3.5" strokeWidth={1.75} />
-              Delete
+              {t("common.delete")}
             </button>
           </div>
           {saveError ? (
@@ -679,7 +686,9 @@ function NoteEditor({
         ) : body.trim() ? (
           <AgentMarkdown text={body} cwd={note.sourceCwd} />
         ) : (
-          <p className="text-[13px] text-content/45">No description</p>
+          <p className="text-[13px] text-content/45">
+            {t("harness.chrome.noDescription")}
+          </p>
         )}
       </div>
     </div>

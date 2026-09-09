@@ -370,7 +370,7 @@ export const SessionPane = memo(function SessionPane({
           </span>
           <button
             type="button"
-            title={`Close Pane (${MOD}W)`}
+            title={t("harness.chrome.closePaneShortcut", { shortcut: `${MOD}W` })}
             aria-label={t("harness.chrome.closePane")}
             data-no-drag
             className="grid size-5 shrink-0 place-items-center rounded text-content/50 hover:bg-content/10 hover:text-content"

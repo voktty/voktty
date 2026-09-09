@@ -4051,7 +4051,9 @@ export function HarnessApp({
                 {
                   id: crypto.randomUUID(),
                   role: "system",
-                  text: `${next.harness} is not connected yet - install and sign in to that provider, then retry.`,
+                  text: t("harness.chrome.providerNotConnected", {
+                    harness: next.harness,
+                  }),
                 },
               ],
             };

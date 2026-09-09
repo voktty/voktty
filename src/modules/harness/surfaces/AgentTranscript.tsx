@@ -1998,7 +1998,10 @@ function ToolCall({
         <button
           type="button"
           aria-expanded={open}
-          aria-label={`${stateLabel} tool call: ${label}`}
+          aria-label={t("harness.chrome.toolCallWithState", {
+            state: stateLabel,
+            text: label,
+          })}
           onClick={() => setOpen((value) => !value)}
           className="flex w-full min-w-0 items-center gap-2 rounded-lg py-1.5 text-left"
         >
@@ -2017,7 +2020,10 @@ function ToolCall({
         </button>
       ) : (
         <div
-          aria-label={`${stateLabel} tool call: ${label}`}
+          aria-label={t("harness.chrome.toolCallWithState", {
+            state: stateLabel,
+            text: label,
+          })}
           className="flex w-full min-w-0 items-center gap-2"
         >
           <ToolCallIcon state={state} />

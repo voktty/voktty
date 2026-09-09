@@ -1,4 +1,5 @@
 import type React from "react";
+import { useTranslation } from "@/modules/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   appendUser,
@@ -39,6 +40,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
   sessionId: initialSessionId,
   cwd: initialCwd,
 }) => {
+  const { t } = useTranslation();
   const [recents, setRecents] = useState<RecentProject[]>(() => {
     const loaded = loadRecents();
     if (initialCwd) {
@@ -59,7 +61,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
       model: choice.model,
       modelSettings: {},
       runtimeMode: "supervised",
-      title: "New Session",
+      title: t("harness.chrome.newSession"),
       blocks: [],
       busy: false,
     };
@@ -144,7 +146,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
 
       current = appendUser(current, text, attachments);
       const title =
-        current.title === "New Session" && text.trim()
+        current.title === t("harness.chrome.newSession") && text.trim()
           ? text.trim().slice(0, 48)
           : current.title;
       setSession({ ...current, title, busy: true });
@@ -180,7 +182,9 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
                   {
                     id: `err-${Date.now()}`,
                     role: "system",
-                    text: `Error: ${err?.message || String(err)}`,
+                    text: t("harness.chrome.errorWithMessage", {
+                      message: err?.message || String(err),
+                    }),
                   },
                 ],
               }
