@@ -1116,7 +1116,7 @@ export function Composer({
         >
           {fileDrag ? (
             <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-lg bg-accent/8 text-[12px] text-content/70">
-              Drop files to attach
+              {t("harness.chrome.dropFilesToAttach")}
             </div>
           ) : null}
           {hideTopBar ? null : (

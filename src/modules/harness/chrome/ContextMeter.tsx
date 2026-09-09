@@ -56,7 +56,10 @@ export function ContextMeter({
         <button
           type="button"
           title={t("harness.chrome.contextUsage")}
-          aria-label={`${headline}, ${detail}. Open context actions`}
+          aria-label={t("harness.chrome.openContextActions", {
+            headline,
+            detail,
+          })}
           aria-expanded={actionsOpen}
           onClick={() => setOpen((value) => !value)}
           className="-m-1 grid rounded-sm p-1 outline-none focus-visible:ring-1 focus-visible:ring-accent"
@@ -64,7 +67,10 @@ export function ContextMeter({
           <MeterRing ratio={ratio} />
         </button>
       ) : (
-        <MeterRing ratio={ratio} label={`${headline}, ${detail}`} />
+        <MeterRing
+          ratio={ratio}
+          label={t("harness.chrome.contextUsageLabel", { headline, detail })}
+        />
       )}
       {hovered || actionsOpen ? (
         <Popover
