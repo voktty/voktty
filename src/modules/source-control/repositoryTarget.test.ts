@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import type { EditorTab, GitHistoryTab, TerminalTab } from "@/modules/tabs";
 import { createTabIdentity } from "@/modules/tabs/lib/tabIdentity";
+import { describe, expect, it } from "vitest";
 import {
   activeRepositoryContextPath,
   clearRepositoryTargetForSpace,
@@ -213,6 +213,7 @@ describe("sourceControlRepositoryPath", () => {
     expect(
       gitGraphRepositoryPath({
         contextPath: "/repos/active",
+        workspaceFallbackPath: "/repos/fallback",
         sidebarView: "source-control",
         target: fixed,
       }),
@@ -220,10 +221,22 @@ describe("sourceControlRepositoryPath", () => {
     expect(
       gitGraphRepositoryPath({
         contextPath: "/repos/active",
+        workspaceFallbackPath: "/repos/fallback",
         sidebarView: "explorer",
         target: fixed,
       }),
     ).toBe("/repos/active");
+  });
+
+  it("falls back to the workspace path when no active surface has a path", () => {
+    expect(
+      gitGraphRepositoryPath({
+        contextPath: null,
+        workspaceFallbackPath: "/repos/fallback",
+        sidebarView: "explorer",
+        target: { mode: "follow-context" },
+      }),
+    ).toBe("/repos/fallback");
   });
 });
 

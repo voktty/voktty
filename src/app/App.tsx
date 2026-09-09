@@ -2765,10 +2765,13 @@ export default function App() {
       void native
         .gitResolveRepo(candidateCwd, candidateEnv)
         .then((repo) => {
-          const finalRepo = repo?.repoRoot || candidateCwd;
+          if (!repo) {
+            toast.info(t("feedback.noGitRepository"));
+            return;
+          }
           const graphId = openCommitHistoryTab({
-            repoRoot: finalRepo,
-            branch: repo?.branch ?? null,
+            repoRoot: repo.repoRoot,
+            branch: repo.branch,
             workspaceEnv: candidateEnv,
           });
           const graphTab = getTab(graphId);
@@ -2776,6 +2779,11 @@ export default function App() {
             joinTabIntoSpaceNextTo(sourceTab, graphTab, spaceViewLimit);
             setActiveId(graphId);
           }
+        })
+        .catch((error) => {
+          toast.error(t("feedback.resolveGitRepositoryFailed"), {
+            description: error instanceof Error ? error.message : String(error),
+          });
         });
     },
     [
