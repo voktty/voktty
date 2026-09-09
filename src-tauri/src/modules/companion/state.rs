@@ -26,7 +26,7 @@ struct CompanionRuntime {
     _server: CompanionLoopback,
     _tunnel: CloudflaredTunnel,
     _host_private_key: EphemeralPrivateKey,
-    pairing: PairingRegistry,
+    pairing: Arc<Mutex<Option<PairingRegistry>>>,
     invite: QrInvitation,
 }
 
@@ -68,7 +68,8 @@ impl CompanionState {
             return Err("companion is already active".to_string());
         }
 
-        let server = CompanionLoopback::start().map_err(|error| error.to_string())?;
+        let pairing = Arc::new(Mutex::new(None));
+        let server = CompanionLoopback::start(pairing.clone()).map_err(|error| error.to_string())?;
         let private_key = EphemeralPrivateKey::generate(&X25519, &SystemRandom::new())
             .map_err(|_| "could not create companion host key".to_string())?;
         let public_key = private_key
@@ -90,11 +91,14 @@ impl CompanionState {
         let response = CompanionInvite {
             invitation: invite.clone(),
         };
-        let pairing = PairingRegistry::new(
+        let registry = PairingRegistry::new(
             &invite.invitation_id,
             &invite.secret,
             invite.expires_at_ms,
         )?;
+        *pairing
+            .lock()
+            .map_err(|_| "companion pairing state is unavailable".to_string())? = Some(registry);
         *runtime = Some(CompanionRuntime {
             _server: server,
             _tunnel: tunnel,
@@ -149,6 +153,10 @@ impl CompanionState {
             .ok_or_else(|| "companion is not active".to_string())?;
         let pending = runtime
             .pairing
+            .lock()
+            .map_err(|_| "companion pairing state is unavailable".to_string())?
+            .as_mut()
+            .ok_or_else(|| "companion is starting".to_string())?
             .request(request, now_ms(), request_id)
             .map_err(pairing_error)?;
         Ok(PendingPairingInfo {
@@ -166,9 +174,13 @@ impl CompanionState {
         let Some(runtime) = runtime.as_ref() else {
             return Vec::new();
         };
-        runtime
-            .pairing
-            .pending()
+        let Ok(pairing) = runtime.pairing.lock() else {
+            return Vec::new();
+        };
+        pairing
+            .as_ref()
+            .map(PairingRegistry::pending)
+            .unwrap_or_default()
             .into_iter()
             .map(|pending| PendingPairingInfo {
                 id: pending.id,
@@ -190,10 +202,20 @@ impl CompanionState {
         if approved {
             runtime
                 .pairing
+                .lock()
+                .map_err(|_| "companion pairing state is unavailable".to_string())?
+                .as_mut()
+                .ok_or_else(|| "companion is starting".to_string())?
                 .approve(request_id, now_ms())
                 .map_err(pairing_error)?;
             Ok(())
-        } else if runtime.pairing.reject(request_id) {
+        } else if runtime
+            .pairing
+            .lock()
+            .map_err(|_| "companion pairing state is unavailable".to_string())?
+            .as_mut()
+            .is_some_and(|pairing| pairing.reject(request_id))
+        {
             Ok(())
         } else {
             Err("pairing request was not found".to_string())
@@ -204,7 +226,6 @@ impl CompanionState {
 fn pairing_error(error: PairingError) -> String {
     match error {
         PairingError::Consumed => "pairing invitation was already used".to_string(),
-        PairingError::Expired => "pairing invitation expired".to_string(),
         PairingError::Rejected => "pairing request was rejected".to_string(),
         PairingError::UnsupportedProtocol => "unsupported companion protocol".to_string(),
     }
@@ -217,7 +238,7 @@ struct CompanionLoopback {
 }
 
 impl CompanionLoopback {
-    fn start() -> io::Result<Self> {
+    fn start(pairing: Arc<Mutex<Option<PairingRegistry>>>) -> io::Result<Self> {
         let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0))?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
@@ -229,7 +250,7 @@ impl CompanionLoopback {
                 while !thread_stop.load(Ordering::Acquire) {
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let _ = handle_request(stream);
+                            let _ = handle_request(stream, &pairing);
                         }
                         Err(error) if error.kind() == ErrorKind::WouldBlock => {
                             thread::sleep(ACCEPT_POLL);
@@ -262,18 +283,67 @@ impl Drop for CompanionLoopback {
     }
 }
 
-fn handle_request(mut stream: TcpStream) -> io::Result<()> {
+fn handle_request(
+    mut stream: TcpStream,
+    pairing: &Arc<Mutex<Option<PairingRegistry>>>,
+) -> io::Result<()> {
     stream.set_read_timeout(Some(REQUEST_TIMEOUT))?;
     stream.set_write_timeout(Some(REQUEST_TIMEOUT))?;
     let mut request = [0_u8; MAX_REQUEST_BYTES];
     let read = stream.read(&mut request)?;
-    let health = request[..read].starts_with(b"GET /health HTTP/");
+    let request = &request[..read];
+    let health = request.starts_with(b"GET /health HTTP/");
     let response = if health {
         b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".as_slice()
+    } else if request.starts_with(b"POST /v1/companion/pair HTTP/") {
+        let response = handle_pairing_request(request, pairing);
+        stream.write_all(&response)?;
+        return Ok(());
     } else {
         b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".as_slice()
     };
     stream.write_all(response)
+}
+
+fn handle_pairing_request(
+    request: &[u8],
+    pairing: &Arc<Mutex<Option<PairingRegistry>>>,
+) -> Vec<u8> {
+    let Some(body_start) = request.windows(4).position(|part| part == b"\r\n\r\n") else {
+        return http_response(400, "Bad Request", b"");
+    };
+    let body = &request[body_start + 4..];
+    let request = match serde_json::from_slice::<PairingRequest>(body) {
+        Ok(request) => request,
+        Err(_) => return http_response(400, "Bad Request", b""),
+    };
+    let request_id = match random_token(16) {
+        Ok(id) => id,
+        Err(_) => return http_response(500, "Internal Server Error", b""),
+    };
+    let result = pairing
+        .lock()
+        .ok()
+        .and_then(|mut registry| registry.as_mut().map(|registry| registry.request(request, now_ms(), request_id)));
+    match result {
+        Some(Ok(_)) => http_response(202, "Accepted", b""),
+        Some(Err(PairingError::Expired | PairingError::Consumed)) => {
+            http_response(410, "Gone", b"")
+        }
+        Some(Err(_)) => http_response(403, "Forbidden", b""),
+        None => http_response(503, "Service Unavailable", b""),
+    }
+}
+
+fn http_response(status: u16, reason: &str, body: &[u8]) -> Vec<u8> {
+    format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes()
+    .into_iter()
+    .chain(body.iter().copied())
+    .collect()
 }
 
 fn random_token(bytes: usize) -> Result<String, String> {
@@ -295,7 +365,7 @@ mod tests {
 
     #[test]
     fn listener_accepts_only_its_health_probe() {
-        let listener = CompanionLoopback::start().expect("listener");
+        let listener = CompanionLoopback::start(Arc::new(Mutex::new(None))).expect("listener");
         let mut stream = TcpStream::connect(listener.address()).expect("connect");
         stream
             .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")

@@ -52,6 +52,14 @@ export function CompanionSection() {
     void refreshStatus().catch(() => {});
   }, [refreshStatus]);
 
+  useEffect(() => {
+    if (status?.active !== true) return;
+    const interval = setInterval(() => {
+      void refreshStatus().catch(() => {});
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [refreshStatus, status?.active]);
+
   const start = async () => {
     setBusy(true);
     setError(null);
