@@ -114,13 +114,13 @@ export function KanbanCardItem({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={cn(
-        "group relative flex flex-col gap-1.5 rounded-lg border border-border/40 bg-card/60 p-2.5 text-xs shadow-xs transition-all hover:border-border/80 hover:bg-card hover:shadow-md cursor-grab active:cursor-grabbing",
+        "group relative flex flex-col gap-1 rounded-lg border border-border/40 bg-card/60 p-2 text-xs shadow-xs transition-all hover:border-border/80 hover:bg-card hover:shadow-sm cursor-grab active:cursor-grabbing",
         card.columnId === "done" && "opacity-75 bg-card/40",
         (card.assignedExecution?.requiresAttention ||
           card.assignedExecution?.lastObservedStatus === "waiting") &&
-          "border-amber-500/60 bg-amber-500/5 ring-1 ring-amber-500/30",
+          "border-amber-500/50 bg-amber-500/5",
         card.assignedExecution?.lastObservedStatus === "error" &&
-          "border-rose-500/50 bg-rose-500/5 ring-1 ring-rose-500/20",
+          "border-rose-500/50 bg-rose-500/5",
       )}
     >
       {/* Title and actions header */}
@@ -331,9 +331,10 @@ export function KanbanCardItem({
 
               <DropdownMenuContent
                 align="end"
-                side="top"
+                side="bottom"
                 sideOffset={4}
-                className="w-52 p-1 text-popover-foreground z-50 rounded-xl"
+                collisionPadding={8}
+                className="w-52 p-1 text-popover-foreground z-50 rounded-lg border border-border/50 bg-popover shadow-lg"
                 onClick={(e) => e.stopPropagation()}
               >
                 <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
@@ -348,7 +349,7 @@ export function KanbanCardItem({
                     <DropdownMenuItem
                       key={`${target.tabId}-${target.leafId}`}
                       onClick={() => onAssignToAgent(card, target)}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] cursor-pointer"
+                      className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] cursor-pointer"
                     >
                       <div className="flex items-center gap-1.5 truncate">
                         <HugeiconsIcon

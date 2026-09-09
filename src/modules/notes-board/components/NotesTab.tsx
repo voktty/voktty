@@ -315,7 +315,8 @@ export function NotesTab({
                   align="end"
                   side="bottom"
                   sideOffset={4}
-                  className="w-56 p-1 text-popover-foreground z-50 rounded-xl"
+                  collisionPadding={8}
+                  className="w-56 p-1 text-popover-foreground z-50 rounded-lg border border-border/50 bg-popover shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
@@ -330,7 +331,7 @@ export function NotesTab({
                       <DropdownMenuItem
                         key={`${target.tabId}-${target.leafId}`}
                         onClick={() => handleSendToAgent(target)}
-                        className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] cursor-pointer"
+                        className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] cursor-pointer"
                       >
                         <div className="flex items-center gap-1.5 truncate">
                           <HugeiconsIcon
