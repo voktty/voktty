@@ -375,6 +375,7 @@ export default function App() {
   const initialLaunchCwd = launchRequestCwd(initialLaunchRequest);
   const {
     tabs,
+    getTab,
     activeId,
     setActiveId,
     allocId,
@@ -2446,9 +2447,9 @@ export default function App() {
 
       const setupSplitWithActive = (newTabId: number) => {
         if (!shouldSplit) return;
-        const activeTab = tabsRef.current.find((t) => t.id === effectiveActiveId);
+        const activeTab = getTab(effectiveActiveId);
         if (!activeTab) return;
-        const newTab = tabsRef.current.find((t) => t.id === newTabId);
+        const newTab = getTab(newTabId);
         if (!newTab) return;
         joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
       };
@@ -2710,9 +2711,126 @@ export default function App() {
     };
   }, [openFileTab]);
 
+  const openNewBrowser = useCallback(() => {
+    return newPreviewTab("about:blank");
+  }, [newPreviewTab]);
+
+  const openPreviewSplit = useCallback(
+    (sourceTabId?: number) => {
+      const sourceTab =
+        (sourceTabId ? getTab(sourceTabId) : null) ?? getTab(effectiveActiveId);
+      if (!sourceTab) return;
+      if (!hasRoomToSplit(sourceTab, spaceViewLimit)) {
+        playErrorTone();
+        toast.error(t("spaces.maxSlots"));
+        return;
+      }
+      const previewId = openPreviewTab("", { splitWithActive: false });
+      const previewTab = getTab(previewId);
+      if (previewTab) {
+        joinTabIntoSpaceNextTo(sourceTab, previewTab, spaceViewLimit);
+        setActiveId(previewId);
+      }
+    },
+    [getTab, effectiveActiveId, spaceViewLimit, t, openPreviewTab, setActiveId],
+  );
+
+  const openGitGraphSplit = useCallback(
+    (sourceTabId?: number) => {
+      const sourceTab =
+        (sourceTabId ? getTab(sourceTabId) : null) ?? getTab(effectiveActiveId);
+      if (!sourceTab) return;
+      if (!hasRoomToSplit(sourceTab, spaceViewLimit)) {
+        playErrorTone();
+        toast.error(t("spaces.maxSlots"));
+        return;
+      }
+      const candidateCwd =
+        (sourceTab.kind === "terminal" ? sourceTab.cwd : undefined) ||
+        activeTerminalLeafCwd ||
+        explorerRoot ||
+        launchCwd;
+      if (!candidateCwd) return;
+
+      const candidateEnv =
+        sourceTab && "workspaceEnv" in sourceTab
+          ? sourceTab.workspaceEnv
+          : undefined;
+
+      void native
+        .gitResolveRepo(candidateCwd, candidateEnv)
+        .then((repo) => {
+          const finalRepo = repo?.repoRoot || candidateCwd;
+          const graphId = openCommitHistoryTab({
+            repoRoot: finalRepo,
+            branch: repo?.branch ?? null,
+            workspaceEnv: candidateEnv,
+          });
+          const graphTab = getTab(graphId);
+          if (graphTab) {
+            joinTabIntoSpaceNextTo(sourceTab, graphTab, spaceViewLimit);
+            setActiveId(graphId);
+          }
+        });
+    },
+    [
+      getTab,
+      effectiveActiveId,
+      spaceViewLimit,
+      t,
+      activeTerminalLeafCwd,
+      explorerRoot,
+      launchCwd,
+      openCommitHistoryTab,
+      setActiveId,
+    ],
+  );
+
+  const openEditorSplit = useCallback(
+    (sourceTabId?: number) => {
+      const sourceTab =
+        (sourceTabId ? getTab(sourceTabId) : null) ?? getTab(effectiveActiveId);
+      if (!sourceTab) return;
+      if (!hasRoomToSplit(sourceTab, spaceViewLimit)) {
+        playErrorTone();
+        toast.error(t("spaces.maxSlots"));
+        return;
+      }
+      const candidatePath =
+        (sourceTab.kind === "editor" ? sourceTab.path : null) || activeFilePath;
+      const candidateEnv =
+        sourceTab && "workspaceEnv" in sourceTab
+          ? sourceTab.workspaceEnv
+          : undefined;
+      if (candidatePath) {
+        const newTabId = openFileTab(candidatePath, true, {
+          spaceId: sourceTab.spaceId,
+          workspaceEnv: candidateEnv,
+        });
+        const newTab = getTab(newTabId);
+        if (newTab) {
+          joinTabIntoSpaceNextTo(sourceTab, newTab, spaceViewLimit);
+          setActiveId(newTabId);
+        }
+      } else {
+        pickAndOpenFile();
+      }
+    },
+    [
+      getTab,
+      effectiveActiveId,
+      spaceViewLimit,
+      t,
+      activeFilePath,
+      openFileTab,
+      setActiveId,
+      pickAndOpenFile,
+    ],
+  );
+
   const handleDuplicateTab = useCallback(
     (id: number) => {
-      const source = tabsRef.current.find((tab) => tab.id === id);
+      const source = getTab(id);
       if (source?.kind !== "terminal") return;
 
       if (!hasRoomToSplit(source, spaceViewLimit)) {
@@ -2730,13 +2848,13 @@ export default function App() {
       const newTabId = duplicateTab(id, env);
       if (newTabId === null) return;
 
-      const newTab = tabsRef.current.find((t) => t.id === newTabId);
+      const newTab = getTab(newTabId);
       if (newTab) {
         joinTabIntoSpaceNextTo(source, newTab, spaceViewLimit);
         setActiveId(newTabId);
       }
     },
-    [duplicateTab, setActiveId, setWorkspaceEnv, spaceViewLimit, t],
+    [duplicateTab, getTab, setActiveId, setWorkspaceEnv, spaceViewLimit, t],
   );
 
   const handleReconnectTab = useCallback((tab: Tab) => {
@@ -2750,7 +2868,7 @@ export default function App() {
 
   const handleToggleTabBlocks = useCallback(
     (tabId: number) => {
-      const tab = tabsRef.current.find((t) => t.id === tabId);
+      const tab = getTab(tabId);
       if (!tab || tab.kind !== "terminal") return;
       const nextBlocks = !tab.blocks;
       toggleTabBlocks(tabId);
@@ -2763,14 +2881,12 @@ export default function App() {
         }
       }
     },
-    [toggleTabBlocks, setActiveId],
+    [getTab, toggleTabBlocks, setActiveId],
   );
 
   const splitActivePaneInActiveTab = useCallback(
     (_dir: "row" | "col", tabId?: number) => {
-      const activeTab = tabsRef.current.find(
-        (x) => x.id === (tabId ?? effectiveActiveId),
-      );
+      const activeTab = getTab(tabId ?? effectiveActiveId);
       if (!activeTab) return;
       if (activeTab.kind === "terminal") {
         handleDuplicateTab(activeTab.id);
@@ -2781,15 +2897,25 @@ export default function App() {
           return;
         }
 
-        const newTabId = openFileTab(activeTab.path, true, { spaceId: activeTab.spaceId });
-        const newTab = tabsRef.current.find((tab) => tab.id === newTabId);
+        const newTabId = openFileTab(activeTab.path, true, {
+          spaceId: activeTab.spaceId,
+        });
+        const newTab = getTab(newTabId);
         if (newTab) {
           joinTabIntoSpaceNextTo(activeTab, newTab, spaceViewLimit);
           setActiveId(newTabId);
         }
       }
     },
-    [effectiveActiveId, handleDuplicateTab, openFileTab, setActiveId, spaceViewLimit, t],
+    [
+      effectiveActiveId,
+      getTab,
+      handleDuplicateTab,
+      openFileTab,
+      setActiveId,
+      spaceViewLimit,
+      t,
+    ],
   );
 
   const livePaneBounds = useCallback((tabId: number): PaneBounds[] => {
@@ -4555,6 +4681,10 @@ export default function App() {
               onNewBlock={openNewBlockTab}
               onNewPrivate={openNewPrivateTab}
               onNewPreview={() => openPreviewTab("")}
+              onNewBrowser={openNewBrowser}
+              onOpenPreviewSplit={openPreviewSplit}
+              onOpenGitGraphSplit={openGitGraphSplit}
+              onOpenEditorSplit={openEditorSplit}
               onNewEditor={openNewEditor}
               onNewApiClient={() => newApiClientTab()}
               onNewHarness={openNewHarness}
@@ -4926,6 +5056,9 @@ export default function App() {
                           onDuplicate={handleDuplicateTab}
                           onSplitRight={(id) => splitActivePaneInActiveTab("row", id)}
                           onSplitDown={(id) => splitActivePaneInActiveTab("col", id)}
+                          onOpenPreviewSplit={openPreviewSplit}
+                          onOpenGitGraphSplit={openGitGraphSplit}
+                          onOpenEditorSplit={openEditorSplit}
                           onReconnectTab={handleReconnectTab}
                           onPin={(id) => {
                             const tab = tabs.find((t) => t.id === id);
@@ -4956,6 +5089,7 @@ export default function App() {
                           onNewBlock={openNewBlockTab}
                           onNewPrivate={openNewPrivateTab}
                           onNewPreview={() => openPreviewTab("")}
+                          onNewBrowser={openNewBrowser}
                           onNewEditor={openNewEditor}
                           onNewRdp={(opts) => newRdpTab(opts)}
                           onConnectRemote={() => setGuestConnectOpen(true)}

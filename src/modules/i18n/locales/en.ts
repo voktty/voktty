@@ -978,6 +978,13 @@ export const en = {
     agentLauncher: "Agent Launcher",
     openAgentChat: "Open Agent in Chat",
     moreTerminals: "More terminals",
+    newBrowser: "New Web Browser",
+    splitRight: "Split Terminal Right",
+    splitDown: "Split Terminal Down",
+    splitPreview: "Open Preview in Split View",
+    splitGitGraph: "Open Commit Graph in Split View",
+    splitEditor: "New Editor in Split View",
+    duplicateSplit: "Duplicate in Split View",
     colorTag: "Color Tag",
     hoverCard: {
       activeTime: "Active Time",

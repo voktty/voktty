@@ -910,20 +910,19 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     (cwd?: string, workspaceEnv: WorkspaceEnv = LOCAL_WORKSPACE) => {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title: "shell",
-          cwd,
-          paneTree: { kind: "leaf", id: leafId, cwd },
-          activeLeafId: leafId,
-          workspaceEnv,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title: "shell",
+        cwd,
+        paneTree: { kind: "leaf", id: leafId, cwd },
+        activeLeafId: leafId,
+        workspaceEnv,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return tabId;
     },
@@ -934,21 +933,20 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     (cwd?: string, workspaceEnv: WorkspaceEnv = LOCAL_WORKSPACE) => {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title: translate("tabs.hoverCard.terminalBlocks"),
-          cwd,
-          paneTree: { kind: "leaf", id: leafId, cwd },
-          activeLeafId: leafId,
-          blocks: true,
-          workspaceEnv,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title: translate("tabs.hoverCard.terminalBlocks"),
+        cwd,
+        paneTree: { kind: "leaf", id: leafId, cwd },
+        activeLeafId: leafId,
+        blocks: true,
+        workspaceEnv,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return tabId;
     },
@@ -959,22 +957,21 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     (shellPath: string, shellName: string, cwd?: string) => {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title: shellName || "shell",
-          customTitle: shellName,
-          cwd,
-          paneTree: { kind: "leaf", id: leafId, cwd },
-          activeLeafId: leafId,
-          workspaceEnv: LOCAL_WORKSPACE,
-          shellOverride: shellPath,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title: shellName || "shell",
+        customTitle: shellName,
+        cwd,
+        paneTree: { kind: "leaf", id: leafId, cwd },
+        activeLeafId: leafId,
+        workspaceEnv: LOCAL_WORKSPACE,
+        shellOverride: shellPath,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return tabId;
     },
@@ -986,21 +983,20 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
       const env: WorkspaceEnv = { kind: "wsl", distro };
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title: `${distro} (WSL)`,
-          customTitle: `${distro} (WSL)`,
-          cwd,
-          paneTree: { kind: "leaf", id: leafId, cwd },
-          activeLeafId: leafId,
-          workspaceEnv: env,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title: `${distro} (WSL)`,
+        customTitle: `${distro} (WSL)`,
+        cwd,
+        paneTree: { kind: "leaf", id: leafId, cwd },
+        activeLeafId: leafId,
+        workspaceEnv: env,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return { tabId, leafId };
     },
@@ -1027,21 +1023,20 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         () => nextIdRef.current++,
         cwd,
       );
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title,
-          customTitle: title,
-          cwd,
-          paneTree,
-          activeLeafId: agentLeafIds[0],
-          workspaceEnv,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title,
+        customTitle: title,
+        cwd,
+        paneTree,
+        activeLeafId: agentLeafIds[0],
+        workspaceEnv,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return { tabId, leafIds: agentLeafIds };
     },
@@ -1064,21 +1059,20 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     ) => {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title,
-          customTitle: title,
-          cwd,
-          paneTree: { kind: "leaf", id: leafId, cwd },
-          activeLeafId: leafId,
-          workspaceEnv,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title,
+        customTitle: title,
+        cwd,
+        paneTree: { kind: "leaf", id: leafId, cwd },
+        activeLeafId: leafId,
+        workspaceEnv,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return { tabId, leafId };
     },
@@ -1094,20 +1088,19 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         kind: "serial",
         ...config,
       };
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title,
-          customTitle: title,
-          paneTree: { kind: "leaf", id: leafId },
-          activeLeafId: leafId,
-          workspaceEnv,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title,
+        customTitle: title,
+        paneTree: { kind: "leaf", id: leafId },
+        activeLeafId: leafId,
+        workspaceEnv,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return { tabId, leafId };
     },
@@ -1119,21 +1112,20 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
       registerGuestTerminal(leafId, credentials);
-      setTabs((current) => [
-        ...current,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title,
-          customTitle: title,
-          paneTree: { kind: "leaf", id: leafId },
-          activeLeafId: leafId,
-          workspaceEnv: LOCAL_WORKSPACE,
-          collaboration: { mode: "guest" },
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title,
+        customTitle: title,
+        paneTree: { kind: "leaf", id: leafId },
+        activeLeafId: leafId,
+        workspaceEnv: LOCAL_WORKSPACE,
+        collaboration: { mode: "guest" },
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return { tabId, leafId };
     },
@@ -1149,21 +1141,20 @@ export function useTabs(initial?: Partial<TerminalTab>) {
         kind: "docker",
         connection,
       };
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title,
-          customTitle: title,
-          cwd: connection.workdir || "/",
-          paneTree: { kind: "leaf", id: leafId, cwd: connection.workdir || "/" },
-          activeLeafId: leafId,
-          workspaceEnv,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title,
+        customTitle: title,
+        cwd: connection.workdir || "/",
+        paneTree: { kind: "leaf", id: leafId, cwd: connection.workdir || "/" },
+        activeLeafId: leafId,
+        workspaceEnv,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return { tabId, leafId };
     },
@@ -1174,21 +1165,20 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     (cwd?: string, workspaceEnv: WorkspaceEnv = LOCAL_WORKSPACE) => {
       const tabId = nextIdRef.current++;
       const leafId = nextIdRef.current++;
-      setTabs((t) => [
-        ...t,
-        {
-          id: tabId,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "terminal",
-          spaceId: activeSpaceIdRef.current,
-          title: translate("tabs.subtitles.privateTerminal"),
-          cwd,
-          paneTree: { kind: "leaf", id: leafId, cwd },
-          activeLeafId: leafId,
-          private: true,
-          workspaceEnv,
-        },
-      ]);
+      const nextTab: Tab = {
+        id: tabId,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "terminal",
+        spaceId: activeSpaceIdRef.current,
+        title: translate("tabs.subtitles.privateTerminal"),
+        cwd,
+        paneTree: { kind: "leaf", id: leafId, cwd },
+        activeLeafId: leafId,
+        private: true,
+        workspaceEnv,
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(tabId);
       return tabId;
     },
@@ -1381,21 +1371,20 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       const id = nextIdRef.current++;
       const host = options?.host || "";
       const title = host ? `RDP: ${host}` : "Remote Desktop";
-      setTabs((t) => [
-        ...t,
-        {
-          id,
-          ...createTabIdentity(activeSpaceIdRef.current),
-          kind: "rdp",
-          spaceId: activeSpaceIdRef.current,
-          title,
-          host,
-          port: options?.port || 3389,
-          username: options?.username,
-          domain: options?.domain,
-          autoConnect: options?.autoConnect ?? Boolean(host),
-        },
-      ]);
+      const nextTab: Tab = {
+        id,
+        ...createTabIdentity(activeSpaceIdRef.current),
+        kind: "rdp",
+        spaceId: activeSpaceIdRef.current,
+        title,
+        host,
+        port: options?.port || 3389,
+        username: options?.username,
+        domain: options?.domain,
+        autoConnect: options?.autoConnect ?? Boolean(host),
+      };
+      tabsRef.current = [...tabsRef.current, nextTab];
+      setTabs(tabsRef.current);
       setActiveId(id);
       return id;
     },
@@ -2096,8 +2085,16 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     );
   }, []);
 
+  const getTabs = useCallback(() => tabsRef.current, []);
+  const getTab = useCallback(
+    (id: number) => tabsRef.current.find((t) => t.id === id),
+    [],
+  );
+
   return {
     tabs,
+    getTabs,
+    getTab,
     activeId,
     setActiveId,
     allocId,

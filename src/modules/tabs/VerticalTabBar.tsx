@@ -76,6 +76,9 @@ type Props = {
   onDuplicate: (id: number) => void;
   onSplitRight?: (id: number) => void;
   onSplitDown?: (id: number) => void;
+  onOpenPreviewSplit?: (id: number) => void;
+  onOpenGitGraphSplit?: (id: number) => void;
+  onOpenEditorSplit?: (id: number) => void;
   onPin: (id: number) => void;
   onRename: (id: number, title: string) => void;
   onReorder: (fromId: number, toGapIndex: number) => void;
@@ -90,6 +93,7 @@ type Props = {
   onNewBlock?: () => void;
   onNewPrivate?: () => void;
   onNewPreview?: () => void;
+  onNewBrowser?: () => void;
   onNewEditor?: () => void;
   onNewApiClient?: () => void;
   onNewHarness?: () => void;
@@ -206,6 +210,9 @@ export function VerticalTabBar({
   onDuplicate,
   onSplitRight,
   onSplitDown,
+  onOpenPreviewSplit,
+  onOpenGitGraphSplit,
+  onOpenEditorSplit,
   onPin,
   onRename,
   onReorder,
@@ -220,6 +227,7 @@ export function VerticalTabBar({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  onNewBrowser,
   onNewEditor,
   onNewApiClient,
   onNewHarness,
@@ -369,9 +377,7 @@ export function VerticalTabBar({
         {onNew &&
         onNewBlock &&
         onNewPrivate &&
-        onNewPreview &&
         onNewEditor &&
-        onNewGitGraph &&
         onLaunchAgents ? (
           <NewTabMenu
             onNew={onNew}
@@ -380,6 +386,7 @@ export function VerticalTabBar({
             onNewBlock={onNewBlock}
             onNewPrivate={onNewPrivate}
             onNewPreview={onNewPreview}
+            onNewBrowser={onNewBrowser}
             onNewEditor={onNewEditor}
             onNewApiClient={onNewApiClient}
             onNewHarness={onNewHarness}
@@ -958,7 +965,7 @@ export function VerticalTabBar({
                             strokeWidth={1.75}
                           />
                           <span className="flex-1">
-                            {t("tabs.duplicateTab")}
+                            {t("tabs.duplicateSplit")}
                           </span>
                         </ContextMenuItem>
                         {onSplitRight ? (
@@ -972,7 +979,7 @@ export function VerticalTabBar({
                               strokeWidth={1.75}
                             />
                             <span className="flex-1">
-                              {t("commandPalette.commands.splitPaneRight")}
+                              {t("tabs.splitRight")}
                             </span>
                           </ContextMenuItem>
                         ) : null}
@@ -987,7 +994,54 @@ export function VerticalTabBar({
                               strokeWidth={1.75}
                             />
                             <span className="flex-1">
-                              {t("commandPalette.commands.splitPaneDown")}
+                              {t("tabs.splitDown")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
+                        {onOpenPreviewSplit ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                            onSelect={() => onOpenPreviewSplit(tab.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={Globe02Icon}
+                              size={13}
+                              strokeWidth={1.75}
+                              className="text-cyan-400"
+                            />
+                            <span className="flex-1">
+                              {t("tabs.splitPreview")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
+                        {onOpenGitGraphSplit ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                            onSelect={() => onOpenGitGraphSplit(tab.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={GitBranchIcon}
+                              size={13}
+                              strokeWidth={1.75}
+                              className="text-amber-400"
+                            />
+                            <span className="flex-1">
+                              {t("tabs.splitGitGraph")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
+                        {onOpenEditorSplit ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-lg px-2.5 py-1.5 text-[12px]"
+                            onSelect={() => onOpenEditorSplit(tab.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={PencilEdit02Icon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {t("tabs.splitEditor")}
                             </span>
                           </ContextMenuItem>
                         ) : null}

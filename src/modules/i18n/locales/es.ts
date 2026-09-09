@@ -1006,6 +1006,13 @@ export const es: TranslationSchema = {
     agentLauncher: "Lanzador de agentes",
     openAgentChat: "Abrir agente en el chat",
     moreTerminals: "Más terminales",
+    newBrowser: "Nuevo navegador web",
+    splitRight: "Dividir terminal a la derecha",
+    splitDown: "Dividir terminal abajo",
+    splitPreview: "Abrir vista previa dividida",
+    splitGitGraph: "Gráfico de commits dividido",
+    splitEditor: "Nuevo editor dividido",
+    duplicateSplit: "Duplicar en vista dividida",
     colorTag: "Etiqueta de color",
     hoverCard: {
       activeTime: "Tiempo activa",

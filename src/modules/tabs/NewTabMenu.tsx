@@ -16,20 +16,16 @@ import {
 import { fmtShortcut, MOD_KEY, SHIFT_KEY } from "@/lib/platform";
 import { AgentLauncherPanel } from "@/modules/agents/components/AgentLauncherPanel";
 import type { AgentLaunchRequest } from "@/modules/agents/lib/launcher";
-import { useAgentHistoryStore } from "@/modules/agent-history";
 import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import { useTranslation } from "@/modules/i18n";
 import { useChatStore } from "@/modules/ai/store/chatStore";
 import {
   AiBrowserIcon,
   type ArrowRight01Icon,
-  Clock01Icon,
   ComputerScreenShareIcon,
   ComputerTerminal02Icon,
   File02Icon,
   FolderOpenIcon,
-  GitBranchIcon,
-  GlobalIcon,
   Globe02Icon,
   IncognitoIcon,
   PencilEdit02Icon,
@@ -57,6 +53,7 @@ export type NewTabMenuProps = {
   onNewBlock: () => void;
   onNewPrivate: () => void;
   onNewPreview?: () => void;
+  onNewBrowser?: () => void;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
   onNewHarness?: () => void;
@@ -70,7 +67,7 @@ export type NewTabMenuProps = {
   onConnectRemote?: () => void;
   onOpenFile?: () => void;
   onOpenFolder?: () => void;
-  onNewGitGraph: () => void;
+  onNewGitGraph?: () => void;
   onLaunchAgents: (request: AgentLaunchRequest) => void;
 };
 
@@ -178,6 +175,7 @@ export function NewTabMenu({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  onNewBrowser,
   onNewEditor,
   onNewApiClient,
   onNewHarness,
@@ -246,6 +244,7 @@ export function NewTabMenu({
                 onNewBlock={onNewBlock}
                 onNewPrivate={onNewPrivate}
                 onNewPreview={onNewPreview}
+                onNewBrowser={onNewBrowser}
                 onNewEditor={onNewEditor}
                 onNewApiClient={onNewApiClient}
                 onNewHarness={onNewHarness}
@@ -292,13 +291,14 @@ export function NewTabMenuItems({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  onNewBrowser,
   onNewEditor,
-  onNewApiClient,
+  onNewApiClient: _onNewApiClient,
   onNewHarness: _onNewHarness,
   onConnectRemote,
   onOpenFile,
   onOpenFolder,
-  onNewGitGraph,
+  onNewGitGraph: _onNewGitGraph,
 }: NewTabMenuItemsProps) {
   const { t } = useTranslation();
   const aiAvailable = useAiAvailable();
@@ -486,24 +486,10 @@ export function NewTabMenuItems({
         shortcut={fmtShortcut(MOD_KEY, "E")}
       />
 
-      {/* 5. Gráfico de Commits */}
-      <NewTabMenuItem
-        onSelect={onNewGitGraph}
-        customIcon={
-          <HugeiconsIcon
-            icon={GitBranchIcon}
-            size={14}
-            strokeWidth={1.75}
-            className="shrink-0 opacity-80"
-          />
-        }
-        label={t("git.commitGraph")}
-      />
-
-      {/* 6. Navegador Web / Live Preview */}
-      {onNewPreview && (
+      {/* 5. Navegador Web (Nueva pestaña en blanco) */}
+      {(onNewBrowser || onNewPreview) && (
         <NewTabMenuItem
-          onSelect={onNewPreview}
+          onSelect={onNewBrowser ?? onNewPreview!}
           customIcon={
             <HugeiconsIcon
               icon={Globe02Icon}
@@ -512,41 +498,9 @@ export function NewTabMenuItems({
               className="shrink-0 text-cyan-400"
             />
           }
-          label={t("preview.openPreview")}
+          label={t("tabs.newBrowser")}
         />
       )}
-
-      {/* 7. API Client & Sandbox */}
-      {onNewApiClient && (
-        <NewTabMenuItem
-          onSelect={onNewApiClient}
-          customIcon={
-            <HugeiconsIcon
-              icon={GlobalIcon}
-              size={14}
-              strokeWidth={1.75}
-              className="shrink-0 text-emerald-400"
-            />
-          }
-          label={t("commandPalette.commands.newApiClient")}
-          shortcut={fmtShortcut(MOD_KEY, SHIFT_KEY, "A")}
-        />
-      )}
-
-      {/* 8. Agent Operational History */}
-      <NewTabMenuItem
-        onSelect={() => useAgentHistoryStore.getState().openHistory()}
-        customIcon={
-          <HugeiconsIcon
-            icon={Clock01Icon}
-            size={14}
-            strokeWidth={1.75}
-            className="shrink-0 text-purple-400"
-          />
-        }
-        label={t("agentHistory.modalTitle")}
-        shortcut={fmtShortcut(MOD_KEY, SHIFT_KEY, "H")}
-      />
 
       {/* 7. Acceso a Archivos */}
       {(onOpenFile || onOpenFolder) && (
