@@ -1,5 +1,7 @@
 minimumReleaseAge: 4320
 minimumReleaseAgeStrict: true
+overrides:
+  '@codemirror/state': 6.7.4
 allowBuilds:
   esbuild: true
   msgpackr-extract: false
