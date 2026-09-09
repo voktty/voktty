@@ -5,6 +5,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import {
   RUNTIME_MODE_HINT,
   RUNTIME_MODE_LABEL,
@@ -32,6 +33,7 @@ const ICONS: Record<RuntimeMode, typeof Lock> = {
 };
 
 export function AccessPicker({ value, onChange, onClose }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(() =>
     Math.max(0, RUNTIME_MODES.indexOf(value)),
@@ -113,7 +115,7 @@ export function AccessPicker({ value, onChange, onClose }: Props) {
           autoFocus
           onDismiss={(reason) => dismiss(reason === "escape")}
           role="listbox"
-          aria-label="Access"
+          aria-label={t("harness.chrome.access")}
           data-access-picker
           tabIndex={-1}
           onKeyDown={onMenuKey}

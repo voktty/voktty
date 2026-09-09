@@ -1,5 +1,6 @@
 import { Loader, WandSparkles } from "./icons";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { createPortal } from "react-dom";
 import { generateCommitMessage } from "../lib/harness";
 import { LAYER } from "../lib/layers";
@@ -28,6 +29,7 @@ export function SwitchBranchDialog({
   onCommit,
   onCancel,
 }: Props) {
+  const { t } = useTranslation();
   const [message, setMessage] = useState("");
   const [generating, setGenerating] = useState(false);
   const messageRef = useRef<HTMLTextAreaElement>(null);
@@ -81,18 +83,22 @@ export function SwitchBranchDialog({
         role="dialog"
         aria-modal="true"
         aria-busy={Boolean(busy) || generating}
-        aria-label={creating ? `Create ${branch}` : `Switch to ${branch}`}
+        aria-label={
+          creating
+            ? t("harness.chrome.createNamed", { name: branch })
+            : t("harness.chrome.switchToNamed", { name: branch })
+        }
         onMouseDown={(event) => event.stopPropagation()}
         className="absolute left-1/2 top-[22%] flex w-[min(420px,calc(100vw-24px))] -translate-x-1/2 flex-col gap-3 rounded-xl border border-zinc-700/60 bg-[#18181b] text-zinc-100 p-4 shadow-2xl shadow-black/80"
       >
         <div className="flex flex-col gap-1">
           <h2 className="text-[13px] font-medium leading-tight text-content">
-            Uncommitted changes
+            {t("harness.chrome.uncommittedChanges")}
           </h2>
           <p className="text-[12px] leading-snug text-content/55">
             {creating
-              ? `Creating “${branch}” would overwrite your local changes. Stash them for later, or commit them on this branch first.`
-              : `Switching to “${branch}” would overwrite your local changes. Stash them for later, or commit them on this branch first.`}
+              ? t("harness.chrome.creatingBranchOverwrite", { name: branch })
+              : t("harness.chrome.switchingBranchOverwrite", { name: branch })}
           </p>
         </div>
 
@@ -101,9 +107,11 @@ export function SwitchBranchDialog({
             ref={messageRef}
             rows={1}
             value={message}
-            placeholder={`Message (${MOD}↩ to commit)`}
+            placeholder={t("harness.chrome.messageToCommitShortcut", {
+              shortcut: `${MOD}↩`,
+            })}
             disabled={Boolean(busy) || generating}
-            aria-label="Commit message"
+            aria-label={t("harness.chrome.commitMessage")}
             className="max-h-40 w-full resize-none overflow-y-auto rounded-md bg-content/10 py-1 pr-8 pl-2 text-[13px] leading-5 text-content outline-none placeholder:text-content/35 disabled:opacity-40"
             onChange={(event) => setMessage(event.target.value)}
             onKeyDown={(event) => {
@@ -119,8 +127,8 @@ export function SwitchBranchDialog({
           />
           <button
             type="button"
-            title="Generate commit message"
-            aria-label="Generate commit message"
+            title={t("harness.chrome.generateCommit")}
+            aria-label={t("harness.chrome.generateCommit")}
             disabled={Boolean(busy) || generating}
             onClick={() => void generate()}
             className="absolute top-1 right-1 grid size-5 place-items-center rounded-md bg-content/10 text-content hover:bg-content/20 hover:text-content disabled:opacity-40"
@@ -146,7 +154,7 @@ export function SwitchBranchDialog({
             onClick={onCancel}
             className="rounded-md px-3 py-1.5 text-[12px] text-content/70 hover:bg-content/8 hover:text-content disabled:opacity-40"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -157,7 +165,7 @@ export function SwitchBranchDialog({
             {busy === "commit" ? (
               <Loader className="size-3.5 animate-spin" strokeWidth={1.75} />
             ) : null}
-            Commit & switch
+            {t("harness.chrome.commitAndSwitch")}
           </button>
           <button
             type="button"
@@ -168,7 +176,7 @@ export function SwitchBranchDialog({
             {busy === "stash" ? (
               <Loader className="size-3.5 animate-spin" strokeWidth={1.75} />
             ) : null}
-            Stash & switch
+            {t("harness.chrome.stashAndSwitch")}
           </button>
         </div>
       </div>

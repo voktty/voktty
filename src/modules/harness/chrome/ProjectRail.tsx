@@ -17,7 +17,7 @@ import {
   Trash2,
 } from "./icons";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { t } from "@/modules/i18n";
+import { t, useTranslation } from "@/modules/i18n";
 import { useDragResize } from "../hooks/useDragResize";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useProjectAvailability } from "../hooks/useProjectAvailability";
@@ -75,12 +75,6 @@ import { TabGroupMenu, type TabGroupMenuExtraItem } from "./TabGroupMenu";
 import { TerminalSpinner } from "./TerminalSpinner";
 import type { SettingsSectionId } from "../lib/settings";
 
-const REVEAL_LABEL = IS_MAC
-  ? "Reveal in Finder"
-  : typeof navigator !== "undefined" && /Win/.test(navigator.platform)
-    ? "Reveal in File Explorer"
-    : "Open Containing Folder";
-
 function projectMenuExtraItems(
   pinned: boolean,
   canRemove: boolean,
@@ -88,18 +82,31 @@ function projectMenuExtraItems(
   const items: TabGroupMenuExtraItem[] = [
     {
       id: "background",
-      label: "Background image",
+      label: t("harness.chrome.backgroundImage"),
       icon: ImagePlus,
     },
     pinned
-      ? { id: "unpin", label: "Unpin project", icon: PinOff }
-      : { id: "pin", label: "Pin project", icon: Pin },
-    { id: "reveal", label: REVEAL_LABEL, icon: FolderOpen },
+      ? { id: "unpin", label: t("harness.chrome.unpinProject"), icon: PinOff }
+      : { id: "pin", label: t("harness.chrome.pinProject"), icon: Pin },
+    {
+      id: "reveal",
+      label: IS_MAC
+        ? t("harness.chrome.revealInFinder")
+        : typeof navigator !== "undefined" && /Win/.test(navigator.platform)
+          ? t("harness.chrome.revealInFileExplorer")
+          : t("harness.chrome.openContainingFolder"),
+      icon: FolderOpen,
+    },
   ];
   if (canRemove) {
     items.push(
-      { id: "archive", label: "Archive", icon: Archive, sepBefore: true },
-      { id: "delete", label: "Delete", icon: Trash2, danger: true },
+      {
+        id: "archive",
+        label: t("harness.chrome.archive"),
+        icon: Archive,
+        sepBefore: true,
+      },
+      { id: "delete", label: t("common.delete"), icon: Trash2, danger: true },
     );
   }
   return items;
@@ -164,6 +171,7 @@ export function ProjectRail({
   onSelectSettingsSection,
   onCloseSettings,
 }: Props) {
+  const { t } = useTranslation();
   const resize = useDragResize({
     min: PROJECT_RAIL_WIDTH_MIN,
     max: () =>
@@ -397,7 +405,7 @@ export function ProjectRail({
   return (
     <nav
       ref={resize.setPaneRef}
-      aria-label="Projects"
+      aria-label={t("harness.chrome.projects")}
       className="sidebar-glass relative flex shrink-0 flex-col border-r border-content/10"
     >
       <div
@@ -426,29 +434,35 @@ export function ProjectRail({
         <>
           <div className="flex shrink-0 flex-col gap-px px-2 pb-2 pt-0.5">
             <RailSearch
-              label="Search"
+              label={t("harness.chrome.search")}
               icon={Search}
               onClick={onSearch}
               active={searchActive}
               shortcut={`${MOD}K`}
-              ariaLabel={`Search (${MOD}K)`}
+              ariaLabel={t("harness.chrome.searchShortcut", {
+                shortcut: `${MOD}K`,
+              })}
             />
             <div className="mt-0.5" />
             <RailAction
-              label="Inbox"
+              label={t("harness.chrome.inbox")}
               icon={Inbox}
               onClick={onOpenInbox}
               active={inboxActive}
               dot={inboxUnseen}
-              ariaLabel={inboxUnseen ? "Inbox, new items" : "Inbox"}
+              ariaLabel={
+                inboxUnseen
+                  ? t("harness.chrome.inboxNewItems")
+                  : t("harness.chrome.inbox")
+              }
             />
             {notesEnabled ? (
               <RailAction
-                label="Notes"
+                label={t("harness.chrome.notes")}
                 icon={File}
                 onClick={onOpenNotes}
                 active={notesActive}
-                ariaLabel="Notes"
+                ariaLabel={t("harness.chrome.notes")}
               />
             ) : null}
           </div>
@@ -462,7 +476,7 @@ export function ProjectRail({
           >
             {sections.pinned.length > 0 ? (
               <ProjectSection
-                label="Pinned"
+                label={t("harness.chrome.pinned")}
                 items={sections.pinned}
                 cwd={cwd}
                 busy={busy}
@@ -483,9 +497,9 @@ export function ProjectRail({
             ) : null}
 
             <ProjectSection
-              label="Projects"
+              label={t("harness.chrome.projects")}
               items={sections.projects}
-              emptyLabel="No projects yet"
+              emptyLabel={t("harness.chrome.noProjectsYet")}
               onAdd={onOpenProject}
               cwd={cwd}
               busy={busy}
@@ -515,11 +529,13 @@ export function ProjectRail({
           />
           <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
             <RailAction
-              label="Settings"
+              label={t("harness.chrome.settings")}
               icon={Settings}
               onClick={onOpenSettings}
               shortcut={`${MOD},`}
-              ariaLabel={`Settings (${MOD},)`}
+              ariaLabel={t("harness.chrome.settingsShortcut", {
+                shortcut: `${MOD},`,
+              })}
             />
           </div>
         </>
@@ -591,7 +607,7 @@ export function ProjectRail({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize project sidebar"
+        aria-label={t("harness.chrome.resizeProjectSidebar")}
         aria-valuenow={resize.width}
         aria-valuemin={PROJECT_RAIL_WIDTH_MIN}
         aria-valuemax={PROJECT_RAIL_WIDTH_MAX}
@@ -627,6 +643,7 @@ function LiveAgentsPreview({
   groupCustomColors: Record<string, string>;
   groupMascots: Record<string, string>;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const lockList = useLockOverscroll<HTMLDivElement>();
@@ -650,7 +667,7 @@ function LiveAgentsPreview({
     <div className="shrink-0 px-2">
       <div
         role="status"
-        aria-label="Working agents"
+        aria-label={t("harness.settings.workingAgents")}
         className="overflow-hidden rounded-lg bg-content/5"
       >
         <div className="flex items-center gap-2 px-3.5 py-1.5">
@@ -659,7 +676,7 @@ function LiveAgentsPreview({
             className="size-1.5 shrink-0 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent)] animate-pulse"
           />
           <span className="min-w-0 flex-1 truncate text-xs text-content/50">
-            Working
+            {t("harness.working")}
           </span>
           <span className="text-[11px] tabular-nums text-content/40">
             {agents.length}
@@ -697,7 +714,9 @@ function LiveAgentsPreview({
             ) : (
               <ChevronDown className="size-3" strokeWidth={1.75} />
             )}
-            {expanded ? "Show less" : `${extra} more`}
+            {expanded
+              ? t("harness.chrome.showLess")
+              : t("harness.chrome.moreCount", { count: extra })}
           </button>
         ) : null}
       </div>
@@ -724,6 +743,7 @@ function LiveAgentCard({
   groupCustomColors: Record<string, string>;
   groupMascots: Record<string, string>;
 }) {
+  const { t } = useTranslation();
   const seed = projectName(agent.cwd);
   const key = projectKey(agent.cwd);
   const project = resolveTabGroupLabel(key, groupLabels, seed);
@@ -736,9 +756,9 @@ function LiveAgentCard({
       ? formatLiveElapsed(agent.startedAt, now)
       : "";
   const activity = agent.needsApproval
-    ? "Need approval"
+    ? t("harness.chrome.needApproval")
     : agent.done
-      ? "Done"
+      ? t("harness.chrome.done")
       : agent.activity;
   const live = !agent.needsApproval && !agent.done;
   const title = [agent.title, project, activity, elapsed]
@@ -850,6 +870,7 @@ function ProjectSection({
   groupLogos: ReturnType<typeof useTabGroupLogos>;
   groupMascots: Record<string, string>;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="shrink-0 mb-2">
       <div className="flex items-center gap-1 px-3 pb-1.5 pt-1">
@@ -859,8 +880,8 @@ function ProjectSection({
         {onAdd ? (
           <button
             type="button"
-            title="Open project"
-            aria-label="Open project"
+            title={t("harness.chrome.openProject")}
+            aria-label={t("harness.chrome.openProject")}
             onClick={onAdd}
             className="grid size-5 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/8 hover:text-content"
           >
@@ -938,6 +959,7 @@ function ProjectCard({
   groupLogos: ReturnType<typeof useTabGroupLogos>;
   groupMascots: Record<string, string>;
 }) {
+  const { t } = useTranslation();
   const fallbackName = basename(item.path);
   const key = projectKey(item.path);
   const seed = projectName(item.path);
@@ -1048,8 +1070,8 @@ function ProjectCard({
       <button
         type="button"
         data-no-drag
-        title="Project options"
-        aria-label="Project options"
+        title={t("harness.chrome.projectOptions")}
+        aria-label={t("harness.chrome.projectOptions")}
         aria-haspopup="menu"
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
@@ -1063,8 +1085,16 @@ function ProjectCard({
       <button
         type="button"
         data-no-drag
-        title={pinned ? "Unpin project" : "Pin project"}
-        aria-label={pinned ? "Unpin project" : "Pin project"}
+        title={
+          pinned
+            ? t("harness.chrome.unpinProject")
+            : t("harness.chrome.pinProject")
+        }
+        aria-label={
+          pinned
+            ? t("harness.chrome.unpinProject")
+            : t("harness.chrome.pinProject")
+        }
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.stopPropagation();
@@ -1136,7 +1166,7 @@ function projectCardTitle(
   if (files > 0 || additions > 0 || deletions > 0) {
     parts.push(
       [
-        files > 0 ? `${files} ${files === 1 ? "file" : "files"} changed` : "",
+        files > 0 ? t("harness.chrome.filesChanged", { count: files }) : "",
         additions > 0 ? `+${additions}` : "",
         deletions > 0 ? `-${deletions}` : "",
       ]
@@ -1154,13 +1184,13 @@ function projectCardAriaLabel(
   unavailable = false,
 ): string {
   const parts = [name];
-  if (unavailable) parts.push("directorio no disponible");
-  if (busy) parts.push("working");
+  if (unavailable) parts.push(t("harness.unavailableDirShort"));
+  if (busy) parts.push(t("harness.working"));
   const files = stats?.files ?? 0;
   const additions = stats?.additions ?? 0;
   const deletions = stats?.deletions ?? 0;
   if (files > 0) {
-    parts.push(`${files} ${files === 1 ? "file" : "files"} changed`);
+    parts.push(t("harness.chrome.filesChanged", { count: files }));
   }
   if (additions > 0) parts.push(`+${additions}`);
   if (deletions > 0) parts.push(`-${deletions}`);

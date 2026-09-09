@@ -14,6 +14,7 @@ import {
   useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import {
   getHarnessAvailabilitySnapshot,
   hasProbedHarnessAvailability,
@@ -64,15 +65,16 @@ export function HandoffButton({
   from,
   onPick,
 }: Pick<Props, "from" | "onPick">) {
+  const { t } = useTranslation();
   return (
     <SecondOpinionButton
       from={from}
       onPick={onPick}
       icon={Replace}
-      title="Handoff"
-      disabledTitle="Install another provider to hand off"
-      description="Hand this session to another agent to continue the work."
-      menuLabel="Hand this session to another agent"
+      title={t("harness.chrome.handoff")}
+      disabledTitle={t("harness.chrome.installProviderHandoff")}
+      description={t("harness.chrome.handoffDescription")}
+      menuLabel={t("harness.chrome.handoffMenu")}
     />
   );
 }
@@ -88,16 +90,17 @@ export function BuildTargetButton({
   disabled?: boolean;
   onPick: (harness: HarnessId, model: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <SecondOpinionButton
       from={from}
       fromModel={model}
       onPick={onPick}
       icon={ChevronDown}
-      title="Build with another model"
-      disabledTitle="No build providers are available"
-      description="Choose the model and provider that should build this plan."
-      menuLabel="Build this plan with another model or provider"
+      title={t("harness.chrome.buildWithAnotherModel")}
+      disabledTitle={t("harness.chrome.noBuildProviders")}
+      description={t("harness.chrome.buildPlanDescription")}
+      menuLabel={t("harness.chrome.buildPlanMenu")}
       includeCurrent
       disabled={disabled}
       triggerClassName="flex h-6 w-6 shrink-0 items-center justify-center rounded-r-md border-l border-background-base/20 bg-content text-background-base hover:bg-content/90 disabled:pointer-events-none disabled:opacity-40"
@@ -110,14 +113,21 @@ export function SecondOpinionButton({
   fromModel,
   onPick,
   icon: Icon = MessageMultiple,
-  title = "Second opinion",
-  disabledTitle = "Install another provider for a second opinion",
-  description = "Send this turn to another agent to review the work.",
-  menuLabel = "Send this turn to another agent",
+  title,
+  disabledTitle,
+  description,
+  menuLabel,
   includeCurrent = false,
   disabled: disabledByCaller = false,
   triggerClassName,
 }: Props) {
+  const { t } = useTranslation();
+  const resolvedTitle = title ?? t("harness.chrome.secondOpinion");
+  const resolvedDisabledTitle =
+    disabledTitle ?? t("harness.chrome.installProviderSecondOpinion");
+  const resolvedDescription =
+    description ?? t("harness.chrome.secondOpinionDescription");
+  const resolvedMenuLabel = menuLabel ?? t("harness.chrome.secondOpinionMenu");
   const availabilityVersion = useSyncExternalStore(
     subscribeHarnessAvailability,
     getHarnessAvailabilitySnapshot,
@@ -203,7 +213,7 @@ export function SecondOpinionButton({
 
   const noTargets = targets.length === 0;
   const disabled = disabledByCaller || noTargets;
-  const label = noTargets ? disabledTitle : title;
+  const label = noTargets ? resolvedDisabledTitle : resolvedTitle;
 
   const pick = (harness: HarnessId, model: string) => {
     setOpen(false);
@@ -312,20 +322,20 @@ export function SecondOpinionButton({
             onDismiss={(reason) => dismiss(reason === "escape")}
             role="menu"
             tabIndex={-1}
-            aria-label={menuLabel}
+            aria-label={resolvedMenuLabel}
             onKeyDown={onMenuKey}
             data-provider-target
             className="p-1 font-sans"
           >
             <div className="px-1.5 pb-2 pt-1.5">
               <p className="text-[11px] leading-3 text-content/50 text-balance">
-                {description}
+                {resolvedDescription}
               </p>
             </div>
             <div className="mx-1 mb-1 h-px bg-content/10" />
             {targets.length === 0 ? (
               <div className="px-2.5 py-2 text-[12px] leading-4 text-content/50">
-                {disabledTitle}
+                {resolvedDisabledTitle}
               </div>
             ) : (
               targets.map((harness, index) => {

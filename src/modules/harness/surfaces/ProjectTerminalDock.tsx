@@ -15,6 +15,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { ExplorerMenu } from "../chrome/ExplorerMenu";
 import { SurfaceTabs } from "../chrome/SurfaceTabs";
 import { IconButton } from "../chrome/TitleBar";
@@ -44,12 +45,14 @@ type Props = {
   onTerminalMetaChange?: (fileId: string, patch: TerminalMetaPatch) => void;
 };
 
-const SIDE_ITEMS: { id: DockSide; label: string }[] = [
-  { id: "bottom", label: "Dock Bottom" },
-  { id: "top", label: "Dock Top" },
-  { id: "left", label: "Dock Left" },
-  { id: "right", label: "Dock Right" },
-];
+const SIDE_ITEMS: DockSide[] = ["bottom", "top", "left", "right"];
+
+const SIDE_KEYS: Record<DockSide, string> = {
+  bottom: "harness.chrome.dockBottom",
+  top: "harness.chrome.dockTop",
+  left: "harness.chrome.dockLeft",
+  right: "harness.chrome.dockRight",
+};
 
 function sideIcon(side: DockSide) {
   if (side === "top") return PanelTop;
@@ -79,6 +82,7 @@ export function ProjectTerminalDock({
   onReorderTerminals,
   onTerminalMetaChange,
 }: Props) {
+  const { t } = useTranslation();
   const vertical = isVerticalDock(dock.side);
   const [dragging, setDragging] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -188,7 +192,7 @@ export function ProjectTerminalDock({
       <div
         role="separator"
         aria-orientation={vertical ? "horizontal" : "vertical"}
-        aria-label="Resize terminal"
+        aria-label={t("harness.chrome.resizeTerminal")}
         aria-valuenow={dock.size}
         className={`${sash} ${dragging ? "bg-content/15" : "hover:bg-content/10"}`}
         onPointerDown={onResizePointerDown}
@@ -205,21 +209,23 @@ export function ProjectTerminalDock({
         activeFileId={dock.pane.activeFileId}
         dirtyFileIds={EMPTY_IDS}
         fileErrorCounts={EMPTY_ERRORS}
-        label="Terminals"
+        label={t("harness.chrome.terminals")}
         onSelectFile={onSelectTerminal}
         onCloseFile={onCloseTerminal}
         onReorder={onReorderTerminals}
         trailing={
           <div className="flex shrink-0 items-center gap-0.5 border-l border-content/10 px-1">
             <IconButton
-              label={`New Terminal (${MOD}\`)`}
+              label={t("harness.chrome.newTerminalShortcut", {
+                shortcut: `${MOD}\``,
+              })}
               onClick={onAddTerminal}
             >
               <Plus className="size-3.5" strokeWidth={1.75} />
             </IconButton>
             <div ref={sideButton}>
             <IconButton
-              label="Move Terminal"
+              label={t("harness.chrome.moveTerminal")}
               onClick={() => {
                 const rect = sideButton.current?.getBoundingClientRect();
                 if (!rect) return;
@@ -230,7 +236,9 @@ export function ProjectTerminalDock({
             </IconButton>
             </div>
             <IconButton
-              label={`Hide Terminal (${MOD}J)`}
+              label={t("harness.chrome.hideTerminalShortcut", {
+                shortcut: `${MOD}J`,
+              })}
               onClick={onHide}
             >
               <HideIcon className="size-3.5" strokeWidth={1.75} />
@@ -262,12 +270,12 @@ export function ProjectTerminalDock({
         <ExplorerMenu
           x={menu.x}
           y={menu.y}
-          ariaLabel="Move terminal"
-          items={SIDE_ITEMS.map((item) => ({
+          ariaLabel={t("harness.chrome.moveTerminal")}
+          items={SIDE_ITEMS.map((id) => ({
             kind: "item" as const,
-            id: item.id,
-            label: item.label,
-            checked: item.id === dock.side,
+            id,
+            label: t(SIDE_KEYS[id]),
+            checked: id === dock.side,
           }))}
           onPick={(id) => {
             if (id === "top" || id === "bottom" || id === "left" || id === "right") {

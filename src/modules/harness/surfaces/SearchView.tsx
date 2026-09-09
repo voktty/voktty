@@ -42,11 +42,11 @@ import type { Session } from "../lib/session";
 import { useTranslation } from "@/modules/i18n";
 import { searchSessions, type SessionSummary } from "../lib/sessionStore";
 
-const SCOPES: { id: SearchScope; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "conversations", label: "Conversations" },
-  { id: "files", label: "Files" },
-  { id: "projects", label: "Projects" },
+const SCOPES: { id: SearchScope }[] = [
+  { id: "all" },
+  { id: "conversations" },
+  { id: "files" },
+  { id: "projects" },
 ];
 
 type Props = {
@@ -395,7 +395,9 @@ export function SearchView({
         ) : error && hits.length === 0 ? (
           <p className="px-2 py-1.5 text-[12px] text-red-400">{error}</p>
         ) : noResults ? (
-          <p className="px-2 py-1.5 text-[12px] text-content/50">No results</p>
+          <p className="px-2 py-1.5 text-[12px] text-content/50">
+            {t("harness.chrome.noResults")}
+          </p>
         ) : (
           <ResultList
             hits={hits}
@@ -414,6 +416,7 @@ const EMPTY_DOT_COLS = 27;
 const EMPTY_DOT_ROWS = 19;
 
 function EmptyState() {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center px-6 pb-24">
       <div className="relative mb-2 grid h-48 w-72 place-items-center">
@@ -439,7 +442,7 @@ function EmptyState() {
       </div>
 
       <p className="max-w-xs text-center text-[13px] text-content/45">
-        Find files, conversations, messages, and projects.
+        {t("harness.chrome.searchEmptyHint")}
       </p>
     </div>
   );

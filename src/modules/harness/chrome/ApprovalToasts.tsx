@@ -1,5 +1,6 @@
 import { CircleAlert } from "./icons";
 import { createPortal } from "react-dom";
+import { useTranslation } from "@/modules/i18n";
 import type { ApprovalDecision } from "../lib/harness";
 import type { PendingApprovalNotice } from "../lib/approvalToast";
 import { LAYER } from "../lib/layers";
@@ -53,6 +54,7 @@ function ApprovalToastCard({
   onFocusSession: (sessionId: string) => void;
   onApproval: Props["onApproval"];
 }) {
+  const { t } = useTranslation();
   const { session, label, requestId } = notice;
   const title = sessionDisplayTitle(session.title, session.harness);
   const harness = HARNESS_TITLE[session.harness];
@@ -76,7 +78,7 @@ function ApprovalToastCard({
           </span>
           <span className="flex shrink-0 items-center gap-1 text-[11px] text-amber-400">
             <CircleAlert className="size-3.5" strokeWidth={1.75} />
-            <span>Approval</span>
+            <span>{t("harness.chrome.approval")}</span>
           </span>
         </span>
         <span className="line-clamp-3 text-[12px] leading-relaxed text-content/70">
@@ -90,14 +92,14 @@ function ApprovalToastCard({
           className="flex-1 rounded-md bg-content px-2.5 py-1 text-[11px] font-medium text-background-base hover:bg-content/80"
           onClick={() => onApproval(session.id, requestId, "allow")}
         >
-          Allow
+          {t("harness.chrome.allow")}
         </button>
         <button
           type="button"
           className="flex-1 rounded-md bg-content/10 px-2.5 py-1 text-[11px] font-medium text-content/70 hover:bg-content/20"
           onClick={() => onApproval(session.id, requestId, "deny")}
         >
-          Deny
+          {t("harness.chrome.deny")}
         </button>
       </div>
     </article>

@@ -16,6 +16,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { normalizeHex } from "../lib/colorUtils";
 import { clearProjectLogo, pickAndSetProjectLogo } from "../lib/projectLogos";
 import { PROJECT_MASCOTS, projectMascot } from "../lib/projectMascots";
@@ -78,36 +79,38 @@ type MenuItem = {
   icon: IconComponent;
 };
 
-const ITEMS: MenuItem[] = [
-  {
-    id: "new-tab",
-    label: "New tab in group",
-    shortcut: `${MOD}T`,
-    icon: SquarePlus,
-  },
-  {
-    id: "new-window",
-    label: "Move group to new window",
-    icon: AppWindow,
-  },
-  {
-    id: "close-group",
-    label: "Close group",
-    shortcut: `${MOD}W`,
-    icon: X,
-  },
-  {
-    id: "ungroup",
-    label: "Ungroup",
-    icon: Ungroup,
-  },
-  {
-    id: "delete-group",
-    label: "Delete group",
-    danger: true,
-    icon: Trash2,
-  },
-];
+function items(t: (key: string) => string): MenuItem[] {
+  return [
+    {
+      id: "new-tab",
+      label: t("harness.chrome.newTabInGroup"),
+      shortcut: `${MOD}T`,
+      icon: SquarePlus,
+    },
+    {
+      id: "new-window",
+      label: t("harness.chrome.moveGroupToNewWindow"),
+      icon: AppWindow,
+    },
+    {
+      id: "close-group",
+      label: t("harness.chrome.closeGroup"),
+      shortcut: `${MOD}W`,
+      icon: X,
+    },
+    {
+      id: "ungroup",
+      label: t("harness.chrome.ungroup"),
+      icon: Ungroup,
+    },
+    {
+      id: "delete-group",
+      label: t("harness.chrome.deleteGroup"),
+      danger: true,
+      icon: Trash2,
+    },
+  ];
+}
 
 export function TabGroupMenu({
   x,
@@ -132,9 +135,11 @@ export function TabGroupMenu({
   extraItems,
   onExtraPick,
 }: Props) {
+  const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(label);
   const [customPickerOpen, setCustomPickerOpen] = useState(false);
+  const menuItems = items(t);
 
   useEffect(() => {
     input.current?.focus();
@@ -163,7 +168,7 @@ export function TabGroupMenu({
       onDismiss={onClose}
       role="menu"
       tabIndex={-1}
-      aria-label="Tab group actions"
+      aria-label={t("harness.chrome.tabGroupActions")}
       onKeyDown={onMenuKey}
       onContextMenu={(e) => e.preventDefault()}
       className="overflow-y-auto overscroll-none p-2"
@@ -173,7 +178,7 @@ export function TabGroupMenu({
         value={name}
         onChange={(e) => setName(e.target.value)}
         onBlur={commitName}
-        aria-label="Group name"
+        aria-label={t("harness.chrome.groupName")}
         className="mb-2 w-full rounded-lg border border-content/10 bg-content/5 px-2.5 py-1.5 text-[13px] text-content outline-none ring-accent/40 focus:ring-1"
       />
 
@@ -215,8 +220,8 @@ export function TabGroupMenu({
           {logoPath ? (
             <button
               type="button"
-              title="Remove project logo"
-              aria-label="Remove project logo"
+              title={t("harness.chrome.removeProjectLogo")}
+              aria-label={t("harness.chrome.removeProjectLogo")}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 void clearProjectLogo(logoProject).then(onLogoChange);
@@ -259,8 +264,8 @@ export function TabGroupMenu({
         })}
         <button
           type="button"
-          title="Custom color"
-          aria-label="Custom color"
+          title={t("harness.chrome.customColor")}
+          aria-label={t("harness.chrome.customColor")}
           aria-expanded={customPickerOpen}
           aria-pressed={customColor != null}
           onMouseDown={(e) => e.preventDefault()}
@@ -320,19 +325,19 @@ export function TabGroupMenu({
         <>
           <div className="my-1 h-px bg-content/10" />
 
-          {ITEMS.slice(0, 2).map((item) => (
+          {menuItems.slice(0, 2).map((item) => (
             <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
           ))}
 
           <div className="my-1 h-px bg-content/10" />
 
-          {ITEMS.slice(2, 4).map((item) => (
+          {menuItems.slice(2, 4).map((item) => (
             <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
           ))}
 
           <div className="my-1 h-px bg-content/10" />
 
-          {ITEMS.slice(4).map((item) => (
+          {menuItems.slice(4).map((item) => (
             <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
           ))}
         </>

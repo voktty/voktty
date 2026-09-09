@@ -8,6 +8,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { t, useTranslation } from "@/modules/i18n";
 import {
   loadProjectFiles,
   peekProjectFiles,
@@ -36,6 +37,7 @@ export function FilePicker({
   onOpenFile,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const search = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -161,7 +163,7 @@ export function FilePicker({
       <div className="absolute inset-0" onMouseDown={onClose} />
       <div
         role="dialog"
-        aria-label="Go to File"
+        aria-label={t("harness.chrome.goToFile")}
         data-file-picker
         onMouseDown={(e) => e.stopPropagation()}
         className="absolute left-1/2 top-[12%] flex w-[min(560px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-zinc-700/60 bg-[#18181b] text-zinc-100 shadow-2xl shadow-black/80"
@@ -173,8 +175,8 @@ export function FilePicker({
               ref={search}
               type="text"
               value={query}
-              placeholder="Go to File"
-              aria-label="Go to File"
+              placeholder={t("harness.chrome.goToFile")}
+              aria-label={t("harness.chrome.goToFile")}
               spellCheck={false}
               autoComplete="off"
               autoCorrect="off"
@@ -221,11 +223,13 @@ function emptyLabel({
   matchCount: number;
 }): string | null {
   if (error && fileCount === 0) return error;
-  if (!looksLikeProject(cwd)) return "Open a project to search files";
-  if (loading && fileCount === 0) return "Indexing files…";
-  if (fileCount === 0) return "No files found";
+  if (!looksLikeProject(cwd)) return t("harness.chrome.openProjectToSearchFiles");
+  if (loading && fileCount === 0) return t("harness.chrome.indexingFiles");
+  if (fileCount === 0) return t("harness.chrome.noFilesFound");
   if (matchCount === 0) {
-    return query.trim() ? "No matching files" : "Type a file name to search";
+    return query.trim()
+      ? t("harness.chrome.noMatchingFiles")
+      : t("harness.chrome.typeFileNameToSearch");
   }
   return null;
 }
@@ -243,6 +247,7 @@ function FileList({
   onActive: (index: number) => void;
   onPick: (file: RankedFile) => void;
 }) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeRef = useRef<HTMLButtonElement>(null);
   const pointer = useRef({ x: Number.NaN, y: Number.NaN, allow: false });
@@ -278,7 +283,7 @@ function FileList({
     <div
       ref={lockOverscroll}
       role="listbox"
-      aria-label="Files"
+      aria-label={t("harness.chrome.files")}
       onMouseMove={onListMouseMove}
       className="max-h-[min(380px,50vh)] overflow-y-auto overscroll-none px-1.5 pb-1.5"
     >

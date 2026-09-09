@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
   type IconComponent,
 } from "./icons";
+import { useTranslation } from "@/modules/i18n";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   SETTINGS_SECTIONS,
@@ -29,19 +30,27 @@ type Props = {
 
 /** Body of the project rail while settings are open. */
 export function SettingsNav({ section, onSelect, onClose }: Props) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
+  const sectionLabels: Record<SettingsSectionId, string> = {
+    general: t("harness.settings.general"),
+    appearance: t("harness.settings.appearance"),
+    keybindings: t("harness.chrome.settingsKeybindings"),
+    providers: t("harness.settings.providers"),
+    archive: t("harness.chrome.settingsArchive"),
+  };
 
   return (
     <>
       <div
         ref={lockOverscroll}
-        aria-label="Settings"
+        aria-label={t("harness.chrome.settings")}
         className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto overscroll-none px-2 pb-2"
       >
         {SETTINGS_SECTIONS.map((item) => (
           <NavRow
             key={item.id}
-            label={item.label}
+            label={sectionLabels[item.id]}
             icon={SECTION_ICONS[item.id]}
             active={item.id === section}
             onClick={() => onSelect(item.id)}
@@ -49,7 +58,7 @@ export function SettingsNav({ section, onSelect, onClose }: Props) {
         ))}
       </div>
       <div className="flex shrink-0 flex-col gap-px p-2">
-        <NavRow label="Back" icon={ArrowLeft} onClick={onClose} />
+        <NavRow label={t("common.back")} icon={ArrowLeft} onClick={onClose} />
       </div>
     </>
   );

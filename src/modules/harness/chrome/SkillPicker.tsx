@@ -6,6 +6,7 @@ import {
   type FormEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { looksLikeProject } from "../lib/recents";
 import {
   isValidSkillName,
@@ -43,9 +44,11 @@ export function SkillPicker({
   onCancelCreate,
   onCreate,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <div
       data-skill-picker
+      aria-label={t("harness.chrome.skills")}
       className="overflow-hidden rounded-xl border border-zinc-700/60 bg-[#1a1a1e] text-zinc-100 shadow-2xl shadow-black/80"
     >
       {creating ? (
@@ -73,7 +76,7 @@ export function SkillPicker({
             className="flex w-full items-center gap-2 border-t border-content/10 px-2.5 py-2 text-left text-[12px] text-content/70 hover:bg-content/10 hover:text-content"
           >
             <Plus className="size-3.5 shrink-0" strokeWidth={1.75} />
-            New skill
+            {t("harness.chrome.newSkill")}
           </button>
         </>
       )}
@@ -94,6 +97,7 @@ function SkillList({
   onActive: (index: number) => void;
   onPick: (skill: Skill) => void;
 }) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeRef = useRef<HTMLButtonElement>(null);
   const pointer = useRef({ x: Number.NaN, y: Number.NaN, allow: false });
@@ -128,7 +132,9 @@ function SkillList({
   if (skills.length === 0) {
     return (
       <p className="px-3 py-2.5 text-[12px] text-content/50">
-        {query.trim() ? "No matching skills" : "No skills yet"}
+        {query.trim()
+          ? t("harness.chrome.noMatchingSkills")
+          : t("harness.chrome.noSkillsYet")}
       </p>
     );
   }
@@ -137,7 +143,7 @@ function SkillList({
     <div
       ref={lockOverscroll}
       role="listbox"
-      aria-label="Skills"
+      aria-label={t("harness.chrome.skills")}
       onMouseMove={onListMouseMove}
       className="max-h-[min(240px,40vh)] overflow-y-auto overscroll-none px-1 py-1"
     >
@@ -196,6 +202,7 @@ function CreateSkillForm({
   onCancel: () => void;
   onCreate: (name: string, scope: "project" | "user") => void;
 }) {
+  const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const project = looksLikeProject(cwd);
   const [name, setName] = useState(() => slugSkillName(query));
@@ -220,14 +227,14 @@ function CreateSkillForm({
   return (
     <form onSubmit={submit} className="px-2.5 py-2">
       <p className="mb-2 text-[11px] text-content/50">
-        Writes a starter SKILL.md you can edit.
+        {t("harness.chrome.skillStarterHint")}
       </p>
       <input
         ref={input}
         value={name}
         spellCheck={false}
-        placeholder="skill-name"
-        aria-label="Skill name"
+        placeholder={t("harness.chrome.skillNamePlaceholder")}
+        aria-label={t("harness.chrome.skillName")}
         disabled={busy}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
@@ -239,14 +246,14 @@ function CreateSkillForm({
       />
       <div className="mb-2 flex gap-1">
         <ScopeButton
-          label="Project"
+          label={t("harness.chrome.project")}
           hint=".agents/skills"
           selected={scope === "project"}
           disabled={!project || busy}
           onClick={() => setScope("project")}
         />
         <ScopeButton
-          label="Personal"
+          label={t("harness.chrome.personal")}
           hint="~/.agents/skills"
           selected={scope === "user"}
           disabled={busy}
@@ -257,7 +264,7 @@ function CreateSkillForm({
         <p className="mb-2 text-[12px] text-content/70">{error}</p>
       ) : !name.trim() || valid ? null : (
         <p className="mb-2 text-[12px] text-content/50">
-          Use lowercase letters, numbers, and hyphens.
+          {t("harness.chrome.skillNameRules")}
         </p>
       )}
       <div className="flex items-center justify-end gap-1">
@@ -267,14 +274,14 @@ function CreateSkillForm({
           onClick={onCancel}
           className="rounded-md px-2 py-1 text-[12px] text-content/50 hover:bg-content/10 hover:text-content"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="submit"
           disabled={!valid || busy}
           className="rounded-md bg-content/20 px-2 py-1 text-[12px] text-content disabled:opacity-40"
         >
-          {busy ? "Creating…" : "Create"}
+          {busy ? t("harness.chrome.creating") : t("common.create")}
         </button>
       </div>
     </form>

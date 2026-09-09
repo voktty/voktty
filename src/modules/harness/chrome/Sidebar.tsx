@@ -24,6 +24,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { t, useTranslation } from "@/modules/i18n";
 import {
   addSessionToFolder,
   applySessionListDrop,
@@ -144,12 +145,12 @@ let rememberedWidth = DEFAULT_WIDTH;
 
 type SidebarTab = SidebarTabId;
 
-const TAB_LABELS: Record<SidebarTab, string> = {
-  sessions: "Sessions",
-  inbox: "Inbox",
-  files: "Explorer",
-  changes: "Changes",
-};
+function sidebarTabLabel(tab: SidebarTab): string {
+  if (tab === "sessions") return t("harness.chrome.sessions");
+  if (tab === "inbox") return t("harness.chrome.inbox");
+  if (tab === "files") return t("harness.chrome.explorer");
+  return t("harness.chrome.changes");
+}
 
 function projectPathBusy(
   paths: Iterable<string> | undefined,
@@ -303,6 +304,7 @@ function SidebarComponent({
   onSelectSettingsSection,
   onCloseSettings,
 }: Props) {
+  const { t } = useTranslation();
   const gitRoot = gitCwd || cwd;
   const inboxUnseen = useInboxUnseen(recents, cwd);
   const resize = useDragResize({
@@ -650,9 +652,9 @@ function SidebarComponent({
     : undefined;
 
   const folderMenuItems: ExplorerMenuItem[] = [
-    { kind: "item", id: "rename", label: "Rename", shortcut: "F2" },
+    { kind: "item", id: "rename", label: t("common.rename"), shortcut: "F2" },
     { kind: "sep" },
-    { kind: "item", id: "ungroup", label: "Ungroup" },
+    { kind: "item", id: "ungroup", label: t("harness.chrome.ungroup") },
   ];
 
   const sessionMenuItems: ExplorerMenuItem[] = [
@@ -661,7 +663,9 @@ function SidebarComponent({
           {
             kind: "item" as const,
             id: "pin",
-            label: allMenuSessionsPinned ? "Unpin" : "Pin",
+            label: allMenuSessionsPinned
+              ? t("harness.chrome.unpin")
+              : t("harness.chrome.pin"),
           },
         ]
       : []),
@@ -670,18 +674,18 @@ function SidebarComponent({
           {
             kind: "item" as const,
             id: "rename",
-            label: "Rename",
+            label: t("common.rename"),
             shortcut: "F2",
           },
         ]
       : []),
     { kind: "sep" as const },
-    { kind: "item" as const, id: "folder-new", label: "New folder" },
+    { kind: "item" as const, id: "folder-new", label: t("harness.chrome.newFolder") },
     ...(sessionFolders.length > 0 ? [{ kind: "sep" as const }] : []),
     ...sessionFolders.map((folder) => ({
       kind: "item" as const,
       id: `folder-add:${folder.id}`,
-      label: `Add to ${folder.name}`,
+      label: t("harness.chrome.addToFolder", { name: folder.name }),
       checked:
         menuSessionIds.length > 0 &&
         menuSessionIds.every((sessionId) =>
@@ -694,8 +698,8 @@ function SidebarComponent({
             kind: "item" as const,
             id: "folder-remove",
             label: multipleMenuSessions
-              ? "Remove from folders"
-              : "Remove from folder",
+              ? t("harness.chrome.removeFromFolders")
+              : t("harness.chrome.removeFromFolder"),
           },
         ]
       : []),
@@ -710,7 +714,9 @@ function SidebarComponent({
                 {
                   kind: "item" as const,
                   id: "archive",
-                  label: allMenuSessionsArchived ? "Unarchive" : "Archive",
+                  label: allMenuSessionsArchived
+                    ? t("harness.chrome.unarchive")
+                    : t("harness.chrome.archive"),
                 },
               ]
             : []),
@@ -719,7 +725,7 @@ function SidebarComponent({
                 {
                   kind: "item" as const,
                   id: "delete",
-                  label: "Delete",
+                  label: t("common.delete"),
                   shortcut: "⌫",
                   danger: true,
                 },
@@ -962,8 +968,8 @@ function SidebarComponent({
       ref={searchInputRef}
       type="text"
       value={searchQuery}
-      placeholder="Search conversations..."
-      aria-label="Search conversations"
+      placeholder={t("harness.chrome.searchConversations")}
+      aria-label={t("harness.chrome.searchConversations")}
       spellCheck={false}
       autoComplete="off"
       autoCorrect="off"
@@ -1042,13 +1048,13 @@ function SidebarComponent({
             isChangesTab
               ? hasChangeStats
                 ? [
-                    "Changes",
+                    t("harness.chrome.changes"),
                     changeAdditions > 0 ? `+${changeAdditions}` : "",
                     changeDeletions > 0 ? `-${changeDeletions}` : "",
                   ]
                     .filter(Boolean)
                     .join(" ")
-                : "Changes"
+                : t("harness.chrome.changes")
               : undefined
           }
           data-tauri-drag-region="false"
@@ -1065,7 +1071,7 @@ function SidebarComponent({
           {isChangesTab && hasChangeStats ? (
             <DiffStat additions={changeAdditions} deletions={changeDeletions} />
           ) : (
-            <span className="block truncate">{TAB_LABELS[itemId]}</span>
+            <span className="block truncate">{sidebarTabLabel(itemId)}</span>
           )}
         </button>
       </div>
@@ -1091,7 +1097,7 @@ function SidebarComponent({
           {visibleTabs.length > 1 ? (
             <div
               role="tablist"
-              aria-label="Workspace"
+              aria-label={t("harness.chrome.workspace")}
               className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-2"
             >
               {workspaceTabItems}
@@ -1149,7 +1155,7 @@ function SidebarComponent({
           {classicSettings || visibleTabs.length <= 1 ? null : (
             <div
               role="tablist"
-              aria-label="Workspace"
+              aria-label={t("harness.chrome.workspace")}
               className={`flex h-9 shrink-0 items-center gap-px overflow-visible border-content/10 px-2 ${
                 // Mirrors the rail-open header stack: each row owns its own
                 // bottom border, so the seams land on the title bar's.
@@ -1226,7 +1232,7 @@ function SidebarComponent({
                 </div>
                 <div className="flex shrink-0 items-center gap-px">
                   <SessionsHeaderButton
-                    label="Search conversations"
+                    label={t("harness.chrome.searchConversations")}
                     active={searchOpen}
                     open={searchOpen}
                     onClick={onToggleSessionSearch}
@@ -1234,7 +1240,7 @@ function SidebarComponent({
                     <Search className="size-3" strokeWidth={1.75} />
                   </SessionsHeaderButton>
                   <SessionsHeaderButton
-                    label="Filter sessions"
+                    label={t("harness.chrome.filterSessions")}
                     active={filtersActive}
                     open={!!filterMenu}
                     hasPopup
@@ -1259,7 +1265,7 @@ function SidebarComponent({
                 {sessionSearchInput}
               </div>
               <SessionsHeaderButton
-                label="Filter sessions"
+                label={t("harness.chrome.filterSessions")}
                 active={filtersActive}
                 open={!!filterMenu}
                 hasPopup
@@ -1303,11 +1309,11 @@ function SidebarComponent({
                   narrowedByUser ? (
                     <p className="px-3 py-2 text-[12px] text-content/50">
                       {searchNarrowed
-                        ? "No matching sessions"
-                        : "No sessions match these filters"}
+                        ? t("harness.chrome.noMatchingSessions")
+                        : t("harness.chrome.noSessionsMatchFilters")}
                     </p>
                   ) : (
-                    <SessionsEmpty message="Sessions you start will show up here" />
+                    <SessionsEmpty message={t("harness.chrome.sessionsEmptyHint")} />
                   )
                 ) : (
                   <ul className="flex flex-col gap-0.5 p-1.5">
@@ -1451,8 +1457,8 @@ function SidebarComponent({
                                         type="button"
                                         data-no-drag
                                         data-tauri-drag-region="false"
-                                        title="New session"
-                                        aria-label="New session"
+                                        title={t("harness.chrome.newSession")}
+                                        aria-label={t("harness.chrome.newSession")}
                                         onClick={() =>
                                           onNewInFolder(entry.folder.id)
                                         }
@@ -1463,7 +1469,7 @@ function SidebarComponent({
                                           strokeWidth={1.75}
                                         />
                                         <span className="text-[13px] font-semibold leading-snug">
-                                          New session
+                                          {t("harness.chrome.newSession")}
                                         </span>
                                       </button>
                                     </div>
@@ -1512,7 +1518,7 @@ function SidebarComponent({
           {showSidebarFooter ? (
             <div className="flex shrink-0 flex-col gap-px p-2 pt-0">
               <RailAction
-                label="Settings"
+                label={t("harness.chrome.settings")}
                 icon={Settings}
                 onClick={onOpenSettings}
                 shortcut={`${MOD},`}
@@ -1530,7 +1536,7 @@ function SidebarComponent({
           ariaLabel={
             multipleMenuSessions
               ? `${menuSessionIds.length} selected session actions`
-              : "Session actions"
+              : t("harness.chrome.sessionActions")
           }
           onPick={onSessionMenuPick}
           onClose={() => setSessionMenu(null)}
@@ -1541,7 +1547,7 @@ function SidebarComponent({
           x={folderMenu.x}
           y={folderMenu.y}
           items={folderMenuItems}
-          ariaLabel="Folder actions"
+          ariaLabel={t("harness.chrome.folderActions")}
           width={260}
           header={
             <FolderColorSwatches
@@ -1568,7 +1574,7 @@ function SidebarComponent({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize sidebar"
+        aria-label={t("harness.chrome.resizeSidebar")}
         aria-valuenow={resize.width}
         aria-valuemin={MIN_WIDTH}
         aria-valuemax={MAX_WIDTH}
@@ -1654,6 +1660,7 @@ function SidebarProjectPicker({
   notesActive?: boolean;
   inboxUnseen?: boolean;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -1789,14 +1796,14 @@ function SidebarProjectPicker({
             width={286}
             maxHeight={380}
             role="dialog"
-            aria-label="Project picker"
+            aria-label={t("harness.chrome.projectPicker")}
             onDismiss={() => closePicker()}
             onKeyDown={onPickerKeyDown}
             className="flex flex-col overflow-hidden"
           >
             <label className="flex h-11 shrink-0 items-center gap-2.5 border-b border-content/10 px-3 text-content/45 focus-within:text-content/70">
               <Search className="size-4 shrink-0" strokeWidth={1.75} />
-              <span className="sr-only">Search projects</span>
+              <span className="sr-only">{t("harness.chrome.searchProjects")}</span>
               <input
                 autoFocus
                 value={query}
@@ -1804,7 +1811,7 @@ function SidebarProjectPicker({
                   setQuery(event.target.value);
                   setActive(0);
                 }}
-                placeholder="Search projects..."
+                placeholder={t("harness.chrome.searchProjects")}
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-content outline-none placeholder:text-content/35"
               />
             </label>
@@ -1907,7 +1914,7 @@ function SidebarProjectPicker({
         ) : null}
         {onOpenInbox ? (
           <IconButton
-            label={inboxUnseen ? "Inbox, new items" : "Inbox"}
+            label={inboxUnseen ? t("harness.chrome.inboxNewItems") : t("harness.chrome.inbox")}
             active={inboxActive}
             onClick={onOpenInbox}
           >
@@ -1923,7 +1930,7 @@ function SidebarProjectPicker({
           </IconButton>
         ) : null}
         {onOpenNotes ? (
-          <IconButton label="Notes" active={notesActive} onClick={onOpenNotes}>
+          <IconButton label={t("harness.chrome.notes")} active={notesActive} onClick={onOpenNotes}>
             <StickyNote className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
@@ -1939,6 +1946,7 @@ function WorkspaceTitleActions({
   onSearch?: () => void;
   onNew?: () => void;
 }) {
+  const { t } = useTranslation();
   if (!onSearch && !onNew) return null;
   return (
     <div
@@ -1946,12 +1954,12 @@ function WorkspaceTitleActions({
       data-tauri-drag-region="false"
     >
       {onSearch ? (
-        <IconButton label={`Go to File (${MOD}P)`} onClick={onSearch}>
+        <IconButton label={t("harness.chrome.goToFileShortcut", { shortcut: `${MOD}P` })} onClick={onSearch}>
           <Search className="size-3.5" strokeWidth={1.75} />
         </IconButton>
       ) : null}
       {onNew ? (
-        <IconButton label={`New session (${MOD}T)`} onClick={onNew}>
+        <IconButton label={t("harness.chrome.newSessionShortcut", { shortcut: `${MOD}T` })} onClick={onNew}>
           <Plus className="size-3.5" strokeWidth={1.75} />
         </IconButton>
       ) : null}
@@ -2258,6 +2266,7 @@ function SessionCard({
   onRename?: () => void;
   onDelete?: () => void;
 }) {
+  const { t } = useTranslation();
   const skipClickUntil = useRef(0);
   const [dragging, setDragging] = useState(false);
   const title = sessionDisplayTitle(session.title, session.harness);
@@ -2266,7 +2275,9 @@ function SessionCard({
   const model = compact
     ? null
     : resolveModel(session.harness, session.model).name;
-  const archiveLabel = session.archived ? "Unarchive" : "Archive";
+  const archiveLabel = session.archived
+    ? t("harness.chrome.unarchive")
+    : t("harness.chrome.archive");
   const statusClass = needsApproval
     ? "text-amber-400"
     : busy
@@ -2281,17 +2292,17 @@ function SessionCard({
       {needsApproval ? (
         <>
           <CircleAlert className="size-3" strokeWidth={1.75} />
-          <span>Need approval</span>
+          <span>{t("harness.chrome.needApproval")}</span>
         </>
       ) : busy ? (
         <>
           <TerminalSpinner className="inline-block w-3 select-none text-center text-[11px] leading-none text-accent" />
-          <span>Working...</span>
+          <span>{t("harness.chrome.workingEllipsis")}</span>
         </>
       ) : done ? (
         <>
           <Check className="size-3" strokeWidth={2.25} />
-          <span>Done</span>
+          <span>{t("harness.chrome.done")}</span>
         </>
       ) : (
         <span>{time}</span>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { defaultNetworkAllowlist } from "../lib/networkSandboxDefaults";
 import type { HarnessId, NetworkSandboxConfig } from "../lib/session";
 import { Shield, ShieldOff } from "./icons";
@@ -19,6 +20,7 @@ export function NetworkSandboxPicker({
   onChange,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -57,13 +59,15 @@ export function NetworkSandboxPicker({
   };
 
   const Icon = enabled ? Shield : ShieldOff;
-  const label = enabled ? "Network sandbox: On" : "Network sandbox: Off";
+  const label = enabled
+    ? t("harness.chrome.networkSandboxOn")
+    : t("harness.chrome.networkSandboxOff");
 
   return (
     <div ref={root} className="relative">
       <button
         type="button"
-        title="Restrict this session's outbound network to an allowed host list"
+        title={t("harness.chrome.networkSandboxTitle")}
         aria-label={label}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -91,7 +95,7 @@ export function NetworkSandboxPicker({
           autoFocus
           onDismiss={(reason) => dismiss(reason === "escape")}
           role="dialog"
-          aria-label="Network sandbox"
+          aria-label={t("harness.chrome.networkSandbox")}
           className="p-2"
         >
           <div className="mb-2 flex items-center gap-1 rounded-lg bg-content/5 p-0.5">

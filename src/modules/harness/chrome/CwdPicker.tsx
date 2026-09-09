@@ -6,6 +6,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
 import { basename, pickFolder } from "../lib/fs";
 import { prettyCwd, prettyParent } from "../lib/paths";
 import {
@@ -64,6 +65,7 @@ export function CwdPicker({
   onNewTerminal,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -194,7 +196,7 @@ export function CwdPicker({
       <button
         type="button"
         title={cwd}
-        aria-label={`Project ${label}`}
+        aria-label={t("harness.chrome.projectNamed", { name: label })}
         aria-expanded={open}
         aria-haspopup="menu"
         disabled={!enabled}
@@ -246,7 +248,7 @@ export function CwdPicker({
           ignore={SELF}
           onDismiss={(reason) => dismiss(reason === "escape")}
           role="menu"
-          aria-label="Project picker"
+          aria-label={t("harness.chrome.projectPicker")}
           data-cwd-picker
           className="flex flex-col overflow-hidden"
         >
@@ -263,13 +265,13 @@ export function CwdPicker({
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-content hover:bg-content/10 font-medium"
               >
                 <FolderOpen className="size-4 shrink-0 text-content/70" />
-                <span>Open Project / Folder…</span>
+                <span>{t("harness.chrome.openProjectFolder")}</span>
               </button>
             </div>
             {inProject ? (
               <>
                 <p className="px-2.5 pb-1 pt-2 text-[10px] uppercase tracking-widest text-content/50">
-                  Current project
+                  {t("harness.chrome.currentProject")}
                 </p>
                 <div className="px-2.5 py-1.5 text-content/50">
                   <p className="truncate text-[13px] text-content">
@@ -284,7 +286,7 @@ export function CwdPicker({
             {previewRecents.length > 0 ? (
               <>
                 <p className="px-2.5 pb-1 pt-2 text-[10px] uppercase tracking-widest text-content/50">
-                  Recent projects
+                  {t("harness.chrome.recentProjects")}
                 </p>
                 {previewRecents.map((item, index) => (
                   <button
@@ -337,7 +339,7 @@ export function CwdPicker({
                     : "text-content/80 hover:bg-content/5"
                 }`}
               >
-                <span className="text-[13px]">More Projects</span>
+                <span className="text-[13px]">{t("harness.chrome.moreProjects")}</span>
                 <ChevronRight
                   className="size-3.5 shrink-0"
                   strokeWidth={1.75}
@@ -362,7 +364,9 @@ export function CwdPicker({
                     : "text-content/80 hover:bg-content/5"
                 }`}
               >
-                <span className="text-[13px]">New terminal</span>
+                <span className="text-[13px]">
+                  {t("harness.menu.newTerminal")}
+                </span>
                 <span className="shrink-0 font-mono text-[11px] text-content/45">
                   {MOD}`
                 </span>
@@ -380,7 +384,7 @@ export function CwdPicker({
           maxHeight={SUBMENU_MAX_HEIGHT}
           layer={LAYER.submenu}
           role="menu"
-          aria-label="More projects"
+          aria-label={t("harness.chrome.moreProjects")}
           data-cwd-submenu
           className="overflow-y-auto overscroll-none py-1"
           onMouseEnter={openMore}

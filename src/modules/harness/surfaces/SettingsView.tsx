@@ -235,7 +235,7 @@ export function SettingsView({
             className="mr-2 flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-content/50 hover:bg-content/10 hover:text-content"
           >
             <RotateCcw className="size-3.5" strokeWidth={1.75} />
-            Restore defaults
+            {t("harness.settings.restoreDefaults")}
           </button>
         ) : null}
       </div>
@@ -373,49 +373,49 @@ function GeneralPage({
     <>
       <Row
         label={t("harness.settings.workspaceLayout")}
-        description="Classic keeps a single sidebar. Deck adds the project rail, the workspace panel, and the project terminal dock."
+        description={t("harness.settings.workspaceLayoutDesc")}
       >
         <Segmented
           label={t("harness.settings.workspaceLayout")}
           value={layout}
           options={[
-            { value: "deck", label: "Deck" },
-            { value: "classic", label: "Classic" },
+            { value: "deck", label: t("harness.settings.deck") },
+            { value: "classic", label: t("harness.settings.classic") },
           ]}
           onChange={onLayout}
         />
       </Row>
       <Row
         label={t("harness.settings.transcriptLayout")}
-        description="Full width keeps user prompts as a spanning card. Chat aligns them to the right with a max width, like a messaging app."
+        description={t("harness.settings.transcriptLayoutDesc")}
       >
         <Segmented
           label={t("harness.settings.transcriptLayout")}
           value={transcriptLayout}
           options={[
-            { value: "full", label: "Full width" },
-            { value: "chat", label: "Chat" },
+            { value: "full", label: t("harness.settings.fullWidth") },
+            { value: "chat", label: t("harness.settings.chat") },
           ]}
           onChange={onTranscriptLayout}
         />
       </Row>
       <Row
         label={t("harness.chrome.followUpBehavior")}
-        description="Queue follow-ups until the active turn finishes, or steer the active turn immediately."
+        description={t("harness.chrome.followUpBehaviorDesc")}
       >
         <Segmented
           label={t("harness.chrome.followUpBehavior")}
           value={followUpBehavior}
           options={[
-            { value: "queue", label: "Queue" },
-            { value: "steer", label: "Steer" },
+            { value: "queue", label: t("harness.chrome.queue") },
+            { value: "steer", label: t("harness.chrome.steer") },
           ]}
           onChange={onFollowUpBehavior}
         />
       </Row>
       <Row
         label={t("harness.settings.anchorPrompts")}
-        description="When you send, the new prompt sits at the top of the transcript and the reply grows into the space below. Turn this off to keep the classic layout, with the latest message resting on the composer."
+        description={t("harness.settings.anchorPromptsDesc")}
       >
         <Toggle
           label={t("harness.settings.anchorPrompts")}
@@ -435,7 +435,7 @@ function GeneralPage({
       </Row>
       <Row
         label={t("harness.settings.composerMascot")}
-        description="When a turn is running, the project mascot runs along the composer, bonks the scroll-to-latest button the first time, then jumps it, and sometimes grabs a coin."
+        description={t("harness.settings.composerMascotDesc")}
       >
         <Toggle
           label={t("harness.settings.composerMascot")}
@@ -445,7 +445,7 @@ function GeneralPage({
       </Row>
       <Row
         label={t("harness.settings.emptySessionGames")}
-        description="Pac-man and snake idle on the empty-session grid. Hover the band to take control of whichever is on screen. Turn this off to keep the pane still."
+        description={t("harness.settings.emptySessionGamesDesc")}
       >
         <Toggle
           label={t("harness.settings.emptySessionGames")}
@@ -455,13 +455,17 @@ function GeneralPage({
       </Row>
       <Row
         label={t("harness.settings.notes")}
-        description="A global markdown notebook on the project rail. Save a finished turn from the transcript, then mention it later with @note or add it to chat. Turn this off to hide Notes from the UI."
+        description={t("harness.settings.notesDesc")}
       >
-        <Toggle label="Notes" on={notesEnabled} onChange={onNotesEnabled} />
+        <Toggle
+          label={t("harness.settings.notes")}
+          on={notesEnabled}
+          onChange={onNotesEnabled}
+        />
       </Row>
       <Row
         label={t("harness.settings.workingAgents")}
-        description="When two or more chats are in flight, a card on the project rail lists them so you can jump across projects. Finished turns stay until you open that session. Turn this off to hide the card."
+        description={t("harness.settings.workingAgentsDesc")}
       >
         <Toggle
           label={t("harness.settings.workingAgents")}
@@ -471,13 +475,17 @@ function GeneralPage({
       </Row>
       <Row
         label={t("harness.settings.sounds")}
-        description="Short cues when a turn finishes, a new inbox item appears on the project rail, or an update is available. Switches and Copy on a finished turn also play."
+        description={t("harness.settings.soundsDesc")}
       >
-        <Toggle label="Sounds" on={soundsEnabled} onChange={onSoundsEnabled} />
+        <Toggle
+          label={t("harness.settings.sounds")}
+          on={soundsEnabled}
+          onChange={onSoundsEnabled}
+        />
       </Row>
       <Row
         label={t("harness.settings.claudeHooks")}
-        description="Run the hooks configured in your settings.json files — PreToolUse command rewrites, blocks, notifications, and the rest — just as the Claude Code CLI would. Turn this off if a hook is misbehaving and you need the session back. Takes effect on the next turn."
+        description={t("harness.settings.claudeHooksDesc")}
       >
         <Toggle
           label={t("harness.settings.claudeHooks")}
@@ -584,14 +592,14 @@ function LinearSettings() {
         label={
           <span className="flex items-center gap-2">
             <InboxProviderMark provider="linear" className="size-4 shrink-0" />
-            API key
+            {t("harness.chrome.apiKey")}
           </span>
         }
-        description="Create a personal API key in Linear → Settings → Security & Access. Disconnect deletes it."
+        description={t("harness.chrome.linearApiKeyDesc")}
       >
         {connected ? (
           <SecondaryButton onClick={() => void onDisconnect()} disabled={busy}>
-            Disconnect
+            {t("harness.chrome.disconnect")}
           </SecondaryButton>
         ) : (
           <div className="flex items-center gap-2">
@@ -614,7 +622,7 @@ function LinearSettings() {
               onClick={() => void onSave()}
               disabled={busy || !token.trim()}
             >
-              {busy ? "Saving" : "Connect"}
+              {busy ? t("dialog.saving") : t("harness.chrome.connect")}
             </SecondaryButton>
           </div>
         )}
@@ -625,10 +633,10 @@ function LinearSettings() {
       {connected && teams.length > 0 ? (
         <div className="border-b border-content/5 py-4">
           <div className="text-[13px] font-medium text-content">
-            Linear Teams
+            {t("harness.chrome.linearTeams")}
           </div>
           <p className="mt-1 text-[12px] leading-relaxed text-content/45">
-            Unchecked teams stay out of the inbox.
+            {t("harness.chrome.uncheckedTeamsHint")}
           </p>
           <div className="mt-3 flex flex-col gap-0.5 -mx-2">
             {teams.map((team) => {
@@ -884,7 +892,7 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
     <>
       <Row
         label={t("harness.settings.sidebarOpacity")}
-        description="How much of the desktop shows through the sidebar and the project rail."
+        description={t("harness.settings.sidebarOpacityDesc")}
       >
         <Slider
           label={t("harness.settings.sidebarOpacity")}
@@ -897,7 +905,7 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
       </Row>
       <Row
         label={t("harness.settings.blurRadius")}
-        description="Background blur behind the window. Higher values cost more to composite."
+        description={t("harness.settings.blurRadiusDesc")}
       >
         <Slider
           label={t("harness.settings.blurRadius")}
@@ -922,7 +930,7 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
       </Row>
       <Row
         label={t("harness.settings.saturation")}
-        description="How strongly the hue tints the interface. Zero keeps it neutral."
+        description={t("harness.settings.saturationDesc")}
       >
         <Slider
           label={t("harness.settings.saturation")}
@@ -935,7 +943,7 @@ function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
       </Row>
       <Row
         label={t("harness.settings.mainPaneGlass")}
-        description="Extend the translucent treatment to the main pane behind sessions and editors."
+        description={t("harness.settings.mainPaneGlassDesc")}
       >
         <Toggle
           label={t("harness.settings.mainPaneGlass")}
@@ -953,6 +961,7 @@ function ChatBackgroundCard({
 }: {
   appearance: AppearanceSettings;
 }) {
+  const { t } = useTranslation();
   const src = chatBackgroundSrc(appearance.chatBackgroundPath);
   const hasImage = Boolean(appearance.chatBackgroundPath && src);
   const visibility = Math.round(appearance.chatBackgroundOpacity * 100);
@@ -1017,37 +1026,41 @@ function ChatBackgroundCard({
             ) : (
               <ImagePlus className="size-5" aria-hidden />
             )}
-            <span className="text-[12px]">Choose an image</span>
+            <span className="text-[12px]">{t("harness.chrome.chooseAnImage")}</span>
           </button>
         )}
         {hasImage ? (
           <div className="border-t border-content/8">
             <div className="flex items-center justify-between gap-4 px-3 py-2.5">
               <div className="min-w-0">
-                <div className="text-[12px] text-content">Show on</div>
+                <div className="text-[12px] text-content">
+                  {t("harness.chrome.showOn")}
+                </div>
                 <p className="text-[11px] text-content/40">
-                  Empty sessions only, or every conversation.
+                  {t("harness.chrome.showOnEmptyHint")}
                 </p>
               </div>
               <Segmented
-                label="Show background on"
+                label={t("harness.chrome.showBackgroundOn")}
                 value={appearance.chatBackgroundScope}
                 options={[
-                  { value: "empty", label: "Empty only" },
-                  { value: "all", label: "All sessions" },
+                  { value: "empty", label: t("harness.chrome.emptyOnly") },
+                  { value: "all", label: t("harness.chrome.allSessions") },
                 ]}
                 onChange={appearance.onChatBackgroundScope}
               />
             </div>
             <div className="flex items-center justify-between gap-4 border-t border-content/5 px-3 py-2.5">
               <div className="min-w-0">
-                <div className="text-[12px] text-content">Visibility</div>
+                <div className="text-[12px] text-content">
+                  {t("harness.chrome.visibility")}
+                </div>
                 <p className="text-[11px] text-content/40">
-                  Keep it subtle so long conversations stay readable.
+                  {t("harness.chrome.visibilityHint")}
                 </p>
               </div>
               <Slider
-                label="Background visibility"
+                label={t("harness.chrome.backgroundVisibility")}
                 value={visibility}
                 display={`${visibility}%`}
                 min={Math.round(CHAT_BACKGROUND_OPACITY_MIN * 100)}
@@ -1094,13 +1107,13 @@ function KeybindingsPage() {
 
       <div className="overflow-hidden rounded-lg border border-content/10">
         <div className="flex items-center border-b border-content/10 bg-content/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-content/40">
-          <span className="min-w-0 flex-1">Command</span>
-          <span className="w-40 shrink-0">Keybinding</span>
-          <span className="w-28 shrink-0">When</span>
+          <span className="min-w-0 flex-1">{t("harness.chrome.command")}</span>
+          <span className="w-40 shrink-0">{t("harness.chrome.keybinding")}</span>
+          <span className="w-28 shrink-0">{t("harness.chrome.when")}</span>
         </div>
         {rows.length === 0 ? (
           <p className="px-3 py-3 text-[12px] text-content/45">
-            No matching bindings
+            {t("harness.chrome.noMatchingBindings")}
           </p>
         ) : (
           rows.map((row) => (
@@ -1343,12 +1356,12 @@ function ArchivePage({
               </div>
               {onRestoreProject ? (
                 <SecondaryButton onClick={() => onRestoreProject(project.path)}>
-                  Restore
+                  {t("harness.chrome.restore")}
                 </SecondaryButton>
               ) : null}
               {onDeleteProject ? (
                 <SecondaryButton danger onClick={() => setDeleting(project)}>
-                  Delete
+                  {t("common.delete")}
                 </SecondaryButton>
               ) : null}
             </div>
@@ -1358,7 +1371,7 @@ function ArchivePage({
 
       <Row
         label={t("harness.chrome.showArchivedSidebar")}
-        description="Keep archived conversations listed alongside the active ones."
+        description={t("harness.chrome.showArchivedSidebarDesc")}
       >
         <Toggle
           label={t("harness.chrome.showArchivedSidebar")}
@@ -1370,8 +1383,8 @@ function ArchivePage({
       <Heading
         title={
           looksLikeProject(cwd)
-            ? `Archived in ${projectName(cwd)}`
-            : "Archived conversations"
+            ? t("harness.chrome.archivedIn", { name: projectName(cwd) })
+            : t("harness.chrome.archivedConversations")
         }
       />
 
@@ -1407,13 +1420,13 @@ function ArchivePage({
               <SecondaryButton
                 onClick={() => onArchiveSession(session.id, false)}
               >
-                Unarchive
+                {t("harness.chrome.unarchive")}
               </SecondaryButton>
               <SecondaryButton
                 danger
                 onClick={() => onDeleteSession(session.id)}
               >
-                Delete
+                {t("common.delete")}
               </SecondaryButton>
             </div>
           ))}
