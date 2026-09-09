@@ -54,6 +54,7 @@ export function dirname(path: string): string {
 }
 
 const EXPANSION_CACHE_LIMIT = 8;
+const NETWORK_REFRESH_INTERVAL_MS = 5000;
 const expansionCache = new Map<string, string[]>();
 
 function rememberExpansion(root: string, expanded: Set<string>): void {
@@ -344,31 +345,29 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | undefined;
-    void listenFsChanged(
-      (paths) => {
-        const current = nodesRef.current;
-        const dirs = new Set<string>();
-        const loadedKeys = Object.keys(current).filter(
-          (k) => current[k]?.status === "loaded",
-        );
-        const norm = (s: string) => s.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
+    void listenFsChanged((paths) => {
+      const current = nodesRef.current;
+      const dirs = new Set<string>();
+      const loadedKeys = Object.keys(current).filter(
+        (k) => current[k]?.status === "loaded",
+      );
+      const norm = (s: string) =>
+        s.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
 
-        for (const p of paths) {
-          const parent = dirname(p);
-          const pNorm = norm(p);
-          const parentNorm = norm(parent);
-          for (const key of loadedKeys) {
-            const keyNorm = norm(key);
-            if (keyNorm === parentNorm || keyNorm === pNorm) {
-              dirs.add(key);
-            }
+      for (const p of paths) {
+        const parent = dirname(p);
+        const pNorm = norm(p);
+        const parentNorm = norm(parent);
+        for (const key of loadedKeys) {
+          const keyNorm = norm(key);
+          if (keyNorm === parentNorm || keyNorm === pNorm) {
+            dirs.add(key);
           }
         }
-        for (const d of dirs) void fetchChildren(d);
-        window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
-      },
-      workspace,
-    ).then((un) => {
+      }
+      for (const d of dirs) void fetchChildren(d);
+      window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
+    }, workspace).then((un) => {
       if (alive) unlisten = un;
       else un();
     });
@@ -377,6 +376,41 @@ export function useFileTree(rootPath: string | null, options?: Options) {
       unlisten?.();
     };
   }, [fetchChildren, workspace]);
+
+  // Windows network shares are deliberately excluded from native filesystem
+  // watching: a disconnected SMB server can otherwise stall the watcher
+  // backend. Refresh the visible directories at a modest cadence instead.
+  // This also covers mapped network drives, which cannot be recognized from
+  // their path text alone.
+  useEffect(() => {
+    if (!rootPath || workspace.kind !== "local") return;
+    let disposed = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    void (async () => {
+      const networkRoot =
+        isNetworkFilesystemPath(rootPath) ||
+        (await invoke<boolean>("fs_is_network_path", {
+          path: rootPath,
+          workspace,
+        }).catch(() => false));
+      if (disposed || !networkRoot) return;
+
+      interval = setInterval(() => {
+        if (document.visibilityState !== "visible") return;
+        const loadedDirectories = Object.entries(nodesRef.current)
+          .filter(([, state]) => state.status === "loaded")
+          .map(([path]) => path);
+        for (const path of loadedDirectories) void fetchChildren(path);
+        window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
+      }, NETWORK_REFRESH_INTERVAL_MS);
+    })();
+
+    return () => {
+      disposed = true;
+      if (interval) clearInterval(interval);
+    };
+  }, [fetchChildren, rootPath, workspace]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies(showHidden): preference changes intentionally trigger a relist
   // biome-ignore lint/correctness/useExhaustiveDependencies(gitDecorations): preference changes intentionally trigger a relist
