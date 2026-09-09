@@ -17,6 +17,10 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "@/modules/i18n";
+import {
+  settingsSectionDescription,
+  settingsSectionLabel,
+} from "../lib/catalogLabels";
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
@@ -149,8 +153,6 @@ import {
   saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
-  settingsSectionDescription,
-  settingsSectionLabel,
   type FollowUpBehavior,
   type SettingsSectionId,
 } from "../lib/settings";
@@ -219,12 +221,14 @@ export function SettingsView({
       >
         {IS_MAC && !besideRail ? <div className="w-[78px] shrink-0" /> : null}
         <div className="flex min-w-0 flex-1 items-center gap-2 px-3 text-[13px]">
-          <span className="shrink-0 text-content/45">Settings</span>
+          <span className="shrink-0 text-content/45">
+            {t("harness.chrome.settings")}
+          </span>
           <span aria-hidden className="shrink-0 text-content/25">
             /
           </span>
           <span className="min-w-0 truncate text-content">
-            {settingsSectionLabel(section)}
+            {settingsSectionLabel(t, section)}
           </span>
         </div>
         {section === "appearance" ? (
@@ -246,8 +250,8 @@ export function SettingsView({
       >
         <div className="mx-auto w-full max-w-5xl px-8 py-8">
           <PageHeader
-            title={settingsSectionLabel(section)}
-            description={settingsSectionDescription(section)}
+            title={settingsSectionLabel(t, section)}
+            description={settingsSectionDescription(t, section)}
           />
           {section === "general" ? (
             <GeneralPage onOpenWhatsNew={onOpenWhatsNew} />
@@ -425,7 +429,9 @@ function GeneralPage({
       </Row>
       <Row
         label={t("harness.settings.zenMode")}
-        description={`The agent's work reads as groups: a run of related tool calls under the line the agent wrote to introduce it. The group it is in stays open and grows a step at a time — tool calls, thinking, the notes it drops between them — and folds back to its header the moment it moves on, leaving a labelled outline above the final answer. Click any group to read it back. Edits waiting on approval still show their diff. ${MOD}${ALT}Z toggles it.`}
+        description={t("harness.settings.zenModeDesc", {
+          shortcut: `${MOD}${ALT}Z`,
+        })}
       >
         <Toggle
           label={t("harness.settings.zenMode")}
@@ -672,6 +678,7 @@ function UpdateRow({
 }: {
   onOpenWhatsNew: (version: string) => void;
 }) {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<UpdaterSnapshot>({
     phase: "idle",
     currentVersion: "…",
@@ -703,22 +710,24 @@ function UpdateRow({
 
   const status =
     snapshot.phase === "available"
-      ? `Version ${snapshot.availableVersion} is available.`
+      ? t("harness.chrome.updateAvailable", {
+          version: snapshot.availableVersion ?? snapshot.currentVersion,
+        })
       : snapshot.phase === "downloading"
         ? `Downloading${snapshot.progress != null ? ` ${snapshot.progress}%` : "…"}`
         : snapshot.phase === "checking"
-          ? "Checking for updates…"
+          ? t("harness.chrome.checkingForUpdates")
           : snapshot.phase === "current"
-            ? "You're on the latest version."
+            ? t("harness.chrome.latestVersion")
             : snapshot.phase === "error"
-              ? (snapshot.error ?? "Update check failed.")
-              : "MonoCode updates itself from the release feed.";
+              ? (snapshot.error ?? t("harness.chrome.updateCheckFailed"))
+              : t("harness.chrome.updatesFromReleaseFeed");
 
   return (
     <Row
       label={
         <span className="flex items-baseline gap-2">
-          Version
+          {t("harness.chrome.version")}
           <span className="font-mono text-[12px] text-content/45">
             {snapshot.currentVersion}
           </span>
@@ -731,7 +740,7 @@ function UpdateRow({
           onClick={() => onOpenWhatsNew(snapshot.currentVersion)}
           disabled={snapshot.currentVersion === "…"}
         >
-          What's new
+          {t("harness.chrome.whatsNew")}
         </SecondaryButton>
         <SecondaryButton onClick={() => void onClick()} disabled={busy}>
           {busy ? (
@@ -741,7 +750,9 @@ function UpdateRow({
         ) : (
           <RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden />
         )}
-          {hasUpdate ? "Download" : "Check for updates"}
+          {hasUpdate
+            ? t("harness.chrome.download")
+            : t("harness.chrome.checkForUpdates")}
         </SecondaryButton>
       </div>
     </Row>
@@ -972,10 +983,10 @@ function ChatBackgroundCard({
       <div className="flex items-start gap-6">
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-medium text-content">
-            Chat background
+            {t("harness.chrome.chatBackground")}
           </div>
           <p className="mt-1 text-[12px] leading-relaxed text-content/45">
-            An image behind your chat panes. It stays on this device.
+            {t("harness.chrome.chatBackgroundDesc")}
           </p>
         </div>
         {hasImage ? (
@@ -987,14 +998,14 @@ function ChatBackgroundCard({
               {busy ? (
                 <Loader className="size-3.5 animate-spin" aria-hidden />
               ) : null}
-              Change
+              {t("harness.chrome.change")}
             </SecondaryButton>
             <SecondaryButton
               onClick={() => void appearance.onClearChatBackground()}
               disabled={busy}
               danger
             >
-              Remove
+              {t("harness.chrome.remove")}
             </SecondaryButton>
           </div>
         ) : null}
@@ -1011,7 +1022,7 @@ function ChatBackgroundCard({
               style={{ opacity: appearance.chatBackgroundOpacity }}
             />
             <span className="pointer-events-none absolute bottom-2 left-2 text-[11px] text-content/40">
-              Preview at {visibility}%
+              {t("harness.chrome.previewAt", { visibility })}
             </span>
           </div>
         ) : (
@@ -1089,7 +1100,7 @@ function KeybindingsPage() {
     <>
       <div className="flex items-center justify-end gap-3 pb-3">
         <span className="shrink-0 text-[12px] text-content/40 tabular-nums">
-          {rows.length} {rows.length === 1 ? "binding" : "bindings"}
+          {t("harness.chrome.bindingCount", { count: rows.length })}
         </span>
         <label className="flex h-7 w-52 shrink-0 items-center gap-2 rounded-md border border-content/10 px-2 text-content/45 focus-within:border-content/20">
           <Search className="size-3.5 shrink-0" strokeWidth={1.75} />
@@ -1134,14 +1145,14 @@ function KeybindingsPage() {
       </div>
 
       <p className="pt-3 text-[12px] text-content/40">
-        Bindings come from the app menu and the workspace key handler; they
-        aren’t customizable yet.
+        {t("harness.chrome.keybindingsDesc")}
       </p>
     </>
   );
 }
 
 function ProvidersPage() {
+  const { t } = useTranslation();
   useSyncExternalStore(subscribeModels, getModelSnapshot, getModelSnapshot);
   useSyncExternalStore(
     subscribeHarnessAvailability,
@@ -1173,11 +1184,7 @@ function ProvidersPage() {
   return (
     <>
       <p className="pb-2 text-[12px] leading-relaxed text-content/45">
-        A provider is listed as installed once its CLI is found on your PATH.
-        Uninstalled CLIs stay listed here but are omitted from the model picker.
-        Turn off Show in picker to hide an installed provider from those tabs.
-        The model beside each provider is what new conversations use when that
-        provider is selected; Use by default picks the provider itself.
+        {t("harness.chrome.providersIntroLong")}
       </p>
       {HARNESSES.map((harness) => (
         <ProviderRow
@@ -1211,6 +1218,7 @@ function ProviderRow({
   onDefault: (harness: HarnessId, model: string) => void;
   onModelChange: (harness: HarnessId, model: string) => void;
 }) {
+  const { t } = useTranslation();
   const models = modelsFor(harness);
   const available = isHarnessAvailable(harness);
   const current =
@@ -1237,20 +1245,22 @@ function ProviderRow({
           {HARNESS_TITLE[harness]}
           {isDefault ? (
             <span className="rounded-full bg-content/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-content/60">
-              Default
+              {t("harness.settings.defaultBadge")}
             </span>
           ) : null}
         </span>
       }
       description={
         available
-          ? `${models.length} ${models.length === 1 ? "model" : "models"} available.`
+          ? t("harness.settings.modelsAvailable", { count: models.length })
           : harnessUnavailableHint(harness)
       }
     >
       {current ? (
         <Select
-          label={`${HARNESS_TITLE[harness]} model`}
+          label={t("harness.settings.modelAria", {
+            name: HARNESS_TITLE[harness],
+          })}
           value={current.id}
           onChange={(next) => onModelChange(harness, next)}
           options={models.map((item) => ({
@@ -1263,13 +1273,19 @@ function ProviderRow({
         onClick={() => current && onDefault(harness, current.id)}
         disabled={isDefault || !current}
       >
-        {isDefault ? "Default" : "Use by default"}
+        {isDefault
+          ? t("harness.settings.defaultBadge")
+          : t("harness.settings.useByDefault")}
       </SecondaryButton>
       {available ? (
         <div className="flex items-center gap-2">
-          <span className="text-[12px] text-content/50">Show in picker</span>
+          <span className="text-[12px] text-content/50">
+            {t("harness.settings.showInPicker")}
+          </span>
           <Toggle
-            label={`Show ${HARNESS_TITLE[harness]} in the model picker`}
+            label={t("harness.settings.showInPickerAria", {
+              name: HARNESS_TITLE[harness],
+            })}
             on={inPicker}
             onChange={onPickerVisible}
           />
@@ -1336,8 +1352,7 @@ function ArchivePage({
       <Heading title={t("harness.chrome.archivedProjects")} first />
       {archivedProjects.length === 0 ? (
         <p className="py-3 text-[12px] text-content/45">
-          Archive a project from the rail to keep its chats without listing it
-          in the sidebar.
+          {t("harness.chrome.archiveProjectHint")}
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-content/10">
@@ -1390,11 +1405,11 @@ function ArchivePage({
 
       {!looksLikeProject(cwd) ? (
         <p className="py-3 text-[12px] text-content/45">
-          Open a project to see its archived conversations.
+          {t("harness.chrome.openProjectForArchived")}
         </p>
       ) : archived.length === 0 ? (
         <p className="py-3 text-[12px] text-content/45">
-          No archived conversations in this project.
+          {t("harness.chrome.noArchivedConversations")}
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-content/10">

@@ -89,7 +89,9 @@ export function GitChangesPanel({
             deletions={index?.deletions ?? 0}
           />
         ) : (
-          <span className="text-[12px] font-medium text-content">Changes</span>
+          <span className="text-[12px] font-medium text-content">
+            {t("harness.chrome.changes")}
+          </span>
         )}
         {index?.branch ? (
           <span className="ml-auto flex min-w-0 items-center gap-1 text-[11px] text-content/50">
@@ -349,7 +351,9 @@ function ChangedFiles({
             ref={messageRef}
             rows={1}
             value={message}
-            placeholder={`Message (${MOD}↩ to commit)`}
+            placeholder={t("harness.chrome.messageToCommitShortcut", {
+              shortcut: MOD,
+            })}
             disabled={!canEditMessage}
             onChange={(event) => setMessage(event.target.value)}
             onKeyDown={(event) => {
@@ -387,7 +391,7 @@ function ChangedFiles({
             className="flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-l-md bg-content text-[12px] font-medium text-background-base disabled:opacity-40"
           >
             <Check className="size-3.5" strokeWidth={2} />
-            Commit
+            {t("harness.chrome.commit")}
           </button>
 
           <button
@@ -408,7 +412,7 @@ function ChangedFiles({
                 onClick={() => void commit(true)}
                 className="flex h-7 w-full items-center px-3 text-left text-[12px] text-content hover:bg-content/10 disabled:opacity-40"
               >
-                Commit & Push
+                {t("harness.chrome.commitAndPush")}
               </button>
               <button
                 type="button"
@@ -416,7 +420,7 @@ function ChangedFiles({
                 onClick={() => void commit(true, true)}
                 className="flex h-7 w-full items-center px-3 text-left text-[12px] text-content hover:bg-content/10 disabled:opacity-40"
               >
-                Commit, Push & Create PR
+                {t("harness.chrome.commitPushCreatePr")}
               </button>
             </div>
           ) : null}
@@ -449,9 +453,9 @@ function ChangedFiles({
           <p className="px-3 py-2 text-[12px] text-content/45">
             {index
               ? index.ahead > 0 || index.behind > 0
-                ? syncStatusLabel(index)
-                : "No uncommitted changes"
-              : "Loading changes…"}
+                ? syncStatusLabel(t, index)
+                : t("harness.chrome.noUncommittedChanges")
+              : t("harness.chrome.loadingChanges")}
           </p>
         ) : (
           <>
@@ -465,7 +469,7 @@ function ChangedFiles({
                   setStagedExpanded(stagedOpen);
                 }}
                 headerAction={{
-                  title: "Unstage All Changes",
+                  title: t("harness.chrome.unstageAllChanges"),
                   icon: <Minus className="size-3.5" strokeWidth={1.75} />,
                   onClick: () => void runAll("unstage"),
                 }}
@@ -493,7 +497,7 @@ function ChangedFiles({
                   setChangesExpanded(changesOpen);
                 }}
                 headerAction={{
-                  title: "Stage All Changes",
+                  title: t("harness.chrome.stageAllChanges"),
                   icon: <Plus className="size-3.5" strokeWidth={1.75} />,
                   onClick: () => void runAll("stage"),
                 }}
@@ -565,19 +569,22 @@ function cachedPr(
   return prByCwd.get(cwd) ?? null;
 }
 
-function syncStatusLabel(index: GitDiffIndex): string {
+function syncStatusLabel(
+  t: ReturnType<typeof useTranslation>["t"],
+  index: GitDiffIndex,
+): string {
   if (index.ahead > 0 && index.behind > 0) {
-    return `Diverged from ${index.upstream ?? "upstream"}`;
+    return t("harness.chrome.divergedFrom", {
+      upstream: index.upstream ?? "upstream",
+    });
   }
   if (index.ahead > 0) {
-    const n = index.ahead;
-    return `${n} unpushed commit${n === 1 ? "" : "s"}`;
+    return t("harness.chrome.unpushedCommitCount", { count: index.ahead });
   }
   if (index.behind > 0) {
-    const n = index.behind;
-    return `${n} incoming commit${n === 1 ? "" : "s"}`;
+    return t("harness.chrome.incomingCommitCount", { count: index.behind });
   }
-  return "No files";
+  return t("harness.chrome.noFiles");
 }
 
 function GitSyncActions({
@@ -609,6 +616,7 @@ function GitSyncActions({
   onCreatePr: () => void;
   onViewPr: () => void;
 }) {
+  const { t } = useTranslation();
   if (!hasRemote) return null;
   const ahead = index.ahead;
   const behind = index.behind;
@@ -616,22 +624,22 @@ function GitSyncActions({
     index.upstream ?? `${index.remote ?? "origin"}/${index.branch ?? "HEAD"}`;
   const syncing = busy === "sync";
   const syncTitle = syncing
-    ? "Synchronizing Changes..."
+    ? t("harness.chrome.synchronizingChanges")
     : canPublish
       ? index.branch
-        ? `Publish Branch "${index.branch}"`
-        : "Publish Branch"
+        ? t("harness.chrome.publishBranchNamed", { branch: index.branch })
+        : t("harness.chrome.publishBranch")
       : behind > 0 && ahead > 0
-        ? `Pull ${behind} and push ${ahead} commits between ${dest}`
+        ? t("harness.chrome.pullAndPushCommits", { ahead, behind, dest })
         : behind > 0
-          ? `Pull ${behind} commit${behind === 1 ? "" : "s"} from ${dest}`
-          : `Push ${ahead} commit${ahead === 1 ? "" : "s"} to ${dest}`;
+          ? t("harness.chrome.pullCommits", { count: behind, dest })
+          : t("harness.chrome.pushCommits", { count: ahead, dest });
   const createTitle = index.defaultBranch
-    ? `Create a pull request into ${index.defaultBranch}`
-    : "Create pull request";
+    ? t("harness.chrome.createPrInto", { branch: index.defaultBranch })
+    : t("harness.chrome.createPr");
   const viewTitle = pr?.title
-    ? `View PR #${pr.number}: ${pr.title}`
-    : "View pull request";
+    ? t("harness.chrome.viewPrDetails", { number: pr.number, title: pr.title })
+    : t("harness.chrome.viewPr");
   const btn =
     "flex h-7 w-full min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-[12px] font-medium disabled:opacity-40";
   const secondary = `${btn} bg-content/10 text-content hover:bg-content/15`;
@@ -657,7 +665,9 @@ function GitSyncActions({
           ) : (
             <CloudUpload className="size-3.5 shrink-0" strokeWidth={1.75} />
           )}
-          <span className="min-w-0 truncate">Publish Branch</span>
+          <span className="min-w-0 truncate">
+            {t("harness.chrome.publishBranch")}
+          </span>
         </button>
       ) : canSync ? (
         <button
@@ -671,7 +681,9 @@ function GitSyncActions({
             className={`size-3.5 shrink-0 ${syncing ? "animate-spin" : ""}`}
             strokeWidth={1.75}
           />
-          <span className="min-w-0 truncate">Sync Changes</span>
+          <span className="min-w-0 truncate">
+            {t("harness.chrome.syncChanges")}
+          </span>
           {behind > 0 ? (
             <span className="shrink-0 tabular-nums text-content/55">
               ↓{behind}
@@ -700,7 +712,7 @@ function GitSyncActions({
           ) : (
             <GitPullRequest className="size-3.5 shrink-0" strokeWidth={1.75} />
           )}
-          Create PR
+          {t("harness.chrome.createPr")}
         </button>
       ) : null}
       {showViewPr ? (
@@ -713,7 +725,9 @@ function GitSyncActions({
         >
           <ExternalLink className="size-3.5 shrink-0" strokeWidth={1.75} />
           <span className="min-w-0 truncate">
-            {pr?.number ? `View PR #${pr.number}` : "View PR"}
+            {pr?.number
+              ? t("harness.chrome.viewPrNumber", { number: pr.number })
+              : t("harness.chrome.viewPr")}
           </span>
         </button>
       ) : null}

@@ -108,7 +108,7 @@ export function NetworkSandboxPicker({
                   : "text-content/60 hover:text-content"
               }`}
             >
-              Off
+              {t("harness.modelSettings.off")}
             </button>
             <button
               type="button"
@@ -119,14 +119,13 @@ export function NetworkSandboxPicker({
                   : "text-content/60 hover:text-content"
               }`}
             >
-              On
+              {t("harness.modelSettings.on")}
             </button>
           </div>
           {enabled ? (
             <>
               <p className="mb-1 text-[11px] leading-4 text-content/50">
-                One host per line. Prefix with <code>*.</code> to allow any
-                subdomain. Nothing else can be reached.
+                {t("harness.chrome.networkSandboxAllowlistHint")}
               </p>
               <textarea
                 value={draft}
@@ -138,7 +137,7 @@ export function NetworkSandboxPicker({
             </>
           ) : (
             <p className="text-[11px] leading-4 text-content/50">
-              The agent's outbound network is unrestricted.
+              {t("harness.chrome.networkSandboxUnrestricted")}
             </p>
           )}
         </Popover>

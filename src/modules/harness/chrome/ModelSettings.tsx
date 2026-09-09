@@ -7,6 +7,11 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { Popover } from "./Popover";
+import { useTranslation } from "@/modules/i18n";
+import {
+  modelSettingLabel,
+  modelSettingOptionLabel,
+} from "../lib/catalogLabels";
 import {
   getModelSnapshot,
   resolveModel,
@@ -32,6 +37,7 @@ export function ModelSettings({
   onChange,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const catalog = useSyncCatalog();
   const settings = useMemo(() => {
     void catalog;
@@ -59,6 +65,7 @@ export function ModelSettings({
             setting={setting}
             value={values[setting.id] ?? setting.value}
             onChange={(value) => setValue(setting.id, value)}
+            t={t}
           />
         ) : (
           <SelectSetting
@@ -67,6 +74,7 @@ export function ModelSettings({
             value={values[setting.id] ?? setting.value}
             onChange={(value) => setValue(setting.id, value)}
             onClose={onClose}
+            t={t}
           />
         ),
       )}
@@ -84,19 +92,22 @@ function ToggleSetting({
   setting,
   value,
   onChange,
+  t,
 }: {
   setting: ModelSetting;
   value: string;
   onChange: (value: string) => void;
+  t: (key: string) => string;
 }) {
+  const label = modelSettingLabel(t, setting);
   const on = value === "true";
   const Icon =
     setting.id === "fast" ? Zap : setting.id === "thinking" ? Brain : Gauge;
   return (
     <button
       type="button"
-      title={setting.description ?? setting.label}
-      aria-label={setting.label}
+      title={setting.description ?? label}
+      aria-label={label}
       aria-pressed={on}
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => onChange(on ? "false" : "true")}
@@ -107,7 +118,7 @@ function ToggleSetting({
       }`}
     >
       <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
-      <span className="text-[11px]">{setting.label}</span>
+      <span className="text-[11px]">{label}</span>
     </button>
   );
 }
@@ -117,11 +128,13 @@ function SelectSetting({
   value,
   onChange,
   onClose,
+  t,
 }: {
   setting: ModelSetting;
   value: string;
   onChange: (value: string) => void;
   onClose?: () => void;
+  t: (key: string) => string;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(() =>
@@ -137,6 +150,10 @@ function SelectSetting({
     setting.options.find((option) => option.value === value) ??
     setting.options[0];
   const Icon = setting.id === "context" ? Maximize2 : Gauge;
+  const label = modelSettingLabel(t, setting);
+  const currentLabel = current
+    ? modelSettingOptionLabel(t, setting, current)
+    : value;
 
   const dismiss = (restore: boolean) => {
     setOpen(false);
@@ -180,8 +197,8 @@ function SelectSetting({
     <div ref={root} className="relative">
       <button
         type="button"
-        title={setting.description ?? setting.label}
-        aria-label={`${setting.label}: ${current?.label ?? value}`}
+        title={setting.description ?? label}
+        aria-label={`${label}: ${currentLabel}`}
         aria-expanded={open}
         aria-haspopup="listbox"
         onMouseDown={(e) => e.preventDefault()}
@@ -200,7 +217,7 @@ function SelectSetting({
       >
         <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
         <span className="min-w-0 truncate text-[11px]">
-          {current?.label ?? setting.label}
+          {currentLabel}
         </span>
         <ChevronDown
           className={`size-3 shrink-0 text-content/50 ${open ? "rotate-180" : ""}`}
@@ -215,7 +232,7 @@ function SelectSetting({
           autoFocus
           onDismiss={(reason) => dismiss(reason === "escape")}
           role="listbox"
-          aria-label={setting.label}
+          aria-label={label}
           data-model-settings
           tabIndex={-1}
           onKeyDown={onMenuKey}
@@ -239,7 +256,7 @@ function SelectSetting({
                     : "text-content hover:bg-content/5"
                 }`}
               >
-                {option.label}
+                {modelSettingOptionLabel(t, setting, option)}
               </button>
             );
           })}
