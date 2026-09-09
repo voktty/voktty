@@ -1,13 +1,15 @@
-import { useCallback, useMemo } from "react";
 import { native } from "@/modules/ai/lib/native";
+import { t as translate } from "@/modules/i18n";
 import type { SidebarViewId } from "@/modules/sidebar";
 import type { Tab } from "@/modules/tabs";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
+import { useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import {
   activeRepositoryContextPath,
   gitGraphRepositoryPath,
-  sourceControlRepositoryPath,
   type SourceControlRepositoryTarget,
+  sourceControlRepositoryPath,
 } from "./repositoryTarget";
 import { useSourceControl } from "./useSourceControl";
 
@@ -47,6 +49,7 @@ export function useSourceControlContext({
   cycleSidebarView,
   openCommitHistoryTab,
 }: Params) {
+  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const workspaceFallbackPath = launchCwdResolved
     ? (launchCwd ?? home ?? null)
     : null;
@@ -80,6 +83,8 @@ export function useSourceControlContext({
   });
   const graphContextPath = gitGraphRepositoryPath({
     contextPath: sourceControlContextPath,
+    workspaceFallbackPath:
+      workspaceEnv.kind === "local" ? workspaceFallbackPath : null,
     sidebarView,
     target: repositoryTarget,
   });
@@ -88,8 +93,6 @@ export function useSourceControlContext({
   const toggleSourceControl = useCallback(() => {
     cycleSidebarView("source-control");
   }, [cycleSidebarView]);
-
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
 
   const openGitGraphFromContext = useCallback(async () => {
     const known = sourceControl.hasRepo ? sourceControl.repo : null;
@@ -105,17 +108,25 @@ export function useSourceControlContext({
       });
       return;
     }
-    if (!graphContextPath) return;
+    if (!graphContextPath) {
+      toast.info(translate("feedback.noGitRepository"));
+      return;
+    }
     try {
       const repo = await native.gitResolveRepo(graphContextPath, workspaceEnv);
-      if (!repo) return;
+      if (!repo) {
+        toast.info(translate("feedback.noGitRepository"));
+        return;
+      }
       openCommitHistoryTab({
         repoRoot: repo.repoRoot,
         branch: repo.branch,
         workspaceEnv,
       });
-    } catch {
-      /* noop */
+    } catch (error) {
+      toast.error(translate("feedback.resolveGitRepositoryFailed"), {
+        description: error instanceof Error ? error.message : String(error),
+      });
     }
   }, [
     openCommitHistoryTab,

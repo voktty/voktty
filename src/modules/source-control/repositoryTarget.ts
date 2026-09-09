@@ -108,16 +108,18 @@ export function sourceControlRepositoryPath({
 
 export function gitGraphRepositoryPath({
   contextPath,
+  workspaceFallbackPath,
   sidebarView,
   target,
 }: {
   contextPath: string | null;
+  workspaceFallbackPath: string | null;
   sidebarView: SidebarViewId;
   target: SourceControlRepositoryTarget;
 }): string | null {
   return sidebarView === "source-control" && target.mode === "fixed"
     ? target.repoRoot
-    : contextPath;
+    : (contextPath ?? workspaceFallbackPath);
 }
 
 export function repositoryTargetIsPending({
