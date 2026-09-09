@@ -76,6 +76,7 @@ import {
   type Skill,
   type SlashToken,
 } from "../lib/skills";
+import { isImeComposition } from "../lib/keyboard";
 import { AccessPicker } from "./AccessPicker";
 import { NetworkSandboxPicker } from "./NetworkSandboxPicker";
 import { ComposerRunner } from "./ComposerRunner";
@@ -913,6 +914,7 @@ export function Composer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isImeComposition(e.nativeEvent)) return;
     if (creatingSkill) return;
 
     if (mentionOpen) {

@@ -1348,11 +1348,13 @@ html.has-chat-background .chat-pane-background::before,
   opacity: var(--chat-background-opacity);
 }
 
-html.chat-background-empty-only
-  .chat-pane-background[data-project-chat-background="false"][data-session-empty="false"]::before,
-.chat-pane-background[data-project-chat-background="true"][data-project-background-scope="empty"][data-session-empty="false"]::before {
-  opacity: 0;
+/* Keep the original content tint in dark mode. In light mode, use the base
+   color at the same opacity so the surface stays translucent without graying. */
+.popover-backdrop {
+  background: color-mix(in srgb, var(--color-content, #f4f4f6) 12%, transparent);
 }
 
-
-
+html.theme-light .popover-backdrop,
+:root:not(.dark) .popover-backdrop {
+  background: color-mix(in srgb, var(--color-background-base, #ffffff) 10%, transparent);
+}
