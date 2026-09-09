@@ -14,6 +14,8 @@ use voktty_companion_protocol::{QrInvitation, INVITATION_TTL_SECS, PROTOCOL_VERS
 
 use crate::modules::collab::quick_tunnel::{verified_executable, CloudflaredTunnel};
 
+use super::pairing::PairingRegistry;
+
 const ACCEPT_POLL: Duration = Duration::from_millis(20);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_REQUEST_BYTES: usize = 4096;
@@ -22,6 +24,7 @@ struct CompanionRuntime {
     _server: CompanionLoopback,
     _tunnel: CloudflaredTunnel,
     _host_private_key: EphemeralPrivateKey,
+    _pairing: PairingRegistry,
     invite: QrInvitation,
 }
 
@@ -76,10 +79,16 @@ impl CompanionState {
         let response = CompanionInvite {
             invitation: invite.clone(),
         };
+        let pairing = PairingRegistry::new(
+            &invite.invitation_id,
+            &invite.secret,
+            invite.expires_at_ms,
+        )?;
         *runtime = Some(CompanionRuntime {
             _server: server,
             _tunnel: tunnel,
             _host_private_key: private_key,
+            _pairing: pairing,
             invite,
         });
         Ok(response)

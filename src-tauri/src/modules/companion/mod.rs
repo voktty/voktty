@@ -1,3 +1,4 @@
+mod pairing;
 mod state;
 
 pub(crate) use state::CompanionState;
