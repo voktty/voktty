@@ -4340,7 +4340,6 @@ export const es: TranslationSchema = {
     renamedFrom: "(← {path})",
     staged: "Preparados",
     unstaged: "Sin preparar",
-    renamedFrom: "(← {path})",
     noResults: "No se encontraron archivos coincidentes.",
     allChanges: "Todos los cambios",
     stageAll: "Preparar todo",
