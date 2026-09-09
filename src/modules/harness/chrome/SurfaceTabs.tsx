@@ -40,6 +40,7 @@ export type SurfaceTabPresentation = {
 
 export function surfaceTabPresentation(
   file: FilePaneTab,
+  t: (key: string, values?: Record<string, string | number>) => string,
 ): SurfaceTabPresentation {
   if (isReleaseNotesTab(file)) {
     const title = releaseNotesTitle(file.releaseNotes.version);
@@ -53,47 +54,51 @@ export function surfaceTabPresentation(
 
   if (isChangesTab(file)) {
     return {
-      name: "Changes",
-      label: "Changes",
+      name: t("harness.chrome.changes"),
+      label: t("harness.chrome.changes"),
       iconName: "CHANGES",
-      tooltip: "Working tree changes",
+      tooltip: t("harness.chrome.workingTreeChanges"),
     };
   }
 
   if (isSessionChangesTab(file)) {
     return {
-      name: "Session Changes",
-      label: "Session Changes",
+      name: t("harness.chrome.sessionChanges"),
+      label: t("harness.chrome.sessionChanges"),
       iconName: "CHANGES",
-      tooltip: "Changes captured for this session only",
+      tooltip: t("harness.chrome.sessionChangesTooltip"),
     };
   }
 
   const review = isReviewTab(file);
   const terminal = isTerminalTab(file);
   const name = isPlanTab(file)
-    ? file.plan.title.trim() || "Plan"
+    ? file.plan.title.trim() || t("harness.chrome.plan")
     : terminal
       ? terminalTabLabel(file)
       : basename(file.path);
   return {
     name,
-    label: review ? `${name} (Working Tree)` : name,
+    label: review ? t("harness.chrome.workingTreeNamed", { name }) : name,
     iconName: isPlanTab(file) ? "plan.md" : name,
     tooltip: isPlanTab(file)
       ? name
       : terminal
         ? `${name} — ${file.cwd}`
         : review
-          ? `${file.path} (Working Tree)`
+          ? t("harness.chrome.workingTreeNamed", { name: file.path })
           : file.path,
   };
 }
 
 /** Mirrors the VS Code tab tooltip: the path, then what is wrong with it. */
-export function appendProblems(title: string, errors: number): string {
+export function appendProblems(
+  t: (key: string, values?: Record<string, string | number>) => string,
+  title: string,
+  errors: number,
+): string {
   if (!errors) return title;
-  return `${title} — ${errors} ${errors === 1 ? "problem" : "problems"}`;
+  return t("harness.chrome.tabProblems", { title, count: errors });
 }
 
 export function SurfaceTabs({
@@ -105,7 +110,7 @@ export function SurfaceTabs({
   onCloseFile,
   onReorder,
   onPaneDragStart,
-  label = "Open files",
+  label,
   trailing,
 }: Props) {
   const { t } = useTranslation();
@@ -128,7 +133,7 @@ export function SurfaceTabs({
       <div
         ref={lockOverscroll}
         role="tablist"
-        aria-label={label}
+        aria-label={label ?? t("harness.chrome.openFiles")}
         className="scrollbar-none flex min-w-0 flex-1 overflow-x-auto overscroll-none"
       >
       {onPaneDragStart ? (
@@ -154,7 +159,7 @@ export function SurfaceTabs({
         const errors = fileErrorCounts.get(file.id) ?? 0;
         const review = isReviewTab(file);
         const terminal = isTerminalTab(file);
-        const { label, iconName, tooltip } = surfaceTabPresentation(file);
+        const { label, iconName, tooltip } = surfaceTabPresentation(file, t);
         const dragging = sortable.draggingId === file.id;
         const showStart =
           sortable.draggingId &&
@@ -199,7 +204,7 @@ export function SurfaceTabs({
               type="button"
               role="tab"
               aria-selected={active}
-              title={appendProblems(tooltip, errors)}
+              title={appendProblems(t, tooltip, errors)}
               onClick={() => {
                 if (sortable.consumeClick()) return;
                 onSelectFile(file.id);
@@ -236,8 +241,8 @@ export function SurfaceTabs({
             </button>
             <button
               type="button"
-              title={`Close ${label}`}
-              aria-label={`Close ${label}`}
+              title={t("harness.chrome.closeNamed", { name: label })}
+              aria-label={t("harness.chrome.closeNamed", { name: label })}
               data-no-drag
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
