@@ -186,8 +186,16 @@ export function TabGroupMenu({
         <div className="mb-2 flex items-center gap-2 px-0.5">
           <button
             type="button"
-            title={logoPath ? "Change project logo" : "Add project logo"}
-            aria-label={logoPath ? "Change project logo" : "Add project logo"}
+            title={
+              logoPath
+                ? t("harness.chrome.changeProjectLogo")
+                : t("harness.chrome.addProjectLogo")
+            }
+            aria-label={
+              logoPath
+                ? t("harness.chrome.changeProjectLogo")
+                : t("harness.chrome.addProjectLogo")
+            }
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               void (async () => {
@@ -212,9 +220,13 @@ export function TabGroupMenu({
             />
           </button>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-content/50">Project logo</p>
+            <p className="text-[11px] text-content/50">
+              {t("harness.chrome.projectLogo")}
+            </p>
             <p className="truncate text-[12px] text-content/70">
-              {logoPath ? "Shown in tabs and composer" : "Optional — replaces folder icon"}
+              {logoPath
+                ? t("harness.chrome.projectLogoShown")
+                : t("harness.chrome.projectLogoOptional")}
             </p>
           </div>
           {logoPath ? (
@@ -243,8 +255,8 @@ export function TabGroupMenu({
             <button
               key={color}
               type="button"
-              title={`Color ${index + 1}`}
-              aria-label={`Color ${index + 1}`}
+              title={t("harness.chrome.colorIndex", { index: index + 1 })}
+              aria-label={t("harness.chrome.colorIndex", { index: index + 1 })}
               aria-pressed={selected}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
@@ -302,7 +314,9 @@ export function TabGroupMenu({
       ) : null}
 
       <div className="mb-2 px-0.5">
-        <p className="mb-1 text-[11px] text-content/50">Mascot</p>
+        <p className="mb-1 text-[11px] text-content/50">
+          {t("harness.chrome.mascot")}
+        </p>
         <div className="flex items-center justify-between gap-1">
           {PROJECT_MASCOTS.map((mascot) => (
             <MascotSwatch
@@ -377,11 +391,12 @@ function MascotSwatch({
   onPick: () => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
       title={title}
-      aria-label={`Mascot ${title}`}
+      aria-label={t("harness.chrome.mascotNamed", { name: title })}
       aria-pressed={selected}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onPick}
