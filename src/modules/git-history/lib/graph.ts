@@ -3,14 +3,14 @@
 // Input: commits ordered newest-first, each with parent SHAs.
 // Output: per-row layout the SVG rail can render directly.
 //
-// Algorithm: maintain `lanes` — an array of "expected next commits" per lane.
+// Algorithm: maintain `lanes` - an array of "expected next commits" per lane.
 // For each commit top-to-bottom:
-//   1. Find lanes that expect this commit (one or more — merges target the
+//   1. Find lanes that expect this commit (one or more - merges target the
 //      leftmost; the others collapse into it).
 //   2. If none, allocate the leftmost free slot.
 //   3. Replace the commit's lane with its first parent, allocate lanes for
 //      additional parents (reusing a lane that already expects them when
-//      possible — keeps history visually consistent).
+//      possible - keeps history visually consistent).
 //
 // Lane colors are stable per slot index. This keeps the rail readable when
 // you load more pages, since lane indices don't shift retroactively.
@@ -124,7 +124,7 @@ export function layoutGraph(
       }
     }
 
-    // Special case: no claiming lane — this is a fresh tip. Reserve our lane
+    // Special case: no claiming lane - this is a fresh tip. Reserve our lane
     // visually (no incoming top edge for this lane).
 
     // Collapse all claiming lanes (they're consumed by this row).
