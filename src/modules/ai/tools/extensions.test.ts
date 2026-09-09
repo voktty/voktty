@@ -19,6 +19,7 @@ describe("buildExtensionTools", () => {
     await built?.execute?.({ id: "button" }, {
       toolCallId: "test-call",
       messages: [],
+      context: {},
     });
     expect(execute).toHaveBeenCalledWith({ id: "button" }, { signal: undefined });
   });
@@ -52,6 +53,7 @@ describe("buildExtensionTools", () => {
     const result = built?.execute?.({}, {
       toolCallId: "cancelled-call",
       messages: [],
+      context: {},
       abortSignal: controller.signal,
     });
     controller.abort();

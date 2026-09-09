@@ -12,7 +12,7 @@ vi.mock("../lib/native", () => ({ native: nativeMock }));
 
 import { buildFsTools } from "./fs";
 
-const options: ToolExecutionOptions = { toolCallId: "call", messages: [] };
+const options: ToolExecutionOptions<Record<string, unknown>> = { toolCallId: "call", messages: [], context: {} };
 
 function context(): ToolContext {
   return {

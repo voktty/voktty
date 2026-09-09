@@ -4241,6 +4241,8 @@ export const en = {
     liveDiff: "Live Diff",
     staged: "Staged",
     unstaged: "Unstaged",
+    renamedFrom: "(← {path})",
+    noResults: "No matching files found.",
     allChanges: "All Changes",
     stageAll: "Stage All",
     unstageAll: "Unstage All",
