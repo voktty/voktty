@@ -10,6 +10,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -40,7 +50,9 @@ import {
   File02Icon,
   GitBranchIcon,
   GitCompareIcon,
+  LayoutTwoColumnIcon,
   LinkSquare02Icon,
+  Tag01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -246,6 +258,10 @@ export const GitHistoryView = memo(function GitHistoryView({
   const [pendingBranch, setPendingBranch] = useState<GitLogEntry | null>(null);
   const [branchName, setBranchName] = useState("");
   const [branching, setBranching] = useState(false);
+  const [pendingTag, setPendingTag] = useState<GitLogEntry | null>(null);
+  const [tagName, setTagName] = useState("");
+  const [tagMessage, setTagMessage] = useState("");
+  const [tagging, setTagging] = useState(false);
   const filesCacheRef = useRef(new Map<string, FilesEntry>());
   const [filesTick, setFilesTick] = useState(0);
   const bumpFiles = useCallback(() => setFilesTick((n) => n + 1), []);
@@ -649,6 +665,54 @@ export const GitHistoryView = memo(function GitHistoryView({
     }
   }, [branchName, handleRefresh, pendingBranch, repoRoot, t, workspaceEnv]);
 
+  const handleCheckout = useCallback(
+    async (commit: GitLogEntry) => {
+      try {
+        await native.gitCheckoutBranch(repoRoot, commit.sha, workspaceEnv);
+        toast.success(
+          t("gitHistory.checkoutSuccess", { sha: commit.shortSha }),
+        );
+        handleRefresh();
+      } catch (err) {
+        toast.error(t("gitHistory.checkoutFailed"), {
+          description: normalizeError(err),
+        });
+      }
+    },
+    [handleRefresh, repoRoot, t, workspaceEnv],
+  );
+
+  const requestTag = useCallback((commit: GitLogEntry) => {
+    setOpenAnchor(null);
+    setTagName("");
+    setTagMessage("");
+    setPendingTag(commit);
+  }, []);
+
+  const confirmTag = useCallback(async () => {
+    const name = tagName.trim();
+    if (!pendingTag || !name) return;
+    setTagging(true);
+    try {
+      await native.gitTagCreate(
+        repoRoot,
+        name,
+        pendingTag.sha,
+        tagMessage.trim() || undefined,
+        workspaceEnv,
+      );
+      toast.success(t("gitHistory.tagsStashes.tagCreated", { name }));
+      setPendingTag(null);
+      handleRefresh();
+    } catch (err) {
+      toast.error(t("gitHistory.tagFailed"), {
+        description: normalizeError(err),
+      });
+    } finally {
+      setTagging(false);
+    }
+  }, [handleRefresh, pendingTag, repoRoot, t, tagName, tagMessage, workspaceEnv]);
+
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={200}>
       <div className="flex h-full min-h-0 flex-col bg-background [contain:layout_style]">
@@ -729,7 +793,25 @@ export const GitHistoryView = memo(function GitHistoryView({
                         graphRow={graphByCommit.get(commit.sha) ?? null}
                         maxLaneCount={maxLaneCount}
                         gridTemplate={gridTemplate}
+                        remoteWeb={remoteWeb}
                         onClick={handleRowClick}
+                        onOpenCommitDiff={(c, split) =>
+                          onOpenCommitDiff({
+                            repoRoot,
+                            sha: c.sha,
+                            shortSha: c.shortSha,
+                            subject: c.subject,
+                            workspaceEnv,
+                            split,
+                          })
+                        }
+                        onCheckout={handleCheckout}
+                        onCreateBranch={requestBranch}
+                        onCreateTag={requestTag}
+                        onCherryPick={requestCherryPick}
+                        onRevert={requestRevert}
+                        onCopySha={copyToClipboard}
+                        onCopyPatch={copyPatch}
                       />
                     </div>
                   );
@@ -956,6 +1038,70 @@ export const GitHistoryView = memo(function GitHistoryView({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Dialog
+          open={pendingTag !== null}
+          onOpenChange={(open) => {
+            if (!open && !tagging) setPendingTag(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t("gitHistory.createTag")}</DialogTitle>
+              <DialogDescription>
+                {pendingTag
+                  ? t("gitHistory.createTagDescription", {
+                      subject: pendingTag.subject || t("gitHistory.noSubject"),
+                      sha: pendingTag.shortSha,
+                    })
+                  : null}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <Input
+                value={tagName}
+                disabled={tagging}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder={t("gitHistory.tagsStashes.tagNamePlaceholder")}
+                onChange={(e) => setTagName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || tagging) return;
+                  e.preventDefault();
+                  void confirmTag();
+                }}
+              />
+              <Input
+                value={tagMessage}
+                disabled={tagging}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder={t("gitHistory.tagsStashes.tagMessagePlaceholder")}
+                onChange={(e) => setTagMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || tagging) return;
+                  e.preventDefault();
+                  void confirmTag();
+                }}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                disabled={tagging}
+                onClick={() => setPendingTag(null)}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                disabled={tagging || tagName.trim().length === 0}
+                onClick={() => void confirmTag()}
+              >
+                {tagging ? t("common.loading") : t("gitHistory.tagsStashes.createTag")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
@@ -976,7 +1122,16 @@ type CommitRowProps = {
   graphRow: GraphRow | null;
   maxLaneCount: number;
   gridTemplate: string;
+  remoteWeb: RemoteWebInfo | null;
   onClick: (sha: string, event: React.MouseEvent<HTMLElement>) => void;
+  onOpenCommitDiff: (commit: GitLogEntry, split?: boolean) => void;
+  onCheckout: (commit: GitLogEntry) => void;
+  onCreateBranch: (commit: GitLogEntry) => void;
+  onCreateTag: (commit: GitLogEntry) => void;
+  onCherryPick: (commit: GitLogEntry) => void;
+  onRevert: (commit: GitLogEntry) => void;
+  onCopySha: (value: string) => Promise<void> | void;
+  onCopyPatch: (commit: GitLogEntry) => Promise<void> | void;
 };
 
 const CommitRow = memo(function CommitRow({
@@ -986,108 +1141,189 @@ const CommitRow = memo(function CommitRow({
   graphRow,
   maxLaneCount,
   gridTemplate,
+  remoteWeb,
   onClick,
+  onOpenCommitDiff,
+  onCheckout,
+  onCreateBranch,
+  onCreateTag,
+  onCherryPick,
+  onRevert,
+  onCopySha,
+  onCopyPatch,
 }: CommitRowProps) {
   const { t } = useTranslation();
   const date = compactDate(commit.timestampSecs);
   const initials = authorInitials(commit.author);
   const totalStat = commit.insertions + commit.deletions;
+  const webUrl = remoteWeb ? commitWebUrl(remoteWeb, commit.sha) : null;
+
   return (
-    <button
-      type="button"
-      onClick={(event) => onClick(commit.sha, event)}
-      className={cn(
-        "group relative grid h-full w-full cursor-pointer items-center gap-3 border-l-2 border-transparent pr-3 text-left transition-colors",
-        active ? "border-l-primary/70 bg-accent/45" : "hover:bg-accent/25",
-      )}
-      style={{ gridTemplateColumns: gridTemplate }}
-    >
-      <div className="flex items-center justify-start pl-1">
-        {graphRow ? (
-          <GraphRail
-            row={graphRow}
-            rowHeight={ROW_HEIGHT}
-            maxLaneCount={maxLaneCount}
-            active={active}
-          />
-        ) : null}
-      </div>
-      <span className="pl-px font-mono text-[10.5px] tabular-nums text-muted-foreground/80">
-        {commit.shortSha}
-      </span>
-      <span
-        className={cn(
-          "min-w-0 truncate text-[12px] leading-tight",
-          active
-            ? "font-semibold text-foreground"
-            : "font-medium text-foreground/95",
-        )}
-      >
-        {highlight(commit.subject, query)}
-      </span>
-      <span aria-hidden />
-      <span
-        className="ml-2 inline-flex h-[18px] max-w-full min-w-0 items-center gap-1.5 justify-self-start self-center overflow-hidden rounded-md bg-foreground/6 pl-1 pr-1.5 text-[10.5px] font-medium text-foreground/85"
-        title={commit.authorEmail || commit.author}
-      >
-        <span
-          className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-[3px] font-mono text-[8.5px] font-bold uppercase tabular-nums text-background"
-          style={{
-            backgroundColor: authorTint(commit.authorEmail || commit.author),
-          }}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={(event) => onClick(commit.sha, event)}
+          className={cn(
+            "group relative grid h-full w-full cursor-pointer items-center gap-3 border-l-2 border-transparent pr-3 text-left transition-colors select-none",
+            active ? "border-l-primary/70 bg-accent/45" : "hover:bg-accent/25",
+          )}
+          style={{ gridTemplateColumns: gridTemplate }}
         >
-          {initials}
-        </span>
-        <span className="min-w-0 truncate">
-          {commit.author
-            ? highlight(commit.author, query)
-            : t("gitHistory.unknownAuthor")}
-        </span>
-      </span>
-      <span className="text-right font-mono text-[10.5px] tabular-nums text-muted-foreground/75">
-        {date}
-      </span>
-      <span className="flex min-w-0 items-center justify-end gap-1.5 font-mono text-[10px] tabular-nums">
-        {commit.filesChanged > 0 ? (
+          <div className="flex items-center justify-start pl-1">
+            {graphRow ? (
+              <GraphRail
+                row={graphRow}
+                rowHeight={ROW_HEIGHT}
+                maxLaneCount={maxLaneCount}
+                active={active}
+              />
+            ) : null}
+          </div>
+          <span className="pl-px font-mono text-[10.5px] tabular-nums text-muted-foreground/80">
+            {commit.shortSha}
+          </span>
           <span
-            className="inline-flex items-center gap-1 text-muted-foreground/75"
-            title={t("gitHistory.filesChangedCount", {
-              count: commit.filesChanged,
-            })}
+            className={cn(
+              "min-w-0 truncate text-[12px] leading-tight",
+              active
+                ? "font-semibold text-foreground"
+                : "font-medium text-foreground/95",
+            )}
           >
-            <HugeiconsIcon
-              icon={File02Icon}
-              size={10.5}
-              strokeWidth={1.7}
-              className="opacity-70"
-            />
-            <span className="font-medium">{commit.filesChanged}</span>
+            {highlight(commit.subject, query)}
           </span>
-        ) : null}
-        {commit.filesChanged > 0 && totalStat > 0 ? (
+          <span aria-hidden />
           <span
-            aria-hidden
-            className="size-[3px] shrink-0 rounded-full bg-muted-foreground/30"
-          />
-        ) : null}
-        {totalStat > 0 ? (
-          <span className="inline-flex items-center gap-1">
-            {commit.insertions > 0 ? (
-              <span className="font-semibold text-emerald-600/85 dark:text-emerald-400/85">
-                +{commit.insertions}
+            className="ml-2 inline-flex h-[18px] max-w-full min-w-0 items-center gap-1.5 justify-self-start self-center overflow-hidden rounded-md bg-foreground/6 pl-1 pr-1.5 text-[10.5px] font-medium text-foreground/85"
+            title={commit.authorEmail || commit.author}
+          >
+            <span
+              className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-[3px] font-mono text-[8.5px] font-bold uppercase tabular-nums text-background"
+              style={{
+                backgroundColor: authorTint(commit.authorEmail || commit.author),
+              }}
+            >
+              {initials}
+            </span>
+            <span className="min-w-0 truncate">
+              {commit.author
+                ? highlight(commit.author, query)
+                : t("gitHistory.unknownAuthor")}
+            </span>
+          </span>
+          <span className="text-right font-mono text-[10.5px] tabular-nums text-muted-foreground/75">
+            {date}
+          </span>
+          <span className="flex min-w-0 items-center justify-end gap-1.5 font-mono text-[10px] tabular-nums">
+            {commit.filesChanged > 0 ? (
+              <span
+                className="inline-flex items-center gap-1 text-muted-foreground/75"
+                title={t("gitHistory.filesChangedCount", {
+                  count: commit.filesChanged,
+                })}
+              >
+                <HugeiconsIcon
+                  icon={File02Icon}
+                  size={10.5}
+                  strokeWidth={1.7}
+                  className="opacity-70"
+                />
+                <span className="font-medium">{commit.filesChanged}</span>
               </span>
             ) : null}
-            {commit.deletions > 0 ? (
-              <span className="font-semibold text-rose-600/85 dark:text-rose-400/85">
-                −{commit.deletions}
+            {commit.filesChanged > 0 && totalStat > 0 ? (
+              <span
+                aria-hidden
+                className="size-[3px] shrink-0 rounded-full bg-muted-foreground/30"
+              />
+            ) : null}
+            {totalStat > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                {commit.insertions > 0 ? (
+                  <span className="font-semibold text-emerald-600/85 dark:text-emerald-400/85">
+                    +{commit.insertions}
+                  </span>
+                ) : null}
+                {commit.deletions > 0 ? (
+                  <span className="font-semibold text-rose-600/85 dark:text-rose-400/85">
+                    −{commit.deletions}
+                  </span>
+                ) : null}
               </span>
+            ) : commit.filesChanged === 0 ? (
+              <span className="text-muted-foreground/40">-</span>
             ) : null}
           </span>
-        ) : commit.filesChanged === 0 ? (
-          <span className="text-muted-foreground/40">-</span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-56 text-xs">
+        <ContextMenuItem onClick={() => onOpenCommitDiff(commit)}>
+          <HugeiconsIcon icon={GitCompareIcon} size={14} />
+          <span>{t("gitHistory.contextMenu.viewDiff")}</span>
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onOpenCommitDiff(commit, true)}>
+          <HugeiconsIcon icon={LayoutTwoColumnIcon} size={14} />
+          <span>{t("gitHistory.contextMenu.openSplitDiff")}</span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => onCheckout(commit)}>
+          <HugeiconsIcon icon={GitBranchIcon} size={14} />
+          <span>{t("gitHistory.contextMenu.checkout")}</span>
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onCreateBranch(commit)}>
+          <HugeiconsIcon icon={GitBranchIcon} size={14} />
+          <span>{t("gitHistory.contextMenu.createBranch")}</span>
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onCreateTag(commit)}>
+          <HugeiconsIcon icon={Tag01Icon} size={14} />
+          <span>{t("gitHistory.contextMenu.createTag")}</span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => onCherryPick(commit)}>
+          <HugeiconsIcon icon={ArrowRight01Icon} size={14} />
+          <span>{t("gitHistory.contextMenu.cherryPick")}</span>
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onRevert(commit)}>
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={14} />
+          <span>{t("gitHistory.contextMenu.revert")}</span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <HugeiconsIcon icon={Copy01Icon} size={14} />
+            <span>{t("gitHistory.contextMenu.copy")}</span>
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-44 text-xs">
+            <ContextMenuItem onClick={() => void onCopySha(commit.sha)}>
+              <span>{t("gitHistory.contextMenu.copySha")}</span>
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => void onCopySha(commit.shortSha)}>
+              <span>{t("gitHistory.contextMenu.copyShortSha")}</span>
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => void onCopySha(commit.subject)}>
+              <span>{t("gitHistory.contextMenu.copySubject")}</span>
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => void onCopyPatch(commit)}>
+              <span>{t("gitHistory.contextMenu.copyPatch")}</span>
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        {webUrl && remoteWeb ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={() => void openUrl(webUrl).catch(console.error)}>
+              <HugeiconsIcon icon={LinkSquare02Icon} size={14} />
+              <span>
+                {t("gitHistory.contextMenu.openRemote", {
+                  host: hostLabel(remoteWeb),
+                })}
+              </span>
+            </ContextMenuItem>
+          </>
         ) : null}
-      </span>
-    </button>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 });
 

@@ -3,10 +3,11 @@ import { NAV_ITEMS } from "./GitWorkbenchNav";
 import type { GitWorkbenchSection } from "../types";
 
 describe("GitWorkbenchNav", () => {
-  it("defines all six core workbench navigation items in expected order", () => {
+  it("defines all core workbench navigation items in expected order", () => {
     const expectedSections: GitWorkbenchSection[] = [
       "history",
       "branches",
+      "pulls",
       "worktrees",
       "tags-stashes",
       "remotes",

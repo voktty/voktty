@@ -20,6 +20,7 @@ import type {
 import { GitBranchesView } from "./views/GitBranchesView";
 import { GitCompareView } from "./views/GitCompareView";
 import { GitHistoryView } from "./views/GitHistoryView";
+import { GitPullsView } from "./views/GitPullsView";
 import { GitRemotesView } from "./views/GitRemotesView";
 import { GitTagsStashesView } from "./views/GitTagsStashesView";
 import { GitWorktreesView } from "./views/GitWorktreesView";
@@ -216,6 +217,14 @@ export function GitHistoryPane({
             />
           )}
 
+          {activeSection === "pulls" && (
+            <GitPullsView
+              repoRoot={repoRoot}
+              workspaceEnv={workspaceEnv}
+              onOpenCommitDiff={onOpenCommitDiff}
+            />
+          )}
+
           {activeSection === "worktrees" && (
             <GitWorktreesView
               repoRoot={repoRoot}
@@ -243,7 +252,7 @@ export function GitHistoryPane({
               repoRoot={repoRoot}
               workspaceEnv={workspaceEnv}
               currentBranch={repoInfo?.branch ?? status?.branch}
-              onOpenFileDiff={(file, base, compare) =>
+              onOpenFileDiff={(file, base, compare, split) =>
                 onOpenCommitFile({
                   repoRoot,
                   sha: compare,
@@ -252,6 +261,7 @@ export function GitHistoryPane({
                   path: file.path,
                   originalPath: file.originalPath,
                   workspaceEnv,
+                  split,
                 })
               }
             />

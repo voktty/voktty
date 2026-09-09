@@ -646,7 +646,9 @@ export function GitReviewTab({ cwd = null }: Props) {
                     </span>
                     {selectedEntry.originalPath && (
                       <span className="font-mono text-[10px] text-muted-foreground truncate">
-                        {`(\u2190 ${selectedEntry.originalPath})`}
+                        {t("notesBoard.renamedFrom", {
+                          path: selectedEntry.originalPath,
+                        })}
                       </span>
                     )}
                     <span
