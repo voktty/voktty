@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/modules/i18n";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { HarnessTab, Tab } from "@/modules/tabs";
 
@@ -20,6 +21,7 @@ type Props = {
 };
 
 export function HarnessStack({ tabs, activeId, placements }: Props) {
+  const { t } = useTranslation();
   const harnessTabs = tabs.filter(
     (t): t is HarnessTab => t.kind === "harness" && !t.cold,
   );
@@ -59,7 +61,7 @@ export function HarnessStack({ tabs, activeId, placements }: Props) {
             <Suspense
               fallback={
                 <div className="h-full w-full bg-[#121215] flex items-center justify-center text-zinc-500 font-mono text-xs">
-                  Loading agent harness...
+                  {t("harness.chrome.loadingAgentHarness")}
                 </div>
               }
             >
