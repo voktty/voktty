@@ -136,6 +136,16 @@ export function StatusBar({
         event.preventDefault();
         event.stopPropagation();
         useNotesBoardStore.getState().requestNewNote();
+        return;
+      }
+      if (
+        (event.altKey && event.key.toLowerCase() === "d") ||
+        (event.ctrlKey && event.altKey && event.key.toLowerCase() === "d")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        useNotesBoardStore.getState().openReview();
+        return;
       }
     };
     window.addEventListener("keydown", onKey, true);

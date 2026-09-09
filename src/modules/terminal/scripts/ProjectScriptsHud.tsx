@@ -18,6 +18,7 @@ import {
   CodeIcon,
   ContainerIcon,
   Copy01Icon,
+  GitCompareIcon,
   PlayIcon,
   Settings02Icon,
   SparklesIcon,
@@ -26,6 +27,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { memo, useState } from "react";
 import { toast } from "sonner";
+import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore";
+import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import type { ScriptCategory } from "./types";
 import { useProjectScripts } from "./useProjectScripts";
 
@@ -82,6 +85,7 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
 }: Props) {
   const { t } = useTranslation();
   const { scripts } = useProjectScripts(cwd);
+  const sourceControl = useSourceControl(cwd ?? null);
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem("voktty.scriptsHud.collapsed") === "true";
@@ -100,7 +104,9 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
     });
   };
 
-  if (!cwd || (scripts.length === 0 && !onOpenCopilot)) return null;
+  const hasGitChanges = sourceControl.hasRepo && sourceControl.changedCount > 0;
+
+  if (!cwd || (scripts.length === 0 && !onOpenCopilot && !hasGitChanges)) return null;
 
   return (
     <TooltipProvider delayDuration={400}>
@@ -199,8 +205,30 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
           </div>
         )}
 
-        {onOpenCopilot && (
-          <div className="ml-auto flex items-center gap-1 shrink-0 pl-1">
+        <div className="ml-auto flex items-center gap-1.5 shrink-0 pl-1">
+          {hasGitChanges && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => useNotesBoardStore.getState().openReview()}
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/35 bg-primary/10 hover:bg-primary/20 px-2 py-0.5 text-[10px] font-medium text-foreground transition-all cursor-pointer shrink-0 active:scale-97"
+                  aria-label={t("terminal.gitDiffHudTooltip", { count: sourceControl.changedCount })}
+                >
+                  <HugeiconsIcon icon={GitCompareIcon} size={11} className="text-primary" />
+                  <span className="font-mono font-semibold text-primary">{sourceControl.changedCount}</span>
+                  <span className="text-muted-foreground text-[9px]">
+                    {t("terminal.gitChanges", { count: sourceControl.changedCount })}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-[10px] font-medium">
+                {t("terminal.gitDiffHudTooltip", { count: sourceControl.changedCount })}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {onOpenCopilot && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -216,8 +244,8 @@ export const ProjectScriptsHud = memo(function ProjectScriptsHud({
                 {copilotLabel ? `${t("terminal.copilot.title")} (${copilotLabel})` : t("terminal.copilot.title")}
               </TooltipContent>
             </Tooltip>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </TooltipProvider>
   );

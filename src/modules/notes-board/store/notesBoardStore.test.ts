@@ -23,6 +23,19 @@ describe("notesBoardStore", () => {
     useNotesBoardStore.getState().open("notes");
     expect(useNotesBoardStore.getState().isOpen).toBe(true);
     expect(useNotesBoardStore.getState().activeTab).toBe("notes");
+    useNotesBoardStore.getState().open("review");
+    expect(useNotesBoardStore.getState().isOpen).toBe(true);
+    expect(useNotesBoardStore.getState().activeTab).toBe("review");
+  });
+
+  it("opens review directly with openReview()", () => {
+    useNotesBoardStore.getState().close();
+    useNotesBoardStore.getState().setTab("notes");
+    expect(useNotesBoardStore.getState().isOpen).toBe(false);
+
+    useNotesBoardStore.getState().openReview();
+    expect(useNotesBoardStore.getState().isOpen).toBe(true);
+    expect(useNotesBoardStore.getState().activeTab).toBe("review");
   });
 
   it("changes tab", () => {
@@ -30,6 +43,8 @@ describe("notesBoardStore", () => {
     expect(useNotesBoardStore.getState().activeTab).toBe("notes");
     useNotesBoardStore.getState().setTab("kanban");
     expect(useNotesBoardStore.getState().activeTab).toBe("kanban");
+    useNotesBoardStore.getState().setTab("review");
+    expect(useNotesBoardStore.getState().activeTab).toBe("review");
   });
 
   it("clamps size within valid ranges", () => {
