@@ -1886,7 +1886,7 @@ export const EditorPane = memo(
             )}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-64 rounded-xl border border-border/40 bg-popover/95 p-1 shadow-2xl backdrop-blur-xl z-50">
+        <ContextMenuContent className="w-56 z-50">
           <ContextMenuItem
             onSelect={() => void handleQuickFix()}
             className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer focus:bg-accent focus:text-accent-foreground font-medium text-amber-300"
