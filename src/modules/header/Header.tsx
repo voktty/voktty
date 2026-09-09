@@ -38,7 +38,8 @@ type Props = {
   onNewWsl?: (distro: string) => void;
   onNewBlock: () => void;
   onNewPrivate: () => void;
-  onNewPreview: () => void;
+  onNewPreview?: () => void;
+  onNewBrowser?: () => void;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
   onNewHarness?: () => void;
@@ -53,7 +54,7 @@ type Props = {
   onShareTerminal?: (id: number) => void;
   onOpenFile?: () => void;
   onOpenFolder?: () => void;
-  onNewGitGraph: () => void;
+  onNewGitGraph?: () => void;
   onLaunchAgents: (request: AgentLaunchRequest) => void;
   onClose: (id: number) => void;
   /** Chrome-style: close every tab to the right of the given tab. */
@@ -64,6 +65,9 @@ type Props = {
   onDuplicate: (id: number) => void;
   onSplitRight?: (id: number) => void;
   onSplitDown?: (id: number) => void;
+  onOpenPreviewSplit?: (id: number) => void;
+  onOpenGitGraphSplit?: (id: number) => void;
+  onOpenEditorSplit?: (id: number) => void;
   /** Set a terminal tab's custom label; empty string resets to default. */
   onRename: (id: number, title: string) => void;
   /** Move a dragged tab to a new position (insertion gap index). */
@@ -114,6 +118,7 @@ export function Header({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  onNewBrowser,
   onNewEditor,
   onNewApiClient,
   onNewHarness,
@@ -129,6 +134,9 @@ export function Header({
   onDuplicate,
   onSplitRight,
   onSplitDown,
+  onOpenPreviewSplit,
+  onOpenGitGraphSplit,
+  onOpenEditorSplit,
   onRename,
   onReorder,
   onOverrideLanguage,
@@ -406,6 +414,9 @@ export function Header({
               onDuplicate={onDuplicate}
               onSplitRight={onSplitRight}
               onSplitDown={onSplitDown}
+              onOpenPreviewSplit={onOpenPreviewSplit}
+              onOpenGitGraphSplit={onOpenGitGraphSplit}
+              onOpenEditorSplit={onOpenEditorSplit}
               onRename={onRename}
               onReorder={onReorder}
               onOverrideLanguage={onOverrideLanguage}
@@ -428,6 +439,7 @@ export function Header({
               onNewBlock={onNewBlock}
               onNewPrivate={onNewPrivate}
               onNewPreview={onNewPreview}
+              onNewBrowser={onNewBrowser}
               onNewEditor={onNewEditor}
               onNewApiClient={onNewApiClient}
               onNewHarness={onNewHarness}

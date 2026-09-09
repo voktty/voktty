@@ -59,6 +59,7 @@ import {
   ComputerTerminal02Icon,
   Copy01Icon,
   Folder01Icon,
+  GitBranchIcon,
   GitCompareIcon,
   Globe02Icon,
   IncognitoIcon,
@@ -111,7 +112,7 @@ type Props = {
   onNewWsl?: (distro: string) => void;
   onNewBlock: () => void;
   onNewPrivate: () => void;
-  onNewPreview: () => void;
+  onNewPreview?: () => void;
   onNewEditor: () => void;
   onNewApiClient?: () => void;
   onNewHarness?: () => void;
@@ -126,7 +127,8 @@ type Props = {
   onShareTerminal?: (id: number) => void;
   onOpenFile?: () => void;
   onOpenFolder?: () => void;
-  onNewGitGraph: () => void;
+  onNewGitGraph?: () => void;
+  onNewBrowser?: () => void;
   onLaunchAgents: (request: AgentLaunchRequest) => void;
   onClose: (id: number) => void;
   /** Chrome-style: close every tab to the right of the given tab. */
@@ -138,6 +140,9 @@ type Props = {
    * next to the original, so both stay visible at once. */
   onSplitRight?: (id: number) => void;
   onSplitDown?: (id: number) => void;
+  onOpenPreviewSplit?: (id: number) => void;
+  onOpenGitGraphSplit?: (id: number) => void;
+  onOpenEditorSplit?: (id: number) => void;
   /** Set a terminal tab's custom label; empty string resets to default. */
   onRename: (id: number, title: string) => void;
   /** Move a dragged tab to a new position (insertion gap index 0..tabs.length). */
@@ -183,6 +188,7 @@ export function TabBar({
   onNewBlock,
   onNewPrivate,
   onNewPreview,
+  onNewBrowser,
   onNewEditor,
   onNewApiClient,
   onNewHarness,
@@ -198,6 +204,9 @@ export function TabBar({
   onDuplicate,
   onSplitRight,
   onSplitDown,
+  onOpenPreviewSplit,
+  onOpenGitGraphSplit,
+  onOpenEditorSplit,
   onRename,
   onReorder,
   onOverrideLanguage,
@@ -1058,7 +1067,7 @@ export function TabBar({
                             strokeWidth={1.75}
                           />
                           <span className="flex-1">
-                            {translate("tabs.duplicateTab")}
+                            {translate("tabs.duplicateSplit")}
                           </span>
                         </ContextMenuItem>
                         {onSplitRight ? (
@@ -1072,7 +1081,7 @@ export function TabBar({
                               strokeWidth={1.75}
                             />
                             <span className="flex-1">
-                              {translate("commandPalette.commands.splitPaneRight")}
+                              {translate("tabs.splitRight")}
                             </span>
                           </ContextMenuItem>
                         ) : null}
@@ -1087,7 +1096,54 @@ export function TabBar({
                               strokeWidth={1.75}
                             />
                             <span className="flex-1">
-                              {translate("commandPalette.commands.splitPaneDown")}
+                              {translate("tabs.splitDown")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
+                        {onOpenPreviewSplit ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            onSelect={() => onOpenPreviewSplit(t.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={Globe02Icon}
+                              size={13}
+                              strokeWidth={1.75}
+                              className="text-cyan-400"
+                            />
+                            <span className="flex-1">
+                              {translate("tabs.splitPreview")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
+                        {onOpenGitGraphSplit ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            onSelect={() => onOpenGitGraphSplit(t.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={GitBranchIcon}
+                              size={13}
+                              strokeWidth={1.75}
+                              className="text-amber-400"
+                            />
+                            <span className="flex-1">
+                              {translate("tabs.splitGitGraph")}
+                            </span>
+                          </ContextMenuItem>
+                        ) : null}
+                        {onOpenEditorSplit ? (
+                          <ContextMenuItem
+                            className="gap-2 rounded-xl px-2.5 py-1.5 text-[13px]"
+                            onSelect={() => onOpenEditorSplit(t.id)}
+                          >
+                            <HugeiconsIcon
+                              icon={PencilEdit02Icon}
+                              size={13}
+                              strokeWidth={1.75}
+                            />
+                            <span className="flex-1">
+                              {translate("tabs.splitEditor")}
                             </span>
                           </ContextMenuItem>
                         ) : null}
@@ -1277,6 +1333,7 @@ export function TabBar({
           onNewBlock={onNewBlock}
           onNewPrivate={onNewPrivate}
           onNewPreview={onNewPreview}
+          onNewBrowser={onNewBrowser}
           onNewEditor={onNewEditor}
           onNewApiClient={onNewApiClient}
           onNewHarness={onNewHarness}
