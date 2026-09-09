@@ -1,3 +1,4 @@
+import { t } from "@/modules/i18n";
 import {
   memo,
   type ReactNode,
@@ -325,7 +326,7 @@ function AgentTranscriptComponent({
               className="rounded-md bg-content/8 px-2.5 py-1.5 font-sans text-[12px] text-content/60 hover:bg-content/12 hover:text-content"
               onClick={loadEarlier}
             >
-              Load earlier messages
+              {t("harness.chrome.loadEarlierMessages")}
             </button>
           </div>
         ) : null}
@@ -555,7 +556,11 @@ export const AgentTranscript = memo(
 function InitialThinking({ live }: { live: boolean }) {
   return (
     <div className="min-w-0 px-4 pt-3 pb-1 font-sans text-sm text-content/50">
-      {live ? <Shimmer duration={1.6}>Thinking...</Shimmer> : "Thinking..."}
+      {live ? (
+        <Shimmer duration={1.6}>{t("harness.chrome.thinking")}</Shimmer>
+      ) : (
+        t("harness.chrome.thinking")
+      )}
     </div>
   );
 }
@@ -1032,7 +1037,7 @@ function ActivityGroup({
           aria-expanded={showPrevious}
           aria-label={
             showPrevious
-              ? "Hide previous tool calls"
+              ? t("harness.chrome.hidePreviousToolCalls")
               : `Show ${hidden.length} previous tool calls`
           }
           onClick={() => setShowPrevious((open) => !open)}
@@ -1046,7 +1051,7 @@ function ActivityGroup({
           />
           <span>
             {showPrevious
-              ? "Hide previous"
+              ? t("harness.chrome.hidePrevious")
               : activityPreviousLabel(hidden.length)}
           </span>
         </button>
@@ -1676,7 +1681,7 @@ function ActivityThinkingRow({
   if (!expandable) {
     return (
       <div
-        aria-label={`Thinking: ${text}`}
+        aria-label={t("harness.chrome.thinkingLabel", { text })}
         className="flex min-w-0 items-center gap-1.5 py-1"
       >
         {icon}
@@ -1743,7 +1748,7 @@ function ActivityNoteRow({
   if (!expandable) {
     return (
       <div
-        aria-label={`Agent said: ${text}`}
+        aria-label={t("harness.chrome.agentSaid", { text })}
         className="flex min-w-0 items-center gap-1.5 py-1"
       >
         {icon}
@@ -1759,7 +1764,11 @@ function ActivityNoteRow({
       <button
         type="button"
         aria-expanded={open}
-        aria-label={open ? "Hide the full note" : `Agent said: ${text}`}
+        aria-label={
+          open
+            ? t("harness.chrome.hideFullNote")
+            : t("harness.chrome.agentSaid", { text })
+        }
         onClick={() => setOpen((value) => !value)}
         className="group flex min-w-0 items-center gap-1.5 py-1 text-left"
       >
@@ -1808,7 +1817,7 @@ function ActivityToolRow({
   return (
     <div className="flex min-w-0 flex-col">
       <div
-        aria-label={`Tool call: ${label}`}
+        aria-label={t("harness.chrome.toolCall", { text: label })}
         className="flex min-w-0 items-center gap-1.5 py-1"
       >
         {bare ? null : <ActivityToolIcon state={state} live={live} />}
@@ -2208,14 +2217,14 @@ function ApprovalControls({
         className="rounded-md bg-white text-zinc-900 px-3 py-1 font-sans text-[11.5px] font-medium hover:bg-zinc-200 transition-colors shadow-sm"
         onClick={() => onApproval?.(approval.requestId, "allow")}
       >
-        Allow
+        {t("harness.chrome.allow")}
       </button>
       <button
         type="button"
         className="rounded-md bg-white/10 text-zinc-300 border border-white/10 px-3 py-1 font-sans text-[11.5px] font-medium hover:bg-white/15 hover:text-white transition-colors"
         onClick={() => onApproval?.(approval.requestId, "deny")}
       >
-        Deny
+        {t("harness.chrome.deny")}
       </button>
     </div>
   );

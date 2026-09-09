@@ -1,6 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { memo } from "react";
-import { useTranslation } from "@/modules/i18n";
+import { t, useTranslation } from "@/modules/i18n";
 import {
   MarkdownViewShell,
   useMarkdownMode,
@@ -236,7 +236,7 @@ function PlanSurface({
     return (
       <div className="grid h-full place-items-center p-6 text-center">
         <p className="text-[13px] text-content/70">
-          This plan is no longer in the session.
+          {t("harness.chrome.planNoLongerInSession")}
         </p>
       </div>
     );

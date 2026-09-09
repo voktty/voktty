@@ -1745,7 +1745,7 @@ function SidebarProjectPicker({
         <button
           type="button"
           title={cwd}
-          aria-label={`Switch project, current project ${label}`}
+          aria-label={t("harness.chrome.switchProjectCurrent", { name: label })}
           aria-expanded={open}
           aria-haspopup="dialog"
           data-tauri-drag-region="false"
@@ -1875,7 +1875,7 @@ function SidebarProjectPicker({
                 })
               ) : (
                 <p className="px-2.5 py-5 text-center text-[12px] text-content/45">
-                  No projects found
+                  {t("harness.chrome.noProjectsFound")}
                 </p>
               )}
             </div>
@@ -1890,7 +1890,7 @@ function SidebarProjectPicker({
                   className="flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-content/75 hover:bg-content/8 hover:text-content"
                 >
                   <Plus className="size-4 shrink-0" strokeWidth={1.75} />
-                  <span>New project</span>
+                  <span>{t("harness.chrome.newProject")}</span>
                 </button>
               </div>
             ) : null}
@@ -1899,13 +1899,16 @@ function SidebarProjectPicker({
       </div>
       <div className="flex items-center ml-auto">
         {onNew ? (
-          <IconButton label={`New tab (${MOD}T)`} onClick={onNew}>
+          <IconButton
+            label={t("harness.chrome.newTabShortcut", { shortcut: `${MOD}T` })}
+            onClick={onNew}
+          >
             <Plus className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
         {onSearch ? (
           <IconButton
-            label={`Search (${MOD}K)`}
+            label={t("harness.chrome.searchShortcut", { shortcut: `${MOD}K` })}
             active={searchActive}
             onClick={onSearch}
           >
