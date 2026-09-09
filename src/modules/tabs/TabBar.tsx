@@ -427,11 +427,12 @@ export function TabBar({
       ref={scrollRef}
       data-tabs-header
       data-tauri-drag-region
-      className="group min-w-0 shrink overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="group min-w-0 flex-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      <div className="flex w-max items-center gap-0.5">
+      <div className="flex w-full min-w-0 items-center gap-0.5">
         <Tabs
           value={activeValue}
+          className="flex-1 min-w-0"
           onValueChange={(value) => {
             if (value.startsWith("space:")) {
               onSelectSpace?.(value.slice("space:".length));
@@ -442,7 +443,7 @@ export function TabBar({
         >
           <TabsList
             ref={listRef}
-            className="relative h-6.5 w-max gap-0.5 bg-transparent p-0"
+            className="relative flex h-6.5 w-full min-w-0 items-center gap-0.5 bg-transparent p-0"
           >
             <span
               aria-hidden
@@ -489,9 +490,6 @@ export function TabBar({
                 : t.id === activeId;
               const isNew = !firstRender && !seen.has(t.id);
               const isPulsing = !!pulsingTabs[t.id];
-              const isCompressible = compact || overflowing;
-              const isCollapsed =
-                isCompressible && !isActive && editingId !== t.id;
 
               const srcIndex = visibleTabs.findIndex(
                 (x) => x.id === draggingId,
@@ -694,35 +692,19 @@ export function TabBar({
                       : undefined
                   }
                   className={cn(
-                    "group relative z-[1] h-6.5 shrink-0 justify-between gap-1 rounded-md bg-transparent text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent",
+                    "group relative z-[1] h-6.5 min-w-[32px] max-w-[220px] flex-1 shrink basis-0 justify-between gap-1 rounded-md bg-transparent text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent px-1.5",
                     isNew && "voktty-tab-in",
                     isPulsing && "voktty-tab-finished-pulse",
                     cardDropTargetTabId === t.id &&
                       "ring-2 ring-primary bg-primary/20",
                     t.color && "border",
                     isActive
-                      ? "text-foreground dark:text-foreground"
+                      ? "text-foreground dark:text-foreground font-medium"
                       : "text-muted-foreground hover:text-foreground/80 dark:text-muted-foreground",
                     draggingId === t.id && "opacity-50",
-                    isCollapsed
-                      ? "px-1.5! gap-1 justify-center max-w-8.5 hover:max-w-64 hover:px-2! hover:justify-between"
-                      : compact
-                        ? "px-1.5!"
-                        : visibleTabs.length === 1
-                          ? "px-2!"
-                          : "ps-2! pe-1!",
                   )}
                 >
-                  <span
-                    className={cn(
-                      "flex min-w-0 items-center transition-all duration-150",
-                      isCollapsed
-                        ? "gap-1 max-w-fit group-hover:max-w-48 group-hover:gap-1.5"
-                        : compact
-                          ? "gap-1.5 max-w-48"
-                          : "gap-1.5 max-w-80",
-                    )}
-                  >
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate transition-all duration-150">
                     {t.color && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -736,10 +718,7 @@ export function TabBar({
                               e.preventDefault();
                               e.stopPropagation();
                             }}
-                            className={cn(
-                              "shrink-0 rounded-full shadow-xs ring-1 ring-background cursor-pointer hover:scale-125 transition-transform",
-                              isCollapsed ? "size-1.5" : "size-2",
-                            )}
+                            className="shrink-0 size-2 rounded-full shadow-xs ring-1 ring-background cursor-pointer hover:scale-125 transition-transform"
                             style={{ backgroundColor: t.color }}
                             title={translate("tooltips.changeColorTag")}
                           />
@@ -873,26 +852,21 @@ export function TabBar({
                         matching the visual convention from VSCode. */}
                     <span
                       className={cn(
-                        "truncate transition-all duration-150",
-                        isCollapsed &&
-                          "max-w-0 opacity-0 group-hover:max-w-40 group-hover:opacity-100 group-hover:ml-0.5",
+                        "truncate flex-1 min-w-0 text-left transition-all duration-150",
                         isPreview && "italic",
                       )}
                     >
                       {labelFor(t)}
                     </span>
-                    <TabProcessBadge tab={t} isCollapsed={isCollapsed} />
+                    <TabProcessBadge tab={t} />
                     {t.kind === "editor" && t.dirty ? (
                       <span
                         aria-label={translate("tabs.unsavedChanges")}
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full bg-foreground/70",
-                          isCollapsed && "hidden group-hover:inline-block",
-                        )}
+                        className="size-1.5 shrink-0 rounded-full bg-foreground/70"
                       />
                     ) : null}
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     {t.locked ? (
                       <span
                         className="inline-flex items-center text-muted-foreground/75 p-0.5"
@@ -923,10 +897,9 @@ export function TabBar({
                           onClose(t.id);
                         }}
                         className={cn(
-                          "rounded p-0.5 transition-opacity hover:bg-accent",
-                          isCollapsed
-                            ? "hidden group-hover:flex opacity-0 group-hover:opacity-60 hover:opacity-100!"
-                            : "opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-60",
+                          "rounded p-0.5 transition-opacity hover:bg-accent shrink-0",
+                          "opacity-0 group-hover:opacity-70 hover:opacity-100!",
+                          isActive && "opacity-40 group-hover:opacity-80",
                         )}
                       >
                         <HugeiconsIcon

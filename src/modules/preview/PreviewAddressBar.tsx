@@ -27,14 +27,14 @@ import { useLiveComponentStore } from "./store/liveComponentStore";
 import { LiveComponentBadge } from "./components/LiveComponentBadge";
 import { PreviewViewportControls } from "./components/PreviewViewportControls";
 
-type PortPreset = {
+export type PortPreset = {
   port: number;
   label: string;
   hint: string;
 };
 
 // Curated dev-server ports. Ordered by frontend frequency, then backend.
-const PORT_PRESETS: readonly PortPreset[] = [
+export const PORT_PRESETS: readonly PortPreset[] = [
   { port: 5173, label: "Vite", hint: "vite, sveltekit" },
   { port: 5174, label: "Vite (alt)", hint: "second vite instance" },
   { port: 3000, label: "Next.js", hint: "next, express, rails" },

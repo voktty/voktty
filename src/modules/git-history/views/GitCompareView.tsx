@@ -212,13 +212,27 @@ export const GitCompareView = memo(function GitCompareView({
                     comparison.ahead.map((c) => (
                       <div
                         key={c.sha}
-                        className="px-2 py-1 rounded bg-muted/10 font-mono text-[11px] truncate"
+                        className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-muted/10 font-mono text-[11px] hover:bg-muted/20 transition-colors"
                         title={c.subject}
                       >
-                        <span className="text-primary mr-1.5">
-                          {c.sha.slice(0, 7)}
-                        </span>
-                        <span>{c.subject}</span>
+                        <div className="flex items-center min-w-0 flex-1 truncate">
+                          <span className="text-primary mr-1.5 shrink-0">
+                            {c.sha.slice(0, 7)}
+                          </span>
+                          <span className="truncate">{c.subject}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 text-[10px] tabular-nums">
+                          {c.insertions > 0 && (
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              +{c.insertions}
+                            </span>
+                          )}
+                          {c.deletions > 0 && (
+                            <span className="font-semibold text-rose-600 dark:text-rose-400">
+                              −{c.deletions}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))
                   )}
@@ -242,13 +256,27 @@ export const GitCompareView = memo(function GitCompareView({
                     comparison.behind.map((c) => (
                       <div
                         key={c.sha}
-                        className="px-2 py-1 rounded bg-muted/10 font-mono text-[11px] truncate"
+                        className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-muted/10 font-mono text-[11px] hover:bg-muted/20 transition-colors"
                         title={c.subject}
                       >
-                        <span className="text-primary mr-1.5">
-                          {c.sha.slice(0, 7)}
-                        </span>
-                        <span>{c.subject}</span>
+                        <div className="flex items-center min-w-0 flex-1 truncate">
+                          <span className="text-primary mr-1.5 shrink-0">
+                            {c.sha.slice(0, 7)}
+                          </span>
+                          <span className="truncate">{c.subject}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 text-[10px] tabular-nums">
+                          {c.insertions > 0 && (
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              +{c.insertions}
+                            </span>
+                          )}
+                          {c.deletions > 0 && (
+                            <span className="font-semibold text-rose-600 dark:text-rose-400">
+                              −{c.deletions}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))
                   )}
