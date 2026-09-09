@@ -1322,7 +1322,7 @@ function TitleBarComponent({
       {projectless && railClosed ? (
         <div className="flex shrink-0 items-center px-1.5">
           <IconButton
-            label={`Toggle Sidebar (${MOD}B)`}
+            label={t("harness.chrome.toggleSidebarShortcut", { shortcut: `${MOD}B` })}
             onClick={onToggleSidebar}
           >
             <PanelLeft className="size-3.5" strokeWidth={1.75} />
@@ -1340,13 +1340,16 @@ function TitleBarComponent({
             />
           )}
           <IconButton
-            label={`Toggle Sidebar (${MOD}B)`}
+            label={t("harness.chrome.toggleSidebarShortcut", { shortcut: `${MOD}B` })}
             active={sidebarOpen}
             onClick={onToggleSidebar}
           >
             <PanelLeft className="size-3.5" strokeWidth={1.75} />
           </IconButton>
-          <IconButton label={`Go to File (${MOD}P)`} onClick={onGoToFile}>
+          <IconButton
+            label={t("harness.chrome.goToFileShortcut", { shortcut: `${MOD}P` })}
+            onClick={onGoToFile}
+          >
             <Search className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         </div>
@@ -1360,7 +1363,9 @@ function TitleBarComponent({
           onNewTerminal={onNewTerminal}
           buttonClassName="flex h-full min-w-0 max-w-64 shrink items-center gap-2 px-6 text-left text-sm font-medium leading-tight"
         >
-          <span className="min-w-0 truncate text-content/50">No project</span>
+          <span className="min-w-0 truncate text-content/50">
+            {t("harness.chrome.noProjectFolder")}
+          </span>
         </CwdPicker>
       ) : null}
 

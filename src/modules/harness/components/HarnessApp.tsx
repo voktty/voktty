@@ -1,4 +1,5 @@
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
+import { t } from "@/modules/i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -1986,7 +1987,7 @@ export function HarnessApp({
       );
       if (
         unsaved.length > 0 &&
-        !window.confirm("Close this tab with unsaved files?")
+        !window.confirm(t("harness.chrome.closeTabWithUnsavedFiles"))
       ) {
         return;
       }
@@ -2242,7 +2243,11 @@ export function HarnessApp({
       if (
         isFilesystemTab(file) &&
         dirtyFiles.has(fileId) &&
-        !window.confirm(`Close ${basename(file.path)} without saving?`)
+        !window.confirm(
+          t("harness.chrome.closeFileWithoutSaving", {
+            name: basename(file.path),
+          }),
+        )
       ) {
         return;
       }
@@ -2370,7 +2375,7 @@ export function HarnessApp({
       );
       if (
         unsaved.length > 0 &&
-        !window.confirm("Close this conversation with unsaved files?")
+        !window.confirm(t("harness.chrome.closeConversationWithUnsavedFiles"))
       ) {
         return;
       }
@@ -3028,7 +3033,7 @@ export function HarnessApp({
       if (
         mode === "delete" &&
         !skipDeleteConfirm &&
-        !window.confirm(`Delete "${label}"?`)
+        !window.confirm(t("harness.chrome.deleteSessionNamed", { name: label }))
       )
         return false;
 
@@ -3245,7 +3250,9 @@ export function HarnessApp({
       if (sessionIds.length === 0) return;
       if (
         !window.confirm(
-          `Delete ${sessionIds.length} selected conversations? This can't be undone.`,
+          t("harness.chrome.deleteSelectedConversations", {
+            count: sessionIds.length,
+          }),
         )
       )
         return;
@@ -3904,7 +3911,9 @@ export function HarnessApp({
         ) {
           enqueueHarnessEvent(sessionId, {
             type: "status",
-            text: `${current.harness} cannot take a follow-up mid-turn - wait for this turn to finish, or stop it first.`,
+            text: t("harness.chrome.cannotFollowUpMidTurn", {
+              harness: current.harness,
+            }),
           });
           flushHarnessEvents();
           return;
@@ -4646,7 +4655,9 @@ export function HarnessApp({
           session.id === sessionId
             ? applyHarnessEvent(session, {
                 type: "status",
-                text: `${HARNESS_TITLE[current.harness as HarnessId]} does not support manual context compaction.`,
+                text: t("harness.chrome.manualCompactionUnsupported", {
+                  harness: HARNESS_TITLE[current.harness as HarnessId],
+                }),
               })
             : session,
         );
@@ -4663,7 +4674,7 @@ export function HarnessApp({
         session.id === sessionId
           ? applyHarnessEvent(
               { ...session, busy: true },
-              { type: "status", text: "Compacting context…" },
+              { type: "status", text: t("harness.chrome.compactingContext") },
             )
           : session,
       );
@@ -4688,7 +4699,7 @@ export function HarnessApp({
           if (turnGen.current.get(sessionId) !== gen) return;
           enqueueHarnessEvent(sessionId, {
             type: "status",
-            text: "Compacted context",
+            text: t("harness.chrome.compactedContext"),
           });
         } catch (error: unknown) {
           if (turnGen.current.get(sessionId) !== gen) return;

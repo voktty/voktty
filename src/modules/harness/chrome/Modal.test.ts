@@ -10,8 +10,7 @@ describe("ModalPanel", () => {
         title: "Example",
         description: "A reusable shell",
         onClose: vi.fn(),
-        children: "Body",
-      }),
+      }, "Body"),
     );
 
     expect(markup).toContain('role="dialog"');
