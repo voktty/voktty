@@ -1,0 +1,221 @@
+use std::io::{self, ErrorKind, Read, Write};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+use ring::agreement::{EphemeralPrivateKey, X25519};
+use ring::rand::SystemRandom;
+use serde::Serialize;
+use voktty_companion_protocol::{QrInvitation, INVITATION_TTL_SECS, PROTOCOL_VERSION};
+
+use crate::modules::collab::quick_tunnel::{verified_executable, CloudflaredTunnel};
+
+const ACCEPT_POLL: Duration = Duration::from_millis(20);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+const MAX_REQUEST_BYTES: usize = 4096;
+
+struct CompanionRuntime {
+    _server: CompanionLoopback,
+    _tunnel: CloudflaredTunnel,
+    _host_private_key: EphemeralPrivateKey,
+    invite: QrInvitation,
+}
+
+#[derive(Default)]
+pub struct CompanionState {
+    runtime: Mutex<Option<CompanionRuntime>>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompanionInvite {
+    pub invitation: QrInvitation,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompanionStatus {
+    pub active: bool,
+    pub expires_at_ms: Option<u64>,
+    pub public_url: Option<String>,
+}
+
+impl CompanionState {
+    pub fn start(&self, custom_cloudflared_path: Option<&str>) -> Result<CompanionInvite, String> {
+        let mut runtime = self
+            .runtime
+            .lock()
+            .map_err(|_| "companion state is unavailable".to_string())?;
+        if runtime.is_some() {
+            return Err("companion is already active".to_string());
+        }
+
+        let server = CompanionLoopback::start().map_err(|error| error.to_string())?;
+        let private_key = EphemeralPrivateKey::generate(&X25519, &SystemRandom::new())
+            .map_err(|_| "could not create companion host key".to_string())?;
+        let public_key = private_key
+            .compute_public_key()
+            .map_err(|_| "could not derive companion host key".to_string())?;
+        let tunnel = CloudflaredTunnel::start(
+            &verified_executable(custom_cloudflared_path)?,
+            &format!("http://127.0.0.1:{}", server.address().port()),
+        )?;
+        let expires_at_ms = now_ms().saturating_add(INVITATION_TTL_SECS.saturating_mul(1000));
+        let invite = QrInvitation {
+            protocol: PROTOCOL_VERSION,
+            public_url: tunnel.public_url().to_string(),
+            invitation_id: random_token(16)?,
+            host_public_key: URL_SAFE_NO_PAD.encode(public_key.as_ref()),
+            secret: random_token(32)?,
+            expires_at_ms,
+        };
+        let response = CompanionInvite {
+            invitation: invite.clone(),
+        };
+        *runtime = Some(CompanionRuntime {
+            _server: server,
+            _tunnel: tunnel,
+            _host_private_key: private_key,
+            invite,
+        });
+        Ok(response)
+    }
+
+    pub fn stop(&self) -> bool {
+        self.runtime
+            .lock()
+            .ok()
+            .and_then(|mut runtime| runtime.take())
+            .is_some()
+    }
+
+    pub fn status(&self) -> CompanionStatus {
+        let Ok(runtime) = self.runtime.lock() else {
+            return CompanionStatus {
+                active: false,
+                expires_at_ms: None,
+                public_url: None,
+            };
+        };
+        let Some(runtime) = runtime.as_ref() else {
+            return CompanionStatus {
+                active: false,
+                expires_at_ms: None,
+                public_url: None,
+            };
+        };
+        CompanionStatus {
+            active: true,
+            expires_at_ms: Some(runtime.invite.expires_at_ms),
+            public_url: Some(runtime.invite.public_url.clone()),
+        }
+    }
+}
+
+struct CompanionLoopback {
+    address: SocketAddr,
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl CompanionLoopback {
+    fn start() -> io::Result<Self> {
+        let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0))?;
+        listener.set_nonblocking(true)?;
+        let address = listener.local_addr()?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let thread_stop = stop.clone();
+        let thread = thread::Builder::new()
+            .name(format!("voktty-companion-accept-{}", address.port()))
+            .spawn(move || {
+                while !thread_stop.load(Ordering::Acquire) {
+                    match listener.accept() {
+                        Ok((stream, _)) => {
+                            let _ = handle_request(stream);
+                        }
+                        Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                            thread::sleep(ACCEPT_POLL);
+                        }
+                        Err(error) => {
+                            log::warn!("companion listener stopped: {error}");
+                            break;
+                        }
+                    }
+                }
+            })?;
+        Ok(Self {
+            address,
+            stop,
+            thread: Some(thread),
+        })
+    }
+
+    fn address(&self) -> SocketAddr {
+        self.address
+    }
+}
+
+impl Drop for CompanionLoopback {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+fn handle_request(mut stream: TcpStream) -> io::Result<()> {
+    stream.set_read_timeout(Some(REQUEST_TIMEOUT))?;
+    stream.set_write_timeout(Some(REQUEST_TIMEOUT))?;
+    let mut request = [0_u8; MAX_REQUEST_BYTES];
+    let read = stream.read(&mut request)?;
+    let health = request[..read].starts_with(b"GET /health HTTP/");
+    let response = if health {
+        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".as_slice()
+    } else {
+        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".as_slice()
+    };
+    stream.write_all(response)
+}
+
+fn random_token(bytes: usize) -> Result<String, String> {
+    let mut token = vec![0_u8; bytes];
+    getrandom::fill(&mut token).map_err(|error| error.to_string())?;
+    Ok(URL_SAFE_NO_PAD.encode(token))
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn listener_accepts_only_its_health_probe() {
+        let listener = CompanionLoopback::start().expect("listener");
+        let mut stream = TcpStream::connect(listener.address()).expect("connect");
+        stream
+            .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .expect("request");
+        let mut response = String::new();
+        stream.read_to_string(&mut response).expect("response");
+        assert!(response.starts_with("HTTP/1.1 200"));
+    }
+
+    #[test]
+    fn random_tokens_are_url_safe_and_unique() {
+        let first = random_token(32).expect("token");
+        let second = random_token(32).expect("token");
+        assert_ne!(first, second);
+        assert!(first.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'));
+    }
+}
