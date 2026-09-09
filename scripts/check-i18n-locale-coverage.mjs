@@ -7,6 +7,7 @@ const locales = ["ar", "de", "es", "fr", "hi", "it", "ja", "ko", "pt", "ru", "zh
 // Spanish must stay 1:1 with English. Other locales inherit missing keys from en
 // at runtime via mergeLocale; they are not required to repeat every key.
 const requiredExplicit = new Set(["es"]);
+const fallbackLocales = locales.filter((locale) => !requiredExplicit.has(locale));
 
 function propertyName(node) {
   if (ts.isIdentifier(node) || ts.isStringLiteral(node)) return node.text;
@@ -85,6 +86,42 @@ function collectLocaleKeys(source, locale) {
   return keys;
 }
 
+function usesEnglishFallback(source) {
+  let importsEnglishFallback = false;
+  let mergesEnglish = false;
+
+  source.forEachChild((node) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.moduleSpecifier.text === "./en" &&
+      node.importClause?.namedBindings &&
+      ts.isNamedImports(node.importClause.namedBindings)
+    ) {
+      const names = new Set(
+        node.importClause.namedBindings.elements.map((element) => element.name.text),
+      );
+      importsEnglishFallback = names.has("en") && names.has("mergeLocale");
+    }
+  });
+
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "mergeLocale" &&
+      ts.isIdentifier(node.arguments[0]) &&
+      node.arguments[0].text === "en"
+    ) {
+      mergesEnglish = true;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+
+  return importsEnglishFallback && mergesEnglish;
+}
+
 function readSource(fileName) {
   const filePath = path.join(localesDir, fileName);
   return ts.createSourceFile(
@@ -118,11 +155,19 @@ const englishKeys = collectObjectKeys(
 );
 
 const incomplete = [];
+const fallbackFailures = [];
+const coverage = [];
 for (const locale of locales) {
-  if (!requiredExplicit.has(locale)) continue;
-  const explicit = collectLocaleKeys(readSource(`${locale}.ts`), locale);
+  const source = readSource(`${locale}.ts`);
+  const explicit = collectLocaleKeys(source, locale);
   const missing = [...englishKeys].filter((key) => !explicit.has(key));
-  if (missing.length > 0) incomplete.push([locale, missing]);
+  if (requiredExplicit.has(locale) && missing.length > 0) {
+    incomplete.push([locale, missing]);
+  }
+  if (fallbackLocales.includes(locale) && !usesEnglishFallback(source)) {
+    fallbackFailures.push(locale);
+  }
+  coverage.push({ locale, explicit: explicit.size, inherited: missing.length });
 }
 
 if (incomplete.length > 0) {
@@ -139,6 +184,16 @@ if (incomplete.length > 0) {
   process.exit(1);
 }
 
+if (fallbackFailures.length > 0) {
+  console.error("Fallback locales must merge directly from the English root:");
+  for (const locale of fallbackFailures) console.error(`- ${locale}`);
+  process.exit(1);
+}
+
 console.log(
-  `Required locales (${[...requiredExplicit].join(", ")}) explicitly cover ${englishKeys.size} English keys. Other locales inherit English.`,
+  `English has ${englishKeys.size} keys. Required locales (${[...requiredExplicit].join(", ")}) explicitly cover every key.`,
 );
+for (const { locale, explicit, inherited } of coverage) {
+  const inheritedLabel = inherited === 0 ? "no inherited keys" : `${inherited} inherited from English`;
+  console.log(`- ${locale}: ${explicit} explicit, ${inheritedLabel}, ${englishKeys.size} effective`);
+}
