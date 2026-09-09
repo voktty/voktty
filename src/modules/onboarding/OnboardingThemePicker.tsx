@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
 import { listBuiltinThemes, useTheme, type Theme } from "@/modules/theme";
+import { resolveThemeDescription } from "@/modules/theme/themeDescription";
 import {
   nextVariationIdForTheme,
   resolveThemeSwatch,
@@ -42,10 +43,16 @@ export function OnboardingThemePicker() {
             selected ? themeVariation : (theme.defaultVariation ?? "default"),
             resolvedMode,
           );
+          const description = resolveThemeDescription(
+            t,
+            theme,
+            selected ? variations.find((variation) => variation.id === themeVariation) : undefined,
+          );
           return (
             <button
               key={theme.id}
               type="button"
+              aria-label={description ? `${theme.name}: ${description}` : theme.name}
               aria-pressed={selected}
               onClick={() => handleSelectTheme(theme)}
               className={cn(
@@ -64,8 +71,15 @@ export function OnboardingThemePicker() {
                   style={{ backgroundColor: swatch.accent }}
                 />
               </div>
-              <span className="text-[11px] font-medium text-foreground truncate">
-                {theme.name}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[11px] font-medium text-foreground truncate">
+                  {theme.name}
+                </span>
+                {description ? (
+                  <span className="line-clamp-1 text-[9.5px] text-muted-foreground">
+                    {description}
+                  </span>
+                ) : null}
               </span>
             </button>
           );

@@ -41,6 +41,7 @@ import {
   saveCustomTheme,
 } from "@/modules/theme/customThemes";
 import { deleteThemeFile, emitThemeEdit } from "@/modules/theme/themeFiles";
+import { resolveThemeDescription } from "@/modules/theme/themeDescription";
 import { listBuiltinThemes } from "@/modules/theme/themes";
 import { DEFAULT_THEME_ID } from "@/modules/theme/types";
 import { validateTheme } from "@/modules/theme/validateTheme";
@@ -309,9 +310,7 @@ export function ThemesSection() {
             const isCustom = customIds.has(theme.id);
             const description = isCustom
               ? theme.description
-              : isSelected && activeVar
-                ? activeVar.description
-                : theme.description;
+              : resolveThemeDescription(t, theme, isSelected ? activeVar : undefined);
             return (
               <button
                 key={theme.id}
