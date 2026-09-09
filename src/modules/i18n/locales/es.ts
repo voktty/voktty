@@ -2969,6 +2969,10 @@ export const es: TranslationSchema = {
     emptyTitle: "Nada que previsualizar aún",
     emptyDesc:
       "Escribe una URL arriba o abre el desplegable de Puertos para ir directo a tu servidor de desarrollo. Los sitios públicos suelen bloquear la incrustación — ábrelos en tu navegador si ves una página en blanco.",
+    whatAreWeDebuggingToday: "¿Qué debugeamos hoy?",
+    enterUrlOrSearch:
+      "Introduce una URL o término de búsqueda para comenzar a navegar e inspeccionar.",
+    urlOrSearchPlaceholder: "Introduce una URL (ej. localhost:3000) o busca...",
     portsDropdownTitle: "Puertos comunes de servidor dev",
     ports: "Puertos",
     checkingPort: "comprobando\u2026",
@@ -4340,7 +4344,6 @@ export const es: TranslationSchema = {
     renamedFrom: "(← {path})",
     staged: "Preparados",
     unstaged: "Sin preparar",
-    renamedFrom: "(← {path})",
     noResults: "No se encontraron archivos coincidentes.",
     allChanges: "Todos los cambios",
     stageAll: "Preparar todo",

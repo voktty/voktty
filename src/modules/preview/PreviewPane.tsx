@@ -1,8 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { Globe02Icon } from "@hugeicons/core-free-icons";
+import { Button } from "@/components/ui/button";
+import {
+  ArrowRight01Icon,
+  Globe02Icon,
+  Search01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
+import { VokttyAnimatedLogo } from "@/modules/onboarding/VokttyAnimatedLogo";
 import {
   forwardRef,
   useEffect,
@@ -11,6 +17,7 @@ import {
   useState,
 } from "react";
 import {
+  PORT_PRESETS,
   PreviewAddressBar,
   type PreviewAddressBarHandle,
 } from "./PreviewAddressBar";
@@ -87,21 +94,27 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
 
     useEffect(() => {
       let cancelled = false;
-      if (!url) {
+      const normalized = (url ?? "").trim();
+      if (
+        !normalized ||
+        normalized === "about:blank" ||
+        normalized === "voktty://home" ||
+        normalized === "voktty://start"
+      ) {
         setEffectiveSrc("");
         return;
       }
-      if (isLocalUrl(url)) {
-        setEffectiveSrc(url);
+      if (isLocalUrl(normalized)) {
+        setEffectiveSrc(normalized);
         return;
       }
-      invoke<string>("web_server_proxy_url", { targetUrl: url })
+      invoke<string>("web_server_proxy_url", { targetUrl: normalized })
         .then((proxied) => {
           if (!cancelled) setEffectiveSrc(proxied);
         })
         .catch((err) => {
           console.warn("[PreviewPane] Failed to resolve proxy url:", err);
-          if (!cancelled) setEffectiveSrc(url);
+          if (!cancelled) setEffectiveSrc(normalized);
         });
 
       return () => {
@@ -364,7 +377,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
               />
             )
           ) : (
-            <EmptyState />
+            <EmptyState onNavigate={onUrlChange} />
           )}
         </div>
 
@@ -401,20 +414,97 @@ function SuspendedState({ onReload }: { onReload: () => void }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onNavigate }: { onNavigate?: (url: string) => void }) {
   const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+
+  const handleQuickNav = (targetUrl: string) => {
+    onNavigate?.(targetUrl);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    if (
+      /^https?:\/\//i.test(trimmed) ||
+      /^localhost(:|\/|$)/i.test(trimmed) ||
+      /^\d{1,3}(\.\d{1,3}){3}/.test(trimmed)
+    ) {
+      onNavigate?.(trimmed.startsWith("http") ? trimmed : `http://${trimmed}`);
+    } else {
+      onNavigate?.(
+        `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`,
+      );
+    }
+  };
+
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
-      <div className="flex size-12 items-center justify-center rounded-2xl border border-border/60 bg-card text-muted-foreground">
-        <HugeiconsIcon icon={Globe02Icon} size={20} strokeWidth={1.5} />
-      </div>
-      <div className="space-y-1.5">
-        <p className="text-sm font-medium text-foreground">
-          {t("preview.emptyTitle")}
-        </p>
-        <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
-          {t("preview.emptyDesc")}
-        </p>
+    <div className="flex h-full w-full flex-col items-center justify-center p-6 text-center select-none bg-radial from-primary/5 via-background to-background">
+      <div className="flex flex-col items-center gap-5 max-w-md w-full animate-in fade-in zoom-in-95 duration-300">
+        {/* Animated Voktty Logo from Onboarding */}
+        <div className="relative flex items-center justify-center p-3.5 rounded-2xl bg-card/50 border border-border/40 shadow-xl backdrop-blur-md">
+          <VokttyAnimatedLogo size={100} />
+        </div>
+
+        {/* i18n Question & Subtitle */}
+        <div className="space-y-1.5">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground font-sans">
+            {t("preview.whatAreWeDebuggingToday")}
+          </h2>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("preview.enterUrlOrSearch")}
+          </p>
+        </div>
+
+        {/* Search & URL Bar */}
+        <form
+          onSubmit={handleSearchSubmit}
+          className="w-full relative flex items-center gap-1.5"
+        >
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("preview.urlOrSearchPlaceholder")}
+              className="w-full h-9 pl-9 pr-3 rounded-xl border border-border/60 bg-muted/30 text-xs font-sans text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60 transition-all shadow-xs"
+            />
+            <HugeiconsIcon
+              icon={Search01Icon}
+              size={15}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+            />
+          </div>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!query.trim()}
+            className="h-9 px-3.5 rounded-xl text-xs gap-1.5 cursor-pointer"
+          >
+            <span>{t("common.open")}</span>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={13} />
+          </Button>
+        </form>
+
+        {/* Quick Local Presets */}
+        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+          {PORT_PRESETS.slice(0, 5).map((preset) => (
+            <button
+              key={preset.port}
+              type="button"
+              onClick={() => handleQuickNav(`http://localhost:${preset.port}`)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border/50 bg-card/60 hover:bg-accent text-[11px] text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-2xs font-mono"
+              title={preset.hint}
+            >
+              <span className="size-1.5 rounded-full bg-primary/70" />
+              <span>:{preset.port}</span>
+              <span className="text-[10px] text-muted-foreground/70 font-sans">
+                ({preset.label})
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

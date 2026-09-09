@@ -231,11 +231,28 @@ function CommitSection({
       ) : (
         <div className="space-y-0.5">
           {entries.map((entry) => (
-            <div key={entry.sha} className="flex items-center gap-2 px-1.5 py-1">
-              <span className="shrink-0 rounded bg-muted/65 px-1 py-0.5 font-mono text-[9.5px] leading-none text-muted-foreground">
-                {entry.shortSha}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{entry.subject}</span>
+            <div
+              key={entry.sha}
+              className="flex items-center justify-between gap-2 px-1.5 py-1 hover:bg-muted/40 rounded transition-colors"
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-1 truncate">
+                <span className="shrink-0 rounded bg-muted/65 px-1 py-0.5 font-mono text-[9.5px] leading-none text-muted-foreground">
+                  {entry.shortSha}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{entry.subject}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px] tabular-nums">
+                {entry.insertions > 0 && (
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    +{entry.insertions}
+                  </span>
+                )}
+                {entry.deletions > 0 && (
+                  <span className="font-semibold text-rose-600 dark:text-rose-400">
+                    −{entry.deletions}
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -183,8 +183,8 @@ export const GitPullsView = memo(function GitPullsView({
     let cancelled = false;
     setDiffLoading(true);
     getGithubPrDiff(ownerRepo, selectedNumber)
-      .then((res) => {
-        if (!cancelled) setPrDiff(res);
+      .then((d) => {
+        if (!cancelled) setPrDiff(d);
       })
       .catch(() => {
         if (!cancelled) setPrDiff(null);
@@ -192,10 +192,22 @@ export const GitPullsView = memo(function GitPullsView({
       .finally(() => {
         if (!cancelled) setDiffLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
   }, [ownerRepo, selectedNumber]);
+
+  const diffStats = useMemo(() => {
+    if (!prDiff?.diff) return { added: 0, removed: 0 };
+    let added = 0;
+    let removed = 0;
+    for (const line of prDiff.diff.split("\n")) {
+      if (line.startsWith("+") && !line.startsWith("+++")) added++;
+      else if (line.startsWith("-") && !line.startsWith("---")) removed++;
+    }
+    return { added, removed };
+  }, [prDiff?.diff]);
 
   const handleSaveToken = useCallback(async () => {
     if (!tokenInput.trim()) return;
@@ -587,7 +599,23 @@ export const GitPullsView = memo(function GitPullsView({
                 {/* Diff Viewer section */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span>{t("gitHistory.pulls.diffPreview")}</span>
+                    <div className="flex items-center gap-2">
+                      <span>{t("gitHistory.pulls.diffPreview")}</span>
+                      {(diffStats.added > 0 || diffStats.removed > 0) && (
+                        <div className="flex items-center gap-1.5 font-mono text-[10.5px] normal-case tracking-normal">
+                          {diffStats.added > 0 && (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                              +{diffStats.added}
+                            </span>
+                          )}
+                          {diffStats.removed > 0 && (
+                            <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                              −{diffStats.removed}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     {prDiff?.truncated && (
                       <span className="text-amber-500 font-normal">
                         ({t("gitHistory.patchTruncated")})

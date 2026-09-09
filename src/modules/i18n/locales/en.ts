@@ -2897,6 +2897,10 @@ export const en = {
     emptyTitle: "Nothing to preview yet",
     emptyDesc:
       "Type a URL above, or open the Ports dropdown to jump straight to your running dev server. Public sites often block embedding \u2014 open them in your browser via the link icon if you see a blank page.",
+    whatAreWeDebuggingToday: "What are we debugging today?",
+    enterUrlOrSearch:
+      "Enter a URL or search query to start browsing and inspecting.",
+    urlOrSearchPlaceholder: "Enter URL (e.g. localhost:3000) or search...",
     portsDropdownTitle: "Common dev-server ports",
     ports: "Ports",
     checkingPort: "checking\u2026",
@@ -4243,7 +4247,6 @@ export const en = {
     renamedFrom: "(← {path})",
     staged: "Staged",
     unstaged: "Unstaged",
-    renamedFrom: "(← {path})",
     noResults: "No matching files found.",
     allChanges: "All Changes",
     stageAll: "Stage All",
