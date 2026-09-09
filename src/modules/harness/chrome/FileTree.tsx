@@ -1128,30 +1128,28 @@ function NameIssueView({
   } else if (issue) {
     switch (issue.kind) {
       case "empty":
-        body = "A file or folder name must be provided.";
+        body = t("harness.chrome.fileNameRequired");
         break;
       case "slash":
-        body = "A file or folder name cannot start with a slash.";
+        body = t("harness.chrome.fileNameNoLeadingSlash");
         break;
       case "exists":
         body = (
           <>
-            A file or folder <span className="font-semibold">{issue.name}</span>{" "}
-            already exists at this location. Please choose a different name.
+            {t("harness.chrome.fileNameExists", { name: issue.name })}
           </>
         );
         break;
       case "invalid":
         body = (
           <>
-            The name <span className="font-semibold">{issue.name}</span> is not
-            valid as a file or folder name. Please choose a different name.
+            {t("harness.chrome.fileNameInvalid", { name: issue.name })}
           </>
         );
         break;
       case "whitespace":
         body =
-          "Leading or trailing whitespace detected in file or folder name.";
+          t("harness.chrome.fileNameWhitespace");
         break;
     }
   }
