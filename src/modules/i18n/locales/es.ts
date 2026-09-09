@@ -4646,6 +4646,7 @@ export const es: TranslationSchema = {
       filesAndNotes: "Archivos y notas",
       filesAndFolders: "Archivos y carpetas",
       note: "Nota",
+      fileCount: "{count, plural, one {# archivo} other {# archivos}}",
       addProjectLogo: "Añadir logo del proyecto",
       changeProjectLogo: "Cambiar logo del proyecto",
       projectLogo: "Logo del proyecto",

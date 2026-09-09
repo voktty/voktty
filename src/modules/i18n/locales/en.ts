@@ -4550,6 +4550,7 @@ export const en = {
       filesAndNotes: "Files and notes",
       filesAndFolders: "Files and folders",
       note: "Note",
+      fileCount: "{count, plural, one {# file} other {# files}}",
       addProjectLogo: "Add project logo",
       changeProjectLogo: "Change project logo",
       projectLogo: "Project logo",

@@ -90,7 +90,7 @@ export function PlanPreview({
                   onClick={onOpen}
                 >
                   <PanelRight className="size-3" strokeWidth={1.75} />
-                  Open
+                  {t("harness.chrome.open")}
                 </button>
               ) : null}
               {onBuild ? (
