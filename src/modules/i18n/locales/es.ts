@@ -964,6 +964,12 @@ export const es: TranslationSchema = {
       agentOnlyDescription:
         "Esta app nunca abre el workbench de escritorio, terminales, sesiones SSH, archivos ni editor.",
       waitingForPairing: "El emparejamiento con tu escritorio estará disponible aquí.",
+      payloadLabel: "Payload de emparejamiento",
+      payloadPlaceholder: "Pega el payload de emparejamiento de tu escritorio",
+      connect: "Solicitar emparejamiento",
+      connecting: "Solicitando emparejamiento...",
+      waitingForApproval: "Esperando aprobación en tu escritorio.",
+      connectionError: "No se pudo enviar la solicitud. Comprueba el payload y el túnel.",
     },
   },
   docker: {

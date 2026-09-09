@@ -295,6 +295,10 @@ fn handle_request(
     let health = request.starts_with(b"GET /health HTTP/");
     let response = if health {
         b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".as_slice()
+    } else if request.starts_with(b"OPTIONS /v1/companion/pair HTTP/") {
+        let response = http_response(204, "No Content", b"");
+        stream.write_all(&response)?;
+        return Ok(());
     } else if request.starts_with(b"POST /v1/companion/pair HTTP/") {
         let response = handle_pairing_request(request, pairing);
         stream.write_all(&response)?;
@@ -337,7 +341,7 @@ fn handle_pairing_request(
 
 fn http_response(status: u16, reason: &str, body: &[u8]) -> Vec<u8> {
     format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {status} {reason}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
     .into_bytes()
