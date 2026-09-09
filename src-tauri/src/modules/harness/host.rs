@@ -3012,6 +3012,7 @@ mod binary_resolution_tests {
         assert!(!binary_name_eq(Path::new("/usr/local/bin/grok"), "fx"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn binary_name_eq_strips_windows_launcher_extension() {
         // A Windows npm shim (`grok.cmd`) must still identify as `grok`, the
