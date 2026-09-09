@@ -192,6 +192,11 @@ import {
   useWorkspaceCwd,
   VerticalTabBar,
 } from "@/modules/tabs";
+import {
+  saveTabIconPreference,
+  tabIconRouteKey,
+  type TabIconId,
+} from "@/modules/tabs/lib/tabIcon";
 import { DEFAULT_SPACE_ID, NO_ACTIVE_TAB_ID } from "@/modules/tabs/lib/useTabs";
 import {
   clearFocusedTerminal,
@@ -3462,6 +3467,16 @@ export default function App() {
     [updateTab],
   );
 
+  const handleSetTabIcon = useCallback(
+    (id: number, icon: TabIconId | null) => {
+      const tab = tabsRef.current.find((candidate) => candidate.id === id);
+      if (!tab) return;
+      saveTabIconPreference(tabIconRouteKey(tab), icon);
+      updateTab(id, { icon });
+    },
+    [updateTab],
+  );
+
   const handleToggleLockTab = useCallback(
     (id: number) => {
       const tab = tabsRef.current.find((t) => t.id === id);
@@ -4748,6 +4763,7 @@ export default function App() {
               spaceSwitcher={spaceSwitcher}
               onOverrideLanguage={setOverrideLanguage}
               onSetColor={handleSetTabColor}
+              onSetIcon={handleSetTabIcon}
               onToggleLock={handleToggleLockTab}
               onToggleBlocks={handleToggleTabBlocks}
               stripEntries={stripEntries}

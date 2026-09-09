@@ -975,6 +975,8 @@ export const es: TranslationSchema = {
     notifications: "Notificaciones",
   },
   tabs: {
+    iconPicker: "Icono",
+    automaticIcon: "Automático",
     revealInSideBar: "Revelar en la barra lateral",
     revealInFileManager: "Mostrar en el explorador de archivos",
     newTab: "Nueva pestaña",

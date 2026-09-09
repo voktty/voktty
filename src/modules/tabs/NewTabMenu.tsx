@@ -218,7 +218,7 @@ export function NewTabMenu({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="pointer-events-none flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-md border border-transparent text-muted-foreground opacity-0 transition-opacity hover:border-border/30 hover:bg-foreground/[0.05] hover:text-foreground group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 cursor-pointer"
+                className="flex h-6.5 w-6.5 shrink-0 cursor-pointer items-center justify-center rounded-md border border-transparent text-muted-foreground transition-colors hover:border-border/30 hover:bg-foreground/[0.05] hover:text-foreground"
                 aria-label={t("tabs.newTab")}
                 title={t("tabs.newTab")}
               >

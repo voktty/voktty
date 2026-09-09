@@ -1,8 +1,5 @@
+import { asTabKey, asWorkspaceScopeId } from "@/modules/tabs/lib/tabIdentity";
 import type { Tab } from "@/modules/tabs/lib/useTabs";
-import {
-  asTabKey,
-  asWorkspaceScopeId,
-} from "@/modules/tabs/lib/tabIdentity";
 import type { PaneNode } from "@/modules/terminal/lib/panes";
 import { describe, expect, it } from "vitest";
 import { hydrateTabs, type SerializedTab, serializeTabs } from "./serialize";
@@ -57,7 +54,7 @@ describe("serializeTabs", () => {
   });
 
   it("persists stable tab and workspace identities", () => {
-    const original = term({ id: 41 });
+    const original = term({ id: 41, icon: "server" });
 
     const [serialized] = serializeTabs([original]);
     const [restored] = hydrateTabs([serialized], "legacy-space", counter());
@@ -65,10 +62,12 @@ describe("serializeTabs", () => {
     expect(serialized).toMatchObject({
       tabKey: original.tabKey,
       workspaceScopeId: original.workspaceScopeId,
+      icon: "server",
     });
     expect(restored.id).not.toBe(original.id);
     expect(restored.tabKey).toBe(original.tabKey);
     expect(restored.workspaceScopeId).toBe(original.workspaceScopeId);
+    expect(restored.icon).toBe("server");
   });
 
   it("drops private terminals and transient kinds", () => {

@@ -1,10 +1,4 @@
-import type {
-  EditorTab,
-  MarkdownTab,
-  PreviewTab,
-  Tab,
-  TerminalTab,
-} from "@/modules/tabs/lib/useTabs";
+import { isTabIconId, type TabIconId } from "@/modules/tabs/lib/tabIcon";
 import {
   asWorkspaceScopeId,
   createTabIdentity,
@@ -12,6 +6,13 @@ import {
   resolveTabKey,
   workspaceScopeIdFromLegacySpace,
 } from "@/modules/tabs/lib/tabIdentity";
+import type {
+  EditorTab,
+  MarkdownTab,
+  PreviewTab,
+  Tab,
+  TerminalTab,
+} from "@/modules/tabs/lib/useTabs";
 import {
   isLeaf,
   type PaneNode,
@@ -43,6 +44,7 @@ export type SerializedTab = (
   tabKey?: string;
   workspaceScopeId?: string;
   color?: string;
+  icon?: TabIconId;
   locked?: boolean;
 };
 
@@ -94,6 +96,7 @@ function serializeTab(tab: Tab): SerializedTab | null {
     tabKey: tab.tabKey,
     workspaceScopeId: tab.workspaceScopeId,
     ...(tab.color ? { color: tab.color } : {}),
+    ...(tab.icon ? { icon: tab.icon } : {}),
     ...(tab.locked ? { locked: true } : {}),
   };
   switch (tab.kind) {
@@ -230,6 +233,7 @@ function hydrateTab(
         ...(s.customTitle !== undefined && { customTitle: s.customTitle }),
         ...(s.workspaceEnv && { workspaceEnv: s.workspaceEnv }),
         ...(s.color ? { color: s.color } : {}),
+        ...(isTabIconId(s.icon) ? { icon: s.icon } : {}),
         ...(s.locked ? { locked: true } : {}),
       } satisfies TerminalTab;
     }
@@ -249,6 +253,7 @@ function hydrateTab(
           s.path,
         ),
         ...(s.color ? { color: s.color } : {}),
+        ...(isTabIconId(s.icon) ? { icon: s.icon } : {}),
         ...(s.locked ? { locked: true } : {}),
       } satisfies EditorTab;
     case "preview":
@@ -264,6 +269,7 @@ function hydrateTab(
           ? { devServerScope: s.devServerScope }
           : {}),
         ...(s.color ? { color: s.color } : {}),
+        ...(isTabIconId(s.icon) ? { icon: s.icon } : {}),
         ...(s.locked ? { locked: true } : {}),
       } satisfies PreviewTab;
     case "markdown":
@@ -280,6 +286,7 @@ function hydrateTab(
           s.path,
         ),
         ...(s.color ? { color: s.color } : {}),
+        ...(isTabIconId(s.icon) ? { icon: s.icon } : {}),
         ...(s.locked ? { locked: true } : {}),
       } satisfies MarkdownTab;
     default:

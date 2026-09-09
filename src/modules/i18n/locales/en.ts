@@ -948,6 +948,8 @@ export const en = {
     notifications: "Notifications",
   },
   tabs: {
+    iconPicker: "Icon",
+    automaticIcon: "Automatic",
     revealInSideBar: "Reveal in Side Bar",
     revealInFileManager: "Reveal in File Explorer",
     newTab: "New Tab",

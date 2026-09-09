@@ -93,6 +93,12 @@ import {
 } from "react";
 import { TabDetailsHoverCard } from "./components/TabDetailsHoverCard";
 import { useTabContextMenuStore } from "./lib/tabContextMenuState";
+import {
+  isTabAgentIconId,
+  loadTabIconPreference,
+  tabIconRouteKey,
+  type TabIconId,
+} from "./lib/tabIcon";
 import { isSshOrRemoteSession, isSshTab, labelFor } from "./lib/tabLabel";
 import { preferredTabBarWidth } from "./lib/tabStripSizing";
 import {
@@ -103,6 +109,7 @@ import { detectAgentFromName } from "@/modules/terminal";
 import type { EditorTab, Tab } from "./lib/useTabs";
 import { NewTabMenu } from "./NewTabMenu";
 import { TabColorBubbles } from "./TabColorBubbles";
+import { TabIconGlyph, TabIconPicker } from "./TabIconPicker";
 
 type Props = {
   tabs: Tab[];
@@ -150,6 +157,7 @@ type Props = {
   onReorder: (fromId: number, toGapIndex: number) => void;
   onOverrideLanguage?: (id: number, lang: string | null) => void;
   onSetColor?: (id: number, color: string | null) => void;
+  onSetIcon?: (id: number, icon: TabIconId | null) => void;
   onPin?: (id: number) => void;
   onToggleLock?: (id: number) => void;
   onToggleBlocks?: (id: number) => void;
@@ -172,10 +180,6 @@ type Props = {
   onRevealInExplorer?: (path: string) => void;
   onReconnectTab?: (tab: Tab) => void;
   compact?: boolean;
-  /** Fires whenever the strip's own icon-collapse state changes, so sibling
-   * chrome (e.g. the harness pill rendered outside this component) can
-   * collapse to match instead of overflowing on its own. */
-  onOverflowChange?: (overflowing: boolean) => void;
   onCardDrop?: (tab: Tab, cardId: string, prompt: string) => void;
 };
 
@@ -212,6 +216,7 @@ export function TabBar({
   onReorder,
   onOverrideLanguage,
   onSetColor,
+  onSetIcon,
   onPin,
   onToggleLock,
   onToggleBlocks,
@@ -228,7 +233,6 @@ export function TabBar({
   onWorkspaceDrop,
   onRevealInExplorer,
   compact,
-  onOverflowChange,
   onCardDrop,
 }: Props) {
   const { t: translate } = useTranslation();
@@ -315,35 +319,6 @@ export function TabBar({
     return () => ro.disconnect();
   }, [measurePill]);
 
-  // The tabs progressively shrink down to their CSS minimum. Report overflow
-  // only when even that compact layout no longer fits, so sibling header
-  // controls can yield their own space without causing resize oscillation.
-  const [overflowing, setOverflowing] = useState(false);
-
-  const checkFit = useCallback(() => {
-    const list = listRef.current;
-    if (!list) return;
-    setOverflowing(list.scrollWidth > list.clientWidth);
-  }, []);
-
-  useLayoutEffect(() => {
-    checkFit();
-  });
-
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    const list = listRef.current;
-    if (!scroller || !list) return;
-    const ro = new ResizeObserver(checkFit);
-    ro.observe(scroller);
-    ro.observe(list);
-    return () => ro.disconnect();
-  }, [checkFit]);
-
-  useEffect(() => {
-    onOverflowChange?.(overflowing);
-  }, [overflowing, onOverflowChange]);
-
   // Hold the transition off until the pill is first placed, so it never slides
   // in from the origin on mount.
   useEffect(() => {
@@ -412,16 +387,18 @@ export function TabBar({
 
   return (
     <div
-      ref={scrollRef}
       data-tabs-header
       data-tauri-drag-region
-      className="group min-w-0 shrink overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="group flex min-w-0 shrink items-center gap-0.5"
       style={{ flexBasis: preferredWidth }}
     >
-      <div className="flex w-full min-w-0 items-center gap-0.5">
+      <div
+        ref={scrollRef}
+        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         <Tabs
           value={activeValue}
-          className="flex-1 min-w-0"
+          className="min-w-0"
           onValueChange={(value) => {
             if (value.startsWith("space:")) {
               onSelectSpace?.(value.slice("space:".length));
@@ -432,7 +409,7 @@ export function TabBar({
         >
           <TabsList
             ref={listRef}
-            className="relative flex h-6.5 w-full min-w-0 items-center gap-0.5 bg-transparent p-0"
+            className="relative flex h-6.5 w-max min-w-0 items-center gap-0.5 bg-transparent p-0"
           >
             <span
               aria-hidden
@@ -460,6 +437,7 @@ export function TabBar({
                     item={item}
                     active={isActive}
                     compact={compact}
+                    iconOnly
                     onSelect={onSelectSpace ?? (() => undefined)}
                     onExpand={onExpandSpace ?? (() => undefined)}
                     onRename={onRenameSpace}
@@ -479,6 +457,8 @@ export function TabBar({
                 : t.id === activeId;
               const isNew = !firstRender && !seen.has(t.id);
               const isPulsing = !!pulsingTabs[t.id];
+              const selectedIcon =
+                t.icon ?? loadTabIconPreference(tabIconRouteKey(t));
 
               const srcIndex = visibleTabs.findIndex(
                 (x) => x.id === draggingId,
@@ -681,7 +661,7 @@ export function TabBar({
                       : undefined
                   }
                   className={cn(
-                    "group relative z-[1] h-6.5 min-w-[32px] max-w-[220px] flex-1 shrink basis-0 justify-between gap-1 overflow-hidden rounded-md bg-transparent text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent px-1.5",
+                    "group relative z-[1] h-6.5 w-9 shrink-0 justify-center overflow-hidden rounded-md bg-transparent p-0 text-[11.5px] transition-all duration-150 data-active:bg-transparent dark:data-active:bg-transparent",
                     isNew && "voktty-tab-in",
                     isPulsing && "voktty-tab-finished-pulse",
                     cardDropTargetTabId === t.id &&
@@ -693,7 +673,7 @@ export function TabBar({
                     draggingId === t.id && "opacity-50",
                   )}
                 >
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate transition-all duration-150">
+                  <span className="flex size-full min-w-0 items-center justify-center transition-all duration-150">
                     {t.color && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -707,7 +687,7 @@ export function TabBar({
                               e.preventDefault();
                               e.stopPropagation();
                             }}
-                            className="shrink-0 size-2 rounded-full shadow-xs ring-1 ring-background cursor-pointer hover:scale-125 transition-transform"
+                            className="absolute left-0.5 top-0.5 z-10 size-1.5 shrink-0 cursor-pointer rounded-full shadow-xs ring-1 ring-background transition-transform hover:scale-125"
                             style={{ backgroundColor: t.color }}
                             title={translate("tooltips.changeColorTag")}
                           />
@@ -839,23 +819,17 @@ export function TabBar({
                     )}
                     {/* Preview tabs use italic to signal the transient state,
                         matching the visual convention from VSCode. */}
-                    <span
-                      className={cn(
-                        "truncate flex-1 min-w-0 text-left transition-all duration-150",
-                        isPreview && "italic",
-                      )}
-                    >
+                    <span className="sr-only">
                       {labelFor(t)}
                     </span>
-                    <TabProcessBadge tab={t} />
                     {t.kind === "editor" && t.dirty ? (
                       <span
                         aria-label={translate("tabs.unsavedChanges")}
-                        className="size-1.5 shrink-0 rounded-full bg-foreground/70"
+                        className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-foreground/70"
                       />
                     ) : null}
                   </span>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="absolute right-0.5 top-1/2 flex -translate-y-1/2 items-center">
                     {t.locked ? (
                       <span
                         className="inline-flex items-center text-muted-foreground/75 p-0.5"
@@ -885,11 +859,7 @@ export function TabBar({
                           e.stopPropagation();
                           onClose(t.id);
                         }}
-                        className={cn(
-                          "rounded p-0.5 transition-opacity hover:bg-accent shrink-0",
-                          "opacity-0 group-hover:opacity-70 hover:opacity-100!",
-                          isActive && "opacity-40 group-hover:opacity-80",
-                        )}
+                        className="shrink-0 rounded bg-background/90 p-0.5 opacity-0 shadow-sm transition-opacity hover:bg-accent group-hover:opacity-100"
                       >
                         <HugeiconsIcon
                           icon={Cancel01Icon}
@@ -924,6 +894,17 @@ export function TabBar({
                         size="md"
                         currentColor={t.color}
                         onSelectColor={(c) => onSetColor?.(t.id, c)}
+                      />
+                    </div>
+                    <div className="px-2 pb-1.5">
+                      <div className="mb-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                        {translate("tabs.iconPicker")}
+                      </div>
+                      <TabIconPicker
+                        current={selectedIcon}
+                        onSelect={(icon) => {
+                          onSetIcon?.(t.id, icon);
+                        }}
                       />
                     </div>
                     <ContextMenuSeparator />
@@ -1225,6 +1206,7 @@ export function TabBar({
             {translate("spaces.extractMember")}
           </span>
         )}
+      </div>
         {showOverflowControl && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1306,7 +1288,6 @@ export function TabBar({
           onNewGitGraph={onNewGitGraph}
           onLaunchAgents={onLaunchAgents}
         />
-      </div>
     </div>
   );
 }
@@ -1431,6 +1412,42 @@ export function TabIcon({
   animatedAgent?: boolean;
 }) {
   const status = useTabProcessStatus(tab);
+  const selectedIcon =
+    tab.icon ?? loadTabIconPreference(tabIconRouteKey(tab));
+  if (selectedIcon) {
+    if (isTabAgentIconId(selectedIcon)) {
+      return animatedAgent ? (
+        <AnimatedAgentIcon
+          agent={selectedIcon}
+          presence={
+            terminalPresence({ state: status.state, agent: selectedIcon }) ??
+            "idle"
+          }
+          size={14}
+          decorative
+        />
+      ) : (
+        <AgentIcon agent={selectedIcon} size={14} className="shrink-0" />
+      );
+    }
+    return (
+      <span
+        className={cn(
+          "inline-flex shrink-0 transition-[color,filter,transform]",
+          status.state === "running" &&
+            "text-primary drop-shadow-[0_0_5px_var(--primary)] motion-safe:animate-pulse",
+          status.state === "attention" &&
+            "text-amber-400 motion-safe:animate-bounce",
+          status.state === "completed" &&
+            "text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.55)]",
+          status.state === "failed" &&
+            "text-rose-400 drop-shadow-[0_0_4px_rgba(244,63,94,0.55)]",
+        )}
+      >
+        <TabIconGlyph icon={selectedIcon} className="size-3.5" />
+      </span>
+    );
+  }
   if (tab.kind === "editor" || tab.kind === "markdown") {
     const url =
       tab.kind === "editor" && tab.overrideLanguage

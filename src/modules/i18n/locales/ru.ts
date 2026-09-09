@@ -574,6 +574,8 @@ const ruBase = mergeLocale(en, {
     notifications: "Уведомления",
   },
   tabs: {
+    iconPicker: "Значок",
+    automaticIcon: "Автоматически",
     revealInSideBar: "Показать на боковой панели",
     revealInFileManager: "Показать в проводнике",
     newTab: "Новая вкладка",

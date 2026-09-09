@@ -18,14 +18,15 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
-import { SpaceAvatar } from "./SpaceAvatar";
 import { SPACE_COLORS } from "./lib/spaceColor";
 import type { ProjectedSpaceItem } from "./lib/spaceProjection";
+import { SpaceAvatar } from "./SpaceAvatar";
 
 type Props = {
   item: ProjectedSpaceItem;
   active: boolean;
   compact?: boolean;
+  iconOnly?: boolean;
   className?: string;
   onSelect: (spaceId: string) => void;
   onExpand: (spaceId: string) => void;
@@ -37,6 +38,7 @@ export function CompositeSpaceChip({
   item,
   active,
   compact = false,
+  iconOnly = false,
   onSelect,
   onExpand,
   onRename,
@@ -82,6 +84,8 @@ export function CompositeSpaceChip({
               ? "text-foreground"
               : "text-muted-foreground hover:bg-accent/70 hover:text-foreground/90",
             compact && "px-0.5",
+            iconOnly && !editing && "w-9 justify-center px-0",
+            iconOnly && editing && "w-32",
             className,
           )}
         >
@@ -117,19 +121,35 @@ export function CompositeSpaceChip({
                 event.preventDefault();
                 beginRename();
               }}
-              className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                iconOnly && "justify-center px-0",
+              )}
             >
               <SpaceAvatar space={item.space} size="sm" active={active} />
-              <span className="max-w-32 truncate font-medium text-[11.5px]">
+              <span
+                className={cn(
+                  "max-w-32 truncate font-medium text-[11.5px]",
+                  iconOnly && "sr-only",
+                )}
+              >
                 {item.space.name}
               </span>
-              <span className="text-[9.5px] tabular-nums text-muted-foreground/70">
+              <span
+                className={cn(
+                  "text-[9.5px] tabular-nums text-muted-foreground/70",
+                  iconOnly && "sr-only",
+                )}
+              >
                 {count}
               </span>
               {focusedTab && (
                 <span
                   aria-hidden
-                  className="size-1.5 shrink-0 rounded-full bg-primary/80"
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full bg-primary/80",
+                    iconOnly && "absolute bottom-0.5 right-0.5",
+                  )}
                 />
               )}
             </button>
@@ -147,7 +167,11 @@ export function CompositeSpaceChip({
               event.preventDefault();
               event.stopPropagation();
             }}
-            className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-opacity hover:bg-foreground/10 hover:text-foreground group-hover:opacity-100"
+            className={cn(
+              "flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-opacity hover:bg-foreground/10 hover:text-foreground group-hover:opacity-100",
+              iconOnly &&
+                "absolute right-0.5 top-1/2 -translate-y-1/2 bg-background/90",
+            )}
           >
             ×
           </button>

@@ -566,6 +566,8 @@ const koBase = mergeLocale(en, {
     notifications: "알림",
   },
   tabs: {
+    iconPicker: "아이콘",
+    automaticIcon: "자동",
     revealInSideBar: "사이드바에서 표시",
     revealInFileManager: "파일 탐색기에서 표시",
     newTab: "새 탭",
