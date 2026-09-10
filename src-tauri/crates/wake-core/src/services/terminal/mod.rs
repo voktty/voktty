@@ -41,10 +41,22 @@ use windows as platform;
 #[cfg(target_os = "windows")]
 use windows::{compose_command, probe_clis};
 
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(target_os = "android")]
+use android as platform;
+#[cfg(target_os = "android")]
+use android::{compose_command, probe_clis};
+
 // 新平台必须给出自己的模块并接上 probe_clis / compose_command /
 // launch_shell 三个接缝(windows.rs 是完整先例)——POSIX 共享层是正向
 // cfg,漏接的接缝直接是编译错误,不存在静默沿用
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "android"
+)))]
 compile_error!("wake terminal services: unsupported platform — add a platform module wired into the probe_clis / compose_command / launch_shell seams");
 
 pub use platform::{ensure_app_icons, installed_terminals, terminals_for, TerminalApp};
