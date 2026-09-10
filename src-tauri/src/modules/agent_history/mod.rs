@@ -5,7 +5,7 @@ pub mod models;
 pub mod sanitizer;
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::State;
 
 use models::{HistoryMessage, HistorySession, HistoryStats, SessionFilter};
@@ -17,7 +17,7 @@ use wake_core::scanner::{run_scan, NullEvents};
 pub struct AgentHistoryState {
     pub store: Arc<Store>,
     pub adapters: Vec<Box<dyn AgentAdapter>>,
-    pub initialized: Mutex<bool>,
+    pub is_scanning: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for AgentHistoryState {
@@ -38,21 +38,43 @@ impl AgentHistoryState {
             .unwrap_or_else(|_| (open_or_rebuild(&PathBuf::from("agent_history_wake.db")).unwrap().0, None));
         let store = Arc::new(store);
         let adapters = create_adapters();
+        let is_scanning = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        // Start non-blocking background incremental scan on startup (cross-platform)
+        let store_bg = store.clone();
+        let scanning_bg = is_scanning.clone();
+        std::thread::spawn(move || {
+            scanning_bg.store(true, std::sync::atomic::Ordering::SeqCst);
+            let adapters = create_adapters();
+            let _ = run_scan(&adapters, &store_bg, &NullEvents, false);
+            scanning_bg.store(false, std::sync::atomic::Ordering::SeqCst);
+        });
 
         Self {
             store,
             adapters,
-            initialized: Mutex::new(false),
+            is_scanning,
         }
     }
 
-    pub fn ensure_initial_scan(&self) {
-        let mut init = self.initialized.lock().unwrap();
-        if !*init {
-            let store = self.store.clone();
-            let adapters = &self.adapters;
-            let _ = run_scan(adapters, &store, &NullEvents, true);
-            *init = true;
+    pub fn trigger_background_scan(&self, full: bool) {
+        if self
+            .is_scanning
+            .compare_exchange(
+                false,
+                true,
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+            )
+            .is_ok()
+        {
+            let store_bg = self.store.clone();
+            let scanning_bg = self.is_scanning.clone();
+            std::thread::spawn(move || {
+                let adapters = create_adapters();
+                let _ = run_scan(&adapters, &store_bg, &NullEvents, full);
+                scanning_bg.store(false, std::sync::atomic::Ordering::SeqCst);
+            });
         }
     }
 }
@@ -76,7 +98,6 @@ pub async fn agent_history_get_sessions(
     filter: Option<SessionFilter>,
     state: State<'_, AgentHistoryState>,
 ) -> Result<Vec<HistorySession>, String> {
-    state.ensure_initial_scan();
     let f = filter.unwrap_or_default();
 
     let wake_filter = WakeSessionFilter {
@@ -170,8 +191,6 @@ pub async fn agent_history_get_messages(
     _limit: Option<u32>,
     state: State<'_, AgentHistoryState>,
 ) -> Result<Vec<HistoryMessage>, String> {
-    state.ensure_initial_scan();
-
     let meta = state
         .store
         .get_session(&session_id)
@@ -344,9 +363,10 @@ pub async fn agent_history_export_markdown(
 pub async fn agent_history_get_stats(
     state: State<'_, AgentHistoryState>,
 ) -> Result<HistoryStats, String> {
-    state.ensure_initial_scan();
-
-    let wake_filter = WakeSessionFilter::default();
+    let wake_filter = WakeSessionFilter {
+        limit: 5000,
+        ..WakeSessionFilter::default()
+    };
     let (wake_sessions, _) = state
         .store
         .list_sessions(&wake_filter)
