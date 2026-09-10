@@ -86,8 +86,10 @@ export function AgentHistoryModal() {
     activeSession,
     messages,
     isLoading,
+    isMessagesLoading,
     isScanning,
     searchQuery,
+    setSearchQuery,
     selectedAgent,
     setSelectedAgent,
     selectSession,
@@ -169,6 +171,19 @@ export function AgentHistoryModal() {
       return true;
     });
   }, [sessions, selectedAgent, selectedProject, searchQuery]);
+
+  // Debounced active session sync when filtered list changes
+  useEffect(() => {
+    if (filteredSessions.length > 0) {
+      const exists = filteredSessions.some((s) => s.id === activeSessionId);
+      if (!exists) {
+        const timer = setTimeout(() => {
+          void selectSession(filteredSessions[0].id);
+        }, 150);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [filteredSessions, activeSessionId, selectSession]);
 
   // Palette filtered sessions
   const paletteResults = useMemo(() => {
@@ -550,12 +565,35 @@ export function AgentHistoryModal() {
               </div>
             </div>
 
+            {/* In-stream Instant Filter Bar */}
+            <div className="border-b border-border/40 px-2.5 py-1.5 shrink-0 bg-[#131315]">
+              <div className="flex items-center gap-1.5 rounded-lg border border-border/50 bg-[#1a1a1d] px-2 py-1 text-xs focus-within:border-primary/60 transition-colors">
+                <HugeiconsIcon icon={Search01Icon} size={12} className="text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Search ${sessions.length} sessions...`}
+                  className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <HugeiconsIcon icon={Cancel01Icon} size={11} />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Sessions List */}
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-0">
-              {isLoading && filteredSessions.length === 0 ? (
+              {isLoading && sessions.length === 0 ? (
                 <div className="flex h-48 flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
                   <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2" />
-                  <span>Searching sessions...</span>
+                  <span>Loading sessions...</span>
                 </div>
               ) : filteredSessions.length === 0 ? (
                 <div className="flex h-48 flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
@@ -767,7 +805,7 @@ export function AgentHistoryModal() {
                   ref={transcriptRef}
                   className="flex-1 min-w-0 min-h-0 overflow-y-auto p-5 space-y-4 select-text"
                 >
-                  {isLoading ? (
+                  {isMessagesLoading && messages.length === 0 ? (
                     <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
                       <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
                       <span>Loading transcript...</span>

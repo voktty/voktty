@@ -7,7 +7,7 @@ import {
   fetchSessions,
   rescanHistory,
 } from "../lib/agentHistoryBridge";
-import type { HistoryMessage, HistorySession, HistoryStats, SessionFilter } from "../types";
+import type { HistoryMessage, HistorySession, HistoryStats } from "../types";
 
 interface AgentHistoryState {
   isOpen: boolean;
@@ -15,7 +15,9 @@ interface AgentHistoryState {
   activeSessionId: string | null;
   activeSession: HistorySession | null;
   messages: HistoryMessage[];
+  messageCache: Record<string, HistoryMessage[]>;
   isLoading: boolean;
+  isMessagesLoading: boolean;
   isScanning: boolean;
   searchQuery: string;
   selectedAgent: string;
@@ -42,7 +44,9 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
   activeSessionId: null,
   activeSession: null,
   messages: [],
+  messageCache: {},
   isLoading: false,
+  isMessagesLoading: false,
   isScanning: false,
   searchQuery: "",
   selectedAgent: "all",
@@ -76,33 +80,22 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
 
   setSearchQuery: (searchQuery) => {
     set({ searchQuery });
-    void get().loadSessions();
   },
 
   setSelectedAgent: (selectedAgent) => {
     set({ selectedAgent });
-    void get().loadSessions();
   },
 
   setSelectedProject: (selectedProject) => {
     set({ selectedProject });
-    void get().loadSessions();
   },
 
   loadSessions: async () => {
-    const { searchQuery, selectedAgent, selectedProject } = get();
     set({ isLoading: true });
 
     try {
-      const filter: SessionFilter = {
-        search_query: searchQuery.trim() || undefined,
-        agent: selectedAgent !== "all" ? selectedAgent : undefined,
-        project: selectedProject.trim() || undefined,
-        limit: 100,
-      };
-
       const [sessions, stats] = await Promise.all([
-        fetchSessions(filter),
+        fetchSessions({ limit: 5000 }),
         fetchHistoryStats(),
       ]);
 
@@ -134,13 +127,31 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
   selectSession: async (id: string) => {
     const sessions = get().sessions;
     const activeSession = sessions.find((s) => s.id === id) || null;
-    set({ activeSessionId: id, activeSession, isLoading: true });
+    const cached = get().messageCache[id];
+
+    if (cached) {
+      set({
+        activeSessionId: id,
+        activeSession,
+        messages: cached,
+        isMessagesLoading: false,
+      });
+      return;
+    }
+
+    set({ activeSessionId: id, activeSession, isMessagesLoading: true });
 
     try {
       const messages = await fetchMessages(id, 0, 500);
-      set({ messages });
+      set((state) => ({
+        messages,
+        messageCache: {
+          ...state.messageCache,
+          [id]: messages,
+        },
+      }));
     } finally {
-      set({ isLoading: false });
+      set({ isMessagesLoading: false });
     }
   },
 
@@ -162,10 +173,15 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
     const sessions = get().sessions.filter((s) => s.id !== id);
     const nextActive = sessions[0] || null;
 
-    set({
-      sessions,
-      activeSessionId: nextActive ? nextActive.id : null,
-      activeSession: nextActive,
+    set((state) => {
+      const newCache = { ...state.messageCache };
+      delete newCache[id];
+      return {
+        sessions,
+        messageCache: newCache,
+        activeSessionId: nextActive ? nextActive.id : null,
+        activeSession: nextActive,
+      };
     });
 
     if (nextActive) {
@@ -182,6 +198,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
       activeSessionId: null,
       activeSession: null,
       messages: [],
+      messageCache: {},
     });
   },
 }));
