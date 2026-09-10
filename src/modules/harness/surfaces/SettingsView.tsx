@@ -4,7 +4,6 @@ import {
   ImagePlus,
   Loader,
   RefreshCw,
-  RotateCcw,
   Search,
 } from "../chrome/icons";
 import {
@@ -26,57 +25,28 @@ import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
-  applyBodyGlass,
   applyChatBackground,
   applyChatBackgroundOpacity,
   applyChatBackgroundScope,
-  applySidebarBlur,
-  applySidebarOpacity,
-  applyThemeTint,
-  BODY_GLASS_DEFAULT,
-  CHAT_BACKGROUND_OPACITY_DEFAULT,
   CHAT_BACKGROUND_OPACITY_MAX,
   CHAT_BACKGROUND_OPACITY_MIN,
-  CHAT_BACKGROUND_SCOPE_DEFAULT,
   chatBackgroundSrc,
-  loadBodyGlass,
   loadChatBackgroundOpacity,
   loadChatBackgroundPath,
   loadChatBackgroundScope,
-  loadSidebarBlur,
   loadSidebarLayout,
-  loadSidebarOpacity,
-  loadThemeHue,
-  loadThemeSaturation,
   loadTranscriptLayout,
   loadTranscriptZen,
   loadTranscriptAnchor,
-  saveBodyGlass,
   saveChatBackgroundOpacity,
   saveChatBackgroundPath,
   saveChatBackgroundScope,
-  saveSidebarBlur,
   saveSidebarLayout,
-  saveSidebarOpacity,
-  saveThemeHue,
-  saveThemeSaturation,
   saveTranscriptLayout,
   saveTranscriptZen,
   saveTranscriptAnchor,
   TRANSCRIPT_ZEN_CHANGE_EVENT,
   TRANSCRIPT_ANCHOR_CHANGE_EVENT,
-  SIDEBAR_BLUR_DEFAULT,
-  SIDEBAR_BLUR_MAX,
-  SIDEBAR_BLUR_MIN,
-  SIDEBAR_OPACITY_DEFAULT,
-  SIDEBAR_OPACITY_MAX,
-  SIDEBAR_OPACITY_MIN,
-  THEME_HUE_DEFAULT,
-  THEME_HUE_MAX,
-  THEME_HUE_MIN,
-  THEME_SATURATION_DEFAULT,
-  THEME_SATURATION_MAX,
-  THEME_SATURATION_MIN,
   type ChatBackgroundScope,
   type SidebarLayout,
   type TranscriptLayout,
@@ -231,17 +201,6 @@ export function SettingsView({
             {settingsSectionLabel(t, section)}
           </span>
         </div>
-        {section === "appearance" ? (
-          <button
-            type="button"
-            data-tauri-drag-region="false"
-            onClick={appearance.restoreDefaults}
-            className="mr-2 flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-content/50 hover:bg-content/10 hover:text-content"
-          >
-            <RotateCcw className="size-3.5" strokeWidth={1.75} />
-            {t("harness.settings.restoreDefaults")}
-          </button>
-        ) : null}
       </div>
 
       <div
@@ -762,11 +721,6 @@ function UpdateRow({
 type AppearanceSettings = ReturnType<typeof useAppearanceSettings>;
 
 function useAppearanceSettings() {
-  const [opacity, setOpacity] = useState(loadSidebarOpacity);
-  const [blur, setBlur] = useState(loadSidebarBlur);
-  const [themeHue, setThemeHue] = useState(loadThemeHue);
-  const [themeSaturation, setThemeSaturation] = useState(loadThemeSaturation);
-  const [bodyGlass, setBodyGlass] = useState(loadBodyGlass);
   const [chatBackgroundPath, setChatBackgroundPath] = useState(
     loadChatBackgroundPath,
   );
@@ -779,32 +733,6 @@ function useAppearanceSettings() {
   const [chatBackgroundError, setChatBackgroundError] = useState<string | null>(
     null,
   );
-
-  const onOpacity = useCallback((percent: number) => {
-    const next = applySidebarOpacity(percent / 100);
-    saveSidebarOpacity(next);
-    setOpacity(next);
-  }, []);
-
-  const onBlur = useCallback((radius: number) => {
-    const next = applySidebarBlur(radius);
-    saveSidebarBlur(next);
-    setBlur(next);
-  }, []);
-
-  const onTint = useCallback((hue: number, saturation: number) => {
-    const next = applyThemeTint(hue, saturation);
-    saveThemeHue(next.hue);
-    saveThemeSaturation(next.saturation);
-    setThemeHue(next.hue);
-    setThemeSaturation(next.saturation);
-  }, []);
-
-  const onBodyGlass = useCallback((next: boolean) => {
-    applyBodyGlass(next);
-    saveBodyGlass(next);
-    setBodyGlass(next);
-  }, []);
 
   const onChooseChatBackground = useCallback(async () => {
     setChatBackgroundBusy(true);
@@ -853,118 +781,21 @@ function useAppearanceSettings() {
     setChatBackgroundScope(next);
   }, []);
 
-  const restoreDefaults = useCallback(() => {
-    onOpacity(Math.round(SIDEBAR_OPACITY_DEFAULT * 100));
-    onBlur(SIDEBAR_BLUR_DEFAULT);
-    onTint(THEME_HUE_DEFAULT, THEME_SATURATION_DEFAULT);
-    onBodyGlass(BODY_GLASS_DEFAULT);
-    onChatBackgroundOpacity(Math.round(CHAT_BACKGROUND_OPACITY_DEFAULT * 100));
-    onChatBackgroundScope(CHAT_BACKGROUND_SCOPE_DEFAULT);
-    if (chatBackgroundPath) void onClearChatBackground();
-  }, [
-    chatBackgroundPath,
-    onBlur,
-    onBodyGlass,
-    onChatBackgroundOpacity,
-    onChatBackgroundScope,
-    onClearChatBackground,
-    onOpacity,
-    onTint,
-  ]);
-
   return {
-    opacity,
-    blur,
-    themeHue,
-    themeSaturation,
-    bodyGlass,
     chatBackgroundPath,
     chatBackgroundOpacity,
     chatBackgroundScope,
     chatBackgroundBusy,
     chatBackgroundError,
-    onOpacity,
-    onBlur,
-    onTint,
-    onBodyGlass,
     onChooseChatBackground,
     onClearChatBackground,
     onChatBackgroundOpacity,
     onChatBackgroundScope,
-    restoreDefaults,
   };
 }
 
 function AppearancePage({ appearance }: { appearance: AppearanceSettings }) {
-  const { t } = useTranslation();
-  const percent = Math.round(appearance.opacity * 100);
-
-  return (
-    <>
-      <Row
-        label={t("harness.settings.sidebarOpacity")}
-        description={t("harness.settings.sidebarOpacityDesc")}
-      >
-        <Slider
-          label={t("harness.settings.sidebarOpacity")}
-          value={percent}
-          display={`${percent}%`}
-          min={Math.round(SIDEBAR_OPACITY_MIN * 100)}
-          max={Math.round(SIDEBAR_OPACITY_MAX * 100)}
-          onChange={appearance.onOpacity}
-        />
-      </Row>
-      <Row
-        label={t("harness.settings.blurRadius")}
-        description={t("harness.settings.blurRadiusDesc")}
-      >
-        <Slider
-          label={t("harness.settings.blurRadius")}
-          value={appearance.blur}
-          display={String(appearance.blur)}
-          min={SIDEBAR_BLUR_MIN}
-          max={SIDEBAR_BLUR_MAX}
-          onChange={appearance.onBlur}
-        />
-      </Row>
-      <Row label={t("harness.settings.hue")} description={t("harness.settings.hueDesc")}>
-        <Slider
-          label={t("harness.settings.hue")}
-          value={appearance.themeHue}
-          display={`${appearance.themeHue}°`}
-          min={THEME_HUE_MIN}
-          max={THEME_HUE_MAX}
-          onChange={(value) =>
-            appearance.onTint(value, appearance.themeSaturation)
-          }
-        />
-      </Row>
-      <Row
-        label={t("harness.settings.saturation")}
-        description={t("harness.settings.saturationDesc")}
-      >
-        <Slider
-          label={t("harness.settings.saturation")}
-          value={appearance.themeSaturation}
-          display={`${appearance.themeSaturation}%`}
-          min={THEME_SATURATION_MIN}
-          max={THEME_SATURATION_MAX}
-          onChange={(value) => appearance.onTint(appearance.themeHue, value)}
-        />
-      </Row>
-      <Row
-        label={t("harness.settings.mainPaneGlass")}
-        description={t("harness.settings.mainPaneGlassDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.mainPaneGlass")}
-          on={appearance.bodyGlass}
-          onChange={appearance.onBodyGlass}
-        />
-      </Row>
-      <ChatBackgroundCard appearance={appearance} />
-    </>
-  );
+  return <ChatBackgroundCard appearance={appearance} />;
 }
 
 function ChatBackgroundCard({
