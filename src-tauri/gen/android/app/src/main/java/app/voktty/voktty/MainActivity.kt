@@ -6,6 +6,10 @@ import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import java.security.KeyStore
+import javax.crypto.KeyGenerator
 import androidx.activity.OnBackPressedCallback
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -60,6 +64,7 @@ class MainActivity : TauriActivity() {
       val wv = findWebViewRecursive(window.decorView)
       if (wv != null) {
         wv.addJavascriptInterface(BackInterface(this), "VokttyBack")
+        wv.addJavascriptInterface(CompanionKeyStore(), "VokttyCompanionKeyStore")
         Log.i(TAG, "VokttyBack JS interface added to WebView")
       } else {
         Log.w(TAG, "WebView not found — retrying in 500ms")
@@ -93,6 +98,18 @@ class MainActivity : TauriActivity() {
     fun setConsumed(value: Boolean) {
       Log.d(TAG, "setConsumed: $value")
       activity.backConsumedByJs = value
+    }
+  }
+
+  class CompanionKeyStore {
+    private val alias = "voktty-companion-device-key"
+    @JavascriptInterface fun ensureKey(): Boolean {
+      val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+      if (store.containsAlias(alias)) return true
+      val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+      generator.init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+        .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
+      generator.generateKey(); return true
     }
   }
 

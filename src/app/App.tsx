@@ -25,6 +25,7 @@ import {
 } from "@/lib/launchRequest";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { playErrorTone } from "@/lib/sound";
+import { IS_ANDROID } from "@/lib/platform";
 import { usePresence } from "@/lib/usePresence";
 import { useZoom } from "@/lib/useZoom";
 import { cn, isMarkdownPath } from "@/lib/utils";
@@ -255,6 +256,7 @@ import {
 } from "@/modules/workspace-search";
 import { SettingsModal } from "@/settings/SettingsModal";
 import { BootstrapLoader } from "@/modules/mobile";
+import { CompanionMobileApp } from "@/modules/companion/CompanionMobileApp";
 import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -377,6 +379,11 @@ const LazyBroadcastToAgentsDialog = lazy(() =>
 );
 
 export default function App() {
+  if (IS_ANDROID) return <CompanionMobileApp />;
+  return <DesktopApp />;
+}
+
+function DesktopApp() {
   const initialLaunchRequest = getInitialLaunchRequest();
   const initialLaunchCwd = launchRequestCwd(initialLaunchRequest);
   const {

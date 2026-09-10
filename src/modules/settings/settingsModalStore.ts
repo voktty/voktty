@@ -22,6 +22,7 @@ function getInitialTab(): SettingsTab {
         "docker",
         "mcp",
         "vault",
+        "companion",
         "about",
       ].includes(saved)
     ) {

@@ -70,7 +70,6 @@ import {
   type ActivityPhase,
   type ActivityPhaseKind,
   activityPhaseTitle,
-  activityPreviousLabel,
   activityStillRunning,
   buildActivityPhases,
   editVerb,
@@ -615,7 +614,7 @@ function LiveFoldTitle({
 }) {
   const elapsedMs = useElapsedFrom(startedAt, paused);
   const text = paused
-    ? "Waiting for approval"
+    ? t("harness.chrome.waitingForApproval")
     : formatWorkingDuration(elapsedMs, false, modelName);
   return (
     <Shimmer className="min-w-0 truncate font-sans text-sm" duration={1}>
@@ -732,8 +731,8 @@ function CopyTurnButton({ text }: { text: string }) {
   return (
     <button
       type="button"
-      title={copied ? "Copied" : "Copy response"}
-      aria-label={copied ? "Copied" : "Copy response"}
+      title={copied ? t("harness.chrome.copied") : t("harness.chrome.copyResponse")}
+      aria-label={copied ? t("harness.chrome.copied") : t("harness.chrome.copyResponse")}
       className="-ml-1 rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
       onClick={() => {
         playCue("copy");
@@ -776,8 +775,8 @@ function SaveNoteButton({
   return (
     <button
       type="button"
-      title={saved ? "Saved to Notes" : "Save as note"}
-      aria-label={saved ? "Saved to Notes" : "Save as note"}
+      title={saved ? t("harness.chrome.savedToNotes") : t("harness.chrome.saveAsNote")}
+      aria-label={saved ? t("harness.chrome.savedToNotes") : t("harness.chrome.saveAsNote")}
       className="rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
       onClick={() => {
         playCue("copy");
@@ -1072,7 +1071,7 @@ function ActivityGroup({
           aria-label={
             showPrevious
               ? t("harness.chrome.hidePreviousToolCalls")
-              : `Show ${hidden.length} previous tool calls`
+              : t("harness.chrome.showPreviousToolCalls", { count: hidden.length })
           }
           onClick={() => setShowPrevious((open) => !open)}
           className={`${DISCLOSURE_ROW} ${ACTIVITY_ROW_HEIGHT} shrink-0 text-content/40 transition-colors duration-200 hover:text-content/70`}
@@ -1086,7 +1085,7 @@ function ActivityGroup({
           <span>
             {showPrevious
               ? t("harness.chrome.hidePrevious")
-              : activityPreviousLabel(hidden.length)}
+              : t("harness.chrome.previousToolCalls", { count: hidden.length })}
           </span>
         </button>
       ) : null}
@@ -1270,7 +1269,7 @@ function WorkFoldLine({
     <button
       type="button"
       aria-expanded={open}
-      aria-label={open ? "Hide the work" : "Show the work"}
+      aria-label={open ? t("harness.chrome.hideWork") : t("harness.chrome.showWork")}
       aria-live={live ? "polite" : undefined}
       onClick={onToggle}
       className={`group ${row}`}
@@ -1484,7 +1483,9 @@ function ActivityPhaseGroup({
         type="button"
         aria-expanded={open}
         aria-label={
-          open ? `Hide the steps for ${title}` : `Show the steps for ${title}`
+          open
+            ? t("harness.chrome.hideStepsFor", { title })
+            : t("harness.chrome.showStepsFor", { title })
         }
         onClick={() => setOverride(!open)}
         className="group flex w-full min-w-0 items-center gap-1.5 py-1 text-left"
@@ -1692,7 +1693,7 @@ function ActivityThinkingRow({
   onOpenFile?: (path: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const text = proseSummary(block.text) || "Thinking";
+  const text = proseSummary(block.text) || t("harness.chrome.thinking");
   // In a group the rail is the bullet, so there is nothing to breathe while
   // reasoning streams in — the line itself does.
   const pulse = block.streaming ? "zen-thinking-pulse" : "";
@@ -1729,7 +1730,11 @@ function ActivityThinkingRow({
       <button
         type="button"
         aria-expanded={open}
-        aria-label={open ? "Hide thinking" : `Show thinking: ${text}`}
+        aria-label={
+          open
+            ? t("harness.chrome.hideThinking")
+            : t("harness.chrome.showThinking", { text })
+        }
         onClick={() => setOpen((value) => !value)}
         className="group flex min-w-0 items-center gap-1.5 py-1 text-left"
       >
@@ -1954,12 +1959,17 @@ function formatWorkingDuration(
 ): string {
   const who = modelName?.trim();
   const elapsed = formatElapsed(elapsedMs);
-  const verb = done ? (who ? "worked" : "Worked") : who ? "working" : "Working";
+  const key = done
+    ? who
+      ? "harness.chrome.modelWorked"
+      : "harness.chrome.worked"
+    : who
+      ? "harness.chrome.modelTurnWorking"
+      : "harness.chrome.turnWorking";
   if (elapsed == null) {
-    if (done) return who ? `${who} ${verb}` : verb;
-    return who ? `${who} ${verb}…` : `${verb}…`;
+    return t(key, { model: who ?? "", ellipsis: done ? "" : "…" });
   }
-  return who ? `${who} ${verb} for ${elapsed}` : `${verb} for ${elapsed}`;
+  return t(`${key}For`, { model: who ?? "", elapsed });
 }
 
 function formatElapsed(elapsedMs: number | null): string | null {
@@ -1994,10 +2004,10 @@ function ToolCall({
   const state = toolCallState(block);
   const stateLabel =
     state === "accepted"
-      ? "Accepted"
+      ? t("harness.chrome.accepted")
       : state === "rejected"
-        ? "Rejected"
-        : "Pending";
+        ? t("harness.chrome.rejected")
+        : t("harness.chrome.pending");
   const editTool = isEditTool(
     block.tool?.kind,
     block.text || block.tool?.title,
@@ -2168,7 +2178,7 @@ function ToolCallSummary({
       .split(/[/\\]/)
       .filter(Boolean)
       .pop() ||
-    "file";
+    t("harness.chrome.file");
   const filePath = resolveWorkspacePath(preview?.path || target, cwd);
   const canOpen = interactive && !!onOpenFile && !!filePath;
   const actionTone = failed ? "text-red-400" : "text-content/50";
@@ -2275,7 +2285,9 @@ function HandoffDivider({ block }: { block: Block }) {
   if (!meta) return null;
 
   const preparing = meta.status === "preparing";
-  const label = preparing ? "Preparing a handoff" : HARNESS_TITLE[meta.to];
+  const label = preparing
+    ? t("harness.chrome.preparingHandoff")
+    : HARNESS_TITLE[meta.to];
 
   return (
     <div className="px-4 py-5">
@@ -2284,8 +2296,10 @@ function HandoffDivider({ block }: { block: Block }) {
         <div
           aria-label={
             preparing
-              ? `Preparing a handoff to ${HARNESS_TITLE[meta.to]}`
-              : `Continued with ${label}`
+              ? t("harness.chrome.preparingHandoffTo", {
+                  harness: HARNESS_TITLE[meta.to],
+                })
+              : t("harness.chrome.continuedWith", { harness: label })
           }
           className="flex max-w-[min(100%,20rem)] items-center gap-1.5 px-1.5 font-sans text-[12px] text-content/55"
         >

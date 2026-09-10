@@ -13,6 +13,7 @@ members = [
 	"crates/voktty-aliases",
 	"crates/voktty-control-protocol",
 	"crates/voktty-collab-protocol",
+	"crates/voktty-companion-protocol",
 	"crates/voktty-remote-protocol",
 	"crates/voktty-remote",
 	"crates/voktty-tool-policy",
@@ -24,6 +25,7 @@ default-members = [
 	"crates/voktty-aliases",
 	"crates/voktty-control-protocol",
 	"crates/voktty-collab-protocol",
+	"crates/voktty-companion-protocol",
 	"crates/voktty-remote-protocol",
 	"crates/voktty-remote",
 	"crates/voktty-tool-policy",
@@ -63,6 +65,7 @@ getrandom = "0.3"
 voktty-control-protocol = { path = "crates/voktty-control-protocol" }
 voktty-aliases = { path = "crates/voktty-aliases" }
 voktty-collab-protocol = { path = "crates/voktty-collab-protocol" }
+voktty-companion-protocol = { path = "crates/voktty-companion-protocol" }
 voktty-remote-protocol = { path = "crates/voktty-remote-protocol" }
 voktty-tool-policy = { path = "crates/voktty-tool-policy" }
 voktty-workspace-edit = { path = "crates/voktty-workspace-edit" }
