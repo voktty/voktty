@@ -28,7 +28,9 @@ pub struct ToolContext<'a> {
 /// 大会话几十页)。键是 scanner 同款的脏判据 (file_path, mtime, size),文件一
 /// 变即失效;server 进程随客户端会话长驻,连续翻页总是同一文件
 #[derive(Default)]
-pub struct TranscriptCache(Mutex<Option<(String, i64, i64, Arc<ParsedTranscript>)>>);
+pub struct TranscriptCache(Mutex<Option<CachedTranscript>>);
+
+type CachedTranscript = (String, i64, i64, Arc<ParsedTranscript>);
 
 impl TranscriptCache {
     fn get_or_parse(
@@ -282,7 +284,7 @@ fn agents_arg(args: &Value) -> Result<Vec<AgentId>, ToolError> {
 /// agent 名宽松解析:正式 id 优先,其次展示名(大小写/空格/连字符不敏感),
 /// 再加几个常见简称
 fn parse_agent(s: &str) -> Option<AgentId> {
-    if let Some(a) = AgentId::from_str(s) {
+    if let Some(a) = AgentId::parse(s) {
         return Some(a);
     }
     let norm: String = s
@@ -468,10 +470,7 @@ fn session_line(s: &SessionMeta) -> String {
 }
 
 fn clean_snippet(s: &str) -> String {
-    let marked = s
-        .replace(HL_OPEN, "**")
-        .replace(HL_CLOSE, "**")
-        .replace("****", "");
+    let marked = s.replace([HL_OPEN, HL_CLOSE], "**").replace("****", "");
     one_line(&marked, 240)
 }
 

@@ -68,7 +68,7 @@ pub fn promote_survivors(
         if !seen.insert(key.as_str()) {
             continue;
         }
-        let Some(agent) = key.split(':').next().and_then(AgentId::from_str) else {
+        let Some(agent) = key.split(':').next().and_then(AgentId::parse) else {
             continue;
         };
         let mut agent_refs: Vec<SessionFileRef> = Vec::new();
@@ -144,12 +144,8 @@ pub fn start_watcher(
 
         let mut pending: HashMap<PathBuf, usize> = HashMap::new();
         let mut removed: Vec<PathBuf> = Vec::new();
-        loop {
+        while let Ok(first) = rx.recv() {
             // 等首个事件(阻塞),然后 800ms 窗口收敛
-            let first = match rx.recv() {
-                Ok(e) => e,
-                Err(_) => break, // watcher dropped
-            };
             let mut batch = vec![first];
             let deadline = std::time::Instant::now() + Duration::from_millis(800);
             while let Ok(ev) =
