@@ -162,6 +162,7 @@ impl AgentHistoryAdapter for GeminiAdapter {
                     tool_output: None,
                     is_error: false,
                     redacted: false,
+                    thinking: None,
                 });
             } else if step_type == "PLANNER_RESPONSE"
                 || v.get("source").and_then(|s| s.as_str()) == Some("MODEL")
@@ -212,6 +213,7 @@ impl AgentHistoryAdapter for GeminiAdapter {
                         tool_output: None,
                         is_error: false,
                         redacted: false,
+                        thinking: None,
                     });
                 }
             }

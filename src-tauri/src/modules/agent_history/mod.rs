@@ -79,7 +79,10 @@ pub async fn agent_history_get_sessions(
     state.ensure_initial_scan();
     let f = filter.unwrap_or_default();
 
-    let wake_filter = WakeSessionFilter::default();
+    let wake_filter = WakeSessionFilter {
+        limit: 5000,
+        ..WakeSessionFilter::default()
+    };
     let (wake_sessions, _) = state
         .store
         .list_sessions(&wake_filter)
@@ -89,8 +92,14 @@ pub async fn agent_history_get_sessions(
         .into_iter()
         .filter(|s| {
             if let Some(ref ag) = f.agent {
-                if ag != "all" && !s.agent.as_str().eq_ignore_ascii_case(ag) {
-                    return false;
+                if ag != "all" {
+                    let s_ag = s.agent.as_str();
+                    let matches = s_ag.eq_ignore_ascii_case(ag)
+                        || (ag.eq_ignore_ascii_case("claude") && s_ag == "claude-code")
+                        || (ag.eq_ignore_ascii_case("opencode") && s_ag == "opencode");
+                    if !matches {
+                        return false;
+                    }
                 }
             }
             if let Some(ref prj) = f.project {
@@ -194,19 +203,12 @@ pub async fn agent_history_get_messages(
             .unwrap_or(0);
         let role_str = msg.role.as_str().to_string();
 
-        let mut content = msg.text.clone();
-        if let Some(ref thinking) = msg.thinking {
-            if !thinking.trim().is_empty() {
-                content = format!("*[Thinking]*\n{}\n\n{}", thinking.trim(), content);
-            }
-        }
-
         seq_counter += 1;
         result.push(HistoryMessage {
             id: format!("{}-{}", session_id, seq_counter),
             session_id: session_id.clone(),
             role: role_str,
-            content,
+            content: msg.text.clone(),
             sequence: seq_counter,
             timestamp: ts_sec,
             tool_name: msg.tool_calls.first().map(|tc| tc.name.clone()),
@@ -221,6 +223,7 @@ pub async fn agent_history_get_messages(
                 .map(|tc| tc.is_error)
                 .unwrap_or(false),
             redacted: false,
+            thinking: msg.thinking.clone(),
         });
 
         for tc in msg.tool_calls.iter().skip(1) {
@@ -237,6 +240,7 @@ pub async fn agent_history_get_messages(
                 tool_output: tc.output.clone(),
                 is_error: tc.is_error,
                 redacted: false,
+                thinking: None,
             });
         }
     }

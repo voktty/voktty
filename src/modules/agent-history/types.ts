@@ -1,4 +1,4 @@
-﻿export type AgentType =
+export type AgentType =
   | "voktty"
   | "claude"
   | "codex"
@@ -38,6 +38,7 @@ export interface HistoryMessage {
   tool_output: string | null;
   is_error: boolean;
   redacted: boolean;
+  thinking?: string;
 }
 
 export interface SessionFilter {

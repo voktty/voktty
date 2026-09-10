@@ -210,6 +210,7 @@ impl AgentHistoryAdapter for CodexAdapter {
                     tool_output,
                     is_error: is_err,
                     redacted: false,
+                    thinking: None,
                 });
             }
         }
