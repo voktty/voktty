@@ -1,5 +1,6 @@
 mod pairing;
 mod state;
+mod transport;
 
 pub(crate) use state::CompanionState;
 

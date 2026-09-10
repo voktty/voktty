@@ -14,6 +14,7 @@ pub const MAX_AGENT_ID_BYTES: usize = 128;
 pub const MAX_MESSAGE_BYTES: usize = 32 * 1024;
 pub const MAX_INVENTORY_AGENTS: usize = 64;
 pub const MAX_TRANSCRIPT_DELTA_BYTES: usize = 128 * 1024;
+pub const MAX_ENCRYPTED_FRAME_BYTES: usize = MAX_FRAME_BYTES + 17;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +45,58 @@ pub struct AuthorizedDevice {
     pub public_key: String,
     pub approved_at_ms: u64,
     pub last_connected_at_ms: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FrameDirection {
+    ClientToHost,
+    HostToClient,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptedFrame {
+    pub protocol: u16,
+    pub direction: FrameDirection,
+    pub counter: u64,
+    pub ciphertext: String,
+}
+
+impl EncryptedFrame {
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        if self.protocol != PROTOCOL_VERSION {
+            return Err(ProtocolError::UnsupportedVersion(self.protocol));
+        }
+        if self.counter == 0 || self.ciphertext.is_empty() {
+            return Err(ProtocolError::InvalidField);
+        }
+        let maximum_base64_bytes = MAX_ENCRYPTED_FRAME_BYTES.saturating_mul(4).div_ceil(3);
+        if self.ciphertext.len() > maximum_base64_bytes {
+            return Err(ProtocolError::MessageTooLarge);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
+pub enum SessionControl {
+    KeyConfirm { protocol: u16 },
+    KeyConfirmed { protocol: u16 },
+}
+
+impl SessionControl {
+    pub fn validate(&self) -> Result<(), ProtocolError> {
+        let protocol = match self {
+            Self::KeyConfirm { protocol } | Self::KeyConfirmed { protocol } => *protocol,
+        };
+        if protocol == PROTOCOL_VERSION {
+            Ok(())
+        } else {
+            Err(ProtocolError::UnsupportedVersion(protocol))
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -170,5 +223,28 @@ mod tests {
         })
         .expect("serialize");
         assert_eq!(encoded, r#"{"type":"ping","protocol":1}"#);
+    }
+
+    #[test]
+    fn encrypted_frames_require_a_protocol_counter_and_bounded_ciphertext() {
+        let valid = EncryptedFrame {
+            protocol: PROTOCOL_VERSION,
+            direction: FrameDirection::ClientToHost,
+            counter: 1,
+            ciphertext: "ciphertext".to_string(),
+        };
+        assert_eq!(valid.validate(), Ok(()));
+        assert_eq!(
+            EncryptedFrame { counter: 0, ..valid.clone() }.validate(),
+            Err(ProtocolError::InvalidField)
+        );
+        assert_eq!(
+            EncryptedFrame {
+                ciphertext: "x".repeat(MAX_ENCRYPTED_FRAME_BYTES.saturating_mul(4).div_ceil(3) + 1),
+                ..valid
+            }
+            .validate(),
+            Err(ProtocolError::MessageTooLarge)
+        );
     }
 }
