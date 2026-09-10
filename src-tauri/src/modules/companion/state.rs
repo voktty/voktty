@@ -11,12 +11,14 @@ use ring::agreement::{agree_ephemeral, EphemeralPrivateKey, UnparsedPublicKey, E
 use ring::rand::SystemRandom;
 use serde::Serialize;
 use voktty_companion_protocol::{
-    PairingRequest, QrInvitation, INVITATION_TTL_SECS, PROTOCOL_VERSION,
+    EncryptedFrame, PairingRequest, QrInvitation, SessionControl, INVITATION_TTL_SECS,
+    PROTOCOL_VERSION,
 };
 
 use crate::modules::collab::quick_tunnel::{verified_executable, CloudflaredTunnel};
 
 use super::pairing::{PairingDecision, PairingError, PairingRegistry};
+use super::transport::CompanionTransport;
 
 const ACCEPT_POLL: Duration = Duration::from_millis(20);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
@@ -26,9 +28,14 @@ struct CompanionRuntime {
     _server: CompanionLoopback,
     _tunnel: CloudflaredTunnel,
     host_private_key: Option<EphemeralPrivateKey>,
-    _session_keys: std::collections::HashMap<String, Vec<u8>>,
+    sessions: Arc<Mutex<std::collections::HashMap<String, CompanionSession>>>,
     pairing: Arc<Mutex<Option<PairingRegistry>>>,
     invite: QrInvitation,
+}
+
+struct CompanionSession {
+    transport: CompanionTransport,
+    key_confirmed: bool,
 }
 
 #[derive(Default)]
@@ -70,7 +77,9 @@ impl CompanionState {
         }
 
         let pairing = Arc::new(Mutex::new(None));
-        let server = CompanionLoopback::start(pairing.clone()).map_err(|error| error.to_string())?;
+        let sessions = Arc::new(Mutex::new(std::collections::HashMap::new()));
+        let server = CompanionLoopback::start(pairing.clone(), sessions.clone())
+            .map_err(|error| error.to_string())?;
         // Android WebCrypto supports P-256 ECDH across current WebView versions.
         // Keeping both ends on this curve is required before a session key can be derived.
         let private_key = EphemeralPrivateKey::generate(&ECDH_P256, &SystemRandom::new())
@@ -106,7 +115,7 @@ impl CompanionState {
             _server: server,
             _tunnel: tunnel,
             host_private_key: Some(private_key),
-            _session_keys: std::collections::HashMap::new(),
+            sessions,
             pairing,
             invite,
         });
@@ -224,7 +233,19 @@ impl CompanionState {
                 Ok::<_, ring::error::Unspecified>(shared.to_vec())
             })
             .map_err(|_| "companion device key is invalid".to_string())?;
-            runtime._session_keys.insert(device.id, session_key);
+            let transport = CompanionTransport::for_host(&session_key, &device.id)
+                .map_err(|_| "could not initialize companion transport".to_string())?;
+            runtime
+                .sessions
+                .lock()
+                .map_err(|_| "companion session state is unavailable".to_string())?
+                .insert(
+                    device.id,
+                    CompanionSession {
+                        transport,
+                        key_confirmed: false,
+                    },
+                );
             Ok(())
         } else if runtime
             .pairing
@@ -255,7 +276,10 @@ struct CompanionLoopback {
 }
 
 impl CompanionLoopback {
-    fn start(pairing: Arc<Mutex<Option<PairingRegistry>>>) -> io::Result<Self> {
+    fn start(
+        pairing: Arc<Mutex<Option<PairingRegistry>>>,
+        sessions: Arc<Mutex<std::collections::HashMap<String, CompanionSession>>>,
+    ) -> io::Result<Self> {
         let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0))?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
@@ -267,7 +291,7 @@ impl CompanionLoopback {
                 while !thread_stop.load(Ordering::Acquire) {
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let _ = handle_request(stream, &pairing);
+                            let _ = handle_request(stream, &pairing, &sessions);
                         }
                         Err(error) if error.kind() == ErrorKind::WouldBlock => {
                             thread::sleep(ACCEPT_POLL);
@@ -303,6 +327,7 @@ impl Drop for CompanionLoopback {
 fn handle_request(
     mut stream: TcpStream,
     pairing: &Arc<Mutex<Option<PairingRegistry>>>,
+    sessions: &Arc<Mutex<std::collections::HashMap<String, CompanionSession>>>,
 ) -> io::Result<()> {
     stream.set_read_timeout(Some(REQUEST_TIMEOUT))?;
     stream.set_write_timeout(Some(REQUEST_TIMEOUT))?;
@@ -323,10 +348,61 @@ fn handle_request(
         let response = handle_pairing_status_request(request, pairing);
         stream.write_all(&response)?;
         return Ok(());
+    } else if request.starts_with(b"POST /v1/companion/session/") {
+        let response = handle_session_confirmation_request(request, sessions);
+        stream.write_all(&response)?;
+        return Ok(());
     } else {
         b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".as_slice()
     };
     stream.write_all(response)
+}
+
+fn handle_session_confirmation_request(
+    request: &[u8],
+    sessions: &Arc<Mutex<std::collections::HashMap<String, CompanionSession>>>,
+) -> Vec<u8> {
+    let Some(line_end) = request.windows(2).position(|part| part == b"\r\n") else {
+        return http_response(400, "Bad Request", b"");
+    };
+    let Some(session_id) = std::str::from_utf8(&request[..line_end])
+        .ok()
+        .and_then(|line| line.strip_prefix("POST /v1/companion/session/"))
+        .and_then(|rest| rest.strip_suffix("/confirm HTTP/1.1").or_else(|| rest.strip_suffix("/confirm HTTP/1.0")))
+    else {
+        return http_response(404, "Not Found", b"");
+    };
+    let Some(body_start) = request.windows(4).position(|part| part == b"\r\n\r\n") else {
+        return http_response(400, "Bad Request", b"");
+    };
+    let frame = match serde_json::from_slice::<EncryptedFrame>(&request[body_start + 4..]) {
+        Ok(frame) => frame,
+        Err(_) => return http_response(400, "Bad Request", b""),
+    };
+    let Ok(mut sessions) = sessions.lock() else {
+        return http_response(503, "Service Unavailable", b"");
+    };
+    let Some(session) = sessions.get_mut(session_id) else {
+        return http_response(403, "Forbidden", b"");
+    };
+    if session.key_confirmed {
+        return http_response(409, "Conflict", b"");
+    }
+    match session.transport.open(&frame) {
+        Ok(SessionControl::KeyConfirm { protocol }) if protocol == PROTOCOL_VERSION => {
+            match session
+                .transport
+                .seal(&SessionControl::KeyConfirmed { protocol: PROTOCOL_VERSION })
+            {
+                Ok(response) => {
+                    session.key_confirmed = true;
+                    json_response(200, "OK", &response)
+                }
+                Err(_) => http_response(403, "Forbidden", b""),
+            }
+        }
+        Ok(_) | Err(_) => http_response(403, "Forbidden", b""),
+    }
 }
 
 fn read_http_request(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
@@ -422,7 +498,7 @@ fn http_response(status: u16, reason: &str, body: &[u8]) -> Vec<u8> {
     .collect()
 }
 
-fn json_response(status: u16, reason: &str, value: &serde_json::Value) -> Vec<u8> {
+fn json_response<T: Serialize>(status: u16, reason: &str, value: &T) -> Vec<u8> {
     let body = serde_json::to_vec(value).unwrap_or_default();
     let mut response = format!(
         "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -452,7 +528,11 @@ mod tests {
 
     #[test]
     fn listener_accepts_only_its_health_probe() {
-        let listener = CompanionLoopback::start(Arc::new(Mutex::new(None))).expect("listener");
+        let listener = CompanionLoopback::start(
+            Arc::new(Mutex::new(None)),
+            Arc::new(Mutex::new(std::collections::HashMap::new())),
+        )
+        .expect("listener");
         let mut stream = TcpStream::connect(listener.address()).expect("connect");
         stream
             .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")

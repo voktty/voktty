@@ -1,6 +1,11 @@
 import { useTranslation } from "@/modules/i18n";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CompanionTransport,
+  decodeBase64Url,
+  encodeBase64Url,
+} from "@/modules/companion/transport";
 import { useRef, useState } from "react";
 
 type Invitation = {
@@ -13,20 +18,7 @@ type Invitation = {
 
 const PROOF_CONTEXT = new TextEncoder().encode("voktty-companion-pair-v1");
 
-function decodeBase64Url(value: string): Uint8Array {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
-}
-
-function encodeBase64Url(value: ArrayBuffer): string {
-  const bytes = new Uint8Array(value);
-  let text = "";
-  for (const byte of bytes) text += String.fromCharCode(byte);
-  return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function deriveSessionKey(invitation: Invitation, privateKey: CryptoKey): Promise<CryptoKey> {
+async function deriveSessionSecret(invitation: Invitation, privateKey: CryptoKey): Promise<ArrayBuffer> {
   const hostKey = await crypto.subtle.importKey(
     "raw",
     decodeBase64Url(invitation.hostPublicKey).buffer as ArrayBuffer,
@@ -34,12 +26,11 @@ async function deriveSessionKey(invitation: Invitation, privateKey: CryptoKey): 
     false,
     [],
   );
-  const bits = await crypto.subtle.deriveBits(
+  return crypto.subtle.deriveBits(
     { name: "ECDH", public: hostKey },
     privateKey,
     256,
   );
-  return crypto.subtle.importKey("raw", bits, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
 function lengthPrefix(value: Uint8Array): Uint8Array {
@@ -98,7 +89,7 @@ export function CompanionMobileApp() {
   const [payload, setPayload] = useState("");
   const [state, setState] = useState<"idle" | "connecting" | "pending" | "approved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const sessionKey = useRef<CryptoKey | null>(null);
+  const transport = useRef<CompanionTransport | null>(null);
 
   const connect = async () => {
     setState("connecting");
@@ -133,7 +124,19 @@ export function CompanionMobileApp() {
       setState("pending");
       const decision = await waitForDecision(invitation.publicUrl, requestId);
       if (decision !== "approved") throw new Error("pairing-rejected");
-      sessionKey.current = await deriveSessionKey(invitation, pair.privateKey);
+      const secret = await deriveSessionSecret(invitation, pair.privateKey);
+      const session = await CompanionTransport.forAndroid(secret, requestId);
+      const confirmation = await fetch(
+        new URL(`/v1/companion/session/${encodeURIComponent(requestId)}/confirm`, invitation.publicUrl),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(await session.confirm()),
+        },
+      );
+      if (!confirmation.ok) throw new Error("session-confirmation-failed");
+      await session.acceptConfirmation((await confirmation.json()) as Parameters<CompanionTransport["acceptConfirmation"]>[0]);
+      transport.current = session;
       setState("approved");
     } catch (reason) {
       setState("error");
