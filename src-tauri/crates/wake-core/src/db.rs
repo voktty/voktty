@@ -598,19 +598,19 @@ impl Store {
             .list_custom_roots()
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|(a, p)| AgentId::from_str(&a).map(|a| (a, std::path::PathBuf::from(p))))
+            .filter_map(|(a, p)| AgentId::parse(&a).map(|a| (a, std::path::PathBuf::from(p))))
             .collect();
         let removed = self
             .list_removed_defaults()
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|a| AgentId::from_str(&a))
+            .filter_map(|a| AgentId::parse(&a))
             .collect();
         let removed_roots = self
             .list_removed_default_roots()
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|(a, p)| AgentId::from_str(&a).map(|a| (a, std::path::PathBuf::from(p))))
+            .filter_map(|(a, p)| AgentId::parse(&a).map(|a| (a, std::path::PathBuf::from(p))))
             .collect();
         (customs, removed, removed_roots)
     }
@@ -621,7 +621,7 @@ impl Store {
         self.list_disabled_locations()
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|(a, p)| AgentId::from_str(&a).map(|a| (a, std::path::PathBuf::from(p))))
+            .filter_map(|(a, p)| AgentId::parse(&a).map(|a| (a, std::path::PathBuf::from(p))))
             .collect()
     }
 
@@ -1470,8 +1470,10 @@ impl Store {
             filter_args.push(Box::new(t));
         }
 
+        type SearchRow = (String, i64, Option<String>, String, Option<i64>, String);
+
         let conn = self.read.lock().unwrap();
-        let mut raw: Vec<(String, i64, Option<String>, String, Option<i64>, String)> = Vec::new();
+        let mut raw: Vec<SearchRow> = Vec::new();
 
         if !degraded {
             let match_expr = segs
@@ -1713,7 +1715,7 @@ fn row_to_meta(r: &rusqlite::Row<'_>) -> rusqlite::Result<SessionMeta> {
     let agent_str: String = r.get(1)?;
     Ok(SessionMeta {
         key: r.get(0)?,
-        agent: AgentId::from_str(&agent_str).unwrap_or(AgentId::ClaudeCode),
+        agent: AgentId::parse(&agent_str).unwrap_or(AgentId::ClaudeCode),
         id: r.get(2)?,
         title: r.get(3)?,
         project_path: r.get(4)?,

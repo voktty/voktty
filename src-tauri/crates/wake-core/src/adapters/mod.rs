@@ -25,6 +25,36 @@ use crate::models::*;
 use anyhow::Result;
 use std::path::Path;
 
+macro_rules! impl_default_adapter {
+    ($($adapter:ty),+ $(,)?) => {
+        $(
+            impl Default for $adapter {
+                fn default() -> Self {
+                    Self::new()
+                }
+            }
+        )+
+    };
+}
+
+impl_default_adapter!(
+    antigravity::AntigravityAdapter,
+    claude::ClaudeAdapter,
+    codex::CodexAdapter,
+    copilot::CopilotAdapter,
+    cursor::CursorAdapter,
+    dsh::DshAdapter,
+    gemini::GeminiAdapter,
+    grok::GrokAdapter,
+    hermes::HermesAdapter,
+    kimi::KimiAdapter,
+    kiro::KiroAdapter,
+    openclaw::OpenclawAdapter,
+    opencode::OpencodeAdapter,
+    pi::PiAdapter,
+    qoder::QoderAdapter,
+);
+
 /// agent 数据源适配器。列表扫描与详情解析共用同一核心解析器,
 /// 保证 FTS 的 seq 与详情页消息序号一致(搜索跳转依赖)。
 pub trait AgentAdapter: Send + Sync {

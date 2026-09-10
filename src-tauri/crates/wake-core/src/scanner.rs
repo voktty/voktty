@@ -273,7 +273,7 @@ fn run_scan_inner(
     }
 
     // 最近的会话优先
-    queue.sort_by(|a, b| b.r.mtime_ms.cmp(&a.r.mtime_ms));
+    queue.sort_by_key(|item| std::cmp::Reverse(item.r.mtime_ms));
     progress.total = queue.len();
     events.on_progress(progress);
 
