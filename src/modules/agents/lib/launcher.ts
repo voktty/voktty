@@ -167,3 +167,28 @@ export function createAgentPanePlan(
       };
   }
 }
+
+/**
+ * If the terminal-emitted title matches a known agent binary name, return
+ * the launcher's label (capitalised).  Handles bare command names
+ * ("claude"), prefixed paths ("C:\…\claude.exe"), and "Select-String -"
+ * style wrappers ("node claude").  Returns `null` when no match.
+ */
+export function matchAgentFromTitle(
+  title: string,
+): { label: string; id: AgentLauncherId } | null {
+  const lower = title.toLowerCase().trim();
+  for (const agent of AGENT_LAUNCHERS) {
+    const cmd = agent.defaultCommand;
+    // Exact match or with .exe suffix
+    if (lower === cmd || lower === `${cmd}.exe`) {
+      return { label: agent.label, id: agent.id };
+    }
+    // Title ends with the command (e.g. "/usr/bin/claude" or "node claude")
+    const tail = lower.split(/[\\/\s]+/).pop() ?? "";
+    if (tail === cmd || tail === `${cmd}.exe`) {
+      return { label: agent.label, id: agent.id };
+    }
+  }
+  return null;
+}
