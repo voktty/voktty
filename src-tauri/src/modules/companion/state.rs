@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use ring::agreement::{EphemeralPrivateKey, ECDH_P256};
+use ring::agreement::{agree_ephemeral, EphemeralPrivateKey, UnparsedPublicKey, ECDH_P256};
 use ring::rand::SystemRandom;
 use serde::Serialize;
 use voktty_companion_protocol::{
@@ -25,7 +25,8 @@ const MAX_REQUEST_BYTES: usize = 4096;
 struct CompanionRuntime {
     _server: CompanionLoopback,
     _tunnel: CloudflaredTunnel,
-    _host_private_key: EphemeralPrivateKey,
+    host_private_key: Option<EphemeralPrivateKey>,
+    _session_keys: std::collections::HashMap<String, Vec<u8>>,
     pairing: Arc<Mutex<Option<PairingRegistry>>>,
     invite: QrInvitation,
 }
@@ -104,7 +105,8 @@ impl CompanionState {
         *runtime = Some(CompanionRuntime {
             _server: server,
             _tunnel: tunnel,
-            _host_private_key: private_key,
+            host_private_key: Some(private_key),
+            _session_keys: std::collections::HashMap::new(),
             pairing,
             invite,
         });
@@ -202,7 +204,7 @@ impl CompanionState {
             .as_mut()
             .ok_or_else(|| "companion is not active".to_string())?;
         if approved {
-            runtime
+            let device = runtime
                 .pairing
                 .lock()
                 .map_err(|_| "companion pairing state is unavailable".to_string())?
@@ -210,6 +212,19 @@ impl CompanionState {
                 .ok_or_else(|| "companion is starting".to_string())?
                 .approve(request_id, now_ms())
                 .map_err(pairing_error)?;
+            let device_key = URL_SAFE_NO_PAD
+                .decode(device.public_key)
+                .map_err(|_| "companion device key is invalid".to_string())?;
+            let private_key = runtime
+                .host_private_key
+                .take()
+                .ok_or_else(|| "companion invitation was already used".to_string())?;
+            let peer_key = UnparsedPublicKey::new(&ECDH_P256, device_key);
+            let session_key = agree_ephemeral(private_key, &peer_key, |shared| {
+                Ok::<_, ring::error::Unspecified>(shared.to_vec())
+            })
+            .map_err(|_| "companion device key is invalid".to_string())?;
+            runtime._session_keys.insert(device.id, session_key);
             Ok(())
         } else if runtime
             .pairing
