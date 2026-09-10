@@ -4,6 +4,10 @@ version = "0.5.2"
 edition = "2021"
 license = "MIT"
 
+[[bin]]
+name = "wake-mcp"
+path = "src/bin/wake_mcp.rs"
+
 [dependencies]
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
