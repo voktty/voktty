@@ -30,6 +30,7 @@ const THEME_IDS = new Set([
 const VOKTTY_VARIATION_IDS = new Set([
   "default",
   "fluent",
+  "liquid",
   "nord",
   "dracula",
   "tokyo-night",

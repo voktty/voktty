@@ -134,6 +134,10 @@
     --border-width: 1px;
     --border-style: solid;
     --focus-style: ring;
+    --material-chrome-opacity: 1;
+    --material-chrome-blur: 0px;
+    --material-chrome-saturation: 1;
+    --material-border-opacity: 1;
 
     /* Ambient elevation shadows (Light) */
     --elevation-2xs: 0 1px rgb(0 0 0 / 0.05);
@@ -499,6 +503,22 @@ html[data-vibrancy="on"] footer {
 html[data-vibrancy="on"] .xterm .xterm-screen,
 html[data-vibrancy="on"] .xterm .xterm-viewport {
   background-color: transparent !important;
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  html[data-material="liquid"] .voktty-harness-root > .body-glass {
+    background: color-mix(
+      in srgb,
+      var(--surface-toolbar) calc(var(--material-chrome-opacity) * 100%),
+      transparent
+    );
+    backdrop-filter: blur(var(--material-chrome-blur)) saturate(var(--material-chrome-saturation));
+    border-left: 1px solid color-mix(
+      in srgb,
+      var(--border-subtle) calc(var(--material-border-opacity) * 100%),
+      transparent
+    );
+  }
 }
 
 html[data-chrome="borderless"] .voktty-bg-surface {
