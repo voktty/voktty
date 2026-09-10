@@ -110,7 +110,8 @@ impl CompanionTransport {
             .receive_key
             .open_in_place(nonce(frame.direction, frame.counter), Aad::from(header.as_slice()), &mut ciphertext)
             .map_err(|_| TransportError::Authentication)?;
-        let control = serde_json::from_slice(plaintext).map_err(|_| TransportError::InvalidFrame)?;
+        let control: SessionControl =
+            serde_json::from_slice(plaintext).map_err(|_| TransportError::InvalidFrame)?;
         control.validate().map_err(protocol_error)?;
         self.receive_counter = frame.counter;
         Ok(control)

@@ -2316,8 +2316,9 @@ mod tests {
             server
                 .watcher
                 .as_ref()
-                .and_then(|watch| watch.refcounts.get(&watched_key)),
-            Some(&2)
+                .and_then(|watch| watch.lock().ok())
+                .and_then(|watch| watch.refcounts.get(&watched_key).copied()),
+            Some(2)
         );
 
         for (id, expected) in [("remove-1", Some(1)), ("remove-2", None)] {
@@ -2335,6 +2336,7 @@ mod tests {
                 server
                     .watcher
                     .as_ref()
+                    .and_then(|watch| watch.lock().ok())
                     .and_then(|watch| watch.refcounts.get(&watched_key).copied()),
                 expected
             );
