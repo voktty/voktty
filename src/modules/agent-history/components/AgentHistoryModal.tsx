@@ -342,8 +342,8 @@ export function AgentHistoryModal() {
               <span className="size-3 rounded-full bg-emerald-500/80 inline-block hover:opacity-80 cursor-pointer" onClick={toggleMaximize} />
             </div>
             <span className="text-xs font-semibold tracking-wide text-foreground flex items-center gap-1.5">
-              <span className="font-bold text-[13px]">Wake</span>
-              <span className="text-[10.5px] text-muted-foreground/70 font-normal">v1.0</span>
+              <span className="font-bold text-[13px]">{t("agentHistory.productName")}</span>
+              <span className="text-[10.5px] text-muted-foreground/70 font-normal">{t("agentHistory.productVersion")}</span>
             </span>
           </div>
 
@@ -392,9 +392,9 @@ export function AgentHistoryModal() {
               >
                 <div className="flex items-center gap-1.5">
                   <HugeiconsIcon icon={Search01Icon} size={13} />
-                  <span>Search sessions</span>
+                  <span>{t("agentHistory.searchSessions")}</span>
                 </div>
-                <kbd className="rounded bg-muted/60 px-1 py-0.2 text-[10px] font-mono text-muted-foreground/80">⌘K</kbd>
+                <kbd className="rounded bg-muted/60 px-1 py-0.2 text-[10px] font-mono text-muted-foreground/80">{t("agentHistory.searchShortcut")}</kbd>
               </button>
 
               <Button
@@ -428,7 +428,7 @@ export function AgentHistoryModal() {
               >
                 <div className="flex items-center gap-2">
                   <HugeiconsIcon icon={Layers01Icon} size={14} className="text-primary/90" />
-                  <span>All Sessions</span>
+                  <span>{t("agentHistory.allSessions")}</span>
                 </div>
                 <span className="text-[10.5px] font-mono opacity-60">{sessions.length}</span>
               </button>
@@ -448,7 +448,7 @@ export function AgentHistoryModal() {
               >
                 <div className="flex items-center gap-2">
                   <HugeiconsIcon icon={StarIcon} size={14} className="text-amber-400" />
-                  <span>Starred</span>
+                  <span>{t("agentHistory.starred")}</span>
                 </div>
                 <span className="text-[10.5px] font-mono opacity-60">0</span>
               </button>
@@ -461,7 +461,7 @@ export function AgentHistoryModal() {
                 onClick={() => setIsAgentsOpen(!isAgentsOpen)}
                 className="flex w-full items-center justify-between px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
               >
-                <span>Agents</span>
+                <span>{t("agentHistory.agentsLabel")}</span>
                 <HugeiconsIcon icon={isAgentsOpen ? ArrowDown01Icon : ArrowRight01Icon} size={12} />
               </button>
 
@@ -508,7 +508,7 @@ export function AgentHistoryModal() {
                   onClick={() => setIsProjectsOpen(!isProjectsOpen)}
                   className="flex w-full items-center justify-between px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
                 >
-                  <span>Projects</span>
+                  <span>{t("agentHistory.projectsLabel")}</span>
                   <HugeiconsIcon icon={isProjectsOpen ? ArrowDown01Icon : ArrowRight01Icon} size={12} />
                 </button>
 
@@ -554,14 +554,14 @@ export function AgentHistoryModal() {
                 {selectedProject
                   ? selectedProject
                   : isStarredView
-                    ? "Starred Sessions"
+                    ? t("agentHistory.starredSessions")
                     : selectedAgent !== "all"
                       ? AGENT_BRANDS[selectedAgent]?.name || selectedAgent
-                      : "All Sessions"}
+                      : t("agentHistory.allSessions")}
               </span>
               <div className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
                 <HugeiconsIcon icon={SortByDown01Icon} size={12} />
-                <span>Date updated</span>
+                <span>{t("agentHistory.dateUpdated")}</span>
               </div>
             </div>
 
@@ -573,7 +573,7 @@ export function AgentHistoryModal() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Search ${sessions.length} sessions...`}
+                  placeholder={t("agentHistory.searchSessionsCount", { count: sessions.length })}
                   className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden"
                 />
                 {searchQuery && (
@@ -593,12 +593,12 @@ export function AgentHistoryModal() {
               {isLoading && sessions.length === 0 ? (
                 <div className="flex h-48 flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
                   <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2" />
-                  <span>Loading sessions...</span>
+                  <span>{t("agentHistory.loadingSessions")}</span>
                 </div>
               ) : filteredSessions.length === 0 ? (
                 <div className="flex h-48 flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
                   <HugeiconsIcon icon={Layers01Icon} size={24} className="opacity-20 mb-2" />
-                  <span>No sessions found</span>
+                  <span>{t("agentHistory.noSessionsFound")}</span>
                 </div>
               ) : (
                 filteredSessions.map((s) => {
@@ -687,7 +687,7 @@ export function AgentHistoryModal() {
                     {/* Breadcrumb Tags */}
                     <div className="flex items-center gap-2 text-xs">
                       <div className="flex items-center gap-1.5 font-medium text-foreground">
-                        <img src={AGENT_BRANDS[activeSession.agent]?.icon || "/brands/claude-code.png"} alt="Agent" className="size-4 rounded object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        <img src={AGENT_BRANDS[activeSession.agent]?.icon || "/brands/claude-code.png"} alt={t("agentHistory.agent")} className="size-4 rounded object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                         <span>{AGENT_BRANDS[activeSession.agent]?.name || activeSession.agent}</span>
                       </div>
                       <span className="text-muted-foreground/50">/</span>
@@ -709,10 +709,10 @@ export function AgentHistoryModal() {
                           size="sm"
                           onClick={() => void handleResumeInTerminal(activeSession)}
                           className="h-7 gap-1.5 px-2.5 text-xs font-semibold cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg shadow-xs"
-                          title="Resume in Terminal"
+                          title={t("agentHistory.resumeInTerminal")}
                         >
                           <HugeiconsIcon icon={TerminalIcon} size={13} />
-                          <span>Resume</span>
+                          <span>{t("agentHistory.resume")}</span>
                         </Button>
                       )}
 
@@ -721,7 +721,7 @@ export function AgentHistoryModal() {
                         variant="ghost"
                         onClick={() => void handleExportMarkdown(activeSession)}
                         className="size-7 text-muted-foreground hover:text-foreground cursor-pointer rounded-lg"
-                        title="Copy Transcript Markdown"
+                        title={t("agentHistory.copyTranscriptMarkdown")}
                       >
                         <HugeiconsIcon icon={Copy01Icon} size={14} />
                       </Button>
@@ -731,7 +731,7 @@ export function AgentHistoryModal() {
                         variant="ghost"
                         onClick={() => void deleteSession(activeSession.id)}
                         className="size-7 text-muted-foreground hover:text-destructive cursor-pointer rounded-lg"
-                        title="Delete Session"
+                        title={t("agentHistory.deleteSession")}
                       >
                         <HugeiconsIcon icon={Delete02Icon} size={14} />
                       </Button>
@@ -763,7 +763,7 @@ export function AgentHistoryModal() {
                           else handleFindNext();
                         }
                       }}
-                      placeholder="Find in transcript..."
+                      placeholder={t("agentHistory.findPlaceholder")}
                       className="h-7 w-48 text-xs font-mono bg-background/80 border-border/60"
                     />
                     <span className="text-[10px] text-muted-foreground font-mono px-1">
@@ -808,11 +808,11 @@ export function AgentHistoryModal() {
                   {isMessagesLoading && messages.length === 0 ? (
                     <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
                       <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
-                      <span>Loading transcript...</span>
+                      <span>{t("agentHistory.loadingTranscript")}</span>
                     </div>
                   ) : messages.length === 0 ? (
                     <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
-                      <span>No messages in this session</span>
+                      <span>{t("agentHistory.noMessages")}</span>
                     </div>
                   ) : (
                     messages.map((msg) => {
@@ -840,11 +840,11 @@ export function AgentHistoryModal() {
                                   isUser ? "text-primary font-semibold" : isTool ? "text-amber-400" : "text-purple-400 font-semibold",
                                 )}
                               >
-                                {isUser ? "User" : isTool ? "Tool Execution" : "Assistant"}
+                                {isUser ? t("agentHistory.user") : isTool ? t("agentHistory.toolExecution") : t("agentHistory.assistant")}
                               </span>
                               {msg.redacted && (
                                 <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30 font-mono">
-                                  redacted
+                                  {t("agentHistory.redacted")}
                                 </Badge>
                               )}
                             </div>
@@ -882,7 +882,7 @@ export function AgentHistoryModal() {
                                   icon={expandedThinking[msg.id] ? ArrowDown01Icon : ArrowRight01Icon}
                                   size={12}
                                 />
-                                <span>Thinking Process</span>
+                                <span>{t("agentHistory.thinkingProcess")}</span>
                               </button>
                               {expandedThinking[msg.id] && (
                                 <pre className="mt-2 p-2 rounded bg-background/80 border border-purple-500/20 whitespace-pre-wrap text-[10.5px] text-muted-foreground font-mono overflow-x-auto max-h-80">
@@ -916,14 +916,14 @@ export function AgentHistoryModal() {
                                   icon={expandedTools[msg.id] ? ArrowDown01Icon : ArrowRight01Icon}
                                   size={12}
                                 />
-                                <span>Tool: {msg.tool_name}</span>
+                                <span>{t("agentHistory.tool")} {msg.tool_name}</span>
                               </button>
 
                               {expandedTools[msg.id] && (
                                 <div className="mt-2 space-y-2 overflow-x-auto text-[10.5px]">
                                   {msg.tool_input && (
                                     <div>
-                                      <div className="text-muted-foreground text-[10px] uppercase font-semibold">Input</div>
+                                      <div className="text-muted-foreground text-[10px] uppercase font-semibold">{t("agentHistory.input")}</div>
                                       <pre className="p-2 rounded bg-[#18181b] border border-border/40 whitespace-pre-wrap">
                                         {msg.tool_input}
                                       </pre>
@@ -931,7 +931,7 @@ export function AgentHistoryModal() {
                                   )}
                                   {msg.tool_output && (
                                     <div>
-                                      <div className="text-muted-foreground text-[10px] uppercase font-semibold">Output</div>
+                                      <div className="text-muted-foreground text-[10px] uppercase font-semibold">{t("agentHistory.output")}</div>
                                       <pre className="p-2 rounded bg-[#18181b] border border-border/40 whitespace-pre-wrap max-h-60 overflow-y-auto">
                                         {msg.tool_output}
                                       </pre>
@@ -950,9 +950,9 @@ export function AgentHistoryModal() {
             ) : (
               <div className="flex h-full flex-col items-center justify-center p-8 text-center text-xs text-muted-foreground">
                 <HugeiconsIcon icon={Layers01Icon} size={36} className="opacity-20 mb-3" />
-                <span className="font-semibold text-foreground text-sm">No session selected</span>
+                <span className="font-semibold text-foreground text-sm">{t("agentHistory.noSessionSelected")}</span>
                 <span className="mt-1 text-[11px] opacity-70">
-                  Select a session from the list to view its full transcript
+                  {t("agentHistory.selectSessionTranscript")}
                 </span>
               </div>
             )}
@@ -992,7 +992,7 @@ export function AgentHistoryModal() {
                       setIsPaletteOpen(false);
                     }
                   }}
-                  placeholder="Search sessions..."
+                  placeholder={t("agentHistory.searchSessions")}
                   className="flex-1 bg-transparent text-sm text-foreground outline-hidden placeholder:text-muted-foreground"
                 />
                 {paletteQuery && (
@@ -1010,7 +1010,7 @@ export function AgentHistoryModal() {
               <div className="max-h-80 overflow-y-auto p-2 space-y-1">
                 {paletteResults.length === 0 ? (
                   <div className="p-6 text-center text-xs text-muted-foreground">
-                    No results found for &ldquo;{paletteQuery}&rdquo;
+                    {t("agentHistory.noResultsFor", { query: paletteQuery })}
                   </div>
                 ) : (
                   paletteResults.map((s, idx) => {
@@ -1046,11 +1046,11 @@ export function AgentHistoryModal() {
 
               {/* Palette Footer */}
               <div className="flex items-center justify-between border-t border-border/40 bg-[#121214] px-4 py-2 text-[10.5px] text-muted-foreground select-none">
-                <span>Scope: all sessions</span>
+                <span>{t("agentHistory.scopeAllSessions")}</span>
                 <div className="flex items-center gap-3">
-                  <span><kbd className="font-mono">↑↓</kbd> navigate</span>
-                  <span><kbd className="font-mono">↵</kbd> open</span>
-                  <span><kbd className="font-mono">esc</kbd> close</span>
+                  <span><kbd className="font-mono">↑↓</kbd> {t("agentHistory.navigate")}</span>
+                  <span><kbd className="font-mono">↵</kbd> {t("agentHistory.open")}</span>
+                  <span><kbd className="font-mono">{t("agentHistory.escapeKey")}</kbd> {t("agentHistory.close")}</span>
                 </div>
               </div>
             </div>

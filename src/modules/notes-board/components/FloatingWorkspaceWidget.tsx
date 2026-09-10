@@ -171,18 +171,18 @@ export function FloatingWorkspaceWidget({
               <span
                 className="size-3 rounded-full bg-amber-500/80 inline-block hover:opacity-80 cursor-pointer transition-opacity"
                 onClick={handleResetCenter}
-                title="Reset Position"
+                title={t("notesBoard.resetPosition")}
               />
               <span
                 className="size-3 rounded-full bg-emerald-500/80 inline-block hover:opacity-80 cursor-pointer transition-opacity"
                 onClick={toggleMaximize}
-                title={isMaximized ? "Restore" : "Maximize"}
+                title={isMaximized ? t("notesBoard.restore") : t("notesBoard.maximize")}
               />
             </div>
 
             <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-foreground">
               <HugeiconsIcon icon={Layout01Icon} size={14} className="text-primary/90" />
-              <span>Workspace</span>
+              <span>{t("notesBoard.workspace")}</span>
             </div>
           </div>
 
@@ -225,7 +225,7 @@ export function FloatingWorkspaceWidget({
               size="icon"
               className="size-6 text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer rounded-md"
               onClick={handleResetCenter}
-              title="Center Window"
+              title={t("notesBoard.centerWindow")}
             >
               <HugeiconsIcon icon={PinIcon} size={12} />
             </Button>
@@ -235,7 +235,7 @@ export function FloatingWorkspaceWidget({
               size="icon"
               className="size-6 text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer rounded-md"
               onClick={toggleMaximize}
-              title={isMaximized ? "Restore" : "Maximize"}
+              title={isMaximized ? t("notesBoard.restore") : t("notesBoard.maximize")}
             >
               <HugeiconsIcon
                 icon={isMaximized ? Minimize01Icon : Maximize01Icon}
