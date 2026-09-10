@@ -134,6 +134,7 @@ impl PairingRegistry {
         pending
     }
 
+    #[cfg(test)]
     pub fn devices(&self) -> Vec<AuthorizedDevice> {
         self.devices.values().cloned().collect()
     }

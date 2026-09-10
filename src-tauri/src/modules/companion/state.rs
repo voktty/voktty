@@ -152,34 +152,6 @@ impl CompanionState {
         }
     }
 
-    pub(crate) fn submit_pairing(
-        &self,
-        request: PairingRequest,
-        request_id: String,
-    ) -> Result<PendingPairingInfo, String> {
-        let mut runtime = self
-            .runtime
-            .lock()
-            .map_err(|_| "companion state is unavailable".to_string())?;
-        let runtime = runtime
-            .as_mut()
-            .ok_or_else(|| "companion is not active".to_string())?;
-        let pending = runtime
-            .pairing
-            .lock()
-            .map_err(|_| "companion pairing state is unavailable".to_string())?
-            .as_mut()
-            .ok_or_else(|| "companion is starting".to_string())?
-            .request(request, now_ms(), request_id)
-            .map_err(pairing_error)?;
-        Ok(PendingPairingInfo {
-            id: pending.id,
-            device_name: pending.device_name,
-            fingerprint: pending.fingerprint,
-            expires_at_ms: pending.expires_at_ms,
-        })
-    }
-
     pub fn pending_pairings(&self) -> Vec<PendingPairingInfo> {
         let Ok(runtime) = self.runtime.lock() else {
             return Vec::new();
