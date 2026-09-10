@@ -1,0 +1,6 @@
+{"type":"user","uuid":"q-null-user","parentUuid":null,"isSidechain":false,"cwd":"/Users/tester/Github/wakefx-null","sessionId":"cdcdcdcd-aaaa-bbbb-cccc-000000000015","userType":"external","entrypoint":"cli","version":"1.1.30","timestamp":"2026-08-09T09:00:00.000Z","message":{"role":"user","content":"这条已被显式回退的消息不能重新出现"}}
+{"type":"assistant","uuid":"q-null-assistant","parentUuid":"q-null-user","isSidechain":false,"cwd":"/Users/tester/Github/wakefx-null","sessionId":"cdcdcdcd-aaaa-bbbb-cccc-000000000015","userType":"external","entrypoint":"cli","version":"1.1.30","timestamp":"2026-08-09T09:01:00.000Z","message":{"id":"q-null-message","type":"message","role":"assistant","model":"qoder-performance","stop_reason":"end_turn","usage":{"total_tokens":50},"content":[{"type":"text","text":"这条回答也必须隐藏"}]}}
+{"type":"custom-title","sessionId":"cdcdcdcd-aaaa-bbbb-cccc-000000000015","customTitle":"Qoder empty rewind"}
+{"type":"relocated","sessionId":"cdcdcdcd-aaaa-bbbb-cccc-000000000015","relocatedCwd":"/Users/tester/Github/wakefx-null"}
+{"type":"active-leaf","sessionId":"cdcdcdcd-aaaa-bbbb-cccc-000000000015","leafUuid":"q-null-assistant","explicit":false,"timestamp":1786266060000}
+{"type":"active-leaf","sessionId":"cdcdcdcd-aaaa-bbbb-cccc-000000000015","leafUuid":null,"explicit":true,"rewound":true,"timestamp":1786266120000}

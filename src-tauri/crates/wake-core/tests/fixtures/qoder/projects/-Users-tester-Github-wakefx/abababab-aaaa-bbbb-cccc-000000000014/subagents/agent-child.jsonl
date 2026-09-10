@@ -1,0 +1,1 @@
+{"type":"user","uuid":"q-child-user","parentUuid":null,"isSidechain":true,"cwd":"/Users/tester/Github/wakefx","sessionId":"child-agent","timestamp":"2026-08-08T09:02:30.000Z","message":{"role":"user","content":"这是会话边车，不能成为主列表项"}}

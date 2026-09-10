@@ -1,0 +1,33 @@
+[package]
+name = "wake-core"
+version = "0.5.2"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.33", features = ["bundled"] }
+dirs = "6"
+walkdir = "2"
+notify = "8"
+chrono = { version = "0.4", features = ["serde"] }
+zstd = "0.13"
+base64 = "0.22"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+trash = "5"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+trash = { version = "5", default-features = false, features = ["coinit_multithreaded", "chrono"] }
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_System_DataExchange",
+  "Win32_System_Memory",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+tempfile = "3"

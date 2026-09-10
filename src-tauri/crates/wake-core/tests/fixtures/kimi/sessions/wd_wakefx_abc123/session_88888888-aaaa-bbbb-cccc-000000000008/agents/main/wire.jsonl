@@ -1,0 +1,8 @@
+{"type":"metadata","protocol_version":"1.3","created_at":1786200000000}
+{"type":"config.update","profileName":"agent","systemPrompt":"You are Kimi Code CLI, an interactive general AI agent."}
+{"type":"tools.set_active_tools","names":["Read","Write","Bash"]}
+{"type":"turn.prompt","input":[{"type":"text","text":"Kimi 修一下二维码组件的 useEffect() 内存泄漏"}],"origin":{"kind":"user"}}
+{"type":"context.append_message","message":{"role":"assistant","content":[{"type":"text","text":"已定位 QrScanner 泄漏并补了清理回调。"}]}}
+{"type":"context.append_loop_event","event":{"type":"tool.result","toolCallId":"k1","result":{"output":"ok","isError":false}}}
+{"type":"turn.ended","turnId":1,"reason":"completed"}
+{"type":"wibble.record","x":1}

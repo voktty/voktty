@@ -1,0 +1,2 @@
+{"type":"metadata","protocol_version":"1.3","created_at":1786200600000}
+{"type":"turn.prompt","input":[{"type":"text","text":"占位标题会话应回退到这句"}],"origin":{"kind":"user"}}
