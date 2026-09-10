@@ -9012,6 +9012,7 @@ dependencies = [
  "url",
  "voktty-aliases",
  "voktty-collab-protocol",
+ "voktty-companion-protocol",
  "voktty-control-protocol",
  "voktty-remote-protocol",
  "voktty-tool-policy",
@@ -9051,6 +9052,14 @@ dependencies = [
 
 [[package]]
 name = "voktty-collab-protocol"
+version = "1.0.9"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "voktty-companion-protocol"
 version = "1.0.9"
 dependencies = [
  "serde",
