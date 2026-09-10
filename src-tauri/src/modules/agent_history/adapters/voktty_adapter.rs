@@ -139,6 +139,7 @@ impl AgentHistoryAdapter for VokttyAdapter {
                     tool_output,
                     is_error,
                     redacted: false,
+                    thinking: None,
                 });
             }
         }

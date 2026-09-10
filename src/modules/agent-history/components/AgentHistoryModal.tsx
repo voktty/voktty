@@ -65,17 +65,28 @@ export function AgentHistoryModal() {
 
   const { t } = useTranslation();
   const agentBadges: Record<string, { bg: string; color: string; label: string }> = {
-    claude: { bg: "bg-purple-500/15", color: "text-purple-400", label: t("agentHistory.agents.claude") },
-    codex: { bg: "bg-emerald-500/15", color: "text-emerald-400", label: t("agentHistory.agents.codex") },
-    cursor: { bg: "bg-sky-500/15", color: "text-sky-400", label: t("agentHistory.agents.cursor") },
-    voktty: { bg: "bg-blue-500/15", color: "text-blue-400", label: t("agentHistory.agents.voktty") },
-    gemini: { bg: "bg-amber-500/15", color: "text-amber-400", label: t("agentHistory.agents.gemini") },
-    kimi: { bg: "bg-teal-500/15", color: "text-teal-400", label: t("agentHistory.agents.kimi") },
-    opencode: { bg: "bg-indigo-500/15", color: "text-indigo-400", label: t("agentHistory.agents.opencode") },
-    grok: { bg: "bg-rose-500/15", color: "text-rose-400", label: t("agentHistory.agents.grok") },
+    "claude-code": { bg: "bg-purple-500/15", color: "text-purple-400", label: "Claude Code" },
+    claude: { bg: "bg-purple-500/15", color: "text-purple-400", label: "Claude Code" },
+    codex: { bg: "bg-emerald-500/15", color: "text-emerald-400", label: "Codex" },
+    grok: { bg: "bg-rose-500/15", color: "text-rose-400", label: "Grok" },
+    dsh: { bg: "bg-blue-600/15", color: "text-blue-400", label: "DeepSeek" },
+    cursor: { bg: "bg-sky-500/15", color: "text-sky-400", label: "Cursor" },
+    opencode: { bg: "bg-indigo-500/15", color: "text-indigo-400", label: "OpenCode" },
+    pi: { bg: "bg-amber-600/15", color: "text-amber-400", label: "Pi" },
+    omp: { bg: "bg-teal-600/15", color: "text-teal-400", label: "Omp" },
+    kiro: { bg: "bg-violet-500/15", color: "text-violet-400", label: "Kiro" },
+    kimi: { bg: "bg-teal-500/15", color: "text-teal-400", label: "Kimi" },
+    gemini: { bg: "bg-amber-500/15", color: "text-amber-400", label: "Gemini" },
+    copilot: { bg: "bg-cyan-500/15", color: "text-cyan-400", label: "Copilot" },
+    antigravity: { bg: "bg-fuchsia-500/15", color: "text-fuchsia-400", label: "Antigravity" },
+    qoder: { bg: "bg-lime-500/15", color: "text-lime-400", label: "Qoder" },
+    hermes: { bg: "bg-orange-500/15", color: "text-orange-400", label: "Hermes" },
+    openclaw: { bg: "bg-red-500/15", color: "text-red-400", label: "OpenClaw" },
+    voktty: { bg: "bg-blue-500/15", color: "text-blue-400", label: "Voktty" },
   };
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
+  const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
   const [isMaximized, setIsMaximized] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
 
@@ -99,11 +110,23 @@ export function AgentHistoryModal() {
     resetOnClose: true,
   });
 
+  const isAgentMatch = (sessionAgent: string, targetAgent: string) => {
+    if (targetAgent === "all") return true;
+    const sNorm = sessionAgent.toLowerCase();
+    const tNorm = targetAgent.toLowerCase();
+    if (sNorm === tNorm) return true;
+    if ((tNorm === "claude" || tNorm === "claude-code") && (sNorm === "claude" || sNorm === "claude-code")) return true;
+    return false;
+  };
+
   // Calculate agent & project counts
   const agentCounts = useMemo(() => {
     const map: Record<string, number> = {};
     for (const s of sessions) {
-      if (s.agent) map[s.agent] = (map[s.agent] || 0) + 1;
+      if (s.agent) {
+        const agKey = s.agent.toLowerCase() === "claude-code" ? "claude" : s.agent.toLowerCase();
+        map[agKey] = (map[agKey] || 0) + 1;
+      }
     }
     return map;
   }, [sessions]);
@@ -119,7 +142,7 @@ export function AgentHistoryModal() {
   // Filtered sessions
   const filteredSessions = useMemo(() => {
     return sessions.filter((s) => {
-      if (selectedAgent !== "all" && s.agent !== selectedAgent) return false;
+      if (selectedAgent !== "all" && !isAgentMatch(s.agent, selectedAgent)) return false;
       if (selectedProject && s.project_name !== selectedProject) return false;
       return true;
     });
@@ -783,6 +806,32 @@ export function AgentHistoryModal() {
                                   </span>
                                 )}
                               </div>
+
+                              {msg.thinking && (
+                                <div className="rounded-md border border-purple-500/25 bg-purple-500/5 p-2 font-mono text-[11px] mb-1">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedThinking((prev) => ({
+                                        ...prev,
+                                        [msg.id]: !prev[msg.id],
+                                      }))
+                                    }
+                                    className="flex items-center gap-1 font-semibold text-purple-400 hover:text-purple-300 cursor-pointer"
+                                  >
+                                    <HugeiconsIcon
+                                      icon={expandedThinking[msg.id] ? ArrowDown01Icon : ArrowRight01Icon}
+                                      size={12}
+                                    />
+                                    <span>Thinking Process</span>
+                                  </button>
+                                  {expandedThinking[msg.id] && (
+                                    <pre className="mt-2 p-1.5 rounded bg-background/80 border border-purple-500/20 whitespace-pre-wrap text-[10.5px] text-muted-foreground font-mono">
+                                      {msg.thinking}
+                                    </pre>
+                                  )}
+                                </div>
+                              )}
 
                               <div className="whitespace-pre-wrap font-sans break-words overflow-x-auto selection:bg-primary/20">
                                 {msg.content}

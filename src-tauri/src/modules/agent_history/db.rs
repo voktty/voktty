@@ -433,6 +433,7 @@ impl HistoryDb {
                 tool_output: row.get(8)?,
                 is_error: row.get::<_, i32>(9)? != 0,
                 redacted: row.get::<_, i32>(10)? != 0,
+                thinking: None,
             })
         })?;
 

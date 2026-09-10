@@ -172,6 +172,7 @@ impl AgentHistoryAdapter for ClaudeAdapter {
                     tool_output,
                     is_error,
                     redacted: false,
+                    thinking: None,
                 });
             }
         }

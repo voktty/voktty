@@ -111,6 +111,8 @@ pub struct HistoryMessage {
     pub tool_output: Option<String>,
     pub is_error: bool,
     pub redacted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
