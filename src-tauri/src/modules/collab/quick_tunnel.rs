@@ -137,7 +137,7 @@ fn extract_public_url(line: &str) -> Option<String> {
     None
 }
 
-pub(super) fn verified_executable(custom_path: Option<&str>) -> Result<PathBuf, String> {
+pub(crate) fn verified_executable(custom_path: Option<&str>) -> Result<PathBuf, String> {
     let status = super::requirements::detect_cloudflared(custom_path);
     if !status.installed {
         return Err(status

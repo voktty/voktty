@@ -3,7 +3,7 @@ pub(crate) mod launch;
 pub mod modules;
 
 use modules::{
-    agent, agent_history, aliases, api_client, collab, control, dap, docker, extensions, fs, git,
+    agent, agent_history, aliases, api_client, collab, companion, control, dap, docker, extensions, fs, git,
     git_review, harness, history, lsp, mcp, net, pty, quota, rdp, remote, secrets, serial, shell,
     ssh_native, tray, tunnel, vibrancy, web_server, workspace,
 };
