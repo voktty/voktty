@@ -7,6 +7,7 @@ import {
   encodeBase64Url,
 } from "@/modules/companion/transport";
 import { useRef, useState } from "react";
+import type { IScannerControls } from "@zxing/browser";
 
 type Invitation = {
   protocol: number;
@@ -89,7 +90,10 @@ export function CompanionMobileApp() {
   const [payload, setPayload] = useState("");
   const [state, setState] = useState<"idle" | "connecting" | "pending" | "approved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
   const transport = useRef<CompanionTransport | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerRef = useRef<IScannerControls | null>(null);
 
   const connect = async () => {
     setState("connecting");
@@ -141,6 +145,31 @@ export function CompanionMobileApp() {
     } catch (reason) {
       setState("error");
       setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
+
+  const stopScanner = () => {
+    scannerRef.current?.stop();
+    scannerRef.current = null;
+    setScanning(false);
+  };
+
+  const scan = async () => {
+    setError(null);
+    setScanning(true);
+    try {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const { BrowserQRCodeReader } = await import("@zxing/browser");
+      if (!videoRef.current) throw new Error("camera");
+      const reader = new BrowserQRCodeReader();
+      scannerRef.current = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
+        if (!result) return;
+        setPayload(result.getText());
+        stopScanner();
+      });
+    } catch {
+      stopScanner();
+      setError(t("companion.mobile.cameraError"));
     }
   };
 
@@ -196,9 +225,21 @@ export function CompanionMobileApp() {
                   ? t("companion.mobile.connecting")
                   : t("companion.mobile.connect")}
               </Button>
+              {scanning ? (
+                <div className="mt-3">
+                  <video ref={videoRef} className="aspect-square w-full rounded-xl bg-black" muted playsInline />
+                  <Button className="mt-2 w-full" variant="outline" onClick={stopScanner}>
+                    {t("companion.mobile.stopScanning")}
+                  </Button>
+                </div>
+              ) : (
+                <Button className="mt-2 w-full" variant="outline" onClick={() => void scan()}>
+                  {t("companion.mobile.scanQr")}
+                </Button>
+              )}
               {state === "error" && error ? (
                 <p className="mt-3 text-center text-xs text-destructive">
-                  {t("companion.mobile.connectionError")}
+                  {error}
                 </p>
               ) : null}
             </div>

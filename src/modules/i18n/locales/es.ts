@@ -973,6 +973,9 @@ export const es: TranslationSchema = {
       waitingForApproval: "Esperando aprobación en tu escritorio.",
       paired: "Emparejado correctamente. El escritorio hará disponibles aquí los agentes activos.",
       connectionError: "No se pudo enviar la solicitud. Comprueba el payload y el túnel.",
+      scanQr: "Escanear código QR de emparejamiento",
+      stopScanning: "Dejar de escanear",
+      cameraError: "No se puede acceder a la cámara. Pega el payload de emparejamiento.",
     },
   },
   docker: {
