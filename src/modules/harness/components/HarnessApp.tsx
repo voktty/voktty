@@ -205,7 +205,6 @@ import {
   planTitle,
   planTurnPrompt,
 } from "../lib/plan";
-import { IS_MAC } from "../lib/platform";
 import { removeProjectData } from "../lib/projectData";
 import {
   addTerminalToDock,
@@ -5416,9 +5415,7 @@ export function HarnessApp({
 
   return (
     <div
-      className={`flex h-full text-content ${
-        IS_MAC ? "bg-background-base/40" : "bg-background-base"
-      }`}
+      className="voktty-harness-root flex h-full bg-background text-foreground"
     >
       <Sidebar
         cwd={sidebarCwd}

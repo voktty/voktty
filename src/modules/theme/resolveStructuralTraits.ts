@@ -1,11 +1,13 @@
 import {
   getBuiltinAppearancePack,
+  getBuiltinMaterialProfile,
   getBuiltinSurfaceProfile,
   getBuiltinTypographyProfile,
 } from "./packs";
 import { getSkin } from "./skins/skinRegistry";
 import type {
   AppearancePack,
+  MaterialProfile,
   StructuralTraits,
   SurfaceProfile,
   Theme,
@@ -48,6 +50,7 @@ export type ResolvedAppearance = {
   pack: AppearancePack | null;
   surfaceProfile: SurfaceProfile | null;
   typographyProfile: TypographyProfile | null;
+  materialProfile: MaterialProfile;
 };
 
 export function resolveStructuralTraits(
@@ -74,6 +77,9 @@ export function resolveStructuralTraits(
   let surfaceProfile: SurfaceProfile | null = pack?.surfaceProfileId
     ? (getBuiltinSurfaceProfile(pack.surfaceProfileId) ?? null)
     : null;
+  const materialProfile =
+    getBuiltinMaterialProfile(pack?.materialProfileId ?? "solid") ??
+    getBuiltinMaterialProfile("solid")!;
 
   const themeTypoId =
     input.variation?.typographyProfileId ?? input.theme?.typographyProfileId;
@@ -208,12 +214,14 @@ export function resolveStructuralTraits(
     pack,
     surfaceProfile,
     typographyProfile,
+    materialProfile,
   };
 }
 
 export function applyStructuralTraits(
   traits: StructuralTraits,
   surfaceProfile?: SurfaceProfile | null,
+  materialProfile?: MaterialProfile,
 ): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
@@ -232,6 +240,12 @@ export function applyStructuralTraits(
   root.setAttribute("data-elevation", traits.elevationStyle);
   root.setAttribute("data-focus-style", traits.focusStyle);
   root.setAttribute("data-density", traits.density);
+  const material = materialProfile ?? getBuiltinMaterialProfile("solid")!;
+  root.setAttribute("data-material", material.id);
+  root.style.setProperty("--material-chrome-opacity", String(material.chromeOpacity));
+  root.style.setProperty("--material-chrome-blur", material.chromeBlur);
+  root.style.setProperty("--material-chrome-saturation", String(material.chromeSaturation));
+  root.style.setProperty("--material-border-opacity", String(material.borderOpacity));
   if (traits.windowCorners) {
     root.setAttribute("data-window-corners", traits.windowCorners);
   } else {

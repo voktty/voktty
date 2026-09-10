@@ -59,6 +59,7 @@ export const es: TranslationSchema = {
       vokttyDefault: {
         default: "Estudio Obsidian moderno con transparencia acrílica sutil y colores calibrados.",
         fluent: "Tema Windows Fluent Desktop con elevación Carbon y superficies limpias.",
+        liquid: "Navegación de vidrio adaptativo con superficies de trabajo sólidas y enfocadas.",
         nord: "Paleta ártica con matices azulados del norte.",
         dracula: "El clásico tema oscuro púrpura de alto contraste.",
         "tokyo-night": "Tema oscuro sereno con tendencia azul.",

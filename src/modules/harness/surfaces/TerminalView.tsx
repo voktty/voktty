@@ -14,8 +14,9 @@ import {
   scanOscCwd,
   type TerminalMetaPatch,
 } from "../lib/terminalTab";
-import { isLightScheme } from "../lib/appearance";
 import { THEME_CHANGED_EVENT } from "@/modules/theme";
+import { buildTerminalTheme } from "@/styles/terminalTheme";
+import { readTerminalTokens } from "@/styles/tokens";
 import {
   applyTerminalChrome,
   fitTerminal,
@@ -32,70 +33,6 @@ type Props = {
   onMetaChange?: (patch: TerminalMetaPatch) => void;
 };
 
-function cssColor(expr: string, fallback: string): string {
-  const probe = document.createElement("span");
-  probe.style.color = expr;
-  document.body.appendChild(probe);
-  const color = getComputedStyle(probe).color;
-  probe.remove();
-  return color || fallback;
-}
-
-const ANSI_DARK = {
-  black: "#1d2428",
-  red: "#f87171",
-  green: "#4ade80",
-  yellow: "#fbbf24",
-  blue: "#60a5fa",
-  magenta: "#c084fc",
-  cyan: "#22d3ee",
-  white: "#e8eef2",
-  brightBlack: "#64748b",
-  brightRed: "#fca5a5",
-  brightGreen: "#86efac",
-  brightYellow: "#fde68a",
-  brightBlue: "#93c5fd",
-  brightMagenta: "#d8b4fe",
-  brightCyan: "#67e8f9",
-  brightWhite: "#f8fafc",
-};
-
-// One-Light-family palette tuned for a near-white canvas.
-const ANSI_LIGHT = {
-  black: "#383a42",
-  red: "#e45649",
-  green: "#50a14f",
-  yellow: "#c18401",
-  blue: "#4078f2",
-  magenta: "#a626a4",
-  cyan: "#0184bc",
-  white: "#fafafa",
-  brightBlack: "#7c8591",
-  brightRed: "#df6b60",
-  brightGreen: "#68b567",
-  brightYellow: "#d19a2f",
-  brightBlue: "#5c89f5",
-  brightMagenta: "#b54bb3",
-  brightCyan: "#1f9cc9",
-  brightWhite: "#ffffff",
-};
-
-function terminalTheme(light: boolean) {
-  return {
-    background: "#00000000",
-    foreground: cssColor("var(--color-content)", light ? "#2e2e2e" : "#e8eef2"),
-    cursor: cssColor("var(--color-accent)", light ? "#4078f2" : "#4da3f5"),
-    cursorAccent: light ? "#ffffff" : "#000000",
-    selectionBackground: light
-      ? "rgba(0,0,0,0.18)"
-      : "rgba(255,255,255,0.18)",
-    selectionInactiveBackground: light
-      ? "rgba(0,0,0,0.08)"
-      : "rgba(255,255,255,0.08)",
-    ...(light ? ANSI_LIGHT : ANSI_DARK),
-  };
-}
-
 function monoFont(): string {
   const fromCss = getComputedStyle(document.documentElement)
     .getPropertyValue("--font-mono")
@@ -103,12 +40,21 @@ function monoFont(): string {
   return fromCss || "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace";
 }
 
-// OSC 10/11/12 replies so CLIs (vim, tmux, …) pick matching colors.
-const OSC_DARK = { fg: "#e8eef2", bg: "#141b1f", cursor: "#4da3f5" };
-const OSC_LIGHT = { fg: "#383a42", bg: "#fafafa", cursor: "#4078f2" };
+function oscColor(value: string, fallback: string): string {
+  const hex = value.trim();
+  if (/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  const rgb = hex.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+  if (!rgb) return fallback;
+  return `#${rgb.slice(1).map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`;
+}
 
 function oscColors() {
-  return isLightScheme() ? OSC_LIGHT : OSC_DARK;
+  const tokens = readTerminalTokens();
+  return {
+    fg: oscColor(tokens.foreground, "#f4f4f6"),
+    bg: oscColor(tokens.background, "#121214"),
+    cursor: oscColor(tokens.cursor, "#0a84ff"),
+  };
 }
 
 export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
@@ -136,7 +82,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
       scrollback: 5000,
       allowTransparency: true,
       smoothScrollDuration: 0,
-      theme: terminalTheme(isLightScheme()),
+      theme: buildTerminalTheme(),
       macOptionIsMeta: IS_MAC,
     });
     term.open(host);
@@ -218,7 +164,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
     );
 
     const onSchemeChange = () => {
-      term.options.theme = terminalTheme(isLightScheme());
+      term.options.theme = buildTerminalTheme();
     };
     window.addEventListener(THEME_CHANGED_EVENT, onSchemeChange);
 

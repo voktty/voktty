@@ -269,7 +269,7 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
   }, []);
 
   return (
-    <div className="h-full w-full bg-[#121215] text-white flex flex-col overflow-hidden select-text font-sans">
+    <div className="h-full w-full bg-background text-foreground flex flex-col overflow-hidden select-text font-sans">
       <SessionPane
         session={session}
         visible={true}
