@@ -243,7 +243,10 @@ mod tests {
     #[test]
     fn rejects_expired_pending_request() {
         let mut registry = registry();
-        registry.request(request(), 1, "request-1".to_string()).expect("pending");
-        assert_eq!(registry.approve("request-1", 10_001), Err(PairingError::Expired));
+        let pending = registry.request(request(), 1, "request-1".to_string()).expect("pending");
+        assert_eq!(
+            registry.approve("request-1", pending.expires_at_ms),
+            Err(PairingError::Expired)
+        );
     }
 }

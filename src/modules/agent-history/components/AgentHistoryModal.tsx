@@ -38,17 +38,6 @@ import { useTranslation } from "@/modules/i18n";
 import { useAgentHistoryStore } from "../store/agentHistoryStore";
 import type { HistorySession } from "../types";
 
-const AGENT_BADGES: Record<string, { bg: string; color: string; label: string }> = {
-  claude: { bg: "bg-purple-500/15", color: "text-purple-400", label: "Claude Code" },
-  codex: { bg: "bg-emerald-500/15", color: "text-emerald-400", label: "Codex CLI" },
-  cursor: { bg: "bg-sky-500/15", color: "text-sky-400", label: "Cursor / Agy" },
-  voktty: { bg: "bg-blue-500/15", color: "text-blue-400", label: "Voktty AI" },
-  gemini: { bg: "bg-amber-500/15", color: "text-amber-400", label: "Gemini CLI" },
-  kimi: { bg: "bg-teal-500/15", color: "text-teal-400", label: "Kimi Code" },
-  opencode: { bg: "bg-indigo-500/15", color: "text-indigo-400", label: "OpenCode" },
-  grok: { bg: "bg-rose-500/15", color: "text-rose-400", label: "Grok Build" },
-};
-
 const DEFAULT_WIDTH = 1180;
 const DEFAULT_HEIGHT = 740;
 const MIN_WIDTH = 750;
@@ -75,6 +64,16 @@ export function AgentHistoryModal() {
   } = useAgentHistoryStore();
 
   const { t } = useTranslation();
+  const agentBadges: Record<string, { bg: string; color: string; label: string }> = {
+    claude: { bg: "bg-purple-500/15", color: "text-purple-400", label: t("agentHistory.agents.claude") },
+    codex: { bg: "bg-emerald-500/15", color: "text-emerald-400", label: t("agentHistory.agents.codex") },
+    cursor: { bg: "bg-sky-500/15", color: "text-sky-400", label: t("agentHistory.agents.cursor") },
+    voktty: { bg: "bg-blue-500/15", color: "text-blue-400", label: t("agentHistory.agents.voktty") },
+    gemini: { bg: "bg-amber-500/15", color: "text-amber-400", label: t("agentHistory.agents.gemini") },
+    kimi: { bg: "bg-teal-500/15", color: "text-teal-400", label: t("agentHistory.agents.kimi") },
+    opencode: { bg: "bg-indigo-500/15", color: "text-indigo-400", label: t("agentHistory.agents.opencode") },
+    grok: { bg: "bg-rose-500/15", color: "text-rose-400", label: t("agentHistory.agents.grok") },
+  };
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [isMaximized, setIsMaximized] = useState(false);
@@ -280,10 +279,13 @@ export function AgentHistoryModal() {
         >
           <div className="flex items-center gap-2 font-medium text-xs text-foreground">
             <HugeiconsIcon icon={CpuIcon} size={15} className="text-primary" />
-            <span>Wake · Voktty Agent History</span>
+            <span>{t("agentHistory.modalTitle")}</span>
             {stats && (
               <span className="text-[11px] text-muted-foreground ml-1">
-                ({stats.total_sessions} sessions · {stats.total_messages} messages)
+                ({t("agentHistory.sessionStats", {
+                  sessions: stats.total_sessions,
+                  messages: stats.total_messages,
+                })})
               </span>
             )}
           </div>
@@ -358,7 +360,7 @@ export function AgentHistoryModal() {
                 ref={inputRef}
                 value={localSearch}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search (Ctrl+K)..."
+                placeholder={t("agentHistory.searchShortcutPlaceholder")}
                 className="h-7 pl-7 pr-6 text-xs bg-background border-border/70 rounded-md focus-visible:ring-1 focus-visible:ring-primary/40"
               />
               {localSearch && (
@@ -388,7 +390,7 @@ export function AgentHistoryModal() {
               >
                 <div className="flex items-center gap-2">
                   <HugeiconsIcon icon={Clock01Icon} size={13} />
-                  <span>All Sessions</span>
+                  <span>{t("agentHistory.allSessions")}</span>
                 </div>
                 <span className="text-[10px] text-muted-foreground font-mono">{sessions.length}</span>
               </Button>
@@ -397,10 +399,10 @@ export function AgentHistoryModal() {
             {/* Agents List Section */}
             <div className="space-y-1">
               <span className="px-2 text-[10.5px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Agents
+                {t("agentHistory.agentsLabel")}
               </span>
               <div className="space-y-0.5 mt-1">
-                {Object.entries(AGENT_BADGES).map(([key, badge]) => {
+                {Object.entries(agentBadges).map(([key, badge]) => {
                   const count = agentCounts[key] || 0;
                   if (count === 0 && key !== "claude" && key !== "codex") return null;
                   const isSelected = selectedAgent === key && !selectedProject;
@@ -434,7 +436,7 @@ export function AgentHistoryModal() {
             {Object.keys(projectCounts).length > 0 && (
               <div className="space-y-1">
                 <span className="px-2 text-[10.5px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Projects
+                  {t("agentHistory.projectsLabel")}
                 </span>
                 <div className="space-y-0.5 mt-1 max-h-48 overflow-y-auto">
                   {Object.entries(projectCounts).map(([proj, count]) => {
@@ -472,13 +474,13 @@ export function AgentHistoryModal() {
             <div className="flex items-center justify-between border-b border-border/40 px-3 py-2 shrink-0 bg-muted/10">
               <span className="text-xs font-semibold text-foreground truncate">
                 {selectedProject
-                  ? `📁 ${selectedProject}`
+                  ? selectedProject
                   : selectedAgent !== "all"
-                    ? AGENT_BADGES[selectedAgent]?.label || selectedAgent
-                    : "All Sessions"}
+                    ? agentBadges[selectedAgent]?.label || selectedAgent
+                    : t("agentHistory.allSessions")}
               </span>
               <span className="text-[10.5px] text-muted-foreground font-mono">
-                {filteredSessions.length} sessions
+                {filteredSessions.length} {t("agentHistory.sessionsCount")}
               </span>
             </div>
 
@@ -506,7 +508,7 @@ export function AgentHistoryModal() {
                 </div>
               ) : (
                 filteredSessions.map((s) => {
-                  const badge = AGENT_BADGES[s.agent] || {
+                  const badge = agentBadges[s.agent] || {
                     bg: "bg-zinc-500/15",
                     color: "text-zinc-400",
                     label: s.agent,
@@ -545,7 +547,7 @@ export function AgentHistoryModal() {
                           </span>
 
                           <div className="flex items-center justify-between text-[10.5px] text-muted-foreground mt-0.5">
-                            <span className="truncate max-w-[130px]">📁 {s.project_name}</span>
+                            <span className="truncate max-w-[130px]">{s.project_name}</span>
                             <span>{s.message_count} {t("agentHistory.msgs")}</span>
                           </div>
                         </div>
@@ -615,7 +617,7 @@ export function AgentHistoryModal() {
                           {activeSession.git_branch}
                         </span>
                       )}
-                      <span>💬 {activeSession.message_count} messages</span>
+                      <span>{activeSession.message_count} {t("agentHistory.messagesCount")}</span>
                     </div>
                   </div>
 
@@ -631,7 +633,7 @@ export function AgentHistoryModal() {
                       title={t("agentHistory.findInTranscript")}
                     >
                       <HugeiconsIcon icon={Search01Icon} size={12} />
-                      <span>Find</span>
+                      <span>{t("agentHistory.find")}</span>
                       <kbd className="hidden sm:inline text-[9px] opacity-60 ml-0.5 font-mono">Ctrl+F</kbd>
                     </Button>
 
@@ -655,7 +657,7 @@ export function AgentHistoryModal() {
                       title={t("agentHistory.copyTranscriptTooltip")}
                     >
                       <HugeiconsIcon icon={Download01Icon} size={12} />
-                      <span>Export</span>
+                      <span>{t("agentHistory.export")}</span>
                     </Button>
 
                     <Button
@@ -802,14 +804,14 @@ export function AgentHistoryModal() {
                                       icon={expandedTools[msg.id] ? ArrowDown01Icon : ArrowRight01Icon}
                                       size={12}
                                     />
-                                    <span>Tool: {msg.tool_name}</span>
+                                    <span>{t("agentHistory.tool")} {msg.tool_name}</span>
                                   </button>
 
                                   {expandedTools[msg.id] && (
                                     <div className="mt-2 space-y-1.5 overflow-x-auto text-[10.5px]">
                                       {msg.tool_input && (
                                         <div>
-                                          <div className="text-muted-foreground">Input:</div>
+                                          <div className="text-muted-foreground">{t("agentHistory.input")}</div>
                                           <pre className="p-1.5 rounded bg-background border border-border/40 whitespace-pre-wrap">
                                             {msg.tool_input}
                                           </pre>
@@ -818,7 +820,7 @@ export function AgentHistoryModal() {
 
                                       {msg.tool_output && (
                                         <div>
-                                          <div className="text-muted-foreground">Output:</div>
+                                          <div className="text-muted-foreground">{t("agentHistory.output")}</div>
                                           <pre className="p-1.5 rounded bg-background border border-border/40 whitespace-pre-wrap">
                                             {msg.tool_output}
                                           </pre>

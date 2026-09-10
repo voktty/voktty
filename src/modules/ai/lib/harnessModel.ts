@@ -1,6 +1,7 @@
 import type { LanguageModel } from "ai";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { t } from "@/modules/i18n";
 
 export function createHarnessModel(modelId: string): LanguageModel {
   return new HarnessLanguageModel(modelId) as unknown as LanguageModel;
@@ -17,20 +18,20 @@ export class HarnessLanguageModel {
     this.modelId = modelId;
   }
 
-  private resolveAgentBinary(): { binary: string; label: string } {
+  private resolveAgentBinary(): { binary: string; labelKey: string } {
     if (this.modelId.includes("codex")) {
-      return { binary: "codex", label: "Codex" };
+      return { binary: "codex", labelKey: "agentHistory.agents.codex" };
     }
     if (this.modelId.includes("agy") || this.modelId.includes("cursor")) {
-      return { binary: "cursor", label: "Agy / Cursor" };
+      return { binary: "cursor", labelKey: "agentHistory.agents.cursor" };
     }
     if (this.modelId.includes("opencode")) {
-      return { binary: "opencode", label: "OpenCode" };
+      return { binary: "opencode", labelKey: "agentHistory.agents.opencode" };
     }
     if (this.modelId.includes("grok")) {
-      return { binary: "grok", label: "Grok" };
+      return { binary: "grok", labelKey: "agentHistory.agents.grok" };
     }
-    return { binary: "claude", label: "Claude" };
+    return { binary: "claude", labelKey: "agentHistory.agents.claude" };
   }
 
   private formatPrompt(prompt: any[]): string {
@@ -83,7 +84,7 @@ export class HarnessLanguageModel {
     stream: ReadableStream<any>;
     rawCall: { rawPrompt: unknown; rawSettings: Record<string, unknown> };
   }> {
-    const { binary, label } = this.resolveAgentBinary();
+    const { binary, labelKey } = this.resolveAgentBinary();
     const formattedPrompt = this.formatPrompt(options.prompt);
     const sessionId = `harness-chat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -149,7 +150,11 @@ export class HarnessLanguageModel {
         } catch (err: any) {
           cleanup();
           // Fallback message if local CLI is not installed or available
-          const msg = `Local ${label} agent execution error: ${err?.message || String(err)}. Ensure '${binary}' CLI is installed and logged in.`;
+          const msg = t("agentHistory.harnessExecutionError", {
+            agent: t(labelKey),
+            error: err?.message || String(err),
+            binary,
+          });
           controller.enqueue({
             type: "text-delta",
             textDelta: msg,
