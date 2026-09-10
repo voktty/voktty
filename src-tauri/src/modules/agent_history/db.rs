@@ -543,6 +543,7 @@ mod tests {
             tool_output: None,
             is_error: false,
             redacted: false,
+            thinking: None,
         };
 
         let m2 = HistoryMessage {
@@ -557,6 +558,7 @@ mod tests {
             tool_output: Some("file contents".to_string()),
             is_error: false,
             redacted: false,
+            thinking: None,
         };
 
         db.replace_session_messages("test_s1", &[m1, m2]).unwrap();
