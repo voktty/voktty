@@ -62,10 +62,10 @@ impl AgentHistoryAdapter for GrokAdapter {
         let file_name = path.file_name()?.to_str()?;
         let session_id = format!("grok_{}", file_name.replace('.', "_"));
 
-        let created_at = std::fs::metadata(path)
-            .ok()?
+        let metadata = std::fs::metadata(path).ok()?;
+        let created_at = metadata
             .created()
-            .or_else(|_| std::fs::metadata(path).ok()?.modified())
+            .or_else(|_| metadata.modified())
             .ok()?
             .duration_since(std::time::UNIX_EPOCH)
             .ok()?
@@ -84,7 +84,7 @@ impl AgentHistoryAdapter for GrokAdapter {
             message_count: 0,
             is_active: false,
             file_path: Some(path.to_string_lossy().to_string()),
-            source_hash: format!("{}_{}", created_at, path.to_string_lossy()),
+            source_hash: Some(format!("{}_{}", created_at, path.to_string_lossy())),
             can_resume: true,
             resume_command: Some("grok".to_string()),
         };
