@@ -60,7 +60,7 @@ export function HarnessStack({ tabs, activeId, placements }: Props) {
           >
             <Suspense
               fallback={
-                <div className="h-full w-full bg-[#121215] flex items-center justify-center text-zinc-500 font-mono text-xs">
+                <div className="h-full w-full bg-background flex items-center justify-center text-muted-foreground font-mono text-xs">
                   {t("harness.chrome.loadingAgentHarness")}
                 </div>
               }

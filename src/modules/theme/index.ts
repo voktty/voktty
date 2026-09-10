@@ -26,9 +26,12 @@ export {
   getBuiltinSurfaceProfile,
   listBuiltinTypographyProfiles,
   getBuiltinTypographyProfile,
+  listBuiltinMaterialProfiles,
+  getBuiltinMaterialProfile,
   BUILTIN_APPEARANCE_PACKS,
   BUILTIN_SURFACE_PROFILES,
   BUILTIN_TYPOGRAPHY_PROFILES,
+  BUILTIN_MATERIAL_PROFILES,
 } from "./packs";
 export {
   resolveStructuralTraits,
@@ -45,10 +48,10 @@ export {
   type AppearancePack,
   type SurfaceProfile,
   type TypographyProfile,
+  type MaterialProfile,
   type FileIconTheme,
   type ProductIconTheme,
   type ThemeSkin,
   type SkinFontDefinition,
 } from "./types";
 export * from "./skins";
-

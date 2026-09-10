@@ -149,6 +149,21 @@ export type TypographyProfile = {
   fontSmoothing?: "antialiased" | "subpixel-antialiased" | "none";
 };
 
+/**
+ * Describes how chrome is painted independently from the color palette. The
+ * profile is deliberately small: content surfaces stay solid while chrome can
+ * opt into a platform-appropriate material.
+ */
+export type MaterialProfile = {
+  id: string;
+  name: string;
+  description?: string;
+  chromeOpacity: number;
+  chromeBlur: string;
+  chromeSaturation: number;
+  borderOpacity: number;
+};
+
 export type StructuralTraits = {
   elevationStyle: "soft" | "bevel" | "flat";
   pillRadius: string;
@@ -205,6 +220,7 @@ export type AppearancePack = {
   windowCorners?: "round" | "square" | "default";
   surfaceProfileId?: string;
   typographyProfileId?: string;
+  materialProfileId?: string;
   fileIconThemeId?: string;
   productIconThemeId?: string;
   elevationStyle?: "soft" | "bevel" | "flat";
