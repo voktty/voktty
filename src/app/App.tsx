@@ -33,6 +33,7 @@ import {
   AgentNotificationsBridge,
   displayAgent,
   findAgentLauncher,
+  matchAgentFromTitle,
   nextAttentionTarget,
   useAgentStore,
   validateAgentLaunchCommand,
@@ -3352,7 +3353,23 @@ export default function App() {
       const tab = tabsRef.current.find(
         (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
       );
-      if (tab && tab.kind === "terminal" && !tab.customTitle && tab.title !== title) {
+      if (!tab || tab.kind !== "terminal") return;
+
+      // If the tab already has a customTitle (e.g. launched via agent panel),
+      // skip — the user-set or system-set label takes precedence.
+      if (tab.customTitle) return;
+
+      // Auto-detect agent binary names in the terminal title.
+      // When a user types "claude" or "codex" in a regular terminal,
+      // the shell's OSC title reports the process name — promote it to
+      // a sticky customTitle so it survives subsequent cwd changes.
+      const agent = matchAgentFromTitle(title);
+      if (agent) {
+        updateTab(tab.id, { title: agent.label, customTitle: agent.label });
+        return;
+      }
+
+      if (tab.title !== title) {
         updateTab(tab.id, { title });
       }
     },

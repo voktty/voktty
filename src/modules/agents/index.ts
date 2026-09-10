@@ -10,6 +10,7 @@ export {
   createAgentPanePlan,
   DEFAULT_AGENT_LAUNCH_COMMANDS,
   findAgentLauncher,
+  matchAgentFromTitle,
   normalizeAgentLaunchCommands,
   validateAgentLaunchCommand,
 } from "./lib/launcher";
