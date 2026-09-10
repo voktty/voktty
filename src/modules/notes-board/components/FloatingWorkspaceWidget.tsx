@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { cn } from "@/lib/utils";
 import {
-  ArrowDown01Icon,
-  ArrowUp01Icon,
   Cancel01Icon,
   GitCompareIcon,
   Layout01Icon,
   Note01Icon,
+  Maximize01Icon,
+  Minimize01Icon,
+  PinIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
@@ -44,15 +46,19 @@ export function FloatingWorkspaceWidget({
   const height = useNotesBoardStore((s) => s.height);
   const position = useNotesBoardStore((s) => s.position);
   const setPosition = useNotesBoardStore((s) => s.setPosition);
-  const resetPosition = useNotesBoardStore((s) => s.resetPosition);
+  const resetStorePosition = useNotesBoardStore((s) => s.resetPosition);
   const requestNewNote = useNotesBoardStore((s) => s.requestNewNote);
   const cardCount = useKanbanStore((s) => s.cards.length);
   const sourceControl = useSourceControl(cwd ?? null);
   const changedCount = sourceControl.changedCount;
-  const [isDragging, setIsDragging] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const { t } = useTranslation();
 
-  const isFloating = position !== null;
+  const { position: dragPos, dragHandleProps, resetPosition, setPosition: setDragPos } = useDraggableModal({
+    initialPosition: position ?? { x: 0, y: 0 },
+    onPositionChange: (pos) => setPosition(pos),
+    resetOnClose: false,
+  });
 
   // Keyboard shortcuts: Escape to close, Alt+N for new note, Alt+D for git review
   useEffect(() => {
@@ -88,144 +94,110 @@ export function FloatingWorkspaceWidget({
     };
   }, [onClose, requestNewNote, setTab]);
 
-  // Keep floating window clamped within viewport on resize
-  useEffect(() => {
-    const onResize = () => {
-      if (!position) return;
-      const maxX = Math.max(8, window.innerWidth - width - 8);
-      const maxY = Math.max(8, window.innerHeight - height - 8);
-      if (position.x > maxX || position.y > maxY) {
-        setPosition({
-          x: Math.min(position.x, maxX),
-          y: Math.min(position.y, maxY),
-        });
-      }
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [position, width, height, setPosition]);
-
-  const handleHeaderMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    const target = e.target as HTMLElement;
-    if (target.closest("button, input, textarea, a, [role=button], [role=tab]")) {
-      return;
-    }
-
-    e.preventDefault();
-    const rect = rootRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const initialLeft = rect.left;
-    const initialTop = rect.top;
-    const elWidth = rect.width;
-    const elHeight = rect.height;
-
-    setIsDragging(true);
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-
-      const maxX = Math.max(8, window.innerWidth - elWidth - 8);
-      const maxY = Math.max(8, window.innerHeight - elHeight - 8);
-      const nextX = Math.max(8, Math.min(maxX, initialLeft + deltaX));
-      const nextY = Math.max(8, Math.min(maxY, initialTop + deltaY));
-
-      setPosition({ x: nextX, y: nextY });
-    };
-
-    const onMouseUp = () => {
-      setIsDragging(false);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
-
-  const handleToggleFloat = useCallback(() => {
-    if (isFloating) {
+  const toggleMaximize = useCallback(() => {
+    if (isMaximized) {
+      setIsMaximized(false);
       resetPosition();
     } else {
-      const centerX = Math.max(8, Math.round((window.innerWidth - width) / 2));
-      const centerY = Math.max(8, Math.round((window.innerHeight - height) / 2));
-      setPosition({ x: centerX, y: centerY });
+      setIsMaximized(true);
+      setDragPos({ x: 0, y: 0 });
     }
-  }, [isFloating, resetPosition, setPosition, width, height]);
+  }, [isMaximized, resetPosition, setDragPos]);
 
-  const handleHeaderDoubleClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("button, input, textarea, a, [role=button], [role=tab]")) {
-      return;
-    }
-    handleToggleFloat();
-  };
+  const handleResetCenter = useCallback(() => {
+    resetPosition();
+    resetStorePosition();
+  }, [resetPosition, resetStorePosition]);
 
   const workspaceTabs: {
     id: WorkspaceTab;
     label: string;
     icon: typeof Note01Icon;
     badge?: number;
-  }[] = [
-    { id: "notes", label: t("notesBoard.tabNotes"), icon: Note01Icon },
-    { id: "kanban", label: t("notesBoard.tabKanban"), icon: Layout01Icon, badge: cardCount },
-    {
-      id: "review",
-      label: t("notesBoard.tabReview"),
-      icon: GitCompareIcon,
-      badge: changedCount > 0 ? changedCount : undefined,
-    },
-  ];
+  }[] = useMemo(
+    () => [
+      { id: "notes", label: t("notesBoard.tabNotes"), icon: Note01Icon },
+      { id: "kanban", label: t("notesBoard.tabKanban"), icon: Layout01Icon, badge: cardCount },
+      {
+        id: "review",
+        label: t("notesBoard.tabReview"),
+        icon: GitCompareIcon,
+        badge: changedCount > 0 ? changedCount : undefined,
+      },
+    ],
+    [cardCount, changedCount, t],
+  );
 
   return (
     <div
-      ref={rootRef}
-      tabIndex={0}
-      role="region"
-      aria-label={t("notesBoard.regionLabel")}
-      style={
-        isFloating
-          ? {
-              left: position.x,
-              top: position.y,
-              width: Math.min(width, window.innerWidth - 16),
-              height: `min(${height}px, calc(100vh - 48px))`,
-            }
-          : {
-              height: `min(${height}px, calc(100vh - 64px))`,
-            }
-      }
-      className={cn(
-        "z-50 flex flex-col overflow-hidden rounded-xl border border-border/70 bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-xl outline-none ring-1 ring-border/25 transition-all duration-150",
-        isFloating
-          ? "fixed"
-          : "fixed bottom-8.5 left-3 right-3 animate-in fade-in slide-in-from-bottom-2",
-        isDragging && "select-none ring-2 ring-primary/40",
-      )}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in-0 duration-100 font-sans"
+      onClick={onClose}
     >
-      {/* Header bar - serves as drag handle */}
       <div
-        onMouseDown={handleHeaderMouseDown}
-        onDoubleClick={handleHeaderDoubleClick}
-        className="flex h-10 shrink-0 items-center justify-between border-b border-border/40 px-3 bg-muted/20 cursor-move select-none"
-        title={t("notesBoard.dragToMove")}
+        ref={rootRef}
+        tabIndex={0}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("notesBoard.regionLabel")}
+        style={{
+          width: isMaximized ? "100vw" : `${Math.min(width, window.innerWidth - 32)}px`,
+          height: isMaximized ? "100vh" : `min(${height}px, calc(100vh - 48px))`,
+          transform: isMaximized
+            ? "none"
+            : dragPos.x || dragPos.y
+              ? `translate3d(${dragPos.x}px, ${dragPos.y}px, 0)`
+              : undefined,
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-[#161618] text-[#ececed] shadow-2xl outline-none select-none duration-100 animate-in zoom-in-95",
+          isMaximized && "rounded-none border-none",
+        )}
       >
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-md bg-muted/60 p-0.5 text-xs">
+        {/* Fluent / Wake Top Header - Drag Handle */}
+        <div
+          {...dragHandleProps}
+          className="flex h-10 shrink-0 items-center justify-between border-b border-border/40 bg-[#121214]/90 px-3.5 select-none cursor-grab active:cursor-grabbing"
+          title={t("notesBoard.dragToMove")}
+        >
+          {/* Traffic Dots & Title */}
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1.5 mr-1.5" data-no-drag>
+              <span
+                className="size-3 rounded-full bg-rose-500/80 inline-block hover:opacity-80 cursor-pointer transition-opacity"
+                onClick={onClose}
+                title={t("notesBoard.closeEsc")}
+              />
+              <span
+                className="size-3 rounded-full bg-amber-500/80 inline-block hover:opacity-80 cursor-pointer transition-opacity"
+                onClick={handleResetCenter}
+                title="Reset Position"
+              />
+              <span
+                className="size-3 rounded-full bg-emerald-500/80 inline-block hover:opacity-80 cursor-pointer transition-opacity"
+                onClick={toggleMaximize}
+                title={isMaximized ? "Restore" : "Maximize"}
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-foreground">
+              <HugeiconsIcon icon={Layout01Icon} size={14} className="text-primary/90" />
+              <span>Workspace</span>
+            </div>
+          </div>
+
+          {/* Central Segment Tabs */}
+          <div className="flex items-center gap-1 rounded-lg bg-[#1a1a1d] p-0.5 border border-border/40 text-xs" data-no-drag>
             {workspaceTabs.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setTab(item.id)}
                 className={cn(
-                  "flex items-center gap-1.5 cursor-pointer rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  "flex items-center gap-1.5 cursor-pointer rounded-md px-2.5 py-1 text-xs transition-colors font-medium",
                   activeTab === item.id
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-[#28282d] text-foreground font-semibold shadow-xs"
+                    : "text-muted-foreground hover:bg-[#202024] hover:text-foreground",
                 )}
               >
                 <HugeiconsIcon icon={item.icon} size={12} />
@@ -245,73 +217,80 @@ export function FloatingWorkspaceWidget({
               </button>
             ))}
           </div>
+
+          {/* Window Control Buttons */}
+          <div className="flex items-center gap-1" data-no-drag>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer rounded-md"
+              onClick={handleResetCenter}
+              title="Center Window"
+            >
+              <HugeiconsIcon icon={PinIcon} size={12} />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 text-muted-foreground hover:bg-accent/50 hover:text-foreground cursor-pointer rounded-md"
+              onClick={toggleMaximize}
+              title={isMaximized ? "Restore" : "Maximize"}
+            >
+              <HugeiconsIcon
+                icon={isMaximized ? Minimize01Icon : Maximize01Icon}
+                size={12}
+              />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 text-muted-foreground hover:bg-destructive/15 hover:text-destructive cursor-pointer rounded-md"
+              onClick={onClose}
+              title={t("notesBoard.closeEsc")}
+            >
+              <HugeiconsIcon icon={Cancel01Icon} size={12} />
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
-            onClick={handleToggleFloat}
-            title={
-              isFloating
-                ? t("notesBoard.dockBelow")
-                : t("notesBoard.undockWindow")
-            }
-          >
-            <HugeiconsIcon
-              icon={isFloating ? ArrowDown01Icon : ArrowUp01Icon}
-              size={13}
+        {/* Main Tab Content Pane */}
+        <div className="flex-1 min-h-0 min-w-0 overflow-hidden bg-[#18181b]">
+          {activeTab === "review" ? (
+            <GitReviewTab
+              onRunCommand={onRunCommand}
+              cwd={cwd}
+              tabs={tabs}
+              onActivateAgent={onActivateAgent}
             />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 text-muted-foreground hover:bg-accent hover:text-destructive cursor-pointer"
-            onClick={onClose}
-            title={t("notesBoard.closeEsc")}
-          >
-            <HugeiconsIcon icon={Cancel01Icon} size={13} />
-          </Button>
+          ) : activeTab === "kanban" ? (
+            <KanbanTab
+              onRunCommand={onRunCommand}
+              cwd={cwd}
+              tabs={tabs}
+              onActivateAgent={onActivateAgent}
+            />
+          ) : (
+            <NotesTab
+              onRunCommand={onRunCommand}
+              cwd={cwd}
+              tabs={tabs}
+              onActivateAgent={onActivateAgent}
+            />
+          )}
         </div>
-      </div>
 
-      {/* Main Tab Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === "review" ? (
-          <GitReviewTab
-            onRunCommand={onRunCommand}
-            cwd={cwd}
-            tabs={tabs}
-            onActivateAgent={onActivateAgent}
-          />
-        ) : activeTab === "kanban" ? (
-          <KanbanTab
-            onRunCommand={onRunCommand}
-            cwd={cwd}
-            tabs={tabs}
-            onActivateAgent={onActivateAgent}
-          />
-        ) : (
-          <NotesTab
-            onRunCommand={onRunCommand}
-            cwd={cwd}
-            tabs={tabs}
-            onActivateAgent={onActivateAgent}
-          />
-        )}
-      </div>
-
-      {/* Subtle Footer */}
-      <div className="flex h-6 shrink-0 items-center justify-between border-t border-border/30 bg-muted/15 px-3 font-mono text-[10px] text-muted-foreground">
-        <span>{t("notesBoard.footerHint")}</span>
-        <div className="flex items-center gap-2">
-          <span>{t("notesBoard.newNoteShortcut")}</span>
-          <span>·</span>
-          <span>{t("notesBoard.newReviewShortcut")}</span>
-          <span>·</span>
-          <span>{t("notesBoard.escToClose")}</span>
+        {/* Fluent Bottom Status / Shortcut Bar */}
+        <div className="flex h-6 shrink-0 items-center justify-between border-t border-border/30 bg-[#121214]/90 px-3.5 font-mono text-[10px] text-muted-foreground select-none">
+          <span>{t("notesBoard.footerHint")}</span>
+          <div className="flex items-center gap-2">
+            <span>{t("notesBoard.newNoteShortcut")}</span>
+            <span>·</span>
+            <span>{t("notesBoard.newReviewShortcut")}</span>
+            <span>·</span>
+            <span>{t("notesBoard.escToClose")}</span>
+          </div>
         </div>
       </div>
     </div>
