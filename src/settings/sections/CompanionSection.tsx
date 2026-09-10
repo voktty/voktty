@@ -37,6 +37,7 @@ export function CompanionSection() {
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [status, setStatus] = useState<CompanionStatus | null>(null);
   const [pending, setPending] = useState<PendingPairing[]>([]);
+  const [qrCode, setQrCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +60,29 @@ export function CompanionSection() {
     }, 1500);
     return () => clearInterval(interval);
   }, [refreshStatus, status?.active]);
+
+  useEffect(() => {
+    if (!invitation) {
+      setQrCode(null);
+      return;
+    }
+    let cancelled = false;
+    void import("qrcode")
+      .then((module) => module.toDataURL(pairingPayload(invitation), {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 256,
+      }))
+      .then((value) => {
+        if (!cancelled) setQrCode(value);
+      })
+      .catch(() => {
+        if (!cancelled) setQrCode(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [invitation]);
 
   const start = async () => {
     setBusy(true);
@@ -139,6 +163,19 @@ export function CompanionSection() {
           <div className="mt-4 rounded-lg border border-border/40 bg-background/40 p-3">
             <p className="text-xs text-muted-foreground">{t("settings.companion.tunnel")}</p>
             <p className="mt-1 break-all font-mono text-xs">{invitation.publicUrl}</p>
+            {qrCode ? (
+              <div className="mt-3 inline-flex rounded-lg bg-white p-2">
+                <img
+                  src={qrCode}
+                  alt={t("settings.companion.qrCode")}
+                  className="size-48"
+                />
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                {t("settings.companion.generatingQr")}
+              </p>
+            )}
             <Button className="mt-3" size="sm" variant="secondary" onClick={() => void copy()}>
               <HugeiconsIcon icon={Copy01Icon} size={14} />
               {t("settings.companion.copyPayload")}

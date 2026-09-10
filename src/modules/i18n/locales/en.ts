@@ -149,6 +149,8 @@ export const en = {
       copyPayload: "Copy pairing payload",
       expires: "Pairing expires at {{time}}",
       tunnel: "Temporary Cloudflare tunnel",
+      qrCode: "Scan this pairing QR code with the Voktty Android companion",
+      generatingQr: "Generating pairing QR code...",
       error: "Could not start the companion: {{message}}",
       pendingTitle: "Pairing requests",
       fingerprint: "Fingerprint: {{fingerprint}}",

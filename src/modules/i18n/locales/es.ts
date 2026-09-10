@@ -151,6 +151,8 @@ export const es: TranslationSchema = {
       copyPayload: "Copiar payload de emparejamiento",
       expires: "El emparejamiento caduca a las {{time}}",
       tunnel: "Túnel temporal de Cloudflare",
+      qrCode: "Escanea este código QR de emparejamiento con el companion Android de Voktty",
+      generatingQr: "Generando código QR de emparejamiento...",
       error: "No se pudo iniciar el companion: {{message}}",
       pendingTitle: "Solicitudes de emparejamiento",
       fingerprint: "Huella: {{fingerprint}}",
