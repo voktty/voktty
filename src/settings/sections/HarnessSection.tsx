@@ -3,33 +3,6 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "@/modules/i18n";
 import {
-  applyBodyGlass,
-  applySidebarBlur,
-  applySidebarOpacity,
-  applyThemeTint,
-  BODY_GLASS_DEFAULT,
-  loadBodyGlass,
-  loadSidebarBlur,
-  loadSidebarOpacity,
-  loadThemeHue,
-  loadThemeSaturation,
-  saveBodyGlass,
-  saveSidebarBlur,
-  saveSidebarOpacity,
-  saveThemeHue,
-  saveThemeSaturation,
-  SIDEBAR_BLUR_DEFAULT,
-  SIDEBAR_BLUR_MAX,
-  SIDEBAR_BLUR_MIN,
-  SIDEBAR_OPACITY_DEFAULT,
-  SIDEBAR_OPACITY_MAX,
-  SIDEBAR_OPACITY_MIN,
-  THEME_HUE_DEFAULT,
-  THEME_HUE_MAX,
-  THEME_HUE_MIN,
-  THEME_SATURATION_DEFAULT,
-  THEME_SATURATION_MAX,
-  THEME_SATURATION_MIN,
   TRANSCRIPT_ZEN_CHANGE_EVENT,
   TRANSCRIPT_ANCHOR_CHANGE_EVENT,
   loadSidebarLayout,
@@ -151,42 +124,6 @@ function Segmented<T extends string>({
   );
 }
 
-function HarnessSlider({
-  label,
-  value,
-  display,
-  min,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  display: string;
-  min: number;
-  max: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="flex w-56 items-center gap-3">
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-valuenow={value}
-        aria-label={label}
-        className="sidebar-opacity-slider min-w-0 flex-1"
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-      <span className="w-10 shrink-0 text-right text-[12px] text-foreground tabular-nums">
-        {display}
-      </span>
-    </div>
-  );
-}
-
 function HarnessToggle({
   label,
   on,
@@ -298,60 +235,6 @@ function GeneralBlock() {
       </Row>
       <Row label={t("harness.settings.claudeHooks")} description={t("harness.settings.claudeHooksDesc")}>
         <HarnessToggle label={t("harness.settings.claudeHooks")} on={claudeHooks} onChange={(next) => { saveClaudeHooks(next); setClaudeHooks(next); }} />
-      </Row>
-    </>
-  );
-}
-
-function AppearanceBlock() {
-  const [opacity, setOpacity] = useState(loadSidebarOpacity);
-  const [blur, setBlur] = useState(loadSidebarBlur);
-  const [themeHue, setThemeHue] = useState(loadThemeHue);
-  const [themeSaturation, setThemeSaturation] = useState(loadThemeSaturation);
-  const [bodyGlass, setBodyGlass] = useState(loadBodyGlass);
-  const percent = Math.round(opacity * 100);
-
-  const onTint = (hue: number, saturation: number) => {
-    const next = applyThemeTint(hue, saturation);
-    saveThemeHue(next.hue);
-    saveThemeSaturation(next.saturation);
-    setThemeHue(next.hue);
-    setThemeSaturation(next.saturation);
-  };
-
-  const restoreDefaults = () => {
-    const op = applySidebarOpacity(SIDEBAR_OPACITY_DEFAULT);
-    saveSidebarOpacity(op); setOpacity(op);
-    const bl = applySidebarBlur(SIDEBAR_BLUR_DEFAULT);
-    saveSidebarBlur(bl); setBlur(bl);
-    onTint(THEME_HUE_DEFAULT, THEME_SATURATION_DEFAULT);
-    applyBodyGlass(BODY_GLASS_DEFAULT);
-    saveBodyGlass(BODY_GLASS_DEFAULT);
-    setBodyGlass(BODY_GLASS_DEFAULT);
-  };
-
-  const { t } = useTranslation();
-  return (
-    <>
-      <div className="flex justify-end">
-        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-muted-foreground" onClick={restoreDefaults}>
-          {t("harness.settings.restoreDefaults")}
-        </Button>
-      </div>
-      <Row label={t("harness.settings.sidebarOpacity")} description={t("harness.settings.sidebarOpacityDesc")}>
-        <HarnessSlider label={t("harness.settings.sidebarOpacity")} value={percent} display={`${percent}%`} min={Math.round(SIDEBAR_OPACITY_MIN * 100)} max={Math.round(SIDEBAR_OPACITY_MAX * 100)} onChange={(val) => { const next = applySidebarOpacity(val / 100); saveSidebarOpacity(next); setOpacity(next); }} />
-      </Row>
-      <Row label={t("harness.settings.blurRadius")} description={t("harness.settings.blurRadiusDesc")}>
-        <HarnessSlider label={t("harness.settings.blurRadius")} value={blur} display={String(blur)} min={SIDEBAR_BLUR_MIN} max={SIDEBAR_BLUR_MAX} onChange={(val) => { const next = applySidebarBlur(val); saveSidebarBlur(next); setBlur(next); }} />
-      </Row>
-      <Row label={t("harness.settings.hue")} description={t("harness.settings.hueDesc")}>
-        <HarnessSlider label={t("harness.settings.hue")} value={themeHue} display={`${themeHue}°`} min={THEME_HUE_MIN} max={THEME_HUE_MAX} onChange={(val) => onTint(val, themeSaturation)} />
-      </Row>
-      <Row label={t("harness.settings.saturation")} description={t("harness.settings.saturationDesc")}>
-        <HarnessSlider label={t("harness.settings.saturation")} value={themeSaturation} display={`${themeSaturation}%`} min={THEME_SATURATION_MIN} max={THEME_SATURATION_MAX} onChange={(val) => onTint(themeHue, val)} />
-      </Row>
-      <Row label={t("harness.settings.mainPaneGlass")} description={t("harness.settings.mainPaneGlassDesc")}>
-        <HarnessToggle label={t("harness.settings.mainPaneGlass")} on={bodyGlass} onChange={(next) => { applyBodyGlass(next); saveBodyGlass(next); setBodyGlass(next); }} />
       </Row>
     </>
   );
@@ -473,8 +356,6 @@ export function HarnessSection({ hideHeader }: { hideHeader?: boolean } = {}) {
       )}
       <SubHeading title={t("harness.settings.general")} />
       <GeneralBlock />
-      <SubHeading title={t("harness.settings.appearance")} />
-      <AppearanceBlock />
       <SubHeading title={t("harness.settings.providers")} />
       <ProvidersBlock />
     </div>

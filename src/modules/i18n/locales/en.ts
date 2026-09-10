@@ -57,6 +57,7 @@ export const en = {
       vokttyDefault: {
         default: "Modern Obsidian studio with subtle acrylic transparency and calibrated colors.",
         fluent: "Windows Fluent Desktop theme with Carbon elevation and clean surfaces.",
+        liquid: "Adaptive glass navigation with focused, solid work surfaces.",
         nord: "Arctic, north-bluish palette.",
         dracula: "The classic high-contrast purple dark theme.",
         "tokyo-night": "Calm, blue-leaning dark theme.",

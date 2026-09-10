@@ -1,4 +1,30 @@
-import type { AppearancePack, SurfaceProfile, TypographyProfile } from "./types";
+import type {
+  AppearancePack,
+  MaterialProfile,
+  SurfaceProfile,
+  TypographyProfile,
+} from "./types";
+
+export const BUILTIN_MATERIAL_PROFILES: MaterialProfile[] = [
+  {
+    id: "solid",
+    name: "Solid",
+    description: "Opaque desktop surfaces with no glass treatment.",
+    chromeOpacity: 1,
+    chromeBlur: "0px",
+    chromeSaturation: 1,
+    borderOpacity: 1,
+  },
+  {
+    id: "liquid",
+    name: "Liquid",
+    description: "Translucent navigation chrome while content remains solid.",
+    chromeOpacity: 0.72,
+    chromeBlur: "20px",
+    chromeSaturation: 1.25,
+    borderOpacity: 0.82,
+  },
+];
 
 export const BUILTIN_SURFACE_PROFILES: SurfaceProfile[] = [
   {
@@ -99,6 +125,7 @@ export const BUILTIN_APPEARANCE_PACKS: AppearancePack[] = [
     variationId: "default",
     surfaceProfileId: "default",
     typographyProfileId: "default",
+    materialProfileId: "solid",
     elevationStyle: "soft",
     pillRadius: "9999px",
     borderWidth: "1px",
@@ -113,6 +140,7 @@ export const BUILTIN_APPEARANCE_PACKS: AppearancePack[] = [
     variationId: "fluent",
     surfaceProfileId: "fluent-solid",
     typographyProfileId: "fluent-compact",
+    materialProfileId: "solid",
     elevationStyle: "soft",
     pillRadius: "9999px",
     borderWidth: "1px",
@@ -127,6 +155,7 @@ export const BUILTIN_APPEARANCE_PACKS: AppearancePack[] = [
     variationId: "fluent",
     surfaceProfileId: "fluent-solid",
     typographyProfileId: "fluent-compact",
+    materialProfileId: "solid",
     elevationStyle: "soft",
     pillRadius: "9999px",
     borderWidth: "1px",
@@ -141,8 +170,24 @@ export const BUILTIN_APPEARANCE_PACKS: AppearancePack[] = [
     variationId: "kanagawa",
     surfaceProfileId: "fluent-solid",
     typographyProfileId: "fluent-compact",
+    materialProfileId: "solid",
     elevationStyle: "soft",
     pillRadius: "9999px",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    focusStyle: "ring",
+  },
+  {
+    id: "voktty-liquid",
+    name: "Voktty Liquid",
+    description: "Adaptive glass chrome with solid work surfaces on every platform.",
+    colorThemeId: "voktty-default",
+    variationId: "liquid",
+    surfaceProfileId: "default",
+    typographyProfileId: "default",
+    materialProfileId: "liquid",
+    elevationStyle: "soft",
+    pillRadius: "10px",
     borderWidth: "1px",
     borderStyle: "solid",
     focusStyle: "ring",
@@ -151,6 +196,7 @@ export const BUILTIN_APPEARANCE_PACKS: AppearancePack[] = [
 
 const SURFACES_BY_ID = new Map(BUILTIN_SURFACE_PROFILES.map((s) => [s.id, s]));
 const TYPOGRAPHY_BY_ID = new Map(BUILTIN_TYPOGRAPHY_PROFILES.map((t) => [t.id, t]));
+const MATERIALS_BY_ID = new Map(BUILTIN_MATERIAL_PROFILES.map((m) => [m.id, m]));
 const PACKS_BY_ID = new Map(BUILTIN_APPEARANCE_PACKS.map((p) => [p.id, p]));
 
 export function listBuiltinSurfaceProfiles(): SurfaceProfile[] {
@@ -167,6 +213,14 @@ export function listBuiltinTypographyProfiles(): TypographyProfile[] {
 
 export function getBuiltinTypographyProfile(id: string): TypographyProfile | undefined {
   return TYPOGRAPHY_BY_ID.get(id);
+}
+
+export function listBuiltinMaterialProfiles(): MaterialProfile[] {
+  return BUILTIN_MATERIAL_PROFILES;
+}
+
+export function getBuiltinMaterialProfile(id: string): MaterialProfile | undefined {
+  return MATERIALS_BY_ID.get(id);
 }
 
 export function listBuiltinAppearancePacks(): AppearancePack[] {

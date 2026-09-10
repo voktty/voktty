@@ -6,6 +6,7 @@ import {
 } from "./resolveStructuralTraits";
 import {
   getBuiltinAppearancePack,
+  getBuiltinMaterialProfile,
   getBuiltinSurfaceProfile,
   getBuiltinTypographyProfile,
   listBuiltinAppearancePacks,
@@ -59,6 +60,7 @@ describe("Structural Traits and Profiles Precedence", () => {
     expect(getBuiltinAppearancePack("fluent-dark")).toBeDefined();
     expect(getBuiltinSurfaceProfile("fluent-solid")).toBeDefined();
     expect(getBuiltinTypographyProfile("fluent-compact")).toBeDefined();
+    expect(getBuiltinMaterialProfile("liquid")).toBeDefined();
   });
 
   it("resolves default structural traits when no pack or overrides are provided", () => {
@@ -72,6 +74,7 @@ describe("Structural Traits and Profiles Precedence", () => {
     expect(resolved.traits.density).toBe("comfortable");
     expect(resolved.traits.uiFontSize).toBe(13);
     expect(resolved.traits.uiFontFamily).toContain("Inter Variable");
+    expect(resolved.materialProfile.id).toBe("solid");
   });
 
   it("applies appearance pack traits over default baseline", () => {
@@ -85,6 +88,15 @@ describe("Structural Traits and Profiles Precedence", () => {
     expect(resolved.traits.uiFontSize).toBe(12);
     expect(resolved.traits.density).toBe("compact");
     expect(resolved.traits.uiFontFamily).toContain("Segoe UI Variable");
+    expect(resolved.materialProfile.id).toBe("solid");
+  });
+
+  it("resolves the liquid material independently from solid content surfaces", () => {
+    const resolved = resolveStructuralTraits({ packId: "voktty-liquid" });
+
+    expect(resolved.materialProfile.id).toBe("liquid");
+    expect(resolved.materialProfile.chromeOpacity).toBeLessThan(1);
+    expect(resolved.surfaceProfile?.id).toBe("default");
   });
 
   it("allows theme and variation to override pack properties", () => {
@@ -194,6 +206,8 @@ describe("Structural Traits and Profiles Precedence", () => {
     expect(mockRoot.getAttribute("data-elevation")).toBe("bevel");
     expect(mockRoot.getAttribute("data-focus-style")).toBe("dotted");
     expect(mockRoot.getAttribute("data-density")).toBe("compact");
+    expect(mockRoot.getAttribute("data-material")).toBe("solid");
+    expect(mockRoot.style.getPropertyValue("--material-chrome-opacity")).toBe("1");
 
     expect(mockRoot.style.getPropertyValue("--surface-sidebar")).toBe("#16171a");
     expect(mockRoot.style.getPropertyValue("--surface-card")).toBe("#1e2025");
