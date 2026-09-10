@@ -2,6 +2,8 @@ mod pairing;
 mod state;
 mod transport;
 
+use tauri::Manager;
+
 pub(crate) use state::CompanionState;
 
 #[tauri::command]
