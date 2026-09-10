@@ -2,6 +2,8 @@ pub mod claude_adapter;
 pub mod codex_adapter;
 pub mod cursor_adapter;
 pub mod gemini_adapter;
+pub mod grok_adapter;
+pub mod opencode_adapter;
 pub mod voktty_adapter;
 
 use super::models::{HistoryMessage, HistorySession};

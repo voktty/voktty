@@ -3,14 +3,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export function createHarnessModel(modelId: string): LanguageModel {
-  return new HarnessLanguageModel(modelId);
+  return new HarnessLanguageModel(modelId) as unknown as LanguageModel;
 }
 
-export class HarnessLanguageModel implements LanguageModel {
+export class HarnessLanguageModel {
   readonly specificationVersion = "v1" as const;
   readonly provider = "harness";
   readonly modelId: string;
   readonly defaultObjectGenerationMode = "json";
+  readonly supportsStructuredOutputs = false;
 
   constructor(modelId: string) {
     this.modelId = modelId;

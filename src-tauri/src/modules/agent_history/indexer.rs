@@ -1,6 +1,7 @@
 use super::adapters::{
     claude_adapter::ClaudeAdapter, codex_adapter::CodexAdapter, cursor_adapter::CursorAdapter,
-    gemini_adapter::GeminiAdapter, voktty_adapter::VokttyAdapter, AgentHistoryAdapter,
+    gemini_adapter::GeminiAdapter, grok_adapter::GrokAdapter, opencode_adapter::OpenCodeAdapter,
+    voktty_adapter::VokttyAdapter, AgentHistoryAdapter,
 };
 use super::db::HistoryDb;
 use super::models::{HistorySession, HistoryStats};
@@ -22,6 +23,8 @@ impl HistoryIndexer {
             Box::new(CodexAdapter::new()),
             Box::new(GeminiAdapter::new()),
             Box::new(CursorAdapter::new()),
+            Box::new(OpenCodeAdapter::new()),
+            Box::new(GrokAdapter::new()),
         ];
 
         Self {
