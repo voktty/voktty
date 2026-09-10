@@ -1,3 +1,4 @@
+import { matchAgentFromTitle } from "@/modules/agents";
 import { t as translate } from "@/modules/i18n";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import type { Tab } from "./useTabs";
@@ -88,6 +89,9 @@ export function labelFor(t: Tab): string {
   if (t.kind === "api-client") return t.title;
   if (t.kind === "harness") return t.title;
   if (t.customTitle) return t.customTitle;
+
+  const agentMatch = matchAgentFromTitle(t.title);
+  if (agentMatch) return agentMatch.label;
 
   const remoteLabel = extractRemoteHostLabel(t);
   if (remoteLabel) return remoteLabel;
