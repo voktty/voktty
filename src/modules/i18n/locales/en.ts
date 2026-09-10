@@ -947,6 +947,9 @@ export const en = {
       waitingForApproval: "Waiting for approval on your desktop.",
       paired: "Paired successfully. Your desktop will make active agents available here.",
       connectionError: "The pairing request could not be sent. Check the payload and tunnel.",
+      scanQr: "Scan pairing QR code",
+      stopScanning: "Stop scanning",
+      cameraError: "Camera access is unavailable. Paste the pairing payload instead.",
     },
   },
   docker: {
