@@ -229,9 +229,7 @@ impl CompanionState {
                 .take()
                 .ok_or_else(|| "companion invitation was already used".to_string())?;
             let peer_key = UnparsedPublicKey::new(&ECDH_P256, device_key);
-            let session_key = agree_ephemeral(private_key, &peer_key, |shared| {
-                Ok::<_, ring::error::Unspecified>(shared.to_vec())
-            })
+            let session_key = agree_ephemeral(private_key, &peer_key, |shared| shared.to_vec())
             .map_err(|_| "companion device key is invalid".to_string())?;
             let transport = CompanionTransport::for_host(&session_key, &device.id)
                 .map_err(|_| "could not initialize companion transport".to_string())?;
@@ -264,6 +262,7 @@ impl CompanionState {
 fn pairing_error(error: PairingError) -> String {
     match error {
         PairingError::Consumed => "pairing invitation was already used".to_string(),
+        PairingError::Expired => "companion pairing request expired".to_string(),
         PairingError::Rejected => "pairing request was rejected".to_string(),
         PairingError::UnsupportedProtocol => "unsupported companion protocol".to_string(),
     }
