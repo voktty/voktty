@@ -89,6 +89,11 @@ const AboutSection = React.lazy(() =>
     default: m.AboutSection,
   })),
 );
+const CompanionSection = React.lazy(() =>
+  import("./sections/CompanionSection").then((m) => ({
+    default: m.CompanionSection,
+  })),
+);
 
 const TABS: {
   id: SettingsTab;
@@ -147,6 +152,11 @@ const TABS: {
     component: VaultSection,
   },
   {
+    id: "companion",
+    icon: AiScanIcon,
+    component: CompanionSection,
+  },
+  {
     id: "about",
     icon: InformationCircleIcon,
     component: AboutSection,
@@ -165,6 +175,7 @@ const VALID_TABS: SettingsTab[] = [
   "docker",
   "mcp",
   "vault",
+  "companion",
   "about",
 ];
 

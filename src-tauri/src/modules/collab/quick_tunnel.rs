@@ -12,7 +12,7 @@ use tempfile::NamedTempFile;
 
 const START_TIMEOUT_SECS: u64 = 20;
 
-pub(super) struct CloudflaredTunnel {
+pub(crate) struct CloudflaredTunnel {
     public_url: String,
     child: Arc<SharedChild>,
     _config: NamedTempFile,

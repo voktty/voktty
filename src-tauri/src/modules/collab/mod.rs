@@ -2,7 +2,7 @@ mod auth;
 mod crypto;
 mod files;
 mod guest;
-mod quick_tunnel;
+pub(crate) mod quick_tunnel;
 pub(crate) mod requirements;
 mod server;
 mod session;

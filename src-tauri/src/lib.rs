@@ -304,6 +304,7 @@ pub fn run() {
         .manage(ssh_native::sftp::transfer::jobs::new_state())
         .manage(collab::CollabState::default())
         .manage(collab::CollabGuestState::default())
+        .manage(companion::CompanionState::default())
         .manage(mcp::McpManagerState::default())
         .manage(agent_history::AgentHistoryState::new())
         .manage(git_review::GitReviewState::default())
@@ -565,6 +566,11 @@ pub fn run() {
             ssh_native::sftp::transfer::jobs::ssh_native_transfer_list,
             ssh_native::sftp::transfer::jobs::ssh_native_transfer_progress,
             collab::requirements::collab_cloudflared_status,
+            companion::companion_start,
+            companion::companion_stop,
+            companion::companion_status,
+            companion::companion_pending_pairings,
+            companion::companion_decide_pairing,
             collab::collab_host_start,
             collab::collab_host_stop,
             collab::collab_host_snapshot_barrier,
@@ -744,6 +750,9 @@ pub fn run() {
                     }
                     if let Some(state) = app.try_state::<control::ControlState>() {
                         state.shutdown();
+                    }
+                    if let Some(state) = app.try_state::<companion::CompanionState>() {
+                        state.stop();
                     }
                 }
                 tauri::RunEvent::ExitRequested { api, .. } => {
