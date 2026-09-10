@@ -42,6 +42,8 @@ const AGENT_BADGES: Record<string, { bg: string; color: string; i18nKey: string 
   voktty: { bg: "bg-blue-500/15", color: "text-blue-400", i18nKey: "voktty" },
   gemini: { bg: "bg-amber-500/15", color: "text-amber-400", i18nKey: "gemini" },
   kimi: { bg: "bg-teal-500/15", color: "text-teal-400", i18nKey: "kimi" },
+  opencode: { bg: "bg-indigo-500/15", color: "text-indigo-400", i18nKey: "opencode" },
+  grok: { bg: "bg-rose-500/15", color: "text-rose-400", i18nKey: "grok" },
 };
 
 const DEFAULT_WIDTH = 1100;
