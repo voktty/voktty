@@ -212,6 +212,11 @@ export async function buildLanguageModel(
       })(resolvedModelId);
       break;
     }
+    case "harness": {
+      const { createHarnessModel } = await import("./harnessModel");
+      built = createHarnessModel(resolvedModelId);
+      break;
+    }
     default: {
       const _exhaustive: never = provider;
       throw new Error(`Unsupported provider: ${_exhaustive as ProviderId}`);

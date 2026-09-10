@@ -13,7 +13,8 @@ export type ProviderId =
   | "openai-compatible"
   | "lmstudio"
   | "mlx"
-  | "ollama";
+  | "ollama"
+  | "harness";
 
 export type ProviderInfo = {
   id: ProviderId;
@@ -118,6 +119,14 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     keyringAccount: "",
     keyPrefix: null,
     consoleUrl: "https://ollama.com/download",
+  },
+  {
+    id: "harness",
+    label: "Local Agent (OAuth)",
+    keyringAccount: "",
+    keyPrefix: null,
+    consoleUrl: "https://voktty.dev",
+    keyOptional: true,
   },
 ] as const;
 
@@ -655,6 +664,53 @@ export const MODELS = [
     description: "Local models via Ollama.",
     capabilities: { intelligence: 3, speed: 3, cost: 5 },
   },
+
+  // ── Local OAuth Agents (Harness) ──────────────────────────────────────────
+  {
+    id: "harness-claude",
+    provider: "harness",
+    label: "Claude (Local OAuth)",
+    hint: "Local OAuth",
+    description: "Runs via local Claude CLI / OAuth session.",
+    capabilities: { intelligence: 5, speed: 4, cost: 5 },
+    tags: ["vision", "reasoning", "tools", "coding"],
+  },
+  {
+    id: "harness-codex",
+    provider: "harness",
+    label: "Codex (Local OAuth)",
+    hint: "Local OAuth",
+    description: "Runs via local Codex CLI / OAuth session.",
+    capabilities: { intelligence: 5, speed: 4, cost: 5 },
+    tags: ["reasoning", "tools", "coding"],
+  },
+  {
+    id: "harness-agy",
+    provider: "harness",
+    label: "Agy / Cursor (Local OAuth)",
+    hint: "Local OAuth",
+    description: "Runs via local Agy / Cursor agent session.",
+    capabilities: { intelligence: 5, speed: 4, cost: 5 },
+    tags: ["reasoning", "tools", "coding"],
+  },
+  {
+    id: "harness-opencode",
+    provider: "harness",
+    label: "OpenCode (Local)",
+    hint: "Local",
+    description: "Runs via local OpenCode agent session.",
+    capabilities: { intelligence: 4, speed: 5, cost: 5 },
+    tags: ["tools", "coding"],
+  },
+  {
+    id: "harness-grok",
+    provider: "harness",
+    label: "Grok (Local OAuth)",
+    hint: "Local OAuth",
+    description: "Runs via local Grok CLI / OAuth session.",
+    capabilities: { intelligence: 4, speed: 5, cost: 5 },
+    tags: ["tools", "coding"],
+  },
 ] as const satisfies readonly ModelInfo[];
 
 export type ModelId = (typeof MODELS)[number]["id"];
@@ -867,6 +923,7 @@ export const KEYLESS_PROVIDERS: readonly ProviderId[] = [
   "mlx",
   "ollama",
   "openai-compatible",
+  "harness",
 ] as const;
 
 export function providerNeedsKey(id: ProviderId): boolean {
