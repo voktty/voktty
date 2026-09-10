@@ -1,0 +1,4 @@
+{"sessionId":"55555555-aaaa-bbbb-cccc-000000000005","projectHash":"wakefx-gem","startTime":"2026-08-04T12:00:00.000Z","lastUpdated":"2026-08-04T12:20:00.000Z"}
+{"$set":{"sessionId":"55555555-aaaa-bbbb-cccc-000000000005","messages":[{"id":"m1","type":"user","content":[{"text":"旧快照文本,应被最后一条快照覆盖"}],"timestamp":"2026-08-04T12:01:00.000Z"}]}}
+{"$set":{"sessionId":"55555555-aaaa-bbbb-cccc-000000000005","messages":[{"id":"m1","type":"user","content":[{"text":"Gemini 帮我调试二维码解码,顺带看 useEffect()"}],"timestamp":"2026-08-04T12:01:00.000Z"},{"id":"m2","type":"gemini","content":[{"text":"可以,先在解码回调里打日志。"}],"timestamp":"2026-08-04T12:02:00.000Z"}]}}
+{"checkpoint":"noise-row, unknown line must be counted"}

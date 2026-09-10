@@ -1,0 +1,17 @@
+{
+  "session_id": "44444444-aaaa-bbbb-cccc-000000000004",
+  "cwd": "/Users/tester/Github/wakefx",
+  "title": "Kiro QR session",
+  "created_at": "2026-08-03T08:00:00Z",
+  "updated_at": "2026-08-03T08:30:00Z",
+  "session_state": {
+    "version": "v1",
+    "rts_model_state": {
+      "model_info": {
+        "model_name": "claude-sonnet-4",
+        "model_id": "claude-sonnet-4",
+        "context_window_tokens": 200000
+      }
+    }
+  }
+}

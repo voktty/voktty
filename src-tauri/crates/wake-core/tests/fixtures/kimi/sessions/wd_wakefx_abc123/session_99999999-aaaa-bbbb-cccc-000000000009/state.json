@@ -1,0 +1,14 @@
+{
+  "createdAt": "2026-08-06T12:10:00.000Z",
+  "updatedAt": "2026-08-06T12:11:00.000Z",
+  "title": "New Session",
+  "isCustomTitle": false,
+  "agents": {
+    "main": {
+      "homedir": "…/agents/main",
+      "type": "main",
+      "parentAgentId": null
+    }
+  },
+  "custom": {}
+}

@@ -1,0 +1,14 @@
+{
+  "createdAt": "2026-08-06T12:00:00.000Z",
+  "updatedAt": "2026-08-06T12:30:00.000Z",
+  "title": "Kimi QR fix",
+  "isCustomTitle": true,
+  "agents": {
+    "main": {
+      "homedir": "…/agents/main",
+      "type": "main",
+      "parentAgentId": null
+    }
+  },
+  "custom": {}
+}
