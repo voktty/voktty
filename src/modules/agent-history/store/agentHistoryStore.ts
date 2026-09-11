@@ -12,6 +12,7 @@ import type { HistoryMessage, HistoryMessagePage, HistorySession, HistoryStats }
 let messageRequest = 0;
 let sessionPageRequest = 0;
 const MAX_CACHED_MESSAGE_SESSIONS = 8;
+const MAX_LOADED_MESSAGES = 200;
 
 function cacheMessagePage(
   cache: Record<string, HistoryMessagePage>,
@@ -231,11 +232,11 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
 
   loadMoreMessages: async () => {
     const { activeSessionId, isMessagesLoading, messageHasMore, nextMessageOffset, messages } = get();
-    if (!activeSessionId || isMessagesLoading || !messageHasMore) return;
+    if (!activeSessionId || isMessagesLoading || !messageHasMore || messages.length >= MAX_LOADED_MESSAGES) return;
     const request = ++messageRequest;
     set({ isMessagesLoading: true });
     try {
-      const page = await fetchMessagePage(activeSessionId, nextMessageOffset, 100);
+      const page = await fetchMessagePage(activeSessionId, nextMessageOffset, Math.min(100, MAX_LOADED_MESSAGES - messages.length));
       if (request !== messageRequest || get().activeSessionId !== activeSessionId) return;
       const items = [...messages, ...page.items];
       set((state) => ({

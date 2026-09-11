@@ -45,6 +45,8 @@ const DEFAULT_HEIGHT = 740;
 const MIN_WIDTH = 800;
 const MIN_HEIGHT = 520;
 const SESSION_LIST_OVERSCAN = 8;
+const MESSAGE_LIST_OVERSCAN = 8;
+const MAX_VISIBLE_MESSAGES = 200;
 
 const AGENT_BRANDS: Record<string, { name: string; icon: string; bg: string; color: string }> = {
   "claude-code": { name: "Claude Code", icon: "/brands/claude-code.png", bg: "bg-amber-500/15", color: "text-amber-500" },
@@ -177,6 +179,14 @@ export function AgentHistoryModal() {
     estimateSize: () => 84,
     getItemKey: (index) => filteredSessions[index]?.id ?? index,
     overscan: SESSION_LIST_OVERSCAN,
+  });
+
+  const messageVirtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => transcriptRef.current,
+    estimateSize: () => 180,
+    getItemKey: (index) => messages[index]?.id ?? index,
+    overscan: MESSAGE_LIST_OVERSCAN,
   });
 
   // Palette filtered sessions
@@ -827,15 +837,21 @@ export function AgentHistoryModal() {
                       <span>{t("agentHistory.noMessages")}</span>
                     </div>
                   ) : (
-                    messages.map((msg) => {
+                    <div style={{ height: `${messageVirtualizer.getTotalSize()}px`, position: "relative" }}>
+                    {messageVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const msg = messages[virtualRow.index];
+                      if (!msg) return null;
                       const isUser = msg.role === "user";
                       const isTool = msg.role === "tool";
 
                       return (
                         <div
                           key={msg.id}
-                          id={`history-message-${msg.id}`}
-                          className={cn(
+                          ref={messageVirtualizer.measureElement}
+                          data-index={virtualRow.index}
+                          style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualRow.start}px)` }}
+                        >
+                        <div id={`history-message-${msg.id}`} className={cn(
                             "flex flex-col gap-2 rounded-xl p-3.5 text-xs leading-relaxed max-w-3xl transition-colors border",
                             isUser
                               ? "border-[#3b3b44] bg-[#222227] ml-auto mr-2 text-foreground shadow-xs"
@@ -955,10 +971,12 @@ export function AgentHistoryModal() {
                             </div>
                           )}
                         </div>
+                        </div>
                       );
                     })
+                    }</div>
                   )}
-                  {messageHasMore && (
+                  {messageHasMore && messages.length < MAX_VISIBLE_MESSAGES && (
                     <div className="flex justify-center pt-2">
                       <Button
                         type="button"
