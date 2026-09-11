@@ -5,6 +5,7 @@ pub mod models;
 pub mod sanitizer;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::State;
 
@@ -17,7 +18,15 @@ use wake_core::scanner::{run_scan, NullEvents};
 pub struct AgentHistoryState {
     pub store: Arc<Store>,
     pub adapters: Vec<Box<dyn AgentAdapter>>,
-    pub is_scanning: Arc<std::sync::atomic::AtomicBool>,
+    pub is_scanning: Arc<AtomicBool>,
+}
+
+struct ScanningGuard(Arc<AtomicBool>);
+
+impl Drop for ScanningGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
 }
 
 impl Default for AgentHistoryState {
@@ -44,16 +53,18 @@ impl AgentHistoryState {
         });
         let store = Arc::new(store);
         let adapters = create_adapters();
-        let is_scanning = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // Claim the startup scan before spawning its thread. Otherwise a
+        // command can observe `false` and enqueue a second scan first.
+        let is_scanning = Arc::new(AtomicBool::new(true));
 
-        // Start non-blocking background incremental scan on startup (cross-platform)
+        // Start one non-blocking incremental scan. List commands read the
+        // persisted index and never queue their own scans.
         let store_bg = store.clone();
         let scanning_bg = is_scanning.clone();
         std::thread::spawn(move || {
-            scanning_bg.store(true, std::sync::atomic::Ordering::SeqCst);
+            let _scanning = ScanningGuard(scanning_bg);
             let adapters = create_adapters();
             let _ = run_scan(&adapters, &store_bg, &NullEvents, false);
-            scanning_bg.store(false, std::sync::atomic::Ordering::SeqCst);
         });
 
         Self {
@@ -66,20 +77,15 @@ impl AgentHistoryState {
     pub fn trigger_background_scan(&self, full: bool) {
         if self
             .is_scanning
-            .compare_exchange(
-                false,
-                true,
-                std::sync::atomic::Ordering::SeqCst,
-                std::sync::atomic::Ordering::SeqCst,
-            )
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
             let store_bg = self.store.clone();
             let scanning_bg = self.is_scanning.clone();
             std::thread::spawn(move || {
+                let _scanning = ScanningGuard(scanning_bg);
                 let adapters = create_adapters();
                 let _ = run_scan(&adapters, &store_bg, &NullEvents, full);
-                scanning_bg.store(false, std::sync::atomic::Ordering::SeqCst);
             });
         }
     }
@@ -277,16 +283,41 @@ pub async fn agent_history_get_messages(
 pub async fn agent_history_rescan(
     state: State<'_, AgentHistoryState>,
 ) -> Result<HistoryStats, String> {
+    if state
+        .is_scanning
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return agent_history_get_stats(state).await;
+    }
+
     let store = state.store.clone();
+    let scanning = state.is_scanning.clone();
 
     tokio::task::spawn_blocking(move || {
+        let _scanning = ScanningGuard(scanning);
         let adapters = create_adapters();
-        let _ = run_scan(&adapters, &store, &NullEvents, true);
+        run_scan(&adapters, &store, &NullEvents, true).map_err(|error| error.to_string())
     })
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())??;
 
     agent_history_get_stats(state).await
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::{Arc, AtomicBool, Ordering, ScanningGuard};
+
+    #[test]
+    fn scanning_guard_releases_the_scan_claim() {
+        let scanning = Arc::new(AtomicBool::new(true));
+        {
+            let _guard = ScanningGuard(scanning.clone());
+            assert!(scanning.load(Ordering::SeqCst));
+        }
+        assert!(!scanning.load(Ordering::SeqCst));
+    }
 }
 
 #[tauri::command]

@@ -1,16 +1,61 @@
 import { describe, expect, it } from "vitest";
 import {
   beginSourceControlRefresh,
-  repositoryInfoFromStatus,
+  ownsSourceControlRefresh,
+  planSourceControlRefresh,
   repositoryContainsContext,
+  repositoryInfoFromStatus,
 } from "./useSourceControl";
+
+describe("planSourceControlRefresh", () => {
+  it("reuses an identical in-flight refresh without invalidating its request", () => {
+    expect(
+      planSourceControlRefresh(
+        7,
+        { contextKey: "local\0/repo", mode: "never" },
+        "local\0/repo",
+        "never",
+      ),
+    ).toEqual({ kind: "reuse", requestId: 7 });
+  });
+
+  it("starts a new request when the context or mode requires different work", () => {
+    expect(
+      planSourceControlRefresh(
+        7,
+        { contextKey: "local\0/repo", mode: "never" },
+        "local\0/other",
+        "never",
+      ),
+    ).toEqual({ kind: "start", requestId: 8 });
+    expect(
+      planSourceControlRefresh(
+        8,
+        { contextKey: "local\0/repo", mode: "never" },
+        "local\0/repo",
+        "always",
+      ),
+    ).toEqual({ kind: "start", requestId: 9 });
+  });
+});
+
+describe("ownsSourceControlRefresh", () => {
+  it("prevents an older request from clearing a newer in-flight refresh", () => {
+    const current = {
+      contextKey: "local\0/repo",
+      mode: "always" as const,
+      requestId: 9,
+    };
+
+    expect(ownsSourceControlRefresh(current, "local\0/repo", 8)).toBe(false);
+    expect(ownsSourceControlRefresh(current, "local\0/repo", 9)).toBe(true);
+  });
+});
 
 describe("repositoryContainsContext", () => {
   it("matches a repository root and its descendants", () => {
     expect(repositoryContainsContext("/repo", "/repo")).toBe(true);
-    expect(repositoryContainsContext("/repo", "/repo/packages/app")).toBe(
-      true,
-    );
+    expect(repositoryContainsContext("/repo", "/repo/packages/app")).toBe(true);
   });
 
   it("rejects sibling paths that only share a string prefix", () => {
@@ -19,9 +64,9 @@ describe("repositoryContainsContext", () => {
   });
 
   it("normalizes Windows separators and drive-letter casing", () => {
-    expect(
-      repositoryContainsContext("C:\\Repo", "c:/repo/packages/app"),
-    ).toBe(true);
+    expect(repositoryContainsContext("C:\\Repo", "c:/repo/packages/app")).toBe(
+      true,
+    );
   });
 
   it("normalizes UNC server and share casing", () => {
