@@ -4257,6 +4257,7 @@ export const en = {
     closeFind: "Close find (Esc)",
     loadingTranscript: "Loading transcript messages...",
     loadMoreMessages: "Load more messages",
+    messageLimitReached: "Showing the first {count} messages. Export the transcript to access all messages.",
     noMessages: "No messages recorded in this session transcript",
     agent: "Agent",
     resume: "Resume",

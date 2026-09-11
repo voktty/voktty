@@ -3902,6 +3902,7 @@ const itI18nBatch22: TranslationSchema = mergeLocale(itI18nBatch21, {
     closeFind: "Chiudi ricerca (Esc)",
     loadingTranscript: "Caricamento messaggi di trascrizione in corso...",
     loadMoreMessages: "Carica altri messaggi",
+    messageLimitReached: "Vengono mostrati i primi {count} messaggi. Esporta la trascrizione per tutti i messaggi.",
     noMessages: "Nessun messaggio registrato in questa trascrizione della sessione",
     roleUser: "User",
     roleTool: "Invocazione ⚙️ strumento"
