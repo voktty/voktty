@@ -201,7 +201,7 @@ function QuestionFields({
   onCustom: (value: string) => void;
 }) {
   const { t } = useTranslation();
-  const options = displayOptions(question);
+  const options = displayOptions(question, t("questions.other"));
   const customSelected = selected.some((id) => isCustomId(question, id));
   const customId = customOptionId(question);
 
@@ -286,12 +286,15 @@ function QuestionFields({
   );
 }
 
-function displayOptions(question: UserQuestion): UserQuestion["options"] {
+function displayOptions(
+  question: UserQuestion,
+  customOptionLabel: string,
+): UserQuestion["options"] {
   if (question.options.length === 0) return question.options;
   if (question.options.some(isOtherOption) || !question.allowCustom) {
     return question.options;
   }
-  return [...question.options, { id: CUSTOM_OPTION_ID, label: "Other" }];
+  return [...question.options, { id: CUSTOM_OPTION_ID, label: customOptionLabel }];
 }
 
 function customOptionId(question: UserQuestion): string {
