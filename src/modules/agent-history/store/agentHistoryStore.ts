@@ -10,6 +10,7 @@ import {
 import type { HistoryMessage, HistorySession, HistoryStats } from "../types";
 
 let messageRequest = 0;
+let sessionPageRequest = 0;
 
 interface AgentHistoryState {
   isOpen: boolean;
@@ -62,12 +63,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
 
   openHistory: () => {
     set({ isOpen: true });
-    void (async () => {
-      await get().loadSessions();
-      if (get().sessions.length === 0) {
-        await get().rescan();
-      }
-    })();
+    void get().loadSessions();
   },
 
   closeHistory: () => set({ isOpen: false }),
@@ -76,35 +72,42 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
     const next = !get().isOpen;
     set({ isOpen: next });
     if (next) {
-      void (async () => {
-        await get().loadSessions();
-        if (get().sessions.length === 0) {
-          await get().rescan();
-        }
-      })();
+      void get().loadSessions();
     }
   },
 
   setSearchQuery: (searchQuery) => {
     set({ searchQuery });
+    void get().loadSessions();
   },
 
   setSelectedAgent: (selectedAgent) => {
     set({ selectedAgent });
+    void get().loadSessions();
   },
 
   setSelectedProject: (selectedProject) => {
     set({ selectedProject });
+    void get().loadSessions();
   },
 
   loadSessions: async () => {
+    const request = ++sessionPageRequest;
+    const { searchQuery, selectedAgent, selectedProject } = get();
     set({ isLoading: true });
 
     try {
       const [page, stats] = await Promise.all([
-        fetchSessionPage({ limit: 100, offset: 0 }),
+        fetchSessionPage({
+          limit: 100,
+          offset: 0,
+          ...(searchQuery.trim() ? { search_query: searchQuery.trim() } : {}),
+          ...(selectedAgent !== "all" ? { agent: selectedAgent } : {}),
+          ...(selectedProject ? { project: selectedProject } : {}),
+        }),
         fetchHistoryStats(),
       ]);
+      if (request !== sessionPageRequest) return;
       const safeSessions = Array.isArray(page.items) ? page.items : [];
       const activeSessionId = get().activeSessionId;
       let activeSession = safeSessions.find((s) => s.id === activeSessionId) || null;
@@ -121,7 +124,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
         set({ messages: [] });
       }
     } finally {
-      set({ isLoading: false });
+      if (request === sessionPageRequest) set({ isLoading: false });
     }
   },
 

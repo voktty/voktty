@@ -282,9 +282,29 @@ pub async fn agent_history_get_session_page(
     let f = filter.unwrap_or_default();
     let limit = f.limit.unwrap_or(100).clamp(1, 100) as i64;
     let offset = f.offset.unwrap_or(0).max(0) as i64;
+    let agents = f
+        .agent
+        .as_deref()
+        .filter(|agent| *agent != "all")
+        .and_then(AgentId::parse)
+        .into_iter()
+        .collect();
+    let project_paths = match f.project.as_deref().filter(|project| !project.is_empty()) {
+        Some(project) => state
+            .store()?
+            .list_projects(false)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .filter(|entry| entry.name.eq_ignore_ascii_case(project))
+            .map(|entry| entry.path)
+            .collect(),
+        None => Vec::new(),
+    };
     let wake_filter = WakeSessionFilter {
         limit,
         offset,
+        agents,
+        project_paths,
         title_query: f.search_query.clone().filter(|q| !q.is_empty()),
         ..WakeSessionFilter::default()
     };
