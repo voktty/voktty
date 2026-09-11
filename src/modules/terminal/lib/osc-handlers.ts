@@ -1,6 +1,6 @@
 import { IS_WINDOWS } from "@/lib/platform";
 import type { IMarker, Terminal } from "@xterm/xterm";
-import { parseOsc9Progress, type Osc9Progress } from "./terminalProgressStore";
+import { type Osc9Progress, parseOsc9Progress } from "./terminalProgressStore";
 
 const MAX_OSC52_CLIPBOARD_BYTES = 1024 * 1024;
 
@@ -26,6 +26,7 @@ export function registerCwdHandler(
   term: Terminal,
   onCwd: (cwd: string) => void,
   state?: ShellIntegrationState,
+  shouldAcceptCwd?: () => boolean,
 ): () => void {
   const d = term.parser.registerOscHandler(7, (data) => {
     // Reject OSC 7 emitted while a command is running: command stdout/stderr
@@ -38,6 +39,10 @@ export function registerCwdHandler(
     // stops agents and multiplexers from making the workspace follow their
     // private runtime directory while preserving ordinary `cd` updates.
     if (state?.sawPromptMarkers && !state.promptCwdPending) return true;
+    // A foreground agent can emit its own OSC 133 and OSC 7 sequences. Its
+    // lifecycle is tracked outside the terminal byte stream, so callers can
+    // use that authoritative state to keep the parent shell cwd stable.
+    if (shouldAcceptCwd && !shouldAcceptCwd()) return true;
     const cwd = parseOsc7(data);
     if (cwd) {
       if (state) state.promptCwdPending = false;
