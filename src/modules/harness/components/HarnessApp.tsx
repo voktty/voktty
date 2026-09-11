@@ -295,6 +295,7 @@ import {
   setSessionPinned,
   shouldPersistSession,
   upsertSession,
+  upsertSessions,
 } from "../lib/sessionStore";
 import {
   loadLiveAgentsEnabled,
@@ -919,12 +920,12 @@ export function HarnessApp({
   }, [resumed]);
 
   useEffect(() => {
-    void probeHarnessAvailability();
     // Only the harnesses already in this window. Probing every installed CLI
     // at boot left unused agents (especially Pi) running in the background.
     const harnesses = [
       ...new Set(sessionsRef.current.map((session: any) => session.harness)),
     ];
+    void probeHarnessAvailability({ ids: harnesses });
     void refreshHarnessCatalogs(harnesses).then(() => {
       setSessions((prev: any) =>
         prev.map((session: any) => {
@@ -1243,20 +1244,26 @@ export function HarnessApp({
     const timer = window.setTimeout(() => {
       const dirty = [...pendingPersist.current.values()];
       pendingPersist.current.clear();
-      void Promise.all(
-        dirty.map(async (session) => {
-          const fingerprint = persistFingerprint(session);
-          if (lastPersisted.current.get(session.id) === fingerprint) return;
-          const summary = await upsertSession(session).catch(() => null);
-          if (!summary) return;
-          lastPersisted.current.set(session.id, fingerprint);
-          if (summary.cwd === sidebarCwdRef.current) {
-            setHistory((current) =>
-              mergeProjectHistorySummary(current, summary),
-            );
-          }
-        }),
+      const changed = dirty.filter(
+        (session) =>
+          lastPersisted.current.get(session.id) !== persistFingerprint(session),
       );
+      if (changed.length === 0) return;
+      void upsertSessions(changed)
+        .then((summaries) => {
+          for (const summary of summaries) {
+            const session = changed.find((item) => item.id === summary.id);
+            if (session) {
+              lastPersisted.current.set(session.id, persistFingerprint(session));
+            }
+            if (summary.cwd === sidebarCwdRef.current) {
+              setHistory((current) =>
+                mergeProjectHistorySummary(current, summary),
+              );
+            }
+          }
+        })
+        .catch(() => undefined);
     }, 650);
     return () => window.clearTimeout(timer);
   }, [persistSession, sessions]);

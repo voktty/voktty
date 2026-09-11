@@ -647,6 +647,7 @@ pub fn run() {
             harness::checkpoint::session_checkpoint_undo,
             harness::checkpoint::session_checkpoint_keep,
             harness::session_store::session_upsert,
+            harness::session_store::session_upsert_batch,
             harness::session_store::session_list_by_project,
             harness::session_store::session_search,
             harness::session_store::session_get,

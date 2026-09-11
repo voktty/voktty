@@ -128,4 +128,41 @@ describe("session persistence concurrency", () => {
       },
     });
   });
+
+  it("coalesces independent dirty sessions into one native batch", async () => {
+    const { upsertSessions } = await loadStore();
+    mocks.invoke.mockResolvedValue([
+      {
+        id: "s1",
+        cwd: "/tmp/project",
+        harness: "cursor",
+        model: "",
+        runtimeMode: "supervised",
+        title: "",
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: "s2",
+        cwd: "/tmp/project",
+        harness: "cursor",
+        model: "",
+        runtimeMode: "supervised",
+        title: "",
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]);
+
+    const summaries = await upsertSessions([session("s1"), session("s2")]);
+
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith("session_upsert_batch", {
+      sessions: [
+        expect.objectContaining({ id: "s1" }),
+        expect.objectContaining({ id: "s2" }),
+      ],
+    });
+    expect(summaries.map((summary) => summary.id)).toEqual(["s1", "s2"]);
+  });
 });
