@@ -382,18 +382,33 @@ fn read_http_request(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     loop {
         let read = stream.read(&mut chunk)?;
         if read == 0 {
-            return Err(io::Error::new(ErrorKind::UnexpectedEof, "incomplete HTTP request"));
+            return Err(io::Error::new(
+                ErrorKind::UnexpectedEof,
+                "incomplete HTTP request",
+            ));
         }
         if request.len().saturating_add(read) > MAX_REQUEST_BYTES {
-            return Err(io::Error::new(ErrorKind::InvalidData, "HTTP request too large"));
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                "HTTP request too large",
+            ));
         }
         request.extend_from_slice(&chunk[..read]);
-        let Some(body_start) = request.windows(4).position(|part| part == b"\r\n\r\n").map(|offset| offset + 4) else {
+        let Some(body_start) = request
+            .windows(4)
+            .position(|part| part == b"\r\n\r\n")
+            .map(|offset| offset + 4)
+        else {
             continue;
         };
         let content_length = std::str::from_utf8(&request[..body_start])
             .ok()
-            .and_then(|headers| headers.lines().find_map(|line| line.strip_prefix("Content-Length:").or_else(|| line.strip_prefix("content-length:"))))
+            .and_then(|headers| {
+                headers.lines().find_map(|line| {
+                    line.strip_prefix("Content-Length:")
+                        .or_else(|| line.strip_prefix("content-length:"))
+                })
+            })
             .and_then(|value| value.trim().parse::<usize>().ok())
             .unwrap_or(0);
         if request.len() >= body_start.saturating_add(content_length) {
@@ -418,12 +433,17 @@ fn handle_pairing_request(
         Ok(id) => id,
         Err(_) => return http_response(500, "Internal Server Error", b""),
     };
-    let result = pairing
-        .lock()
-        .ok()
-        .and_then(|mut registry| registry.as_mut().map(|registry| registry.request(request, now_ms(), request_id)));
+    let result = pairing.lock().ok().and_then(|mut registry| {
+        registry
+            .as_mut()
+            .map(|registry| registry.request(request, now_ms(), request_id))
+    });
     match result {
-        Some(Ok(pending)) => json_response(202, "Accepted", &serde_json::json!({ "requestId": pending.id })),
+        Some(Ok(pending)) => json_response(
+            202,
+            "Accepted",
+            &serde_json::json!({ "requestId": pending.id }),
+        ),
         Some(Err(PairingError::Expired | PairingError::Consumed)) => {
             http_response(410, "Gone", b"")
         }
@@ -442,18 +462,30 @@ fn handle_pairing_status_request(
     let Some(path) = std::str::from_utf8(&request[..line_end])
         .ok()
         .and_then(|line| line.strip_prefix("GET /v1/companion/pair/"))
-        .and_then(|rest| rest.strip_suffix(" HTTP/1.1").or_else(|| rest.strip_suffix(" HTTP/1.0")))
+        .and_then(|rest| {
+            rest.strip_suffix(" HTTP/1.1")
+                .or_else(|| rest.strip_suffix(" HTTP/1.0"))
+        })
     else {
         return http_response(400, "Bad Request", b"");
     };
-    let result = pairing
-        .lock()
-        .ok()
-        .and_then(|mut registry| registry.as_mut().and_then(|registry| registry.decision(path, now_ms())));
+    let result = pairing.lock().ok().and_then(|mut registry| {
+        registry
+            .as_mut()
+            .and_then(|registry| registry.decision(path, now_ms()))
+    });
     match result {
-        Some(PairingDecision::Pending) => json_response(202, "Accepted", &serde_json::json!({ "status": "pending" })),
-        Some(PairingDecision::Approved) => json_response(200, "OK", &serde_json::json!({ "status": "approved" })),
-        Some(PairingDecision::Rejected) => json_response(403, "Forbidden", &serde_json::json!({ "status": "rejected" })),
+        Some(PairingDecision::Pending) => {
+            json_response(202, "Accepted", &serde_json::json!({ "status": "pending" }))
+        }
+        Some(PairingDecision::Approved) => {
+            json_response(200, "OK", &serde_json::json!({ "status": "approved" }))
+        }
+        Some(PairingDecision::Rejected) => json_response(
+            403,
+            "Forbidden",
+            &serde_json::json!({ "status": "rejected" }),
+        ),
         Some(PairingDecision::Expired) | None => http_response(410, "Gone", b""),
     }
 }
@@ -518,6 +550,8 @@ mod tests {
         let first = random_token(32).expect("token");
         let second = random_token(32).expect("token");
         assert_ne!(first, second);
-        assert!(first.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'));
+        assert!(first
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'));
     }
 }
