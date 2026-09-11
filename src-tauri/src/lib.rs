@@ -326,9 +326,7 @@ pub fn run() {
                 .unwrap_or_else(|| std::path::PathBuf::from("."))
                 .join("voktty")
                 .join("harness.db");
-            harness::session_store::SessionStore::open(db_path).unwrap_or_else(|_| {
-                harness::session_store::SessionStore::open_in_memory().expect("in-memory db")
-            })
+            harness::session_store::SessionStoreState::new(db_path)
         })
         .manage(harness::window_transfer::WindowTransferState::new())
         .invoke_handler(tauri::generate_handler![

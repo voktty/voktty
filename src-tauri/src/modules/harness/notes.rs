@@ -2,7 +2,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use super::session_store::{now_millis, validate_id, SessionStore};
+use super::session_store::{now_millis, validate_id, SessionStore, SessionStoreState};
 
 const TITLE_MAX: usize = 200;
 const BODY_MAX: usize = 1_000_000;
@@ -52,20 +52,20 @@ pub fn ensure_notes_table(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 #[tauri::command(async)]
-pub fn notes_list(store: State<'_, SessionStore>) -> Result<Vec<Note>, String> {
+pub fn notes_list(store: State<'_, SessionStoreState>) -> Result<Vec<Note>, String> {
     let conn = store.lock_conn()?;
     list_notes(&conn).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
-pub fn notes_get(store: State<'_, SessionStore>, id: String) -> Result<Option<Note>, String> {
+pub fn notes_get(store: State<'_, SessionStoreState>, id: String) -> Result<Option<Note>, String> {
     validate_id(&id, "note")?;
     let conn = store.lock_conn()?;
     get_note(&conn, &id).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
-pub fn notes_upsert(store: State<'_, SessionStore>, note: NoteUpsert) -> Result<Note, String> {
+pub fn notes_upsert(store: State<'_, SessionStoreState>, note: NoteUpsert) -> Result<Note, String> {
     validate_id(&note.id, "note")?;
     if let Some(session_id) = note.source_session_id.as_deref() {
         if !session_id.is_empty() {
@@ -80,7 +80,7 @@ pub fn notes_upsert(store: State<'_, SessionStore>, note: NoteUpsert) -> Result<
 }
 
 #[tauri::command(async)]
-pub fn notes_delete(store: State<'_, SessionStore>, id: String) -> Result<(), String> {
+pub fn notes_delete(store: State<'_, SessionStoreState>, id: String) -> Result<(), String> {
     validate_id(&id, "note")?;
     let conn = store.lock_conn()?;
     delete_note(&conn, &id).map_err(|e| e.to_string())

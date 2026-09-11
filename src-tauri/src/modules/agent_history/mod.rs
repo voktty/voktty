@@ -6,7 +6,7 @@ pub mod sanitizer;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tauri::State;
 
 use models::{HistoryMessage, HistorySession, HistoryStats, SessionFilter};
@@ -16,8 +16,9 @@ use wake_core::models::{AgentId, SessionFileRef, SessionFilter as WakeSessionFil
 use wake_core::scanner::{run_scan, NullEvents};
 
 pub struct AgentHistoryState {
-    pub store: Arc<Store>,
-    pub adapters: Vec<Box<dyn AgentAdapter>>,
+    db_path: PathBuf,
+    store: OnceLock<Result<Arc<Store>, String>>,
+    adapters: OnceLock<Vec<Box<dyn AgentAdapter>>>,
     pub is_scanning: Arc<AtomicBool>,
 }
 
@@ -37,50 +38,59 @@ impl Default for AgentHistoryState {
 
 impl AgentHistoryState {
     pub fn new() -> Self {
-        let db_dir = dirs::config_dir()
+        let db_path = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("voktty");
-        let _ = std::fs::create_dir_all(&db_dir);
-        let db_path = db_dir.join("agent_history_wake.db");
+            .join("voktty")
+            .join("agent_history_wake.db");
+        Self::with_db_path(db_path)
+    }
 
-        let (store, _) = open_or_rebuild(&db_path).unwrap_or_else(|_| {
-            (
-                open_or_rebuild(&PathBuf::from("agent_history_wake.db"))
-                    .unwrap()
-                    .0,
-                None,
-            )
-        });
-        let store = Arc::new(store);
-        let adapters = create_adapters();
-        // Claim the startup scan before spawning its thread. Otherwise a
-        // command can observe `false` and enqueue a second scan first.
-        let is_scanning = Arc::new(AtomicBool::new(true));
-
-        // Start one non-blocking incremental scan. List commands read the
-        // persisted index and never queue their own scans.
-        let store_bg = store.clone();
-        let scanning_bg = is_scanning.clone();
-        std::thread::spawn(move || {
-            let _scanning = ScanningGuard(scanning_bg);
-            let adapters = create_adapters();
-            let _ = run_scan(&adapters, &store_bg, &NullEvents, false);
-        });
-
+    fn with_db_path(db_path: PathBuf) -> Self {
         Self {
-            store,
-            adapters,
-            is_scanning,
+            db_path,
+            store: OnceLock::new(),
+            adapters: OnceLock::new(),
+            is_scanning: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    pub fn trigger_background_scan(&self, full: bool) {
+    pub fn store(&self) -> Result<&Arc<Store>, String> {
+        self.store
+            .get_or_init(|| {
+                let primary = (|| {
+                    if let Some(parent) = self.db_path.parent() {
+                        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                    }
+                    open_or_rebuild(&self.db_path)
+                        .map(|(store, _)| Arc::new(store))
+                        .map_err(|error| error.to_string())
+                })();
+                primary.or_else(|primary| {
+                    open_or_rebuild(PathBuf::from("agent_history_wake.db"))
+                        .map(|(store, _)| Arc::new(store))
+                        .map_err(|fallback| {
+                            format!(
+                                "Could not open history database: {primary}; fallback: {fallback}"
+                            )
+                        })
+                })
+            })
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+
+    pub fn adapters(&self) -> &[Box<dyn AgentAdapter>] {
+        self.adapters.get_or_init(create_adapters)
+    }
+
+    pub fn trigger_background_scan(&self, full: bool) -> Result<(), String> {
+        let store = self.store()?.clone();
         if self
             .is_scanning
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let store_bg = self.store.clone();
+            let store_bg = store;
             let scanning_bg = self.is_scanning.clone();
             std::thread::spawn(move || {
                 let _scanning = ScanningGuard(scanning_bg);
@@ -88,6 +98,7 @@ impl AgentHistoryState {
                 let _ = run_scan(&adapters, &store_bg, &NullEvents, full);
             });
         }
+        Ok(())
     }
 }
 
@@ -111,13 +122,14 @@ pub async fn agent_history_get_sessions(
     state: State<'_, AgentHistoryState>,
 ) -> Result<Vec<HistorySession>, String> {
     let f = filter.unwrap_or_default();
+    state.trigger_background_scan(false)?;
 
     let wake_filter = WakeSessionFilter {
         limit: 5000,
         ..WakeSessionFilter::default()
     };
     let (wake_sessions, _) = state
-        .store
+        .store()?
         .list_sessions(&wake_filter)
         .map_err(|e| e.to_string())?;
 
@@ -204,12 +216,12 @@ pub async fn agent_history_get_messages(
     state: State<'_, AgentHistoryState>,
 ) -> Result<Vec<HistoryMessage>, String> {
     let meta = state
-        .store
+        .store()?
         .get_session(&session_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Session not found".to_string())?;
 
-    let adapter = adapter_for(&state.adapters, meta.agent, &meta.file_path)
+    let adapter = adapter_for(state.adapters(), meta.agent, &meta.file_path)
         .ok_or_else(|| format!("No adapter for agent {:?}", meta.agent))?;
 
     let file_ref = SessionFileRef {
@@ -291,7 +303,7 @@ pub async fn agent_history_rescan(
         return agent_history_get_stats(state).await;
     }
 
-    let store = state.store.clone();
+    let store = state.store()?.clone();
     let scanning = state.is_scanning.clone();
 
     tokio::task::spawn_blocking(move || {
@@ -307,7 +319,7 @@ pub async fn agent_history_rescan(
 
 #[cfg(test)]
 mod state_tests {
-    use super::{Arc, AtomicBool, Ordering, ScanningGuard};
+    use super::{AgentHistoryState, Arc, AtomicBool, Ordering, PathBuf, ScanningGuard};
 
     #[test]
     fn scanning_guard_releases_the_scan_claim() {
@@ -318,6 +330,34 @@ mod state_tests {
         }
         assert!(!scanning.load(Ordering::SeqCst));
     }
+
+    #[test]
+    fn state_constructor_defers_database_creation() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let path = temp.path().join("history.db");
+        let state = AgentHistoryState::with_db_path(path.clone());
+
+        assert!(!path.exists());
+        let first = state.store().expect("open history database") as *const _;
+        let second = state.store().expect("reuse history database") as *const _;
+        assert!(path.exists());
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn concurrent_access_opens_one_history_store() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let state = AgentHistoryState::with_db_path(temp.path().join("history.db"));
+        let (first, second) = std::thread::scope(|scope| {
+            let first = scope.spawn(|| state.store().map(|store| store as *const _ as usize));
+            let second = scope.spawn(|| state.store().map(|store| store as *const _ as usize));
+            (
+                first.join().expect("first worker").expect("first store"),
+                second.join().expect("second worker").expect("second store"),
+            )
+        });
+        assert_eq!(first, second);
+    }
 }
 
 #[tauri::command]
@@ -326,7 +366,7 @@ pub async fn agent_history_delete_session(
     state: State<'_, AgentHistoryState>,
 ) -> Result<(), String> {
     state
-        .store
+        .store()?
         .remove_session(&session_id, true)
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -334,7 +374,7 @@ pub async fn agent_history_delete_session(
 
 #[tauri::command]
 pub async fn agent_history_clear_all(state: State<'_, AgentHistoryState>) -> Result<(), String> {
-    state.store.rebuild_all().map_err(|e| e.to_string())?;
+    state.store()?.rebuild_all().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -344,7 +384,7 @@ pub async fn agent_history_get_resume_command(
     state: State<'_, AgentHistoryState>,
 ) -> Result<Option<String>, String> {
     let session = state
-        .store
+        .store()?
         .get_session(&session_id)
         .map_err(|e| e.to_string())?;
     let Some(s) = session else {
@@ -359,7 +399,7 @@ pub async fn agent_history_export_markdown(
     state: State<'_, AgentHistoryState>,
 ) -> Result<String, String> {
     let session = state
-        .store
+        .store()?
         .get_session(&session_id)
         .map_err(|e| e.to_string())?
         .ok_or("Session not found")?;
@@ -405,7 +445,7 @@ pub async fn agent_history_get_stats(
         ..WakeSessionFilter::default()
     };
     let (wake_sessions, _) = state
-        .store
+        .store()?
         .list_sessions(&wake_filter)
         .map_err(|e| e.to_string())?;
 
