@@ -66,7 +66,8 @@ impl AgentHistoryState {
                         .map_err(|error| error.to_string())
                 })();
                 primary.or_else(|primary| {
-                    open_or_rebuild(PathBuf::from("agent_history_wake.db"))
+                    let fallback_path = PathBuf::from("agent_history_wake.db");
+                    open_or_rebuild(&fallback_path)
                         .map(|(store, _)| Arc::new(store))
                         .map_err(|fallback| {
                             format!(
@@ -319,7 +320,7 @@ pub async fn agent_history_rescan(
 
 #[cfg(test)]
 mod state_tests {
-    use super::{AgentHistoryState, Arc, AtomicBool, Ordering, PathBuf, ScanningGuard};
+    use super::{AgentHistoryState, Arc, AtomicBool, Ordering, ScanningGuard};
 
     #[test]
     fn scanning_guard_releases_the_scan_claim() {
