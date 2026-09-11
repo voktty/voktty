@@ -55,8 +55,10 @@ export const en = {
   themes: {
     descriptions: {
       vokttyDefault: {
-        default: "Modern Obsidian studio with subtle acrylic transparency and calibrated colors.",
-        fluent: "Windows Fluent Desktop theme with Carbon elevation and clean surfaces.",
+        default:
+          "Modern Obsidian studio with subtle acrylic transparency and calibrated colors.",
+        fluent:
+          "Windows Fluent Desktop theme with Carbon elevation and clean surfaces.",
         liquid: "Adaptive glass navigation with focused, solid work surfaces.",
         nord: "Arctic, north-bluish palette.",
         dracula: "The classic high-contrast purple dark theme.",
@@ -75,27 +77,46 @@ export const en = {
         caffeine: "Warm coffee tones, cream and espresso.",
       },
       "voktty-default": "Unified Voktty theme with curated color variations.",
-      win31: "Classic 16-bit Windows 3.1 skin with 3D beveled chrome, navy titlebar, and square corners.",
+      win31:
+        "Classic 16-bit Windows 3.1 skin with 3D beveled chrome, navy titlebar, and square corners.",
       mac1: "Authentic 1984 1-bit monochrome interface with a pinstriped titlebar and go-away close box.",
       kde: "Classic KDE 2/3 desktop with a blue gradient titlebar and beveled Qt controls.",
-      "commander-blue": "Classic DOS dual-pane file commander with deep navy, cyan borders, and yellow accents.",
-      "phosphor-crt": "Monochrome CRT terminal with glowing phosphor, scanlines, and a curved bezel.",
-      "whistler-bliss": "Y2K desktop with royal blue curved titlebars, emerald Start accents, and glossy controls.",
-      "boing-workbench": "Legendary 1985 creative workstation with sapphire blue, amber topaz, white, and obsidian.",
-      cubestep: "Iconic black cube workstation with beveled titanium tiles, floating titlebars, and high contrast.",
-      "yellowtab-os": "Responsive desktop with signature yellow-tab window titles and clean blue-gray chrome.",
-      "solar-cde": "Common Desktop Environment Unix workstation with geometric panels, deep slate, and plum accents.",
-      "humanity-2006": "Warm espresso brown and radiant orange desktop inspired by classic 2006 GNOME 2.",
-      "pocket-89": "Four-tone green LCD handheld with pixel contrast and retro gaming nostalgia.",
-      "pilot-pda": "Classic monochrome stylus organizer with an olive-gray LCD, compact buttons, and list rows.",
-      "clickwheel-pod": "Polished steel and white porcelain player with cyan highlights and compact sans typography.",
-      "station-94": "Classic 32-bit console with matte gray casing, memory-card indigo, and geometric action symbols.",
-      "audioamp-classic": "Legendary 90s MP3 player with brushed titanium, green LED digits, and a spectrum visualizer.",
-      "cybercafe-99": "Nostalgic 1999 internet café with dial-up teal, desktop shortcuts, and retro web aesthetics.",
-      "tiger-aqua": "2005 brushed aluminum desktop with glossy capsule buttons and smooth drop-shadow depth.",
-      "media-station-9": "Electric cobalt media player with glossy pill curves, glowing playback indicators, and cyan accents.",
-      "instant-chat-7": "Mid-2000s messenger aesthetic with sky-blue headers, tactile cards, and online presence accents.",
-      "bbs-dialup": "1980s bulletin board with ANSI character cells, ASCII menus, and modem telemetry colors.",
+      "commander-blue":
+        "Classic DOS dual-pane file commander with deep navy, cyan borders, and yellow accents.",
+      "phosphor-crt":
+        "Monochrome CRT terminal with glowing phosphor, scanlines, and a curved bezel.",
+      "whistler-bliss":
+        "Y2K desktop with royal blue curved titlebars, emerald Start accents, and glossy controls.",
+      "boing-workbench":
+        "Legendary 1985 creative workstation with sapphire blue, amber topaz, white, and obsidian.",
+      cubestep:
+        "Iconic black cube workstation with beveled titanium tiles, floating titlebars, and high contrast.",
+      "yellowtab-os":
+        "Responsive desktop with signature yellow-tab window titles and clean blue-gray chrome.",
+      "solar-cde":
+        "Common Desktop Environment Unix workstation with geometric panels, deep slate, and plum accents.",
+      "humanity-2006":
+        "Warm espresso brown and radiant orange desktop inspired by classic 2006 GNOME 2.",
+      "pocket-89":
+        "Four-tone green LCD handheld with pixel contrast and retro gaming nostalgia.",
+      "pilot-pda":
+        "Classic monochrome stylus organizer with an olive-gray LCD, compact buttons, and list rows.",
+      "clickwheel-pod":
+        "Polished steel and white porcelain player with cyan highlights and compact sans typography.",
+      "station-94":
+        "Classic 32-bit console with matte gray casing, memory-card indigo, and geometric action symbols.",
+      "audioamp-classic":
+        "Legendary 90s MP3 player with brushed titanium, green LED digits, and a spectrum visualizer.",
+      "cybercafe-99":
+        "Nostalgic 1999 internet café with dial-up teal, desktop shortcuts, and retro web aesthetics.",
+      "tiger-aqua":
+        "2005 brushed aluminum desktop with glossy capsule buttons and smooth drop-shadow depth.",
+      "media-station-9":
+        "Electric cobalt media player with glossy pill curves, glowing playback indicators, and cyan accents.",
+      "instant-chat-7":
+        "Mid-2000s messenger aesthetic with sky-blue headers, tactile cards, and online presence accents.",
+      "bbs-dialup":
+        "1980s bulletin board with ANSI character cells, ASCII menus, and modem telemetry colors.",
     },
   },
   dialog: {
@@ -949,11 +970,14 @@ export const en = {
       connect: "Request pairing",
       connecting: "Requesting pairing...",
       waitingForApproval: "Waiting for approval on your desktop.",
-      paired: "Paired successfully. Your desktop will make active agents available here.",
-      connectionError: "The pairing request could not be sent. Check the payload and tunnel.",
+      paired:
+        "Paired successfully. Your desktop will make active agents available here.",
+      connectionError:
+        "The pairing request could not be sent. Check the payload and tunnel.",
       scanQr: "Scan pairing QR code",
       stopScanning: "Stop scanning",
-      cameraError: "Camera access is unavailable. Paste the pairing payload instead.",
+      cameraError:
+        "Camera access is unavailable. Paste the pairing payload instead.",
     },
   },
   docker: {
@@ -1663,6 +1687,21 @@ export const en = {
     navigate: "Navigate",
     switch: "Switch",
     closeTab: "Close",
+  },
+  connectionsLaunchpad: {
+    title: "Connections",
+    placeholder: "Search active and available connections...",
+    active: "Active connections",
+    available: "Available connections",
+    noResults: "No connections match your search",
+    newSsh: "New SSH",
+    newRdp: "New RDP",
+    newSerial: "New serial",
+    joinCompanion: "Join companion",
+    running: "Running",
+    current: "Current connection",
+    hintNavigate: "Up/Down to navigate",
+    hintOpen: "Enter to open",
   },
   projectToolkit: {
     buttonAria: "Quick actions and language servers",
@@ -2764,6 +2803,7 @@ export const en = {
       commandPaletteContent: "Find in files",
       fileQuickOpen: "Quick Open",
       tabsLaunchpad: "Open active tabs",
+      connectionsLaunchpad: "Open connections",
       settingsOpen: "Open settings",
       tabNew: "New tab",
       tabNewBlock: "New Blocks terminal",
@@ -3464,7 +3504,8 @@ export const en = {
       copyCommand: "Copy command",
     },
     gitChanges: "{count, plural, =1 {change} other {changes}}",
-    gitDiffHudTooltip: "Open floating live Git review ({count} {count, plural, =1 {change} other {changes}}) · Alt+D",
+    gitDiffHudTooltip:
+      "Open floating live Git review ({count} {count, plural, =1 {change} other {changes}}) · Alt+D",
   },
   onboarding: {
     title: "Welcome to Voktty",
@@ -4223,7 +4264,8 @@ export const en = {
     assistant: "Assistant",
     redacted: "redacted",
     thinkingProcess: "Thinking Process",
-    selectSessionTranscript: "Select a session from the list to view its full transcript",
+    selectSessionTranscript:
+      "Select a session from the list to view its full transcript",
     noResultsFor: "No results found for “{query}”",
     scopeAllSessions: "Scope: all sessions",
     navigate: "navigate",
@@ -4353,7 +4395,8 @@ export const en = {
     unstageAll: "Unstage All",
     discardAll: "Discard All",
     discardAllConfirm: "Discard all uncommitted changes?",
-    discardAllDesc: "This action cannot be undone. All modified files in the working tree will be reverted.",
+    discardAllDesc:
+      "This action cannot be undone. All modified files in the working tree will be reverted.",
     discardFile: "Discard Changes",
     discardFileConfirm: "Discard changes in '{file}'?",
     discardFileDesc: "This will revert uncommitted edits in this file.",
@@ -4418,8 +4461,7 @@ export const en = {
     needsConsoleTitle:
       "Needs intervention in the console. Click to focus the terminal",
     terminalClosedEarly: "Terminal closed before finishing",
-    assignedTo:
-      "Assigned to {agent} (Tab {tabId}). Click to focus",
+    assignedTo: "Assigned to {agent} (Tab {tabId}). Click to focus",
     unassignAgent: "Unassign agent",
     runWithAgent: "Run with agent...",
     agent: "Agent",
@@ -4569,8 +4611,10 @@ export const en = {
       sectionDescriptions: {
         general: "App-wide behavior and the build you are running.",
         appearance: "Theme, translucency, and the tint applied to the chrome.",
-        keybindings: "Every shortcut the workspace handles, from the app menu and the key handler.",
-        providers: "Agent CLIs Voktty can drive, and the model new sessions start with.",
+        keybindings:
+          "Every shortcut the workspace handles, from the app menu and the key handler.",
+        providers:
+          "Agent CLIs Voktty can drive, and the model new sessions start with.",
         inbox:
           "Source connections and authentication for issues, PRs, and review feeds.",
         skills:
@@ -4624,14 +4668,19 @@ export const en = {
       checkForUpdates: "Check for updates",
       download: "Download",
       chatBackground: "Chat background",
-      chatBackgroundDesc: "An image behind your chat panes. It stays on this device.",
+      chatBackgroundDesc:
+        "An image behind your chat panes. It stays on this device.",
       change: "Change",
       previewAt: "Preview at {visibility}%",
       bindingCount: "{count, plural, one {# binding} other {# bindings}}",
-      keybindingsDesc: "Bindings come from the app menu and the workspace key handler; they aren't customizable yet.",
-      providersIntroLong: "A provider is listed as installed once its CLI is found on your PATH. Uninstalled CLIs stay listed here but are omitted from the model picker. Turn off Show in picker to hide an installed provider from those tabs. The model beside each provider is what new conversations use when that provider is selected; Use by default picks the provider itself.",
-      archiveProjectHint: "Archive a project from the rail to keep its chats without listing it in the sidebar.",
-      openProjectForArchived: "Open a project to see its archived conversations.",
+      keybindingsDesc:
+        "Bindings come from the app menu and the workspace key handler; they aren't customizable yet.",
+      providersIntroLong:
+        "A provider is listed as installed once its CLI is found on your PATH. Uninstalled CLIs stay listed here but are omitted from the model picker. Turn off Show in picker to hide an installed provider from those tabs. The model beside each provider is what new conversations use when that provider is selected; Use by default picks the provider itself.",
+      archiveProjectHint:
+        "Archive a project from the rail to keep its chats without listing it in the sidebar.",
+      openProjectForArchived:
+        "Open a project to see its archived conversations.",
       noArchivedConversations: "No archived conversations in this project.",
       commit: "Commit",
       commitAndPush: "Commit & Push",
@@ -4641,15 +4690,20 @@ export const en = {
       unstageAllChanges: "Unstage All Changes",
       stageAllChanges: "Stage All Changes",
       divergedFrom: "Diverged from {upstream}",
-      unpushedCommitCount: "{count, plural, one {# unpushed commit} other {# unpushed commits}}",
-      incomingCommitCount: "{count, plural, one {# incoming commit} other {# incoming commits}}",
+      unpushedCommitCount:
+        "{count, plural, one {# unpushed commit} other {# unpushed commits}}",
+      incomingCommitCount:
+        "{count, plural, one {# incoming commit} other {# incoming commits}}",
       noFiles: "No files",
       synchronizingChanges: "Synchronizing changes…",
       publishBranch: "Publish Branch",
-      publishBranchNamed: "Publish Branch \"{branch}\"",
-      pullAndPushCommits: "Pull {behind} and push {ahead} commits between {dest}",
-      pullCommits: "Pull {count, plural, one {# commit} other {# commits}} from {dest}",
-      pushCommits: "Push {count, plural, one {# commit} other {# commits}} to {dest}",
+      publishBranchNamed: 'Publish Branch "{branch}"',
+      pullAndPushCommits:
+        "Pull {behind} and push {ahead} commits between {dest}",
+      pullCommits:
+        "Pull {count, plural, one {# commit} other {# commits}} from {dest}",
+      pushCommits:
+        "Push {count, plural, one {# commit} other {# commits}} to {dest}",
       syncChanges: "Sync Changes",
       createPr: "Create PR",
       createPrInto: "Create a pull request into {branch}",
@@ -4658,10 +4712,14 @@ export const en = {
       viewPrDetails: "View PR #{number}: {title}",
       deleteProjectNamed: "Delete {name}",
       deleteProjectNamedQuestion: "Delete “{name}”?",
-      deleteProjectDescription: "All conversations for this project will be deleted. It also leaves the sidebar. The folder on disk stays put, and opening it again brings the project back empty.",
-      savedConversationRemoval: "{count, plural, one {# saved conversation will be removed.} other {# saved conversations will be removed.}}",
-      networkSandboxAllowlistHint: "One host per line. Prefix with *. to allow any subdomain. Nothing else can be reached.",
-      networkSandboxUnrestricted: "The agent's outbound network is unrestricted.",
+      deleteProjectDescription:
+        "All conversations for this project will be deleted. It also leaves the sidebar. The folder on disk stays put, and opening it again brings the project back empty.",
+      savedConversationRemoval:
+        "{count, plural, one {# saved conversation will be removed.} other {# saved conversations will be removed.}}",
+      networkSandboxAllowlistHint:
+        "One host per line. Prefix with *. to allow any subdomain. Nothing else can be reached.",
+      networkSandboxUnrestricted:
+        "The agent's outbound network is unrestricted.",
       noMatchingFilesOrNotes: "No matching files or notes",
       noMatchingFilesOrFolders: "No matching files or folders",
       noFilesOrNotesFound: "No files or notes found",
@@ -4674,9 +4732,11 @@ export const en = {
       sessionChanges: "Session Changes",
       closeTabWithUnsavedFiles: "Close this tab with unsaved files?",
       closeFileWithoutSaving: "Close {name} without saving?",
-      closeConversationWithUnsavedFiles: "Close this conversation with unsaved files?",
-      deleteSessionNamed: "Delete \"{name}\"?",
-      deleteSelectedConversations: "Delete {count} selected conversations? This can't be undone.",
+      closeConversationWithUnsavedFiles:
+        "Close this conversation with unsaved files?",
+      deleteSessionNamed: 'Delete "{name}"?',
+      deleteSelectedConversations:
+        "Delete {count} selected conversations? This can't be undone.",
       cannotFollowUpMidTurn:
         "{harness} cannot take a follow-up mid-turn. Wait for this turn to finish, or stop it first.",
       manualCompactionUnsupported:
@@ -4707,23 +4767,29 @@ export const en = {
       gameOver: "Game over",
       release: "Release",
       takeControl: "Take control",
-      unmodifiedLines: "{count} unmodified {count, plural, one {line} other {lines}}",
+      unmodifiedLines:
+        "{count} unmodified {count, plural, one {line} other {lines}}",
       uncommittedSummary: "{label} uncommitted",
       toolCallWithState: "{state} tool call: {text}",
       closePaneShortcut: "Close Pane ({shortcut})",
       sessionChangesTooltip: "Changes captured for this session only",
       plan: "Plan",
       workingTreeNamed: "{name} (Working Tree)",
-      tabProblems: "{title} — {count, plural, one {# problem} other {# problems}}",
+      tabProblems:
+        "{title} — {count, plural, one {# problem} other {# problems}}",
       openFiles: "Open files",
       loadingAgentHarness: "Loading agent harness…",
       commentOn: "Comment on {location}",
       addCommentShortcut: "{shortcut}↩ to add",
       fileNameRequired: "A file or folder name must be provided.",
-      fileNameNoLeadingSlash: "A file or folder name cannot start with a slash.",
-      fileNameExists: "A file or folder named {name} already exists at this location. Please choose a different name.",
-      fileNameInvalid: "The name {name} is not valid as a file or folder name. Please choose a different name.",
-      fileNameWhitespace: "Leading or trailing whitespace detected in file or folder name.",
+      fileNameNoLeadingSlash:
+        "A file or folder name cannot start with a slash.",
+      fileNameExists:
+        "A file or folder named {name} already exists at this location. Please choose a different name.",
+      fileNameInvalid:
+        "The name {name} is not valid as a file or folder name. Please choose a different name.",
+      fileNameWhitespace:
+        "Leading or trailing whitespace detected in file or folder name.",
       openContextActions: "{headline}, {detail}. Open context actions",
       contextUsageLabel: "{headline}, {detail}",
       dropFilesToAttach: "Drop files to attach",
@@ -4733,7 +4799,8 @@ export const en = {
       savedToNotes: "Saved to Notes",
       saveAsNote: "Save as note",
       showPreviousToolCalls: "Show {count} previous tool calls",
-      previousToolCalls: "+{count} previous {count, plural, one {tool call} other {tool calls}}",
+      previousToolCalls:
+        "+{count} previous {count, plural, one {tool call} other {tool calls}}",
       hideWork: "Hide the work",
       showWork: "Show the work",
       hideStepsFor: "Hide the steps for {title}",
@@ -4764,7 +4831,8 @@ export const en = {
       couldntLoadSessionChanges: "Couldn't load session changes",
       noSessionChanges: "No session changes",
       noFileChanges: "No file changes",
-      diffTooLargeFull: "Diff is too large to display in full. File list is shown without patches.",
+      diffTooLargeFull:
+        "Diff is too large to display in full. File list is shown without patches.",
       binaryFileChanged: "Binary file changed",
       diffTooLarge: "Diff is too large to display",
       noTextualDiff: "No textual diff",
@@ -4789,7 +4857,8 @@ export const en = {
       placeholderNote: "Add a note, or send to start...",
       placeholderMessage: "Add a message, or send...",
       placeholderContinue: "Add context, or send to continue...",
-      placeholderAskCommands: "Ask, build, / for commands, @ for references... ",
+      placeholderAskCommands:
+        "Ask, build, / for commands, @ for references... ",
       placeholderAskSkills: "Ask, build, / for skills, @ for references... ",
       jumpToLatest: "Jump to latest",
       closePane: "Close pane",
@@ -4868,7 +4937,8 @@ export const en = {
       newFile: "New File",
       newFolder: "New Folder",
       collapseAll: "Collapse All",
-      typeFileName: "Type file name. Press Enter to confirm or Escape to cancel.",
+      typeFileName:
+        "Type file name. Press Enter to confirm or Escape to cancel.",
       dismissUpdate: "Dismiss update notification",
       filterSessions: "Filter sessions",
       archived: "Archived",
@@ -5160,8 +5230,7 @@ export const en = {
       secondOpinionMenu: "Send this turn to another agent",
       settingsKeybindings: "Keybindings",
       settingsArchive: "Archive",
-      commentCount:
-        "{count, plural, one {# comment} other {# comments}}",
+      commentCount: "{count, plural, one {# comment} other {# comments}}",
       latestCommentsMoreOn: "Latest comments · more on {name}",
       resolved: "Resolved",
       ghost: "ghost",
@@ -5169,8 +5238,7 @@ export const en = {
       couldntOpenFile: "Could not open {name}",
       saving: "Saving...",
       saveFailed: "Save failed: {message}",
-      searchEmptyHint:
-        "Find files, conversations, messages, and projects.",
+      searchEmptyHint: "Find files, conversations, messages, and projects.",
       teams: "Teams",
       clearFilters: "Clear filters",
       noMatchingSkills: "No matching skills",
@@ -5220,16 +5288,19 @@ export const en = {
     branchCreated: "Branch {name} created successfully",
     branchFailed: "Failed to create branch",
     revertConfirmTitle: "Revert Commit?",
-    revertConfirmDescription: 'Are you sure you want to revert commit "{subject}"?',
+    revertConfirmDescription:
+      'Are you sure you want to revert commit "{subject}"?',
     revertCommit: "Revert Commit",
     cherryPickConfirmTitle: "Cherry-pick Commit?",
-    cherryPickConfirmDescription: 'Are you sure you want to cherry-pick commit "{subject}"?',
+    cherryPickConfirmDescription:
+      'Are you sure you want to cherry-pick commit "{subject}"?',
     cherryPick: "Cherry-pick",
     createBranch: "Create Branch",
     createBranchDescription: 'Create a new branch from commit "{subject}"',
     branchNamePlaceholder: "Branch name (e.g. feat/new-feature)",
     unknownAuthor: "Unknown author",
-    filesChangedCount: "{count, plural, one {# file changed} other {# files changed}}",
+    filesChangedCount:
+      "{count, plural, one {# file changed} other {# files changed}}",
     noSubject: "(no commit message)",
     viewChanges: "View changes",
     copied: "Copied!",
@@ -5318,7 +5389,8 @@ export const en = {
       noPulls: "No open pull requests found.",
       noRemoteFound: "No GitHub remote repository found for this project.",
       tokenRequiredTitle: "Connect GitHub to view Pull Requests",
-      tokenRequiredDesc: "Add a personal access token (PAT) to browse, review, and checkout pull requests.",
+      tokenRequiredDesc:
+        "Add a personal access token (PAT) to browse, review, and checkout pull requests.",
       connectGithub: "Connect GitHub",
       setTokenBtn: "Set Access Token",
       connectGithubTitle: "GitHub Personal Access Token",
@@ -5334,7 +5406,8 @@ export const en = {
       baseBranch: "Base Branch",
       diffPreview: "PR Diff Preview",
       diffUnavailable: "No diff content available for this pull request.",
-      selectPrHint: "Select a pull request from the list to view its details and diff.",
+      selectPrHint:
+        "Select a pull request from the list to view its details and diff.",
       submitReviewTitle: "Review Pull Request #{number}",
       approve: "Approve",
       comment: "Comment",
@@ -5359,12 +5432,14 @@ export const en = {
       add: "Add Worktree",
       refresh: "Refresh",
       loading: "Loading worktrees...",
-      empty: "No active auxiliary worktrees. Create a worktree to run concurrent tasks in isolation.",
+      empty:
+        "No active auxiliary worktrees. Create a worktree to run concurrent tasks in isolation.",
       active: "Active Worktrees",
       createSuccess: "Worktree created",
       removeSuccess: "Worktree removed",
       removeConfirmTitle: "Remove Worktree?",
-      removeConfirmDesc: 'Are you sure you want to remove worktree "{name}"? Uncommitted changes will not be deleted.',
+      removeConfirmDesc:
+        'Are you sure you want to remove worktree "{name}"? Uncommitted changes will not be deleted.',
       cancel: "Cancel",
       remove: "Remove",
       branchPlaceholder: "New branch name for worktree",
@@ -5389,7 +5464,7 @@ export const en = {
       deleteTagTitle: "Delete Tag?",
       deleteTagDesc: 'Are you sure you want to delete tag "{name}"?',
       dropStashTitle: "Drop Stash?",
-      dropStashDesc: 'Are you sure you want to drop stash@{index}?',
+      dropStashDesc: "Are you sure you want to drop stash@{index}?",
       cancel: "Cancel",
       delete: "Delete",
       drop: "Drop",
@@ -5481,7 +5556,8 @@ export const en = {
     copyPathAriaLabel: "Copy path of {name}",
     revealInFileManager: "Reveal in file manager",
     revealAriaLabel: "Reveal {name} in file explorer",
-    descriptionFooter: "Hidden skills stay on disk and are excluded from Voktty's file-skill catalog. Provider-managed skills and native commands are unaffected. Skills live in .agents/skills for this project and ~/.agents/skills for you personally; harness folders are also picked up.",
+    descriptionFooter:
+      "Hidden skills stay on disk and are excluded from Voktty's file-skill catalog. Provider-managed skills and native commands are unaffected. Skills live in .agents/skills for this project and ~/.agents/skills for you personally; harness folders are also picked up.",
   },
   questions: {
     question: "Question",
@@ -5500,12 +5576,15 @@ export const en = {
     keep: "Keep",
     review: "Review",
     undoAllSessionChanges: "Undo all session changes",
-    undoLockedOtherSession: "Undo is unavailable while another session is running in this project",
-    undoUnavailableExternal: "Undo is unavailable because a file changed outside this session",
+    undoLockedOtherSession:
+      "Undo is unavailable while another session is running in this project",
+    undoUnavailableExternal:
+      "Undo is unavailable because a file changed outside this session",
     keepAllSessionChanges: "Keep all session changes and dismiss this card",
     reviewChanges: "Review changes",
     showFewerFiles: "Show fewer files",
-    showMoreFiles: "Show {count} more {count, plural, one {file} other {files}}",
+    showMoreFiles:
+      "Show {count} more {count, plural, one {file} other {files}}",
     sharedFile: "Shared file",
   },
 };

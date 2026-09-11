@@ -57,9 +57,12 @@ export const es: TranslationSchema = {
   themes: {
     descriptions: {
       vokttyDefault: {
-        default: "Estudio Obsidian moderno con transparencia acrílica sutil y colores calibrados.",
-        fluent: "Tema Windows Fluent Desktop con elevación Carbon y superficies limpias.",
-        liquid: "Navegación de vidrio adaptativo con superficies de trabajo sólidas y enfocadas.",
+        default:
+          "Estudio Obsidian moderno con transparencia acrílica sutil y colores calibrados.",
+        fluent:
+          "Tema Windows Fluent Desktop con elevación Carbon y superficies limpias.",
+        liquid:
+          "Navegación de vidrio adaptativo con superficies de trabajo sólidas y enfocadas.",
         nord: "Paleta ártica con matices azulados del norte.",
         dracula: "El clásico tema oscuro púrpura de alto contraste.",
         "tokyo-night": "Tema oscuro sereno con tendencia azul.",
@@ -67,37 +70,60 @@ export const es: TranslationSchema = {
         "rose-pine": "Vibras del Soho, pino y rosa naturales.",
         everforest: "Paleta de bosque verde, suave y de bajo contraste.",
         gruvbox: "Paleta retro cálida y terrosa.",
-        solarized: "Paleta precisa de bajo deslumbramiento de Ethan Schoonover.",
-        kanagawa: "Oscuro entintado inspirado en Hokusai, con Lotus claro y cálido.",
-        "kanagawa-dragon": "La variante Dragon de Kanagawa, apagada y casi negra.",
+        solarized:
+          "Paleta precisa de bajo deslumbramiento de Ethan Schoonover.",
+        kanagawa:
+          "Oscuro entintado inspirado en Hokusai, con Lotus claro y cálido.",
+        "kanagawa-dragon":
+          "La variante Dragon de Kanagawa, apagada y casi negra.",
         claude: "Acento de arcilla cálida sobre papel.",
         xcode: "Colores de sistema de Apple con acento systemBlue.",
         tide: "Pizarra abisal con neón turquesa oceánico luminoso.",
         sage: "Verde bosque apagado, sereno y suave.",
         caffeine: "Tonos cálidos de café, crema y espresso.",
       },
-      "voktty-default": "Tema Voktty unificado con variaciones de color seleccionadas.",
-      win31: "Skin clásico de Windows 3.1 de 16 bits con chrome biselado 3D, barra azul marino y esquinas cuadradas.",
+      "voktty-default":
+        "Tema Voktty unificado con variaciones de color seleccionadas.",
+      win31:
+        "Skin clásico de Windows 3.1 de 16 bits con chrome biselado 3D, barra azul marino y esquinas cuadradas.",
       mac1: "Interfaz monocroma auténtica de 1 bit de 1984 con barra de título rayada y botón de cierre clásico.",
       kde: "Escritorio clásico KDE 2/3 con barra de título de gradiente azul y controles Qt biselados.",
-      "commander-blue": "Comandante de archivos DOS clásico de dos paneles con azul marino, bordes cian y acentos amarillos.",
-      "phosphor-crt": "Terminal CRT monocroma con fósforo brillante, líneas de barrido y bisel curvado.",
-      "whistler-bliss": "Escritorio Y2K con barras curvas azul real, acentos esmeralda de Inicio y controles brillantes.",
-      "boing-workbench": "Estación creativa legendaria de 1985 con azul zafiro, ámbar topacio, blanco y obsidiana.",
-      cubestep: "Icónica estación de cubo negro con baldosas de titanio biseladas, barras flotantes y alto contraste.",
-      "yellowtab-os": "Escritorio adaptable con títulos de ventana de pestaña amarilla y chrome azul grisáceo limpio.",
-      "solar-cde": "Estación Unix Common Desktop Environment con paneles geométricos, pizarra profunda y acentos ciruela.",
-      "humanity-2006": "Escritorio marrón espresso y naranja radiante inspirado en GNOME 2 clásico de 2006.",
-      "pocket-89": "Consola portátil LCD verde de cuatro tonos con contraste de píxeles y nostalgia retro.",
-      "pilot-pda": "Organizador clásico monocromo con lápiz, LCD gris oliva, botones compactos y filas de lista.",
-      "clickwheel-pod": "Reproductor de acero pulido y porcelana blanca con resaltados cian y tipografía sans compacta.",
-      "station-94": "Consola clásica de 32 bits con carcasa gris mate, índigo de tarjeta de memoria y símbolos geométricos.",
-      "audioamp-classic": "Legendario reproductor MP3 de los 90 con titanio cepillado, dígitos LED verdes y visualizador de espectro.",
-      "cybercafe-99": "Cibercafé nostálgico de 1999 con verde azulado dial-up, accesos de escritorio y estética web retro.",
-      "tiger-aqua": "Escritorio de aluminio cepillado de 2005 con botones cápsula brillantes y profundidad de sombras suave.",
-      "media-station-9": "Reproductor multimedia cobalto eléctrico con curvas brillantes, indicadores luminosos y acentos cian.",
-      "instant-chat-7": "Estética de mensajería de mediados de los 2000 con cabeceras azul cielo, tarjetas táctiles y presencia en línea.",
-      "bbs-dialup": "Tablón de anuncios de los 80 con celdas ANSI, menús ASCII y colores de telemetría de módem.",
+      "commander-blue":
+        "Comandante de archivos DOS clásico de dos paneles con azul marino, bordes cian y acentos amarillos.",
+      "phosphor-crt":
+        "Terminal CRT monocroma con fósforo brillante, líneas de barrido y bisel curvado.",
+      "whistler-bliss":
+        "Escritorio Y2K con barras curvas azul real, acentos esmeralda de Inicio y controles brillantes.",
+      "boing-workbench":
+        "Estación creativa legendaria de 1985 con azul zafiro, ámbar topacio, blanco y obsidiana.",
+      cubestep:
+        "Icónica estación de cubo negro con baldosas de titanio biseladas, barras flotantes y alto contraste.",
+      "yellowtab-os":
+        "Escritorio adaptable con títulos de ventana de pestaña amarilla y chrome azul grisáceo limpio.",
+      "solar-cde":
+        "Estación Unix Common Desktop Environment con paneles geométricos, pizarra profunda y acentos ciruela.",
+      "humanity-2006":
+        "Escritorio marrón espresso y naranja radiante inspirado en GNOME 2 clásico de 2006.",
+      "pocket-89":
+        "Consola portátil LCD verde de cuatro tonos con contraste de píxeles y nostalgia retro.",
+      "pilot-pda":
+        "Organizador clásico monocromo con lápiz, LCD gris oliva, botones compactos y filas de lista.",
+      "clickwheel-pod":
+        "Reproductor de acero pulido y porcelana blanca con resaltados cian y tipografía sans compacta.",
+      "station-94":
+        "Consola clásica de 32 bits con carcasa gris mate, índigo de tarjeta de memoria y símbolos geométricos.",
+      "audioamp-classic":
+        "Legendario reproductor MP3 de los 90 con titanio cepillado, dígitos LED verdes y visualizador de espectro.",
+      "cybercafe-99":
+        "Cibercafé nostálgico de 1999 con verde azulado dial-up, accesos de escritorio y estética web retro.",
+      "tiger-aqua":
+        "Escritorio de aluminio cepillado de 2005 con botones cápsula brillantes y profundidad de sombras suave.",
+      "media-station-9":
+        "Reproductor multimedia cobalto eléctrico con curvas brillantes, indicadores luminosos y acentos cian.",
+      "instant-chat-7":
+        "Estética de mensajería de mediados de los 2000 con cabeceras azul cielo, tarjetas táctiles y presencia en línea.",
+      "bbs-dialup":
+        "Tablón de anuncios de los 80 con celdas ANSI, menús ASCII y colores de telemetría de módem.",
     },
   },
   dialog: {
@@ -152,7 +178,8 @@ export const es: TranslationSchema = {
       copyPayload: "Copiar payload de emparejamiento",
       expires: "El emparejamiento caduca a las {{time}}",
       tunnel: "Túnel temporal de Cloudflare",
-      qrCode: "Escanea este código QR de emparejamiento con el companion Android de Voktty",
+      qrCode:
+        "Escanea este código QR de emparejamiento con el companion Android de Voktty",
       generatingQr: "Generando código QR de emparejamiento...",
       error: "No se pudo iniciar el companion: {{message}}",
       pendingTitle: "Solicitudes de emparejamiento",
@@ -969,17 +996,21 @@ export const es: TranslationSchema = {
       agentOnlyTitle: "Solo conversaciones de agentes",
       agentOnlyDescription:
         "Esta app nunca abre el workbench de escritorio, terminales, sesiones SSH, archivos ni editor.",
-      waitingForPairing: "El emparejamiento con tu escritorio estará disponible aquí.",
+      waitingForPairing:
+        "El emparejamiento con tu escritorio estará disponible aquí.",
       payloadLabel: "Payload de emparejamiento",
       payloadPlaceholder: "Pega el payload de emparejamiento de tu escritorio",
       connect: "Solicitar emparejamiento",
       connecting: "Solicitando emparejamiento...",
       waitingForApproval: "Esperando aprobación en tu escritorio.",
-      paired: "Emparejado correctamente. El escritorio hará disponibles aquí los agentes activos.",
-      connectionError: "No se pudo enviar la solicitud. Comprueba el payload y el túnel.",
+      paired:
+        "Emparejado correctamente. El escritorio hará disponibles aquí los agentes activos.",
+      connectionError:
+        "No se pudo enviar la solicitud. Comprueba el payload y el túnel.",
       scanQr: "Escanear código QR de emparejamiento",
       stopScanning: "Dejar de escanear",
-      cameraError: "No se puede acceder a la cámara. Pega el payload de emparejamiento.",
+      cameraError:
+        "No se puede acceder a la cámara. Pega el payload de emparejamiento.",
     },
   },
   docker: {
@@ -1706,6 +1737,21 @@ export const es: TranslationSchema = {
     navigate: "Navegar",
     switch: "Ir",
     closeTab: "Cerrar",
+  },
+  connectionsLaunchpad: {
+    title: "Conexiones",
+    placeholder: "Buscar conexiones activas y disponibles...",
+    active: "Conexiones activas",
+    available: "Conexiones disponibles",
+    noResults: "Ninguna conexión coincide con la búsqueda",
+    newSsh: "Nueva SSH",
+    newRdp: "Nueva RDP",
+    newSerial: "Nueva conexión serie",
+    joinCompanion: "Unirse a companion",
+    running: "En ejecución",
+    current: "Conexión actual",
+    hintNavigate: "Arriba/Abajo para navegar",
+    hintOpen: "Enter para abrir",
   },
   projectToolkit: {
     buttonAria: "Acciones rápidas y servidores de lenguaje",
@@ -2833,6 +2879,7 @@ export const es: TranslationSchema = {
       commandPaletteContent: "Buscar en archivos",
       fileQuickOpen: "Apertura rápida",
       tabsLaunchpad: "Abrir pestañas activas",
+      connectionsLaunchpad: "Abrir conexiones",
       settingsOpen: "Abrir ajustes",
       tabNew: "Nueva pestaña",
       tabNewBlock: "Nueva terminal de bloques",
@@ -3543,7 +3590,8 @@ export const es: TranslationSchema = {
       copyCommand: "Copiar comando",
     },
     gitChanges: "{count, plural, =1 {cambio} other {cambios}}",
-    gitDiffHudTooltip: "Abrir revisión Git flotante en vivo ({count} {count, plural, =1 {cambio} other {cambios}}) · Alt+D",
+    gitDiffHudTooltip:
+      "Abrir revisión Git flotante en vivo ({count} {count, plural, =1 {cambio} other {cambios}}) · Alt+D",
   },
   onboarding: {
     title: "Bienvenido a Voktty",
@@ -4316,7 +4364,8 @@ export const es: TranslationSchema = {
     assistant: "Asistente",
     redacted: "ocultado",
     thinkingProcess: "Proceso de razonamiento",
-    selectSessionTranscript: "Selecciona una sesión de la lista para ver su transcripción completa",
+    selectSessionTranscript:
+      "Selecciona una sesión de la lista para ver su transcripción completa",
     noResultsFor: "No se encontraron resultados para “{query}”",
     scopeAllSessions: "Ámbito: todas las sesiones",
     navigate: "navegar",
@@ -4450,15 +4499,19 @@ export const es: TranslationSchema = {
     unstageAll: "Despreparar todo",
     discardAll: "Descartar todo",
     discardAllConfirm: "¿Descartar todos los cambios no guardados?",
-    discardAllDesc: "Esta acción no se puede deshacer. Todos los archivos modificados en el árbol de trabajo se revertirán.",
+    discardAllDesc:
+      "Esta acción no se puede deshacer. Todos los archivos modificados en el árbol de trabajo se revertirán.",
     discardFile: "Descartar cambios",
     discardFileConfirm: "¿Descartar cambios en '{file}'?",
-    discardFileDesc: "Esto revertirá las ediciones no guardadas en este archivo.",
+    discardFileDesc:
+      "Esto revertirá las ediciones no guardadas en este archivo.",
     filterFiles: "Filtrar archivos modificados...",
     noChangesTitle: "Árbol de trabajo limpio",
-    noChangesDesc: "No se detectaron archivos modificados en el repositorio actual.",
+    noChangesDesc:
+      "No se detectaron archivos modificados en el repositorio actual.",
     noRepoTitle: "Sin repositorio Git",
-    noRepoDesc: "La carpeta del espacio de trabajo activo no es un repositorio Git.",
+    noRepoDesc:
+      "La carpeta del espacio de trabajo activo no es un repositorio Git.",
     walkthroughAi: "Recorrido IA",
     githubPrReview: "PRs de GitHub",
     sendReviewToAgent: "Enviar revisión al agente / terminal",
@@ -4515,8 +4568,7 @@ export const es: TranslationSchema = {
     needsConsoleTitle:
       "Requiere intervencion en consola. Clic para enfocar la terminal",
     terminalClosedEarly: "Terminal cerrada antes de finalizar",
-    assignedTo:
-      "Asignado a {agent} (Pestaña {tabId}). Clic para enfocar",
+    assignedTo: "Asignado a {agent} (Pestaña {tabId}). Clic para enfocar",
     unassignAgent: "Desvincular agente",
     runWithAgent: "Ejecutar con agente...",
     agent: "Agente",
@@ -4622,7 +4674,8 @@ export const es: TranslationSchema = {
         "Ejecuta hooks de settings.json (PreToolUse, bloques, notificaciones). Se aplica en el siguiente turno.",
       restoreDefaults: "Restaurar valores",
       sidebarOpacity: "Opacidad de la barra lateral",
-      sidebarOpacityDesc: "Cuanto se ve el escritorio a traves de la barra lateral.",
+      sidebarOpacityDesc:
+        "Cuanto se ve el escritorio a traves de la barra lateral.",
       blurRadius: "Radio de desenfoque",
       blurRadiusDesc: "Desenfoque de fondo detras de la ventana.",
       hue: "Tono",
@@ -4665,10 +4718,13 @@ export const es: TranslationSchema = {
       auto: "Automático",
       flex: "Flex",
       sectionDescriptions: {
-        general: "Comportamiento general de la aplicación y la compilación que estás usando.",
+        general:
+          "Comportamiento general de la aplicación y la compilación que estás usando.",
         appearance: "Tema, transparencia y el tinte aplicado al chrome.",
-        keybindings: "Todos los atajos que controla el espacio de trabajo, desde el menú hasta el gestor de teclas.",
-        providers: "CLIs de agentes que Voktty puede controlar y el modelo con el que empiezan las sesiones nuevas.",
+        keybindings:
+          "Todos los atajos que controla el espacio de trabajo, desde el menú hasta el gestor de teclas.",
+        providers:
+          "CLIs de agentes que Voktty puede controlar y el modelo con el que empiezan las sesiones nuevas.",
         inbox:
           "Conexiones de origen y autenticación para incidencias, PRs y feeds de revisión.",
         skills:
@@ -4714,23 +4770,31 @@ export const es: TranslationSchema = {
         "Hay disponible MonoCode {available} (tienes {current}).{detail}\n\n¿Instalar ahora?",
       updatesUnavailable:
         "Las actualizaciones automáticas no están configuradas para esta compilación.\n\nDescarga versiones en https://github.com/hardbeat920/monocode/releases/latest",
-      updateCheckError: "No se pudieron comprobar las actualizaciones.\n\n{error}",
+      updateCheckError:
+        "No se pudieron comprobar las actualizaciones.\n\n{error}",
       checkingForUpdates: "Buscando actualizaciones…",
       latestVersion: "Estás usando la versión más reciente.",
       updateCheckFailed: "La comprobación de actualizaciones falló.",
-      updatesFromReleaseFeed: "Voktty se actualiza desde el canal de versiones.",
+      updatesFromReleaseFeed:
+        "Voktty se actualiza desde el canal de versiones.",
       checkForUpdates: "Buscar actualizaciones",
       download: "Descargar",
       chatBackground: "Fondo del chat",
-      chatBackgroundDesc: "Una imagen detrás de tus paneles de chat. Se mantiene en este dispositivo.",
+      chatBackgroundDesc:
+        "Una imagen detrás de tus paneles de chat. Se mantiene en este dispositivo.",
       change: "Cambiar",
       previewAt: "Vista previa al {visibility}%",
       bindingCount: "{count, plural, one {# atajo} other {# atajos}}",
-      keybindingsDesc: "Los atajos proceden del menú de la aplicación y del gestor de teclas del espacio de trabajo; todavía no se pueden personalizar.",
-      providersIntroLong: "Un proveedor aparece como instalado cuando se encuentra su CLI en tu PATH. Los CLI no instalados siguen figurando aquí, pero se omiten del selector de modelos. Desactiva Mostrar en el selector para ocultar un proveedor instalado en esas pestañas. El modelo junto a cada proveedor es el que usan las conversaciones nuevas al seleccionar ese proveedor; Usar como predeterminado selecciona el propio proveedor.",
-      archiveProjectHint: "Archiva un proyecto desde la barra lateral para conservar sus chats sin listarlo en la barra lateral.",
-      openProjectForArchived: "Abre un proyecto para ver sus conversaciones archivadas.",
-      noArchivedConversations: "No hay conversaciones archivadas en este proyecto.",
+      keybindingsDesc:
+        "Los atajos proceden del menú de la aplicación y del gestor de teclas del espacio de trabajo; todavía no se pueden personalizar.",
+      providersIntroLong:
+        "Un proveedor aparece como instalado cuando se encuentra su CLI en tu PATH. Los CLI no instalados siguen figurando aquí, pero se omiten del selector de modelos. Desactiva Mostrar en el selector para ocultar un proveedor instalado en esas pestañas. El modelo junto a cada proveedor es el que usan las conversaciones nuevas al seleccionar ese proveedor; Usar como predeterminado selecciona el propio proveedor.",
+      archiveProjectHint:
+        "Archiva un proyecto desde la barra lateral para conservar sus chats sin listarlo en la barra lateral.",
+      openProjectForArchived:
+        "Abre un proyecto para ver sus conversaciones archivadas.",
+      noArchivedConversations:
+        "No hay conversaciones archivadas en este proyecto.",
       commit: "Confirmar cambios",
       commitAndPush: "Confirmar y enviar",
       commitPushCreatePr: "Confirmar, enviar y crear PR",
@@ -4739,15 +4803,20 @@ export const es: TranslationSchema = {
       unstageAllChanges: "Quitar todos los cambios del área de preparación",
       stageAllChanges: "Preparar todos los cambios",
       divergedFrom: "Divergente de {upstream}",
-      unpushedCommitCount: "{count, plural, one {# commit sin enviar} other {# commits sin enviar}}",
-      incomingCommitCount: "{count, plural, one {# commit entrante} other {# commits entrantes}}",
+      unpushedCommitCount:
+        "{count, plural, one {# commit sin enviar} other {# commits sin enviar}}",
+      incomingCommitCount:
+        "{count, plural, one {# commit entrante} other {# commits entrantes}}",
       noFiles: "No hay archivos",
       synchronizingChanges: "Sincronizando cambios…",
       publishBranch: "Publicar rama",
-      publishBranchNamed: "Publicar rama \"{branch}\"",
-      pullAndPushCommits: "Traer {behind} y enviar {ahead} commits entre {dest}",
-      pullCommits: "Traer {count, plural, one {# commit} other {# commits}} desde {dest}",
-      pushCommits: "Enviar {count, plural, one {# commit} other {# commits}} a {dest}",
+      publishBranchNamed: 'Publicar rama "{branch}"',
+      pullAndPushCommits:
+        "Traer {behind} y enviar {ahead} commits entre {dest}",
+      pullCommits:
+        "Traer {count, plural, one {# commit} other {# commits}} desde {dest}",
+      pushCommits:
+        "Enviar {count, plural, one {# commit} other {# commits}} a {dest}",
       syncChanges: "Sincronizar cambios",
       createPr: "Crear PR",
       createPrInto: "Crear una solicitud de extracción hacia {branch}",
@@ -4756,10 +4825,14 @@ export const es: TranslationSchema = {
       viewPrDetails: "Ver PR #{number}: {title}",
       deleteProjectNamed: "Eliminar {name}",
       deleteProjectNamedQuestion: "¿Eliminar “{name}”?",
-      deleteProjectDescription: "Se eliminarán todas las conversaciones de este proyecto. También desaparecerá de la barra lateral. La carpeta en disco no se modifica, y al abrirla de nuevo el proyecto estará vacío.",
-      savedConversationRemoval: "{count, plural, one {# conversación guardada se eliminará.} other {# conversaciones guardadas se eliminarán.}}",
-      networkSandboxAllowlistHint: "Un host por línea. Usa el prefijo *. para permitir cualquier subdominio. No se podrá acceder a nada más.",
-      networkSandboxUnrestricted: "La red saliente del agente no tiene restricciones.",
+      deleteProjectDescription:
+        "Se eliminarán todas las conversaciones de este proyecto. También desaparecerá de la barra lateral. La carpeta en disco no se modifica, y al abrirla de nuevo el proyecto estará vacío.",
+      savedConversationRemoval:
+        "{count, plural, one {# conversación guardada se eliminará.} other {# conversaciones guardadas se eliminarán.}}",
+      networkSandboxAllowlistHint:
+        "Un host por línea. Usa el prefijo *. para permitir cualquier subdominio. No se podrá acceder a nada más.",
+      networkSandboxUnrestricted:
+        "La red saliente del agente no tiene restricciones.",
       noMatchingFilesOrNotes: "No hay archivos ni notas coincidentes",
       noMatchingFilesOrFolders: "No hay archivos ni carpetas coincidentes",
       noFilesOrNotesFound: "No se encontraron archivos ni notas",
@@ -4770,11 +4843,14 @@ export const es: TranslationSchema = {
       fileCount: "{count, plural, one {# archivo} other {# archivos}}",
       workingTreeChanges: "Cambios del árbol de trabajo",
       sessionChanges: "Cambios de sesión",
-      closeTabWithUnsavedFiles: "¿Cerrar esta pestaña con archivos sin guardar?",
+      closeTabWithUnsavedFiles:
+        "¿Cerrar esta pestaña con archivos sin guardar?",
       closeFileWithoutSaving: "¿Cerrar {name} sin guardar?",
-      closeConversationWithUnsavedFiles: "¿Cerrar esta conversación con archivos sin guardar?",
-      deleteSessionNamed: "¿Eliminar \"{name}\"?",
-      deleteSelectedConversations: "¿Eliminar {count} conversaciones seleccionadas? Esta acción no se puede deshacer.",
+      closeConversationWithUnsavedFiles:
+        "¿Cerrar esta conversación con archivos sin guardar?",
+      deleteSessionNamed: '¿Eliminar "{name}"?',
+      deleteSelectedConversations:
+        "¿Eliminar {count} conversaciones seleccionadas? Esta acción no se puede deshacer.",
       cannotFollowUpMidTurn:
         "{harness} no puede aceptar seguimiento durante un turno. Espera a que termine o detenlo primero.",
       manualCompactionUnsupported:
@@ -4805,23 +4881,29 @@ export const es: TranslationSchema = {
       gameOver: "Fin de la partida",
       release: "Soltar",
       takeControl: "Tomar el control",
-      unmodifiedLines: "{count} {count, plural, one {línea sin modificar} other {líneas sin modificar}}",
+      unmodifiedLines:
+        "{count} {count, plural, one {línea sin modificar} other {líneas sin modificar}}",
       uncommittedSummary: "{label} sin confirmar",
       toolCallWithState: "Llamada de herramienta {state}: {text}",
       closePaneShortcut: "Cerrar panel ({shortcut})",
       sessionChangesTooltip: "Cambios capturados solo para esta sesión",
       plan: "Plan",
       workingTreeNamed: "{name} (árbol de trabajo)",
-      tabProblems: "{title} — {count, plural, one {# problema} other {# problemas}}",
+      tabProblems:
+        "{title} — {count, plural, one {# problema} other {# problemas}}",
       openFiles: "Archivos abiertos",
       loadingAgentHarness: "Cargando arnés de agente…",
       commentOn: "Comentar en {location}",
       addCommentShortcut: "{shortcut}↩ para añadir",
       fileNameRequired: "Debes indicar un nombre de archivo o carpeta.",
-      fileNameNoLeadingSlash: "El nombre de archivo o carpeta no puede comenzar con una barra.",
-      fileNameExists: "Ya existe un archivo o carpeta llamado {name} en esta ubicación. Elige otro nombre.",
-      fileNameInvalid: "El nombre {name} no es válido como nombre de archivo o carpeta. Elige otro nombre.",
-      fileNameWhitespace: "Se detectaron espacios al inicio o al final del nombre de archivo o carpeta.",
+      fileNameNoLeadingSlash:
+        "El nombre de archivo o carpeta no puede comenzar con una barra.",
+      fileNameExists:
+        "Ya existe un archivo o carpeta llamado {name} en esta ubicación. Elige otro nombre.",
+      fileNameInvalid:
+        "El nombre {name} no es válido como nombre de archivo o carpeta. Elige otro nombre.",
+      fileNameWhitespace:
+        "Se detectaron espacios al inicio o al final del nombre de archivo o carpeta.",
       openContextActions: "{headline}, {detail}. Abrir acciones de contexto",
       contextUsageLabel: "{headline}, {detail}",
       dropFilesToAttach: "Suelta archivos para adjuntarlos",
@@ -4830,8 +4912,10 @@ export const es: TranslationSchema = {
       copyResponse: "Copiar respuesta",
       savedToNotes: "Guardado en Notas",
       saveAsNote: "Guardar como nota",
-      showPreviousToolCalls: "Mostrar {count} llamadas de herramientas anteriores",
-      previousToolCalls: "+{count} {count, plural, one {llamada de herramienta anterior} other {llamadas de herramientas anteriores}}",
+      showPreviousToolCalls:
+        "Mostrar {count} llamadas de herramientas anteriores",
+      previousToolCalls:
+        "+{count} {count, plural, one {llamada de herramienta anterior} other {llamadas de herramientas anteriores}}",
       hideWork: "Ocultar el trabajo",
       showWork: "Mostrar el trabajo",
       hideStepsFor: "Ocultar los pasos de {title}",
@@ -4862,7 +4946,8 @@ export const es: TranslationSchema = {
       couldntLoadSessionChanges: "No se pudieron cargar los cambios de sesión",
       noSessionChanges: "No hay cambios de sesión",
       noFileChanges: "No hay cambios de archivos",
-      diffTooLargeFull: "El diff es demasiado grande para mostrarse completo. La lista de archivos se muestra sin parches.",
+      diffTooLargeFull:
+        "El diff es demasiado grande para mostrarse completo. La lista de archivos se muestra sin parches.",
       binaryFileChanged: "El archivo binario cambió",
       diffTooLarge: "El diff es demasiado grande para mostrarse",
       noTextualDiff: "No hay diff textual",
@@ -4887,8 +4972,10 @@ export const es: TranslationSchema = {
       placeholderNote: "Anade una nota, o envia para empezar...",
       placeholderMessage: "Anade un mensaje, o envia...",
       placeholderContinue: "Anade contexto, o envia para continuar...",
-      placeholderAskCommands: "Pregunta, construye, / para comandos, @ para referencias... ",
-      placeholderAskSkills: "Pregunta, construye, / para skills, @ para referencias... ",
+      placeholderAskCommands:
+        "Pregunta, construye, / para comandos, @ para referencias... ",
+      placeholderAskSkills:
+        "Pregunta, construye, / para skills, @ para referencias... ",
       jumpToLatest: "Ir al mas reciente",
       closePane: "Cerrar panel",
       resizeChanges: "Redimensionar panel de cambios",
@@ -4966,7 +5053,8 @@ export const es: TranslationSchema = {
       newFile: "Nuevo archivo",
       newFolder: "Nueva carpeta",
       collapseAll: "Contraer todo",
-      typeFileName: "Escribe el nombre. Enter para confirmar o Escape para cancelar.",
+      typeFileName:
+        "Escribe el nombre. Enter para confirmar o Escape para cancelar.",
       dismissUpdate: "Cerrar notificacion de actualizacion",
       filterSessions: "Filtrar sesiones",
       archived: "Archivadas",
@@ -5051,8 +5139,7 @@ export const es: TranslationSchema = {
       fxNoAttachments: "fx no admite adjuntos",
       queuePaused: "Cola en pausa porque interrumpiste",
       resume: "Reanudar",
-      attachmentCount:
-        "{count, plural, one {# adjunto} other {# adjuntos}}",
+      attachmentCount: "{count, plural, one {# adjunto} other {# adjuntos}}",
       status: "Estado",
       time: "Tiempo",
       allTime: "Todo el tiempo",
@@ -5181,7 +5268,8 @@ export const es: TranslationSchema = {
       queue: "Cola",
       provider: "Proveedor",
       showOnEmptyHint: "Solo sesiones vacias, o cada conversacion.",
-      visibilityHint: "Mantenlo sutil para que las conversaciones largas se lean bien.",
+      visibilityHint:
+        "Mantenlo sutil para que las conversaciones largas se lean bien.",
       followUpBehaviorDesc:
         "Encola seguimientos hasta que termine el turno activo, o dirige el turno activo al momento.",
       linearApiKeyDesc:
@@ -5259,8 +5347,7 @@ export const es: TranslationSchema = {
       secondOpinionMenu: "Enviar este turno a otro agente",
       settingsKeybindings: "Atajos",
       settingsArchive: "Archivo",
-      commentCount:
-        "{count, plural, one {# comentario} other {# comentarios}}",
+      commentCount: "{count, plural, one {# comentario} other {# comentarios}}",
       latestCommentsMoreOn: "Ultimos comentarios · mas en {name}",
       resolved: "Resuelto",
       ghost: "fantasma",
@@ -5268,8 +5355,7 @@ export const es: TranslationSchema = {
       couldntOpenFile: "No se pudo abrir {name}",
       saving: "Guardando...",
       saveFailed: "Error al guardar: {message}",
-      searchEmptyHint:
-        "Busca archivos, conversaciones, mensajes y proyectos.",
+      searchEmptyHint: "Busca archivos, conversaciones, mensajes y proyectos.",
       teams: "Equipos",
       clearFilters: "Limpiar filtros",
       noMatchingSkills: "No hay skills coincidentes",
@@ -5319,16 +5405,20 @@ export const es: TranslationSchema = {
     branchCreated: "Rama {name} creada correctamente",
     branchFailed: "Error al crear la rama",
     revertConfirmTitle: "Revertir commit?",
-    revertConfirmDescription: 'Estas seguro de que deseas revertir el commit "{subject}"?',
+    revertConfirmDescription:
+      'Estas seguro de que deseas revertir el commit "{subject}"?',
     revertCommit: "Revertir commit",
     cherryPickConfirmTitle: "Hacer cherry-pick?",
-    cherryPickConfirmDescription: 'Estas seguro de que deseas aplicar el cherry-pick del commit "{subject}"?',
+    cherryPickConfirmDescription:
+      'Estas seguro de que deseas aplicar el cherry-pick del commit "{subject}"?',
     cherryPick: "Cherry-pick",
     createBranch: "Crear rama",
-    createBranchDescription: 'Crear una nueva rama a partir del commit "{subject}"',
+    createBranchDescription:
+      'Crear una nueva rama a partir del commit "{subject}"',
     branchNamePlaceholder: "Nombre de la rama (ej. feat/nueva-funcion)",
     unknownAuthor: "Autor desconocido",
-    filesChangedCount: "{count, plural, one {# archivo modificado} other {# archivos modificados}}",
+    filesChangedCount:
+      "{count, plural, one {# archivo modificado} other {# archivos modificados}}",
     noSubject: "(sin mensaje de commit)",
     viewChanges: "Ver cambios",
     copied: "Copiado!",
@@ -5415,13 +5505,16 @@ export const es: TranslationSchema = {
       loadingDiff: "Cargando diff del PR...",
       searchPlaceholder: "Buscar pull requests...",
       noPulls: "No se encontraron pull requests abiertos.",
-      noRemoteFound: "No se encontro un repositorio remoto de GitHub para este proyecto.",
+      noRemoteFound:
+        "No se encontro un repositorio remoto de GitHub para este proyecto.",
       tokenRequiredTitle: "Conecta GitHub para ver Pull Requests",
-      tokenRequiredDesc: "Anade un token de acceso personal (PAT) para explorar, revisar y cambiar a ramas de pull requests.",
+      tokenRequiredDesc:
+        "Anade un token de acceso personal (PAT) para explorar, revisar y cambiar a ramas de pull requests.",
       connectGithub: "Conectar GitHub",
       setTokenBtn: "Configurar Token de Acceso",
       connectGithubTitle: "Token de Acceso Personal de GitHub",
-      connectGithubDesc: "Ingresa un personal access token con permisos de repositorio.",
+      connectGithubDesc:
+        "Ingresa un personal access token con permisos de repositorio.",
       tokenSaved: "Token de acceso de GitHub guardado",
       draftBadge: "borrador",
       openInBrowser: "Abrir en el navegador",
@@ -5432,8 +5525,10 @@ export const es: TranslationSchema = {
       headBranch: "Rama origen",
       baseBranch: "Rama destino",
       diffPreview: "Vista previa del Diff",
-      diffUnavailable: "No hay contenido diff disponible para este pull request.",
-      selectPrHint: "Selecciona un pull request de la lista para ver sus detalles y diff.",
+      diffUnavailable:
+        "No hay contenido diff disponible para este pull request.",
+      selectPrHint:
+        "Selecciona un pull request de la lista para ver sus detalles y diff.",
       submitReviewTitle: "Revisar Pull Request #{number}",
       approve: "Aprobar",
       comment: "Comentar",
@@ -5458,12 +5553,14 @@ export const es: TranslationSchema = {
       add: "Anadir worktree",
       refresh: "Actualizar",
       loading: "Cargando worktrees...",
-      empty: "No hay worktrees auxiliares activos. Crea un worktree para ejecutar tareas simultaneas en aislamiento.",
+      empty:
+        "No hay worktrees auxiliares activos. Crea un worktree para ejecutar tareas simultaneas en aislamiento.",
       active: "Worktrees activos",
       createSuccess: "Worktree creado",
       removeSuccess: "Worktree eliminado",
       removeConfirmTitle: "Eliminar worktree?",
-      removeConfirmDesc: 'Estas seguro de que deseas eliminar el worktree "{name}"? Los cambios no confirmados no se borraran.',
+      removeConfirmDesc:
+        'Estas seguro de que deseas eliminar el worktree "{name}"? Los cambios no confirmados no se borraran.',
       cancel: "Cancelar",
       remove: "Eliminar",
       branchPlaceholder: "Nombre de nueva rama para el worktree",
@@ -5488,7 +5585,7 @@ export const es: TranslationSchema = {
       deleteTagTitle: "Eliminar tag?",
       deleteTagDesc: 'Estas seguro de que deseas eliminar el tag "{name}"?',
       dropStashTitle: "Descartar stash?",
-      dropStashDesc: 'Estas seguro de que deseas descartar stash@{index}?',
+      dropStashDesc: "Estas seguro de que deseas descartar stash@{index}?",
       cancel: "Cancelar",
       delete: "Eliminar",
       drop: "Descartar",
@@ -5567,9 +5664,11 @@ export const es: TranslationSchema = {
     closeSkillFormAriaLabel: "Cerrar formulario de habilidad",
     addSkillTooltip: "Crear un SKILL.md inicial para editar",
     loading: "Cargando habilidades…",
-    noSkills: "No hay habilidades aún. Añadir habilidad crea un SKILL.md inicial.",
+    noSkills:
+      "No hay habilidades aún. Añadir habilidad crea un SKILL.md inicial.",
     noMatchingSkills: "No hay habilidades coincidentes",
-    savePreferenceError: "No se pudo guardar la preferencia de habilidad. Inténtalo de nuevo.",
+    savePreferenceError:
+      "No se pudo guardar la preferencia de habilidad. Inténtalo de nuevo.",
     openFolderError: "No se pudo abrir la carpeta: {error}",
     copyPathError: "No se pudo copiar la ruta al portapapeles.",
     scopePersonal: "Personal",
@@ -5580,7 +5679,8 @@ export const es: TranslationSchema = {
     copyPathAriaLabel: "Copiar ruta de {name}",
     revealInFileManager: "Mostrar en el explorador de archivos",
     revealAriaLabel: "Mostrar {name} en el explorador de archivos",
-    descriptionFooter: "Las habilidades ocultas permanecen en el disco y se excluyen del catálogo de habilidades de Voktty. Las habilidades administradas por proveedores y los comandos nativos no se ven afectados. Las habilidades residen en .agents/skills para este proyecto y en ~/.agents/skills para ti personalmente; las carpetas de harness también se detectan.",
+    descriptionFooter:
+      "Las habilidades ocultas permanecen en el disco y se excluyen del catálogo de habilidades de Voktty. Las habilidades administradas por proveedores y los comandos nativos no se ven afectados. Las habilidades residen en .agents/skills para este proyecto y en ~/.agents/skills para ti personalmente; las carpetas de harness también se detectan.",
   },
   questions: {
     question: "Pregunta",
@@ -5594,17 +5694,22 @@ export const es: TranslationSchema = {
     other: "Otro",
   },
   sessionReview: {
-    changedFiles: "{count} {count, plural, one {archivo modificado} other {archivos modificados}}",
+    changedFiles:
+      "{count} {count, plural, one {archivo modificado} other {archivos modificados}}",
     undo: "Deshacer",
     keep: "Conservar",
     review: "Revisar",
     undoAllSessionChanges: "Deshacer todos los cambios de la sesión",
-    undoLockedOtherSession: "Deshacer no está disponible mientras otra sesión se ejecuta en este proyecto",
-    undoUnavailableExternal: "Deshacer no está disponible porque un archivo cambió fuera de esta sesión",
-    keepAllSessionChanges: "Conservar todos los cambios de la sesión y descartar esta tarjeta",
+    undoLockedOtherSession:
+      "Deshacer no está disponible mientras otra sesión se ejecuta en este proyecto",
+    undoUnavailableExternal:
+      "Deshacer no está disponible porque un archivo cambió fuera de esta sesión",
+    keepAllSessionChanges:
+      "Conservar todos los cambios de la sesión y descartar esta tarjeta",
     reviewChanges: "Revisar cambios",
     showFewerFiles: "Mostrar menos archivos",
-    showMoreFiles: "Mostrar {count} {count, plural, one {archivo más} other {archivos más}}",
+    showMoreFiles:
+      "Mostrar {count} {count, plural, one {archivo más} other {archivos más}}",
     sharedFile: "Archivo compartido",
   },
 };
