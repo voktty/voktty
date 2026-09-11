@@ -122,6 +122,13 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
             id.includes("/scheduler/")
           )
             return "react";
+          // Startup currently preloads dozens of individual Hugeicons modules.
+          // Bucket them by their first two letters so Settings only preloads the
+          // icons its entry reaches, while main still avoids one request per icon.
+          if (id.includes("@hugeicons/core-free-icons")) {
+            const icon = id.match(/\/esm\/([A-Z][a-z]?)/);
+            if (icon) return `icons-${icon[1].toLowerCase()}`;
+          }
           if (id.includes("@radix-ui/") || id.includes("/radix-ui/"))
             return "radix";
 
