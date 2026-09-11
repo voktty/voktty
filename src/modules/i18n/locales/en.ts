@@ -552,6 +552,9 @@ export const en = {
       connected: "Connected",
       getKey: "Get key",
       removeProvider: "Remove provider",
+      localAgent: "Local agent",
+      localAgentDescription:
+        "Uses the selected installed CLI and its existing local OAuth session. No API key is copied into Voktty.",
       pasteKey: "Paste API key",
       hideKey: "Hide key",
       showKey: "Show key",
@@ -4240,6 +4243,8 @@ export const en = {
     copyMessageText: "Copy message text",
     harnessExecutionError:
       "Local {agent} agent execution error: {error}. Ensure '{binary}' CLI is installed and logged in.",
+    harnessWorkspaceRequired:
+      "Open a local workspace before using a local OAuth agent.",
     noActiveTerminal: "Open a terminal before resuming this session.",
     noSessionSelected: "No session selected",
     resumeCommandCopied: "Resume command copied to clipboard",
