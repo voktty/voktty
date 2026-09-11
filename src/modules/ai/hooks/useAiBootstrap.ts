@@ -34,6 +34,12 @@ export function useAiBootstrap(): {
   const [keysLoaded, setKeysLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
+    if (!aiAvailable) {
+      setKeysLoaded(false);
+      return () => {
+        alive = false;
+      };
+    }
     const reload = () => {
       void getAllKeys().then((keys) => {
         if (!alive) return;
@@ -54,7 +60,7 @@ export function useAiBootstrap(): {
       alive = false;
       void unlistenP.then((fn) => fn());
     };
-  }, [setApiKeys, setCustomEndpointKeys, prefsHydrated]);
+  }, [aiAvailable, setApiKeys, setCustomEndpointKeys, prefsHydrated]);
 
   // Hydrate the cross-window preference store and mirror the default model
   // into chatStore so the dropdown reflects what the user picked in Settings.
@@ -76,10 +82,11 @@ export function useAiBootstrap(): {
   }, [prefsHydrated, prefDefaultModel, setSelectedModelId]);
 
   useEffect(() => {
+    if (!aiAvailable) return;
     void hydrateSessions();
     void useAgentsStore.getState().hydrate();
     void useSnippetsStore.getState().hydrate();
-  }, [hydrateSessions]);
+  }, [aiAvailable, hydrateSessions]);
 
   return {
     hasComposer: keysLoaded && prefsHydrated && aiAvailable,
