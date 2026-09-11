@@ -33,6 +33,11 @@ import {
 } from "@/modules/source-control/lib/reviewQueue";
 import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { ExplorerMenu, type ExplorerMenuItem } from "@/modules/harness/chrome/ExplorerMenu";
+import { copyText } from "@/modules/harness/lib/clipboard";
+import { basename, revealPath } from "@/modules/harness/lib/fs";
+import { IS_MAC, IS_WIN } from "@/modules/harness/lib/platform";
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
@@ -61,6 +66,26 @@ type Props = {
   tabs?: TabSummary[];
   onActivateAgent?: (tabId: number, leafId: number) => void;
 };
+
+function reviewFileMenuItems(t: (key: string) => string): ExplorerMenuItem[] {
+  const revealLabel = IS_MAC
+    ? t("harness.chrome.revealInFinder")
+    : IS_WIN
+      ? t("harness.chrome.revealInFileExplorer")
+      : t("harness.chrome.openContainingFolder");
+
+  return [
+    { kind: "item", id: "open-file", label: t("harness.chrome.openFile") },
+    { kind: "item", id: "open-default", label: t("harness.chrome.openInDefaultApp") },
+    { kind: "item", id: "reveal", label: revealLabel },
+    { kind: "sep" },
+    { kind: "item", id: "copy-path", label: t("harness.chrome.copyPath") },
+    { kind: "item", id: "copy-relative-path", label: t("harness.chrome.copyRelativePath") },
+    { kind: "item", id: "copy-name", label: t("harness.chrome.copyFileName") },
+    { kind: "sep" },
+    { kind: "item", id: "open-git-history", label: t("harness.chrome.viewFileHistory") },
+  ];
+}
 
 function statusBadge(statusCode: string) {
   const norm = statusCode.toUpperCase();
@@ -103,10 +128,69 @@ export function GitReviewTab({ cwd = null }: Props) {
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState<GitReviewEntry | null>(null);
   const [discardAllOpen, setDiscardAllOpen] = useState(false);
+  const [fileMenu, setFileMenu] = useState<{
+    x: number;
+    y: number;
+    entry: GitReviewEntry;
+  } | null>(null);
 
   const repoRoot = sourceControl.status?.repoRoot ?? cwd ?? "";
   const hasRepo = sourceControl.hasRepo;
   const branchName = sourceControl.status?.branch ?? "";
+
+  const handleMenuPick = useCallback(
+    (actionId: string) => {
+      if (!fileMenu) return;
+      const target = fileMenu.entry;
+      setFileMenu(null);
+      const fullPath = repoRoot
+        ? `${repoRoot.replace(/[/\\]+$/, "")}/${target.path.replace(/^[/\\]+/, "")}`
+        : target.path;
+
+      let action: Promise<void> | void;
+      switch (actionId) {
+        case "open-file":
+          window.dispatchEvent(
+            new CustomEvent("voktty:open-dropped-path", { detail: fullPath }),
+          );
+          return;
+        case "open-default":
+          action = openPath(fullPath);
+          break;
+        case "reveal":
+          action = revealPath(fullPath);
+          break;
+        case "copy-path":
+          action = copyText(fullPath);
+          break;
+        case "copy-relative-path":
+          action = copyText(target.path);
+          break;
+        case "copy-name":
+          action = copyText(basename(target.path));
+          break;
+        case "open-git-history":
+          window.dispatchEvent(
+            new CustomEvent("voktty:open-git-graph", {
+              detail: {
+                repoRoot,
+                branch: branchName,
+                workspaceEnv: activeWorkspaceEnv,
+              },
+            }),
+          );
+          return;
+        default:
+          return;
+      }
+      if (action) {
+        void action.catch((error) => {
+          console.error(`Failed to execute review file action ${actionId}:`, error);
+        });
+      }
+    },
+    [activeWorkspaceEnv, branchName, fileMenu, repoRoot],
+  );
 
   const changedFiles = useMemo(
     () => sourceControl.status?.changedFiles ?? [],
@@ -411,6 +495,27 @@ export function GitReviewTab({ cwd = null }: Props) {
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent("voktty:open-git-graph", {
+                    detail: {
+                      repoRoot,
+                      branch: branchName,
+                      workspaceEnv: activeWorkspaceEnv,
+                    },
+                  }),
+                );
+              }}
+              className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-muted"
+              title={t("gitHistory.openCommitGraph")}
+            >
+              <HugeiconsIcon icon={FolderGitTwoIcon} size={12} className="text-primary" />
+              <span>{t("gitHistory.openCommitGraph")}</span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setGithubOpen(true)}
               className="h-6 px-2 text-[10.5px] gap-1 cursor-pointer hover:bg-muted"
               title={t("notesBoard.githubPrReview")}
@@ -530,6 +635,11 @@ export function GitReviewTab({ cwd = null }: Props) {
                       <div
                         key={entry.path}
                         onClick={() => setSelectedPath(entry.path)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setFileMenu({ x: e.clientX, y: e.clientY, entry });
+                        }}
                         className={cn(
                           "group relative flex items-center justify-between rounded-md px-2 py-1.5 text-[11px] cursor-pointer transition-colors select-none",
                           isSelected
@@ -639,7 +749,14 @@ export function GitReviewTab({ cwd = null }: Props) {
             {selectedEntry ? (
               <div className="flex h-full flex-col overflow-hidden">
                 {/* File Header Bar */}
-                <div className="flex h-8 shrink-0 items-center justify-between border-b border-border/50 bg-muted/15 px-3 text-[11px] select-none">
+                <div
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFileMenu({ x: e.clientX, y: e.clientY, entry: selectedEntry });
+                  }}
+                  className="flex h-8 shrink-0 items-center justify-between border-b border-border/50 bg-muted/15 px-3 text-[11px] select-none"
+                >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-mono text-xs font-semibold text-foreground truncate">
                       {selectedEntry.path}
@@ -828,6 +945,16 @@ export function GitReviewTab({ cwd = null }: Props) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {fileMenu ? (
+          <ExplorerMenu
+            x={fileMenu.x}
+            y={fileMenu.y}
+            items={reviewFileMenuItems(t)}
+            onPick={handleMenuPick}
+            onClose={() => setFileMenu(null)}
+          />
+        ) : null}
       </div>
     </TooltipProvider>
   );

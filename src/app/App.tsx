@@ -2095,13 +2095,30 @@ function DesktopApp() {
       const cwd = custom.detail?.cwd;
       newTab(cwd);
     };
+    const gitGraphHandler = (e: Event) => {
+      const custom = e as CustomEvent<{
+        repoRoot?: string;
+        branch?: string;
+        workspaceEnv?: WorkspaceEnv;
+      }>;
+      const root = custom.detail?.repoRoot || explorerRoot || launchCwd;
+      if (root) {
+        openCommitHistoryTab({
+          repoRoot: root,
+          branch: custom.detail?.branch,
+          workspaceEnv: custom.detail?.workspaceEnv,
+        });
+      }
+    };
     window.addEventListener("voktty:open-dropped-path", handler);
     window.addEventListener("voktty:open-new-terminal-tab", terminalHandler);
+    window.addEventListener("voktty:open-git-graph", gitGraphHandler);
     return () => {
       window.removeEventListener("voktty:open-dropped-path", handler);
       window.removeEventListener("voktty:open-new-terminal-tab", terminalHandler);
+      window.removeEventListener("voktty:open-git-graph", gitGraphHandler);
     };
-  }, [handleDroppedPath, newTab]);
+  }, [explorerRoot, handleDroppedPath, launchCwd, newTab, openCommitHistoryTab]);
 
   const pickAndOpenFile = useCallback(async () => {
     const target = contextualInsertionTarget();
@@ -5069,6 +5086,8 @@ function DesktopApp() {
                             onOpenCommitFile={handleOpenCommitFileWithSplit}
                             onOpenCommitDiff={handleOpenCommitDiffWithSplit}
                             onGitHistorySearchHandle={setGitHistoryHandle}
+                            onOpenCommitHistory={openCommitHistoryTab}
+                            onOpenFile={(path) => handleOpenFile(path, true)}
                             onSetMarkdownView={setMarkdownView}
                             registerMarkdownHandle={registerMarkdownHandle}
                             onOpenPreview={openPreviewTab}
