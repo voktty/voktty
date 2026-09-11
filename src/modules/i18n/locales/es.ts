@@ -5549,4 +5549,18 @@ export const es: TranslationSchema = {
     typeYourAnswer: "Escribe tu respuesta",
     other: "Otro",
   },
+  sessionReview: {
+    changedFiles: "{count} {count, plural, one {archivo modificado} other {archivos modificados}}",
+    undo: "Deshacer",
+    keep: "Conservar",
+    review: "Revisar",
+    undoAllSessionChanges: "Deshacer todos los cambios de la sesión",
+    undoLockedOtherSession: "Deshacer no está disponible mientras otra sesión se ejecuta en este proyecto",
+    undoUnavailableExternal: "Deshacer no está disponible porque un archivo cambió fuera de esta sesión",
+    keepAllSessionChanges: "Conservar todos los cambios de la sesión y descartar esta tarjeta",
+    reviewChanges: "Revisar cambios",
+    showFewerFiles: "Mostrar menos archivos",
+    showMoreFiles: "Mostrar {count} {count, plural, one {archivo más} other {archivos más}}",
+    sharedFile: "Archivo compartido",
+  },
 };
