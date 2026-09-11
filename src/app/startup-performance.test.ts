@@ -53,6 +53,12 @@ describe("startup performance invariants", () => {
     expect(file).toContain("if (panelOpen) setAiSidebarMounted(true)");
   });
 
+  it("does not load Preview before a non-cold Preview tab exists", () => {
+    const file = source("modules/preview/PreviewStackLazy.tsx");
+    expect(file).toContain('import("./PreviewStack")');
+    expect(file).toContain('tab.kind === "preview" && !tab.cold');
+  });
+
   it("authorizes restored cwd values only for the active tab", () => {
     const file = source("modules/spaces/lib/useSpacesBoot.ts");
     expect(file).toContain("uniqueCwds([activeTab])");

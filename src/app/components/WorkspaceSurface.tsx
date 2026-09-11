@@ -4,7 +4,7 @@ import { GitCommitDiffStack, GitHistoryStack } from "@/modules/git-history";
 import { ApiClientStackLazy } from "@/modules/api-client/components/ApiClientStackLazy";
 import { HarnessStack } from "@/modules/harness/components/HarnessStack";
 import { MarkdownStack } from "@/modules/markdown";
-import { PreviewStack } from "@/modules/preview";
+import { PreviewStackLazy } from "@/modules/preview/PreviewStackLazy";
 import { RdpStack } from "@/modules/rdp";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { Tab } from "@/modules/tabs";
@@ -13,7 +13,7 @@ import type { ComponentProps } from "react";
 
 type TerminalStackProps = ComponentProps<typeof TerminalStack>;
 type EditorStackProps = ComponentProps<typeof EditorStack>;
-type PreviewStackProps = ComponentProps<typeof PreviewStack>;
+type PreviewStackProps = ComponentProps<typeof PreviewStackLazy>;
 type AiDiffStackProps = ComponentProps<typeof AiDiffStack>;
 type GitHistoryStackProps = ComponentProps<typeof GitHistoryStack>;
 type GitDiffStackProps = ComponentProps<typeof GitDiffStack>;
@@ -177,7 +177,7 @@ export function WorkspaceSurface({
         )}
         aria-hidden={!layerVisible("preview")}
       >
-        <PreviewStack
+        <PreviewStackLazy
           tabs={tabs}
           activeId={activeId}
           registerHandle={registerPreviewHandle}
