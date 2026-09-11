@@ -1,3 +1,5 @@
+import { useEditorThemeExt } from "@/modules/editor/editorTheme";
+import { useTranslation } from "@/modules/i18n";
 import { acceptCompletion, completionStatus } from "@codemirror/autocomplete";
 import { indentLess, indentMore } from "@codemirror/commands";
 import {
@@ -11,11 +13,11 @@ import {
   Compartment,
   countColumn,
   EditorSelection,
+  type EditorState,
   Prec,
   StateField,
-  Transaction,
-  type EditorState,
   type Text,
+  Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -26,15 +28,14 @@ import {
   keymap,
   lineNumbers,
 } from "@codemirror/view";
+import { minimalSetup } from "codemirror";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
   RotateCcw,
 } from "../chrome/icons";
-import { minimalSetup } from "codemirror";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "@/modules/i18n";
 import {
   MarkdownViewShell,
   useMarkdownMode,
@@ -42,6 +43,7 @@ import {
 import { useColorScheme } from "../hooks/useColorScheme";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { isLightScheme } from "../lib/appearance";
+import { syncWatchedMtime, watchFile } from "../lib/fileWatch";
 import { formatText } from "../lib/format";
 import {
   basename,
@@ -52,7 +54,6 @@ import {
   subscribeGitChanged,
   writeTextFile,
 } from "../lib/fs";
-import { syncWatchedMtime, watchFile } from "../lib/fileWatch";
 import { displayPath } from "../lib/paths";
 import type { EditorNavigation } from "../lib/search";
 import { MarkdownPreview } from "./AgentMarkdown";
@@ -61,7 +62,7 @@ import {
   type DiffCommentComposerTarget,
 } from "./DiffCommentComposer";
 import { editorAutocomplete } from "./editorAutocomplete";
-import { languageForPath, schemeExtensions } from "./editorChrome";
+import { languageForPath, themedEditorExtensions } from "./editorChrome";
 import { preserveEditorViewport, replaceEditorDoc } from "./editorDoc";
 import { editorMatching, editorTyping, tryExpandEmmet } from "./editorEditing";
 import {
@@ -488,6 +489,9 @@ function CodeMirrorEditor({
   const chunkNavPinnedRef = useRef<number | null>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const colorScheme = useColorScheme();
+  const globalEditorTheme = useEditorThemeExt();
+  const globalEditorThemeRef = useRef(globalEditorTheme);
+  globalEditorThemeRef.current = globalEditorTheme;
   const [chunkNav, setChunkNav] = useState<{
     positions: number[];
     index: number;
@@ -647,7 +651,12 @@ function CodeMirrorEditor({
         EditorView.lineWrapping,
         wrappedLineIndent,
         language.of([]),
-        editorScheme.of(schemeExtensions(isLightScheme() ? "light" : "dark")),
+        editorScheme.of(
+          themedEditorExtensions(
+            globalEditorThemeRef.current,
+            isLightScheme() ? "light" : "dark",
+          ),
+        ),
         editorMatching,
         editorTyping(path),
         editorAutocomplete,
@@ -730,9 +739,11 @@ function CodeMirrorEditor({
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({
-      effects: editorScheme.reconfigure(schemeExtensions(colorScheme)),
+      effects: editorScheme.reconfigure(
+        themedEditorExtensions(globalEditorTheme, colorScheme),
+      ),
     });
-  }, [colorScheme]);
+  }, [colorScheme, globalEditorTheme]);
 
   useEffect(() => {
     const view = viewRef.current;
