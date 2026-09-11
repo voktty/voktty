@@ -41,26 +41,30 @@ const CACHE_TTL: Duration = Duration::from_millis(2500);
 static WAKE_STORE: OnceLock<Arc<Store>> = OnceLock::new();
 static WAKE_ADAPTERS: OnceLock<Vec<Box<dyn AgentAdapter>>> = OnceLock::new();
 
-fn get_wake_store() -> Option<Arc<Store>> {
-    WAKE_STORE
-        .get_or_init(|| {
-            let db_dir = dirs::config_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("voktty");
-            let _ = std::fs::create_dir_all(&db_dir);
-            let db_path = db_dir.join("agent_history_wake.db");
-            let (store, _) = open_or_rebuild(&db_path).unwrap_or_else(|_| {
-                (
-                    open_or_rebuild(&PathBuf::from("agent_history_wake.db"))
-                        .unwrap()
-                        .0,
-                    None,
-                )
-            });
-            Arc::new(store)
+fn get_wake_store() -> Result<Arc<Store>, String> {
+    if let Some(store) = WAKE_STORE.get() {
+        return Ok(store.clone());
+    }
+    let db_dir = dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("voktty");
+    let primary = std::fs::create_dir_all(&db_dir)
+        .map(|()| db_dir.join("agent_history_wake.db"))
+        .and_then(|path| {
+            open_or_rebuild(&path)
+                .map(|value| value.0)
+                .map_err(std::io::Error::other)
+        });
+    let store = primary
+        .or_else(|_| {
+            open_or_rebuild(&PathBuf::from("agent_history_wake.db"))
+                .map(|value| value.0)
+                .map_err(std::io::Error::other)
         })
-        .clone()
-        .into()
+        .map_err(|error| error.to_string())?;
+    let store = Arc::new(store);
+    let _ = WAKE_STORE.set(store.clone());
+    Ok(WAKE_STORE.get().cloned().unwrap_or(store))
 }
 
 fn get_wake_adapters() -> &'static [Box<dyn AgentAdapter>] {
@@ -91,29 +95,60 @@ fn set_cached(cwd_norm: String, sessions: Vec<SessionSummary>) {
     }
 }
 
+fn matching_project_paths(
+    paths: impl IntoIterator<Item = String>,
+    target_norm: &str,
+) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|path| {
+            let normalized = normalize_project_path(path);
+            normalized == target_norm || normalized.eq_ignore_ascii_case(target_norm)
+        })
+        .collect()
+}
+
+fn project_session_filter(project_paths: Vec<String>) -> WakeSessionFilter {
+    WakeSessionFilter {
+        include_archived: true,
+        roots_only: true,
+        project_paths,
+        ..WakeSessionFilter::default()
+    }
+}
+
 /// Lists all external sessions (from Claude, Codex, Grok, Antigravity, OpenCode, Cursor, etc.) belonging to target_cwd.
-pub fn list_external_sessions_for_project(target_cwd: &str) -> Vec<SessionSummary> {
+pub fn list_external_sessions_for_project(target_cwd: &str) -> Result<Vec<SessionSummary>, String> {
     let target_norm = normalize_project_path(target_cwd);
     if target_norm.is_empty() || target_norm == "~" {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     if let Some(cached) = get_cached(&target_norm) {
-        return cached;
+        return Ok(cached);
     }
 
-    let Some(store) = get_wake_store() else {
-        return Vec::new();
-    };
+    let store = get_wake_store()?;
 
     let adapters = get_wake_adapters();
-    let _ = run_scan(adapters, &store, &NullEvents, false);
+    run_scan(adapters, &store, &NullEvents, false).map_err(|error| error.to_string())?;
 
-    let filter = WakeSessionFilter::default();
-    let (sessions, _) = match store.list_sessions(&filter) {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
-    };
+    let project_paths = matching_project_paths(
+        store
+            .list_projects(true)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(|project| project.path),
+        &target_norm,
+    );
+    if project_paths.is_empty() {
+        set_cached(target_norm, Vec::new());
+        return Ok(Vec::new());
+    }
+    let filter = project_session_filter(project_paths);
+    let (sessions, _) = store
+        .list_sessions(&filter)
+        .map_err(|error| error.to_string())?;
 
     let mut result = Vec::new();
     for meta in sessions {
@@ -158,11 +193,11 @@ pub fn list_external_sessions_for_project(target_cwd: &str) -> Vec<SessionSummar
 
     result.sort_by_key(|s| std::cmp::Reverse(s.updated_at));
     set_cached(target_norm, result.clone());
-    result
+    Ok(result)
 }
 
 /// Retrieves and formats an external session into a full SessionRecord on demand using wake_core.
-pub fn get_external_session_record(session_id: &str) -> Option<SessionRecord> {
+pub fn get_external_session_record(session_id: &str) -> Result<Option<SessionRecord>, String> {
     let key = if let Some(k) = session_id.strip_prefix("ext_wake_") {
         k
     } else if let Some(k) = session_id.strip_prefix("ext_codex_") {
@@ -176,10 +211,13 @@ pub fn get_external_session_record(session_id: &str) -> Option<SessionRecord> {
     };
 
     let store = get_wake_store()?;
-    let meta = store.get_session(key).ok()??;
+    let Some(meta) = store.get_session(key).map_err(|error| error.to_string())? else {
+        return Ok(None);
+    };
 
     let adapters = get_wake_adapters();
-    let adapter = adapter_for(adapters, meta.agent, &meta.file_path)?;
+    let adapter = adapter_for(adapters, meta.agent, &meta.file_path)
+        .ok_or_else(|| format!("No history adapter for {}", meta.agent.as_str()))?;
 
     let file_ref = SessionFileRef {
         agent: meta.agent,
@@ -189,7 +227,9 @@ pub fn get_external_session_record(session_id: &str) -> Option<SessionRecord> {
         size: meta.size_bytes,
     };
 
-    let transcript = adapter.parse_transcript(&file_ref).ok()?;
+    let transcript = adapter
+        .parse_transcript(&file_ref)
+        .map_err(|error| error.to_string())?;
 
     let mut blocks = Vec::new();
     for (block_idx, msg) in transcript.mainline.into_iter().enumerate() {
@@ -227,7 +267,7 @@ pub fn get_external_session_record(session_id: &str) -> Option<SessionRecord> {
         meta.updated_at
     };
 
-    Some(SessionRecord {
+    Ok(Some(SessionRecord {
         id: session_id.to_string(),
         cwd: meta.project_path,
         harness: meta.agent.as_str().to_string(),
@@ -247,19 +287,19 @@ pub fn get_external_session_record(session_id: &str) -> Option<SessionRecord> {
         worktree_cwd: None,
         created_at: created,
         updated_at: updated,
-    })
+    }))
 }
 
 /// Lists all distinct project directory paths discovered from external CLI agents via wake_core.
-pub fn list_external_projects() -> Vec<String> {
-    let Some(store) = get_wake_store() else {
-        return Vec::new();
-    };
+pub fn list_external_projects() -> Result<Vec<String>, String> {
+    let store = get_wake_store()?;
 
     let adapters = get_wake_adapters();
-    let _ = run_scan(adapters, &store, &NullEvents, false);
+    run_scan(adapters, &store, &NullEvents, false).map_err(|error| error.to_string())?;
 
-    let projects = store.list_projects(true).unwrap_or_default();
+    let projects = store
+        .list_projects(true)
+        .map_err(|error| error.to_string())?;
     let mut set = HashSet::new();
 
     for p in projects {
@@ -269,5 +309,34 @@ pub fn list_external_projects() -> Vec<String> {
         }
     }
 
-    set.into_iter().collect()
+    Ok(set.into_iter().collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{matching_project_paths, project_session_filter};
+
+    #[test]
+    fn project_filter_preserves_exact_index_paths_after_normalized_matching() {
+        let paths = vec![
+            String::from("C:\\Work\\Voktty\\"),
+            String::from("c:/work/other"),
+            String::from("/workspace/voktty"),
+        ];
+
+        assert_eq!(
+            matching_project_paths(paths, "c:/work/voktty"),
+            vec![String::from("C:\\Work\\Voktty\\")]
+        );
+    }
+
+    #[test]
+    fn project_filter_reaches_sql_before_wake_applies_its_page_limit() {
+        let paths = vec![String::from("/workspace/voktty")];
+        let filter = project_session_filter(paths.clone());
+
+        assert_eq!(filter.project_paths, paths);
+        assert!(filter.include_archived);
+        assert!(filter.roots_only);
+    }
 }
