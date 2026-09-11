@@ -5503,4 +5503,9 @@ export const es: TranslationSchema = {
     approveTool: "Aprobar: {what}",
     harnessFinished: "{harness} ha finalizado",
   },
+  lightbox: {
+    preview: "Vista previa de imagen: {alt}",
+    close: "Cerrar vista previa de imagen",
+    openFullScreen: "Abrir {name} en pantalla completa",
+  },
 };
