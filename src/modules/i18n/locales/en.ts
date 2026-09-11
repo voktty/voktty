@@ -5440,6 +5440,17 @@ export const en = {
     revealAriaLabel: "Reveal {name} in file explorer",
     descriptionFooter: "Hidden skills stay on disk and are excluded from Voktty's file-skill catalog. Provider-managed skills and native commands are unaffected. Skills live in .agents/skills for this project and ~/.agents/skills for you personally; harness folders are also picked up.",
   },
+  questions: {
+    question: "Question",
+    skip: "Skip",
+    continue: "Continue",
+    interactToKeepOpen: "Interact to keep this question open.",
+    optionalQuestion: "Optional question",
+    autoResolvesIn: "Continues without an answer in {seconds}s",
+    selectMultiple: "Select all that apply",
+    typeYourAnswer: "Type your answer",
+    other: "Other",
+  },
 };
 
 export type TranslationSchema = typeof en;

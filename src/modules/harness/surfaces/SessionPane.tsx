@@ -14,7 +14,9 @@ import { Composer } from "../chrome/Composer";
 import { DiscussionEmpty } from "../chrome/DiscussionEmpty";
 import { SessionReview } from "../chrome/SessionReview";
 import { PromptOutline } from "../chrome/PromptOutline";
-import { canCompactHarnessContext, type ApprovalDecision } from "../lib/harness";
+import type { ApprovalDecision } from "../lib/harness/types";
+import type { UserQuestionReply } from "../lib/userQuestion";
+import { canCompactHarnessContext } from "../lib/harness";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
 import {
   sessionDisplayTitle,
@@ -89,6 +91,12 @@ type Props = {
   onInboxCardDismiss?: (sessionId: string) => void;
   onNoteCardDismiss?: (sessionId: string) => void;
   onHandoffCardDismiss?: (sessionId: string) => void;
+  onQuestionReply?: (
+    sessionId: string,
+    requestId: number,
+    reply: UserQuestionReply,
+  ) => void;
+  onQuestionInteraction?: (sessionId: string, requestId: number) => void;
   onApproval: (
     sessionId: string,
     requestId: number,
@@ -153,6 +161,8 @@ export const SessionPane = memo(function SessionPane({
   onInboxCardDismiss,
   onNoteCardDismiss,
   onHandoffCardDismiss,
+  onQuestionReply,
+  onQuestionInteraction,
   onApproval,
   onOpenFile,
   onOpenDiff,
@@ -285,6 +295,17 @@ export const SessionPane = memo(function SessionPane({
       inboxCard={session.inboxCard}
       noteCard={session.noteCard}
       handoffCard={session.handoffCard}
+      question={session.pendingQuestion}
+      onQuestionReply={
+        onQuestionReply
+          ? (requestId, reply) => onQuestionReply(session.id, requestId, reply)
+          : undefined
+      }
+      onQuestionInteraction={
+        onQuestionInteraction
+          ? (requestId) => onQuestionInteraction(session.id, requestId)
+          : undefined
+      }
       onQuoteRequestConsumed={acknowledgeQuote}
       onInboxCardDismiss={() => onInboxCardDismiss?.(session.id)}
       onNoteCardDismiss={() => onNoteCardDismiss?.(session.id)}

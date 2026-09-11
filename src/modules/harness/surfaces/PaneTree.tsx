@@ -12,6 +12,7 @@ import {
   useExternalPaneDrop,
 } from "../lib/paneDrop";
 import type { ApprovalDecision } from "../lib/harness";
+import type { UserQuestionReply } from "../lib/userQuestion";
 import type { EditorNavigationTarget } from "../lib/search";
 import {
   layoutLeaves,
@@ -84,6 +85,12 @@ type Shared = {
   onInboxCardDismiss?: (sessionId: string) => void;
   onNoteCardDismiss?: (sessionId: string) => void;
   onHandoffCardDismiss?: (sessionId: string) => void;
+  onQuestionReply?: (
+    sessionId: string,
+    requestId: number,
+    reply: UserQuestionReply,
+  ) => void;
+  onQuestionInteraction?: (sessionId: string, requestId: number) => void;
   onApproval: (
     sessionId: string,
     requestId: number,
@@ -166,6 +173,8 @@ function PaneTreeComponent({
   onInboxCardDismiss,
   onNoteCardDismiss,
   onHandoffCardDismiss,
+  onQuestionReply,
+  onQuestionInteraction,
   onApproval,
   onOpenFile,
   editorNavigation,
@@ -366,6 +375,8 @@ function PaneTreeComponent({
                 onInboxCardDismiss={onInboxCardDismiss}
                 onNoteCardDismiss={onNoteCardDismiss}
                 onHandoffCardDismiss={onHandoffCardDismiss}
+                onQuestionReply={onQuestionReply}
+                onQuestionInteraction={onQuestionInteraction}
                 onApproval={onApproval}
                 onOpenFile={onOpenFile}
                 onOpenDiff={onOpenDiff}
