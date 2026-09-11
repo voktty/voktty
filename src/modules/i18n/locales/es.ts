@@ -5498,6 +5498,9 @@ export const es: TranslationSchema = {
     openLabel: "Abrir {label}",
     previewLabel: "Previsualizar {type}: {label}",
     closePreview: "Cerrar previsualización",
+    file: "Archivo",
+    previewLines: "Líneas de previsualización",
+    emptyFile: "Archivo vacío",
   },
   notifications: {
     title: "Voktty",

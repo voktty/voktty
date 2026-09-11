@@ -13,12 +13,15 @@ describe("ToolDiffPreview", () => {
     })!;
 
     const markup = renderToStaticMarkup(
-      createElement(ToolDiffPreview, {
-        preview,
-        label: "notes.md",
-        status: "accepted",
-        children: "notes.md",
-      }),
+      createElement(
+        ToolDiffPreview,
+        {
+          preview,
+          label: "notes.md",
+          status: "accepted",
+        },
+        "notes.md",
+      ),
     );
 
     expect(markup).toContain("<button");
@@ -33,12 +36,15 @@ describe("ToolDiffPreview", () => {
     })!;
 
     const markup = renderToStaticMarkup(
-      createElement(ToolDiffPreview, {
-        preview,
-        label: "notes.md",
-        status: "accepted",
-        children: "notes.md",
-      }),
+      createElement(
+        ToolDiffPreview,
+        {
+          preview,
+          label: "notes.md",
+          status: "accepted",
+        },
+        "notes.md",
+      ),
     );
 
     expect(markup).toContain("<button");
