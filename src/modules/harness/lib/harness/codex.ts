@@ -635,7 +635,7 @@ async function handleServerRequest(
       await live.rpc.respond(id, { answers: {} });
       return;
     }
-    let questions;
+    let questions: ReturnType<typeof codexQuestions>;
     try {
       questions = codexQuestions(params);
     } catch (error) {

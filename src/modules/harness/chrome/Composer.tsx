@@ -93,10 +93,7 @@ import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
 import { QuestionForm } from "./QuestionForm";
 import { SkillPicker } from "./SkillPicker";
-import {
-  type UserQuestionPrompt,
-  type UserQuestionReply,
-} from "../lib/userQuestion";
+import type { UserQuestionPrompt, UserQuestionReply } from "../lib/userQuestion";
 import { projectKey } from "../lib/paths";
 import { consumeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
