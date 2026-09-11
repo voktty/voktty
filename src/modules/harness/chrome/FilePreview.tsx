@@ -1,8 +1,9 @@
-import { CircleDashed, X } from "./icons";
+import { useTranslation } from "@/modules/i18n";
 import { MAX_PREVIEW_LINES } from "../lib/harness/preview";
 import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import type { ToolPreview, ToolPreviewLine } from "../lib/session";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { CircleDashed, X } from "./icons";
 
 type Status = "pending" | "accepted" | "rejected";
 
@@ -69,6 +70,7 @@ export function FilePreview({
   onOpenFile,
   variant = "card",
 }: Props) {
+  const { t } = useTranslation();
   const path = preview.path;
   const filePath = path ? (resolveWorkspacePath(path, cwd) ?? path) : undefined;
   const fileName = preview.fileName || fileNameOf(path);
@@ -85,7 +87,7 @@ export function FilePreview({
   const deleted = preview.deletions ?? 0;
   const label = path
     ? displayPath(path, cwd)
-    : fileName || preview.title || "File";
+    : fileName || preview.title || t("toolPreview.file");
 
   return (
     <div
@@ -138,11 +140,14 @@ export function FilePreview({
                 : undefined
             }
             tabIndex={variant === "popover" ? 0 : undefined}
-            aria-label={variant === "popover" ? "Preview lines" : undefined}
+            role={variant === "popover" ? "region" : undefined}
+            aria-label={
+              variant === "popover" ? t("toolPreview.previewLines") : undefined
+            }
           >
             {preview.contentOnly && !lines.length ? (
               <p className="px-3 py-2 font-mono text-xs text-content/50">
-                Empty file
+                {t("toolPreview.emptyFile")}
               </p>
             ) : null}
             {lines.map((line, index) => (
@@ -278,4 +283,3 @@ function fileNameOf(path?: string): string | undefined {
   const parts = path.split(/[/\\]/).filter(Boolean);
   return parts[parts.length - 1];
 }
-

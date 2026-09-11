@@ -70,6 +70,7 @@ export type BlockMatch = { line: number; col: number; len: number };
 
 export type BlockDecorationsOptions = {
   onCwd?: (cwd: string) => void;
+  shouldAcceptCwd?: () => boolean;
   onMode?: (mode: BlockMode) => void;
   onViewport?: () => void;
 };
@@ -110,6 +111,7 @@ export class BlockDecorations {
         this.onCwd?.(c);
       },
       this.shellState,
+      opts?.shouldAcceptCwd,
     );
     const parsed = term.onWriteParsed(() => this.syncAlt());
     const scroll = term.onScroll(() => this.scheduleViewport());

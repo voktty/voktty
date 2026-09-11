@@ -13,7 +13,7 @@ type Props = {
   onOpen?: () => void;
   onOpenFile?: (path: string) => void;
   className?: string;
-  children: ReactNode;
+  children?: ReactNode;
 };
 
 /** A quiet file chip that reveals the tool's own edit, independent of git. */
@@ -124,7 +124,7 @@ export function ToolDiffPreview({
           }
         }}
       >
-        {children}
+        {children ?? label}
       </button>
       {open ? (
         <Popover

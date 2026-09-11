@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import type { Terminal } from "@xterm/xterm";
+import { describe, expect, it, vi } from "vitest";
 import {
   createShellIntegrationState,
   registerCwdHandler,
@@ -111,6 +111,46 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
 
     expect(onCwd).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      "Windows",
+      "file:///C:/Users/me",
+      "file:///C:/work/project",
+      "C:/work/project",
+    ],
+    [
+      "Unix",
+      "file://host/home/me",
+      "file://host/work/project",
+      "/work/project",
+    ],
+  ])(
+    "keeps the visual cwd stable while an agent is active on %s",
+    (_platform, agentCwd, shellCwd, expectedShellCwd) => {
+      const { term, handlers } = makeFakeTerm();
+      const state = createShellIntegrationState();
+      const onCwd = vi.fn();
+      let agentActive = true;
+      registerPromptTracker(term, state);
+      registerCwdHandler(term, onCwd, state, () => !agentActive);
+
+      // Agent output can spoof a completed shell command and then advertise
+      // its private runtime cwd. The PTY lifecycle remains authoritative.
+      handlers.get(133)?.("C;agent");
+      handlers.get(133)?.("D;0");
+      handlers.get(7)?.(agentCwd);
+
+      expect(onCwd).not.toHaveBeenCalled();
+
+      agentActive = false;
+      handlers.get(133)?.("D;0");
+      handlers.get(7)?.(shellCwd);
+
+      expect(onCwd).toHaveBeenCalledOnce();
+      expect(onCwd).toHaveBeenCalledWith(expectedShellCwd);
+    },
+  );
 
   it("works without state for backwards compatibility (legacy callers)", () => {
     // The state parameter is optional — when omitted, OSC 7 is always
