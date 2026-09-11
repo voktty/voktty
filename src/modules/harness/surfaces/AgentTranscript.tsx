@@ -120,6 +120,8 @@ type Props = {
   onJumpToBottomReady?: (jump: () => void) => void;
   /** Passes a function that renders the turn that holds a block. The render completes before the function returns. */
   onRevealReady?: (reveal: (blockId: string) => boolean) => void;
+  /** Session-level output shown after the latest reply and before its action row. */
+  latestTurnAccessory?: ReactNode;
   /** False while the pane is `display: none` (another tab). */
   visible?: boolean;
 };
@@ -142,6 +144,7 @@ function AgentTranscriptComponent({
   onJumpToBottomChange,
   onJumpToBottomReady,
   onRevealReady,
+  latestTurnAccessory,
   visible = true,
 }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
@@ -540,6 +543,7 @@ function AgentTranscriptComponent({
                 return [foldLineRow, row];
               })}
               {foldLineAt >= items.length ? foldLineRow : null}
+              {isLastTurn && latestTurnAccessory ? latestTurnAccessory : null}
               {durationMs != null && settled ? (
                 <TurnDuration
                   elapsedMs={durationMs}

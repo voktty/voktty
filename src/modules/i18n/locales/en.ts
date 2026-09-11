@@ -5451,6 +5451,20 @@ export const en = {
     typeYourAnswer: "Type your answer",
     other: "Other",
   },
+  sessionReview: {
+    changedFiles: "Changed {count} {count, plural, one {file} other {files}}",
+    undo: "Undo",
+    keep: "Keep",
+    review: "Review",
+    undoAllSessionChanges: "Undo all session changes",
+    undoLockedOtherSession: "Undo is unavailable while another session is running in this project",
+    undoUnavailableExternal: "Undo is unavailable because a file changed outside this session",
+    keepAllSessionChanges: "Keep all session changes and dismiss this card",
+    reviewChanges: "Review changes",
+    showFewerFiles: "Show fewer files",
+    showMoreFiles: "Show {count} more {count, plural, one {file} other {files}}",
+    sharedFile: "Shared file",
+  },
 };
 
 export type TranslationSchema = typeof en;

@@ -345,18 +345,7 @@ export const SessionPane = memo(function SessionPane({
       onResumeQueue={() => onResumeQueue?.(session.id)}
       onOpenFile={onOpenFile}
       busy={!!session.busy}
-    >
-      {session.inboxAsk ? null : (
-        <SessionReview
-          sessionId={session.id}
-          cwd={workCwd}
-          enabled={visible}
-          busy={!!session.busy}
-          undoLocked={undoLocked}
-          onOpenDiff={onOpenDiff}
-        />
-      )}
-    </Composer>
+    />
   );
 
   return (
@@ -459,6 +448,18 @@ export const SessionPane = memo(function SessionPane({
               onJumpToBottomChange={setShowJumpToBottom}
               onJumpToBottomReady={onJumpToBottomReady}
               onRevealReady={onRevealReady}
+              latestTurnAccessory={
+                session.inboxAsk ? undefined : (
+                  <SessionReview
+                    sessionId={session.id}
+                    cwd={workCwd}
+                    enabled={visible}
+                    busy={!!session.busy}
+                    undoLocked={undoLocked}
+                    onOpenDiff={onOpenDiff}
+                  />
+                )
+              }
             />
             <PromptOutline
               blocks={session.blocks}
