@@ -20,6 +20,7 @@ const SECTION_LABEL_KEYS: Record<SettingsSectionId, string> = {
   appearance: "harness.settings.appearance",
   keybindings: "harness.modelSettings.keybindings",
   providers: "harness.settings.providers",
+  inbox: "harness.settings.inbox",
   skills: "harness.settings.skills",
   archive: "harness.modelSettings.archive",
 };
@@ -29,6 +30,7 @@ const SECTION_DESCRIPTION_KEYS: Record<SettingsSectionId, string> = {
   appearance: "harness.modelSettings.sectionDescriptions.appearance",
   keybindings: "harness.modelSettings.sectionDescriptions.keybindings",
   providers: "harness.modelSettings.sectionDescriptions.providers",
+  inbox: "harness.modelSettings.sectionDescriptions.inbox",
   skills: "harness.modelSettings.sectionDescriptions.skills",
   archive: "harness.modelSettings.sectionDescriptions.archive",
 };

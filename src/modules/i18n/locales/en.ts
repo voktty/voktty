@@ -4467,6 +4467,22 @@ export const en = {
       general: "General",
       appearance: "Appearance",
       providers: "Providers",
+      inbox: "Inbox",
+      inboxDesc: "Manage source connections and tokens for your inbox feeds.",
+      github: "GitHub",
+      githubConnection: "GitHub connection",
+      githubConnected: "Connected via GitHub CLI",
+      githubConnectedDesc:
+        "Voktty reads issues and review requests through your authenticated gh session.",
+      githubSignInRequired: "Sign in required",
+      githubSignInRequiredDesc:
+        "GitHub CLI is installed, but you are not signed in. Run 'gh auth login' in your terminal.",
+      githubNotInstalled: "GitHub CLI not found",
+      githubNotInstalledDesc:
+        "Install gh CLI and run 'gh auth login' to pull notifications, issues, and pull requests into your inbox.",
+      githubInstallGuide: "Install GitHub CLI",
+      githubCheckAgain: "Check connection",
+      githubChecking: "Checking GitHub CLI...",
       skills: "Skills",
       workspaceLayout: "Workspace layout",
       workspaceLayoutDesc:
@@ -4550,6 +4566,8 @@ export const en = {
         appearance: "Theme, translucency, and the tint applied to the chrome.",
         keybindings: "Every shortcut the workspace handles, from the app menu and the key handler.",
         providers: "Agent CLIs Voktty can drive, and the model new sessions start with.",
+        inbox:
+          "Source connections and authentication for issues, PRs, and review feeds.",
         skills:
           "Discover and manage file skills from project, personal, and harness folders.",
         archive: "Projects and conversations you have archived.",
@@ -4793,6 +4811,12 @@ export const en = {
       inboxSource: "Inbox source",
       filterInbox: "Filter inbox",
       resizeInbox: "Resize inbox list",
+      addConnection: "Add connection",
+      connectSource: "Connect {source}",
+      notConnected: "Not connected",
+      addConnectionToStartInbox:
+        "Add a connection above to start pulling notifications and issues into your inbox.",
+      connectAnInboxSource: "Connect an inbox source",
       prSections: "Pull request sections",
       summary: "Summary",
       code: "Code",

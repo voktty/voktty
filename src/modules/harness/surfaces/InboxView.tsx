@@ -7,6 +7,7 @@ import {
   ListFilter,
   LoaderCircle,
   MessageSquare,
+  Plus,
   RefreshCw,
   Search,
 } from "../chrome/icons";
@@ -26,6 +27,7 @@ import {
   InboxFiltersMenu,
   INBOX_FILTER_MENU_WIDTH,
 } from "../chrome/InboxFiltersMenu";
+import { InboxConnectMenu } from "../chrome/InboxConnectMenu";
 import { InboxKindStatusIcon } from "../chrome/InboxKindStatusIcon";
 import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { ProjectLogoIcon } from "../chrome/ProjectLogoIcon";
@@ -37,6 +39,7 @@ import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
 import {
   githubPrDiff,
   githubReviewDecisionLabel,
+  githubStatus,
   githubWorkItemComment,
   githubWorkItemDetails,
   githubWorkItemThread,
@@ -62,14 +65,21 @@ import {
 } from "../lib/githubTasks";
 import {
   applyInboxFilters,
+  connectableInboxSources,
   hasActiveInboxFilters,
   inboxFetchState,
   linearProjectOptions,
+  loadInboxConnections,
   loadInboxFilters,
   loadInboxSource,
   pruneInboxFilters,
+  resolveInboxSource,
+  saveInboxConnections,
   saveInboxFilters,
   saveInboxSource,
+  visibleInboxSources,
+  INBOX_SOURCE_LABELS,
+  type ConnectableInboxSource,
   type InboxFilters,
   type InboxSource,
 } from "../lib/inboxFilters";
@@ -84,6 +94,7 @@ import {
 } from "../lib/inboxSeen";
 import {
   LINEAR_CHANGE_EVENT,
+  linearConnected,
   linearIssueComment,
   linearIssueDetails,
   linearIssueThread,
@@ -197,7 +208,7 @@ function InboxSourceTab({
   selected: boolean;
   onSelect: (source: InboxSource) => void;
 }) {
-  const label = source === "linear" ? "Linear" : "GitHub";
+  const label = INBOX_SOURCE_LABELS[source];
   return (
     <button
       type="button"
@@ -259,6 +270,7 @@ type Props = {
   onAsk?: (item: InboxItem) => Promise<string>;
   onAskRestart?: (item: InboxItem) => Promise<string>;
   onAskMount?: (portal: InboxSessionPortal | null) => void;
+  onOpenIntegrations?: (source: ConnectableInboxSource) => void;
 };
 
 export function InboxView({
@@ -272,6 +284,7 @@ export function InboxView({
   onAsk,
   onAskRestart,
   onAskMount,
+  onOpenIntegrations,
 }: Props) {
   const { t } = useTranslation();
   const [discussionOpen, setDiscussionOpen] = useState(false);
@@ -299,7 +312,12 @@ export function InboxView({
   const [refresh, setRefresh] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [filters, setFilters] = useState(loadInboxFilters);
-  const [source, setSource] = useState(loadInboxSource);
+  const [connections, setConnections] = useState(loadInboxConnections);
+  const [source, setSource] = useState(() =>
+    resolveInboxSource(loadInboxSource(), connections),
+  );
+  const [connectMenuOpen, setConnectMenuOpen] = useState(false);
+  const connectButtonRef = useRef<HTMLButtonElement | null>(null);
   const [filterMenu, setFilterMenu] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -362,11 +380,15 @@ export function InboxView({
         setFilterMenu(null);
         return;
       }
+      if (connectMenuOpen) {
+        setConnectMenuOpen(false);
+        return;
+      }
       onCloseRef.current?.();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [filterMenu, sidebar]);
+  }, [connectMenuOpen, filterMenu, sidebar]);
 
   useEffect(() => {
     const onChange = () => {
@@ -376,6 +398,59 @@ export function InboxView({
     window.addEventListener(LINEAR_CHANGE_EVENT, onChange);
     return () => window.removeEventListener(LINEAR_CHANGE_EVENT, onChange);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let latest = 0;
+    const read = () => {
+      const generation = ++latest;
+      void Promise.allSettled([
+        githubStatus(),
+        linearConnected(),
+      ]).then(([github, linear]) => {
+        if (cancelled || generation !== latest) return;
+        setConnections((prev) => ({
+          github:
+            github.status === "fulfilled"
+              ? github.value.connected
+              : prev.github,
+          linear:
+            linear.status === "fulfilled"
+              ? linear.value.connected
+              : prev.linear,
+          gitlab: prev.gitlab,
+        }));
+      });
+    };
+    read();
+    window.addEventListener(LINEAR_CHANGE_EVENT, read);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(LINEAR_CHANGE_EVENT, read);
+    };
+  }, []);
+
+  useEffect(() => {
+    saveInboxConnections(connections);
+  }, [connections]);
+
+  useEffect(() => {
+    saveInboxSource(source);
+    // Mount only: the temporary switch to GitHub for a linked target must not
+    // be persisted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const next = resolveInboxSource(source, connections);
+    if (next === source) return;
+    setSource(next);
+    saveInboxSource(next);
+  }, [connections, source]);
+
+  const visibleSources = visibleInboxSources(connections);
+  const connectableSources = connectableInboxSources(connections);
+  const noSourcesConnected = visibleSources.length === 0;
 
   // The roster has to come from Linear, not from the fetched issues: hiding a
   // team drops its issues, so a derived list could never offer it back.
@@ -500,69 +575,97 @@ export function InboxView({
           : "relative flex h-full min-h-0 shrink-0 flex-col border-r border-content/10"
       }
     >
-      <div
-        role="tablist"
-        aria-label={t("harness.chrome.inboxSource")}
-        className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-2"
-      >
-        <InboxSourceTab
-          source="github"
-          selected={source === "github"}
-          onSelect={onSourceChange}
-        />
-        <InboxSourceTab
-          source="linear"
-          selected={source === "linear"}
-          onSelect={onSourceChange}
-        />
+      <div className="flex h-9 shrink-0 items-center gap-px border-b border-content/10 px-2">
+        {visibleSources.length > 0 ? (
+          <div
+            role="tablist"
+            aria-label={t("harness.chrome.inboxSource")}
+            className="flex min-w-0 basis-0 items-center gap-px"
+            style={{ flexGrow: visibleSources.length }}
+          >
+            {visibleSources.map((option) => (
+              <InboxSourceTab
+                key={option}
+                source={option}
+                selected={source === option}
+                onSelect={onSourceChange}
+              />
+            ))}
+          </div>
+        ) : null}
+        {connectableSources.length > 0 ? (
+          <button
+            ref={connectButtonRef}
+            type="button"
+            aria-label={t("harness.chrome.connectAnInboxSource")}
+            aria-haspopup="menu"
+            aria-expanded={connectMenuOpen}
+            title={t("harness.chrome.connectAnInboxSource")}
+            onClick={() => setConnectMenuOpen((open) => !open)}
+            className={`flex h-6 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[12px] leading-none ${
+              connectMenuOpen
+                ? "bg-content/10 text-content"
+                : "text-content/40 hover:bg-content/5 hover:text-content"
+            }`}
+          >
+            <Plus className="size-3.5 shrink-0" strokeWidth={1.75} />
+            <span className="min-w-0 truncate">{t("harness.chrome.addConnection")}</span>
+          </button>
+        ) : null}
       </div>
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
-        <div className="relative flex h-7 min-w-0 flex-1 items-center">
-          <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
-          <input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder={t("harness.chrome.filterInbox")}
-            aria-label={t("harness.chrome.filterInbox")}
-            spellCheck={false}
-            autoComplete="off"
-            className="h-7 w-full rounded-md bg-transparent pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/40"
-          />
-        </div>
-        <button
-          type="button"
-          title={t("harness.chrome.filterInbox")}
-          aria-label={t("harness.chrome.filterInbox")}
-          aria-expanded={!!filterMenu}
-          aria-haspopup="menu"
-          onClick={onFilterButtonClick}
-          className={`grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content ${
-            filterMenu || filtersActive ? "bg-content/10 text-content" : ""
-          }`}
-        >
-          <ListFilter className="size-3" strokeWidth={1.75} />
-        </button>
-        <button
-          type="button"
-          aria-label={t("common.refresh")}
-          onClick={() => setRefresh((value) => value + 1)}
-          className="grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
-        >
-          {loading || revalidating ? (
-            <LoaderCircle
-              className="size-3.5 animate-spin"
-              strokeWidth={1.75}
+      {noSourcesConnected ? null : (
+        <div className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2">
+          <div className="relative flex h-7 min-w-0 flex-1 items-center">
+            <Search className="pointer-events-none absolute left-2 size-3 shrink-0 opacity-50" />
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder={t("harness.chrome.filterInbox")}
+              aria-label={t("harness.chrome.filterInbox")}
+              spellCheck={false}
+              autoComplete="off"
+              className="h-7 w-full rounded-md bg-transparent pl-7 pr-2 text-[12px] text-content outline-none placeholder:text-content/40"
             />
-          ) : (
-            <RefreshCw className="size-3.5" strokeWidth={1.75} />
-          )}
-        </button>
-      </div>
+          </div>
+          <button
+            type="button"
+            title={t("harness.chrome.filterInbox")}
+            aria-label={t("harness.chrome.filterInbox")}
+            aria-expanded={!!filterMenu}
+            aria-haspopup="menu"
+            onClick={onFilterButtonClick}
+            className={`grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content ${
+              filterMenu || filtersActive ? "bg-content/10 text-content" : ""
+            }`}
+          >
+            <ListFilter className="size-3" strokeWidth={1.75} />
+          </button>
+          <button
+            type="button"
+            aria-label={t("common.refresh")}
+            onClick={() => setRefresh((value) => value + 1)}
+            className="grid size-6 shrink-0 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
+          >
+            {loading || revalidating ? (
+              <LoaderCircle
+                className="size-3.5 animate-spin"
+                strokeWidth={1.75}
+              />
+            ) : (
+              <RefreshCw className="size-3.5" strokeWidth={1.75} />
+            )}
+          </button>
+        </div>
+      )}
       <div
         ref={listLock}
         className="min-h-0 flex-1 overflow-y-auto overscroll-none"
       >
-        {sourceError && visibleItems.length === 0 ? (
+        {noSourcesConnected ? (
+          <p className="px-3 py-3 text-[12px] text-content/50">
+            {t("harness.chrome.addConnectionToStartInbox")}
+          </p>
+        ) : sourceError && visibleItems.length === 0 ? (
           <p className="px-3 py-2 text-[12px] text-content/50">{sourceError}</p>
         ) : loading && items.length === 0 ? (
           <div className="flex justify-center py-10 text-content/40">
@@ -649,6 +752,16 @@ export function InboxView({
     />
   ) : null;
 
+  const connectPortal =
+    connectMenuOpen && connectableSources.length > 0 ? (
+      <InboxConnectMenu
+        anchor={connectButtonRef}
+        sources={connectableSources}
+        onConnect={(targetSource) => onOpenIntegrations?.(targetSource)}
+        onClose={() => setConnectMenuOpen(false)}
+      />
+    ) : null;
+
   if (sidebar) {
     return (
       <div
@@ -658,6 +771,7 @@ export function InboxView({
       >
         {list}
         {filtersPortal}
+        {connectPortal}
       </div>
     );
   }
@@ -715,6 +829,7 @@ export function InboxView({
         ) : null}
       </div>
       {filtersPortal}
+      {connectPortal}
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { t } from "@/modules/i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -377,7 +376,8 @@ import { ProjectTerminalDock } from "../surfaces/ProjectTerminalDock";
 import { SearchView } from "../surfaces/SearchView";
 import { SessionPane } from "../surfaces/SessionPane";
 import { SessionSurface } from "../surfaces/SessionSurface";
-import { SettingsView } from "../surfaces/SettingsView";
+import { SettingsView, type SettingsAnchor } from "../surfaces/SettingsView";
+import type { ConnectableInboxSource } from "../lib/inboxFilters";
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
@@ -645,6 +645,9 @@ export function HarnessApp({
   const [updateNotice, setUpdateNotice] = useState(installedUpdate);
   const [settingsSection, setSettingsSection] =
     useState<SettingsSectionId>(loadSettingsSection);
+  const [settingsAnchor, setSettingsAnchor] = useState<SettingsAnchor | null>(
+    null,
+  );
   const [editorNavigation, setEditorNavigation] =
     useState<EditorNavigationTarget | null>(null);
   const editorNavigationToken = useRef(0);
@@ -4957,21 +4960,28 @@ export function HarnessApp({
     setNotesViewOpen(false);
   }, []);
 
-  const openSettings = useCallback((section?: SettingsSectionId) => {
-    setFilePickerOpen(false);
-    setSearchViewOpen(false);
-    setInboxViewOpen(false);
-    setNotesViewOpen(false);
-    if (section === "archive") {
-      setSettingsSection(section);
-      saveSettingsSection(section);
+  const openSettings = useCallback(
+    (section?: SettingsSectionId, anchor?: SettingsAnchor) => {
+      setFilePickerOpen(false);
+      setSearchViewOpen(false);
+      setInboxViewOpen(false);
+      setNotesViewOpen(false);
+      if (section) {
+        setSettingsSection(section);
+        saveSettingsSection(section);
+      }
+      setSettingsAnchor(anchor ?? null);
       setSettingsOpen(true);
-      return;
-    }
-    void openSettingsWindow("agents");
-  }, []);
+    },
+    [],
+  );
 
   const onOpenSettings = useCallback(() => openSettings(), [openSettings]);
+
+  const onOpenInboxIntegrations = useCallback(
+    (source: ConnectableInboxSource) => openSettings("inbox", source),
+    [openSettings],
+  );
 
   const onCloseSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -5764,6 +5774,7 @@ export function HarnessApp({
             onAsk={onAskInboxItem}
             onAskRestart={onRestartInboxAsk}
             onAskMount={setInboxAskPortal}
+            onOpenIntegrations={onOpenInboxIntegrations}
           />
         ) : null}
         {notesViewOpen ? (
@@ -5777,6 +5788,7 @@ export function HarnessApp({
         {settingsOpen ? (
           <SettingsView
             section={settingsSection}
+            anchor={settingsAnchor}
             cwd={sidebarCwd}
             sessions={sidebarHistory}
             besideRail={deckLayout || sidebarOpen || settingsOpen}

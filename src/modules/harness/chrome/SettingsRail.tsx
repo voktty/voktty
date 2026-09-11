@@ -2,6 +2,7 @@ import {
   Archive,
   ArrowLeft,
   Bot,
+  Inbox,
   Keyboard,
   Palette,
   SlidersHorizontal,
@@ -20,6 +21,7 @@ const SECTION_ICONS: Record<SettingsSectionId, IconComponent> = {
   appearance: Palette,
   keybindings: Keyboard,
   providers: Bot,
+  inbox: Inbox,
   skills: Sparkles,
   archive: Archive,
 };
@@ -39,6 +41,7 @@ export function SettingsNav({ section, onSelect, onClose }: Props) {
     appearance: t("harness.settings.appearance"),
     keybindings: t("harness.chrome.settingsKeybindings"),
     providers: t("harness.settings.providers"),
+    inbox: t("harness.settings.inbox"),
     skills: t("harness.settings.skills"),
     archive: t("harness.chrome.settingsArchive"),
   };

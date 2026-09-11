@@ -1,3 +1,4 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowDownCircle,
   Check,
@@ -96,7 +97,11 @@ import {
   saveSessionSidebarFilters,
 } from "../lib/sessionFilters";
 import type { SessionSummary } from "../lib/sessionStore";
-import { clearInboxCache } from "../lib/githubTasks";
+import {
+  clearInboxCache,
+  githubStatus,
+  type GithubStatus,
+} from "../lib/githubTasks";
 import {
   disconnectLinear,
   LINEAR_CHANGE_EVENT,
@@ -135,8 +140,18 @@ import {
   type UpdaterSnapshot,
 } from "../lib/updater";
 
+export type SettingsAnchor = "github" | "gitlab" | "linear";
+
+const ANCHOR_IDS: Record<SettingsAnchor, string> = {
+  github: "settings-github",
+  gitlab: "settings-gitlab",
+  linear: "settings-linear",
+};
+
 type Props = {
   section: SettingsSectionId;
+  /** Card to scroll to; the General page is too long to land at the top. */
+  anchor?: SettingsAnchor | null;
   cwd: string;
   sessions: SessionSummary[];
   besideRail?: boolean;
@@ -151,6 +166,7 @@ type Props = {
 
 export function SettingsView({
   section,
+  anchor = null,
   cwd,
   sessions,
   besideRail = false,
@@ -164,6 +180,12 @@ export function SettingsView({
 }: Props) {
   const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
+  useEffect(() => {
+    if (!anchor) return;
+    document.getElementById(ANCHOR_IDS[anchor])?.scrollIntoView({
+      block: "start",
+    });
+  }, [anchor]);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const appearance = useAppearanceSettings();
@@ -221,6 +243,7 @@ export function SettingsView({
           ) : null}
           {section === "keybindings" ? <KeybindingsPage /> : null}
           {section === "providers" ? <ProvidersPage /> : null}
+          {section === "inbox" ? <InboxPage /> : null}
           {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
           {section === "archive" ? (
             <ArchivePage
@@ -461,11 +484,98 @@ function GeneralPage({
         />
       </Row>
 
-      <Heading title={t("harness.chrome.linear")} />
-      <LinearSettings />
-
       <Heading title={t("harness.chrome.about")} />
       <UpdateRow onOpenWhatsNew={onOpenWhatsNew} />
+    </>
+  );
+}
+
+function InboxPage() {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Heading title={t("harness.settings.github")} id={ANCHOR_IDS.github} first />
+      <GithubSettings />
+
+      <Heading title={t("harness.chrome.linear")} id={ANCHOR_IDS.linear} />
+      <LinearSettings />
+    </>
+  );
+}
+
+function GithubSettings() {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<GithubStatus | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const request = useRef(0);
+
+  const checkStatus = useCallback(async () => {
+    const generation = ++request.current;
+    setChecking(true);
+    setError(null);
+    try {
+      const next = await githubStatus();
+      if (generation === request.current) setStatus(next);
+    } catch (err: unknown) {
+      if (generation === request.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (generation === request.current) setChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkStatus();
+    return () => {
+      request.current += 1;
+    };
+  }, [checkStatus]);
+
+  const description = status?.connected
+    ? t("harness.settings.githubConnectedDesc")
+    : status?.installed
+      ? t("harness.settings.githubSignInRequiredDesc")
+      : t("harness.settings.githubNotInstalledDesc");
+  const label = checking
+    ? t("harness.settings.githubChecking")
+    : status?.connected
+      ? t("harness.settings.githubConnected")
+      : status?.installed
+        ? t("harness.settings.githubSignInRequired")
+        : t("harness.settings.githubNotInstalled");
+
+  return (
+    <>
+      <Row
+        label={
+          <span className="flex items-center gap-2">
+            <InboxProviderMark provider="github" className="size-4 shrink-0" />
+            {t("harness.settings.githubConnection")}
+          </span>
+        }
+        description={description}
+      >
+        <span className="text-[12px] text-content/50">{label}</span>
+        {!checking && !status?.installed ? (
+          <SecondaryButton
+            onClick={() => {
+              void openUrl("https://cli.github.com/").catch(() => {});
+            }}
+          >
+            {t("harness.settings.githubInstallGuide")}
+          </SecondaryButton>
+        ) : null}
+        <SecondaryButton onClick={() => void checkStatus()} disabled={checking}>
+          {checking
+            ? t("harness.settings.githubChecking")
+            : t("harness.settings.githubCheckAgain")}
+        </SecondaryButton>
+      </Row>
+      {error ? (
+        <p className="pb-2 text-[12px] text-red-400/90">{error}</p>
+      ) : null}
     </>
   );
 }
@@ -1329,9 +1439,18 @@ function PageHeader({
   );
 }
 
-function Heading({ title, first = false }: { title: string; first?: boolean }) {
+function Heading({
+  title,
+  id,
+  first = false,
+}: {
+  title: string;
+  id?: string;
+  first?: boolean;
+}) {
   return (
     <h2
+      id={id}
       className={`pb-1 text-[15px] font-semibold text-content ${
         first ? "" : "pt-8"
       }`}

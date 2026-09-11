@@ -4564,6 +4564,23 @@ export const es: TranslationSchema = {
       general: "General",
       appearance: "Apariencia",
       providers: "Proveedores",
+      inbox: "Bandeja",
+      inboxDesc:
+        "Gestiona conexiones de fuentes y tokens para los feeds de tu bandeja de entrada.",
+      github: "GitHub",
+      githubConnection: "Conexión con GitHub",
+      githubConnected: "Conectado mediante GitHub CLI",
+      githubConnectedDesc:
+        "Voktty lee problemas y solicitudes de revisión a través de tu sesión autenticada de gh.",
+      githubSignInRequired: "Inicio de sesión requerido",
+      githubSignInRequiredDesc:
+        "GitHub CLI está instalado, pero no has iniciado sesión. Ejecuta 'gh auth login' en tu terminal.",
+      githubNotInstalled: "GitHub CLI no encontrado",
+      githubNotInstalledDesc:
+        "Instala gh CLI y ejecuta 'gh auth login' para traer notificaciones, incidencias y solicitudes de extracción a tu bandeja.",
+      githubInstallGuide: "Instalar GitHub CLI",
+      githubCheckAgain: "Comprobar conexión",
+      githubChecking: "Comprobando GitHub CLI...",
       skills: "Habilidades",
       workspaceLayout: "Distribucion del espacio",
       workspaceLayoutDesc:
@@ -4647,6 +4664,8 @@ export const es: TranslationSchema = {
         appearance: "Tema, transparencia y el tinte aplicado al chrome.",
         keybindings: "Todos los atajos que controla el espacio de trabajo, desde el menú hasta el gestor de teclas.",
         providers: "CLIs de agentes que Voktty puede controlar y el modelo con el que empiezan las sesiones nuevas.",
+        inbox:
+          "Conexiones de origen y autenticación para incidencias, PRs y feeds de revisión.",
         skills:
           "Explorar y administrar habilidades basadas en archivos desde el proyecto, carpetas personales y el harness.",
         archive: "Proyectos y conversaciones que has archivado.",
@@ -4890,6 +4909,12 @@ export const es: TranslationSchema = {
       inboxSource: "Origen de la bandeja",
       filterInbox: "Filtrar bandeja",
       resizeInbox: "Redimensionar lista de la bandeja",
+      addConnection: "Añadir conexión",
+      connectSource: "Conectar {source}",
+      notConnected: "No conectado",
+      addConnectionToStartInbox:
+        "Añade una conexión arriba para empezar a traer notificaciones e incidencias a tu bandeja.",
+      connectAnInboxSource: "Conectar una fuente de bandeja",
       prSections: "Secciones del pull request",
       summary: "Resumen",
       code: "Codigo",
