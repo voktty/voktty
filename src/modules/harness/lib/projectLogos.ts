@@ -1,6 +1,7 @@
 import { t } from "@/modules/i18n";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { projectKey } from "./paths";
 import {
   loadTabGroupLogos,
   notifyTabGroupLogosChanged,
@@ -8,8 +9,9 @@ import {
   tabGroupLogoDisplayRevision,
 } from "./tabGroups";
 
-export async function pickImageFile(): Promise<string | null> {
+export async function pickImageFile(directory?: string | null): Promise<string | null> {
   const selected = await open({
+    ...(directory ? { defaultPath: directory } : {}),
     multiple: false,
     directory: false,
     title: t("harness.chrome.chooseProjectLogo"),
@@ -52,10 +54,11 @@ async function forgetLogoFile(path: string | null): Promise<void> {
 }
 
 export async function pickAndSetProjectLogo(
-  project: string,
+  projectPath?: string | null,
 ): Promise<string | null> {
-  const sourcePath = await pickImageFile();
+  const sourcePath = await pickImageFile(projectPath);
   if (!sourcePath) return null;
+  const project = projectKey(projectPath);
   const logos = loadTabGroupLogos();
   const path = await invoke<string>("save_project_logo", {
     project,

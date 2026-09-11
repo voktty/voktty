@@ -1,10 +1,15 @@
 import { GripVertical, Terminal, X } from "./icons";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "@/modules/i18n";
-import { basename } from "../lib/fs";
+import { copyText } from "../lib/clipboard";
+import { basename, revealPath } from "../lib/fs";
+import { displayPath } from "../lib/paths";
+import { IS_MAC, IS_WIN } from "../lib/platform";
 import {
   isChangesTab,
+  isFilesystemTab,
   isPlanTab,
   isReleaseNotesTab,
   isReviewTab,
@@ -16,6 +21,7 @@ import { releaseNotesTitle } from "../lib/releaseNotes";
 import { terminalTabLabel } from "../lib/terminalTab";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useSortable } from "../hooks/useSortable";
+import { ExplorerMenu, type ExplorerMenuItem } from "./ExplorerMenu";
 import { FileTypeIcon } from "./FileTypeIcon";
 
 type Props = {
@@ -101,6 +107,49 @@ export function appendProblems(
   return t("harness.chrome.tabProblems", { title, count: errors });
 }
 
+type SurfaceTabMenu = {
+  x: number;
+  y: number;
+  fileId: string;
+};
+
+export function surfaceTabMenuItems(
+  file: FilePaneTab,
+  t: (key: string) => string,
+): ExplorerMenuItem[] {
+  const close: ExplorerMenuItem = {
+    kind: "item",
+    id: "close",
+    label: t("common.close"),
+  };
+  if (!isFilesystemTab(file) || isChangesTab(file)) return [close];
+
+  const revealLabel = IS_MAC
+    ? t("harness.chrome.revealInFinder")
+    : IS_WIN
+      ? t("harness.chrome.revealInFileExplorer")
+      : t("harness.chrome.openContainingFolder");
+
+  return [
+    {
+      kind: "item",
+      id: "open-default",
+      label: t("harness.chrome.openInDefaultApp"),
+    },
+    { kind: "item", id: "reveal", label: revealLabel },
+    { kind: "sep" },
+    { kind: "item", id: "copy-path", label: t("harness.chrome.copyPath") },
+    {
+      kind: "item",
+      id: "copy-relative-path",
+      label: t("harness.chrome.copyRelativePath"),
+    },
+    { kind: "item", id: "copy-name", label: t("harness.chrome.copyFileName") },
+    { kind: "sep" },
+    close,
+  ];
+}
+
 export function SurfaceTabs({
   files,
   activeFileId,
@@ -116,9 +165,47 @@ export function SurfaceTabs({
   const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeTabRef = useRef<HTMLDivElement | null>(null);
+  const [menu, setMenu] = useState<SurfaceTabMenu | null>(null);
   const fileIds = files.map((file) => file.id);
   const sortable = useSortable(fileIds, onReorder);
   const canDrag = files.length > 1;
+  const menuFile = menu
+    ? files.find((file) => file.id === menu.fileId)
+    : undefined;
+
+  const onMenuPick = (id: string) => {
+    if (!menuFile) return;
+    setMenu(null);
+    if (id === "close") {
+      onCloseFile(menuFile.id);
+      return;
+    }
+    if (!isFilesystemTab(menuFile) || isChangesTab(menuFile)) return;
+
+    let action: Promise<void>;
+    switch (id) {
+      case "open-default":
+        action = openPath(menuFile.path);
+        break;
+      case "reveal":
+        action = revealPath(menuFile.path);
+        break;
+      case "copy-path":
+        action = copyText(menuFile.path);
+        break;
+      case "copy-relative-path":
+        action = copyText(displayPath(menuFile.path, menuFile.cwd));
+        break;
+      case "copy-name":
+        action = copyText(basename(menuFile.path));
+        break;
+      default:
+        return;
+    }
+    void action.catch((error) => {
+      console.error(`Failed to run file-tab action ${id}:`, error);
+    });
+  };
 
   useLayoutEffect(() => {
     if (sortable.draggingId) return;
@@ -183,6 +270,15 @@ export function SurfaceTabs({
             } ${dragging ? "opacity-40" : ""} ${
               canDrag ? "cursor-grab active:cursor-grabbing" : ""
             }`}
+            onMouseDownCapture={(event) => {
+              if (event.button === 1) event.preventDefault();
+            }}
+            onAuxClick={(event) => {
+              if (event.button !== 1) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onCloseFile(file.id);
+            }}
             onPointerDown={(event) => {
               if (event.button !== 0) return;
               if (
@@ -192,6 +288,16 @@ export function SurfaceTabs({
               }
               onSelectFile(file.id);
               sortable.onItemPointerDown(file.id, event);
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onSelectFile(file.id);
+              setMenu({
+                x: event.clientX,
+                y: event.clientY,
+                fileId: file.id,
+              });
             }}
           >
             {showStart ? (
@@ -224,8 +330,8 @@ export function SurfaceTabs({
                 className={`min-w-0 flex-1 truncate ${review ? "italic" : ""} ${
                   errors
                     ? active
-                      ? "text-red-400"
-                      : "text-red-400/75 group-hover:text-red-400"
+                    ? "text-red-400"
+                    : "text-red-400/75 group-hover:text-red-400"
                     : ""
                 }`}
               >
@@ -270,6 +376,16 @@ export function SurfaceTabs({
       ) : null}
       </div>
       {trailing}
+      {menu && menuFile ? (
+        <ExplorerMenu
+          x={menu.x}
+          y={menu.y}
+          items={surfaceTabMenuItems(menuFile, t)}
+          ariaLabel={t("harness.chrome.fileTabActions")}
+          onPick={onMenuPick}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
     </div>
   );
 }

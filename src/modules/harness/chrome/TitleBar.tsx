@@ -370,6 +370,15 @@ function TitleTabItem({
         event.stopPropagation();
         onContextMenu?.(event);
       }}
+      onMouseDownCapture={(event) => {
+        if (event.button === 1) event.preventDefault();
+      }}
+      onAuxClick={(event) => {
+        if (event.button !== 1 || !closable) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose(tab.id);
+      }}
     >
       {showStart ? (
         <div className="pointer-events-none absolute inset-y-1.5 left-0 z-20 w-0.5 rounded-full bg-accent" />
