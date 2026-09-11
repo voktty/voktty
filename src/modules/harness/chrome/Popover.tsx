@@ -1,21 +1,21 @@
 import {
+  type ComponentPropsWithoutRef,
+  type CSSProperties,
+  type Ref,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  type ComponentPropsWithoutRef,
-  type CSSProperties,
-  type Ref,
 } from "react";
 import { createPortal } from "react-dom";
 import { LAYER } from "../lib/layers";
 import {
-  placePopover,
   type AnchorRect,
   type PopoverAlign,
   type PopoverPosition,
   type PopoverSide,
+  placePopover,
 } from "../lib/popover";
 
 /**
@@ -42,8 +42,6 @@ type Props = Omit<ComponentPropsWithoutRef<"div">, "style"> & {
   maxHeight?: number;
   /** Defaults to `LAYER.popover`; a flyout off an open popover wants higher. */
   layer?: number;
-  /** Drops the glass frame and keeps only placement and the content animation. */
-  bare?: boolean;
   style?: CSSProperties;
   autoFocus?: boolean;
   /** Wiring this in hands Popover the outside-click and Escape handling. */
@@ -136,7 +134,6 @@ export function Popover({
   minHeight,
   maxHeight,
   layer = LAYER.popover,
-  bare = false,
   className,
   style,
   autoFocus = false,
@@ -240,7 +237,7 @@ export function Popover({
   // Keep the backdrop-filter on a stable frame. WebKit can briefly paint a
   // stale backdrop when the same composited element is transformed and then
   // invalidated by a child hover. Only this unblurred content layer moves.
-  const frameInset = bare ? 0 : 2;
+  const frameInset = 2;
   const contentMaxHeight = position
     ? Math.max(0, position.maxHeight - frameInset)
     : maxHeight != null
@@ -252,7 +249,7 @@ export function Popover({
       ref={frame}
       data-popover-side={position?.side ?? side}
       style={{ ...placed, zIndex: layer }}
-      className={bare ? undefined : POPOVER_FRAME_CLASS}
+      className={POPOVER_FRAME_CLASS}
     >
       <div
         {...rest}

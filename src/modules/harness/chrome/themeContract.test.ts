@@ -11,6 +11,7 @@ const THEMED_SHELLS = [
   "SkillPicker.tsx",
   "SwitchBranchDialog.tsx",
   "UpdateToast.tsx",
+  "../surfaces/InboxView.tsx",
 ];
 const HARNESS_ONLY_SURFACE =
   /bg-\[#[0-9a-f]+\]|border-zinc-|text-zinc-|shadow-black\/|backdrop-blur-(?:xl|2xl)/i;
