@@ -286,4 +286,28 @@ describe("skill names", () => {
     expect(md).toContain("name: review-pr");
     expect(md).toContain("# Review Pr");
   });
+
+  it("filters disabled skill paths in mergeCatalog", () => {
+    const catalog = mergeCatalog(
+      [
+        {
+          name: "review-pr",
+          description: "from agents",
+          path: "/p/.agents/skills/review-pr/SKILL.md",
+          scope: "project",
+          source: "agents",
+        },
+        {
+          name: "cursor-only",
+          description: "native",
+          path: "/p/.cursor/skills/cursor-only/SKILL.md",
+          scope: "project",
+          source: "cursor",
+        },
+      ],
+      new Set(["/p/.agents/skills/review-pr/SKILL.md"]),
+    );
+    expect(catalog.find((s) => s.name === "review-pr")).toBeUndefined();
+    expect(catalog.find((s) => s.name === "cursor-only")).toBeDefined();
+  });
 });

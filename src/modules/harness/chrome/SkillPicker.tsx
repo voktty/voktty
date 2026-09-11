@@ -187,7 +187,7 @@ function SkillList({
   );
 }
 
-function CreateSkillForm({
+export function CreateSkillForm({
   query,
   cwd,
   error,

@@ -23,6 +23,7 @@ import {
 import { HarnessIcon } from "../chrome/HarnessIcon";
 import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
+import { SkillsPage } from "./SkillsPage";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   applyChatBackground,
@@ -220,6 +221,7 @@ export function SettingsView({
           ) : null}
           {section === "keybindings" ? <KeybindingsPage /> : null}
           {section === "providers" ? <ProvidersPage /> : null}
+          {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
           {section === "archive" ? (
             <ArchivePage
               cwd={cwd}
