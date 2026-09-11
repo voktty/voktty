@@ -203,8 +203,9 @@ export function AgentHistoryModal() {
   useEffect(() => {
     if (!findResults.messageIds.length) return;
     const messageId = findResults.messageIds[findMatchIndex % findResults.messageIds.length];
-    document.getElementById(`history-message-${messageId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [findMatchIndex, findResults]);
+    const index = messages.findIndex((message) => message.id === messageId);
+    if (index >= 0) messageVirtualizer.scrollToIndex(index, { align: "center" });
+  }, [findMatchIndex, findResults, messageVirtualizer, messages]);
 
   const handleFindChange = (q: string) => {
     setFindQuery(q);
@@ -789,8 +790,8 @@ export function AgentHistoryModal() {
                       className="h-7 w-48 text-xs font-mono bg-background/80 border-border/60"
                     />
                     <span className="text-[10px] text-muted-foreground font-mono px-1">
-                      {findResults.total > 0
-                        ? `${Math.min(findMatchIndex + 1, findResults.messageIds.length)}/${findResults.total}`
+                      {findResults.messageIds.length > 0
+                        ? `${Math.min(findMatchIndex + 1, findResults.messageIds.length)}/${findResults.messageIds.length}`
                         : findQuery
                           ? "0/0"
                           : ""}

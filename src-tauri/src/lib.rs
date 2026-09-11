@@ -231,7 +231,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(move |_app| {
             if cfg!(debug_assertions) {
-                log::debug!("startup setup reached in {} ms", startup_started.elapsed().as_millis());
+                log::debug!(
+                    "startup setup reached in {} ms",
+                    startup_started.elapsed().as_millis()
+                );
             }
             harness::host::reap_orphaned_harness_processes();
             // TCP bind + descriptor-file write + stale-launcher sweep + CLI

@@ -10,10 +10,10 @@ const message: HistoryMessage = {
 describe("searchHistoryMessages", () => {
   it("searches the canonical transcript fields without DOM nodes", () => {
     expect(searchHistoryMessages([message, { ...message, id: "two", content: "No match", thinking: "OAuth OAuth" }], "oauth"))
-      .toEqual({ messageIds: ["one", "two"], total: 5 });
+      .toEqual({ messageIds: ["one", "two"] });
   });
 
   it("returns no matches for an empty query", () => {
-    expect(searchHistoryMessages([message], " ")).toEqual({ messageIds: [], total: 0 });
+    expect(searchHistoryMessages([message], " ")).toEqual({ messageIds: [] });
   });
 });

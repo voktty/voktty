@@ -333,14 +333,13 @@ pub async fn git_review_update_comment(
 
 #[cfg(test)]
 mod tests {
-    use super::{GitReviewState, PathBuf};
+    use super::GitReviewState;
 
     #[test]
     fn state_constructor_defers_review_database_creation() {
         let temp = tempfile::tempdir().expect("temporary directory");
         let path = temp.path().join("review.db");
-        let state =
-            GitReviewState::with_paths(path.clone(), PathBuf::from(temp.path().join("blobs")));
+        let state = GitReviewState::with_paths(path.clone(), temp.path().join("blobs"));
 
         assert!(!path.exists());
         let first = state.resources().expect("open review database") as *const _;
@@ -352,10 +351,8 @@ mod tests {
     #[test]
     fn concurrent_access_opens_one_resource_set() {
         let temp = tempfile::tempdir().expect("temporary directory");
-        let state = GitReviewState::with_paths(
-            temp.path().join("review.db"),
-            PathBuf::from(temp.path().join("blobs")),
-        );
+        let state =
+            GitReviewState::with_paths(temp.path().join("review.db"), temp.path().join("blobs"));
         let (first, second) = std::thread::scope(|scope| {
             let first = scope.spawn(|| {
                 state
