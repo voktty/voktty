@@ -4,6 +4,8 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12,12 +14,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ApprovalToasts } from "../chrome/ApprovalToasts";
-import { FilePicker } from "../chrome/FilePicker";
 import { Sidebar } from "../chrome/Sidebar";
 import { TitleBar, type Tab as TitleTab } from "../chrome/TitleBar";
-import { UpdateToast } from "../chrome/UpdateToast";
-import { UsageFooter } from "../chrome/UsageFooter";
 import { useInputNotifications } from "../hooks/useInputNotifications";
 import { useProjectBranches } from "../hooks/useProjectBranches";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
@@ -363,21 +361,58 @@ import {
   planWorkspaceTabClose,
   workspaceTabCwd,
 } from "../lib/workspaceTabGroups";
-import { DiffPane } from "../surfaces/DiffPane";
 import {
   handleEditorFindKey,
   openFindInActiveEditor,
 } from "../surfaces/editorSearch";
-import { InboxDetailPane, InboxView } from "../surfaces/InboxView";
 import type { InboxSessionPortal } from "../surfaces/InboxDiscussionPanel";
-import { NotesView } from "../surfaces/NotesView";
 import { PaneTree } from "../surfaces/PaneTree";
-import { ProjectTerminalDock } from "../surfaces/ProjectTerminalDock";
-import { SearchView } from "../surfaces/SearchView";
-import { SessionPane } from "../surfaces/SessionPane";
 import { SessionSurface } from "../surfaces/SessionSurface";
-import { SettingsView, type SettingsAnchor } from "../surfaces/SettingsView";
+import type { SettingsAnchor } from "../surfaces/SettingsView";
 import type { ConnectableInboxSource } from "../lib/inboxFilters";
+
+const LazyDiffPane = lazy(() =>
+  import("../surfaces/DiffPane").then((module) => ({ default: module.DiffPane })),
+);
+const LazyInboxDetailPane = lazy(() =>
+  import("../surfaces/InboxView").then((module) => ({ default: module.InboxDetailPane })),
+);
+const LazyInboxView = lazy(() =>
+  import("../surfaces/InboxView").then((module) => ({ default: module.InboxView })),
+);
+const LazyNotesView = lazy(() =>
+  import("../surfaces/NotesView").then((module) => ({ default: module.NotesView })),
+);
+const LazySearchView = lazy(() =>
+  import("../surfaces/SearchView").then((module) => ({ default: module.SearchView })),
+);
+const LazySettingsView = lazy(() =>
+  import("../surfaces/SettingsView").then((module) => ({ default: module.SettingsView })),
+);
+const LazyApprovalToasts = lazy(() =>
+  import("../chrome/ApprovalToasts").then((module) => ({
+    default: module.ApprovalToasts,
+  })),
+);
+const LazyFilePicker = lazy(() =>
+  import("../chrome/FilePicker").then((module) => ({ default: module.FilePicker })),
+);
+const LazyUpdateToast = lazy(() =>
+  import("../chrome/UpdateToast").then((module) => ({ default: module.UpdateToast })),
+);
+const LazyUsageFooter = lazy(() =>
+  import("../chrome/UsageFooter").then((module) => ({ default: module.UsageFooter })),
+);
+const LazyProjectTerminalDock = lazy(() =>
+  import("../surfaces/ProjectTerminalDock").then((module) => ({
+    default: module.ProjectTerminalDock,
+  })),
+);
+const LazySessionPane = lazy(() =>
+  import("../surfaces/SessionPane").then((module) => ({
+    default: module.SessionPane,
+  })),
+);
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
@@ -5614,22 +5649,24 @@ export function HarnessApp({
                     style={show ? { gridArea: "dock" } : undefined}
                     aria-hidden={!show}
                   >
-                    <ProjectTerminalDock
-                      dock={dock}
-                      focused={show && projectTerminalFocused}
-                      onFocus={focusProjectTerminal}
-                      onHide={onHideProjectTerminal}
-                      onSideChange={onProjectTerminalSide}
-                      onSizePaint={paintDockSize}
-                      onSizeCommit={commitDockSize}
-                      onAddTerminal={() =>
-                        openProjectTerminal(active?.cwd ?? projectCwd)
-                      }
-                      onSelectTerminal={onSelectProjectTerminal}
-                      onCloseTerminal={onCloseProjectTerminal}
-                      onReorderTerminals={onReorderProjectTerminals}
-                      onTerminalMetaChange={onTerminalMetaChange}
-                    />
+                    <Suspense fallback={null}>
+                      <LazyProjectTerminalDock
+                        dock={dock}
+                        focused={show && projectTerminalFocused}
+                        onFocus={focusProjectTerminal}
+                        onHide={onHideProjectTerminal}
+                        onSideChange={onProjectTerminalSide}
+                        onSizePaint={paintDockSize}
+                        onSizeCommit={commitDockSize}
+                        onAddTerminal={() =>
+                          openProjectTerminal(active?.cwd ?? projectCwd)
+                        }
+                        onSelectTerminal={onSelectProjectTerminal}
+                        onCloseTerminal={onCloseProjectTerminal}
+                        onReorderTerminals={onReorderProjectTerminals}
+                        onTerminalMetaChange={onTerminalMetaChange}
+                      />
+                    </Suspense>
                   </div>
                 );
               })}
@@ -5638,11 +5675,13 @@ export function HarnessApp({
                 style={{ gridArea: "main" }}
               >
                 {classicInbox ? (
-                  <InboxDetailPane
-                    cwd={sidebarCwd}
-                    recents={recents}
-                    onStart={onStartInboxItem}
-                  />
+                  <Suspense fallback={null}>
+                    <LazyInboxDetailPane
+                      cwd={sidebarCwd}
+                      recents={recents}
+                      onStart={onStartInboxItem}
+                    />
+                  </Suspense>
                 ) : (
                   <div className="relative min-h-0 min-w-0 flex-1">
                     {tabs.map((tab: any) => (
@@ -5733,22 +5772,24 @@ export function HarnessApp({
                   </div>
                 )}
                 {!deckLayout && !classicInbox && activeTab?.diffOpen ? (
-                  <DiffPane
-                    key={gitCwd ?? ""}
-                    cwd={gitCwd}
-                    textHarness={pickTextHarness(active?.harness)}
-                    selectedPath={selectedChangePath(activeTab, gitCwd)}
-                    focused={!!activeTab.diffFocused}
-                    onFocus={onFocusDiff}
-                    onOpenFile={onOpenDiff}
-                  />
+                  <Suspense fallback={null}>
+                    <LazyDiffPane
+                      key={gitCwd ?? ""}
+                      cwd={gitCwd}
+                      textHarness={pickTextHarness(active?.harness)}
+                      selectedPath={selectedChangePath(activeTab, gitCwd)}
+                      focused={!!activeTab.diffFocused}
+                      onFocus={onFocusDiff}
+                      onOpenFile={onOpenDiff}
+                    />
+                  </Suspense>
                 ) : null}
               </div>
             </div>
           </main>
         </div>
         {searchViewOpen ? (
-          <SearchView
+          <Suspense fallback={null}><LazySearchView
             open
             cwd={sidebarCwd}
             recents={recents}
@@ -5761,10 +5802,10 @@ export function HarnessApp({
             onOpenFile={onOpenFile}
             onOpenSession={onSelectHistorySession}
             onOpenProject={onSelectProject}
-          />
+          /></Suspense>
         ) : null}
         {inboxViewOpen ? (
-          <InboxView
+          <Suspense fallback={null}><LazyInboxView
             cwd={sidebarCwd}
             recents={recents}
             besideRail={deckLayout && projectRailOpen}
@@ -5775,18 +5816,18 @@ export function HarnessApp({
             onAskRestart={onRestartInboxAsk}
             onAskMount={setInboxAskPortal}
             onOpenIntegrations={onOpenInboxIntegrations}
-          />
+          /></Suspense>
         ) : null}
         {notesViewOpen ? (
-          <NotesView
+          <Suspense fallback={null}><LazyNotesView
             besideRail={deckLayout && projectRailOpen}
             cwd={projectCwd}
             onClose={onLeaveNotes}
             onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
-          />
+          /></Suspense>
         ) : null}
         {settingsOpen ? (
-          <SettingsView
+          <Suspense fallback={null}><LazySettingsView
             section={settingsSection}
             anchor={settingsAnchor}
             cwd={sidebarCwd}
@@ -5801,42 +5842,54 @@ export function HarnessApp({
               onRemoveProject(path, { purgeData: true })
             }
             onOpenWhatsNew={onOpenWhatsNew}
-          />
+          /></Suspense>
         ) : null}
         {searchViewOpen ||
         inboxViewOpen ||
         notesViewOpen ||
         settingsOpen ? null : (
-          <UsageFooter
-            providers={usageProviders}
-            session={usageSession}
-            terminals={runningTerminals}
-            terminalOpen={runningTerminalOpen}
-            onToggleTerminal={onToggleRunningTerminal}
-          />
+          <Suspense fallback={null}>
+            <LazyUsageFooter
+              providers={usageProviders}
+              session={usageSession}
+              terminals={runningTerminals}
+              terminalOpen={runningTerminalOpen}
+              onToggleTerminal={onToggleRunningTerminal}
+            />
+          </Suspense>
         )}
       </div>
 
       {filePickerOpen ? (
-        <FilePicker
-          open
-          cwd={gitCwd}
-          openPaths={openFilePaths}
-          onOpenFile={onOpenFile}
-          onClose={() => setFilePickerOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <LazyFilePicker
+            open
+            cwd={gitCwd}
+            openPaths={openFilePaths}
+            onOpenFile={onOpenFile}
+            onClose={() => setFilePickerOpen(false)}
+          />
+        </Suspense>
       ) : null}
 
-      <ApprovalToasts
-        notices={hiddenApprovalToasts}
-        onFocusSession={onOpenApprovalSession}
-        onApproval={onApproval}
-      />
-      <UpdateToast
-        update={updateNotice}
-        onOpen={onOpenWhatsNew}
-        onDismiss={() => setUpdateNotice(null)}
-      />
+      {hiddenApprovalToasts.length > 0 ? (
+        <Suspense fallback={null}>
+          <LazyApprovalToasts
+            notices={hiddenApprovalToasts}
+            onFocusSession={onOpenApprovalSession}
+            onApproval={onApproval}
+          />
+        </Suspense>
+      ) : null}
+      {updateNotice ? (
+        <Suspense fallback={null}>
+          <LazyUpdateToast
+            update={updateNotice}
+            onOpen={onOpenWhatsNew}
+            onDismiss={() => setUpdateNotice(null)}
+          />
+        </Suspense>
+      ) : null}
       <div className="hidden" aria-hidden="true">
         {sessions
           .filter((session) => session.inboxAsk)
@@ -5849,7 +5902,7 @@ export function HarnessApp({
                   : undefined
               }
             >
-              <SessionPane
+              <LazySessionPane
                 session={session}
                 visible={inboxAskPortal?.sessionId === session.id}
                 focused={inboxAskPortal?.sessionId === session.id}

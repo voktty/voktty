@@ -53,4 +53,27 @@ describe("startup bundle budget", () => {
     );
     expect(offenders).toEqual([]);
   }, 15000);
+
+  it("keeps optional Harness workbench surfaces behind local lazy boundaries", () => {
+    const { files } = traceEager("src/modules/harness/components/HarnessApp.tsx");
+    const normalized = files.map((file) => file.replace(/\\/g, "/"));
+    const optionalSurfaces = [
+      "/modules/harness/chrome/ApprovalToasts",
+      "/modules/harness/chrome/FilePicker",
+      "/modules/harness/chrome/UpdateToast",
+      "/modules/harness/chrome/UsageFooter",
+      "/modules/harness/surfaces/DiffPane",
+      "/modules/harness/surfaces/FilePane",
+      "/modules/harness/surfaces/GitDiffPane",
+      "/modules/harness/surfaces/NotesView",
+      "/modules/harness/surfaces/ProjectTerminalDock",
+      "/modules/harness/surfaces/SearchView",
+      "/modules/harness/surfaces/SessionPane",
+      "/modules/harness/surfaces/SettingsView",
+    ];
+    const offenders = normalized.filter((file) =>
+      optionalSurfaces.some((surface) => file.includes(surface)),
+    );
+    expect(offenders).toEqual([]);
+  }, 15000);
 });
