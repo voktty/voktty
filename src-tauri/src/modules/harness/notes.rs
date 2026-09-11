@@ -2,7 +2,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use super::session_store::{now_millis, validate_id, SessionStore, SessionStoreState};
+use super::session_store::{now_millis, validate_id, SessionStoreState};
 
 const TITLE_MAX: usize = 200;
 const BODY_MAX: usize = 1_000_000;
