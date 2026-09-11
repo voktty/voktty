@@ -5389,6 +5389,15 @@ export const en = {
       diff: "Diff",
     },
   },
+  toolPreview: {
+    proposedChanges: "Proposed changes",
+    attemptedChanges: "Attempted changes · tool did not complete",
+    writtenContent: "Written content · previous contents unavailable",
+    changePreview: "Change preview",
+    openLabel: "Open {label}",
+    previewLabel: "Preview {type}: {label}",
+    closePreview: "Close preview",
+  },
 };
 
 export type TranslationSchema = typeof en;
