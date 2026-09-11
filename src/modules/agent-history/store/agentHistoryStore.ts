@@ -4,7 +4,7 @@ import {
   deleteHistorySession,
   fetchHistoryStats,
   fetchMessages,
-  fetchSessions,
+  fetchSessionPage,
   rescanHistory,
 } from "../lib/agentHistoryBridge";
 import type { HistoryMessage, HistorySession, HistoryStats } from "../types";
@@ -23,6 +23,8 @@ interface AgentHistoryState {
   selectedAgent: string;
   selectedProject: string;
   stats: HistoryStats | null;
+  hasMore: boolean;
+  offset: number;
 
   // Actions
   openHistory: () => void;
@@ -52,6 +54,8 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
   selectedAgent: "all",
   selectedProject: "",
   stats: null,
+  hasMore: false,
+  offset: 0,
 
   openHistory: () => {
     set({ isOpen: true });
@@ -94,29 +98,23 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      const [sessions, stats] = await Promise.all([
-        fetchSessions({ limit: 5000 }),
+      const [page, stats] = await Promise.all([
+        fetchSessionPage({ limit: 100, offset: 0 }),
         fetchHistoryStats(),
       ]);
-
-      const safeSessions = Array.isArray(sessions) ? sessions : [];
+      const safeSessions = Array.isArray(page.items) ? page.items : [];
       const activeSessionId = get().activeSessionId;
       let activeSession = safeSessions.find((s) => s.id === activeSessionId) || null;
-
-      if (!activeSession && safeSessions.length > 0) {
-        activeSession = safeSessions[0];
-      }
 
       set({
         sessions: safeSessions,
         stats: stats ?? null,
         activeSessionId: activeSession ? activeSession.id : null,
         activeSession,
+        hasMore: page.has_more,
+        offset: page.offset,
       });
-
-      if (activeSession) {
-        void get().selectSession(activeSession.id);
-      } else {
+      if (!activeSession) {
         set({ messages: [] });
       }
     } finally {

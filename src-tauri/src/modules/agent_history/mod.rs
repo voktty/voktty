@@ -209,6 +209,88 @@ pub async fn agent_history_get_sessions(
     Ok(sessions)
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistorySessionPage {
+    items: Vec<HistorySession>,
+    offset: i64,
+    limit: i64,
+    total: i64,
+    has_more: bool,
+    scanning: bool,
+}
+
+#[tauri::command]
+pub async fn agent_history_get_session_page(
+    filter: Option<SessionFilter>,
+    state: State<'_, AgentHistoryState>,
+) -> Result<HistorySessionPage, String> {
+    let f = filter.unwrap_or_default();
+    let limit = f.limit.unwrap_or(100).clamp(1, 100) as i64;
+    let offset = f.offset.unwrap_or(0).max(0) as i64;
+    let wake_filter = WakeSessionFilter {
+        limit,
+        offset,
+        title_query: f.search_query.clone().filter(|q| !q.is_empty()),
+        ..WakeSessionFilter::default()
+    };
+    let (wake_sessions, total) = state
+        .store()?
+        .list_sessions(&wake_filter)
+        .map_err(|e| e.to_string())?;
+    let items = wake_sessions
+        .into_iter()
+        .map(history_session_from_meta)
+        .collect();
+    Ok(HistorySessionPage {
+        has_more: offset + limit < total,
+        items,
+        offset,
+        limit,
+        total,
+        scanning: state.is_scanning.load(Ordering::SeqCst),
+    })
+}
+
+fn history_session_from_meta(meta: SessionMeta) -> HistorySession {
+    let created_at = if meta.created_at > 1_000_000_000_000 {
+        meta.created_at / 1000
+    } else {
+        meta.created_at
+    };
+    let updated_at = if meta.updated_at > 1_000_000_000_000 {
+        meta.updated_at / 1000
+    } else {
+        meta.updated_at
+    };
+    let resume_command = get_resume_cmd(&meta);
+    HistorySession {
+        id: meta.key,
+        agent: meta.agent.as_str().to_string(),
+        title: if meta.title.is_empty() {
+            meta.id
+        } else {
+            meta.title
+        },
+        project_name: if meta.project_name.is_empty() {
+            "Unknown".to_string()
+        } else {
+            meta.project_name
+        },
+        project_path: meta.project_path.clone(),
+        cwd: Some(meta.project_path),
+        git_branch: meta.git_branch,
+        created_at,
+        updated_at,
+        message_count: meta.message_count as u32,
+        is_active: false,
+        file_path: Some(meta.file_path),
+        source_hash: None,
+        can_resume: resume_command.is_some(),
+        resume_command,
+    }
+}
+
 #[tauri::command]
 pub async fn agent_history_get_messages(
     session_id: String,

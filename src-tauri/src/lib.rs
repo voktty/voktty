@@ -594,6 +594,7 @@ pub fn run() {
             collab::collab_guest_file_read,
             collab::collab_guest_close,
             agent_history::agent_history_get_sessions,
+            agent_history::agent_history_get_session_page,
             agent_history::agent_history_get_messages,
             agent_history::agent_history_rescan,
             agent_history::agent_history_delete_session,
