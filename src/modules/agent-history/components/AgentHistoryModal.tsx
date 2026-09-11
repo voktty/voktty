@@ -32,6 +32,7 @@ import {
   SortByDown01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { exportSessionMarkdown, getResumeCommand } from "../lib/agentHistoryBridge";
@@ -43,6 +44,7 @@ const DEFAULT_WIDTH = 1180;
 const DEFAULT_HEIGHT = 740;
 const MIN_WIDTH = 800;
 const MIN_HEIGHT = 520;
+const SESSION_LIST_OVERSCAN = 8;
 
 const AGENT_BRANDS: Record<string, { name: string; icon: string; bg: string; color: string }> = {
   "claude-code": { name: "Claude Code", icon: "/brands/claude-code.png", bg: "bg-amber-500/15", color: "text-amber-500" },
@@ -126,6 +128,7 @@ export function AgentHistoryModal() {
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const findInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const sessionListRef = useRef<HTMLDivElement>(null);
   const searchControllerRef = useRef<ReturnType<typeof createDomSearchController> | null>(null);
 
   const { position, dragHandleProps, resetPosition, setPosition } = useDraggableModal({
@@ -166,6 +169,14 @@ export function AgentHistoryModal() {
       return true;
     });
   }, [sessions, selectedAgent, selectedProject, searchQuery]);
+
+  const sessionVirtualizer = useVirtualizer({
+    count: filteredSessions.length,
+    getScrollElement: () => sessionListRef.current,
+    estimateSize: () => 84,
+    getItemKey: (index) => filteredSessions[index]?.id ?? index,
+    overscan: SESSION_LIST_OVERSCAN,
+  });
 
   // Palette filtered sessions
   const paletteResults = useMemo(() => {
@@ -575,7 +586,7 @@ export function AgentHistoryModal() {
             </div>
 
             {/* Sessions List */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-0">
+            <div ref={sessionListRef} className="flex-1 overflow-y-auto p-2 min-h-0">
               {isLoading && sessions.length === 0 ? (
                 <div className="flex h-48 flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
                   <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2" />
@@ -588,12 +599,22 @@ export function AgentHistoryModal() {
                 </div>
               ) : (
                 <>
-                {filteredSessions.map((s) => {
+                <div className="relative w-full" style={{ height: sessionVirtualizer.getTotalSize() }}>
+                {sessionVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const s = filteredSessions[virtualRow.index];
+                  if (!s) return null;
                   const brand = AGENT_BRANDS[s.agent] || AGENT_BRANDS["claude"];
                   const isActive = activeSessionId === s.id;
 
                   return (
-                    <ContextMenu key={s.id}>
+                    <div
+                      key={virtualRow.key}
+                      ref={sessionVirtualizer.measureElement}
+                      data-index={virtualRow.index}
+                      className="absolute left-0 top-0 w-full pb-1.5"
+                      style={{ transform: `translateY(${virtualRow.start}px)` }}
+                    >
+                    <ContextMenu>
                       <ContextMenuTrigger asChild>
                         <div
                           onClick={() => void selectSession(s.id)}
@@ -658,8 +679,10 @@ export function AgentHistoryModal() {
                         </ContextMenuItem>
                       </ContextMenuContent>
                     </ContextMenu>
+                    </div>
                   );
                 })}
+                </div>
                 {hasMore && (
                   <Button
                     type="button"
