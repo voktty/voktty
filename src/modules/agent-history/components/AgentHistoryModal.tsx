@@ -10,7 +10,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { cn } from "@/lib/utils";
-import { createDomSearchController, type DomSearchMatchInfo } from "@/modules/markdown/lib/domSearch";
 import { getActiveTerminalLeafId, submitToLeaf } from "@/modules/terminal/lib/useTerminalSession";
 import {
   ArrowDown01Icon,
@@ -36,6 +35,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { exportSessionMarkdown, getResumeCommand } from "../lib/agentHistoryBridge";
+import { searchHistoryMessages } from "../lib/messageSearch";
 import { useTranslation } from "@/modules/i18n";
 import { useAgentHistoryStore } from "../store/agentHistoryStore";
 import type { HistorySession } from "../types";
@@ -120,7 +120,7 @@ export function AgentHistoryModal() {
   // In-transcript Ctrl+F search state
   const [isFindOpen, setIsFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
-  const [findMatchInfo, setFindMatchInfo] = useState<DomSearchMatchInfo>({ current: 0, total: 0 });
+  const [findMatchIndex, setFindMatchIndex] = useState(0);
 
   const [size] = useState({
     width: typeof window !== "undefined" ? Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - 60)) : DEFAULT_WIDTH,
@@ -131,7 +131,6 @@ export function AgentHistoryModal() {
   const findInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const sessionListRef = useRef<HTMLDivElement>(null);
-  const searchControllerRef = useRef<ReturnType<typeof createDomSearchController> | null>(null);
 
   const { position, dragHandleProps, resetPosition, setPosition } = useDraggableModal({
     resetOnClose: true,
@@ -189,44 +188,31 @@ export function AgentHistoryModal() {
       .slice(0, 15);
   }, [sessions, paletteQuery]);
 
-  // In-transcript search controller lifecycle
+  const findResults = useMemo(() => searchHistoryMessages(messages, findQuery), [findQuery, messages]);
+
   useEffect(() => {
-    if (transcriptRef.current && activeSession) {
-      searchControllerRef.current = createDomSearchController(transcriptRef.current);
-    }
-    return () => {
-      searchControllerRef.current?.clearQuery();
-      searchControllerRef.current = null;
-    };
-  }, [activeSession, messages]);
+    if (!findResults.messageIds.length) return;
+    const messageId = findResults.messageIds[findMatchIndex % findResults.messageIds.length];
+    document.getElementById(`history-message-${messageId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [findMatchIndex, findResults]);
 
   const handleFindChange = (q: string) => {
     setFindQuery(q);
-    if (searchControllerRef.current) {
-      const match = searchControllerRef.current.setQuery(q);
-      setFindMatchInfo(match);
-    }
+    setFindMatchIndex(0);
   };
 
   const handleFindNext = () => {
-    if (searchControllerRef.current) {
-      const match = searchControllerRef.current.findNext();
-      setFindMatchInfo(match);
-    }
+    if (findResults.messageIds.length) setFindMatchIndex((index) => (index + 1) % findResults.messageIds.length);
   };
 
   const handleFindPrev = () => {
-    if (searchControllerRef.current) {
-      const match = searchControllerRef.current.findPrevious();
-      setFindMatchInfo(match);
-    }
+    if (findResults.messageIds.length) setFindMatchIndex((index) => (index - 1 + findResults.messageIds.length) % findResults.messageIds.length);
   };
 
   const closeFind = useCallback(() => {
     setIsFindOpen(false);
     setFindQuery("");
-    setFindMatchInfo({ current: 0, total: 0 });
-    searchControllerRef.current?.clearQuery();
+    setFindMatchIndex(0);
   }, []);
 
   // Global keydown handler for Escape, Ctrl+F, Ctrl+K
@@ -793,8 +779,8 @@ export function AgentHistoryModal() {
                       className="h-7 w-48 text-xs font-mono bg-background/80 border-border/60"
                     />
                     <span className="text-[10px] text-muted-foreground font-mono px-1">
-                      {findMatchInfo.total > 0
-                        ? `${findMatchInfo.current}/${findMatchInfo.total}`
+                      {findResults.total > 0
+                        ? `${Math.min(findMatchIndex + 1, findResults.messageIds.length)}/${findResults.total}`
                         : findQuery
                           ? "0/0"
                           : ""}
@@ -848,6 +834,7 @@ export function AgentHistoryModal() {
                       return (
                         <div
                           key={msg.id}
+                          id={`history-message-${msg.id}`}
                           className={cn(
                             "flex flex-col gap-2 rounded-xl p-3.5 text-xs leading-relaxed max-w-3xl transition-colors border",
                             isUser
