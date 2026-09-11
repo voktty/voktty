@@ -19,6 +19,7 @@ import { Sidebar } from "../chrome/Sidebar";
 import { TitleBar, type Tab as TitleTab } from "../chrome/TitleBar";
 import { UpdateToast } from "../chrome/UpdateToast";
 import { UsageFooter } from "../chrome/UsageFooter";
+import { useInputNotifications } from "../hooks/useInputNotifications";
 import { useProjectBranches } from "../hooks/useProjectBranches";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
 import {
@@ -1032,6 +1033,8 @@ export function HarnessApp({
         : [],
     [liveAgentsEnabled, sessions, unseenFinishedIds],
   );
+
+  useInputNotifications(sessions, activeSessionId);
 
   const hiddenApprovalToasts = useMemo(
     () => hiddenApprovalNotices(sessions, activeTabId, tabs, composerFocused),

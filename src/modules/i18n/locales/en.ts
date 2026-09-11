@@ -5398,6 +5398,13 @@ export const en = {
     previewLabel: "Preview {type}: {label}",
     closePreview: "Close preview",
   },
+  notifications: {
+    title: "Voktty",
+    questionPrompt: "{harness} has a question for you",
+    approvalNeeded: "{harness} needs your approval",
+    approveTool: "Approve: {what}",
+    harnessFinished: "{harness} finished",
+  },
 };
 
 export type TranslationSchema = typeof en;
