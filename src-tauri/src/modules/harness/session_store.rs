@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
 
+use crate::modules::agent_history::AgentHistoryState;
+
 const MIGRATION_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
@@ -170,16 +172,22 @@ pub fn session_upsert(
 #[tauri::command(async)]
 pub fn session_list_by_project(
     store: State<'_, SessionStore>,
+    history: State<'_, AgentHistoryState>,
     cwd: String,
 ) -> Result<Vec<SessionSummary>, String> {
     if cwd.trim().is_empty() {
         return Err("cwd is required".into());
     }
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
-    let mut sessions = list_by_project(&conn, &cwd).map_err(|e| e.to_string())?;
+    let mut sessions = {
+        let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+        list_by_project(&conn, &cwd).map_err(|e| e.to_string())?
+    };
 
-    // Integrate fast external CLI sessions (Codex, Antigravity, Claude)
-    let external_sessions = super::external_history::list_external_sessions_for_project(&cwd)?;
+    // Wake is an auxiliary index. A failure there must never prevent the
+    // Harness from returning its own persisted sessions.
+    let external_sessions =
+        super::external_history::list_external_sessions_for_project(&cwd, &history.store)
+            .unwrap_or_default();
     let mut seen_ids = std::collections::HashSet::new();
     for s in &sessions {
         seen_ids.insert(s.id.clone());
@@ -205,20 +213,31 @@ pub fn session_list_by_project(
 #[tauri::command(async)]
 pub fn session_get(
     store: State<'_, SessionStore>,
+    history: State<'_, AgentHistoryState>,
     session_id: String,
 ) -> Result<Option<SessionRecord>, String> {
     validate_id(&session_id, "session")?;
 
     if session_id.starts_with("ext_") {
-        if let Some(record) = super::external_history::get_external_session_record(&session_id)? {
+        if let Some(record) = super::external_history::get_external_session_record(
+            &session_id,
+            &history.store,
+            &history.adapters,
+        )? {
             return Ok(Some(record));
         }
     }
 
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
-    let record = get_session(&conn, &session_id).map_err(|e| e.to_string())?;
+    let record = {
+        let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+        get_session(&conn, &session_id).map_err(|e| e.to_string())?
+    };
     if record.is_none() {
-        if let Some(ext) = super::external_history::get_external_session_record(&session_id)? {
+        if let Some(ext) = super::external_history::get_external_session_record(
+            &session_id,
+            &history.store,
+            &history.adapters,
+        )? {
             return Ok(Some(ext));
         }
     }
@@ -226,8 +245,10 @@ pub fn session_get(
 }
 
 #[tauri::command(async)]
-pub fn external_history_list_projects() -> Result<Vec<String>, String> {
-    super::external_history::list_external_projects()
+pub fn external_history_list_projects(
+    history: State<'_, AgentHistoryState>,
+) -> Result<Vec<String>, String> {
+    super::external_history::list_external_projects(&history.store)
 }
 
 const MAX_SEARCH_SCAN: usize = 400;

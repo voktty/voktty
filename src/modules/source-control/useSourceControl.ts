@@ -93,8 +93,38 @@ type RefreshableSourceControlState = Pick<
 type InflightRefresh = {
   contextKey: string;
   mode: SourceControlRefreshMode;
+  requestId: number;
   promise: Promise<void>;
 };
+
+export type SourceControlRefreshPlan =
+  | { kind: "reuse"; requestId: number }
+  | { kind: "start"; requestId: number };
+
+export function planSourceControlRefresh(
+  currentRequestId: number,
+  inflight: Pick<InflightRefresh, "contextKey" | "mode"> | null,
+  contextKey: string,
+  mode: SourceControlRefreshMode,
+): SourceControlRefreshPlan {
+  if (
+    inflight?.contextKey === contextKey &&
+    (inflight.mode === "always" || inflight.mode === mode)
+  ) {
+    return { kind: "reuse", requestId: currentRequestId };
+  }
+  return { kind: "start", requestId: currentRequestId + 1 };
+}
+
+export function ownsSourceControlRefresh(
+  inflight: Pick<InflightRefresh, "contextKey" | "requestId"> | null,
+  contextKey: string,
+  requestId: number,
+): boolean {
+  return (
+    inflight?.contextKey === contextKey && inflight.requestId === requestId
+  );
+}
 
 function sourceControlContextKey(
   workspaceKey: string,
@@ -341,9 +371,9 @@ export function useSourceControl(
     async (remoteMode: SourceControlRefreshMode = "auto") => {
       const activeContextPath = contextPath;
       const activeContextKey = contextKey;
-      const requestId = ++requestIdRef.current;
 
       if (!enabled || !activeContextPath) {
+        requestIdRef.current++;
         inflightRef.current = null;
         setState({
           contextPath: null,
@@ -359,17 +389,17 @@ export function useSourceControl(
         return;
       }
 
-      if (
-        inflightRef.current &&
-        inflightRef.current.contextKey === activeContextKey
-      ) {
-        if (
-          inflightRef.current.mode === "always" ||
-          inflightRef.current.mode === remoteMode
-        ) {
-          return inflightRef.current.promise;
-        }
+      const refreshPlan = planSourceControlRefresh(
+        requestIdRef.current,
+        inflightRef.current,
+        activeContextKey,
+        remoteMode,
+      );
+      if (refreshPlan.kind === "reuse") {
+        return inflightRef.current?.promise;
       }
+      const requestId = refreshPlan.requestId;
+      requestIdRef.current = requestId;
 
       const current = stateRef.current;
       const canReuseRepo = repositoryContainsContext(
@@ -488,7 +518,13 @@ export function useSourceControl(
           }));
           lastRefreshAtRef.current = Date.now();
         } finally {
-          if (inflightRef.current?.contextKey === activeContextKey) {
+          if (
+            ownsSourceControlRefresh(
+              inflightRef.current,
+              activeContextKey,
+              requestId,
+            )
+          ) {
             inflightRef.current = null;
           }
         }
@@ -497,6 +533,7 @@ export function useSourceControl(
       inflightRef.current = {
         contextKey: activeContextKey,
         mode: remoteMode,
+        requestId,
         promise: refreshPromise,
       };
 
@@ -617,10 +654,8 @@ export function useSourceControl(
       void doRefresh("never");
     };
     window.addEventListener("voktty:git-refresh", onGitRefresh);
-    window.addEventListener("monocode-git-changed", onGitRefresh);
     return () => {
       window.removeEventListener("voktty:git-refresh", onGitRefresh);
-      window.removeEventListener("monocode-git-changed", onGitRefresh);
     };
   }, [doRefresh]);
 

@@ -1,13 +1,9 @@
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::collections::HashSet;
 
 use serde_json::{json, Value};
-use wake_core::adapters::{adapter_for, create_adapters, AgentAdapter};
-use wake_core::db::{open_or_rebuild, Store};
+use wake_core::adapters::{adapter_for, AgentAdapter};
+use wake_core::db::Store;
 use wake_core::models::{SessionFileRef, SessionFilter as WakeSessionFilter};
-use wake_core::scanner::{run_scan, NullEvents};
 
 use super::session_store::{SessionRecord, SessionSummary};
 
@@ -28,71 +24,6 @@ pub fn normalize_project_path(raw: &str) -> String {
         s = format!("{}{}", first, &s[1..]);
     }
     s
-}
-
-struct CacheEntry {
-    sessions: Vec<SessionSummary>,
-    fetched_at: Instant,
-}
-
-static CACHE: Mutex<Option<HashMap<String, CacheEntry>>> = Mutex::new(None);
-const CACHE_TTL: Duration = Duration::from_millis(2500);
-
-static WAKE_STORE: OnceLock<Arc<Store>> = OnceLock::new();
-static WAKE_ADAPTERS: OnceLock<Vec<Box<dyn AgentAdapter>>> = OnceLock::new();
-
-fn get_wake_store() -> Result<Arc<Store>, String> {
-    if let Some(store) = WAKE_STORE.get() {
-        return Ok(store.clone());
-    }
-    let db_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("voktty");
-    let primary = std::fs::create_dir_all(&db_dir)
-        .map(|()| db_dir.join("agent_history_wake.db"))
-        .and_then(|path| {
-            open_or_rebuild(&path)
-                .map(|value| value.0)
-                .map_err(std::io::Error::other)
-        });
-    let store = primary
-        .or_else(|_| {
-            open_or_rebuild(&PathBuf::from("agent_history_wake.db"))
-                .map(|value| value.0)
-                .map_err(std::io::Error::other)
-        })
-        .map_err(|error| error.to_string())?;
-    let store = Arc::new(store);
-    let _ = WAKE_STORE.set(store.clone());
-    Ok(WAKE_STORE.get().cloned().unwrap_or(store))
-}
-
-fn get_wake_adapters() -> &'static [Box<dyn AgentAdapter>] {
-    WAKE_ADAPTERS.get_or_init(create_adapters)
-}
-
-fn get_cached(cwd_norm: &str) -> Option<Vec<SessionSummary>> {
-    let mut guard = CACHE.lock().ok()?;
-    let map = guard.as_mut()?;
-    if let Some(entry) = map.get(cwd_norm) {
-        if entry.fetched_at.elapsed() < CACHE_TTL {
-            return Some(entry.sessions.clone());
-        }
-    }
-    None
-}
-
-fn set_cached(cwd_norm: String, sessions: Vec<SessionSummary>) {
-    if let Ok(mut guard) = CACHE.lock() {
-        let map = guard.get_or_insert_with(HashMap::new);
-        map.insert(
-            cwd_norm,
-            CacheEntry {
-                sessions,
-                fetched_at: Instant::now(),
-            },
-        );
-    }
 }
 
 fn matching_project_paths(
@@ -118,20 +49,14 @@ fn project_session_filter(project_paths: Vec<String>) -> WakeSessionFilter {
 }
 
 /// Lists all external sessions (from Claude, Codex, Grok, Antigravity, OpenCode, Cursor, etc.) belonging to target_cwd.
-pub fn list_external_sessions_for_project(target_cwd: &str) -> Result<Vec<SessionSummary>, String> {
+pub fn list_external_sessions_for_project(
+    target_cwd: &str,
+    store: &Store,
+) -> Result<Vec<SessionSummary>, String> {
     let target_norm = normalize_project_path(target_cwd);
     if target_norm.is_empty() || target_norm == "~" {
         return Ok(Vec::new());
     }
-
-    if let Some(cached) = get_cached(&target_norm) {
-        return Ok(cached);
-    }
-
-    let store = get_wake_store()?;
-
-    let adapters = get_wake_adapters();
-    run_scan(adapters, &store, &NullEvents, false).map_err(|error| error.to_string())?;
 
     let project_paths = matching_project_paths(
         store
@@ -142,7 +67,6 @@ pub fn list_external_sessions_for_project(target_cwd: &str) -> Result<Vec<Sessio
         &target_norm,
     );
     if project_paths.is_empty() {
-        set_cached(target_norm, Vec::new());
         return Ok(Vec::new());
     }
     let filter = project_session_filter(project_paths);
@@ -192,12 +116,15 @@ pub fn list_external_sessions_for_project(target_cwd: &str) -> Result<Vec<Sessio
     }
 
     result.sort_by_key(|s| std::cmp::Reverse(s.updated_at));
-    set_cached(target_norm, result.clone());
     Ok(result)
 }
 
 /// Retrieves and formats an external session into a full SessionRecord on demand using wake_core.
-pub fn get_external_session_record(session_id: &str) -> Result<Option<SessionRecord>, String> {
+pub fn get_external_session_record(
+    session_id: &str,
+    store: &Store,
+    adapters: &[Box<dyn AgentAdapter>],
+) -> Result<Option<SessionRecord>, String> {
     let key = if let Some(k) = session_id.strip_prefix("ext_wake_") {
         k
     } else if let Some(k) = session_id.strip_prefix("ext_codex_") {
@@ -210,12 +137,10 @@ pub fn get_external_session_record(session_id: &str) -> Result<Option<SessionRec
         session_id
     };
 
-    let store = get_wake_store()?;
     let Some(meta) = store.get_session(key).map_err(|error| error.to_string())? else {
         return Ok(None);
     };
 
-    let adapters = get_wake_adapters();
     let adapter = adapter_for(adapters, meta.agent, &meta.file_path)
         .ok_or_else(|| format!("No history adapter for {}", meta.agent.as_str()))?;
 
@@ -291,12 +216,7 @@ pub fn get_external_session_record(session_id: &str) -> Result<Option<SessionRec
 }
 
 /// Lists all distinct project directory paths discovered from external CLI agents via wake_core.
-pub fn list_external_projects() -> Result<Vec<String>, String> {
-    let store = get_wake_store()?;
-
-    let adapters = get_wake_adapters();
-    run_scan(adapters, &store, &NullEvents, false).map_err(|error| error.to_string())?;
-
+pub fn list_external_projects(store: &Store) -> Result<Vec<String>, String> {
     let projects = store
         .list_projects(true)
         .map_err(|error| error.to_string())?;
