@@ -20,9 +20,8 @@ type Props = {
   items: LauncherItem[];
 };
 
-/** Grid of everything Voktty can open, including the surfaces that only ever
- * had a context menu or no entry point at all. Type to narrow, arrows to move,
- * Enter to launch. */
+/** Grid of operational surfaces and immediate actions. Preferences remain in
+ * Settings so every tile here launches or activates actual work. */
 export function ToolLauncher({ items }: Props) {
   const { t } = useTranslation();
   const open = useLauncherStore((s) => s.isOpen);

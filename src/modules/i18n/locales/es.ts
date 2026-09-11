@@ -2983,6 +2983,7 @@ export const es: TranslationSchema = {
       blockTerminal: "Terminal en bloques",
       privateTerminal: "Terminal privada",
       commandHistory: "Historial de comandos",
+      connections: "Conexiones",
       ssh: "Conexion SSH",
       serial: "Puerto serie",
       rdp: "Escritorio remoto",

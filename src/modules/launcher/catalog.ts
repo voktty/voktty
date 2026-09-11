@@ -1,17 +1,14 @@
 import { useAgentHistoryStore } from "@/modules/agent-history";
 import type { CommandPaletteActionContext } from "@/modules/command-palette";
 import { t } from "@/modules/i18n";
-import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { useArcadeStore } from "@/modules/statusbar/arcadeStore";
 import { useCommandHistoryStore } from "@/modules/terminal";
 import {
   Alert02Icon,
   BrainIcon,
   Clock01Icon,
-  CommandIcon,
   ComputerScreenShareIcon,
   ComputerTerminal02Icon,
-  ContainerIcon,
   DashboardSquare01Icon,
   Download01Icon,
   File02Icon,
@@ -23,18 +20,11 @@ import {
   Globe02Icon,
   HierarchyIcon,
   IncognitoIcon,
-  InformationCircleIcon,
-  KeyboardIcon,
   Layout01Icon,
   LayoutTwoRowIcon,
-  LockPasswordIcon,
-  PaintBoardIcon,
   PlayIcon,
-  PlugIcon,
-  PuzzleIcon,
   Rocket01Icon,
   ServerStack01Icon,
-  Settings01Icon,
   SparklesIcon,
   UsbIcon,
   UserGroupIcon,
@@ -44,6 +34,7 @@ import type { LauncherItem } from "./types";
 /** Surfaces the launcher can reach that the palette context does not already
  * carry. They live behind their own dialogs, so App wires them in. */
 export type LauncherExtraContext = {
+  openConnections?: () => void;
   openSshConnect?: () => void;
   openRdpConnect?: () => void;
   openGuestConnect?: () => void;
@@ -95,6 +86,24 @@ export function createLauncherItems(
     },
 
     // --- Connections ---
+    ctx.openConnections
+      ? {
+          id: "launch.connections",
+          title: t("launcher.items.connections"),
+          group: "connections",
+          keywords: [
+            "connections",
+            "conexiones",
+            "active",
+            "activas",
+            "switch",
+            "cambiar",
+          ],
+          icon: DashboardSquare01Icon,
+          tint: "text-sky-400",
+          run: ctx.openConnections,
+        }
+      : null,
     ctx.openSshConnect
       ? {
           id: "launch.ssh",
@@ -300,71 +309,7 @@ export function createLauncherItems(
       run: () => useAgentHistoryStore.getState().openHistory(),
     },
 
-    // --- System ---
-    {
-      id: "launch.settings",
-      title: t("launcher.items.settings"),
-      group: "system",
-      keywords: ["settings", "ajustes", "preferencias", "config"],
-      icon: Settings01Icon,
-      run: ctx.openSettings,
-    },
-    {
-      id: "launch.shortcuts",
-      title: t("launcher.items.shortcuts"),
-      group: "system",
-      keywords: ["shortcuts", "atajos", "teclado", "keyboard", "keys"],
-      icon: KeyboardIcon,
-      run: ctx.openKeyboardShortcuts,
-    },
-    {
-      id: "launch.themes",
-      title: t("launcher.items.themes"),
-      group: "system",
-      keywords: ["theme", "tema", "apariencia", "colors", "colores"],
-      icon: PaintBoardIcon,
-      run: () => void openSettingsWindow("themes"),
-    },
-    {
-      id: "launch.models",
-      title: t("launcher.items.models"),
-      group: "system",
-      keywords: ["models", "modelos", "ai", "ia", "providers", "proveedores"],
-      icon: BrainIcon,
-      run: () => void openSettingsWindow("models"),
-    },
-    {
-      id: "launch.extensions",
-      title: t("launcher.items.extensions"),
-      group: "system",
-      keywords: ["extensions", "extensiones", "plugins", "addons"],
-      icon: PuzzleIcon,
-      run: () => void openSettingsWindow("extensions"),
-    },
-    {
-      id: "launch.mcp",
-      title: t("launcher.items.mcp"),
-      group: "system",
-      keywords: ["mcp", "servers", "servidores", "tools", "herramientas"],
-      icon: PlugIcon,
-      run: () => void openSettingsWindow("mcp"),
-    },
-    {
-      id: "launch.aliases",
-      title: t("launcher.items.aliases"),
-      group: "system",
-      keywords: ["alias", "aliases", "comandos", "commands", "shell"],
-      icon: CommandIcon,
-      run: () => void openSettingsWindow("aliases"),
-    },
-    {
-      id: "launch.vault",
-      title: t("launcher.items.vault"),
-      group: "system",
-      keywords: ["vault", "boveda", "secrets", "secretos", "keys", "claves"],
-      icon: LockPasswordIcon,
-      run: () => void openSettingsWindow("vault"),
-    },
+    // --- Navigation ---
     {
       id: "launch.spaces",
       title: t("launcher.items.spaces"),
@@ -380,49 +325,6 @@ export function createLauncherItems(
       keywords: ["tabs", "pestanas", "active", "activas", "switch"],
       icon: DashboardSquare01Icon,
       run: ctx.openActiveTabs,
-    },
-    // Settings panes that no menu and no palette command reach today. They are
-    // whole tools in their own right, not preferences.
-    {
-      id: "launch.sshSettings",
-      title: t("launcher.items.sshSettings"),
-      group: "connections",
-      keywords: ["ssh", "tunnels", "tuneles", "hosts", "claves", "keys"],
-      icon: ServerStack01Icon,
-      run: () => void openSettingsWindow("ssh"),
-    },
-    {
-      id: "launch.dockerSettings",
-      title: t("launcher.items.dockerSettings"),
-      group: "connections",
-      keywords: ["docker", "containers", "contenedores", "images", "imagenes"],
-      icon: ContainerIcon,
-      run: () => void openSettingsWindow("docker"),
-    },
-    {
-      id: "launch.rdpSettings",
-      title: t("launcher.items.rdpSettings"),
-      group: "connections",
-      keywords: ["rdp", "escritorio", "desktop", "hosts"],
-      icon: ComputerScreenShareIcon,
-      run: () => void openSettingsWindow("rdp"),
-    },
-    {
-      id: "launch.harnessSettings",
-      title: t("launcher.items.harnessSettings"),
-      group: "ai",
-      keywords: ["harness", "settings", "ajustes", "agentes", "agents"],
-      icon: Settings01Icon,
-      tint: "text-violet-400",
-      run: () => void openSettingsWindow("harness"),
-    },
-    {
-      id: "launch.about",
-      title: t("launcher.items.about"),
-      group: "system",
-      keywords: ["about", "acerca", "version", "info", "updates"],
-      icon: InformationCircleIcon,
-      run: () => void openSettingsWindow("about"),
     },
     ctx.openOnboarding
       ? {
