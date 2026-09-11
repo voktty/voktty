@@ -5400,6 +5400,9 @@ export const en = {
     openLabel: "Open {label}",
     previewLabel: "Preview {type}: {label}",
     closePreview: "Close preview",
+    file: "File",
+    previewLines: "Preview lines",
+    emptyFile: "Empty file",
   },
   notifications: {
     title: "Voktty",
