@@ -103,11 +103,8 @@ impl CompanionState {
         let response = CompanionInvite {
             invitation: invite.clone(),
         };
-        let registry = PairingRegistry::new(
-            &invite.invitation_id,
-            &invite.secret,
-            invite.expires_at_ms,
-        )?;
+        let registry =
+            PairingRegistry::new(&invite.invitation_id, &invite.secret, invite.expires_at_ms)?;
         *pairing
             .lock()
             .map_err(|_| "companion pairing state is unavailable".to_string())? = Some(registry);
@@ -202,7 +199,7 @@ impl CompanionState {
                 .ok_or_else(|| "companion invitation was already used".to_string())?;
             let peer_key = UnparsedPublicKey::new(&ECDH_P256, device_key);
             let session_key = agree_ephemeral(private_key, &peer_key, |shared| shared.to_vec())
-            .map_err(|_| "companion device key is invalid".to_string())?;
+                .map_err(|_| "companion device key is invalid".to_string())?;
             let transport = CompanionTransport::for_host(&session_key, &device.id)
                 .map_err(|_| "could not initialize companion transport".to_string())?;
             runtime
@@ -339,7 +336,10 @@ fn handle_session_confirmation_request(
     let Some(session_id) = std::str::from_utf8(&request[..line_end])
         .ok()
         .and_then(|line| line.strip_prefix("POST /v1/companion/session/"))
-        .and_then(|rest| rest.strip_suffix("/confirm HTTP/1.1").or_else(|| rest.strip_suffix("/confirm HTTP/1.0")))
+        .and_then(|rest| {
+            rest.strip_suffix("/confirm HTTP/1.1")
+                .or_else(|| rest.strip_suffix("/confirm HTTP/1.0"))
+        })
     else {
         return http_response(404, "Not Found", b"");
     };
@@ -361,10 +361,9 @@ fn handle_session_confirmation_request(
     }
     match session.transport.open(&frame) {
         Ok(SessionControl::KeyConfirm { protocol }) if protocol == PROTOCOL_VERSION => {
-            match session
-                .transport
-                .seal(&SessionControl::KeyConfirmed { protocol: PROTOCOL_VERSION })
-            {
+            match session.transport.seal(&SessionControl::KeyConfirmed {
+                protocol: PROTOCOL_VERSION,
+            }) {
                 Ok(response) => {
                     session.key_confirmed = true;
                     json_response(200, "OK", &response)

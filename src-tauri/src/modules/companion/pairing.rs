@@ -3,11 +3,10 @@ use std::collections::HashMap;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use hmac::{Hmac, Mac};
-use sha2::{Digest, Sha256};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use voktty_companion_protocol::{
-    AuthorizedDevice, PairingRequest, INVITATION_TTL_SECS, MAX_DEVICE_NAME_BYTES,
-    PROTOCOL_VERSION,
+    AuthorizedDevice, PairingRequest, INVITATION_TTL_SECS, MAX_DEVICE_NAME_BYTES, PROTOCOL_VERSION,
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -100,8 +99,15 @@ impl PairingRegistry {
         Ok(pending)
     }
 
-    pub fn approve(&mut self, request_id: &str, now_ms: u64) -> Result<AuthorizedDevice, PairingError> {
-        let pending = self.pending.remove(request_id).ok_or(PairingError::Rejected)?;
+    pub fn approve(
+        &mut self,
+        request_id: &str,
+        now_ms: u64,
+    ) -> Result<AuthorizedDevice, PairingError> {
+        let pending = self
+            .pending
+            .remove(request_id)
+            .ok_or(PairingError::Rejected)?;
         if now_ms >= pending.expires_at_ms {
             return Err(PairingError::Expired);
         }
@@ -176,9 +182,19 @@ fn validate_nonempty(value: &str, max_bytes: usize) -> Result<(), PairingError> 
     Ok(())
 }
 
-fn proof_for(secret: &[u8], invitation_id: &str, device_name: &str, device_public_key: &str) -> Vec<u8> {
+fn proof_for(
+    secret: &[u8],
+    invitation_id: &str,
+    device_name: &str,
+    device_public_key: &str,
+) -> Vec<u8> {
     let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC accepts arbitrary key lengths");
-    for value in [PROOF_CONTEXT, invitation_id.as_bytes(), device_name.as_bytes(), device_public_key.as_bytes()] {
+    for value in [
+        PROOF_CONTEXT,
+        invitation_id.as_bytes(),
+        device_name.as_bytes(),
+        device_public_key.as_bytes(),
+    ] {
         mac.update(&(value.len() as u64).to_be_bytes());
         mac.update(value);
     }
@@ -205,7 +221,8 @@ mod tests {
     use super::*;
 
     fn registry() -> PairingRegistry {
-        PairingRegistry::new("invite-1", &URL_SAFE_NO_PAD.encode([7_u8; 32]), 10_000).expect("registry")
+        PairingRegistry::new("invite-1", &URL_SAFE_NO_PAD.encode([7_u8; 32]), 10_000)
+            .expect("registry")
     }
 
     fn request() -> PairingRequest {
@@ -223,9 +240,14 @@ mod tests {
     #[test]
     fn valid_request_is_single_use_and_requires_approval() {
         let mut registry = registry();
-        let pending = registry.request(request(), 100, "request-1".to_string()).expect("pending");
+        let pending = registry
+            .request(request(), 100, "request-1".to_string())
+            .expect("pending");
         assert_eq!(pending.fingerprint.len(), 12);
-        assert_eq!(registry.request(request(), 100, "request-2".to_string()), Err(PairingError::Consumed));
+        assert_eq!(
+            registry.request(request(), 100, "request-2".to_string()),
+            Err(PairingError::Consumed)
+        );
         let device = registry.approve("request-1", 101).expect("approval");
         assert_eq!(device.name, "Pixel");
         assert_eq!(registry.devices(), vec![device]);
@@ -236,14 +258,21 @@ mod tests {
         let mut registry = registry();
         let mut tampered = request();
         tampered.proof = "bad".to_string();
-        assert_eq!(registry.request(tampered, 100, "request-1".to_string()), Err(PairingError::Rejected));
-        assert!(registry.request(request(), 100, "request-2".to_string()).is_ok());
+        assert_eq!(
+            registry.request(tampered, 100, "request-1".to_string()),
+            Err(PairingError::Rejected)
+        );
+        assert!(registry
+            .request(request(), 100, "request-2".to_string())
+            .is_ok());
     }
 
     #[test]
     fn rejects_expired_pending_request() {
         let mut registry = registry();
-        let pending = registry.request(request(), 1, "request-1".to_string()).expect("pending");
+        let pending = registry
+            .request(request(), 1, "request-1".to_string())
+            .expect("pending");
         assert_eq!(
             registry.approve("request-1", pending.expires_at_ms),
             Err(PairingError::Expired)

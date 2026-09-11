@@ -30,7 +30,11 @@ impl OpenCodeAdapter {
                     Self::scan_recursive(&path, list, depth + 1);
                 } else if path.is_file() {
                     let ext = path.extension().and_then(|e| e.to_str());
-                    if ext == Some("db") || ext == Some("sqlite") || ext == Some("json") || ext == Some("jsonl") {
+                    if ext == Some("db")
+                        || ext == Some("sqlite")
+                        || ext == Some("json")
+                        || ext == Some("jsonl")
+                    {
                         if let Some(loc) = SessionLocation::from_path(path) {
                             list.push(loc);
                         }
@@ -81,7 +85,10 @@ impl AgentHistoryAdapter for OpenCodeAdapter {
             agent: "opencode".to_string(),
             title: format!("OpenCode Session ({})", file_name),
             project_name: "OpenCode".to_string(),
-            project_path: path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+            project_path: path
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default(),
             cwd: None,
             git_branch: None,
             created_at,
@@ -98,6 +105,9 @@ impl AgentHistoryAdapter for OpenCodeAdapter {
     }
 
     fn resume_command(&self, session: &HistorySession) -> Option<String> {
-        session.resume_command.clone().or_else(|| Some("opencode".to_string()))
+        session
+            .resume_command
+            .clone()
+            .or_else(|| Some("opencode".to_string()))
     }
 }
