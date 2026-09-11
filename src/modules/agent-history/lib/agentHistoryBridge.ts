@@ -1,5 +1,5 @@
 ﻿import { invoke } from "@tauri-apps/api/core";
-import type { HistoryMessage, HistorySession, HistorySessionPage, HistoryStats, SessionFilter } from "../types";
+import type { HistoryMessage, HistoryMessagePage, HistorySession, HistorySessionPage, HistoryStats, SessionFilter } from "../types";
 
 export async function fetchSessionPage(filter?: SessionFilter): Promise<HistorySessionPage> {
   return invoke<HistorySessionPage>("agent_history_get_session_page", { filter });
@@ -19,15 +19,24 @@ export async function fetchMessages(
   offset = 0,
   limit = 200,
 ): Promise<HistoryMessage[]> {
+  const page = await fetchMessagePage(sessionId, offset, limit);
+  return page.items;
+}
+
+export async function fetchMessagePage(
+  sessionId: string,
+  offset = 0,
+  limit = 100,
+): Promise<HistoryMessagePage> {
   try {
-    return await invoke<HistoryMessage[]>("agent_history_get_messages", {
+    return await invoke<HistoryMessagePage>("agent_history_get_messages", {
       sessionId,
       offset,
       limit,
     });
   } catch (err) {
     console.error("agent_history_get_messages error:", err);
-    return [];
+    return { items: [], offset, limit, total: 0, hasMore: false };
   }
 }
 

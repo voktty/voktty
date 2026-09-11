@@ -3598,6 +3598,7 @@ const arLocaleBatch: TranslationSchema = mergeLocale(en, {
     nextMatch: "المطابقة التالية (Enter)",
     closeFind: "إغلاق البحث (Esc)",
     loadingTranscript: "جارٍ تحميل رسائل النص...",
+    loadMoreMessages: "تحميل المزيد من الرسائل",
     noMessages: "لا توجد رسائل مسجلة في نص هذه الجلسة",
     roleUser: "👤 المستخدم",
     roleTool: "⚙️ استدعاء أداة",

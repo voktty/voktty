@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::State;
 
-use models::{HistoryMessage, HistorySession, HistoryStats, SessionFilter};
+use models::{HistoryMessage, HistoryMessagePage, HistorySession, HistoryStats, SessionFilter};
 use wake_core::adapters::{adapter_for, create_adapters, AgentAdapter};
 use wake_core::db::{open_or_rebuild, Store};
 use wake_core::models::{AgentId, SessionFileRef, SessionFilter as WakeSessionFilter, SessionMeta};
@@ -377,10 +377,18 @@ pub async fn agent_history_get_messages(
     offset: Option<u32>,
     limit: Option<u32>,
     state: State<'_, AgentHistoryState>,
-) -> Result<Vec<HistoryMessage>, String> {
+) -> Result<HistoryMessagePage, String> {
+    let messages = load_session_messages(&state, &session_id).await?;
+    Ok(message_page(&messages, offset, limit))
+}
+
+async fn load_session_messages(
+    state: &AgentHistoryState,
+    session_id: &str,
+) -> Result<Arc<Vec<HistoryMessage>>, String> {
     let meta = state
         .store()?
-        .get_session(&session_id)
+        .get_session(session_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Session not found".to_string())?;
 
@@ -399,9 +407,7 @@ pub async fn agent_history_get_messages(
         .get(&cache_key);
 
     if let Some(messages) = cached {
-        let offset = offset.unwrap_or(0) as usize;
-        let limit = limit.unwrap_or(200).clamp(1, 500) as usize;
-        return Ok(messages.iter().skip(offset).take(limit).cloned().collect());
+        return Ok(messages);
     }
 
     let transcript = tokio::task::spawn_blocking(move || {
@@ -428,7 +434,7 @@ pub async fn agent_history_get_messages(
         seq_counter += 1;
         result.push(HistoryMessage {
             id: format!("{}-{}", session_id, seq_counter),
-            session_id: session_id.clone(),
+            session_id: session_id.to_string(),
             role: role_str,
             content: msg.text.clone(),
             sequence: seq_counter,
@@ -452,7 +458,7 @@ pub async fn agent_history_get_messages(
             seq_counter += 1;
             result.push(HistoryMessage {
                 id: format!("{}-{}", session_id, seq_counter),
-                session_id: session_id.clone(),
+                session_id: session_id.to_string(),
                 role: "tool".to_string(),
                 content: format!("Tool invocation: {}", tc.name),
                 sequence: seq_counter,
@@ -474,9 +480,26 @@ pub async fn agent_history_get_messages(
         .lock()
         .map_err(|_| "Transcript cache is locked".to_string())?
         .insert(cache_key, messages.clone(), bytes);
-    let offset = offset.unwrap_or(0) as usize;
-    let limit = limit.unwrap_or(200).clamp(1, 500) as usize;
-    Ok(messages.iter().skip(offset).take(limit).cloned().collect())
+    Ok(messages)
+}
+
+fn message_page(
+    messages: &[HistoryMessage],
+    offset: Option<u32>,
+    limit: Option<u32>,
+) -> HistoryMessagePage {
+    let offset = offset.unwrap_or(0).min(messages.len() as u32);
+    let limit = limit.unwrap_or(100).clamp(1, 200);
+    let end = (offset as usize)
+        .saturating_add(limit as usize)
+        .min(messages.len());
+    HistoryMessagePage {
+        items: messages[offset as usize..end].to_vec(),
+        offset,
+        limit,
+        total: messages.len() as u32,
+        has_more: end < messages.len(),
+    }
 }
 
 fn history_message_bytes(message: &HistoryMessage) -> usize {
@@ -519,7 +542,7 @@ pub async fn agent_history_rescan(
 #[cfg(test)]
 mod state_tests {
     use super::{
-        AgentHistoryState, Arc, AtomicBool, HistoryMessage, Ordering, ScanningGuard,
+        message_page, AgentHistoryState, Arc, AtomicBool, HistoryMessage, Ordering, ScanningGuard,
         TranscriptCache, VecDeque, TRANSCRIPT_CACHE_MAX_ENTRIES,
     };
 
@@ -596,6 +619,21 @@ mod state_tests {
             .get(&TRANSCRIPT_CACHE_MAX_ENTRIES.to_string())
             .is_some());
     }
+
+    #[test]
+    fn message_page_clamps_limits_and_reports_remaining_messages() {
+        let messages = vec![message("1"), message("2"), message("3")];
+
+        let first = message_page(&messages, Some(0), Some(1));
+        assert_eq!(first.items.len(), 1);
+        assert_eq!(first.total, 3);
+        assert!(first.has_more);
+
+        let final_page = message_page(&messages, Some(2), Some(500));
+        assert_eq!(final_page.items.len(), 1);
+        assert_eq!(final_page.limit, 200);
+        assert!(!final_page.has_more);
+    }
 }
 
 #[tauri::command]
@@ -642,7 +680,7 @@ pub async fn agent_history_export_markdown(
         .map_err(|e| e.to_string())?
         .ok_or("Session not found")?;
 
-    let messages = agent_history_get_messages(session_id.clone(), None, None, state).await?;
+    let messages = load_session_messages(&state, &session_id).await?;
 
     let mut md = format!(
         "# {} Transcript\n\n- **Agent:** {}\n- **Project:** {}\n- **Date:** {}\n- **Messages:** {}\n\n---\n\n",
@@ -653,18 +691,18 @@ pub async fn agent_history_export_markdown(
         messages.len()
     );
 
-    for m in messages {
+    for m in messages.iter() {
         md.push_str(&format!(
             "### {}\n\n{}\n\n",
             m.role.to_uppercase(),
             m.content
         ));
-        if let Some(tool) = m.tool_name {
+        if let Some(tool) = &m.tool_name {
             md.push_str(&format!("> **Tool Call:** `{}`\n", tool));
-            if let Some(inp) = m.tool_input {
+            if let Some(inp) = &m.tool_input {
                 md.push_str(&format!("```json\n{}\n```\n", inp));
             }
-            if let Some(out) = m.tool_output {
+            if let Some(out) = &m.tool_output {
                 md.push_str(&format!("*Output:*\n```\n{}\n```\n", out));
             }
             md.push('\n');

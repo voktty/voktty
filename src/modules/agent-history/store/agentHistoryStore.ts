@@ -3,14 +3,31 @@ import {
   clearAllHistory,
   deleteHistorySession,
   fetchHistoryStats,
-  fetchMessages,
+  fetchMessagePage,
   fetchSessionPage,
   rescanHistory,
 } from "../lib/agentHistoryBridge";
-import type { HistoryMessage, HistorySession, HistoryStats } from "../types";
+import type { HistoryMessage, HistoryMessagePage, HistorySession, HistoryStats } from "../types";
 
 let messageRequest = 0;
 let sessionPageRequest = 0;
+const MAX_CACHED_MESSAGE_SESSIONS = 8;
+
+function cacheMessagePage(
+  cache: Record<string, HistoryMessagePage>,
+  sessionId: string,
+  page: HistoryMessagePage,
+): Record<string, HistoryMessagePage> {
+  const next = { ...cache };
+  delete next[sessionId];
+  next[sessionId] = page;
+  while (Object.keys(next).length > MAX_CACHED_MESSAGE_SESSIONS) {
+    const oldestSessionId = Object.keys(next)[0];
+    if (!oldestSessionId) break;
+    delete next[oldestSessionId];
+  }
+  return next;
+}
 
 interface AgentHistoryState {
   isOpen: boolean;
@@ -18,7 +35,9 @@ interface AgentHistoryState {
   activeSessionId: string | null;
   activeSession: HistorySession | null;
   messages: HistoryMessage[];
-  messageCache: Record<string, HistoryMessage[]>;
+  messageCache: Record<string, HistoryMessagePage>;
+  messageHasMore: boolean;
+  nextMessageOffset: number;
   isLoading: boolean;
   isMessagesLoading: boolean;
   isScanning: boolean;
@@ -41,6 +60,7 @@ interface AgentHistoryState {
   loadSessions: () => Promise<void>;
   loadMoreSessions: () => Promise<void>;
   selectSession: (id: string) => Promise<void>;
+  loadMoreMessages: () => Promise<void>;
   rescan: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   clearAll: () => Promise<void>;
@@ -53,6 +73,8 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
   activeSession: null,
   messages: [],
   messageCache: {},
+  messageHasMore: false,
+  nextMessageOffset: 0,
   isLoading: false,
   isMessagesLoading: false,
   isScanning: false,
@@ -114,7 +136,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
       if (request !== sessionPageRequest) return;
       const safeSessions = Array.isArray(page.items) ? page.items : [];
       const activeSessionId = get().activeSessionId;
-      let activeSession = safeSessions.find((s) => s.id === activeSessionId) || null;
+      const activeSession = safeSessions.find((s) => s.id === activeSessionId) || null;
 
       set({
         sessions: safeSessions,
@@ -128,7 +150,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
       });
       if (!activeSession) {
         messageRequest += 1;
-        set({ messages: [], isMessagesLoading: false });
+        set({ messages: [], messageHasMore: false, nextMessageOffset: 0, isMessagesLoading: false });
       }
     } catch (error) {
       if (request === sessionPageRequest) {
@@ -179,7 +201,9 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
       set({
         activeSessionId: id,
         activeSession,
-        messages: cached,
+        messages: cached.items,
+        messageHasMore: cached.hasMore,
+        nextMessageOffset: cached.offset + cached.items.length,
         isMessagesLoading: false,
       });
       return;
@@ -188,19 +212,40 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
     set({ activeSessionId: id, activeSession, isMessagesLoading: true });
 
     try {
-      const messages = await fetchMessages(id, 0, 500);
+      const page = await fetchMessagePage(id, 0, 100);
       if (request !== messageRequest || get().activeSessionId !== id) return;
       set((state) => ({
-        messages,
+        messages: page.items,
+        messageHasMore: page.hasMore,
+        nextMessageOffset: page.offset + page.items.length,
         messageCache: {
-          ...state.messageCache,
-          [id]: messages,
+          ...cacheMessagePage(state.messageCache, id, page),
         },
       }));
     } finally {
       if (request === messageRequest && get().activeSessionId === id) {
         set({ isMessagesLoading: false });
       }
+    }
+  },
+
+  loadMoreMessages: async () => {
+    const { activeSessionId, isMessagesLoading, messageHasMore, nextMessageOffset, messages } = get();
+    if (!activeSessionId || isMessagesLoading || !messageHasMore) return;
+    const request = ++messageRequest;
+    set({ isMessagesLoading: true });
+    try {
+      const page = await fetchMessagePage(activeSessionId, nextMessageOffset, 100);
+      if (request !== messageRequest || get().activeSessionId !== activeSessionId) return;
+      const items = [...messages, ...page.items];
+      set((state) => ({
+        messages: items,
+        messageHasMore: page.hasMore,
+        nextMessageOffset: page.offset + page.items.length,
+        messageCache: cacheMessagePage(state.messageCache, activeSessionId, { ...page, items, offset: 0 }),
+      }));
+    } finally {
+      if (request === messageRequest && get().activeSessionId === activeSessionId) set({ isMessagesLoading: false });
     }
   },
 
@@ -236,7 +281,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
     if (nextActive) {
       void get().selectSession(nextActive.id);
     } else {
-      set({ messages: [] });
+      set({ messages: [], messageHasMore: false, nextMessageOffset: 0 });
     }
   },
 
@@ -248,6 +293,8 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
       activeSession: null,
       messages: [],
       messageCache: {},
+      messageHasMore: false,
+      nextMessageOffset: 0,
     });
   },
 }));

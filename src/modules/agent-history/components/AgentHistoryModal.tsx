@@ -89,10 +89,12 @@ export function AgentHistoryModal() {
     messages,
     isLoading,
     isMessagesLoading,
+    messageHasMore,
     isScanning,
     stats,
     hasMore,
     loadMoreSessions,
+    loadMoreMessages,
     searchQuery,
     setSearchQuery,
     selectedAgent,
@@ -968,6 +970,20 @@ export function AgentHistoryModal() {
                         </div>
                       );
                     })
+                  )}
+                  {messageHasMore && (
+                    <div className="flex justify-center pt-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void loadMoreMessages()}
+                        disabled={isMessagesLoading}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {isMessagesLoading ? t("agentHistory.loadingTranscript") : t("agentHistory.loadMoreMessages")}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </>

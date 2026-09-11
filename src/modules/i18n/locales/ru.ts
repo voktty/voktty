@@ -4208,6 +4208,7 @@ const ruCoveragePatch: TranslationSchema = mergeLocale(ruCoverageBase, {
     nextMatch: "Следующее совпадение (Enter)",
     closeFind: "Закрыть поиск (Esc)",
     loadingTranscript: "Загрузка сообщений транскрипта...",
+    loadMoreMessages: "Загрузить ещё сообщения",
     noMessages: "В транскрипте этой сессии нет сообщений",
     roleUser: "Пользователь",
     roleTool: "Вызов инструмента",

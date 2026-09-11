@@ -3837,6 +3837,7 @@ const deI18nFinal: TranslationSchema = mergeLocale(deI18nBatch7, {
     nextMatch: "Nächstes Spiel (Eingabe)",
     closeFind: "Schließen Sie die Suche (Esc)",
     loadingTranscript: "Transkriptnachrichten werden geladen...",
+    loadMoreMessages: "Weitere Nachrichten laden",
     noMessages: "In diesem Sitzungsprotokoll sind keine Nachrichten aufgezeichnet",
     roleUser: "👤 Benutzer",
     roleTool: "⚙️ Tool-Aufruf",

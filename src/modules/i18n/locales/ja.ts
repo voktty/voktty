@@ -3815,6 +3815,7 @@ const jaI18nBatch22: TranslationSchema = mergeLocale(jaI18nBatch21, {
     nextMatch: "次の試合（ Enter ）",
     closeFind: "検索を閉じる(Esc)",
     loadingTranscript: "トランスクリプトメッセージを読み込んでいます...",
+    loadMoreMessages: "さらにメッセージを読み込む",
     noMessages: "このセッションのトランスクリプトにはメッセージが記録されていません",
     roleUser: "ユーザー",
     roleTool: "⚙️ ツール呼び出し"

@@ -1,11 +1,11 @@
 ﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAgentHistoryStore } from "./agentHistoryStore";
 import * as bridge from "../lib/agentHistoryBridge";
-import type { HistoryMessage, HistorySession } from "../types";
+import type { HistoryMessage, HistoryMessagePage, HistorySession } from "../types";
 
 vi.mock("../lib/agentHistoryBridge", () => ({
   fetchSessionPage: vi.fn(),
-  fetchMessages: vi.fn(),
+  fetchMessagePage: vi.fn(),
   rescanHistory: vi.fn(),
   deleteHistorySession: vi.fn(),
   clearAllHistory: vi.fn(),
@@ -21,13 +21,20 @@ describe("agentHistoryStore", () => {
       items: [], offset: 0, limit: 100, total: 0, hasMore: false, scanning: false,
     });
     vi.mocked(bridge.fetchHistoryStats).mockResolvedValue(null);
+    vi.mocked(bridge.fetchMessagePage).mockResolvedValue({
+      items: [], offset: 0, limit: 100, total: 0, hasMore: false,
+    });
     useAgentHistoryStore.setState({
       isOpen: false,
       sessions: [],
       activeSessionId: null,
       activeSession: null,
       messages: [],
+      messageCache: {},
+      messageHasMore: false,
+      nextMessageOffset: 0,
       isLoading: false,
+      isMessagesLoading: false,
       isScanning: false,
       error: null,
       searchQuery: "",
@@ -91,7 +98,7 @@ describe("agentHistoryStore", () => {
     const state = useAgentHistoryStore.getState();
     expect(state.sessions).toHaveLength(1);
     expect(state.activeSessionId).toBeNull();
-    expect(bridge.fetchMessages).not.toHaveBeenCalled();
+    expect(bridge.fetchMessagePage).not.toHaveBeenCalled();
   });
 
   it("handles deleteSession properly", async () => {
@@ -140,7 +147,7 @@ describe("agentHistoryStore", () => {
     });
     await useAgentHistoryStore.getState().loadMoreSessions();
     expect(useAgentHistoryStore.getState().sessions.map((session) => session.id)).toEqual(["s1", "s2"]);
-    expect(bridge.fetchMessages).not.toHaveBeenCalled();
+    expect(bridge.fetchMessagePage).not.toHaveBeenCalled();
   });
 
   it("keeps the current filters and cursor when loading another page", async () => {
@@ -163,13 +170,13 @@ describe("agentHistoryStore", () => {
   });
 
   it("ignores a stale transcript response after another session is selected", async () => {
-    let resolveFirst: (messages: HistoryMessage[]) => void;
-    const first = new Promise<HistoryMessage[]>((resolve) => {
+    let resolveFirst: ((page: HistoryMessagePage) => void) | undefined;
+    const first = new Promise<HistoryMessagePage>((resolve) => {
       resolveFirst = resolve;
     });
-    vi.mocked(bridge.fetchMessages)
+    vi.mocked(bridge.fetchMessagePage)
       .mockReturnValueOnce(first)
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce({ items: [], offset: 0, limit: 100, total: 0, hasMore: false });
     useAgentHistoryStore.setState({
       sessions: [
         { id: "s1", agent: "codex", title: "One", project_name: "p", project_path: "/p", cwd: "/p", git_branch: null, created_at: 1, updated_at: 1, message_count: 1, is_active: false, file_path: null, source_hash: null, can_resume: true, resume_command: null },
@@ -178,10 +185,34 @@ describe("agentHistoryStore", () => {
     });
     const firstSelection = useAgentHistoryStore.getState().selectSession("s1");
     await useAgentHistoryStore.getState().selectSession("s2");
-    resolveFirst!([{ id: "old", session_id: "s1", role: "user", content: "old", sequence: 1, timestamp: 1, tool_name: null, tool_input: null, tool_output: null, is_error: false, redacted: false }]);
+    const oldMessage: HistoryMessage = { id: "old", session_id: "s1", role: "user", content: "old", sequence: 1, timestamp: 1, tool_name: null, tool_input: null, tool_output: null, is_error: false, redacted: false };
+    if (!resolveFirst) throw new Error("First transcript request was not started");
+    resolveFirst({ items: [oldMessage], offset: 0, limit: 100, total: 1, hasMore: false });
     await firstSelection;
     expect(useAgentHistoryStore.getState().activeSessionId).toBe("s2");
     expect(useAgentHistoryStore.getState().messages).toEqual([]);
+  });
+
+  it("loads the next transcript page and retains the complete loaded prefix", async () => {
+    const first: HistoryMessage = { id: "one", session_id: "s1", role: "user", content: "one", sequence: 1, timestamp: 1, tool_name: null, tool_input: null, tool_output: null, is_error: false, redacted: false };
+    const second: HistoryMessage = { ...first, id: "two", content: "two", sequence: 2 };
+    useAgentHistoryStore.setState({
+      activeSessionId: "s1",
+      messages: [first],
+      messageHasMore: true,
+      nextMessageOffset: 1,
+    });
+    vi.mocked(bridge.fetchMessagePage).mockResolvedValueOnce({
+      items: [second], offset: 1, limit: 100, total: 2, hasMore: false,
+    });
+
+    await useAgentHistoryStore.getState().loadMoreMessages();
+
+    const state = useAgentHistoryStore.getState();
+    expect(state.messages.map((message) => message.id)).toEqual(["one", "two"]);
+    expect(state.messageHasMore).toBe(false);
+    expect(state.nextMessageOffset).toBe(2);
+    expect(bridge.fetchMessagePage).toHaveBeenCalledWith("s1", 1, 100);
   });
 
   it("keeps the modal state stable when a page request fails", async () => {

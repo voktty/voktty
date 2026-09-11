@@ -3887,6 +3887,7 @@ const ptCoverageBase: TranslationSchema = mergeLocale(ptI18nBatch21, {
     nextMatch: "Próxima partida (Enter)",
     closeFind: "Fechar localização (Esc)",
     loadingTranscript: "A carregar mensagens de transcrição...",
+    loadMoreMessages: "Carregar mais mensagens",
     noMessages: "Nenhuma mensagem gravada nesta transcrição de sessão",
     roleUser: "Utilizador ",
     roleTool: "Invocação ⚙️ de ferramenta"
