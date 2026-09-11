@@ -26,7 +26,7 @@ import {
 } from "react";
 import { BlockOverlay } from "./block/BlockOverlay";
 import { BlockWatermark } from "./block/BlockWatermark";
-import { TerminalCopilotPopup } from "./copilot/TerminalCopilotPopup";
+import { TerminalCopilotPopupLazy } from "./copilot/TerminalCopilotPopupLazy";
 import { useTerminalCopilotStore } from "./copilot/terminalCopilotStore";
 import {
   focusLeafInput,
@@ -349,7 +349,7 @@ export const TerminalPane = memo(
             </ErrorBoundary>
             {copilotOpen && (
               <ErrorBoundary name="Terminal Copilot">
-                <TerminalCopilotPopup
+                <TerminalCopilotPopupLazy
                   leafId={leafId}
                   active={copilotOpen}
                   cwd={currentCwd ?? leafCwd(leafId) ?? initialCwd}
@@ -441,7 +441,7 @@ export const TerminalPane = memo(
           )}
           {copilotOpen && (
             <ErrorBoundary name="Terminal Copilot">
-              <TerminalCopilotPopup
+              <TerminalCopilotPopupLazy
                 leafId={leafId}
                 active={copilotOpen}
                 cwd={leafCwd(leafId)}

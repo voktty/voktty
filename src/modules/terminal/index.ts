@@ -1,4 +1,3 @@
-export * from "./copilot";
 export {
   type AgentTabStatus,
   detectAgentFromName,
@@ -54,4 +53,3 @@ export { CommandHistoryModal } from "./history/CommandHistoryModal";
 export { useCommandHistoryStore } from "./history/commandHistoryStore";
 export { TerminalInlineSuggest } from "./TerminalInlineSuggest";
 export { useTerminalSuggestStore } from "./lib/terminalSuggestStore";
-

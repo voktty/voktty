@@ -216,7 +216,6 @@ import {
   setLeafBlocks,
   type TerminalPaneHandle,
   useAgentActivityStore,
-  useTerminalCopilotStore,
   useTerminalFileDrop,
   waitForLeafConnection,
   whenSessionReady,
@@ -225,6 +224,7 @@ import {
   CommandHistoryModal,
   useCommandHistoryStore,
 } from "@/modules/terminal";
+import { useTerminalCopilotStore } from "@/modules/terminal/copilot/terminalCopilotStore";
 import { useKanbanStore } from "@/modules/notes-board/store/kanbanStore";
 import {
   ThemeProvider,
@@ -881,6 +881,7 @@ function DesktopApp() {
   }, [panelOpen, verticalTabsCollapsed]);
 
   const { hasComposer, keysLoaded } = useAiBootstrap();
+  const activeAgentSessionId = useChatStore((s) => s.activeSessionId);
 
   useEffect(() => {
     if (!keysLoaded || hasComposer) return;
@@ -5348,7 +5349,7 @@ function DesktopApp() {
           <Toaster position="bottom-right" />
           <TransferQueuePanel onDecide={decideTransferConflict} />
 
-          {hasComposer ? (
+          {hasComposer && activeAgentSessionId ? (
             <>
               <AgentRunBridge
                 openAiDiffTab={openAiDiffTab}
