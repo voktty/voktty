@@ -1,4 +1,5 @@
 import { code } from "@streamdown/code";
+import { useTranslation } from "@/modules/i18n";
 import {
   createContext,
   isValidElement,
@@ -68,33 +69,41 @@ type FileLinkMenu = {
   path: string;
 };
 
-const REVEAL_LABEL = IS_MAC
-  ? "Reveal in Finder"
-  : IS_WIN
-    ? "Reveal in File Explorer"
-    : "Open Containing Folder";
-
 function fileLinkMenuItems(
   canOpenInVoktty: boolean,
   canCopyRelativePath: boolean,
+  t: (key: string) => string,
 ): ExplorerMenuItem[] {
+  const revealLabel = IS_MAC
+    ? t("harness.chrome.revealInFinder")
+    : IS_WIN
+      ? t("harness.chrome.revealInFileExplorer")
+      : t("harness.chrome.openContainingFolder");
   return [
     {
       kind: "item",
       id: "open-voktty",
-      label: "Open in Voktty",
+      label: t("harness.chrome.openInVoktty"),
       disabled: !canOpenInVoktty,
     },
-    { kind: "item", id: "open-default", label: "Open in Default App" },
-    { kind: "item", id: "reveal", label: REVEAL_LABEL },
+    {
+      kind: "item",
+      id: "open-default",
+      label: t("harness.chrome.openInDefaultApp"),
+    },
+    { kind: "item", id: "reveal", label: revealLabel },
     { kind: "sep" },
-    { kind: "item", id: "copy-path", label: "Copy Path" },
+    {
+      kind: "item",
+      id: "copy-path",
+      label: t("harness.chrome.copyPath"),
+    },
     ...(canCopyRelativePath
       ? [
           {
             kind: "item" as const,
             id: "copy-relative-path",
-            label: "Copy Relative Path",
+            label: t("harness.chrome.copyRelativePath"),
           },
         ]
       : []),
@@ -307,6 +316,7 @@ export const AgentMarkdown = memo(function AgentMarkdown({
   cwd?: string;
   onOpenFile?: (path: string) => void;
 }) {
+  const { t } = useTranslation();
   const [fileMenu, setFileMenu] = useState<FileLinkMenu | null>(null);
   const onFileContextMenu = useCallback(
     (event: ReactMouseEvent, path: string) => {
@@ -370,8 +380,8 @@ export const AgentMarkdown = memo(function AgentMarkdown({
         <ExplorerMenu
           x={fileMenu.x}
           y={fileMenu.y}
-          items={fileLinkMenuItems(!!onOpenFile, !!cwd)}
-          ariaLabel="File link actions"
+          items={fileLinkMenuItems(!!onOpenFile, !!cwd, t)}
+          ariaLabel={t("harness.chrome.fileLinkActions")}
           onPick={onFileMenuPick}
           onClose={() => setFileMenu(null)}
         />
