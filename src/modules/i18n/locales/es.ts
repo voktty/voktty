@@ -5487,4 +5487,13 @@ export const es: TranslationSchema = {
       diff: "Diff",
     },
   },
+  toolPreview: {
+    proposedChanges: "Cambios propuestos",
+    attemptedChanges: "Cambios intentados · la herramienta no finalizó",
+    writtenContent: "Contenido escrito · contenido previo no disponible",
+    changePreview: "Previsualización de cambios",
+    openLabel: "Abrir {label}",
+    previewLabel: "Previsualizar {type}: {label}",
+    closePreview: "Cerrar previsualización",
+  },
 };

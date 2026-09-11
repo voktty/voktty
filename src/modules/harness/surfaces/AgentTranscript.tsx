@@ -14,6 +14,7 @@ import { AttachmentChip } from "../chrome/AttachmentChip";
 import { FilePreview } from "../chrome/FilePreview";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { HarnessIcon } from "../chrome/HarnessIcon";
+import { ToolDiffPreview } from "../chrome/ToolDiffPreview";
 import {
   Check,
   ChevronRight,
@@ -1863,10 +1864,12 @@ function ActivityToolRow({
         <ToolCallSummary
           label={label}
           preview={block.tool?.preview}
+          status={state}
           cwd={cwd}
           chip={bare}
           failed={state === "rejected"}
           onOpenFile={openFile}
+          onOpenDiff={onOpenDiff}
         />
         {pending ? null : <ToolCallStatusIcon state={state} />}
       </div>
@@ -2053,9 +2056,11 @@ function ToolCall({
           <ToolCallSummary
             label={label}
             preview={preview}
+            status={state}
             cwd={cwd}
             failed={state === "rejected"}
             onOpenFile={onOpenFile}
+            onOpenDiff={onOpenDiff}
           />
           <ChevronRight
             className={`size-3.5 shrink-0 text-content/35 transition-transform ${open ? "rotate-90" : ""}`}
@@ -2074,9 +2079,11 @@ function ToolCall({
           <ToolCallSummary
             label={label}
             preview={preview}
+            status={state}
             cwd={cwd}
             failed={state === "rejected"}
             onOpenFile={onOpenFile}
+            onOpenDiff={onOpenDiff}
           />
         </div>
       )}
@@ -2093,16 +2100,20 @@ function ToolCall({
 function ToolCallSummary({
   label,
   preview,
+  status = "accepted",
   cwd,
   onOpenFile,
+  onOpenDiff,
   interactive = true,
   chip = false,
   failed = false,
 }: {
   label: string;
   preview?: ToolPreview;
+  status?: "pending" | "accepted" | "rejected";
   cwd?: string;
   onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
   interactive?: boolean;
   /** Sets the file off in a chip, for rows that lean on a rail for structure. */
   chip?: boolean;
@@ -2180,7 +2191,16 @@ function ToolCallSummary({
       .pop() ||
     t("harness.chrome.file");
   const filePath = resolveWorkspacePath(preview?.path || target, cwd);
-  const canOpen = interactive && !!onOpenFile && !!filePath;
+  const openFile =
+    action === "Edit" || action === "Write"
+      ? (onOpenDiff ?? onOpenFile)
+      : onOpenFile;
+  const canOpen = interactive && !!openFile && !!filePath;
+  const canPreview =
+    interactive &&
+    preview?.kind === "write" &&
+    (preview.contentOnly ||
+      preview.lines?.some((line) => line.kind !== "context"));
   const actionTone = failed ? "text-red-400" : "text-content/50";
   const targetTone = failed
     ? "text-red-400"
@@ -2194,7 +2214,24 @@ function ToolCallSummary({
         {action}
       </span>
       {isFile ? (
-        canOpen ? (
+        canPreview ? (
+          <ToolDiffPreview
+            preview={preview}
+            label={target}
+            status={status}
+            cwd={cwd}
+            onOpen={openFile && filePath ? () => openFile(filePath) : undefined}
+            onOpenFile={onOpenFile}
+            className={`-my-0.5 flex min-w-0 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-left hover:text-sky-300 ${
+              chip
+                ? `max-w-full bg-content/6 hover:bg-content/10 ${targetTone}`
+                : `flex-1 hover:bg-content/6 ${targetTone}`
+            }`}
+          >
+            <FileTypeIcon name={fileName} isDir={false} />
+            <span className="min-w-0 truncate">{target}</span>
+          </ToolDiffPreview>
+        ) : canOpen ? (
           <button
             type="button"
             className={`-my-0.5 flex min-w-0 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-left hover:text-sky-300 ${
@@ -2205,7 +2242,7 @@ function ToolCallSummary({
             title={preview?.path || target}
             onClick={(event) => {
               event.stopPropagation();
-              onOpenFile?.(filePath);
+              openFile?.(filePath);
             }}
           >
             <FileTypeIcon name={fileName} isDir={action === "List"} />
