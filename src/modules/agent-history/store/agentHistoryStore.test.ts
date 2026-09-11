@@ -1,7 +1,7 @@
 ﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAgentHistoryStore } from "./agentHistoryStore";
 import * as bridge from "../lib/agentHistoryBridge";
-import type { HistorySession } from "../types";
+import type { HistoryMessage, HistorySession } from "../types";
 
 vi.mock("../lib/agentHistoryBridge", () => ({
   fetchSessionPage: vi.fn(),
@@ -18,7 +18,7 @@ describe("agentHistoryStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(bridge.fetchSessionPage).mockResolvedValue({
-      items: [], offset: 0, limit: 100, total: 0, has_more: false, scanning: false,
+      items: [], offset: 0, limit: 100, total: 0, hasMore: false, scanning: false,
     });
     vi.mocked(bridge.fetchHistoryStats).mockResolvedValue(null);
     useAgentHistoryStore.setState({
@@ -29,12 +29,14 @@ describe("agentHistoryStore", () => {
       messages: [],
       isLoading: false,
       isScanning: false,
+      error: null,
       searchQuery: "",
       selectedAgent: "all",
       selectedProject: "",
       stats: null,
       hasMore: false,
       offset: 0,
+      nextOffset: 0,
     });
   });
 
@@ -75,7 +77,7 @@ describe("agentHistoryStore", () => {
     };
 
     vi.mocked(bridge.fetchSessionPage).mockResolvedValue({
-      items: [mockSession], offset: 0, limit: 100, total: 1, has_more: false, scanning: false,
+      items: [mockSession], offset: 0, limit: 100, total: 1, hasMore: false, scanning: false,
     });
     vi.mocked(bridge.fetchHistoryStats).mockResolvedValue({
       total_sessions: 1,
@@ -130,13 +132,63 @@ describe("agentHistoryStore", () => {
       sessions: [{ id: "s1", agent: "codex", title: "One", project_name: "p", project_path: "/p", cwd: "/p", git_branch: null, created_at: 1, updated_at: 1, message_count: 1, is_active: false, file_path: null, source_hash: null, can_resume: true, resume_command: null }],
       hasMore: true,
       offset: 0,
+      nextOffset: 1,
     });
     vi.mocked(bridge.fetchSessionPage).mockResolvedValueOnce({
       items: [{ id: "s2", agent: "codex", title: "Two", project_name: "p", project_path: "/p", cwd: "/p", git_branch: null, created_at: 2, updated_at: 2, message_count: 1, is_active: false, file_path: null, source_hash: null, can_resume: true, resume_command: null }],
-      offset: 1, limit: 100, total: 2, has_more: false, scanning: false,
+      offset: 1, limit: 100, total: 2, hasMore: false, scanning: false,
     });
     await useAgentHistoryStore.getState().loadMoreSessions();
     expect(useAgentHistoryStore.getState().sessions.map((session) => session.id)).toEqual(["s1", "s2"]);
     expect(bridge.fetchMessages).not.toHaveBeenCalled();
+  });
+
+  it("keeps the current filters and cursor when loading another page", async () => {
+    useAgentHistoryStore.setState({
+      sessions: [],
+      hasMore: true,
+      nextOffset: 200,
+      searchQuery: "oauth",
+      selectedAgent: "codex",
+      selectedProject: "voktty",
+    });
+    await useAgentHistoryStore.getState().loadMoreSessions();
+    expect(bridge.fetchSessionPage).toHaveBeenCalledWith({
+      limit: 100,
+      offset: 200,
+      search_query: "oauth",
+      agent: "codex",
+      project: "voktty",
+    });
+  });
+
+  it("ignores a stale transcript response after another session is selected", async () => {
+    let resolveFirst: (messages: HistoryMessage[]) => void;
+    const first = new Promise<HistoryMessage[]>((resolve) => {
+      resolveFirst = resolve;
+    });
+    vi.mocked(bridge.fetchMessages)
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce([]);
+    useAgentHistoryStore.setState({
+      sessions: [
+        { id: "s1", agent: "codex", title: "One", project_name: "p", project_path: "/p", cwd: "/p", git_branch: null, created_at: 1, updated_at: 1, message_count: 1, is_active: false, file_path: null, source_hash: null, can_resume: true, resume_command: null },
+        { id: "s2", agent: "codex", title: "Two", project_name: "p", project_path: "/p", cwd: "/p", git_branch: null, created_at: 2, updated_at: 2, message_count: 1, is_active: false, file_path: null, source_hash: null, can_resume: true, resume_command: null },
+      ],
+    });
+    const firstSelection = useAgentHistoryStore.getState().selectSession("s1");
+    await useAgentHistoryStore.getState().selectSession("s2");
+    resolveFirst!([{ id: "old", session_id: "s1", role: "user", content: "old", sequence: 1, timestamp: 1, tool_name: null, tool_input: null, tool_output: null, is_error: false, redacted: false }]);
+    await firstSelection;
+    expect(useAgentHistoryStore.getState().activeSessionId).toBe("s2");
+    expect(useAgentHistoryStore.getState().messages).toEqual([]);
+  });
+
+  it("keeps the modal state stable when a page request fails", async () => {
+    vi.mocked(bridge.fetchSessionPage).mockRejectedValueOnce(new Error("index unavailable"));
+    await useAgentHistoryStore.getState().loadSessions();
+    const state = useAgentHistoryStore.getState();
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBe("index unavailable");
   });
 });

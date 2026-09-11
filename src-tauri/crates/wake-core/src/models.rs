@@ -403,6 +403,14 @@ pub struct ProjectInfo {
     pub last_active: i64,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SessionStats {
+    pub total_sessions: i64,
+    pub total_messages: i64,
+    pub agents_count: std::collections::HashMap<String, i64>,
+    pub projects_count: std::collections::HashMap<String, i64>,
+}
+
 #[derive(Debug, Clone)]
 pub struct SearchHit {
     pub session: SessionMeta,

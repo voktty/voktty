@@ -22,12 +22,14 @@ interface AgentHistoryState {
   isLoading: boolean;
   isMessagesLoading: boolean;
   isScanning: boolean;
+  error: string | null;
   searchQuery: string;
   selectedAgent: string;
   selectedProject: string;
   stats: HistoryStats | null;
   hasMore: boolean;
   offset: number;
+  nextOffset: number;
 
   // Actions
   openHistory: () => void;
@@ -54,12 +56,14 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
   isLoading: false,
   isMessagesLoading: false,
   isScanning: false,
+  error: null,
   searchQuery: "",
   selectedAgent: "all",
   selectedProject: "",
   stats: null,
   hasMore: false,
   offset: 0,
+  nextOffset: 0,
 
   openHistory: () => {
     set({ isOpen: true });
@@ -94,7 +98,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
   loadSessions: async () => {
     const request = ++sessionPageRequest;
     const { searchQuery, selectedAgent, selectedProject } = get();
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
 
     try {
       const [page, stats] = await Promise.all([
@@ -117,11 +121,18 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
         stats: stats ?? null,
         activeSessionId: activeSession ? activeSession.id : null,
         activeSession,
-        hasMore: page.has_more,
+        hasMore: page.hasMore,
         offset: page.offset,
+        nextOffset: page.offset + safeSessions.length,
+        isScanning: page.scanning,
       });
       if (!activeSession) {
-        set({ messages: [] });
+        messageRequest += 1;
+        set({ messages: [], isMessagesLoading: false });
+      }
+    } catch (error) {
+      if (request === sessionPageRequest) {
+        set({ error: error instanceof Error ? error.message : String(error) });
       }
     } finally {
       if (request === sessionPageRequest) set({ isLoading: false });
@@ -129,19 +140,32 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
   },
 
   loadMoreSessions: async () => {
-    const { hasMore, isLoading, offset, sessions } = get();
+    const { hasMore, isLoading, nextOffset, sessions, searchQuery, selectedAgent, selectedProject } = get();
     if (!hasMore || isLoading) return;
-    set({ isLoading: true });
+    const request = ++sessionPageRequest;
+    set({ isLoading: true, error: null });
     try {
-      const page = await fetchSessionPage({ limit: 100, offset: offset + sessions.length });
+      const page = await fetchSessionPage({
+        limit: 100,
+        offset: nextOffset,
+        ...(searchQuery.trim() ? { search_query: searchQuery.trim() } : {}),
+        ...(selectedAgent !== "all" ? { agent: selectedAgent } : {}),
+        ...(selectedProject ? { project: selectedProject } : {}),
+      });
+      if (request !== sessionPageRequest) return;
       const known = new Set(sessions.map((session) => session.id));
       set({
         sessions: [...sessions, ...page.items.filter((session) => !known.has(session.id))],
-        hasMore: page.has_more,
+        hasMore: page.hasMore,
         offset: page.offset,
+        nextOffset: page.offset + page.items.length,
       });
+    } catch (error) {
+      if (request === sessionPageRequest) {
+        set({ error: error instanceof Error ? error.message : String(error) });
+      }
     } finally {
-      set({ isLoading: false });
+      if (request === sessionPageRequest) set({ isLoading: false });
     }
   },
 
@@ -174,7 +198,9 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
         },
       }));
     } finally {
-      set({ isMessagesLoading: false });
+      if (request === messageRequest && get().activeSessionId === id) {
+        set({ isMessagesLoading: false });
+      }
     }
   },
 
