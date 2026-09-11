@@ -990,6 +990,11 @@ export function AgentHistoryModal() {
                       </Button>
                     </div>
                   )}
+                  {messageHasMore && messages.length >= MAX_VISIBLE_MESSAGES && (
+                    <p className="pt-2 text-center text-xs text-muted-foreground">
+                      {t("agentHistory.messageLimitReached", { count: MAX_VISIBLE_MESSAGES })}
+                    </p>
+                  )}
                 </div>
               </>
             ) : (

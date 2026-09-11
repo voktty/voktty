@@ -3600,6 +3600,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
     closeFind: "खोज बंद करें (Esc)",
     loadingTranscript: "ट्रांसक्रिप्ट संदेश लोड हो रहे हैं...",
     loadMoreMessages: "और संदेश लोड करें",
+    messageLimitReached: "पहले {count} संदेश दिखाए जा रहे हैं। सभी संदेशों के लिए ट्रांसक्रिप्ट निर्यात करें।",
     noMessages: "इस सत्र ट्रांसक्रिप्ट में कोई संदेश दर्ज नहीं है",
     roleUser: "👤 उपयोगकर्ता",
     roleTool: "⚙️ टूल आमंत्रण",

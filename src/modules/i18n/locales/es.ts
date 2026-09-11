@@ -4357,6 +4357,7 @@ export const es: TranslationSchema = {
     closeFind: "Cerrar búsqueda (Esc)",
     loadingTranscript: "Cargando mensajes de la transcripción...",
     loadMoreMessages: "Cargar más mensajes",
+    messageLimitReached: "Se muestran los primeros {count} mensajes. Exporte la transcripción para acceder a todos.",
     noMessages: "No hay mensajes registrados en esta transcripción de sesión",
     agent: "Agente",
     resume: "Reanudar",
