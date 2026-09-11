@@ -91,18 +91,6 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
           )
             return "react";
 
-          // Each AI provider SDK in its own chunk so unused providers
-          // don't bloat the initial load (lazy-imported in agent.ts).
-          if (id.includes("@ai-sdk/anthropic")) return "ai-anthropic";
-          if (id.includes("@ai-sdk/google")) return "ai-google";
-          if (id.includes("@ai-sdk/openai-compatible"))
-            return "ai-openai-compat";
-          if (id.includes("@ai-sdk/openai")) return "ai-openai";
-          if (id.includes("@ai-sdk/cerebras")) return "ai-cerebras";
-          if (id.includes("@ai-sdk/groq")) return "ai-groq";
-          if (id.includes("@ai-sdk/xai")) return "ai-xai";
-          if (id.includes("@ai-sdk/")) return "ai-sdk-shared";
-
           if (id.includes("/xterm/") || id.includes("@xterm/")) return "xterm";
           // The minimap is optional and loaded only from the editor setting.
           if (id.includes("@replit/codemirror-minimap")) return "cm-minimap";
