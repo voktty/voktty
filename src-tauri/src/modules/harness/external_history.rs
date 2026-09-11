@@ -49,8 +49,14 @@ fn get_wake_store() -> Option<Arc<Store>> {
                 .join("voktty");
             let _ = std::fs::create_dir_all(&db_dir);
             let db_path = db_dir.join("agent_history_wake.db");
-            let (store, _) = open_or_rebuild(&db_path)
-                .unwrap_or_else(|_| (open_or_rebuild(&PathBuf::from("agent_history_wake.db")).unwrap().0, None));
+            let (store, _) = open_or_rebuild(&db_path).unwrap_or_else(|_| {
+                (
+                    open_or_rebuild(&PathBuf::from("agent_history_wake.db"))
+                        .unwrap()
+                        .0,
+                    None,
+                )
+            });
             Arc::new(store)
         })
         .clone()
@@ -228,7 +234,11 @@ pub fn get_external_session_record(session_id: &str) -> Option<SessionRecord> {
         model: meta.model.unwrap_or_else(|| "default".to_string()),
         model_settings: json!({}),
         runtime_mode: "supervised".to_string(),
-        title: if meta.title.is_empty() { meta.id.clone() } else { meta.title },
+        title: if meta.title.is_empty() {
+            meta.id.clone()
+        } else {
+            meta.title
+        },
         provider_session_id: Some(meta.id),
         blocks: Value::Array(blocks),
         context_used: None,
