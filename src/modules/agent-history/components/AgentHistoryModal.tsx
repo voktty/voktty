@@ -88,6 +88,7 @@ export function AgentHistoryModal() {
     isLoading,
     isMessagesLoading,
     isScanning,
+    stats,
     hasMore,
     loadMoreSessions,
     searchQuery,
@@ -142,23 +143,14 @@ export function AgentHistoryModal() {
 
   // Calculate agent & project counts
   const agentCounts = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const s of sessions) {
-      if (s.agent) {
-        const agKey = s.agent.toLowerCase() === "claude-code" ? "claude" : s.agent.toLowerCase();
-        map[agKey] = (map[agKey] || 0) + 1;
-      }
+    const map = { ...(stats?.agents_count || {}) };
+    if (map["claude-code"] !== undefined) {
+      map.claude = (map.claude || 0) + map["claude-code"];
     }
     return map;
-  }, [sessions]);
+  }, [stats]);
 
-  const projectCounts = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const s of sessions) {
-      if (s.project_name) map[s.project_name] = (map[s.project_name] || 0) + 1;
-    }
-    return map;
-  }, [sessions]);
+  const projectCounts = stats?.projects_count || {};
 
   // Filtered sessions
   const filteredSessions = useMemo(() => {
@@ -174,19 +166,6 @@ export function AgentHistoryModal() {
       return true;
     });
   }, [sessions, selectedAgent, selectedProject, searchQuery]);
-
-  // Debounced active session sync when filtered list changes
-  useEffect(() => {
-    if (filteredSessions.length > 0) {
-      const exists = filteredSessions.some((s) => s.id === activeSessionId);
-      if (!exists) {
-        const timer = setTimeout(() => {
-          void selectSession(filteredSessions[0].id);
-        }, 150);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [filteredSessions, activeSessionId, selectSession]);
 
   // Palette filtered sessions
   const paletteResults = useMemo(() => {
@@ -434,7 +413,7 @@ export function AgentHistoryModal() {
                   <HugeiconsIcon icon={Layers01Icon} size={14} className="text-primary/90" />
                   <span>{t("agentHistory.allSessions")}</span>
                 </div>
-                <span className="text-[10.5px] font-mono opacity-60">{sessions.length}</span>
+                <span className="text-[10.5px] font-mono opacity-60">{stats?.total_sessions ?? sessions.length}</span>
               </button>
 
               <button
@@ -681,7 +660,7 @@ export function AgentHistoryModal() {
                     </ContextMenu>
                   );
                 })}
-                {hasMore && !searchQuery && selectedAgent === "all" && !selectedProject && (
+                {hasMore && (
                   <Button
                     type="button"
                     variant="ghost"

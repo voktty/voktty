@@ -1185,6 +1185,38 @@ impl Store {
         Ok(map)
     }
 
+    pub fn session_stats(&self) -> Result<SessionStats> {
+        let conn = self.read.lock().unwrap();
+        let (total_sessions, total_messages) = conn.query_row(
+            "SELECT COUNT(*), COALESCE(SUM(message_count), 0) FROM sessions WHERE archived = 0",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let mut agents_count = HashMap::new();
+        let mut agents = conn.prepare_cached(
+            "SELECT agent_id, COUNT(*) FROM sessions WHERE archived = 0 GROUP BY agent_id",
+        )?;
+        for row in agents.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))? {
+            let (agent, count) = row?;
+            agents_count.insert(agent, count);
+        }
+        let mut projects_count = HashMap::new();
+        let mut projects = conn.prepare_cached(
+            "SELECT project_name, COUNT(*) FROM sessions
+             WHERE archived = 0 AND project_name != '' GROUP BY project_name",
+        )?;
+        for row in projects.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))? {
+            let (project, count) = row?;
+            projects_count.insert(project, count);
+        }
+        Ok(SessionStats {
+            total_sessions,
+            total_messages,
+            agents_count,
+            projects_count,
+        })
+    }
+
     /// 各数据源目录下的会话数(Session locations 面板用):一次扫表按
     /// **(agent, 数据根)** 归属,免去每个目录一次往返。**不过滤 archived**
     /// ——归档目录本就该显示自己的量,那正是 agent_counts(WHERE archived = 0)
@@ -1908,4 +1940,66 @@ pub fn default_db_path() -> std::path::PathBuf {
         }
     }
     db
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session(
+        key: &str,
+        agent: AgentId,
+        project: &str,
+        messages: i64,
+        archived: bool,
+    ) -> SessionMeta {
+        SessionMeta {
+            key: key.into(),
+            id: key.into(),
+            host: String::new(),
+            agent,
+            title: key.into(),
+            project_path: format!("/{project}"),
+            project_name: project.into(),
+            file_path: format!("/{key}.jsonl"),
+            created_at: 1,
+            updated_at: 1,
+            message_count: messages,
+            size_bytes: 1,
+            git_branch: None,
+            model: None,
+            tokens_used: None,
+            archived,
+            source: None,
+            favorite: false,
+            pinned: false,
+        }
+    }
+
+    #[test]
+    fn session_stats_uses_sql_aggregates_and_excludes_archived_sessions() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let store = Store::open(&temp.path().join("wake.db")).expect("open store");
+        store
+            .write_session(&session("one", AgentId::Codex, "voktty", 3, false), 1, &[])
+            .expect("write first session");
+        store
+            .write_session(
+                &session("two", AgentId::ClaudeCode, "voktty", 5, false),
+                1,
+                &[],
+            )
+            .expect("write second session");
+        store
+            .write_session(&session("old", AgentId::Codex, "archive", 9, true), 1, &[])
+            .expect("write archived session");
+
+        let stats = store.session_stats().expect("aggregate stats");
+        assert_eq!(stats.total_sessions, 2);
+        assert_eq!(stats.total_messages, 8);
+        assert_eq!(stats.agents_count.get("codex"), Some(&1));
+        assert_eq!(stats.agents_count.get("claude-code"), Some(&1));
+        assert_eq!(stats.projects_count.get("voktty"), Some(&2));
+        assert!(!stats.projects_count.contains_key("archive"));
+    }
 }

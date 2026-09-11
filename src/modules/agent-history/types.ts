@@ -56,7 +56,7 @@ export interface HistorySessionPage {
   offset: number;
   limit: number;
   total: number;
-  has_more: boolean;
+  hasMore: boolean;
   scanning: boolean;
 }
 

@@ -281,12 +281,18 @@ pub async fn agent_history_get_session_page(
 ) -> Result<HistorySessionPage, String> {
     let f = filter.unwrap_or_default();
     let limit = f.limit.unwrap_or(100).clamp(1, 100) as i64;
-    let offset = f.offset.unwrap_or(0).max(0) as i64;
+    let offset = f.offset.unwrap_or(0) as i64;
     let agents = f
         .agent
         .as_deref()
         .filter(|agent| *agent != "all")
-        .and_then(AgentId::parse)
+        .and_then(|agent| {
+            AgentId::parse(if agent.eq_ignore_ascii_case("claude") {
+                "claude-code"
+            } else {
+                agent
+            })
+        })
         .into_iter()
         .collect();
     let project_paths = match f.project.as_deref().filter(|project| !project.is_empty()) {
@@ -672,34 +678,21 @@ pub async fn agent_history_export_markdown(
 pub async fn agent_history_get_stats(
     state: State<'_, AgentHistoryState>,
 ) -> Result<HistoryStats, String> {
-    let wake_filter = WakeSessionFilter {
-        limit: 5000,
-        ..WakeSessionFilter::default()
-    };
-    let (wake_sessions, _) = state
-        .store()?
-        .list_sessions(&wake_filter)
-        .map_err(|e| e.to_string())?;
-
-    let mut agents_count = std::collections::HashMap::new();
-    let mut projects_count = std::collections::HashMap::new();
-    let mut total_messages = 0u32;
-
-    for s in &wake_sessions {
-        *agents_count
-            .entry(s.agent.as_str().to_string())
-            .or_insert(0) += 1;
-        if !s.project_name.is_empty() {
-            *projects_count.entry(s.project_name.clone()).or_insert(0) += 1;
-        }
-        total_messages += s.message_count as u32;
-    }
+    let stats = state.store()?.session_stats().map_err(|e| e.to_string())?;
 
     Ok(HistoryStats {
-        total_sessions: wake_sessions.len() as u32,
-        total_messages,
-        agents_count,
-        projects_count,
+        total_sessions: stats.total_sessions.try_into().unwrap_or(u32::MAX),
+        total_messages: stats.total_messages.try_into().unwrap_or(u32::MAX),
+        agents_count: stats
+            .agents_count
+            .into_iter()
+            .map(|(agent, count)| (agent, count.try_into().unwrap_or(u32::MAX)))
+            .collect(),
+        projects_count: stats
+            .projects_count
+            .into_iter()
+            .map(|(project, count)| (project, count.try_into().unwrap_or(u32::MAX)))
+            .collect(),
         last_scan_timestamp: chrono::Utc::now().timestamp(),
     })
 }
