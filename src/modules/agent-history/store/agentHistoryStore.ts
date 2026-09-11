@@ -9,6 +9,8 @@ import {
 } from "../lib/agentHistoryBridge";
 import type { HistoryMessage, HistorySession, HistoryStats } from "../types";
 
+let messageRequest = 0;
+
 interface AgentHistoryState {
   isOpen: boolean;
   sessions: HistorySession[];
@@ -141,6 +143,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
   },
 
   selectSession: async (id: string) => {
+    const request = ++messageRequest;
     const sessions = get().sessions;
     const activeSession = sessions.find((s) => s.id === id) || null;
     const cached = get().messageCache[id];
@@ -159,6 +162,7 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
 
     try {
       const messages = await fetchMessages(id, 0, 500);
+      if (request !== messageRequest || get().activeSessionId !== id) return;
       set((state) => ({
         messages,
         messageCache: {

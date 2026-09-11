@@ -4,9 +4,10 @@ pub mod indexer;
 pub mod models;
 pub mod sanitizer;
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::State;
 
 use models::{HistoryMessage, HistorySession, HistoryStats, SessionFilter};
@@ -20,6 +21,55 @@ pub struct AgentHistoryState {
     store: OnceLock<Result<Arc<Store>, String>>,
     adapters: OnceLock<Vec<Box<dyn AgentAdapter>>>,
     pub is_scanning: Arc<AtomicBool>,
+    transcripts: Mutex<TranscriptCache>,
+}
+
+const TRANSCRIPT_CACHE_MAX_ENTRIES: usize = 8;
+const TRANSCRIPT_CACHE_MAX_BYTES: usize = 32 * 1024 * 1024;
+
+struct TranscriptCacheEntry {
+    key: String,
+    messages: Arc<Vec<HistoryMessage>>,
+    bytes: usize,
+}
+struct TranscriptCache {
+    entries: VecDeque<TranscriptCacheEntry>,
+    bytes: usize,
+}
+
+impl TranscriptCache {
+    fn get(&mut self, key: &str) -> Option<Arc<Vec<HistoryMessage>>> {
+        let index = self.entries.iter().position(|entry| entry.key == key)?;
+        let entry = self.entries.remove(index)?;
+        let messages = entry.messages.clone();
+        self.entries.push_front(entry);
+        Some(messages)
+    }
+    fn insert(&mut self, key: String, messages: Arc<Vec<HistoryMessage>>, bytes: usize) {
+        if bytes > TRANSCRIPT_CACHE_MAX_BYTES {
+            return;
+        }
+        if let Some(index) = self.entries.iter().position(|entry| entry.key == key) {
+            if let Some(entry) = self.entries.remove(index) {
+                self.bytes = self.bytes.saturating_sub(entry.bytes);
+            }
+        }
+        self.bytes += bytes;
+        self.entries.push_front(TranscriptCacheEntry {
+            key,
+            messages,
+            bytes,
+        });
+        while self.entries.len() > TRANSCRIPT_CACHE_MAX_ENTRIES
+            || self.bytes > TRANSCRIPT_CACHE_MAX_BYTES
+        {
+            if let Some(entry) = self.entries.pop_back() {
+                self.bytes = self.bytes.saturating_sub(entry.bytes);
+            } else {
+                break;
+            }
+        }
+    }
 }
 
 struct ScanningGuard(Arc<AtomicBool>);
@@ -51,6 +101,10 @@ impl AgentHistoryState {
             store: OnceLock::new(),
             adapters: OnceLock::new(),
             is_scanning: Arc::new(AtomicBool::new(false)),
+            transcripts: Mutex::new(TranscriptCache {
+                entries: VecDeque::new(),
+                bytes: 0,
+            }),
         }
     }
 
@@ -294,8 +348,8 @@ fn history_session_from_meta(meta: SessionMeta) -> HistorySession {
 #[tauri::command]
 pub async fn agent_history_get_messages(
     session_id: String,
-    _offset: Option<u32>,
-    _limit: Option<u32>,
+    offset: Option<u32>,
+    limit: Option<u32>,
     state: State<'_, AgentHistoryState>,
 ) -> Result<Vec<HistoryMessage>, String> {
     let meta = state
@@ -304,9 +358,6 @@ pub async fn agent_history_get_messages(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Session not found".to_string())?;
 
-    let adapter = adapter_for(state.adapters(), meta.agent, &meta.file_path)
-        .ok_or_else(|| format!("No adapter for agent {:?}", meta.agent))?;
-
     let file_ref = SessionFileRef {
         agent: meta.agent,
         native_id: meta.id.clone(),
@@ -314,10 +365,29 @@ pub async fn agent_history_get_messages(
         mtime_ms: meta.updated_at,
         size: meta.size_bytes,
     };
+    let cache_key = format!("{}:{}:{}", session_id, file_ref.mtime_ms, file_ref.size);
+    let cached = state
+        .transcripts
+        .lock()
+        .map_err(|_| "Transcript cache is locked".to_string())?
+        .get(&cache_key);
 
-    let transcript = adapter
-        .parse_transcript(&file_ref)
-        .map_err(|e| e.to_string())?;
+    if let Some(messages) = cached {
+        let offset = offset.unwrap_or(0) as usize;
+        let limit = limit.unwrap_or(200).clamp(1, 500) as usize;
+        return Ok(messages.iter().skip(offset).take(limit).cloned().collect());
+    }
+
+    let transcript = tokio::task::spawn_blocking(move || {
+        let adapters = create_adapters();
+        let adapter = adapter_for(&adapters, file_ref.agent, &file_ref.file_path)
+            .ok_or_else(|| format!("No adapter for agent {:?}", file_ref.agent))?;
+        adapter
+            .parse_transcript(&file_ref)
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())??;
 
     let mut result = Vec::new();
     let mut seq_counter = 0u32;
@@ -371,7 +441,27 @@ pub async fn agent_history_get_messages(
         }
     }
 
-    Ok(result)
+    let bytes = result.iter().map(history_message_bytes).sum();
+    let messages = Arc::new(result);
+    state
+        .transcripts
+        .lock()
+        .map_err(|_| "Transcript cache is locked".to_string())?
+        .insert(cache_key, messages.clone(), bytes);
+    let offset = offset.unwrap_or(0) as usize;
+    let limit = limit.unwrap_or(200).clamp(1, 500) as usize;
+    Ok(messages.iter().skip(offset).take(limit).cloned().collect())
+}
+
+fn history_message_bytes(message: &HistoryMessage) -> usize {
+    message.id.len()
+        + message.session_id.len()
+        + message.role.len()
+        + message.content.len()
+        + message.tool_name.as_ref().map_or(0, String::len)
+        + message.tool_input.as_ref().map_or(0, String::len)
+        + message.tool_output.as_ref().map_or(0, String::len)
+        + message.thinking.as_ref().map_or(0, String::len)
 }
 
 #[tauri::command]
@@ -402,7 +492,27 @@ pub async fn agent_history_rescan(
 
 #[cfg(test)]
 mod state_tests {
-    use super::{AgentHistoryState, Arc, AtomicBool, Ordering, ScanningGuard};
+    use super::{
+        AgentHistoryState, Arc, AtomicBool, HistoryMessage, Ordering, ScanningGuard,
+        TranscriptCache, VecDeque, TRANSCRIPT_CACHE_MAX_ENTRIES,
+    };
+
+    fn message(id: &str) -> HistoryMessage {
+        HistoryMessage {
+            id: id.into(),
+            session_id: "s".into(),
+            role: "user".into(),
+            content: "x".into(),
+            sequence: 1,
+            timestamp: 0,
+            tool_name: None,
+            tool_input: None,
+            tool_output: None,
+            is_error: false,
+            redacted: false,
+            thinking: None,
+        }
+    }
 
     #[test]
     fn scanning_guard_releases_the_scan_claim() {
@@ -440,6 +550,25 @@ mod state_tests {
             )
         });
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn transcript_cache_evicts_the_least_recently_used_entry() {
+        let mut cache = TranscriptCache {
+            entries: VecDeque::new(),
+            bytes: 0,
+        };
+        for index in 0..=TRANSCRIPT_CACHE_MAX_ENTRIES {
+            cache.insert(
+                index.to_string(),
+                Arc::new(vec![message(&index.to_string())]),
+                1,
+            );
+        }
+        assert!(cache.get("0").is_none());
+        assert!(cache
+            .get(&TRANSCRIPT_CACHE_MAX_ENTRIES.to_string())
+            .is_some());
     }
 }
 
