@@ -18,6 +18,19 @@ export type AiHealthCheckConfig = {
   customEndpoints: readonly CustomEndpoint[];
 };
 
+export function aiHealthCheckTimeoutMs(modelId: string): number {
+  return modelId.startsWith("harness-") ? 75_000 : 20_000;
+}
+
+export function aiHealthCheckErrorDetail(
+  modelId: string,
+  error: unknown,
+): string | undefined {
+  if (!modelId.startsWith("harness-")) return undefined;
+  const detail = error instanceof Error ? error.message : String(error);
+  return detail.trim().replace(/\s+/g, " ").slice(0, 240) || undefined;
+}
+
 export async function runAiHealthCheck(
   config: AiHealthCheckConfig,
   abortSignal?: AbortSignal,

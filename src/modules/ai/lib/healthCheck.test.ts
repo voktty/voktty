@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { runAiHealthCheck } from "./healthCheck";
+import {
+  aiHealthCheckErrorDetail,
+  aiHealthCheckTimeoutMs,
+  runAiHealthCheck,
+} from "./healthCheck";
 import { EMPTY_PROVIDER_KEYS } from "./keyring";
 
 vi.mock("./agent", () => ({
@@ -59,5 +63,29 @@ describe("runAiHealthCheck", () => {
         },
       }),
     );
+  });
+});
+
+describe("aiHealthCheckTimeoutMs", () => {
+  it("allows local OAuth agents enough time to initialize", () => {
+    expect(aiHealthCheckTimeoutMs("harness-codex")).toBe(75_000);
+    expect(aiHealthCheckTimeoutMs("gpt-5.4-mini")).toBe(20_000);
+  });
+});
+
+describe("aiHealthCheckErrorDetail", () => {
+  it("exposes bounded local agent errors without exposing cloud failures", () => {
+    expect(
+      aiHealthCheckErrorDetail(
+        "harness-codex",
+        new Error("OAuth session\nexpired"),
+      ),
+    ).toBe("OAuth session expired");
+    expect(
+      aiHealthCheckErrorDetail(
+        "gpt-5.4-mini",
+        new Error("request included secret context"),
+      ),
+    ).toBeUndefined();
   });
 });
