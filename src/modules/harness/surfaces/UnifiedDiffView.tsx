@@ -17,12 +17,17 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { ExplorerMenu, type ExplorerMenuItem } from "../chrome/ExplorerMenu";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { useColorScheme } from "../hooks/useColorScheme";
 import type { ColorScheme } from "../lib/appearance";
-import { basename } from "../lib/fs";
+import { copyText } from "../lib/clipboard";
+import { basename, revealPath } from "../lib/fs";
+import { IS_MAC, IS_WIN } from "../lib/platform";
 import { highlightDiffFile, type SyntaxToken } from "./syntaxTokens";
 import { DiffCommentComposer } from "./DiffCommentComposer";
 import {
@@ -61,12 +66,64 @@ export type UnifiedDiffFileModel = {
 type FileLayout = "stacked" | "cards";
 type InitialExpansion = "all" | "first" | "none";
 
+type FileContextMenuState = {
+  x: number;
+  y: number;
+  file: UnifiedDiffFileModel;
+};
+
+function resolveFullPath(path: string, repoRoot?: string): string {
+  if (!repoRoot || /^(?:[a-zA-Z]:[/\\]|\/)/.test(path)) return path;
+  const cleanRoot = repoRoot.replace(/[/\\]+$/, "");
+  const cleanRel = path.replace(/^[/\\]+/, "");
+  return `${cleanRoot}/${cleanRel}`;
+}
+
+function fileDiffMenuItems(
+  t: (key: string) => string,
+): ExplorerMenuItem[] {
+  const revealLabel = IS_MAC
+    ? t("harness.chrome.revealInFinder")
+    : IS_WIN
+      ? t("harness.chrome.revealInFileExplorer")
+      : t("harness.chrome.openContainingFolder");
+
+  return [
+    {
+      kind: "item",
+      id: "open-file",
+      label: t("harness.chrome.openFile"),
+    },
+    {
+      kind: "item",
+      id: "open-default",
+      label: t("harness.chrome.openInDefaultApp"),
+    },
+    { kind: "item", id: "reveal", label: revealLabel },
+    { kind: "sep" },
+    { kind: "item", id: "copy-path", label: t("harness.chrome.copyPath") },
+    {
+      kind: "item",
+      id: "copy-relative-path",
+      label: t("harness.chrome.copyRelativePath"),
+    },
+    { kind: "item", id: "copy-name", label: t("harness.chrome.copyFileName") },
+    { kind: "sep" },
+    {
+      kind: "item",
+      id: "open-git-history",
+      label: t("harness.chrome.viewFileHistory"),
+    },
+  ];
+}
+
 type Props = {
   files: UnifiedDiffFileModel[];
   truncated?: boolean;
   focusPath?: string;
   busyId?: string | null;
   totals?: { additions: number; deletions: number };
+  repoRoot?: string;
   /** Fill the parent pane and scroll inside. Off when the parent already scrolls. */
   fill?: boolean;
   /** Changes uses a continuous stack; embedded review surfaces can use cards. */
@@ -76,6 +133,8 @@ type Props = {
   onStageFile?: (id: string) => void;
   onDiscardFile?: (id: string) => void;
   onStageHunk?: (id: string, pos: number) => void;
+  onOpenFile?: (path: string) => void;
+  onOpenGitHistory?: (path?: string) => void;
 };
 
 export function UnifiedDiffView({
@@ -84,12 +143,15 @@ export function UnifiedDiffView({
   focusPath,
   busyId,
   totals,
+  repoRoot,
   fill = true,
   fileLayout = "stacked",
   initialExpansion = "all",
   onStageFile,
   onDiscardFile,
   onStageHunk,
+  onOpenFile,
+  onOpenGitHistory,
 }: Props) {
   const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
@@ -100,6 +162,7 @@ export function UnifiedDiffView({
   const [reveals, setReveals] = useState<
     Record<string, Record<string, FoldReveal>>
   >({});
+  const [fileMenu, setFileMenu] = useState<FileContextMenuState | null>(null);
   const fileRefs = useRef(new Map<string, HTMLElement>());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileKey = useMemo(
@@ -162,6 +225,75 @@ export function UnifiedDiffView({
     if (node) fileRefs.current.set(path, node);
     else fileRefs.current.delete(path);
   }, []);
+
+  const handleFileContextMenu = useCallback(
+    (file: UnifiedDiffFileModel, event: ReactMouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setFileMenu({
+        x: event.clientX,
+        y: event.clientY,
+        file,
+      });
+    },
+    [],
+  );
+
+  const handleMenuPick = useCallback(
+    (actionId: string) => {
+      if (!fileMenu) return;
+      const targetFile = fileMenu.file;
+      setFileMenu(null);
+      const fullPath = resolveFullPath(targetFile.path, repoRoot);
+
+      let action: Promise<void> | void;
+      switch (actionId) {
+        case "open-file":
+          if (onOpenFile) {
+            onOpenFile(fullPath);
+          } else {
+            window.dispatchEvent(
+              new CustomEvent("voktty:open-dropped-path", { detail: fullPath }),
+            );
+          }
+          return;
+        case "open-default":
+          action = openPath(fullPath);
+          break;
+        case "reveal":
+          action = revealPath(fullPath);
+          break;
+        case "copy-path":
+          action = copyText(fullPath);
+          break;
+        case "copy-relative-path":
+          action = copyText(targetFile.path);
+          break;
+        case "copy-name":
+          action = copyText(basename(targetFile.path));
+          break;
+        case "open-git-history":
+          if (onOpenGitHistory) {
+            onOpenGitHistory(fullPath);
+          } else {
+            window.dispatchEvent(
+              new CustomEvent("voktty:open-git-graph", {
+                detail: { repoRoot, branch: undefined, workspaceEnv: undefined },
+              }),
+            );
+          }
+          return;
+        default:
+          return;
+      }
+      if (action) {
+        void action.catch((error) => {
+          console.error(`Failed to execute diff file action ${actionId}:`, error);
+        });
+      }
+    },
+    [fileMenu, onOpenFile, onOpenGitHistory, repoRoot],
+  );
 
   if (files.length === 0) {
     return (
@@ -248,11 +380,21 @@ export function UnifiedDiffView({
               onStageFile={onStageFile}
               onDiscardFile={onDiscardFile}
               onStageHunk={onStageHunk}
+              onContextMenu={handleFileContextMenu}
               bindRef={bindFileRef}
             />
           ))}
         </div>
       </div>
+      {fileMenu ? (
+        <ExplorerMenu
+          x={fileMenu.x}
+          y={fileMenu.y}
+          items={fileDiffMenuItems(t)}
+          onPick={handleMenuPick}
+          onClose={() => setFileMenu(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -276,6 +418,7 @@ type FileSectionProps = {
   onStageFile?: (id: string) => void;
   onDiscardFile?: (id: string) => void;
   onStageHunk?: (id: string, pos: number) => void;
+  onContextMenu?: (file: UnifiedDiffFileModel, event: ReactMouseEvent) => void;
   bindRef: (path: string, node: HTMLElement | null) => void;
 };
 
@@ -293,6 +436,7 @@ const FileSection = memo(function FileSection({
   onStageFile,
   onDiscardFile,
   onStageHunk,
+  onContextMenu,
   bindRef,
 }: FileSectionProps) {
   const { t } = useTranslation();
@@ -357,6 +501,7 @@ const FileSection = memo(function FileSection({
       } ${focused ? "bg-content/[0.03]" : ""}`}
     >
       <header
+        onContextMenu={(event) => onContextMenu?.(file, event)}
         className={`${
           fileLayout === "stacked" ? "sticky top-0 z-30 backdrop-blur-xl" : ""
         } flex items-center gap-2 bg-content/2 px-3 py-1.5 ${
@@ -447,6 +592,7 @@ function equalFileSectionProps(
     previous.onStageFile === next.onStageFile &&
     previous.onDiscardFile === next.onDiscardFile &&
     previous.onStageHunk === next.onStageHunk &&
+    previous.onContextMenu === next.onContextMenu &&
     previous.bindRef === next.bindRef
   );
 }

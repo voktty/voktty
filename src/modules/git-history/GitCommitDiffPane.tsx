@@ -11,6 +11,8 @@ import {
 } from "@/modules/harness/surfaces/UnifiedDiffView";
 import { useTranslation } from "@/modules/i18n";
 import { Spinner } from "@/components/ui/spinner";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { FolderGitTwoIcon } from "@hugeicons/core-free-icons";
 import { useEffect, useMemo, useState } from "react";
 
 type Props = {
@@ -19,6 +21,12 @@ type Props = {
   shortSha: string;
   subject: string;
   workspaceEnv?: WorkspaceEnv;
+  onOpenCommitHistory?: (args: {
+    repoRoot: string;
+    branch?: string;
+    workspaceEnv?: WorkspaceEnv;
+  }) => void;
+  onOpenFile?: (path: string) => void;
 };
 
 type LoadedDiff = {
@@ -45,11 +53,25 @@ export function GitCommitDiffPane({
   shortSha,
   subject,
   workspaceEnv,
+  onOpenCommitHistory,
+  onOpenFile,
 }: Props) {
   const { t } = useTranslation();
   const [files, setFiles] = useState<GitCommitFileChange[] | null>(null);
   const [diffs, setDiffs] = useState<Map<string, LoadedDiff>>(new Map());
   const [error, setError] = useState<string | null>(null);
+
+  const handleOpenCommitGraph = () => {
+    if (onOpenCommitHistory) {
+      onOpenCommitHistory({ repoRoot, workspaceEnv });
+    } else {
+      window.dispatchEvent(
+        new CustomEvent("voktty:open-git-graph", {
+          detail: { repoRoot, workspaceEnv },
+        }),
+      );
+    }
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -184,6 +206,16 @@ export function GitCommitDiffPane({
         <span className="shrink-0 text-[10.5px] tabular-nums text-muted-foreground/85">
           {t("gitHistory.filesChangedCount", { count: files.length })}
         </span>
+        <button
+          type="button"
+          onClick={handleOpenCommitGraph}
+          title={t("gitHistory.openCommitGraph")}
+          aria-label={t("gitHistory.openCommitGraph")}
+          className="flex shrink-0 items-center gap-1 rounded border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
+        >
+          <HugeiconsIcon icon={FolderGitTwoIcon} size={13} className="text-primary shrink-0" />
+          <span>{t("gitHistory.openCommitGraph")}</span>
+        </button>
       </div>
       <div className="min-h-0 flex-1">
         {files.length === 0 ? (
@@ -196,6 +228,9 @@ export function GitCommitDiffPane({
             totals={totals}
             truncated={anyTruncated}
             initialExpansion="all"
+            repoRoot={repoRoot}
+            onOpenFile={onOpenFile}
+            onOpenGitHistory={() => handleOpenCommitGraph()}
             fill
           />
         )}

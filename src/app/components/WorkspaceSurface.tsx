@@ -40,6 +40,12 @@ export type WorkspaceSurfaceProps = {
   onOpenCommitFile: GitHistoryStackProps["onOpenCommitFile"];
   onOpenCommitDiff: GitHistoryStackProps["onOpenCommitDiff"];
   onGitHistorySearchHandle: GitHistoryStackProps["onSearchHandle"];
+  onOpenCommitHistory?: (args: {
+    repoRoot: string;
+    branch?: string;
+    workspaceEnv?: import("@/modules/workspace").WorkspaceEnv;
+  }) => void;
+  onOpenFile?: (path: string) => void;
   onSetMarkdownView: EditorStackProps["onSetMarkdownView"];
   registerMarkdownHandle?: (
     id: number,
@@ -87,6 +93,8 @@ export function WorkspaceSurface({
   onOpenCommitFile,
   onOpenCommitDiff,
   onGitHistorySearchHandle,
+  onOpenCommitHistory,
+  onOpenFile,
   onSetMarkdownView,
   registerMarkdownHandle,
   onOpenPreview,
@@ -254,6 +262,8 @@ export function WorkspaceSurface({
           tabs={tabs}
           activeId={activeId}
           placements={placements ? placementByTabId : undefined}
+          onOpenCommitHistory={onOpenCommitHistory}
+          onOpenFile={onOpenFile}
         />
       </div>
       <div

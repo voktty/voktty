@@ -1,14 +1,27 @@
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { GitCommitDiffTab, Tab } from "@/modules/tabs";
+import type { WorkspaceEnv } from "@/modules/workspace";
 import { GitCommitDiffPane } from "./GitCommitDiffPane";
 
 type Props = {
   tabs: Tab[];
   activeId: number;
   placements?: ReadonlyMap<number, WorkspacePlacement>;
+  onOpenCommitHistory?: (args: {
+    repoRoot: string;
+    branch?: string;
+    workspaceEnv?: WorkspaceEnv;
+  }) => void;
+  onOpenFile?: (path: string) => void;
 };
 
-export function GitCommitDiffStack({ tabs, activeId, placements }: Props) {
+export function GitCommitDiffStack({
+  tabs,
+  activeId,
+  placements,
+  onOpenCommitHistory,
+  onOpenFile,
+}: Props) {
   const commits = tabs.filter(
     (tab): tab is GitCommitDiffTab => tab.kind === "git-commit" && !tab.cold,
   );
@@ -53,6 +66,8 @@ export function GitCommitDiffStack({ tabs, activeId, placements }: Props) {
                 shortSha={tab.shortSha}
                 subject={tab.subject}
                 workspaceEnv={tab.workspaceEnv}
+                onOpenCommitHistory={onOpenCommitHistory}
+                onOpenFile={onOpenFile}
               />
             </div>
           </div>
