@@ -124,7 +124,7 @@ function global:prompt {
     if ($env:VOKTTY_BLOCKS) {
         $global:LASTEXITCODE = $lec
         $gap = if ($global:__voktty_block_seen) { "`n`n" } else { "`n" }
-        return "$oscD$oscA$osc7$gap$oscB"
+        return "$oscD$osc7$oscA$gap$oscB"
     }
 
     $original = if (Test-Path Function:__voktty_user_prompt) {
@@ -134,5 +134,5 @@ function global:prompt {
     }
 
     $global:LASTEXITCODE = $lec
-    "$oscD$oscA$osc7${original}${oscB}"
+    "$oscD$osc7$oscA${original}${oscB}"
 }

@@ -49,6 +49,7 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
     // next prompt.
     handlers.get(133)?.("D;0");
     handlers.get(7)?.("file://host/home/me/project");
+    handlers.get(133)?.("A");
 
     expect(onCwd).toHaveBeenCalledWith("/home/me/project");
   });
