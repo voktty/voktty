@@ -72,11 +72,18 @@ impl CompanionTransport {
         })
     }
 
-    pub(super) fn seal(&mut self, control: &SessionControl) -> Result<EncryptedFrame, TransportError> {
+    pub(super) fn seal(
+        &mut self,
+        control: &SessionControl,
+    ) -> Result<EncryptedFrame, TransportError> {
         control.validate().map_err(protocol_error)?;
-        let counter = self.send_counter.checked_add(1).ok_or(TransportError::CounterExhausted)?;
+        let counter = self
+            .send_counter
+            .checked_add(1)
+            .ok_or(TransportError::CounterExhausted)?;
         let header = header(self.send_direction, counter);
-        let mut ciphertext = serde_json::to_vec(control).map_err(|_| TransportError::InvalidFrame)?;
+        let mut ciphertext =
+            serde_json::to_vec(control).map_err(|_| TransportError::InvalidFrame)?;
         if ciphertext.len() > MAX_ENCRYPTED_FRAME_BYTES.saturating_sub(TAG_BYTES) {
             return Err(TransportError::MessageTooLarge);
         }
