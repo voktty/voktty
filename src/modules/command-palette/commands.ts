@@ -1,4 +1,4 @@
-import { useAgentHistoryStore } from "@/modules/agent-history";
+import { useAgentHistoryStore } from "@/modules/agent-history/store/agentHistoryStore";
 import { extensionCommands, useExtensionStore } from "@/modules/extensions";
 import type { SearchTarget } from "@/modules/header";
 import { t } from "@/modules/i18n";

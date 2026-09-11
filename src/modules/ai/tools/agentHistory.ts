@@ -1,6 +1,9 @@
 ﻿import { tool } from "ai";
 import { z } from "zod";
-import { fetchMessages, fetchSessions } from "@/modules/agent-history";
+import {
+  fetchMessages,
+  fetchSessions,
+} from "@/modules/agent-history/lib/agentHistoryBridge";
 import type { ToolContext } from "./context";
 
 export function buildAgentHistoryTools(_ctx: ToolContext) {

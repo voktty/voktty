@@ -1,9 +1,9 @@
 ﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAgentHistoryTools } from "./agentHistory";
-import * as agentHistoryModule from "@/modules/agent-history";
+import * as agentHistoryModule from "@/modules/agent-history/lib/agentHistoryBridge";
 import type { ToolContext } from "./context";
 
-vi.mock("@/modules/agent-history", () => ({
+vi.mock("@/modules/agent-history/lib/agentHistoryBridge", () => ({
   fetchSessions: vi.fn(),
   fetchMessages: vi.fn(),
 }));
