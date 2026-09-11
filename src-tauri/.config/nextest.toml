@@ -6,3 +6,8 @@ mcp-transport-fixtures = { max-threads = 1 }
 [[profile.default.overrides]]
 filter = 'test(modules::mcp::http::tests::) | test(modules::mcp::stdio::tests::)'
 test-group = 'mcp-transport-fixtures'
+
+# PowerShell startup can starve behind the full Windows test matrix on shared runners.
+[[profile.default.overrides]]
+filter = 'test(windows_background_process_captures_output)'
+threads-required = "num-test-threads"
