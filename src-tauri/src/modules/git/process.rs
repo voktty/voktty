@@ -428,10 +428,14 @@ fn build_git_command(
     }
 
     let mut cmd = Command::new("git");
-    cmd.args(args);
     if let Some(dir) = cwd.filter(|s| !s.is_empty()) {
-        cmd.current_dir(Path::new(dir));
+        // Let Git enter the repository itself. On Windows, CreateProcess can
+        // reject an otherwise accessible UNC/SMB path when it is supplied as
+        // the child process working directory, so Git never gets a chance to
+        // inspect the repository.
+        cmd.arg("-C").arg(dir);
     }
+    cmd.args(args);
     Ok(cmd)
 }
 
@@ -535,16 +539,13 @@ fn drain<R: Read>(reader: &mut R, prealloc: usize) -> (Vec<u8>, bool) {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(windows)]
     use super::build_git_command;
     use super::{
         parse_git_version, prune_expired_availability_entries, version_meets_minimum, Availability,
         AvailabilityCache, AVAILABILITY_TTL,
     };
-    #[cfg(windows)]
     use crate::modules::workspace::WorkspaceEnv;
     use std::collections::HashMap;
-    #[cfg(windows)]
     use std::ffi::OsString;
     use std::time::{Duration, Instant};
 
@@ -599,6 +600,23 @@ mod tests {
 
         assert!(cache.contains_key("local"));
         assert!(!cache.contains_key("wsl:Ubuntu"));
+    }
+
+    #[test]
+    fn native_git_uses_c_option_instead_of_process_working_directory() {
+        let cmd = build_git_command(
+            &WorkspaceEnv::Local,
+            Some("//server/share/repo"),
+            &[OsString::from("status"), OsString::from("--short")],
+        )
+        .expect("native git command");
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(args, vec!["-C", "//server/share/repo", "status", "--short"]);
+        assert!(cmd.get_current_dir().is_none());
     }
 
     #[cfg(windows)]
