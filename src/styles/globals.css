@@ -120,8 +120,6 @@
     --background-base: #fafafc;
     --color-content: #18191c;
     --color-background-base: #fafafc;
-    --theme-hue: 240;
-    --theme-saturation: 0%;
     --chat-background-opacity: 0.24;
     /* Level 2 Structural tokens */
     --ui-font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -209,12 +207,7 @@
     --background-base: #121214;
     --color-content: #f4f4f6;
     --color-background-base: #121214;
-    --theme-hue: 240;
-    --theme-saturation: 0%;
     --chat-background-opacity: 0.24;
-    --content-lightness: 92%;
-    --background-lightness: 9%;
-
     /* Ambient elevation shadows (Dark) */
     --elevation-2xs: 0 1px rgb(0 0 0 / 0.3);
     --elevation-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
@@ -1126,8 +1119,8 @@ html *::-webkit-scrollbar {
       transparent calc(50% + var(--spread, 25%))
     ),
     linear-gradient(
-      hsl(var(--theme-hue, 240) var(--theme-saturation, 0%) var(--content-lightness, 92%) / 0.4),
-      hsl(var(--theme-hue, 240) var(--theme-saturation, 0%) var(--content-lightness, 92%) / 0.4)
+      color-mix(in srgb, var(--color-content, #f4f4f6) 40%, transparent),
+      color-mix(in srgb, var(--color-content, #f4f4f6) 40%, transparent)
     );
   background-size:
     250% 100%,
