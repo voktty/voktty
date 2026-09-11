@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection, OptionalExtension};
@@ -63,9 +63,73 @@ impl SessionStore {
     }
 }
 
+pub struct SessionStoreState {
+    path: PathBuf,
+    store: OnceLock<Result<SessionStore, String>>,
+}
+
+impl SessionStoreState {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            store: OnceLock::new(),
+        }
+    }
+
+    fn store(&self) -> Result<&SessionStore, String> {
+        self.store
+            .get_or_init(|| {
+                SessionStore::open(self.path.clone()).or_else(|primary| {
+                    SessionStore::open_in_memory().map_err(|fallback| {
+                        format!("Could not open harness database: {primary}; fallback: {fallback}")
+                    })
+                })
+            })
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+
+    pub(crate) fn lock_conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+        self.store()?.lock_conn()
+    }
+}
+
+#[cfg(test)]
+mod lazy_state_tests {
+    use super::SessionStoreState;
+
+    #[test]
+    fn state_constructor_defers_database_creation() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let path = temp.path().join("harness.db");
+        let state = SessionStoreState::new(path.clone());
+
+        assert!(!path.exists());
+        let first = state.store().expect("open harness database") as *const _;
+        let second = state.store().expect("reuse harness database") as *const _;
+        assert!(path.exists());
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn concurrent_access_opens_one_store() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let state = SessionStoreState::new(temp.path().join("harness.db"));
+        let (first, second) = std::thread::scope(|scope| {
+            let first = scope.spawn(|| state.store().map(|store| store as *const _ as usize));
+            let second = scope.spawn(|| state.store().map(|store| store as *const _ as usize));
+            (
+                first.join().expect("first worker").expect("first store"),
+                second.join().expect("second worker").expect("second store"),
+            )
+        });
+        assert_eq!(first, second);
+    }
+}
+
 pub fn init(app: &AppHandle) -> Result<(), String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    let store = SessionStore::open(data_dir.join("monocode.db"))?;
+    let store = SessionStoreState::new(data_dir.join("monocode.db"));
     app.manage(store);
     Ok(())
 }
@@ -146,7 +210,7 @@ pub struct SessionRecord {
 
 #[tauri::command(async)]
 pub fn session_upsert(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     session: SessionUpsert,
 ) -> Result<SessionSummary, String> {
     validate_id(&session.id, "session")?;
@@ -165,13 +229,13 @@ pub fn session_upsert(
         return Err("blocks must be an array".into());
     }
 
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let conn = store.lock_conn()?;
     upsert_session(&conn, &session).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
 pub fn session_list_by_project(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     history: State<'_, AgentHistoryState>,
     cwd: String,
 ) -> Result<Vec<SessionSummary>, String> {
@@ -179,15 +243,19 @@ pub fn session_list_by_project(
         return Err("cwd is required".into());
     }
     let mut sessions = {
-        let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+        let conn = store.lock_conn()?;
         list_by_project(&conn, &cwd).map_err(|e| e.to_string())?
     };
 
     // Wake is an auxiliary index. A failure there must never prevent the
     // Harness from returning its own persisted sessions.
-    let external_sessions =
-        super::external_history::list_external_sessions_for_project(&cwd, &history.store)
-            .unwrap_or_default();
+    let external_sessions = history
+        .store()
+        .ok()
+        .and_then(|store| {
+            super::external_history::list_external_sessions_for_project(&cwd, store).ok()
+        })
+        .unwrap_or_default();
     let mut seen_ids = std::collections::HashSet::new();
     let mut seen_provider_sessions = std::collections::HashSet::new();
     for s in &sessions {
@@ -220,7 +288,7 @@ pub fn session_list_by_project(
 
 #[tauri::command(async)]
 pub fn session_get(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     history: State<'_, AgentHistoryState>,
     session_id: String,
 ) -> Result<Option<SessionRecord>, String> {
@@ -229,22 +297,22 @@ pub fn session_get(
     if session_id.starts_with("ext_") {
         if let Some(record) = super::external_history::get_external_session_record(
             &session_id,
-            &history.store,
-            &history.adapters,
+            history.store()?,
+            history.adapters(),
         )? {
             return Ok(Some(record));
         }
     }
 
     let record = {
-        let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+        let conn = store.lock_conn()?;
         get_session(&conn, &session_id).map_err(|e| e.to_string())?
     };
     if record.is_none() {
         if let Some(ext) = super::external_history::get_external_session_record(
             &session_id,
-            &history.store,
-            &history.adapters,
+            history.store()?,
+            history.adapters(),
         )? {
             return Ok(Some(ext));
         }
@@ -256,7 +324,7 @@ pub fn session_get(
 pub fn external_history_list_projects(
     history: State<'_, AgentHistoryState>,
 ) -> Result<Vec<String>, String> {
-    super::external_history::list_external_projects(&history.store)
+    super::external_history::list_external_projects(history.store()?)
 }
 
 const MAX_SEARCH_SCAN: usize = 400;
@@ -299,39 +367,42 @@ pub struct SessionSearchResult {
 
 #[tauri::command(async)]
 pub fn session_search(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     options: SessionSearchOptions,
 ) -> Result<SessionSearchResult, String> {
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let conn = store.lock_conn()?;
     search_sessions(&conn, &options).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
-pub fn session_delete(store: State<'_, SessionStore>, session_id: String) -> Result<(), String> {
+pub fn session_delete(
+    store: State<'_, SessionStoreState>,
+    session_id: String,
+) -> Result<(), String> {
     validate_id(&session_id, "session")?;
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let conn = store.lock_conn()?;
     delete_session(&conn, &session_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
 pub fn session_set_archived(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     session_id: String,
     archived: bool,
 ) -> Result<(), String> {
     validate_id(&session_id, "session")?;
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let conn = store.lock_conn()?;
     set_archived(&conn, &session_id, archived).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
 pub fn session_set_pinned(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     session_id: String,
     pinned: bool,
 ) -> Result<(), String> {
     validate_id(&session_id, "session")?;
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let conn = store.lock_conn()?;
     set_pinned(&conn, &session_id, pinned).map_err(|e| e.to_string())
 }
 
@@ -344,7 +415,7 @@ pub struct InFlightSession {
 
 #[tauri::command(async)]
 pub fn session_set_in_flight(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     sessions: Vec<InFlightSession>,
 ) -> Result<(), String> {
     for session in &sessions {
@@ -353,7 +424,7 @@ pub fn session_set_in_flight(
             return Err("cwd is required".into());
         }
     }
-    let mut conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let mut conn = store.lock_conn()?;
     replace_in_flight(&mut conn, &sessions).map_err(|e| e.to_string())
 }
 
@@ -361,18 +432,18 @@ pub fn session_set_in_flight(
 /// consume the only copy.
 #[tauri::command(async)]
 pub fn session_list_in_flight(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
 ) -> Result<Vec<InFlightSession>, String> {
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let conn = store.lock_conn()?;
     list_in_flight(&conn).map_err(|e| e.to_string())
 }
 
 /// Read and clear the quit snapshot so a restored window cannot take it twice.
 #[tauri::command(async)]
 pub fn session_take_in_flight(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
 ) -> Result<Vec<InFlightSession>, String> {
-    let mut conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let mut conn = store.lock_conn()?;
     take_in_flight(&mut conn).map_err(|e| e.to_string())
 }
 
@@ -380,7 +451,7 @@ const WORKSPACE_SNAPSHOT_MAX_BYTES: usize = 2_000_000;
 
 #[tauri::command(async)]
 pub fn workspace_set_snapshot(
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     snapshot: Value,
 ) -> Result<(), String> {
     if !snapshot.is_object() {
@@ -390,13 +461,15 @@ pub fn workspace_set_snapshot(
     if json.len() > WORKSPACE_SNAPSHOT_MAX_BYTES {
         return Err("workspace snapshot is too large".into());
     }
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+    let conn = store.lock_conn()?;
     set_workspace_snapshot(&conn, &json).map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
-pub fn workspace_get_snapshot(store: State<'_, SessionStore>) -> Result<Option<Value>, String> {
-    let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
+pub fn workspace_get_snapshot(
+    store: State<'_, SessionStoreState>,
+) -> Result<Option<Value>, String> {
+    let conn = store.lock_conn()?;
     let json = get_workspace_snapshot(&conn).map_err(|e| e.to_string())?;
     match json {
         None => Ok(None),
