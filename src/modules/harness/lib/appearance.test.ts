@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   CHAT_BACKGROUND_OPACITY_DEFAULT,
@@ -6,19 +8,19 @@ import {
   loadChatBackgroundOpacity,
   loadChatBackgroundPath,
   loadChatBackgroundScope,
+  loadTranscriptAnchor,
   loadTranscriptLayout,
   loadTranscriptZen,
   saveChatBackgroundOpacity,
   saveChatBackgroundPath,
   saveChatBackgroundScope,
+  saveTranscriptAnchor,
   saveTranscriptLayout,
   saveTranscriptZen,
-  toggleTranscriptZen,
+  TRANSCRIPT_ANCHOR_DEFAULT,
   TRANSCRIPT_LAYOUT_DEFAULT,
   TRANSCRIPT_ZEN_DEFAULT,
-  loadTranscriptAnchor,
-  saveTranscriptAnchor,
-  TRANSCRIPT_ANCHOR_DEFAULT,
+  toggleTranscriptZen,
 } from "./appearance";
 
 const KEY = "monocode.transcriptLayout";
@@ -27,6 +29,21 @@ const ANCHOR_KEY = "monocode.transcriptAnchor";
 const CHAT_BACKGROUND_PATH_KEY = "monocode.chatBackgroundPath";
 const CHAT_BACKGROUND_OPACITY_KEY = "monocode.chatBackgroundOpacity";
 const CHAT_BACKGROUND_SCOPE_KEY = "monocode.chatBackgroundScope";
+const APPEARANCE_SOURCE = readFileSync(
+  fileURLToPath(new URL("./appearance.ts", import.meta.url)),
+  "utf8",
+);
+const GLOBALS_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../../styles/globals.css", import.meta.url)),
+  "utf8",
+);
+const LEGACY_STRUCTURAL_KEYS = [
+  "monocode.themeHue",
+  "monocode.themeSaturation",
+  "monocode.sidebarOpacity",
+  "monocode.sidebarBlur",
+  "monocode.bodyGlass",
+];
 
 function mockLocalStorage() {
   const data = new Map<string, string>();
@@ -166,8 +183,14 @@ function mockDocumentElementClasses() {
       documentElement: {
         classList: {
           contains: (name: string) => classes.has(name),
-          add: (...names: string[]) => names.forEach((n) => classes.add(n)),
-          remove: (...names: string[]) => names.forEach((n) => classes.delete(n)),
+          add: (...names: string[]) =>
+            names.forEach((name) => {
+              classes.add(name);
+            }),
+          remove: (...names: string[]) =>
+            names.forEach((name) => {
+              classes.delete(name);
+            }),
         },
       },
     },
@@ -188,5 +211,22 @@ describe("isLightScheme", () => {
     classes.delete("light");
     classes.add("dark");
     expect(isLightScheme()).toBe(false);
+  });
+});
+
+describe("Harness appearance authority", () => {
+  it("does not retain structural theme preferences outside Voktty", () => {
+    for (const key of LEGACY_STRUCTURAL_KEYS) {
+      expect(APPEARANCE_SOURCE).not.toContain(key);
+    }
+    expect(APPEARANCE_SOURCE).not.toContain("set_window_background_blur");
+    expect(GLOBALS_SOURCE).not.toContain("--theme-hue");
+    expect(GLOBALS_SOURCE).not.toContain("--theme-saturation");
+  });
+
+  it("preserves content and layout preferences", () => {
+    expect(APPEARANCE_SOURCE).toContain(CHAT_BACKGROUND_PATH_KEY);
+    expect(APPEARANCE_SOURCE).toContain("monocode.sidebarLayout");
+    expect(APPEARANCE_SOURCE).toContain("monocode.projectRailWidth");
   });
 });
