@@ -4256,6 +4256,7 @@ export const en = {
     nextMatch: "Next match (Enter)",
     closeFind: "Close find (Esc)",
     loadingTranscript: "Loading transcript messages...",
+    loadMoreMessages: "Load more messages",
     noMessages: "No messages recorded in this session transcript",
     agent: "Agent",
     resume: "Resume",

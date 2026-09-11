@@ -41,6 +41,14 @@ export interface HistoryMessage {
   thinking?: string;
 }
 
+export interface HistoryMessagePage {
+  items: HistoryMessage[];
+  offset: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+}
+
 export interface SessionFilter {
   search_query?: string;
   agent?: string;

@@ -3972,6 +3972,7 @@ const zhCoveragePatch: TranslationSchema = mergeLocale(zhCoverageBase, {
     nextMatch: "下一个匹配 (Enter)",
     closeFind: "关闭查找 (Esc)",
     loadingTranscript: "正在加载转录消息...",
+    loadMoreMessages: "加载更多消息",
     noMessages: "此会话转录中没有记录消息",
     roleUser: "用户",
     roleTool: "工具调用",

@@ -3739,6 +3739,7 @@ const koI18nBatch22: TranslationSchema = mergeLocale(koI18nBatch21, {
     nextMatch: "다음 경기 (Enter)",
     closeFind: "찾기 닫기 (Esc)",
     loadingTranscript: "대화록 메시지 로드 중...",
+    loadMoreMessages: "메시지 더 불러오기",
     noMessages: "이 세션 대화록에 기록된 메시지가 없습니다",
     roleUser: "사용자",
     roleTool: "⚙️ 도구 호출"

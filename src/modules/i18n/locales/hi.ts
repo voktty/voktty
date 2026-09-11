@@ -3599,6 +3599,7 @@ const hiLocaleBase: TranslationSchema = mergeLocale(en, {
     nextMatch: "अगला मिलान (Enter)",
     closeFind: "खोज बंद करें (Esc)",
     loadingTranscript: "ट्रांसक्रिप्ट संदेश लोड हो रहे हैं...",
+    loadMoreMessages: "और संदेश लोड करें",
     noMessages: "इस सत्र ट्रांसक्रिप्ट में कोई संदेश दर्ज नहीं है",
     roleUser: "👤 उपयोगकर्ता",
     roleTool: "⚙️ टूल आमंत्रण",

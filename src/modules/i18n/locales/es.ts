@@ -4356,6 +4356,7 @@ export const es: TranslationSchema = {
     nextMatch: "Coincidencia siguiente (Enter)",
     closeFind: "Cerrar búsqueda (Esc)",
     loadingTranscript: "Cargando mensajes de la transcripción...",
+    loadMoreMessages: "Cargar más mensajes",
     noMessages: "No hay mensajes registrados en esta transcripción de sesión",
     agent: "Agente",
     resume: "Reanudar",

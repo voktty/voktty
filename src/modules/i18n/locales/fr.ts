@@ -3925,6 +3925,7 @@ const frI18nBatch17: TranslationSchema = mergeLocale(frI18nBatch16, {
     nextMatch: "Match suivant (Entrer)",
     closeFind: "Fermer la recherche (Échap)",
     loadingTranscript: "Chargement des messages de transcription...",
+    loadMoreMessages: "Charger plus de messages",
     noMessages: "Aucun message enregistré dans cette transcription de session",
     roleUser: "👤 Utilisateur",
     roleTool: "⚙️ Invocation d'outil",
