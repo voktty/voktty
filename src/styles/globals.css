@@ -1368,13 +1368,18 @@ html.has-chat-background .chat-pane-background::before,
   opacity: var(--chat-background-opacity);
 }
 
-/* Keep the original content tint in dark mode. In light mode, use the base
-   color at the same opacity so the surface stays translucent without graying. */
-.popover-backdrop {
-  background: color-mix(in srgb, var(--color-content, #f4f4f6) 12%, transparent);
+.voktty-floating-surface {
+  background: var(--surface-popover, var(--popover));
+  border-color: color-mix(
+    in srgb,
+    var(--border-subtle, var(--border)) calc(var(--material-border-opacity, 1) * 100%),
+    transparent
+  );
 }
 
-html.theme-light .popover-backdrop,
-:root:not(.dark) .popover-backdrop {
-  background: color-mix(in srgb, var(--color-background-base, #ffffff) 10%, transparent);
+@supports (backdrop-filter: blur(1px)) {
+  html[data-material="liquid"] .voktty-floating-surface {
+    backdrop-filter: blur(var(--material-chrome-blur))
+      saturate(var(--material-chrome-saturation));
+  }
 }

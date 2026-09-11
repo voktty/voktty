@@ -61,7 +61,7 @@ export function FileMentionPicker({
   return (
     <div
       data-mention-picker
-      className="overflow-hidden rounded-lg border border-zinc-700/60 bg-[#1a1a1e] text-zinc-100 shadow-2xl shadow-black/80"
+      className="voktty-floating-surface overflow-hidden rounded-lg border text-popover-foreground shadow-2xl"
     >
       {files.length === 0 ? (
         <p className="px-3 py-2.5 text-[12px] text-content/50">

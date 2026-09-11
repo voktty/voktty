@@ -49,7 +49,7 @@ export function SkillPicker({
     <div
       data-skill-picker
       aria-label={t("harness.chrome.skills")}
-      className="overflow-hidden rounded-xl border border-zinc-700/60 bg-[#1a1a1e] text-zinc-100 shadow-2xl shadow-black/80"
+      className="voktty-floating-surface overflow-hidden rounded-xl border text-popover-foreground shadow-2xl"
     >
       {creating ? (
         <CreateSkillForm
