@@ -186,9 +186,7 @@ pub fn get_external_session_record(session_id: &str) -> Option<SessionRecord> {
     let transcript = adapter.parse_transcript(&file_ref).ok()?;
 
     let mut blocks = Vec::new();
-    let mut block_idx = 0;
-
-    for msg in transcript.mainline {
+    for (block_idx, msg) in transcript.mainline.into_iter().enumerate() {
         let role = msg.role.as_str();
         let ts = msg.timestamp.unwrap_or(meta.updated_at);
 
@@ -210,7 +208,6 @@ pub fn get_external_session_record(session_id: &str) -> Option<SessionRecord> {
         }
 
         blocks.push(block_obj);
-        block_idx += 1;
     }
 
     let created = if meta.created_at < 1_000_000_000_000 {
