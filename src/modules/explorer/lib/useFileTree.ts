@@ -15,13 +15,13 @@ import {
 } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { parentPath as pathParent } from "./path";
 import {
   isNetworkFilesystemPath,
   listenFsChanged,
   watchAdd,
   watchRemove,
 } from "./watch";
-import { parentPath as pathParent } from "./path";
 
 export type DirEntry = {
   name: string;
@@ -94,6 +94,27 @@ function sameDirListing(a: DirEntry[], b: DirEntry[]): boolean {
   return true;
 }
 
+export function hasDirListingMetadataChanged(
+  previous: DirEntry[],
+  next: DirEntry[],
+): boolean {
+  if (previous.length !== next.length) return true;
+  for (let i = 0; i < previous.length; i++) {
+    const before = previous[i];
+    const after = next[i];
+    if (
+      before.name !== after.name ||
+      before.kind !== after.kind ||
+      before.gitignored !== after.gitignored ||
+      before.size !== after.size ||
+      before.mtime !== after.mtime
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 type Options = {
   /**
    * Changes when the backing local/WSL/SSH workspace changes. The explorer
@@ -157,6 +178,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   const expandedRef = useRef(expanded);
   const nodesRef = useRef(nodes);
   const watchedRef = useRef<Set<string>>(new Set());
+  const listingMetadataRef = useRef<Map<string, DirEntry[]>>(new Map());
 
   useEffect(() => {
     showHiddenRef.current = showHidden;
@@ -192,13 +214,13 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   );
 
   const fetchChildren = useCallback(
-    async (path: string) => {
+    async (path: string): Promise<boolean> => {
       const isWorkspacePath = isPathInWorkspace(workspace, path);
       const requestWorkspace = isWorkspacePath ? workspace : LOCAL_WORKSPACE;
       const requestWorkspaceKey = workspaceScopeKey(requestWorkspace);
       // A space can change before its environment switch finishes. Do not send
       // a request for the new root through the previous server.
-      if (isWorkspacePath && requestWorkspaceKey !== workspaceKey) return;
+      if (isWorkspacePath && requestWorkspaceKey !== workspaceKey) return false;
 
       if (nodesRef.current[path]?.status !== "loaded") {
         setNodes((s) => ({ ...s, [path]: { status: "loading" } }));
@@ -226,15 +248,20 @@ export function useFileTree(rootPath: string | null, options?: Options) {
           isWorkspacePath &&
           activeWorkspaceKeyRef.current !== requestWorkspaceKey
         ) {
-          return;
+          return false;
         }
 
+        const previousMetadata = listingMetadataRef.current.get(path);
+        const metadataChanged = previousMetadata
+          ? hasDirListingMetadataChanged(previousMetadata, entries)
+          : false;
+        listingMetadataRef.current.set(path, entries);
         const prev = nodesRef.current[path];
         if (
           prev?.status === "loaded" &&
           sameDirListing(prev.entries, entries)
         ) {
-          return;
+          return metadataChanged;
         }
 
         const liveDirs = new Set(
@@ -267,6 +294,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         });
 
         if (dead.size > 0) {
+          for (const path of dead) listingMetadataRef.current.delete(path);
           setExpanded((c) => {
             let changed = false;
             const n = new Set(c);
@@ -278,14 +306,16 @@ export function useFileTree(rootPath: string | null, options?: Options) {
             if (watchedRef.current.delete(d)) toUnwatch.push(d);
           watchRemove(toUnwatch, requestWorkspace);
         }
+        return true;
       } catch (e) {
         if (activeWorkspaceKeyRef.current !== requestWorkspaceKey) {
-          return;
+          return false;
         }
         setNodes((s) => ({
           ...s,
           [path]: { status: "error", message: String(e) },
         }));
+        return false;
       }
     },
     [workspace, workspaceKey],
@@ -299,6 +329,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
       setExpanded(new Set());
       setPendingCreate(null);
       setRenaming(null);
+      listingMetadataRef.current.clear();
       return;
     }
     setPendingCreate(null);
@@ -313,6 +344,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
     // re-populating — leaving a valid root with an empty tree when rootPath
     // changes rapidly (e.g. switching folders in quick succession).
     nodesRef.current = {};
+    listingMetadataRef.current.clear();
 
     void (async () => {
       networkRoot =
@@ -385,6 +417,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   useEffect(() => {
     if (!rootPath || workspace.kind !== "local") return;
     let disposed = false;
+    let polling = false;
     let interval: ReturnType<typeof setInterval> | undefined;
 
     void (async () => {
@@ -396,13 +429,24 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         }).catch(() => false));
       if (disposed || !networkRoot) return;
 
-      interval = setInterval(() => {
-        if (document.visibilityState !== "visible") return;
+      interval = setInterval(async () => {
+        if (disposed || polling || document.visibilityState !== "visible") {
+          return;
+        }
+        polling = true;
         const loadedDirectories = Object.entries(nodesRef.current)
           .filter(([, state]) => state.status === "loaded")
           .map(([path]) => path);
-        for (const path of loadedDirectories) void fetchChildren(path);
-        window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
+        try {
+          const changed = (
+            await Promise.all(loadedDirectories.map(fetchChildren))
+          ).some(Boolean);
+          if (!disposed && changed) {
+            window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
+          }
+        } finally {
+          polling = false;
+        }
       }, NETWORK_REFRESH_INTERVAL_MS);
     })();
 
