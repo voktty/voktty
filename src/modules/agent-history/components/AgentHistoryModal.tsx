@@ -94,6 +94,7 @@ export function AgentHistoryModal() {
     setSearchQuery,
     selectedAgent,
     setSelectedAgent,
+    setSelectedProject: setStoreSelectedProject,
     selectSession,
     rescan,
     deleteSession,
@@ -419,6 +420,7 @@ export function AgentHistoryModal() {
                 onClick={() => {
                   setSelectedAgent("all");
                   setSelectedProject(null);
+                  setStoreSelectedProject("");
                   setIsStarredView(false);
                 }}
                 className={cn(
@@ -440,6 +442,7 @@ export function AgentHistoryModal() {
                 onClick={() => {
                   setIsStarredView(true);
                   setSelectedProject(null);
+                  setStoreSelectedProject("");
                 }}
                 className={cn(
                   "flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer",
@@ -481,6 +484,7 @@ export function AgentHistoryModal() {
                         onClick={() => {
                           setSelectedAgent(key);
                           setSelectedProject(null);
+                          setStoreSelectedProject("");
                           setIsStarredView(false);
                         }}
                         className={cn(
@@ -525,6 +529,7 @@ export function AgentHistoryModal() {
                           type="button"
                           onClick={() => {
                             setSelectedProject(proj);
+                            setStoreSelectedProject(proj);
                             setIsStarredView(false);
                           }}
                           className={cn(

@@ -49,6 +49,12 @@ describe("agentHistoryStore", () => {
     expect(useAgentHistoryStore.getState().isOpen).toBe(false);
   });
 
+  it("does not start a full scan when the persisted index is empty", async () => {
+    useAgentHistoryStore.getState().openHistory();
+    await vi.waitFor(() => expect(bridge.fetchSessionPage).toHaveBeenCalledOnce());
+    expect(bridge.rescanHistory).not.toHaveBeenCalled();
+  });
+
   it("loads the first page without reading a transcript", async () => {
     const mockSession: HistorySession = {
       id: "claude_123",
