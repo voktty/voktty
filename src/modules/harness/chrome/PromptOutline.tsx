@@ -16,6 +16,7 @@ import {
   promptBlocks,
   promptLabel,
   promptPreview,
+  NEAR_END_PX,
   RIPPLE_SPAN,
   type OutlineAnchor,
   type OutlineBand,
@@ -58,62 +59,88 @@ export function PromptOutline({
   revealBlock,
 }: Props) {
   const { t } = useTranslation();
+  const prompts = useMemo(() => promptBlocks(blocks), [blocks]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [focusId, setFocusId] = useState<string | null>(null);
+  const [stackBudget, setStackBudget] = useState(BAR_STACK_MAX_PX);
   const [hover, setHover] = useState<Hover | null>(null);
   const [open, setOpen] = useState(false);
-  const [stackBudget, setStackBudget] = useState(BAR_STACK_MAX_PX);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const rail = useRef<HTMLDivElement>(null);
-  const pointerInside = useRef(false);
+  const frame = useRef<number | null>(null);
   const openTimer = useRef<number | null>(null);
-  const prompts = useMemo(() => promptBlocks(blocks), [blocks]);
+  const pointerInside = useRef(false);
+  const lastPromptId = useRef<string | null>(null);
+  lastPromptId.current = prompts[prompts.length - 1]?.id ?? null;
 
-  useEffect(() => {
-    setHover(null);
-    setOpen(false);
-  }, [visible]);
-
-  const updateActive = useCallback(() => {
+  const measure = useCallback(() => {
     const scroller = scope.current?.querySelector<HTMLElement>(SCROLLER);
-    if (!scroller) return;
-    const anchors = [
-      ...scroller.querySelectorAll<HTMLElement>(ANCHOR),
-    ];
-    if (anchors.length === 0) return;
+    if (!scroller) {
+      setActiveId(null);
+      return;
+    }
     const viewport = scroller.getBoundingClientRect();
+    // A hidden tab has zero-size boxes. The rule would then select the last prompt.
+    if (viewport.height === 0) return;
+    setStackBudget(
+      Math.min(
+        BAR_STACK_MAX_PX,
+        Math.floor(viewport.height * BAR_STACK_PANE_SHARE),
+      ),
+    );
+    // Streaming re-measures on every frame, and it almost always lands here:
+    // pinned to the end, where the last prompt wins whatever the anchors say.
+    // Answer from the block list and skip the walk.
     const distanceToEnd =
       scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-    const bands: OutlineAnchor[] = anchors.flatMap((anchor) => {
-      const id = anchor.dataset.promptAnchor;
-      return id ? [{ id, ...promptBand(anchor, viewport) }] : [];
-    });
-    setActiveId(activePromptId(viewport, bands, distanceToEnd));
+    if (distanceToEnd <= NEAR_END_PX) {
+      setActiveId(lastPromptId.current);
+      return;
+    }
+    const anchors: OutlineAnchor[] = [];
+    for (const el of scroller.querySelectorAll<HTMLElement>(ANCHOR)) {
+      const id = el.dataset.promptAnchor;
+      if (id) anchors.push({ id, ...promptBand(el, viewport) });
+    }
+    setActiveId(
+      activePromptId(
+        { top: viewport.top, bottom: viewport.bottom },
+        anchors,
+        distanceToEnd,
+      ),
+    );
   }, [scope]);
 
-  useEffect(() => {
-    updateActive();
-  }, [prompts, updateActive]);
+  const schedule = useCallback(() => {
+    if (frame.current != null) return;
+    frame.current = window.requestAnimationFrame(() => {
+      frame.current = null;
+      measure();
+    });
+  }, [measure]);
 
   useEffect(() => {
     const scroller = scope.current?.querySelector<HTMLElement>(SCROLLER);
     if (!scroller) return;
-    scroller.addEventListener("scroll", updateActive, { passive: true });
-    return () => scroller.removeEventListener("scroll", updateActive);
-  }, [scope, updateActive]);
+    scroller.addEventListener("scroll", schedule, { passive: true });
+    const observer = new ResizeObserver(schedule);
+    observer.observe(scroller);
+    // Content growth moves the anchors without a scroll event.
+    if (scroller.firstElementChild)
+      observer.observe(scroller.firstElementChild);
+    schedule();
+    return () => {
+      scroller.removeEventListener("scroll", schedule);
+      observer.disconnect();
+      if (frame.current != null) {
+        window.cancelAnimationFrame(frame.current);
+        frame.current = null;
+      }
+    };
+  }, [schedule, scope]);
 
   useEffect(() => {
-    const root = scope.current;
-    if (!root) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
-      setStackBudget(
-        Math.min(BAR_STACK_MAX_PX, entry.contentRect.height * BAR_STACK_PANE_SHARE),
-      );
-      updateActive();
-    });
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [scope, updateActive]);
+    schedule();
+  }, [schedule, blocks, visible]);
 
   const cancelOpen = () => {
     if (openTimer.current == null) return;
@@ -259,7 +286,7 @@ export function PromptOutline({
             }}
             onClick={() => jumpTo(prompt.id)}
             style={{ height: BAR_HEIGHT_PX + stack.gap }}
-            className="flex w-full shrink-0 items-center justify-end outline-none"
+            className="flex w-full shrink-0 items-center justify-end outline-none cursor-pointer"
           >
             <span
               aria-hidden="true"
