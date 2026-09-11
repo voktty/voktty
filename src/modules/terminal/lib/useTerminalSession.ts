@@ -1,5 +1,6 @@
 import { ensureMonoFontsLoaded } from "@/lib/fonts";
 import { IS_WINDOWS } from "@/lib/platform";
+import { markFirstTerminalReady } from "@/lib/startupTiming";
 import {
   beginConnectionAttempt,
   disconnectConnection,
@@ -291,6 +292,7 @@ const readyWaiters = new Map<
 function markSessionReady(leafId: number): void {
   if (readyLeaves.has(leafId)) return;
   readyLeaves.add(leafId);
+  markFirstTerminalReady();
   const waiters = readyWaiters.get(leafId);
   if (!waiters) return;
   readyWaiters.delete(leafId);

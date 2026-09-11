@@ -9,6 +9,7 @@ use modules::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::time::Instant;
 #[cfg(target_os = "macos")]
 use tauri::PhysicalPosition;
 use tauri::{Emitter, Manager, WindowEvent};
@@ -164,6 +165,7 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let startup_started = Instant::now();
     #[cfg(windows)]
     {
         let args: Vec<String> = std::env::args().collect();
@@ -228,6 +230,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(move |_app| {
+            if cfg!(debug_assertions) {
+                log::debug!("startup setup reached in {} ms", startup_started.elapsed().as_millis());
+            }
             harness::host::reap_orphaned_harness_processes();
             // TCP bind + descriptor-file write + stale-launcher sweep + CLI
             // launcher prep are all blocking I/O; do them off the setup()

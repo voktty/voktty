@@ -4,11 +4,14 @@ import "./styles/globals.css";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import ReactDOM from "react-dom/client";
-import App from "./app/App";
-import { initLaunchRequests } from "./lib/launchRequest";
-import { IS_LINUX, IS_MAC, IS_WINDOWS } from "./lib/platform";
-import { applyDocumentLocale, readFastLanguage } from "./modules/i18n";
+import App from "@/app/App";
+import { StartupCommitMarker } from "@/app/StartupCommitMarker";
+import { initLaunchRequests } from "@/lib/launchRequest";
+import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
+import { markStartupPhase } from "@/lib/startupTiming";
+import { applyDocumentLocale, readFastLanguage } from "@/modules/i18n";
 
+markStartupPhase("js-start");
 applyDocumentLocale(readFastLanguage());
 
 document.documentElement.dataset.platform = IS_WINDOWS
@@ -80,8 +83,12 @@ await Promise.all([
   initLaunchRequests(),
 ]);
 
+markStartupPhase("bootstrap-complete");
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <App />,
+  <>
+    <App />
+    <StartupCommitMarker />
+  </>,
 );
 
 // Window starts hidden (per tauri.conf.json) so users never see a transparent
@@ -90,6 +97,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 const showWindow = () => {
   getCurrentWindow()
     .show()
+    .then(() => markStartupPhase("window-visible"))
     .catch((e) => console.error("window.show failed:", e));
 };
 setTimeout(showWindow, 50);

@@ -1,6 +1,6 @@
 [
   {
-    "name": "main window startup JS (eager modulepreload)",
+    "name": "selected main-window JS diagnostic",
     "path": [
       "dist/assets/main-*.js",
       "dist/assets/react-*.js",
