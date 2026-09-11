@@ -2494,7 +2494,7 @@ fn remote_mount_shaping_is_stable_across_sync_states() {
     let after = wake_core::adapters::remote::create_remote_adapters(&templates, "h", synced.path());
     for (a, b) in before.iter().zip(&after) {
         assert_eq!(a.agent(), b.agent());
-        let rel = |adapter: &Box<dyn AgentAdapter>, root: &std::path::Path| -> Vec<PathBuf> {
+        let rel = |adapter: &dyn AgentAdapter, root: &std::path::Path| -> Vec<PathBuf> {
             adapter
                 .data_roots()
                 .iter()
@@ -2506,8 +2506,8 @@ fn remote_mount_shaping_is_stable_across_sync_states() {
                 .collect()
         };
         assert_eq!(
-            rel(a, empty.path()),
-            rel(b, synced.path()),
+            rel(a.as_ref(), empty.path()),
+            rel(b.as_ref(), synced.path()),
             "{:?} 的 mount 整形随缓存落盘而漂移",
             a.agent()
         );
