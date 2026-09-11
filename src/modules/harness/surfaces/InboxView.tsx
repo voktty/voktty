@@ -1658,7 +1658,7 @@ function InboxProjectPicker({
         <div
           ref={menu}
           role="listbox"
-          className="absolute left-0 top-full z-30 mt-1 max-h-64 min-w-full max-w-64 overflow-y-auto rounded-lg border border-content/10 bg-content/10 p-1 shadow-xl backdrop-blur-xl outline-none"
+          className="voktty-floating-surface absolute left-0 top-full z-30 mt-1 max-h-64 min-w-full max-w-64 overflow-y-auto rounded-lg border p-1 text-popover-foreground shadow-xl outline-none"
         >
           {projects.map((project) => {
             const active = selected
