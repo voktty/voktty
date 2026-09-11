@@ -81,6 +81,13 @@ function formatRelativeTime(timestampSeconds: number): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function isAgentMatch(sessionAgent: string, targetAgent: string) {
+  if (targetAgent === "all") return true;
+  const session = sessionAgent.toLowerCase();
+  const target = targetAgent.toLowerCase();
+  return session === target || ((target === "claude" || target === "claude-code") && (session === "claude" || session === "claude-code"));
+}
+
 export function AgentHistoryModal() {
   const {
     isOpen,
@@ -137,15 +144,6 @@ export function AgentHistoryModal() {
   const { position, dragHandleProps, resetPosition, setPosition } = useDraggableModal({
     resetOnClose: true,
   });
-
-  const isAgentMatch = (sessionAgent: string, targetAgent: string) => {
-    if (targetAgent === "all") return true;
-    const sNorm = sessionAgent.toLowerCase();
-    const tNorm = targetAgent.toLowerCase();
-    if (sNorm === tNorm) return true;
-    if ((tNorm === "claude" || tNorm === "claude-code") && (sNorm === "claude" || sNorm === "claude-code")) return true;
-    return false;
-  };
 
   // Calculate agent & project counts
   const agentCounts = useMemo(() => {
@@ -329,9 +327,9 @@ export function AgentHistoryModal() {
           {/* Brand & Traffic Dots */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 mr-2">
-              <span className="size-3 rounded-full bg-rose-500/80 inline-block hover:opacity-80 cursor-pointer" onClick={closeHistory} />
-              <span className="size-3 rounded-full bg-amber-500/80 inline-block hover:opacity-80 cursor-pointer" onClick={() => resetPosition()} />
-              <span className="size-3 rounded-full bg-emerald-500/80 inline-block hover:opacity-80 cursor-pointer" onClick={toggleMaximize} />
+              <button type="button" aria-label={t("agentHistory.closeEsc")} onClick={closeHistory} className="size-3 rounded-full bg-rose-500/80 hover:opacity-80 cursor-pointer" />
+              <button type="button" aria-label={t("notesBoard.resetPosition")} onClick={() => resetPosition()} className="size-3 rounded-full bg-amber-500/80 hover:opacity-80 cursor-pointer" />
+              <button type="button" aria-label={t(isMaximized ? "notesBoard.restore" : "notesBoard.maximize")} onClick={toggleMaximize} className="size-3 rounded-full bg-emerald-500/80 hover:opacity-80 cursor-pointer" />
             </div>
             <span className="text-xs font-semibold tracking-wide text-foreground flex items-center gap-1.5">
               <span className="font-bold text-[13px]">{t("agentHistory.productName")}</span>
@@ -351,6 +349,7 @@ export function AgentHistoryModal() {
               size="icon"
               variant="ghost"
               onClick={toggleMaximize}
+              aria-label={t(isMaximized ? "notesBoard.restore" : "notesBoard.maximize")}
               className="size-6 text-muted-foreground hover:text-foreground cursor-pointer rounded-md"
             >
               <HugeiconsIcon icon={isMaximized ? Copy01Icon : SquareIcon} size={12} />
@@ -361,6 +360,7 @@ export function AgentHistoryModal() {
               size="icon"
               variant="ghost"
               onClick={closeHistory}
+              aria-label={t("agentHistory.closeEsc")}
               className="size-6 text-muted-foreground hover:text-destructive cursor-pointer rounded-md"
             >
               <HugeiconsIcon icon={Cancel01Icon} size={13} />
@@ -602,7 +602,7 @@ export function AgentHistoryModal() {
                 {sessionVirtualizer.getVirtualItems().map((virtualRow) => {
                   const s = filteredSessions[virtualRow.index];
                   if (!s) return null;
-                  const brand = AGENT_BRANDS[s.agent] || AGENT_BRANDS["claude"];
+                  const brand = AGENT_BRANDS[s.agent] || AGENT_BRANDS.claude;
                   const isActive = activeSessionId === s.id;
 
                   return (
@@ -615,10 +615,12 @@ export function AgentHistoryModal() {
                     >
                     <ContextMenu>
                       <ContextMenuTrigger asChild>
-                        <div
+                        <button
+                          type="button"
                           onClick={() => void selectSession(s.id)}
+                          aria-pressed={isActive}
                           className={cn(
-                            "group flex cursor-pointer flex-col gap-1 rounded-xl border p-2.5 transition-all text-xs select-none",
+                            "group flex w-full cursor-pointer flex-col gap-1 rounded-xl border p-2.5 text-left transition-all text-xs select-none",
                             isActive
                               ? "border-border/90 bg-[#222226] shadow-sm"
                               : "border-transparent bg-[#1a1a1d]/60 hover:border-border/50 hover:bg-[#1f1f23]",
@@ -637,7 +639,7 @@ export function AgentHistoryModal() {
                               {formatRelativeTime(s.updated_at)}
                             </span>
                           </div>
-                        </div>
+                        </button>
                       </ContextMenuTrigger>
 
                       <ContextMenuContent className="w-56 p-1 text-xs">
@@ -800,6 +802,7 @@ export function AgentHistoryModal() {
                       size="icon"
                       variant="ghost"
                       onClick={handleFindPrev}
+                      aria-label={t("agentHistory.previousMatch")}
                       className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       <HugeiconsIcon icon={ArrowUp01Icon} size={12} />
@@ -808,6 +811,7 @@ export function AgentHistoryModal() {
                       size="icon"
                       variant="ghost"
                       onClick={handleFindNext}
+                      aria-label={t("agentHistory.nextMatch")}
                       className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       <HugeiconsIcon icon={ArrowDown01Icon} size={12} />
@@ -816,6 +820,7 @@ export function AgentHistoryModal() {
                       size="icon"
                       variant="ghost"
                       onClick={closeFind}
+                      aria-label={t("agentHistory.closeFind")}
                       className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       <HugeiconsIcon icon={Cancel01Icon} size={12} />
@@ -1014,11 +1019,15 @@ export function AgentHistoryModal() {
         {isPaletteOpen && (
           <div
             className="fixed inset-0 z-60 flex items-start justify-center pt-24 bg-black/50 backdrop-blur-xs animate-in fade-in-0 duration-100"
-            onClick={() => setIsPaletteOpen(false)}
           >
+            <button
+              type="button"
+              aria-label={t("agentHistory.closeEsc")}
+              onClick={() => setIsPaletteOpen(false)}
+              className="absolute inset-0 cursor-default"
+            />
             <div
-              className="w-full max-w-xl overflow-hidden rounded-2xl border border-border/80 bg-[#18181b] shadow-2xl animate-in zoom-in-95 duration-100"
-              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-border/80 bg-[#18181b] shadow-2xl animate-in zoom-in-95 duration-100"
             >
               {/* Search Bar */}
               <div className="flex items-center border-b border-border/60 px-3.5 py-3">
@@ -1050,6 +1059,7 @@ export function AgentHistoryModal() {
                   <button
                     type="button"
                     onClick={() => setPaletteQuery("")}
+                    aria-label={t("agentHistory.clearSearch")}
                     className="text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     <HugeiconsIcon icon={Cancel01Icon} size={14} />
@@ -1065,18 +1075,19 @@ export function AgentHistoryModal() {
                   </div>
                 ) : (
                   paletteResults.map((s, idx) => {
-                    const brand = AGENT_BRANDS[s.agent] || AGENT_BRANDS["claude"];
+                    const brand = AGENT_BRANDS[s.agent] || AGENT_BRANDS.claude;
                     const isSelected = idx === paletteSelectedIndex;
 
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={s.id}
                         onClick={() => {
                           void selectSession(s.id);
                           setIsPaletteOpen(false);
                         }}
                         className={cn(
-                          "flex cursor-pointer flex-col gap-1 rounded-xl p-2.5 text-xs transition-colors",
+                          "flex w-full cursor-pointer flex-col gap-1 rounded-xl p-2.5 text-left text-xs transition-colors",
                           isSelected ? "bg-[#27272b] text-foreground" : "hover:bg-[#202024] text-[#dcdce0]",
                         )}
                       >
@@ -1089,7 +1100,7 @@ export function AgentHistoryModal() {
                             {s.project_name} · {formatRelativeTime(s.updated_at)}
                           </span>
                         </div>
-                      </div>
+                      </button>
                     );
                   })
                 )}
