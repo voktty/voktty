@@ -2907,6 +2907,7 @@ export const en = {
       blockTerminal: "Blocks terminal",
       privateTerminal: "Private terminal",
       commandHistory: "Command history",
+      connections: "Connections",
       ssh: "SSH connection",
       serial: "Serial port",
       rdp: "Remote desktop",
