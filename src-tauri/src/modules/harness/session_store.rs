@@ -179,7 +179,7 @@ pub fn session_list_by_project(
     let mut sessions = list_by_project(&conn, &cwd).map_err(|e| e.to_string())?;
 
     // Integrate fast external CLI sessions (Codex, Antigravity, Claude)
-    let external_sessions = super::external_history::list_external_sessions_for_project(&cwd);
+    let external_sessions = super::external_history::list_external_sessions_for_project(&cwd)?;
     let mut seen_ids = std::collections::HashSet::new();
     for s in &sessions {
         seen_ids.insert(s.id.clone());
@@ -210,7 +210,7 @@ pub fn session_get(
     validate_id(&session_id, "session")?;
 
     if session_id.starts_with("ext_") {
-        if let Some(record) = super::external_history::get_external_session_record(&session_id) {
+        if let Some(record) = super::external_history::get_external_session_record(&session_id)? {
             return Ok(Some(record));
         }
     }
@@ -218,7 +218,7 @@ pub fn session_get(
     let conn = store.conn.lock().map_err(|_| "Session store is locked")?;
     let record = get_session(&conn, &session_id).map_err(|e| e.to_string())?;
     if record.is_none() {
-        if let Some(ext) = super::external_history::get_external_session_record(&session_id) {
+        if let Some(ext) = super::external_history::get_external_session_record(&session_id)? {
             return Ok(Some(ext));
         }
     }
@@ -227,7 +227,7 @@ pub fn session_get(
 
 #[tauri::command(async)]
 pub fn external_history_list_projects() -> Result<Vec<String>, String> {
-    Ok(super::external_history::list_external_projects())
+    super::external_history::list_external_projects()
 }
 
 const MAX_SEARCH_SCAN: usize = 400;
