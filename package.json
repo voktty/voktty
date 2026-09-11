@@ -31,6 +31,7 @@
     "format:check": "biome format ./src",
     "analyze:bundle": "ANALYZE=true vite build",
     "analyze:eager": "node scripts/eager-graph.mjs src/main.tsx && node scripts/eager-graph.mjs src/settings/main.tsx",
+    "check:startup": "node scripts/startup-budget.mjs",
     "size": "size-limit",
     "knip": "knip"
   },

@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "html": "index.html",
+      "maxResources": 175,
+      "maxGzipBytes": 1950000,
+      "forbiddenAssets": ["streamdown-", "codemirror-"]
+    },
+    {
+      "html": "settings.html",
+      "maxResources": 50,
+      "maxGzipBytes": 1150000,
+      "forbiddenAssets": ["streamdown-", "codemirror-"]
+    }
+  ]
+}
