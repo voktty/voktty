@@ -101,6 +101,15 @@ const NEAR_BOTTOM_PX = 16;
 const INITIAL_TURNS = 20;
 const TURN_PAGE_SIZE = 20;
 
+export const USER_MESSAGE_SURFACE_CLASS =
+  "min-w-0 border border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 text-card-foreground shadow-lg transition-colors hover:border-input";
+export const COMMAND_SUMMARY_SURFACE_CLASS =
+  "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-active-item)] px-2 py-0.5 font-mono text-[11.5px]";
+export const APPROVAL_ALLOW_CLASS =
+  "rounded-md bg-primary px-3 py-1 font-sans text-[11.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90";
+export const APPROVAL_DENY_CLASS =
+  "rounded-md border border-[var(--border-subtle)] bg-[var(--surface-active-item)] px-3 py-1 font-sans text-[11.5px] font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
+
 type Props = {
   blocks: Block[];
   busy?: boolean;
@@ -1000,7 +1009,7 @@ function UserMessageBlock({
       className={chat ? "flex justify-end pt-2 pr-4 pb-4 pl-14" : "p-1.5 pb-3"}
     >
       <div
-        className={`min-w-0 border border-zinc-700/60 bg-[#222228] px-4 shadow-lg shadow-black/30 transition-colors hover:border-zinc-600/80 ${
+        className={`${USER_MESSAGE_SURFACE_CLASS} ${
           chat
             ? `w-fit max-w-xl ${singleLine ? "rounded-full py-2" : "rounded-[14px] py-3"}`
             : "w-full rounded-[14px] py-3"
@@ -1030,7 +1039,7 @@ function UserMessageBlock({
         {text ? (
           <pre
             ref={textRef}
-            className={`min-w-0 whitespace-pre-wrap break-words font-sans text-[13.5px] leading-relaxed font-normal text-zinc-100 ${
+            className={`min-w-0 whitespace-pre-wrap break-words font-sans text-[13.5px] leading-relaxed font-normal text-card-foreground ${
               expanded ? "" : "line-clamp-6"
             }`}
           >
@@ -2175,12 +2184,12 @@ function ToolCallSummary({
     );
     return (
       <span
-        className={`inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md bg-zinc-800/80 px-2 py-0.5 font-mono text-[11.5px] border border-zinc-700/50 ${
-          failed ? "text-red-400 border-red-500/30" : "text-zinc-300"
+        className={`${COMMAND_SUMMARY_SURFACE_CLASS} ${
+          failed ? "border-red-500/30 text-red-400" : "text-content/75"
         }`}
         title={cleanLabel}
       >
-        <span className="text-zinc-500 select-none font-semibold">&gt;_</span>
+        <span className="select-none font-semibold text-content/40">&gt;_</span>
         <span className="truncate">{cleanLabel}</span>
       </span>
     );
@@ -2305,14 +2314,14 @@ function ApprovalControls({
     <div className="mt-2 flex items-center gap-2">
       <button
         type="button"
-        className="rounded-md bg-white text-zinc-900 px-3 py-1 font-sans text-[11.5px] font-medium hover:bg-zinc-200 transition-colors shadow-sm"
+        className={APPROVAL_ALLOW_CLASS}
         onClick={() => onApproval?.(approval.requestId, "allow")}
       >
         {t("harness.chrome.allow")}
       </button>
       <button
         type="button"
-        className="rounded-md bg-white/10 text-zinc-300 border border-white/10 px-3 py-1 font-sans text-[11.5px] font-medium hover:bg-white/15 hover:text-white transition-colors"
+        className={APPROVAL_DENY_CLASS}
         onClick={() => onApproval?.(approval.requestId, "deny")}
       >
         {t("harness.chrome.deny")}
