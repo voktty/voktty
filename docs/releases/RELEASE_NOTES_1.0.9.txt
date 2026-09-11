@@ -1,0 +1,43 @@
+Voktty 1.0.9
+
+This release substantially expands Voktty's agent workspace, Git tooling, mobile-ready UI, and localization.
+
+Highlights
+
+- New Notes and Kanban workspace hub with persistent boards, agent handoff, reactive task states, observation controls, Git-friendly vault synchronization, and MCP tools.
+- Expanded Agent Harness workflow: project switching, session folders, filtered inboxes, multi-select and bulk-close actions, project and global chat backgrounds, and a tree view for session changes.
+- Added prompt-outline navigation and an "Open all changes" action that sends session changes directly to the Git Changes panel.
+- Added agent session broadcasting, allowing one message to be sent to every open agent session.
+- Improved CLI support and binary discovery, including Gemini and Antigravity integration.
+
+Git and code review
+
+- Added the modular Git Workbench with repository navigation and operations.
+- Added native GitHub pull request support, including a pull request view, commit context menus, split diffs, and live review integration.
+- Git diff and review surfaces now refresh when files change on disk.
+- Added per-session isolated Git worktrees for agent tasks.
+
+Browser and developer tools
+
+- Added browser-agent tools, a browser CLI, visual inspection improvements, and a network log for previews.
+- Added a per-session network proxy toggle with hostname allowlisting.
+- Added control-plane credentials and orchestration commands for harness sessions.
+
+Interface and usability
+
+- Reworked tabs with improved sizing, reliable split-view actions, an updated new-tab menu, compact persistent icons, and overflow-aware collapse behavior.
+- Refined Fluent UI density across menus, popovers, cards, dropdowns, and context menus.
+- Improved browser start-page presentation and Git diff line statistics.
+- Fixed several terminal focus, session lifecycle, split-view, and tab-header layout issues.
+
+Localization
+
+- Moved the remaining visible Harness, navigation, composer, file-tree, diff, theme, and prompt-outline copy into the localization system.
+- English and Spanish now provide the complete UI copy for this scope; other locales fall back safely to English where needed.
+
+Performance, reliability, and maintenance
+
+- Improved Harness rendering performance for long transcripts, collapsed activity, file trees, icons, and pending approvals.
+- Added IME safeguards and improved Windows CI launcher coverage.
+- Migrated AI providers to AI SDK v7.
+- Refreshed production, development, GitHub Actions, and install-action dependencies.
