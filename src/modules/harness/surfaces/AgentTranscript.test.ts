@@ -2,7 +2,13 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Block } from "../lib/session";
-import { AgentTranscript } from "./AgentTranscript";
+import {
+  AgentTranscript,
+  APPROVAL_ALLOW_CLASS,
+  APPROVAL_DENY_CLASS,
+  COMMAND_SUMMARY_SURFACE_CLASS,
+  USER_MESSAGE_SURFACE_CLASS,
+} from "./AgentTranscript";
 
 function tool(id: string, approval?: Block["approval"]): Block {
   return {
@@ -83,5 +89,27 @@ describe("AgentTranscript collapsed work", () => {
     expect(markup.indexOf("Changed files")).toBeLessThan(
       markup.indexOf('aria-label="Worked for 1s"'),
     );
+  });
+});
+
+describe("AgentTranscript theme contract", () => {
+  const STRUCTURAL_CLASSES = [
+    USER_MESSAGE_SURFACE_CLASS,
+    COMMAND_SUMMARY_SURFACE_CLASS,
+    APPROVAL_ALLOW_CLASS,
+    APPROVAL_DENY_CLASS,
+  ];
+
+  it("uses Voktty semantic tokens for transcript surfaces and actions", () => {
+    expect(USER_MESSAGE_SURFACE_CLASS).toContain("--surface-card");
+    expect(COMMAND_SUMMARY_SURFACE_CLASS).toContain("--surface-active-item");
+    expect(APPROVAL_ALLOW_CLASS).toContain("bg-primary");
+    expect(APPROVAL_DENY_CLASS).toContain("--surface-active-item");
+
+    for (const classes of STRUCTURAL_CLASSES) {
+      expect(classes).not.toMatch(
+        /(?:bg|border|text|shadow)-(?:zinc|white|black)|#[0-9a-f]{3,8}/i,
+      );
+    }
   });
 });
