@@ -5,6 +5,7 @@ import {
   Keyboard,
   Palette,
   SlidersHorizontal,
+  Sparkles,
   type IconComponent,
 } from "./icons";
 import { useTranslation } from "@/modules/i18n";
@@ -19,6 +20,7 @@ const SECTION_ICONS: Record<SettingsSectionId, IconComponent> = {
   appearance: Palette,
   keybindings: Keyboard,
   providers: Bot,
+  skills: Sparkles,
   archive: Archive,
 };
 
@@ -37,6 +39,7 @@ export function SettingsNav({ section, onSelect, onClose }: Props) {
     appearance: t("harness.settings.appearance"),
     keybindings: t("harness.chrome.settingsKeybindings"),
     providers: t("harness.settings.providers"),
+    skills: t("harness.settings.skills"),
     archive: t("harness.chrome.settingsArchive"),
   };
 
