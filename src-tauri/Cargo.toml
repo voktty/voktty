@@ -72,7 +72,7 @@ voktty-remote-protocol = { path = "crates/voktty-remote-protocol" }
 voktty-tool-policy = { path = "crates/voktty-tool-policy" }
 voktty-workspace-edit = { path = "crates/voktty-workspace-edit" }
 wake-core = { path = "crates/wake-core" }
-dirs = "6"
+dirs = "7"
 log = "0.4"
 ignore = "0.4"
 grep-regex = "0.1"
