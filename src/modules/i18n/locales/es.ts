@@ -5496,4 +5496,11 @@ export const es: TranslationSchema = {
     previewLabel: "Previsualizar {type}: {label}",
     closePreview: "Cerrar previsualización",
   },
+  notifications: {
+    title: "Voktty",
+    questionPrompt: "{harness} tiene una pregunta para ti",
+    approvalNeeded: "{harness} necesita tu aprobación",
+    approveTool: "Aprobar: {what}",
+    harnessFinished: "{harness} ha finalizado",
+  },
 };
