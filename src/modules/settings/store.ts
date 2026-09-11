@@ -182,6 +182,7 @@ export type Preferences = {
   aiHealthRevision: number | null;
   aiHealthCheckedAt: number | null;
   defaultModelId: ModelId;
+  harnessProviderEnabled: boolean;
   editorTheme: EditorThemePref;
   remoteFilesystemBackend: RemoteFilesystemBackend;
   editorFontSize: number;
@@ -318,6 +319,7 @@ const KEY_AI_CONFIG_REVISION = "aiConfigRevision";
 const KEY_AI_HEALTH_REVISION = "aiHealthRevision";
 const KEY_AI_HEALTH_CHECKED_AT = "aiHealthCheckedAt";
 const KEY_DEFAULT_MODEL = "defaultModelId";
+const KEY_HARNESS_PROVIDER_ENABLED = "harnessProviderEnabled";
 const KEY_EDITOR_THEME = "editorTheme";
 const KEY_REMOTE_FS_BACKEND = "remoteFilesystemBackend";
 const KEY_EDITOR_FONT_SIZE = "editorFontSize";
@@ -468,6 +470,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   aiHealthRevision: null,
   aiHealthCheckedAt: null,
   defaultModelId: DEFAULT_MODEL_ID,
+  harnessProviderEnabled: false,
   editorTheme: EDITOR_THEME_AUTO,
   remoteFilesystemBackend: "helper",
   editorFontSize: EDITOR_FONT_SIZE_DEFAULT,
@@ -664,6 +667,9 @@ export async function loadPreferences(): Promise<Preferences> {
         ? stored
         : DEFAULT_PREFERENCES.defaultModelId;
     })(),
+    harnessProviderEnabled:
+      get<boolean>(KEY_HARNESS_PROVIDER_ENABLED) ??
+      DEFAULT_PREFERENCES.harnessProviderEnabled,
     editorTheme: ((): EditorThemePref => {
       const stored = get<string>(KEY_EDITOR_THEME);
       if (stored === EDITOR_THEME_AUTO || isEditorThemeId(stored))
@@ -1030,6 +1036,10 @@ export async function setBackgroundBlur(value: number): Promise<void> {
 
 export async function setDefaultModel(value: ModelId): Promise<void> {
   await writeAiConfigurationPref(KEY_DEFAULT_MODEL, value);
+}
+
+export async function setHarnessProviderEnabled(value: boolean): Promise<void> {
+  await writeAiConfigurationPref(KEY_HARNESS_PROVIDER_ENABLED, value);
 }
 
 export async function setAiEnabled(value: boolean): Promise<void> {
@@ -1482,6 +1492,7 @@ export async function onPreferencesChange(
     [KEY_AI_HEALTH_REVISION]: "aiHealthRevision",
     [KEY_AI_HEALTH_CHECKED_AT]: "aiHealthCheckedAt",
     [KEY_DEFAULT_MODEL]: "defaultModelId",
+    [KEY_HARNESS_PROVIDER_ENABLED]: "harnessProviderEnabled",
     [KEY_EDITOR_THEME]: "editorTheme",
     [KEY_REMOTE_FS_BACKEND]: "remoteFilesystemBackend",
     [KEY_EDITOR_FONT_SIZE]: "editorFontSize",
@@ -1625,6 +1636,7 @@ export const PREF_KEY_TO_STORAGE_KEY: Record<PrefKey, string> = {
   aiHealthRevision: KEY_AI_HEALTH_REVISION,
   aiHealthCheckedAt: KEY_AI_HEALTH_CHECKED_AT,
   defaultModelId: KEY_DEFAULT_MODEL,
+  harnessProviderEnabled: KEY_HARNESS_PROVIDER_ENABLED,
   editorTheme: KEY_EDITOR_THEME,
   remoteFilesystemBackend: KEY_REMOTE_FS_BACKEND,
   editorFontSize: KEY_EDITOR_FONT_SIZE,

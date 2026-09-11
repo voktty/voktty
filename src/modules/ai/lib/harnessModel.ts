@@ -1,7 +1,11 @@
 import type { LanguageModel } from "ai";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { t } from "@/modules/i18n";
+import { runClaudeTextPrompt } from "@/modules/harness/lib/harness/claudeText";
+import { runCodexTextPrompt } from "@/modules/harness/lib/harness/codexText";
+import { runCursorTextPrompt } from "@/modules/harness/lib/harness/cursorText";
+import { runGrokTextPrompt } from "@/modules/harness/lib/harness/grokText";
+import { runOpenCodeTextPrompt } from "@/modules/harness/lib/harness/opencodeText";
+import { useChatStore } from "@/modules/ai/store/chatStore";
 
 export function createHarnessModel(modelId: string): LanguageModel {
   return new HarnessLanguageModel(modelId) as unknown as LanguageModel;
@@ -18,20 +22,48 @@ export class HarnessLanguageModel {
     this.modelId = modelId;
   }
 
-  private resolveAgentBinary(): { binary: string; labelKey: string } {
+  private resolveAgent(): {
+    binary: string;
+    labelKey: string;
+    run: (input: {
+      cwd: string;
+      prompt: string;
+      timeoutMs: number;
+    }) => Promise<string>;
+  } {
     if (this.modelId.includes("codex")) {
-      return { binary: "codex", labelKey: "agentHistory.agents.codex" };
+      return {
+        binary: "codex",
+        labelKey: "agentHistory.agents.codex",
+        run: runCodexTextPrompt,
+      };
     }
     if (this.modelId.includes("agy") || this.modelId.includes("cursor")) {
-      return { binary: "cursor", labelKey: "agentHistory.agents.cursor" };
+      return {
+        binary: "cursor-agent",
+        labelKey: "agentHistory.agents.cursor",
+        run: runCursorTextPrompt,
+      };
     }
     if (this.modelId.includes("opencode")) {
-      return { binary: "opencode", labelKey: "agentHistory.agents.opencode" };
+      return {
+        binary: "opencode",
+        labelKey: "agentHistory.agents.opencode",
+        run: runOpenCodeTextPrompt,
+      };
     }
     if (this.modelId.includes("grok")) {
-      return { binary: "grok", labelKey: "agentHistory.agents.grok" };
+      return {
+        binary: "grok",
+        labelKey: "agentHistory.agents.grok",
+        run: runGrokTextPrompt,
+      };
     }
-    return { binary: "claude", labelKey: "agentHistory.agents.claude" };
+    return {
+      binary: "claude",
+      labelKey: "agentHistory.agents.claude",
+      run: runClaudeTextPrompt,
+    };
   }
 
   private formatPrompt(prompt: any[]): string {
@@ -44,7 +76,9 @@ export class HarnessLanguageModel {
         text = msg.content;
       } else if (Array.isArray(msg.content)) {
         text = msg.content
-          .map((part: any) => (typeof part === "string" ? part : part?.text ?? ""))
+          .map((part: any) =>
+            typeof part === "string" ? part : (part?.text ?? ""),
+          )
           .filter(Boolean)
           .join("\n");
       }
@@ -84,72 +118,23 @@ export class HarnessLanguageModel {
     stream: ReadableStream<any>;
     rawCall: { rawPrompt: unknown; rawSettings: Record<string, unknown> };
   }> {
-    const { binary, labelKey } = this.resolveAgentBinary();
+    const { binary, labelKey, run } = this.resolveAgent();
     const formattedPrompt = this.formatPrompt(options.prompt);
-    const sessionId = `harness-chat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const live = useChatStore.getState().live;
+    const cwd = live.getCwd() ?? live.getWorkspaceRoot();
 
     const stream = new ReadableStream({
       async start(controller) {
         controller.enqueue({ type: "stream-start", warnings: [] });
-
-        let unlistenLine: UnlistenFn | null = null;
-        let unlistenExit: UnlistenFn | null = null;
-
-        const cleanup = () => {
-          if (unlistenLine) unlistenLine();
-          if (unlistenExit) unlistenExit();
-        };
-
         try {
-          unlistenLine = await listen<{ sessionId: string; line: string }>(
-            "harness_line",
-            (event) => {
-              if (event.payload.sessionId === sessionId) {
-                const chunk = event.payload.line;
-                if (chunk) {
-                  controller.enqueue({
-                    type: "text-delta",
-                    textDelta: chunk + "\n",
-                  });
-                }
-              }
-            },
-          );
-
-          unlistenExit = await listen<{ sessionId: string; code: number | null }>(
-            "harness_exit",
-            (event) => {
-              if (event.payload.sessionId === sessionId) {
-                cleanup();
-                controller.enqueue({
-                  type: "finish",
-                  finishReason: "stop",
-                  usage: { promptTokens: 0, completionTokens: 0 },
-                });
-                controller.close();
-              }
-            },
-          );
-
-          // Spawn local CLI agent in print/exec mode
-          let args: string[] = [];
-          if (binary === "claude") {
-            args = ["-p", formattedPrompt, "--print"];
-          } else if (binary === "codex") {
-            args = ["exec", "-p", formattedPrompt];
-          } else {
-            args = ["-p", formattedPrompt];
-          }
-
-          await invoke("harness_spawn", {
-            sessionId,
-            command: binary,
-            args,
-            cwd: null,
+          if (!cwd) throw new Error(t("agentHistory.harnessWorkspaceRequired"));
+          const text = await run({
+            cwd,
+            prompt: formattedPrompt,
+            timeoutMs: 45_000,
           });
+          controller.enqueue({ type: "text-delta", textDelta: text });
         } catch (err: any) {
-          cleanup();
-          // Fallback message if local CLI is not installed or available
           const msg = t("agentHistory.harnessExecutionError", {
             agent: t(labelKey),
             error: err?.message || String(err),
@@ -159,13 +144,13 @@ export class HarnessLanguageModel {
             type: "text-delta",
             textDelta: msg,
           });
-          controller.enqueue({
-            type: "finish",
-            finishReason: "stop",
-            usage: { promptTokens: 0, completionTokens: 0 },
-          });
-          controller.close();
         }
+        controller.enqueue({
+          type: "finish",
+          finishReason: "stop",
+          usage: { promptTokens: 0, completionTokens: 0 },
+        });
+        controller.close();
       },
     });
 
