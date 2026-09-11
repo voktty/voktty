@@ -10,7 +10,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Spinner } from "@/components/ui/spinner";
 import { fmtShortcut, MOD_KEY } from "@/lib/platform";
 import { cn } from "@/lib/utils";
-import { useAgentHistoryStore } from "@/modules/agent-history";
+import { useAgentHistoryStore } from "@/modules/agent-history/store/agentHistoryStore";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
   Add01Icon,

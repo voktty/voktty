@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/resizable";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { startIdlePreload } from "@/lib/idlePreload";
 import {
   getInitialLaunchRequest,
   getLaunchBootstrap,
@@ -39,10 +38,7 @@ import {
   useAgentStore,
   validateAgentLaunchCommand,
 } from "@/modules/agents";
-import {
-  AgentHistoryModal,
-  useAgentHistoryStore,
-} from "@/modules/agent-history";
+import { useAgentHistoryStore } from "@/modules/agent-history/store/agentHistoryStore";
 import {
   AgentRunBridge,
   AiMiniWindow,
@@ -378,6 +374,12 @@ const LazyBroadcastToAgentsDialog = lazy(() =>
   import("@/modules/harness/components/BroadcastToAgentsDialog").then((m) => ({
     default: m.BroadcastToAgentsDialog,
   })),
+);
+
+const LazyAgentHistoryModal = lazy(() =>
+  import("@/modules/agent-history/components/AgentHistoryModal").then(
+    (module) => ({ default: module.AgentHistoryModal }),
+  ),
 );
 
 export default function App() {
@@ -838,16 +840,19 @@ function DesktopApp() {
   const closeMini = useChatStore((s) => s.closeMini);
   const presentChat = useChatStore((s) => s.presentChat);
   const [aiSidebarMounted, setAiSidebarMounted] = useState(panelOpen);
+  const agentHistoryOpen = useAgentHistoryStore((state) => state.isOpen);
+  const [agentHistoryMounted, setAgentHistoryMounted] =
+    useState(agentHistoryOpen);
   const setLive = useChatStore((s) => s.setLive);
   const respondToApproval = useChatStore((s) => s.respondToApproval);
 
   useEffect(() => {
-    startIdlePreload();
-  }, []);
-
-  useEffect(() => {
     if (panelOpen) setAiSidebarMounted(true);
   }, [panelOpen]);
+
+  useEffect(() => {
+    if (agentHistoryOpen) setAgentHistoryMounted(true);
+  }, [agentHistoryOpen]);
 
   useEffect(() => {
     const panel = verticalTabsPanelRef.current;
@@ -5533,7 +5538,9 @@ function DesktopApp() {
           <UpdaterDialog />
           <SettingsModal />
           <CommandHistoryModal />
-          <AgentHistoryModal />
+          <Suspense fallback={null}>
+            {agentHistoryMounted && <LazyAgentHistoryModal />}
+          </Suspense>
           <OnboardingWizard
             open={onboardingOpen}
             onOpenChange={setOnboardingOpen}

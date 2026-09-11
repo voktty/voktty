@@ -1,4 +1,4 @@
-import { useAgentHistoryStore } from "@/modules/agent-history";
+import { useAgentHistoryStore } from "@/modules/agent-history/store/agentHistoryStore";
 import type { CommandPaletteActionContext } from "@/modules/command-palette";
 import { t } from "@/modules/i18n";
 import { useArcadeStore } from "@/modules/statusbar/arcadeStore";
