@@ -51,6 +51,15 @@ export interface SessionFilter {
   offset?: number;
 }
 
+export interface HistorySessionPage {
+  items: HistorySession[];
+  offset: number;
+  limit: number;
+  total: number;
+  has_more: boolean;
+  scanning: boolean;
+}
+
 export interface HistoryStats {
   total_sessions: number;
   total_messages: number;

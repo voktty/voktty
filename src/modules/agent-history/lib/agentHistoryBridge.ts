@@ -1,5 +1,9 @@
 ﻿import { invoke } from "@tauri-apps/api/core";
-import type { HistoryMessage, HistorySession, HistoryStats, SessionFilter } from "../types";
+import type { HistoryMessage, HistorySession, HistorySessionPage, HistoryStats, SessionFilter } from "../types";
+
+export async function fetchSessionPage(filter?: SessionFilter): Promise<HistorySessionPage> {
+  return invoke<HistorySessionPage>("agent_history_get_session_page", { filter });
+}
 
 export async function fetchSessions(filter?: SessionFilter): Promise<HistorySession[]> {
   try {
