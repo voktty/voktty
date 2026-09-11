@@ -1,5 +1,7 @@
 import {
+  lazy,
   memo,
+  Suspense,
   useCallback,
   useEffect,
   useRef,
@@ -33,8 +35,13 @@ import type {
   RuntimeMode,
   Session,
 } from "../lib/session";
-import { FilePane } from "./FilePane";
-import { SessionPane } from "./SessionPane";
+
+const LazyFilePane = lazy(() =>
+  import("./FilePane").then((module) => ({ default: module.FilePane })),
+);
+const LazySessionPane = lazy(() =>
+  import("./SessionPane").then((module) => ({ default: module.SessionPane })),
+);
 
 type Shared = {
   visible: boolean;
@@ -324,69 +331,82 @@ function PaneTreeComponent({
               <PaneDropHint edge={drop.edge} />
             ) : null}
             {editorPane ? (
-              <FilePane
-                pane={editorPane}
-                focused={focusedId === editorPane.id}
-                dirtyFileIds={dirtyFileIds}
-                fileErrorCounts={fileErrorCounts}
-                sessions={sessions}
-                onFocus={onFocus}
-                onSelectFile={onSelectFile}
-                onCloseFile={onCloseFile}
-                onReorderFiles={onReorderFiles}
-                onDirtyChange={onFileDirtyChange}
-                onErrorCountChange={onFileErrorCountChange}
-                onOpenFile={onOpenFile}
-                onUpdatePlan={onUpdatePlan}
-                onBuildPlan={onBuildPlan}
-                editorNavigation={editorNavigation}
-                onPaneDragStart={onPaneDragStart}
-                onTerminalMetaChange={onTerminalMetaChange}
-                onAddTerminal={onAddTerminalToPane}
-              />
+              <Suspense
+                fallback={
+                  <div
+                    aria-busy="true"
+                    className="h-full bg-background"
+                  />
+                }
+              >
+                <LazyFilePane
+                  pane={editorPane}
+                  focused={focusedId === editorPane.id}
+                  dirtyFileIds={dirtyFileIds}
+                  fileErrorCounts={fileErrorCounts}
+                  sessions={sessions}
+                  onFocus={onFocus}
+                  onSelectFile={onSelectFile}
+                  onCloseFile={onCloseFile}
+                  onReorderFiles={onReorderFiles}
+                  onDirtyChange={onFileDirtyChange}
+                  onErrorCountChange={onFileErrorCountChange}
+                  onOpenFile={onOpenFile}
+                  onUpdatePlan={onUpdatePlan}
+                  onBuildPlan={onBuildPlan}
+                  editorNavigation={editorNavigation}
+                  onPaneDragStart={onPaneDragStart}
+                  onTerminalMetaChange={onTerminalMetaChange}
+                  onAddTerminal={onAddTerminalToPane}
+                />
+              </Suspense>
             ) : session ? (
-              <SessionPane
-                session={session}
-                visible={visible}
-                focused={focusedId === session.id}
-                addToChatTarget={addToChatSessionId === session.id}
-                inSplit={inSplit}
-                undoLocked={sessions.some(
-                  (s) => s.id !== session.id && s.cwd === session.cwd && !!s.busy,
-                )}
-                composerFocused={composerFocused}
-                recents={recents}
-                hideProjectPicker={hideProjectPicker}
-                onFocus={onFocus}
-                onClose={onClose}
-                onCwdChange={onCwdChange}
-                onBranchChange={onBranchChange}
-                onModelChange={onModelChange}
-                onModelSettingsChange={onModelSettingsChange}
-                onRuntimeModeChange={onRuntimeModeChange}
-                onSubmit={onSubmit}
-                onStop={onStop}
-                onCompactContext={onCompactContext}
-                onDeleteQueuedMessage={onDeleteQueuedMessage}
-                onEditQueuedMessage={onEditQueuedMessage}
-                onQueuedMessageEditingChange={onQueuedMessageEditingChange}
-                onSteerQueuedMessage={onSteerQueuedMessage}
-                onResumeQueue={onResumeQueue}
-                onInboxCardDismiss={onInboxCardDismiss}
-                onNoteCardDismiss={onNoteCardDismiss}
-                onHandoffCardDismiss={onHandoffCardDismiss}
-                onQuestionReply={onQuestionReply}
-                onQuestionInteraction={onQuestionInteraction}
-                onApproval={onApproval}
-                onOpenFile={onOpenFile}
-                onOpenDiff={onOpenDiff}
-                onOpenPlan={onOpenPlan}
-                onBuildPlan={onBuildPlan}
-                onSecondOpinion={onSecondOpinion}
-                onHandoff={onHandoff}
-                onNewTerminal={onNewTerminal}
-                onPaneDragStart={onPaneDragStart}
-              />
+              <Suspense
+                fallback={<div aria-busy="true" className="h-full bg-background" />}
+              >
+                <LazySessionPane
+                  session={session}
+                  visible={visible}
+                  focused={focusedId === session.id}
+                  addToChatTarget={addToChatSessionId === session.id}
+                  inSplit={inSplit}
+                  undoLocked={sessions.some(
+                    (s) => s.id !== session.id && s.cwd === session.cwd && !!s.busy,
+                  )}
+                  composerFocused={composerFocused}
+                  recents={recents}
+                  hideProjectPicker={hideProjectPicker}
+                  onFocus={onFocus}
+                  onClose={onClose}
+                  onCwdChange={onCwdChange}
+                  onBranchChange={onBranchChange}
+                  onModelChange={onModelChange}
+                  onModelSettingsChange={onModelSettingsChange}
+                  onRuntimeModeChange={onRuntimeModeChange}
+                  onSubmit={onSubmit}
+                  onStop={onStop}
+                  onCompactContext={onCompactContext}
+                  onDeleteQueuedMessage={onDeleteQueuedMessage}
+                  onEditQueuedMessage={onEditQueuedMessage}
+                  onQueuedMessageEditingChange={onQueuedMessageEditingChange}
+                  onSteerQueuedMessage={onSteerQueuedMessage}
+                  onResumeQueue={onResumeQueue}
+                  onInboxCardDismiss={onInboxCardDismiss}
+                  onNoteCardDismiss={onNoteCardDismiss}
+                  onHandoffCardDismiss={onHandoffCardDismiss}
+                  onQuestionReply={onQuestionReply}
+                  onQuestionInteraction={onQuestionInteraction}
+                  onApproval={onApproval}
+                  onOpenFile={onOpenFile}
+                  onOpenDiff={onOpenDiff}
+                  onOpenPlan={onOpenPlan}
+                  onBuildPlan={onBuildPlan}
+                  onSecondOpinion={onSecondOpinion}
+                  onHandoff={onHandoff}
+                  onNewTerminal={onNewTerminal}
+                  onPaneDragStart={onPaneDragStart}
+                />
+              </Suspense>
             ) : null}
           </div>
         );

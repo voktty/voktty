@@ -78,6 +78,18 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
           if (id.includes("vite/preload-helper") || id.includes("/vite/dist/"))
             return "react";
 
+          // These small shared helpers are reached by the eager workspace and
+          // the deferred Harness surfaces. Keep them with the eager core so
+          // splitting the Harness cannot turn one cached startup payload into
+          // four extra preload requests.
+          if (
+            id.endsWith("/modules/preview/devServerStore.ts") ||
+            id.endsWith("/modules/source-control/useSourceControl.ts") ||
+            id.endsWith("/modules/terminal/lib/pty-bridge.ts") ||
+            id.endsWith("/styles/terminalTheme.ts")
+          )
+            return "core";
+
           if (!id.includes("node_modules")) return null;
 
           // Ubiquitous styling utils used by `cn()` on nearly every eager
