@@ -81,7 +81,11 @@ impl CompanionTransport {
             return Err(TransportError::MessageTooLarge);
         }
         self.send_key
-            .seal_in_place_append_tag(nonce(self.send_direction, counter), Aad::from(header.as_slice()), &mut ciphertext)
+            .seal_in_place_append_tag(
+                nonce(self.send_direction, counter),
+                Aad::from(header.as_slice()),
+                &mut ciphertext,
+            )
             .map_err(|_| TransportError::Authentication)?;
         self.send_counter = counter;
         Ok(EncryptedFrame {
@@ -92,23 +96,35 @@ impl CompanionTransport {
         })
     }
 
-    pub(super) fn open(&mut self, frame: &EncryptedFrame) -> Result<SessionControl, TransportError> {
+    pub(super) fn open(
+        &mut self,
+        frame: &EncryptedFrame,
+    ) -> Result<SessionControl, TransportError> {
         frame.validate().map_err(protocol_error)?;
         if frame.direction != self.receive_direction {
             return Err(TransportError::WrongDirection);
         }
-        let expected = self.receive_counter.checked_add(1).ok_or(TransportError::CounterExhausted)?;
+        let expected = self
+            .receive_counter
+            .checked_add(1)
+            .ok_or(TransportError::CounterExhausted)?;
         if frame.counter != expected {
             return Err(TransportError::InvalidSequence);
         }
-        let mut ciphertext = URL_SAFE_NO_PAD.decode(&frame.ciphertext).map_err(|_| TransportError::InvalidFrame)?;
+        let mut ciphertext = URL_SAFE_NO_PAD
+            .decode(&frame.ciphertext)
+            .map_err(|_| TransportError::InvalidFrame)?;
         if ciphertext.len() > MAX_ENCRYPTED_FRAME_BYTES || ciphertext.len() < TAG_BYTES {
             return Err(TransportError::MessageTooLarge);
         }
         let header = header(frame.direction, frame.counter);
         let plaintext = self
             .receive_key
-            .open_in_place(nonce(frame.direction, frame.counter), Aad::from(header.as_slice()), &mut ciphertext)
+            .open_in_place(
+                nonce(frame.direction, frame.counter),
+                Aad::from(header.as_slice()),
+                &mut ciphertext,
+            )
             .map_err(|_| TransportError::Authentication)?;
         let control: SessionControl =
             serde_json::from_slice(plaintext).map_err(|_| TransportError::InvalidFrame)?;
@@ -119,7 +135,8 @@ impl CompanionTransport {
 }
 
 fn derive_key(shared_secret: &[u8], session_id: &str, direction: &[u8]) -> [u8; 32] {
-    let mut mac = HmacSha256::new_from_slice(shared_secret).expect("HMAC accepts arbitrary key lengths");
+    let mut mac =
+        HmacSha256::new_from_slice(shared_secret).expect("HMAC accepts arbitrary key lengths");
     for field in [KEY_CONTEXT, session_id.as_bytes(), direction] {
         mac.update(&(field.len() as u64).to_be_bytes());
         mac.update(field);
@@ -158,7 +175,9 @@ fn nonce(direction: FrameDirection, counter: u64) -> Nonce {
 fn protocol_error(error: ProtocolError) -> TransportError {
     match error {
         ProtocolError::MessageTooLarge => TransportError::MessageTooLarge,
-        ProtocolError::InvalidField | ProtocolError::UnsupportedVersion(_) => TransportError::InvalidFrame,
+        ProtocolError::InvalidField | ProtocolError::UnsupportedVersion(_) => {
+            TransportError::InvalidFrame
+        }
     }
 }
 
@@ -171,13 +190,22 @@ mod tests {
         let mut host = CompanionTransport::for_host(&[7; 32], "request-1").expect("host");
         let mut client = CompanionTransport::for_client(&[7; 32], "request-1").expect("client");
         let frame = client
-            .seal(&SessionControl::KeyConfirm { protocol: PROTOCOL_VERSION })
+            .seal(&SessionControl::KeyConfirm {
+                protocol: PROTOCOL_VERSION,
+            })
             .expect("seal");
-        assert_eq!(host.open(&frame), Ok(SessionControl::KeyConfirm { protocol: PROTOCOL_VERSION }));
+        assert_eq!(
+            host.open(&frame),
+            Ok(SessionControl::KeyConfirm {
+                protocol: PROTOCOL_VERSION
+            })
+        );
         assert_eq!(host.open(&frame), Err(TransportError::InvalidSequence));
 
         let mut tampered = client
-            .seal(&SessionControl::KeyConfirm { protocol: PROTOCOL_VERSION })
+            .seal(&SessionControl::KeyConfirm {
+                protocol: PROTOCOL_VERSION,
+            })
             .expect("seal");
         tampered.ciphertext.replace_range(..1, "A");
         assert_eq!(host.open(&tampered), Err(TransportError::Authentication));
@@ -186,9 +214,12 @@ mod tests {
     #[test]
     fn transport_binds_the_session_and_direction() {
         let mut host = CompanionTransport::for_host(&[7; 32], "request-1").expect("host");
-        let mut other_client = CompanionTransport::for_client(&[7; 32], "request-2").expect("client");
+        let mut other_client =
+            CompanionTransport::for_client(&[7; 32], "request-2").expect("client");
         let frame = other_client
-            .seal(&SessionControl::KeyConfirm { protocol: PROTOCOL_VERSION })
+            .seal(&SessionControl::KeyConfirm {
+                protocol: PROTOCOL_VERSION,
+            })
             .expect("seal");
         assert_eq!(host.open(&frame), Err(TransportError::Authentication));
     }
