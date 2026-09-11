@@ -42,6 +42,7 @@ export type HarnessAdapter = {
     requestId: number,
     reply: UserQuestionReply,
   ): void;
+  keepQuestionOpen?(sessionId: string, requestId: number): void;
   /** Kill the child but keep resume state for later rebind. */
   stopSession(sessionId: string): Promise<void>;
   /** Drop resume state and kill the child (delete, harness switch, idle detach). */
@@ -202,6 +203,14 @@ export function respondHarnessQuestion(
   reply: UserQuestionReply,
 ): void {
   getHarness(harness)?.respondQuestion?.(sessionId, requestId, reply);
+}
+
+export function keepHarnessQuestionOpen(
+  harness: HarnessId,
+  sessionId: string,
+  requestId: number,
+): void {
+  getHarness(harness)?.keepQuestionOpen?.(sessionId, requestId);
 }
 
 export async function stopHarnessSession(

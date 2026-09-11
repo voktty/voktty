@@ -5,10 +5,13 @@ import {
   appendUser,
   applyHarnessEvent,
   cancelHarnessTurn,
+  keepHarnessQuestionOpen,
   respondHarnessApproval,
+  respondHarnessQuestion,
   sendHarnessTurn,
   startHarnessBridge,
   stopStreaming,
+  type UserQuestionReply,
 } from "../lib/harness";
 import type {
   ApprovalDecision,
@@ -253,6 +256,24 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
     [],
   );
 
+  const handleQuestionReply = useCallback(
+    (sessionId: string, requestId: number, reply: UserQuestionReply) => {
+      const current = sessionRef.current;
+      if (!current) return;
+      respondHarnessQuestion(current.harness, sessionId, requestId, reply);
+    },
+    [],
+  );
+
+  const handleQuestionInteraction = useCallback(
+    (sessionId: string, requestId: number) => {
+      const current = sessionRef.current;
+      if (!current) return;
+      keepHarnessQuestionOpen(current.harness, sessionId, requestId);
+    },
+    [],
+  );
+
   const handleOpenFile = useCallback((path?: string) => {
     if (!path) return;
     window.dispatchEvent(
@@ -290,6 +311,8 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
         onStop={handleStop}
         onCompactContext={() => false}
         onApproval={handleApproval}
+        onQuestionReply={handleQuestionReply}
+        onQuestionInteraction={handleQuestionInteraction}
         onOpenFile={handleOpenFile}
         onOpenDiff={handleOpenFile}
         onOpenPlan={handleOpenFile}

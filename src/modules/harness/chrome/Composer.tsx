@@ -91,7 +91,12 @@ import { NoteMiniCard } from "./NoteMiniCard";
 import { HandoffMiniCard } from "./HandoffMiniCard";
 import { ModelPicker } from "./ModelPicker";
 import { ModelSettings } from "./ModelSettings";
+import { QuestionForm } from "./QuestionForm";
 import { SkillPicker } from "./SkillPicker";
+import {
+  type UserQuestionPrompt,
+  type UserQuestionReply,
+} from "../lib/userQuestion";
 import { projectKey } from "../lib/paths";
 import { consumeQuoteRequest, type QuoteRequest } from "../lib/quoteDraft";
 import { useTabGroupLogos } from "../hooks/useTabGroupLogos";
@@ -142,6 +147,7 @@ type Props = {
   inboxCard?: InboxComposerCard;
   noteCard?: NoteComposerCard;
   handoffCard?: HandoffComposerCard;
+  question?: UserQuestionPrompt;
   queuedMessages?: QueuedMessage[];
   queueStatus?: MessageQueueStatus;
   busy?: boolean;
@@ -158,6 +164,8 @@ type Props = {
   onInboxCardDismiss?: () => void;
   onNoteCardDismiss?: () => void;
   onHandoffCardDismiss?: () => void;
+  onQuestionReply?: (requestId: number, reply: UserQuestionReply) => void;
+  onQuestionInteraction?: (requestId: number) => void;
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop?: () => void;
   onCompactContext?: () => boolean;
@@ -392,6 +400,7 @@ export function Composer({
   inboxCard,
   noteCard,
   handoffCard,
+  question,
   queuedMessages = [],
   queueStatus,
   busy = false,
@@ -407,6 +416,8 @@ export function Composer({
   onInboxCardDismiss,
   onNoteCardDismiss,
   onHandoffCardDismiss,
+  onQuestionReply,
+  onQuestionInteraction,
   onSubmit,
   onStop,
   onCompactContext,
@@ -1023,6 +1034,13 @@ export function Composer({
       className={`relative shrink-0 ${shell ? "" : "p-1.5 pt-0"}`}
       onMouseDown={onFocus}
     >
+      {question && onQuestionReply ? (
+        <QuestionForm
+          prompt={question}
+          onReply={onQuestionReply}
+          onInteraction={onQuestionInteraction}
+        />
+      ) : null}
       {children}
       <MessageQueue
         messages={queuedMessages}

@@ -123,10 +123,13 @@ import {
   refreshHarnessCatalogs,
   registerBuiltinHarnesses,
   respondHarnessApproval,
+  respondHarnessQuestion,
+  keepHarnessQuestionOpen,
   sendHarnessTurn,
   startHarnessBridge,
   steerHarnessTurn,
   stopStreaming,
+  type UserQuestionReply,
 } from "../lib/harness";
 import { isEditTool } from "../lib/harness/preview";
 import {
@@ -4781,6 +4784,23 @@ export function HarnessApp({
     [],
   );
 
+  const onQuestionReply = useCallback(
+    (sessionId: string, requestId: number, reply: UserQuestionReply) => {
+      const session = sessionsRef.current.find((s: any) => s.id === sessionId);
+      if (!session) return;
+      respondHarnessQuestion(session.harness, sessionId, requestId, reply);
+    },
+    [],
+  );
+
+  const onQuestionInteraction = useCallback(
+    (sessionId: string, requestId: number) => {
+      const session = sessionsRef.current.find((s: any) => s.id === sessionId);
+      if (session) keepHarnessQuestionOpen(session.harness, sessionId, requestId);
+    },
+    [],
+  );
+
   const onOpenApprovalSession = useCallback(
     (sessionId: string) => {
       if (!focusOpenSession(sessionId)) {
@@ -5682,6 +5702,8 @@ export function HarnessApp({
                             onNoteCardDismiss={onNoteCardDismiss}
                             onHandoffCardDismiss={onHandoffCardDismiss}
                             onApproval={onApproval}
+                            onQuestionReply={onQuestionReply}
+                            onQuestionInteraction={onQuestionInteraction}
                             onOpenFile={onOpenFile}
                             editorNavigation={editorNavigation}
                             onOpenDiff={onOpenDiff}
@@ -5834,6 +5856,8 @@ export function HarnessApp({
                 onStop={onStop}
                 onCompactContext={onCompactContext}
                 onApproval={onApproval}
+                onQuestionReply={onQuestionReply}
+                onQuestionInteraction={onQuestionInteraction}
                 onOpenFile={onOpenFile}
                 onOpenDiff={onOpenDiff}
                 onOpenPlan={onOpenPlan}

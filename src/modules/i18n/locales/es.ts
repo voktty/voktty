@@ -5538,4 +5538,15 @@ export const es: TranslationSchema = {
     revealAriaLabel: "Mostrar {name} en el explorador de archivos",
     descriptionFooter: "Las habilidades ocultas permanecen en el disco y se excluyen del catálogo de habilidades de Voktty. Las habilidades administradas por proveedores y los comandos nativos no se ven afectados. Las habilidades residen en .agents/skills para este proyecto y en ~/.agents/skills para ti personalmente; las carpetas de harness también se detectan.",
   },
+  questions: {
+    question: "Pregunta",
+    skip: "Omitir",
+    continue: "Continuar",
+    interactToKeepOpen: "Interactúa para mantener esta pregunta abierta.",
+    optionalQuestion: "Pregunta opcional",
+    autoResolvesIn: "Continuará sin respuesta en {seconds}s",
+    selectMultiple: "Selecciona todas las opciones aplicables",
+    typeYourAnswer: "Escribe tu respuesta",
+    other: "Otro",
+  },
 };
