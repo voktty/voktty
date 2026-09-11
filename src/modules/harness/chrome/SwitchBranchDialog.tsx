@@ -89,7 +89,7 @@ export function SwitchBranchDialog({
             : t("harness.chrome.switchToNamed", { name: branch })
         }
         onMouseDown={(event) => event.stopPropagation()}
-        className="absolute left-1/2 top-[22%] flex w-[min(420px,calc(100vw-24px))] -translate-x-1/2 flex-col gap-3 rounded-xl border border-zinc-700/60 bg-[#18181b] text-zinc-100 p-4 shadow-2xl shadow-black/80"
+        className="voktty-floating-surface absolute left-1/2 top-[22%] flex w-[min(420px,calc(100vw-24px))] -translate-x-1/2 flex-col gap-3 rounded-xl border p-4 text-popover-foreground shadow-2xl"
       >
         <div className="flex flex-col gap-1">
           <h2 className="text-[13px] font-medium leading-tight text-content">

@@ -19,5 +19,9 @@ describe("ModalPanel", () => {
     expect(markup).toContain("A reusable shell");
     expect(markup).toContain("Body");
     expect(markup).toContain('aria-label="Close"');
+    expect(markup).toContain("voktty-floating-surface");
+    expect(markup).toContain("text-popover-foreground");
+    expect(markup).not.toContain("bg-background-base/55");
+    expect(markup).not.toContain("backdrop-blur-xl");
   });
 });

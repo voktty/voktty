@@ -54,10 +54,10 @@ type Props = Omit<ComponentPropsWithoutRef<"div">, "style"> & {
   ref?: Ref<HTMLDivElement>;
 };
 
-const FRAME =
-  "isolate overflow-hidden rounded-lg border border-content/10 shadow-xl";
-const BACKDROP =
-  "popover-backdrop pointer-events-none absolute inset-0 z-0 backdrop-blur-xl [backface-visibility:hidden] [transform:translateZ(0)]";
+export const POPOVER_FRAME_CLASS =
+  "voktty-floating-surface isolate overflow-hidden rounded-lg border shadow-xl";
+export const POPOVER_CONTENT_CLASS =
+  "relative z-[1] text-popover-foreground outline-none";
 
 /** Which corner the open animation grows from, so it reads as anchored. */
 function origin(side: PopoverSide, align: PopoverAlign): string {
@@ -252,9 +252,8 @@ export function Popover({
       ref={frame}
       data-popover-side={position?.side ?? side}
       style={{ ...placed, zIndex: layer }}
-      className={bare ? undefined : FRAME}
+      className={bare ? undefined : POPOVER_FRAME_CLASS}
     >
-      {bare ? null : <div aria-hidden="true" className={BACKDROP} />}
       <div
         {...rest}
         ref={(el) => {
@@ -268,7 +267,7 @@ export function Popover({
           transformOrigin: origin(position?.side ?? side, align),
           ...style,
         }}
-        className={`${position ? "popover-open " : ""}relative z-[1] outline-none text-zinc-100 ${className ?? ""}`}
+        className={`${position ? "popover-open " : ""}${POPOVER_CONTENT_CLASS} ${className ?? ""}`}
       >
         {children}
       </div>

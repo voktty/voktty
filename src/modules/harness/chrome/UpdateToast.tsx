@@ -16,7 +16,7 @@ export function UpdateToastCard({ update, onOpen, onDismiss }: Props) {
   return (
     <section
       role="status"
-      className="pointer-events-auto flex w-80 items-center gap-3 rounded-xl border border-content/15 bg-content/10 px-3 py-2.5 text-content shadow-xl backdrop-blur-xl"
+      className="voktty-floating-surface pointer-events-auto flex w-80 items-center gap-3 rounded-xl border px-3 py-2.5 text-popover-foreground shadow-xl"
     >
       <p className="min-w-0 flex-1 text-[13px] font-medium">
         {t("harness.chrome.updatedTo", { version: update.version })}
