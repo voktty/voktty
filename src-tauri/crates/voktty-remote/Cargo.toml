@@ -10,7 +10,7 @@ name = "voktty-remote"
 path = "src/main.rs"
 
 [dependencies]
-base64 = "0.22"
+base64 = "0.23"
 globset = "0.4"
 grep-matcher = "0.1"
 grep-regex = "0.1"
