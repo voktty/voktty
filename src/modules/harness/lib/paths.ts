@@ -31,7 +31,8 @@ export function pathKey(path: string): string {
  * checkouts (`cortex/agentbase` and `cortex-finance/agentbase`), so the whole
  * path is the key - `projectName` is for display only.
  */
-export function projectKey(cwd: string): string {
+export function projectKey(cwd?: string | null): string {
+  if (!cwd) return "";
   return pathKey(cwd);
 }
 

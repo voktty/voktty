@@ -2535,14 +2535,13 @@ function SessionCard({
 function SessionRenameRow({
   session,
   isActive,
-  busy,
   needsApproval,
   onCommit,
   onCancel,
 }: {
   session: SessionSummary;
   isActive: boolean;
-  busy: boolean;
+  busy?: boolean;
   needsApproval: boolean;
   onCommit: (title: string) => void;
   onCancel: () => void;
@@ -2601,7 +2600,6 @@ function SessionRenameRow({
       <input
         ref={inputRef}
         value={value}
-        disabled={busy}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => finish(true)}
         onKeyDown={onKeyDown}

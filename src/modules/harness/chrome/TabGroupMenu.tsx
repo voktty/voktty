@@ -18,6 +18,7 @@ import {
 } from "react";
 import { useTranslation } from "@/modules/i18n";
 import { normalizeHex } from "../lib/colorUtils";
+import { projectKey } from "../lib/paths";
 import { clearProjectLogo, pickAndSetProjectLogo } from "../lib/projectLogos";
 import { PROJECT_MASCOTS, projectMascot } from "../lib/projectMascots";
 import { TAB_GROUP_COLORS } from "../lib/tabGroups";
@@ -236,7 +237,7 @@ export function TabGroupMenu({
               aria-label={t("harness.chrome.removeProjectLogo")}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                void clearProjectLogo(logoProject).then(onLogoChange);
+                void clearProjectLogo(projectKey(logoProject)).then(onLogoChange);
               }}
               className="grid size-7 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/10 hover:text-content"
             >

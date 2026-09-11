@@ -4,6 +4,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { homeRelativePath } from "@/lib/homeRelativePath";
 import { cn } from "@/lib/utils";
 import { useAiAvailable } from "@/modules/ai/lib/runtimeAvailability";
 import { useChatStore } from "@/modules/ai/store/chatStore";
@@ -72,13 +73,6 @@ function fmtTime(ms: number): string {
   const h = String(d.getHours()).padStart(2, "0");
   const m = String(d.getMinutes()).padStart(2, "0");
   return `${h}:${m}`;
-}
-
-function relPath(p: string): string {
-  if (cachedHome && (p === cachedHome || p.startsWith(`${cachedHome}/`))) {
-    return `~${p.slice(cachedHome.length)}`;
-  }
-  return p;
 }
 
 function copy(text: string, message: string) {
@@ -180,7 +174,11 @@ function BlockChrome({ block, all, onSearch }: ChromeProps) {
 function Meta({ block }: { block: PositionedBlock }) {
   return (
     <span className="bt-head-meta">
-      {block.cwd && <span className="bt-cwd">{relPath(block.cwd)}</span>}
+      {block.cwd && (
+        <span className="bt-cwd">
+          {homeRelativePath(block.cwd, cachedHome)}
+        </span>
+      )}
       <span className="bt-clock">
         <HugeiconsIcon icon={Clock01Icon} size={11} strokeWidth={1.75} />
         {fmtTime(block.startedAt)}

@@ -1,3 +1,4 @@
+import { homeRelativePath } from "@/lib/homeRelativePath";
 import { AiInputBarConnect } from "@/modules/ai";
 import { Chip } from "@/modules/ai/components/Chip";
 import { ChipsRow } from "@/modules/ai/components/ChipsRow";
@@ -90,7 +91,7 @@ export function WorkspaceInputBar({
         {os && <Chip tone="neutral" iconNode={<OsIcon os={os} />} title={os} />}
         {cwd && (
           <Chip tone="blue" icon={Folder01Icon} title={cwd}>
-            {relPath(cwd, home)}
+            {homeRelativePath(cwd, home ?? null)}
           </Chip>
         )}
         {branch && (
@@ -169,10 +170,3 @@ export function WorkspaceInputBar({
   );
 }
 
-function relPath(p: string | null | undefined, home: string | null | undefined): string {
-  if (typeof p !== "string" || !p) return "";
-  if (typeof home !== "string" || !home) return p;
-  const h = home.replace(/\/+$/, "");
-  if (p === h || p.startsWith(`${h}/`)) return `~${p.slice(h.length)}`;
-  return p;
-}
