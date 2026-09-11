@@ -34,6 +34,7 @@ interface AgentHistoryState {
   setSelectedAgent: (agent: string) => void;
   setSelectedProject: (project: string) => void;
   loadSessions: () => Promise<void>;
+  loadMoreSessions: () => Promise<void>;
   selectSession: (id: string) => Promise<void>;
   rescan: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
@@ -117,6 +118,23 @@ export const useAgentHistoryStore = create<AgentHistoryState>((set, get) => ({
       if (!activeSession) {
         set({ messages: [] });
       }
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  loadMoreSessions: async () => {
+    const { hasMore, isLoading, offset, sessions } = get();
+    if (!hasMore || isLoading) return;
+    set({ isLoading: true });
+    try {
+      const page = await fetchSessionPage({ limit: 100, offset: offset + sessions.length });
+      const known = new Set(sessions.map((session) => session.id));
+      set({
+        sessions: [...sessions, ...page.items.filter((session) => !known.has(session.id))],
+        hasMore: page.has_more,
+        offset: page.offset,
+      });
     } finally {
       set({ isLoading: false });
     }

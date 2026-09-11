@@ -88,6 +88,8 @@ export function AgentHistoryModal() {
     isLoading,
     isMessagesLoading,
     isScanning,
+    hasMore,
+    loadMoreSessions,
     searchQuery,
     setSearchQuery,
     selectedAgent,
@@ -601,7 +603,8 @@ export function AgentHistoryModal() {
                   <span>{t("agentHistory.noSessionsFound")}</span>
                 </div>
               ) : (
-                filteredSessions.map((s) => {
+                <>
+                {filteredSessions.map((s) => {
                   const brand = AGENT_BRANDS[s.agent] || AGENT_BRANDS["claude"];
                   const isActive = activeSessionId === s.id;
 
@@ -672,7 +675,21 @@ export function AgentHistoryModal() {
                       </ContextMenuContent>
                     </ContextMenu>
                   );
-                })
+                })}
+                {hasMore && !searchQuery && selectedAgent === "all" && !selectedProject && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void loadMoreSessions()}
+                    disabled={isLoading}
+                    aria-label={t("agentHistory.loadingSessions")}
+                    className="w-full text-muted-foreground"
+                  >
+                    <HugeiconsIcon icon={ArrowDown01Icon} size={14} />
+                  </Button>
+                )}
+                </>
               )}
             </div>
           </div>
