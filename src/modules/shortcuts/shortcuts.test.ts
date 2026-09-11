@@ -159,6 +159,9 @@ describe("IDE shortcut defaults", () => {
   it("opens commands on F1 and workspace files on Mod+P", () => {
     expect(bindings("file.quickOpen")).toEqual([{ ctrl: true, key: "p" }]);
     expect(bindings("tabs.launchpad")).toEqual([]);
+    expect(bindings("connections.launchpad")).toEqual([
+      { ctrl: true, shift: true, key: "j" },
+    ]);
     expect(bindings("commandPalette.open")).toEqual([{ key: "F1" }]);
   });
 

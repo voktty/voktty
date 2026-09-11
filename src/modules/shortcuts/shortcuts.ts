@@ -9,6 +9,7 @@ export type ShortcutId =
   | "commandPalette.content"
   | "file.quickOpen"
   | "tabs.launchpad"
+  | "connections.launchpad"
   | "tab.new"
   | "tab.newBlock"
   | "tab.newPrivate"
@@ -126,6 +127,12 @@ export const SHORTCUTS: Shortcut[] = [
     labelKey: "shortcuts.labels.tabsLaunchpad",
     group: "Tabs",
     defaultBindings: [],
+  },
+  {
+    id: "connections.launchpad",
+    labelKey: "shortcuts.labels.connectionsLaunchpad",
+    group: "General",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "j" }],
   },
   {
     id: "settings.open",

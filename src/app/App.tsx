@@ -39,7 +39,10 @@ import {
   useAgentStore,
   validateAgentLaunchCommand,
 } from "@/modules/agents";
-import { AgentHistoryModal, useAgentHistoryStore } from "@/modules/agent-history";
+import {
+  AgentHistoryModal,
+  useAgentHistoryStore,
+} from "@/modules/agent-history";
 import {
   AgentRunBridge,
   AiMiniWindow,
@@ -60,6 +63,7 @@ import {
   type HostShareTarget,
 } from "@/modules/collab";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
+import { ConnectionsLaunchpad } from "@/modules/connections";
 import {
   createLauncherItems,
   type LauncherActionContext,
@@ -149,9 +153,7 @@ import {
   useSpacesBoot,
   WorkspaceDragLiveRegion,
 } from "@/modules/spaces";
-import {
-  planContextualSpaceInsertion,
-} from "@/modules/spaces/lib/contextualInsertion";
+import { planContextualSpaceInsertion } from "@/modules/spaces/lib/contextualInsertion";
 import { planWorkspaceDrop } from "@/modules/spaces/lib/planWorkspaceDrop";
 import { updateSpaceSplitRatio } from "@/modules/spaces/lib/spaceGeometry";
 import type { SlotId } from "@/modules/spaces/lib/spaceLayout";
@@ -373,9 +375,9 @@ function readRightPanelWidth(): number {
 // Lazy: pulls in the harness icon catalog (chrome/icons.tsx), which must
 // stay out of the main window's eager graph (see eager-budget.test.ts).
 const LazyBroadcastToAgentsDialog = lazy(() =>
-  import("@/modules/harness/components/BroadcastToAgentsDialog").then(
-    (m) => ({ default: m.BroadcastToAgentsDialog }),
-  ),
+  import("@/modules/harness/components/BroadcastToAgentsDialog").then((m) => ({
+    default: m.BroadcastToAgentsDialog,
+  })),
 );
 
 export default function App() {
@@ -679,7 +681,11 @@ function DesktopApp() {
   }, [activeId, booted, spaceViewLimit, spacesHydrated, tabs]);
 
   useEffect(() => {
-    if (!booted || !activeViewSpace || activeViewSpace.presentation !== "composite") {
+    if (
+      !booted ||
+      !activeViewSpace ||
+      activeViewSpace.presentation !== "composite"
+    ) {
       return;
     }
     const memberKeys = new Set(activeViewSpace.memberOrder);
@@ -781,6 +787,8 @@ function DesktopApp() {
   const [workspaceSearchFocusRequest, setWorkspaceSearchFocusRequest] =
     useState(0);
   const [activeTabsLaunchpadOpen, setActiveTabsLaunchpadOpen] = useState(false);
+  const [connectionsLaunchpadOpen, setConnectionsLaunchpadOpen] =
+    useState(false);
   const openCommandPalette = useCallback(() => {
     setCommandPaletteMode("commands");
     setCommandPaletteOpen(true);
@@ -820,6 +828,9 @@ function DesktopApp() {
   }, []);
   const openActiveTabsLaunchpad = useCallback(() => {
     setActiveTabsLaunchpadOpen(true);
+  }, []);
+  const openConnectionsLaunchpad = useCallback(() => {
+    setConnectionsLaunchpadOpen(true);
   }, []);
   const focusInput = useChatStore((s) => s.focusInput);
   const closePanel = useChatStore((s) => s.closePanel);
@@ -946,7 +957,7 @@ function DesktopApp() {
     !activeSpace?.env ||
     activeSpace.env.kind === "local"
       ? localFallbackRoot
-      : (activeSpace?.root ?? (launchCwd ?? home));
+      : (activeSpace?.root ?? launchCwd ?? home);
 
   const { explorerRoot, explorerTerminalId, inheritedCwdForNewTab } =
     useWorkspaceCwd(
@@ -960,7 +971,7 @@ function DesktopApp() {
 
   const effectiveExplorerRoot =
     activeTab?.kind === "harness"
-      ? (activeHarnessCwd || explorerRoot)
+      ? activeHarnessCwd || explorerRoot
       : explorerRoot;
   const explorerTerminal =
     explorerTerminalId === null
@@ -969,12 +980,12 @@ function DesktopApp() {
   const activeExplorerWorkspaceEnv =
     activeSpaceTabCount === 0
       ? LOCAL_WORKSPACE
-      : (explorerTerminalId !== null
+      : ((explorerTerminalId !== null
           ? explorerWorkspaceEnvsRef.current.get(explorerTerminalId)
           : undefined) ??
         (explorerTerminal?.kind === "terminal"
           ? (explorerTerminal.workspaceEnv ?? LOCAL_WORKSPACE)
-          : (activeSpace?.env ?? LOCAL_WORKSPACE));
+          : (activeSpace?.env ?? LOCAL_WORKSPACE)));
   const activeWorkspaceSessionId =
     activeTab &&
     "workspaceEnv" in activeTab &&
@@ -1542,7 +1553,9 @@ function DesktopApp() {
           toast.error(t("spaces.rendererCapacity"));
           return;
         }
-        if (!state.addMemberToViewSpace(viewSpaceId, tab.tabKey, spaceViewLimit)) {
+        if (
+          !state.addMemberToViewSpace(viewSpaceId, tab.tabKey, spaceViewLimit)
+        ) {
           toast.error(t("spaces.maxSlots"));
           return;
         }
@@ -1629,8 +1642,10 @@ function DesktopApp() {
 
   const [newSshDialogOpen, setNewSshDialogOpen] = useState(false);
   const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
-  const [sessionPickerConn, setSessionPickerConn] = useState<SshConnection | null>(null);
-  const [sessionPickerProbe, setSessionPickerProbe] = useState<RemoteMultiplexerProbe | null>(null);
+  const [sessionPickerConn, setSessionPickerConn] =
+    useState<SshConnection | null>(null);
+  const [sessionPickerProbe, setSessionPickerProbe] =
+    useState<RemoteMultiplexerProbe | null>(null);
   const [serialDialogOpen, setSerialDialogOpen] = useState(false);
   const [guestConnectOpen, setGuestConnectOpen] = useState(false);
   const [hostShareOpen, setHostShareOpen] = useState(false);
@@ -2115,10 +2130,19 @@ function DesktopApp() {
     window.addEventListener("voktty:open-git-graph", gitGraphHandler);
     return () => {
       window.removeEventListener("voktty:open-dropped-path", handler);
-      window.removeEventListener("voktty:open-new-terminal-tab", terminalHandler);
+      window.removeEventListener(
+        "voktty:open-new-terminal-tab",
+        terminalHandler,
+      );
       window.removeEventListener("voktty:open-git-graph", gitGraphHandler);
     };
-  }, [explorerRoot, handleDroppedPath, launchCwd, newTab, openCommitHistoryTab]);
+  }, [
+    explorerRoot,
+    handleDroppedPath,
+    launchCwd,
+    newTab,
+    openCommitHistoryTab,
+  ]);
 
   const pickAndOpenFile = useCallback(async () => {
     const target = contextualInsertionTarget();
@@ -2974,7 +2998,9 @@ function DesktopApp() {
   );
 
   const handleOpenCommitFileWithSplit = useCallback(
-    (input: Parameters<typeof openCommitFileDiffTab>[0] & { split?: boolean }) => {
+    (
+      input: Parameters<typeof openCommitFileDiffTab>[0] & { split?: boolean },
+    ) => {
       const activeTab = getTab(effectiveActiveId);
       const newTabId = openCommitFileDiffTab(input);
       if (input.split && activeTab && newTabId) {
@@ -3021,10 +3047,9 @@ function DesktopApp() {
     if (t?.locked) {
       void import("sonner").then(({ toast }) => {
         void import("@/modules/i18n").then(({ t: translate }) => {
-          toast.warning(
-            translate("tabs.tabIsLockedWarning"),
-            { id: `tab-locked-${effectiveActiveId}` },
-          );
+          toast.warning(translate("tabs.tabIsLockedWarning"), {
+            id: `tab-locked-${effectiveActiveId}`,
+          });
         });
       });
       return;
@@ -3085,6 +3110,7 @@ function DesktopApp() {
       "editor.navigateForward": () => navigationActionRef.current("forward"),
       "editor.outline": openOutline,
       "tabs.launchpad": openActiveTabsLaunchpad,
+      "connections.launchpad": openConnectionsLaunchpad,
       "tab.new": openNewTab,
       "tab.newBlock": openNewBlockTab,
       "tab.newPrivate": openNewPrivateTab,
@@ -3232,6 +3258,7 @@ function DesktopApp() {
       openQuickOpen,
       openOutline,
       openActiveTabsLaunchpad,
+      openConnectionsLaunchpad,
       stepSwitcher,
       cycleSpace,
       handleCloseTabOrPane,
@@ -3358,7 +3385,9 @@ function DesktopApp() {
     [setLeafCwd, workspaceEnv],
   );
 
-  const handleSyncActiveTerminal = useCallback(async (): Promise<string | null> => {
+  const handleSyncActiveTerminal = useCallback(async (): Promise<
+    string | null
+  > => {
     const tab = tabsRef.current.find((t) => t.id === effectiveActiveId);
     const activeLeafId =
       tab?.kind === "terminal" ? tab.activeLeafId : undefined;
@@ -3434,9 +3463,7 @@ function DesktopApp() {
       if (tab?.kind !== "terminal") return false;
       const previousExplorerEnv = explorerWorkspaceEnvsRef.current.get(tab.id);
       const currentEnv =
-        previousExplorerEnv ??
-        tab.workspaceEnv ??
-        workspaceEnv;
+        previousExplorerEnv ?? tab.workspaceEnv ?? workspaceEnv;
       const prepared = await prepareRemoteExplorerEnv(
         currentEnv,
         rootPath,
@@ -3535,8 +3562,6 @@ function DesktopApp() {
     [updateTab],
   );
 
-
-
   const searchTarget = useMemo<SearchTarget>(() => {
     if (isTerminalTab && activeLeafId !== null && activeSearchAddon)
       return {
@@ -3585,14 +3610,16 @@ function DesktopApp() {
     activeTerminalLeafCwd ??
     (activeTab?.kind === "harness"
       ? activeHarnessCwd
-      : (activeTab && "cwd" in activeTab && typeof (activeTab as any).cwd === "string"
+      : ((activeTab &&
+        "cwd" in activeTab &&
+        typeof (activeTab as any).cwd === "string"
           ? (activeTab as any).cwd
           : null) ??
         explorerRoot ??
         inheritedCwdForNewTab ??
         activeSpace?.root ??
         lastProjectPath() ??
-        null);
+        null));
   const localWorkspaceRoot = localHome;
 
   const handleStatusBarCd = useCallback(
@@ -3629,28 +3656,31 @@ function DesktopApp() {
     return meta.id;
   }, [localWorkspaceRoot, setActiveSpaceForNewTabs]);
 
-  const handleDeleteSpace = useCallback((id: string) => {
-    const viewSpaceId = id.startsWith("view-") ? id : `view-${id}`;
-    const workspaceId = viewSpaceId.slice("view-".length);
-    const state = useSpaces.getState();
-    const fallback =
-      state.spaces.find((space) => space.id !== workspaceId) ??
-      state.create({
-        name: t("common.default"),
-        root: localWorkspaceRoot,
-        env: LOCAL_WORKSPACE,
-      });
-    const affectedTabs = tabsRef.current.filter(
-      (tab) => tab.spaceId === workspaceId,
-    );
-    state.deleteViewSpace(viewSpaceId);
-    for (const tab of affectedTabs) {
-      moveTabToSpace(tab.id, fallback.id);
-    }
-    state.remove(workspaceId);
-    state.setActive(fallback.id);
-    setActiveSpaceForNewTabs(fallback.id);
-  }, [localWorkspaceRoot, moveTabToSpace, setActiveSpaceForNewTabs, t]);
+  const handleDeleteSpace = useCallback(
+    (id: string) => {
+      const viewSpaceId = id.startsWith("view-") ? id : `view-${id}`;
+      const workspaceId = viewSpaceId.slice("view-".length);
+      const state = useSpaces.getState();
+      const fallback =
+        state.spaces.find((space) => space.id !== workspaceId) ??
+        state.create({
+          name: t("common.default"),
+          root: localWorkspaceRoot,
+          env: LOCAL_WORKSPACE,
+        });
+      const affectedTabs = tabsRef.current.filter(
+        (tab) => tab.spaceId === workspaceId,
+      );
+      state.deleteViewSpace(viewSpaceId);
+      for (const tab of affectedTabs) {
+        moveTabToSpace(tab.id, fallback.id);
+      }
+      state.remove(workspaceId);
+      state.setActive(fallback.id);
+      setActiveSpaceForNewTabs(fallback.id);
+    },
+    [localWorkspaceRoot, moveTabToSpace, setActiveSpaceForNewTabs, t],
+  );
 
   const handleExtractTabFromSpace = useCallback((tabId: number) => {
     const tab = tabsRef.current.find((candidate) => candidate.id === tabId);
@@ -3794,7 +3824,13 @@ function DesktopApp() {
       }
 
       if (plan.operation === "assign" || plan.operation === "append") {
-        if (!viewState.addMemberToViewSpace(plan.viewSpaceId, tab.tabKey, spaceViewLimit)) {
+        if (
+          !viewState.addMemberToViewSpace(
+            plan.viewSpaceId,
+            tab.tabKey,
+            spaceViewLimit,
+          )
+        ) {
           toast.error(t("spaces.maxSlots"));
           return;
         }
@@ -3909,7 +3945,9 @@ function DesktopApp() {
           workspaceId: spaceId,
           name: meta?.name ?? spaceId,
         });
-        if (!state.addMemberToViewSpace(viewSpaceId, tab.tabKey, spaceViewLimit)) {
+        if (
+          !state.addMemberToViewSpace(viewSpaceId, tab.tabKey, spaceViewLimit)
+        ) {
           toast.error(t("spaces.maxSlots"));
           return;
         }
@@ -4019,9 +4057,7 @@ function DesktopApp() {
       if (!viewSpaceId.startsWith("view-")) return;
       const nextName = name.trim();
       if (!nextName) return;
-      useSpaces
-        .getState()
-        .rename(viewSpaceId.slice("view-".length), nextName);
+      useSpaces.getState().rename(viewSpaceId.slice("view-".length), nextName);
     },
     [],
   );
@@ -4029,9 +4065,7 @@ function DesktopApp() {
   const handleSetViewSpaceColor = useCallback(
     (viewSpaceId: string, color: number | undefined) => {
       if (!viewSpaceId.startsWith("view-")) return;
-      useSpaces
-        .getState()
-        .setColor(viewSpaceId.slice("view-".length), color);
+      useSpaces.getState().setColor(viewSpaceId.slice("view-".length), color);
     },
     [],
   );
@@ -4106,7 +4140,9 @@ function DesktopApp() {
         toast.error(t("spaces.rendererCapacity"));
         return;
       }
-      if (!state.addMemberToViewSpace(viewSpaceId, tab.tabKey, spaceViewLimit)) {
+      if (
+        !state.addMemberToViewSpace(viewSpaceId, tab.tabKey, spaceViewLimit)
+      ) {
         toast.error(t("spaces.maxSlots"));
         return;
       }
@@ -4915,8 +4951,8 @@ function DesktopApp() {
                             })
                           }
                           isPreviewActive={
-                            tabs.find((t) => t.id === effectiveActiveId)?.kind ===
-                            "preview"
+                            tabs.find((t) => t.id === effectiveActiveId)
+                              ?.kind === "preview"
                           }
                           onOpenPreview={openPreviewTab}
                           onPathRenamed={handlePathRenamed}
@@ -4926,7 +4962,9 @@ function DesktopApp() {
                             handleOpenRepositoryInSourceControl
                           }
                           onOpenGitHistory={handleOpenGitHistoryForPath}
-                          onOpenBlame={(path) => void handleOpenBlameForPath(path)}
+                          onOpenBlame={(path) =>
+                            void handleOpenBlameForPath(path)
+                          }
                           onAttachToAgent={handleAttachFileToAgent}
                           onWorkspaceDrop={(source, target) => {
                             void handleWorkspaceDrop(source, target);
@@ -5155,8 +5193,12 @@ function DesktopApp() {
                           onCloseTabsToRight={handleCloseTabsToRight}
                           onCloseOtherTabs={handleCloseOtherTabs}
                           onDuplicate={handleDuplicateTab}
-                          onSplitRight={(id) => splitActivePaneInActiveTab("row", id)}
-                          onSplitDown={(id) => splitActivePaneInActiveTab("col", id)}
+                          onSplitRight={(id) =>
+                            splitActivePaneInActiveTab("row", id)
+                          }
+                          onSplitDown={(id) =>
+                            splitActivePaneInActiveTab("col", id)
+                          }
                           onOpenPreviewSplit={openPreviewSplit}
                           onOpenGitGraphSplit={openGitGraphSplit}
                           onOpenEditorSplit={openEditorSplit}
@@ -5390,6 +5432,32 @@ function DesktopApp() {
             onCloseTab={handleClose}
           />
 
+          <ConnectionsLaunchpad
+            open={connectionsLaunchpadOpen}
+            onOpenChange={setConnectionsLaunchpadOpen}
+            tabs={tabs}
+            activeTabId={effectiveActiveId}
+            onSelectTab={(tab) => jumpToTab(tab.id)}
+            onConnectSsh={(connection) => void handleConnectSsh(connection)}
+            onNewSsh={() => setNewSshDialogOpen(true)}
+            onNewWsl={openNewWslTab}
+            onConnectDocker={(connection) =>
+              void handleConnectDocker(connection)
+            }
+            onConnectRdp={(connection) =>
+              newRdpTab({
+                host: connection.host,
+                port: connection.port,
+                username: connection.username,
+                domain: connection.domain,
+                autoConnect: true,
+              })
+            }
+            onNewRdp={() => newRdpTab()}
+            onNewSerial={() => setSerialDialogOpen(true)}
+            onConnectGuest={() => setGuestConnectOpen(true)}
+          />
+
           <NewEditorDialog
             open={newEditorOpen}
             onOpenChange={(open) => {
@@ -5433,7 +5501,10 @@ function DesktopApp() {
               if (!sessionPickerConn) return;
               const modifiedConn: SshConnection = {
                 ...sessionPickerConn,
-                multiplexerMode: action === "none" ? "none" : sessionPickerConn.multiplexerMode || "auto",
+                multiplexerMode:
+                  action === "none"
+                    ? "none"
+                    : sessionPickerConn.multiplexerMode || "auto",
                 activeMultiplexerSession: sessionName,
                 multiplexerAction: action === "none" ? undefined : action,
               };
