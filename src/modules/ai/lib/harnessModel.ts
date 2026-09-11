@@ -1,22 +1,39 @@
-import type { LanguageModel } from "ai";
-import { t } from "@/modules/i18n";
+import { useChatStore } from "@/modules/ai/store/chatStore";
 import { runClaudeTextPrompt } from "@/modules/harness/lib/harness/claudeText";
 import { runCodexTextPrompt } from "@/modules/harness/lib/harness/codexText";
 import { runCursorTextPrompt } from "@/modules/harness/lib/harness/cursorText";
 import { runGrokTextPrompt } from "@/modules/harness/lib/harness/grokText";
 import { runOpenCodeTextPrompt } from "@/modules/harness/lib/harness/opencodeText";
-import { useChatStore } from "@/modules/ai/store/chatStore";
+import { t } from "@/modules/i18n";
+import type { LanguageModel } from "ai";
+
+type HarnessLanguageModelContract = Extract<
+  LanguageModel,
+  { readonly specificationVersion: "v4" }
+>;
+type HarnessCallOptions = Parameters<
+  HarnessLanguageModelContract["doGenerate"]
+>[0];
+type HarnessGenerateResult = Awaited<
+  ReturnType<HarnessLanguageModelContract["doGenerate"]>
+>;
+type HarnessStreamResult = Awaited<
+  ReturnType<HarnessLanguageModelContract["doStream"]>
+>;
+type HarnessStreamPart =
+  HarnessStreamResult["stream"] extends ReadableStream<infer Part>
+    ? Part
+    : never;
 
 export function createHarnessModel(modelId: string): LanguageModel {
-  return new HarnessLanguageModel(modelId) as unknown as LanguageModel;
+  return new HarnessLanguageModel(modelId);
 }
 
-export class HarnessLanguageModel {
-  readonly specificationVersion = "v1" as const;
+export class HarnessLanguageModel implements HarnessLanguageModelContract {
+  readonly specificationVersion = "v4" as const;
   readonly provider = "harness";
   readonly modelId: string;
-  readonly defaultObjectGenerationMode = "json";
-  readonly supportsStructuredOutputs = false;
+  readonly supportedUrls = {};
 
   constructor(modelId: string) {
     this.modelId = modelId;
@@ -66,18 +83,17 @@ export class HarnessLanguageModel {
     };
   }
 
-  private formatPrompt(prompt: any[]): string {
+  private formatPrompt(prompt: HarnessCallOptions["prompt"]): string {
     const parts: string[] = [];
     for (const msg of prompt) {
-      if (!msg) continue;
       const role = msg.role;
       let text = "";
       if (typeof msg.content === "string") {
         text = msg.content;
       } else if (Array.isArray(msg.content)) {
         text = msg.content
-          .map((part: any) =>
-            typeof part === "string" ? part : (part?.text ?? ""),
+          .map((part) =>
+            "text" in part && typeof part.text === "string" ? part.text : "",
           )
           .filter(Boolean)
           .join("\n");
@@ -95,71 +111,94 @@ export class HarnessLanguageModel {
     return parts.join("\n\n");
   }
 
-  async doGenerate(options: any): Promise<any> {
-    const streamResult = await this.doStream(options);
-    const reader = streamResult.stream.getReader();
-    let text = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value.type === "text-delta") {
-        text += value.textDelta;
-      }
-    }
-    return {
-      text,
-      finishReason: "stop" as const,
-      usage: { promptTokens: 0, completionTokens: 0 },
-      rawCall: { rawPrompt: options.prompt, rawSettings: {} },
-    };
-  }
-
-  async doStream(options: any): Promise<{
-    stream: ReadableStream<any>;
-    rawCall: { rawPrompt: unknown; rawSettings: Record<string, unknown> };
-  }> {
+  private async run(options: HarnessCallOptions): Promise<string> {
     const { binary, labelKey, run } = this.resolveAgent();
     const formattedPrompt = this.formatPrompt(options.prompt);
     const live = useChatStore.getState().live;
     const cwd = live.getCwd() ?? live.getWorkspaceRoot();
 
-    const stream = new ReadableStream({
+    if (!cwd) throw new Error(t("agentHistory.harnessWorkspaceRequired"));
+    try {
+      return await run({
+        cwd,
+        prompt: formattedPrompt,
+        timeoutMs: 45_000,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        t("agentHistory.harnessExecutionError", {
+          agent: t(labelKey),
+          error: detail,
+          binary,
+        }),
+      );
+    }
+  }
+
+  async doGenerate(
+    options: HarnessCallOptions,
+  ): Promise<HarnessGenerateResult> {
+    const text = await this.run(options);
+    return {
+      content: [{ type: "text", text }],
+      finishReason: { unified: "stop" as const, raw: undefined },
+      usage: {
+        inputTokens: {
+          total: undefined,
+          noCache: undefined,
+          cacheRead: undefined,
+          cacheWrite: undefined,
+        },
+        outputTokens: {
+          total: undefined,
+          text: undefined,
+          reasoning: undefined,
+        },
+      },
+      warnings: [],
+    };
+  }
+
+  async doStream(options: HarnessCallOptions): Promise<HarnessStreamResult> {
+    const run = () => this.run(options);
+
+    const stream = new ReadableStream<HarnessStreamPart>({
       async start(controller) {
         controller.enqueue({ type: "stream-start", warnings: [] });
         try {
-          if (!cwd) throw new Error(t("agentHistory.harnessWorkspaceRequired"));
-          const text = await run({
-            cwd,
-            prompt: formattedPrompt,
-            timeoutMs: 45_000,
-          });
-          controller.enqueue({ type: "text-delta", textDelta: text });
-        } catch (err: any) {
-          const msg = t("agentHistory.harnessExecutionError", {
-            agent: t(labelKey),
-            error: err?.message || String(err),
-            binary,
-          });
+          const text = await run();
+          controller.enqueue({ type: "text-start", id: "text-0" });
           controller.enqueue({
             type: "text-delta",
-            textDelta: msg,
+            id: "text-0",
+            delta: text,
           });
+          controller.enqueue({ type: "text-end", id: "text-0" });
+          controller.enqueue({
+            type: "finish",
+            finishReason: { unified: "stop", raw: undefined },
+            usage: {
+              inputTokens: {
+                total: undefined,
+                noCache: undefined,
+                cacheRead: undefined,
+                cacheWrite: undefined,
+              },
+              outputTokens: {
+                total: undefined,
+                text: undefined,
+                reasoning: undefined,
+              },
+            },
+          });
+        } catch (error) {
+          controller.enqueue({ type: "error", error });
         }
-        controller.enqueue({
-          type: "finish",
-          finishReason: "stop",
-          usage: { promptTokens: 0, completionTokens: 0 },
-        });
         controller.close();
       },
     });
 
-    return {
-      stream,
-      rawCall: {
-        rawPrompt: options.prompt,
-        rawSettings: {},
-      },
-    };
+    return { stream };
   }
 }
