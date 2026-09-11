@@ -1,0 +1,56 @@
+Voktty 1.0.10
+
+This release expands Voktty's remote workspace, agent history, Android Companion, and launchpad workflows while strengthening cross-platform reliability and localization.
+
+Highlights
+
+- Added the Connections Launchpad, a searchable and keyboard-navigable modal for switching to active SSH, WSL, Docker, serial, RDP, and Companion sessions.
+- The Launchpad can also open new SSH, RDP, serial, and Companion actions, as well as saved connection profiles and running Docker containers.
+- Added an editable default shortcut for the Connections Launchpad: Ctrl/Cmd+Shift+J.
+- Kept the Launchpad focused on operational tools and immediate actions. Settings sections are no longer exposed as Launchpad tiles.
+
+Android Companion
+
+- Replaced the mobile workbench with a Companion shell designed to remotely control agent sessions running on the desktop application.
+- Added a secure local pairing flow with QR scanning, single-use pairing requests, explicit desktop approval, and derived device session keys.
+- Added an isolated loopback Companion runtime and agent-only transport protocol with encrypted pairing and session state handling.
+- Added desktop pairing controls, Android touch input restoration, Android CI target support, and clean runtime shutdown on application exit.
+- Added the Companion Android keystore setup required by the mobile build.
+
+Agent history and Harness
+
+- Integrated the Wake core engine with SQLite-backed indexing, full-text search, transcript caching, background scanning, and bounded history queries.
+- Added history adapters and metadata support for OpenCode, Grok, Claude, Codex, Gemini, Pi, and other supported agent formats.
+- Added native Wake-style agent history UI with palette search, thinking blocks, transcript activity states, complete agent branding, and improved filtering.
+- Added session review in the latest transcript turn with aggregated diff metrics and improved session change navigation.
+- Added Codex interactive questions, elicitation support, and the localized QuestionForm workflow.
+- Added editor line locations to Harness file mentions, fullscreen image inspection, note image handling, Skills catalog and management, and richer tab and Markdown actions.
+- Added GitHub connection settings and inbox provider connection flow for Harness.
+- Added persistence and execution support for local OAuth agents, including Claude, Codex, Agy, OpenCode, and Grok.
+- Added operating-system notifications for agent input and completion, inline tool diff inspection, and improved terminal agent title detection.
+- Preserved terminal cwd and workspace context while agents are running.
+
+Remote workspaces and Git
+
+- Preserved the active workspace cwd when starting agents inside local or remote SSH sessions, including tmux and other multiplexer contexts.
+- Improved remote file watching so SSH Git trees and their changes remain visible to the explorer and source control surfaces.
+- Hardened SMB and UNC workspace refresh behavior.
+- Improved Git graph opening from launcher context and added file context actions, commit graph access, and richer diff and review navigation.
+
+Localization and interface
+
+- Localized remaining Harness file actions, agent history controls, transcript activity states, and related interface copy.
+- English and Spanish provide the supported translations for this release; other locales continue to fall back to English.
+- Strengthened AI contributor guidance in AGENTS.md and CLAUDE.md for safer, more consistent development workflows.
+
+Reliability and maintenance
+
+- Cleared remaining frontend and Rust CI failures across the Companion, agent history, Wake, and Android paths.
+- Applied Rust formatting and resolved strict Clippy issues in the release path.
+- Added test coverage for the Connections Launchpad and its editable shortcut registration.
+- Improved Windows process startup isolation and maintained cross-platform release validation.
+
+Upgrade notes
+
+- The application version is now 1.0.10 in the frontend package and Tauri configuration.
+- Existing saved connections, agent history, and workspace state remain compatible with this release.
