@@ -164,7 +164,13 @@ export function StatusBar({
           onNewRdp={onNewRdp}
           onNewSerial={onNewSerial}
         />
-        <CwdBreadcrumb cwd={cwd} filePath={filePath} home={home} onCd={onCd} />
+        <CwdBreadcrumb
+          cwd={cwd}
+          filePath={filePath}
+          home={home}
+          workspaceEnv={activeWorkspaceEnv}
+          onCd={onCd}
+        />
         <SerialControlPill
           workspaceEnv={activeWorkspaceEnv}
           activeLeafId={activeLeafId}

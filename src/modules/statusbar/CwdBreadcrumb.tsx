@@ -15,7 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { isPathInWorkspace, remoteReadDir } from "@/modules/remote";
-import { currentWorkspaceEnv, workspaceForNativeFs } from "@/modules/workspace";
+import {
+  type WorkspaceEnv,
+  workspaceEnvForNativePty,
+  workspaceForNativeFs,
+} from "@/modules/workspace";
 import {
   ArrowDown01Icon,
   Folder01Icon,
@@ -26,12 +30,17 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useTranslation } from "@/modules/i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import { segmentsFromCwd } from "./lib/pathUtils";
+import {
+  breadcrumbChildPath,
+  breadcrumbHomeForWorkspace,
+  segmentsFromCwd,
+} from "./lib/pathUtils";
 
 type Props = {
   cwd?: string | null;
   filePath?: string | null;
   home?: string | null;
+  workspaceEnv?: WorkspaceEnv;
   onCd: (path: string) => void;
 };
 
@@ -48,13 +57,20 @@ function basename(path: string | null | undefined): string {
   return i === -1 ? path : path.slice(i + 1);
 }
 
-export function CwdBreadcrumb({ cwd, filePath, home, onCd }: Props) {
+export function CwdBreadcrumb({
+  cwd,
+  filePath,
+  home,
+  workspaceEnv,
+  onCd,
+}: Props) {
   const { t } = useTranslation();
+  const navigationHome = breadcrumbHomeForWorkspace(home, workspaceEnv);
   // File mode: dir segments navigate; filename is the terminal leaf.
   if (typeof filePath === "string" && filePath.trim() !== "") {
     const dir = dirname(filePath);
     const name = basename(filePath);
-    const segments = segmentsFromCwd(dir, home);
+    const segments = segmentsFromCwd(dir, navigationHome);
     const first = segments[0];
     const middle = segments.slice(1);
     return (
@@ -93,7 +109,7 @@ export function CwdBreadcrumb({ cwd, filePath, home, onCd }: Props) {
     );
   }
 
-  const segments = segmentsFromCwd(cwd, home);
+  const segments = segmentsFromCwd(cwd, navigationHome);
   if (segments.length === 0) {
     return (
       <span className="text-[10.5px] text-muted-foreground/70">{t("statusbar.cwd.noDirectory")}</span>
@@ -136,6 +152,7 @@ export function CwdBreadcrumb({ cwd, filePath, home, onCd }: Props) {
           <CurrentSegmentDropdown
             label={current.label}
             path={current.fullPath}
+            workspaceEnv={workspaceEnv}
             onCd={onCd}
           />
         </BreadcrumbItem>
@@ -183,10 +200,12 @@ function BreadcrumbSegment({
 function CurrentSegmentDropdown({
   label,
   path,
+  workspaceEnv,
   onCd,
 }: {
   label: string;
   path: string;
+  workspaceEnv?: WorkspaceEnv;
   onCd: (p: string) => void;
 }) {
   const { t } = useTranslation();
@@ -198,7 +217,7 @@ function CurrentSegmentDropdown({
   const load = useCallback(async () => {
     setError(null);
     try {
-      const workspace = currentWorkspaceEnv();
+      const workspace = workspaceEnv ?? { kind: "local" as const };
       const dirs =
         workspace.kind === "ssh" && isPathInWorkspace(workspace, path)
           ? (await remoteReadDir(workspace, path))
@@ -207,18 +226,32 @@ function CurrentSegmentDropdown({
                   entry.kind === "dir" &&
                   (showHidden || !entry.name.startsWith(".")),
               )
-              .map((entry) => `${path.replace(/\/+$/, "")}/${entry.name}`)
-          : await invoke<string[]>("list_subdirs", {
-              path,
-              showHidden,
-              workspace: workspaceForNativeFs(workspace, path),
-            });
+              .map((entry) => entry.name)
+          : workspace.kind === "docker"
+            ? (
+                await invoke<Array<{ name: string; kind: string }>>(
+                  "fs_read_dir",
+                  {
+                    path,
+                    showHidden,
+                    gitDecorations: false,
+                    workspace: workspaceEnvForNativePty(workspace),
+                  },
+                )
+              )
+                .filter((entry) => entry.kind === "dir")
+                .map((entry) => entry.name)
+            : await invoke<string[]>("list_subdirs", {
+                path,
+                showHidden,
+                workspace: workspaceForNativeFs(workspace, path),
+              });
       setChildren(dirs);
     } catch (e) {
       setError(String(e));
       setChildren([]);
     }
-  }, [path, showHidden]);
+  }, [path, showHidden, workspaceEnv]);
 
   useEffect(() => {
     if (open) load();
@@ -260,9 +293,7 @@ function CurrentSegmentDropdown({
           children.map((name) => (
             <DropdownMenuItem
               key={name}
-              onSelect={() =>
-                onCd(path.endsWith("/") ? `${path}${name}` : `${path}/${name}`)
-              }
+              onSelect={() => onCd(breadcrumbChildPath(path, name))}
               className="text-[11px]"
             >
               <HugeiconsIcon

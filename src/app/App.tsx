@@ -5306,7 +5306,7 @@ function DesktopApp() {
               onNewSsh={() => setNewSshDialogOpen(true)}
               onNewRdp={() => newRdpTab()}
               onNewSerial={() => setSerialDialogOpen(true)}
-              activeWorkspaceEnv={activeTerminalTab?.workspaceEnv}
+              activeWorkspaceEnv={activeTabWorkspaceEnv}
               activeLeafId={activeTerminalTab?.activeLeafId}
               activeEditorId={
                 activeTab?.kind === "editor" ? activeTab.id : null
