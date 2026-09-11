@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use serde_json::{json, Value};
 use wake_core::adapters::{adapter_for, AgentAdapter};
 use wake_core::db::Store;
-use wake_core::models::{SessionFileRef, SessionFilter as WakeSessionFilter};
+use wake_core::models::{AgentId, SessionFileRef, SessionFilter as WakeSessionFilter};
 
 use super::session_store::{SessionRecord, SessionSummary};
 
@@ -45,6 +45,48 @@ fn project_session_filter(project_paths: Vec<String>) -> WakeSessionFilter {
         roots_only: true,
         project_paths,
         ..WakeSessionFilter::default()
+    }
+}
+
+fn external_session_id(key: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut id = String::with_capacity("ext_wake_".len() + key.len() * 2);
+    id.push_str("ext_wake_");
+    for byte in key.bytes() {
+        id.push(HEX[(byte >> 4) as usize] as char);
+        id.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    id
+}
+
+fn decode_external_session_key(encoded: &str) -> Result<String, String> {
+    if encoded.is_empty() || encoded.len() > 2048 || !encoded.len().is_multiple_of(2) {
+        return Err("Invalid external session id".into());
+    }
+    let bytes = encoded.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len() / 2);
+    for pair in bytes.as_chunks::<2>().0 {
+        let high = hex_nibble(pair[0]).ok_or_else(|| "Invalid external session id".to_string())?;
+        let low = hex_nibble(pair[1]).ok_or_else(|| "Invalid external session id".to_string())?;
+        decoded.push((high << 4) | low);
+    }
+    String::from_utf8(decoded).map_err(|_| "Invalid external session id".into())
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        _ => None,
+    }
+}
+
+fn harness_id(agent: AgentId) -> &'static str {
+    match agent {
+        AgentId::ClaudeCode => "claude",
+        AgentId::Antigravity | AgentId::Gemini => "gemini",
+        AgentId::Dsh => "fx",
+        _ => agent.as_str(),
     }
 }
 
@@ -96,9 +138,9 @@ pub fn list_external_sessions_for_project(
             };
 
             result.push(SessionSummary {
-                id: format!("ext_wake_{}", meta.key),
+                id: external_session_id(&meta.key),
                 cwd: target_cwd.to_string(),
-                harness: meta.agent.as_str().to_string(),
+                harness: harness_id(meta.agent).to_string(),
                 model: meta.model.unwrap_or_else(|| "default".to_string()),
                 runtime_mode: "supervised".to_string(),
                 title: clean_title,
@@ -125,19 +167,19 @@ pub fn get_external_session_record(
     store: &Store,
     adapters: &[Box<dyn AgentAdapter>],
 ) -> Result<Option<SessionRecord>, String> {
-    let key = if let Some(k) = session_id.strip_prefix("ext_wake_") {
-        k
+    let key = if let Some(encoded) = session_id.strip_prefix("ext_wake_") {
+        decode_external_session_key(encoded)?
     } else if let Some(k) = session_id.strip_prefix("ext_codex_") {
-        k
+        k.to_string()
     } else if let Some(k) = session_id.strip_prefix("ext_gemini_") {
-        k
+        k.to_string()
     } else if let Some(k) = session_id.strip_prefix("ext_claude_") {
-        k
+        k.to_string()
     } else {
-        session_id
+        session_id.to_string()
     };
 
-    let Some(meta) = store.get_session(key).map_err(|error| error.to_string())? else {
+    let Some(meta) = store.get_session(&key).map_err(|error| error.to_string())? else {
         return Ok(None);
     };
 
@@ -195,7 +237,7 @@ pub fn get_external_session_record(
     Ok(Some(SessionRecord {
         id: session_id.to_string(),
         cwd: meta.project_path,
-        harness: meta.agent.as_str().to_string(),
+        harness: harness_id(meta.agent).to_string(),
         model: meta.model.unwrap_or_else(|| "default".to_string()),
         model_settings: json!({}),
         runtime_mode: "supervised".to_string(),
@@ -234,7 +276,11 @@ pub fn list_external_projects(store: &Store) -> Result<Vec<String>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{matching_project_paths, project_session_filter};
+    use super::{
+        decode_external_session_key, external_session_id, matching_project_paths,
+        project_session_filter,
+    };
+    use crate::modules::harness::session_store::validate_id;
 
     #[test]
     fn project_filter_preserves_exact_index_paths_after_normalized_matching() {
@@ -258,5 +304,17 @@ mod tests {
         assert_eq!(filter.project_paths, paths);
         assert!(filter.include_archived);
         assert!(filter.roots_only);
+    }
+
+    #[test]
+    fn external_session_ids_round_trip_as_store_safe_ids() {
+        let key = "claude-code:dev@example.com:session_123";
+        let id = external_session_id(key);
+        assert!(validate_id(&id, "session").is_ok());
+        assert_eq!(
+            decode_external_session_key(id.strip_prefix("ext_wake_").unwrap()).unwrap(),
+            key
+        );
+        assert!(decode_external_session_key("../secret").is_err());
     }
 }

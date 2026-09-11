@@ -189,9 +189,11 @@ pub fn session_list_by_project(
         super::external_history::list_external_sessions_for_project(&cwd, &history.store)
             .unwrap_or_default();
     let mut seen_ids = std::collections::HashSet::new();
+    let mut seen_provider_sessions = std::collections::HashSet::new();
     for s in &sessions {
         seen_ids.insert(s.id.clone());
         if let Some(ref pid) = s.provider_session_id {
+            seen_provider_sessions.insert((s.harness.clone(), pid.clone()));
             seen_ids.insert(pid.clone());
             seen_ids.insert(format!("ext_codex_{}", pid));
             seen_ids.insert(format!("ext_gemini_{}", pid));
@@ -200,7 +202,13 @@ pub fn session_list_by_project(
     }
 
     for ext in external_sessions {
-        if !seen_ids.contains(&ext.id) {
+        let duplicate_provider = ext.provider_session_id.as_ref().is_some_and(|pid| {
+            seen_provider_sessions.contains(&(ext.harness.clone(), pid.clone()))
+        });
+        if !seen_ids.contains(&ext.id) && !duplicate_provider {
+            if let Some(ref pid) = ext.provider_session_id {
+                seen_provider_sessions.insert((ext.harness.clone(), pid.clone()));
+            }
             seen_ids.insert(ext.id.clone());
             sessions.push(ext);
         }
