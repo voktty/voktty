@@ -7,6 +7,7 @@ export type SettingsSectionId =
   | "appearance"
   | "keybindings"
   | "providers"
+  | "inbox"
   | "skills"
   | "archive";
 
@@ -15,6 +16,7 @@ export const SETTINGS_SECTIONS: { id: SettingsSectionId }[] = [
   { id: "appearance" },
   { id: "keybindings" },
   { id: "providers" },
+  { id: "inbox" },
   { id: "skills" },
   { id: "archive" },
 ];

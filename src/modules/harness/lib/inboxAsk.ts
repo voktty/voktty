@@ -1,11 +1,11 @@
-import type { InboxItem } from "./githubTasks";
+import type { InboxItem, InboxProvider } from "./githubTasks";
 import inboxInstructions from "../instructions/inbox.md?raw";
 
 export type InboxAskContext = {
   key: string;
   title: string;
   url: string;
-  provider: "github" | "linear";
+  provider: InboxProvider;
   description?: string;
 };
 

@@ -701,6 +701,7 @@ pub fn run() {
             harness::fs::git_range_context,
             harness::fs::git_pr_status,
             harness::fs::git_pr_create,
+            harness::fs::git_github_status,
             harness::fs::git_github_repo,
             harness::fs::git_github_work_items,
             harness::fs::git_github_work_item_details,
