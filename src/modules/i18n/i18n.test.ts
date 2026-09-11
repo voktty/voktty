@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { interpolate } from "./interpolate";
-import { translate } from "./resolve";
+import { loadLocale, translate } from "./resolve";
 import { isLanguageId, SUPPORTED_LANGUAGES } from "./types";
 import { en } from "./locales/en";
 import { es } from "./locales/es";
@@ -63,6 +63,10 @@ function getInterpolationVariables(message: string): string[] {
 }
 
 describe("i18n module", () => {
+  beforeAll(async () => {
+    await Promise.all(SUPPORTED_LANGUAGES.map((language) => loadLocale(language.id)));
+  });
+
   it("interpolates parameters accurately", () => {
     expect(interpolate("Hello, {name}!", { name: "Voktty" })).toBe(
       "Hello, Voktty!",

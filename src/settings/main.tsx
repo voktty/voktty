@@ -2,12 +2,14 @@ import "../styles/globals.css";
 
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
 import { ThemeProvider } from "@/modules/theme";
-import { applyDocumentLocale, readFastLanguage } from "@/modules/i18n";
+import { applyDocumentLocale, loadLocale, readFastLanguage } from "@/modules/i18n";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import ReactDOM from "react-dom/client";
 import { SettingsApp } from "./SettingsApp";
 
-applyDocumentLocale(readFastLanguage());
+const startupLanguage = readFastLanguage();
+await loadLocale(startupLanguage);
+applyDocumentLocale(startupLanguage);
 
 document.documentElement.dataset.platform = IS_WINDOWS
   ? "windows"

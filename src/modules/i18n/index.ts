@@ -6,7 +6,7 @@ import type { LanguageId, TranslationParams } from "./types";
 
 export * from "./types";
 export * from "./direction";
-export { translate } from "./resolve";
+export { loadLocale, translate } from "./resolve";
 
 export function useTranslation() {
   const language = usePreferencesStore((s) => s.language ?? "en");

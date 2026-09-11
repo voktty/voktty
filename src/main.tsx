@@ -9,10 +9,12 @@ import { StartupCommitMarker } from "@/app/StartupCommitMarker";
 import { initLaunchRequests } from "@/lib/launchRequest";
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
 import { markStartupPhase } from "@/lib/startupTiming";
-import { applyDocumentLocale, readFastLanguage } from "@/modules/i18n";
+import { applyDocumentLocale, loadLocale, readFastLanguage } from "@/modules/i18n";
 
 markStartupPhase("js-start");
-applyDocumentLocale(readFastLanguage());
+const startupLanguage = readFastLanguage();
+await loadLocale(startupLanguage);
+applyDocumentLocale(startupLanguage);
 
 document.documentElement.dataset.platform = IS_WINDOWS
   ? "windows"

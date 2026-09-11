@@ -1,50 +1,73 @@
 import { interpolate } from "./interpolate";
 import { en } from "./locales/en";
-import { es } from "./locales/es";
-import { pt } from "./locales/pt";
-import { fr } from "./locales/fr";
-import { de } from "./locales/de";
-import { it } from "./locales/it";
-import { zh } from "./locales/zh";
-import { ja } from "./locales/ja";
-import { ko } from "./locales/ko";
-import { ru } from "./locales/ru";
-import { hi } from "./locales/hi";
-import { ar } from "./locales/ar";
-import type { LanguageId, TranslationParams } from "./types";
+import { isLanguageId, type LanguageId, type TranslationParams } from "./types";
 
-const LOCALES: Record<LanguageId, Record<string, unknown>> = {
-  en: en as unknown as Record<string, unknown>,
-  es: es as unknown as Record<string, unknown>,
-  pt: pt as unknown as Record<string, unknown>,
-  fr: fr as unknown as Record<string, unknown>,
-  de: de as unknown as Record<string, unknown>,
-  it: it as unknown as Record<string, unknown>,
-  zh: zh as unknown as Record<string, unknown>,
-  ja: ja as unknown as Record<string, unknown>,
-  ko: ko as unknown as Record<string, unknown>,
-  ru: ru as unknown as Record<string, unknown>,
-  hi: hi as unknown as Record<string, unknown>,
-  ar: ar as unknown as Record<string, unknown>,
+type Dictionary = Record<string, unknown>;
+
+const loaders: Record<LanguageId, () => Promise<Dictionary>> = {
+  en: () => Promise.resolve(en),
+  es: () => import("./locales/es").then((module) => module.es),
+  pt: () => import("./locales/pt").then((module) => module.pt),
+  fr: () => import("./locales/fr").then((module) => module.fr),
+  de: () => import("./locales/de").then((module) => module.de),
+  it: () => import("./locales/it").then((module) => module.it),
+  zh: () => import("./locales/zh").then((module) => module.zh),
+  ja: () => import("./locales/ja").then((module) => module.ja),
+  ko: () => import("./locales/ko").then((module) => module.ko),
+  ru: () => import("./locales/ru").then((module) => module.ru),
+  hi: () => import("./locales/hi").then((module) => module.hi),
+  ar: () => import("./locales/ar").then((module) => module.ar),
 };
 
-function getNestedValue(
-  obj: Record<string, unknown>,
-  path: string,
-): string | undefined {
+const dictionaries = new Map<LanguageId, Dictionary>([["en", en]]);
+const pending = new Map<LanguageId, Promise<Dictionary>>();
+
+function getNestedValue(obj: Dictionary, path: string): string | undefined {
   const parts = path.split(".");
   let current: unknown = obj;
   for (const part of parts) {
     if (
       current === null ||
       typeof current !== "object" ||
-      !(part in (current as Record<string, unknown>))
+      !(part in (current as Dictionary))
     ) {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[part];
+    current = (current as Dictionary)[part];
   }
   return typeof current === "string" ? current : undefined;
+}
+
+function normalizedLanguage(language: LanguageId | string): LanguageId {
+  return isLanguageId(language) ? language : "en";
+}
+
+function loadDictionary(language: LanguageId): Promise<Dictionary> {
+  const cached = dictionaries.get(language);
+  if (cached) return Promise.resolve(cached);
+  const inFlight = pending.get(language);
+  if (inFlight) return inFlight;
+  const loading = loaders[language]()
+    .then((dictionary) => {
+      dictionaries.set(language, dictionary);
+      return dictionary;
+    })
+    .finally(() => pending.delete(language));
+  pending.set(language, loading);
+  return loading;
+}
+
+export async function loadLocale(language: LanguageId | string): Promise<void> {
+  const target = normalizedLanguage(language);
+  const english = loadDictionary("en");
+  if (target === "en") {
+    await english;
+    return;
+  }
+  await Promise.all([
+    english,
+    loadDictionary(target).catch(() => dictionaries.get("en") ?? english),
+  ]);
 }
 
 export function translate(
@@ -52,11 +75,10 @@ export function translate(
   key: string,
   params?: TranslationParams,
 ): string {
-  const targetDict = LOCALES[lang] ?? LOCALES.en;
-  let str = getNestedValue(targetDict, key);
-  if (str === undefined && lang !== "en") {
-    str = getNestedValue(LOCALES.en, key);
-  }
+  const target = dictionaries.get(normalizedLanguage(lang));
+  const english = dictionaries.get("en");
+  let str = target ? getNestedValue(target, key) : undefined;
+  if (str === undefined && english) str = getNestedValue(english, key);
   if (str === undefined) {
     const defaultValue = params?.defaultValue;
     return typeof defaultValue === "string"
