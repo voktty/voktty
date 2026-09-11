@@ -49,8 +49,8 @@ let availability: HarnessAvailability = {
   hermes: false,
 };
 let version = 0;
-let inflight: Promise<void> | null = null;
-let probedAt = 0;
+const probeFlights = new Map<HarnessId, Promise<readonly [HarnessId, boolean]>>();
+const probedAt = new Map<HarnessId, number>();
 const listeners = new Set<() => void>();
 
 /**
@@ -60,6 +60,20 @@ const listeners = new Set<() => void>();
  * and `force` covers it.
  */
 const PROBE_TTL_MS = 30_000;
+const PROBE_CONCURRENCY = 2;
+
+const RESOLVERS: Record<HarnessId, () => Promise<unknown>> = {
+  claude: resolveClaudeBinary,
+  codex: resolveCodexBinary,
+  cursor: resolveCursorBinary,
+  grok: resolveGrokBinary,
+  opencode: resolveOpenCodeBinary,
+  pi: resolvePiBinary,
+  omp: resolveOmpBinary,
+  fx: resolveFxBinary,
+  gemini: resolveGeminiBinary,
+  hermes: resolveHermesBinary,
+};
 
 function emit() {
   version += 1;
@@ -78,7 +92,7 @@ export function getHarnessAvailabilitySnapshot(): number {
 }
 
 export function hasProbedHarnessAvailability(): boolean {
-  return probedAt > 0;
+  return probedAt.size > 0;
 }
 
 export function isHarnessAvailable(id: HarnessId): boolean {
@@ -91,108 +105,54 @@ export function harnessUnavailableHint(id: HarnessId): string {
   return `${name} not found${how}. Install it, or restart MonoCode if it is already installed.`;
 }
 
-export function probeHarnessAvailability(
-  options?: { force?: boolean },
-): Promise<void> {
-  if (inflight) return inflight;
-  if (!options?.force && probedAt > 0 && Date.now() - probedAt < PROBE_TTL_MS) {
-    return Promise.resolve();
-  }
-  inflight = Promise.all(
-    HARNESSES.map(async (id) => {
-      if (!isLiveHarness(id)) return [id, false] as const;
-      if (id === "cursor") {
-        try {
-          await resolveCursorBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "claude") {
-        try {
-          await resolveClaudeBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "codex") {
-        try {
-          await resolveCodexBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "opencode") {
-        try {
-          await resolveOpenCodeBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "pi") {
-        try {
-          await resolvePiBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "omp") {
-        try {
-          await resolveOmpBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "fx") {
-        try {
-          await resolveFxBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "grok") {
-        try {
-          await resolveGrokBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "gemini") {
-        try {
-          await resolveGeminiBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      if (id === "hermes") {
-        try {
-          await resolveHermesBinary();
-          return [id, true] as const;
-        } catch {
-          return [id, false] as const;
-        }
-      }
-      return [id, false] as const;
-    }),
-  )
-    .then((entries) => {
-      const next = { ...availability };
-      for (const [id, ok] of entries) next[id] = ok;
-      availability = next;
-      emit();
-    })
+export function probeHarnessAvailability(options?: {
+  force?: boolean;
+  ids?: Iterable<HarnessId>;
+}): Promise<void> {
+  const now = Date.now();
+  const ids = [...new Set(options?.ids ?? HARNESSES)].filter(
+    (id) =>
+      isLiveHarness(id) &&
+      (options?.force || now - (probedAt.get(id) ?? 0) >= PROBE_TTL_MS),
+  );
+  if (ids.length === 0) return Promise.resolve();
+
+  return probeWithConcurrency(ids, PROBE_CONCURRENCY).then((entries) => {
+    const next = { ...availability };
+    for (const [id, ok] of entries) next[id] = ok;
+    availability = next;
+    emit();
+  });
+}
+
+function probeWithConcurrency(
+  ids: HarnessId[],
+  limit: number,
+): Promise<(readonly [HarnessId, boolean])[]> {
+  const entries: (readonly [HarnessId, boolean])[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < ids.length) {
+      const id = ids[next++];
+      if (!id) continue;
+      entries.push(await probeOne(id));
+    }
+  };
+  return Promise.all(Array.from({ length: Math.min(limit, ids.length) }, worker)).then(
+    () => entries,
+  );
+}
+
+function probeOne(id: HarnessId): Promise<readonly [HarnessId, boolean]> {
+  const existing = probeFlights.get(id);
+  if (existing) return existing;
+  const run = RESOLVERS[id]()
+    .then(() => [id, true] as const)
+    .catch(() => [id, false] as const)
     .finally(() => {
-      probedAt = Date.now();
-      inflight = null;
+      probedAt.set(id, Date.now());
+      probeFlights.delete(id);
     });
-  return inflight;
+  probeFlights.set(id, run);
+  return run;
 }

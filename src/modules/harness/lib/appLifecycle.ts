@@ -30,8 +30,7 @@ import {
   loadWorkspaceSnapshot,
   replaceInFlightSessions,
   saveWorkspaceSnapshot,
-  shouldPersistSession,
-  upsertSession,
+  upsertSessions,
 } from "./sessionStore";
 import {
   collectWorkspaceSnapshot,
@@ -182,11 +181,7 @@ async function loadResumedWorkspaceOnce(): Promise<ResumedWorkspace | null> {
 
   bootingResumed = workspace;
   if (workspace) {
-    await Promise.all(
-      workspace.sessions
-        .filter(shouldPersistSession)
-        .map((session) => upsertSession(session).catch(() => null)),
-    );
+    await upsertSessions(workspace.sessions).catch(() => []);
   }
   return workspace;
 }
@@ -214,11 +209,7 @@ export async function closeCurrentWindow(): Promise<void> {
 export async function persistLiveTranscripts(
   sessions: Session[],
 ): Promise<void> {
-  await Promise.all(
-    sessions
-      .filter(shouldPersistSession)
-      .map((session) => upsertSession(session).catch(() => null)),
-  );
+  await upsertSessions(sessions).catch(() => []);
 }
 
 export async function persistQuitState(
@@ -231,15 +222,11 @@ export async function persistQuitState(
 ): Promise<void> {
   const refs = inFlightRefs(sessions, tabs);
   const interrupted = new Set(refs.map((ref) => ref.sessionId));
-  await Promise.all(
-    sessions.map(async (session) => {
-      if (!shouldPersistSession(session)) return;
-      const payload = interrupted.has(session.id)
-        ? markTurnInterrupted(session)
-        : session;
-      await upsertSession(payload).catch(() => null);
-    }),
-  );
+  await upsertSessions(
+    sessions.map((session) =>
+      interrupted.has(session.id) ? markTurnInterrupted(session) : session,
+    ),
+  ).catch(() => []);
   await saveWorkspaceSnapshot(
     collectWorkspaceSnapshot(
       tabs,
@@ -257,11 +244,7 @@ export async function persistQuitState(
 }
 
 async function persistBootingResume(workspace: ResumedWorkspace): Promise<void> {
-  await Promise.all(
-    workspace.sessions
-      .filter(shouldPersistSession)
-      .map((session) => upsertSession(session).catch(() => null)),
-  );
+  await upsertSessions(workspace.sessions).catch(() => []);
   await saveWorkspaceSnapshot(
     collectWorkspaceSnapshot(
       workspace.tabs,

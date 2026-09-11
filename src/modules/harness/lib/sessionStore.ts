@@ -157,6 +157,39 @@ export async function upsertSession(
 }
 
 /**
+ * Coalesce periodic snapshots into one native transaction. Per-session queues
+ * still fence this write behind any urgent save, archive, or delete for the
+ * same session, so a delayed batch cannot overwrite a newer user action.
+ */
+export async function upsertSessions(
+  sessions: Session[],
+): Promise<SessionSummary[]> {
+  const pending = new Map<string, SessionUpsertPayload>();
+  for (const session of sessions) {
+    if (!shouldPersistSession(session) || deletedSessionIds.has(session.id)) continue;
+    pending.set(session.id, sanitizeSessionForPersist(session));
+  }
+  const payloads = [...pending.values()];
+  if (payloads.length === 0) return [];
+
+  const previous = payloads.map(
+    (payload) => sessionWriteQueues.get(payload.id) ?? Promise.resolve(),
+  );
+  const batch = Promise.all(previous).then(() =>
+    invoke<SessionSummary[]>("session_upsert_batch", { sessions: payloads }),
+  );
+  const summaries = await Promise.all(
+    payloads.map((payload, index) =>
+      enqueueSessionWrite(payload.id, async () => {
+        const summary = (await batch)[index];
+        return summary ? normalizeSummary(summary) : null;
+      }),
+    ),
+  );
+  return summaries.filter((summary): summary is SessionSummary => summary != null);
+}
+
+/**
  * Blocks are replaced, never mutated in place, so identity stands in for
  * content. Serializing the session here instead meant a full deep copy and a
  * `JSON.stringify` of the whole transcript (megabytes on a long chat) on the

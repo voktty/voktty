@@ -213,24 +213,24 @@ pub fn session_upsert(
     store: State<'_, SessionStoreState>,
     session: SessionUpsert,
 ) -> Result<SessionSummary, String> {
-    validate_id(&session.id, "session")?;
-    if session.cwd.trim().is_empty() {
-        return Err("cwd is required".into());
-    }
-    if let Some(provider_session_id) = &session.provider_session_id {
-        if !provider_session_id.is_empty() {
-            validate_id(provider_session_id, "provider session")?;
-        }
-    }
-    if !session.model_settings.is_object() {
-        return Err("modelSettings must be an object".into());
-    }
-    if !session.blocks.is_array() {
-        return Err("blocks must be an array".into());
-    }
+    validate_session_upsert(&session)?;
 
     let conn = store.lock_conn()?;
     upsert_session(&conn, &session).map_err(|e| e.to_string())
+}
+
+const SESSION_UPSERT_BATCH_MAX: usize = 100;
+
+/// Flush a bounded set of dirty transcripts in one SQLite transaction. The
+/// single-session command remains for user actions that must persist before
+/// their next step, while periodic and shutdown flushes use this boundary.
+#[tauri::command(async)]
+pub fn session_upsert_batch(
+    store: State<'_, SessionStoreState>,
+    sessions: Vec<SessionUpsert>,
+) -> Result<Vec<SessionSummary>, String> {
+    let mut conn = store.lock_conn()?;
+    upsert_sessions(&mut conn, &sessions)
 }
 
 #[tauri::command(async)]
@@ -694,6 +694,51 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     )?;
     super::notes::ensure_notes_table(conn)?;
     Ok(())
+}
+
+fn validate_session_upsert(session: &SessionUpsert) -> Result<(), String> {
+    validate_id(&session.id, "session")?;
+    if session.cwd.trim().is_empty() {
+        return Err("cwd is required".into());
+    }
+    if let Some(provider_session_id) = &session.provider_session_id {
+        if !provider_session_id.is_empty() {
+            validate_id(provider_session_id, "provider session")?;
+        }
+    }
+    if !session.model_settings.is_object() {
+        return Err("modelSettings must be an object".into());
+    }
+    if !session.blocks.is_array() {
+        return Err("blocks must be an array".into());
+    }
+    Ok(())
+}
+
+fn upsert_sessions(
+    conn: &mut Connection,
+    sessions: &[SessionUpsert],
+) -> Result<Vec<SessionSummary>, String> {
+    if sessions.len() > SESSION_UPSERT_BATCH_MAX {
+        return Err(format!(
+            "session batch exceeds the {SESSION_UPSERT_BATCH_MAX} session limit"
+        ));
+    }
+    let mut ids = std::collections::HashSet::new();
+    for session in sessions {
+        validate_session_upsert(session)?;
+        if !ids.insert(&session.id) {
+            return Err("session batch contains duplicate ids".into());
+        }
+    }
+
+    let transaction = conn.transaction().map_err(|error| error.to_string())?;
+    let summaries = sessions
+        .iter()
+        .map(|session| upsert_session(&transaction, session).map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    transaction.commit().map_err(|error| error.to_string())?;
+    Ok(summaries)
 }
 
 fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Result<SessionSummary> {
@@ -1381,6 +1426,23 @@ mod tests {
         assert!(second.updated_at > first.updated_at);
         assert_eq!(second.title, "Updated");
         assert_eq!(second.provider_session_id.as_deref(), Some("acp-session-2"));
+    }
+
+    #[test]
+    fn batch_upsert_is_atomic_and_bounded() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let mut conn = store.conn.lock().unwrap();
+        let first = sample("s1", "/tmp/a", "First");
+        let mut invalid = sample("s2", "/tmp/a", "Invalid");
+        invalid.blocks = json!({ "not": "an array" });
+
+        assert!(upsert_sessions(&mut conn, &[first, invalid]).is_err());
+        assert!(get_session(&conn, "s1").unwrap().is_none());
+
+        let sessions = (0..=SESSION_UPSERT_BATCH_MAX)
+            .map(|index| sample(&format!("s{index}"), "/tmp/a", "Many"))
+            .collect::<Vec<_>>();
+        assert!(upsert_sessions(&mut conn, &sessions).is_err());
     }
 
     #[test]
