@@ -25,9 +25,7 @@ pub fn companion_stop(state: tauri::State<'_, CompanionState>) -> bool {
 }
 
 #[tauri::command]
-pub fn companion_status(
-    state: tauri::State<'_, CompanionState>,
-) -> state::CompanionStatus {
+pub fn companion_status(state: tauri::State<'_, CompanionState>) -> state::CompanionStatus {
     state.status()
 }
 

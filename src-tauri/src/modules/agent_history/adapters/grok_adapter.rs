@@ -76,7 +76,10 @@ impl AgentHistoryAdapter for GrokAdapter {
             agent: "grok".to_string(),
             title: format!("Grok Session ({})", file_name),
             project_name: "Grok".to_string(),
-            project_path: path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+            project_path: path
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default(),
             cwd: None,
             git_branch: None,
             created_at,
@@ -93,6 +96,9 @@ impl AgentHistoryAdapter for GrokAdapter {
     }
 
     fn resume_command(&self, session: &HistorySession) -> Option<String> {
-        session.resume_command.clone().or_else(|| Some("grok".to_string()))
+        session
+            .resume_command
+            .clone()
+            .or_else(|| Some("grok".to_string()))
     }
 }

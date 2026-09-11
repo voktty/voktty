@@ -80,7 +80,11 @@ impl EncryptedFrame {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum SessionControl {
     KeyConfirm { protocol: u16 },
     KeyConfirmed { protocol: u16 },
@@ -129,14 +133,38 @@ pub struct AgentSummary {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum ClientMessage {
-    InventorySubscribe { protocol: u16 },
-    AgentSnapshot { protocol: u16, agent_id: String, after: u64 },
-    AgentMessage { protocol: u16, agent_id: String, message: String },
-    ApprovalRespond { protocol: u16, agent_id: String, grant_id: String, approved: bool },
-    Ping { protocol: u16 },
-    Revoke { protocol: u16, device_id: String },
+    InventorySubscribe {
+        protocol: u16,
+    },
+    AgentSnapshot {
+        protocol: u16,
+        agent_id: String,
+        after: u64,
+    },
+    AgentMessage {
+        protocol: u16,
+        agent_id: String,
+        message: String,
+    },
+    ApprovalRespond {
+        protocol: u16,
+        agent_id: String,
+        grant_id: String,
+        approved: bool,
+    },
+    Ping {
+        protocol: u16,
+    },
+    Revoke {
+        protocol: u16,
+        device_id: String,
+    },
 }
 
 impl ClientMessage {
@@ -169,14 +197,40 @@ impl ClientMessage {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum ServerMessage {
-    Inventory { protocol: u16, agents: Vec<AgentSummary> },
-    AgentDelta { protocol: u16, agent_id: String, cursor: u64, content: String },
-    ApprovalRequest { protocol: u16, agent_id: String, grant_id: String, prompt: String },
-    Pong { protocol: u16 },
-    Error { protocol: u16, code: String, message: String },
-    Closed { protocol: u16, reason: String },
+    Inventory {
+        protocol: u16,
+        agents: Vec<AgentSummary>,
+    },
+    AgentDelta {
+        protocol: u16,
+        agent_id: String,
+        cursor: u64,
+        content: String,
+    },
+    ApprovalRequest {
+        protocol: u16,
+        agent_id: String,
+        grant_id: String,
+        prompt: String,
+    },
+    Pong {
+        protocol: u16,
+    },
+    Error {
+        protocol: u16,
+        code: String,
+        message: String,
+    },
+    Closed {
+        protocol: u16,
+        reason: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -203,7 +257,10 @@ mod tests {
     #[test]
     fn rejects_an_unsupported_protocol_before_dispatch() {
         let message = ClientMessage::InventorySubscribe { protocol: 0 };
-        assert_eq!(message.validate(), Err(ProtocolError::UnsupportedVersion(0)));
+        assert_eq!(
+            message.validate(),
+            Err(ProtocolError::UnsupportedVersion(0))
+        );
     }
 
     #[test]
@@ -235,7 +292,11 @@ mod tests {
         };
         assert_eq!(valid.validate(), Ok(()));
         assert_eq!(
-            EncryptedFrame { counter: 0, ..valid.clone() }.validate(),
+            EncryptedFrame {
+                counter: 0,
+                ..valid.clone()
+            }
+            .validate(),
             Err(ProtocolError::InvalidField)
         );
         assert_eq!(

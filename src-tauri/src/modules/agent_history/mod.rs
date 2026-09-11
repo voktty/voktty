@@ -34,8 +34,14 @@ impl AgentHistoryState {
         let _ = std::fs::create_dir_all(&db_dir);
         let db_path = db_dir.join("agent_history_wake.db");
 
-        let (store, _) = open_or_rebuild(&db_path)
-            .unwrap_or_else(|_| (open_or_rebuild(&PathBuf::from("agent_history_wake.db")).unwrap().0, None));
+        let (store, _) = open_or_rebuild(&db_path).unwrap_or_else(|_| {
+            (
+                open_or_rebuild(&PathBuf::from("agent_history_wake.db"))
+                    .unwrap()
+                    .0,
+                None,
+            )
+        });
         let store = Arc::new(store);
         let adapters = create_adapters();
         let is_scanning = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -377,7 +383,9 @@ pub async fn agent_history_get_stats(
     let mut total_messages = 0u32;
 
     for s in &wake_sessions {
-        *agents_count.entry(s.agent.as_str().to_string()).or_insert(0) += 1;
+        *agents_count
+            .entry(s.agent.as_str().to_string())
+            .or_insert(0) += 1;
         if !s.project_name.is_empty() {
             *projects_count.entry(s.project_name.clone()).or_insert(0) += 1;
         }

@@ -23,8 +23,8 @@ use voktty_remote_protocol::{
     METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME,
     METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
     METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
-    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW,
-    METHOD_WRITE_FILE, PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
+    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
+    PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -739,7 +739,13 @@ impl RemoteServer {
         };
         let mut watch = match watch.lock() {
             Ok(watch) => watch,
-            Err(_) => return RemoteResponse::failure(request.id, "watch_failed", "remote watch state is poisoned"),
+            Err(_) => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "watch_failed",
+                    "remote watch state is poisoned",
+                )
+            }
         };
         let mut removed = 0usize;
         for path in paths {
@@ -788,7 +794,9 @@ impl RemoteServer {
     fn add_watch_tree(&mut self, request: RemoteRequest, output: SharedOutput) -> RemoteResponse {
         let params = match serde_json::from_value::<WatchTreeParams>(request.params) {
             Ok(params) => params,
-            Err(error) => return RemoteResponse::failure(request.id, "invalid_params", error.to_string()),
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
         };
         let root = match self.resolve_watch_add(&params.root) {
             Ok(root) => root,
@@ -797,33 +805,63 @@ impl RemoteServer {
         if let Err(error) = self.ensure_watch_started(output) {
             return RemoteResponse::failure(request.id, "watch_start_failed", error);
         }
-        let mut watch = match self.watcher.as_ref().expect("watcher was initialized").lock() {
+        let mut watch = match self
+            .watcher
+            .as_ref()
+            .expect("watcher was initialized")
+            .lock()
+        {
             Ok(watch) => watch,
-            Err(_) => return RemoteResponse::failure(request.id, "watch_failed", "remote watch state is poisoned"),
+            Err(_) => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "watch_failed",
+                    "remote watch state is poisoned",
+                )
+            }
         };
         if let Some(existing) = watch.tree_roots.get_mut(&root) {
             existing.refcount += 1;
-            return RemoteResponse::success(request.id, json!({ "watched": existing.watched_dirs.len() }));
+            return RemoteResponse::success(
+                request.id,
+                json!({ "watched": existing.watched_dirs.len() }),
+            );
         }
         let directories = walk_watchable_dirs(&root);
         if watched_directory_count(&watch) + directories.len() > MAX_WATCH_DIRECTORIES {
-            return RemoteResponse::failure(request.id, "watch_limit", "remote watch directory limit reached");
+            return RemoteResponse::failure(
+                request.id,
+                "watch_limit",
+                "remote watch directory limit reached",
+            );
         }
         let mut watched_dirs = HashSet::new();
         for directory in directories {
-            if watch.watcher.watch(&directory, RecursiveMode::NonRecursive).is_ok() {
+            if watch
+                .watcher
+                .watch(&directory, RecursiveMode::NonRecursive)
+                .is_ok()
+            {
                 watched_dirs.insert(directory);
             }
         }
         let watched = watched_dirs.len();
-        watch.tree_roots.insert(root, RemoteTreeRoot { watched_dirs, refcount: 1 });
+        watch.tree_roots.insert(
+            root,
+            RemoteTreeRoot {
+                watched_dirs,
+                refcount: 1,
+            },
+        );
         RemoteResponse::success(request.id, json!({ "watched": watched }))
     }
 
     fn remove_watch_tree(&mut self, request: RemoteRequest) -> RemoteResponse {
         let params = match serde_json::from_value::<WatchTreeParams>(request.params) {
             Ok(params) => params,
-            Err(error) => return RemoteResponse::failure(request.id, "invalid_params", error.to_string()),
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
         };
         let root = match self.resolve_watch_remove(&params.root) {
             Ok(root) => root,
@@ -834,7 +872,13 @@ impl RemoteServer {
         };
         let mut watch = match watch.lock() {
             Ok(watch) => watch,
-            Err(_) => return RemoteResponse::failure(request.id, "watch_failed", "remote watch state is poisoned"),
+            Err(_) => {
+                return RemoteResponse::failure(
+                    request.id,
+                    "watch_failed",
+                    "remote watch state is poisoned",
+                )
+            }
         };
         let Some(existing) = watch.tree_roots.get_mut(&root) else {
             return RemoteResponse::success(request.id, json!({ "removed": 0 }));
@@ -1782,7 +1826,9 @@ fn maintain_tree_watches(watch: &Arc<Mutex<RemoteWatch>>, event: &notify::Result
     }
     let Ok(mut watch) = watch.lock() else { return };
     for path in &event.paths {
-        let Some(parent) = path.parent() else { continue };
+        let Some(parent) = path.parent() else {
+            continue;
+        };
         let root = watch
             .tree_roots
             .iter()
@@ -1797,7 +1843,11 @@ fn maintain_tree_watches(watch: &Arc<Mutex<RemoteWatch>>, event: &notify::Result
                 if watched_directory_count(&watch) >= MAX_WATCH_DIRECTORIES {
                     return;
                 }
-                if watch.watcher.watch(&directory, RecursiveMode::NonRecursive).is_ok() {
+                if watch
+                    .watcher
+                    .watch(&directory, RecursiveMode::NonRecursive)
+                    .is_ok()
+                {
                     if let Some(tree) = watch.tree_roots.get_mut(&root) {
                         tree.watched_dirs.insert(directory);
                     }
@@ -1938,12 +1988,9 @@ mod tests {
     fn tree_watch_walk_prunes_skipped_directories_at_any_depth() {
         let directory = tempdir().expect("temp dir");
         let root = directory.path();
-        fs::create_dir_all(root.join("src/components"))
-            .expect("watchable directory");
-        fs::create_dir_all(root.join("src/node_modules/package"))
-            .expect("skipped directory");
-        fs::create_dir_all(root.join("nested/target/debug"))
-            .expect("nested skipped directory");
+        fs::create_dir_all(root.join("src/components")).expect("watchable directory");
+        fs::create_dir_all(root.join("src/node_modules/package")).expect("skipped directory");
+        fs::create_dir_all(root.join("nested/target/debug")).expect("nested skipped directory");
 
         let found: HashSet<PathBuf> = walk_watchable_dirs(root).into_iter().collect();
 
