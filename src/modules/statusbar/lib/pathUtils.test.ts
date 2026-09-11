@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { segmentsFromCwd } from "./pathUtils";
+import type { WorkspaceEnv } from "@/modules/workspace";
+import {
+  breadcrumbChildPath,
+  breadcrumbHomeForWorkspace,
+  segmentsFromCwd,
+} from "./pathUtils";
 
 function shape(cwd: string, home: string | null) {
   return segmentsFromCwd(cwd, home).map((s) => ({
@@ -76,5 +81,51 @@ describe("segmentsFromCwd", () => {
       { label: "usr", fullPath: "/usr", isHome: false },
       { label: "bin", fullPath: "/usr/bin", isHome: false },
     ]);
+  });
+});
+
+describe("breadcrumbHomeForWorkspace", () => {
+  const localHome = "/home/local-user";
+  const remoteEnvironments: WorkspaceEnv[] = [
+    { kind: "wsl", distro: "Ubuntu" },
+    {
+      kind: "ssh",
+      connection: {
+        id: "server-1",
+        name: "Server",
+        host: "server.example",
+      },
+      root: "/home/remote-user",
+    },
+    {
+      kind: "docker",
+      connection: {
+        containerId: "container-1",
+        containerName: "api",
+        image: "node:22",
+      },
+    },
+  ];
+
+  it("keeps the native home only for local navigation", () => {
+    expect(breadcrumbHomeForWorkspace(localHome, { kind: "local" })).toBe(
+      localHome,
+    );
+  });
+
+  it.each(remoteEnvironments)(
+    "does not label $kind paths using the local home",
+    (workspace) => {
+      expect(breadcrumbHomeForWorkspace(localHome, workspace)).toBeNull();
+    },
+  );
+});
+
+describe("breadcrumbChildPath", () => {
+  it("builds a child destination from the entry name only", () => {
+    expect(breadcrumbChildPath("/srv/app", "packages")).toBe(
+      "/srv/app/packages",
+    );
+    expect(breadcrumbChildPath("/", "var")).toBe("/var");
   });
 });

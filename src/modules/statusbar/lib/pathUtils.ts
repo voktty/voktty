@@ -1,3 +1,5 @@
+import type { WorkspaceEnv } from "@/modules/workspace";
+
 export type Segment = {
   label: string;
   fullPath: string;
@@ -5,6 +7,17 @@ export type Segment = {
 };
 
 const WINDOWS_DRIVE = /^([A-Za-z]:)(.*)$/;
+
+export function breadcrumbHomeForWorkspace(
+  home: string | null | undefined,
+  workspace: WorkspaceEnv | undefined,
+): string | null | undefined {
+  return !workspace || workspace.kind === "local" ? home : null;
+}
+
+export function breadcrumbChildPath(parent: string, child: string): string {
+  return parent.endsWith("/") ? `${parent}${child}` : `${parent}/${child}`;
+}
 
 function normalize(p: string | null | undefined): string {
   if (typeof p !== "string") {
