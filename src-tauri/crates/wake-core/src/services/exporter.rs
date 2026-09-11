@@ -550,7 +550,7 @@ mod compact_tests {
         let page = render_compact(std::slice::from_ref(&m), &o);
         let tool_lines = page.text.matches("🔧").count();
         assert!(
-            tool_lines >= 1 && tool_lines < 120,
+            (1..120).contains(&tool_lines),
             "{tool_lines} tool lines"
         );
         assert!(

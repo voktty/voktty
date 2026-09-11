@@ -72,8 +72,7 @@ fn main() -> Result<()> {
     if let Some(q) = args
         .iter()
         .position(|a| a == "--search")
-        .map(|i| args.get(i + 1))
-        .flatten()
+        .and_then(|i| args.get(i + 1))
     {
         let t1 = std::time::Instant::now();
         let (hits, degraded) = store.search(q, &[], None, 10)?;
