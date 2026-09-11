@@ -2,8 +2,8 @@
   "entries": [
     {
       "html": "index.html",
-      "maxResources": 175,
-      "maxGzipBytes": 1950000,
+      "maxResources": 170,
+      "maxGzipBytes": 1200000,
       "forbiddenAssets": [
         "streamdown-",
         "codemirror-",
@@ -13,13 +13,24 @@
         "ai-openai-",
         "ai-cerebras-",
         "ai-groq-",
-        "ai-xai-"
+        "ai-xai-",
+        "assets/ar-",
+        "assets/de-",
+        "assets/es-",
+        "assets/fr-",
+        "assets/hi-",
+        "assets/it-",
+        "assets/ja-",
+        "assets/ko-",
+        "assets/pt-",
+        "assets/ru-",
+        "assets/zh-"
       ]
     },
     {
       "html": "settings.html",
-      "maxResources": 50,
-      "maxGzipBytes": 1150000,
+      "maxResources": 40,
+      "maxGzipBytes": 700000,
       "forbiddenAssets": [
         "streamdown-",
         "codemirror-",
@@ -29,7 +40,18 @@
         "ai-openai-",
         "ai-cerebras-",
         "ai-groq-",
-        "ai-xai-"
+        "ai-xai-",
+        "assets/ar-",
+        "assets/de-",
+        "assets/es-",
+        "assets/fr-",
+        "assets/hi-",
+        "assets/it-",
+        "assets/ja-",
+        "assets/ko-",
+        "assets/pt-",
+        "assets/ru-",
+        "assets/zh-"
       ]
     }
   ]

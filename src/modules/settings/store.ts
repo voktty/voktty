@@ -21,6 +21,7 @@ import {
 } from "@/modules/agents/lib/launcher";
 import { type LanguageId, isLanguageId } from "@/modules/i18n/types";
 import { applyDocumentLocale } from "@/modules/i18n/direction";
+import { loadLocale } from "@/modules/i18n/resolve";
 import type { SshConnection } from "@/modules/ssh/types";
 import type { SshTunnelConfig } from "@/modules/ssh/tunnels/types";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
@@ -962,6 +963,7 @@ export async function setLspCustomServers(
 }
 
 export async function setLanguage(value: LanguageId): Promise<void> {
+  await loadLocale(value);
   applyDocumentLocale(value);
   await writePref(KEY_LANGUAGE, value);
   syncTrayLanguage(value);
