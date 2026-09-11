@@ -4,6 +4,7 @@ import { runCodexTextPrompt } from "@/modules/harness/lib/harness/codexText";
 import { runCursorTextPrompt } from "@/modules/harness/lib/harness/cursorText";
 import { runGrokTextPrompt } from "@/modules/harness/lib/harness/grokText";
 import { runOpenCodeTextPrompt } from "@/modules/harness/lib/harness/opencodeText";
+import { homeDir } from "@/modules/harness/lib/fs";
 import { t } from "@/modules/i18n";
 import type { LanguageModel } from "ai";
 
@@ -115,7 +116,7 @@ export class HarnessLanguageModel implements HarnessLanguageModelContract {
     const { binary, labelKey, run } = this.resolveAgent();
     const formattedPrompt = this.formatPrompt(options.prompt);
     const live = useChatStore.getState().live;
-    const cwd = live.getCwd() ?? live.getWorkspaceRoot();
+    const cwd = live.getCwd() ?? live.getWorkspaceRoot() ?? (await homeDir());
 
     if (!cwd) throw new Error(t("agentHistory.harnessWorkspaceRequired"));
     try {

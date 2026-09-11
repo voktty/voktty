@@ -51,7 +51,11 @@ import {
 } from "@/modules/ai/lib/keyring";
 import { useChatStore } from "@/modules/ai/store/chatStore";
 import { hasCurrentAiHealth } from "@/modules/ai/lib/availability";
-import { runAiHealthCheck } from "@/modules/ai/lib/healthCheck";
+import {
+  aiHealthCheckErrorDetail,
+  aiHealthCheckTimeoutMs,
+  runAiHealthCheck,
+} from "@/modules/ai/lib/healthCheck";
 import { hasAutocompleteAccess } from "@/modules/editor/lib/autocomplete/availability";
 import { detectCompletionCapabilities } from "@/modules/editor/lib/autocomplete/capabilities";
 import {
@@ -790,7 +794,7 @@ function DefaultsBlock({
     | { phase: "idle" }
     | { phase: "testing" }
     | { phase: "ok"; latencyMs: number }
-    | { phase: "fail" }
+    | { phase: "fail"; error?: string }
   >({ phase: "idle" });
 
   useEffect(() => {
@@ -816,17 +820,23 @@ function DefaultsBlock({
   const testAi = async () => {
     const revision = aiConfigRevision;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
     setHealthStatus({ phase: "testing" });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let targetModel = defaultModel;
     try {
       const preferences = usePreferencesStore.getState();
-      const targetModel = isDefaultConfigured
+      targetModel = isDefaultConfigured
         ? defaultModel
         : (getFirstConfiguredModelId(configuredIds, customEndpoints) ?? defaultModel);
 
       if (!isDefaultConfigured && targetModel !== defaultModel) {
         await setDefaultModel(targetModel);
       }
+
+      timeout = setTimeout(
+        () => controller.abort(),
+        aiHealthCheckTimeoutMs(targetModel),
+      );
 
       const result = await runAiHealthCheck(
         {
@@ -855,10 +865,13 @@ function DefaultsBlock({
       if (recorded) {
         await setAiEnabled(true);
       }
-    } catch {
-      setHealthStatus({ phase: "fail" });
+    } catch (error) {
+      setHealthStatus({
+        phase: "fail",
+        error: aiHealthCheckErrorDetail(targetModel, error),
+      });
     } finally {
-      clearTimeout(timeout);
+      if (timeout !== undefined) clearTimeout(timeout);
     }
   };
 
@@ -908,7 +921,9 @@ function DefaultsBlock({
                     latency: String(healthStatus.latencyMs),
                   })
                 : healthStatus.phase === "fail"
-                  ? t("settings.models.aiHealthFailed")
+                  ? healthStatus.error
+                    ? `${t("settings.models.aiHealthFailed")} ${healthStatus.error}`
+                    : t("settings.models.aiHealthFailed")
                   : healthCurrent
                     ? t("settings.models.aiHealthVerified")
                     : t("settings.models.aiHealthRequired")}
