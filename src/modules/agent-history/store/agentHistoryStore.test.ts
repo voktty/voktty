@@ -4,7 +4,7 @@ import * as bridge from "../lib/agentHistoryBridge";
 import type { HistorySession } from "../types";
 
 vi.mock("../lib/agentHistoryBridge", () => ({
-  fetchSessions: vi.fn(),
+  fetchSessionPage: vi.fn(),
   fetchMessages: vi.fn(),
   rescanHistory: vi.fn(),
   deleteHistorySession: vi.fn(),
@@ -17,6 +17,10 @@ vi.mock("../lib/agentHistoryBridge", () => ({
 describe("agentHistoryStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(bridge.fetchSessionPage).mockResolvedValue({
+      items: [], offset: 0, limit: 100, total: 0, has_more: false, scanning: false,
+    });
+    vi.mocked(bridge.fetchHistoryStats).mockResolvedValue(null);
     useAgentHistoryStore.setState({
       isOpen: false,
       sessions: [],
@@ -29,6 +33,8 @@ describe("agentHistoryStore", () => {
       selectedAgent: "all",
       selectedProject: "",
       stats: null,
+      hasMore: false,
+      offset: 0,
     });
   });
 
@@ -43,7 +49,7 @@ describe("agentHistoryStore", () => {
     expect(useAgentHistoryStore.getState().isOpen).toBe(false);
   });
 
-  it("loads sessions and sets first active session", async () => {
+  it("loads the first page without reading a transcript", async () => {
     const mockSession: HistorySession = {
       id: "claude_123",
       agent: "claude",
@@ -62,7 +68,9 @@ describe("agentHistoryStore", () => {
       resume_command: "claude --resume claude_123",
     };
 
-    vi.mocked(bridge.fetchSessions).mockResolvedValue([mockSession]);
+    vi.mocked(bridge.fetchSessionPage).mockResolvedValue({
+      items: [mockSession], offset: 0, limit: 100, total: 1, has_more: false, scanning: false,
+    });
     vi.mocked(bridge.fetchHistoryStats).mockResolvedValue({
       total_sessions: 1,
       total_messages: 5,
@@ -70,28 +78,12 @@ describe("agentHistoryStore", () => {
       projects_count: { voktty: 1 },
       last_scan_timestamp: 1700000000,
     });
-    vi.mocked(bridge.fetchMessages).mockResolvedValue([
-      {
-        id: "msg_1",
-        session_id: "claude_123",
-        role: "user",
-        content: "Fix OAuth",
-        sequence: 1,
-        timestamp: 1700000000,
-        tool_name: null,
-        tool_input: null,
-        tool_output: null,
-        is_error: false,
-        redacted: false,
-      },
-    ]);
-
     await useAgentHistoryStore.getState().loadSessions();
 
     const state = useAgentHistoryStore.getState();
     expect(state.sessions).toHaveLength(1);
-    expect(state.activeSessionId).toBe("claude_123");
-    expect(state.activeSession?.title).toBe("Fix OAuth2 Bug");
+    expect(state.activeSessionId).toBeNull();
+    expect(bridge.fetchMessages).not.toHaveBeenCalled();
   });
 
   it("handles deleteSession properly", async () => {
@@ -125,5 +117,20 @@ describe("agentHistoryStore", () => {
     const state = useAgentHistoryStore.getState();
     expect(state.sessions).toHaveLength(0);
     expect(state.activeSessionId).toBeNull();
+  });
+
+  it("appends the next page without reloading messages", async () => {
+    useAgentHistoryStore.setState({
+      sessions: [{ id: "s1", agent: "codex", title: "One", project_name: "p", project_path: "/p", cwd: "/p", git_branch: null, created_at: 1, updated_at: 1, message_count: 1, is_active: false, file_path: null, source_hash: null, can_resume: true, resume_command: null }],
+      hasMore: true,
+      offset: 0,
+    });
+    vi.mocked(bridge.fetchSessionPage).mockResolvedValueOnce({
+      items: [{ id: "s2", agent: "codex", title: "Two", project_name: "p", project_path: "/p", cwd: "/p", git_branch: null, created_at: 2, updated_at: 2, message_count: 1, is_active: false, file_path: null, source_hash: null, can_resume: true, resume_command: null }],
+      offset: 1, limit: 100, total: 2, has_more: false, scanning: false,
+    });
+    await useAgentHistoryStore.getState().loadMoreSessions();
+    expect(useAgentHistoryStore.getState().sessions.map((session) => session.id)).toEqual(["s1", "s2"]);
+    expect(bridge.fetchMessages).not.toHaveBeenCalled();
   });
 });
