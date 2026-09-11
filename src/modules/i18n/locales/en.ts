@@ -5405,6 +5405,11 @@ export const en = {
     approveTool: "Approve: {what}",
     harnessFinished: "{harness} finished",
   },
+  lightbox: {
+    preview: "Image preview: {alt}",
+    close: "Close image preview",
+    openFullScreen: "Open {name} full screen",
+  },
 };
 
 export type TranslationSchema = typeof en;
