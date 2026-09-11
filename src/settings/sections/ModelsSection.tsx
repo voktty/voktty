@@ -78,6 +78,7 @@ import {
   setDefaultModel,
   setFavoriteModelIds,
   setGroqSttModel,
+  setHarnessProviderEnabled,
   setLmstudioBaseURL,
   setLmstudioModelId,
   setMlxBaseURL,
@@ -165,6 +166,9 @@ export function ModelsSection() {
   const [adding, setAdding] = useState<Set<ProviderId>>(new Set());
 
   const defaultModel = usePreferencesStore((s) => s.defaultModelId);
+  const harnessProviderEnabled = usePreferencesStore(
+    (s) => s.harnessProviderEnabled,
+  );
   const lmstudioBaseURL = usePreferencesStore((s) => s.lmstudioBaseURL);
   const lmstudioModelId = usePreferencesStore((s) => s.lmstudioModelId);
   const mlxBaseURL = usePreferencesStore((s) => s.mlxBaseURL);
@@ -319,6 +323,7 @@ export function ModelsSection() {
   };
 
   const isConfigured = (id: ProviderId): boolean => {
+    if (id === "harness") return harnessProviderEnabled;
     if (id === "openrouter") return !!currentKeys[id] && !!openrouterModelId?.trim();
     if (!isLocalProvider(id)) return !!currentKeys[id];
     const cfg = localConfig(id);
@@ -341,7 +346,9 @@ export function ModelsSection() {
   );
 
   const removeProvider = (id: ProviderId) => {
-    if (id === "openrouter") {
+    if (id === "harness") {
+      void setHarnessProviderEnabled(false);
+    } else if (id === "openrouter") {
       void setOpenrouterModelId("");
       void onClearKey(id);
     } else if (isLocalProvider(id)) {
@@ -362,6 +369,9 @@ export function ModelsSection() {
   };
 
   const addProvider = (id: ProviderId) => {
+    if (id === "harness") {
+      void setHarnessProviderEnabled(true);
+    }
     setAdding((prev) => new Set(prev).add(id));
   };
 
@@ -440,6 +450,17 @@ export function ModelsSection() {
                   {visibleProviders.map((p) => {
                     const meta = LOCAL_META[p.id];
                     const cfg = localConfig(p.id);
+                    if (p.id === "harness") {
+                      return (
+                        <HarnessProviderCard
+                          key={p.id}
+                          provider={p}
+                          selectedModel={defaultModel}
+                          configured={configuredIds.has(p.id)}
+                          onRemove={() => removeProvider(p.id)}
+                        />
+                      );
+                    }
                     if (p.id === "openrouter") {
                       if (!cfg || !meta) return null;
                       return (
@@ -584,6 +605,74 @@ function ProviderMenuItem({
       <ProviderIcon provider={provider.id} size={13} />
       <span>{provider.label}</span>
     </DropdownMenuItem>
+  );
+}
+
+function HarnessProviderCard({
+  provider,
+  selectedModel,
+  configured,
+  onRemove,
+}: {
+  provider: ProviderInfo;
+  selectedModel: ModelId;
+  configured: boolean;
+  onRemove: () => void;
+}) {
+  const { t } = useTranslation();
+  const models = MODELS.filter((model) => model.provider === "harness");
+  const selected = models.some((model) => model.id === selectedModel)
+    ? selectedModel
+    : (models[0]?.id ?? "harness-claude");
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 px-3 py-3">
+      <div className="flex items-center gap-2">
+        <ProviderIcon provider={provider.id} size={16} />
+        <span className="flex-1 text-[12.5px] font-semibold">
+          {provider.label}
+        </span>
+        {configured ? (
+          <Badge variant="secondary" className="h-5 text-[10px]">
+            {t("common.enabled")}
+          </Badge>
+        ) : null}
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          onClick={onRemove}
+          aria-label={t("settings.models.removeProvider")}
+        >
+          <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={1.75} />
+        </Button>
+      </div>
+      <FieldRow label={t("settings.models.localAgent")}>
+        <Select
+          value={selected}
+          onValueChange={(value) => {
+            const modelId = value as ModelId;
+            useChatStore.getState().setSelectedModelId(modelId);
+            void setDefaultModel(modelId);
+          }}
+        >
+          <SelectTrigger className="h-8 flex-1 text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {models.map((model) => (
+              <SelectItem key={model.id} value={model.id}>
+                {model.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FieldRow>
+      <p className="text-[10.5px] leading-relaxed text-muted-foreground">
+        {t("settings.models.localAgentDescription")}
+      </p>
+    </div>
   );
 }
 

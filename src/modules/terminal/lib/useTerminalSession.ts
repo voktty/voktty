@@ -1,6 +1,5 @@
 import { ensureMonoFontsLoaded } from "@/lib/fonts";
 import { IS_WINDOWS } from "@/lib/platform";
-import { useDevServerCaptureStore } from "@/modules/preview/devServerStore";
 import {
   beginConnectionAttempt,
   disconnectConnection,
@@ -9,6 +8,7 @@ import {
   requestConnectionCancellation,
   settleConnectionAttempt,
 } from "@/modules/connections/lifecycle";
+import { useDevServerCaptureStore } from "@/modules/preview/devServerStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   LOCAL_WORKSPACE,
@@ -864,9 +864,7 @@ function deliverPtyBytes(leafId: number, bytes: Uint8Array): void {
     });
   } else {
     if (devServerChunk !== null) {
-      useDevServerCaptureStore
-        .getState()
-        .processOutput(leafId, devServerChunk);
+      useDevServerCaptureStore.getState().processOutput(leafId, devServerChunk);
     }
     s.dormantRing.push(bytes);
   }
@@ -1103,6 +1101,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
       if (s.blocks) {
         const osc52 = registerOsc52ClipboardHandler(term);
         const deco = new BlockDecorations(term, {
+          shouldAcceptCwd: () => s.pty === null || !isAgentActivePty(s.pty.id),
           onCwd: (next) => {
             markSessionReady(leafId);
             if (s.lastCwd === next) return;
@@ -1151,6 +1150,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
           s.callbacks.onCwd?.(next);
         },
         shellState,
+        () => s.pty === null || !isAgentActivePty(s.pty.id),
       );
       const osc52 = registerOsc52ClipboardHandler(term);
       let lastReportedTitle: string | null = null;

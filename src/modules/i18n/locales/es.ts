@@ -559,6 +559,9 @@ export const es: TranslationSchema = {
       connected: "Conectado",
       getKey: "Obtener clave",
       removeProvider: "Eliminar proveedor",
+      localAgent: "Agente local",
+      localAgentDescription:
+        "Usa el CLI instalado seleccionado y su sesión OAuth local existente. No se copia ninguna clave de API en Voktty.",
       pasteKey: "Pegar clave de API",
       hideKey: "Ocultar clave",
       showKey: "Mostrar clave",
@@ -4333,6 +4336,8 @@ export const es: TranslationSchema = {
     copyMessageText: "Copiar texto del mensaje",
     harnessExecutionError:
       "Error de ejecución local del agente {agent}: {error}. Asegúrate de que la CLI '{binary}' está instalada y autenticada.",
+    harnessWorkspaceRequired:
+      "Abre un espacio de trabajo local antes de usar un agente OAuth local.",
     noActiveTerminal: "Abre una terminal antes de reanudar esta sesión.",
     noSessionSelected: "No hay sesión seleccionada",
     resumeCommandCopied: "Comando de reanudación copiado al portapapeles",
@@ -5523,6 +5528,9 @@ export const es: TranslationSchema = {
     openLabel: "Abrir {label}",
     previewLabel: "Previsualizar {type}: {label}",
     closePreview: "Cerrar previsualización",
+    file: "Archivo",
+    previewLines: "Líneas de previsualización",
+    emptyFile: "Archivo vacío",
   },
   notifications: {
     title: "Voktty",
