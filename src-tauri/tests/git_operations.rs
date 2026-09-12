@@ -425,6 +425,35 @@ fn panel_snapshot_returns_repo_and_status_after_commit() {
 }
 
 #[test]
+fn history_metadata_returns_branches_repo_and_status_from_one_authorized_root() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("a.txt", "alpha\n");
+    fx.run_git(&["add", "a.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "seed"]);
+    fx.run_git(&["branch", "feature"]);
+    fx.write_file("b.txt", "beta\n");
+
+    let metadata = operations::history_metadata(&fx.registry, &fx.repo_str(), &fx.workspace)
+        .expect("history_metadata");
+
+    assert_eq!(metadata.repo.repo_root, fx.repo_str());
+    assert_eq!(metadata.repo.branch, "main");
+    assert_eq!(metadata.status.branch, "main");
+    assert!(metadata
+        .status
+        .changed_files
+        .iter()
+        .any(|file| file.path == "b.txt"));
+    assert!(metadata
+        .branches
+        .iter()
+        .any(|branch| branch.name == "feature"));
+}
+
+#[test]
 fn panel_snapshot_outside_repo_is_empty() {
     if skip_if_no_git() {
         return;

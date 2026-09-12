@@ -9,10 +9,10 @@ use crate::modules::git::process::{
 };
 use crate::modules::git::types::{
     DiscardEntry, GitBlameLine, GitBranchComparison, GitBranchEntry, GitBranchListResult,
-    GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult, GitLogEntry,
-    GitOperationStatus, GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry,
-    GitStatusSnapshot, GitTagEntry, TextSource, WorktreeRemoveOutcome, DEFAULT_TIMEOUT_SECS,
-    MAX_FILE_BYTES, NETWORK_TIMEOUT_SECS,
+    GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult, GitHistoryMetadata,
+    GitLogEntry, GitOperationStatus, GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo,
+    GitStashEntry, GitStatusSnapshot, GitTagEntry, TextSource, WorktreeRemoveOutcome,
+    DEFAULT_TIMEOUT_SECS, MAX_FILE_BYTES, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream, ResolvedGitDirectory,
@@ -130,6 +130,30 @@ pub fn status(
     let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
     ensure_git_available(&repo_root.workspace)?;
     status_inner(&repo_root)
+}
+
+pub fn history_metadata(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<GitHistoryMetadata> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+
+    let status = status_inner(&repo_root)?;
+    let branches = list_branches_inner(&repo_root)?;
+    let repo = GitRepoInfo {
+        repo_root: repo_root.git_path.clone(),
+        branch: status.branch.clone(),
+        upstream: status.upstream.clone(),
+        is_detached: status.is_detached,
+    };
+
+    Ok(GitHistoryMetadata {
+        branches: branches.branches,
+        repo,
+        status,
+    })
 }
 
 fn status_inner(repo_root: &ResolvedGitDirectory) -> Result<GitStatusSnapshot> {
@@ -1091,6 +1115,10 @@ pub fn list_branches(
     let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
     ensure_git_available(&repo_root.workspace)?;
 
+    list_branches_inner(&repo_root)
+}
+
+fn list_branches_inner(repo_root: &ResolvedGitDirectory) -> Result<GitBranchListResult> {
     let mut branches: Vec<GitBranchEntry> = Vec::new();
 
     let current_branch = git_stdout_line_opt(
