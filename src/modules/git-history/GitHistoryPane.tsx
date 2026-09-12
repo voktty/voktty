@@ -68,15 +68,10 @@ export function GitHistoryPane({
 
   const loadMetadata = useCallback(async () => {
     try {
-      const [branchRes, panelSnapshot] = await Promise.all([
-        native.gitListBranches(repoRoot, workspaceEnv),
-        native.gitPanelSnapshot(repoRoot, workspaceEnv).catch(() => null),
-      ]);
-      setBranches(branchRes.branches || []);
-      if (panelSnapshot) {
-        setRepoInfo(panelSnapshot.repo);
-        setStatus(panelSnapshot.status);
-      }
+      const metadata = await native.gitHistoryMetadata(repoRoot, workspaceEnv);
+      setBranches(metadata.branches);
+      setRepoInfo(metadata.repo);
+      setStatus(metadata.status);
     } catch {
       // Ignored silently during background sync
     }

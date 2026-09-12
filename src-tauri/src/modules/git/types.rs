@@ -143,6 +143,14 @@ pub struct GitBranchListResult {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitHistoryMetadata {
+    pub branches: Vec<GitBranchEntry>,
+    pub repo: GitRepoInfo,
+    pub status: GitStatusSnapshot,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitStashEntry {
     pub index: u32,
     pub sha: String,

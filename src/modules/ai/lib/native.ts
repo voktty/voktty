@@ -159,6 +159,12 @@ export type GitBranchListResult = {
   branches: GitBranchEntry[];
 };
 
+export type GitHistoryMetadata = {
+  branches: GitBranchEntry[];
+  repo: GitRepoInfo;
+  status: GitStatusSnapshot;
+};
+
 export type WorktreeRemoveOutcome = {
   removed: boolean;
   reason: string | null;
@@ -499,6 +505,11 @@ export const native = {
     invoke<GitPanelSnapshot>("git_panel_snapshot", {
       cwd,
       workspace: resolveGitWorkspace(cwd, workspace),
+    }),
+  gitHistoryMetadata: (repoRoot: string, workspace?: WorkspaceEnv) =>
+    invoke<GitHistoryMetadata>("git_history_metadata", {
+      repoRoot,
+      workspace: resolveGitWorkspace(repoRoot, workspace),
     }),
   gitStatus: (repoRoot: string, workspace?: WorkspaceEnv) =>
     invoke<GitStatusSnapshot>("git_status", {

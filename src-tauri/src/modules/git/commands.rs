@@ -3,9 +3,9 @@ use tauri::{AppHandle, Manager};
 use crate::modules::git::operations;
 use crate::modules::git::types::{
     DiscardEntry, GitBlameLine, GitBranchComparison, GitBranchListResult, GitCommitFileChange,
-    GitCommitResult, GitDiffContentResult, GitDiffResult, GitLogEntry, GitOperationStatus,
-    GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry, GitStatusSnapshot, GitTagEntry,
-    WorktreeRemoveOutcome,
+    GitCommitResult, GitDiffContentResult, GitDiffResult, GitHistoryMetadata, GitLogEntry,
+    GitOperationStatus, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStashEntry,
+    GitStatusSnapshot, GitTagEntry, WorktreeRemoveOutcome,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
@@ -44,6 +44,19 @@ pub async fn git_panel_snapshot(
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
         operations::panel_snapshot(r, &cwd, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_history_metadata(
+    repo_root: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<GitHistoryMetadata, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::history_metadata(r, &repo_root, &workspace).map_err(Into::into)
     })
     .await
 }
