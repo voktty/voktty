@@ -16,7 +16,6 @@ import { useTranslation } from "@/modules/i18n";
 import {
   ArrowDown01Icon,
   Clock01Icon,
-  Delete02Icon,
   FlashIcon,
   GlobalIcon,
   Link01Icon,
@@ -25,13 +24,34 @@ import {
   WorkflowSquare01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { lazy, Suspense } from "react";
 import { useApiClientTabStore } from "../store/ApiClientStoreContext";
-import { ApiBrowserView } from "./ApiBrowserView";
-import { ApiCollectionExplorer } from "./ApiCollectionExplorer";
-import { RequestEditor } from "./RequestEditor";
-import { ResponseViewer } from "./ResponseViewer";
-import { SandboxProbePanel } from "./SandboxProbePanel";
-import { ScenarioRunner } from "./ScenarioRunner";
+
+const LazyApiBrowserView = lazy(() =>
+  import("./ApiBrowserView").then((module) => ({ default: module.ApiBrowserView })),
+);
+const LazyApiCollectionExplorer = lazy(() =>
+  import("./ApiCollectionExplorer").then((module) => ({
+    default: module.ApiCollectionExplorer,
+  })),
+);
+const LazyApiHistoryView = lazy(() =>
+  import("./ApiHistoryView").then((module) => ({ default: module.ApiHistoryView })),
+);
+const LazyRequestEditor = lazy(() =>
+  import("./RequestEditor").then((module) => ({ default: module.RequestEditor })),
+);
+const LazyResponseViewer = lazy(() =>
+  import("./ResponseViewer").then((module) => ({ default: module.ResponseViewer })),
+);
+const LazySandboxProbePanel = lazy(() =>
+  import("./SandboxProbePanel").then((module) => ({
+    default: module.SandboxProbePanel,
+  })),
+);
+const LazyScenarioRunner = lazy(() =>
+  import("./ScenarioRunner").then((module) => ({ default: module.ScenarioRunner })),
+);
 
 export function ApiClientView() {
   const { t } = useTranslation();
@@ -39,8 +59,6 @@ export function ApiClientView() {
     activeTab,
     setActiveTab,
     history,
-    loadFromHistory,
-    clearHistory,
     sidebarCollapsed,
     toggleSidebar,
     environments,
@@ -208,7 +226,9 @@ export function ApiClientView() {
             {!sidebarCollapsed && (
               <>
                 <ResizablePanel defaultSize="20%" minSize="14%" maxSize="32%">
-                  <ApiCollectionExplorer />
+                  <Suspense fallback={null}>
+                    <LazyApiCollectionExplorer />
+                  </Suspense>
                 </ResizablePanel>
                 <ResizableHandle />
               </>
@@ -218,7 +238,9 @@ export function ApiClientView() {
               defaultSize={sidebarCollapsed ? "50%" : "42%"}
               minSize="25%"
             >
-              <RequestEditor />
+              <Suspense fallback={null}>
+                <LazyRequestEditor />
+              </Suspense>
             </ResizablePanel>
 
             <ResizableHandle />
@@ -227,78 +249,35 @@ export function ApiClientView() {
               defaultSize={sidebarCollapsed ? "50%" : "38%"}
               minSize="25%"
             >
-              <ResponseViewer />
+              <Suspense fallback={null}>
+                <LazyResponseViewer />
+              </Suspense>
             </ResizablePanel>
           </ResizablePanelGroup>
         )}
 
-        {activeTab === "browser" && <ApiBrowserView />}
+        {activeTab === "browser" && (
+          <Suspense fallback={null}>
+            <LazyApiBrowserView />
+          </Suspense>
+        )}
 
-        {activeTab === "sandbox" && <SandboxProbePanel />}
+        {activeTab === "sandbox" && (
+          <Suspense fallback={null}>
+            <LazySandboxProbePanel />
+          </Suspense>
+        )}
 
-        {activeTab === "scenarios" && <ScenarioRunner />}
+        {activeTab === "scenarios" && (
+          <Suspense fallback={null}>
+            <LazyScenarioRunner />
+          </Suspense>
+        )}
 
         {activeTab === "history" && (
-          <div className="flex h-full flex-col p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-semibold">{t("apiClient.header.history")}</span>
-              {history.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={clearHistory}
-                  className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/10"
-                >
-                  <HugeiconsIcon icon={Delete02Icon} size={12} />
-                  <span>{t("apiClient.header.clearHistory")}</span>
-                </Button>
-              )}
-            </div>
-
-            {history.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-                {t("apiClient.header.noHistory")}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 overflow-auto">
-                {history.map((item, index) => (
-                  <div
-                    key={`${item.request.id}-${item.timestamp}-${index}`}
-                    onClick={() => loadFromHistory(index)}
-                    className="flex cursor-pointer items-center justify-between rounded border border-border/40 bg-muted/20 p-2 text-xs transition-colors hover:border-primary/40 hover:bg-muted/40"
-                  >
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="font-mono font-bold text-primary">
-                        {item.request.method}
-                      </span>
-                      <span className="truncate font-mono text-muted-foreground">
-                        {item.request.url}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {item.response && (
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-[10px]",
-                            item.response.status >= 200 && item.response.status < 300
-                              ? "text-emerald-500 border-emerald-500/30"
-                              : "text-rose-500 border-rose-500/30",
-                          )}
-                        >
-                          {item.response.status}
-                        </Badge>
-                      )}
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(item.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <Suspense fallback={null}>
+            <LazyApiHistoryView />
+          </Suspense>
         )}
       </div>
     </div>

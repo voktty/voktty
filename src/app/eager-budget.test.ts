@@ -76,4 +76,22 @@ describe("startup bundle budget", () => {
     );
     expect(offenders).toEqual([]);
   }, 15000);
+
+  it("keeps inactive API Client sections behind local lazy boundaries", () => {
+    const { files } = traceEager("src/modules/api-client/components/ApiClientStack.tsx");
+    const normalized = files.map((file) => file.replace(/\\/g, "/"));
+    const optionalSections = [
+      "/modules/api-client/components/ApiBrowserView",
+      "/modules/api-client/components/ApiCollectionExplorer",
+      "/modules/api-client/components/ApiHistoryView",
+      "/modules/api-client/components/RequestEditor",
+      "/modules/api-client/components/ResponseViewer",
+      "/modules/api-client/components/SandboxProbePanel",
+      "/modules/api-client/components/ScenarioRunner",
+    ];
+    const offenders = normalized.filter((file) =>
+      optionalSections.some((section) => file.includes(section)),
+    );
+    expect(offenders).toEqual([]);
+  }, 15000);
 });
