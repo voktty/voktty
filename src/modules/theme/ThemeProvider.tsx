@@ -29,8 +29,8 @@ import { SurfaceLayer } from "./SurfaceLayer";
 import {
   getBuiltinTheme,
   getDefaultTheme,
-  isLegacyVariationId,
 } from "./themes";
+import { isLegacyVariationId } from "./legacyThemeIds";
 import { resolveAppearanceSelection } from "./resolveAppearanceSelection";
 import type { Theme } from "./types";
 import { getBackdropKind } from "./vibrancy";

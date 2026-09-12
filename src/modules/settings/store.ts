@@ -30,7 +30,7 @@ import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { getOptimalInitialZoomLevel } from "@/lib/optimalZoom";
 import { ensureStorageMigrated } from "@/lib/storageMigration";
-import { isLegacyVariationId } from "@/modules/theme/themes";
+import { isLegacyVariationId } from "@/modules/theme/legacyThemeIds";
 
 export type ThemePref = "system" | "light" | "dark";
 
