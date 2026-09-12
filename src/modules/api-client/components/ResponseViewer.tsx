@@ -15,12 +15,12 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useApiClientStore } from "../store/apiClientStore";
+import { useApiClientTabStore } from "../store/ApiClientStoreContext";
 
 export function ResponseViewer() {
   const { t } = useTranslation();
   const aiAvailable = useAiAvailable();
-  const { activeResponse, activeRequest, isLoading, cancelRequest } = useApiClientStore();
+  const { activeResponse, activeRequest, isLoading, cancelRequest } = useApiClientTabStore();
   const [activeTab, setActiveTab] = useState<"body" | "headers" | "timings">("body");
   const [viewMode, setViewMode] = useState<"pretty" | "raw">("pretty");
 

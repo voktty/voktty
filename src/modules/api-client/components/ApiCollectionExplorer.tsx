@@ -20,7 +20,7 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useApiClientStore } from "../store/apiClientStore";
+import { useApiClientTabStore } from "../store/ApiClientStoreContext";
 import type { ApiMethod, ApiRequest } from "../types";
 
 export const METHOD_BADGES: Record<
@@ -55,7 +55,7 @@ export function ApiCollectionExplorer() {
     createRequest,
     selectRequest,
     deleteRequest,
-  } = useApiClientStore();
+  } = useApiClientTabStore();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [newColName, setNewColName] = useState("");
