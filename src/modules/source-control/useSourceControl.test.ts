@@ -1,11 +1,71 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   beginSourceControlRefresh,
+  loadSharedSourceControlSnapshot,
   ownsSourceControlRefresh,
   planSourceControlRefresh,
   repositoryContainsContext,
   repositoryInfoFromStatus,
 } from "./useSourceControl";
+
+const sharedSnapshot = {
+  repo: {
+    repoRoot: "/repo",
+    branch: "main",
+    upstream: null,
+    isDetached: false,
+  },
+  status: {
+    repoRoot: "/repo",
+    branch: "main",
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    isDetached: false,
+    truncated: false,
+    changedFiles: [],
+  },
+  remoteError: null,
+};
+
+describe("loadSharedSourceControlSnapshot", () => {
+  it("shares one in-flight load between consumers of the same repository", async () => {
+    const load = vi.fn(async () => sharedSnapshot);
+    const key = "test-shared-inflight\0repo:/repo";
+
+    const [first, second] = await Promise.all([
+      loadSharedSourceControlSnapshot(key, "test-shared-inflight", false, load),
+      loadSharedSourceControlSnapshot(key, "test-shared-inflight", false, load),
+    ]);
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(first).toEqual(sharedSnapshot);
+    expect(second).toEqual(sharedSnapshot);
+  });
+
+  it("reuses a fresh snapshot only when the caller permits ambient caching", async () => {
+    const key = "test-shared-cache\0repo:/repo";
+    const firstLoad = vi.fn(async () => sharedSnapshot);
+    const secondLoad = vi.fn(async () => ({ ...sharedSnapshot, repo: null }));
+
+    await loadSharedSourceControlSnapshot(
+      key,
+      "test-shared-cache",
+      false,
+      firstLoad,
+    );
+    const cached = await loadSharedSourceControlSnapshot(
+      key,
+      "test-shared-cache",
+      true,
+      secondLoad,
+    );
+
+    expect(firstLoad).toHaveBeenCalledTimes(1);
+    expect(secondLoad).not.toHaveBeenCalled();
+    expect(cached).toEqual(sharedSnapshot);
+  });
+});
 
 describe("planSourceControlRefresh", () => {
   it("reuses an identical in-flight refresh without invalidating its request", () => {
