@@ -134,6 +134,17 @@ export type ApiClientPersistedState = Pick<
   "activeTab" | "sidebarCollapsed" | "variablesDrawerOpen"
 >;
 
+export const API_CLIENT_STORAGE_VERSION = 2;
+export const LEGACY_API_CLIENT_STORAGE_KEY = "voktty-api-client-storage";
+
+const API_CLIENT_TABS = new Set<ApiClientTabMode>([
+  "request",
+  "browser",
+  "sandbox",
+  "scenarios",
+  "history",
+]);
+
 export function getApiClientPersistedState(
   state: ApiClientStore,
 ): ApiClientPersistedState {
@@ -142,6 +153,41 @@ export function getApiClientPersistedState(
     sidebarCollapsed: state.sidebarCollapsed,
     variablesDrawerOpen: state.variablesDrawerOpen,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * Reads the only non-sensitive fields from the pre-v2 shared store. The legacy
+ * record is deliberately left intact so users retain a recoverable copy of its
+ * requests and secrets until an explicit Vault migration is available.
+ */
+export function getLegacyApiClientPresentationState(
+  serialized: string | null,
+): Partial<ApiClientPersistedState> {
+  if (!serialized) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(serialized);
+    const state = isRecord(parsed) && isRecord(parsed.state) ? parsed.state : parsed;
+    if (!isRecord(state)) return {};
+
+    return {
+      ...(typeof state.activeTab === "string" && API_CLIENT_TABS.has(state.activeTab as ApiClientTabMode)
+        ? { activeTab: state.activeTab as ApiClientTabMode }
+        : {}),
+      ...(typeof state.sidebarCollapsed === "boolean"
+        ? { sidebarCollapsed: state.sidebarCollapsed }
+        : {}),
+      ...(typeof state.variablesDrawerOpen === "boolean"
+        ? { variablesDrawerOpen: state.variablesDrawerOpen }
+        : {}),
+    };
+  } catch {
+    return {};
+  }
 }
 
 const DEFAULT_POKEMON_REQUEST: ApiRequest = {
@@ -396,12 +442,13 @@ const DEFAULT_WEBHOOK: ApiWebhookDispatch = {
 };
 
 export const createApiClientStore = (
-  storageName: string = "voktty-api-client-storage",
+  storageName: string = LEGACY_API_CLIENT_STORAGE_KEY,
+  initialPresentationState: Partial<ApiClientPersistedState> = {},
 ) =>
   create<ApiClientStore>()(
   persist(
     (set, get) => ({
-      activeTab: "request",
+      activeTab: initialPresentationState.activeTab ?? "request",
       activeRequest: DEFAULT_POKEMON_REQUEST,
       activeResponse: null,
       isLoading: false,
@@ -409,8 +456,8 @@ export const createApiClientStore = (
       history: [],
 
       // Sidebar and UI state
-      sidebarCollapsed: false,
-      variablesDrawerOpen: false,
+      sidebarCollapsed: initialPresentationState.sidebarCollapsed ?? false,
+      variablesDrawerOpen: initialPresentationState.variablesDrawerOpen ?? false,
 
       // Collections & Workspace Explorer
       collections: DEFAULT_COLLECTIONS,
@@ -979,7 +1026,7 @@ export const createApiClientStore = (
     }),
     {
       name: storageName,
-      version: 2,
+      version: API_CLIENT_STORAGE_VERSION,
       partialize: getApiClientPersistedState,
     },
   ),

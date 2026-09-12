@@ -1,10 +1,27 @@
 import { createContext, useContext, useRef, type ReactNode } from "react";
 import type { UseBoundStore, StoreApi } from "zustand";
-import { createApiClientStore, type ApiClientStore } from "./apiClientStore";
+import {
+  createApiClientStore,
+  getLegacyApiClientPresentationState,
+  LEGACY_API_CLIENT_STORAGE_KEY,
+  type ApiClientStore,
+} from "./apiClientStore";
 
 type ApiClientBoundStore = UseBoundStore<StoreApi<ApiClientStore>>;
 
 const ApiClientStoreContext = createContext<ApiClientBoundStore | null>(null);
+
+function getLegacyPresentationState() {
+  if (typeof window === "undefined") return {};
+
+  try {
+    return getLegacyApiClientPresentationState(
+      window.localStorage.getItem(LEGACY_API_CLIENT_STORAGE_KEY),
+    );
+  } catch {
+    return {};
+  }
+}
 
 export function ApiClientStoreProvider({
   tabId,
@@ -15,7 +32,10 @@ export function ApiClientStoreProvider({
 }) {
   const storeRef = useRef<ApiClientBoundStore | null>(null);
   if (!storeRef.current) {
-    storeRef.current = createApiClientStore(`voktty-api-client-storage:${tabId}`);
+    storeRef.current = createApiClientStore(
+      `${LEGACY_API_CLIENT_STORAGE_KEY}:${tabId}`,
+      getLegacyPresentationState(),
+    );
   }
   return (
     <ApiClientStoreContext.Provider value={storeRef.current}>
