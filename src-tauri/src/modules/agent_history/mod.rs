@@ -1,8 +1,4 @@
-pub mod adapters;
-pub mod db;
-pub mod indexer;
 pub mod models;
-pub mod sanitizer;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
