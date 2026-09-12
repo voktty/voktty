@@ -226,11 +226,9 @@ import {
 } from "@/modules/terminal";
 import { useTerminalCopilotStore } from "@/modules/terminal/copilot/terminalCopilotStore";
 import { useKanbanStore } from "@/modules/notes-board/store/kanbanStore";
-import {
-  ThemeProvider,
-  useThemeFileEditing,
-  WindowVibrancyBridge,
-} from "@/modules/theme";
+import { ThemeProvider } from "@/modules/theme/ThemeProvider";
+import { WindowVibrancyBridge } from "@/modules/theme/WindowVibrancyBridge";
+import { useThemeFileEditing } from "@/modules/theme/useThemeFileEditing";
 import { UpdaterDialog } from "@/modules/updater";
 import { WorkbenchPanel, type WorkbenchBuiltinTab } from "@/modules/workbench";
 import {

@@ -1,7 +1,8 @@
 import "../styles/globals.css";
 
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
-import { ThemeProvider } from "@/modules/theme";
+import { ThemeProvider } from "@/modules/theme/ThemeProvider";
+import { loadBuiltinTheme } from "@/modules/theme/themeLoader";
 import { applyDocumentLocale, loadLocale, readFastLanguage } from "@/modules/i18n";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import ReactDOM from "react-dom/client";
@@ -10,6 +11,11 @@ import { SettingsApp } from "./SettingsApp";
 const startupLanguage = readFastLanguage();
 await loadLocale(startupLanguage);
 applyDocumentLocale(startupLanguage);
+const startupThemeId = window.localStorage.getItem("voktty-ui-theme-id-shadow") ?? "voktty-default";
+const startupThemeVariation = window.localStorage.getItem("voktty-ui-theme-variation-shadow") ?? "default";
+await loadBuiltinTheme(
+  startupThemeId === "voktty-default" ? startupThemeVariation : startupThemeId,
+);
 
 document.documentElement.dataset.platform = IS_WINDOWS
   ? "windows"

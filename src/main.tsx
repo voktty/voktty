@@ -10,11 +10,17 @@ import { initLaunchRequests } from "@/lib/launchRequest";
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
 import { markStartupPhase } from "@/lib/startupTiming";
 import { applyDocumentLocale, loadLocale, readFastLanguage } from "@/modules/i18n";
+import { loadBuiltinTheme } from "@/modules/theme/themeLoader";
 
 markStartupPhase("js-start");
 const startupLanguage = readFastLanguage();
 await loadLocale(startupLanguage);
 applyDocumentLocale(startupLanguage);
+const startupThemeId = window.localStorage.getItem("voktty-ui-theme-id-shadow") ?? "voktty-default";
+const startupThemeVariation = window.localStorage.getItem("voktty-ui-theme-variation-shadow") ?? "default";
+await loadBuiltinTheme(
+  startupThemeId === "voktty-default" ? startupThemeVariation : startupThemeId,
+);
 
 document.documentElement.dataset.platform = IS_WINDOWS
   ? "windows"

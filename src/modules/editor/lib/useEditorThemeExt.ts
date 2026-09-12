@@ -1,5 +1,6 @@
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { resolveEditorThemeId, useTheme } from "@/modules/theme";
+import { useTheme } from "@/modules/theme/ThemeProvider";
+import { resolveEditorThemeId } from "@/modules/theme/resolveEditorTheme";
 import type { Extension } from "@codemirror/state";
 import { useMemo } from "react";
 import { EDITOR_THEME_EXT } from "./themes";

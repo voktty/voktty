@@ -1,7 +1,7 @@
 import { resolveFontFamily } from "@/lib/fonts";
 import { fmtShortcut, MOD_KEY } from "@/lib/platform";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/modules/theme";
+import { useTheme } from "@/modules/theme/ThemeProvider";
 import { useTranslation } from "@/modules/i18n";
 import { useEffect, useRef } from "react";
 import {

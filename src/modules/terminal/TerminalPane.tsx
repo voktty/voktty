@@ -6,7 +6,7 @@ import { HostSessionBadge } from "@/modules/collab/components/HostSessionBadge";
 import type { ResourceConnectionState } from "@/modules/connections/lifecycle";
 import { useTranslation } from "@/modules/i18n";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { useTheme } from "@/modules/theme";
+import { useTheme } from "@/modules/theme/ThemeProvider";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import {
   Cancel01Icon,

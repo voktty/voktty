@@ -14,7 +14,7 @@ import {
   scanOscCwd,
   type TerminalMetaPatch,
 } from "../lib/terminalTab";
-import { THEME_CHANGED_EVENT } from "@/modules/theme";
+import { THEME_CHANGED_EVENT } from "@/modules/theme/ThemeProvider";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
 import { readTerminalTokens } from "@/styles/tokens";
 import {
