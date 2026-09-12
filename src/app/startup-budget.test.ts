@@ -42,6 +42,17 @@ describe("generated startup budget", () => {
     ).toThrow(/forbidden startup asset heavy\.js/);
   });
 
+  it("fails when generated startup references exceed the resource budget", () => {
+    expect(() =>
+      checkStartupBudget(
+        {
+          entries: [{ html: "index.html", maxResources: 2 }],
+        },
+        fixtures,
+      ),
+    ).toThrow(/index\.html: 3 resources exceeds 2/);
+  });
+
   it("fails when generated HTML references an absent asset", () => {
     expect(() =>
       analyzeStartupEntry(fixtures, { html: "missing.html" }),

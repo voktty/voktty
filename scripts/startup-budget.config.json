@@ -2,7 +2,7 @@
   "entries": [
     {
       "html": "index.html",
-      "maxResources": 170,
+      "maxResources": 80,
       "maxGzipBytes": 1200000,
       "forbiddenAssets": [
         "streamdown-",
@@ -29,7 +29,7 @@
     },
     {
       "html": "settings.html",
-      "maxResources": 40,
+      "maxResources": 20,
       "maxGzipBytes": 700000,
       "forbiddenAssets": [
         "streamdown-",

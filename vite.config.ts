@@ -90,6 +90,12 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
           )
             return "core";
 
+          // The startup shell already reaches these primitives, but Rolldown
+          // emits one preload per component when they are shared by dialogs.
+          // Keep their existing eager cost in one request without assigning
+          // feature modules to the startup chunk.
+          if (id.includes("/src/components/ui/")) return "ui";
+
           if (!id.includes("node_modules")) return null;
 
           // Ubiquitous styling utils used by `cn()` on nearly every eager
@@ -134,12 +140,10 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
             id.includes("/scheduler/")
           )
             return "react";
-          // Startup currently preloads dozens of individual Hugeicons modules.
-          // Bucket them by their first two letters so Settings only preloads the
-          // icons its entry reaches, while main still avoids one request per icon.
+          // A shared icon chunk replaces dozens of startup preloads. Both
+          // entries remain inside their generated startup budgets.
           if (id.includes("@hugeicons/core-free-icons")) {
-            const icon = id.match(/\/esm\/([A-Z][a-z]?)/);
-            if (icon) return `icons-${icon[1].toLowerCase()}`;
+            return "icons";
           }
           if (id.includes("@radix-ui/") || id.includes("/radix-ui/"))
             return "radix";
