@@ -19,4 +19,3 @@ export function useEditorThemeExt(): Extension {
     return EDITOR_THEME_EXT[id] ?? EDITOR_THEME_EXT.atomone;
   }, [pref, themeId, themeVariation, customThemes, resolvedMode]);
 }
-

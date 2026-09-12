@@ -34,6 +34,11 @@ describe("startup bundle budget", () => {
     }
   }, 15000);
 
+  it("keeps the Catppuccin icon catalog behind its runtime loader", () => {
+    const { hits } = traceEager("src/main.tsx", ["@iconify-json/catppuccin"]);
+    expect([...hits.entries()]).toEqual([]);
+  }, 15000);
+
   // The agent harness (Agent Development panel: HarnessApp, the per-CLI
   // adapters, and the diff/arcade surfaces it renders) must stay behind
   // React.lazy so every launch doesn't pay for a feature most sessions never
