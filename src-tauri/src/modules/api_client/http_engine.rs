@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bytes::Bytes;
+use bytes::BytesMut;
 use futures_util::StreamExt;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
@@ -13,6 +13,108 @@ use tauri::ipc::{Channel, Response};
 type CancellationMap = Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<()>>>>;
 static ACTIVE_CANCELLATIONS: std::sync::LazyLock<CancellationMap> =
     std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+pub const MAX_API_REQUEST_BODY_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_API_RESPONSE_BODY_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_API_STREAM_BYTES: usize = 16 * 1024 * 1024;
+
+#[derive(Clone)]
+struct HttpClientPool {
+    secure_follow_redirects: reqwest::Client,
+    secure_no_redirects: reqwest::Client,
+    insecure_follow_redirects: reqwest::Client,
+    insecure_no_redirects: reqwest::Client,
+}
+
+fn build_http_client(
+    insecure_skip_verify: bool,
+    follow_redirects: bool,
+) -> Result<reqwest::Client, String> {
+    let mut builder = reqwest::Client::builder().redirect(if follow_redirects {
+        reqwest::redirect::Policy::limited(10)
+    } else {
+        reqwest::redirect::Policy::none()
+    });
+    if insecure_skip_verify {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    builder
+        .build()
+        .map_err(|error| format!("Failed to initialize HTTP client: {error}"))
+}
+
+impl HttpClientPool {
+    fn new() -> Result<Self, String> {
+        Ok(Self {
+            secure_follow_redirects: build_http_client(false, true)?,
+            secure_no_redirects: build_http_client(false, false)?,
+            insecure_follow_redirects: build_http_client(true, true)?,
+            insecure_no_redirects: build_http_client(true, false)?,
+        })
+    }
+
+    fn client(&self, insecure_skip_verify: bool, follow_redirects: bool) -> reqwest::Client {
+        match (insecure_skip_verify, follow_redirects) {
+            (false, true) => self.secure_follow_redirects.clone(),
+            (false, false) => self.secure_no_redirects.clone(),
+            (true, true) => self.insecure_follow_redirects.clone(),
+            (true, false) => self.insecure_no_redirects.clone(),
+        }
+    }
+}
+
+static HTTP_CLIENTS: std::sync::LazyLock<Result<HttpClientPool, String>> =
+    std::sync::LazyLock::new(HttpClientPool::new);
+
+fn pooled_client(
+    insecure_skip_verify: bool,
+    follow_redirects: bool,
+) -> Result<reqwest::Client, String> {
+    HTTP_CLIENTS
+        .as_ref()
+        .map_err(Clone::clone)
+        .map(|clients| clients.client(insecure_skip_verify, follow_redirects))
+}
+
+fn content_length_exceeds_limit(headers: &HeaderMap, limit: usize) -> bool {
+    headers
+        .get(reqwest::header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<usize>().ok())
+        .is_some_and(|content_length| content_length > limit)
+}
+
+fn request_body_len(body: &ApiRequestBody) -> Result<usize, String> {
+    match body {
+        ApiRequestBody::None => Ok(0),
+        ApiRequestBody::Json(value) => serde_json::to_vec(value)
+            .map(|serialized| serialized.len())
+            .map_err(|error| format!("Failed to serialize request body: {error}")),
+        ApiRequestBody::Text(value) => Ok(value.len()),
+        ApiRequestBody::Raw { content, .. } => Ok(content.len()),
+        ApiRequestBody::FormUrlEncoded(params) => {
+            let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+            for param in params
+                .iter()
+                .filter(|param| param.enabled && !param.key.is_empty())
+            {
+                serializer.append_pair(&param.key, &param.value);
+            }
+            Ok(serializer.finish().len())
+        }
+    }
+}
+
+fn ensure_request_body_within_limit(body: &ApiRequestBody) -> Result<(), String> {
+    let len = request_body_len(body)?;
+    if len > MAX_API_REQUEST_BODY_BYTES {
+        return Err(format!(
+            "Request body exceeds the {} MiB limit",
+            MAX_API_REQUEST_BODY_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
+}
 
 pub fn cancel_in_flight_request(request_id: &str) -> bool {
     let mut map = ACTIVE_CANCELLATIONS.lock().unwrap();
@@ -260,26 +362,13 @@ pub async fn execute_http_request(
             .map_err(|e| format!("Invalid HTTP method '{other}': {e}"))?,
     };
 
-    // 3. Build Client with timeout & TLS options
+    // 3. Select a pooled client. Timeout stays request-local so callers do not
+    // contaminate other requests that share the same connection pool.
     let timeout = Duration::from_millis(req.timeout_ms.unwrap_or(30_000).max(100));
-    let mut builder =
-        reqwest::Client::builder()
-            .timeout(timeout)
-            .redirect(if req.follow_redirects {
-                reqwest::redirect::Policy::limited(10)
-            } else {
-                reqwest::redirect::Policy::none()
-            });
+    let client = pooled_client(req.insecure_skip_verify, req.follow_redirects)?;
 
-    if req.insecure_skip_verify {
-        builder = builder.danger_accept_invalid_certs(true);
-    }
-
-    let client = builder
-        .build()
-        .map_err(|e| format!("Failed to initialize HTTP client: {e}"))?;
-
-    let mut request_builder = client.request(method, url);
+    let mut request_builder = client.request(method, url).timeout(timeout);
+    ensure_request_body_within_limit(&req.body)?;
 
     // 4. Set Headers
     let mut header_map = HeaderMap::new();
@@ -400,6 +489,13 @@ pub async fn execute_http_request(
     let status_code = status.as_u16();
     let status_text = status.canonical_reason().unwrap_or("").to_string();
 
+    if content_length_exceeds_limit(response.headers(), MAX_API_RESPONSE_BODY_BYTES) {
+        return Err(format!(
+            "Response body exceeds the {} MiB limit",
+            MAX_API_RESPONSE_BODY_BYTES / (1024 * 1024)
+        ));
+    }
+
     let mut resp_headers: Vec<(String, String)> = Vec::new();
     for (k, v) in response.headers() {
         resp_headers.push((
@@ -409,16 +505,29 @@ pub async fn execute_http_request(
     }
 
     let download_start = Instant::now();
-    let bytes_fut = response.bytes();
-
-    let bytes: Bytes = tokio::select! {
-        res = bytes_fut => {
-            res.map_err(|e| format!("Failed to read response body: {e}"))?
+    let mut response_stream = response.bytes_stream();
+    let mut bytes = BytesMut::new();
+    loop {
+        tokio::select! {
+            chunk = response_stream.next() => match chunk {
+                Some(Ok(chunk)) => {
+                    let next_len = bytes.len().checked_add(chunk.len()).ok_or_else(|| {
+                        "Response body length overflowed the configured limit".to_string()
+                    })?;
+                    if next_len > MAX_API_RESPONSE_BODY_BYTES {
+                        return Err(format!(
+                            "Response body exceeds the {} MiB limit",
+                            MAX_API_RESPONSE_BODY_BYTES / (1024 * 1024)
+                        ));
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                Some(Err(error)) => return Err(format!("Failed to read response body: {error}")),
+                None => break,
+            },
+            _ = &mut cancel_rx => return Err("Response download was cancelled by user".to_string()),
         }
-        _ = &mut cancel_rx => {
-            return Err("Response download was cancelled by user".to_string());
-        }
-    };
+    }
 
     let download_ms = download_start.elapsed().as_secs_f64() * 1000.0;
     let total_elapsed = start_instant.elapsed().as_secs_f64() * 1000.0;
@@ -615,5 +724,38 @@ mod tests {
         }
         assert!(cancel_in_flight_request(req_id));
         assert!(!cancel_in_flight_request(req_id));
+    }
+
+    #[test]
+    fn content_length_limit_rejects_only_known_oversized_responses() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::CONTENT_LENGTH,
+            HeaderValue::from_static("8388609"),
+        );
+        assert!(content_length_exceeds_limit(
+            &headers,
+            MAX_API_RESPONSE_BODY_BYTES
+        ));
+
+        headers.insert(
+            reqwest::header::CONTENT_LENGTH,
+            HeaderValue::from_static("not-a-number"),
+        );
+        assert!(!content_length_exceeds_limit(
+            &headers,
+            MAX_API_RESPONSE_BODY_BYTES
+        ));
+    }
+
+    #[test]
+    fn request_body_limit_applies_to_raw_payloads() {
+        let body = ApiRequestBody::Raw {
+            content: "x".repeat(MAX_API_REQUEST_BODY_BYTES + 1),
+            content_type: "application/octet-stream".to_string(),
+        };
+        assert!(ensure_request_body_within_limit(&body)
+            .expect_err("oversized request must be rejected")
+            .contains("2 MiB"));
     }
 }
