@@ -216,16 +216,20 @@ pub async fn git_log(
     repo_root: String,
     limit: Option<u32>,
     before_sha: Option<String>,
+    all_refs: Option<bool>,
+    skip: Option<u32>,
     workspace: Option<WorkspaceEnv>,
     app: AppHandle,
 ) -> Result<Vec<GitLogEntry>, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
-        operations::log(
+        operations::log_with_options(
             r,
             &repo_root,
             limit.unwrap_or(30),
             before_sha.as_deref(),
+            all_refs.unwrap_or(false),
+            skip.unwrap_or(0),
             &workspace,
         )
         .map_err(Into::into)

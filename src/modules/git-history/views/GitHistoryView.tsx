@@ -105,9 +105,10 @@ type Props = {
   workspaceEnv?: WorkspaceEnv;
   searchQuery?: string;
   branchScope?: GitBranchScope;
+  refreshGeneration?: number;
   onOpenCommitFile: (input: CommitFileDiffOpenInput) => void;
   onOpenCommitDiff: (input: CommitDiffOpenInput) => void;
-  onRefreshNeeded?: () => void;
+  onRefresh?: () => void;
 };
 
 type LoadStatus = "idle" | "initial" | "more" | "error";
@@ -227,9 +228,10 @@ export const GitHistoryView = memo(function GitHistoryView({
   workspaceEnv,
   searchQuery,
   branchScope,
+  refreshGeneration = 0,
   onOpenCommitFile,
   onOpenCommitDiff,
-  onRefreshNeeded,
+  onRefresh,
 }: Props) {
   const { t } = useTranslation();
   const [commits, setCommits] = useState<GitLogEntry[]>([]);
@@ -365,6 +367,7 @@ export const GitHistoryView = memo(function GitHistoryView({
     try {
       const entries = await native.gitLog(repoRoot, {
         limit: PAGE_SIZE,
+        allRefs: branchScope === "all",
         workspace: workspaceEnv,
       });
       if (requestId !== requestIdRef.current) return;
@@ -388,7 +391,9 @@ export const GitHistoryView = memo(function GitHistoryView({
     try {
       const entries = await native.gitLog(repoRoot, {
         limit: PAGE_SIZE,
-        beforeSha: last.sha,
+        allRefs: branchScope === "all",
+        beforeSha: branchScope !== "all" ? last.sha : undefined,
+        skip: branchScope === "all" ? commits.length : undefined,
         workspace: workspaceEnv,
       });
       setCommits((prev) => {
@@ -405,7 +410,7 @@ export const GitHistoryView = memo(function GitHistoryView({
     } finally {
       inflightMoreRef.current = false;
     }
-  }, [commits, endReached, loadStatus, repoRoot, workspaceEnv]);
+  }, [branchScope, commits, endReached, loadStatus, repoRoot, workspaceEnv]);
 
   useEffect(() => {
     filesInflightRef.current.clear();
@@ -415,7 +420,7 @@ export const GitHistoryView = memo(function GitHistoryView({
     setOpenAnchor(null);
     setSelectedSha(null);
     void loadInitial();
-  }, [bumpFiles, loadInitial]);
+  }, [bumpFiles, loadInitial, refreshGeneration]);
 
   useEffect(() => {
     let cancelled = false;
@@ -445,28 +450,12 @@ export const GitHistoryView = memo(function GitHistoryView({
     }
   }, [activeSearch, loadMore]);
 
-  useEffect(() => {
-    if (loadStatus !== "idle") return;
-    if (endReached) return;
-    if (activeSearch) return;
-    if (commits.length === 0) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    const scrollable = el.scrollHeight - el.clientHeight;
-    if (scrollable > NEAR_BOTTOM_PX) return;
-    const id = window.setTimeout(() => {
-      void loadMore();
-    }, 0);
-    return () => window.clearTimeout(id);
-  }, [commits.length, activeSearch, endReached, loadMore, loadStatus]);
-
   const handleRefresh = useCallback(() => {
     filesInflightRef.current.clear();
     filesCacheRef.current.clear();
     bumpFiles();
-    void loadInitial();
-    onRefreshNeeded?.();
-  }, [bumpFiles, loadInitial, onRefreshNeeded]);
+    onRefresh?.();
+  }, [bumpFiles, onRefresh]);
 
   const fetchFiles = useCallback(
     async (sha: string) => {

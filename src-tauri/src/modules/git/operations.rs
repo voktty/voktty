@@ -563,8 +563,7 @@ pub fn push(
 const LOG_FORMAT: &str = "%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s";
 const MAX_LOG_LIMIT: u32 = 200;
 
-/// Parses one `LOG_FORMAT`-formatted commit header line (the shortstat line
-/// that may follow, if any, is a separate concern handled by the caller).
+/// Parses one `LOG_FORMAT`-formatted commit header line.
 fn parse_log_header_line(line: &str) -> Option<GitLogEntry> {
     if !line.contains('\x1f') {
         return None;
@@ -605,11 +604,30 @@ pub fn log(
     before_sha: Option<&str>,
     workspace: &WorkspaceEnv,
 ) -> Result<Vec<GitLogEntry>> {
+    log_with_options(registry, repo_root, limit, before_sha, false, 0, workspace)
+}
+
+pub fn log_with_options(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    limit: u32,
+    before_sha: Option<&str>,
+    all_refs: bool,
+    skip: u32,
+    workspace: &WorkspaceEnv,
+) -> Result<Vec<GitLogEntry>> {
     let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
     ensure_git_available(&repo_root.workspace)?;
     let bounded = limit.clamp(1, MAX_LOG_LIMIT);
     let count_arg = format!("--max-count={bounded}");
     let format_arg = format!("--format={LOG_FORMAT}");
+    let skip_arg = format!("--skip={skip}");
+    if all_refs && before_sha.is_some() {
+        return Err(GitError::command(
+            "git log",
+            "all-ref pagination cannot use a commit cursor",
+        ));
+    }
     let cursor = match before_sha {
         Some(sha) if !sha.is_empty() => {
             if !sha_is_safe(sha) {
@@ -622,10 +640,15 @@ pub fn log(
     let mut args: Vec<&OsStr> = vec![
         OsStr::new("log"),
         OsStr::new("--no-color"),
-        OsStr::new("--shortstat"),
         OsStr::new(&count_arg),
         OsStr::new(&format_arg),
     ];
+    if all_refs {
+        args.push(OsStr::new("--all"));
+        if skip > 0 {
+            args.push(OsStr::new(&skip_arg));
+        }
+    }
     if let Some(spec) = cursor.as_deref() {
         args.push(OsStr::new(spec));
     }
@@ -651,13 +674,6 @@ pub fn log(
     }
     let stdout = std::str::from_utf8(&output.stdout).unwrap_or("");
     let mut entries: Vec<GitLogEntry> = Vec::with_capacity(bounded as usize);
-    // Lines we get back interleave:
-    //   <sha>\x1f<author>\x1f<email>\x1f<ts>\x1f<parents>\x1f<subject>
-    //   <blank>
-    //    5 files changed, 12 insertions(+), 3 deletions(-)
-    // Commits without diffstats (root commits, merges with no changes) just
-    // skip the shortstat line. Detect commit headers by the presence of
-    // the unit-separator we put in the format.
     for raw_line in stdout.lines() {
         let line = raw_line.trim_end_matches('\r');
         if line.is_empty() {
@@ -665,15 +681,6 @@ pub fn log(
         }
         if let Some(entry) = parse_log_header_line(line) {
             entries.push(entry);
-            continue;
-        }
-        if let Some(current) = entries.last_mut() {
-            if line.contains("file changed") || line.contains("files changed") {
-                let (files, ins, del) = parse_shortstat(line);
-                current.files_changed = files;
-                current.insertions = ins;
-                current.deletions = del;
-            }
         }
     }
     Ok(entries)
@@ -712,33 +719,6 @@ pub fn show_commit_diff(
         diff_text,
         truncated: output.truncated,
     })
-}
-
-fn parse_shortstat(tail: &str) -> (u32, u32, u32) {
-    // Looks for a line like " 5 files changed, 12 insertions(+), 3 deletions(-)"
-    for line in tail.lines() {
-        let trimmed = line.trim();
-        if !(trimmed.contains("file changed") || trimmed.contains("files changed")) {
-            continue;
-        }
-        let mut files = 0u32;
-        let mut ins = 0u32;
-        let mut del = 0u32;
-        for part in trimmed.split(',') {
-            let part = part.trim();
-            let num_str = part.split_ascii_whitespace().next().unwrap_or("0");
-            let n: u32 = num_str.parse().unwrap_or(0);
-            if part.contains("file") {
-                files = n;
-            } else if part.contains("insertion") {
-                ins = n;
-            } else if part.contains("deletion") {
-                del = n;
-            }
-        }
-        return (files, ins, del);
-    }
-    (0, 0, 0)
 }
 
 fn sha_is_safe(sha: &str) -> bool {
@@ -2438,23 +2418,6 @@ mod tests {
         for c in " /:\\?\"'".chars() {
             assert!(!is_remote_name_char(c));
         }
-    }
-
-    #[test]
-    fn parse_shortstat_pulls_three_counts() {
-        let line = " 5 files changed, 12 insertions(+), 3 deletions(-)";
-        assert_eq!(parse_shortstat(line), (5, 12, 3));
-    }
-
-    #[test]
-    fn parse_shortstat_handles_singular_file() {
-        let line = " 1 file changed, 1 insertion(+)";
-        assert_eq!(parse_shortstat(line), (1, 1, 0));
-    }
-
-    #[test]
-    fn parse_shortstat_returns_zeros_when_absent() {
-        assert_eq!(parse_shortstat("no stat here"), (0, 0, 0));
     }
 
     #[test]
