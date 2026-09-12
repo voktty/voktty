@@ -3,6 +3,7 @@ import { WEBHOOK_PRESETS } from "../lib/presets";
 import {
   createApiClientStore,
   getApiClientPersistedState,
+  getLegacyApiClientPresentationState,
   useApiClientStore,
 } from "./apiClientStore";
 
@@ -93,5 +94,34 @@ describe("apiClientStore", () => {
     expect(firstTab.getState().activeRequest.url).toBe("https://api.example.test/first");
     expect(secondTab.getState().activeRequest.url).not.toBe("https://api.example.test/first");
     expect(secondTab.getState().activeRequest.bearerToken).toBeUndefined();
+  });
+
+  it("migrates only presentation preferences from legacy storage", () => {
+    const legacy = JSON.stringify({
+      state: {
+        activeTab: "history",
+        sidebarCollapsed: true,
+        variablesDrawerOpen: true,
+        activeRequest: { bearerToken: "legacy-token" },
+        webhookConfig: { secret: "whsec_legacy" },
+        history: [{ response: { body: "private response" } }],
+      },
+      version: 0,
+    });
+
+    expect(getLegacyApiClientPresentationState(legacy)).toEqual({
+      activeTab: "history",
+      sidebarCollapsed: true,
+      variablesDrawerOpen: true,
+    });
+  });
+
+  it("ignores malformed or unsupported legacy presentation values", () => {
+    expect(getLegacyApiClientPresentationState("not-json")).toEqual({});
+    expect(
+      getLegacyApiClientPresentationState(
+        JSON.stringify({ state: { activeTab: "invalid", sidebarCollapsed: "yes" } }),
+      ),
+    ).toEqual({});
   });
 });
