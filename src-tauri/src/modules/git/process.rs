@@ -266,6 +266,8 @@ where
         .into_iter()
         .map(|arg| arg.as_ref().to_os_string())
         .collect();
+    let operation = git_operation_name(&args);
+    let started_at = Instant::now();
 
     if let WorkspaceEnv::Ssh { session_id, .. } = workspace {
         let Some(session_id) = session_id else {
@@ -273,9 +275,11 @@ where
         };
         let remote_state = crate::modules::remote::RemoteState::global()
             .ok_or_else(|| GitError::Spawn("remote state not initialized".into()))?;
-        return remote_state
+        let result = remote_state
             .exec_git(*session_id, cwd, &args, timeout_secs)
             .map_err(GitError::Spawn);
+        log_git_process(operation, "ssh", started_at, result.is_ok());
+        return result;
     }
 
     let dur = Duration::from_secs(timeout_secs.clamp(1, MAX_TIMEOUT_SECS));
@@ -331,13 +335,53 @@ where
     let (stdout, stdout_truncated) = stdout_handle.join().unwrap_or((Vec::new(), false));
     let (stderr, _stderr_truncated) = stderr_handle.join().unwrap_or((Vec::new(), false));
 
-    Ok(GitOutput {
+    let output = GitOutput {
         stdout,
         stderr,
         exit_code,
         timed_out,
         truncated: stdout_truncated,
-    })
+    };
+    log_git_process(operation, workspace_kind(workspace), started_at, true);
+    Ok(output)
+}
+
+fn git_operation_name(args: &[OsString]) -> &'static str {
+    match args.first().and_then(|arg| arg.to_str()) {
+        Some("add") => "add",
+        Some("blame") => "blame",
+        Some("branch") => "branch",
+        Some("checkout") => "checkout",
+        Some("clean") => "clean",
+        Some("commit") => "commit",
+        Some("config") => "config",
+        Some("diff") | Some("diff-tree") => "diff",
+        Some("fetch") => "fetch",
+        Some("log") => "log",
+        Some("pull") => "pull",
+        Some("push") => "push",
+        Some("rev-parse") => "rev-parse",
+        Some("show") => "show",
+        Some("status") => "status",
+        Some("worktree") => "worktree",
+        _ => "other",
+    }
+}
+
+fn workspace_kind(workspace: &WorkspaceEnv) -> &'static str {
+    match workspace {
+        WorkspaceEnv::Local => "local",
+        WorkspaceEnv::Wsl { .. } => "wsl",
+        WorkspaceEnv::Ssh { .. } => "ssh",
+        WorkspaceEnv::Docker { .. } => "docker",
+    }
+}
+
+fn log_git_process(operation: &str, workspace: &str, started_at: Instant, completed: bool) {
+    log::debug!(
+        "git process operation={operation} workspace={workspace} elapsed_ms={} completed={completed}",
+        started_at.elapsed().as_millis(),
+    );
 }
 
 /// Writes `contents` into the object database as a blob and returns its hash,
@@ -541,8 +585,8 @@ fn drain<R: Read>(reader: &mut R, prealloc: usize) -> (Vec<u8>, bool) {
 mod tests {
     use super::build_git_command;
     use super::{
-        parse_git_version, prune_expired_availability_entries, version_meets_minimum, Availability,
-        AvailabilityCache, AVAILABILITY_TTL,
+        git_operation_name, parse_git_version, prune_expired_availability_entries,
+        version_meets_minimum, workspace_kind, Availability, AvailabilityCache, AVAILABILITY_TTL,
     };
     use crate::modules::workspace::WorkspaceEnv;
     use std::collections::HashMap;
@@ -575,6 +619,22 @@ mod tests {
         // patch component must not regress the comparison
         assert!(version_meets_minimum("2.23.5", "2.23.4"));
         assert!(!version_meets_minimum("2.23.3", "2.23.4"));
+    }
+
+    #[test]
+    fn git_process_logs_only_normalized_operation_and_workspace_kind() {
+        assert_eq!(git_operation_name(&[OsString::from("log")]), "log");
+        assert_eq!(
+            git_operation_name(&[OsString::from("custom-command")]),
+            "other"
+        );
+        assert_eq!(workspace_kind(&WorkspaceEnv::Local), "local");
+        assert_eq!(
+            workspace_kind(&WorkspaceEnv::Wsl {
+                distro: "private-distro".into(),
+            }),
+            "wsl",
+        );
     }
 
     #[test]
