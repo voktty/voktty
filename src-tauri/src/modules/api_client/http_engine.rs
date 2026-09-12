@@ -17,6 +17,8 @@ static ACTIVE_CANCELLATIONS: std::sync::LazyLock<CancellationMap> =
 pub const MAX_API_REQUEST_BODY_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_API_RESPONSE_BODY_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_API_STREAM_BYTES: usize = 16 * 1024 * 1024;
+const API_STREAM_BATCH_BYTES: usize = 8 * 1024;
+const API_STREAM_BATCH_WINDOW: Duration = Duration::from_millis(50);
 
 #[derive(Clone)]
 struct HttpClientPool {
@@ -114,6 +116,18 @@ fn ensure_request_body_within_limit(body: &ApiRequestBody) -> Result<(), String>
         ));
     }
     Ok(())
+}
+
+fn emit_stream_event(on_event: &Channel<Response>, event: &ApiStreamEvent) -> Result<(), String> {
+    let payload = serde_json::to_vec(event)
+        .map_err(|error| format!("Failed to serialize stream event: {error}"))?;
+    on_event
+        .send(Response::new(payload))
+        .map_err(|_| "API stream consumer closed".to_string())
+}
+
+fn stream_batch_is_ready(len: usize) -> bool {
+    len >= API_STREAM_BATCH_BYTES
 }
 
 pub fn cancel_in_flight_request(request_id: &str) -> bool {
@@ -590,11 +604,17 @@ pub async fn stream_http_request(
     let start_instant = Instant::now();
     let url = url::Url::parse(&req.url).map_err(|e| format!("Invalid URL: {e}"))?;
 
+    if req.is_agent_call {
+        if let Some(host) = url.host_str() {
+            if host == "169.254.169.254" || host == "metadata.google.internal" || host == "metadata"
+            {
+                return Err("Blocked: Access to cloud metadata service is prohibited".to_string());
+            }
+        }
+    }
+
     let timeout = Duration::from_millis(req.timeout_ms.unwrap_or(60_000).max(100));
-    let client = reqwest::Client::builder()
-        .timeout(timeout)
-        .build()
-        .map_err(|e| format!("Failed to initialize client: {e}"))?;
+    let client = pooled_client(req.insecure_skip_verify, req.follow_redirects)?;
 
     let method = match req.method.to_uppercase().as_str() {
         "POST" => Method::POST,
@@ -602,7 +622,7 @@ pub async fn stream_http_request(
         _ => Method::GET,
     };
 
-    let mut request_builder = client.request(method, url);
+    let mut request_builder = client.request(method, url).timeout(timeout);
     let mut header_map = HeaderMap::new();
     header_map.insert(
         reqwest::header::ACCEPT,
@@ -626,71 +646,106 @@ pub async fn stream_http_request(
         _ = &mut cancel_rx => return Err("Streaming cancelled".to_string()),
     };
 
+    if content_length_exceeds_limit(response.headers(), MAX_API_STREAM_BYTES) {
+        let event = ApiStreamEvent::Error {
+            message: format!(
+                "Stream exceeds the {} MiB limit",
+                MAX_API_STREAM_BYTES / (1024 * 1024)
+            ),
+        };
+        let _ = emit_stream_event(&on_event, &event);
+        return Err("Stream exceeded the configured byte limit".to_string());
+    }
+
     let status = response.status();
     let status_event = ApiStreamEvent::Status {
         code: status.as_u16(),
         reason: status.canonical_reason().unwrap_or("").to_string(),
     };
-    if let Ok(json) = serde_json::to_vec(&status_event) {
-        let _ = on_event.send(Response::new(json));
-    }
+    emit_stream_event(&on_event, &status_event)?;
 
     for (k, v) in response.headers() {
         let header_event = ApiStreamEvent::Header {
             key: k.as_str().to_string(),
             value: v.to_str().unwrap_or("").to_string(),
         };
-        if let Ok(json) = serde_json::to_vec(&header_event) {
-            let _ = on_event.send(Response::new(json));
-        }
+        emit_stream_event(&on_event, &header_event)?;
     }
 
     let mut stream = response.bytes_stream();
     let mut total_bytes = 0usize;
+    let mut batch = BytesMut::new();
+    let flush_timer = tokio::time::sleep(API_STREAM_BATCH_WINDOW);
+    tokio::pin!(flush_timer);
 
     loop {
         tokio::select! {
             chunk_opt = stream.next() => {
                 match chunk_opt {
                     Some(Ok(bytes)) => {
-                        total_bytes += bytes.len();
-                        let text = String::from_utf8_lossy(&bytes).to_string();
-                        let chunk_event = ApiStreamEvent::Chunk {
-                            data: text,
-                            bytes_len: bytes.len(),
-                        };
-                        if let Ok(json) = serde_json::to_vec(&chunk_event) {
-                            let _ = on_event.send(Response::new(json));
+                        let next_len = total_bytes.checked_add(bytes.len()).ok_or_else(|| {
+                            "Stream length overflowed the configured limit".to_string()
+                        })?;
+                        if next_len > MAX_API_STREAM_BYTES {
+                            let event = ApiStreamEvent::Error {
+                                message: format!(
+                                    "Stream exceeds the {} MiB limit",
+                                    MAX_API_STREAM_BYTES / (1024 * 1024)
+                                ),
+                            };
+                            let _ = emit_stream_event(&on_event, &event);
+                            return Err("Stream exceeded the configured byte limit".to_string());
+                        }
+                        total_bytes = next_len;
+                        batch.extend_from_slice(&bytes);
+                        if stream_batch_is_ready(batch.len()) {
+                            let chunk_event = ApiStreamEvent::Chunk {
+                                data: String::from_utf8_lossy(&batch).to_string(),
+                                bytes_len: batch.len(),
+                            };
+                            emit_stream_event(&on_event, &chunk_event)?;
+                            batch.clear();
+                            flush_timer.as_mut().reset(tokio::time::Instant::now() + API_STREAM_BATCH_WINDOW);
                         }
                     }
                     Some(Err(e)) => {
                         let err_event = ApiStreamEvent::Error {
                             message: format!("Stream error: {e}"),
                         };
-                        if let Ok(json) = serde_json::to_vec(&err_event) {
-                            let _ = on_event.send(Response::new(json));
-                        }
+                        emit_stream_event(&on_event, &err_event)?;
                         break;
                     }
                     None => {
+                        if !batch.is_empty() {
+                            let chunk_event = ApiStreamEvent::Chunk {
+                                data: String::from_utf8_lossy(&batch).to_string(),
+                                bytes_len: batch.len(),
+                            };
+                            emit_stream_event(&on_event, &chunk_event)?;
+                        }
                         let done_event = ApiStreamEvent::Done {
                             total_bytes,
                             duration_ms: start_instant.elapsed().as_secs_f64() * 1000.0,
                         };
-                        if let Ok(json) = serde_json::to_vec(&done_event) {
-                            let _ = on_event.send(Response::new(json));
-                        }
+                        emit_stream_event(&on_event, &done_event)?;
                         break;
                     }
                 }
+            }
+            _ = &mut flush_timer, if !batch.is_empty() => {
+                let chunk_event = ApiStreamEvent::Chunk {
+                    data: String::from_utf8_lossy(&batch).to_string(),
+                    bytes_len: batch.len(),
+                };
+                emit_stream_event(&on_event, &chunk_event)?;
+                batch.clear();
+                flush_timer.as_mut().reset(tokio::time::Instant::now() + API_STREAM_BATCH_WINDOW);
             }
             _ = &mut cancel_rx => {
                 let err_event = ApiStreamEvent::Error {
                     message: "Stream cancelled by user".to_string(),
                 };
-                if let Ok(json) = serde_json::to_vec(&err_event) {
-                    let _ = on_event.send(Response::new(json));
-                }
+                emit_stream_event(&on_event, &err_event)?;
                 break;
             }
         }
@@ -702,6 +757,25 @@ pub async fn stream_http_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    fn request_for(url: String, id: &str) -> ApiRequestPayload {
+        ApiRequestPayload {
+            id: Some(id.to_string()),
+            url,
+            method: "GET".to_string(),
+            headers: HashMap::new(),
+            query_params: Vec::new(),
+            body: ApiRequestBody::None,
+            auth: ApiRequestAuth::None,
+            timeout_ms: Some(2_000),
+            follow_redirects: false,
+            insecure_skip_verify: false,
+            variables: None,
+            is_agent_call: false,
+        }
+    }
 
     #[test]
     fn test_interpolate_variables() {
@@ -757,5 +831,72 @@ mod tests {
         assert!(ensure_request_body_within_limit(&body)
             .expect_err("oversized request must be rejected")
             .contains("2 MiB"));
+    }
+
+    #[test]
+    fn stream_batches_only_after_the_configured_byte_window() {
+        assert!(!stream_batch_is_ready(API_STREAM_BATCH_BYTES - 1));
+        assert!(stream_batch_is_ready(API_STREAM_BATCH_BYTES));
+    }
+
+    #[tokio::test]
+    async fn chunked_response_without_content_length_stops_at_body_limit() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = socket.read(&mut request).await.unwrap();
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+                .await
+                .unwrap();
+            let chunk = vec![b'x'; 64 * 1024];
+            for _ in 0..=MAX_API_RESPONSE_BODY_BYTES / chunk.len() {
+                socket
+                    .write_all(format!("{:X}\r\n", chunk.len()).as_bytes())
+                    .await
+                    .unwrap();
+                socket.write_all(&chunk).await.unwrap();
+                socket.write_all(b"\r\n").await.unwrap();
+            }
+            socket.write_all(b"0\r\n\r\n").await.unwrap();
+        });
+
+        let error = execute_http_request(request_for(
+            format!("http://{address}/chunked"),
+            "chunked-limit-test",
+        ))
+        .await
+        .expect_err("chunked response over the limit must fail");
+
+        assert!(error.contains("8 MiB limit"), "unexpected error: {error}");
+    }
+
+    #[tokio::test]
+    async fn cancellation_interrupts_a_pending_request_and_cleans_its_registration() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (_socket, _) = listener.accept().await.unwrap();
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        });
+
+        let request_id = "pending-cancel-test";
+        let request = request_for(format!("http://{address}/pending"), request_id);
+        let task = tokio::spawn(execute_http_request(request));
+        for _ in 0..20 {
+            if cancel_in_flight_request(request_id) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        let error = task
+            .await
+            .unwrap()
+            .expect_err("cancelled request must fail");
+        assert!(error.contains("cancelled"));
+        assert!(!cancel_in_flight_request(request_id));
     }
 }
