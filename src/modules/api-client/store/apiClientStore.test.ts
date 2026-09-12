@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { WEBHOOK_PRESETS } from "../lib/presets";
 import {
   createApiClientStore,
+  createApiHistoryResponsePreview,
   getApiClientPersistedState,
   getLegacyApiClientPresentationState,
   useApiClientStore,
@@ -123,5 +124,27 @@ describe("apiClientStore", () => {
         JSON.stringify({ state: { activeTab: "invalid", sidebarCollapsed: "yes" } }),
       ),
     ).toEqual({});
+  });
+
+  it("bounds history response previews without changing the active response", () => {
+    const response = {
+      status: 200,
+      statusText: "OK",
+      headers: [],
+      body: "x".repeat(70 * 1024),
+      bodyBytesLen: 70 * 1024,
+      isJson: true,
+      jsonValue: { private: "full response" },
+      timings: { totalDurationMs: 10 },
+      timestamp: 1,
+    };
+
+    const preview = createApiHistoryResponsePreview(response);
+
+    expect(new TextEncoder().encode(preview.body).byteLength).toBeLessThanOrEqual(64 * 1024);
+    expect(preview.body).toContain("[truncated]");
+    expect(preview.bodyBytesLen).toBe(70 * 1024);
+    expect(preview.jsonValue).toBeUndefined();
+    expect(response.jsonValue).toEqual({ private: "full response" });
   });
 });

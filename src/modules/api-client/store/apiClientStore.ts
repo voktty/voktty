@@ -136,6 +136,10 @@ export type ApiClientPersistedState = Pick<
 
 export const API_CLIENT_STORAGE_VERSION = 2;
 export const LEGACY_API_CLIENT_STORAGE_KEY = "voktty-api-client-storage";
+export const MAX_API_HISTORY_ENTRIES = 30;
+export const MAX_API_HISTORY_RESPONSE_BODY_BYTES = 64 * 1024;
+
+const HISTORY_TRUNCATION_MARKER = "\n… [truncated]";
 
 const API_CLIENT_TABS = new Set<ApiClientTabMode>([
   "request",
@@ -188,6 +192,24 @@ export function getLegacyApiClientPresentationState(
   } catch {
     return {};
   }
+}
+
+export function createApiHistoryResponsePreview(response: ApiResponse): ApiResponse {
+  const bodyBytes = new TextEncoder().encode(response.body);
+  if (bodyBytes.byteLength <= MAX_API_HISTORY_RESPONSE_BODY_BYTES) {
+    return { ...response, jsonValue: undefined };
+  }
+
+  const markerBytes = new TextEncoder().encode(HISTORY_TRUNCATION_MARKER);
+  const previewBytes = bodyBytes.slice(
+    0,
+    MAX_API_HISTORY_RESPONSE_BODY_BYTES - markerBytes.byteLength,
+  );
+  return {
+    ...response,
+    body: `${new TextDecoder().decode(previewBytes)}${HISTORY_TRUNCATION_MARKER}`,
+    jsonValue: undefined,
+  };
 }
 
 const DEFAULT_POKEMON_REQUEST: ApiRequest = {
@@ -853,10 +875,10 @@ export const createApiClientStore = (
             history: [
               {
                 request: { ...activeRequest },
-                response,
+                response: createApiHistoryResponsePreview(response),
                 timestamp: Date.now(),
               },
-              ...state.history.slice(0, 49),
+              ...state.history.slice(0, MAX_API_HISTORY_ENTRIES - 1),
             ],
           }));
           return response;
