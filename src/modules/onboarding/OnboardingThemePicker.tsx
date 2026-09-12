@@ -1,11 +1,13 @@
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
-import { listBuiltinThemes, useTheme, type Theme } from "@/modules/theme";
+import { useTheme, type Theme } from "@/modules/theme/ThemeProvider";
+import { loadBuiltinThemes } from "@/modules/theme/themeLoader";
 import { resolveThemeDescription } from "@/modules/theme/themeDescription";
 import {
   nextVariationIdForTheme,
   resolveThemeSwatch,
 } from "@/modules/theme/themeSwatch";
+import { useEffect, useState } from "react";
 
 export function OnboardingThemePicker() {
   const { t } = useTranslation();
@@ -17,8 +19,12 @@ export function OnboardingThemePicker() {
     resolvedMode,
     customThemes,
   } = useTheme();
+  const [builtinThemes, setBuiltinThemes] = useState<Theme[]>([]);
+  useEffect(() => {
+    void loadBuiltinThemes().then(setBuiltinThemes);
+  }, []);
 
-  const themes = [...listBuiltinThemes(), ...customThemes];
+  const themes = [...builtinThemes, ...customThemes];
   const selectedTheme = themes.find((theme) => theme.id === themeId) ?? themes[0];
   const variations = selectedTheme?.variations ?? [];
 

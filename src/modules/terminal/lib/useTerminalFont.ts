@@ -1,5 +1,6 @@
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { resolveTerminalFont, useTheme } from "@/modules/theme";
+import { useTheme } from "@/modules/theme/ThemeProvider";
+import { resolveTerminalFont } from "@/modules/theme/resolveTerminalFont";
 import { useMemo } from "react";
 
 export function useTerminalFont() {

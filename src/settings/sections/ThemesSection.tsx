@@ -26,12 +26,12 @@ import {
   setVibrancyOpacity,
   setWindowVibrancy,
 } from "@/modules/settings/store";
+import { useTheme } from "@/modules/theme/ThemeProvider";
 import {
-  useTheme,
   listBuiltinAppearancePacks,
   listBuiltinSurfaceProfiles,
   listBuiltinTypographyProfiles,
-} from "@/modules/theme";
+} from "@/modules/theme/packs";
 import {
   deleteBgImage,
   importBgImageFromFile,

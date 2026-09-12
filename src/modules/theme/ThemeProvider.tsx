@@ -26,11 +26,12 @@ import {
 } from "./customThemes";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { SurfaceLayer } from "./SurfaceLayer";
-import {
-  getBuiltinTheme,
-  getDefaultTheme,
-} from "./themes";
 import { isLegacyVariationId } from "./legacyThemeIds";
+import {
+  getLoadedBuiltinTheme,
+  getLoadedDefaultTheme,
+  loadBuiltinTheme,
+} from "./themeLoader";
 import { resolveAppearanceSelection } from "./resolveAppearanceSelection";
 import type { Theme } from "./types";
 import { getBackdropKind } from "./vibrancy";
@@ -118,7 +119,7 @@ function writeFastThemeVariation(variation: string): void {
 }
 
 function resolveTheme(id: string, custom: Theme[]): Theme {
-  return custom.find((t) => t.id === id) ?? getBuiltinTheme(id) ?? getDefaultTheme();
+  return custom.find((t) => t.id === id) ?? getLoadedBuiltinTheme(id) ?? getLoadedDefaultTheme();
 }
 
 export function ThemeProvider({ children, defaultMode = "system" }: ThemeProviderProps) {
@@ -132,6 +133,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     null,
   );
   const [customThemes, setCustomThemes] = useState<Theme[]>([]);
+  const [loadedThemeId, setLoadedThemeId] = useState(() => readFastThemeId());
   const [systemDark, setSystemDark] = useState<boolean>(() =>
     typeof window === "undefined"
       ? true
@@ -166,6 +168,16 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       void unlistenP.then((fn) => fn());
     };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const requestedThemeId =
+      themeId === DEFAULT_THEME_ID ? themeVariation : themeId;
+    void loadBuiltinTheme(requestedThemeId).then(() => {
+      if (alive) setLoadedThemeId(requestedThemeId);
+    });
+    return () => { alive = false; };
+  }, [themeId, themeVariation]);
 
   useEffect(() => {
     let alive = true;
@@ -229,7 +241,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
 
   const baseTheme = useMemo(
     () => resolveTheme(effectiveId, customThemes),
-    [effectiveId, customThemes],
+    [effectiveId, customThemes, loadedThemeId],
   );
 
   const activeVariation = useMemo(() => {

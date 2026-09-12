@@ -17,7 +17,9 @@ import {
   SHORTCUTS,
   type ShortcutId,
 } from "@/modules/shortcuts";
-import { DEFAULT_THEME_ID, listBuiltinThemes, useTheme } from "@/modules/theme";
+import { useTheme } from "@/modules/theme/ThemeProvider";
+import { loadBuiltinThemes } from "@/modules/theme/themeLoader";
+import { DEFAULT_THEME_ID } from "@/modules/theme/types";
 import {
   AlertCircleIcon,
   ArrowTurnBackwardIcon,
@@ -63,6 +65,7 @@ export function CommandPalette({
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [value, setValue] = useState("");
+  const [builtinThemes, setBuiltinThemes] = useState<Awaited<ReturnType<typeof loadBuiltinThemes>>>([]);
   const [page, setPage] = useState<"root" | "themes">("root");
   const userShortcuts = usePreferencesStore((s) => s.shortcuts);
   const {
@@ -77,6 +80,11 @@ export function CommandPalette({
   const parsed = parseQuery(query);
   const inThemes = page === "themes";
   const themeFilter = inThemes ? query.trim() : "";
+
+  useEffect(() => {
+    if (!inThemes || builtinThemes.length > 0) return;
+    void loadBuiltinThemes().then(setBuiltinThemes);
+  }, [builtinThemes.length, inThemes]);
 
   const content = useContentSearch(
     workspaceRoot,
@@ -97,7 +105,7 @@ export function CommandPalette({
 
   const themeItems = useMemo(() => {
     if (!inThemes) return [];
-    const builtin = listBuiltinThemes();
+    const builtin = builtinThemes;
     const variations = builtin[0]?.variations ?? [];
     const items: Array<{ id: string; name: string; isSelected: boolean }> = [
       ...customThemes.map((t) => ({
@@ -118,7 +126,7 @@ export function CommandPalette({
       .filter((x) => x.s !== null)
       .sort((a, b) => (b.s ?? 0) - (a.s ?? 0))
       .map((x) => x.t);
-  }, [inThemes, themeFilter, customThemes, themeId, themeVariation]);
+  }, [inThemes, themeFilter, builtinThemes, customThemes, themeId, themeVariation]);
 
   const resetPalette = useCallback(() => {
     setQuery("");

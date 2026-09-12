@@ -18,7 +18,7 @@ import {
 } from "@/modules/settings";
 import { emitKeysChanged } from "@/modules/settings/store";
 import { shortcutLabel } from "@/modules/shortcuts";
-import { listBuiltinThemes, useTheme } from "@/modules/theme";
+import { useTheme } from "@/modules/theme/ThemeProvider";
 import { formatThemeAppearanceLabel, resolveThemeSwatch } from "@/modules/theme/themeSwatch";
 import {
   ArrowLeft01Icon,
@@ -146,7 +146,7 @@ export function OnboardingWizard({
 }: OnboardingWizardProps) {
   const { t, language } = useTranslation();
   const prefs = usePreferencesStore();
-  const { themeId, themeVariation, resolvedMode, customThemes } = useTheme();
+  const { themeId, themeVariation, resolvedMode, activeTheme } = useTheme();
 
   const [step, setStep] = useState<number>(1);
   const [phase, setPhase] = useState<"welcome" | "wizard">("welcome");
@@ -196,9 +196,6 @@ export function OnboardingWizard({
     void setLanguage(langId);
   };
 
-  const activeThemes = [...listBuiltinThemes(), ...customThemes];
-  const activeTheme =
-    activeThemes.find((theme) => theme.id === themeId) ?? activeThemes[0];
   const activeSwatch = activeTheme
     ? resolveThemeSwatch(activeTheme, themeVariation, resolvedMode)
     : null;
