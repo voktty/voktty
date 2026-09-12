@@ -129,6 +129,21 @@ export type ApiClientStore = {
   executeScenario: (scenario: ApiScenario) => Promise<ApiScenarioResult | null>;
 };
 
+export type ApiClientPersistedState = Pick<
+  ApiClientStore,
+  "activeTab" | "sidebarCollapsed" | "variablesDrawerOpen"
+>;
+
+export function getApiClientPersistedState(
+  state: ApiClientStore,
+): ApiClientPersistedState {
+  return {
+    activeTab: state.activeTab,
+    sidebarCollapsed: state.sidebarCollapsed,
+    variablesDrawerOpen: state.variablesDrawerOpen,
+  };
+}
+
 const DEFAULT_POKEMON_REQUEST: ApiRequest = {
   id: "req-pokemon-paginated",
   name: "List Pokémon (paginated)",
@@ -380,7 +395,10 @@ const DEFAULT_WEBHOOK: ApiWebhookDispatch = {
   delayMsBetweenDuplicates: 50,
 };
 
-export const useApiClientStore = create<ApiClientStore>()(
+export const createApiClientStore = (
+  storageName: string = "voktty-api-client-storage",
+) =>
+  create<ApiClientStore>()(
   persist(
     (set, get) => ({
       activeTab: "request",
@@ -960,13 +978,12 @@ export const useApiClientStore = create<ApiClientStore>()(
       },
     }),
     {
-      name: "voktty-api-client-storage",
-      partialize: (state) => ({
-        activeRequest: state.activeRequest,
-        webhookConfig: state.webhookConfig,
-        discoveryUrl: state.discoveryUrl,
-        history: state.history.slice(0, 30),
-      }),
+      name: storageName,
+      version: 2,
+      partialize: getApiClientPersistedState,
     },
   ),
 );
+
+/** Legacy singleton retained only for non-UI callers while tabs migrate to scoped stores. */
+export const useApiClientStore = createApiClientStore();

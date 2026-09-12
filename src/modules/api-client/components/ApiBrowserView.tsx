@@ -16,7 +16,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useApiClientStore } from "../store/apiClientStore";
+import { useApiClientTabStore } from "../store/ApiClientStoreContext";
 import type { ApiMethod } from "../types";
 
 const METHOD_BADGES: Record<ApiMethod, string> = {
@@ -42,7 +42,7 @@ export function ApiBrowserView() {
     discoveryResult,
     runDiscovery,
     loadEndpointToEditor,
-  } = useApiClientStore();
+  } = useApiClientTabStore();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<string>("ALL");

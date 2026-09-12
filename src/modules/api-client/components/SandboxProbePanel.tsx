@@ -23,7 +23,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { generateWebhookMarkdownReceipt } from "../lib/markdownReceipt";
 import { WEBHOOK_PRESETS } from "../lib/presets";
-import { useApiClientStore } from "../store/apiClientStore";
+import { useApiClientTabStore } from "../store/ApiClientStoreContext";
 
 export function SandboxProbePanel() {
   const { t } = useTranslation();
@@ -38,7 +38,7 @@ export function SandboxProbePanel() {
     setWebhookDuplicateCount,
     applyWebhookPreset,
     triggerWebhookDispatch,
-  } = useApiClientStore();
+  } = useApiClientTabStore();
 
   const [selectedPresetId, setSelectedPresetId] = useState(WEBHOOK_PRESETS[0].id);
   const [payloadText, setPayloadText] = useState(

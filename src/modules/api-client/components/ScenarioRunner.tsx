@@ -12,12 +12,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { generateScenarioMarkdownReceipt } from "../lib/markdownReceipt";
 import { PRESET_SCENARIOS } from "../lib/presets";
-import { useApiClientStore } from "../store/apiClientStore";
+import { useApiClientTabStore } from "../store/ApiClientStoreContext";
 import type { ApiScenario } from "../types";
 
 export function ScenarioRunner() {
   const { t } = useTranslation();
-  const { scenarioResult, isRunningScenario, executeScenario } = useApiClientStore();
+  const { scenarioResult, isRunningScenario, executeScenario } = useApiClientTabStore();
   const [selectedScenario, setSelectedScenario] = useState<ApiScenario>(PRESET_SCENARIOS[0]);
 
   const handleRun = () => {

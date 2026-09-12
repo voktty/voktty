@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { ApiClientTab, Tab } from "@/modules/tabs";
 import { ApiClientView } from "./ApiClientView";
+import { ApiClientStoreProvider } from "../store/ApiClientStoreContext";
 
 type Props = {
   tabs: Tab[];
@@ -46,7 +47,9 @@ export function ApiClientStack({ tabs, activeId, placements }: Props) {
             }
             aria-hidden={!visible}
           >
-            <ApiClientView />
+            <ApiClientStoreProvider tabId={tab.id}>
+              <ApiClientView />
+            </ApiClientStoreProvider>
           </div>
         );
       })}

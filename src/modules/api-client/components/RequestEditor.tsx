@@ -30,7 +30,7 @@ import {
   exportToPython,
   parseCurlCommand,
 } from "../lib/curlParser";
-import { useApiClientStore } from "../store/apiClientStore";
+import { useApiClientTabStore } from "../store/ApiClientStoreContext";
 import type { ApiMethod } from "../types";
 
 const METHOD_COLORS: Record<ApiMethod, string> = {
@@ -75,7 +75,7 @@ export function RequestEditor() {
     setActiveTab,
     setDiscoveryUrl,
     runDiscovery,
-  } = useApiClientStore();
+  } = useApiClientTabStore();
 
   const [activeSubTab, setActiveSubTab] = useState<
     "params" | "headers" | "auth" | "body" | "code"
@@ -110,8 +110,9 @@ export function RequestEditor() {
     if (parsed.url) setUrl(parsed.url);
     if (parsed.method) setMethod(parsed.method);
     if (parsed.headers && parsed.headers.length > 0) {
-      for (const h of parsed.headers) {
-        useApiClientStore.getState().activeRequest.headers.push(h);
+      for (const [offset, h] of parsed.headers.entries()) {
+        addHeader();
+        updateHeader(activeRequest.headers.length + offset, h);
       }
     }
     if (parsed.bodyType) setBodyType(parsed.bodyType);

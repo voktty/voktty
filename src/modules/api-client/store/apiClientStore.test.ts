@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { WEBHOOK_PRESETS } from "../lib/presets";
-import { useApiClientStore } from "./apiClientStore";
+import {
+  createApiClientStore,
+  getApiClientPersistedState,
+  useApiClientStore,
+} from "./apiClientStore";
 
 describe("apiClientStore", () => {
   beforeEach(() => {
@@ -64,5 +68,30 @@ describe("apiClientStore", () => {
     expect(state.webhookConfig.service).toBe(preset.service);
     expect(state.webhookConfig.eventType).toBe(preset.eventType);
     expect(state.webhookConfig.payload).toHaveProperty("id");
+  });
+
+  it("persists only non-sensitive presentation preferences", () => {
+    const store = createApiClientStore("api-client-test-persistence");
+    const persisted = getApiClientPersistedState(store.getState());
+
+    expect(persisted).toEqual({
+      activeTab: "request",
+      sidebarCollapsed: false,
+      variablesDrawerOpen: false,
+    });
+    expect(JSON.stringify(persisted)).not.toContain("whsec_");
+    expect(JSON.stringify(persisted)).not.toContain("secretKey");
+  });
+
+  it("keeps request state independent between tab stores", () => {
+    const firstTab = createApiClientStore("api-client-test-tab-1");
+    const secondTab = createApiClientStore("api-client-test-tab-2");
+
+    firstTab.getState().setUrl("https://api.example.test/first");
+    firstTab.getState().setBearerToken("first-tab-token");
+
+    expect(firstTab.getState().activeRequest.url).toBe("https://api.example.test/first");
+    expect(secondTab.getState().activeRequest.url).not.toBe("https://api.example.test/first");
+    expect(secondTab.getState().activeRequest.bearerToken).toBeUndefined();
   });
 });

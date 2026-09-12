@@ -25,7 +25,7 @@ import {
   WorkflowSquare01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useApiClientStore } from "../store/apiClientStore";
+import { useApiClientTabStore } from "../store/ApiClientStoreContext";
 import { ApiBrowserView } from "./ApiBrowserView";
 import { ApiCollectionExplorer } from "./ApiCollectionExplorer";
 import { RequestEditor } from "./RequestEditor";
@@ -47,7 +47,7 @@ export function ApiClientView() {
     activeEnvironmentId,
     setEnvironment,
     activeRequest,
-  } = useApiClientStore();
+  } = useApiClientTabStore();
 
   const activeEnv =
     environments.find((e) => e.id === activeEnvironmentId) || environments[0];
