@@ -67,18 +67,14 @@ export function getLoadedDefaultTheme(): Theme {
 }
 
 export function loadBuiltinTheme(id: string): Promise<Theme> {
+  if (id === "default") return Promise.resolve(defaultTheme);
   const cached = cache.get(id);
   if (cached) return Promise.resolve(cached);
   const existing = pending.get(id);
   if (existing) return existing;
   const direct = loaders[id] ?? variationLoaders[id];
-  const load = (direct ? direct() : import("./themes").then(({ getBuiltinTheme }) => {
-    const catalogDefault = getBuiltinTheme("voktty-default");
-    if (catalogDefault) cache.set("voktty-default", catalogDefault);
-    const theme = getBuiltinTheme(id) ?? getBuiltinTheme("voktty-default") ?? defaultTheme;
-    cache.set(id, theme);
-    return theme;
-  })).then((theme) => {
+  if (!direct) return Promise.resolve(defaultTheme);
+  const load = direct().then((theme) => {
     cache.set(id, theme);
     if (variationLoaders[id]) cache.set("voktty-default", theme);
     return theme;

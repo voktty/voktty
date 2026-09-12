@@ -13,6 +13,10 @@ describe("themeLoader", () => {
     });
   });
 
+  it("keeps the default variation out of the catalog loader", async () => {
+    await expect(loadBuiltinTheme("default")).resolves.toBe(getLoadedDefaultTheme());
+  });
+
   it("loads and caches a requested legacy variation", async () => {
     const theme = await loadBuiltinTheme("nord");
     expect(theme.variations?.[0]?.variants.dark?.colors?.background).toBe("#2e3440");
