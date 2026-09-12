@@ -1,12 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   beginSourceControlRefresh,
+  createDebouncedSourceControlRefresh,
   loadSharedSourceControlSnapshot,
   ownsSourceControlRefresh,
   planSourceControlRefresh,
   repositoryContainsContext,
   repositoryInfoFromStatus,
 } from "./useSourceControl";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const sharedSnapshot = {
   repo: {
@@ -64,6 +69,35 @@ describe("loadSharedSourceControlSnapshot", () => {
     expect(firstLoad).toHaveBeenCalledTimes(1);
     expect(secondLoad).not.toHaveBeenCalled();
     expect(cached).toEqual(sharedSnapshot);
+  });
+});
+
+describe("createDebouncedSourceControlRefresh", () => {
+  it("coalesces a filesystem burst into one refresh", () => {
+    vi.useFakeTimers();
+    const refresh = vi.fn();
+    const debounced = createDebouncedSourceControlRefresh(refresh, 150);
+
+    debounced.schedule();
+    debounced.schedule();
+    debounced.schedule();
+    vi.advanceTimersByTime(149);
+    expect(refresh).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not refresh after its watcher is disposed", () => {
+    vi.useFakeTimers();
+    const refresh = vi.fn();
+    const debounced = createDebouncedSourceControlRefresh(refresh, 150);
+
+    debounced.schedule();
+    debounced.cancel();
+    vi.runAllTimers();
+
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
 

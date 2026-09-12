@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 const AUTO_FETCH_THROTTLE_MS = 5 * 60_000;
 const AUTO_FETCH_LRU_LIMIT = 16;
 const FOCUS_REFRESH_MIN_INTERVAL_MS = 1500;
+const FILESYSTEM_REFRESH_DEBOUNCE_MS = 150;
 // Skip the context-change refetch when the data is this fresh and the new path
 // is still inside the loaded repo (cd-within-repo produces identical status).
 const SC_STATUS_TTL_MS = 2000;
@@ -182,6 +183,26 @@ export async function loadSharedSourceControlSnapshot(
     });
   sharedSnapshotInflight.set(key, promise);
   return promise;
+}
+
+export function createDebouncedSourceControlRefresh(
+  refresh: () => void,
+  delayMs: number = FILESYSTEM_REFRESH_DEBOUNCE_MS,
+): { schedule: () => void; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return {
+    schedule: () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        refresh();
+      }, delayMs);
+    },
+    cancel: () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    },
+  };
 }
 
 export type SourceControlRefreshPlan =
@@ -729,12 +750,15 @@ export function useSourceControl(
     const repoRoot = state.repo?.repoRoot;
     if (!repoRoot) return;
     watchAddTree(repoRoot, workspaceEnv);
+    const refresh = createDebouncedSourceControlRefresh(() => {
+      void doRefresh("never");
+    });
 
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void listenFsChanged((paths) => {
       if (paths.some((path) => isPathWithinTree(path, repoRoot))) {
-        void doRefresh("never");
+        refresh.schedule();
       }
     }, workspaceEnv).then((stop) => {
       if (disposed) {
@@ -746,6 +770,7 @@ export function useSourceControl(
 
     return () => {
       disposed = true;
+      refresh.cancel();
       unlisten?.();
       watchRemoveTree(repoRoot, workspaceEnv);
     };
