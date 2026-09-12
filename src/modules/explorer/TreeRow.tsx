@@ -35,6 +35,7 @@ export type EntryRowProps = {
   size: number;
   mtime: number;
   workspace: WorkspaceEnv;
+  iconCatalogVersion: number;
 };
 
 function EntryRowImpl(props: EntryRowProps) {
@@ -56,7 +57,10 @@ function EntryRowImpl(props: EntryRowProps) {
     size,
     mtime,
     workspace,
+    iconCatalogVersion,
   } = props;
+
+  void iconCatalogVersion;
 
   const iconUrl = isDir ? folderIconUrl(name, isExpanded) : fileIconUrl(name);
   const paddingLeft = 4 + depth * 10;

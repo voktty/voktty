@@ -54,6 +54,7 @@ import {
   revealInFinder,
 } from "./lib/contextActions";
 import { fileIconUrl, folderIconUrl } from "./lib/iconResolver";
+import { useIconCatalogVersion } from "./lib/useIconCatalogVersion";
 import { COMPACT_CONTENT, COMPACT_ITEM } from "./lib/menuItemClass";
 import { useExplorerDnd } from "./lib/useExplorerDnd";
 import { useExplorerFileDrop } from "./lib/useExplorerFileDrop";
@@ -270,6 +271,7 @@ export const FileExplorer = memo(
     ref,
   ) {
     const { t } = useTranslation();
+    const iconCatalogVersion = useIconCatalogVersion();
     const loadingMessage = t("common.loading");
     const sourceRootIsReachable =
       sourceRootPath === null ||
@@ -801,6 +803,7 @@ export const FileExplorer = memo(
               size={row.size}
               mtime={row.mtime}
               workspace={workspaceEnv}
+              iconCatalogVersion={iconCatalogVersion}
               actions={rowActions}
               renameInProgress={renameInProgress}
               isSelected={selectedPaths.has(row.path)}
