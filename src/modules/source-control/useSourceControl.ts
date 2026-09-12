@@ -311,6 +311,7 @@ function extractDubiousOwnershipPath(
 export function useSourceControl(
   contextPath: string | null,
   enabled: boolean = true,
+  live: boolean = enabled,
 ): SourceControlSummary {
   const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const workspaceKey = workspaceScopeKey(workspaceEnv);
@@ -663,6 +664,7 @@ export function useSourceControl(
   // files, a save from another app, a branch switch outside Voktty) refreshes
   // this view without waiting for window focus or an explicit action.
   useEffect(() => {
+    if (!live) return;
     const repoRoot = state.repo?.repoRoot;
     if (!repoRoot) return;
     watchAddTree(repoRoot, workspaceEnv);
@@ -686,7 +688,7 @@ export function useSourceControl(
       unlisten?.();
       watchRemoveTree(repoRoot, workspaceEnv);
     };
-  }, [state.repo?.repoRoot, workspaceEnv, doRefresh]);
+  }, [state.repo?.repoRoot, workspaceEnv, doRefresh, live]);
 
   const runRemoteAction = useCallback(
     async (
@@ -792,7 +794,7 @@ export function useSourceControl(
   }, [refresh, contextPath, enabled]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !live) return;
     let timer = 0;
     const onFocus = () => {
       if (timer) window.clearTimeout(timer);
@@ -808,7 +810,7 @@ export function useSourceControl(
       window.removeEventListener("focus", onFocus);
       if (timer) window.clearTimeout(timer);
     };
-  }, [refresh, enabled]);
+  }, [refresh, enabled, live]);
 
   return useMemo<SourceControlSummary>(
     () => ({

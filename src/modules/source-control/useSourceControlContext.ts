@@ -22,6 +22,7 @@ type Params = {
   launchCwdResolved: boolean;
   home: string | null;
   sidebarView: SidebarViewId;
+  explorerGitDecorations: boolean;
   repositoryTarget: SourceControlRepositoryTarget;
   cycleSidebarView: (view: SidebarViewId) => void;
   openCommitHistoryTab: (args: {
@@ -30,6 +31,16 @@ type Params = {
     workspaceEnv?: WorkspaceEnv;
   }) => void;
 };
+
+export function shouldKeepSourceControlLive(
+  sidebarView: SidebarViewId,
+  explorerGitDecorations: boolean,
+): boolean {
+  return (
+    sidebarView === "source-control" ||
+    (sidebarView === "explorer" && explorerGitDecorations)
+  );
+}
 
 /**
  * Resolves the source-control context path off the active tab and feeds the
@@ -45,6 +56,7 @@ export function useSourceControlContext({
   launchCwdResolved,
   home,
   sidebarView,
+  explorerGitDecorations,
   repositoryTarget,
   cycleSidebarView,
   openCommitHistoryTab,
@@ -88,7 +100,11 @@ export function useSourceControlContext({
     sidebarView,
     target: repositoryTarget,
   });
-  const sourceControl = useSourceControl(sourceControlPath, true);
+  const sourceControl = useSourceControl(
+    sourceControlPath,
+    true,
+    shouldKeepSourceControlLive(sidebarView, explorerGitDecorations),
+  );
 
   const toggleSourceControl = useCallback(() => {
     cycleSidebarView("source-control");

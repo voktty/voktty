@@ -2480,6 +2480,9 @@ function DesktopApp() {
     openSourceControl,
     openCommitHistoryTab,
   });
+  const explorerGitDecorations = usePreferencesStore(
+    (s) => s.explorerGitDecorations,
+  );
   const { sourceControl, toggleSourceControl, openGitGraphFromContext } =
     useSourceControlContext({
       activeTab,
@@ -2490,13 +2493,11 @@ function DesktopApp() {
       launchCwdResolved,
       home,
       sidebarView,
+      explorerGitDecorations,
       repositoryTarget: sourceControlRepositoryTarget,
       cycleSidebarView,
       openCommitHistoryTab,
     });
-  const explorerGitDecorations = usePreferencesStore(
-    (s) => s.explorerGitDecorations,
-  );
   const [gitCloneModalOpen, setGitCloneModalOpen] = useState(false);
   const [broadcastToAgentsOpen, setBroadcastToAgentsOpen] = useState(false);
 
