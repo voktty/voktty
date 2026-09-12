@@ -55,7 +55,7 @@ export function GitHistoryPane({
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshTick, setRefreshTick] = useState(0);
+  const [refreshGeneration, setRefreshGeneration] = useState(0);
 
   // Wire external search handle
   useEffect(() => {
@@ -84,7 +84,7 @@ export function GitHistoryPane({
 
   useEffect(() => {
     void loadMetadata();
-  }, [loadMetadata, refreshTick]);
+  }, [loadMetadata]);
 
   const handleFetch = useCallback(async () => {
     try {
@@ -92,7 +92,7 @@ export function GitHistoryPane({
       await native.gitFetch(repoRoot, workspaceEnv);
       toast.success(t("gitHistory.workbench.header.fetchSuccess"));
       await loadMetadata();
-      setRefreshTick((t) => t + 1);
+      setRefreshGeneration((generation) => generation + 1);
     } catch (err) {
       toast.error(
         typeof err === "string" ? err : (err as Error).message || "Fetch failed"
@@ -108,7 +108,7 @@ export function GitHistoryPane({
       await native.gitPullFfOnly(repoRoot, workspaceEnv);
       toast.success(t("gitHistory.workbench.header.pullSuccess"));
       await loadMetadata();
-      setRefreshTick((t) => t + 1);
+      setRefreshGeneration((generation) => generation + 1);
     } catch (err) {
       toast.error(
         typeof err === "string" ? err : (err as Error).message || "Pull failed"
@@ -124,7 +124,7 @@ export function GitHistoryPane({
       await native.gitPush(repoRoot, workspaceEnv);
       toast.success(t("gitHistory.workbench.header.pushSuccess"));
       await loadMetadata();
-      setRefreshTick((t) => t + 1);
+      setRefreshGeneration((generation) => generation + 1);
     } catch (err) {
       toast.error(
         typeof err === "string" ? err : (err as Error).message || "Push failed"
@@ -142,7 +142,7 @@ export function GitHistoryPane({
           t("gitHistory.branches.checkoutSuccess", { branch: branchName })
         );
         await loadMetadata();
-        setRefreshTick((t) => t + 1);
+        setRefreshGeneration((generation) => generation + 1);
       } catch (err) {
         toast.error(
           typeof err === "string" ? err : (err as Error).message || "Checkout failed"
@@ -156,7 +156,7 @@ export function GitHistoryPane({
     try {
       setIsRefreshing(true);
       await loadMetadata();
-      setRefreshTick((t) => t + 1);
+      setRefreshGeneration((generation) => generation + 1);
     } finally {
       setIsRefreshing(false);
     }
@@ -197,14 +197,14 @@ export function GitHistoryPane({
         <div className="flex-1 min-h-0 overflow-hidden relative">
           {activeSection === "history" && (
             <GitHistoryView
-              key={`history-${refreshTick}`}
               repoRoot={repoRoot}
               workspaceEnv={workspaceEnv}
               searchQuery={searchQuery}
               branchScope={branchScope}
+              refreshGeneration={refreshGeneration}
               onOpenCommitFile={onOpenCommitFile}
               onOpenCommitDiff={onOpenCommitDiff}
-              onRefreshNeeded={loadMetadata}
+              onRefresh={handleRefresh}
             />
           )}
 

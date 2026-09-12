@@ -589,12 +589,20 @@ export const native = {
     }),
   gitLog: (
     repoRoot: string,
-    options?: { limit?: number; beforeSha?: string; workspace?: WorkspaceEnv },
+    options?: {
+      limit?: number;
+      beforeSha?: string;
+      allRefs?: boolean;
+      skip?: number;
+      workspace?: WorkspaceEnv;
+    },
   ) =>
     invoke<GitLogEntry[]>("git_log", {
       repoRoot,
       limit: options?.limit ?? null,
       beforeSha: options?.beforeSha ?? null,
+      allRefs: options?.allRefs ?? null,
+      skip: options?.skip ?? null,
       workspace: resolveGitWorkspace(repoRoot, options?.workspace),
     }),
   gitShowCommit: (repoRoot: string, sha: string, workspace?: WorkspaceEnv) =>

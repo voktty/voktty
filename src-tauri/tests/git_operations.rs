@@ -130,6 +130,64 @@ fn stage_then_commit_produces_log_entry() {
 }
 
 #[test]
+fn log_all_refs_includes_side_branch_and_uses_offset_pagination() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    fx.write_file("base.txt", "base\n");
+    fx.run_git(&["add", "base.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "base"]);
+    fx.run_git(&["checkout", "-q", "-b", "side"]);
+    fx.write_file("side.txt", "side\n");
+    fx.run_git(&["add", "side.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "side commit"]);
+    fx.run_git(&["checkout", "-q", "main"]);
+    fx.write_file("main.txt", "main\n");
+    fx.run_git(&["add", "main.txt"]);
+    fx.run_git(&["commit", "-q", "-m", "main commit"]);
+
+    let current = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace)
+        .expect("current log");
+    assert!(current.iter().all(|entry| entry.subject != "side commit"));
+    assert!(current.iter().all(|entry| entry.files_changed == 0));
+
+    let all = operations::log_with_options(
+        &fx.registry,
+        &fx.repo_str(),
+        10,
+        None,
+        true,
+        0,
+        &fx.workspace,
+    )
+    .expect("all-ref log");
+    assert!(all.iter().any(|entry| entry.subject == "side commit"));
+
+    let first = operations::log_with_options(
+        &fx.registry,
+        &fx.repo_str(),
+        1,
+        None,
+        true,
+        0,
+        &fx.workspace,
+    )
+    .expect("first page");
+    let second = operations::log_with_options(
+        &fx.registry,
+        &fx.repo_str(),
+        1,
+        None,
+        true,
+        1,
+        &fx.workspace,
+    )
+    .expect("second page");
+    assert_ne!(first[0].sha, second[0].sha);
+}
+
+#[test]
 fn unstage_clears_index_entry() {
     if skip_if_no_git() {
         return;
