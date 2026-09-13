@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod docker_stats_tests {
     use crate::modules::docker::stats::calculate_container_stats;
-    use bollard::container::Stats;
+    use bollard::models::ContainerStatsResponse;
 
     #[test]
     fn test_calculate_container_stats_from_json() {
@@ -44,7 +44,7 @@ mod docker_stats_tests {
             "id": "c12345678901"
         }"#;
 
-        let stats: Stats =
+        let stats: ContainerStatsResponse =
             serde_json::from_str(json_data).expect("failed to deserialize stats json");
         let res =
             calculate_container_stats("c12345678901".to_string(), "web-server".to_string(), &stats);

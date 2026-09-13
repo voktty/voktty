@@ -1,6 +1,7 @@
-use bollard::container::{
-    KillContainerOptions, ListContainersOptions, LogsOptions, RemoveContainerOptions,
-    RestartContainerOptions, StartContainerOptions, StatsOptions, StopContainerOptions,
+use bollard::query_parameters::{
+    KillContainerOptionsBuilder, ListContainersOptionsBuilder, LogsOptionsBuilder,
+    RemoveContainerOptionsBuilder, RestartContainerOptionsBuilder, StartContainerOptionsBuilder,
+    StatsOptionsBuilder, StopContainerOptionsBuilder,
 };
 use futures_util::StreamExt;
 use std::collections::HashMap;
@@ -73,10 +74,9 @@ pub async fn docker_list_containers(
 ) -> Result<Vec<DockerContainerInfo>, String> {
     let docker = create_docker_client(custom_host.as_deref())?;
 
-    let options = ListContainersOptions::<String> {
-        all: all.unwrap_or(true),
-        ..Default::default()
-    };
+    let options = ListContainersOptionsBuilder::new()
+        .all(all.unwrap_or(true))
+        .build();
 
     let containers = docker
         .list_containers(Some(options))
@@ -157,19 +157,28 @@ pub async fn docker_container_action(
     match action.to_lowercase().as_str() {
         "start" => {
             docker
-                .start_container(&container_id, None::<StartContainerOptions<String>>)
+                .start_container(
+                    &container_id,
+                    Some(StartContainerOptionsBuilder::new().build()),
+                )
                 .await
                 .map_err(|e| format!("Failed to start container {container_id}: {e}"))?;
         }
         "stop" => {
             docker
-                .stop_container(&container_id, None::<StopContainerOptions>)
+                .stop_container(
+                    &container_id,
+                    Some(StopContainerOptionsBuilder::new().build()),
+                )
                 .await
                 .map_err(|e| format!("Failed to stop container {container_id}: {e}"))?;
         }
         "restart" => {
             docker
-                .restart_container(&container_id, None::<RestartContainerOptions>)
+                .restart_container(
+                    &container_id,
+                    Some(RestartContainerOptionsBuilder::new().build()),
+                )
                 .await
                 .map_err(|e| format!("Failed to restart container {container_id}: {e}"))?;
         }
@@ -187,7 +196,10 @@ pub async fn docker_container_action(
         }
         "kill" => {
             docker
-                .kill_container(&container_id, None::<KillContainerOptions<String>>)
+                .kill_container(
+                    &container_id,
+                    Some(KillContainerOptionsBuilder::new().build()),
+                )
                 .await
                 .map_err(|e| format!("Failed to kill container {container_id}: {e}"))?;
         }
@@ -195,10 +207,7 @@ pub async fn docker_container_action(
             docker
                 .remove_container(
                     &container_id,
-                    Some(RemoveContainerOptions {
-                        force: true,
-                        ..Default::default()
-                    }),
+                    Some(RemoveContainerOptionsBuilder::new().force(true).build()),
                 )
                 .await
                 .map_err(|e| format!("Failed to remove container {container_id}: {e}"))?;
@@ -216,17 +225,17 @@ pub async fn docker_get_stats(
 ) -> Result<DockerContainerStats, String> {
     let docker = create_docker_client(custom_host.as_deref())?;
 
-    let options = StatsOptions {
-        stream: false,
-        one_shot: true,
-    };
+    let options = StatsOptionsBuilder::new()
+        .stream(false)
+        .one_shot(true)
+        .build();
 
     let mut stream = docker.stats(&container_id, Some(options));
     if let Some(res) = stream.next().await {
         let stats = res.map_err(|e| format!("Failed to fetch stats for {container_id}: {e}"))?;
         Ok(calculate_container_stats(
             container_id.clone(),
-            stats.name.clone(),
+            stats.name.clone().unwrap_or_default(),
             &stats,
         ))
     } else {
@@ -245,13 +254,12 @@ pub async fn docker_get_logs(
     let tail_str = tail
         .map(|t| t.to_string())
         .unwrap_or_else(|| "100".to_string());
-    let options = LogsOptions::<String> {
-        stdout: true,
-        stderr: true,
-        tail: tail_str,
-        timestamps: false,
-        ..Default::default()
-    };
+    let options = LogsOptionsBuilder::new()
+        .stdout(true)
+        .stderr(true)
+        .tail(&tail_str)
+        .timestamps(false)
+        .build();
 
     let mut stream = docker.logs(&container_id, Some(options));
     let mut output = String::new();
