@@ -1,5 +1,5 @@
 import { createContext, useContext, useRef, type ReactNode } from "react";
-import type { UseBoundStore, StoreApi } from "zustand";
+import { useStore, type UseBoundStore, type StoreApi } from "zustand";
 import {
   createApiClientStore,
   getLegacyApiClientPresentationState,
@@ -44,8 +44,16 @@ export function ApiClientStoreProvider({
   );
 }
 
-export function useApiClientTabStore(): ApiClientStore {
+const defaultSelector = (state: ApiClientStore) => state;
+
+export function useApiClientTabStore(): ApiClientStore;
+export function useApiClientTabStore<T>(selector: (state: ApiClientStore) => T): T;
+export function useApiClientTabStore<T = ApiClientStore>(
+  selector: (state: ApiClientStore) => T = defaultSelector as unknown as (
+    state: ApiClientStore,
+  ) => T,
+): T {
   const store = useContext(ApiClientStoreContext);
   if (!store) throw new Error("ApiClientStoreProvider is required");
-  return store();
+  return useStore(store, selector);
 }

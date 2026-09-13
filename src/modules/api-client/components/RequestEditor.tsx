@@ -31,7 +31,7 @@ import {
   parseCurlCommand,
 } from "../lib/curlParser";
 import { useApiClientTabStore } from "../store/ApiClientStoreContext";
-import type { ApiMethod } from "../types";
+import type { ApiMethod, ApiRequest } from "../types";
 
 const METHOD_COLORS: Record<ApiMethod, string> = {
   GET: "text-blue-400 font-bold",
@@ -46,6 +46,69 @@ const METHOD_COLORS: Record<ApiMethod, string> = {
   GRPC: "text-indigo-400 font-bold",
   WS: "text-sky-400 font-bold",
 };
+
+const QUICK_MOCK_TARGETS: {
+  name: string;
+  method: ApiMethod;
+  url: string;
+  bodyType: ApiRequest["bodyType"];
+  bodyContent: string;
+  headers: { key: string; value: string; enabled: boolean }[];
+  queryParams: { key: string; value: string; enabled: boolean }[];
+}[] = [
+  {
+    name: "PokeAPI (REST)",
+    method: "GET",
+    url: "https://pokeapi.co/api/v2/pokemon/ditto",
+    bodyType: "none",
+    bodyContent: "",
+    headers: [{ key: "Accept", value: "application/json", enabled: true }],
+    queryParams: [],
+  },
+  {
+    name: "DummyJSON Product",
+    method: "GET",
+    url: "https://dummyjson.com/products/1",
+    bodyType: "none",
+    bodyContent: "",
+    headers: [{ key: "Accept", value: "application/json", enabled: true }],
+    queryParams: [],
+  },
+  {
+    name: "HTTPBin POST Echo",
+    method: "POST",
+    url: "https://httpbin.org/post",
+    bodyType: "json",
+    bodyContent: '{\n  "app": "Voktty",\n  "status": "ready",\n  "zeroCors": true\n}',
+    headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+    queryParams: [],
+  },
+  {
+    name: "PokeAPI GraphQL",
+    method: "POST",
+    url: "https://beta.pokeapi.co/graphql/v1beta",
+    bodyType: "graphql",
+    bodyContent: `query GetPokemon {
+  pokemon_v2_pokemon(limit: 5) {
+    id
+    name
+    height
+    weight
+  }
+}`,
+    headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+    queryParams: [],
+  },
+  {
+    name: "HTTPBin SSE Stream",
+    method: "GET",
+    url: "https://httpbin.org/stream/5",
+    bodyType: "none",
+    bodyContent: "",
+    headers: [{ key: "Accept", value: "text/event-stream", enabled: true }],
+    queryParams: [],
+  },
+];
 
 export function RequestEditor() {
   const { t } = useTranslation();
@@ -72,6 +135,7 @@ export function RequestEditor() {
     setRequestVariables,
     importPostman,
     sendRequest,
+    selectRequest,
     setActiveTab,
     setDiscoveryUrl,
     runDiscovery,
@@ -237,6 +301,44 @@ export function RequestEditor() {
         >
           <span>Postman</span>
         </Button>
+      </div>
+
+      {/* Quick Mock Test Presets Bar */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-border/40 bg-muted/15 px-2.5 py-1 text-[11px]">
+        <span className="font-medium text-muted-foreground mr-0.5">
+          {t("apiClient.browser.fastPresets")}:
+        </span>
+        {QUICK_MOCK_TARGETS.map((target) => (
+          <button
+            key={target.name}
+            type="button"
+            onClick={() => {
+              selectRequest({
+                id: `mock-${Date.now()}`,
+                name: target.name,
+                url: target.url,
+                method: target.method,
+                headers: target.headers,
+                queryParams: target.queryParams,
+                bodyType: target.bodyType,
+                bodyContent: target.bodyContent,
+                authType: "none",
+                variables: {},
+              });
+            }}
+            className="flex items-center gap-1 rounded border border-border/60 bg-background px-2 py-0.5 text-[10.5px] font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <span
+              className={cn(
+                "font-mono text-[9px] font-bold",
+                METHOD_COLORS[target.method]?.split(" ")[0],
+              )}
+            >
+              {target.method}
+            </span>
+            <span>{target.name}</span>
+          </button>
+        ))}
       </div>
 
       {/* cURL Import Drawer */}
