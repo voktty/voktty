@@ -13,7 +13,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { harden } from "rehype-harden";
 import {
   CodeBlock,
@@ -197,8 +197,11 @@ function MarkdownLink({
           onOpenFile(filePath);
           return;
         }
-        if (!href || !/^https?:\/\//i.test(href)) {
-          event.preventDefault();
+        event.preventDefault();
+        if (href && /^https?:\/\//i.test(href)) {
+          void openUrl(href).catch((error) => {
+            console.error("Failed to open web link:", error);
+          });
         }
       }}
       onContextMenu={(event) => {

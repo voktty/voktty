@@ -4734,6 +4734,8 @@ export const en = {
       workingTreeChanges: "Working tree changes",
       sessionChanges: "Session Changes",
       closeTabWithUnsavedFiles: "Close this tab with unsaved files?",
+      closeOtherTabsWithUnsavedFiles:
+        "Close other tabs with unsaved files?",
       closeFileWithoutSaving: "Close {name} without saving?",
       closeConversationWithUnsavedFiles:
         "Close this conversation with unsaved files?",
@@ -5050,6 +5052,7 @@ export const en = {
       openInVoktty: "Open in Voktty",
       fileLinkActions: "File link actions",
       fileTabActions: "File tab actions",
+      closeOthers: "Close Others",
       openCommitGraph: "Open Git Graph",
       viewFileHistory: "View File History",
       duplicate: "Duplicate",

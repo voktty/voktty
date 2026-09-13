@@ -4848,6 +4848,8 @@ export const es: TranslationSchema = {
       sessionChanges: "Cambios de sesión",
       closeTabWithUnsavedFiles:
         "¿Cerrar esta pestaña con archivos sin guardar?",
+      closeOtherTabsWithUnsavedFiles:
+        "¿Cerrar otras pestañas con archivos sin guardar?",
       closeFileWithoutSaving: "¿Cerrar {name} sin guardar?",
       closeConversationWithUnsavedFiles:
         "¿Cerrar esta conversación con archivos sin guardar?",
@@ -5165,6 +5167,7 @@ export const es: TranslationSchema = {
       openInVoktty: "Abrir en Voktty",
       fileLinkActions: "Acciones del enlace de archivo",
       fileTabActions: "Acciones de la pestaña de archivo",
+      closeOthers: "Cerrar otras",
       openCommitGraph: "Abrir gráfico de commits",
       viewFileHistory: "Ver historial del archivo",
       duplicate: "Duplicar",
