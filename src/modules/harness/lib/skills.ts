@@ -18,6 +18,11 @@ import {
   CREATE_SKILL_DESCRIPTION,
   CREATE_SKILL_NAME,
 } from "./createSkill";
+export {
+  CREATE_SKILL_BODY,
+  CREATE_SKILL_DESCRIPTION,
+  CREATE_SKILL_NAME,
+};
 
 const DISABLED_SKILL_PATHS_KEY = "voktty.disabledSkillPaths";
 

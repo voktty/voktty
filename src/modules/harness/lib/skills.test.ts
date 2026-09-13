@@ -7,6 +7,7 @@ import {
   isValidSkillName,
   mergeCatalog,
   rankSkills,
+  readSkillBody,
   replaceSlashToken,
   skillNamesInText,
   skillTextParts,
@@ -309,5 +310,10 @@ describe("skill names", () => {
     );
     expect(catalog.find((s) => s.name === "review-pr")).toBeUndefined();
     expect(catalog.find((s) => s.name === "cursor-only")).toBeDefined();
+  });
+
+  it("reads builtin skill body for preview", async () => {
+    const builtinBody = await readSkillBody(BUILTIN_CREATE_SKILL);
+    expect(builtinBody).toContain("create-skill");
   });
 });

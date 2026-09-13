@@ -5562,6 +5562,13 @@ export const en = {
     copyPathAriaLabel: "Copy path of {name}",
     revealInFileManager: "Reveal in file manager",
     revealAriaLabel: "Reveal {name} in file explorer",
+    previewSkill: "Preview",
+    hideSkillPreview: "Hide preview",
+    previewAriaLabel: "Preview {name} content",
+    copySkillContent: "Copy content",
+    copySkillContentAriaLabel: "Copy content of {name}",
+    copiedSkillContent: "Copied!",
+    loadSkillError: "Could not load skill content: {error}",
     descriptionFooter:
       "Hidden skills stay on disk and are excluded from Voktty's file-skill catalog. Provider-managed skills and native commands are unaffected. Skills live in .agents/skills for this project and ~/.agents/skills for you personally; harness folders are also picked up.",
   },

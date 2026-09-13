@@ -5685,6 +5685,13 @@ export const es: TranslationSchema = {
     copyPathAriaLabel: "Copiar ruta de {name}",
     revealInFileManager: "Mostrar en el explorador de archivos",
     revealAriaLabel: "Mostrar {name} en el explorador de archivos",
+    previewSkill: "Vista previa",
+    hideSkillPreview: "Ocultar vista previa",
+    previewAriaLabel: "Vista previa de la habilidad {name}",
+    copySkillContent: "Copiar contenido",
+    copySkillContentAriaLabel: "Copiar contenido de {name}",
+    copiedSkillContent: "¡Copiado!",
+    loadSkillError: "No se pudo cargar el contenido de la habilidad: {error}",
     descriptionFooter:
       "Las habilidades ocultas permanecen en el disco y se excluyen del catálogo de habilidades de Voktty. Las habilidades administradas por proveedores y los comandos nativos no se ven afectados. Las habilidades residen en .agents/skills para este proyecto y en ~/.agents/skills para ti personalmente; las carpetas de harness también se detectan.",
   },
