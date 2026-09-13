@@ -114,7 +114,7 @@ ring = "0.17"
 tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
 url = "2.5"
 serialport = "4.7"
-bollard = "0.18"
+bollard = "0.21"
 ironrdp-pdu = "0.9"
 ironrdp-session = "0.8"
 ironrdp-graphics = "0.8"
