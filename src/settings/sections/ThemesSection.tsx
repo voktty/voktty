@@ -42,7 +42,10 @@ import {
 } from "@/modules/theme/customThemes";
 import { deleteThemeFile, emitThemeEdit } from "@/modules/theme/themeFiles";
 import { resolveThemeDescription } from "@/modules/theme/themeDescription";
-import { listBuiltinThemes } from "@/modules/theme/themes";
+import {
+  builtinThemeCatalog,
+  resolveCatalogTheme,
+} from "@/modules/theme/themeCatalog";
 import { DEFAULT_THEME_ID } from "@/modules/theme/types";
 import { validateTheme } from "@/modules/theme/validateTheme";
 import {
@@ -70,15 +73,18 @@ export function ThemesSection() {
     setTypographyProfile,
     resolvedMode,
     customThemes,
+    activeTheme,
   } = useTheme();
-  const builtinThemes = listBuiltinThemes();
   const themes = useMemo(
-    () => [...builtinThemes, ...customThemes],
-    [builtinThemes, customThemes],
+    () => [...builtinThemeCatalog, ...customThemes],
+    [customThemes],
   );
   const selectedTheme = useMemo(
-    () => themes.find((t) => t.id === themeId) ?? themes[0],
-    [themes, themeId],
+    () =>
+      customThemes.find((theme) => theme.id === themeId) ??
+      resolveCatalogTheme(themeId, activeTheme) ??
+      themes[0],
+    [activeTheme, customThemes, themes, themeId],
   );
   const customIds = useMemo(
     () => new Set(customThemes.map((t) => t.id)),

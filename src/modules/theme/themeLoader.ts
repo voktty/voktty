@@ -82,7 +82,3 @@ export function loadBuiltinTheme(id: string): Promise<Theme> {
   pending.set(id, load);
   return load;
 }
-
-export function loadBuiltinThemes(): Promise<Theme[]> {
-  return import("./themes").then(({ listBuiltinThemes }) => listBuiltinThemes());
-}
