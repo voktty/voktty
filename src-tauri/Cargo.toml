@@ -148,6 +148,11 @@ window-vibrancy = "0.8"
 
 # WebKitGTK can't read external clipboard copies; mac/win webviews can.
 [target.'cfg(target_os = "linux")'.dependencies]
+dbus = "0.9"
+keyring = { version = "3.6", default-features = false, features = [
+	"crypto-rust",
+	"sync-secret-service",
+] }
 tauri-plugin-clipboard-manager = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
