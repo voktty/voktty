@@ -76,9 +76,9 @@ API keys are stored via `secrets_*` commands (`src-tauri/src/modules/secrets.rs`
 
 - macOS: Keychain via `keyring`
 - Windows: Credential Manager via `keyring`
-- Linux: a JSON file in the app's local data dir with mode `0600` (atomic write to `.tmp` then rename)
+- Linux: freedesktop Secret Service when available; if the session bus or service is genuinely absent, an atomic JSON fallback in the app's local data dir with mode `0600`
 
-Service constant: `voktty-ai`. Keys never touch disk outside the keychain/Linux secrets file, never go in `localStorage`, and never appear in logs.
+Service constant: `voktty-ai`. Keys never go in `localStorage` or logs. On Linux, access, activation, locking, and protocol failures are surfaced instead of silently downgrading to the file fallback.
 
 ## OSC trust gating
 
@@ -98,7 +98,7 @@ The agent detector (`src-tauri/src/modules/pty/agent_detect.rs`) is armed by `OS
 - External tool descriptions, annotations and output must remain untrusted and cannot lower effects or approval requirements.
 - MCP calls must use native snapshots and grants; AI SDK approval state is never sufficient authority.
 - New plugin APIs must be added to `src-tauri/capabilities/default.json`.
-- Keys, tokens, and credentials stay in the keychain / Linux secrets file.
+- Keys, tokens, and credentials stay in the OS keychain, Linux Secret Service, or its private Linux fallback file.
 
 ## See also
 

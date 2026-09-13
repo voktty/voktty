@@ -29,7 +29,7 @@ Model metadata (context limits, costs, reasoning behavior) lives in the model re
 5. If it needs a dedicated `@ai-sdk/*` package, add it to `package.json` and justify the bundle cost (see `CONTRIBUTING.md`).
 6. New built-ins must justify unique value beyond `openai-compatible` and OpenRouter; `CONTRIBUTING.md` calls this out explicitly.
 
-Keys are never persisted outside the OS keychain / Linux secrets file.
+Keys are never persisted outside the OS keychain, Linux Secret Service, or its private Linux fallback file.
 
 ## Agent run loop
 
