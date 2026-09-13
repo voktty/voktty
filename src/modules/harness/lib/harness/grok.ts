@@ -8,6 +8,7 @@ import {
   unwatchChild,
   watchChild,
 } from "./child";
+import { AcpSubagents } from "./acpSubagents";
 import {
   AUTH_HELP,
   askQuestionResponse,
@@ -52,6 +53,7 @@ type Live = {
   onEvent: (event: HarnessEvent) => void;
   approvals: Map<number, (decision: ApprovalDecision) => void>;
   questions: Map<number, (reply: UserQuestionReply) => void>;
+  subagents: AcpSubagents;
   turns: Promise<void>;
 };
 
@@ -395,6 +397,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       onEvent: input.onEvent,
       approvals: new Map(),
       questions: new Map(),
+      subagents: new AcpSubagents(),
       turns: Promise.resolve(),
     };
     liveRef.current = live;
@@ -492,7 +495,8 @@ function handleNotification(live: Live, method: string, params: unknown) {
         ? unwrapSessionNotification(params)
         : null;
   if (!updateParams) return;
-  for (const event of eventsFromAcpUpdate(updateParams)) {
+  const events = eventsFromAcpUpdate(updateParams);
+  for (const event of live.subagents.route(updateParams, events)) {
     if (
       event.type === "context" &&
       event.window == null &&

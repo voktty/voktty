@@ -11,9 +11,13 @@ import {
   watchChild,
 } from "./child";
 import {
+  readStoredCursorSubagentRuns,
   readStoredCursorToolCalls,
+  type StoredCursorSubagentRun,
   type StoredCursorToolCall,
 } from "./cursorStore";
+import { cursorSubagentEvents } from "./cursorSubagents";
+import { AcpSubagents, acpAgentInfo } from "./acpSubagents";
 import { stopCursorTitleGeneration } from "./cursorTitle";
 import type {
   ApprovalDecision,
@@ -78,6 +82,10 @@ type Live = {
   taskListTools: Set<string>;
   agentTools: Map<string, string>;
   backgroundAgentTools: Set<string>;
+  subagents: AcpSubagents;
+  subagentRuns: Map<string, StoredCursorSubagentRun>;
+  subagentTimer?: ReturnType<typeof setTimeout>;
+  subagentRunning: boolean;
   promptActive: boolean;
   turns: Promise<void>;
 };
@@ -116,6 +124,7 @@ export async function sendCursorTurn(input: SendTurnInput): Promise<void> {
       live.cancelled = false;
       live.muteUpdates = false;
       scheduleCursorToolEnrichment(live, 0);
+      scheduleCursorSubagents(live, 0);
       try {
         await applyModelSelection(live, input);
         if (live.cancelled) return;
@@ -177,6 +186,9 @@ export async function cancelCursorTurn(sessionId: string): Promise<void> {
   live.backgroundAgentTools.clear();
   if (live.toolEnrichmentTimer) clearTimeout(live.toolEnrichmentTimer);
   live.toolEnrichmentTimer = undefined;
+  if (live.subagentTimer) clearTimeout(live.subagentTimer);
+  live.subagentTimer = undefined;
+  live.subagentRuns.clear();
   for (const [, resolve] of live.approvals) resolve("deny");
   live.approvals.clear();
   for (const [, resolve] of live.questions) resolve({ kind: "skipped" });
@@ -197,6 +209,9 @@ export async function stopCursorSession(sessionId: string): Promise<void> {
     live.promptActive = false;
     if (live.toolEnrichmentTimer) clearTimeout(live.toolEnrichmentTimer);
     live.pendingToolEnrichments.clear();
+    if (live.subagentTimer) clearTimeout(live.subagentTimer);
+    live.subagentTimer = undefined;
+    live.subagentRuns.clear();
     live.agentTools.clear();
     live.backgroundAgentTools.clear();
     for (const [, resolve] of live.approvals) resolve("deny");
@@ -344,6 +359,9 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       taskListTools: new Set(),
       agentTools: new Map(),
       backgroundAgentTools: new Set(),
+      subagents: new AcpSubagents(),
+      subagentRuns: new Map(),
+      subagentRunning: false,
       promptActive: false,
       turns: Promise.resolve(),
     };
@@ -434,10 +452,12 @@ async function prompt(live: Live, input: SendTurnInput): Promise<void> {
     live.onEvent({ type: "message.completed" });
     live.onEvent({ type: "reasoning.completed" });
     wakeCursorToolEnrichment(live);
+    wakeCursorSubagents(live);
   } catch (error) {
     live.promptActive = false;
     if (live.cancelled) return;
     settleCursorBackgroundAgents(live, "failed");
+    wakeCursorSubagents(live);
     live.onEvent({
       type: "session.error",
       message: error instanceof Error ? error.message : String(error),
@@ -773,8 +793,10 @@ function handleSessionUpdate(live: Live, params: unknown) {
       tool.raw_input ??
       update.input ??
       tool.input;
+    const acpInfo = acpAgentInfo(update, tool, reportedKind, rawTitle, rawInput);
     const agent =
       live.agentTools.has(callId) ||
+      !!acpInfo ||
       isAgentTool(reportedKind, rawTitle) ||
       isCursorAgentInput(rawInput);
     const taskList =
@@ -785,7 +807,8 @@ function handleSessionUpdate(live: Live, params: unknown) {
     const detail = toolDetail(update, tool);
     const preview = extractToolPreview(update, tool);
     const title = agent
-      ? cursorAgentTitle(rawInput, rawTitle, live.agentTools.get(callId))
+      ? (acpInfo?.title ??
+        cursorAgentTitle(rawInput, rawTitle, live.agentTools.get(callId)))
       : composeToolTitle({
           kind: toolKind,
           title: rawTitle,
@@ -810,6 +833,7 @@ function handleSessionUpdate(live: Live, params: unknown) {
           previewKind: preview?.kind,
         }) || rawTitle;
     if (agent && title) live.agentTools.set(callId, title);
+    if (agent) scheduleCursorSubagents(live, 0);
     const background =
       agent &&
       status === "completed" &&
@@ -825,6 +849,7 @@ function handleSessionUpdate(live: Live, params: unknown) {
       status: displayedStatus,
       detail,
       preview,
+      ...(acpInfo?.agentModel ? { agentModel: acpInfo.agentModel } : {}),
     });
     if (needsCursorToolEnrichment(toolKind, title, preview)) {
       queueCursorToolEnrichment(live, callId, toolKind);
@@ -1492,6 +1517,78 @@ function joinContentParts(parts: string[], separator: string): string {
     joined += boundaryAlreadyPresent ? part : separator + part;
   }
   return joined;
+}
+
+function scheduleCursorSubagents(live: Live, delay: number): void {
+  if (
+    live.muteUpdates ||
+    live.subagentRunning ||
+    live.subagentTimer ||
+    live.agentTools.size === 0
+  ) {
+    return;
+  }
+  live.subagentTimer = setTimeout(() => {
+    live.subagentTimer = undefined;
+    void refreshCursorSubagents(live);
+  }, delay);
+}
+
+function wakeCursorSubagents(live: Live): void {
+  if (live.subagentTimer) clearTimeout(live.subagentTimer);
+  live.subagentTimer = undefined;
+  scheduleCursorSubagents(live, 0);
+}
+
+async function refreshCursorSubagents(live: Live): Promise<void> {
+  if (
+    live.muteUpdates ||
+    live.subagentRunning ||
+    live.agentTools.size === 0
+  ) {
+    return;
+  }
+  live.subagentRunning = true;
+  const callIds = [...live.agentTools.keys()].slice(-64);
+  try {
+    const runs = await readStoredCursorSubagentRuns(
+      live.acpSessionId,
+      callIds,
+    ).catch(() => []);
+    if (live.muteUpdates) return;
+    for (const run of runs) {
+      const prior = live.subagentRuns.get(run.toolCallId);
+      if (sameCursorSubagentRun(prior, run)) continue;
+      live.subagentRuns.set(run.toolCallId, run);
+      for (const event of cursorSubagentEvents(
+        run,
+        live.agentTools.get(run.toolCallId),
+      )) {
+        live.onEvent(event);
+      }
+    }
+  } finally {
+    live.subagentRunning = false;
+    if (live.agentTools.size > 0 && live.promptActive) {
+      scheduleCursorSubagents(live, 500);
+    }
+  }
+}
+
+function sameCursorSubagentRun(
+  a?: StoredCursorSubagentRun,
+  b?: StoredCursorSubagentRun,
+): boolean {
+  if (!a || !b) return false;
+  if (a.steps.length !== b.steps.length) return false;
+  const lastA = a.steps[a.steps.length - 1];
+  const lastB = b.steps[b.steps.length - 1];
+  return (
+    lastA?.id === lastB?.id &&
+    lastA?.status === lastB?.status &&
+    lastA?.text === lastB?.text &&
+    lastA?.output === lastB?.output
+  );
 }
 
 export function __cursorTestReset(): void {

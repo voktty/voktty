@@ -88,6 +88,9 @@ import {
   nestedScrollAbsorbsWheel,
   proseSummary,
   splitActivityRows,
+  subagentBrief,
+  subagentName,
+  subagentReport,
   type ToolCallState,
   type TurnItem,
   toolCallLabel,
@@ -432,7 +435,16 @@ function AgentTranscriptComponent({
               ? firstWork
               : items.length;
           const renderItem = (item: TurnItem, itemIndex: number) =>
-            item.type === "activity" ? (
+            item.type === "subagents" ? (
+              <SubagentGroup
+                key={item.blocks[0].id}
+                blocks={item.blocks}
+                cwd={cwd}
+                onApproval={onApproval}
+                onOpenFile={onOpenFile}
+                onOpenDiff={onOpenDiff}
+              />
+            ) : item.type === "activity" ? (
               zen ? (
                 itemIndex === initialThinkingAt ? (
                   <InitialThinking
@@ -1138,6 +1150,224 @@ function ActivityGroup({
   );
 }
 
+function SubagentGroup({
+  blocks,
+  cwd,
+  onApproval,
+  onOpenFile,
+  onOpenDiff,
+}: {
+  blocks: Block[];
+  cwd?: string;
+  onApproval?: (requestId: number, decision: ApprovalDecision) => void;
+  onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 px-4">
+      {blocks.map((block) => (
+        <SubagentRunRow
+          key={block.id}
+          block={block}
+          cwd={cwd}
+          onApproval={onApproval}
+          onOpenFile={onOpenFile}
+          onOpenDiff={onOpenDiff}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SubagentRunRow({
+  block,
+  cwd,
+  onApproval: _onApproval,
+  onOpenFile,
+  onOpenDiff,
+}: {
+  block: Block;
+  cwd?: string;
+  onApproval?: (requestId: number, decision: ApprovalDecision) => void;
+  onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const state = toolCallState(block);
+  const meta = block.agentRun;
+  const name = subagentName(block);
+  const brief = subagentBrief(block);
+  const report = subagentReport(block);
+  const steps = meta?.steps ?? [];
+  const model = meta?.model ?? block.tool?.agentModel;
+  const agentType = meta?.agentType;
+  const hasSteps = steps.length > 0 || !!report;
+
+  return (
+    <div className="flex min-w-0 flex-col rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-2.5 shadow-sm transition-colors">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <SubagentMascot agentType={agentType} />
+          <div className="flex min-w-0 flex-col">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate font-sans text-sm font-medium text-foreground">
+                {name}
+              </span>
+              {model ? (
+                <span className="rounded bg-content/8 px-1.5 py-0.5 text-[11px] font-mono text-content/60">
+                  {model}
+                </span>
+              ) : null}
+            </div>
+            {brief ? (
+              <span className="truncate font-sans text-xs text-content/50">
+                {brief}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {state === "pending" ? (
+            <TerminalSpinner className="size-3.5 text-content/50" />
+          ) : state === "accepted" ? (
+            <Check className="size-3.5 text-emerald-500" strokeWidth={2} />
+          ) : (
+            <X className="size-3.5 text-destructive" strokeWidth={2} />
+          )}
+          {hasSteps ? (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className="rounded p-0.5 text-content/40 hover:bg-content/8 hover:text-content/70"
+              aria-label={open ? t("harness.chrome.hideDetails") : t("harness.chrome.showDetails")}
+            >
+              <ChevronRight
+                className={`size-3.5 transition-transform duration-200 ${open ? "rotate-90" : ""}`}
+                strokeWidth={1.75}
+              />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {open && hasSteps ? (
+        <div className="mt-2.5 flex min-w-0 flex-col gap-1.5 border-t border-[var(--border-subtle)] pt-2 pl-2">
+          {steps.map((step) => (
+            <SubagentStepRow
+              key={step.id}
+              step={step}
+              cwd={cwd}
+              onOpenFile={onOpenFile}
+              onOpenDiff={onOpenDiff}
+            />
+          ))}
+          {report &&
+          !steps.some(
+            (s) => s.kind === "message" && s.text?.trim() === report,
+          ) ? (
+            <div className="rounded bg-[var(--surface-active-item)] p-2 font-sans text-xs text-content/80 whitespace-pre-wrap break-words">
+              {report}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SubagentMascot({ agentType }: { agentType?: string }) {
+  const type = (agentType ?? "").toLowerCase();
+  if (
+    type.includes("explore") ||
+    type.includes("search") ||
+    type.includes("find")
+  ) {
+    return (
+      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-blue-500">
+        <Search className="size-3.5" strokeWidth={2} />
+      </div>
+    );
+  }
+  if (
+    type.includes("edit") ||
+    type.includes("write") ||
+    type.includes("patch")
+  ) {
+    return (
+      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-amber-500">
+        <PenLine className="size-3.5" strokeWidth={2} />
+      </div>
+    );
+  }
+  if (
+    type.includes("exec") ||
+    type.includes("bash") ||
+    type.includes("term")
+  ) {
+    return (
+      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-zinc-500/15 text-foreground">
+        <Terminal className="size-3.5" strokeWidth={2} />
+      </div>
+    );
+  }
+  return (
+    <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+      <Wrench className="size-3.5" strokeWidth={2} />
+    </div>
+  );
+}
+
+function SubagentStepRow({
+  step,
+  cwd: _cwd,
+  onOpenFile: _onOpenFile,
+  onOpenDiff: _onOpenDiff,
+}: {
+  step: import("../lib/session").AgentStep;
+  cwd?: string;
+  onOpenFile?: (path: string) => void;
+  onOpenDiff?: (path: string) => void;
+}) {
+  if (step.kind === "reasoning") {
+    return (
+      <div className="flex min-w-0 items-center gap-1.5 font-sans text-xs text-content/40 italic">
+        <CircleDashed className="size-3 shrink-0" />
+        <span className="truncate">{step.text}</span>
+      </div>
+    );
+  }
+  if (step.kind === "message") {
+    return (
+      <div className="font-sans text-xs text-content/80 whitespace-pre-wrap break-words">
+        {step.text}
+      </div>
+    );
+  }
+  const status = step.status;
+  const isDone = status === "completed" || status === "success";
+  const isFail = status === "failed" || status === "error";
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-content/70">
+        {isFail ? (
+          <X className="size-3 shrink-0 text-destructive" strokeWidth={2} />
+        ) : isDone ? (
+          <Check className="size-3 shrink-0 text-emerald-500" strokeWidth={2} />
+        ) : (
+          <TerminalSpinner className="size-3 shrink-0 text-content/50" />
+        )}
+        <span className="truncate">{step.text || "Tool execution"}</span>
+      </div>
+      {step.preview?.output ? (
+        <pre className="max-h-28 overflow-y-auto rounded bg-[var(--surface-active-item)] p-1.5 font-mono text-[11px] leading-4 text-content/60 whitespace-pre-wrap break-words">
+          {step.preview.output}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * One row of a turn, in a box that never moves. Folding is then a height on a
  * stable element: nothing is reparented and nothing remounts, so a run of work
@@ -1196,7 +1426,9 @@ function TurnRow({
 
 /** A turn item's identity, stable as the group it names grows. */
 function turnItemKey(item: TurnItem): string {
-  return item.type === "activity" ? item.blocks[0].id : item.block.id;
+  return item.type === "activity" || item.type === "subagents"
+    ? item.blocks[0].id
+    : item.block.id;
 }
 
 /**

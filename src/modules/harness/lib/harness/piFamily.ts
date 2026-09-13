@@ -18,6 +18,7 @@ import {
 } from "./child";
 import type { PiFlavor } from "./piFlavor";
 import { PiRpc } from "./piClient";
+import { piSubagentEvents } from "./piSubagents";
 import {
   agentEndWillRetry,
   asRecord,
@@ -779,15 +780,25 @@ function handleFrame(
         tool.input = mergeToolInput(tool.input, execUpdate.input);
         tool.title = toolTitle(tool.name, tool.input);
       }
-      live.onEvent({
-        type: "tool.updated",
-        callId: tool.id,
-        title: tool.title,
-        kind: toolKindFromName(tool.name),
-        status: "running",
-        detail: execUpdate.detail,
-        preview: previewFromTool(tool.name, tool.input, execUpdate.detail),
-      });
+      const subevents = piSubagentEvents(
+        tool.id,
+        tool.input,
+        rec.partialResult ?? rec,
+        false,
+      );
+      if (subevents.length > 0) {
+        for (const event of subevents) live.onEvent(event);
+      } else {
+        live.onEvent({
+          type: "tool.updated",
+          callId: tool.id,
+          title: tool.title,
+          kind: toolKindFromName(tool.name),
+          status: "running",
+          detail: execUpdate.detail,
+          preview: previewFromTool(tool.name, tool.input, execUpdate.detail),
+        });
+      }
     }
   }
 
@@ -795,15 +806,26 @@ function handleFrame(
   if (execEnd) {
     const tool = live.toolsById.get(execEnd.id);
     if (tool) {
-      live.onEvent({
-        type: "tool.updated",
-        callId: tool.id,
-        title: tool.title,
-        kind: toolKindFromName(tool.name),
-        status: execEnd.isError ? "failed" : "completed",
-        detail: execEnd.detail,
-        preview: previewFromTool(tool.name, tool.input, execEnd.detail),
-      });
+      const subevents = piSubagentEvents(
+        tool.id,
+        tool.input,
+        rec.result ?? rec,
+        true,
+        execEnd.isError,
+      );
+      if (subevents.length > 0) {
+        for (const event of subevents) live.onEvent(event);
+      } else {
+        live.onEvent({
+          type: "tool.updated",
+          callId: tool.id,
+          title: tool.title,
+          kind: toolKindFromName(tool.name),
+          status: execEnd.isError ? "failed" : "completed",
+          detail: execEnd.detail,
+          preview: previewFromTool(tool.name, tool.input, execEnd.detail),
+        });
+      }
     }
   }
 

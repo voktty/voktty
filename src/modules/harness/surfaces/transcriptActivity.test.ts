@@ -12,10 +12,14 @@ import {
   groupTurnItems,
   groupTurns,
   initialThinkingIndex,
+  isSubagentBlock,
   lastActivityIndex,
   nestedScrollAbsorbsWheel,
   proseSummary,
   splitActivityRows,
+  subagentBrief,
+  subagentName,
+  subagentReport,
   toolCallLabel,
   turnCopyText,
 } from "./transcriptActivity";
@@ -912,5 +916,73 @@ describe("buildActivityPhases", () => {
     ]);
     expect(phases.map((phase) => phase.kind)).toEqual(["edit", "run"]);
     expect(phases[1].headline?.id).toBe("n1");
+  });
+});
+
+describe("subagents transcript activity", () => {
+  function agentBlock(id: string, name = "Review subagent"): Block {
+    return {
+      id,
+      role: "tool",
+      text: name,
+      tool: {
+        kind: "agent",
+        title: name,
+        status: "completed",
+      },
+      agentRun: {
+        name,
+        agentType: "reviewer",
+        steps: [
+          {
+            id: "step1",
+            kind: "tool",
+            text: "Read src/App.tsx",
+            status: "completed",
+          },
+          {
+            id: "step2",
+            kind: "message",
+            text: "Everything looks good.",
+          },
+        ],
+      },
+    };
+  }
+
+  it("identifies subagent blocks and keeps them out of activity groups", () => {
+    const block = agentBlock("a1");
+    expect(isSubagentBlock(block)).toBe(true);
+
+    const items = groupTurnItems([shell("s1"), block, shell("s2")]);
+    expect(items).toHaveLength(3);
+    expect(items[0]).toMatchObject({ type: "activity" });
+    expect(items[1]).toMatchObject({
+      type: "subagents",
+      blocks: [{ id: "a1" }],
+    });
+    expect(items[2]).toMatchObject({ type: "activity" });
+  });
+
+  it("extracts subagent name, brief and report", () => {
+    const block = agentBlock("a1", "Code Review");
+    expect(subagentName(block)).toBe("Code Review");
+    expect(subagentBrief(block)).toBe("Everything looks good.");
+    expect(subagentReport(block)).toBe("Everything looks good.");
+  });
+
+  it("does not fold subagents under prose", () => {
+    const items = groupTurnItems([
+      shell("s1"),
+      agentBlock("a1"),
+      note("n1", "Here is the summary."),
+    ]);
+    const fold = foldableWork(items);
+    // fold should only encompass the activity before subagent
+    expect(fold).toBeDefined();
+    if (fold) {
+      expect(fold.start).toBe(0);
+      expect(fold.end).toBe(0);
+    }
   });
 });
