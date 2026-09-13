@@ -31,6 +31,7 @@ type Props = {
   fileErrorCounts: Map<string, number>;
   onSelectFile: (fileId: string) => void;
   onCloseFile: (fileId: string) => void;
+  onCloseOtherFiles?: (fileId: string) => void;
   onReorder: (ids: string[]) => void;
   onPaneDragStart?: (event: ReactPointerEvent<HTMLElement>) => void;
   label?: string;
@@ -116,13 +117,22 @@ type SurfaceTabMenu = {
 export function surfaceTabMenuItems(
   file: FilePaneTab,
   t: (key: string) => string,
+  canCloseOthers = true,
 ): ExplorerMenuItem[] {
   const close: ExplorerMenuItem = {
     kind: "item",
     id: "close",
     label: t("common.close"),
   };
-  if (!isFilesystemTab(file) || isChangesTab(file)) return [close];
+  const closeOthers: ExplorerMenuItem = {
+    kind: "item",
+    id: "close-others",
+    label: t("harness.chrome.closeOthers"),
+    disabled: !canCloseOthers,
+  };
+  if (!isFilesystemTab(file) || isChangesTab(file)) {
+    return [close, closeOthers];
+  }
 
   const revealLabel = IS_MAC
     ? t("harness.chrome.revealInFinder")
@@ -147,6 +157,7 @@ export function surfaceTabMenuItems(
     { kind: "item", id: "copy-name", label: t("harness.chrome.copyFileName") },
     { kind: "sep" },
     close,
+    closeOthers,
   ];
 }
 
@@ -157,6 +168,7 @@ export function SurfaceTabs({
   fileErrorCounts,
   onSelectFile,
   onCloseFile,
+  onCloseOtherFiles,
   onReorder,
   onPaneDragStart,
   label,
@@ -178,6 +190,10 @@ export function SurfaceTabs({
     setMenu(null);
     if (id === "close") {
       onCloseFile(menuFile.id);
+      return;
+    }
+    if (id === "close-others") {
+      onCloseOtherFiles?.(menuFile.id);
       return;
     }
     if (!isFilesystemTab(menuFile) || isChangesTab(menuFile)) return;
@@ -380,7 +396,7 @@ export function SurfaceTabs({
         <ExplorerMenu
           x={menu.x}
           y={menu.y}
-          items={surfaceTabMenuItems(menuFile, t)}
+          items={surfaceTabMenuItems(menuFile, t, files.length > 1)}
           ariaLabel={t("harness.chrome.fileTabActions")}
           onPick={onMenuPick}
           onClose={() => setMenu(null)}

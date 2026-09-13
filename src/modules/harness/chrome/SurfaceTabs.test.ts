@@ -3,9 +3,14 @@ import {
   newChangesTab,
   newReleaseNotesWorkspaceTab,
   newSessionChangesTab,
+  type FilePaneTab,
 } from "../lib/layout";
 import { releaseNotesTitle } from "../lib/releaseNotes";
-import { appendProblems, surfaceTabPresentation } from "./SurfaceTabs";
+import {
+  appendProblems,
+  surfaceTabMenuItems,
+  surfaceTabPresentation,
+} from "./SurfaceTabs";
 
 const t = (key: string, values?: Record<string, string | number>) => {
   const name = String(values?.name ?? "");
@@ -71,5 +76,35 @@ describe("appendProblems", () => {
     expect(appendProblems(t, "/repo/src/app.ts", 4)).toBe(
       "/repo/src/app.ts — 4 problems",
     );
+  });
+});
+
+describe("surfaceTabMenuItems", () => {
+  const file: FilePaneTab = {
+    id: "f1",
+    path: "/repo/src/index.ts",
+    cwd: "/repo",
+  };
+
+  it("includes Close and Close Others enabled when canCloseOthers is true", () => {
+    const items = surfaceTabMenuItems(file, (key) => key, true);
+    const closeOthers = items.find(
+      (i) => i.kind === "item" && i.id === "close-others",
+    );
+    expect(closeOthers).toBeDefined();
+    if (closeOthers && closeOthers.kind === "item") {
+      expect(closeOthers.disabled).toBe(false);
+    }
+  });
+
+  it("disables Close Others when canCloseOthers is false", () => {
+    const items = surfaceTabMenuItems(file, (key) => key, false);
+    const closeOthers = items.find(
+      (i) => i.kind === "item" && i.id === "close-others",
+    );
+    expect(closeOthers).toBeDefined();
+    if (closeOthers && closeOthers.kind === "item") {
+      expect(closeOthers.disabled).toBe(true);
+    }
   });
 });

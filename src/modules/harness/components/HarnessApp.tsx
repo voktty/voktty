@@ -1940,6 +1940,34 @@ export function HarnessApp({
     void confirmCloseTerminal(file).then((ok: any) => ok && finishClose());
   }, []);
 
+  const onCloseOtherProjectTerminals = useCallback((fileId: string) => {
+    const projectPath = projectCwdRef.current;
+    const dock = findProjectTerminal(projectTerminalsRef.current, projectPath);
+    if (!dock?.pane.files.some((file: any) => file.id === fileId)) return;
+    const closingFiles = dock.pane.files.filter((file: any) => file.id !== fileId);
+    if (closingFiles.length === 0) return;
+    const closingIds = new Set(closingFiles.map((file: any) => file.id));
+
+    const finishClose = () => {
+      setProjectTerminals((prev: any) =>
+        mapProjectTerminal(prev, projectPath, (entry) => {
+          if (!entry.pane.files.some((file: any) => file.id === fileId)) {
+            return entry;
+          }
+          const files = entry.pane.files.filter(
+            (file: any) => !closingIds.has(file.id),
+          );
+          return {
+            ...entry,
+            pane: { ...entry.pane, files, activeFileId: fileId },
+          };
+        }),
+      );
+    };
+
+    void confirmCloseTerminals(closingFiles).then((ok: any) => ok && finishClose());
+  }, []);
+
   const onTerminalMetaChange = useCallback(
     (fileId: string, patch: TerminalMetaPatch) => {
       setProjectTerminals((prev: any) =>
@@ -2410,6 +2438,66 @@ export function HarnessApp({
     },
     [activeTabId, dirtyFiles, onCloseTab, projectCwd, tabCloseScope],
   );
+
+  const onCloseOtherFiles = useCallback((paneId: string, fileId: string) => {
+    const tab = tabsRef.current.find((entry: any) => findSurfacePane(entry, paneId));
+    if (!tab) return;
+    const found = findSurfacePane(tab, paneId);
+    if (!found?.pane.files.some((file: any) => file.id === fileId)) return;
+    const closingFiles = found.pane.files.filter((file: any) => file.id !== fileId);
+    if (closingFiles.length === 0) return;
+    const closingIds = new Set(closingFiles.map((file: any) => file.id));
+    const unsaved = closingFiles.filter(
+      (file: any) => isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
+    );
+    const terminals = closingFiles.filter((file: any) => file.terminal);
+
+    const finishClose = () => {
+      setTabs((prev: any) =>
+        prev.map((entry: any) => {
+          if (entry.id !== tab.id) return entry;
+          const current = findSurfacePane(entry, paneId);
+          if (!current?.pane.files.some((file: any) => file.id === fileId)) {
+            return entry;
+          }
+          return withSurfacePanes(
+            { ...entry, focusedId: paneId },
+            current.kind,
+            surfacePanes(entry, current.kind).map((pane: any) =>
+              pane.id === paneId
+                ? {
+                    ...pane,
+                    files: pane.files.filter(
+                      (file: any) => !closingIds.has(file.id),
+                    ),
+                    activeFileId: fileId,
+                  }
+                : pane,
+            ),
+          );
+        }),
+      );
+      setDirtyFiles((prev: Set<string>) => {
+        const next = new Set(prev);
+        for (const id of closingIds) next.delete(id);
+        return next;
+      });
+    };
+
+    void (async () => {
+      if (unsaved.length > 0) {
+        const ok = await confirmDiscardUnsaved(
+          t("harness.chrome.closeOtherTabsWithUnsavedFiles"),
+        );
+        if (!ok) return;
+      }
+      if (terminals.length > 0) {
+        const ok = await confirmCloseTerminals(terminals);
+        if (!ok) return;
+      }
+      finishClose();
+    })();
+  }, [t]);
 
   const onClearTabSession = useCallback(
     (id: string) => {
@@ -5670,6 +5758,7 @@ export function HarnessApp({
                         }
                         onSelectTerminal={onSelectProjectTerminal}
                         onCloseTerminal={onCloseProjectTerminal}
+                        onCloseOtherTerminals={onCloseOtherProjectTerminals}
                         onReorderTerminals={onReorderProjectTerminals}
                         onTerminalMetaChange={onTerminalMetaChange}
                       />
@@ -5731,6 +5820,7 @@ export function HarnessApp({
                             onClose={onClosePane}
                             onSelectFile={onSelectFileSurface}
                             onCloseFile={onCloseFile}
+                            onCloseOtherFiles={onCloseOtherFiles}
                             onReorderFiles={onReorderFiles}
                             onFileDirtyChange={onFileDirtyChange}
                             onFileErrorCountChange={onFileErrorCountChange}
