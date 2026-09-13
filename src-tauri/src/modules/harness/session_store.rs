@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::modules::agent_history::AgentHistoryState;
 
@@ -376,12 +376,16 @@ pub fn session_search(
 
 #[tauri::command(async)]
 pub fn session_delete(
+    app: tauri::AppHandle,
     store: State<'_, SessionStoreState>,
     session_id: String,
 ) -> Result<(), String> {
     validate_id(&session_id, "session")?;
     let conn = store.lock_conn()?;
-    delete_session(&conn, &session_id).map_err(|e| e.to_string())
+    delete_session(&conn, &session_id).map_err(|e| e.to_string())?;
+    drop(conn);
+    let _ = app.emit(super::reminders::CHANGED, ());
+    Ok(())
 }
 
 #[tauri::command(async)]
@@ -693,6 +697,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
          );",
     )?;
     super::notes::ensure_notes_table(conn)?;
+    super::reminders::ensure_table(conn)?;
     Ok(())
 }
 

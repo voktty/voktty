@@ -145,6 +145,11 @@ const UnfoldVerticalIcon: IconSvgElement = [
   ["path", { d: "M7 17L12 22L17 17", ...stroke, key: "5" }],
 ];
 
+const ClockIcon: IconSvgElement = [
+  ["circle", { cx: "12", cy: "12", r: "9", ...stroke, key: "0" }],
+  ["path", { d: "M12 7V12L15 15", ...stroke, key: "1" }],
+];
+
 export const AiIdea = wrap(AiIdeaIcon, "AiIdea");
 export const AlertCircle = wrap(AlertCircleIcon, "AlertCircle");
 export const AppWindow = wrap(AppWindowIcon, "AppWindow");
@@ -165,6 +170,7 @@ export const ChevronUp = wrap(ArrowUp01Icon, "ChevronUp");
 export const CircleAlert = wrap(AlertCircleIcon, "CircleAlert");
 export const CircleDashed = wrap(CircleDashedIcon, "CircleDashed");
 export const CircleDot = wrap(CircleDotIcon, "CircleDot");
+export const Clock = wrap(ClockIcon, "Clock");
 export const CloudUpload = wrap(CloudUploadIcon, "CloudUpload");
 export const Copy = wrap(Copy01Icon, "Copy");
 export const ExternalLink = wrap(LinkSquare02Icon, "ExternalLink");

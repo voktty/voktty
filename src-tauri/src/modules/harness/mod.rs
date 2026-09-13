@@ -8,6 +8,7 @@ pub mod linear;
 pub mod notes;
 pub mod project_logo;
 pub mod rate_limits;
+pub mod reminders;
 pub mod search;
 pub mod session_store;
 pub mod skills;
