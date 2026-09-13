@@ -121,6 +121,7 @@ export function NotesTab({
         slug: `note-${now.toString(36)}`,
         title: initialTitle ?? t("notesBoard.newNote"),
         body: initialBody ?? "",
+        tags: [],
         sourceCwd: cwd ?? undefined,
         createdAt: now,
         updatedAt: now,

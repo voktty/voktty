@@ -1,4 +1,4 @@
-import { LoaderCircle, Plus, Search, File, Trash2 } from "../chrome/icons";
+import { LoaderCircle, Plus, Search, File, Trash2, X } from "../chrome/icons";
 import {
   Fragment,
   useCallback,
@@ -21,6 +21,8 @@ import {
   createNote,
   deleteNote,
   loadNotes,
+  MAX_NOTE_TAGS,
+  normalizeNoteTags,
   notePreview,
   noteSourceProject,
   noteTitle,
@@ -132,6 +134,7 @@ export function NotesView({
         note.title.toLowerCase().includes(needle) ||
         note.body.toLowerCase().includes(needle) ||
         note.slug.toLowerCase().includes(needle) ||
+        note.tags.some((tag) => tag.includes(needle.replace(/^#/, ""))) ||
         project.includes(needle)
       );
     });
@@ -448,6 +451,23 @@ function NoteCard({
           {preview}
         </span>
       ) : null}
+      {note.tags.length > 0 ? (
+        <span className="mt-1.5 flex min-w-0 items-center gap-1 overflow-hidden">
+          {note.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className="max-w-24 truncate rounded bg-content/8 px-1.5 py-0.5 text-[10px] leading-none text-content/55"
+            >
+              #{tag}
+            </span>
+          ))}
+          {note.tags.length > 3 ? (
+            <span className="shrink-0 text-[10px] text-content/40">
+              +{note.tags.length - 3}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -514,9 +534,11 @@ function NoteEditor({
   const [mode, setMode] = useMarkdownMode(note.id);
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
+  const [tags, setTags] = useState(note.tags);
   const [saveError, setSaveError] = useState<string | null>(null);
   const titleRef = useRef(title);
   const bodyRef = useRef(body);
+  const tagsRef = useRef(tags);
   const noteRef = useRef(note);
   const skipSave = useRef(false);
   const saveTimer = useRef<number | null>(null);
@@ -524,6 +546,7 @@ function NoteEditor({
   const onSavedRef = useRef(onSaved);
   titleRef.current = title;
   bodyRef.current = body;
+  tagsRef.current = tags;
   noteRef.current = note;
   onSavedRef.current = onSaved;
   const time = formatRelativeTime(new Date(note.updatedAt).toISOString());
@@ -539,12 +562,19 @@ function NoteEditor({
     const current = noteRef.current;
     const nextTitle = titleRef.current.trim() || noteTitle(bodyRef.current);
     const nextBody = bodyRef.current;
-    if (nextTitle === current.title && nextBody === current.body) return;
+    const nextTags = tagsRef.current;
+    if (
+      nextTitle === current.title &&
+      nextBody === current.body &&
+      sameTags(nextTags, current.tags)
+    )
+      return;
     try {
       const saved = await upsertNote({
         id: current.id,
         title: nextTitle,
         body: nextBody,
+        tags: nextTags,
       });
       setSaveError(null);
       if (
@@ -575,9 +605,10 @@ function NoteEditor({
   }, [persist]);
 
   const onTitleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    event.currentTarget.blur();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.blur();
+    }
   };
 
   const canAddToChat = Boolean(body.trim());
@@ -585,6 +616,7 @@ function NoteEditor({
     ...note,
     title: title.trim() || noteTitle(body),
     body,
+    tags,
   };
 
   return (
@@ -631,6 +663,14 @@ function NoteEditor({
               {t("harness.chrome.updatedAt", { time })}
             </div>
           ) : null}
+          <NoteTagsEditor
+            tags={tags}
+            onChange={(next) => {
+              tagsRef.current = next;
+              setTags(next);
+              scheduleSave();
+            }}
+          />
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
               type="button"
@@ -745,5 +785,82 @@ function NoteSource({
         style={{ paddingLeft: textOffset }}
       />
     </div>
+  );
+}
+
+function NoteTagsEditor({
+  tags,
+  onChange,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  const [value, setValue] = useState("");
+
+  const addTag = (input = value) => {
+    const next = normalizeNoteTags([...tags, input]);
+    setValue("");
+    if (!sameTags(next, tags)) onChange(next);
+  };
+
+  return (
+    <div
+      className="flex min-w-0 flex-wrap items-center gap-1.5"
+      aria-label="Tags"
+    >
+      <span className="mr-0.5 text-[11px] text-content/45">Tags</span>
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex h-6 max-w-48 items-center gap-1 rounded-md bg-content/8 pl-2 pr-1 text-[11px] text-content/70"
+        >
+          <span className="truncate">#{tag}</span>
+          <button
+            type="button"
+            title={`Remove #${tag}`}
+            aria-label={`Remove #${tag}`}
+            onClick={() => onChange(tags.filter((item) => item !== tag))}
+            className="grid size-4 shrink-0 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content"
+          >
+            <X className="size-2.5" strokeWidth={1.75} />
+          </button>
+        </span>
+      ))}
+      {tags.length < MAX_NOTE_TAGS ? (
+        <input
+          value={value}
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next.endsWith(",")) addTag(next.slice(0, -1));
+            else setValue(next);
+          }}
+          onBlur={() => {
+            if (value.trim()) addTag();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              event.preventDefault();
+              addTag();
+              return;
+            }
+            if (event.key === "Backspace" && !value && tags.length > 0) {
+              onChange(tags.slice(0, -1));
+            }
+          }}
+          aria-label="Add note tag"
+          placeholder="Add tag…"
+          spellCheck={false}
+          autoComplete="off"
+          className="h-6 min-w-20 flex-1 border-0 bg-transparent px-1 text-[11px] text-content outline-none placeholder:text-content/35"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function sameTags(left: readonly string[], right: readonly string[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((tag, index) => tag === right[index])
   );
 }

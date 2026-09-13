@@ -179,7 +179,7 @@ function AgentTranscriptComponent({
   const [anchorTurn, setAnchorTurn] = useState(!!busy);
   const { selection, dismissSelection } = useTranscriptSelection(
     scrollerEl,
-    onAddToChat !== undefined,
+    onAddToChat !== undefined || onSaveNote !== undefined,
   );
   const transcriptLayout = useTranscriptLayout();
   const zen = useTranscriptZen();
@@ -593,10 +593,11 @@ function AgentTranscriptComponent({
           );
         })}
       </div>
-      {onAddToChat ? (
+      {onAddToChat || onSaveNote ? (
         <TranscriptSelectionMenu
           selection={selection}
           onAddToChat={onAddToChat}
+          onAddToNotes={onSaveNote}
           onDismiss={dismissSelection}
         />
       ) : null}

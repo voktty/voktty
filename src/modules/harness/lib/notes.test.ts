@@ -10,14 +10,18 @@ import {
   noteSourceProject,
   noteSlugsInText,
   notesAsProjectFiles,
+  normalizeNoteTags,
   noteTitle,
   rankNoteFiles,
   type Note,
 } from "./notes";
 
-function note(partial: Partial<Note> & Pick<Note, "id" | "slug" | "title">): Note {
+function note(
+  partial: Partial<Note> & Pick<Note, "id" | "slug" | "title">,
+): Note {
   return {
     body: "",
+    tags: [],
     createdAt: 1,
     updatedAt: 1,
     ...partial,
@@ -37,6 +41,14 @@ describe("noteTitle", () => {
 
   it("returns Untitled when empty", () => {
     expect(noteTitle("   \n```\ncode\n```\n")).toBe("Untitled");
+  });
+});
+
+describe("normalizeNoteTags", () => {
+  it("normalizes, deduplicates, and drops empty tags", () => {
+    expect(
+      normalizeNoteTags([" Ideas ", "#Project Docs", "ideas", "###"]),
+    ).toEqual(["ideas", "project-docs"]);
   });
 });
 
@@ -170,6 +182,20 @@ describe("rankNoteFiles", () => {
     expect(rankNoteFiles(notes, "plan").map((file) => file.path)).toEqual([
       "note:b",
     ]);
+  });
+
+  it("fuzzy-matches tags", () => {
+    const tagged = [
+      note({
+        id: "a",
+        slug: "reference",
+        title: "Reference",
+        tags: ["important-links"],
+      }),
+    ];
+    expect(rankNoteFiles(tagged, "important").map((file) => file.path)).toEqual(
+      ["note:a"],
+    );
   });
 });
 
