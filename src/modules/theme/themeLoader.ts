@@ -37,6 +37,7 @@ function variationTheme(id: string, palette: Theme): Theme {
 }
 
 const variationLoaders: Record<string, () => Promise<Theme>> = {
+  liquid: () => import("./themes/liquid").then((m) => variationTheme("liquid", m.liquid)),
   nord: () => import("./themes/nord").then((m) => variationTheme("nord", m.nord)),
   dracula: () => import("./themes/dracula").then((m) => variationTheme("dracula", m.dracula)),
   "tokyo-night": () => import("./themes/tokyo-night").then((m) => variationTheme("tokyo-night", m.tokyoNight)),

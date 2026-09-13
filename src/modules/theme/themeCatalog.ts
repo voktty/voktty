@@ -21,6 +21,10 @@ const DEFAULT_VARIATIONS: ThemeVariation[] = [
   ["caffeine", "Caffeine"],
 ].map(([id, name]) => ({ id, name, variants: {} }));
 
+export const builtinThemeVariationIds = DEFAULT_VARIATIONS.map(
+  (variation) => variation.id,
+);
+
 function catalogTheme(
   id: string,
   name: string,
