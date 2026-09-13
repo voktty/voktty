@@ -71,7 +71,7 @@ import {
   exportConfiguration,
   importConfiguration,
 } from "@/modules/settings/configExport";
-import { useTheme } from "@/modules/theme/ThemeProvider";
+import { useTheme } from "@/modules/theme";
 import {
   ComputerIcon,
   Copy01Icon,

@@ -4,7 +4,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
@@ -27,12 +26,11 @@ import {
 } from "./customThemes";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { SurfaceLayer } from "./SurfaceLayer";
-import { isLegacyVariationId } from "./legacyThemeIds";
 import {
-  getLoadedBuiltinTheme,
-  getLoadedDefaultTheme,
-  loadBuiltinTheme,
-} from "./themeLoader";
+  getBuiltinTheme,
+  getDefaultTheme,
+} from "./themes";
+import { isLegacyVariationId } from "./legacyThemeIds";
 import { resolveAppearanceSelection } from "./resolveAppearanceSelection";
 import type { Theme } from "./types";
 import { getBackdropKind } from "./vibrancy";
@@ -120,7 +118,7 @@ function writeFastThemeVariation(variation: string): void {
 }
 
 function resolveTheme(id: string, custom: Theme[]): Theme {
-  return custom.find((t) => t.id === id) ?? getLoadedBuiltinTheme(id) ?? getLoadedDefaultTheme();
+  return custom.find((t) => t.id === id) ?? getBuiltinTheme(id) ?? getDefaultTheme();
 }
 
 export function ThemeProvider({ children, defaultMode = "system" }: ThemeProviderProps) {
@@ -133,10 +131,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   const [previewVariationId, setPreviewVariationId] = useState<string | null>(
     null,
   );
-  const [appearancePack, setAppearancePackState] = useState("default");
-  const hasUserThemeSelection = useRef(false);
   const [customThemes, setCustomThemes] = useState<Theme[]>([]);
-  const [loadedThemeId, setLoadedThemeId] = useState(() => readFastThemeId());
   const [systemDark, setSystemDark] = useState<boolean>(() =>
     typeof window === "undefined"
       ? true
@@ -147,17 +142,12 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     let alive = true;
     void loadPreferences().then((p) => {
       if (!alive) return;
-      // Preferences can arrive well after the window becomes interactive.
-      // Never let that initial response erase a theme the user chose meanwhile.
-      if (!hasUserThemeSelection.current) {
-        setModeState(p.theme);
-        setThemeIdState(p.themeId);
-        setThemeVariationState(p.themeVariation);
-        setAppearancePackState(p.appearancePack);
-        writeFastMode(p.theme);
-        writeFastThemeId(p.themeId);
-        writeFastThemeVariation(p.themeVariation);
-      }
+      setModeState(p.theme);
+      setThemeIdState(p.themeId);
+      setThemeVariationState(p.themeVariation);
+      writeFastMode(p.theme);
+      writeFastThemeId(p.themeId);
+      writeFastThemeVariation(p.themeVariation);
     });
     const unlistenP = onPreferencesChange((key, value) => {
       if (key === "theme" && (value === "system" || value === "light" || value === "dark")) {
@@ -169,8 +159,6 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       } else if (key === "themeVariation" && typeof value === "string") {
         setThemeVariationState(value);
         writeFastThemeVariation(value);
-      } else if (key === "appearancePack" && typeof value === "string") {
-        setAppearancePackState(value);
       }
     });
     return () => {
@@ -203,6 +191,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
 
   const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
   const vibrancyOpacity = usePreferencesStore((s) => s.vibrancyOpacity);
+  const appearancePackPref = usePreferencesStore((s) => s.appearancePack);
   const surfaceProfilePref = usePreferencesStore((s) => s.surfaceProfile);
   const typographyProfilePref = usePreferencesStore((s) => s.typographyProfile);
 
@@ -229,30 +218,18 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolveAppearanceSelection({
         themeId,
         variationId: themeVariation,
-        appearancePack,
+        appearancePack: appearancePackPref,
         previewThemeId: previewId,
         previewVariationId,
       }),
-    [themeId, themeVariation, appearancePack, previewId, previewVariationId],
+    [themeId, themeVariation, appearancePackPref, previewId, previewVariationId],
   );
   const effectiveId = selection.themeId;
   const effectiveVariationId = selection.variationId;
 
-  useEffect(() => {
-    let alive = true;
-    const requestedThemeId =
-      effectiveId === DEFAULT_THEME_ID ? effectiveVariationId : effectiveId;
-    void loadBuiltinTheme(requestedThemeId).then(() => {
-      if (alive) setLoadedThemeId(requestedThemeId);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [effectiveId, effectiveVariationId]);
-
   const baseTheme = useMemo(
     () => resolveTheme(effectiveId, customThemes),
-    [effectiveId, customThemes, loadedThemeId],
+    [effectiveId, customThemes],
   );
 
   const activeVariation = useMemo(() => {
@@ -311,7 +288,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       theme: activeTheme,
       variation: activeVariation,
       userOverrides: {
-        appearancePack,
+        appearancePack: appearancePackPref,
         surfaceProfile: surfaceProfilePref,
         typographyProfile: typographyProfilePref,
       },
@@ -319,7 +296,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   }, [
     activeTheme,
     activeVariation,
-    appearancePack,
+    appearancePackPref,
     surfaceProfilePref,
     typographyProfilePref,
   ]);
@@ -379,14 +356,12 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   }, []);
 
   const setThemeId = useCallback((id: string) => {
-    hasUserThemeSelection.current = true;
     const legacyVar = isLegacyVariationId(id);
     if (legacyVar) {
       setPreviewId(null);
       setPreviewVariationId(null);
       setThemeIdState(DEFAULT_THEME_ID);
       setThemeVariationState(legacyVar);
-      setAppearancePackState("default");
       writeFastThemeId(DEFAULT_THEME_ID);
       writeFastThemeVariation(legacyVar);
       void persistThemeId(DEFAULT_THEME_ID);
@@ -397,25 +372,20 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     setPreviewId(null);
     setPreviewVariationId(null);
     setThemeIdState(id);
-    setAppearancePackState("default");
     writeFastThemeId(id);
     void persistThemeId(id);
     void persistAppearancePack("default");
   }, []);
 
   const setThemeVariation = useCallback((variation: string) => {
-    hasUserThemeSelection.current = true;
     setPreviewVariationId(null);
     setThemeVariationState(variation);
-    setAppearancePackState("default");
     writeFastThemeVariation(variation);
     void persistThemeVariation(variation);
     void persistAppearancePack("default");
   }, []);
 
   const setAppearancePack = useCallback((pack: string) => {
-    hasUserThemeSelection.current = true;
-    setAppearancePackState(pack);
     void persistAppearancePack(pack);
   }, []);
 
@@ -441,7 +411,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolvedMode,
       themeId: effectiveId,
       themeVariation: effectiveVariationId,
-      appearancePack,
+      appearancePack: appearancePackPref,
       surfaceProfile: surfaceProfilePref,
       typographyProfile: typographyProfilePref,
       resolvedAppearance,
@@ -461,7 +431,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolvedMode,
       effectiveId,
       effectiveVariationId,
-      appearancePack,
+      appearancePackPref,
       surfaceProfilePref,
       typographyProfilePref,
       resolvedAppearance,
