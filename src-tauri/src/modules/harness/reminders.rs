@@ -6,7 +6,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
-use crate::modules::harness::session_store::{now_millis, validate_id, SessionStore};
+use crate::modules::harness::session_store::{now_millis, validate_id, SessionStoreState};
 
 pub(crate) const CHANGED: &str = "voktty:reminders-changed";
 const OPEN: &str = "voktty:reminder-open";
@@ -142,7 +142,7 @@ fn take_due(conn: &mut Connection, now: i64) -> rusqlite::Result<Vec<Reminder>> 
 }
 
 #[tauri::command(async)]
-pub fn reminder_list(store: State<'_, SessionStore>) -> Result<Vec<Reminder>, String> {
+pub fn reminder_list(store: State<'_, SessionStoreState>) -> Result<Vec<Reminder>, String> {
     let conn = store.lock_conn()?;
     list(&conn).map_err(|error| error.to_string())
 }
@@ -150,7 +150,7 @@ pub fn reminder_list(store: State<'_, SessionStore>) -> Result<Vec<Reminder>, St
 #[tauri::command(async)]
 pub fn reminder_set(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     session_ids: Vec<String>,
     due_at: i64,
 ) -> Result<(), String> {
@@ -164,7 +164,7 @@ pub fn reminder_set(
 #[tauri::command(async)]
 pub fn reminder_clear(
     app: AppHandle,
-    store: State<'_, SessionStore>,
+    store: State<'_, SessionStoreState>,
     session_ids: Vec<String>,
     expected_due_at: Option<i64>,
 ) -> Result<(), String> {
@@ -292,7 +292,7 @@ pub(crate) fn init(app: &AppHandle) {
         let Some(preferences) = preferences else {
             continue;
         };
-        let store = app.state::<SessionStore>();
+        let store = app.state::<SessionStoreState>();
         let due = store.lock_conn().and_then(|mut conn| {
             take_due(&mut conn, now_millis()).map_err(|error| error.to_string())
         });
@@ -333,6 +333,7 @@ pub(crate) fn init(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::harness::session_store::SessionStore;
 
     fn seed(conn: &Connection, id: &str, cwd: &str) {
         conn.execute(
