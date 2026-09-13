@@ -24,34 +24,14 @@ import {
   WorkflowSquare01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { lazy, Suspense } from "react";
+import { ApiBrowserView } from "./ApiBrowserView";
+import { ApiCollectionExplorer } from "./ApiCollectionExplorer";
+import { ApiHistoryView } from "./ApiHistoryView";
+import { RequestEditor } from "./RequestEditor";
+import { ResponseViewer } from "./ResponseViewer";
+import { SandboxProbePanel } from "./SandboxProbePanel";
+import { ScenarioRunner } from "./ScenarioRunner";
 import { useApiClientTabStore } from "../store/ApiClientStoreContext";
-
-const LazyApiBrowserView = lazy(() =>
-  import("./ApiBrowserView").then((module) => ({ default: module.ApiBrowserView })),
-);
-const LazyApiCollectionExplorer = lazy(() =>
-  import("./ApiCollectionExplorer").then((module) => ({
-    default: module.ApiCollectionExplorer,
-  })),
-);
-const LazyApiHistoryView = lazy(() =>
-  import("./ApiHistoryView").then((module) => ({ default: module.ApiHistoryView })),
-);
-const LazyRequestEditor = lazy(() =>
-  import("./RequestEditor").then((module) => ({ default: module.RequestEditor })),
-);
-const LazyResponseViewer = lazy(() =>
-  import("./ResponseViewer").then((module) => ({ default: module.ResponseViewer })),
-);
-const LazySandboxProbePanel = lazy(() =>
-  import("./SandboxProbePanel").then((module) => ({
-    default: module.SandboxProbePanel,
-  })),
-);
-const LazyScenarioRunner = lazy(() =>
-  import("./ScenarioRunner").then((module) => ({ default: module.ScenarioRunner })),
-);
 
 export function ApiClientView() {
   const { t } = useTranslation();
@@ -226,9 +206,7 @@ export function ApiClientView() {
             {!sidebarCollapsed && (
               <>
                 <ResizablePanel defaultSize="20%" minSize="14%" maxSize="32%">
-                  <Suspense fallback={null}>
-                    <LazyApiCollectionExplorer />
-                  </Suspense>
+                  <ApiCollectionExplorer />
                 </ResizablePanel>
                 <ResizableHandle />
               </>
@@ -238,9 +216,7 @@ export function ApiClientView() {
               defaultSize={sidebarCollapsed ? "50%" : "42%"}
               minSize="25%"
             >
-              <Suspense fallback={null}>
-                <LazyRequestEditor />
-              </Suspense>
+              <RequestEditor />
             </ResizablePanel>
 
             <ResizableHandle />
@@ -249,35 +225,25 @@ export function ApiClientView() {
               defaultSize={sidebarCollapsed ? "50%" : "38%"}
               minSize="25%"
             >
-              <Suspense fallback={null}>
-                <LazyResponseViewer />
-              </Suspense>
+              <ResponseViewer />
             </ResizablePanel>
           </ResizablePanelGroup>
         )}
 
         {activeTab === "browser" && (
-          <Suspense fallback={null}>
-            <LazyApiBrowserView />
-          </Suspense>
+          <ApiBrowserView />
         )}
 
         {activeTab === "sandbox" && (
-          <Suspense fallback={null}>
-            <LazySandboxProbePanel />
-          </Suspense>
+          <SandboxProbePanel />
         )}
 
         {activeTab === "scenarios" && (
-          <Suspense fallback={null}>
-            <LazyScenarioRunner />
-          </Suspense>
+          <ScenarioRunner />
         )}
 
         {activeTab === "history" && (
-          <Suspense fallback={null}>
-            <LazyApiHistoryView />
-          </Suspense>
+          <ApiHistoryView />
         )}
       </div>
     </div>
