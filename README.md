@@ -131,7 +131,7 @@ The current product captures are maintained in [`docs/images`](docs/images/READM
 ### Privacy and security
 
 - **No account and no Voktty telemetry:** Voktty runs no first-party telemetry service. Enabled AI features communicate only with the cloud or local provider you select.
-- **Protected credentials:** AI provider keys use the operating-system keychain. The optional encrypted vault stores SSH keys, passphrases, API keys, tokens, and generic secrets with a master password and automatic locking.
+- **Protected credentials:** AI provider keys use the operating-system keychain. On Linux, Voktty uses Secret Service when available and a private mode-0600 file only when the session bus or service is absent. The optional encrypted vault stores SSH keys, passphrases, API keys, tokens, and generic secrets with a master password and automatic locking.
 - **Workspace boundaries:** Native filesystem access is authorized per workspace, and local control requests can open only regular files inside an authorized root.
 - **Secret and endpoint safeguards:** AI file tools reject sensitive paths, mutating tools require approval, and local or compatible model endpoints are used only after you configure them.
 
@@ -154,7 +154,7 @@ Latest installers are on the [Releases](https://github.com/voktty/voktty/release
 
 1. Open **Settings -> AI**.
 2. Pick a provider and paste your API key. For local inference, point Voktty at your LM Studio / MLX / Ollama endpoint.
-3. Keys are written to the OS keychain via `keyring`. They never touch disk or localStorage.
+3. Keys are written to the OS keychain via `keyring` and never to `localStorage`. On Linux where the session bus or Secret Service is absent, Voktty uses a private mode-0600 fallback file.
 
 ## Build from source
 
