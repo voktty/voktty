@@ -11,7 +11,7 @@ Voktty currently has two executable tool families. Built-in AI tools are assembl
 The existing native boundaries already provide useful primitives:
 
 - `src-tauri/src/modules/net.rs` validates schemes, destinations, DNS results, redirects and response budgets for outbound HTTP.
-- `src-tauri/src/modules/secrets.rs` stores credentials through the operating-system keyring on macOS and Windows and a mode-0600 fallback on Linux.
+- `src-tauri/src/modules/secrets.rs` stores credentials through the operating-system keyring on macOS and Windows, and through freedesktop Secret Service on Linux with a mode-0600 fallback only when the session bus or service is absent.
 - PTY and LSP lifecycle code owns native child processes, process groups and Windows Job Objects.
 - The two-process architecture assigns process, network, secret and security authority to Rust. React owns presentation and user coordination.
 
