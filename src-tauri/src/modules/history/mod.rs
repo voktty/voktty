@@ -11,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 struct Index {
     entries: Vec<HistEntry>,
-    path_cmds: Vec<String>,
+    path_cmds: Option<Vec<String>>,
 }
 
 #[derive(Default)]
@@ -203,7 +203,9 @@ fn ensure(state: &HistoryState) -> std::sync::MutexGuard<'_, Option<Index>> {
 
         *guard = Some(Index {
             entries,
-            path_cmds: scan_path(),
+            // Listing history must not synchronously walk every PATH entry.
+            // That work is only needed by command completion.
+            path_cmds: None,
         });
     }
     guard
@@ -225,10 +227,28 @@ pub fn history_commands(
     prefix: String,
     limit: Option<usize>,
 ) -> Vec<String> {
-    let guard = ensure(&state);
-    match guard.as_ref() {
-        Some(idx) => complete_commands(&idx.entries, &idx.path_cmds, &prefix, limit.unwrap_or(50)),
+    let mut guard = ensure(&state);
+    match guard.as_mut() {
+        Some(idx) => {
+            let path_cmds = idx.path_cmds.get_or_insert_with(scan_path);
+            complete_commands(&idx.entries, path_cmds, &prefix, limit.unwrap_or(50))
+        }
         None => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Index;
+
+    #[test]
+    fn history_index_defers_path_scan_until_completion_is_requested() {
+        let index = Index {
+            entries: Vec::new(),
+            path_cmds: None,
+        };
+
+        assert!(index.path_cmds.is_none());
     }
 }
 

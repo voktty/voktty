@@ -7,7 +7,32 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { useTranslation } from "@/modules/i18n";
+import {
+  ArrowRight01Icon,
+  Cancel01Icon,
+  CheckmarkCircle02Icon,
+  CleanIcon,
+  Clock01Icon,
+  Copy01Icon,
+  Download01Icon,
+  PlayIcon,
+  Search01Icon,
+  TerminalIcon,
+  Upload01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { toast } from "sonner";
 import {
   historyClear,
   historyDeleteEntry,
@@ -25,30 +50,6 @@ import {
   type HistoryShellFilter,
   useCommandHistoryStore,
 } from "./commandHistoryStore";
-import {
-  ArrowRight01Icon,
-  Cancel01Icon,
-  CheckmarkCircle02Icon,
-  CleanIcon,
-  Clock01Icon,
-  Copy01Icon,
-  Download01Icon,
-  PlayIcon,
-  Search01Icon,
-  TerminalIcon,
-  Upload01Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { useDraggableModal } from "@/hooks/useDraggableModal";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { toast } from "sonner";
 
 function formatRelativeTime(timestampSec: number): string {
   if (!timestampSec || timestampSec <= 0) return "";
@@ -127,6 +128,13 @@ export function CommandHistoryModal() {
     return list;
   }, [entries, sortMode]);
 
+  const rowVirtualizer = useVirtualizer({
+    count: sortedEntries.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 38,
+    overscan: 8,
+  });
+
   const handleCopy = useCallback(
     async (cmd: string) => {
       try {
@@ -136,7 +144,10 @@ export function CommandHistoryModal() {
           description: cmd,
           duration: 2000,
         });
-        setTimeout(() => setCopiedCmd((cur) => (cur === cmd ? null : cur)), 2000);
+        setTimeout(
+          () => setCopiedCmd((cur) => (cur === cmd ? null : cur)),
+          2000,
+        );
       } catch {
         toast.error(t("terminal.history.copyError"));
       }
@@ -395,6 +406,8 @@ export function CommandHistoryModal() {
         {/* History Items List */}
         <div
           ref={listRef}
+          role="listbox"
+          aria-label={t("terminal.history.title")}
           onScroll={(e) => setScrollPosition(e.currentTarget.scrollTop)}
           className="flex-1 overflow-y-auto min-h-[260px] max-h-[400px] p-1.5 space-y-0.5"
         >
@@ -409,143 +422,172 @@ export function CommandHistoryModal() {
             </div>
           ) : sortedEntries.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-1.5">
-              <HugeiconsIcon icon={TerminalIcon} size={22} className="opacity-40" />
+              <HugeiconsIcon
+                icon={TerminalIcon}
+                size={22}
+                className="opacity-40"
+              />
               <p className="text-xs font-medium text-foreground/80">
                 {t("terminal.history.noResults")}
               </p>
             </div>
           ) : (
-            sortedEntries.map((entry, i) => {
-              const isSelected = i === selectedIndex;
-              const isCopied = copiedCmd === entry.cmd;
-              const isPowershell =
-                entry.shell_type?.toLowerCase().includes("power") ||
-                entry.shell_type?.toLowerCase().includes("pwsh");
-              const isUnix =
-                entry.shell_type?.toLowerCase().includes("bash") ||
-                entry.shell_type?.toLowerCase().includes("zsh") ||
-                entry.shell_type?.toLowerCase().includes("unix") ||
-                entry.shell_type?.toLowerCase().includes("fish");
+            <div
+              className="relative w-full"
+              style={{ height: rowVirtualizer.getTotalSize() }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const i = virtualRow.index;
+                const entry = sortedEntries[i];
+                if (!entry) return null;
+                const isSelected = i === selectedIndex;
+                const isCopied = copiedCmd === entry.cmd;
+                const isPowershell =
+                  entry.shell_type?.toLowerCase().includes("power") ||
+                  entry.shell_type?.toLowerCase().includes("pwsh");
+                const isUnix =
+                  entry.shell_type?.toLowerCase().includes("bash") ||
+                  entry.shell_type?.toLowerCase().includes("zsh") ||
+                  entry.shell_type?.toLowerCase().includes("unix") ||
+                  entry.shell_type?.toLowerCase().includes("fish");
 
-              return (
-                <div
-                  key={`${entry.cmd}-${i}`}
-                  data-index={i}
-                  onDoubleClick={() => handleInsert(entry.cmd)}
-                  onClick={() => setSelectedIndex(i)}
-                  className={`group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md cursor-pointer transition-colors ${
-                    isSelected
-                      ? "bg-accent/80 text-accent-foreground shadow-xs border border-border/50"
-                      : "hover:bg-muted/40 text-foreground/90"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <HugeiconsIcon
-                      icon={Clock01Icon}
-                      size={12}
-                      className="text-muted-foreground/50 shrink-0"
-                    />
-                    <span className="font-mono text-xs truncate select-text leading-relaxed">
-                      {entry.cmd}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Metadata tags */}
-                    {isPowershell && (
-                      <Badge
-                        variant="secondary"
-                        className="text-[9.5px] h-4 px-1 font-mono font-normal bg-sky-500/10 text-sky-500 border-sky-500/20"
-                      >
-                        PS
-                      </Badge>
-                    )}
-                    {isUnix && (
-                      <Badge
-                        variant="secondary"
-                        className="text-[9.5px] h-4 px-1 font-mono font-normal bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                      >
-                        {entry.shell_type}
-                      </Badge>
-                    )}
-                    {entry.category === "ssh" && (
-                      <Badge
-                        variant="secondary"
-                        className="text-[9.5px] h-4 px-1 font-mono font-normal bg-amber-500/10 text-amber-500 border-amber-500/20"
-                      >
-                        SSH
-                      </Badge>
-                    )}
-                    {entry.count > 1 && (
-                      <span className="text-[9.5px] font-mono text-muted-foreground/70 bg-muted/60 px-1 py-0.2 rounded">
-                        x{entry.count}
+                return (
+                  <div
+                    key={`${entry.cmd}-${i}`}
+                    ref={rowVirtualizer.measureElement}
+                    data-index={i}
+                    role="option"
+                    aria-selected={isSelected}
+                    tabIndex={isSelected ? 0 : -1}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    onDoubleClick={() => handleInsert(entry.cmd)}
+                    onClick={() => setSelectedIndex(i)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setSelectedIndex(i);
+                    }}
+                    className={`group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md cursor-pointer transition-colors ${
+                      isSelected
+                        ? "bg-accent/80 text-accent-foreground shadow-xs border border-border/50"
+                        : "hover:bg-muted/40 text-foreground/90"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <HugeiconsIcon
+                        icon={Clock01Icon}
+                        size={12}
+                        className="text-muted-foreground/50 shrink-0"
+                      />
+                      <span className="font-mono text-xs truncate select-text leading-relaxed">
+                        {entry.cmd}
                       </span>
-                    )}
-                    {entry.last > 0 && (
-                      <span className="text-[10px] text-muted-foreground/60 min-w-[40px] text-right">
-                        {formatRelativeTime(entry.last)}
-                      </span>
-                    )}
+                    </div>
 
-                    {/* Action buttons on hover/selection */}
-                    <div className="flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
-                        title={t("terminal.history.copy")}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleCopy(entry.cmd);
-                        }}
-                      >
-                        <HugeiconsIcon
-                          icon={isCopied ? CheckmarkCircle02Icon : Copy01Icon}
-                          size={12}
-                          className={isCopied ? "text-emerald-400" : ""}
-                        />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
-                        title={t("terminal.history.insert")}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleInsert(entry.cmd);
-                        }}
-                      >
-                        <HugeiconsIcon icon={ArrowRight01Icon} size={12} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 rounded hover:bg-primary/20 text-primary cursor-pointer"
-                        title={t("terminal.history.run")}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRun(entry.cmd);
-                        }}
-                      >
-                        <HugeiconsIcon icon={PlayIcon} size={12} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 rounded hover:bg-destructive/20 text-destructive/80 cursor-pointer"
-                        title={t("terminal.history.delete")}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleDelete(entry.cmd);
-                        }}
-                      >
-                        <HugeiconsIcon icon={Cancel01Icon} size={12} />
-                      </Button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Metadata tags */}
+                      {isPowershell && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[9.5px] h-4 px-1 font-mono font-normal bg-sky-500/10 text-sky-500 border-sky-500/20"
+                        >
+                          PS
+                        </Badge>
+                      )}
+                      {isUnix && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[9.5px] h-4 px-1 font-mono font-normal bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                        >
+                          {entry.shell_type}
+                        </Badge>
+                      )}
+                      {entry.category === "ssh" && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[9.5px] h-4 px-1 font-mono font-normal bg-amber-500/10 text-amber-500 border-amber-500/20"
+                        >
+                          SSH
+                        </Badge>
+                      )}
+                      {entry.count > 1 && (
+                        <span className="text-[9.5px] font-mono text-muted-foreground/70 bg-muted/60 px-1 py-0.2 rounded">
+                          x{entry.count}
+                        </span>
+                      )}
+                      {entry.last > 0 && (
+                        <span className="text-[10px] text-muted-foreground/60 min-w-[40px] text-right">
+                          {formatRelativeTime(entry.last)}
+                        </span>
+                      )}
+
+                      {/* Action buttons on hover/selection */}
+                      <div className="flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
+                          title={t("terminal.history.copy")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleCopy(entry.cmd);
+                          }}
+                        >
+                          <HugeiconsIcon
+                            icon={isCopied ? CheckmarkCircle02Icon : Copy01Icon}
+                            size={12}
+                            className={isCopied ? "text-emerald-400" : ""}
+                          />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded hover:bg-background text-muted-foreground hover:text-foreground cursor-pointer"
+                          title={t("terminal.history.insert")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleInsert(entry.cmd);
+                          }}
+                        >
+                          <HugeiconsIcon icon={ArrowRight01Icon} size={12} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded hover:bg-primary/20 text-primary cursor-pointer"
+                          title={t("terminal.history.run")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRun(entry.cmd);
+                          }}
+                        >
+                          <HugeiconsIcon icon={PlayIcon} size={12} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded hover:bg-destructive/20 text-destructive/80 cursor-pointer"
+                          title={t("terminal.history.delete")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDelete(entry.cmd);
+                          }}
+                        >
+                          <HugeiconsIcon icon={Cancel01Icon} size={12} />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           )}
         </div>
 
@@ -580,9 +622,7 @@ export function CommandHistoryModal() {
               </kbd>{" "}
               {t("terminal.history.hintRun")}
             </span>
-            <span>
-              {t("terminal.history.hintCopy")}
-            </span>
+            <span>{t("terminal.history.hintCopy")}</span>
           </div>
         </div>
       </DialogContent>
