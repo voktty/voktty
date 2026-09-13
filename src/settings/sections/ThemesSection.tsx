@@ -26,12 +26,12 @@ import {
   setVibrancyOpacity,
   setWindowVibrancy,
 } from "@/modules/settings/store";
-import { useTheme } from "@/modules/theme/ThemeProvider";
 import {
+  useTheme,
   listBuiltinAppearancePacks,
   listBuiltinSurfaceProfiles,
   listBuiltinTypographyProfiles,
-} from "@/modules/theme/packs";
+} from "@/modules/theme";
 import {
   deleteBgImage,
   importBgImageFromFile,
@@ -42,10 +42,7 @@ import {
 } from "@/modules/theme/customThemes";
 import { deleteThemeFile, emitThemeEdit } from "@/modules/theme/themeFiles";
 import { resolveThemeDescription } from "@/modules/theme/themeDescription";
-import {
-  builtinThemeCatalog,
-  resolveCatalogTheme,
-} from "@/modules/theme/themeCatalog";
+import { listBuiltinThemes } from "@/modules/theme/themes";
 import { DEFAULT_THEME_ID } from "@/modules/theme/types";
 import { validateTheme } from "@/modules/theme/validateTheme";
 import {
@@ -73,18 +70,15 @@ export function ThemesSection() {
     setTypographyProfile,
     resolvedMode,
     customThemes,
-    activeTheme,
   } = useTheme();
+  const builtinThemes = listBuiltinThemes();
   const themes = useMemo(
-    () => [...builtinThemeCatalog, ...customThemes],
-    [customThemes],
+    () => [...builtinThemes, ...customThemes],
+    [builtinThemes, customThemes],
   );
   const selectedTheme = useMemo(
-    () =>
-      customThemes.find((theme) => theme.id === themeId) ??
-      resolveCatalogTheme(themeId, activeTheme) ??
-      themes[0],
-    [activeTheme, customThemes, themes, themeId],
+    () => themes.find((t) => t.id === themeId) ?? themes[0],
+    [themes, themeId],
   );
   const customIds = useMemo(
     () => new Set(customThemes.map((t) => t.id)),

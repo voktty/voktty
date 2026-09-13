@@ -1,4 +1,4 @@
-import { useTheme } from "@/modules/theme/ThemeProvider";
+import { useTheme } from "@/modules/theme";
 import type { ColorScheme } from "../lib/appearance";
 
 /** Mirrors Voktty's own resolved theme mode - the harness has no color

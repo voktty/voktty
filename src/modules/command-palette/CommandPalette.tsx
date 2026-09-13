@@ -17,9 +17,7 @@ import {
   SHORTCUTS,
   type ShortcutId,
 } from "@/modules/shortcuts";
-import { useTheme } from "@/modules/theme/ThemeProvider";
-import { builtinThemeCatalog } from "@/modules/theme/themeCatalog";
-import { DEFAULT_THEME_ID } from "@/modules/theme/types";
+import { DEFAULT_THEME_ID, listBuiltinThemes, useTheme } from "@/modules/theme";
 import {
   AlertCircleIcon,
   ArrowTurnBackwardIcon,
@@ -52,9 +50,6 @@ type Props = {
 
 const SHORTCUTS_BY_ID = new Map(SHORTCUTS.map((s) => [s.id, s]));
 const THEME_PREVIEW_DELAY_MS = 140;
-const DEFAULT_THEME_VARIATIONS =
-  builtinThemeCatalog.find((theme) => theme.id === DEFAULT_THEME_ID)
-    ?.variations ?? [];
 
 export function CommandPalette({
   open,
@@ -102,13 +97,15 @@ export function CommandPalette({
 
   const themeItems = useMemo(() => {
     if (!inThemes) return [];
+    const builtin = listBuiltinThemes();
+    const variations = builtin[0]?.variations ?? [];
     const items: Array<{ id: string; name: string; isSelected: boolean }> = [
       ...customThemes.map((t) => ({
         id: t.id,
         name: t.name,
         isSelected: themeId === t.id,
       })),
-      ...DEFAULT_THEME_VARIATIONS.map((v) => ({
+      ...variations.map((v) => ({
         id: v.id,
         name: `Voktty: ${v.name}`,
         isSelected: themeId === DEFAULT_THEME_ID && themeVariation === v.id,
