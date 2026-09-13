@@ -1,9 +1,16 @@
 import type {
+  Attachment,
   RuntimeMode,
   TaskListItem,
   ToolPreview,
   TurnIntent,
 } from "../session";
+import {
+  attachmentPath,
+  attachmentPathText,
+  isVisionImage,
+  normalizeImageMime,
+} from "../attachments";
 import { normalizeTaskListStatus } from "../taskList";
 import {
   composeToolTitle,
@@ -87,19 +94,12 @@ export function buildTurnSteerParams(input: {
   threadId: string;
   expectedTurnId: string;
   prompt?: string;
-  attachments?: Array<{ type: "image"; url: string }>;
+  attachments?: Attachment[];
 }): Record<string, unknown> {
-  const turnInput: Array<Record<string, unknown>> = [];
-  if (input.prompt) {
-    turnInput.push({ type: "text", text: input.prompt });
-  }
-  for (const attachment of input.attachments ?? []) {
-    turnInput.push(attachment);
-  }
   return {
     threadId: input.threadId,
     expectedTurnId: input.expectedTurnId,
-    input: turnInput,
+    input: codexInput(input.prompt, input.attachments),
   };
 }
 
@@ -107,7 +107,7 @@ export function buildTurnStartParams(input: {
   threadId: string;
   runtimeMode: RuntimeMode;
   prompt?: string;
-  attachments?: Array<{ type: "image"; url: string }>;
+  attachments?: Attachment[];
   model?: string;
   effort?: string;
   serviceTier?: string;
@@ -123,16 +123,9 @@ export function buildTurnStartParams(input: {
           sandboxPolicy: { type: "readOnly" },
         }
       : runtimeConfig;
-  const turnInput: Array<Record<string, unknown>> = [];
-  if (input.prompt) {
-    turnInput.push({ type: "text", text: input.prompt });
-  }
-  for (const attachment of input.attachments ?? []) {
-    turnInput.push(attachment);
-  }
   return {
     threadId: input.threadId,
-    input: turnInput,
+    input: codexInput(input.prompt, input.attachments),
     approvalPolicy: config.approvalPolicy,
     approvalsReviewer: config.approvalsReviewer,
     sandboxPolicy: config.sandboxPolicy,
@@ -150,6 +143,30 @@ export function buildTurnStartParams(input: {
       ? { serviceTier: input.serviceTier }
       : {}),
   };
+}
+
+/** App-server accepts image inputs, but documents need a path in text. */
+function codexInput(
+  prompt: string | undefined,
+  attachments: Attachment[] = [],
+): Array<Record<string, unknown>> {
+  const input: Array<Record<string, unknown>> = [];
+  if (prompt) input.push({ type: "text", text: prompt });
+  for (const file of attachments) {
+    if (isVisionImage(file.mimeType)) {
+      input.push(
+        file.data
+          ? {
+              type: "image",
+              url: `data:${normalizeImageMime(file.mimeType)};base64,${file.data}`,
+            }
+          : { type: "localImage", path: attachmentPath(file) },
+      );
+    } else {
+      input.push({ type: "text", text: attachmentPathText(file) });
+    }
+  }
+  return input;
 }
 
 export function isRecoverableThreadResumeError(error: unknown): boolean {
