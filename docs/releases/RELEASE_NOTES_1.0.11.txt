@@ -1,0 +1,52 @@
+Voktty 1.0.11
+
+This release focuses on startup responsiveness, first-open latency, and bounded work across the integrated Harness, agent history, Git, API Client, terminal history, explorer, and theme systems.
+
+Performance and startup
+
+- Added generated startup-budget checks that measure the resources actually loaded by the built HTML, including scripts, stylesheets, module preloads, raw bytes, and gzip bytes.
+- Deferred optional frontend surfaces and inactive AI hydration until the user needs them, while preserving lazy boundaries for Preview, terminal Copilot, providers, editor features, and Harness workbench surfaces.
+- Loaded only the active locale during startup with English fallback, avoiding eager evaluation and recursive merging of all locale dictionaries.
+- Deferred native Agent History, Harness, and Git Review database initialization until their first authorized consumer and guarded concurrent initialization.
+- Split the Harness session shell from optional editor, Git, diff, settings, inbox, search, notes, and terminal workbench surfaces.
+- Limited Harness provider availability work and batched session persistence to reduce probe and IPC bursts during startup and session activity.
+
+Agent History and terminal history
+
+- Added paginated Agent History discovery with SQLite-backed agent, project, text, and ordering filters.
+- Bounded transcript loading, message pages, transcript sizes, and native/client caches while preserving complete Markdown export.
+- Virtualized session and transcript timelines, replaced DOM-dependent transcript search with canonical data search, and protected rapid session changes from stale results.
+- Added an explicit visible-limit notice for long transcripts and retained keyboard-accessible controls for selection, copying, export, resume, search, and pagination.
+- Opening Command History no longer scans every directory in `PATH`; that scan is deferred until command completion is actually requested.
+- Virtualized the Command History list so large histories do not render every row at once.
+
+Git, Source Control, and API Client
+
+- Streamlined Git History refresh and first-page loading, sharing repository metadata and postponing secondary diff statistics until they are needed.
+- Suspended unnecessary ambient Source Control tracking, shared repository snapshots, and debounced filesystem refreshes.
+- Isolated API Client state by tab, bounded response history, pooled HTTP clients, and batched bounded SSE events. The complete internal API workspace remains mounted after first open so menu and panel interactions stay stable.
+- Deferred the non-default explorer icon catalog while retaining synchronous fallback icons for the first tree render.
+
+Themes and visual reliability
+
+- Preserved legacy appearance preference mapping and unified the Harness visual surfaces with the central theme engine.
+- Restored the eager built-in theme catalog after testing showed that deferred theme catalogs could leave previews dark, variations incomplete, or theme selection unresponsive after first launch.
+- Theme selection, built-in previews, variations, onboarding, and command-palette theme actions therefore retain their complete synchronous catalog in this release.
+
+Reliability and maintenance
+
+- Removed statically unreachable legacy Harness surfaces, unused module barrels, and the superseded native Agent History indexer after routing the active history flow through Wake core.
+- Restored strict CI validation gates and calibrated the client-size budget without excluding generated chunks from measurement.
+- Added and maintained regression coverage for startup budgets, pagination, transcript limits, stale results, virtualized history, deferred initialization, Git metadata reuse, API bounds, and command-history path-scan deferral.
+- Preserved workspace authorization, cross-platform path handling, agent session state, terminal cwd tracking, and existing persisted history/workspace contracts.
+
+Validation
+
+- Frontend type checking and the complete Vitest suite pass: 465 files and 3,317 tests.
+- Focused Rust history and Git validation passes through `cargo nextest`; the optimization series also includes strict formatting, Clippy, build, startup-budget, eager-graph, and bundle-size checks.
+- The remaining platform-specific desktop and visual release smoke coverage depends on the available native display and workspace environments.
+
+Upgrade notes
+
+- The application version is now 1.0.11 in the release documentation; package and Tauri version metadata must be updated by the release-preparation commit.
+- Existing saved themes, workspace state, agent history, API Client tabs, and terminal history remain compatible with this release.
