@@ -171,16 +171,6 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
 
   useEffect(() => {
     let alive = true;
-    const requestedThemeId =
-      themeId === DEFAULT_THEME_ID ? themeVariation : themeId;
-    void loadBuiltinTheme(requestedThemeId).then(() => {
-      if (alive) setLoadedThemeId(requestedThemeId);
-    });
-    return () => { alive = false; };
-  }, [themeId, themeVariation]);
-
-  useEffect(() => {
-    let alive = true;
     void listCustomThemes().then((list) => { if (alive) setCustomThemes(list); });
     const unlisten = onCustomThemesChange(() => {
       void listCustomThemes().then((list) => setCustomThemes(list));
@@ -238,6 +228,18 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   );
   const effectiveId = selection.themeId;
   const effectiveVariationId = selection.variationId;
+
+  useEffect(() => {
+    let alive = true;
+    const requestedThemeId =
+      effectiveId === DEFAULT_THEME_ID ? effectiveVariationId : effectiveId;
+    void loadBuiltinTheme(requestedThemeId).then(() => {
+      if (alive) setLoadedThemeId(requestedThemeId);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [effectiveId, effectiveVariationId]);
 
   const baseTheme = useMemo(
     () => resolveTheme(effectiveId, customThemes),
