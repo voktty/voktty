@@ -237,6 +237,7 @@ pub fn run() {
                 );
             }
             harness::host::reap_orphaned_harness_processes();
+            harness::reminders::init(_app.handle());
             // TCP bind + descriptor-file write + stale-launcher sweep + CLI
             // launcher prep are all blocking I/O; do them off the setup()
             // path so they can't delay the main window's first frame. The
@@ -669,6 +670,13 @@ pub fn run() {
             harness::notes::notes_get,
             harness::notes::notes_upsert,
             harness::notes::notes_delete,
+            harness::reminders::reminder_list,
+            harness::reminders::reminder_set,
+            harness::reminders::reminder_clear,
+            harness::reminders::reminder_configure,
+            harness::reminders::reminder_register_window,
+            harness::reminders::reminder_take_pending_open,
+            harness::reminders::reminder_open,
             harness::skills::list_skills,
             harness::rate_limits::fetch_claude_usage,
             quota::get_quota_overview,

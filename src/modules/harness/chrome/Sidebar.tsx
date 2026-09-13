@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  Clock,
   Folder,
   GitBranch,
   Inbox,
@@ -34,12 +35,14 @@ import {
   folderAccent,
   folderContaining,
   folderShellFill,
+  loadReminderSessionsCollapsed,
   loadSessionFolders,
   mergeFolderSessionSummaries,
   pruneSessionFolders,
   removeSessionFromFolder,
   renameFolder,
   reorderSessionFolders,
+  saveReminderSessionsCollapsed,
   saveSessionFolders,
   sessionListNavigationIds,
   setFolderCollapsed,
@@ -49,6 +52,12 @@ import {
   type SessionFolder,
   type SessionListDropTarget,
 } from "../lib/sessionFolders";
+import {
+  formatReminderTime,
+  reminderTime,
+  type SessionReminder,
+} from "../lib/sessionReminders";
+import { sessionReminderPresets } from "./sessionReminderPresets";
 import { SESSION_LIST_PAGE, sessionListWindow } from "../lib/sessionListWindow";
 import { ColorPickerPopover, ColorSwatchRow } from "./ColorPickerPopover";
 import { normalizeHex } from "../lib/colorUtils";
@@ -233,6 +242,9 @@ type Props = {
   onToggleProjectRail?: () => void;
   projectRailOpen?: boolean;
   unseenFinishedIds?: Set<string>;
+  reminders?: SessionReminder[];
+  onSetReminders?: (sessionIds: readonly string[], dueAt: number) => void;
+  onCancelReminders?: (sessionIds: readonly string[]) => void;
   settingsOpen?: boolean;
   settingsSection?: SettingsSectionId;
   onOpenSettings?: () => void;
@@ -299,6 +311,9 @@ function SidebarComponent({
   onToggleProjectRail,
   projectRailOpen = true,
   unseenFinishedIds: unseenFinishedIdsProp,
+  reminders = [],
+  onSetReminders,
+  onCancelReminders,
   settingsOpen = false,
   settingsSection = "general",
   onOpenSettings,
@@ -340,6 +355,9 @@ function SidebarComponent({
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [sessionFolders, setSessionFolders] = useState<SessionFolder[]>(() =>
     loadSessionFolders(cwd),
+  );
+  const [reminderSessionsCollapsed, setReminderSessionsCollapsed] = useState(
+    () => loadReminderSessionsCollapsed(cwd),
   );
   const [sessionDrop, setSessionDrop] = useState<SessionListDropTarget | null>(
     null,
@@ -416,15 +434,31 @@ function SidebarComponent({
     activeUngroupedIndex,
   );
   const shownUngrouped = ungroupedVisible.slice(0, shownUngroupedCount);
+  const projectReminders = (reminders ?? []).filter((r) =>
+    listedSessions.some((s) => s.id === r.sessionId),
+  );
+  const reminderSessionIds = projectReminders.map((r) => r.sessionId);
   const sessionListEntries = buildSessionList(
     visibleSessions,
     sessionFolders,
     shownUngrouped,
+    reminderSessionIds.length > 0
+      ? {
+          sessionIds: reminderSessionIds,
+          collapsed: reminderSessionsCollapsed,
+        }
+      : undefined,
   );
   const fullSessionListEntries = buildSessionList(
     visibleSessions,
     sessionFolders,
     ungroupedVisible,
+    reminderSessionIds.length > 0
+      ? {
+          sessionIds: reminderSessionIds,
+          collapsed: reminderSessionsCollapsed,
+        }
+      : undefined,
   );
   const sessionNavigationIds = sessionListNavigationIds(
     fullSessionListEntries,
@@ -472,6 +506,7 @@ function SidebarComponent({
 
   useEffect(() => {
     setSessionFolders(loadSessionFolders(cwd));
+    setReminderSessionsCollapsed(loadReminderSessionsCollapsed(cwd));
     setRenamingFolderId(null);
     setFolderMenu(null);
     setSessionDrop(null);
@@ -652,6 +687,14 @@ function SidebarComponent({
     ? sessionFolders.find((folder) => folder.id === folderMenu.folderId)
     : undefined;
 
+  const menuReminderTimes = [
+    ...new Set(
+      (reminders ?? [])
+        .filter((r) => menuSessionIds.includes(r.sessionId))
+        .map((r) => r.dueAt),
+    ),
+  ];
+
   const folderMenuItems: ExplorerMenuItem[] = [
     { kind: "item", id: "rename", label: t("common.rename"), shortcut: "F2" },
     { kind: "sep" },
@@ -670,6 +713,27 @@ function SidebarComponent({
           },
         ]
       : []),
+    ...(onCancelReminders && menuReminderTimes.length > 0
+      ? [
+          {
+            kind: "item" as const,
+            id: "reminder:cancel",
+            label: t("harness.chrome.cancelReminder"),
+            description:
+              menuReminderTimes.length === 1
+                ? formatReminderTime(menuReminderTimes[0])
+                : t("harness.chrome.multipleReminderTimes"),
+          },
+          { kind: "sep" as const },
+        ]
+      : []),
+    {
+      kind: "item" as const,
+      id: "reminder",
+      label: t("harness.chrome.remindMe"),
+      disabled: !onSetReminders,
+      submenu: sessionReminderPresets(),
+    },
     ...(!multipleMenuSessions && onRenameSession
       ? [
           {
@@ -773,6 +837,19 @@ function SidebarComponent({
         onPinSessions(sessionIds, !pinned);
       } else {
         for (const id of sessionIds) onPinSession?.(id, !pinned);
+      }
+      return;
+    }
+    if (id === "reminder:cancel") {
+      onCancelReminders?.(sessionIds);
+      return;
+    }
+    if (id.startsWith("reminder:")) {
+      const dueAt = reminderTime(id);
+      if (dueAt != null) {
+        setReminderSessionsCollapsed(false);
+        saveReminderSessionsCollapsed(cwd, false);
+        onSetReminders?.(sessionIds, dueAt);
       }
       return;
     }
@@ -1330,6 +1407,68 @@ function SidebarComponent({
                           </li>
                         );
                       }
+                      if (entry.kind === "reminders") {
+                        const expanded =
+                          searchNarrowed || !reminderSessionsCollapsed;
+                        return (
+                          <li key="reminders-group" className="mb-1.5">
+                            <div className="overflow-hidden rounded-md bg-content/5">
+                              <button
+                                type="button"
+                                title={t("harness.chrome.reminders")}
+                                aria-expanded={expanded}
+                                data-tauri-drag-region="false"
+                                onClick={() => {
+                                  if (searchNarrowed) return;
+                                  const next = !reminderSessionsCollapsed;
+                                  setReminderSessionsCollapsed(next);
+                                  saveReminderSessionsCollapsed(cwd, next);
+                                }}
+                                className={`group relative flex w-full touch-none items-center gap-1.5 px-2 h-8 text-left ${
+                                  expanded
+                                    ? "rounded-md text-content hover:bg-content/10"
+                                    : "text-content/80 hover:bg-content/10 hover:text-content"
+                                }`}
+                              >
+                                <span className="relative grid size-4 shrink-0 place-items-center text-accent">
+                                  {expanded ? (
+                                    <ChevronDown
+                                      className="size-3.5 text-content"
+                                      strokeWidth={1.75}
+                                    />
+                                  ) : (
+                                    <>
+                                      <Clock
+                                        className="size-3.5 group-hover:hidden group-focus-visible:hidden text-accent"
+                                        strokeWidth={1.75}
+                                      />
+                                      <ChevronRight
+                                        className="hidden size-3.5 group-hover:block group-focus-visible:block text-content"
+                                        strokeWidth={1.75}
+                                      />
+                                    </>
+                                  )}
+                                </span>
+                                <span className="relative min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug text-content">
+                                  {t("harness.chrome.reminders")}
+                                </span>
+                                <span className="relative flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-content/45">
+                                  <span>{entry.sessions.length}</span>
+                                </span>
+                              </button>
+                              {expanded ? (
+                                <ul className="flex flex-col gap-px p-1">
+                                  {entry.sessions.map((session) => (
+                                    <li key={session.id}>
+                                      {renderSessionCard(session, true)}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </div>
+                          </li>
+                        );
+                      }
                       if (entry.kind === "folder") {
                         const expanded =
                           searchNarrowed || !entry.folder.collapsed;
@@ -1481,11 +1620,14 @@ function SidebarComponent({
                           </li>
                         );
                       }
-                      return (
-                        <li key={entry.session.id}>
-                          {renderSessionCard(entry.session)}
-                        </li>
-                      );
+                      if (entry.kind === "session") {
+                        return (
+                          <li key={entry.session.id}>
+                            {renderSessionCard(entry.session)}
+                          </li>
+                        );
+                      }
+                      return null;
                     })}
                     {hasMoreSessions ? (
                       <li

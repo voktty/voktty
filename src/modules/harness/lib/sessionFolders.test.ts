@@ -9,11 +9,14 @@ import {
   folderAccent,
   folderContaining,
   folderShellFill,
+  loadReminderSessionsCollapsed,
   loadSessionFolders,
   mergeFolderSessionSummaries,
+  placeSessionInFolder,
   pruneSessionFolders,
   removeSessionFromFolder,
   renameFolder,
+  saveReminderSessionsCollapsed,
   saveSessionFolders,
   sessionListNavigationIds,
   setFolderCollapsed,
@@ -167,6 +170,27 @@ describe("buildSessionList", () => {
     ).toEqual(["pin", "divider", "rest"]);
   });
 
+  it("places reminders at the top of the session list", () => {
+    const sessions = [
+      summary("pin", { pinned: true, updatedAt: 1 }),
+      summary("new", { updatedAt: 9 }),
+      summary("in-folder", { updatedAt: 5 }),
+    ];
+    const folders = [folder("work", ["in-folder"], { name: "Work" })];
+    const entries = buildSessionList(
+      sessions,
+      folders,
+      ungroupedSessions(sessions, folders),
+      { sessionIds: ["new"], collapsed: false },
+    );
+    expect(entries[0]).toEqual({
+      kind: "reminders",
+      collapsed: false,
+      sessions: [sessions[1]],
+    });
+    expect(entries[1]?.kind).toBe("folder");
+  });
+
   it("exposes the full visible navigation order without pagination", () => {
     const sessions = [
       summary("folder-a"),
@@ -187,6 +211,30 @@ describe("buildSessionList", () => {
       "folder-b",
       "loose",
     ]);
+  });
+});
+
+describe("placeSessionInFolder", () => {
+  it("adds to an existing folder", () => {
+    const folders = [folder("work", ["a"])];
+    const { folders: next } = placeSessionInFolder(
+      folders,
+      { kind: "existing", folderId: "work" },
+      "b",
+    );
+    expect(next[0]?.sessionIds).toEqual(["a", "b"]);
+  });
+
+  it("creates a new folder with custom name", () => {
+    const folders: SessionFolder[] = [];
+    const { folders: next, createdId } = placeSessionInFolder(
+      folders,
+      { kind: "new", name: "Custom" },
+      "b",
+    );
+    expect(createdId).toBeTruthy();
+    expect(next[0]?.name).toBe("Custom");
+    expect(next[0]?.sessionIds).toEqual(["b"]);
   });
 });
 
@@ -423,6 +471,13 @@ describe("session folder persistence", () => {
   it("drops a project key when the last folder is gone", () => {
     saveSessionFolders("/tmp/project", [folder("g", ["a"])]);
     saveSessionFolders("/tmp/project", []);
-    expect(localStorage.getItem("monocode.sessionFolders")).toBe("{}");
+    expect(localStorage.getItem("voktty.sessionFolders")).toBe("{}");
+  });
+
+  it("round-trips reminder sessions collapsed state", () => {
+    saveReminderSessionsCollapsed("/tmp/project", true);
+    expect(loadReminderSessionsCollapsed("/tmp/project")).toBe(true);
+    saveReminderSessionsCollapsed("/tmp/project", false);
+    expect(loadReminderSessionsCollapsed("/tmp/project")).toBe(false);
   });
 });

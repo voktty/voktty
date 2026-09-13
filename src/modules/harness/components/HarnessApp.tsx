@@ -18,6 +18,7 @@ import { Sidebar } from "../chrome/Sidebar";
 import { TitleBar, type Tab as TitleTab } from "../chrome/TitleBar";
 import { useInputNotifications } from "../hooks/useInputNotifications";
 import { useProjectBranches } from "../hooks/useProjectBranches";
+import { useSessionReminders } from "../hooks/useSessionReminders";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
 import {
   LAYOUT_CHANGE_EVENT,
@@ -401,6 +402,11 @@ const LazyFilePicker = lazy(() =>
 );
 const LazyUpdateToast = lazy(() =>
   import("../chrome/UpdateToast").then((module) => ({ default: module.UpdateToast })),
+);
+const LazyReminderNotices = lazy(() =>
+  import("../chrome/ReminderNotices").then((module) => ({
+    default: module.ReminderNotices,
+  })),
 );
 const LazyUsageFooter = lazy(() =>
   import("../chrome/UsageFooter").then((module) => ({ default: module.UsageFooter })),
@@ -5580,6 +5586,28 @@ export function HarnessApp({
     );
   }, [currentProjectDock, dockVisible]);
 
+  const ensureSaved = useCallback(
+    async (sessionIds: readonly string[]) => {
+      const candidates = sessionIds.flatMap((id) => {
+        const session = sessionsRef.current.find((entry) => entry.id === id);
+        return session ? [session] : [];
+      });
+      if (candidates.length > 0) {
+        await upsertSessions(candidates);
+      }
+    },
+    [],
+  );
+  const activeOpenSessionIds = useMemo(
+    () => [...openSessionIds(tabs)],
+    [tabs],
+  );
+  const reminders = useSessionReminders(
+    onSelectHistorySession,
+    ensureSaved,
+    activeOpenSessionIds,
+  );
+
   return (
     <div
       className="voktty-harness-root flex h-full bg-background text-foreground"
@@ -5611,6 +5639,9 @@ export function HarnessApp({
         onPinSessions={onPinHistorySessions}
         onDeleteSession={onDeleteHistorySession}
         onDeleteSessions={onDeleteHistorySessions}
+        reminders={reminders.reminders}
+        onSetReminders={reminders.schedule}
+        onCancelReminders={reminders.cancel}
         onOpenFile={onOpenFile}
         onOpenTerminal={(cwd: string) => onOpenTerminal(cwd)}
         onFileMoved={onFileMoved}
@@ -5988,6 +6019,19 @@ export function HarnessApp({
             update={updateNotice}
             onOpen={onOpenWhatsNew}
             onDismiss={() => setUpdateNotice(null)}
+          />
+        </Suspense>
+      ) : null}
+      {reminders.due.length > 0 || reminders.error ? (
+        <Suspense fallback={null}>
+          <LazyReminderNotices
+            reminders={reminders.due}
+            error={reminders.error}
+            onOpen={reminders.open}
+            onSnooze={reminders.schedule}
+            onDismiss={reminders.cancel}
+            onRetry={reminders.refresh}
+            onOpenSettings={() => openSettings("general")}
           />
         </Suspense>
       ) : null}
