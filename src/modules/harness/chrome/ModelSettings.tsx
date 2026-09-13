@@ -41,8 +41,17 @@ export function ModelSettings({
   const catalog = useSyncCatalog();
   const settings = useMemo(() => {
     void catalog;
-    const list = resolveModel(harness, model).settings ?? [];
-    const order = ["variant", "agent", "effort", "reasoning", "thinking", "fast", "context"];
+    const list = resolveModel(harness, model)?.settings ?? [];
+    const order = [
+      "variant",
+      "agent",
+      "effort",
+      "reasoning",
+      "reasoningEffort",
+      "thinking",
+      "fast",
+      "context",
+    ];
     return [...list].sort((a, b) => {
       const ai = order.indexOf(a.id);
       const bi = order.indexOf(b.id);
