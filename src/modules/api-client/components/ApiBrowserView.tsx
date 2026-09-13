@@ -48,7 +48,9 @@ export function ApiBrowserView() {
   const [selectedMethod, setSelectedMethod] = useState<string>("ALL");
 
   const fastTargets = [
-    { name: t("apiClient.browser.presets.dummyJson"), url: "https://dummyjson.com" },
+    { name: "PokeAPI (REST)", url: "https://pokeapi.co/api/v2" },
+    { name: "DummyJSON", url: "https://dummyjson.com" },
+    { name: "HTTPBin", url: "https://httpbin.org" },
     { name: t("apiClient.browser.presets.ollama"), url: "http://localhost:11434/api" },
     { name: t("apiClient.browser.presets.docker"), url: "http://localhost:2375" },
     { name: t("apiClient.browser.presets.openAi"), url: "http://localhost:8000/v1" },

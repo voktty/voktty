@@ -47,7 +47,7 @@ export function ApiClientStack({ tabs, activeId, placements }: Props) {
             }
             aria-hidden={!visible}
           >
-            <ApiClientStoreProvider tabId={tab.id}>
+            <ApiClientStoreProvider key={tab.id} tabId={tab.id}>
               <ApiClientView />
             </ApiClientStoreProvider>
           </div>

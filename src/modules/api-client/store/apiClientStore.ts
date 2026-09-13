@@ -213,38 +213,25 @@ export function createApiHistoryResponsePreview(response: ApiResponse): ApiRespo
 }
 
 const DEFAULT_POKEMON_REQUEST: ApiRequest = {
-  id: "req-pokemon-paginated",
-  name: "List Pokémon (paginated)",
-  url: "{{ GRAPHQL_URL }}",
-  method: "POST",
+  id: "req-pokemon-ditto",
+  name: "Get Ditto details (PokeAPI REST)",
+  url: "https://pokeapi.co/api/v2/pokemon/ditto",
+  method: "GET",
   headers: [
-    { key: "Content-Type", value: "application/json", enabled: true },
+    { key: "Accept", value: "application/json", enabled: true },
     { key: "User-Agent", value: "Voktty-ApiClient/1.0", enabled: true },
   ],
   queryParams: [],
-  bodyType: "graphql",
-  bodyContent: `query ListPokemon($limit: Int!, $offset: Int!, $type: String) {
-  pokemons(limit: $limit, offset: $offset, type: $type) {
-    count
-    results {
-      id
-      name
-      types
-    }
-  }
-}`,
+  bodyType: "none",
+  bodyContent: "",
   authType: "none",
-  variables: {
-    limit: "6",
-    offset: "0",
-    type: "water",
-  },
+  variables: {},
 };
 
 const DEFAULT_COLLECTIONS: ApiCollection[] = [
   {
     id: "col-pokemon",
-    name: "Pokémon API",
+    name: "Pokémon & Mock APIs",
     description: t("apiClient.discovery.defaultCollectionDescription"),
     requests: [],
     folders: [
@@ -253,6 +240,7 @@ const DEFAULT_COLLECTIONS: ApiCollection[] = [
         name: "REST",
         isExpanded: true,
         requests: [
+          DEFAULT_POKEMON_REQUEST,
           {
             id: "req-rest-list",
             name: "List Pokemon (paginated)",
@@ -268,9 +256,20 @@ const DEFAULT_COLLECTIONS: ApiCollection[] = [
             authType: "none",
           },
           {
-            id: "req-rest-pikachu",
-            name: "Get Pikachu details",
-            url: "{{ BASE_URL }}/pokemon/pikachu",
+            id: "req-rest-dummyjson",
+            name: "Get DummyJSON Product",
+            url: "https://dummyjson.com/products/1",
+            method: "GET",
+            headers: [{ key: "Accept", value: "application/json", enabled: true }],
+            queryParams: [],
+            bodyType: "none",
+            bodyContent: "",
+            authType: "none",
+          },
+          {
+            id: "req-rest-httpbin-get",
+            name: "HTTPBin GET (IP & Headers)",
+            url: "https://httpbin.org/get",
             method: "GET",
             headers: [{ key: "Accept", value: "application/json", enabled: true }],
             queryParams: [],
@@ -282,12 +281,12 @@ const DEFAULT_COLLECTIONS: ApiCollection[] = [
       },
       {
         id: "f-sse",
-        name: "SSE",
+        name: "SSE Streams",
         isExpanded: true,
         requests: [
           {
             id: "req-sse-stream",
-            name: "Endless stream",
+            name: "Endless Stream (5 events)",
             url: "https://httpbin.org/stream/5",
             method: "GET",
             headers: [{ key: "Accept", value: "text/event-stream", enabled: true }],
@@ -298,7 +297,7 @@ const DEFAULT_COLLECTIONS: ApiCollection[] = [
           },
           {
             id: "req-sse-stop-n",
-            name: "Stop after N token",
+            name: "Stream 1KB Bytes",
             url: "https://httpbin.org/stream-bytes/1024",
             method: "GET",
             headers: [],
@@ -309,8 +308,8 @@ const DEFAULT_COLLECTIONS: ApiCollection[] = [
           },
           {
             id: "req-sse-speed",
-            name: "Slow it down or speed up",
-            url: "https://httpbin.org/delay/2",
+            name: "Delayed Response (1s)",
+            url: "https://httpbin.org/delay/1",
             method: "GET",
             headers: [],
             queryParams: [],
@@ -327,75 +326,81 @@ const DEFAULT_COLLECTIONS: ApiCollection[] = [
         requests: [
           {
             id: "req-gql-get",
-            name: "Get Pokémon",
+            name: "Get Squirtle (PokeAPI GraphQL)",
             url: "{{ GRAPHQL_URL }}",
-            method: "GQL",
+            method: "POST",
             headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
             queryParams: [],
             bodyType: "graphql",
-            bodyContent: `query GetPokemon($name: String!) {\n  pokemon(name: $name) {\n    id\n    name\n    types\n  }\n}`,
+            bodyContent: `query GetPokemon {
+  pokemon_v2_pokemon(where: {name: {_eq: "squirtle"}}) {
+    id
+    name
+    height
+    weight
+  }
+}`,
             authType: "none",
-            variables: { name: "squirtle" },
+            variables: {},
           },
-          DEFAULT_POKEMON_REQUEST,
           {
-            id: "req-gql-trainer",
-            name: "Trainer & Team (nested)",
+            id: "req-gql-list",
+            name: "List Pokémon (PokeAPI GraphQL)",
             url: "{{ GRAPHQL_URL }}",
-            method: "GQL",
+            method: "POST",
             headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
             queryParams: [],
             bodyType: "graphql",
-            bodyContent: `query GetTrainerTeam($trainerId: ID!) {\n  trainer(id: $trainerId) {\n    name\n    badges\n    team {\n      name\n      level\n    }\n  }\n}`,
+            bodyContent: `query ListPokemon {
+  pokemon_v2_pokemon(limit: 6) {
+    id
+    name
+    height
+    weight
+  }
+}`,
             authType: "none",
-            variables: { trainerId: "ash-ketchum-1" },
+            variables: {},
           },
         ],
       },
       {
-        id: "f-grpc",
-        name: "gRPC",
+        id: "f-post",
+        name: "POST & Echo",
         isExpanded: false,
         requests: [
           {
-            id: "req-grpc-pokemon",
-            name: "PokemonService.GetPokemon",
-            url: "grpc://localhost:50051/pokemon.v1.PokemonService/GetPokemon",
-            method: "GRPC",
-            headers: [],
+            id: "req-post-echo",
+            name: "HTTPBin POST Echo",
+            url: "https://httpbin.org/post",
+            method: "POST",
+            headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
             queryParams: [],
             bodyType: "json",
-            bodyContent: `{\n  "pokemon_id": 25\n}`,
+            bodyContent: `{\n  "message": "Hello from Voktty API Client!",\n  "status": "testing"\n}`,
             authType: "none",
           },
-        ],
-      },
-      {
-        id: "f-ws",
-        name: "WebSocket",
-        isExpanded: false,
-        requests: [
           {
-            id: "req-ws-echo",
-            name: "Live Battle Stream",
-            url: "wss://echo.websocket.events",
-            method: "WS",
-            headers: [],
+            id: "req-post-dummyjson",
+            name: "DummyJSON Add Product",
+            url: "https://dummyjson.com/products/add",
+            method: "POST",
+            headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
             queryParams: [],
             bodyType: "json",
-            bodyContent: `{\n  "action": "subscribe",\n  "channel": "battles"\n}`,
+            bodyContent: `{\n  "title": "Voktty Developer Keyboard",\n  "price": 149\n}`,
             authType: "none",
           },
         ],
       },
       {
         id: "f-auth",
-        name: "Auth",
+        name: "Auth Mocks",
         isExpanded: false,
         requests: [
           {
             id: "req-auth-login",
-            name: "OAuth 2.0 Token Exchange",
+            name: "OAuth 2.0 Bearer Token Test",
             url: "https://httpbin.org/post",
             method: "POST",
             headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
@@ -418,7 +423,7 @@ const DEFAULT_ENVIRONMENTS: ApiEnvironment[] = [
     color: "red",
     variables: {
       BASE_URL: "https://pokeapi.co/api/v2",
-      GRAPHQL_URL: "https://graphql.org/graphql",
+      GRAPHQL_URL: "https://beta.pokeapi.co/graphql/v1beta",
       API_KEY: "prod_live_sec_991823",
     },
   },
@@ -427,8 +432,8 @@ const DEFAULT_ENVIRONMENTS: ApiEnvironment[] = [
     name: "Staging",
     color: "yellow",
     variables: {
-      BASE_URL: "https://staging.pokeapi.co/api/v2",
-      GRAPHQL_URL: "https://staging.graphql.org/graphql",
+      BASE_URL: "https://pokeapi.co/api/v2",
+      GRAPHQL_URL: "https://beta.pokeapi.co/graphql/v1beta",
       API_KEY: "staging_sec_4410",
     },
   },
@@ -448,7 +453,7 @@ const DEFAULT_ENVIRONMENTS: ApiEnvironment[] = [
     color: "zinc",
     variables: {
       BASE_URL: "https://httpbin.org",
-      GRAPHQL_URL: "https://graphql.org/graphql",
+      GRAPHQL_URL: "https://beta.pokeapi.co/graphql/v1beta",
     },
   },
 ];

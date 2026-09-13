@@ -202,26 +202,37 @@ export function ApiClientView() {
       {/* Main Workspace Area with 3-Column Resizable Panels */}
       <div className="min-h-0 flex-1 overflow-hidden">
         {activeTab === "request" && (
-          <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
+          <ResizablePanelGroup
+            id="api-client-panel-group"
+            orientation="horizontal"
+            className="h-full w-full"
+          >
             {!sidebarCollapsed && (
-              <>
-                <ResizablePanel defaultSize="20%" minSize="14%" maxSize="32%">
-                  <ApiCollectionExplorer />
-                </ResizablePanel>
-                <ResizableHandle />
-              </>
+              <ResizablePanel
+                id="api-client-sidebar-panel"
+                defaultSize="20%"
+                minSize="14%"
+                maxSize="32%"
+              >
+                <ApiCollectionExplorer />
+              </ResizablePanel>
+            )}
+            {!sidebarCollapsed && (
+              <ResizableHandle id="api-client-sidebar-handle" />
             )}
 
             <ResizablePanel
+              id="api-client-editor-panel"
               defaultSize={sidebarCollapsed ? "50%" : "42%"}
               minSize="25%"
             >
               <RequestEditor />
             </ResizablePanel>
 
-            <ResizableHandle />
+            <ResizableHandle id="api-client-response-handle" />
 
             <ResizablePanel
+              id="api-client-response-panel"
               defaultSize={sidebarCollapsed ? "50%" : "38%"}
               minSize="25%"
             >
