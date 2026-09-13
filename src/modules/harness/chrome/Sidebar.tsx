@@ -62,6 +62,7 @@ import { basename } from "../lib/fs";
 import { IS_MAC, MOD } from "../lib/platform";
 import { resolveModel } from "../lib/models";
 import { prettyParent, projectKey, projectName } from "../lib/paths";
+import type { OpenFileFn } from "../lib/search";
 import { sessionDisplayTitle } from "../lib/session";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
 import {
@@ -194,7 +195,7 @@ type Props = {
   onPinSessions?: (sessionIds: readonly string[], pinned: boolean) => void;
   onDeleteSession?: (sessionId: string) => void;
   onDeleteSessions?: (sessionIds: readonly string[]) => void;
-  onOpenFile: (path: string) => void;
+  onOpenFile: OpenFileFn;
   onOpenTerminal?: (cwd: string) => void;
   onFileMoved?: (from: string, to: string) => void;
   onFileDeleted?: (path: string) => void;
@@ -1505,8 +1506,13 @@ function SidebarComponent({
                 enabled={open}
                 textHarness={textHarness}
                 selectedPath={selectedDiffPath}
-                onOpenFile={onOpenFile}
-                onOpenDiff={onOpenDiff ?? onOpenFile}
+                onOpenFile={(path) =>
+                  onOpenFile(path, undefined, { exact: true })
+                }
+                onOpenDiff={
+                  onOpenDiff ??
+                  ((path) => onOpenFile(path, undefined, { exact: true }))
+                }
               />
             </div>
           ) : null}

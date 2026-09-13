@@ -59,6 +59,7 @@ import {
   invalidateProjectFiles,
   prefetchProjectFiles,
   rememberOpenedFile,
+  resolveFileOpenRequest,
   resolveOpenablePath,
 } from "../lib/fileIndex";
 import { notifyDirsChanged } from "../lib/fileTree";
@@ -3784,10 +3785,13 @@ export function HarnessApp({
   }, []);
 
   const onOpenFile = useCallback<OpenFileFn>(
-    (path, navigation) => {
+    (path, navigation, options) => {
       void (async () => {
-        const resolved =
-          (await resolveOpenablePath(gitCwdRef.current, path)) ?? path;
+        const resolved = await resolveFileOpenRequest(
+          gitCwdRef.current,
+          path,
+          options,
+        );
         rememberOpenedFile(sidebarCwdRef.current, resolved);
         const tab = tabsRef.current.find(
           (entry: any) => entry.id === activeTabId,
