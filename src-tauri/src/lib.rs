@@ -726,6 +726,7 @@ pub fn run() {
             harness::linear::linear_issue_comment,
             harness::search::search_project,
             harness::cursor_store::cursor_tool_calls,
+            harness::cursor_store::cursor_subagent_runs,
             harness::project_logo::save_project_logo,
             harness::project_logo::remove_project_logo,
             harness::project_logo::forget_logo_file,

@@ -10,6 +10,7 @@ import {
   extractSkillName,
   extractToolPreview,
 } from "./preview";
+import { acpAgentInfo } from "./acpSubagents";
 import { fxToolInfo, fxToolVerb } from "./fxTool";
 
 export type FxModeId = "ask" | "code";
@@ -242,15 +243,19 @@ export function eventsFromAcpUpdate(params: unknown): HarnessEvent[] {
       fx.title ||
       toolLabel(update) ||
       toolLabel(tool);
+    const agent = acpAgentInfo(update, tool, toolKind, title);
+    const resolvedKind = agent?.kind ?? toolKind;
+    const resolvedTitle = agent?.title ?? title;
     return [
       {
         type: "tool.updated",
         callId,
-        title,
-        kind: toolKind,
+        title: resolvedTitle,
+        kind: resolvedKind,
         status,
         detail: cap(fx.detail ?? "") || toolDetail(update, tool),
         preview,
+        ...(agent?.agentModel ? { agentModel: agent.agentModel } : {}),
       },
     ];
   }

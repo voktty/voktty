@@ -5,6 +5,7 @@ import { normalizeTaskListStatus } from "../taskList";
 import type { ApprovalDecision, HarnessEvent } from "./types";
 import type { UserQuestion, UserQuestionReply } from "../userQuestion";
 import { questionsFromUnknown, selectedAnswerLabels } from "../userQuestion";
+import { acpAgentInfo } from "./acpSubagents";
 import {
   composeToolTitle,
   extractSearchQuery,
@@ -396,15 +397,19 @@ export function eventsFromAcpUpdate(params: unknown): HarnessEvent[] {
       grok.title ||
       toolLabel(update) ||
       toolLabel(tool);
+    const agent = acpAgentInfo(update, tool, toolKind, title);
+    const resolvedKind = agent?.kind ?? toolKind;
+    const resolvedTitle = agent?.title ?? title;
     return [
       {
         type: "tool.updated",
         callId,
-        title,
-        kind: toolKind,
+        title: resolvedTitle,
+        kind: resolvedKind,
         status,
         detail: cap(toolDetail(update, tool) ?? "") || undefined,
         preview,
+        ...(agent?.agentModel ? { agentModel: agent.agentModel } : {}),
       },
     ];
   }

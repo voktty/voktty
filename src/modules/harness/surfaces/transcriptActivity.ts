@@ -2,6 +2,7 @@ import { t } from "@/modules/i18n";
 import { leafName } from "../lib/fileName";
 import {
   composeToolTitle,
+  formatAgentType,
   isAgentTool,
   isEditTool,
   isExecuteTool,
@@ -16,7 +17,8 @@ export type ToolCallState = "pending" | "accepted" | "rejected";
 
 export type TurnItem =
   | { type: "block"; block: Block }
-  | { type: "activity"; blocks: Block[] };
+  | { type: "activity"; blocks: Block[] }
+  | { type: "subagents"; blocks: Block[] };
 
 export function needsApproval(block: Block): boolean {
   return !!block.approval && !block.approval.decided;
@@ -105,11 +107,58 @@ export function isHiddenTool(block: Block): boolean {
   return isIncompleteTool(block, toolCallLabel(block), state);
 }
 
+export function isSubagentBlock(block: Block): boolean {
+  return (
+    (block.role === "tool" || block.role === "approval") &&
+    isAgentTool(block.tool?.kind, block.text || block.tool?.title)
+  );
+}
+
+export function subagentName(block: Block): string {
+  const meta = block.agentRun;
+  const fromMeta = meta?.name?.trim();
+  if (fromMeta && !/^(?:subagent(?:\s+task)?|task|agent)$/i.test(fromMeta)) {
+    return fromMeta;
+  }
+  const title = block.tool?.title?.trim() || block.text?.trim() || "";
+  const cleaned = title
+    .replace(/^[:\s·-]+/, "")
+    .replace(/^(?:agent|task)\s*[:·-]\s*/i, "")
+    .trim();
+  if (cleaned && !/^(?:subagent(?:\s+task)?|task|agent)$/i.test(cleaned)) {
+    return cleaned;
+  }
+  const type = meta?.agentType?.trim();
+  if (type) return `${formatAgentType(type)} subagent`;
+  return "Subagent";
+}
+
+export function subagentBrief(block: Block): string | undefined {
+  const meta = block.agentRun;
+  const last = meta?.steps[meta.steps.length - 1];
+  if (last && (last.kind === "tool" || last.kind === "message")) {
+    const text = last.text?.trim();
+    if (text) return text.split("\n")[0]?.trim();
+  }
+  return undefined;
+}
+
+export function subagentReport(block: Block): string | undefined {
+  const meta = block.agentRun;
+  const detail = block.tool?.detail?.trim();
+  if (detail) return detail;
+  const lastMessage = meta?.steps
+    .filter((step) => step.kind === "message" && step.text?.trim())
+    .slice(-1)[0];
+  return lastMessage?.text?.trim();
+}
+
 /**
  * Zen mode folds edits in with the reads and searches. An edit still awaiting
  * approval stays out: you cannot judge a diff you cannot see.
  */
 export function isActivityBlock(block: Block, zen = false): boolean {
+  if (isSubagentBlock(block)) return false;
   if (zen && isThinkingBlock(block)) return true;
   if (block.role !== "tool" && block.role !== "approval") return false;
   if (
@@ -205,21 +254,35 @@ export function groupTurnItems(blocks: Block[], zen = false): TurnItem[] {
   );
   const items: TurnItem[] = [];
   let activity: Block[] = [];
-  const flush = () => {
+  let subagents: Block[] = [];
+  const flushActivity = () => {
     if (activity.length > 0) {
       items.push({ type: "activity", blocks: activity });
     }
     activity = [];
   };
+  const flushSubagents = () => {
+    if (subagents.length > 0) {
+      items.push({ type: "subagents", blocks: subagents });
+    }
+    subagents = [];
+  };
   visible.forEach((block) => {
+    if (isSubagentBlock(block)) {
+      flushActivity();
+      subagents.push(block);
+      return;
+    }
+    flushSubagents();
     if (isActivityBlock(block, zen)) {
       activity.push(block);
       return;
     }
-    flush();
+    flushActivity();
     items.push({ type: "block", block });
   });
-  flush();
+  flushActivity();
+  flushSubagents();
   return items;
 }
 
@@ -616,7 +679,7 @@ export function foldableWork(items: TurnItem[]): WorkFold | undefined {
       }
       continue;
     }
-    if (isProseBlock(item.block)) answered = true;
+    if (item.type === "block" && isProseBlock(item.block)) answered = true;
   }
   if (end < 0) return undefined;
   // Only work and the agent's commentary on it fold. A plan, a task list or a
@@ -627,6 +690,7 @@ export function foldableWork(items: TurnItem[]): WorkFold | undefined {
 }
 
 function isFoldableItem(item: TurnItem): boolean {
+  if (item.type === "subagents") return false;
   return item.type === "activity"
     ? !item.blocks.some(needsApproval)
     : isProseBlock(item.block);
@@ -645,7 +709,11 @@ export function firstFoldableIndex(items: TurnItem[]): number {
 export function foldedBlocks(items: TurnItem[], fold: WorkFold): Block[] {
   return items
     .slice(fold.start, fold.end + 1)
-    .flatMap((item) => (item.type === "activity" ? item.blocks : [item.block]));
+    .flatMap((item) =>
+      item.type === "activity" || item.type === "subagents"
+        ? item.blocks
+        : [item.block],
+    );
 }
 
 /** True when a nested scroller should consume this wheel, not the parent. */

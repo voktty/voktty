@@ -236,11 +236,14 @@ export function agentToolTitle(
 ): string {
   const description = coerceString(input.description)?.trim();
   if (description) return description;
+  const task = coerceString(input.task)?.trim();
+  if (task) return task;
   const type =
     coerceString(input.subagent_type) ??
     coerceString(input.subagentType) ??
     coerceString(input.agent_type) ??
-    coerceString(input.agentType);
+    coerceString(input.agentType) ??
+    coerceString(input.agent);
   if (type) {
     const label = formatAgentType(type);
     return /subagent/i.test(label) ? label : `${label} subagent`;

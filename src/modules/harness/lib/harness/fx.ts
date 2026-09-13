@@ -8,6 +8,7 @@ import {
   unwatchChild,
   watchChild,
 } from "./child";
+import { AcpSubagents } from "./acpSubagents";
 import {
   autoPermissionOption,
   eventsFromAcpUpdate,
@@ -45,6 +46,7 @@ type Live = {
   runtimeMode: RuntimeMode;
   planning: boolean;
   onEvent: (event: HarnessEvent) => void;
+  subagents: AcpSubagents;
   turns: Promise<void>;
 };
 
@@ -340,6 +342,7 @@ async function ensureLive(input: SendTurnInput): Promise<Live> {
       runtimeMode: input.runtimeMode,
       planning: input.intent === "plan",
       onEvent: input.onEvent,
+      subagents: new AcpSubagents(),
       turns: Promise.resolve(),
     };
     liveRef.current = live;
@@ -475,7 +478,10 @@ function ignoreUnsupportedControl(method: string, error: unknown): void {
 
 function handleNotification(live: Live, method: string, params: unknown) {
   if (method !== "session/update") return;
-  for (const event of eventsFromAcpUpdate(params)) {
+  for (const event of live.subagents.route(
+    params,
+    eventsFromAcpUpdate(params),
+  )) {
     live.onEvent(event);
   }
 }

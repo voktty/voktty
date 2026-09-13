@@ -23,6 +23,7 @@ import {
   mergeOpenCodeAssistantText,
   MINIMUM_OPENCODE_VERSION,
   KNOWN_HIDDEN_AGENTS,
+  openCodeChildSessionId,
   parseOpenCodeModelSlug,
   parseOpenCodeVersion,
   parseServerUrlFromOutput,
@@ -79,6 +80,10 @@ type Live = {
   approvals: Map<number, PendingApproval>;
   questions: Map<number, PendingQuestion>;
   nextApprovalUiId: number;
+  sessionParentById: Map<string, string | undefined>;
+  subagentSessions: Map<string, string>;
+  subagentModels: Map<string, string>;
+  pendingSubagent: Map<string, OpenCodePart[]>;
   partById: Map<string, OpenCodePart>;
   emittedTextByPartId: Map<string, string>;
   messageRoleById: Map<string, "user" | "assistant" | "hidden">;
@@ -360,6 +365,10 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       approvals: new Map(),
       questions: new Map(),
       nextApprovalUiId: 1,
+      sessionParentById: new Map(),
+      subagentSessions: new Map(),
+      subagentModels: new Map(),
+      pendingSubagent: new Map(),
       partById: new Map(),
       emittedTextByPartId: new Map(),
       messageRoleById: new Map(),
@@ -490,12 +499,48 @@ async function runCompaction(
   await live.client.summarizeSession(live.openCodeSessionId, model);
 }
 
-function handleEvent(live: Live, event: Record<string, unknown>): void {
-  const payloadSessionId = eventSessionId(event);
-  if (payloadSessionId && payloadSessionId !== live.openCodeSessionId) return;
+function isDescendantSession(live: Live, sessionId: string): boolean {
+  let cur: string | undefined = sessionId;
+  const visited = new Set<string>();
+  while (cur && !visited.has(cur)) {
+    if (cur === live.openCodeSessionId) return true;
+    visited.add(cur);
+    cur = live.sessionParentById.get(cur);
+  }
+  return false;
+}
 
+function handleEvent(live: Live, event: Record<string, unknown>): void {
   const type = typeof event.type === "string" ? event.type : "";
   const properties = asRecord(event.properties) ?? {};
+
+  if (type === "session.created" || type === "session.updated") {
+    const info = asRecord(properties.info);
+    const id = stringField(info, "id");
+    if (id) {
+      const parentId = stringField(info, "parentID");
+      live.sessionParentById.set(id, parentId);
+    }
+    return;
+  }
+
+  const payloadSessionId = eventSessionId(event);
+  if (payloadSessionId && payloadSessionId !== live.openCodeSessionId) {
+    if (
+      type === "message.updated" ||
+      type === "message.part.updated" ||
+      type === "message.part.delta"
+    ) {
+      handleSubagentEvent(live, payloadSessionId, type, properties);
+      return;
+    }
+    // Only blocking interactions are forwarded otherwise. In particular, a
+    // child's idle/error event must never finish the parent's active turn.
+    if (type !== "permission.asked" && type !== "question.asked") return;
+    const turn = live.turnDone;
+    if (!isDescendantSession(live, payloadSessionId)) return;
+    if (turn !== live.turnDone) return;
+  }
 
   switch (type) {
     case "message.updated": {
@@ -738,6 +783,7 @@ function emitTool(live: Live, part: OpenCodePart): void {
       status: "pending",
       preview,
     });
+    if (kind === "agent") trackSubagentRow(live, callId, part);
     return;
   }
   live.onEvent({
@@ -754,6 +800,174 @@ function emitTool(live: Live, part: OpenCodePart): void {
     detail,
     preview,
   });
+  // Bind after creating the parent block: replayed steps need an owner.
+  if (kind === "agent") trackSubagentRow(live, callId, part);
+}
+
+/** How many parts an unidentified child may bank before its row is known. */
+const MAX_PENDING_SUBAGENT = 64;
+
+/**
+ * Task metadata names the child session. Arrival order is not an identity:
+ * concurrent tasks can create their sessions in any order.
+ */
+function trackSubagentRow(
+  live: Live,
+  callId: string,
+  part: OpenCodePart,
+): void {
+  const named = openCodeChildSessionId(part);
+  if (named && named !== live.openCodeSessionId) {
+    bindSubagentSession(live, named, callId);
+  }
+}
+
+function bindSubagentSession(
+  live: Live,
+  sessionId: string,
+  callId: string,
+): void {
+  if (live.subagentSessions.get(sessionId) === callId) return;
+  live.subagentSessions.set(sessionId, callId);
+  const model = live.subagentModels.get(sessionId);
+  if (model) live.onEvent({ type: "tool.updated", callId, kind: "agent", agentModel: model });
+  const backlog = live.pendingSubagent.get(sessionId);
+  live.pendingSubagent.delete(sessionId);
+  for (const part of backlog ?? []) emitSubagentStep(live, callId, sessionId, part);
+}
+
+function handleSubagentEvent(
+  live: Live,
+  sessionId: string,
+  type: string,
+  properties: Record<string, unknown>,
+): void {
+  // The server broadcasts other sessions too. Only retain known descendants.
+  let ancestor: string | undefined = sessionId;
+  const visited = new Set<string>();
+  while (ancestor && !visited.has(ancestor)) {
+    if (ancestor === live.openCodeSessionId || live.subagentSessions.has(ancestor)) break;
+    visited.add(ancestor);
+    ancestor = live.sessionParentById.get(ancestor);
+  }
+  if (!ancestor || visited.has(ancestor)) return;
+  if (type === "message.updated") {
+    const info = asRecord(properties.info);
+    const id = stringField(info, "id");
+    const role = stringField(info, "role");
+    const agent = stringField(info, "agent");
+    const model = stringField(info, "modelID");
+    // Nested agents share the outer trail, but have their own model.
+    if (role === "assistant" && model && !(agent && KNOWN_HIDDEN_AGENTS.has(agent)) &&
+        live.sessionParentById.get(sessionId) === live.openCodeSessionId) {
+      live.subagentModels.set(sessionId, model);
+      const callId = live.subagentSessions.get(sessionId);
+      if (callId) live.onEvent({ type: "tool.updated", callId, kind: "agent", agentModel: model });
+    }
+    if (id && (role === "user" || role === "assistant")) {
+      live.messageRoleById.set(id, agent && KNOWN_HIDDEN_AGENTS.has(agent) ? "hidden" : role);
+      // Message metadata may follow the first part on a resumed stream.
+      for (const part of live.partById.values()) {
+        if (part.messageID === id) mirrorSubagentPart(live, sessionId, part);
+      }
+    }
+    return;
+  }
+  let part = type === "message.part.updated" ? parsePart(properties.part) : null;
+  if (type === "message.part.delta") {
+    const id = stringField(properties, "partID");
+    const existing = id ? live.partById.get(id) : undefined;
+    const delta = streamTextDelta(properties.delta);
+    if (existing && delta && (existing.type === "text" || existing.type === "reasoning")) {
+      part = { ...existing, text: (existing.text ?? "") + delta };
+    }
+  }
+  if (!part) return;
+  live.partById.set(part.id, part);
+  mirrorSubagentPart(live, sessionId, part);
+}
+
+/**
+ * One thing a subagent did, mirrored onto its row. Until the child's session
+ * is tied to a row the part is kept, because a task's opening moves arrive
+ * before OpenCode reports the session it created for them.
+ */
+function mirrorSubagentPart(
+  live: Live,
+  sessionId: string,
+  part: OpenCodePart,
+): void {
+  const callId = live.subagentSessions.get(sessionId);
+  if (callId) {
+    emitSubagentStep(live, callId, sessionId, part);
+    return;
+  }
+  if (part.type !== "tool" && part.type !== "text" && part.type !== "reasoning") return;
+  const backlog = live.pendingSubagent.get(sessionId) ?? [];
+  const index = backlog.findIndex((entry) => entry.id === part.id);
+  if (index >= 0) backlog[index] = part;
+  else backlog.push(part);
+  if (backlog.length > MAX_PENDING_SUBAGENT) backlog.shift();
+  if (!live.pendingSubagent.has(sessionId) && live.pendingSubagent.size >= 32) {
+    live.pendingSubagent.delete(live.pendingSubagent.keys().next().value!);
+  }
+  live.pendingSubagent.set(sessionId, backlog);
+}
+
+function emitSubagentStep(
+  live: Live,
+  callId: string,
+  sessionId: string,
+  part: OpenCodePart,
+): void {
+  if (part.messageID && !live.messageRoleById.has(part.messageID)) return;
+  if (roleForPart(live, part) !== "assistant") return;
+  if (part.type === "text" || part.type === "reasoning") {
+    const text = part.text?.trim();
+    if (!text) return;
+    live.onEvent({
+      type: "agent.step",
+      callId,
+      stepId: `${sessionId}:${part.id}`,
+      kind: part.type === "reasoning" ? "reasoning" : "message",
+      text,
+    });
+    return;
+  }
+  if (part.type !== "tool") return;
+  const tool = part.tool ?? "tool";
+  const state = part.state ?? {};
+  const status = typeof state.status === "string" ? state.status : "pending";
+  const kind = toolKindFromName(tool);
+  const preview = previewFromToolPart(part);
+  const title =
+    composeToolTitle({
+      kind,
+      title: (typeof state.title === "string" && state.title) || tool,
+      command: extractShellCommand(state.input),
+      skill: extractSkillName(state.input),
+      path: preview?.path,
+      query: preview?.query,
+      previewKind: preview?.kind,
+    }) ||
+    (typeof state.title === "string" && state.title) ||
+    tool;
+  live.onEvent({
+    type: "agent.step",
+    callId,
+    stepId: `${sessionId}:${part.callID ?? part.id}`,
+    kind: "tool",
+    text: title,
+    toolKind: kind,
+    status:
+      status === "error"
+        ? "failed"
+        : status === "completed"
+          ? "completed"
+          : "in_progress",
+    ...(preview ? { preview } : {}),
+  });
+  if (kind === "agent") trackSubagentRow(live, callId, part);
 }
 
 async function waitApproval(
