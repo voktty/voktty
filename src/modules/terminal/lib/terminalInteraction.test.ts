@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   copyTerminalSelection,
   pasteClipboardIntoTerminal,
 } from "./terminalInteraction";
+import { resetTerminalPasteDeduplication } from "./terminalPaste";
 
 describe("copyTerminalSelection", () => {
+  beforeEach(() => {
+    resetTerminalPasteDeduplication();
+  });
   it("copies the exact terminal selection", async () => {
     const writeText = vi.fn<() => Promise<void>>().mockResolvedValue();
 
