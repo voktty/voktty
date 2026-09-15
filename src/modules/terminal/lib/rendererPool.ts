@@ -542,6 +542,19 @@ function createSlot(): Slot {
     }
   }
 
+  // Suppress redundant native DOM paste events on the hidden helper textarea.
+  // In Voktty, clipboard pastes are driven explicitly by isTerminalPaste (Ctrl+V / Cmd+V)
+  // and host contextmenu (right-click). Native browser/WebView2 right-click dispatch
+  // on focused textareas otherwise causes double-pasting in agents/TUIs.
+  slot.term.textarea?.addEventListener(
+    "paste",
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true,
+  );
+
   term.attachCustomKeyEventHandler((event) => {
     // During IME composition the browser is assembling a multi-keystroke
     // character (Chinese pinyin → hanzi, Korean jamo → syllable, etc.).
@@ -649,16 +662,29 @@ function createSlot(): Slot {
         !event.metaKey &&
         !event.shiftKey
       ) {
-        const sessionInfo = adapter?.getSessionInfo?.(leafId);
-        const isRemoteWithoutLocalPaths =
-          sessionInfo?.isUnix &&
-          !suggest.hasRealPaths &&
-          sessionInfo?.workspaceEnv?.kind !== "local";
-
-        // In remote/docker/ssh sessions without local filesystem probing,
-        // if user hasn't explicitly navigated the history popup, let Tab pass
-        // directly to the remote PTY so the remote shell's native path completion works!
-        if (isRemoteWithoutLocalPaths && !suggest.navigated && !suggest.searchMode) {
+        if (suggest.navigated || suggest.searchMode) {
+          event.preventDefault();
+          if (event.type === "keydown") {
+            const selected =
+              suggest.items[suggest.selectedIndex] ?? suggest.items[0];
+            if (selected) {
+              const query = suggest.query;
+              if (selected.startsWith(query)) {
+                const remainder = selected.slice(query.length);
+                if (remainder) bridge.writeToPty(remainder);
+              } else {
+                const erase = "\x7f".repeat(query.length);
+                bridge.writeToPty(erase + selected);
+              }
+            }
+            slot.isDirectTyping = false;
+            useTerminalSuggestStore.getState().clear(leafId);
+          }
+          return false;
+        } else {
+          // If the user hasn't explicitly navigated the suggestion popup,
+          // let Tab pass directly to the shell PTY so native shell completion
+          // (PowerShell / PSReadLine, Bash, Zsh, Fish, remote shell) works normally!
           event.preventDefault();
           if (event.type === "keydown") {
             bridge.writeToPty("\t");
@@ -667,25 +693,6 @@ function createSlot(): Slot {
           }
           return false;
         }
-
-        event.preventDefault();
-        if (event.type === "keydown") {
-          const selected =
-            suggest.items[suggest.selectedIndex] ?? suggest.items[0];
-          if (selected) {
-            const query = suggest.query;
-            if (selected.startsWith(query)) {
-              const remainder = selected.slice(query.length);
-              if (remainder) bridge.writeToPty(remainder);
-            } else {
-              const erase = "\x7f".repeat(query.length);
-              bridge.writeToPty(erase + selected);
-            }
-          }
-          slot.isDirectTyping = false;
-          useTerminalSuggestStore.getState().clear(leafId);
-        }
-        return false;
       }
 
       if (
@@ -887,6 +894,7 @@ function createSlot(): Slot {
 
   host.addEventListener("contextmenu", async (event) => {
     event.preventDefault();
+    event.stopPropagation();
 
     const leafId = slot.currentLeafId;
     if (leafId === null) return;
