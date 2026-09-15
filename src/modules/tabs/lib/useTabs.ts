@@ -464,6 +464,30 @@ export function planCloseOtherTabs(
   };
 }
 
+/**
+ * Plans closing all unlocked tabs within the target space (or all tabs if not in a space).
+ */
+export function planCloseAllTabs(
+  tabs: Tab[],
+  anchorId: number,
+  activeId: number,
+): CloseTabsPlan {
+  const anchor =
+    tabs.find((t) => t.id === anchorId) ?? tabs.find((t) => t.id === activeId);
+  const targetSpaceId = anchor?.spaceId;
+  const sameSpace = targetSpaceId
+    ? tabs.filter((t) => t.spaceId === targetSpaceId)
+    : tabs;
+  const closeIds = sameSpace.filter((t) => !t.locked).map((t) => t.id);
+  const remaining = tabs.filter((t) => !closeIds.includes(t.id));
+  return {
+    closeIds,
+    nextActiveId: remaining.some((t) => t.id === activeId)
+      ? activeId
+      : remaining[0]?.id ?? activeId,
+  };
+}
+
 export function applyCloseTabsPlan(
   tabs: Tab[],
   anchorId: number,

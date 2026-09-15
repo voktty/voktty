@@ -1,6 +1,6 @@
 import type { CloseTabsPlan } from "@/modules/tabs";
 
-export type CloseManyKind = "right" | "other";
+export type CloseManyKind = "right" | "other" | "all";
 
 export type CloseManyHazards = {
   dirtyIds: number[];

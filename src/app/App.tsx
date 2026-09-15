@@ -1291,6 +1291,7 @@ function DesktopApp() {
     handleClose,
     handleCloseTabsToRight,
     handleCloseOtherTabs,
+    handleCloseAllTabs,
     confirmClose,
     cancelClose,
     confirmTerminalClose,
@@ -3128,6 +3129,8 @@ function DesktopApp() {
       "tab.newEditor": openNewEditor,
       "tab.newHarness": openNewHarness,
       "tab.close": handleCloseTabOrPane,
+      "tab.closeOthers": () => handleCloseOtherTabs(effectiveActiveId),
+      "tab.closeAll": () => handleCloseAllTabs(effectiveActiveId),
       "tab.next": () => stepSwitcher(1),
       "tab.prev": () => stepSwitcher(-1),
       "tab.selectByIndex": (e) =>

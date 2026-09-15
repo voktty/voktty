@@ -22,6 +22,7 @@ export {
   planSingleTabClose,
   planCloseTabsToRight,
   planCloseOtherTabs,
+  planCloseAllTabs,
   type CloseTabsPlan,
   type SingleTabCloseResult,
   type Tab,

@@ -1449,6 +1449,9 @@ fn resolve_codex() -> Option<PathBuf> {
             candidates.push(localappdata.join("codex\\codex.exe"));
         }
         if let Some(userprofile) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
+            candidates.push(userprofile.join(".bun\\bin\\codex.exe"));
+            candidates.push(userprofile.join(".bun\\bin\\codex.cmd"));
+            candidates.push(userprofile.join(".bun\\bin\\codex.ps1"));
             candidates.push(userprofile.join(".cargo\\bin\\codex.exe"));
             candidates.push(userprofile.join(".cargo\\bin\\codex.cmd"));
             candidates.push(userprofile.join(".local\\bin\\codex.exe"));
@@ -1462,6 +1465,7 @@ fn resolve_codex() -> Option<PathBuf> {
     {
         if let Some(home) = &home {
             candidates.push(home.join(".local/bin/codex"));
+            candidates.push(home.join(".bun/bin/codex"));
             candidates.push(home.join(".npm-global/bin/codex"));
             candidates.push(home.join(".cargo/bin/codex"));
             candidates.push(home.join("n/bin/codex"));
@@ -1488,6 +1492,7 @@ fn resolve_opencode() -> Option<PathBuf> {
     if let Some(home) = &home {
         candidates.push(home.join(".opencode/bin/opencode"));
         candidates.push(home.join(".local/bin/opencode"));
+        candidates.push(home.join(".bun/bin/opencode"));
         candidates.push(home.join(".npm-global/bin/opencode"));
         candidates.push(home.join(".cargo/bin/opencode"));
         candidates.push(home.join("n/bin/opencode"));
@@ -1528,6 +1533,7 @@ fn resolve_claude() -> Option<PathBuf> {
 
     if let Some(home) = &home {
         candidates.push(home.join(".local/bin/claude"));
+        candidates.push(home.join(".bun/bin/claude"));
         candidates.push(home.join(".claude/local/claude"));
         candidates.push(home.join(".local/share/claude/claude"));
         candidates.push(home.join(".npm-global/bin/claude"));
@@ -1552,6 +1558,7 @@ fn resolve_pi() -> Option<PathBuf> {
     if let Some(home) = &home {
         for name in ["pi-coding-agent", "pi"] {
             candidates.push(home.join(".local/bin").join(name));
+            candidates.push(home.join(".bun/bin").join(name));
             candidates.push(home.join(".npm-global/bin").join(name));
             candidates.push(home.join(".cargo/bin").join(name));
             candidates.push(home.join("n/bin").join(name));
@@ -2107,6 +2114,7 @@ fn push_windows_npm_candidates(candidates: &mut Vec<PathBuf>, name: &str) {
         candidates.push(appdata.join("npm").join(name));
     }
     if let Some(userprofile) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
+        candidates.push(userprofile.join(".bun").join("bin").join(name));
         candidates.push(userprofile.join("scoop").join("shims").join(name));
     }
 }
@@ -2135,6 +2143,7 @@ fn gui_search_path_from(
     }
     if let Some(home) = home {
         parts.push(format!("{home}/.local/bin"));
+        parts.push(format!("{home}/.bun/bin"));
         parts.push(format!("{home}/.cargo/bin"));
         parts.push(format!("{home}/.claude/local"));
         parts.push(format!("{home}/.local/share/claude"));

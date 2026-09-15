@@ -64,9 +64,11 @@ import {
 } from "../lib/session";
 import { playCue } from "../lib/sounds";
 import { legacyTaskListFromText } from "../lib/taskList";
+import { parseUserMessageLink } from "../lib/linkPreview";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { Shimmer } from "./Shimmer";
 import { TranscriptSelectionMenu } from "./TranscriptSelectionMenu";
+import { UserLinkPreview } from "./UserLinkPreview";
 import {
   type ActivityPhase,
   type ActivityPhaseKind,
@@ -972,10 +974,14 @@ function UserMessageBlock({
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const [singleLine, setSingleLine] = useState(false);
-  const textRef = useRef<HTMLPreElement>(null);
+  const textRef = useRef<HTMLElement>(null);
   const card = block.secondOpinion;
   const note = block.noteCard;
   const text = card && card.kind !== "handoff" ? "" : block.text;
+  const messageLink = text ? parseUserMessageLink(text) : null;
+  const displayText = messageLink
+    ? `${messageLink.beforeText}${messageLink.afterText}`
+    : text;
   const chat = layout === "chat";
   const textOnly =
     Boolean(text) && !block.attachments?.length && !card && !note;
@@ -983,7 +989,7 @@ function UserMessageBlock({
 
   useLayoutEffect(() => {
     const el = textRef.current;
-    if (!el || !text) {
+    if (!el || !displayText) {
       setOverflows(false);
       setSingleLine(false);
       return;
@@ -1010,7 +1016,7 @@ function UserMessageBlock({
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [text, roundsSingleLine, expanded]);
+  }, [displayText, roundsSingleLine, expanded]);
 
   const toggle = () => {
     if (overflows) setExpanded((value) => !value);
@@ -1049,14 +1055,29 @@ function UserMessageBlock({
             <SecondOpinionCard card={card} />
           </div>
         ) : null}
-        {text ? (
+        {messageLink ? (
+          <div
+            ref={(element) => {
+              textRef.current = element;
+            }}
+            className={`user-message-with-link min-w-0 whitespace-pre-wrap break-words font-sans text-[13.5px] leading-relaxed font-normal text-card-foreground ${
+              expanded ? "" : "line-clamp-6"
+            }`}
+          >
+            {messageLink.beforeText}
+            <UserLinkPreview link={messageLink.link} />
+            {messageLink.afterText}
+          </div>
+        ) : displayText ? (
           <pre
-            ref={textRef}
+            ref={(element) => {
+              textRef.current = element;
+            }}
             className={`min-w-0 whitespace-pre-wrap break-words font-sans text-[13.5px] leading-relaxed font-normal text-card-foreground ${
               expanded ? "" : "line-clamp-6"
             }`}
           >
-            {text}
+            {displayText}
           </pre>
         ) : null}
       </div>

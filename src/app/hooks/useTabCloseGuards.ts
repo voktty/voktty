@@ -10,6 +10,7 @@ import {
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   type CloseTabsPlan,
+  planCloseAllTabs,
   planCloseOtherTabs,
   planCloseTabsToRight,
   type Tab,
@@ -128,10 +129,15 @@ export function useTabCloseGuards({
   );
 
   const planCloseMany = useCallback(
-    (kind: CloseManyKind, anchorId: number) =>
-      kind === "right"
-        ? planCloseTabsToRight(tabsRef.current, anchorId, activeIdRef.current)
-        : planCloseOtherTabs(tabsRef.current, anchorId, activeIdRef.current),
+    (kind: CloseManyKind, anchorId: number) => {
+      if (kind === "right") {
+        return planCloseTabsToRight(tabsRef.current, anchorId, activeIdRef.current);
+      }
+      if (kind === "other") {
+        return planCloseOtherTabs(tabsRef.current, anchorId, activeIdRef.current);
+      }
+      return planCloseAllTabs(tabsRef.current, anchorId, activeIdRef.current);
+    },
     [],
   );
 
@@ -169,6 +175,14 @@ export function useTabCloseGuards({
   const handleCloseOtherTabs = useCallback(
     (anchorId: number) => {
       void handleCloseMany("other", anchorId);
+    },
+    [handleCloseMany],
+  );
+
+  const handleCloseAllTabs = useCallback(
+    (anchorId?: number) => {
+      const id = anchorId ?? activeIdRef.current;
+      void handleCloseMany("all", id);
     },
     [handleCloseMany],
   );
@@ -255,6 +269,7 @@ export function useTabCloseGuards({
     handleClose,
     handleCloseTabsToRight,
     handleCloseOtherTabs,
+    handleCloseAllTabs,
     confirmClose,
     cancelClose,
     confirmTerminalClose,
