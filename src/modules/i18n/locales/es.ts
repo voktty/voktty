@@ -5035,6 +5035,8 @@ export const es: TranslationSchema = {
       search: "Buscar",
       expandAllFiles: "Expandir todos los archivos",
       collapseAllFiles: "Contraer todos los archivos",
+      viewFullFile: "Ver archivo completo",
+      collapseFullFile: "Contraer contexto",
       discardFile: "Descartar archivo",
       stageFile: "Preparar archivo",
       expandUp: "Expandir lineas sin modificar hacia arriba",

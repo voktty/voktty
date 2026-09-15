@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { newSession, type Block, type Session } from "./session";
 import {
+  cacheSession,
+  clearSessionCache,
+  evictCachedSession,
+  getCachedSession,
   isPersistableId,
   persistFingerprint,
   sanitizeSessionForPersist,
@@ -261,3 +265,44 @@ describe("persistFingerprint", () => {
     ).toBe(persistFingerprint({ ...session, context: { used: 10 } }));
   });
 });
+
+describe("session memory cache", () => {
+  it("caches and retrieves sessions in memory", () => {
+    clearSessionCache();
+    const session = newSession("cursor", "/tmp/project");
+    session.id = "test-session-123";
+    session.blocks = [{ id: "b1", role: "user", text: "hello" }];
+
+    cacheSession(session);
+    const retrieved = getCachedSession("test-session-123");
+    expect(retrieved).not.toBeNull();
+    expect(retrieved?.id).toBe("test-session-123");
+    expect(retrieved?.blocks).toHaveLength(1);
+  });
+
+  it("evicts cached session on demand", () => {
+    clearSessionCache();
+    const session = newSession("cursor", "/tmp/project");
+    session.id = "test-session-456";
+    cacheSession(session);
+    expect(getCachedSession("test-session-456")).not.toBeNull();
+
+    evictCachedSession("test-session-456");
+    expect(getCachedSession("test-session-456")).toBeNull();
+  });
+
+  it("clears all cached sessions", () => {
+    clearSessionCache();
+    const session1 = newSession("cursor", "/tmp/project");
+    session1.id = "test-session-1";
+    const session2 = newSession("cursor", "/tmp/project");
+    session2.id = "test-session-2";
+    cacheSession(session1);
+    cacheSession(session2);
+
+    clearSessionCache();
+    expect(getCachedSession("test-session-1")).toBeNull();
+    expect(getCachedSession("test-session-2")).toBeNull();
+  });
+});
+

@@ -4919,6 +4919,8 @@ export const en = {
       search: "Search",
       expandAllFiles: "Expand all files",
       collapseAllFiles: "Collapse all files",
+      viewFullFile: "View full file",
+      collapseFullFile: "Collapse context",
       discardFile: "Discard file",
       stageFile: "Stage file",
       expandUp: "Expand unmodified lines upward",

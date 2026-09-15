@@ -178,6 +178,7 @@ export const File = wrap(File01Icon, "File");
 export const FileDiff = wrap(FileDiffIcon, "FileDiff");
 export const FilePlus = wrap(FileAddIcon, "FilePlus");
 export const FilePlusCorner = wrap(FilePlusCornerIcon, "FilePlusCorner");
+export const FileText = wrap(File01Icon, "FileText");
 export const FoldVertical = wrap(FoldVerticalIcon, "FoldVertical");
 export const Folder = wrap(Folder01Icon, "Folder");
 export const FolderOpen = wrap(FolderOpenIcon, "FolderOpen");
