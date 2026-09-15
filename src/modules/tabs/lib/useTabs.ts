@@ -1695,7 +1695,10 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     const targetSpace = spaceId ?? activeSpaceIdRef.current;
     const curr = tabsRef.current;
     const existing = curr.find(
-      (t): t is HarnessTab => t.kind === "harness" && t.spaceId === targetSpace,
+      (t): t is HarnessTab =>
+        t.kind === "harness" &&
+        t.spaceId === targetSpace &&
+        (sessionId ? t.sessionId === sessionId : true),
     );
     if (existing) {
       setActiveId(existing.id);

@@ -5,7 +5,7 @@
  * read/submit closures so `useControlBridge` can reach them without touching
  * how sessions are stored today.
  */
-import type { Attachment, HarnessId, Session } from "./session";
+import type { Attachment, HarnessId, RuntimeMode, Session } from "./session";
 import { hasPendingApproval } from "./session";
 
 export type HarnessSessionState = "idle" | "working" | "waiting" | "done";
@@ -16,11 +16,25 @@ export type HarnessSessionSnapshot = {
   cwd: string;
   title: string;
   state: HarnessSessionState;
+  model?: string;
+  runtimeMode?: RuntimeMode;
+  activeTool?: string;
+  toolsExecutedCount?: number;
+  subagentsCount?: number;
+  pendingApproval?: boolean;
+  turnCount?: number;
+};
+
+export type HarnessSendOptions = {
+  interrupt?: boolean;
+  steering?: boolean;
+  attachments?: Attachment[];
 };
 
 export type HarnessSessionHandle = {
   getSession: () => Session;
   submit: (text: string, attachments?: Attachment[]) => Promise<void>;
+  interrupt?: () => void;
 };
 
 const handles = new Map<string, HarnessSessionHandle>();
@@ -43,12 +57,31 @@ export function harnessSessionState(session: Session): HarnessSessionState {
 }
 
 function snapshotOf(session: Session): HarnessSessionSnapshot {
+  const pending = hasPendingApproval(session.blocks);
+  const toolBlocks = session.blocks.filter((b) => b.role === "tool");
+  const userBlocks = session.blocks.filter((b) => b.role === "user");
+  const subagents = session.blocks.filter(
+    (b) => Boolean(b.agentRun) || Boolean(b.tool?.agentModel),
+  ).length;
+  const lastTool = toolBlocks[toolBlocks.length - 1];
+  const activeTool =
+    session.busy && lastTool
+      ? lastTool.tool?.title || lastTool.text || lastTool.tool?.kind
+      : undefined;
+
   return {
     sessionId: session.id,
     harness: session.harness,
     cwd: session.cwd,
     title: session.title,
     state: harnessSessionState(session),
+    model: session.model,
+    runtimeMode: session.runtimeMode,
+    ...(activeTool ? { activeTool } : {}),
+    toolsExecutedCount: toolBlocks.length,
+    subagentsCount: subagents,
+    pendingApproval: pending,
+    turnCount: userBlocks.length,
   };
 }
 
@@ -88,12 +121,42 @@ export function getHarnessSessionResult(
 export async function sendHarnessSessionMessage(
   sessionId: string,
   text: string,
+  options?: HarnessSendOptions,
 ): Promise<void> {
   const handle = handles.get(sessionId);
   if (!handle) {
     throw new Error(`no mounted harness session "${sessionId}"`);
   }
-  await handle.submit(text);
+  if (options?.interrupt) {
+    handle.interrupt?.();
+  }
+  await handle.submit(text, options?.attachments);
+}
+
+export function interruptHarnessSession(sessionId: string): boolean {
+  const handle = handles.get(sessionId);
+  if (!handle?.interrupt) return false;
+  handle.interrupt();
+  return true;
+}
+
+export async function waitForHarnessSessionHandle(
+  sessionId: string,
+  timeoutMs = 5000,
+): Promise<HarnessSessionHandle> {
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  while (Date.now() < deadline) {
+    const handle = handles.get(sessionId);
+    if (handle) return handle;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  const handle = handles.get(sessionId);
+  if (!handle) {
+    throw new Error(
+      `harness session "${sessionId}" did not mount within ${timeoutMs}ms`,
+    );
+  }
+  return handle;
 }
 
 const WAIT_POLL_MS = 150;
