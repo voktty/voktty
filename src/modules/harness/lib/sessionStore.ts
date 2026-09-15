@@ -125,6 +125,40 @@ export function sanitizeSessionForPersist(
  */
 const sessionWriteQueues = new Map<string, Promise<unknown>>();
 const deletedSessionIds = new Set<string>();
+const sessionMemoryCache = new Map<string, Session>();
+const MAX_CACHED_SESSIONS = 64;
+
+export function cacheSession(session: Session): void {
+  if (!session || !session.id) return;
+  if (
+    sessionMemoryCache.size >= MAX_CACHED_SESSIONS &&
+    !sessionMemoryCache.has(session.id)
+  ) {
+    const firstKey = sessionMemoryCache.keys().next().value;
+    if (firstKey) sessionMemoryCache.delete(firstKey);
+  }
+  sessionMemoryCache.set(session.id, {
+    ...session,
+    blocks: [...session.blocks],
+  });
+}
+
+export function getCachedSession(sessionId: string): Session | null {
+  const hit = sessionMemoryCache.get(sessionId);
+  if (!hit) return null;
+  return {
+    ...hit,
+    blocks: [...hit.blocks],
+  };
+}
+
+export function evictCachedSession(sessionId: string): void {
+  sessionMemoryCache.delete(sessionId);
+}
+
+export function clearSessionCache(): void {
+  sessionMemoryCache.clear();
+}
 
 function enqueueSessionWrite<T>(
   sessionId: string,
@@ -151,6 +185,7 @@ export async function upsertSession(
   if (!shouldPersistSession(session) || deletedSessionIds.has(session.id)) {
     return null;
   }
+  cacheSession(session);
   const payload = sanitizeSessionForPersist(session);
   const summary = await enqueueSessionWrite(session.id, async () => {
     if (deletedSessionIds.has(session.id)) return null;
@@ -266,15 +301,20 @@ export async function searchSessions(options: {
 }
 
 export async function getSession(sessionId: string): Promise<Session | null> {
+  const cached = getCachedSession(sessionId);
+  if (cached) return cached;
   const record = await invoke<SessionRecord | null>("session_get", {
     sessionId,
   });
   if (!record) return null;
-  return recoverCursorSubagents(recordToSession(record));
+  const session = recoverCursorSubagents(recordToSession(record));
+  cacheSession(session);
+  return session;
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
   deletedSessionIds.add(sessionId);
+  evictCachedSession(sessionId);
   try {
     await enqueueSessionWrite(sessionId, () =>
       invoke<void>("session_delete", { sessionId }),

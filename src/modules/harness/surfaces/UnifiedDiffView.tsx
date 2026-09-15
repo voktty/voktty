@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  FileText,
   FoldVertical,
   MessageSquarePlus,
   Undo2,
@@ -70,6 +71,8 @@ type FileContextMenuState = {
   x: number;
   y: number;
   file: UnifiedDiffFileModel;
+  hasFolds: boolean;
+  isFull: boolean;
 };
 
 function resolveFullPath(path: string, repoRoot?: string): string {
@@ -81,6 +84,8 @@ function resolveFullPath(path: string, repoRoot?: string): string {
 
 function fileDiffMenuItems(
   t: (key: string) => string,
+  hasFolds = false,
+  isFull = false,
 ): ExplorerMenuItem[] {
   const revealLabel = IS_MAC
     ? t("harness.chrome.revealInFinder")
@@ -94,6 +99,17 @@ function fileDiffMenuItems(
       id: "open-file",
       label: t("harness.chrome.openFile"),
     },
+    ...(hasFolds
+      ? [
+          {
+            kind: "item" as const,
+            id: "toggle-full-file",
+            label: isFull
+              ? t("harness.chrome.collapseFullFile")
+              : t("harness.chrome.viewFullFile"),
+          },
+        ]
+      : []),
     {
       kind: "item",
       id: "open-default",
@@ -226,17 +242,97 @@ export function UnifiedDiffView({
     else fileRefs.current.delete(path);
   }, []);
 
+  const toggleFullFile = useCallback(
+    (fileId: string) => {
+      const targetFile = files.find((f) => f.id === fileId);
+      if (!targetFile) return;
+      const hasFolds = targetFile.blocks.some((b) => b.kind === "fold");
+      if (!hasFolds) return;
+
+      const fileReveals = reveals[fileId] ?? EMPTY_REVEALS;
+      const isCurrentlyFull = targetFile.blocks.every((b) => {
+        if (b.kind !== "fold") return true;
+        const rev = fileReveals[b.id];
+        return rev && rev.start + rev.end >= b.lines.length;
+      });
+
+      if (isCurrentlyFull) {
+        setReveals((current) => {
+          const next = { ...current };
+          delete next[fileId];
+          return next;
+        });
+      } else {
+        const nextFileReveals: Record<string, FoldReveal> = {};
+        for (const block of targetFile.blocks) {
+          if (block.kind === "fold") {
+            nextFileReveals[block.id] = { start: block.lines.length, end: 0 };
+          }
+        }
+        setReveals((current) => ({
+          ...current,
+          [fileId]: nextFileReveals,
+        }));
+      }
+    },
+    [files, reveals],
+  );
+
+  const allFull = useMemo(() => {
+    const filesWithFolds = files.filter((f) =>
+      f.blocks.some((b) => b.kind === "fold"),
+    );
+    if (filesWithFolds.length === 0) return false;
+    return filesWithFolds.every((file) => {
+      const fileReveals = reveals[file.id] ?? EMPTY_REVEALS;
+      return file.blocks.every((b) => {
+        if (b.kind !== "fold") return true;
+        const rev = fileReveals[b.id];
+        return rev && rev.start + rev.end >= b.lines.length;
+      });
+    });
+  }, [files, reveals]);
+
+  const toggleAllFullFiles = useCallback(() => {
+    if (allFull) {
+      setReveals({});
+    } else {
+      const nextReveals: Record<string, Record<string, FoldReveal>> = {};
+      for (const file of files) {
+        const fileReveals: Record<string, FoldReveal> = {};
+        for (const block of file.blocks) {
+          if (block.kind === "fold") {
+            fileReveals[block.id] = { start: block.lines.length, end: 0 };
+          }
+        }
+        nextReveals[file.id] = fileReveals;
+      }
+      setReveals(nextReveals);
+    }
+  }, [allFull, files]);
+
   const handleFileContextMenu = useCallback(
     (file: UnifiedDiffFileModel, event: ReactMouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
+      const hasFolds = file.blocks.some((b) => b.kind === "fold");
+      const fileReveals = reveals[file.id] ?? EMPTY_REVEALS;
+      const isFull =
+        hasFolds &&
+        file.blocks.every((b) => {
+          if (b.kind !== "fold") return true;
+          const rev = fileReveals[b.id];
+          return rev && rev.start + rev.end >= b.lines.length;
+        });
       setFileMenu({
         x: event.clientX,
         y: event.clientY,
         file,
+        hasFolds,
+        isFull,
       });
     },
-    [],
+    [reveals],
   );
 
   const handleMenuPick = useCallback(
@@ -256,6 +352,9 @@ export function UnifiedDiffView({
               new CustomEvent("voktty:open-dropped-path", { detail: fullPath }),
             );
           }
+          return;
+        case "toggle-full-file":
+          toggleFullFile(targetFile.id);
           return;
         case "open-default":
           action = openPath(fullPath);
@@ -292,7 +391,7 @@ export function UnifiedDiffView({
         });
       }
     },
-    [fileMenu, onOpenFile, onOpenGitHistory, repoRoot],
+    [fileMenu, onOpenFile, onOpenGitHistory, repoRoot, toggleFullFile],
   );
 
   if (files.length === 0) {
@@ -323,6 +422,27 @@ export function UnifiedDiffView({
         <span className="text-content/70">{fileLabel}</span>
         <DiffCounts additions={additions} deletions={deletions} />
         <span className="ml-auto flex items-center gap-0.5">
+          <button
+            type="button"
+            title={
+              allFull
+                ? t("harness.chrome.collapseFullFile")
+                : t("harness.chrome.viewFullFile")
+            }
+            aria-label={
+              allFull
+                ? t("harness.chrome.collapseFullFile")
+                : t("harness.chrome.viewFullFile")
+            }
+            onClick={toggleAllFullFiles}
+            className={`grid size-7 place-items-center rounded-md ${
+              allFull
+                ? "bg-content/10 text-content"
+                : "text-content/45 hover:bg-content/10 hover:text-content"
+            }`}
+          >
+            <FileText className="size-3.5" strokeWidth={1.75} />
+          </button>
           <button
             type="button"
             title={t("harness.chrome.expandAllFiles")}
@@ -376,6 +496,7 @@ export function UnifiedDiffView({
               colorScheme={colorScheme}
               scrollerRef={scrollerRef}
               onToggle={toggleFile}
+              onToggleFullFile={toggleFullFile}
               onReveal={revealFold}
               onStageFile={onStageFile}
               onDiscardFile={onDiscardFile}
@@ -390,7 +511,7 @@ export function UnifiedDiffView({
         <ExplorerMenu
           x={fileMenu.x}
           y={fileMenu.y}
-          items={fileDiffMenuItems(t)}
+          items={fileDiffMenuItems(t, fileMenu.hasFolds, fileMenu.isFull)}
           onPick={handleMenuPick}
           onClose={() => setFileMenu(null)}
         />
@@ -409,6 +530,7 @@ type FileSectionProps = {
   colorScheme: ColorScheme;
   scrollerRef: React.RefObject<HTMLDivElement | null>;
   onToggle: (id: string) => void;
+  onToggleFullFile?: (id: string) => void;
   onReveal: (
     fileId: string,
     foldId: string,
@@ -432,6 +554,7 @@ const FileSection = memo(function FileSection({
   colorScheme,
   scrollerRef,
   onToggle,
+  onToggleFullFile,
   onReveal,
   onStageFile,
   onDiscardFile,
@@ -447,6 +570,14 @@ const FileSection = memo(function FileSection({
   const [tokens, setTokens] = useState<Map<UnifiedLine, SyntaxToken[]> | null>(
     null,
   );
+  const hasFolds = file.blocks.some((b) => b.kind === "fold");
+  const isFull =
+    hasFolds &&
+    file.blocks.every((b) => {
+      if (b.kind !== "fold") return true;
+      const rev = reveals[b.id];
+      return rev && rev.start + rev.end >= b.lines.length;
+    });
 
   useEffect(() => {
     if (!expanded || !near) return;
@@ -529,6 +660,22 @@ const FileSection = memo(function FileSection({
           </span>
           <DiffCounts additions={file.additions} deletions={file.deletions} />
         </button>
+        {hasFolds && expanded && onToggleFullFile ? (
+          <IconButton
+            title={
+              isFull
+                ? t("harness.chrome.collapseFullFile")
+                : t("harness.chrome.viewFullFile")
+            }
+            onClick={() => onToggleFullFile(file.id)}
+          >
+            {isFull ? (
+              <FoldVertical className="size-3.5" strokeWidth={1.75} />
+            ) : (
+              <UnfoldVertical className="size-3.5" strokeWidth={1.75} />
+            )}
+          </IconButton>
+        ) : null}
         {file.canDiscard && onDiscardFile ? (
           <IconButton
             title={t("harness.chrome.discardFile")}
@@ -588,6 +735,7 @@ function equalFileSectionProps(
     previous.colorScheme === next.colorScheme &&
     previous.scrollerRef === next.scrollerRef &&
     previous.onToggle === next.onToggle &&
+    previous.onToggleFullFile === next.onToggleFullFile &&
     previous.onReveal === next.onReveal &&
     previous.onStageFile === next.onStageFile &&
     previous.onDiscardFile === next.onDiscardFile &&
