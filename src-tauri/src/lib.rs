@@ -679,6 +679,7 @@ pub fn run() {
             harness::reminders::reminder_open,
             harness::skills::list_skills,
             harness::rate_limits::fetch_claude_usage,
+            harness::link_preview::fetch_link_preview,
             quota::get_quota_overview,
             quota::refresh_quota_provider,
             harness::fs::git_branches,

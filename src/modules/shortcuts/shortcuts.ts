@@ -19,6 +19,8 @@ export type ShortcutId =
   | "tab.newEditor"
   | "tab.newHarness"
   | "tab.close"
+  | "tab.closeOthers"
+  | "tab.closeAll"
   | "tab.next"
   | "tab.prev"
   | "tab.selectByIndex"
@@ -197,6 +199,18 @@ export const SHORTCUTS: Shortcut[] = [
     labelKey: "shortcuts.labels.tabClose",
     group: "Tabs",
     defaultBindings: [{ [MOD_PROP]: true, key: "w" }],
+  },
+  {
+    id: "tab.closeOthers",
+    labelKey: "shortcuts.labels.tabCloseOthers",
+    group: "Tabs",
+    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "t" }],
+  },
+  {
+    id: "tab.closeAll",
+    labelKey: "shortcuts.labels.tabCloseAll",
+    group: "Tabs",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "w" }],
   },
   {
     id: "pane.splitRight",

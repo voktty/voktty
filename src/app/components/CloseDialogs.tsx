@@ -277,7 +277,9 @@ export function CloseDialogs({
             <AlertDialogTitle>
               {pendingCloseMany?.kind === "right"
                 ? t("tabs.closeTabsToRight")
-                : t("tabs.closeOtherTabs")}
+                : pendingCloseMany?.kind === "all"
+                  ? t("tabs.closeAllTabs")
+                  : t("tabs.closeOtherTabs")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingCloseMany ? closeManyMessage(pendingCloseMany, tabs, t) : ""}

@@ -305,6 +305,7 @@ export function useControlBridge({
           if (open.focus) {
             const window = getCurrentWindow();
             try {
+              await window.unminimize().catch(() => {});
               await window.show();
               await window.setFocus();
               focused = true;
