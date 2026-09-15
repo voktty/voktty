@@ -343,13 +343,13 @@ describe("model effort helpers", () => {
     ]);
   });
 
-  it("returns null when model has no effort setting", () => {
+  it("returns undefined when model has no effort setting", () => {
     const noEffortModel: AgentModel = {
       id: "test:m1",
       harness: "claude",
       name: "Test",
     };
-    expect(modelEffortSetting(noEffortModel)).toBeNull();
+    expect(modelEffortSetting(noEffortModel)).toBeUndefined();
   });
 
   it("formats effort labels properly", () => {
