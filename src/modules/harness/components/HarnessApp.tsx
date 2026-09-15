@@ -287,9 +287,7 @@ import {
 } from "../lib/sessionHistory";
 import { piSkillContextForSession } from "../lib/sessionSkills";
 import {
-  cacheSession,
   deleteSession,
-  getCachedSession,
   getSession,
   listSessionsByProject,
   persistFingerprint,
