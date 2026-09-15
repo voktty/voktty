@@ -13,6 +13,8 @@ import {
   saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
+  searchSettings,
+  settingsSectionsByGroup,
 } from "./settings";
 
 const KEY = "monocode.composerRunner";
