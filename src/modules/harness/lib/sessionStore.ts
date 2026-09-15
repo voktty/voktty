@@ -307,7 +307,7 @@ export async function getSession(sessionId: string): Promise<Session | null> {
     sessionId,
   });
   if (!record) return null;
-  const session = recoverCursorSubagents(recordToSession(record));
+  const session = await recoverCursorSubagents(recordToSession(record));
   cacheSession(session);
   return session;
 }
