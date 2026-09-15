@@ -288,6 +288,7 @@ import {
 import { piSkillContextForSession } from "../lib/sessionSkills";
 import {
   deleteSession,
+  getCachedSession,
   getSession,
   listSessionsByProject,
   persistFingerprint,
@@ -615,11 +616,18 @@ export function HarnessApp({
       : loadRecents();
   });
   const [seed] = useState(() => {
+    const cached = initialSessionId ? getCachedSession(initialSessionId) : null;
+    if (cached) {
+      const tab = newTab(cached.id);
+      return { session: cached, tab };
+    }
     const cwd =
       (initialCwd && looksLikeProject(initialCwd) ? initialCwd : undefined) ??
       lastProjectPath() ??
       "~";
-    const session = newDefaultSession(cwd);
+    const session = initialSessionId
+      ? { ...newDefaultSession(cwd), id: initialSessionId }
+      : newDefaultSession(cwd);
     const tab = newTab(session.id);
     return { session, tab };
   });

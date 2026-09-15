@@ -3,9 +3,11 @@ import {
   getHarnessSessionResult,
   getHarnessSessionSnapshot,
   type HarnessSessionState,
+  interruptHarnessSession,
   listHarnessSessionSnapshots,
   sendHarnessSessionMessage,
   waitForHarnessSession,
+  waitForHarnessSessionHandle,
 } from "@/modules/harness/lib/harnessControlBridge";
 import {
   getBrowserSelected,
@@ -49,12 +51,22 @@ type OpenRequest = {
   focus: boolean;
 };
 
+export type NewHarnessHandler = (params: {
+  harness?: string;
+  cwd?: string;
+  prompt?: string;
+  model?: string;
+  runtimeMode?: string;
+  spaceId?: string;
+}) => Promise<{ sessionId: string; tabId: number }>;
+
 type UseControlBridgeOptions = {
   ready: boolean;
   tabsRef: RefObject<Tab[]>;
   activeTabIdRef: RefObject<number>;
   activeSpaceIdRef: RefObject<string | null>;
   onOpen: (request: LaunchRequest & { spaceId: string }) => number | null;
+  onNewHarness?: NewHarnessHandler;
 };
 
 class RequestError extends Error {
@@ -145,6 +157,7 @@ function requireSessionId(value: Record<string, unknown>): string {
 export async function dispatchHarnessMethod(
   method: string,
   params: unknown,
+  onNewHarness?: NewHarnessHandler,
 ): Promise<unknown> {
   const value =
     typeof params === "object" && params !== null
@@ -181,12 +194,25 @@ export async function dispatchHarnessMethod(
       if (text == null) {
         throw new RequestError("invalid_params", "harness send requires text");
       }
+      const interrupt = value.interrupt === true;
       try {
-        await sendHarnessSessionMessage(sessionId, text);
+        await sendHarnessSessionMessage(sessionId, text, { interrupt });
       } catch (error) {
         throw new RequestError(
           "not_found",
           error instanceof Error ? error.message : String(error),
+        );
+      }
+      return { ok: true };
+    }
+    case "harness.interrupt":
+    case "harness.stop": {
+      const sessionId = requireSessionId(value);
+      const interrupted = interruptHarnessSession(sessionId);
+      if (!interrupted) {
+        throw new RequestError(
+          "not_found",
+          `no mounted harness session "${sessionId}" or session does not support interrupt`,
         );
       }
       return { ok: true };
@@ -215,11 +241,46 @@ export async function dispatchHarnessMethod(
         );
       }
     }
-    case "harness.new":
-      throw new RequestError(
-        "unsupported_method",
-        "harness.new is not implemented yet; open a harness session in Voktty first",
-      );
+    case "harness.new": {
+      if (!onNewHarness) {
+        throw new RequestError(
+          "unsupported_method",
+          "harness.new handler is not registered",
+        );
+      }
+      const harness = optionalString(value.harness);
+      const cwd = optionalString(value.cwd);
+      const prompt = optionalString(value.prompt);
+      const model = optionalString(value.model);
+      const runtimeMode =
+        optionalString(value.runtime_mode) || optionalString(value.runtimeMode);
+      const spaceId =
+        optionalString(value.space_id) || optionalString(value.spaceId);
+
+      const created = await onNewHarness({
+        harness,
+        cwd,
+        prompt,
+        model,
+        runtimeMode,
+        spaceId,
+      });
+
+      if (prompt && value.auto_submit !== false) {
+        try {
+          await waitForHarnessSessionHandle(created.sessionId, 3000);
+          await sendHarnessSessionMessage(created.sessionId, prompt);
+        } catch {
+          // Session was created and prompt is seeded in composer
+        }
+      }
+
+      return {
+        ok: true,
+        session_id: created.sessionId,
+        tab_id: created.tabId,
+      };
+    }
     default:
       throw new RequestError(
         "unknown_method",
@@ -281,6 +342,7 @@ export function useControlBridge({
   activeTabIdRef,
   activeSpaceIdRef,
   onOpen,
+  onNewHarness,
 }: UseControlBridgeOptions): void {
   useEffect(() => {
     if (!ready) return;
@@ -368,6 +430,7 @@ export function useControlBridge({
           const result = await dispatchHarnessMethod(
             request.method,
             request.params,
+            onNewHarness,
           );
           await respond(request.id, { ok: true, result });
           return;
@@ -411,5 +474,5 @@ export function useControlBridge({
         console.error("[voktty] control bridge cleanup failed:", error);
       });
     };
-  }, [ready, tabsRef, activeTabIdRef, activeSpaceIdRef, onOpen]);
+  }, [ready, tabsRef, activeTabIdRef, activeSpaceIdRef, onOpen, onNewHarness]);
 }

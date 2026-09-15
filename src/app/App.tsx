@@ -4602,12 +4602,57 @@ function DesktopApp() {
     [openFileTab, setActiveId],
   );
 
+  const handleNewHarness = useCallback(
+    async (params: {
+      harness?: string;
+      cwd?: string;
+      prompt?: string;
+      model?: string;
+      runtimeMode?: string;
+      spaceId?: string;
+    }) => {
+      const { HARNESSES, RUNTIME_MODES, DEFAULT_RUNTIME_MODE, newSession } =
+        await import("@/modules/harness/lib/session");
+      const { cacheSession } = await import(
+        "@/modules/harness/lib/sessionStore"
+      );
+      const harnessId =
+        params.harness &&
+        (HARNESSES as readonly string[]).includes(params.harness)
+          ? (params.harness as import("@/modules/harness/lib/session").HarnessId)
+          : "claude";
+      const resolvedCwd =
+        params.cwd || launchCwd || activeTerminalTab?.cwd || "~";
+      const runtimeMode =
+        params.runtimeMode &&
+        (RUNTIME_MODES as readonly string[]).includes(params.runtimeMode)
+          ? (params.runtimeMode as import("@/modules/harness/lib/session").RuntimeMode)
+          : DEFAULT_RUNTIME_MODE;
+      const session = newSession(
+        harnessId,
+        resolvedCwd,
+        params.model,
+        runtimeMode,
+      );
+      if (params.prompt) {
+        session.composerSeed = params.prompt;
+      }
+      cacheSession(session);
+      const targetSpace =
+        params.spaceId || activeSpaceIdRef.current || DEFAULT_SPACE_ID;
+      const tabId = newHarnessTab(targetSpace, resolvedCwd, session.id);
+      return { sessionId: session.id, tabId };
+    },
+    [launchCwd, activeTerminalTab?.cwd, newHarnessTab, activeSpaceIdRef],
+  );
+
   useControlBridge({
     ready: spacesHydrated && launchCwdResolved,
     tabsRef,
     activeTabIdRef: activeIdRef,
     activeSpaceIdRef,
     onOpen: openControlFile,
+    onNewHarness: handleNewHarness,
   });
 
   useEffect(() => {

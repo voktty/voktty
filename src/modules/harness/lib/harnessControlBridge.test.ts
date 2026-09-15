@@ -3,10 +3,12 @@ import {
   getHarnessSessionResult,
   getHarnessSessionSnapshot,
   harnessSessionState,
+  interruptHarnessSession,
   listHarnessSessionSnapshots,
   registerHarnessSessionHandle,
   sendHarnessSessionMessage,
   waitForHarnessSession,
+  waitForHarnessSessionHandle,
 } from "./harnessControlBridge";
 import { newSession, type Session } from "./session";
 
@@ -46,7 +48,7 @@ describe("registerHarnessSessionHandle", () => {
     vi.useRealTimers();
   });
 
-  it("exposes and then removes a mounted session", () => {
+  it("exposes and then removes a mounted session with rich metadata", () => {
     const session = withBlocks({ id: "s1" });
     const submit = vi.fn().mockResolvedValue(undefined);
     const unregister = registerHarnessSessionHandle("s1", {
@@ -60,6 +62,12 @@ describe("registerHarnessSessionHandle", () => {
       cwd: "/tmp/project",
       title: session.title,
       state: "idle",
+      model: session.model,
+      runtimeMode: "supervised",
+      turnCount: 0,
+      toolsExecutedCount: 0,
+      subagentsCount: 0,
+      pendingApproval: false,
     });
     expect(listHarnessSessionSnapshots()).toHaveLength(1);
 
@@ -69,16 +77,25 @@ describe("registerHarnessSessionHandle", () => {
     expect(listHarnessSessionSnapshots()).toHaveLength(0);
   });
 
-  it("sends through the registered submit closure", async () => {
+  it("sends through the registered submit closure and supports interrupt", async () => {
     const session = withBlocks({ id: "s2" });
     const submit = vi.fn().mockResolvedValue(undefined);
+    const interrupt = vi.fn();
     const unregister = registerHarnessSessionHandle("s2", {
       getSession: () => session,
       submit,
+      interrupt,
     });
 
     await sendHarnessSessionMessage("s2", "hello");
-    expect(submit).toHaveBeenCalledWith("hello");
+    expect(submit).toHaveBeenCalledWith("hello", undefined);
+
+    await sendHarnessSessionMessage("s2", "stop and do this", { interrupt: true });
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(submit).toHaveBeenCalledWith("stop and do this", undefined);
+
+    expect(interruptHarnessSession("s2")).toBe(true);
+    expect(interrupt).toHaveBeenCalledTimes(2);
 
     unregister();
   });
@@ -109,6 +126,12 @@ describe("registerHarnessSessionHandle", () => {
       title: session.title,
       state: "done",
       text: "hello back",
+      model: session.model,
+      runtimeMode: "supervised",
+      turnCount: 1,
+      toolsExecutedCount: 0,
+      subagentsCount: 0,
+      pendingApproval: false,
     });
 
     unregister();
@@ -148,5 +171,27 @@ describe("waitForHarnessSession", () => {
     await expect(
       waitForHarnessSession("missing", ["done"], 100),
     ).rejects.toThrow(/no mounted harness session/);
+  });
+});
+
+describe("waitForHarnessSessionHandle", () => {
+  it("resolves when handle is registered before timeout", async () => {
+    const session = withBlocks({ id: "s6" });
+    const submit = vi.fn().mockResolvedValue(undefined);
+    setTimeout(() => {
+      registerHarnessSessionHandle("s6", {
+        getSession: () => session,
+        submit,
+      });
+    }, 50);
+
+    const handle = await waitForHarnessSessionHandle("s6", 500);
+    expect(handle.getSession()).toBe(session);
+  });
+
+  it("throws when handle fails to mount in time", async () => {
+    await expect(waitForHarnessSessionHandle("missing-handle", 100)).rejects.toThrow(
+      /did not mount within 100ms/,
+    );
   });
 });

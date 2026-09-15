@@ -198,6 +198,13 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
     [],
   );
 
+  const handleStop = useCallback((sessionId: string) => {
+    const current = sessionRef.current;
+    if (!current) return;
+    void cancelHarnessTurn(current.harness, sessionId);
+    setSession((prev) => (prev ? stopStreaming(prev) : prev));
+  }, []);
+
   // Expose this mounted session to the control plane (voktty harness.* CLI
   // verbs) without changing how session state is stored.
   useEffect(() => {
@@ -205,15 +212,9 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
       getSession: () => sessionRef.current,
       submit: (text, attachments = []) =>
         handleSubmit(session.id, text, attachments),
+      interrupt: () => handleStop(session.id),
     });
-  }, [session.id, handleSubmit]);
-
-  const handleStop = useCallback((sessionId: string) => {
-    const current = sessionRef.current;
-    if (!current) return;
-    void cancelHarnessTurn(current.harness, sessionId);
-    setSession((prev) => (prev ? stopStreaming(prev) : prev));
-  }, []);
+  }, [session.id, handleSubmit, handleStop]);
 
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
