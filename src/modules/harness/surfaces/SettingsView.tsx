@@ -9,7 +9,9 @@ import {
   Search,
 } from "../chrome/icons";
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -133,7 +135,10 @@ import {
   saveGridArcadeEnabled,
   saveLiveAgentsEnabled,
   saveNotesEnabled,
+  searchSettings,
+  settingDomId,
   type FollowUpBehavior,
+  type SettingsSearchResult,
   type SettingsSectionId,
 } from "../lib/settings";
 import { loadSoundsEnabled, playCue, saveSoundsEnabled } from "../lib/sounds";
@@ -152,8 +157,11 @@ const ANCHOR_IDS: Record<SettingsAnchor, string> = {
   linear: "settings-linear",
 };
 
+const RevealedSettingContext = createContext<string | null>(null);
+
 type Props = {
   section: SettingsSectionId;
+  onSelectSection?: (section: SettingsSectionId) => void;
   /** Card to scroll to; the General page is too long to land at the top. */
   anchor?: SettingsAnchor | null;
   cwd: string;
@@ -170,6 +178,7 @@ type Props = {
 
 export function SettingsView({
   section,
+  onSelectSection,
   anchor = null,
   cwd,
   sessions,
@@ -184,12 +193,39 @@ export function SettingsView({
 }: Props) {
   const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
+  const [revealedSetting, setRevealedSetting] = useState<string | null>(null);
+  const revealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!anchor) return;
     document.getElementById(ANCHOR_IDS[anchor])?.scrollIntoView({
       block: "start",
     });
   }, [anchor]);
+
+  const onReveal = useCallback(
+    (item: SettingsSearchResult) => {
+      if (item.section !== section && onSelectSection) {
+        onSelectSection(item.section);
+      }
+      if (item.settingId) {
+        if (revealTimeoutRef.current) clearTimeout(revealTimeoutRef.current);
+        setRevealedSetting(item.settingId);
+        revealTimeoutRef.current = setTimeout(() => {
+          setRevealedSetting(null);
+        }, 2500);
+
+        setTimeout(() => {
+          const el = document.getElementById(settingDomId(item.settingId!));
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 80);
+      }
+    },
+    [section, onSelectSection],
+  );
+
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const appearance = useAppearanceSettings();
@@ -206,62 +242,228 @@ export function SettingsView({
   }, []);
 
   return (
-    <div
-      role="region"
-      aria-label={t("harness.chrome.settings")}
-      data-app-settings
-      className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
-    >
+    <RevealedSettingContext.Provider value={revealedSetting}>
       <div
-        className="flex h-10 shrink-0 select-none items-center border-b border-content/10"
-        data-tauri-drag-region="deep"
+        role="region"
+        aria-label={t("harness.chrome.settings")}
+        data-app-settings
+        className="flex min-h-0 min-w-0 flex-1 flex-col text-content"
       >
-        {IS_MAC && !besideRail ? <div className="w-[78px] shrink-0" /> : null}
-        <div className="flex min-w-0 flex-1 items-center gap-2 px-3 text-[13px]">
-          <span className="shrink-0 text-content/45">
-            {t("harness.chrome.settings")}
-          </span>
-          <span aria-hidden className="shrink-0 text-content/25">
-            /
-          </span>
-          <span className="min-w-0 truncate text-content">
-            {settingsSectionLabel(t, section)}
-          </span>
+        <div
+          className="flex h-10 shrink-0 select-none items-center justify-between gap-4 border-b border-content/10 pr-3"
+          data-tauri-drag-region="deep"
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-2 px-3 text-[13px]">
+            {IS_MAC && !besideRail ? <div className="w-[78px] shrink-0" /> : null}
+            <span className="shrink-0 text-content/45">
+              {t("harness.chrome.settings")}
+            </span>
+            <span aria-hidden className="shrink-0 text-content/25">
+              /
+            </span>
+            <span className="min-w-0 truncate text-content">
+              {settingsSectionLabel(t, section)}
+            </span>
+          </div>
+          <SettingsSearch onSelectResult={onReveal} />
         </div>
+
+        <div
+          ref={lockOverscroll}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-none"
+        >
+          <div className="mx-auto w-full max-w-5xl px-8 py-8">
+            <PageHeader
+              title={settingsSectionLabel(t, section)}
+              description={settingsSectionDescription(t, section)}
+            />
+            {section === "general" ? (
+              <GeneralPage onOpenWhatsNew={onOpenWhatsNew} />
+            ) : null}
+            {section === "appearance" ? (
+              <AppearancePage appearance={appearance} />
+            ) : null}
+            {section === "chat" ? <ChatPage /> : null}
+            {section === "keybindings" ? <KeybindingsPage /> : null}
+            {section === "providers" ? <ProvidersPage /> : null}
+            {section === "inbox" ? <InboxPage /> : null}
+            {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
+            {section === "archive" ? (
+              <ArchivePage
+                cwd={cwd}
+                sessions={sessions}
+                onOpenSession={onOpenSession}
+                onArchiveSession={onArchiveSession}
+                onDeleteSession={onDeleteSession}
+                onRestoreProject={onRestoreProject}
+                onDeleteProject={onDeleteProject}
+              />
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </RevealedSettingContext.Provider>
+  );
+}
+
+function SettingsSearch({
+  onSelectResult,
+}: {
+  onSelectResult: (item: SettingsSearchResult) => void;
+}) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const results = useMemo(() => {
+    if (!query.trim()) return [];
+    return searchSettings(query, (section) => settingsSectionLabel(t, section));
+  }, [query, t]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [results]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "f" && !e.shiftKey && !e.altKey) {
+        const target = e.target as HTMLElement | null;
+        if (!target?.closest("[data-app-settings]")) return;
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleSelect = (item: SettingsSearchResult) => {
+    setOpen(false);
+    setQuery("");
+    inputRef.current?.blur();
+    onSelectResult(item);
+  };
+
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((prev) =>
+        results.length > 0 ? (prev + 1) % results.length : 0,
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((prev) =>
+        results.length > 0 ? (prev - 1 + results.length) % results.length : 0,
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (results[selectedIndex]) {
+        handleSelect(results[selectedIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      inputRef.current?.blur();
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="relative max-w-xs flex-1">
+      <div className="relative flex items-center">
+        <Search
+          className="pointer-events-none absolute left-2.5 size-3.5 text-content/40"
+          strokeWidth={1.75}
+        />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => {
+            if (query.trim()) setOpen(true);
+          }}
+          onKeyDown={onKeyDown}
+          placeholder={t("harness.settings.searchPlaceholder")}
+          className="w-full rounded-md border border-content/10 bg-content/5 py-1 pl-8 pr-7 text-[12px] text-content placeholder:text-content/40 outline-none transition-colors focus:border-content/25 focus:bg-content/10"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setOpen(false);
+              inputRef.current?.focus();
+            }}
+            className="absolute right-2 text-[11px] text-content/40 hover:text-content"
+          >
+            ✕
+          </button>
+        ) : null}
       </div>
 
-      <div
-        ref={lockOverscroll}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-none"
-      >
-        <div className="mx-auto w-full max-w-5xl px-8 py-8">
-          <PageHeader
-            title={settingsSectionLabel(t, section)}
-            description={settingsSectionDescription(t, section)}
-          />
-          {section === "general" ? (
-            <GeneralPage onOpenWhatsNew={onOpenWhatsNew} />
-          ) : null}
-          {section === "appearance" ? (
-            <AppearancePage appearance={appearance} />
-          ) : null}
-          {section === "keybindings" ? <KeybindingsPage /> : null}
-          {section === "providers" ? <ProvidersPage /> : null}
-          {section === "inbox" ? <InboxPage /> : null}
-          {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
-          {section === "archive" ? (
-            <ArchivePage
-              cwd={cwd}
-              sessions={sessions}
-              onOpenSession={onOpenSession}
-              onArchiveSession={onArchiveSession}
-              onDeleteSession={onDeleteSession}
-              onRestoreProject={onRestoreProject}
-              onDeleteProject={onDeleteProject}
-            />
-          ) : null}
-        </div>
-      </div>
+      {open && results.length > 0 ? (
+        <Popover
+          anchor={containerRef}
+          side="bottom"
+          align="end"
+          width={340}
+          maxHeight={360}
+          autoFocus={false}
+          onDismiss={() => setOpen(false)}
+          className="z-50 overflow-y-auto overscroll-contain p-1"
+        >
+          <div className="flex flex-col gap-0.5">
+            {results.map((item, idx) => {
+              const active = idx === selectedIndex;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onMouseEnter={() => setSelectedIndex(idx)}
+                  onClick={() => handleSelect(item)}
+                  className={`flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-left text-[12px] ${
+                    active
+                      ? "bg-content/10 text-content"
+                      : "text-content/80 hover:bg-content/5"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-content">
+                      {item.title}
+                    </span>
+                    <span className="shrink-0 rounded bg-content/10 px-1.5 py-0.5 font-mono text-[10px] text-content/60">
+                      {settingsSectionLabel(t, item.section)}
+                    </span>
+                  </div>
+                  {item.description ? (
+                    <span className="line-clamp-1 text-[11px] text-content/50">
+                      {item.description}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </Popover>
+      ) : open && query.trim() ? (
+        <Popover
+          anchor={containerRef}
+          side="bottom"
+          align="end"
+          width={300}
+          autoFocus={false}
+          onDismiss={() => setOpen(false)}
+          className="z-50 p-3 text-center text-[12px] text-content/50"
+        >
+          {t("harness.settings.noResults")}
+        </Popover>
+      ) : null}
     </div>
   );
 }
@@ -273,6 +475,108 @@ function GeneralPage({
 }) {
   const { t } = useTranslation();
   const [layout, setLayout] = useState<SidebarLayout>(loadSidebarLayout);
+  const [notesEnabled, setNotesEnabled] = useState(loadNotesEnabled);
+  const [liveAgentsEnabled, setLiveAgentsEnabled] = useState(
+    loadLiveAgentsEnabled,
+  );
+  const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
+  const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
+
+  const onLayout = (next: SidebarLayout) => {
+    saveSidebarLayout(next);
+    setLayout(next);
+  };
+
+  const onNotesEnabled = (next: boolean) => {
+    saveNotesEnabled(next);
+    setNotesEnabled(next);
+  };
+
+  const onLiveAgentsEnabled = (next: boolean) => {
+    saveLiveAgentsEnabled(next);
+    setLiveAgentsEnabled(next);
+  };
+
+  const onSoundsEnabled = (next: boolean) => {
+    saveSoundsEnabled(next);
+    setSoundsEnabled(next);
+  };
+
+  const onClaudeHooks = (next: boolean) => {
+    saveClaudeHooks(next);
+    setClaudeHooks(next);
+  };
+
+  return (
+    <>
+      <Row
+        settingId="workspaceLayout"
+        label={t("harness.settings.workspaceLayout")}
+        description={t("harness.settings.workspaceLayoutDesc")}
+      >
+        <Segmented
+          label={t("harness.settings.workspaceLayout")}
+          value={layout}
+          options={[
+            { value: "deck", label: t("harness.settings.deck") },
+            { value: "classic", label: t("harness.settings.classic") },
+          ]}
+          onChange={onLayout}
+        />
+      </Row>
+      <Row
+        settingId="notes"
+        label={t("harness.settings.notes")}
+        description={t("harness.settings.notesDesc")}
+      >
+        <Toggle
+          label={t("harness.settings.notes")}
+          on={notesEnabled}
+          onChange={onNotesEnabled}
+        />
+      </Row>
+      <Row
+        settingId="workingAgents"
+        label={t("harness.settings.workingAgents")}
+        description={t("harness.settings.workingAgentsDesc")}
+      >
+        <Toggle
+          label={t("harness.settings.workingAgents")}
+          on={liveAgentsEnabled}
+          onChange={onLiveAgentsEnabled}
+        />
+      </Row>
+      <Row
+        settingId="sounds"
+        label={t("harness.settings.sounds")}
+        description={t("harness.settings.soundsDesc")}
+      >
+        <Toggle
+          label={t("harness.settings.sounds")}
+          on={soundsEnabled}
+          onChange={onSoundsEnabled}
+        />
+      </Row>
+      <Row
+        settingId="claudeHooks"
+        label={t("harness.settings.claudeHooks")}
+        description={t("harness.settings.claudeHooksDesc")}
+      >
+        <Toggle
+          label={t("harness.settings.claudeHooks")}
+          on={claudeHooks}
+          onChange={onClaudeHooks}
+        />
+      </Row>
+
+      <Heading title={t("harness.chrome.about")} />
+      <UpdateRow onOpenWhatsNew={onOpenWhatsNew} />
+    </>
+  );
+}
+
+function ChatPage() {
+  const { t } = useTranslation();
   const [transcriptLayout, setTranscriptLayout] =
     useState<TranscriptLayout>(loadTranscriptLayout);
   const [transcriptZen, setTranscriptZen] = useState(loadTranscriptZen);
@@ -284,12 +588,6 @@ function GeneralPage({
   const [gridArcadeEnabled, setGridArcadeEnabled] = useState(
     loadGridArcadeEnabled,
   );
-  const [notesEnabled, setNotesEnabled] = useState(loadNotesEnabled);
-  const [liveAgentsEnabled, setLiveAgentsEnabled] = useState(
-    loadLiveAgentsEnabled,
-  );
-  const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
-  const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
 
   useEffect(() => {
     const onZen = (event: Event) => {
@@ -305,11 +603,6 @@ function GeneralPage({
       window.removeEventListener(TRANSCRIPT_ANCHOR_CHANGE_EVENT, onAnchor);
     };
   }, []);
-
-  const onLayout = (next: SidebarLayout) => {
-    saveSidebarLayout(next);
-    setLayout(next);
-  };
 
   const onTranscriptZen = (next: boolean) => {
     saveTranscriptZen(next);
@@ -341,43 +634,10 @@ function GeneralPage({
     setGridArcadeEnabled(next);
   };
 
-  const onNotesEnabled = (next: boolean) => {
-    saveNotesEnabled(next);
-    setNotesEnabled(next);
-  };
-
-  const onLiveAgentsEnabled = (next: boolean) => {
-    saveLiveAgentsEnabled(next);
-    setLiveAgentsEnabled(next);
-  };
-
-  const onSoundsEnabled = (next: boolean) => {
-    saveSoundsEnabled(next);
-    setSoundsEnabled(next);
-  };
-
-  const onClaudeHooks = (next: boolean) => {
-    saveClaudeHooks(next);
-    setClaudeHooks(next);
-  };
-
   return (
     <>
       <Row
-        label={t("harness.settings.workspaceLayout")}
-        description={t("harness.settings.workspaceLayoutDesc")}
-      >
-        <Segmented
-          label={t("harness.settings.workspaceLayout")}
-          value={layout}
-          options={[
-            { value: "deck", label: t("harness.settings.deck") },
-            { value: "classic", label: t("harness.settings.classic") },
-          ]}
-          onChange={onLayout}
-        />
-      </Row>
-      <Row
+        settingId="transcriptLayout"
         label={t("harness.settings.transcriptLayout")}
         description={t("harness.settings.transcriptLayoutDesc")}
       >
@@ -392,6 +652,7 @@ function GeneralPage({
         />
       </Row>
       <Row
+        settingId="followUpBehavior"
         label={t("harness.chrome.followUpBehavior")}
         description={t("harness.chrome.followUpBehaviorDesc")}
       >
@@ -406,6 +667,7 @@ function GeneralPage({
         />
       </Row>
       <Row
+        settingId="anchorPrompts"
         label={t("harness.settings.anchorPrompts")}
         description={t("harness.settings.anchorPromptsDesc")}
       >
@@ -416,6 +678,7 @@ function GeneralPage({
         />
       </Row>
       <Row
+        settingId="zenMode"
         label={t("harness.settings.zenMode")}
         description={t("harness.settings.zenModeDesc", {
           shortcut: `${MOD}${ALT}Z`,
@@ -428,6 +691,7 @@ function GeneralPage({
         />
       </Row>
       <Row
+        settingId="composerMascot"
         label={t("harness.settings.composerMascot")}
         description={t("harness.settings.composerMascotDesc")}
       >
@@ -438,6 +702,7 @@ function GeneralPage({
         />
       </Row>
       <Row
+        settingId="emptySessionGames"
         label={t("harness.settings.emptySessionGames")}
         description={t("harness.settings.emptySessionGamesDesc")}
       >
@@ -447,49 +712,6 @@ function GeneralPage({
           onChange={onGridArcadeEnabled}
         />
       </Row>
-      <Row
-        label={t("harness.settings.notes")}
-        description={t("harness.settings.notesDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.notes")}
-          on={notesEnabled}
-          onChange={onNotesEnabled}
-        />
-      </Row>
-      <Row
-        label={t("harness.settings.workingAgents")}
-        description={t("harness.settings.workingAgentsDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.workingAgents")}
-          on={liveAgentsEnabled}
-          onChange={onLiveAgentsEnabled}
-        />
-      </Row>
-      <Row
-        label={t("harness.settings.sounds")}
-        description={t("harness.settings.soundsDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.sounds")}
-          on={soundsEnabled}
-          onChange={onSoundsEnabled}
-        />
-      </Row>
-      <Row
-        label={t("harness.settings.claudeHooks")}
-        description={t("harness.settings.claudeHooksDesc")}
-      >
-        <Toggle
-          label={t("harness.settings.claudeHooks")}
-          on={claudeHooks}
-          onChange={onClaudeHooks}
-        />
-      </Row>
-
-      <Heading title={t("harness.chrome.about")} />
-      <UpdateRow onOpenWhatsNew={onOpenWhatsNew} />
     </>
   );
 }
@@ -1465,16 +1687,32 @@ function Heading({
 }
 
 function Row({
+  id,
+  settingId,
   label,
   description,
   children,
 }: {
+  id?: string;
+  settingId?: string;
   label: ReactNode;
   description?: string;
   children?: ReactNode;
 }) {
+  const revealedId = useContext(RevealedSettingContext);
+  const domId = id ?? (settingId ? settingDomId(settingId) : undefined);
+  const isRevealed = Boolean(settingId && revealedId === settingId);
+
   return (
-    <div className="flex items-start gap-6 border-b border-content/5 py-4 last:border-b-0">
+    <div
+      id={domId}
+      data-setting-id={settingId}
+      className={`flex items-start gap-6 border-b border-content/5 py-4 last:border-b-0 transition-all duration-500 ${
+        isRevealed
+          ? "-mx-3 rounded-lg bg-accent/15 px-3 ring-1 ring-accent/40"
+          : ""
+      }`}
+    >
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium text-content">{label}</div>
         {description ? (

@@ -55,6 +55,35 @@ type Props = {
   onClose?: () => void;
 };
 
+type ModelGroup = {
+  id: string;
+  name?: string;
+  models: Array<{ item: AgentModel; index: number }>;
+};
+
+function modelGroups(tab: ModelPickerTab, models: AgentModel[]): ModelGroup[] {
+  if (tab !== "opencode") {
+    return [
+      {
+        id: "models",
+        models: models.map((item, index) => ({ item, index })),
+      },
+    ];
+  }
+
+  const groups = new Map<string, ModelGroup>();
+  models.forEach((item, index) => {
+    const provider = item.provider ?? { id: "opencode", name: "OpenCode" };
+    let group = groups.get(provider.id);
+    if (!group) {
+      group = { id: provider.id, name: provider.name, models: [] };
+      groups.set(provider.id, group);
+    }
+    group.models.push({ item, index });
+  });
+  return [...groups.values()];
+}
+
 const MENU_WIDTH = 300;
 const MENU_MIN_HEIGHT = 180;
 const MENU_MAX_HEIGHT = 340;
@@ -228,7 +257,7 @@ export function ModelPicker({
     if (!needle) return pool;
     return pool.filter((item) => {
       const hay =
-        `${item.name} ${HARNESS_TITLE[item.harness]} ${HARNESS_LABEL[item.harness]}`.toLowerCase();
+        `${item.name} ${HARNESS_TITLE[item.harness]} ${HARNESS_LABEL[item.harness]} ${item.provider?.name ?? ""} ${item.provider?.id ?? ""}`.toLowerCase();
       return hay.includes(needle);
     });
     // Catalog, install probes, and picker-visibility all feed this list:
@@ -299,8 +328,8 @@ export function ModelPicker({
     <div ref={root} className="relative">
       <button
         type="button"
-        title={`${HARNESS_TITLE[current.harness]} · ${current.name} (${MOD}.)`}
-        aria-label={`${HARNESS_TITLE[current.harness]} ${current.name}`}
+        title={`${HARNESS_TITLE[current.harness]}${current.provider ? ` · ${current.provider.name}` : ""} · ${current.name} (${MOD}.)`}
+        aria-label={`${HARNESS_TITLE[current.harness]}${current.provider ? `, ${current.provider.name},` : ""} ${current.name}`}
         aria-keyshortcuts={`${MOD}.`}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -386,6 +415,7 @@ export function ModelPicker({
               </label>
             </div>
             <ModelList
+              tab={visibleTab}
               models={visible}
               active={active}
               currentId={current.id}
@@ -455,6 +485,7 @@ function ProviderTabButton({
 }
 
 function ModelList({
+  tab,
   models,
   active,
   currentId,
@@ -464,6 +495,7 @@ function ModelList({
   onPick,
   onToggleFavorite,
 }: {
+  tab: ModelPickerTab;
   models: AgentModel[];
   active: number;
   currentId: string;
@@ -477,6 +509,7 @@ function ModelList({
   const listRef = useRef<HTMLDivElement>(null);
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeRef = useRef<HTMLDivElement>(null);
+  const groups = modelGroups(tab, models);
 
   const setListRef = (el: HTMLDivElement | null) => {
     listRef.current = el;
@@ -513,96 +546,124 @@ function ModelList({
       aria-label={t("harness.chrome.models")}
       className="min-h-0 flex-1 overflow-y-auto overscroll-none px-1.5 pb-1.5"
     >
-      {models.map((item, index) => {
-        const selected = item.id === currentId;
-        const highlighted = index === active;
-        const favorited = favorites.includes(item.id);
-        const disabled = !isHarnessAvailable(item.harness);
-        const shortcut = index < 9 && !disabled ? `${MOD}${index + 1}` : null;
-        return (
-          <div
-            key={item.id}
-            ref={highlighted ? activeRef : undefined}
-            onMouseEnter={() => onActive(index)}
-            className={`flex w-full items-center gap-1 rounded-lg px-1 ${
-              disabled
-                ? ""
-                : highlighted || selected
-                  ? "bg-content/10"
-                  : "hover:bg-content/5"
-            }`}
-          >
-            <button
-              type="button"
-              role="option"
-              aria-selected={selected}
-              aria-disabled={disabled}
-              disabled={disabled}
-              title={
-                disabled ? harnessUnavailableHint(item.harness) : undefined
-              }
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                if (disabled) return;
-                onPick(item);
-              }}
-              className={`flex min-w-0 flex-1 items-center gap-2 px-1.5 py-2 text-left ${
-                disabled ? "cursor-not-allowed text-content/35" : "text-content"
-              }`}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium leading-5">
-                  {item.name}
-                </span>
-                <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-4 text-content/50">
-                  <HarnessIcon
-                    harness={item.harness}
-                    className="size-3 shrink-0 opacity-80"
-                  />
-                  <span className="truncate">
-                    {HARNESS_TITLE[item.harness]} ·{" "}
-                    {HARNESS_LABEL[item.harness]}
+      {groups.map((group) => (
+        <div
+          key={group.id}
+          role={group.name ? "group" : undefined}
+          aria-label={group.name}
+        >
+          {group.name ? (
+            <div className="px-2.5 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-content/40">
+              {group.name}
+            </div>
+          ) : null}
+          {group.models.map(({ item, index }) => {
+            const selected = item.id === currentId;
+            const highlighted = index === active;
+            const favorited = favorites.includes(item.id);
+            const disabled = !isHarnessAvailable(item.harness);
+            const shortcut =
+              index < 9 && !disabled ? `${MOD}${index + 1}` : null;
+            return (
+              <div
+                key={item.id}
+                ref={highlighted ? activeRef : undefined}
+                onMouseEnter={() => onActive(index)}
+                className={`flex w-full items-center gap-1 rounded-lg px-1 ${
+                  disabled
+                    ? ""
+                    : highlighted || selected
+                      ? "bg-content/10"
+                      : "hover:bg-content/5"
+                }`}
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  aria-label={
+                    item.provider
+                      ? `${item.name}, ${item.provider.name}`
+                      : undefined
+                  }
+                  aria-disabled={disabled}
+                  disabled={disabled}
+                  title={
+                    disabled ? harnessUnavailableHint(item.harness) : undefined
+                  }
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    if (disabled) return;
+                    onPick(item);
+                  }}
+                  className={`flex min-w-0 flex-1 items-center gap-2 px-1.5 py-2 text-left ${
+                    disabled
+                      ? "cursor-not-allowed text-content/35"
+                      : "text-content"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium leading-5">
+                      {item.name}
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-4 text-content/50">
+                      <HarnessIcon
+                        harness={item.harness}
+                        className="size-3 shrink-0 opacity-80"
+                      />
+                      <span className="truncate">
+                        {HARNESS_TITLE[item.harness]}
+                        {item.provider
+                          ? ` · ${item.provider.name}`
+                          : ` · ${HARNESS_LABEL[item.harness]}`}
+                      </span>
+                    </span>
                   </span>
-                </span>
-              </span>
-              {shortcut ? (
-                <span className="shrink-0 rounded-md bg-content/10 px-1.5 py-0.5 font-mono text-[10px] text-content/50">
-                  {shortcut}
-                </span>
-              ) : null}
-            </button>
-            <button
-              type="button"
-              title={
-                favorited
-                  ? t("harness.chrome.removeFromFavorites")
-                  : t("harness.chrome.addToFavorites")
-              }
-              aria-label={
-                favorited
-                  ? t("harness.chrome.removeFromFavorites")
-                  : t("harness.chrome.addToFavorites")
-              }
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(item.id);
-              }}
-              className={`grid size-6 shrink-0 place-items-center rounded-md ${
-                favorited
-                  ? "text-content"
-                  : "text-content/30 hover:text-content/70"
-              }`}
-            >
-              <Star
-                className="size-3.5"
-                strokeWidth={1.75}
-                fill={favorited ? "currentColor" : "none"}
-              />
-            </button>
-          </div>
-        );
-      })}
+                  {tab === "favorites" && item.provider ? (
+                    <span className="max-w-24 shrink-0 truncate text-[10px] text-content/40">
+                      {item.provider.name}
+                    </span>
+                  ) : null}
+                  {shortcut ? (
+                    <span className="shrink-0 rounded-md bg-content/10 px-1.5 py-0.5 font-mono text-[10px] text-content/50">
+                      {shortcut}
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  title={
+                    favorited
+                      ? t("harness.chrome.removeFromFavorites")
+                      : t("harness.chrome.addToFavorites")
+                  }
+                  aria-label={
+                    favorited
+                      ? t("harness.chrome.removeFromFavorites")
+                      : t("harness.chrome.addToFavorites")
+                  }
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(item.id);
+                  }}
+                  className={`grid size-6 shrink-0 place-items-center rounded-md ${
+                    favorited
+                      ? "text-content"
+                      : "text-content/30 hover:text-content/70"
+                  }`}
+                >
+                  <Star
+                    className="size-3.5"
+                    strokeWidth={1.75}
+                    fill={favorited ? "currentColor" : "none"}
+                  />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

@@ -4026,6 +4026,33 @@ const ruCoveragePatch: TranslationSchema = mergeLocale(ruCoverageBase, {
   harness: {
     agentDevelopment: "Разработка агентов",
     closeAgentDevelopment: "Закрыть разработку агентов",
+    settings: {
+      general: "Общие",
+      appearance: "Внешний вид",
+      chat: "Чат",
+      providers: "Провайдеры",
+      inbox: "Входящие",
+      skills: "Навыки",
+      groups: {
+        app: "Приложение",
+        agents: "Агенты",
+        workspace: "Рабочее пространство",
+      },
+      searchPlaceholder: "Поиск настроек...",
+      noResults: "Настройки не найдены.",
+    },
+    modelSettings: {
+      sectionDescriptions: {
+        general: "Общее поведение приложения и текущая версия.",
+        appearance: "Тема, прозрачность и цветовые оттенки интерфейса.",
+        chat: "Макет транскрипта, закрепление промптов, дзен-режим и поведение чата.",
+        keybindings: "Горячие клавиши рабочего пространства.",
+        providers: "Поддерживаемые CLI агентов и модели по умолчанию.",
+        inbox: "Подключения источников и аутентификация для задач и PR.",
+        skills: "Управление файловыми навыками из проектов и Harness.",
+        archive: "Архивированные проекты и диалоги.",
+      },
+    },
   },
   common: {
     paste: "Вставить",

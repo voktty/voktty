@@ -1,7 +1,13 @@
 import type { ModelSetting, ModelSettingChoice } from "./models";
-import type { SettingsSectionId } from "./settings";
+import type { SettingsGroupId, SettingsSectionId } from "./settings";
 
 type Translate = (key: string) => string;
+
+const GROUP_LABEL_KEYS: Record<SettingsGroupId, string> = {
+  app: "harness.settings.groups.app",
+  agents: "harness.settings.groups.agents",
+  workspace: "harness.settings.groups.workspace",
+};
 
 const SETTING_LABEL_KEYS: Partial<Record<string, string>> = {
   effort: "harness.modelSettings.reasoning",
@@ -18,6 +24,7 @@ const SETTING_LABEL_KEYS: Partial<Record<string, string>> = {
 const SECTION_LABEL_KEYS: Record<SettingsSectionId, string> = {
   general: "harness.settings.general",
   appearance: "harness.settings.appearance",
+  chat: "harness.settings.chat",
   keybindings: "harness.modelSettings.keybindings",
   providers: "harness.settings.providers",
   inbox: "harness.settings.inbox",
@@ -28,6 +35,7 @@ const SECTION_LABEL_KEYS: Record<SettingsSectionId, string> = {
 const SECTION_DESCRIPTION_KEYS: Record<SettingsSectionId, string> = {
   general: "harness.modelSettings.sectionDescriptions.general",
   appearance: "harness.modelSettings.sectionDescriptions.appearance",
+  chat: "harness.modelSettings.sectionDescriptions.chat",
   keybindings: "harness.modelSettings.sectionDescriptions.keybindings",
   providers: "harness.modelSettings.sectionDescriptions.providers",
   inbox: "harness.modelSettings.sectionDescriptions.inbox",
@@ -67,6 +75,10 @@ export function modelSettingOptionLabel(
   }[option.value];
 
   return key ? t(key) : option.label;
+}
+
+export function settingsGroupLabel(t: Translate, group: SettingsGroupId): string {
+  return t(GROUP_LABEL_KEYS[group]);
 }
 
 export function settingsSectionLabel(t: Translate, id: SettingsSectionId): string {

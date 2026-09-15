@@ -24,6 +24,7 @@ import {
   type Attachment,
   type Block,
   type HarnessId,
+  type ModelTarget,
   type NetworkSandboxConfig,
   type PlanBuildTarget,
   type RuntimeMode,
@@ -115,15 +116,13 @@ type Props = {
   ) => void;
   onSecondOpinion?: (
     sessionId: string,
-    harness: HarnessId,
+    target: ModelTarget,
     turn: Block[],
-    model: string,
   ) => void;
   onHandoff?: (
     sessionId: string,
-    harness: HarnessId,
+    target: ModelTarget,
     turn: Block[],
-    model: string,
   ) => void;
   onNewTerminal: (sessionId: string) => void;
   onPaneDragStart?: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -426,6 +425,7 @@ export const SessionPane = memo(function SessionPane({
               cwd={workCwd}
               harness={session.harness}
               model={session.model}
+              modelSettings={session.modelSettings}
               onApproval={approve}
               onAddToChat={addSelectionToChat}
               onSaveNote={notesEnabled ? saveNote : undefined}
@@ -435,14 +435,14 @@ export const SessionPane = memo(function SessionPane({
               onBuildPlan={buildPlan}
               onSecondOpinion={
                 onSecondOpinion && !session.inboxAsk
-                  ? (harness, turn, model) =>
-                      onSecondOpinion(session.id, harness, turn, model)
+                  ? (target, turn) =>
+                      onSecondOpinion(session.id, target, turn)
                   : undefined
               }
               onHandoff={
                 onHandoff && !session.inboxAsk
-                  ? (harness, turn, model) =>
-                      onHandoff(session.id, harness, turn, model)
+                  ? (target, turn) =>
+                      onHandoff(session.id, target, turn)
                   : undefined
               }
               onJumpToBottomChange={setShowJumpToBottom}

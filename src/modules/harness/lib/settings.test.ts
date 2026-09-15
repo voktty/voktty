@@ -144,3 +144,36 @@ describe("workspace navigation keybindings", () => {
     ).toBe(true);
   });
 });
+
+describe("settingsSectionsByGroup", () => {
+  it("groups sections properly under app, agents, workspace", () => {
+    const groups = settingsSectionsByGroup();
+    expect(groups.map((g) => g.id)).toEqual(["app", "agents", "workspace"]);
+    const agentSections = groups.find((g) => g.id === "agents")?.sections;
+    expect(agentSections?.map((s) => s.id)).toEqual([
+      "chat",
+      "providers",
+      "skills",
+    ]);
+  });
+});
+
+describe("searchSettings", () => {
+  it("returns matching settings entries", () => {
+    const results = searchSettings("theme");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].id).toBe("theme");
+    expect(results[0].section).toBe("appearance");
+  });
+
+  it("matches section descriptions", () => {
+    const results = searchSettings("transcript");
+    expect(results.some((r) => r.section === "chat")).toBe(true);
+  });
+
+  it("returns empty array for empty query", () => {
+    expect(searchSettings("")).toEqual([]);
+    expect(searchSettings("   ")).toEqual([]);
+  });
+});
+

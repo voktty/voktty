@@ -4,6 +4,7 @@ import {
   Bot,
   Inbox,
   Keyboard,
+  MessageSquare,
   Palette,
   SlidersHorizontal,
   Sparkles,
@@ -12,13 +13,18 @@ import {
 import { useTranslation } from "@/modules/i18n";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
-  SETTINGS_SECTIONS,
+  settingsGroupLabel,
+  settingsSectionLabel,
+} from "../lib/catalogLabels";
+import {
+  settingsSectionsByGroup,
   type SettingsSectionId,
 } from "../lib/settings";
 
 const SECTION_ICONS: Record<SettingsSectionId, IconComponent> = {
   general: SlidersHorizontal,
   appearance: Palette,
+  chat: MessageSquare,
   keybindings: Keyboard,
   providers: Bot,
   inbox: Inbox,
@@ -36,34 +42,33 @@ type Props = {
 export function SettingsNav({ section, onSelect, onClose }: Props) {
   const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
-  const sectionLabels: Record<SettingsSectionId, string> = {
-    general: t("harness.settings.general"),
-    appearance: t("harness.settings.appearance"),
-    keybindings: t("harness.chrome.settingsKeybindings"),
-    providers: t("harness.settings.providers"),
-    inbox: t("harness.settings.inbox"),
-    skills: t("harness.settings.skills"),
-    archive: t("harness.chrome.settingsArchive"),
-  };
+  const groups = settingsSectionsByGroup();
 
   return (
     <>
       <div
         ref={lockOverscroll}
         aria-label={t("harness.chrome.settings")}
-        className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto overscroll-none px-2 pb-2"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-none px-2 pb-2"
       >
-        {SETTINGS_SECTIONS.map((item) => (
-          <NavRow
-            key={item.id}
-            label={sectionLabels[item.id]}
-            icon={SECTION_ICONS[item.id]}
-            active={item.id === section}
-            onClick={() => onSelect(item.id)}
-          />
+        {groups.map(({ id, sections }) => (
+          <div key={id} className="flex flex-col gap-0.5">
+            <div className="px-2 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-content/40">
+              {settingsGroupLabel(t, id)}
+            </div>
+            {sections.map((item) => (
+              <NavRow
+                key={item.id}
+                label={settingsSectionLabel(t, item.id)}
+                icon={SECTION_ICONS[item.id]}
+                active={item.id === section}
+                onClick={() => onSelect(item.id)}
+              />
+            ))}
+          </div>
         ))}
       </div>
-      <div className="flex shrink-0 flex-col gap-px p-2">
+      <div className="flex shrink-0 flex-col gap-px border-t border-border/10 p-2">
         <NavRow label={t("common.back")} icon={ArrowLeft} onClick={onClose} />
       </div>
     </>
