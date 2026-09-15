@@ -31,6 +31,7 @@ import type {
   Attachment,
   Block,
   HarnessId,
+  ModelTarget,
   PlanBuildTarget,
   RuntimeMode,
   Session,
@@ -119,15 +120,13 @@ type Shared = {
   ) => void;
   onSecondOpinion?: (
     sessionId: string,
-    harness: HarnessId,
+    target: ModelTarget,
     turn: Block[],
-    model: string,
   ) => void;
   onHandoff?: (
     sessionId: string,
-    harness: HarnessId,
+    target: ModelTarget,
     turn: Block[],
-    model: string,
   ) => void;
   onMovePane: (fromId: string, toId: string, edge: PaneEdge) => void;
   onNewTerminal: (sessionId: string) => void;

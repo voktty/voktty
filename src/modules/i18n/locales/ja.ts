@@ -4399,6 +4399,33 @@ const jaCoveragePatch: TranslationSchema = mergeLocale(jaCoverageBase, {
   harness: {
     agentDevelopment: "エージェント開発",
     closeAgentDevelopment: "エージェント開発を閉じる",
+    settings: {
+      general: "一般",
+      appearance: "外観",
+      chat: "チャット",
+      providers: "プロバイダー",
+      inbox: "受信トレイ",
+      skills: "スキル",
+      groups: {
+        app: "アプリ",
+        agents: "エージェント",
+        workspace: "ワークスペース",
+      },
+      searchPlaceholder: "設定を検索...",
+      noResults: "一致する設定が見つかりません。",
+    },
+    modelSettings: {
+      sectionDescriptions: {
+        general: "アプリ全体の動作と現在のビルド。",
+        appearance: "テーマ、透明度、クロームの色合い。",
+        chat: "トランスクリプトのレイアウト、プロンプト固定、Zenモード、チャット動作。",
+        keybindings: "ワークスペースのキーボードショートカット。",
+        providers: "利用可能なエージェントCLIとデフォルトモデル。",
+        inbox: "タスク、PR、レビューフィードの接続と認証。",
+        skills: "プロジェクトやHarnessのファイルスキルの管理。",
+        archive: "アーカイブされたプロジェクトと会話。",
+      },
+    },
   },
 });
 

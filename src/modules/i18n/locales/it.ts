@@ -4485,6 +4485,33 @@ const itCoveragePatch: TranslationSchema = mergeLocale(itCoverageBase, {
   harness: {
     agentDevelopment: "Sviluppo agenti",
     closeAgentDevelopment: "Chiudi sviluppo agenti",
+    settings: {
+      general: "Generale",
+      appearance: "Aspetto",
+      chat: "Chat",
+      providers: "Provider",
+      inbox: "Posta in arrivo",
+      skills: "Competenze",
+      groups: {
+        app: "Applicazione",
+        agents: "Agenti",
+        workspace: "Area di lavoro",
+      },
+      searchPlaceholder: "Cerca impostazioni...",
+      noResults: "Nessuna impostazione corrispondente trovata.",
+    },
+    modelSettings: {
+      sectionDescriptions: {
+        general: "Comportamento generale dell'applicazione e versione corrente.",
+        appearance: "Tema, trasparenza e colori dell'interfaccia.",
+        chat: "Layout trascrizioni, ancoraggio prompt, modalità zen e comportamento chat.",
+        keybindings: "Scorciatoie da tastiera dell'area di lavoro.",
+        providers: "CLI degli agenti supportate e modelli predefiniti.",
+        inbox: "Connessioni di origine e autenticazione per task e PR.",
+        skills: "Gestione delle competenze basate su file.",
+        archive: "Progetti e conversazioni archiviati.",
+      },
+    },
   },
 });
 

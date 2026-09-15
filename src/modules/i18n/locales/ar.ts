@@ -4187,6 +4187,33 @@ const arCoveragePatch: TranslationSchema = mergeLocale(arCoverageBase, {
   harness: {
     agentDevelopment: "تطوير الوكلاء",
     closeAgentDevelopment: "إغلاق تطوير الوكلاء",
+    settings: {
+      general: "عام",
+      appearance: "المظهر",
+      chat: "المحادثة",
+      providers: "المزودون",
+      inbox: "صندوق الوارد",
+      skills: "المهارات",
+      groups: {
+        app: "التطبيق",
+        agents: "الوكلاء",
+        workspace: "مساحة العمل",
+      },
+      searchPlaceholder: "البحث في الإعدادات...",
+      noResults: "لم يتم العثور على إعدادات مطابقة.",
+    },
+    modelSettings: {
+      sectionDescriptions: {
+        general: "سلوك التطبيق العام ومعلومات الإصدار الحالي.",
+        appearance: "السمة، والشفافية، وتدرجات واجهة المستخدم.",
+        chat: "تخطيط النصوص، وتثبيت المطالبات، ووضع Zen، وسلوك المحادثة.",
+        keybindings: "اختصارات لوحة المفاتيح لمساحة العمل.",
+        providers: "واجهات سطر الأوامر للوكلاء المدعومة والنماذج الافتراضية.",
+        inbox: "اتصالات المصادر والمصادقة للمهام وطلبات السحب.",
+        skills: "إدارة المهارات المستندة إلى الملفات.",
+        archive: "المشاريع والمحادثات المؤرشفة.",
+      },
+    },
   },
 });
 

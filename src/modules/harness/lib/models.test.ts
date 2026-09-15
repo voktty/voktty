@@ -11,6 +11,8 @@ import {
   loadLastModelChoice,
   loadLastModelSettings,
   mergeModelSettings,
+  modelEffortLabel,
+  modelEffortSetting,
   modelPickerTabs,
   preferredModelId,
   preferredModelSettings,
@@ -329,3 +331,30 @@ describe("live catalog overlays", () => {
     expect(resolveModel("claude", "claude:opus").id).toBe("claude:opus-5");
   });
 });
+
+describe("model effort helpers", () => {
+  it("identifies reasoning/effort setting on a model", () => {
+    const setting = modelEffortSetting(opus);
+    expect(setting?.id).toBe("effort");
+    expect(setting?.options.map((o) => o.value)).toEqual([
+      "high",
+      "xhigh",
+      "max",
+    ]);
+  });
+
+  it("returns null when model has no effort setting", () => {
+    const noEffortModel: AgentModel = {
+      id: "test:m1",
+      harness: "claude",
+      name: "Test",
+    };
+    expect(modelEffortSetting(noEffortModel)).toBeNull();
+  });
+
+  it("formats effort labels properly", () => {
+    expect(modelEffortLabel(opus, { effort: "xhigh" })).toBe("Extra High");
+    expect(modelEffortLabel(opus, {})).toBe("High");
+  });
+});
+

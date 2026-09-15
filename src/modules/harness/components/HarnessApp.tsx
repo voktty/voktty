@@ -264,6 +264,7 @@ import {
   HARNESS_TITLE,
   type HarnessId,
   hasPendingApproval,
+  type ModelTarget,
   newDefaultSession,
   newSession,
   type PlanBuildTarget,
@@ -486,7 +487,7 @@ function withPlanBuildTarget(
   target: PlanBuildTarget,
 ): Session {
   const resolved = resolveModel(target.harness, target.model);
-  const modelSettings = preferredModelSettings(resolved, session.modelSettings);
+  const modelSettings = mergeModelSettings(resolved, target.modelSettings);
   const plan = planComposerSwitch(session, target.harness);
   const next = withHarnessChoice(
     session,
@@ -960,6 +961,19 @@ export function HarnessApp({
     sessions.find(
       (session) => activeTab && leafIds(activeTab.layout).includes(session.id),
     );
+
+  /** Probe the active session's harness for its live model catalog whenever
+   * the active harness changes. Catalogs load lazily (probing spawns a CLI
+   * process) and the boot refresh runs before restored sessions land, so a
+   * fresh session would otherwise show only the built-in fallback model
+   * until the picker happened to be opened. Idempotent: refreshHarnessCatalogs
+   * dedupes via hasLiveCatalog and its inflight map. */
+  const activeHarness = active?.harness;
+  useEffect(() => {
+    if (!activeHarness || !isLiveHarness(activeHarness)) return;
+    void refreshHarnessCatalogs([activeHarness]);
+  }, [activeHarness]);
+
   const sessionDefaults = active ?? sessions[0];
   const activeSkillContext = active ? piSkillContextForSession(active) : null;
   const activeSkillCwd = activeSkillContext?.cwd;
@@ -4556,11 +4570,12 @@ export function HarnessApp({
   );
 
   const onSecondOpinion = useCallback(
-    (sourceId: string, harness: HarnessId, turn: Block[], model: string) => {
+    (sourceId: string, target: ModelTarget, turn: Block[]) => {
       const source = sessionsRef.current.find(
         (session) => session.id === sourceId,
       );
       if (!source) return;
+      const { harness, model, modelSettings } = target;
       const cwd = sessionWorkCwd(source);
       const from = harnessForTurn(source.blocks, turn, source.harness);
       const userRequest = turnUserRequest(turn);
@@ -4573,6 +4588,10 @@ export function HarnessApp({
       });
       const session = {
         ...newSession(harness, cwd, model, source.runtimeMode),
+        modelSettings: mergeModelSettings(
+          resolveModel(harness, model),
+          modelSettings,
+        ),
         title: formatSessionTitle(harness, SECOND_OPINION_TITLE),
       };
       openSessionBeside(sourceId, session, cwd);
@@ -4589,11 +4608,12 @@ export function HarnessApp({
   );
 
   const onHandoff = useCallback(
-    (sourceId: string, harness: HarnessId, turn: Block[], model: string) => {
+    (sourceId: string, target: ModelTarget, turn: Block[]) => {
       const source = sessionsRef.current.find(
         (session) => session.id === sourceId,
       );
       if (!source) return;
+      const { harness, model, modelSettings } = target;
       const cwd = sessionWorkCwd(source);
       const from = harnessForTurn(source.blocks, turn, source.harness);
       const sliced = sessionThroughTurn(source, turn);
@@ -4602,6 +4622,10 @@ export function HarnessApp({
       const display = sessionDisplayTitle(source.title, source.harness);
       const session = {
         ...newSession(harness, cwd, model, source.runtimeMode),
+        modelSettings: mergeModelSettings(
+          resolveModel(harness, model),
+          modelSettings,
+        ),
         title: formatSessionTitle(
           harness,
           display === "New session" ? HANDOFF_TITLE : display,
@@ -5961,6 +5985,7 @@ export function HarnessApp({
         {settingsOpen ? (
           <Suspense fallback={null}><LazySettingsView
             section={settingsSection}
+            onSelectSection={onSelectSettingsSection}
             anchor={settingsAnchor}
             cwd={sidebarCwd}
             sessions={sidebarHistory}

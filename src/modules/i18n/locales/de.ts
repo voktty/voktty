@@ -4383,6 +4383,33 @@ const deCoveragePatch: TranslationSchema = mergeLocale(deCoverageBase, {
   harness: {
     agentDevelopment: "Agentenentwicklung",
     closeAgentDevelopment: "Agentenentwicklung schließen",
+    settings: {
+      general: "Allgemein",
+      appearance: "Erscheinungsbild",
+      chat: "Chat",
+      providers: "Anbieter",
+      inbox: "Posteingang",
+      skills: "Skills",
+      groups: {
+        app: "App",
+        agents: "Agenten",
+        workspace: "Arbeitsbereich",
+      },
+      searchPlaceholder: "Einstellungen suchen...",
+      noResults: "Keine passenden Einstellungen gefunden.",
+    },
+    modelSettings: {
+      sectionDescriptions: {
+        general: "App-weites Verhalten und aktuelle Build-Informationen.",
+        appearance: "Theme, Transparenz und Akzentfarben.",
+        chat: "Transkript-Layout, Prompt-Anheftung, Zen-Modus und Chat-Verhalten.",
+        keybindings: "Tastenkombinationen des Arbeitsbereichs.",
+        providers: "Unterstützte Agenten-CLIs und Standardmodelle.",
+        inbox: "Quellverbindungen und Authentifizierung für Aufgaben und PRs.",
+        skills: "Verwaltung von Datei-Skills aus Projekten und Harness.",
+        archive: "Archivierte Projekte und Konversationen.",
+      },
+    },
   },
 });
 

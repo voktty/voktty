@@ -4645,6 +4645,13 @@ export const es: TranslationSchema = {
       githubCheckAgain: "Comprobar conexión",
       githubChecking: "Comprobando GitHub CLI...",
       skills: "Habilidades",
+      groups: {
+        app: "Aplicación",
+        agents: "Agentes",
+        workspace: "Espacio de trabajo",
+      },
+      searchPlaceholder: "Buscar ajustes...",
+      noResults: "No se encontraron ajustes con esa búsqueda.",
       workspaceLayout: "Distribucion del espacio",
       workspaceLayoutDesc:
         "Classic mantiene una sola barra lateral. Deck anade el rail de proyecto, el panel de workspace y el muelle de terminal.",
@@ -4727,6 +4734,7 @@ export const es: TranslationSchema = {
         general:
           "Comportamiento general de la aplicación y la compilación que estás usando.",
         appearance: "Tema, transparencia y el tinte aplicado al chrome.",
+        chat: "Diseño del transcript, anclaje de prompts, modo zen y comportamiento del chat.",
         keybindings:
           "Todos los atajos que controla el espacio de trabajo, desde el menú hasta el gestor de teclas.",
         providers:

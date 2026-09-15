@@ -3790,6 +3790,33 @@ const zhCoveragePatch: TranslationSchema = mergeLocale(zhCoverageBase, {
   harness: {
     agentDevelopment: "智能体开发",
     closeAgentDevelopment: "关闭智能体开发",
+    settings: {
+      general: "通用",
+      appearance: "外观",
+      chat: "对话",
+      providers: "服务商",
+      inbox: "收件箱",
+      skills: "技能",
+      groups: {
+        app: "应用",
+        agents: "智能体",
+        workspace: "工作区",
+      },
+      searchPlaceholder: "搜索设置...",
+      noResults: "未找到匹配的设置",
+    },
+    modelSettings: {
+      sectionDescriptions: {
+        general: "全局应用行为与当前版本。",
+        appearance: "主题、半透明效果及界面色调。",
+        chat: "消息流布局、提示词置顶、Zen 模式及对话行为。",
+        keybindings: "工作区快捷键列表。",
+        providers: "可驱动的智能体 CLI 及默认模型。",
+        inbox: "任务、PR 和评审提要的源连接及认证。",
+        skills: "项目、个人和 Harness 技能管理。",
+        archive: "已归档的项目与对话。",
+      },
+    },
   },
   common: {
     paste: "粘贴",

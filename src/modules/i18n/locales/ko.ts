@@ -4323,6 +4323,33 @@ const koCoveragePatch: TranslationSchema = mergeLocale(koCoverageBase, {
   harness: {
     agentDevelopment: "에이전트 개발",
     closeAgentDevelopment: "에이전트 개발 닫기",
+    settings: {
+      general: "일반",
+      appearance: "모양",
+      chat: "채팅",
+      providers: "제공자",
+      inbox: "받은 편지함",
+      skills: "스킬",
+      groups: {
+        app: "앱",
+        agents: "에이전트",
+        workspace: "워크스페이스",
+      },
+      searchPlaceholder: "설정 검색...",
+      noResults: "일치하는 설정을 찾을 수 없습니다.",
+    },
+    modelSettings: {
+      sectionDescriptions: {
+        general: "앱 전체 동작 및 현재 빌드 정보.",
+        appearance: "테마, 투명도 및 인터페이스 색조.",
+        chat: "트랜스크립트 레이아웃, 프롬프트 고정, Zen 모드 및 채팅 동작.",
+        keybindings: "워크스페이스 키보드 단축키.",
+        providers: "지원되는 에이전트 CLI 및 기본 모델.",
+        inbox: "작업 및 PR 피드를 위한 소스 연결 및 인증.",
+        skills: "프로젝트 및 하네스 파일 스킬 관리.",
+        archive: "보관된 프로젝트 및 대화.",
+      },
+    },
   },
 });
 

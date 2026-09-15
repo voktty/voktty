@@ -4174,6 +4174,33 @@ const hiCoveragePatch: TranslationSchema = mergeLocale(hiCoverageBase, {
   harness: {
     agentDevelopment: "एजेंट विकास",
     closeAgentDevelopment: "एजेंट विकास बंद करें",
+    settings: {
+      general: "सामान्य",
+      appearance: "दिखावट",
+      chat: "चैट",
+      providers: "प्रदाता",
+      inbox: "इनबॉक्स",
+      skills: "कौशल",
+      groups: {
+        app: "ऐप",
+        agents: "एजेंट्स",
+        workspace: "कार्यक्षेत्र",
+      },
+      searchPlaceholder: "सेटिंग्स खोजें...",
+      noResults: "कोई मेल खाती सेटिंग्स नहीं मिलीं।",
+    },
+    modelSettings: {
+      sectionDescriptions: {
+        general: "ऐप-व्यापी व्यवहार और वर्तमान संस्करण।",
+        appearance: "थीम, पारदर्शिता और क्रोम रंग।",
+        chat: "ट्रांसक्रिप्ट लेआउट, प्रॉम्प्ट एंकरिंग, ज़ेन मोड और चैट व्यवहार।",
+        keybindings: "कार्यक्षेत्र कीबोर्ड शॉर्टकट।",
+        providers: "समर्थित एजेंट सीएलआई और डिफ़ॉल्ट मॉडल।",
+        inbox: "कार्यों और पीआर के लिए स्रोत कनेक्शन और प्रमाणीकरण।",
+        skills: "फ़ाइल आधारित कौशलों का प्रबंधन।",
+        archive: "संग्रहीत प्रोजेक्ट और बातचीत।",
+      },
+    },
   },
 });
 

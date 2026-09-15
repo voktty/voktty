@@ -4537,6 +4537,13 @@ export const en = {
       githubCheckAgain: "Check connection",
       githubChecking: "Checking GitHub CLI...",
       skills: "Skills",
+      groups: {
+        app: "App",
+        agents: "Agents",
+        workspace: "Workspace",
+      },
+      searchPlaceholder: "Search settings...",
+      noResults: "No settings found matching your search.",
       workspaceLayout: "Workspace layout",
       workspaceLayoutDesc:
         "Classic keeps a single sidebar. Deck adds the project rail, workspace panel, and terminal dock.",
@@ -4617,6 +4624,7 @@ export const en = {
       sectionDescriptions: {
         general: "App-wide behavior and the build you are running.",
         appearance: "Theme, translucency, and the tint applied to the chrome.",
+        chat: "Transcript layout, prompt anchoring, zen mode, and chat behavior.",
         keybindings:
           "Every shortcut the workspace handles, from the app menu and the key handler.",
         providers:

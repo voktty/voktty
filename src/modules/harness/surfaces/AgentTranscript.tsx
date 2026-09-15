@@ -59,6 +59,7 @@ import {
   HARNESS_TITLE,
   type HarnessId,
   hasPendingApproval,
+  type ModelTarget,
   type PlanBuildTarget,
   type ToolPreview,
 } from "../lib/session";
@@ -121,6 +122,7 @@ type Props = {
   cwd?: string;
   harness?: HarnessId;
   model?: string;
+  modelSettings?: Record<string, string>;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onAddToChat?: (text: string) => void;
   onSaveNote?: (text: string) => void;
@@ -128,8 +130,8 @@ type Props = {
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
   onBuildPlan?: (blockId: string, target?: PlanBuildTarget) => void;
-  onSecondOpinion?: (harness: HarnessId, turn: Block[], model: string) => void;
-  onHandoff?: (harness: HarnessId, turn: Block[], model: string) => void;
+  onSecondOpinion?: (target: ModelTarget, turn: Block[]) => void;
+  onHandoff?: (target: ModelTarget, turn: Block[]) => void;
   onJumpToBottomChange?: (show: boolean) => void;
   onJumpToBottomReady?: (jump: () => void) => void;
   /** Passes a function that renders the turn that holds a block. The render completes before the function returns. */
@@ -146,6 +148,7 @@ function AgentTranscriptComponent({
   cwd,
   harness,
   model,
+  modelSettings,
   onApproval,
   onAddToChat,
   onSaveNote,
@@ -501,6 +504,7 @@ function AgentTranscriptComponent({
                 planBusy={!!busy}
                 planHarness={harness}
                 planModel={model}
+                planModelSettings={modelSettings}
                 cwd={cwd}
               />
             );
@@ -581,13 +585,11 @@ function AgentTranscriptComponent({
                   fromHarness={turnHarness}
                   onSecondOpinion={
                     onSecondOpinion
-                      ? (target, model) => onSecondOpinion(target, turn, model)
+                      ? (target) => onSecondOpinion(target, turn)
                       : undefined
                   }
                   onHandoff={
-                    onHandoff
-                      ? (target, model) => onHandoff(target, turn, model)
-                      : undefined
+                    onHandoff ? (target) => onHandoff(target, turn) : undefined
                   }
                 />
               ) : null}
@@ -678,8 +680,8 @@ function TurnDuration({
   copyText?: string;
   onSaveNote?: (text: string) => void;
   fromHarness?: HarnessId;
-  onSecondOpinion?: (harness: HarnessId, model: string) => void;
-  onHandoff?: (harness: HarnessId, model: string) => void;
+  onSecondOpinion?: (target: ModelTarget) => void;
+  onHandoff?: (target: ModelTarget) => void;
 }) {
   const label = formatWorkingDuration(elapsedMs, true, modelName);
   const dot = (
@@ -838,6 +840,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   planBusy,
   planHarness,
   planModel,
+  planModelSettings,
 }: {
   block: Block;
   layout: TranscriptLayout;
@@ -853,6 +856,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   planBusy?: boolean;
   planHarness?: HarnessId;
   planModel?: string;
+  planModelSettings?: Record<string, string>;
 }) {
   if (block.role === "user") {
     return (
@@ -910,6 +914,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
           plan={block.plan}
           harness={planHarness}
           model={planModel}
+          modelSettings={planModelSettings}
           onOpen={onOpenPlan ? () => onOpenPlan(block.id) : undefined}
           onBuild={
             onBuildPlan ? (target) => onBuildPlan(block.id, target) : undefined

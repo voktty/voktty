@@ -6,20 +6,369 @@ export type SettingsSectionId =
   | "general"
   | "appearance"
   | "keybindings"
+  | "chat"
   | "providers"
-  | "inbox"
   | "skills"
+  | "inbox"
   | "archive";
 
-export const SETTINGS_SECTIONS: { id: SettingsSectionId }[] = [
-  { id: "general" },
-  { id: "appearance" },
-  { id: "keybindings" },
-  { id: "providers" },
-  { id: "inbox" },
-  { id: "skills" },
-  { id: "archive" },
+/** Rail buckets. Sections list in order under their group label. */
+export type SettingsGroupId = "app" | "agents" | "workspace";
+
+export const SETTINGS_GROUPS: { id: SettingsGroupId; label: string }[] = [
+  { id: "app", label: "App" },
+  { id: "agents", label: "Agents" },
+  { id: "workspace", label: "Workspace" },
 ];
+
+export type SettingsSection = {
+  id: SettingsSectionId;
+  group: SettingsGroupId;
+  label: string;
+  description: string;
+  /** Extra words search matches the section on, beyond its label. */
+  keywords?: string;
+};
+
+export const SETTINGS_SECTIONS: SettingsSection[] = [
+  {
+    id: "general",
+    group: "app",
+    label: "General",
+    description:
+      "The build you are running, how Voktty reaches you, and the panels it shows.",
+    keywords: "version update sounds notifications notes rail",
+  },
+  {
+    id: "appearance",
+    group: "app",
+    label: "Appearance",
+    description:
+      "Theme, tint, translucency, and the image behind your conversations.",
+    keywords: "theme dark light color accent glass blur zoom scale wallpaper",
+  },
+  {
+    id: "keybindings",
+    group: "app",
+    label: "Keybindings",
+    description:
+      "Every shortcut the workspace handles, from the app menu and the key handler.",
+    keywords: "shortcut hotkey keyboard binding",
+  },
+  {
+    id: "chat",
+    group: "agents",
+    label: "Chat",
+    description:
+      "How transcripts read, what the composer does with a follow-up, and how diffs open.",
+    keywords: "transcript composer prompt message diff review layout",
+  },
+  {
+    id: "providers",
+    group: "agents",
+    label: "Providers",
+    description:
+      "Agent CLIs Voktty can drive, and the model new sessions start with.",
+    keywords: "model harness claude codex gemini cli default hooks",
+  },
+  {
+    id: "skills",
+    group: "agents",
+    label: "Skills",
+    description:
+      "Discover and manage file skills from project, personal, and harness folders.",
+    keywords: "skill instructions prompt",
+  },
+  {
+    id: "inbox",
+    group: "workspace",
+    label: "Inbox",
+    description: "Connect and manage the services that appear in your Inbox.",
+    keywords: "github gitlab linear connect token integration",
+  },
+  {
+    id: "archive",
+    group: "workspace",
+    label: "Archive",
+    description: "Projects and conversations you have archived.",
+    keywords: "archived restore delete hidden",
+  },
+];
+
+export function settingsSectionsByGroup(): {
+  id: SettingsGroupId;
+  label: string;
+  sections: SettingsSection[];
+}[] {
+  return SETTINGS_GROUPS.map((group) => ({
+    ...group,
+    sections: SETTINGS_SECTIONS.filter((section) => section.group === group.id),
+  })).filter((group) => group.sections.length > 0);
+}
+
+export type SettingsEntry = {
+  id: string;
+  section: SettingsSectionId;
+  label: string;
+  keywords?: string;
+};
+
+export const SETTINGS_INDEX: SettingsEntry[] = [
+  {
+    id: "update",
+    section: "general",
+    label: "Version",
+    keywords: "update upgrade release what's new build changelog",
+  },
+  {
+    id: "sounds",
+    section: "general",
+    label: "Sounds",
+    keywords: "audio cue chime mute volume",
+  },
+  {
+    id: "notifications",
+    section: "general",
+    label: "Notifications",
+    keywords: "notify alert toast permission reminder background",
+  },
+  {
+    id: "notes",
+    section: "general",
+    label: "Notes",
+    keywords: "notebook markdown rail scratchpad",
+  },
+  {
+    id: "working-agents",
+    section: "general",
+    label: "Working agents",
+    keywords: "live running sessions rail card",
+  },
+  {
+    id: "theme",
+    section: "appearance",
+    label: "Theme",
+    keywords: "dark light system appearance mode",
+  },
+  {
+    id: "accent-color",
+    section: "appearance",
+    label: "Accent color",
+    keywords: "highlight bubble send button tint",
+  },
+  {
+    id: "hue",
+    section: "appearance",
+    label: "Hue",
+    keywords: "tint color chrome",
+  },
+  {
+    id: "saturation",
+    section: "appearance",
+    label: "Saturation",
+    keywords: "tint color neutral grey gray",
+  },
+  {
+    id: "dark-lightness",
+    section: "appearance",
+    label: "Dark-mode lightness",
+    keywords: "black brightness contrast background",
+  },
+  {
+    id: "sidebar-opacity",
+    section: "appearance",
+    label: "Sidebar opacity",
+    keywords: "glass translucent transparency vibrancy",
+  },
+  {
+    id: "blur",
+    section: "appearance",
+    label: "Blur radius",
+    keywords: "glass translucent vibrancy backdrop",
+  },
+  {
+    id: "main-pane-glass",
+    section: "appearance",
+    label: "Main pane glass",
+    keywords: "translucent transparency body window",
+  },
+  {
+    id: "interface-scale",
+    section: "appearance",
+    label: "Interface scale",
+    keywords: "zoom font size bigger smaller ui",
+  },
+  {
+    id: "chat-background",
+    section: "appearance",
+    label: "Chat background",
+    keywords: "wallpaper image picture opacity backdrop",
+  },
+  {
+    id: "transcript-layout",
+    section: "chat",
+    label: "Transcript layout",
+    keywords: "full width chat bubble message",
+  },
+  {
+    id: "anchor-prompts",
+    section: "chat",
+    label: "Anchor prompts to top",
+    keywords: "scroll position sticky message",
+  },
+  {
+    id: "follow-up",
+    section: "chat",
+    label: "Follow-up behavior",
+    keywords: "queue steer interrupt send while running",
+  },
+  {
+    id: "effort-control",
+    section: "chat",
+    label: "Effort control",
+    keywords: "thinking reasoning model picker composer",
+  },
+  {
+    id: "composer-mascot",
+    section: "chat",
+    label: "Composer mascot",
+    keywords: "runner animation coin fun",
+  },
+  {
+    id: "diff-view",
+    section: "chat",
+    label: "Diff view",
+    keywords: "unified editor review changes working tree",
+  },
+  {
+    id: "empty-session-games",
+    section: "chat",
+    label: "Empty session games",
+    keywords: "pacman snake arcade grid fun",
+  },
+  {
+    id: "claude-hooks",
+    section: "providers",
+    label: "Claude Code hooks",
+    keywords: "pretooluse settings.json block command notification",
+  },
+  {
+    id: "github",
+    section: "inbox",
+    label: "GitHub",
+    keywords: "gh cli connect pull request sign in",
+  },
+  {
+    id: "gitlab",
+    section: "inbox",
+    label: "GitLab",
+    keywords: "token self-managed merge request connect",
+  },
+  {
+    id: "linear",
+    section: "inbox",
+    label: "Linear",
+    keywords: "api key issues teams connect",
+  },
+  {
+    id: "show-archived",
+    section: "archive",
+    label: "Show archived in the sidebar",
+    keywords: "hidden conversations list",
+  },
+];
+
+export function settingDomId(id: string): string {
+  return `setting-${id}`;
+}
+
+export type SettingsSearchResult = {
+  id: string;
+  section: SettingsSectionId;
+  sectionLabel: string;
+  /** Row to scroll to, or `null` when the whole section matched. */
+  settingId: string | null;
+  label: string;
+  title: string;
+  description?: string;
+};
+
+/** Ranks a label/keyword pair against a lowercased needle; `null` means no match. */
+function matchScore(
+  needle: string,
+  label: string,
+  keywords?: string,
+): number | null {
+  const lower = label.toLowerCase();
+  if (lower.startsWith(needle)) return 0;
+  if (lower.includes(needle)) return 1;
+  if (keywords?.toLowerCase().includes(needle)) return 2;
+  return null;
+}
+
+/** Individual settings first, then whole sections, so a row wins its own name. */
+export function searchSettings(
+  query: string,
+  limitOrLabel?: number | ((section: SettingsSectionId) => string),
+  getSectionLabel?: (section: SettingsSectionId) => string,
+): SettingsSearchResult[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  const limit = typeof limitOrLabel === "number" ? limitOrLabel : 8;
+  const resolveLabel =
+    typeof limitOrLabel === "function" ? limitOrLabel : getSectionLabel;
+  const scored: { score: number; result: SettingsSearchResult }[] = [];
+  const resolveSectionLabel = (sec: SettingsSectionId) =>
+    resolveLabel?.(sec) ??
+    SETTINGS_SECTIONS.find((s) => s.id === sec)?.label ??
+    sec;
+
+  for (const entry of SETTINGS_INDEX) {
+    const score = matchScore(needle, entry.label, entry.keywords);
+    if (score == null) continue;
+    scored.push({
+      score,
+      result: {
+        id: entry.id,
+        section: entry.section,
+        sectionLabel: resolveSectionLabel(entry.section),
+        settingId: entry.id,
+        label: entry.label,
+        title: entry.label,
+      },
+    });
+  }
+
+  for (const section of SETTINGS_SECTIONS) {
+    const label = resolveSectionLabel(section.id);
+    const score = matchScore(
+      needle,
+      label,
+      `${section.description} ${section.keywords ?? ""}`,
+    );
+    if (score == null) continue;
+    scored.push({
+      score: score + 0.5,
+      result: {
+        id: section.id,
+        section: section.id,
+        sectionLabel: label,
+        settingId: null,
+        label,
+        title: label,
+        description: section.description,
+      },
+    });
+  }
+
+  return scored
+    .sort(
+      (a, b) =>
+        a.score - b.score || a.result.label.localeCompare(b.result.label),
+    )
+    .slice(0, limit)
+    .map((item) => item.result);
+}
 
 export const SETTINGS_SECTION_DEFAULT: SettingsSectionId = "general";
 
