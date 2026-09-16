@@ -45,4 +45,30 @@ describe("harness availability", () => {
     expect(isHarnessAvailable("codex")).toBe(true);
     expect(isHarnessAvailable("claude")).toBe(true);
   });
+
+  it("generates helpful unavailable hints for missing CLIs", async () => {
+    const { harnessUnavailableHint } = await loadAvailability();
+    expect(harnessUnavailableHint("claude")).toBe(
+      "Claude Code CLI not found. Install it, or restart Voktty if it is already installed.",
+    );
+    expect(harnessUnavailableHint("pi")).toContain("npm i -g @earendil-works/pi-coding-agent");
+    expect(harnessUnavailableHint("grok")).toContain("https://x.ai/cli/install.sh");
+  });
+
+  it("notifies subscribers when availability updates", async () => {
+    const { probeHarnessAvailability, subscribeHarnessAvailability } =
+      await loadAvailability();
+    let notified = 0;
+    const unsub = subscribeHarnessAvailability(() => {
+      notified += 1;
+    });
+
+    await probeHarnessAvailability({ ids: ["cursor"], force: true });
+    expect(notified).toBe(1);
+
+    unsub();
+    await probeHarnessAvailability({ ids: ["cursor"], force: true });
+    expect(notified).toBe(1);
+  });
 });
+
