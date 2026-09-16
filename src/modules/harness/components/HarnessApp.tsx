@@ -576,6 +576,8 @@ function titleTabsEqual(a: TitleTab[], b: TitleTab[]): boolean {
       tab.more.join("\u0000") === other.more.join("\u0000") &&
       tab.harnesses.join("\u0000") === other.harnesses.join("\u0000") &&
       tab.busyHarnesses.join("\u0000") === other.busyHarnesses.join("\u0000") &&
+      (tab.doneHarnesses ?? []).join("\u0000") ===
+        (other.doneHarnesses ?? []).join("\u0000") &&
       tab.files.join("\u0000") === other.files.join("\u0000") &&
       tab.multiPane === other.multiPane &&
       tab.fileFocused === other.fileFocused &&
@@ -4996,7 +4998,7 @@ export function HarnessApp({
   );
 
   const nextTitleTabs: TitleTab[] = deckProjectTabs.map((tab: any) =>
-    toTitleTab(tab, sessions, dirtyFiles),
+    toTitleTab(tab, sessions, dirtyFiles, unseenFinishedIds),
   );
   tabProjectsRef.current = new Map(
     nextTitleTabs.map((tab: any) => [tab.id, tab.project]),
@@ -6152,6 +6154,7 @@ function toTitleTab(
   tab: WorkspaceTab,
   sessions: Session[],
   dirtyFiles: Set<string>,
+  unseenFinishedIds: ReadonlySet<string> = new Set(),
 ): TitleTab {
   const paneIds = leafIds(tab.layout);
   const multiPane = paneIds.length > 1;
@@ -6173,6 +6176,8 @@ function toTitleTab(
   const harnesses: HarnessId[] = [];
   const busySeen = new Set<HarnessId>();
   const busyHarnesses: HarnessId[] = [];
+  const doneSeen = new Set<HarnessId>();
+  const doneHarnesses: HarnessId[] = [];
   const ordered = focused
     ? [
         focused,
@@ -6187,6 +6192,10 @@ function toTitleTab(
     ) {
       busySeen.add(session.harness);
       busyHarnesses.push(session.harness);
+    }
+    if (unseenFinishedIds.has(session.id) && !doneSeen.has(session.harness)) {
+      doneSeen.add(session.harness);
+      doneHarnesses.push(session.harness);
     }
     if (seen.has(session.harness)) continue;
     seen.add(session.harness);
@@ -6256,6 +6265,7 @@ function toTitleTab(
     sessionCount: tabSessions.length,
     harnesses,
     busyHarnesses,
+    doneHarnesses,
     files,
     multiPane,
     fileFocused,

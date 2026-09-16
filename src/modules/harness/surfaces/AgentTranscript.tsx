@@ -552,6 +552,10 @@ function AgentTranscriptComponent({
                                 fold.start + offset === fold.end
                                   ? "zen-fold-tail"
                                   : ""
+                              }${
+                                entry.type === "block" && isProseBlock(entry.block)
+                                  ? " zen-fold-prose"
+                                  : ""
                               }`}
                             >
                               {renderItem(entry, fold.start + offset)}
