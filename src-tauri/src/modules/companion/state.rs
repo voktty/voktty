@@ -303,27 +303,22 @@ fn handle_request(
     let request = request.as_slice();
     let health = request.starts_with(b"GET /health HTTP/");
     let response = if health {
-        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".as_slice()
+        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".to_vec()
     } else if request.starts_with(b"OPTIONS /v1/companion/pair HTTP/") {
-        let response = http_response(204, "No Content", b"");
-        stream.write_all(&response)?;
-        return Ok(());
+        http_response(204, "No Content", b"")
     } else if request.starts_with(b"POST /v1/companion/pair HTTP/") {
-        let response = handle_pairing_request(request, pairing);
-        stream.write_all(&response)?;
-        return Ok(());
+        handle_pairing_request(request, pairing)
     } else if request.starts_with(b"GET /v1/companion/pair/") {
-        let response = handle_pairing_status_request(request, pairing);
-        stream.write_all(&response)?;
-        return Ok(());
+        handle_pairing_status_request(request, pairing)
     } else if request.starts_with(b"POST /v1/companion/session/") {
-        let response = handle_session_confirmation_request(request, sessions);
-        stream.write_all(&response)?;
-        return Ok(());
+        handle_session_confirmation_request(request, sessions)
     } else {
-        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".as_slice()
+        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec()
     };
-    stream.write_all(response)
+    stream.write_all(&response)?;
+    stream.flush()?;
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    Ok(())
 }
 
 fn handle_session_confirmation_request(
