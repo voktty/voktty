@@ -5261,6 +5261,7 @@ export const es: TranslationSchema = {
       dockRight: "Acoplar a la derecha",
       newTabInGroup: "Nueva pestana en el grupo",
       moveGroupToNewWindow: "Mover grupo a una ventana nueva",
+      moveToNewWindow: "Mover a una ventana nueva",
       closeGroup: "Cerrar grupo",
       deleteGroup: "Eliminar grupo",
       emptyOnly: "Solo vacias",

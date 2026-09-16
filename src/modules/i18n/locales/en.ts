@@ -5145,6 +5145,7 @@ export const en = {
       dockRight: "Dock Right",
       newTabInGroup: "New tab in group",
       moveGroupToNewWindow: "Move group to new window",
+      moveToNewWindow: "Move to new window",
       closeGroup: "Close group",
       deleteGroup: "Delete group",
       emptyOnly: "Empty only",
