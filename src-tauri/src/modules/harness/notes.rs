@@ -59,11 +59,7 @@ pub fn ensure_notes_table(conn: &Connection) -> rusqlite::Result<()> {
     ensure_notes_column(conn, "tags_json", "TEXT NOT NULL DEFAULT '[]'")
 }
 
-fn ensure_notes_column(
-    conn: &Connection,
-    name: &str,
-    definition: &str,
-) -> rusqlite::Result<()> {
+fn ensure_notes_column(conn: &Connection, name: &str, definition: &str) -> rusqlite::Result<()> {
     let mut stmt = conn.prepare("PRAGMA table_info(notes)")?;
     let mut rows = stmt.query([])?;
     let mut found = false;
