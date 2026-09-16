@@ -443,3 +443,32 @@ describe("openChangesTab", () => {
     expect(next.editorPanes[0]?.files.find(isChangesTab)?.path).toBe(cwd);
   });
 });
+
+describe("splitPane", () => {
+  it("splits a leaf to the right by default", () => {
+    const tree = splitPane(leaf("a"), "a", "right", "b");
+    expect(tree.type).toBe("split");
+    if (tree.type === "split") {
+      expect(tree.dir).toBe("right");
+      expect(tree.children.map((c) => (c.type === "leaf" ? c.id : ""))).toEqual(["a", "b"]);
+    }
+  });
+
+  it("splits a leaf to the left when place is before", () => {
+    const tree = splitPane(leaf("a"), "a", "right", "b", "before");
+    expect(tree.type).toBe("split");
+    if (tree.type === "split") {
+      expect(tree.dir).toBe("right");
+      expect(tree.children.map((c) => (c.type === "leaf" ? c.id : ""))).toEqual(["b", "a"]);
+    }
+  });
+
+  it("inserts before the focused leaf in an existing same-direction split", () => {
+    const initial = splitPane(leaf("a"), "a", "right", "c");
+    const updated = splitPane(initial, "c", "right", "b", "before");
+    expect(updated.type).toBe("split");
+    if (updated.type === "split") {
+      expect(updated.children.map((c) => (c.type === "leaf" ? c.id : ""))).toEqual(["a", "b", "c"]);
+    }
+  });
+});
