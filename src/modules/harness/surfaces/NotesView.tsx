@@ -795,6 +795,7 @@ function NoteTagsEditor({
   tags: string[];
   onChange: (tags: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState("");
 
   const addTag = (input = value) => {
@@ -806,9 +807,11 @@ function NoteTagsEditor({
   return (
     <div
       className="flex min-w-0 flex-wrap items-center gap-1.5"
-      aria-label="Tags"
+      aria-label={t("harness.notes.tags")}
     >
-      <span className="mr-0.5 text-[11px] text-content/45">Tags</span>
+      <span className="mr-0.5 text-[11px] text-content/45">
+        {t("harness.notes.tags")}
+      </span>
       {tags.map((tag) => (
         <span
           key={tag}
@@ -817,8 +820,8 @@ function NoteTagsEditor({
           <span className="truncate">#{tag}</span>
           <button
             type="button"
-            title={`Remove #${tag}`}
-            aria-label={`Remove #${tag}`}
+            title={t("harness.notes.removeTag", { tag })}
+            aria-label={t("harness.notes.removeTag", { tag })}
             onClick={() => onChange(tags.filter((item) => item !== tag))}
             className="grid size-4 shrink-0 place-items-center rounded text-content/40 hover:bg-content/10 hover:text-content"
           >
@@ -847,8 +850,8 @@ function NoteTagsEditor({
               onChange(tags.slice(0, -1));
             }
           }}
-          aria-label="Add note tag"
-          placeholder="Add tag…"
+          aria-label={t("harness.notes.addNoteTag")}
+          placeholder={t("harness.notes.addTagPlaceholder")}
           spellCheck={false}
           autoComplete="off"
           className="h-6 min-w-20 flex-1 border-0 bg-transparent px-1 text-[11px] text-content outline-none placeholder:text-content/35"

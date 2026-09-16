@@ -4503,6 +4503,21 @@ export const en = {
     closeAgentDevelopment: "Close Agent Development",
     promptOutline: "Prompt outline",
     promptPreview: "Prompt preview",
+    reminders: {
+      dueReminders: "Due reminders",
+      loadError: "Couldn’t load reminders.",
+      openSession: "Open session",
+      snooze: "Snooze",
+      dismiss: "Dismiss",
+      desktopAlertsOff: "Desktop alerts are off. Enable in Settings.",
+      reminder: "Reminder",
+    },
+    notes: {
+      tags: "Tags",
+      removeTag: "Remove #{tag}",
+      addNoteTag: "Add note tag",
+      addTagPlaceholder: "Add tag…",
+    },
     broadcast: {
       title: "Send to all agents",
       description:
@@ -4637,6 +4652,7 @@ export const en = {
       },
     },
     addToChat: "Add to chat",
+    addToNotes: "Add to notes",
     selectedTextActions: "Selected text actions",
     unavailableDir: "Directory unavailable on disk",
     unavailableDirShort: "Directory unavailable",
@@ -4664,6 +4680,13 @@ export const en = {
       toggleChanges: "Toggle Changes",
     },
     chrome: {
+      toolExecution: "Tool execution",
+      cancelReminder: "Cancel reminder",
+      multipleReminderTimes: "Multiple reminder times",
+      remindMe: "Remind me",
+      reminders: "Reminders",
+      showDetails: "Show details",
+      hideDetails: "Hide details",
       version: "Version",
       updateAvailable: "Version {version} is available.",
       productName: "MonoCode",

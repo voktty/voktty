@@ -27,7 +27,8 @@ const internalMetadataPaths = [
   /\/modules\/theme\/(?:packs\.ts|themes\/|skins\/)/,
   /\/modules\/harness\/lib\/harness\//,
   /\/modules\/harness\/lib\/models\.ts$/,
-  /\/modules\/harness\/lib\/(?:appLifecycle|compact|createSkill|fileMentions|handoff|inFlight|plan|secondOpinion|terminalClose)\.ts$/,
+  /\/modules\/harness\/lib\/(?:appLifecycle|compact|createSkill|fileMentions|handoff|inFlight|plan|secondOpinion|terminalClose|settings)\.ts$/,
+  /\/modules\/harness\/chrome\/sessionReminderPresets\.ts$/,
 ];
 
 
@@ -103,7 +104,7 @@ const technicalPatterns = [
   /^(?:unhandled method \{…\}|Space|←|↑\{…\} ↓\{…\}|[↑↓]\{…\}|~)$/,
   /^(?:ssh\s+\{…\}|ssh \{…\}@\{…\}|serial · \{…\}|docker · \{…\}|wsl · \{…\}|\{…\} \(WSL\)|\{…\} · localhost:\{…\}|\{…\} :\{…\}|🐳 \{…\}|\{…\} \(AI diff\)|\{…\} @ \{…\}|\{…\} — \{…\})$/,
   /^(?:, \{…\}|\{…\}%|\{…\}…|\{…\}@|· \{…\}|\{…\}% — \{…\}|\{…\} · v\{…\}|v\{…\}|\+\{…\})$/,
-  /^(?:`|&gt;_|lin_api_…|\{…\} · \{…\} \(\{…\}\.\)|\{…\} models|Ask · \{…\})$/,
+  /^(?:`|&gt;_|lin_api_…|\{…\}(?:\{…\})? · \{…\} \(\{…\}\.\)|\{…\} models|Ask · \{…\}|\{…\} effort)$/,
 ];
 
 function normalizeText(value) {

@@ -269,6 +269,7 @@ pub fn reminder_open(
             *pending = Some(request);
         }
         if let Some(window) = target {
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             let _ = window.unminimize();
             let _ = window.show();
             let _ = window.set_focus();
