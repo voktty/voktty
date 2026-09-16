@@ -224,11 +224,7 @@ pub fn reminder_take_pending_open(
 }
 
 #[tauri::command]
-pub fn reminder_open(
-    app: AppHandle,
-    session_id: String,
-    due_at: i64,
-) -> Result<(), String> {
+pub fn reminder_open(app: AppHandle, session_id: String, due_at: i64) -> Result<(), String> {
     validate_id(&session_id, "session")?;
     let handle = app.clone();
     app.run_on_main_thread(move || {
@@ -322,7 +318,8 @@ pub(crate) fn init(app: &AppHandle) {
                 continue;
             }
             use tauri_plugin_notification::NotificationExt;
-            let _ = app.notification()
+            let _ = app
+                .notification()
                 .builder()
                 .title(format!("Voktty: {}", reminder.title))
                 .body("Reminder: continue this conversation.")

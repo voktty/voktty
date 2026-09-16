@@ -535,7 +535,9 @@ mod tests {
         )
         .expect("listener");
         let mut stream = TcpStream::connect(listener.address()).expect("connect");
-        stream.set_read_timeout(Some(Duration::from_secs(5))).expect("timeout");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("timeout");
         stream
             .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
             .expect("request");
