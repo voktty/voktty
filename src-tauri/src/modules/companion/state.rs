@@ -259,7 +259,11 @@ impl CompanionLoopback {
                 while !thread_stop.load(Ordering::Acquire) {
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let _ = handle_request(stream, &pairing, &sessions);
+                            let pairing = pairing.clone();
+                            let sessions = sessions.clone();
+                            thread::spawn(move || {
+                                let _ = handle_request(stream, &pairing, &sessions);
+                            });
                         }
                         Err(error) if error.kind() == ErrorKind::WouldBlock => {
                             thread::sleep(ACCEPT_POLL);
@@ -531,11 +535,14 @@ mod tests {
         )
         .expect("listener");
         let mut stream = TcpStream::connect(listener.address()).expect("connect");
+        stream.set_read_timeout(Some(Duration::from_secs(5))).expect("timeout");
         stream
-            .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
             .expect("request");
-        let mut response = String::new();
-        stream.read_to_string(&mut response).expect("response");
+        stream.flush().expect("flush");
+        let mut buf = [0_u8; 1024];
+        let n = stream.read(&mut buf).expect("read");
+        let response = String::from_utf8_lossy(&buf[..n]);
         assert!(response.starts_with("HTTP/1.1 200"));
     }
 
