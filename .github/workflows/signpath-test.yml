@@ -16,11 +16,11 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
@@ -58,7 +58,7 @@ jobs:
 
       - name: Upload unsigned artifact
         id: upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: windows-unsigned
           path: signpath-staging/
@@ -94,7 +94,7 @@ jobs:
           }
 
       - name: Upload signed artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: windows-signed
           path: signed/

@@ -21,7 +21,7 @@ jobs:
             platform: linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -43,7 +43,7 @@ jobs:
         run: node scripts/cortex-eval/validate-report.mjs scripts/cortex-eval/sqlite-spike/reports/metrics.ndjson ${{ matrix.platform }}
 
       - name: Upload measurements
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: cortex-sqlite-${{ runner.os }}-${{ runner.arch }}
           path: scripts/cortex-eval/sqlite-spike/reports/metrics.ndjson
@@ -54,9 +54,9 @@ jobs:
     needs: sqlite-spike
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           pattern: cortex-sqlite-*
           path: cortex-reports
