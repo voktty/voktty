@@ -558,6 +558,7 @@ export function splitPane(
   focusedId: string,
   dir: SplitDir,
   newSessionId: string,
+  place: PanePlace = "after",
 ): LayoutNode {
   if (node.type === "leaf") {
     if (node.id !== focusedId) return node;
@@ -565,7 +566,10 @@ export function splitPane(
       type: "split",
       id: crypto.randomUUID(),
       dir,
-      children: [node, leaf(newSessionId)],
+      children:
+        place === "before"
+          ? [leaf(newSessionId), node]
+          : [node, leaf(newSessionId)],
       sizes: [0.5, 0.5],
     };
   }
@@ -576,10 +580,11 @@ export function splitPane(
 
   if (direct >= 0) {
     if (node.dir === dir) {
+      const insertAt = place === "before" ? direct : direct + 1;
       const children = [
-        ...node.children.slice(0, direct + 1),
+        ...node.children.slice(0, insertAt),
         leaf(newSessionId),
-        ...node.children.slice(direct + 1),
+        ...node.children.slice(insertAt),
       ];
       return { ...node, children, sizes: equalSizes(children.length) };
     }
@@ -591,7 +596,10 @@ export function splitPane(
               type: "split",
               id: crypto.randomUUID(),
               dir,
-              children: [child, leaf(newSessionId)],
+              children:
+                place === "before"
+                  ? [leaf(newSessionId), child]
+                  : [child, leaf(newSessionId)],
               sizes: [0.5, 0.5],
             }
           : child,
@@ -602,7 +610,7 @@ export function splitPane(
   return {
     ...node,
     children: node.children.map((child) =>
-      splitPane(child, focusedId, dir, newSessionId),
+      splitPane(child, focusedId, dir, newSessionId, place),
     ),
   };
 }
