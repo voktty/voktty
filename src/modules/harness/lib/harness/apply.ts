@@ -113,6 +113,7 @@ export function applyHarnessEvent(
         id: crypto.randomUUID(),
         role: "system",
         text: event.message,
+        notice: "error",
       });
     case "session.providerBound":
       return { ...session, providerSessionId: event.providerSessionId };

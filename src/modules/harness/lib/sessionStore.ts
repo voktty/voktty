@@ -409,6 +409,8 @@ function sanitizeBlock(block: Block): Block | null {
     role: block.role,
     text: block.text,
   };
+  if (block.notice) next.notice = block.notice;
+  if (block.interjection) next.interjection = block.interjection;
   if (block.attachments?.length) {
     next.attachments = block.attachments.map(persistableAttachment);
   }

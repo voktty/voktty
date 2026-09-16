@@ -181,6 +181,12 @@ export type Attachment = {
   previewUrl?: string;
 };
 
+export type InterjectionMeta = {
+  harness?: HarnessId;
+  model?: string;
+  sourceSessionId?: string;
+};
+
 export type Block = {
   id: string;
   role: BlockRole;
@@ -191,6 +197,8 @@ export type Block = {
   startedAt?: number;
   /** How long the agent worked on this user turn, in ms. */
   durationMs?: number;
+  notice?: "error" | "interrupt";
+  interjection?: InterjectionMeta;
   tool?: {
     callId?: string;
     title?: string;

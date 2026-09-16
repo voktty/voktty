@@ -1011,6 +1011,11 @@ html *::-webkit-scrollbar {
   overflow: hidden;
 }
 
+/* Folded running commentary: dimmed so it reads as background to the final answer. */
+.zen-fold-prose {
+  color: var(--color-content-muted, rgba(244, 244, 246, 0.6));
+}
+
 /*
  * The rail: a spine down the group with a step branching off it on a curve,
  * drawn on the step itself so it follows however tall that step turns out to

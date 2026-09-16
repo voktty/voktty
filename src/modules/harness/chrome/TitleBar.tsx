@@ -1,4 +1,5 @@
 import {
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
   GitCompare,
@@ -78,6 +79,8 @@ export type Tab = {
   harnesses: HarnessId[];
   /** Harnesses with an in-flight turn in this tab. */
   busyHarnesses: HarnessId[];
+  /** Harnesses with a finished response that has not been focused yet. */
+  doneHarnesses?: HarnessId[];
   /** Open file basenames, active files first. */
   files: string[];
   /** Split layout with more than one pane in this tab. */
@@ -236,33 +239,49 @@ export function titleTabContextCloseIds(
 function TabHarnesses({
   harnesses,
   busyHarnesses,
+  doneHarnesses = [],
   dimmed,
 }: {
   harnesses: HarnessId[];
   busyHarnesses: HarnessId[];
+  doneHarnesses?: HarnessId[];
   dimmed: boolean;
 }) {
   const shown = harnesses.slice(0, 3);
   const extra = harnesses.length - shown.length;
   const opacity = dimmed ? "opacity-55" : "opacity-100";
   const busy = new Set(busyHarnesses);
+  const done = new Set(doneHarnesses);
 
   return (
     <span className="flex shrink-0 items-center">
-      {shown.map((harness, i) => (
-        <span
-          key={harness}
-          className={`grid size-3.5 shrink-0 place-items-center ${opacity} ${
-            i > 0 ? "-ml-0.5" : ""
-          }`}
-        >
-          {busy.has(harness) ? (
-            <TerminalSpinner className="inline-block w-3.5 select-none text-center text-[11px] leading-none text-accent" />
-          ) : (
-            <HarnessIcon harness={harness} className="size-3.5 shrink-0" />
-          )}
-        </span>
-      ))}
+      {shown.map((harness, i) => {
+        const status = busy.has(harness)
+          ? "busy"
+          : done.has(harness)
+            ? "done"
+            : "idle";
+        return (
+          <span
+            key={harness}
+            data-harness-status={status}
+            className={`grid size-3.5 shrink-0 place-items-center ${
+              status === "done" ? "opacity-100" : opacity
+            } ${i > 0 ? "-ml-0.5" : ""}`}
+          >
+            {status === "busy" ? (
+              <TerminalSpinner className="inline-block w-3.5 select-none text-center text-[11px] leading-none text-accent" />
+            ) : status === "done" ? (
+              <CheckCircle
+                className="size-3.5 shrink-0 text-teal-400"
+                strokeWidth={2}
+              />
+            ) : (
+              <HarnessIcon harness={harness} className="size-3.5 shrink-0" />
+            )}
+          </span>
+        );
+      })}
       {extra > 0 ? (
         <span
           className={`pl-0.5 text-[10px] leading-none ${dimmed ? "text-content/50" : "text-content"}`}
@@ -330,6 +349,10 @@ function TitleTabItem({
   const inGroup = groupPosition != null;
   const { headline, meta, tooltip } = tabCopy(tab, { inGroup, deckLayout });
   const fileIcon = tab.files[0];
+  const accessibleTooltip =
+    (tab.doneHarnesses?.length ?? 0) > 0
+      ? `${tooltip} · Response complete`
+      : tooltip;
   const showStart =
     canDrag &&
     sortable.draggingId &&
@@ -393,8 +416,8 @@ function TitleTabItem({
       ) : null}
       <button
         type="button"
-        title={tooltip}
-        aria-label={tooltip}
+        title={accessibleTooltip}
+        aria-label={accessibleTooltip}
         data-tauri-drag-region="false"
         onClick={() => {
           if (sortable.consumeClick()) return;
@@ -412,6 +435,7 @@ function TitleTabItem({
           <TabHarnesses
             harnesses={tab.harnesses}
             busyHarnesses={tab.busyHarnesses}
+            doneHarnesses={tab.doneHarnesses ?? []}
             dimmed={!active}
           />
         ) : tab.terminal || !fileIcon ? (

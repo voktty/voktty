@@ -163,6 +163,7 @@ export const CancelCircle = wrap(CancelCircleIcon, "CancelCircle");
 export const CaseSensitive = wrap(CaseSensitiveIcon, "CaseSensitive");
 export const Check = wrap(Tick02Icon, "Check");
 export const CheckmarkCircle = wrap(CheckmarkCircle02Icon, "CheckmarkCircle");
+export const CheckCircle = CheckmarkCircle;
 export const ChevronDown = wrap(ArrowDown01Icon, "ChevronDown");
 export const ChevronLeft = wrap(ArrowLeft01Icon, "ChevronLeft");
 export const ChevronRight = wrap(ArrowRight01Icon, "ChevronRight");

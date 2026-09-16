@@ -690,10 +690,12 @@ export function foldableWork(items: TurnItem[]): WorkFold | undefined {
 }
 
 function isFoldableItem(item: TurnItem): boolean {
-  if (item.type === "subagents") return false;
+  if (item.type === "subagents") {
+    return !item.blocks.some(needsApproval);
+  }
   return item.type === "activity"
     ? !item.blocks.some(needsApproval)
-    : isProseBlock(item.block);
+    : isProseBlock(item.block) && !item.block.notice;
 }
 
 /**
