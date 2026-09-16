@@ -93,6 +93,13 @@ describe("scanOscCwd", () => {
     expect(rest).toBe("");
   });
 
+  it("extracts and normalizes Windows drive path from OSC 7 reports", () => {
+    const chunk = "\x1b]7;file://localhost/C:/Users/dev/repo\x07";
+    const { cwd, rest } = scanOscCwd(chunk, "");
+    expect(cwd).toBe("C:/Users/dev/repo");
+    expect(rest).toBe("");
+  });
+
   it("keeps a trailing buffer for split sequences", () => {
     const partial = "\x1b]7;file://host/Users/dev";
     const { cwd, rest } = scanOscCwd("/repo\x07", partial);
@@ -100,3 +107,5 @@ describe("scanOscCwd", () => {
     expect(rest).toBe("");
   });
 });
+
+

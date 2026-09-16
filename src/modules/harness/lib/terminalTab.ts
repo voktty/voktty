@@ -94,7 +94,11 @@ const OSC_CWD =
 
 function decodeOscPath(raw: string): string {
   try {
-    return decodeURIComponent(raw);
+    const decoded = decodeURIComponent(raw);
+    if (/^\/[a-zA-Z]:[\\/]/.test(decoded)) {
+      return decoded.slice(1);
+    }
+    return decoded;
   } catch {
     return raw;
   }
