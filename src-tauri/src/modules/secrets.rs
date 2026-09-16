@@ -21,7 +21,9 @@ use std::collections::HashMap;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use std::fs;
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use std::path::Path;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use tauri::Manager;
 

@@ -4610,6 +4610,21 @@ export const es: TranslationSchema = {
     closeAgentDevelopment: "Cerrar Desarrollo de Agentes",
     promptOutline: "Esquema de prompts",
     promptPreview: "Vista previa del prompt",
+    reminders: {
+      dueReminders: "Recordatorios pendientes",
+      loadError: "No se pudieron cargar los recordatorios.",
+      openSession: "Abrir sesión",
+      snooze: "Posponer",
+      dismiss: "Descartar",
+      desktopAlertsOff: "Las alertas de escritorio están desactivadas. Actívalas en Ajustes.",
+      reminder: "Recordatorio",
+    },
+    notes: {
+      tags: "Etiquetas",
+      removeTag: "Eliminar #{tag}",
+      addNoteTag: "Añadir etiqueta de nota",
+      addTagPlaceholder: "Añadir etiqueta…",
+    },
     broadcast: {
       title: "Enviar a todos los agentes",
       description:
@@ -4747,6 +4762,7 @@ export const es: TranslationSchema = {
       },
     },
     addToChat: "Anadir al chat",
+    addToNotes: "Añadir a notas",
     selectedTextActions: "Acciones del texto seleccionado",
     unavailableDir: "Directorio no disponible en disco",
     unavailableDirShort: "Directorio no disponible",
@@ -4774,6 +4790,13 @@ export const es: TranslationSchema = {
       toggleChanges: "Mostrar u ocultar cambios",
     },
     chrome: {
+      toolExecution: "Ejecución de herramienta",
+      cancelReminder: "Cancelar recordatorio",
+      multipleReminderTimes: "Varios horarios de recordatorio",
+      remindMe: "Recordarme",
+      reminders: "Recordatorios",
+      showDetails: "Mostrar detalles",
+      hideDetails: "Ocultar detalles",
       version: "Versión",
       updateAvailable: "La versión {version} está disponible.",
       productName: "MonoCode",

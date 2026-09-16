@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { t } from "@/modules/i18n";
 import {
   loadNotificationsEnabled,
   NOTIFICATIONS_CHANGE_EVENT,
@@ -43,7 +44,10 @@ export function useSessionReminders(
   }, []);
 
   const report = (error: unknown) => {
-    void message(String(error), { title: "Reminder", kind: "error" });
+    void message(String(error), {
+      title: t("harness.reminders.reminder"),
+      kind: "error",
+    });
   };
 
   const schedule = useCallback(

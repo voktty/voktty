@@ -1384,7 +1384,9 @@ function SubagentStepRow({
         ) : (
           <TerminalSpinner className="size-3 shrink-0 text-content/50" />
         )}
-        <span className="truncate">{step.text || "Tool execution"}</span>
+        <span className="truncate">
+          {step.text || t("harness.chrome.toolExecution")}
+        </span>
       </div>
       {step.preview?.output ? (
         <pre className="max-h-28 overflow-y-auto rounded bg-[var(--surface-active-item)] p-1.5 font-mono text-[11px] leading-4 text-content/60 whitespace-pre-wrap break-words">
