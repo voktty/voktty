@@ -43,6 +43,6 @@ describe("reminderTime", () => {
   it("formats reminder times into readable strings", () => {
     const dueAt = new Date(2026, 2, 1, 14, 30, 0).getTime();
     const formatted = formatReminderTime(dueAt);
-    expect(formatted).toContain("14:30");
+    expect(formatted).toMatch(/(?:14:30|2:30\s*PM)/i);
   });
 });
