@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Install musl toolchain
         run: |
@@ -60,7 +60,7 @@ jobs:
           test -s src-tauri/resources/remote/linux-x86_64/voktty-remote
 
       - name: Upload remote helper
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: voktty-remote-linux-x86_64
           path: src-tauri/resources/remote/linux-x86_64/
@@ -99,7 +99,7 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Install Linux build dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -114,9 +114,9 @@ jobs:
             libudev-dev \
             patchelf
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
@@ -135,7 +135,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download remote helper
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: voktty-remote-linux-x86_64
           path: src-tauri/resources/remote/linux-x86_64
@@ -283,7 +283,7 @@ jobs:
       - name: Upload unsigned Windows artifact
         id: upload-windows
         if: matrix.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: windows-unsigned
           path: signpath-staging/
