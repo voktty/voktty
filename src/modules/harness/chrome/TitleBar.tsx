@@ -1175,6 +1175,15 @@ function TitleBarComponent({
       }
     }
 
+    if (tabs.length > 1 && onGroupMoveToNewWindow) {
+      items.push({ kind: "sep" });
+      items.push({
+        kind: "item",
+        id: "new-window",
+        label: t("harness.chrome.moveToNewWindow"),
+      });
+    }
+
     return items;
   })();
 
@@ -1193,7 +1202,8 @@ function TitleBarComponent({
         }
         return;
       }
-      if (id === "new-group") onAddToNewGroup?.(tabId);
+      if (id === "new-window") onGroupMoveToNewWindow?.([tabId]);
+      else if (id === "new-group") onAddToNewGroup?.(tabId);
       else if (id === "remove") onRemoveFromGroup?.(tabId);
       else if (id.startsWith("add:")) onAddToGroup?.(tabId, id.slice(4));
     },
@@ -1204,6 +1214,7 @@ function TitleBarComponent({
       onAddToNewGroup,
       onClose,
       onCloseMany,
+      onGroupMoveToNewWindow,
       onRemoveFromGroup,
       tabMenu,
     ],
