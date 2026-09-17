@@ -344,6 +344,7 @@ function SidebarComponent({
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const selectionAnchorRef = useRef<string | null>(null);
   const [folderMenu, setFolderMenu] = useState<{
     x: number;
     y: number;
@@ -628,6 +629,7 @@ function SidebarComponent({
     if (selectedSessionIds.size === 0) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      selectionAnchorRef.current = null;
       setSelectedSessionIds(new Set());
       setSessionMenu(null);
     };
@@ -948,13 +950,41 @@ function SidebarComponent({
 
   const onSessionCardSelect = (
     sessionId: string,
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean },
   ) => {
+    setSessionMenu(null);
     if (event.shiftKey) {
-      setSessionMenu(null);
-      setSelectedSessionIds((current) =>
-        toggleSessionSelection(current, sessionId),
+      const visibleIds = sessionListNavigationIds(
+        sessionListEntries,
+        searchNarrowed,
       );
+      if (
+        selectionAnchorRef.current &&
+        !visibleIds.includes(selectionAnchorRef.current)
+      ) {
+        selectionAnchorRef.current = null;
+      }
+      const anchor = selectionAnchorRef.current ?? activeSessionId ?? sessionId;
+      const start = visibleIds.indexOf(anchor);
+      const end = visibleIds.indexOf(sessionId);
+      const range =
+        start < 0 || end < 0
+          ? [sessionId]
+          : visibleIds.slice(Math.min(start, end), Math.max(start, end) + 1);
+      selectionAnchorRef.current = start < 0 ? sessionId : anchor;
+      setSelectedSessionIds(
+        (current) =>
+          new Set(
+            event.ctrlKey || event.metaKey ? [...current, ...range] : range,
+          ),
+      );
+      return;
+    }
+    selectionAnchorRef.current = sessionId;
+    if (event.ctrlKey || event.metaKey) {
+      const next = toggleSessionSelection(selectedSessionIds, sessionId);
+      if (next.size === 0) selectionAnchorRef.current = null;
+      setSelectedSessionIds(next);
       return;
     }
     setSelectedSessionIds(new Set());
@@ -2407,7 +2437,7 @@ function SessionCard({
   deletions?: number;
   onSelect: (
     sessionId: string,
-    event: ReactMouseEvent<HTMLButtonElement>,
+    event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean },
   ) => void;
   onPlaceOnPane?: (sessionId: string, targetId: string, edge: PaneEdge) => void;
   onListDrop?: (draggedId: string, target: SessionListDropTarget) => void;
@@ -2462,6 +2492,12 @@ function SessionCard({
   );
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelect(session.id, e);
+      return;
+    }
     if (e.key === "F2" && onRename) {
       e.preventDefault();
       onRename();
@@ -2578,6 +2614,15 @@ function SessionCard({
       data-session-selected={isSelected ? "true" : undefined}
       data-tauri-drag-region="false"
       onPointerDown={onPointerDown}
+      onMouseDown={(event) => {
+        if (event.button !== 0) return;
+        // Shift-click can trigger :focus-visible. Mouse selection should
+        // only highlight the card; Tab can still focus this button.
+        event.preventDefault();
+        // Clear prior focus too, so shortcuts cannot target another card.
+        const focused = event.currentTarget.ownerDocument.activeElement;
+        if (focused instanceof HTMLElement) focused.blur();
+      }}
       onClick={(event) => {
         if (performance.now() < skipClickUntil.current) return;
         onSelect(session.id, event);
