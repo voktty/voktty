@@ -41,8 +41,11 @@ import {
   saveSelected,
   subscribeDirsChanged,
 } from "../lib/fileTree";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { dragPointToClient } from "../lib/dragPoint";
 import {
   basename,
+  clipboardFilePaths,
   copyPath,
   createPath,
   deletePath,
@@ -89,6 +92,7 @@ type TreeCtxValue = {
   creating: Creating | null;
   renaming: string | null;
   cutPath: string | null;
+  dragOverPath: string | null;
   epoch: number;
   gitStatuses?: GitStatusMap;
   onToggle: (path: string) => void;
@@ -142,9 +146,8 @@ function explorerItems(
 ): ExplorerMenuItem[] {
   const pasteParent = target.isDir ? target.path : parentPath(target.path);
   const pasteBlocked =
-    !clip ||
-    (clip.isDir &&
-      (pasteParent === clip.path || pasteParent.startsWith(`${clip.path}/`)));
+    !!clip?.isDir &&
+    (pasteParent === clip.path || pasteParent.startsWith(`${clip.path}/`));
   return [
     { kind: "item", id: "new-file", label: t("harness.chrome.newFile") },
     { kind: "item", id: "new-folder", label: t("harness.chrome.newFolder") },
@@ -241,6 +244,7 @@ export const FileTree = memo(function FileTree({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [clip, setClip] = useState<Clip | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [opError, setOpError] = useState<string | null>(null);
   const [epoch, setEpoch] = useState(0);
   const creatingRef = useRef(creating);
@@ -360,13 +364,6 @@ export const FileTree = memo(function FileTree({
   const removeEntry = async (path: string) => {
     if (path === cwd) return;
     const isDir = isDirAt(cwd, path);
-    const label = basename(path);
-    const ok = window.confirm(
-      isDir
-        ? `Delete folder “${label}” and everything inside it?`
-        : `Delete “${label}”?`,
-    );
-    if (!ok) return;
     await deletePath(path);
     await refreshTouched([parentPath(path)], isDir ? [path] : []);
     setSelectedPath((prev) => {
@@ -385,9 +382,26 @@ export const FileTree = memo(function FileTree({
     onFileDeleted?.(path);
   };
 
+  const copyExternalFiles = async (paths: string[], destParent: string) => {
+    let created: string | null = null;
+    try {
+      for (const from of paths) created = await copyPath(from, destParent);
+    } finally {
+      if (created) {
+        await refreshTouched([destParent]);
+        expandDirs([destParent]);
+        setSelectedPath(created);
+        saveSelected(cwd, created);
+      }
+    }
+  };
+
   const pasteAt = async (targetPath: string) => {
-    if (!clip) return;
     const destParent = createParentOf(cwd, targetPath);
+    if (!clip) {
+      await copyExternalFiles(await clipboardFilePaths(), destParent);
+      return;
+    }
     if (
       clip.isDir &&
       (destParent === clip.path || destParent.startsWith(`${clip.path}/`))
@@ -416,6 +430,11 @@ export const FileTree = memo(function FileTree({
     setSelectedPath(created);
     saveSelected(cwd, created);
   };
+
+  const dropFiles = (paths: string[], targetPath: string) =>
+    run(() => copyExternalFiles(paths, createParentOf(cwd, targetPath)));
+  const dropFilesRef = useRef(dropFiles);
+  dropFilesRef.current = dropFiles;
 
   const duplicateAt = async (path: string) => {
     if (path === cwd) return;
@@ -559,6 +578,44 @@ export const FileTree = memo(function FileTree({
   }, [menu]);
 
   useEffect(() => {
+    const treePathAt = (x: number, y: number): string | null => {
+      const root = rootRef.current;
+      if (!root) return null;
+      const point = dragPointToClient(x, y);
+      const el = document.elementFromPoint(point.x, point.y);
+      if (!el || !root.contains(el)) return null;
+      return el.closest<HTMLElement>("[role='treeitem']")?.title ?? cwd;
+    };
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (event.payload.type === "leave") {
+          setDragOverPath(null);
+          return;
+        }
+        const { x, y } = event.payload.position;
+        const target = treePathAt(x, y);
+        if (event.payload.type !== "drop") {
+          setDragOverPath(target ? createParentOf(cwd, target) : null);
+          return;
+        }
+        setDragOverPath(null);
+        if (target) void dropFilesRef.current(event.payload.paths, target);
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [cwd]);
+
+  useEffect(() => {
     const unsub = subscribeDirsChanged(() => setEpoch((n) => n + 1));
     const onResume = () => {
       if (!document.hidden) notifyDirsChanged();
@@ -605,6 +662,7 @@ export const FileTree = memo(function FileTree({
         creating,
         renaming,
         cutPath: clip?.mode === "cut" ? clip.path : null,
+        dragOverPath,
         epoch,
         gitStatuses,
         onToggle: toggle,
@@ -682,7 +740,9 @@ export const FileTree = memo(function FileTree({
                 e.clientY,
               );
             }}
-            className={`flex min-w-0 flex-1 items-center gap-1 h-full pl-2 text-left`}
+            className={`flex min-w-0 flex-1 items-center gap-1 h-full pl-2 text-left ${
+              dragOverPath === cwd ? "bg-selection" : ""
+            }`}
           >
             <span className="grid size-4 shrink-0 place-items-center text-content/50">
               {rootOpen ? (
@@ -881,6 +941,7 @@ function TreeNode({ entry, depth }: { entry: FsEntry; depth: number }) {
     selectedPath,
     renaming,
     cutPath,
+    dragOverPath,
     epoch,
     gitStatuses,
     onToggle,
@@ -964,7 +1025,9 @@ function TreeNode({ entry, depth }: { entry: FsEntry; depth: number }) {
             selected
               ? "bg-content/10 text-content"
               : "text-content hover:bg-content/5"
-          } ${cutPath === entry.path ? "opacity-50" : ""}`}
+          } ${cutPath === entry.path ? "opacity-50" : ""} ${
+            dragOverPath === entry.path ? "bg-selection" : ""
+          }`}
         >
           <span className="grid size-4 shrink-0 place-items-center text-content/50">
             {entry.isDir ? (

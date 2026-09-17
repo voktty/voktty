@@ -7,6 +7,7 @@ pub mod host;
 pub mod linear;
 pub mod link_preview;
 pub mod notes;
+pub mod pasteboard;
 pub mod project_logo;
 pub mod rate_limits;
 pub mod reminders;
