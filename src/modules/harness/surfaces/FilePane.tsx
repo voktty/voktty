@@ -23,7 +23,9 @@ import { IconButton } from "../chrome/TitleBar";
 import { Play, Terminal } from "../chrome/icons";
 import { BuildTargetButton } from "../chrome/SecondOpinionButton";
 import { GitDiffPane } from "@/modules/editor/GitDiffPane";
+import { isImagePath } from "../lib/filePreview";
 import { MarkdownPreview } from "./AgentMarkdown";
+import { BinaryFileView } from "./BinaryFileView";
 import { FileEditor } from "./FileEditor";
 import { ReleaseNotesSurface } from "./ReleaseNotesSurface";
 import { SessionChangesDiff } from "./SessionChangesDiff";
@@ -150,6 +152,8 @@ function FilePaneComponent({
                   originalPath: null,
                 }}
               />
+            ) : isImagePath(file.path) ? (
+              <BinaryFileView path={file.path} cwd={file.cwd} />
             ) : (
               <FileEditor
                 path={file.path}
