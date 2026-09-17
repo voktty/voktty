@@ -65,6 +65,22 @@ pub struct CursorBinary {
     pub path: String,
 }
 
+pub fn provider_account_dir(
+    app: &AppHandle,
+    provider: &str,
+    account_id: Option<&str>,
+) -> Result<Option<PathBuf>, String> {
+    let Some(id) = account_id.filter(|s| !s.trim().is_empty()) else {
+        return Ok(None);
+    };
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let path = app_dir.join("accounts").join(provider).join(id);
+    Ok(Some(path))
+}
+
 struct LiveChild {
     stdin: Mutex<ChildStdin>,
     pid: u32,

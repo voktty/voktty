@@ -1034,7 +1034,8 @@ export function HarnessApp({
     if (
       active?.harness === "claude" ||
       active?.harness === "codex" ||
-      active?.harness === "gemini"
+      active?.harness === "gemini" ||
+      active?.harness === "opencode"
     ) {
       return [active.harness];
     }

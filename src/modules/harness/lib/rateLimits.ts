@@ -1,6 +1,6 @@
 import { asRecord } from "./harness/codexProtocol";
 
-export type RateLimitProvider = "claude" | "codex" | "gemini";
+export type RateLimitProvider = "claude" | "codex" | "gemini" | "opencode";
 
 export type RateLimitStatus =
   "idle" | "fetching" | "ok" | "error" | "unavailable";
@@ -18,6 +18,7 @@ export type ProviderRateLimits = {
   provider: RateLimitProvider;
   session: RateLimitWindow | null;
   weekly: RateLimitWindow | null;
+  monthly: RateLimitWindow | null;
   updatedAt: number;
   error: string | null;
   status: RateLimitStatus;
@@ -25,6 +26,7 @@ export type ProviderRateLimits = {
 
 export const SESSION_WINDOW_MINUTES = 300;
 export const WEEKLY_WINDOW_MINUTES = 10_080;
+export const MONTHLY_WINDOW_MINUTES = 43_200;
 
 /** Background poll while the window is visible. */
 export const RATE_LIMIT_POLL_MS = 15 * 60 * 1000;
@@ -57,11 +59,13 @@ export function shouldFetchRateLimits(input: {
   visible: boolean;
   claude: ProviderRateLimits;
   codex: ProviderRateLimits;
+  opencode?: ProviderRateLimits;
   now?: number;
 }): boolean {
   return (
     shouldFetchProvider(input.claude, input) ||
-    shouldFetchProvider(input.codex, input)
+    shouldFetchProvider(input.codex, input) ||
+    (input.opencode ? shouldFetchProvider(input.opencode, input) : false)
   );
 }
 
@@ -74,6 +78,7 @@ export function idleRateLimits(
     provider,
     session: null,
     weekly: null,
+    monthly: null,
     updatedAt: 0,
     error: null,
     status: "idle",
@@ -84,13 +89,17 @@ export function fetchingRateLimits(
   provider: RateLimitProvider,
   previous?: ProviderRateLimits | null,
 ): ProviderRateLimits {
-  if (previous && (previous.session || previous.weekly)) {
+  if (
+    previous &&
+    (previous.session || previous.weekly || previous.monthly)
+  ) {
     return { ...previous, status: "fetching" };
   }
   return {
     provider,
     session: previous?.session ?? null,
     weekly: previous?.weekly ?? null,
+    monthly: previous?.monthly ?? null,
     updatedAt: previous?.updatedAt ?? 0,
     error: null,
     status: "fetching",
@@ -105,6 +114,7 @@ export function unavailableRateLimits(
     provider,
     session: null,
     weekly: null,
+    monthly: null,
     updatedAt: Date.now(),
     error,
     status: "unavailable",
@@ -116,7 +126,10 @@ export function errorRateLimits(
   error: string,
   previous?: ProviderRateLimits | null,
 ): ProviderRateLimits {
-  if (previous && (previous.session || previous.weekly)) {
+  if (
+    previous &&
+    (previous.session || previous.weekly || previous.monthly)
+  ) {
     return {
       ...previous,
       error,
@@ -128,6 +141,7 @@ export function errorRateLimits(
     provider,
     session: null,
     weekly: null,
+    monthly: null,
     updatedAt: Date.now(),
     error,
     status: "error",
@@ -149,6 +163,7 @@ export function formatUsagePercent(usedPercent: number): string {
  */
 export function formatWindowLabel(windowMinutes: number): string {
   if (windowMinutes === WEEKLY_WINDOW_MINUTES) return "wk";
+  if (windowMinutes === MONTHLY_WINDOW_MINUTES) return "mo";
   if (windowMinutes === SESSION_WINDOW_MINUTES) return "5h";
   if (windowMinutes === 60) return "1h";
   if (windowMinutes < 60) return `${windowMinutes}m`;
@@ -271,6 +286,7 @@ export function parseClaudeOAuthUsage(body: string): ProviderRateLimits {
     provider: "claude",
     session: mapUsageWindow(rec.five_hour, SESSION_WINDOW_MINUTES),
     weekly: mapUsageWindow(rec.seven_day, WEEKLY_WINDOW_MINUTES),
+    monthly: null,
     updatedAt: Date.now(),
     error: null,
     status: "ok",
@@ -294,9 +310,51 @@ export function parseCodexRateLimits(result: unknown): ProviderRateLimits {
     provider: "codex",
     session: mapCodexSnapshot(classified.session, SESSION_WINDOW_MINUTES),
     weekly: mapCodexSnapshot(classified.weekly, WEEKLY_WINDOW_MINUTES),
+    monthly: null,
     updatedAt: Date.now(),
     error: null,
     status: "ok",
+  };
+}
+
+/**
+ * Parse the official OpenCode Go usage payload:
+ * { usage: { rolling: { status, percent, resetsAt },
+ *            weekly: {...}, monthly: {...} } }
+ * `percent` is percent used, matching the dashboard.
+ */
+export function parseOpencodeGoUsage(result: unknown): ProviderRateLimits {
+  const rec = asRecord(result);
+  const usage = asRecord(rec?.usage) ?? rec;
+  return {
+    provider: "opencode",
+    session: mapOpencodeGoWindow(usage?.rolling, SESSION_WINDOW_MINUTES),
+    weekly: mapOpencodeGoWindow(usage?.weekly, WEEKLY_WINDOW_MINUTES),
+    monthly: mapOpencodeGoWindow(usage?.monthly, MONTHLY_WINDOW_MINUTES),
+    updatedAt: Date.now(),
+    error: null,
+    status: "ok",
+  };
+}
+
+function mapOpencodeGoWindow(
+  raw: unknown,
+  windowMinutes: number,
+): RateLimitWindow | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  // Require an explicit valid status; unknown shapes are dropped so the
+  // caller can treat a fully empty payload as an error, not a snapshot.
+  const status = rec.status;
+  if (status !== "ok" && status !== "rate-limited") return null;
+  const usedPercent =
+    numberField(rec, "percent") ?? numberField(rec, "usedPercent");
+  if (usedPercent == null) return null;
+  return {
+    usedPercent: clampUsedPercent(usedPercent),
+    windowMinutes,
+    resetsAt:
+      parseResetTimestamp(rec.resetsAt) ?? parseResetTimestamp(rec.resets_at),
   };
 }
 

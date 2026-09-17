@@ -289,6 +289,11 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
   const existing = liveByThread.get(input.sessionId);
   if (existing && existing.cwd === input.cwd) {
     existing.onEvent = input.onEvent;
+    if (existing.runtimeMode !== input.runtimeMode) {
+      await existing.client.updateSession(existing.openCodeSessionId, {
+        permission: buildOpenCodePermissionRules(input.runtimeMode),
+      });
+    }
     existing.runtimeMode = input.runtimeMode;
     return existing;
   }
@@ -604,12 +609,14 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
           )
         : [];
       const metadata = asRecord(properties.metadata) ?? {};
+      const tool = asRecord(properties.tool) ?? {};
       const callId =
         stringField(properties, "callID") ??
         stringField(properties, "toolCallId") ??
+        stringField(tool, "callID") ??
+        stringField(tool, "callId") ??
         stringField(metadata, "callID") ??
         stringField(metadata, "toolCallId");
-      const uiId = live.nextApprovalUiId++;
       const kind = toolKindFromName(permission);
       const preview =
         previewFromToolPart({
@@ -651,6 +658,11 @@ function handleEvent(live: Live, event: Record<string, unknown>): void {
           .catch(() => undefined);
         break;
       }
+      if (live.runtimeMode === "full-access") {
+        void live.client.replyPermission(id, "once").catch(() => undefined);
+        break;
+      }
+      const uiId = live.nextApprovalUiId++;
       if (callId) {
         live.onEvent({
           type: "tool.updated",
@@ -1116,4 +1128,11 @@ function waitForServerUrl(
     };
     tick();
   });
+}
+
+/** Exported for tests. */
+export function __openCodeTestReset(): void {
+  liveByThread.clear();
+  resumeByThread.clear();
+  cancelledThreads.clear();
 }
