@@ -88,6 +88,90 @@ export function setQuitWorkspace(
   };
 }
 
+export type QuitConfirmPayload = {
+  id: number;
+  inFlight: number;
+};
+
+export async function reportQuitPoll(id: number): Promise<void> {
+  if (liveWorkspace) {
+    liveWorkspace.flush();
+    const refs = inFlightRefs(
+      liveWorkspace.sessions(),
+      liveWorkspace.tabs(),
+    );
+    await invoke("quit_poll_reply", { id, inFlight: refs.length });
+    return;
+  }
+  const { resumed } = await loadBootWorkspace();
+  const pending = resumed ?? bootingResumed;
+  if (pending) {
+    const busy = pending.sessions.some(wasTurnInterrupted);
+    await invoke("quit_poll_reply", { id, inFlight: busy ? 1 : 0 });
+    return;
+  }
+  await invoke("quit_poll_reply", { id, inFlight: 0 });
+}
+
+export async function askQuitConfirmation(
+  payload: QuitConfirmPayload,
+): Promise<void> {
+  if (quitDialogOpen) return;
+  quitDialogOpen = true;
+  try {
+    const ok = await ask(quitWhileBusyMessage(payload.inFlight), {
+      title: "Voktty",
+      kind: "warning",
+      okLabel: "Quit",
+    });
+    await invoke("quit_decision", {
+      id: payload.id,
+      confirmed: Boolean(ok),
+    });
+  } catch {
+    await invoke("quit_decision", {
+      id: payload.id,
+      confirmed: false,
+    });
+  } finally {
+    quitDialogOpen = false;
+  }
+}
+
+export async function commitQuit(id: number): Promise<void> {
+  quitting = true;
+  let persisted = false;
+  try {
+    if (liveWorkspace) {
+      liveWorkspace.flush();
+      await persistQuitState(
+        liveWorkspace.sessions(),
+        liveWorkspace.tabs(),
+        liveWorkspace.activeTabId(),
+        liveWorkspace.projectCwd(),
+        "quit",
+        liveWorkspace.projectTerminals(),
+      );
+      persisted = true;
+    } else {
+      const { resumed } = await loadBootWorkspace();
+      const pending = resumed ?? bootingResumed;
+      if (pending) {
+        await persistBootingResume(pending);
+      }
+      persisted = true;
+    }
+  } catch {
+    persisted = false;
+  } finally {
+    await invoke("quit_ready", { id, persisted });
+  }
+}
+
+export function abortQuit(): void {
+  quitting = false;
+}
+
 export async function handleQuitRequested(): Promise<void> {
   if (liveWorkspace) {
     liveWorkspace.flush();
@@ -264,6 +348,38 @@ async function persistBootingResume(workspace: ResumedWorkspace): Promise<void> 
   ).catch(() => undefined);
 }
 
+export async function confirmAndCloseWindow(
+  sessions: Session[],
+  tabs: WorkspaceTab[],
+  activeTabId: string,
+  projectCwd: string,
+  projectTerminals: ProjectTerminalDock[] = [],
+  flush?: () => void,
+): Promise<void> {
+  const refs = inFlightRefs(sessions, tabs);
+  if (refs.length > 0) {
+    const ok = await ask(quitWhileBusyMessage(refs.length), {
+      title: "Voktty",
+      kind: "warning",
+      okLabel: "Close",
+    });
+    if (!ok) return;
+  }
+  flush?.();
+  try {
+    await persistQuitState(
+      sessions,
+      tabs,
+      activeTabId,
+      projectCwd,
+      "unload",
+      projectTerminals,
+    );
+  } finally {
+    await closeCurrentWindow();
+  }
+}
+
 async function confirmQuitAndExit(
   sessions: Session[],
   tabs: WorkspaceTab[],
@@ -277,7 +393,7 @@ async function confirmQuitAndExit(
     const refs = inFlightRefs(sessions, tabs);
     if (refs.length > 0) {
       const ok = await ask(quitWhileBusyMessage(refs.length), {
-        title: "MonoCode",
+        title: "Voktty",
         kind: "warning",
         okLabel: "Quit",
       });

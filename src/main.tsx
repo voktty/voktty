@@ -2,6 +2,8 @@ import "@xterm/xterm/css/xterm.css";
 import "./styles/globals.css";
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import ReactDOM from "react-dom/client";
 import App from "@/app/App";
@@ -10,6 +12,13 @@ import { initLaunchRequests } from "@/lib/launchRequest";
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
 import { markStartupPhase } from "@/lib/startupTiming";
 import { applyDocumentLocale, loadLocale, readFastLanguage } from "@/modules/i18n";
+import {
+  abortQuit,
+  askQuitConfirmation,
+  commitQuit,
+  reportQuitPoll,
+  type QuitConfirmPayload,
+} from "@/modules/harness/lib/appLifecycle";
 
 markStartupPhase("js-start");
 const startupLanguage = readFastLanguage();
@@ -84,6 +93,14 @@ await Promise.all([
   invoke("pty_close_all").catch(() => {}),
   initLaunchRequests(),
 ]);
+
+void listen<number>("quit_poll", (event) => void reportQuitPoll(event.payload));
+void getCurrentWebviewWindow().listen<QuitConfirmPayload>(
+  "quit_confirm",
+  (event) => void askQuitConfirmation(event.payload),
+);
+void listen<number>("quit_commit", (event) => void commitQuit(event.payload));
+void listen("quit_aborted", () => abortQuit());
 
 markStartupPhase("bootstrap-complete");
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

@@ -34,6 +34,7 @@ import {
 import {
   bindResumedSessions,
   closeCurrentWindow,
+  confirmAndCloseWindow,
   hasInFlightSessions,
   hideCurrentWindow,
   isAppQuitting,
@@ -186,6 +187,7 @@ import {
   saveLastModelSettings,
 } from "../lib/models";
 import {
+  loadCloseToTray,
   loadFollowUpBehavior,
   type FollowUpBehavior,
 } from "../lib/settings";
@@ -1174,10 +1176,21 @@ export function HarnessApp({
         // Listening here makes close our job. Letting the default path run
         // calls JS `window.destroy`, which Tauri denies without a permission.
         event.preventDefault();
-        if (hasInFlightSessions(sessionsRef.current)) {
+        if (loadCloseToTray()) {
           flushHarnessEvents();
           void persistLiveTranscripts(sessionsRef.current);
           void hideCurrentWindow();
+          return;
+        }
+        if (hasInFlightSessions(sessionsRef.current)) {
+          void confirmAndCloseWindow(
+            sessionsRef.current,
+            tabsRef.current,
+            activeTabIdRef.current,
+            projectCwdRef.current,
+            projectTerminalsRef.current,
+            flushHarnessEvents,
+          );
           return;
         }
         void persistQuitState(

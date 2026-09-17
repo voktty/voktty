@@ -4703,6 +4703,9 @@ export const es: TranslationSchema = {
       claudeHooks: "Hooks de Claude Code",
       claudeHooksDesc:
         "Ejecuta hooks de settings.json (PreToolUse, bloques, notificaciones). Se aplica en el siguiente turno.",
+      closeToTray: "Cerrar a la bandeja del sistema",
+      closeToTrayDesc:
+        "Al cerrar la ventana, Voktty se mantiene en ejecucion en la bandeja del sistema para que las tareas en segundo plano continuen.",
       restoreDefaults: "Restaurar valores",
       sidebarOpacity: "Opacidad de la barra lateral",
       sidebarOpacityDesc:
