@@ -35,6 +35,10 @@ import {
   revokeAttachment,
 } from "../lib/attachments";
 import { resizeComposer } from "../lib/composerResize";
+import {
+  EXPLORER_FILE_POINTER_DRAG_EVENT,
+  type ExplorerFilePointerDragDetail,
+} from "../lib/drag";
 import type { ContextUsage } from "../lib/contextUsage";
 import {
   loadProjectFiles,
@@ -856,10 +860,31 @@ export function Composer({
       void attachmentsFromFiles(files).then(addAttachments);
     };
 
+    const onExplorerFilePointerDrag = (event: Event) => {
+      const detail = (event as CustomEvent<ExplorerFilePointerDragDetail>)
+        .detail;
+      if (!detail || detail.type === "end") {
+        setFileDrag(false);
+        return;
+      }
+      const over = overTarget(detail.x, detail.y);
+      if (detail.type === "move") {
+        setFileDrag(over && attachmentsSupported);
+        return;
+      }
+      setFileDrag(false);
+      if (!over || !attachmentsSupported) return;
+      void attachmentsFromPaths([detail.path]).then(addAttachments);
+    };
+
     const root = dropRoot();
     root?.addEventListener("dragover", onDragOver);
     root?.addEventListener("dragleave", onDragLeave);
     root?.addEventListener("drop", onDrop);
+    window.addEventListener(
+      EXPLORER_FILE_POINTER_DRAG_EVENT,
+      onExplorerFilePointerDrag,
+    );
 
     let cancelled = false;
     let unlisten: (() => void) | undefined;
@@ -892,6 +917,10 @@ export function Composer({
       root?.removeEventListener("dragover", onDragOver);
       root?.removeEventListener("dragleave", onDragLeave);
       root?.removeEventListener("drop", onDrop);
+      window.removeEventListener(
+        EXPLORER_FILE_POINTER_DRAG_EVENT,
+        onExplorerFilePointerDrag,
+      );
       unlisten?.();
     };
   }, [addAttachments, attachmentsSupported, enabled]);
