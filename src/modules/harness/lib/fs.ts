@@ -279,6 +279,13 @@ export function revealPath(path: string): Promise<void> {
   return invoke<void>("reveal_path", { path });
 }
 
+/** macOS only. Other platforms return an empty list. */
+export function clipboardFilePaths(): Promise<string[]> {
+  return invoke<string[]>("clipboard_file_paths").then((paths) =>
+    paths.map((p) => p.replace(/\\/g, "/")),
+  );
+}
+
 export function homeDir(): Promise<string> {
   return invoke<string>("home_dir");
 }

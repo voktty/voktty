@@ -692,6 +692,7 @@ pub fn run() {
             harness::fs::copy_path,
             harness::fs::move_path,
             harness::fs::reveal_path,
+            harness::pasteboard::clipboard_file_paths,
             harness::fs::clone_repo,
             harness::fs::read_file_preview,
             harness::fs::stat_files,
