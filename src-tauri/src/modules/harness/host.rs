@@ -350,6 +350,19 @@ pub fn harness_resolve_grok() -> Result<CursorBinary, String> {
         })
 }
 
+/// Resolve Nous Research Hermes Agent (`hermes`).
+#[tauri::command(async)]
+pub fn harness_resolve_hermes() -> Result<CursorBinary, String> {
+    resolve_hermes()
+        .map(|path| CursorBinary {
+            path: path.to_string_lossy().into_owned(),
+        })
+        .ok_or_else(|| {
+            "Hermes Agent CLI not found. Install it from https://hermes-agent.nousresearch.com, run `hermes model`, then retry."
+                .into()
+        })
+}
+
 /// Resolve Antigravity / Gemini CLI (`agy`).
 #[tauri::command(async)]
 pub fn harness_resolve_gemini() -> Result<CursorBinary, String> {
@@ -359,19 +372,6 @@ pub fn harness_resolve_gemini() -> Result<CursorBinary, String> {
         })
         .ok_or_else(|| {
             "Antigravity (agy) CLI not found. Ensure `agy` is installed and in your PATH, then retry."
-                .into()
-        })
-}
-
-/// Resolve the Hermes Agent local CLI (`hermes`).
-#[tauri::command(async)]
-pub fn harness_resolve_hermes() -> Result<CursorBinary, String> {
-    resolve_hermes()
-        .map(|path| CursorBinary {
-            path: path.to_string_lossy().into_owned(),
-        })
-        .ok_or_else(|| {
-            "Hermes CLI not found. Ensure `hermes` is installed and in your PATH, then retry."
                 .into()
         })
 }
@@ -1205,6 +1205,7 @@ fn is_harness_argv_token(part: &str) -> bool {
             | "grok"
             | "omp"
             | "fx"
+            | "hermes"
             | "pi"
             | "worker-server"
             | "app-server"
@@ -1673,6 +1674,38 @@ fn resolve_grok() -> Option<PathBuf> {
     first_binary_matching(candidates, is_grok_agent)
 }
 
+fn resolve_hermes() -> Option<PathBuf> {
+    let home = dirs_home().map(PathBuf::from);
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Some(home) = &home {
+        // Official per-user installer, then its underlying virtualenv in case
+        // the launcher symlink has not been added to PATH yet.
+        candidates.push(home.join(".local/bin/hermes"));
+        candidates.push(home.join(".hermes/hermes-agent/venv/bin/hermes"));
+        candidates.push(home.join(".hermes/hermes-agent/.venv/bin/hermes"));
+        candidates.push(home.join(".npm-global/bin/hermes"));
+        candidates.push(home.join(".cargo/bin/hermes"));
+        candidates.push(home.join("n/bin/hermes"));
+    }
+    #[cfg(windows)]
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        // Native Windows installer launchers, then the underlying virtualenv.
+        candidates.push(local_app_data.join("hermes/bin/hermes.exe"));
+        candidates.push(local_app_data.join("hermes/hermes-agent/venv/Scripts/hermes.exe"));
+    }
+    #[cfg(target_os = "macos")]
+    candidates.push(PathBuf::from("/opt/homebrew/bin/hermes"));
+    candidates.push(PathBuf::from("/usr/local/bin/hermes"));
+    candidates.push(PathBuf::from("/usr/bin/hermes"));
+    candidates.push(PathBuf::from("/snap/bin/hermes"));
+    if let Some(from_shell) = which_via_login_shell("hermes") {
+        candidates.push(from_shell);
+    }
+
+    first_binary(candidates)
+}
+
 fn resolve_agy() -> Option<PathBuf> {
     let home = dirs_home().map(PathBuf::from);
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -1707,34 +1740,6 @@ fn resolve_agy() -> Option<PathBuf> {
         candidates.push(from_shell);
     }
     if let Some(from_shell) = which_via_login_shell("gemini") {
-        candidates.push(from_shell);
-    }
-
-    first_binary(candidates)
-}
-
-/// Resolve the Hermes Agent local CLI (`hermes`). This is a lightweight
-/// launcher-only mode: it detects and spawns a local `hermes` binary the same
-/// way as the other CLI agents. It is not the full Hermes Gateway integration
-/// (HTTP API, session continuity) proposed separately.
-fn resolve_hermes() -> Option<PathBuf> {
-    let home = dirs_home().map(PathBuf::from);
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
-    if let Some(home) = &home {
-        candidates.push(home.join(".local/bin/hermes"));
-        candidates.push(home.join(".npm-global/bin/hermes"));
-        candidates.push(home.join(".cargo/bin/hermes"));
-        candidates.push(home.join("n/bin/hermes"));
-    }
-    #[cfg(target_os = "macos")]
-    candidates.push(PathBuf::from("/opt/homebrew/bin/hermes"));
-    candidates.push(PathBuf::from("/usr/local/bin/hermes"));
-    candidates.push(PathBuf::from("/usr/bin/hermes"));
-    candidates.push(PathBuf::from("/snap/bin/hermes"));
-    #[cfg(windows)]
-    push_windows_npm_candidates(&mut candidates, "hermes");
-    if let Some(from_shell) = which_via_login_shell("hermes") {
         candidates.push(from_shell);
     }
 

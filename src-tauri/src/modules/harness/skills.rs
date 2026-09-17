@@ -63,6 +63,7 @@ pub(crate) fn list_skills_from(project: &Path, home: Option<&Path>) -> Vec<Disco
         (".omp/skills", "omp"),
         (".fx/skills", "fx"),
         (".grok/skills", "grok"),
+        (".hermes/skills", "hermes"),
     ] {
         add_root(project.join(dir), "project", source);
         if let Some(home) = home {
