@@ -287,6 +287,11 @@ export function clipboardFilePaths(): Promise<string[]> {
   );
 }
 
+/** Put the original file on the macOS clipboard, preserving its name and type. */
+export function copyFileToClipboard(path: string): Promise<void> {
+  return invoke<void>("copy_file_to_clipboard", { path });
+}
+
 export function homeDir(): Promise<string> {
   return invoke<string>("home_dir");
 }
@@ -361,6 +366,12 @@ export function statFiles(paths: string[]): Promise<FileMtime[]> {
 
 export function readTextFile(path: string): Promise<string> {
   return invoke<string>("read_text_file", { path });
+}
+
+/** Raw bytes for the image viewer. Arrives as an ArrayBuffer, not base64. */
+export async function readBinaryFile(path: string): Promise<Uint8Array> {
+  const buffer = await invoke<ArrayBuffer>("read_binary_file", { path });
+  return new Uint8Array(buffer);
 }
 
 export function writeTextFile(path: string, content: string): Promise<void> {
