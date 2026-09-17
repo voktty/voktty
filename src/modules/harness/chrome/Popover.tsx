@@ -40,6 +40,8 @@ type Props = Omit<ComponentPropsWithoutRef<"div">, "style"> & {
   width?: number;
   minHeight?: number;
   maxHeight?: number;
+  /** Defaults to true. Disable for intrinsic-height surfaces like context menus. */
+  constrainHeight?: boolean;
   /** Defaults to `LAYER.popover`; a flyout off an open popover wants higher. */
   layer?: number;
   style?: CSSProperties;
@@ -133,6 +135,7 @@ export function Popover({
   width,
   minHeight,
   maxHeight,
+  constrainHeight = true,
   layer = LAYER.popover,
   className,
   style,
@@ -223,14 +226,16 @@ export function Popover({
         top: position.top,
         bottom: position.bottom,
         width: position.width,
-        maxHeight: position.maxHeight,
+        ...(constrainHeight ? { maxHeight: position.maxHeight } : {}),
       }
     : {
         position: "fixed",
         left: 0,
         top: 0,
         width,
-        maxHeight: maxHeight ?? "calc(100vh - 16px)",
+        ...(constrainHeight
+          ? { maxHeight: maxHeight ?? "calc(100vh - 16px)" }
+          : {}),
         visibility: "hidden",
       };
 
@@ -238,11 +243,15 @@ export function Popover({
   // stale backdrop when the same composited element is transformed and then
   // invalidated by a child hover. Only this unblurred content layer moves.
   const frameInset = 2;
-  const contentMaxHeight = position
-    ? Math.max(0, position.maxHeight - frameInset)
-    : maxHeight != null
-      ? Math.max(0, maxHeight - frameInset)
-      : `calc(100vh - ${16 + frameInset}px)`;
+  const contentMaxHeight = constrainHeight
+    ? position
+      ? Math.max(0, position.maxHeight - frameInset)
+      : maxHeight != null
+        ? Math.max(0, maxHeight - frameInset)
+        : `calc(100vh - ${16 + frameInset}px)`
+    : undefined;
+
+  if (typeof document === "undefined") return null;
 
   return createPortal(
     <div
@@ -260,7 +269,7 @@ export function Popover({
         }}
         data-popover-side={position?.side ?? side}
         style={{
-          maxHeight: contentMaxHeight,
+          ...(contentMaxHeight != null ? { maxHeight: contentMaxHeight } : {}),
           transformOrigin: origin(position?.side ?? side, align),
           ...style,
         }}
