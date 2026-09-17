@@ -27,7 +27,7 @@ const internalMetadataPaths = [
   /\/modules\/theme\/(?:packs\.ts|themes\/|skins\/)/,
   /\/modules\/harness\/lib\/harness\//,
   /\/modules\/harness\/lib\/models\.ts$/,
-  /\/modules\/harness\/lib\/(?:appLifecycle|compact|createSkill|fileMentions|handoff|inFlight|plan|secondOpinion|terminalClose|settings)\.ts$/,
+  /\/modules\/harness\/lib\/(?:appLifecycle|compact|createSkill|fileMentions|handoff|inFlight|plan|secondOpinion|terminalClose|settings|rateLimits|rateLimitsFetch)\.ts$/,
   /\/modules\/harness\/chrome\/sessionReminderPresets\.ts$/,
 ];
 

@@ -293,6 +293,7 @@ function ProviderChip({
   limits: ProviderRateLimits;
   now: number;
 }) {
+  const { t } = useTranslation();
   const loading =
     limits.status === "idle" ||
     (limits.status === "fetching" && !limits.session && !limits.weekly);
@@ -320,9 +321,9 @@ function ProviderChip({
         tooltip ||
         limits.error ||
         (disconnected
-          ? "Not connected"
+          ? t("common.notConnected")
           : loading
-            ? "Loading usage…"
+            ? t("common.loading")
             : undefined)
       }
     >
@@ -330,9 +331,11 @@ function ProviderChip({
       {loading ? (
         <span className="animate-pulse text-content/35">···</span>
       ) : disconnected ? (
-        <span className="text-content/35">not connected</span>
+        <span className="text-content/35">
+          {t("common.notConnected")}
+        </span>
       ) : windows.length === 0 ? (
-        <span className="text-content/35">{emptyUsageLabel(limits)}</span>
+        <span className="text-content/35">{emptyUsageLabel(limits, t)}</span>
       ) : (
         <>
           {tightest ? <MiniBar usedPct={tightest.usedPercent} /> : null}
@@ -353,10 +356,15 @@ function ProviderChip({
   );
 }
 
-function emptyUsageLabel(limits: ProviderRateLimits): string {
+function emptyUsageLabel(
+  limits: ProviderRateLimits,
+  t: (key: string) => string,
+): string {
   if (limits.status !== "error") return "—";
   const text = limits.error?.toLowerCase() ?? "";
-  if (text.includes("expired") || text.includes("sign-in")) return "expired";
+  if (text.includes("expired") || text.includes("sign-in")) {
+    return t("common.expired");
+  }
   return "—";
 }
 
