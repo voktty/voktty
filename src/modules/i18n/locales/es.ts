@@ -53,6 +53,8 @@ export const es: TranslationSchema = {
     breadcrumb: "Ruta de navegación",
     unknownError: "Error desconocido",
     noResults: "No se encontraron resultados",
+    notConnected: "No conectado",
+    expired: "Expirado",
   },
   themes: {
     descriptions: {

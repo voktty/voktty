@@ -51,6 +51,8 @@ export const en = {
     breadcrumb: "Breadcrumb",
     unknownError: "Unknown error",
     noResults: "No results found",
+    notConnected: "Not connected",
+    expired: "Expired",
   },
   themes: {
     descriptions: {
