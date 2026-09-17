@@ -7,12 +7,12 @@ import {
   steerHermesTurn,
   stopHermesSession,
 } from "./hermes";
-import { type HarnessAdapter, registerHarness } from "./registry";
+import { refreshHermesCatalog } from "./hermesCatalog";
+import { registerHarness, type HarnessAdapter } from "./registry";
 
 export const hermesAdapter: HarnessAdapter = {
   id: "hermes",
   live: true,
-  canSteer: false,
   sendTurn: sendHermesTurn,
   steerTurn: steerHermesTurn,
   cancelTurn: cancelHermesTurn,
@@ -20,6 +20,7 @@ export const hermesAdapter: HarnessAdapter = {
   stopSession: stopHermesSession,
   forgetSession: forgetHermesSession,
   bindSession: bindHermesSession,
+  refreshCatalog: refreshHermesCatalog,
 };
 
 let registered = false;

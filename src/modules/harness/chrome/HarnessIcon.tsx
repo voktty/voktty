@@ -4,6 +4,7 @@ import codex from "../assets/providers/codex.svg";
 import cursor from "../assets/providers/cursor.svg";
 import fx from "../assets/providers/fx.svg";
 import grok from "../assets/providers/grok.svg";
+import hermes from "../assets/providers/hermes.svg";
 import omp from "../assets/providers/omp.svg";
 import opencode from "../assets/providers/opencode.svg";
 import pi from "../assets/providers/pi.svg";
@@ -14,7 +15,7 @@ export const HARNESS_ICONS: Record<HarnessId, string> = {
   codex,
   cursor,
   grok,
-  hermes: "",
+  hermes,
   opencode,
   pi,
   omp,
@@ -86,6 +87,28 @@ export function HarnessIcon({
       </MonoIcon>
     );
   }
+  if (harness === "hermes") {
+    return (
+      <span
+        aria-hidden
+        className={`inline-flex items-center justify-center ${className}`}
+      >
+        <span
+          className="block size-[72%] bg-current"
+          style={{
+            maskImage: `url(${hermes})`,
+            maskPosition: "center",
+            maskRepeat: "no-repeat",
+            maskSize: "contain",
+            WebkitMaskImage: `url(${hermes})`,
+            WebkitMaskPosition: "center",
+            WebkitMaskRepeat: "no-repeat",
+            WebkitMaskSize: "contain",
+          }}
+        />
+      </span>
+    );
+  }
   if (harness === "grok") {
     return (
       <MonoIcon className={className} viewBox="0 0 35 33">
@@ -125,15 +148,6 @@ export function HarnessIcon({
           fillRule="evenodd"
           d="M15.5 17H26.5V25.5H15.5V17ZM19 20V22.5H20.5V20H19ZM22.5 20V22.5H24V20H22.5Z"
         />
-      </MonoIcon>
-    );
-  }
-  if (harness === "hermes") {
-    return (
-      <MonoIcon className={className}>
-        <path d="M14.5 0L17.2 2.7L14.5 5.4L11.8 2.7L14.5 0Z" />
-        <path d="M13 6H16V29H13V6Z" />
-        <path d="M13 11.5L1.2 4L0 7.6L11 15L13 11.5ZM16 11.5L27.8 4L29 7.6L18 15L16 11.5Z" />
       </MonoIcon>
     );
   }
