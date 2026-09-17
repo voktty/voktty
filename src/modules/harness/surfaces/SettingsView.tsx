@@ -85,7 +85,7 @@ import {
   subscribeModels,
 } from "../lib/models";
 import { prettyCwd, projectKey, projectName } from "../lib/paths";
-import { ALT, IS_MAC, MOD } from "../lib/platform";
+import { ALT, IS_MAC, IS_WIN, MOD } from "../lib/platform";
 import {
   loadArchivedProjects,
   looksLikeProject,
@@ -124,12 +124,14 @@ import {
   filterKeybindings,
   KEYBINDINGS,
   loadClaudeHooks,
+  loadCloseToTray,
   loadComposerRunner,
   loadFollowUpBehavior,
   loadGridArcadeEnabled,
   loadLiveAgentsEnabled,
   loadNotesEnabled,
   saveClaudeHooks,
+  saveCloseToTray,
   saveComposerRunner,
   saveFollowUpBehavior,
   saveGridArcadeEnabled,
@@ -481,6 +483,7 @@ function GeneralPage({
   );
   const [soundsEnabled, setSoundsEnabled] = useState(loadSoundsEnabled);
   const [claudeHooks, setClaudeHooks] = useState(loadClaudeHooks);
+  const [closeToTray, setCloseToTray] = useState(loadCloseToTray);
 
   const onLayout = (next: SidebarLayout) => {
     saveSidebarLayout(next);
@@ -505,6 +508,11 @@ function GeneralPage({
   const onClaudeHooks = (next: boolean) => {
     saveClaudeHooks(next);
     setClaudeHooks(next);
+  };
+
+  const onCloseToTray = (next: boolean) => {
+    saveCloseToTray(next);
+    setCloseToTray(next);
   };
 
   return (
@@ -568,6 +576,19 @@ function GeneralPage({
           onChange={onClaudeHooks}
         />
       </Row>
+      {IS_WIN && (
+        <Row
+          settingId="closeToTray"
+          label={t("harness.settings.closeToTray")}
+          description={t("harness.settings.closeToTrayDesc")}
+        >
+          <Toggle
+            label={t("harness.settings.closeToTray")}
+            on={closeToTray}
+            onChange={onCloseToTray}
+          />
+        </Row>
+      )}
 
       <Heading title={t("harness.chrome.about")} />
       <UpdateRow onOpenWhatsNew={onOpenWhatsNew} />

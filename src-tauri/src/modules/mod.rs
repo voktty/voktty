@@ -32,4 +32,5 @@ pub mod tray;
 pub mod tunnel;
 pub mod vibrancy;
 pub mod web_server;
+pub mod window;
 pub mod workspace;

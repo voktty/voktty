@@ -1,4 +1,4 @@
-import { ALT, IS_MAC, MOD, SHIFT } from "./platform";
+import { ALT, IS_MAC, IS_WIN, MOD, SHIFT } from "./platform";
 
 const SECTION_KEY = "monocode.settingsSection";
 
@@ -144,6 +144,16 @@ export const SETTINGS_INDEX: SettingsEntry[] = [
     label: "Working agents",
     keywords: "live running sessions rail card",
   },
+  ...(IS_WIN
+    ? [
+        {
+          id: "close-to-tray",
+          section: "general" as const,
+          label: "Close to tray",
+          keywords: "minimize background quit exit window taskbar windows",
+        },
+      ]
+    : []),
   {
     id: "theme",
     section: "appearance",
@@ -561,6 +571,29 @@ export function subscribeGridArcadeEnabled(onStoreChange: () => void) {
   window.addEventListener(GRID_ARCADE_ENABLED_CHANGE_EVENT, onStoreChange);
   return () =>
     window.removeEventListener(GRID_ARCADE_ENABLED_CHANGE_EVENT, onStoreChange);
+}
+
+const CLOSE_TO_TRAY_KEY = "monocode.closeToTray";
+
+export const CLOSE_TO_TRAY_DEFAULT = true;
+
+export function loadCloseToTray(): boolean {
+  if (!IS_WIN) return false;
+  try {
+    const raw = localStorage.getItem(CLOSE_TO_TRAY_KEY);
+    if (raw == null) return CLOSE_TO_TRAY_DEFAULT;
+    return raw === "1" || raw === "true";
+  } catch {
+    return CLOSE_TO_TRAY_DEFAULT;
+  }
+}
+
+export function saveCloseToTray(value: boolean) {
+  try {
+    localStorage.setItem(CLOSE_TO_TRAY_KEY, value ? "1" : "0");
+  } catch {
+    // private mode / quota
+  }
 }
 
 const CLAUDE_HOOKS_KEY = "monocode.claudeHooks";

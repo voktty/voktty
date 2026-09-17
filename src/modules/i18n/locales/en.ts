@@ -4595,6 +4595,9 @@ export const en = {
       claudeHooks: "Claude Code hooks",
       claudeHooksDesc:
         "Run hooks from settings.json (PreToolUse, blocks, notifications). Takes effect on the next turn.",
+      closeToTray: "Close to system tray",
+      closeToTrayDesc:
+        "Closing the window keeps Voktty running in the system tray so background tasks continue.",
       restoreDefaults: "Restore defaults",
       sidebarOpacity: "Sidebar opacity",
       sidebarOpacityDesc: "How much of the desktop shows through the sidebar.",

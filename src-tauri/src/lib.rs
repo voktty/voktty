@@ -266,6 +266,7 @@ pub fn run() {
                         event,
                         WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
                     ) {
+                        modules::window::forget_quit_window(&handle, "main");
                         if let Some(settings) = handle.get_webview_window("settings") {
                             let _ = settings.close();
                         }
@@ -751,6 +752,11 @@ pub fn run() {
             harness::chat_background::remove_project_chat_background,
             harness::window_transfer::stage_window_transfer,
             harness::window_transfer::take_window_transfer,
+            modules::window::hide_window,
+            modules::window::destroy_window,
+            modules::window::quit_poll_reply,
+            modules::window::quit_decision,
+            modules::window::quit_ready,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
