@@ -17,6 +17,6 @@ pub mod skills;
 pub mod window_transfer;
 
 pub use checkpoint::CheckpointStore;
-pub use host::HarnessHost;
+pub use host::{provider_account_dir, HarnessHost};
 pub use session_store::SessionStore as HarnessSessionStore;
 pub use session_store::SessionStore;
