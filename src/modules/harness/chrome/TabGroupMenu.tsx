@@ -164,15 +164,17 @@ export function TabGroupMenu({
   return (
     <Popover
       anchor={{ x, y }}
+      side="right"
       gap={0}
       width={MENU_WIDTH}
+      constrainHeight={false}
       onDismiss={onClose}
       role="menu"
       tabIndex={-1}
       aria-label={t("harness.chrome.tabGroupActions")}
       onKeyDown={onMenuKey}
       onContextMenu={(e) => e.preventDefault()}
-      className="overflow-y-auto overscroll-none p-2"
+      className="p-2"
     >
       <input
         ref={input}
