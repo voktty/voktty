@@ -8,6 +8,22 @@ export type FsEntry = {
   ignored: boolean;
 };
 
+export type ExternalEditor = {
+  id: string;
+  name: string;
+};
+
+export function listExternalEditors(): Promise<ExternalEditor[]> {
+  return invoke<ExternalEditor[]>("list_external_editors");
+}
+
+export function openInExternalEditor(
+  editorId: string,
+  cwd: string,
+): Promise<void> {
+  return invoke<void>("open_in_external_editor", { editorId, cwd });
+}
+
 export type ProjectFile = {
   name: string;
   path: string;

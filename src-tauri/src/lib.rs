@@ -695,6 +695,8 @@ pub fn run() {
             harness::fs::reveal_path,
             harness::pasteboard::clipboard_file_paths,
             harness::pasteboard::copy_file_to_clipboard,
+            harness::external_editor::list_external_editors,
+            harness::external_editor::open_in_external_editor,
             harness::fs::clone_repo,
             harness::fs::read_file_preview,
             harness::fs::stat_files,
