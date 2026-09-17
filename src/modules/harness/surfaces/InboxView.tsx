@@ -1,6 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
+  Check,
   ChevronDown,
+  Copy,
   ExternalLink,
   GitCompare,
   Inbox,
@@ -85,6 +87,8 @@ import {
 } from "../lib/inboxFilters";
 import { projectKey, projectName } from "../lib/paths";
 import { IS_MAC } from "../lib/platform";
+import { copyText } from "../lib/clipboard";
+import { playCue } from "../lib/sounds";
 import { sameProjectPath, type RecentProject } from "../lib/recents";
 import { setInboxSelection, useInboxSelection } from "../lib/inboxSelection";
 import {
@@ -1378,6 +1382,7 @@ function InboxDetail({
                 <span className="min-w-0 truncate">
                   {baseRef} ← {headRef}
                 </span>
+                <CopyBranchNameButton branch={headRef} />
               </span>
             </>
           ) : null}
@@ -1722,3 +1727,43 @@ function labelColor(value: string): string | null {
   if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
   return `#${hex}`;
 }
+
+function CopyBranchNameButton({ branch }: { branch: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setCopied(false);
+    return () => {
+      if (timer.current != null) window.clearTimeout(timer.current);
+    };
+  }, [branch]);
+
+  return (
+    <button
+      type="button"
+      title={copied ? t("common.copied") : t("common.copyBranchName")}
+      aria-label={copied ? t("common.copied") : t("common.copyBranchName")}
+      className="shrink-0 rounded p-0.5 text-content/40 hover:bg-content/8 hover:text-content/70"
+      onClick={() => {
+        void copyText(branch).then(
+          () => {
+            playCue("copy");
+            setCopied(true);
+            if (timer.current != null) window.clearTimeout(timer.current);
+            timer.current = window.setTimeout(() => setCopied(false), 2000);
+          },
+          () => {},
+        );
+      }}
+    >
+      {copied ? (
+        <Check className="size-3" strokeWidth={1.75} />
+      ) : (
+        <Copy className="size-3" strokeWidth={1.75} />
+      )}
+    </button>
+  );
+}
+
