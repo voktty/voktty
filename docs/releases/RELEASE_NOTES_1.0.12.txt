@@ -1,0 +1,55 @@
+Voktty 1.0.12
+
+This release introduces local multi-agent orchestration, folded work trails and titlebar completion status, model reasoning effort pickers, settings search, inline skill previews, note tagging from transcripts, flexible split-pane placement, and substantial terminal and cross-platform companion reliability enhancements.
+
+Agent Orchestration and Subagents
+
+- Added local agent orchestration (v1) with worker tracking, status lifecycles, and live canvas steering.
+- Rendered subagent activity, hierarchical status, and active model badges directly in transcript rows.
+- Enhanced subagent session resumption and cursor tracking during workspace reloads.
+
+Harness and AI Capabilities
+
+- Added folded work trails, shell unwrap, and dynamic titlebar completion status to monitor long-running commands and agent tasks at a glance.
+- Added reasoning effort selectors (low, medium, high) and provider grouping across supported AI models.
+- Added scheduled session reminders with visible timestamps in the session menu and system notifications.
+- Added note tagging and the ability to save highlighted transcript selections directly as rich notes.
+- Added Hermes CLI runner integration and prompt builder with dedicated unit testing.
+- Enhanced OpenCode text response extraction and expanded AI provider availability test suites.
+- Ensured reliable file attachment delivery across multiple AI provider backends.
+- Normalized Claude model aliases across restarts and gated Sonnet 5 model versions.
+- Preserved composer height across tab switches, pane resizing, and hidden workspace states.
+- Preserved exact paths when opening files from workspace views.
+
+Tabs, Windows, and Workspace Layout
+
+- Added "Move to New Window" action for individual workspace tabs.
+- Added `place` parameter to `splitPane` supporting flexible "left" and "before" insertion orientations.
+- Added "Close All Tabs" and "Close Other Tabs" keyboard shortcuts and context menu actions.
+- Added automatic Bun CLI detection for native environment discovery.
+- Added secure link previews with external web links opening in the default browser.
+
+Settings, Skills, and Git
+
+- Added instant search within the Settings modal to quickly locate options and configurations.
+- Added inline skill preview in Settings, allowing instant inspection of skill instructions and tools.
+- Added a full file view toggle in Git Review / PR inspection panels.
+- Added an in-memory closed sessions cache for instant tab and session restoration.
+
+Terminal and Native Platform Reliability
+
+- Normalized Windows drive paths during OSC 7 CWD extraction to prevent path mismatches in PowerShell and WSL.
+- Resolved terminal paste issues and duplicate newline transmissions.
+- Enhanced Linux Secret Service vault integration for secure credential storage.
+- Improved companion loopback TCP networking with concurrent connection handling, explicit write flush, and clean socket shutdown across macOS (BSD) and Windows.
+- Adapted Docker client integration for Bollard 0.21.
+
+Dependencies and CI
+
+- Upgraded development and runtime dependencies including Vitest 5, Babel 8, Base64 0.23, Dirs 7.0, and Bollard 0.21.
+- Updated and restored GitHub Actions workflows across Linux, macOS, Windows, and Android runners.
+- Verified test suite with 100% green pass rate across all matrix jobs and platforms.
+
+Upgrade Notes
+
+- Existing workspace state, tabs, themes, notes, and agent sessions remain fully compatible with 1.0.12.
