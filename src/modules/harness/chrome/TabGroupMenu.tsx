@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  ChevronRight,
   ImagePlus,
   Pipette,
   SquarePlus,
@@ -18,6 +19,7 @@ import {
 } from "react";
 import { useTranslation } from "@/modules/i18n";
 import { normalizeHex } from "../lib/colorUtils";
+import { LAYER } from "../lib/layers";
 import { projectKey } from "../lib/paths";
 import { clearProjectLogo, pickAndSetProjectLogo } from "../lib/projectLogos";
 import { PROJECT_MASCOTS, projectMascot } from "../lib/projectMascots";
@@ -41,6 +43,10 @@ export type TabGroupMenuExtraItem = {
   icon: IconComponent;
   danger?: boolean;
   sepBefore?: boolean;
+  disabled?: boolean;
+  description?: string;
+  shortcut?: string;
+  submenu?: { kind: "item"; id: string; label: string; disabled?: boolean }[];
 };
 
 type Props = {
@@ -67,6 +73,7 @@ type Props = {
   /** When false, only name / logo / color controls are shown. */
   showActions?: boolean;
   extraItems?: TabGroupMenuExtraItem[];
+  footer?: ReactNode;
   onExtraPick?: (id: string) => void;
 };
 
@@ -134,13 +141,41 @@ export function TabGroupMenu({
   onClose,
   showActions = true,
   extraItems,
+  footer,
   onExtraPick,
 }: Props) {
   const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(label);
   const [customPickerOpen, setCustomPickerOpen] = useState(false);
+  const [submenu, setSubmenu] = useState<{
+    item: TabGroupMenuExtraItem;
+    anchor: HTMLButtonElement;
+  } | null>(null);
+  const submenuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuItems = items(t);
+
+  const cancelSubmenuClose = () => {
+    if (submenuCloseTimer.current != null) clearTimeout(submenuCloseTimer.current);
+    submenuCloseTimer.current = null;
+  };
+
+  const scheduleSubmenuClose = () => {
+    cancelSubmenuClose();
+    submenuCloseTimer.current = setTimeout(() => setSubmenu(null), 180);
+  };
+
+  const closeSubmenu = () => {
+    cancelSubmenuClose();
+    setSubmenu(null);
+  };
+
+  const pickExtra = (id: string) => {
+    onExtraPick?.(id);
+    onClose();
+  };
+
+  useEffect(() => cancelSubmenuClose, []);
 
   useEffect(() => {
     input.current?.focus();
@@ -162,224 +197,283 @@ export function TabGroupMenu({
   };
 
   return (
-    <Popover
-      anchor={{ x, y }}
-      side="right"
-      gap={0}
-      width={MENU_WIDTH}
-      constrainHeight={false}
-      onDismiss={onClose}
-      role="menu"
-      tabIndex={-1}
-      aria-label={t("harness.chrome.tabGroupActions")}
-      onKeyDown={onMenuKey}
-      onContextMenu={(e) => e.preventDefault()}
-      className="p-2"
-    >
-      <input
-        ref={input}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={commitName}
-        aria-label={t("harness.chrome.groupName")}
-        className="mb-2 w-full rounded-lg border border-content/10 bg-content/5 px-2.5 py-1.5 text-[13px] text-content outline-none ring-accent/40 focus:ring-1"
-      />
+    <>
+      <Popover
+        anchor={{ x, y }}
+        side="right"
+        gap={0}
+        width={MENU_WIDTH}
+        constrainHeight={false}
+        onDismiss={onClose}
+        role="menu"
+        tabIndex={-1}
+        aria-label={t("harness.chrome.tabGroupActions")}
+        onKeyDown={onMenuKey}
+        onContextMenu={(e) => e.preventDefault()}
+        className="p-2"
+      >
+        <input
+          ref={input}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={commitName}
+          aria-label={t("harness.chrome.groupName")}
+          className="mb-2 w-full rounded-lg border border-content/10 bg-content/5 px-2.5 py-1.5 text-[13px] text-content outline-none ring-accent/40 focus:ring-1"
+        />
 
-      {logoProject ? (
-        <div className="mb-2 flex items-center gap-2 px-0.5">
+        {logoProject ? (
+          <div className="mb-2 flex items-center gap-2 px-0.5">
+            <button
+              type="button"
+              title={
+                logoPath
+                  ? t("harness.chrome.changeProjectLogo")
+                  : t("harness.chrome.addProjectLogo")
+              }
+              aria-label={
+                logoPath
+                  ? t("harness.chrome.changeProjectLogo")
+                  : t("harness.chrome.addProjectLogo")
+              }
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                void (async () => {
+                  try {
+                    const path = await pickAndSetProjectLogo(logoProject);
+                    if (path) onLogoChange();
+                  } catch (error) {
+                    console.error("Failed to save project logo:", error);
+                  } finally {
+                    onClose();
+                  }
+                })();
+              }}
+              className="grid size-9 shrink-0 place-items-center rounded-lg border border-content/10 bg-content/5 hover:bg-content/10"
+            >
+              <ProjectLogoIcon
+                path={logoPath}
+                className="size-5"
+                imageClassName="size-5"
+                fallback={ImagePlus}
+                fallbackStrokeWidth={1.75}
+              />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] text-content/50">
+                {t("harness.chrome.projectLogo")}
+              </p>
+              <p className="truncate text-[12px] text-content/70">
+                {logoPath
+                  ? t("harness.chrome.projectLogoShown")
+                  : t("harness.chrome.projectLogoOptional")}
+              </p>
+            </div>
+            {logoPath ? (
+              <button
+                type="button"
+                title={t("harness.chrome.removeProjectLogo")}
+                aria-label={t("harness.chrome.removeProjectLogo")}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  void clearProjectLogo(projectKey(logoProject)).then(onLogoChange);
+                }}
+                className="grid size-7 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/10 hover:text-content"
+              >
+                <Trash2 className="size-3.5" strokeWidth={1.75} />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mb-2 flex items-center justify-between gap-1 px-0.5">
+          {TAB_GROUP_COLORS.map((color, index) => {
+            const selected =
+              customColor == null &&
+              (colorIndex === index || (colorIndex == null && index === 0));
+            return (
+              <button
+                key={color}
+                type="button"
+                title={t("harness.chrome.colorIndex", { index: index + 1 })}
+                aria-label={t("harness.chrome.colorIndex", { index: index + 1 })}
+                aria-pressed={selected}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setCustomPickerOpen(false);
+                  onColorChange(groupId, index === 0 ? null : index);
+                }}
+                className="grid size-5 place-items-center rounded-full"
+              >
+                <span
+                  className={`size-3.5 rounded-full ${
+                    selected ? "ring-2 ring-content/80 ring-offset-1 ring-offset-transparent" : ""
+                  }`}
+                  style={{ background: color }}
+                />
+              </button>
+            );
+          })}
           <button
             type="button"
-            title={
-              logoPath
-                ? t("harness.chrome.changeProjectLogo")
-                : t("harness.chrome.addProjectLogo")
-            }
-            aria-label={
-              logoPath
-                ? t("harness.chrome.changeProjectLogo")
-                : t("harness.chrome.addProjectLogo")
-            }
+            title={t("harness.chrome.customColor")}
+            aria-label={t("harness.chrome.customColor")}
+            aria-expanded={customPickerOpen}
+            aria-pressed={customColor != null}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              void (async () => {
-                try {
-                  const path = await pickAndSetProjectLogo(logoProject);
-                  if (path) onLogoChange();
-                } catch (error) {
-                  console.error("Failed to save project logo:", error);
-                } finally {
-                  onClose();
-                }
-              })();
-            }}
-            className="grid size-9 shrink-0 place-items-center rounded-lg border border-content/10 bg-content/5 hover:bg-content/10"
+            onClick={() => setCustomPickerOpen((open) => !open)}
+            className="grid size-5 place-items-center rounded-full"
           >
-            <ProjectLogoIcon
-              path={logoPath}
-              className="size-5"
-              imageClassName="size-5"
-              fallback={ImagePlus}
-              fallbackStrokeWidth={1.75}
-            />
-          </button>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-content/50">
-              {t("harness.chrome.projectLogo")}
-            </p>
-            <p className="truncate text-[12px] text-content/70">
-              {logoPath
-                ? t("harness.chrome.projectLogoShown")
-                : t("harness.chrome.projectLogoOptional")}
-            </p>
-          </div>
-          {logoPath ? (
-            <button
-              type="button"
-              title={t("harness.chrome.removeProjectLogo")}
-              aria-label={t("harness.chrome.removeProjectLogo")}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                void clearProjectLogo(projectKey(logoProject)).then(onLogoChange);
-              }}
-              className="grid size-7 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/10 hover:text-content"
+            <span
+              className={`grid size-3.5 place-items-center overflow-hidden rounded-full ${
+                customColor != null || customPickerOpen
+                  ? "ring-2 ring-content/80 ring-offset-1 ring-offset-transparent"
+                  : ""
+              }`}
+              style={
+                customColor
+                  ? { background: customColor }
+                  : {
+                      background:
+                        "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)",
+                    }
+              }
             >
-              <Trash2 className="size-3.5" strokeWidth={1.75} />
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="mb-2 flex items-center justify-between gap-1 px-0.5">
-        {TAB_GROUP_COLORS.map((color, index) => {
-          const selected =
-            customColor == null &&
-            (colorIndex === index || (colorIndex == null && index === 0));
-          return (
-            <button
-              key={color}
-              type="button"
-              title={t("harness.chrome.colorIndex", { index: index + 1 })}
-              aria-label={t("harness.chrome.colorIndex", { index: index + 1 })}
-              aria-pressed={selected}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setCustomPickerOpen(false);
-                onColorChange(groupId, index === 0 ? null : index);
-              }}
-              className="grid size-5 place-items-center rounded-full"
-            >
-              <span
-                className={`size-3.5 rounded-full ${
-                  selected ? "ring-2 ring-content/80 ring-offset-1 ring-offset-transparent" : ""
-                }`}
-                style={{ background: color }}
-              />
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          title={t("harness.chrome.customColor")}
-          aria-label={t("harness.chrome.customColor")}
-          aria-expanded={customPickerOpen}
-          aria-pressed={customColor != null}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setCustomPickerOpen((open) => !open)}
-          className="grid size-5 place-items-center rounded-full"
-        >
-          <span
-            className={`grid size-3.5 place-items-center overflow-hidden rounded-full ${
-              customColor != null || customPickerOpen
-                ? "ring-2 ring-content/80 ring-offset-1 ring-offset-transparent"
-                : ""
-            }`}
-            style={
-              customColor
-                ? { background: customColor }
-                : {
-                    background:
-                      "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)",
-                  }
-            }
-          >
-            {!customColor ? (
-              <Pipette className="size-2 text-white drop-shadow-sm" strokeWidth={2.25} />
-            ) : null}
-          </span>
-        </button>
-      </div>
-
-      {customPickerOpen ? (
-        <ColorPickerPopover
-          value={customColor ?? normalizeHex(currentColor)}
-          onChange={(color) => onCustomColorChange(groupId, color)}
-        />
-      ) : null}
-
-      <div className="mb-2 px-0.5">
-        <p className="mb-1 text-[11px] text-content/50">
-          {t("harness.chrome.mascot")}
-        </p>
-        <div className="flex items-center justify-between gap-1">
-          {PROJECT_MASCOTS.map((mascot) => (
-            <MascotSwatch
-              key={mascot.name}
-              title={mascot.name}
-              selected={shownMascot === mascot.name}
-              onPick={() => onMascotChange(groupId, mascot.name)}
-            >
-              <ProjectMascot
-                project={groupId}
-                name={mascot.name}
-                className="size-3 text-content/75"
-              />
-            </MascotSwatch>
-          ))}
-        </div>
-      </div>
-
-      {showActions ? (
-        <>
-          <div className="my-1 h-px bg-content/10" />
-
-          {menuItems.slice(0, 2).map((item) => (
-            <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
-          ))}
-
-          <div className="my-1 h-px bg-content/10" />
-
-          {menuItems.slice(2, 4).map((item) => (
-            <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
-          ))}
-
-          <div className="my-1 h-px bg-content/10" />
-
-          {menuItems.slice(4).map((item) => (
-            <MenuRow key={item.id} item={item} onPick={() => onPick(item.id as TabGroupMenuAction)} />
-          ))}
-        </>
-      ) : null}
-
-      {extraItems && extraItems.length > 0 ? (
-        <>
-          <div className="my-1 h-px bg-content/10" />
-          {extraItems.map((item) => (
-            <Fragment key={item.id}>
-              {item.sepBefore ? (
-                <div role="separator" className="my-1 h-px bg-content/10" />
+              {!customColor ? (
+                <Pipette className="size-2 text-white drop-shadow-sm" strokeWidth={2.25} />
               ) : null}
+            </span>
+          </button>
+        </div>
+
+        {customPickerOpen ? (
+          <ColorPickerPopover
+            value={customColor ?? normalizeHex(currentColor)}
+            onChange={(color) => onCustomColorChange(groupId, color)}
+          />
+        ) : null}
+
+        <div className="mb-2 px-0.5">
+          <p className="mb-1 text-[11px] text-content/50">
+            {t("harness.chrome.mascot")}
+          </p>
+          <div className="flex items-center justify-between gap-1">
+            {PROJECT_MASCOTS.map((mascot) => (
+              <MascotSwatch
+                key={mascot.name}
+                title={mascot.name}
+                selected={shownMascot === mascot.name}
+                onPick={() => onMascotChange(groupId, mascot.name)}
+              >
+                <ProjectMascot
+                  project={groupId}
+                  name={mascot.name}
+                  className="size-3 text-content/75"
+                />
+              </MascotSwatch>
+            ))}
+          </div>
+        </div>
+
+        {showActions ? (
+          <>
+            <div className="my-1 h-px bg-content/10" />
+
+            {menuItems.slice(0, 2).map((item) => (
               <MenuRow
+                key={item.id}
                 item={item}
-                onPick={() => {
-                  onExtraPick?.(item.id);
-                  onClose();
-                }}
+                onHover={() => setSubmenu(null)}
+                onPick={() => onPick(item.id as TabGroupMenuAction)}
               />
-            </Fragment>
+            ))}
+
+            <div className="my-1 h-px bg-content/10" />
+
+            {menuItems.slice(2, 4).map((item) => (
+              <MenuRow
+                key={item.id}
+                item={item}
+                onHover={() => setSubmenu(null)}
+                onPick={() => onPick(item.id as TabGroupMenuAction)}
+              />
+            ))}
+
+            <div className="my-1 h-px bg-content/10" />
+
+            {menuItems.slice(4).map((item) => (
+              <MenuRow
+                key={item.id}
+                item={item}
+                onHover={() => setSubmenu(null)}
+                onPick={() => onPick(item.id as TabGroupMenuAction)}
+              />
+            ))}
+          </>
+        ) : null}
+
+        {extraItems && extraItems.length > 0 ? (
+          <>
+            <div className="my-1 h-px bg-content/10" />
+            {extraItems.map((item) => (
+              <Fragment key={item.id}>
+                {item.sepBefore ? (
+                  <div role="separator" className="my-1 h-px bg-content/10" />
+                ) : null}
+                <MenuRow
+                  item={item}
+                  expanded={submenu?.item.id === item.id}
+                  onHover={(anchor) =>
+                    setSubmenu(
+                      item.submenu && !item.disabled ? { item, anchor } : null,
+                    )
+                  }
+                  onPick={(anchor) => {
+                    if (item.submenu) setSubmenu({ item, anchor });
+                    else pickExtra(item.id);
+                  }}
+                />
+              </Fragment>
+            ))}
+          </>
+        ) : null}
+        {footer}
+      </Popover>
+      {submenu && submenu.item.submenu ? (
+        <Popover
+          anchor={submenu.anchor}
+          side="right"
+          gap={4}
+          width={MENU_WIDTH}
+          layer={LAYER.submenu}
+          onDismiss={closeSubmenu}
+          role="menu"
+          tabIndex={-1}
+          aria-label={submenu.item.label}
+          onContextMenu={(e) => e.preventDefault()}
+          onMouseEnter={cancelSubmenuClose}
+          onMouseLeave={scheduleSubmenuClose}
+          className="p-1"
+        >
+          {submenu.item.submenu.map((subItem) => (
+            <button
+              key={subItem.id}
+              type="button"
+              role="menuitem"
+              disabled={subItem.disabled}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pickExtra(subItem.id)}
+              className={`flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[13px] leading-none ${
+                subItem.disabled
+                  ? "text-content/30"
+                  : "text-content hover:bg-content/5"
+              }`}
+            >
+              <span className="min-w-0 flex-1 truncate">{subItem.label}</span>
+            </button>
           ))}
-        </>
+        </Popover>
       ) : null}
-    </Popover>
+    </>
   );
 }
 
@@ -415,25 +509,57 @@ function MascotSwatch({
 function MenuRow({
   item,
   onPick,
+  onHover,
+  expanded,
 }: {
-  item: MenuItem;
-  onPick: () => void;
+  item: (MenuItem | TabGroupMenuExtraItem) & {
+    disabled?: boolean;
+    submenu?: { kind: "item"; id: string; label: string; disabled?: boolean }[];
+    description?: string;
+  };
+  onPick: (anchor: HTMLButtonElement) => void;
+  onHover?: (anchor: HTMLButtonElement) => void;
+  expanded?: boolean;
 }) {
   const Icon = item.icon;
   return (
     <button
       type="button"
       role="menuitem"
+      disabled={item.disabled}
+      aria-haspopup={item.submenu ? "menu" : undefined}
+      aria-expanded={item.submenu ? expanded : undefined}
+      aria-label={item.description ? item.label : undefined}
+      aria-description={item.description}
       onMouseDown={(e) => e.preventDefault()}
-      onClick={onPick}
-      className={`flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[13px] leading-none ${
-        item.danger
-          ? "text-red-300/90 hover:bg-red-500/15"
-          : "text-content hover:bg-content/5"
+      onMouseEnter={(e) => onHover?.(e.currentTarget)}
+      onClick={(e) => onPick(e.currentTarget)}
+      onKeyDown={(e) => {
+        if (item.submenu && e.key === "ArrowRight") {
+          e.preventDefault();
+          onPick(e.currentTarget);
+        }
+      }}
+      className={`flex min-h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[13px] leading-none ${
+        item.disabled
+          ? "text-content/30"
+          : item.danger
+            ? "text-red-300/90 hover:bg-red-500/15"
+            : "text-content hover:bg-content/5"
       }`}
     >
       <Icon className="size-3.5 shrink-0 text-content/55" strokeWidth={1.75} />
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      <span className={`min-w-0 flex-1 ${item.description ? "py-2" : "truncate"}`}>
+        {item.label}
+        {item.description ? (
+          <span className="mt-1 block text-[11px] leading-snug text-content/60">
+            {item.description}
+          </span>
+        ) : null}
+      </span>
+      {item.submenu ? (
+        <ChevronRight className="size-3.5 shrink-0 text-content/50" strokeWidth={1.75} />
+      ) : null}
       {item.shortcut ? (
         <span className="shrink-0 text-[11px] text-content/40">
           {item.shortcut}

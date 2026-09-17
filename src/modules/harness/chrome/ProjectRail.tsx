@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   Archive,
   Check,
   ChevronDown,
@@ -31,7 +32,14 @@ import {
   PROJECT_RAIL_WIDTH_MIN,
   saveProjectRailWidth,
 } from "../lib/appearance";
-import { basename, revealPath, type GitDiffStats } from "../lib/fs";
+import {
+  basename,
+  listExternalEditors,
+  openInExternalEditor,
+  revealPath,
+  type ExternalEditor,
+  type GitDiffStats,
+} from "../lib/fs";
 import { IS_MAC, MOD } from "../lib/platform";
 import { projectKey, projectName } from "../lib/paths";
 import {
@@ -78,6 +86,7 @@ import type { SettingsSectionId } from "../lib/settings";
 function projectMenuExtraItems(
   pinned: boolean,
   canRemove: boolean,
+  externalEditors: ExternalEditor[] | null,
 ): TabGroupMenuExtraItem[] {
   const items: TabGroupMenuExtraItem[] = [
     {
@@ -96,6 +105,36 @@ function projectMenuExtraItems(
           ? t("harness.chrome.revealInFileExplorer")
           : t("harness.chrome.openContainingFolder"),
       icon: FolderOpen,
+    },
+    {
+      id: "external-editor",
+      label: t("harness.chrome.openInEditor"),
+      icon: AppWindow,
+      disabled: externalEditors === null,
+      submenu:
+        externalEditors === null
+          ? [
+              {
+                kind: "item",
+                id: "external-editor:loading",
+                label: t("harness.chrome.lookingForEditors"),
+                disabled: true,
+              },
+            ]
+          : externalEditors.length > 0
+            ? externalEditors.map((editor) => ({
+                kind: "item" as const,
+                id: `external-editor:${editor.id}`,
+                label: editor.name,
+              }))
+            : [
+                {
+                  kind: "item",
+                  id: "external-editor:none",
+                  label: t("harness.chrome.noSupportedEditorsFound"),
+                  disabled: true,
+                },
+              ],
     },
   ];
   if (canRemove) {
@@ -188,12 +227,16 @@ export function ProjectRail({
   const [groupCustomColors, setGroupCustomColors] = useState(
     loadTabGroupCustomColors,
   );
+  const [externalEditors, setExternalEditors] = useState<
+    ExternalEditor[] | null
+  >(null);
   const [projectMenu, setProjectMenu] = useState<{
     x: number;
     y: number;
     path: string;
     projectKey: string;
   } | null>(null);
+  const [projectMenuError, setProjectMenuError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<{
     path: string;
     name: string;
@@ -205,6 +248,20 @@ export function ProjectRail({
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupLogos = useTabGroupLogos();
+
+  useEffect(() => {
+    let active = true;
+    void listExternalEditors()
+      .then((installed) => {
+        if (active) setExternalEditors(Array.isArray(installed) ? installed : []);
+      })
+      .catch(() => {
+        if (active) setExternalEditors([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const busy = useMemo(() => {
     const set = new Set<string>();
     for (const path of busyPaths ?? []) set.add(path);
@@ -280,6 +337,7 @@ export function ProjectRail({
   }, [projectMenu]);
 
   const openProjectMenu = (path: string, x: number, y: number) => {
+    setProjectMenuError(null);
     setProjectMenu({
       x,
       y,
@@ -376,7 +434,19 @@ export function ProjectRail({
         name: resolveTabGroupLabel(projectKey, groupLabels, basename(path)),
       });
     } else if (action === "reveal") void revealPath(path);
-    else if (action === "archive") {
+    else if (action.startsWith("external-editor:")) {
+      const editorId = action.slice("external-editor:".length);
+      if (!externalEditors?.some((editor) => editor.id === editorId)) return;
+      void openInExternalEditor(editorId, path)
+        .then(() => {
+          setProjectMenu(null);
+        })
+        .catch((error: unknown) => {
+          setProjectMenuError(
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+    } else if (action === "archive") {
       onRemoveProject?.(path, { purgeData: false });
     } else if (action === "delete") {
       setRemoving({
@@ -585,7 +655,11 @@ export function ProjectRail({
               sameProjectPath(pinned, projectMenu.path),
             ),
             Boolean(onRemoveProject),
+            externalEditors,
           )}
+          footer={projectMenuError ? (
+            <p role="alert" className="px-2 py-1 text-xs text-red-400">{projectMenuError}</p>
+          ) : null}
           onExtraPick={onProjectMenuPick}
         />
       ) : null}

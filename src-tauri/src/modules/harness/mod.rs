@@ -1,6 +1,7 @@
 pub mod chat_background;
 pub mod checkpoint;
 pub mod cursor_store;
+pub mod external_editor;
 pub mod external_history;
 pub mod fs;
 pub mod host;
