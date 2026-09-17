@@ -53,6 +53,7 @@ type Shared = {
   focusedId: string;
   addToChatSessionId?: string;
   composerFocused: boolean;
+  composerFocusToken?: number;
   recents: RecentProject[];
   hideProjectPicker?: boolean;
   onFocus: (paneId: string) => void;
@@ -154,6 +155,7 @@ function PaneTreeComponent({
   focusedId,
   addToChatSessionId,
   composerFocused,
+  composerFocusToken,
   recents,
   hideProjectPicker,
   onFocus,
@@ -376,6 +378,7 @@ function PaneTreeComponent({
                     (s) => s.id !== session.id && s.cwd === session.cwd && !!s.busy,
                   )}
                   composerFocused={composerFocused}
+                  composerFocusToken={composerFocusToken}
                   recents={recents}
                   hideProjectPicker={hideProjectPicker}
                   onFocus={onFocus}

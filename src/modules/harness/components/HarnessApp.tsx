@@ -657,6 +657,7 @@ export function HarnessApp({
       resumed.sessions.some((session: any) => session.id === tab.focusedId)
     );
   });
+  const [composerFocusToken, setComposerFocusToken] = useState(0);
   /** Tab id -> project name, kept in sync with the rendered title tabs. */
   const tabProjectsRef = useRef(new Map<string, string>());
   const projectOfTab = useCallback(
@@ -734,6 +735,8 @@ export function HarnessApp({
   tabsRef.current = tabs;
   const projectTerminalsRef = useRef(projectTerminals);
   projectTerminalsRef.current = projectTerminals;
+  const projectTerminalFocusedRef = useRef(projectTerminalFocused);
+  projectTerminalFocusedRef.current = projectTerminalFocused;
   const activeTabIdRef = useRef(activeTabId);
   activeTabIdRef.current = activeTabId;
   const projectCwdRef = useRef(projectCwd);
@@ -1126,6 +1129,18 @@ export function HarnessApp({
         if (focused) {
           flushHarnessEvents();
           syncDockBadge(sessionsRef.current);
+          const el = document.activeElement;
+          if (
+            (el === null || el === document.body) &&
+            !searchViewOpenRef.current &&
+            !inboxViewOpenRef.current &&
+            !notesViewOpenRef.current &&
+            !settingsOpenRef.current &&
+            !projectTerminalFocusedRef.current
+          ) {
+            setComposerFocused(true);
+            setComposerFocusToken((prev) => prev + 1);
+          }
         }
       })
       .then((fn) => {
@@ -5884,6 +5899,7 @@ export function HarnessApp({
                             composerFocused={
                               composerFocused && !projectTerminalFocused
                             }
+                            composerFocusToken={composerFocusToken}
                             recents={recents}
                             hideProjectPicker={deckLayout}
                             onFocus={onFocusPane}
