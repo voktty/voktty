@@ -284,6 +284,7 @@ export function bindResumedSessions(sessions: Session[]): void {
       session.id,
       session.providerSessionId,
       sessionWorkCwd(session),
+      session.providerAccountId,
     );
   }
 }

@@ -65,25 +65,133 @@ pub struct CursorBinary {
     pub path: String,
 }
 
+const DEFAULT_PROVIDER_ACCOUNT_ID: &str = "default";
+
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessAccount {
+    pub provider: String,
+    pub id: String,
+}
+
 pub fn provider_account_dir(
     app: &AppHandle,
     provider: &str,
     account_id: Option<&str>,
 ) -> Result<Option<PathBuf>, String> {
-    let Some(id) = account_id.filter(|s| !s.trim().is_empty()) else {
+    let Some(account_id) = account_id.filter(|id| *id != DEFAULT_PROVIDER_ACCOUNT_ID) else {
         return Ok(None);
     };
-    let app_dir = app
+    let dir = provider_account_path(app, provider, account_id)?;
+    std::fs::create_dir_all(&dir).map_err(|error| {
+        format!(
+            "Could not create the {provider} account directory {}: {error}",
+            dir.display()
+        )
+    })?;
+    Ok(Some(dir))
+}
+
+fn provider_account_path(
+    app: &AppHandle,
+    provider: &str,
+    account_id: &str,
+) -> Result<PathBuf, String> {
+    if provider != "claude" && provider != "codex" {
+        return Err("Provider account profiles are not supported for this provider".into());
+    }
+    if account_id == DEFAULT_PROVIDER_ACCOUNT_ID {
+        return Err("The default provider account cannot be removed".into());
+    }
+    if account_id.is_empty()
+        || account_id.len() > 80
+        || !account_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    {
+        return Err("Invalid provider account id".into());
+    }
+    Ok(app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let path = app_dir.join("accounts").join(provider).join(id);
-    Ok(Some(path))
+        .map_err(|error| error.to_string())?
+        .join("provider-accounts")
+        .join(provider)
+        .join(account_id))
+}
+
+#[tauri::command(async)]
+pub fn provider_account_remove(
+    app: AppHandle,
+    host: State<'_, HarnessHost>,
+    provider: String,
+    account_id: String,
+) -> Result<(), String> {
+    let dir = provider_account_path(&app, &provider, &account_id)?;
+    host.kill_account(&provider, &account_id);
+
+    #[cfg(target_os = "macos")]
+    if provider == "claude" {
+        super::rate_limits::delete_claude_keychain_credentials(&dir)?;
+    }
+
+    let metadata = match std::fs::symlink_metadata(&dir) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!(
+                "Could not inspect the {provider} account directory {}: {error}",
+                dir.display()
+            ));
+        }
+    };
+    if metadata.file_type().is_symlink() || metadata.is_file() {
+        std::fs::remove_file(&dir)
+    } else {
+        std::fs::remove_dir_all(&dir)
+    }
+    .map_err(|error| {
+        format!(
+            "Could not remove the {provider} account directory {}: {error}",
+            dir.display()
+        )
+    })
+}
+
+fn apply_provider_account(
+    app: &AppHandle,
+    cmd: &mut Command,
+    account: Option<&HarnessAccount>,
+) -> Result<(), String> {
+    let Some(account) = account else {
+        return Ok(());
+    };
+    let Some(dir) = provider_account_dir(app, &account.provider, Some(&account.id))? else {
+        return Ok(());
+    };
+    match account.provider.as_str() {
+        "claude" => {
+            cmd.env("CLAUDE_CONFIG_DIR", &dir)
+                .env("CLAUDE_SECURESTORAGE_CONFIG_DIR", &dir)
+                .env_remove("ANTHROPIC_API_KEY")
+                .env_remove("ANTHROPIC_AUTH_TOKEN")
+                .env_remove("CLAUDE_CODE_OAUTH_TOKEN");
+        }
+        "codex" => {
+            cmd.env("CODEX_HOME", &dir)
+                .env_remove("OPENAI_API_KEY")
+                .env_remove("CODEX_API_KEY")
+                .env_remove("CODEX_ACCESS_TOKEN");
+        }
+        _ => unreachable!("provider_account_dir validates the provider"),
+    }
+    Ok(())
 }
 
 struct LiveChild {
     stdin: Mutex<ChildStdin>,
     pid: u32,
+    account: Option<HarnessAccount>,
 }
 
 struct LiveSse {
@@ -182,6 +290,38 @@ impl HarnessHost {
         *inner.epochs.entry(session_id.to_string()).or_insert(0) += 1;
         inner.proxies.remove(session_id);
         inner.children.remove(session_id)
+    }
+
+    fn kill_account(&self, provider: &str, account_id: &str) {
+        let children: Vec<(String, Arc<LiveChild>)> = {
+            let mut inner = self.lock_inner();
+            let session_ids: Vec<String> = inner
+                .children
+                .iter()
+                .filter_map(|(session_id, live)| {
+                    let account = live.account.as_ref()?;
+                    (account.provider == provider && account.id == account_id)
+                        .then(|| session_id.clone())
+                })
+                .collect();
+            session_ids
+                .into_iter()
+                .filter_map(|session_id| {
+                    *inner.epochs.entry(session_id.clone()).or_insert(0) += 1;
+                    inner.proxies.remove(&session_id);
+                    inner
+                        .children
+                        .remove(&session_id)
+                        .map(|child| (session_id, child))
+                })
+                .collect()
+        };
+        for (session_id, _) in &children {
+            self.stop_sse(session_id);
+        }
+        let pids: Vec<u32> = children.iter().map(|(_, child)| child.pid).collect();
+        drop(children);
+        terminate_all(&pids);
     }
 
     fn remove_if_pid(&self, session_id: &str, pid: u32) -> Option<Arc<LiveChild>> {
@@ -541,6 +681,7 @@ fn build_exec_command(command: &str, args: &[String]) -> Command {
 /// login-shell read. Callers await this before writing to the child. Kill can
 /// still race the fork, so a cancelled spawn must not reinsert the child.
 #[tauri::command(async)]
+#[allow(clippy::too_many_arguments)]
 pub fn harness_spawn(
     app: AppHandle,
     host: State<'_, HarnessHost>,
@@ -549,6 +690,7 @@ pub fn harness_spawn(
     args: Vec<String>,
     cwd: String,
     network_allowlist: Option<Vec<String>>,
+    account: Option<HarnessAccount>,
 ) -> Result<u32, String> {
     let (epoch, kill_all, prev) = host.begin_spawn(&session_id);
     if let Some(prev) = prev {
@@ -577,6 +719,8 @@ pub fn harness_spawn(
             apply_harness_control_env(&mut cmd, &env);
         }
     }
+
+    apply_provider_account(&app, &mut cmd, account.as_ref())?;
 
     let mut network_proxy: Option<net_proxy::ProxyHandle> = None;
     if let Some(hosts) = &network_allowlist {
@@ -609,6 +753,7 @@ pub fn harness_spawn(
     let live = Arc::new(LiveChild {
         stdin: Mutex::new(stdin),
         pid,
+        account,
     });
     if let Some(rejected) = host.install_spawn(session_id.clone(), epoch, kill_all, live) {
         // A kill, or a newer spawn, won the race while this one was forking.
@@ -2452,6 +2597,7 @@ mod tests {
             Arc::new(LiveChild {
                 stdin: Mutex::new(stdin),
                 pid,
+                account: None,
             }),
             child,
         )
@@ -2943,6 +3089,7 @@ mod proxy_lifecycle_tests {
             Arc::new(LiveChild {
                 stdin: Mutex::new(stdin),
                 pid,
+                account: None,
             }),
             child,
         )

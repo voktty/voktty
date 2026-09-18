@@ -132,7 +132,9 @@ import {
   stopStreaming,
   type UserQuestionReply,
 } from "../lib/harness";
+import { latestTurnNeedsHarnessLogin } from "../lib/harness/auth";
 import { isEditTool } from "../lib/harness/preview";
+import type { UsageFooterSession } from "../chrome/UsageFooter";
 import {
   CONTINUE_PROMPT,
   canAutoContinue,
@@ -232,6 +234,13 @@ import {
   withDockSize,
 } from "../lib/projectTerminal";
 import { preparePrompt } from "../lib/promptPreparation";
+import {
+  DEFAULT_PROVIDER_ACCOUNT_ID,
+  providerAccountExists,
+  selectedProviderAccountId,
+  supportsProviderAccounts,
+  type ProviderAccountProvider,
+} from "../lib/providerAccounts";
 import {
   archiveProject,
   forgetProject,
@@ -496,7 +505,9 @@ function withHarnessChoice(
     ...(session.model === model
       ? {}
       : { context: dropContextWindow(session.context) }),
-    ...(session.harness === harness ? {} : { providerSessionId: undefined }),
+    ...(session.harness === harness
+      ? {}
+      : { providerSessionId: undefined, providerAccountId: undefined }),
   };
 }
 
@@ -524,6 +535,9 @@ function withPlanBuildTarget(
       ...(plan.restoreProviderSessionId
         ? { providerSessionId: plan.restoreProviderSessionId }
         : { providerSessionId: undefined }),
+      ...(plan.restoreProviderAccountId
+        ? { providerAccountId: plan.restoreProviderAccountId }
+        : { providerAccountId: undefined }),
     };
   }
   if (plan.kind === "empty") {
@@ -1080,10 +1094,19 @@ export function HarnessApp({
     }
     return [];
   }, [active?.harness]);
-  const usageSession = useMemo(() => {
+  const usageSession = useMemo((): UsageFooterSession | undefined => {
     if (!active) return undefined;
-    return { harness: active.harness };
-  }, [active?.harness]);
+    return {
+      id: active.id,
+      harness: active.harness,
+      authRequired: latestTurnNeedsHarnessLogin(active.blocks),
+      providerAccountId:
+        active.providerAccountId ??
+        (active.blocks.some((block: any) => block.role === "user")
+          ? DEFAULT_PROVIDER_ACCOUNT_ID
+          : undefined),
+    };
+  }, [active?.id, active?.harness, active?.blocks, active?.providerAccountId]);
   const runningTerminals = useMemo(() => {
     const files: FilePaneTab[] = [];
     const dock = findProjectTerminal(projectTerminals, projectCwd);
@@ -1859,6 +1882,44 @@ export function HarnessApp({
     window.addEventListener(ADD_TO_CHAT_EVENT, onAdd);
     return () => window.removeEventListener(ADD_TO_CHAT_EVENT, onAdd);
   }, [openSessionForAddToChat]);
+
+  const onSelectProviderAccount = useCallback(
+    (provider: ProviderAccountProvider, accountId: string) => {
+      if (!active || active.harness !== provider) return;
+      const currentId = active.providerAccountId ?? DEFAULT_PROVIDER_ACCOUNT_ID;
+      if (currentId === accountId) return;
+
+      if (active.blocks.length === 0 && !active.busy) {
+        setSessions((current: any) =>
+          current.map((session: any) =>
+            session.id === active.id
+              ? { ...session, providerAccountId: accountId }
+              : session,
+          ),
+        );
+        return;
+      }
+
+      // Provider thread ids are account-owned. Keep the current conversation
+      // pinned to its account and open a clean one for the selected profile.
+      const session = {
+        ...newSession(
+          active.harness,
+          active.cwd,
+          active.model,
+          active.runtimeMode,
+          active.modelSettings,
+        ),
+        providerAccountId: accountId,
+      };
+      const tab = newTab(session.id);
+      setSessions((current: any) => [...current, session]);
+      appendTab(tab, active.cwd);
+      setActiveTabId(tab.id);
+      setComposerFocused(true);
+    },
+    [active, appendTab],
+  );
 
   const onInboxCardDismiss = useCallback((sessionId: string) => {
     setSessions((prev: any) =>
@@ -4103,6 +4164,9 @@ export function HarnessApp({
               ...(plan.restoreProviderSessionId
                 ? { providerSessionId: plan.restoreProviderSessionId }
                 : { providerSessionId: undefined }),
+              ...(plan.restoreProviderAccountId
+                ? { providerAccountId: plan.restoreProviderAccountId }
+                : { providerAccountId: undefined }),
             };
           }
           if (plan.kind === "empty") {
@@ -4190,6 +4254,26 @@ export function HarnessApp({
       if (isPreparingHandoff(current)) return;
       saveRecentModelChoice(current.harness, current.model);
       const workCwd = sessionWorkCwd(current);
+      const accountProvider = supportsProviderAccounts(current.harness)
+        ? current.harness
+        : undefined;
+      const providerAccountId = accountProvider
+        ? (current.providerAccountId ??
+          selectedProviderAccountId(accountProvider, current.cwd))
+        : undefined;
+      if (
+        accountProvider &&
+        providerAccountId &&
+        !providerAccountExists(accountProvider, providerAccountId)
+      ) {
+        enqueueHarnessEvent(sessionId, {
+          type: "session.error",
+          message:
+            "This conversation uses a removed provider account. Switch accounts from the usage control to start a new conversation.",
+        });
+        flushHarnessEvents();
+        return;
+      }
       const submittedText = intent === "build" ? "Build approved plan" : text;
       const harnessText = composeNoteMessage(noteCard, submittedText);
 
@@ -4277,6 +4361,7 @@ export function HarnessApp({
               cwd: workCwd,
               model: current.model,
               modelSettings: current.modelSettings,
+              providerAccountId,
               text: prompt,
               attachments: prepared,
             });
@@ -4335,6 +4420,7 @@ export function HarnessApp({
           const titled = isFirstTurn ? titleSeed : selected.title;
           let next: any = {
             ...selected,
+            providerAccountId,
             inboxCard: undefined,
             noteCard: undefined,
             handoffCard: undefined,
@@ -4412,6 +4498,7 @@ export function HarnessApp({
           cwd: workCwd,
           message:
             harnessText || attachments.map((file: any) => file.name).join(", "),
+          providerAccountId,
         })
           .then((title: any) => {
             if (!title) return;
@@ -4483,6 +4570,7 @@ export function HarnessApp({
                 cwd: workCwd,
                 model: pendingSwitch.fromModel,
                 modelSettings: pendingSwitch.fromSettings,
+                providerAccountId: pendingSwitch.fromProviderAccountId,
                 userRequest: text,
               });
             }
@@ -4529,6 +4617,7 @@ export function HarnessApp({
             cwd: workCwd,
             model: current.model,
             modelSettings: current.modelSettings,
+            providerAccountId,
             runtimeMode: current.runtimeMode,
             intent,
             text: wrap
@@ -5028,6 +5117,10 @@ export function HarnessApp({
             cwd: workCwd,
             model: current.model,
             modelSettings: current.modelSettings,
+            providerAccountId: supportsProviderAccounts(current.harness)
+              ? (current.providerAccountId ??
+                selectedProviderAccountId(current.harness, current.cwd))
+              : undefined,
             runtimeMode: current.runtimeMode,
             onEvent: (event) => {
               if (turnGen.current.get(sessionId) !== gen) return;
@@ -6212,6 +6305,11 @@ export function HarnessApp({
             <LazyUsageFooter
               providers={usageProviders}
               session={usageSession}
+              project={active?.cwd ?? projectCwd}
+              onSelectAccount={onSelectProviderAccount}
+              onManageAccounts={() =>
+                openSettings("providers", "provider-accounts")
+              }
               terminals={runningTerminals}
               terminalOpen={runningTerminalOpen}
               onToggleTerminal={onToggleRunningTerminal}

@@ -247,6 +247,7 @@ pub fn get_external_session_record(
             meta.title
         },
         provider_session_id: Some(meta.id),
+        provider_account_id: None,
         blocks: Value::Array(blocks),
         context_used: None,
         context_window: None,

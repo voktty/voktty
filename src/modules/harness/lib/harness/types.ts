@@ -123,6 +123,7 @@ export type HarnessSessionInput = {
   cwd: string;
   model: string;
   modelSettings?: Record<string, string>;
+  providerAccountId?: string;
   runtimeMode: RuntimeMode;
   intent?: TurnIntent;
   onEvent: (event: HarnessEvent) => void;
@@ -142,6 +143,7 @@ export type SteerTurnInput = {
   cwd: string;
   model: string;
   modelSettings?: Record<string, string>;
+  providerAccountId?: string;
   text: string;
   attachments?: Attachment[];
 };

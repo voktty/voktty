@@ -68,8 +68,9 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     group: "agents",
     label: "Providers",
     description:
-      "Agent CLIs Voktty can drive, and the model new sessions start with.",
-    keywords: "model harness claude codex gemini cli default hooks",
+      "Provider accounts, agent CLIs Voktty can drive, and the model new sessions start with.",
+    keywords:
+      "account sign in login model harness claude codex gemini cli default hooks",
   },
   {
     id: "skills",
@@ -255,6 +256,12 @@ export const SETTINGS_INDEX: SettingsEntry[] = [
     section: "chat",
     label: "Empty session games",
     keywords: "pacman snake arcade grid fun",
+  },
+  {
+    id: "provider-accounts",
+    section: "providers",
+    label: "Provider accounts",
+    keywords: "account sign in login rename remove delete credentials profile",
   },
   {
     id: "claude-hooks",

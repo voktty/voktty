@@ -17,6 +17,7 @@ vi.mock("./child", () => ({
 }));
 
 const {
+  bindCodexSession,
   compactCodexContext,
   sendCodexTurn,
   stopCodexSession,
@@ -53,14 +54,28 @@ async function startTurn(
   options: {
     runtimeMode?: RuntimeMode;
     intent?: TurnIntent;
+    resume?: boolean;
+    providerAccountId?: string;
+    resumeProviderAccountId?: string;
+    expectResume?: boolean;
+    beforeThreadReply?: () => Promise<void>;
   } = {},
 ) {
   const events: HarnessEvent[] = [];
+  if (options.resume) {
+    bindCodexSession(
+      sessionId,
+      "thr_1",
+      "/repo",
+      options.resumeProviderAccountId,
+    );
+  }
   const turn = sendCodexTurn({
     sessionId,
     cwd: "/repo",
     model: "codex:gpt-5.4",
     modelSettings: {},
+    providerAccountId: options.providerAccountId,
     runtimeMode: options.runtimeMode ?? "supervised",
     intent: options.intent,
     text: "summarize the changelog",
@@ -73,11 +88,16 @@ async function startTurn(
     "initialize",
   );
   reply(parse().find((m) => m.method === "initialize")!.id as number, {});
+  const threadMethod =
+    (options.expectResume ?? options.resume) ? "thread/resume" : "thread/start";
   await waitFor(
-    () => parse().some((m) => m.method === "thread/start"),
-    "thread/start",
+    () => parse().some((m) => m.method === threadMethod),
+    threadMethod,
   );
-  reply(parse().find((m) => m.method === "thread/start")!.id as number, {
+  if (options.beforeThreadReply) {
+    await options.beforeThreadReply();
+  }
+  reply(parse().find((m) => m.method === threadMethod)!.id as number, {
     thread: { id: "thr_1" },
   });
   await waitFor(
@@ -101,6 +121,37 @@ describe("codex live turn sequence", () => {
     vi.useRealTimers();
     await stopCodexSession("codex-live");
     __codexTestReset();
+  });
+
+  it("resumes a legacy thread when the missing account resolves to default", async () => {
+    const { turn } = await startTurn("codex-live", {
+      resume: true,
+      providerAccountId: "default",
+    });
+    expect(parse().some((message) => message.method === "thread/resume")).toBe(
+      true,
+    );
+    expect(parse().some((message) => message.method === "thread/start")).toBe(
+      false,
+    );
+    notify("turn/completed", { turn: { id: "turn_1", status: "completed" } });
+    await turn;
+  });
+
+  it("does not resume a legacy default thread under a named account", async () => {
+    const { turn } = await startTurn("codex-live", {
+      resume: true,
+      providerAccountId: "account-work",
+      expectResume: false,
+    });
+    expect(parse().some((message) => message.method === "thread/start")).toBe(
+      true,
+    );
+    expect(parse().some((message) => message.method === "thread/resume")).toBe(
+      false,
+    );
+    notify("turn/completed", { turn: { id: "turn_1", status: "completed" } });
+    await turn;
   });
 
   it("stays busy after an agent message until turn/completed", async () => {

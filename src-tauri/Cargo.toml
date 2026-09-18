@@ -109,6 +109,7 @@ base64 = "0.23"
 hex = "0.4"
 portable-pty = "0.9"
 sha2 = "0.10"
+unicode-normalization = "0.1"
 hmac = "0.12"
 ring = "0.17"
 tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }

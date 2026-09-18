@@ -11,10 +11,12 @@ export async function generateCodexSessionTitle(input: {
   sessionId: string;
   cwd: string;
   message: string;
+  providerAccountId?: string;
 }): Promise<string | null> {
   try {
     const output = await runCodexTextPrompt({
       cwd: input.cwd,
+      providerAccountId: input.providerAccountId,
       prompt: buildThreadTitlePrompt(input.message),
       timeoutMs: TITLE_TIMEOUT_MS,
     });
