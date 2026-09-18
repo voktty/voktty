@@ -19,6 +19,7 @@ import {
 import { joinStreamText } from "./streamText";
 import { taskListText } from "../taskList";
 import { isReviewablePlan } from "../plan";
+import { resolveModel } from "../models";
 import type { HarnessEvent } from "./types";
 
 export function applyHarnessEvent(
@@ -311,6 +312,17 @@ function userTurnFields(extra?: UserTurnExtra) {
   };
 }
 
+function turnModelFields(session: Session) {
+  const model = resolveModel(session.harness, session.model);
+  return {
+    turnModel: {
+      harness: session.harness,
+      id: session.model,
+      name: model.name,
+    },
+  };
+}
+
 export function appendUser(
   session: Session,
   text: string,
@@ -325,6 +337,7 @@ export function appendUser(
       role: "user",
       text,
       startedAt: Date.now(),
+      ...turnModelFields(session),
       ...(attachments.length > 0 ? { attachments } : {}),
       ...userTurnFields(extra),
     },
@@ -347,6 +360,7 @@ export function appendSteerUser(
         id: crypto.randomUUID(),
         role: "user",
         text,
+        ...turnModelFields(session),
         ...(attachments.length > 0 ? { attachments } : {}),
         ...userTurnFields(extra),
       },
