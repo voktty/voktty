@@ -187,6 +187,13 @@ export type InterjectionMeta = {
   sourceSessionId?: string;
 };
 
+/** Provider/model provenance captured when a user turn is submitted. */
+export type TurnModel = {
+  harness: HarnessId;
+  id: string;
+  name: string;
+};
+
 export type Block = {
   id: string;
   role: BlockRole;
@@ -197,6 +204,8 @@ export type Block = {
   startedAt?: number;
   /** How long the agent worked on this user turn, in ms. */
   durationMs?: number;
+  /** Stable model label for this turn. Present on newly created user blocks. */
+  turnModel?: TurnModel;
   notice?: "error" | "interrupt";
   interjection?: InterjectionMeta;
   tool?: {

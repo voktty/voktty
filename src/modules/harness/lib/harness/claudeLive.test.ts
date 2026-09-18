@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sent: string[] = [];
+const spawned: string[][] = [];
 let onLine: ((line: string) => void) | undefined;
 
 vi.mock("./child", () => ({
   resolveClaudeBinary: async () => ({ path: "/fake/claude" }),
-  spawnChild: async () => undefined,
+  spawnChild: async (_id: string, _path: string, args: string[]) => {
+    spawned.push(args);
+  },
   killChild: async () => undefined,
   unwatchChild: () => undefined,
   watchChild: (_id: string, line: (l: string) => void) => {
@@ -79,6 +82,7 @@ async function startTurn(
 
 beforeEach(() => {
   sent.length = 0;
+  spawned.length = 0;
   onLine = undefined;
   __claudeTestReset();
 });
@@ -86,6 +90,48 @@ beforeEach(() => {
 afterEach(async () => {
   await stopClaudeSession("s1");
   __claudeTestReset();
+});
+
+describe("claude model switching", () => {
+  it("restarts with the new model while resuming the provider conversation", async () => {
+    const first = await startTurn("s1");
+    emit({ type: "result", subtype: "success", session_id: "sess_1" });
+    await first.turn;
+
+    const userCount = parse().filter(
+      (message) => message.type === "user",
+    ).length;
+    const second = sendClaudeTurn({
+      sessionId: "s1",
+      cwd: "/repo",
+      model: "claude:opus-5",
+      modelSettings: {},
+      runtimeMode: "supervised",
+      text: "what did I ask before?",
+      attachments: [],
+      onEvent: () => undefined,
+    });
+
+    await waitFor(() => spawned.length === 2, "replacement Claude process");
+    expect(spawned[1]).toEqual(
+      expect.arrayContaining([
+        "--model",
+        "claude-opus-5",
+        "--resume",
+        "sess_1",
+      ]),
+    );
+    expect(spawned[1]).not.toContain("--session-id");
+
+    emit({ type: "system", subtype: "init", session_id: "sess_1" });
+    await waitFor(
+      () =>
+        parse().filter((message) => message.type === "user").length > userCount,
+      "follow-up prompt",
+    );
+    emit({ type: "result", subtype: "success", session_id: "sess_1" });
+    await second;
+  });
 });
 
 describe("claude subagents", () => {
