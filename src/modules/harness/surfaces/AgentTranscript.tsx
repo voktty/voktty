@@ -2128,6 +2128,7 @@ function ActivityToolRow({
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
 }) {
+  const [errorOpen, setErrorOpen] = useState(false);
   const label = toolCallLabel(block, cwd);
   const state = toolCallState(block);
   const pending = needsApproval(block);
@@ -2138,28 +2139,68 @@ function ActivityToolRow({
   )
     ? (onOpenDiff ?? onOpenFile)
     : onOpenFile;
+  const errorDetail =
+    !pending && state === "rejected" ? block.tool?.detail?.trim() : undefined;
+  const summary = (
+    <ToolCallSummary
+      label={label}
+      preview={block.tool?.preview}
+      status={state}
+      cwd={cwd}
+      chip={bare}
+      failed={state === "rejected"}
+      onOpenFile={openFile}
+      onOpenDiff={onOpenDiff}
+    />
+  );
 
   return (
     <div className="flex min-w-0 flex-col">
-      <div
-        aria-label={t("harness.chrome.toolCall", { text: label })}
-        className="flex min-w-0 items-center gap-1.5 py-1"
-      >
-        {bare ? null : <ActivityToolIcon state={state} live={live} />}
-        <ToolCallSummary
-          label={label}
-          preview={block.tool?.preview}
-          status={state}
-          cwd={cwd}
-          chip={bare}
-          failed={state === "rejected"}
-          onOpenFile={openFile}
-          onOpenDiff={onOpenDiff}
-        />
-        {pending ? null : <ToolCallStatusIcon state={state} />}
-      </div>
+      {errorDetail ? (
+        <div
+          aria-label={`Failed tool call: ${label}`}
+          className="group flex min-w-0 items-center gap-1.5 py-1"
+        >
+          {bare ? null : <ActivityToolIcon state={state} live={live} />}
+          <div
+            className="flex min-w-0 flex-1 cursor-pointer"
+            onClick={() => setErrorOpen((value) => !value)}
+          >
+            {summary}
+          </div>
+          <ToolCallStatusIcon state={state} />
+          <button
+            type="button"
+            aria-expanded={errorOpen}
+            aria-label={`${errorOpen ? "Hide" : "Show"} error details for ${label}`}
+            onClick={() => setErrorOpen((value) => !value)}
+            className="-m-1 shrink-0 rounded p-1"
+          >
+            <ChevronRight
+              className={`size-3.5 text-red-400/60 transition-transform ${errorOpen ? "rotate-90" : ""}`}
+              strokeWidth={1.75}
+            />
+          </button>
+        </div>
+      ) : (
+        <div
+          aria-label={t("harness.chrome.toolCall", { text: label })}
+          className="flex min-w-0 items-center gap-1.5 py-1"
+        >
+          {bare ? null : <ActivityToolIcon state={state} live={live} />}
+          {summary}
+          {pending ? null : <ToolCallStatusIcon state={state} />}
+        </div>
+      )}
       {pending ? (
         <ApprovalControls block={block} onApproval={onApproval} />
+      ) : null}
+      {errorOpen && errorDetail ? (
+        <pre
+          className={`min-w-0 whitespace-pre-wrap break-words py-1 font-mono text-[12px] leading-5 text-red-400/80 ${bare ? "" : "pl-5"}`}
+        >
+          {errorDetail}
+        </pre>
       ) : null}
     </div>
   );
