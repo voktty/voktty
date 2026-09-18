@@ -116,6 +116,25 @@ describe("AgentTranscript collapsed work", () => {
     expect(markup.includes('aria-label="Show the work"')).toBe(false);
   });
 
+  it("keeps failed tool error details collapsed by default", () => {
+    const markup = render([
+      { id: "user", role: "user", text: "Start the app" },
+      {
+        id: "command",
+        role: "tool",
+        text: "Run npm run dev",
+        tool: {
+          kind: "shell",
+          status: "failed",
+          detail: "Error: listen EPERM\n    at Server.setupListenHandle",
+        },
+      },
+    ], true);
+
+    expect(markup).toContain("Show error details for Run npm run dev");
+    expect(markup).not.toContain("Server.setupListenHandle");
+  });
+
   it("places a session accessory after the latest reply and before its action row", () => {
     const markup = render(
       [
