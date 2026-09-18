@@ -39,6 +39,7 @@ import {
 } from "./workspaceSnapshot";
 import { loadWindowTransfer } from "./windowTransferBootstrap";
 import type { WindowTransferPayload } from "./windowTransfer";
+import type { ProjectReturnMemory } from "./projectReturn";
 
 export type { ResumedWorkspace };
 export { hasInFlightSessions };
@@ -59,6 +60,7 @@ let liveWorkspace: {
   activeTabId: () => string;
   projectCwd: () => string;
   projectTerminals: () => ProjectTerminalDock[];
+  projectReturnMemory: () => ProjectReturnMemory;
   flush: () => void;
 } | null = null;
 
@@ -72,6 +74,7 @@ export function setQuitWorkspace(
   activeTabId: () => string,
   projectCwd: () => string,
   projectTerminals: () => ProjectTerminalDock[],
+  projectReturnMemory: () => ProjectReturnMemory,
   flush: () => void,
 ): () => void {
   liveWorkspace = {
@@ -80,6 +83,7 @@ export function setQuitWorkspace(
     activeTabId,
     projectCwd,
     projectTerminals,
+    projectReturnMemory,
     flush,
   };
   bootingResumed = null;
@@ -149,6 +153,7 @@ export async function commitQuit(id: number): Promise<void> {
         liveWorkspace.tabs(),
         liveWorkspace.activeTabId(),
         liveWorkspace.projectCwd(),
+        liveWorkspace.projectReturnMemory(),
         "quit",
         liveWorkspace.projectTerminals(),
       );
@@ -180,6 +185,7 @@ export async function handleQuitRequested(): Promise<void> {
       liveWorkspace.tabs(),
       liveWorkspace.activeTabId(),
       liveWorkspace.projectCwd(),
+      liveWorkspace.projectReturnMemory(),
       liveWorkspace.projectTerminals(),
     );
     return;
@@ -301,6 +307,7 @@ export async function persistQuitState(
   tabs: WorkspaceTab[],
   activeTabId: string,
   projectCwd: string,
+  memory: ProjectReturnMemory,
   mode: "quit" | "unload" = "quit",
   projectTerminals: ProjectTerminalDock[] = [],
 ): Promise<void> {
@@ -317,6 +324,7 @@ export async function persistQuitState(
       sessions,
       activeTabId,
       projectCwd,
+      memory,
       projectTerminals,
     ),
   ).catch(() => undefined);
@@ -335,6 +343,7 @@ async function persistBootingResume(workspace: ResumedWorkspace): Promise<void> 
       workspace.sessions,
       workspace.activeTabId,
       workspace.projectCwd,
+      workspace.projectReturnMemory ?? new Map(),
       workspace.projectTerminals ?? [],
     ),
   ).catch(() => undefined);
@@ -353,6 +362,7 @@ export async function confirmAndCloseWindow(
   tabs: WorkspaceTab[],
   activeTabId: string,
   projectCwd: string,
+  memory: ProjectReturnMemory,
   projectTerminals: ProjectTerminalDock[] = [],
   flush?: () => void,
 ): Promise<void> {
@@ -372,6 +382,7 @@ export async function confirmAndCloseWindow(
       tabs,
       activeTabId,
       projectCwd,
+      memory,
       "unload",
       projectTerminals,
     );
@@ -385,6 +396,7 @@ async function confirmQuitAndExit(
   tabs: WorkspaceTab[],
   activeTabId: string,
   projectCwd: string,
+  memory: ProjectReturnMemory,
   projectTerminals: ProjectTerminalDock[] = [],
 ): Promise<void> {
   if (quitDialogOpen) return;
@@ -406,6 +418,7 @@ async function confirmQuitAndExit(
         tabs,
         activeTabId,
         projectCwd,
+        memory,
         "quit",
         projectTerminals,
       );

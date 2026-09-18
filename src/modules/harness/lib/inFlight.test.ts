@@ -122,7 +122,7 @@ describe("markTurnInterrupted", () => {
     const once = markTurnInterrupted(chat("/tmp/a", { busy: true }));
     const twice = markTurnInterrupted(once);
     expect(
-      twice.blocks.filter((block) => block.text === INTERRUPT_MESSAGE),
+      twice.blocks.filter((block: any) => block.text === INTERRUPT_MESSAGE),
     ).toHaveLength(1);
   });
 
@@ -148,7 +148,7 @@ describe("markTurnInterrupted", () => {
     };
     const second = markTurnInterrupted(continued);
     expect(
-      second.blocks.filter((block) => block.text === INTERRUPT_MESSAGE),
+      second.blocks.filter((block: any) => block.text === INTERRUPT_MESSAGE),
     ).toHaveLength(2);
     expect(second.blocks[second.blocks.length - 1]?.text).toBe(INTERRUPT_MESSAGE);
     expect(canAutoContinue(second)).toBe(true);

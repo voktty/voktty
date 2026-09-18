@@ -88,7 +88,13 @@ describe("inbox sessions", () => {
     const project = newSession("codex", "/project");
     const session = { ...newSession("codex", "/other"), inboxAsk: context, busy: true };
     const tab = newTab(project.id);
-    const snapshot = collectWorkspaceSnapshot([tab], [project, session], tab.id, project.cwd);
+    const snapshot = collectWorkspaceSnapshot(
+      [tab],
+      [project, session],
+      tab.id,
+      project.cwd,
+      new Map(),
+    );
     expect(snapshot.sessions.map(entry => entry.id)).toEqual([project.id]);
     const restored = hydrateWorkspaceSnapshot(
       snapshot,
