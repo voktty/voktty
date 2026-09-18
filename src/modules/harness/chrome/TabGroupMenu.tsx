@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  Check,
   ChevronRight,
   ImagePlus,
   Pipette,
@@ -29,6 +30,7 @@ import { Popover } from "./Popover";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
 import { ProjectMascot } from "./ProjectMascot";
 import { MOD } from "../lib/platform";
+import type { ExplorerMenuItem } from "./ExplorerMenu";
 
 export type TabGroupMenuAction =
   | "new-tab"
@@ -46,7 +48,7 @@ export type TabGroupMenuExtraItem = {
   disabled?: boolean;
   description?: string;
   shortcut?: string;
-  submenu?: { kind: "item"; id: string; label: string; disabled?: boolean }[];
+  submenu?: ExplorerMenuItem[];
 };
 
 type Props = {
@@ -70,6 +72,7 @@ type Props = {
   onLogoChange: () => void;
   onPick: (action: TabGroupMenuAction) => void;
   onClose: () => void;
+  ariaLabel?: string;
   /** When false, only name / logo / color controls are shown. */
   showActions?: boolean;
   extraItems?: TabGroupMenuExtraItem[];
@@ -139,6 +142,7 @@ export function TabGroupMenu({
   onLogoChange,
   onPick,
   onClose,
+  ariaLabel,
   showActions = true,
   extraItems,
   footer,
@@ -207,7 +211,7 @@ export function TabGroupMenu({
         onDismiss={onClose}
         role="menu"
         tabIndex={-1}
-        aria-label={t("harness.chrome.tabGroupActions")}
+        aria-label={ariaLabel ?? t("harness.chrome.tabGroupActions")}
         onKeyDown={onMenuKey}
         onContextMenu={(e) => e.preventDefault()}
         className="p-2"
@@ -454,23 +458,35 @@ export function TabGroupMenu({
           onMouseLeave={scheduleSubmenuClose}
           className="p-1"
         >
-          {submenu.item.submenu.map((subItem) => (
-            <button
-              key={subItem.id}
-              type="button"
-              role="menuitem"
-              disabled={subItem.disabled}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pickExtra(subItem.id)}
-              className={`flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[13px] leading-none ${
-                subItem.disabled
-                  ? "text-content/30"
-                  : "text-content hover:bg-content/5"
-              }`}
-            >
-              <span className="min-w-0 flex-1 truncate">{subItem.label}</span>
-            </button>
-          ))}
+          {submenu.item.submenu.map((subItem, index) =>
+            subItem.kind === "sep" ? (
+              <div
+                key={`sep-${index}`}
+                role="separator"
+                className="my-1 h-px bg-content/10"
+              />
+            ) : (
+              <button
+                key={subItem.id}
+                type="button"
+                role="menuitem"
+                disabled={subItem.disabled}
+                aria-checked={subItem.checked}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pickExtra(subItem.id)}
+                className={`flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[13px] leading-none ${
+                  subItem.disabled
+                    ? "text-content/30"
+                    : "text-content hover:bg-content/5"
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate">{subItem.label}</span>
+                {subItem.checked ? (
+                  <Check className="size-3.5 shrink-0 text-content" strokeWidth={2} />
+                ) : null}
+              </button>
+            ),
+          )}
         </Popover>
       ) : null}
     </>
@@ -514,7 +530,7 @@ function MenuRow({
 }: {
   item: (MenuItem | TabGroupMenuExtraItem) & {
     disabled?: boolean;
-    submenu?: { kind: "item"; id: string; label: string; disabled?: boolean }[];
+    submenu?: ExplorerMenuItem[];
     description?: string;
   };
   onPick: (anchor: HTMLButtonElement) => void;
