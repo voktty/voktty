@@ -23,7 +23,8 @@ const {
   __codexTestReset,
 } = await import("./codex");
 import type { HarnessEvent } from "./types";
-import type { RuntimeMode, TurnIntent } from "../session";
+import { applyHarnessEvent } from "./apply";
+import { newSession, type RuntimeMode, type TurnIntent } from "../session";
 
 function parse() {
   return sent.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -138,6 +139,69 @@ describe("codex live turn sequence", () => {
     });
     await turn;
     expect(settled).toBe(true);
+  });
+
+  it("keeps retries and HTTP fallback out of a successful turn's transcript", async () => {
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const { events, turn } = await startTurn("codex-live");
+    const settled = vi.fn();
+    void turn.then(settled);
+    const beforeRetries = [...events];
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      notify("error", {
+        threadId: "thr_1",
+        turnId: "turn_1",
+        error: { message: `Reconnecting... ${attempt}/5` },
+        willRetry: true,
+      });
+    }
+    const fallback =
+      "Falling back from WebSockets to HTTPS transport. unexpected status 404 Not Found: Unknown endpoint: GET /v1/responses, url: ws://127.0.0.1:19101/v1/responses";
+    notify("warning", { threadId: "thr_1", message: fallback });
+    await Promise.resolve();
+    expect(settled).not.toHaveBeenCalled();
+    expect(events).toEqual(beforeRetries);
+    expect(debug).toHaveBeenCalledTimes(6);
+    expect(debug).toHaveBeenCalledWith(expect.any(String), fallback);
+
+    notify("item/agentMessage/delta", { delta: "The answer" });
+    notify("turn/completed", { turn: { id: "turn_1", status: "completed" } });
+    await turn;
+    expect(settled).toHaveBeenCalledOnce();
+    const session = events.reduce(
+      applyHarnessEvent,
+      newSession("codex", "/repo", "codex:gpt-5.4", "supervised"),
+    );
+    expect(session.blocks).toMatchObject([
+      { role: "assistant", text: "The answer", streaming: false },
+    ]);
+  });
+
+  it("still surfaces a terminal failure after transport retries", async () => {
+    vi.spyOn(console, "debug").mockImplementation(() => {});
+    const { events, turn } = await startTurn("codex-live");
+    notify("error", {
+      error: { message: "Reconnecting... 5/5" },
+      willRetry: true,
+    });
+    const message =
+      "Response stream disconnected after too many failed attempts";
+    notify("error", { error: { message }, willRetry: false });
+    expect(events).toContainEqual({ type: "session.error", message });
+    notify("turn/completed", {
+      turn: { id: "turn_1", status: "failed", error: { message } },
+    });
+    await turn;
+    const session = events.reduce(
+      applyHarnessEvent,
+      newSession("codex", "/repo", "codex:gpt-5.4", "supervised"),
+    );
+    expect(session.blocks).toContainEqual(
+      expect.objectContaining({ role: "system", text: message }),
+    );
+    expect(
+      session.blocks.some((block) => block.text.includes("Reconnecting")),
+    ).toBe(false);
   });
 
   it("keeps plan turns read-only without surfacing approval prompts", async () => {

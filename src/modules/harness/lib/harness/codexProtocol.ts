@@ -225,6 +225,8 @@ export function toCodexApprovalDecision(
 
 export type MappedCodexNotification = {
   events: HarnessEvent[];
+  /** Provider diagnostics for debug logs, excluded from the transcript. */
+  diagnostic?: string;
   /** When set, the active turn finished. */
   turnCompleted?: {
     status: "completed" | "failed" | "interrupted" | "cancelled";
@@ -356,7 +358,9 @@ export function mapCodexNotification(
       "Codex error";
     const willRetry = rec.willRetry === true;
     if (willRetry) {
-      return { events: [{ type: "status", text: message }] };
+      // Codex owns retrying the request; a status event would persist a row
+      // for every attempt and interrupt any streaming transcript block.
+      return { events: [], diagnostic: message };
     }
     return { events: [{ type: "session.error", message }] };
   }
@@ -367,6 +371,16 @@ export function mapCodexNotification(
       stringField(rec, "message") ??
       stringField(rec, "details");
     if (!message) return { events: [] };
+    // Runtime warnings have no structured code. Match only Codex's known
+    // transport fallback notice; configuration and other warnings stay visible.
+    if (
+      method === "warning" &&
+      /^Falling back from WebSockets to HTTPS transport(?:[.:]|$)/.test(
+        message.trimStart(),
+      )
+    ) {
+      return { events: [], diagnostic: message };
+    }
     return { events: [{ type: "status", text: message }] };
   }
 

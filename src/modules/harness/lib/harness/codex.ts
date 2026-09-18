@@ -573,6 +573,12 @@ function handleNotification(live: Live, method: string, params: unknown): void {
   // turn/completed (and turn/aborted) settle sendCodexTurn, which is what the
   // UI uses for busy / stop / "Working for".
   const mapped = mapCodexNotification(method, params);
+  if (mapped.diagnostic) {
+    console.debug(
+      `[voktty] codex ${live.threadId} ${method}`,
+      mapped.diagnostic,
+    );
+  }
   // Codex describes one spawned agent through more than one item type. The
   // first row to name a child thread owns it; a later item for the same thread
   // would otherwise stand up a second agent that never does anything.
