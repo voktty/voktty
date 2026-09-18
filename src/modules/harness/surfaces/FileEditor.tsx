@@ -122,6 +122,17 @@ export function FileEditor({
   }>({ path, original: null });
   const markdown = isMarkdownPath(path);
   const [mode, setMode] = useMarkdownMode(path);
+  const sourceNavigationToken = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (
+      !navigation ||
+      !markdown ||
+      sourceNavigationToken.current === navigation.token
+    )
+      return;
+    sourceNavigationToken.current = navigation.token;
+    setMode("source");
+  }, [markdown, navigation, setMode]);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const saveGeneration = useRef(0);
   const loadGeneration = useRef(0);
@@ -506,6 +517,8 @@ function CodeMirrorEditor({
   onSaveRef.current = onSave;
   onStageGitRef.current = onStageGit;
   onDocChangeRef.current = onDocChange;
+  const navigationTokenRef = useRef<number | undefined>(undefined);
+  const pendingNavigationRef = useRef<EditorNavigationRequest | null>(null);
   valueRef.current = value;
   gitOriginalRef.current = gitOriginal;
 
@@ -683,12 +696,27 @@ function CodeMirrorEditor({
           ]),
         ),
         EditorView.updateListener.of((update) => {
+          if (
+            update.transactions.some(
+              (tr) =>
+                (tr.selection || tr.docChanged) &&
+                !tr.annotation(diskReload) &&
+                !tr.annotation(sourceNavigation),
+            )
+          ) {
+            pendingNavigationRef.current = null;
+          }
           if (!update.docChanged) return;
           onDocChangeRef.current?.(update.state.doc.toString());
           if (update.transactions.some((tr) => tr.annotation(diskReload))) {
             return;
           }
           markDirty();
+        }),
+        EditorView.domEventHandlers({
+          blur: () => {
+            pendingNavigationRef.current = null;
+          },
         }),
         showDiff
           ? EditorView.updateListener.of((update) => {
@@ -784,26 +812,35 @@ function CodeMirrorEditor({
   }, [showDiff, syncChunkNav, value]);
 
   useEffect(() => {
-    if (!navigation) return;
+    if (!navigation) {
+      pendingNavigationRef.current = null;
+      return;
+    }
+    if (navigationTokenRef.current !== navigation.token) {
+      navigationTokenRef.current = navigation.token;
+      pendingNavigationRef.current = navigation;
+    }
+    const pending = pendingNavigationRef.current;
+    if (!pending) return;
     const view = viewRef.current;
     if (!view) return;
 
     let cancelled = false;
     const run = () => {
-      if (cancelled) return;
-      if (view.state.doc.lines < navigation.line) {
-        requestAnimationFrame(run);
-        return;
+      if (cancelled || pendingNavigationRef.current !== pending) return;
+      revealNavigation(view, pending);
+      // Retry a clamped location only while its line has not arrived and
+      // the user has not moved the caret, edited the file, or left the editor.
+      if (pending.line <= view.state.doc.lines) {
+        pendingNavigationRef.current = null;
       }
-      if (cancelled) return;
-      revealNavigation(view, navigation);
     };
     requestAnimationFrame(() => requestAnimationFrame(run));
 
     return () => {
       cancelled = true;
     };
-  }, [navigation]);
+  }, [navigation, value]);
 
   useEffect(() => {
     if (!active) return;
@@ -931,11 +968,13 @@ function revealNavigation(view: EditorView, target: EditorNavigation) {
   view.dispatch({
     selection: { anchor },
     effects: EditorView.scrollIntoView(anchor, { y: "center" }),
+    annotations: sourceNavigation.of(true),
   });
   view.focus();
 }
 
 const diskReload = Annotation.define<boolean>();
+const sourceNavigation = Annotation.define<boolean>();
 
 function indentOrInsertTab(view: EditorView): boolean {
   const { state, dispatch } = view;
