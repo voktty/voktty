@@ -3,9 +3,12 @@ import {
   Archive,
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   CircleAlert,
   FolderOpen,
+  FolderPlus,
+  FolderTree,
   ImagePlus,
   Inbox,
   MoreHorizontal,
@@ -41,7 +44,7 @@ import {
   type GitDiffStats,
 } from "../lib/fs";
 import { IS_MAC, MOD } from "../lib/platform";
-import { projectKey, projectName } from "../lib/paths";
+import { pathKey, projectKey, projectName } from "../lib/paths";
 import {
   collectRailProjects,
   loadPinnedProjects,
@@ -68,7 +71,18 @@ import {
   saveTabGroupCustomColor,
   saveTabGroupLabel,
   saveTabGroupMascot,
+  TAB_GROUP_COLORS,
+  tabGroupColor,
 } from "../lib/tabGroups";
+import {
+  createProjectGroup,
+  loadProjectGroupAssignments,
+  loadProjectGroups,
+  projectGroupIdForPath,
+  saveProjectGroupAssignments,
+  saveProjectGroups,
+  type ProjectGroup,
+} from "../lib/projectGroups";
 import { formatLiveElapsed, type LiveAgent } from "../lib/liveAgents";
 import { HarnessIcon } from "./HarnessIcon";
 import { ProjectLogoIcon } from "./ProjectLogoIcon";
@@ -87,12 +101,37 @@ function projectMenuExtraItems(
   pinned: boolean,
   canRemove: boolean,
   externalEditors: ExternalEditor[] | null,
+  projectGroups: ProjectGroup[],
+  currentProjectGroupId?: string,
 ): TabGroupMenuExtraItem[] {
+  const groupSubmenu: TabGroupMenuExtraItem["submenu"] = [
+    { kind: "item", id: "project-group:new", label: "New group…" },
+    ...(projectGroups.length > 0 ? [{ kind: "sep" } as const] : []),
+    ...projectGroups.map((group) => ({
+      kind: "item" as const,
+      id: `project-group:${group.id}`,
+      label: group.name,
+      checked: group.id === currentProjectGroupId,
+    })),
+    ...(projectGroups.length > 0 ? [{ kind: "sep" } as const] : []),
+    {
+      kind: "item",
+      id: "project-group:none",
+      label: "Ungrouped",
+      checked: currentProjectGroupId == null,
+    },
+  ];
   const items: TabGroupMenuExtraItem[] = [
     {
       id: "background",
       label: t("harness.chrome.backgroundImage"),
       icon: ImagePlus,
+    },
+    {
+      id: "project-group",
+      label: "Move to group",
+      icon: FolderTree,
+      submenu: groupSubmenu,
     },
     pinned
       ? { id: "unpin", label: t("harness.chrome.unpinProject"), icon: PinOff }
@@ -214,7 +253,12 @@ export function ProjectRail({
   const resize = useDragResize({
     min: PROJECT_RAIL_WIDTH_MIN,
     max: () =>
-      Math.min(PROJECT_RAIL_WIDTH_MAX, Math.floor(window.innerWidth * 0.35)),
+      Math.min(
+        PROJECT_RAIL_WIDTH_MAX,
+        Math.floor(
+          (typeof window !== "undefined" ? window.innerWidth : 1200) * 0.35,
+        ),
+      ),
     defaultWidth: PROJECT_RAIL_WIDTH_DEFAULT,
     initial: loadProjectRailWidth(),
     onCommit: saveProjectRailWidth,
@@ -227,6 +271,16 @@ export function ProjectRail({
   const [groupCustomColors, setGroupCustomColors] = useState(
     loadTabGroupCustomColors,
   );
+  const [projectGroups, setProjectGroups] = useState(loadProjectGroups);
+  const [projectGroupAssignments, setProjectGroupAssignments] = useState(
+    loadProjectGroupAssignments,
+  );
+  const [projectGroupMenu, setProjectGroupMenu] = useState<{
+    x: number;
+    y: number;
+    id: string;
+  } | null>(null);
+  const menuTrigger = useRef<HTMLElement | null>(null);
   const [externalEditors, setExternalEditors] = useState<
     ExternalEditor[] | null
   >(null);
@@ -292,6 +346,80 @@ export function ProjectRail({
       ),
     [busy, cwd, pinnedPaths, railOrder, recents, unavailablePaths],
   );
+
+  const groupedProjectSections = useMemo(() => {
+    const byGroup = new Map<string, RecentProject[]>(
+      projectGroups.map((group) => [group.id, []]),
+    );
+    const ungrouped: RecentProject[] = [];
+    for (const project of sections.projects) {
+      const groupId = projectGroupIdForPath(
+        project.path,
+        projectGroupAssignments,
+      );
+      const items = groupId ? byGroup.get(groupId) : undefined;
+      if (items) items.push(project);
+      else ungrouped.push(project);
+    }
+    return {
+      ungrouped,
+      grouped: projectGroups.map((group) => ({
+        group,
+        items: byGroup.get(group.id) ?? [],
+      })),
+    };
+  }, [projectGroupAssignments, projectGroups, sections.projects]);
+
+  const saveProjectGroupList = (next: ProjectGroup[]) => {
+    if (!saveProjectGroups(next)) return false;
+    setProjectGroups(next);
+    return true;
+  };
+
+  const updateProjectGroup = (
+    id: string,
+    update: (group: ProjectGroup) => ProjectGroup,
+  ) => {
+    const current = loadProjectGroups();
+    if (!current.some((group) => group.id === id)) return;
+    const next = current.map((group) =>
+      group.id === id ? update(group) : group,
+    );
+    saveProjectGroupList(next);
+  };
+
+  const assignProjectGroup = (path: string, groupId: string | null) => {
+    const next = { ...loadProjectGroupAssignments() };
+    const key = pathKey(path);
+    if (groupId == null) delete next[key];
+    else next[key] = groupId;
+    if (!saveProjectGroupAssignments(next)) return false;
+    setProjectGroupAssignments(next);
+    return true;
+  };
+
+  const createGroup = (x: number, y: number, projectPath?: string) => {
+    const current = loadProjectGroups();
+    const group = createProjectGroup(current);
+    if (!saveProjectGroupList([...current, group])) return;
+    if (projectPath) assignProjectGroup(projectPath, group.id);
+    if (!projectPath) {
+      menuTrigger.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+    }
+    setProjectGroupMenu({ x, y, id: group.id });
+  };
+
+  const deleteGroup = (id: string) => {
+    const nextGroups = loadProjectGroups().filter((group) => group.id !== id);
+    if (!saveProjectGroupList(nextGroups)) return false;
+    const nextAssignments = loadProjectGroupAssignments(nextGroups);
+    saveProjectGroupAssignments(nextAssignments);
+    setProjectGroupAssignments(nextAssignments);
+    return true;
+  };
 
   const handleSelectProject = async (path: string) => {
     const isUnavailable = isBusyPath(path, unavailablePaths);
@@ -428,7 +556,16 @@ export function ProjectRail({
     if (!projectMenu) return;
     const { path, projectKey } = projectMenu;
     if (action === "pin" || action === "unpin") onTogglePin(path);
-    else if (action === "background") {
+    else if (action === "project-group:new") {
+      createGroup(projectMenu.x, projectMenu.y, path);
+    } else if (action === "project-group:none") {
+      assignProjectGroup(path, null);
+    } else if (action.startsWith("project-group:")) {
+      const groupId = action.slice("project-group:".length);
+      if (projectGroups.some((group) => group.id === groupId)) {
+        assignProjectGroup(path, groupId);
+      }
+    } else if (action === "background") {
       setBackgroundProject({
         project: projectKey,
         name: resolveTabGroupLabel(projectKey, groupLabels, basename(path)),
@@ -458,12 +595,13 @@ export function ProjectRail({
 
   const onConfirmDelete = () => {
     if (!removing) return;
+    assignProjectGroup(removing.path, null);
     onRemoveProject?.(removing.path, { purgeData: true });
     setRemoving(null);
   };
 
   const pinnedIds = sections.pinned.map((item) => item.path);
-  const projectIds = sections.projects.map((item) => item.path);
+  const projectIds = groupedProjectSections.ungrouped.map((item) => item.path);
   const pinnedSortable = useSortable(pinnedIds, onReorderPinned, {
     axis: "y",
     onActivate: onSelectProject,
@@ -566,11 +704,59 @@ export function ProjectRail({
               />
             ) : null}
 
+            {projectGroups.length > 0 ? (
+              <div className="mb-2 shrink-0">
+                <ProjectSectionHeader label="Groups" onAddGroup={createGroup} />
+                <div className="flex flex-col gap-px px-2">
+                  {groupedProjectSections.grouped.map(({ group, items }) => (
+                    <ProjectGroupSection
+                      key={group.id}
+                      group={group}
+                      items={items}
+                      cwd={cwd}
+                      busy={busy}
+                      unavailablePaths={unavailablePaths}
+                      searchActive={searchActive || inboxActive || notesActive}
+                      onSelect={handleSelectProject}
+                      onTogglePin={onTogglePin}
+                      onContextMenu={onProjectContextMenu}
+                      onOpenMenu={openProjectMenu}
+                      onReorder={onReorderProjects}
+                      onToggleCollapsed={() =>
+                        updateProjectGroup(group.id, (current) => ({
+                          ...current,
+                          collapsed: !current.collapsed,
+                        }))
+                      }
+                      onOpenGroupMenu={(x, y) => {
+                        menuTrigger.current =
+                          document.activeElement instanceof HTMLElement
+                            ? document.activeElement
+                            : null;
+                        setProjectMenu(null);
+                        setProjectGroupMenu({ x, y, id: group.id });
+                      }}
+                      groupLabels={groupLabels}
+                      groupColors={groupColors}
+                      groupCustomColors={groupCustomColors}
+                      groupLogos={groupLogos}
+                      groupMascots={groupMascots}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <ProjectSection
               label={t("harness.chrome.projects")}
-              items={sections.projects}
-              emptyLabel={t("harness.chrome.noProjectsYet")}
+              items={groupedProjectSections.ungrouped}
+              emptyLabel={
+                sections.projects.length === 0 && projectGroups.length === 0
+                  ? t("harness.chrome.noProjectsYet")
+                  : undefined
+              }
               onAdd={onOpenProject}
+              onAddGroup={projectGroups.length === 0 ? createGroup : undefined}
               cwd={cwd}
               busy={busy}
               unavailablePaths={unavailablePaths}
@@ -656,11 +842,53 @@ export function ProjectRail({
             ),
             Boolean(onRemoveProject),
             externalEditors,
+            projectGroups,
+            projectGroupIdForPath(
+              projectMenu.path,
+              projectGroupAssignments,
+            ),
           )}
           footer={projectMenuError ? (
             <p role="alert" className="px-2 py-1 text-xs text-red-400">{projectMenuError}</p>
           ) : null}
           onExtraPick={onProjectMenuPick}
+        />
+      ) : null}
+      {projectGroupMenu ? (
+        <ProjectGroupAppearanceMenu
+          menu={projectGroupMenu}
+          groups={projectGroups}
+          onRename={(id, name) =>
+            updateProjectGroup(id, (group) => ({
+              ...group,
+              name: name.trim() || group.name,
+            }))
+          }
+          onColorChange={(id, colorIndex) =>
+            updateProjectGroup(id, (group) => ({
+              ...group,
+              colorIndex: colorIndex ?? undefined,
+              customColor: undefined,
+            }))
+          }
+          onCustomColorChange={(id, customColor) =>
+            updateProjectGroup(id, (group) => ({
+              ...group,
+              colorIndex: undefined,
+              customColor,
+            }))
+          }
+          onMascotChange={(id, mascot) =>
+            updateProjectGroup(id, (group) => ({
+              ...group,
+              mascot: mascot ?? undefined,
+            }))
+          }
+          onDelete={deleteGroup}
+          onClose={() => {
+            setProjectGroupMenu(null);
+            menuTrigger.current?.focus();
+          }}
         />
       ) : null}
       {removing ? (
@@ -903,11 +1131,276 @@ function LiveAgentCard({
   );
 }
 
+function projectGroupColor(group: ProjectGroup): string {
+  if (group.customColor) return group.customColor;
+  if (
+    group.colorIndex != null &&
+    group.colorIndex >= 0 &&
+    group.colorIndex < TAB_GROUP_COLORS.length
+  ) {
+    return TAB_GROUP_COLORS[group.colorIndex];
+  }
+  return tabGroupColor(group.id);
+}
+
+function ProjectSectionHeader({
+  label,
+  onAdd,
+  onAddGroup,
+}: {
+  label: string;
+  onAdd?: () => void;
+  onAddGroup?: (x: number, y: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 px-3 pb-1.5 pt-1">
+      <span className="min-w-0 flex-1 truncate px-1 text-xs text-content/50">
+        {label}
+      </span>
+      {onAddGroup ? (
+        <button
+          type="button"
+          title="New project group"
+          aria-label="New project group"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            onAddGroup(rect.left, rect.bottom);
+          }}
+          className="grid size-5 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/8 hover:text-content"
+        >
+          <FolderPlus className="size-3.5" strokeWidth={1.75} />
+        </button>
+      ) : null}
+      {onAdd ? (
+        <button
+          type="button"
+          title="Open project"
+          aria-label="Open project"
+          onClick={onAdd}
+          className="grid size-5 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/8 hover:text-content"
+        >
+          <Plus className="size-3.5" strokeWidth={1.75} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ProjectGroupAppearanceMenu({
+  menu,
+  groups,
+  onRename,
+  onColorChange,
+  onCustomColorChange,
+  onMascotChange,
+  onDelete,
+  onClose,
+}: {
+  menu: { x: number; y: number; id: string };
+  groups: ProjectGroup[];
+  onRename: (id: string, name: string) => void;
+  onColorChange: (id: string, colorIndex: number | null) => void;
+  onCustomColorChange: (id: string, color: string) => void;
+  onMascotChange: (id: string, mascot: string | null) => void;
+  onDelete: (id: string) => boolean;
+  onClose: () => void;
+}) {
+  const group = groups.find((item) => item.id === menu.id);
+  if (!group) return null;
+  return (
+    <TabGroupMenu
+      x={menu.x}
+      y={menu.y}
+      groupId={group.id}
+      label={group.name}
+      colorIndex={group.colorIndex ?? null}
+      customColor={group.customColor ?? null}
+      currentColor={projectGroupColor(group)}
+      logoPath={null}
+      mascotName={group.mascot ?? null}
+      mascotProject={group.id}
+      onRename={onRename}
+      onColorChange={onColorChange}
+      onCustomColorChange={onCustomColorChange}
+      onMascotChange={onMascotChange}
+      onLogoChange={() => {}}
+      onPick={() => {}}
+      onClose={onClose}
+      showActions={false}
+      ariaLabel="Project group actions"
+      extraItems={[
+        {
+          id: "delete-project-group",
+          label: "Delete group",
+          description: "Projects will become ungrouped",
+          icon: Trash2,
+          danger: true,
+        },
+      ]}
+      onExtraPick={(action) =>
+        action === "delete-project-group" ? onDelete(group.id) : undefined
+      }
+    />
+  );
+}
+
+function ProjectGroupSection({
+  group,
+  items,
+  cwd,
+  busy,
+  unavailablePaths,
+  searchActive,
+  onSelect,
+  onTogglePin,
+  onContextMenu,
+  onOpenMenu,
+  onReorder,
+  onToggleCollapsed,
+  onOpenGroupMenu,
+  groupLabels,
+  groupColors,
+  groupCustomColors,
+  groupLogos,
+  groupMascots,
+}: {
+  group: ProjectGroup;
+  items: RecentProject[];
+  cwd: string;
+  busy: Set<string>;
+  unavailablePaths: Set<string>;
+  searchActive: boolean;
+  onSelect: (path: string) => void;
+  onTogglePin: (path: string) => void;
+  onContextMenu: (path: string, event: MouseEvent<HTMLElement>) => void;
+  onOpenMenu: (path: string, x: number, y: number) => void;
+  onReorder: (ids: string[]) => void;
+  onToggleCollapsed: () => void;
+  onOpenGroupMenu: (x: number, y: number) => void;
+  groupLabels: Record<string, string>;
+  groupColors: Record<string, number>;
+  groupCustomColors: Record<string, string>;
+  groupLogos: ReturnType<typeof useTabGroupLogos>;
+  groupMascots: Record<string, string>;
+}) {
+  const sortable = useSortable(
+    items.map((item) => item.path),
+    onReorder,
+    { axis: "y", onActivate: onSelect },
+  );
+  const countLabel = `${items.length} ${items.length === 1 ? "project" : "projects"}`;
+  const expanded = !group.collapsed;
+  const openMenu = (target: HTMLElement, x?: number, y?: number) => {
+    const rect = target.getBoundingClientRect();
+    onOpenGroupMenu(x ?? rect.left, y ?? rect.bottom);
+  };
+
+  return (
+    <div
+      className={`shrink-0 overflow-hidden rounded-md ${
+        expanded ? "mb-1.5 bg-content/5" : ""
+      }`}
+      data-project-group={group.id}
+      role="group"
+      aria-label={group.name}
+    >
+      <div
+        className="project-reorder-item group relative flex h-8 items-stretch rounded-md px-2 opacity-65 cursor-default hover:bg-content/5 hover:text-content"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.currentTarget.querySelector<HTMLButtonElement>("button")?.focus();
+          openMenu(event.currentTarget, event.clientX, event.clientY);
+        }}
+      >
+        <button
+          type="button"
+          aria-expanded={!group.collapsed}
+          aria-label={`${group.name}, ${countLabel}`}
+          title={`${group.name} · ${countLabel}`}
+          onClick={onToggleCollapsed}
+          className="flex min-w-0 flex-1 cursor-default items-center gap-2 text-left transition-[padding] duration-150 motion-reduce:transition-none group-hover:pr-6 group-has-[:focus-visible]:pr-6"
+        >
+          <div className="grid size-4 shrink-0 place-items-center">
+            {group.collapsed ? (
+              <>
+                <span
+                  data-group-mascot
+                  className="grid size-4 place-items-center group-hover:hidden group-has-[:focus-visible]:hidden"
+                >
+                  <ProjectMascot
+                    project={group.id}
+                    color={projectGroupColor(group)}
+                    name={group.mascot ?? null}
+                    className="size-3"
+                  />
+                </span>
+                <ChevronRight
+                  data-group-chevron
+                  className="hidden size-3.5 group-hover:block group-has-[:focus-visible]:block"
+                  strokeWidth={1.75}
+                />
+              </>
+            ) : (
+              <ChevronDown
+                data-group-chevron
+                className="size-3.5"
+                strokeWidth={1.75}
+              />
+            )}
+          </div>
+          <span className={nameClassName}>{group.name}</span>
+        </button>
+        <button
+          type="button"
+          data-no-drag
+          title="Group options"
+          aria-label={`${group.name} group options`}
+          aria-haspopup="menu"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            openMenu(event.currentTarget);
+          }}
+          className="absolute right-1 top-1/2 hidden size-6 -translate-y-1/2 place-items-center rounded-md text-content/55 hover:bg-content/8 hover:text-content group-hover:grid group-has-[:focus-visible]:grid"
+        >
+          <MoreHorizontal className="size-4" strokeWidth={1.75} />
+        </button>
+      </div>
+      {expanded ? (
+        <div data-project-group-items className="flex flex-col gap-px p-1">
+          {items.map((item, index) => (
+            <ProjectCard
+              key={item.path}
+              item={item}
+              selected={!searchActive && sameProjectPath(item.path, cwd)}
+              busy={isBusyPath(item.path, busy)}
+              unavailable={isBusyPath(item.path, unavailablePaths)}
+              pinned={false}
+              sortable={sortable}
+              index={index}
+              onSelect={onSelect}
+              onTogglePin={onTogglePin}
+              onContextMenu={onContextMenu}
+              onOpenMenu={onOpenMenu}
+              groupLabels={groupLabels}
+              groupColors={groupColors}
+              groupCustomColors={groupCustomColors}
+              groupLogos={groupLogos}
+              groupMascots={groupMascots}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ProjectSection({
   label,
   items,
   emptyLabel,
   onAdd,
+  onAddGroup,
   cwd,
   busy,
   unavailablePaths,
@@ -928,6 +1421,7 @@ function ProjectSection({
   items: RecentProject[];
   emptyLabel?: string;
   onAdd?: () => void;
+  onAddGroup?: (x: number, y: number) => void;
   cwd: string;
   busy: Set<string>;
   unavailablePaths: Set<string>;
@@ -944,25 +1438,9 @@ function ProjectSection({
   groupLogos: ReturnType<typeof useTabGroupLogos>;
   groupMascots: Record<string, string>;
 }) {
-  const { t } = useTranslation();
   return (
     <div className="shrink-0 mb-2">
-      <div className="flex items-center gap-1 px-3 pb-1.5 pt-1">
-        <span className="min-w-0 flex-1 truncate px-1 text-xs text-content/50">
-          {label}
-        </span>
-        {onAdd ? (
-          <button
-            type="button"
-            title={t("harness.chrome.openProject")}
-            aria-label={t("harness.chrome.openProject")}
-            onClick={onAdd}
-            className="grid size-5 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/8 hover:text-content"
-          >
-            <Plus className="size-3.5" strokeWidth={1.75} />
-          </button>
-        ) : null}
-      </div>
+      <ProjectSectionHeader label={label} onAdd={onAdd} onAddGroup={onAddGroup} />
       {items.length === 0 && emptyLabel ? (
         <p className="px-4 pb-1 text-[11px] leading-tight text-content/40">
           {emptyLabel}
