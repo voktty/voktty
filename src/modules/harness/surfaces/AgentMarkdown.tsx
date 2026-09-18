@@ -19,6 +19,7 @@ import {
   CodeBlock,
   Streamdown,
   defaultRehypePlugins,
+  defaultRemarkPlugins,
   useIsCodeFenceIncomplete,
   type Components,
 } from "streamdown";
@@ -28,7 +29,13 @@ import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { createLazyMermaidPlugin } from "./mermaidPlugin";
 import { copyText } from "../lib/clipboard";
 import { revealPath } from "../lib/fs";
-import { displayPath, resolveWorkspacePath } from "../lib/paths";
+import {
+  displayPath,
+  isExtensionlessFileName,
+  resolveWorkspaceFileReference,
+} from "../lib/paths";
+import type { EditorNavigation, OpenFileFn } from "../lib/search";
+import { remarkWorkspaceFileLinks } from "../lib/markdownFileLinks";
 import { IS_MAC, IS_WIN } from "../lib/platform";
 import { isAtxHeadingLine } from "../lib/markdownSource";
 import { useColorScheme } from "../hooks/useColorScheme";
@@ -67,6 +74,7 @@ type FileLinkMenu = {
   x: number;
   y: number;
   path: string;
+  navigation?: EditorNavigation;
 };
 
 function fileLinkMenuItems(
@@ -112,8 +120,12 @@ function fileLinkMenuItems(
 
 const FileOpenContext = createContext<{
   cwd?: string;
-  onOpenFile?: (path: string) => void;
-  onFileContextMenu?: (event: ReactMouseEvent, path: string) => void;
+  onOpenFile?: OpenFileFn;
+  onFileContextMenu?: (
+    event: ReactMouseEvent,
+    path: string,
+    navigation?: EditorNavigation,
+  ) => void;
 }>({});
 
 const LANGUAGE_FROM_EXT: Record<string, string> = {
@@ -181,7 +193,7 @@ function MarkdownLink({
   ...props
 }: MarkdownLinkProps) {
   const { cwd, onOpenFile, onFileContextMenu } = useContext(FileOpenContext);
-  const filePath = href ? resolveWorkspacePath(href, cwd) : undefined;
+  const file = href ? resolveWorkspaceFileReference(href, cwd) : undefined;
 
   return (
     <a
@@ -192,9 +204,9 @@ function MarkdownLink({
       onClick={(event) => {
         onClick?.(event);
         if (event.defaultPrevented) return;
-        if (filePath && onOpenFile) {
+        if (file && onOpenFile) {
           event.preventDefault();
-          onOpenFile(filePath);
+          onOpenFile(file.path, file.navigation);
           return;
         }
         event.preventDefault();
@@ -206,8 +218,8 @@ function MarkdownLink({
       }}
       onContextMenu={(event) => {
         onContextMenu?.(event);
-        if (event.defaultPrevented || !filePath || !onFileContextMenu) return;
-        onFileContextMenu(event, filePath);
+        if (event.defaultPrevented || !file || !onFileContextMenu) return;
+        onFileContextMenu(event, file.path, file.navigation);
       }}
     >
       {children}
@@ -230,9 +242,13 @@ function MarkdownCode({
     const text = textContent(children);
     const fileName = inlineFileName(text);
     const { cwd, onOpenFile, onFileContextMenu } = useContext(FileOpenContext);
-    const filePath = fileName ? resolveWorkspacePath(text, cwd) : undefined;
+    const file = fileName
+      ? resolveWorkspaceFileReference(text, cwd)
+      : undefined;
     const open =
-      filePath && onOpenFile ? () => onOpenFile(filePath) : undefined;
+      file && onOpenFile
+        ? () => onOpenFile(file.path, file.navigation)
+        : undefined;
     return (
       <code
         {...props}
@@ -245,8 +261,8 @@ function MarkdownCode({
         onClick={open}
         onContextMenu={(event) => {
           onContextMenu?.(event);
-          if (event.defaultPrevented || !filePath || !onFileContextMenu) return;
-          onFileContextMenu(event, filePath);
+          if (event.defaultPrevented || !file || !onFileContextMenu) return;
+          onFileContextMenu(event, file.path, file.navigation);
         }}
         onKeyDown={
           open
@@ -288,7 +304,9 @@ function MarkdownCode({
           <FileTypeIcon name={iconName} isDir={false} />
         </span>
       ) : null}
-      {fence.filePath ? <MarkdownCodePath path={fence.filePath} /> : null}
+      {fence.filePath ? (
+        <MarkdownCodePath path={fence.filePath} startLine={fence.startLine} />
+      ) : null}
       <CodeBlock
         className={className}
         code={textContent(children)}
@@ -317,21 +335,28 @@ export const AgentMarkdown = memo(function AgentMarkdown({
   streaming?: boolean;
   className?: string;
   cwd?: string;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: OpenFileFn;
 }) {
   const { t } = useTranslation();
   const [fileMenu, setFileMenu] = useState<FileLinkMenu | null>(null);
   const onFileContextMenu = useCallback(
-    (event: ReactMouseEvent, path: string) => {
+    (event: ReactMouseEvent, path: string, navigation?: EditorNavigation) => {
       event.preventDefault();
       event.stopPropagation();
-      setFileMenu({ x: event.clientX, y: event.clientY, path });
+      setFileMenu({ x: event.clientX, y: event.clientY, path, navigation });
     },
     [],
   );
   const fileOpen = useMemo(
     () => ({ cwd, onOpenFile, onFileContextMenu }),
     [cwd, onOpenFile, onFileContextMenu],
+  );
+  const remarkPlugins = useMemo<PluggableList>(
+    () => [
+      ...Object.values(defaultRemarkPlugins),
+      [remarkWorkspaceFileLinks, { cwd }],
+    ],
+    [cwd],
   );
 
   const onFileMenuPick = (id: string) => {
@@ -340,7 +365,8 @@ export const AgentMarkdown = memo(function AgentMarkdown({
     setFileMenu(null);
 
     if (id === "open-voktty") {
-      onOpenFile?.(path);
+      if (fileMenu.navigation) onOpenFile?.(path, fileMenu.navigation);
+      else onOpenFile?.(path);
       return;
     }
 
@@ -375,6 +401,7 @@ export const AgentMarkdown = memo(function AgentMarkdown({
         dir="auto"
         isAnimating={!!streaming}
         plugins={MARKDOWN_PLUGINS}
+        remarkPlugins={remarkPlugins}
         rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
       >
         {text}
@@ -402,7 +429,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
   text: string;
   streaming?: boolean;
   cwd?: string;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: OpenFileFn;
 }) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
 
@@ -603,22 +630,30 @@ function parseCodeFence(
   return { language: raw, startLine: metaStartLine };
 }
 
-function MarkdownCodePath({ path }: { path: string }) {
+function MarkdownCodePath({
+  path,
+  startLine,
+}: {
+  path: string;
+  startLine?: number;
+}) {
   const { cwd, onOpenFile, onFileContextMenu } = useContext(FileOpenContext);
-  const filePath = resolveWorkspacePath(path, cwd);
-  if (!filePath || !onOpenFile) {
+  const file = resolveWorkspaceFileReference(path, cwd);
+  if (!file || !onOpenFile) {
     return <span className="markdown-code-path">{path}</span>;
   }
+  const navigation =
+    file.navigation ??
+    (startLine && startLine > 0 ? { line: startLine } : undefined);
   return (
     <button
       type="button"
       className="markdown-code-path markdown-code-path-link"
-      title={filePath}
-      onClick={() => onOpenFile(filePath)}
-      onContextMenu={(event) => {
-        if (!onFileContextMenu) return;
-        onFileContextMenu(event, filePath);
-      }}
+      title={file.path}
+      onClick={() => onOpenFile(file.path, navigation)}
+      onContextMenu={(event) =>
+        onFileContextMenu?.(event, file.path, navigation)
+      }
     >
       {path}
     </button>
@@ -649,19 +684,15 @@ function inlineFileName(value: string): string | undefined {
     "",
   );
   const fileName = withoutLocation.split(/[/\\]/).filter(Boolean).pop();
-  if (!fileName || !/^[\w@+().-]+$/.test(fileName)) return undefined;
+  if (!fileName || !/^[\w%@+().-]+$/.test(fileName)) return undefined;
 
-  const lower = fileName.toLowerCase();
-  if (
-    lower === "dockerfile" ||
-    lower === "makefile" ||
-    lower === "gemfile" ||
-    lower === "license"
-  ) {
+  if (isExtensionlessFileName(fileName)) {
     return fileName;
   }
 
-  const extension = fileName.split(".").pop();
+  const extension = fileName.includes(".")
+    ? fileName.split(".").pop()
+    : undefined;
   return extension && /^[a-z][a-z0-9+-]{0,11}$/i.test(extension)
     ? fileName
     : undefined;

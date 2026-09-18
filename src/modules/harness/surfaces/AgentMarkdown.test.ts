@@ -66,3 +66,46 @@ describe("AgentMarkdown inline code", () => {
     expect(classes).not.toContain("h-6");
   });
 });
+
+describe("AgentMarkdown file links and navigation", () => {
+  it("renders inline file chips for code referencing existing files", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentMarkdown, {
+        text: "Check `src/main.ts:12:3` and `Dockerfile` and `docs/my%20file.md`",
+        cwd: "/repo",
+        onOpenFile: () => {},
+      }),
+    );
+
+    expect(markup).toContain('role="link"');
+    expect(markup).toContain("src/main.ts:12:3");
+    expect(markup).toContain("Dockerfile");
+  });
+
+  it("renders local markdown links with normalized hrefs", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentMarkdown, {
+        text: "[Guide](<docs/My Guide.md#L7-L9>) and [Readme](./README.md)",
+        cwd: "/repo",
+        onOpenFile: () => {},
+      }),
+    );
+
+    expect(markup).toContain("<a");
+    expect(markup).toContain('href="/repo/docs/My%20Guide.md:7"');
+    expect(markup).toContain('href="/repo/README.md"');
+  });
+
+  it("keeps non-file links and javascript: links safe", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentMarkdown, {
+        text: "[Web](https://example.com) and [Script](javascript:alert(1))",
+        cwd: "/repo",
+        onOpenFile: () => {},
+      }),
+    );
+
+    expect(markup).toContain('href="https://example.com/');
+    expect(markup).not.toContain('href="javascript:alert(1)"');
+  });
+});
