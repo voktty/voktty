@@ -16,6 +16,7 @@ import {
   searchSettings,
   settingsSectionsByGroup,
 } from "./settings";
+import { MOD, SHIFT } from "./platform";
 
 const KEY = "monocode.composerRunner";
 const NOTES_KEY = "monocode.notesEnabled";
@@ -176,6 +177,27 @@ describe("searchSettings", () => {
   it("returns empty array for empty query", () => {
     expect(searchSettings("")).toEqual([]);
     expect(searchSettings("   ")).toEqual([]);
+  });
+});
+
+describe("workspace navigation keybindings", () => {
+  it("documents the command palette and reload shortcuts", () => {
+    expect(
+      KEYBINDINGS.filter((row) =>
+        ["App: Command Palette", "View: Reload"].includes(row.command),
+      ),
+    ).toEqual([
+      {
+        command: "App: Command Palette",
+        keys: `${MOD}${SHIFT}P`,
+        when: "Always",
+      },
+      {
+        command: "View: Reload",
+        keys: `${MOD}${SHIFT}R`,
+        when: "Always",
+      },
+    ]);
   });
 });
 
