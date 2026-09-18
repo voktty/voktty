@@ -6,6 +6,7 @@ import {
   askQuitConfirmation,
   commitQuit,
   confirmAndCloseWindow,
+  confirmReload,
   isAppQuitting,
   reportQuitPoll,
   setQuitWorkspace,
@@ -213,6 +214,35 @@ describe("appLifecycle coordinated quit", () => {
 
       expect(flush).not.toHaveBeenCalled();
       expect(invoke).not.toHaveBeenCalledWith("destroy_window");
+    });
+  });
+
+  describe("confirming reload", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(ask).mockResolvedValue(true);
+    });
+
+    it("reloads without prompting when files are clean", async () => {
+      await expect(confirmReload(false)).resolves.toBe(true);
+      expect(ask).not.toHaveBeenCalled();
+    });
+
+    it("allows reload after unsaved changes are confirmed", async () => {
+      await expect(confirmReload(true)).resolves.toBe(true);
+      expect(ask).toHaveBeenCalledWith(
+        "Reload Voktty and discard unsaved changes?",
+        {
+          title: "Voktty",
+          kind: "warning",
+          okLabel: "Reload",
+        },
+      );
+    });
+
+    it("cancels reload when unsaved changes are kept", async () => {
+      vi.mocked(ask).mockResolvedValue(false);
+      await expect(confirmReload(true)).resolves.toBe(false);
     });
   });
 });
