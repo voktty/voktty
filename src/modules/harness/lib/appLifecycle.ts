@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
+  bindHarnessSession,
+  forgetHarnessSession,
+  isLiveHarness,
+} from "./harness/registry";
+import { killAllChildren } from "./harness/child";
+import {
   hasInFlightSessions,
   inFlightRefs,
   markTurnInterrupted,

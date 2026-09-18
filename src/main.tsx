@@ -12,13 +12,7 @@ import { initLaunchRequests } from "@/lib/launchRequest";
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
 import { markStartupPhase } from "@/lib/startupTiming";
 import { applyDocumentLocale, loadLocale, readFastLanguage } from "@/modules/i18n";
-import {
-  abortQuit,
-  askQuitConfirmation,
-  commitQuit,
-  reportQuitPoll,
-  type QuitConfirmPayload,
-} from "@/modules/harness/lib/appLifecycle";
+import type { QuitConfirmPayload } from "@/modules/harness/lib/appLifecycle";
 
 markStartupPhase("js-start");
 const startupLanguage = readFastLanguage();
@@ -94,13 +88,27 @@ await Promise.all([
   initLaunchRequests(),
 ]);
 
-void listen<number>("quit_poll", (event) => void reportQuitPoll(event.payload));
+void listen<number>("quit_poll", async (event) => {
+  const { reportQuitPoll } = await import("@/modules/harness/lib/appLifecycle");
+  void reportQuitPoll(event.payload);
+});
 void getCurrentWebviewWindow().listen<QuitConfirmPayload>(
   "quit_confirm",
-  (event) => void askQuitConfirmation(event.payload),
+  async (event) => {
+    const { askQuitConfirmation } = await import(
+      "@/modules/harness/lib/appLifecycle"
+    );
+    void askQuitConfirmation(event.payload);
+  },
 );
-void listen<number>("quit_commit", (event) => void commitQuit(event.payload));
-void listen("quit_aborted", () => abortQuit());
+void listen<number>("quit_commit", async (event) => {
+  const { commitQuit } = await import("@/modules/harness/lib/appLifecycle");
+  void commitQuit(event.payload);
+});
+void listen("quit_aborted", async () => {
+  const { abortQuit } = await import("@/modules/harness/lib/appLifecycle");
+  abortQuit();
+});
 
 markStartupPhase("bootstrap-complete");
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
