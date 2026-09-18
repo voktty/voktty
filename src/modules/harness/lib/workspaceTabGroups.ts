@@ -1,10 +1,12 @@
 import {
   closeLeaf,
   focusedFileTab,
+  firstLeafId,
   leaf,
   leafIds,
   placePane,
   replaceLeafId,
+  splitPane,
   type PaneEdge,
   type WorkspaceTab,
 } from "./layout";
@@ -57,6 +59,31 @@ export function filterTabsForProject(
     const cwd = workspaceTabCwd(tab, sessions);
     return cwd ? sameProjectPath(cwd, path) : false;
   });
+}
+
+/** Add a chat beside a file-only tab so an add-to-chat request has a target. */
+export function openAddToChatSessionPane({
+  tab,
+  sessions,
+  sessionId,
+}: {
+  tab: WorkspaceTab;
+  sessions: readonly Pick<Session, "id">[];
+  sessionId: string;
+}): WorkspaceTab | null {
+  const paneIds = leafIds(tab.layout);
+  const sessionIds = new Set(sessions.map((session) => session.id));
+  if (paneIds.some((id) => sessionIds.has(id))) return null;
+
+  const sourceId = paneIds.includes(tab.focusedId)
+    ? tab.focusedId
+    : firstLeafId(tab.layout);
+  return {
+    ...tab,
+    layout: splitPane(tab.layout, sourceId, "right", sessionId),
+    focusedId: sessionId,
+    diffFocused: false,
+  };
 }
 
 export type WorkspaceTabCloseScope = "project" | "workspace";
@@ -215,3 +242,5 @@ export function replaceGroupInTabOrder(
   next.splice(startIndex, length, ...newGroupIds);
   return next;
 }
+
+

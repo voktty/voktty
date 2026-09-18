@@ -27,6 +27,16 @@ export function requestAddToChat(
   );
 }
 
+/** Initial composer text for an add-to-chat request that opens a new session. */
+export function composerSeedForAddToChat(
+  text: string,
+  mode: AddToChatMode = "quote",
+): string {
+  return mode === "plain"
+    ? appendComposerInsert("", text)
+    : appendSelectionQuote("", text);
+}
+
 export type QuoteConsumption = {
   draft: string;
   consumedId: number | null;
