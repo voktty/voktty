@@ -17,6 +17,8 @@ import {
   type ProjectTerminalDock,
 } from "./projectTerminal";
 import { normalizeProjectPath } from "./recents";
+import { pathKey } from "./paths";
+import { reconcileProjectReturn, type ProjectReturnMemory } from "./projectReturn";
 import type { InboxAskContext } from "./inboxAsk";
 import {
   HARNESSES,
@@ -47,6 +49,7 @@ export type WorkspaceSnapshot = {
   activeTabId: string;
   projectCwd: string;
   projectTerminals: ProjectTerminalDock[];
+  projectReturnTargets?: { projectPath: string; tabId?: string; paneId?: string }[];
 };
 
 export function collectWorkspaceSnapshot(
@@ -54,9 +57,10 @@ export function collectWorkspaceSnapshot(
   sessions: Session[],
   activeTabId: string,
   projectCwd: string,
+  memory: ProjectReturnMemory,
   projectTerminals: ProjectTerminalDock[] = [],
 ): WorkspaceSnapshot {
-  return withoutInboxSessions({
+  const snapshot = withoutInboxSessions({
     tabs: tabs.map(sanitizeTab).filter((tab): tab is WorkspaceTab => tab != null),
     sessions: sessions.map(sessionStub).filter((stub): stub is WorkspaceSessionStub => stub != null),
     activeTabId,
@@ -65,6 +69,44 @@ export function collectWorkspaceSnapshot(
       .map(sanitizeProjectTerminal)
       .filter((dock): dock is ProjectTerminalDock => dock != null),
   });
+  return withProjectReturnTargets(snapshot, memory);
+}
+
+function withProjectReturnTargets(
+  snapshot: WorkspaceSnapshot,
+  memory: ProjectReturnMemory,
+): WorkspaceSnapshot {
+  const valid = reconcileProjectReturn({
+    ...snapshot,
+    memory,
+    activeTabId: "",
+  });
+  return {
+    ...snapshot,
+    projectReturnTargets: [...valid].map(([projectPath, paneId]) => ({
+      projectPath,
+      tabId: paneId,
+    })),
+  };
+}
+
+function parseProjectReturnTargets(raw: unknown): ProjectReturnMemory {
+  const memory = new Map<string, string>();
+  if (!Array.isArray(raw)) return memory;
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    if (!("projectPath" in entry)) continue;
+    const projectPath = (entry as { projectPath?: unknown }).projectPath;
+    if (typeof projectPath !== "string" || !projectPath.trim()) continue;
+
+    const remembered =
+      (entry as { paneId?: unknown }).paneId ??
+      (entry as { tabId?: unknown }).tabId;
+    if (typeof remembered !== "string" || !remembered.trim()) continue;
+
+    memory.set(pathKey(projectPath), remembered.trim());
+  }
+  return memory;
 }
 
 /** Also removes tabs saved by the earlier, persistent Inbox implementation. */
@@ -97,6 +139,7 @@ export function parseWorkspaceSnapshot(raw: unknown): WorkspaceSnapshot | null {
     activeTabId?: unknown;
     projectCwd?: unknown;
     projectTerminals?: unknown;
+    projectReturnTargets?: unknown;
   };
   if (!Array.isArray(value.tabs) || typeof value.activeTabId !== "string") {
     return null;
@@ -123,7 +166,12 @@ export function parseWorkspaceSnapshot(raw: unknown): WorkspaceSnapshot | null {
         .filter((dock): dock is ProjectTerminalDock => dock != null)
     : [];
   const snapshot = withoutInboxSessions({ tabs, sessions, activeTabId, projectCwd, projectTerminals });
-  return snapshot.tabs.length > 0 ? snapshot : null;
+  return snapshot.tabs.length > 0
+    ? withProjectReturnTargets(
+        snapshot,
+        parseProjectReturnTargets(value.projectReturnTargets),
+      )
+    : null;
 }
 
 export function workspaceSnapshotKey(snapshot: WorkspaceSnapshot): string {
@@ -208,6 +256,12 @@ export function hydrateWorkspaceSnapshot(
     activeTabId,
     projectCwd,
     projectTerminals: parsed.projectTerminals,
+    projectReturnMemory: reconcileProjectReturn({
+      memory: parseProjectReturnTargets(parsed.projectReturnTargets),
+      tabs,
+      sessions: [...sessions.values()],
+      activeTabId,
+    }),
   };
 }
 

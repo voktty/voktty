@@ -371,10 +371,16 @@ import { runSessionRemoval } from "../lib/sessionRemoval";
 import {
   applyPlaceSessionOnPane,
   filterTabsForProject,
-  findTabForProject,
   planWorkspaceTabClose,
   workspaceTabCwd,
+  focusedWorkspaceTabCwd,
 } from "../lib/workspaceTabGroups";
+import {
+  isBlankSession,
+  planProjectReturn,
+  reconcileProjectReturn,
+  type ProjectReturnMemory,
+} from "../lib/projectReturn";
 import {
   handleEditorFindKey,
   openFindInActiveEditor,
@@ -752,6 +758,22 @@ export function HarnessApp({
   projectCwdRef.current = projectCwd;
   const searchViewOpenRef = useRef(searchViewOpen);
   searchViewOpenRef.current = searchViewOpen;
+
+  const projectReturnRef = useRef<ProjectReturnMemory>(
+    resumed?.projectReturnMemory ?? new Map(),
+  );
+  const readProjectReturnMemory = useCallback(() => {
+    projectReturnRef.current = reconcileProjectReturn({
+      memory: projectReturnRef.current,
+      tabs: tabsRef.current,
+      sessions: sessionsRef.current,
+      activeTabId: activeTabIdRef.current,
+    });
+    return projectReturnRef.current;
+  }, []);
+  useEffect(() => {
+    readProjectReturnMemory();
+  }, [activeTabId, tabs, sessions, readProjectReturnMemory]);
   const inboxViewOpenRef = useRef(inboxViewOpen);
   inboxViewOpenRef.current = inboxViewOpen;
   const notesViewOpenRef = useRef(notesViewOpen);
@@ -928,6 +950,7 @@ export function HarnessApp({
         tabsRef.current,
         activeTabIdRef.current,
         projectCwdRef.current,
+        readProjectReturnMemory(),
         "unload",
         projectTerminalsRef.current,
       ).finally(() => {
@@ -947,7 +970,7 @@ export function HarnessApp({
       cancelScheduledFlush(harnessFlush.current);
       harnessFlush.current = null;
     };
-  }, [resumed]);
+  }, [resumed, readProjectReturnMemory]);
 
   useEffect(() => {
     // Only the harnesses already in this window. Probing every installed CLI
@@ -1176,6 +1199,7 @@ export function HarnessApp({
       () => activeTabIdRef.current,
       () => projectCwdRef.current,
       () => projectTerminalsRef.current,
+      readProjectReturnMemory,
       flushHarnessEvents,
     );
     void getCurrentWindow()
@@ -1195,6 +1219,7 @@ export function HarnessApp({
             tabsRef.current,
             activeTabIdRef.current,
             projectCwdRef.current,
+            readProjectReturnMemory(),
             projectTerminalsRef.current,
             flushHarnessEvents,
           );
@@ -1205,6 +1230,7 @@ export function HarnessApp({
           tabsRef.current,
           activeTabIdRef.current,
           projectCwdRef.current,
+          readProjectReturnMemory(),
           "unload",
           projectTerminalsRef.current,
         ).finally(() => {
@@ -1218,7 +1244,7 @@ export function HarnessApp({
       releaseQuit();
       unlistenClose?.();
     };
-  }, [flushHarnessEvents]);
+  }, [flushHarnessEvents, readProjectReturnMemory]);
 
   const refreshHistory = useCallback(async (cwd: string) => {
     if (!cwd || cwd === "~") return;
@@ -1360,6 +1386,12 @@ export function HarnessApp({
       sessions,
       activeTabId,
       projectCwd,
+      reconcileProjectReturn({
+        memory: projectReturnRef.current,
+        tabs,
+        sessions,
+        activeTabId,
+      }),
       projectTerminals,
     );
     const key = workspaceSnapshotKey(snapshot);
@@ -1438,11 +1470,33 @@ export function HarnessApp({
   }, [sessions, tabs, persistSession, liveAgentsEnabled]);
 
   const activateTab = useCallback(
-    (id: string) => {
-      setActiveTabId(id);
+    (id: string, paneId?: string) => {
       const tab = tabsRef.current.find((entry: any) => entry.id === id);
+      const nextFocusedId =
+        tab &&
+        paneId &&
+        (leafIds(tab.layout).includes(paneId) ||
+          tab.editorPanes.some((entry: any) => entry.id === paneId) ||
+          (tab.terminalPanes ?? []).some((entry: any) => entry.id === paneId))
+          ? paneId
+          : tab?.focusedId;
+
+      setActiveTabId(id);
+      if (tab && nextFocusedId && nextFocusedId !== tab.focusedId) {
+        setTabs((prev: any) =>
+          prev.map((entry: any) =>
+            entry.id === id
+              ? { ...entry, focusedId: nextFocusedId, diffFocused: false }
+              : entry,
+          ),
+        );
+      }
+
       if (deckLayout && tab) {
-        const cwd = workspaceTabCwd(tab, sessionsRef.current);
+        const focusedTab = nextFocusedId
+          ? { ...tab, focusedId: nextFocusedId }
+          : tab;
+        const cwd = focusedWorkspaceTabCwd(focusedTab, sessionsRef.current);
         if (cwd && looksLikeProject(cwd)) {
           const normalized = normalizeProjectPath(cwd);
           if (!sameProjectPath(normalized, projectCwdRef.current)) {
@@ -1452,9 +1506,9 @@ export function HarnessApp({
         }
       }
       setComposerFocused(
-        !!tab &&
+        !!nextFocusedId &&
           sessionsRef.current.some(
-            (session: any) => session.id === tab.focusedId,
+            (session: any) => session.id === nextFocusedId,
           ),
       );
     },
@@ -3657,26 +3711,32 @@ export function HarnessApp({
             (session) => session.id === activeWorkspace.focusedId,
           )
         : undefined;
-      const currentCwd =
-        current?.cwd ??
-        (activeWorkspace ? focusedFileTab(activeWorkspace)?.cwd : undefined);
-      if (currentCwd && sameProjectPath(currentCwd, normalized)) return;
-
-      if (current && isBlankSession(current)) {
-        onCwdChange(current.id, normalized);
-        return;
-      }
-
-      const match = findTabForProject(
-        tabsRef.current,
-        sessionsRef.current,
-        normalized,
-      );
-      if (match) {
-        setProjectCwd(normalized);
-        setRecents(rememberProject(normalized));
-        activateTab(match.id);
-        return;
+      const decision = planProjectReturn({
+        memory: readProjectReturnMemory(),
+        tabs: tabsRef.current,
+        sessions: sessionsRef.current,
+        activeTabId: activeTabIdRef.current,
+        projectPath: normalized,
+      });
+      switch (decision.action) {
+        case "keep":
+          setProjectCwd(normalized);
+          setRecents(rememberProject(normalized));
+          return;
+        case "reuse-blank":
+          onCwdChange(decision.sessionId, normalized);
+          return;
+        case "activate":
+          setProjectCwd(normalized);
+          setRecents(rememberProject(normalized));
+          activateTab(decision.tabId, decision.paneId);
+          return;
+        case "create":
+          break;
+        default: {
+          const exhaustive: never = decision;
+          return exhaustive;
+        }
       }
 
       const seed = current ?? sessionsRef.current[0];
@@ -3695,7 +3755,7 @@ export function HarnessApp({
       setActiveTabId(tab.id);
       setComposerFocused(true);
     },
-    [activateTab, appendTab, onCwdChange],
+    [activateTab, appendTab, onCwdChange, readProjectReturnMemory],
   );
 
   useEffect(() => {
@@ -6216,10 +6276,6 @@ function lastUserBlockId(session: Session): string | undefined {
   return undefined;
 }
 
-function isBlankSession(session: Session | undefined): boolean {
-  if (!session || session.busy) return false;
-  return !session.blocks.some((block: any) => block.role === "user");
-}
 
 function selectedChangePath(
   tab: WorkspaceTab,

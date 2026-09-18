@@ -60,6 +60,7 @@ describe("appLifecycle coordinated quit", () => {
         () => tabs[0].id,
         () => "/work/app",
         () => [],
+        () => new Map(),
         vi.fn(),
       );
 
@@ -83,6 +84,7 @@ describe("appLifecycle coordinated quit", () => {
         () => tabs[0].id,
         () => "/work/app",
         () => [],
+        () => new Map(),
         vi.fn(),
       );
 
@@ -139,6 +141,7 @@ describe("appLifecycle coordinated quit", () => {
         () => tabs[0].id,
         () => "/work/app",
         () => [],
+        () => new Map(),
         flush,
       );
 
@@ -175,6 +178,7 @@ describe("appLifecycle coordinated quit", () => {
         tabs,
         tabs[0].id,
         "/work/app",
+        new Map(),
         [],
         flush,
       );
@@ -202,6 +206,7 @@ describe("appLifecycle coordinated quit", () => {
         tabs,
         tabs[0].id,
         "/work/app",
+        new Map(),
         [],
         flush,
       );
