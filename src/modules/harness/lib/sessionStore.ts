@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { recoverCursorSubagents } from "./harness/cursorSubagents";
 import { persistableAttachment } from "./attachments";
 import type { ContextUsage } from "./contextUsage";
 import { normalizeProjectPath } from "./recents";
