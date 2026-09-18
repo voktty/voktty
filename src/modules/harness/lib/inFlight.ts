@@ -1,7 +1,6 @@
 import { leafIds, newTab, type WorkspaceTab } from "./layout";
 import type { ProjectTerminalDock } from "./projectTerminal";
 import { hasPendingApproval, type Session } from "./session";
-import { stopStreaming } from "./harness/apply";
 
 export const INTERRUPT_MESSAGE =
   "Turn interrupted when MonoCode quit.";

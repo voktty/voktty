@@ -246,6 +246,13 @@ import {
   focusReleaseNotesTarget,
   planReleaseNotesOpen,
 } from "../lib/releaseNotesWorkspace";
+import {
+  ADD_TO_CHAT_EVENT,
+  composerSeedForAddToChat,
+  type AddToChatMode,
+  type AddToChatRequest,
+} from "../lib/quoteDraft";
+import { openAddToChatSessionPane } from "../lib/workspaceTabGroups";
 import { mergeOrderedSubset, orderByIds } from "../lib/reorder";
 import type { EditorNavigationTarget, OpenFileFn } from "../lib/search";
 import {
@@ -1742,6 +1749,58 @@ export function HarnessApp({
     window.addEventListener(ADD_NOTE_TO_CHAT_EVENT, onAdd);
     return () => window.removeEventListener(ADD_NOTE_TO_CHAT_EVENT, onAdd);
   }, [onAddNoteToChat]);
+
+  const openSessionForAddToChat = useCallback(
+    (text: string, mode?: AddToChatMode) => {
+      const activeTab = tabs.find((tab) => tab.id === activeTabId);
+      if (!activeTab) return;
+      const tabSessionIds = new Set(
+        leafIds(activeTab.layout).filter((id) =>
+          sessions.some((session: any) => session.id === id),
+        ),
+      );
+      if (tabSessionIds.size > 0) return;
+
+      const cwd = active?.cwd || sessionDefaults?.cwd || projectCwd;
+      const session = {
+        ...newDefaultSession(cwd, sessionDefaults?.runtimeMode),
+        composerSeed: composerSeedForAddToChat(text, mode),
+      };
+      setSessions((prev: any) => [...prev, session]);
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === activeTab.id
+            ? openAddToChatSessionPane({
+                tab,
+                sessions: [...sessions, session],
+                sessionId: session.id,
+              }) ?? tab
+            : tab,
+        ),
+      );
+      setComposerFocused(true);
+      setComposerFocusToken((token) => token + 1);
+    },
+    [
+      active?.cwd,
+      activeTabId,
+      projectCwd,
+      sessionDefaults?.cwd,
+      sessionDefaults?.runtimeMode,
+      sessions,
+      tabs,
+    ],
+  );
+
+  useEffect(() => {
+    const onAdd = (event: Event) => {
+      const detail = (event as CustomEvent<AddToChatRequest>).detail;
+      if (!detail?.text) return;
+      openSessionForAddToChat(detail.text, detail.mode);
+    };
+    window.addEventListener(ADD_TO_CHAT_EVENT, onAdd);
+    return () => window.removeEventListener(ADD_TO_CHAT_EVENT, onAdd);
+  }, [openSessionForAddToChat]);
 
   const onInboxCardDismiss = useCallback((sessionId: string) => {
     setSessions((prev: any) =>

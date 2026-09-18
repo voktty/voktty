@@ -1,4 +1,3 @@
-import { isEditTool } from "./harness/preview";
 import { limitSection } from "./jsonText";
 import { displayPath } from "./paths";
 import {

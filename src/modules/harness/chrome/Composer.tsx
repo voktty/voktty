@@ -440,6 +440,7 @@ export function Composer({
   const highlightRef = useRef<HTMLDivElement>(null);
   const attachmentsRef = useRef<Attachment[]>([]);
   const consumedQuoteId = useRef<number | null>(null);
+  const positionedInitialDraft = useRef(false);
   const slashRef = useRef<SlashToken | null>(null);
   const mentionRef = useRef<MentionToken | null>(null);
   const [draft, setDraft] = useState(initialDraft ?? "");
@@ -669,6 +670,11 @@ export function Composer({
     const el = ref.current;
     if (!el || !initialDraft) return;
     if (el.value !== initialDraft) el.value = initialDraft;
+    if (!positionedInitialDraft.current) {
+      positionedInitialDraft.current = true;
+      el.selectionStart = el.value.length;
+      el.selectionEnd = el.value.length;
+    }
     resizeComposer(el);
   }, [initialDraft]);
 

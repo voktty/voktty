@@ -5,6 +5,7 @@ import {
   applyPlaceSessionOnPane,
   filterTabsForProject,
   findTabForProject,
+  openAddToChatSessionPane,
   planWorkspaceTabClose,
   replaceGroupInTabOrder,
   workspaceTabProject,
@@ -263,3 +264,41 @@ describe("replaceGroupInTabOrder", () => {
     ]);
   });
 });
+
+describe("openAddToChatSessionPane", () => {
+  const sessions = [
+    session("s1", "/projects/voktty"),
+    session("s2", "/projects/voktty"),
+  ];
+
+  it("returns null when a session pane is already present", () => {
+    const originalTab = tab("t1", "s1");
+    const result = openAddToChatSessionPane({
+      tab: originalTab,
+      sessions,
+      sessionId: "s2",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("splits the pane to the right when no session pane is present", () => {
+    const editorTab: WorkspaceTab = {
+      ...tab("t1", "editor-1"),
+      editorPanes: [
+        {
+          id: "editor-1",
+          files: [],
+          activeFileId: "",
+        },
+      ],
+    };
+    const result = openAddToChatSessionPane({
+      tab: editorTab,
+      sessions,
+      sessionId: "s1",
+    });
+    expect(result?.focusedId).toBe("s1");
+    expect(leafIds(result!.layout)).toEqual(["editor-1", "s1"]);
+  });
+});
+
