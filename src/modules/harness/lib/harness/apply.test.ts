@@ -92,6 +92,54 @@ describe("streamed markdown", () => {
   });
 });
 
+describe("approval lifetime", () => {
+  function waitingForApproval() {
+    let session = appendUser(newSession("codex", "/tmp"), "check it");
+    session = applyHarnessEvent(session, {
+      type: "tool.started",
+      callId: "shell-1",
+      title: "Run npm test",
+      kind: "execute",
+      status: "pending",
+    });
+    return applyHarnessEvent(session, {
+      type: "approval.requested",
+      requestId: 7,
+      callId: "shell-1",
+      title: "Run npm test",
+      kind: "execute",
+    });
+  }
+
+  it("cancels an unresolved request when its turn stops", () => {
+    const session = stopStreaming(waitingForApproval());
+    const tool = session.blocks.find(
+      (block) => block.tool?.callId === "shell-1",
+    );
+
+    expect(session.busy).toBe(false);
+    expect(tool).toMatchObject({
+      streaming: false,
+      tool: { status: "cancelled" },
+      approval: { requestId: 7, decided: "cancelled" },
+    });
+  });
+
+  it("cancels a stale request before a later turn is appended", () => {
+    const stale = { ...waitingForApproval(), busy: false };
+    const session = appendUser(stale, "continue");
+    const tool = session.blocks.find(
+      (block) => block.tool?.callId === "shell-1",
+    );
+
+    expect(tool?.approval).toEqual({ requestId: 7, decided: "cancelled" });
+    expect(session.blocks[session.blocks.length - 1]).toMatchObject({
+      role: "user",
+      text: "continue",
+    });
+  });
+});
+
 describe("appendSteerUser", () => {
   it("appends a user message without sealing an in-flight assistant block", () => {
     let session = appendUser(newSession("cursor", "/tmp"), "build it");
