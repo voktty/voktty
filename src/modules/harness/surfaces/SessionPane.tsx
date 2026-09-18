@@ -233,9 +233,9 @@ export const SessionPane = memo(function SessionPane({
     () => true,
   );
   const saveNote = useCallback(
-    (text: string) => {
+    async (text: string) => {
       const sessionTitle = sessionDisplayTitle(session.title, session.harness);
-      void createNote({
+      await createNote({
         title:
           sessionTitle && sessionTitle !== "New session"
             ? sessionTitle
@@ -246,6 +246,17 @@ export const SessionPane = memo(function SessionPane({
       });
     },
     [session.cwd, session.harness, session.id, session.title],
+  );
+  const saveSelectionNote = useCallback(
+    async (text: string) => {
+      await createNote({
+        title: noteTitle(text),
+        body: text,
+        sourceSessionId: session.id,
+        sourceCwd: session.cwd,
+      });
+    },
+    [session.cwd, session.id],
   );
 
   useEffect(() => {
@@ -432,6 +443,7 @@ export const SessionPane = memo(function SessionPane({
               onApproval={approve}
               onAddToChat={addSelectionToChat}
               onSaveNote={notesEnabled ? saveNote : undefined}
+              onSaveSelectionNote={notesEnabled ? saveSelectionNote : undefined}
               onOpenFile={onOpenFile}
               onOpenDiff={onOpenDiff}
               onOpenPlan={openPlan}

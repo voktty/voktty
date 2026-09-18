@@ -125,6 +125,7 @@ export function persistableAttachment(file: Attachment): Attachment {
 export function displayAttachments(files: Attachment[]): Attachment[] {
   return files.map((file) => ({
     ...persistableAttachment(file),
+    ...(file.path ? { copyFromPath: true } : {}),
     ...(file.previewUrl ? { previewUrl: file.previewUrl } : {}),
     ...(file.data ? { data: file.data } : {}),
   }));
@@ -360,7 +361,7 @@ async function attachmentFromBlob(file: File): Promise<Attachment | null> {
       previewUrl,
     };
   }
-  if (!data) {
+  if (data === null) {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     return null;
   }
@@ -485,8 +486,21 @@ function fileUri(path: string): string {
   return `file://${abs.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-function readBlobBase64(file: File): Promise<string | null> {
-  if (file.size > MAX_EMBED_BYTES) return Promise.resolve(null);
+async function readBlobBase64(file: File): Promise<string | null> {
+  if (file.size > MAX_EMBED_BYTES) return null;
+  if (typeof FileReader === "undefined") {
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    } catch {
+      return null;
+    }
+  }
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => {

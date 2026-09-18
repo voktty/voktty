@@ -43,7 +43,7 @@ import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import { useTranscriptZen } from "../hooks/useTranscriptZen";
 import type { TranscriptLayout } from "../lib/appearance";
-import { copyText } from "../lib/clipboard";
+import { copyMessage } from "../lib/clipboard";
 import type { ApprovalDecision } from "../lib/harness";
 import {
   isEditTool,
@@ -55,6 +55,7 @@ import { resolveModel } from "../lib/models";
 import { displayPath, resolveWorkspacePath } from "../lib/paths";
 import { harnessForTurn } from "../lib/secondOpinion";
 import {
+  type Attachment,
   type Block,
   HARNESS_TITLE,
   type HarnessId,
@@ -125,7 +126,8 @@ type Props = {
   modelSettings?: Record<string, string>;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
   onAddToChat?: (text: string) => void;
-  onSaveNote?: (text: string) => void;
+  onSaveNote?: (text: string) => void | Promise<void>;
+  onSaveSelectionNote?: (text: string) => void | Promise<void>;
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
@@ -152,6 +154,7 @@ function AgentTranscriptComponent({
   onApproval,
   onAddToChat,
   onSaveNote,
+  onSaveSelectionNote,
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
@@ -504,6 +507,7 @@ function AgentTranscriptComponent({
                     (itemIndex === foldLineAt && showFoldLine))
                 }
                 onApproval={onApproval}
+                onSaveNote={onSaveNote}
                 onOpenFile={onOpenFile}
                 onOpenDiff={onOpenDiff}
                 onOpenPlan={onOpenPlan}
@@ -608,11 +612,11 @@ function AgentTranscriptComponent({
           );
         })}
       </div>
-      {onAddToChat || onSaveNote ? (
+      {onAddToChat || onSaveSelectionNote || onSaveNote ? (
         <TranscriptSelectionMenu
           selection={selection}
           onAddToChat={onAddToChat}
-          onAddToNotes={onSaveNote}
+          onAddToNotes={onSaveSelectionNote ?? onSaveNote}
           onDismiss={dismissSelection}
         />
       ) : null}
@@ -689,7 +693,7 @@ function TurnDuration({
   harness?: HarnessId;
   completedAt?: number;
   copyText?: string;
-  onSaveNote?: (text: string) => void;
+  onSaveNote?: (text: string) => void | Promise<void>;
   fromHarness?: HarnessId;
   onSecondOpinion?: (target: ModelTarget) => void;
   onHandoff?: (target: ModelTarget) => void;
@@ -759,41 +763,68 @@ function formatClockTime(epochMs: number): string {
   });
 }
 
-function CopyTurnButton({ text }: { text: string }) {
+function CopyTurnButton({
+  text,
+  attachments,
+  label = t("harness.chrome.copyResponse"),
+}: {
+  text: string;
+  attachments?: Attachment[];
+  label?: string;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
     setCopied(false);
+    setError(null);
     return () => {
       if (timer.current != null) window.clearTimeout(timer.current);
     };
-  }, [text]);
+  }, [text, attachments]);
 
   return (
-    <button
-      type="button"
-      title={copied ? t("harness.chrome.copied") : t("harness.chrome.copyResponse")}
-      aria-label={copied ? t("harness.chrome.copied") : t("harness.chrome.copyResponse")}
-      className="-ml-1 rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
-      onClick={() => {
-        playCue("copy");
-        void copyText(text).then(
-          () => {
-            setCopied(true);
-            if (timer.current != null) window.clearTimeout(timer.current);
-            timer.current = window.setTimeout(() => setCopied(false), 2000);
-          },
-          () => {},
-        );
-      }}
-    >
-      {copied ? (
-        <Check className="size-3.5" strokeWidth={1.75} />
-      ) : (
-        <Copy className="size-3.5" strokeWidth={1.75} />
+    <>
+      <button
+        type="button"
+        disabled={pending}
+        title={copied ? t("harness.chrome.copied") : label}
+        aria-label={copied ? t("harness.chrome.copied") : label}
+        className="-ml-1 rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
+        onClick={(event) => {
+          event.stopPropagation();
+          setError(null);
+          setCopied(false);
+          setPending(true);
+          playCue("copy");
+          void copyMessage(text, attachments).then(
+            () => {
+              setPending(false);
+              setCopied(true);
+              if (timer.current != null) window.clearTimeout(timer.current);
+              timer.current = window.setTimeout(() => setCopied(false), 2000);
+            },
+            (error: unknown) => {
+              setPending(false);
+              setError(error instanceof Error ? error.message : String(error));
+            },
+          );
+        }}
+      >
+        {copied ? (
+          <Check className="size-3.5" strokeWidth={1.75} />
+        ) : (
+          <Copy className="size-3.5" strokeWidth={1.75} />
+        )}
+      </button>
+      {error && (
+        <span role="alert" className="max-w-xs text-xs text-content/70">
+          {t("harness.chrome.copyFailed", { defaultValue: "Copy failed." })} {error}
+        </span>
       )}
-    </button>
+    </>
   );
 }
 
@@ -802,38 +833,59 @@ function SaveNoteButton({
   onSave,
 }: {
   text: string;
-  onSave: (text: string) => void;
+  onSave: (text: string) => void | Promise<void>;
 }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
     setSaved(false);
+    setError(null);
     return () => {
       if (timer.current != null) window.clearTimeout(timer.current);
     };
   }, [text]);
 
   return (
-    <button
-      type="button"
-      title={saved ? t("harness.chrome.savedToNotes") : t("harness.chrome.saveAsNote")}
-      aria-label={saved ? t("harness.chrome.savedToNotes") : t("harness.chrome.saveAsNote")}
-      className="rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
-      onClick={() => {
-        playCue("copy");
-        onSave(text);
-        setSaved(true);
-        if (timer.current != null) window.clearTimeout(timer.current);
-        timer.current = window.setTimeout(() => setSaved(false), 2000);
-      }}
-    >
-      {saved ? (
-        <Check className="size-3.5" strokeWidth={1.75} />
-      ) : (
-        <FilePlusCorner className="size-3.5" strokeWidth={1.75} />
+    <>
+      <button
+        type="button"
+        disabled={pending}
+        title={saved ? t("harness.chrome.savedToNotes") : t("harness.chrome.saveAsNote")}
+        aria-label={saved ? t("harness.chrome.savedToNotes") : t("harness.chrome.saveAsNote")}
+        className="rounded-md p-1 text-content/40 hover:bg-content/8 hover:text-content/70"
+        onClick={async (event) => {
+          event.stopPropagation();
+          setError(null);
+          setSaved(false);
+          setPending(true);
+          try {
+            await onSave(text);
+            playCue("copy");
+            setSaved(true);
+            if (timer.current != null) window.clearTimeout(timer.current);
+            timer.current = window.setTimeout(() => setSaved(false), 2000);
+          } catch (error) {
+            setError(error instanceof Error ? error.message : String(error));
+          } finally {
+            setPending(false);
+          }
+        }}
+      >
+        {saved ? (
+          <Check className="size-3.5" strokeWidth={1.75} />
+        ) : (
+          <FilePlusCorner className="size-3.5" strokeWidth={1.75} />
+        )}
+      </button>
+      {error && (
+        <span role="alert" className="max-w-xs text-xs text-content/70">
+          {t("harness.chrome.couldNotSaveNote", { defaultValue: "Could not save note." })} {error}
+        </span>
       )}
-    </button>
+    </>
   );
 }
 
@@ -844,6 +896,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   underLine = false,
   cwd,
   onApproval,
+  onSaveNote,
   onOpenFile,
   onOpenDiff,
   onOpenPlan,
@@ -860,6 +913,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   underLine?: boolean;
   cwd?: string;
   onApproval?: (requestId: number, decision: ApprovalDecision) => void;
+  onSaveNote?: (text: string) => void | Promise<void>;
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
   onOpenPlan?: (blockId: string) => void;
@@ -875,6 +929,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
         block={block}
         layout={layout}
         stickyIndex={stickyIndex}
+        onSaveNote={onSaveNote}
       />
     );
   }
@@ -982,10 +1037,12 @@ function UserMessageBlock({
   block,
   layout,
   stickyIndex,
+  onSaveNote,
 }: {
   block: Block;
   layout: TranscriptLayout;
   stickyIndex: number;
+  onSaveNote?: (text: string) => void | Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
@@ -1041,60 +1098,98 @@ function UserMessageBlock({
   return (
     <div
       data-prompt-anchor={block.id}
-      className={chat ? "flex justify-end pt-2 pr-4 pb-4 pl-14" : "p-1.5 pb-3"}
+      className={`user-message-row ${
+        chat ? "flex flex-col items-end pt-2 pr-4 pb-5 pl-14" : "p-1.5 pb-4"
+      }`}
     >
       <div
-        className={`${USER_MESSAGE_SURFACE_CLASS} ${
-          chat
-            ? `w-fit max-w-xl ${singleLine ? "rounded-full py-2" : "rounded-[14px] py-3"}`
-            : "w-full rounded-[14px] py-3"
-        }`}
-        style={{ zIndex: stickyIndex }}
-        onClick={overflows ? toggle : undefined}
+        className={`user-message-hover-zone min-w-0 ${chat ? "flex w-fit max-w-full flex-col items-end" : "w-full"}`}
       >
-        {block.attachments?.length ? (
-          <div
-            className={`flex flex-wrap gap-1.5 ${text || card || note ? "mb-2" : ""}`}
-          >
-            {block.attachments.map((file) => (
-              <AttachmentChip key={file.id} attachment={file} />
-            ))}
+        <div
+          className={`${USER_MESSAGE_SURFACE_CLASS} ${
+            chat
+              ? `w-fit max-w-xl ${singleLine ? "rounded-full py-2" : "rounded-[14px] py-3"}`
+              : "w-full rounded-[14px] py-3"
+          }`}
+          style={{ zIndex: stickyIndex }}
+        >
+          {block.attachments?.length ? (
+            <div
+              className={`flex flex-wrap gap-1.5 ${text || card || note ? "mb-2" : ""}`}
+            >
+              {block.attachments.map((file) => (
+                <AttachmentChip key={file.id} attachment={file} />
+              ))}
+            </div>
+          ) : null}
+          {note ? (
+            <div className={text || card ? "mb-2" : ""}>
+              <NoteMiniCard card={note} embedded />
+            </div>
+          ) : null}
+          {card ? (
+            <div className={text ? "mb-1.5" : undefined}>
+              <SecondOpinionCard card={card} />
+            </div>
+          ) : null}
+          {messageLink ? (
+            <div
+              ref={(element) => {
+                textRef.current = element;
+              }}
+              className={`user-message-with-link min-w-0 whitespace-pre-wrap break-words font-sans text-[13.5px] leading-relaxed font-normal text-card-foreground ${
+                expanded ? "" : "line-clamp-6"
+              }`}
+              data-selectable-agent-response={block.id}
+            >
+              {messageLink.beforeText}
+              <UserLinkPreview link={messageLink.link} />
+              {messageLink.afterText}
+            </div>
+          ) : displayText ? (
+            <pre
+              data-selectable-agent-response={block.id}
+              ref={(element) => {
+                textRef.current = element;
+              }}
+              className={`min-w-0 whitespace-pre-wrap break-words font-sans text-[13.5px] leading-relaxed font-normal text-card-foreground ${
+                expanded ? "" : "line-clamp-6"
+              }`}
+            >
+              {displayText}
+            </pre>
+          ) : null}
+          {overflows ? (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              className="mt-1 rounded px-1 py-0.5 text-xs text-content/60 hover:bg-content/8 hover:text-content"
+              onClick={toggle}
+            >
+              {expanded ? t("harness.chrome.showLess", { defaultValue: "Show less" }) : t("harness.chrome.showMore", { defaultValue: "Show more" })}
+            </button>
+          ) : null}
+        </div>
+        {text || block.attachments?.length ? (
+          <div className="user-message-actions flex items-center gap-1 px-3 pt-1">
+            <CopyTurnButton
+              text={text}
+              attachments={block.attachments}
+              label={t("harness.chrome.copyMessage", { defaultValue: "Copy message" })}
+            />
+            {text && onSaveNote ? (
+              <SaveNoteButton text={text} onSave={onSaveNote} />
+            ) : null}
+            {block.startedAt != null ? (
+              <time
+                dateTime={new Date(block.startedAt).toISOString()}
+                title={new Date(block.startedAt).toLocaleString()}
+                className="ml-1 font-sans text-xs text-content/40"
+              >
+                {formatClockTime(block.startedAt)}
+              </time>
+            ) : null}
           </div>
-        ) : null}
-        {note ? (
-          <div className={text || card ? "mb-2" : ""}>
-            <NoteMiniCard card={note} embedded />
-          </div>
-        ) : null}
-        {card ? (
-          <div className={text ? "mb-1.5" : undefined}>
-            <SecondOpinionCard card={card} />
-          </div>
-        ) : null}
-        {messageLink ? (
-          <div
-            ref={(element) => {
-              textRef.current = element;
-            }}
-            className={`user-message-with-link min-w-0 whitespace-pre-wrap break-words font-sans text-[13.5px] leading-relaxed font-normal text-card-foreground ${
-              expanded ? "" : "line-clamp-6"
-            }`}
-          >
-            {messageLink.beforeText}
-            <UserLinkPreview link={messageLink.link} />
-            {messageLink.afterText}
-          </div>
-        ) : displayText ? (
-          <pre
-            ref={(element) => {
-              textRef.current = element;
-            }}
-            className={`min-w-0 whitespace-pre-wrap break-words font-sans text-[13.5px] leading-relaxed font-normal text-card-foreground ${
-              expanded ? "" : "line-clamp-6"
-            }`}
-          >
-            {displayText}
-          </pre>
         ) : null}
       </div>
     </div>

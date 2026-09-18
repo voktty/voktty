@@ -34,6 +34,7 @@ import {
   pickAttachments,
   revokeAttachment,
 } from "../lib/attachments";
+import { messageFilesFromClipboard } from "../lib/clipboard";
 import { resizeComposer } from "../lib/composerResize";
 import {
   EXPLORER_FILE_POINTER_DRAG_EVENT,
@@ -1082,6 +1083,21 @@ export function Composer({
   };
 
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const messageFiles = messageFilesFromClipboard(e.clipboardData);
+    if (messageFiles) {
+      e.preventDefault();
+      const el = e.currentTarget;
+      el.setRangeText(
+        e.clipboardData.getData("text/plain"),
+        el.selectionStart,
+        el.selectionEnd,
+        "end",
+      );
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      if (attachmentsSupported)
+        void attachmentsFromFiles(messageFiles).then(addAttachments);
+      return;
+    }
     const files = filesFromClipboard(e.clipboardData);
     if (files.length === 0) return;
     e.preventDefault();
