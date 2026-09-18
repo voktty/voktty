@@ -100,13 +100,19 @@ function anchorRect(anchor: PopoverAnchor): AnchorRect | null {
 
 /** Points and rects are fresh objects every render; elements keep identity. */
 function anchorKey(anchor: PopoverAnchor): unknown {
-  if (!anchor || anchor instanceof HTMLElement || "current" in anchor) {
+  if (!anchor || typeof anchor !== "object") {
+    return anchor;
+  }
+  if ("current" in anchor) {
     return anchor;
   }
   if ("width" in anchor) {
     return `${anchor.left}:${anchor.top}:${anchor.width}:${anchor.height}`;
   }
-  return `${anchor.x}:${anchor.y}`;
+  if ("x" in anchor && "y" in anchor) {
+    return `${anchor.x}:${anchor.y}`;
+  }
+  return anchor;
 }
 
 function samePosition(a: PopoverPosition | null, b: PopoverPosition): boolean {

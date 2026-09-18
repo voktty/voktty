@@ -168,6 +168,8 @@ export type AgentRunMeta = {
 export type AttachmentKind = "image" | "audio" | "file";
 
 export type Attachment = {
+  /** Live transcript only; deliberately excluded from persisted attachments. */
+  copyFromPath?: boolean;
   id: string;
   name: string;
   mimeType: string;
