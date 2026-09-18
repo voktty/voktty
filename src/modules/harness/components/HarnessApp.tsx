@@ -185,6 +185,7 @@ import {
   preferredModelSettings,
   resolveModel,
   saveLastModelSettings,
+  saveRecentModelChoice,
 } from "../lib/models";
 import {
   loadCloseToTray,
@@ -4068,6 +4069,7 @@ export function HarnessApp({
       if (!current) return;
       if (isPreparingHandoff(current)) return;
       const resolved = resolveModel(harness, model);
+      saveRecentModelChoice(resolved.harness, resolved.id);
       if (current.modelSettings) {
         saveLastModelSettings(current.modelSettings, "fill");
       }
@@ -4183,6 +4185,7 @@ export function HarnessApp({
         return;
       }
       if (isPreparingHandoff(current)) return;
+      saveRecentModelChoice(current.harness, current.model);
       const workCwd = sessionWorkCwd(current);
       const submittedText = intent === "build" ? "Build approved plan" : text;
       const harnessText = composeNoteMessage(noteCard, submittedText);
