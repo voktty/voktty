@@ -15,6 +15,7 @@ export async function requestOutgoingHandoff(input: {
   cwd: string;
   model: string;
   modelSettings?: Record<string, string>;
+  providerAccountId?: string;
   userRequest: string;
   timeoutMs?: number;
 }): Promise<string> {
@@ -27,6 +28,7 @@ export async function requestOutgoingHandoff(input: {
       cwd: input.cwd,
       model: input.model,
       modelSettings: input.modelSettings,
+      providerAccountId: input.providerAccountId,
       runtimeMode: "supervised",
       text: buildOutgoingHandoffPrompt(input.userRequest),
       onEvent: (event) => {

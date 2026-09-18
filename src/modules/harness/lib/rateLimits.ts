@@ -14,11 +14,27 @@ export type RateLimitWindow = {
   resetsAt: number | null;
 };
 
+export type RateLimitResetCredit = {
+  id: string;
+  resetType: "codexRateLimits" | "unknown";
+  status: "available" | "redeeming" | "redeemed" | "unknown";
+  grantedAt: number | null;
+  expiresAt: number | null;
+  title: string | null;
+  description: string | null;
+};
+
+export type RateLimitResetCredits = {
+  availableCount: number;
+  credits: RateLimitResetCredit[] | null;
+};
+
 export type ProviderRateLimits = {
   provider: RateLimitProvider;
   session: RateLimitWindow | null;
   weekly: RateLimitWindow | null;
   monthly: RateLimitWindow | null;
+  resetCredits?: RateLimitResetCredits | null;
   updatedAt: number;
   error: string | null;
   status: RateLimitStatus;
@@ -79,6 +95,7 @@ export function idleRateLimits(
     session: null,
     weekly: null,
     monthly: null,
+    resetCredits: null,
     updatedAt: 0,
     error: null,
     status: "idle",
@@ -100,6 +117,7 @@ export function fetchingRateLimits(
     session: previous?.session ?? null,
     weekly: previous?.weekly ?? null,
     monthly: previous?.monthly ?? null,
+    resetCredits: previous?.resetCredits ?? null,
     updatedAt: previous?.updatedAt ?? 0,
     error: null,
     status: "fetching",
@@ -115,6 +133,7 @@ export function unavailableRateLimits(
     session: null,
     weekly: null,
     monthly: null,
+    resetCredits: null,
     updatedAt: Date.now(),
     error,
     status: "unavailable",
@@ -287,6 +306,7 @@ export function parseClaudeOAuthUsage(body: string): ProviderRateLimits {
     session: mapUsageWindow(rec.five_hour, SESSION_WINDOW_MINUTES),
     weekly: mapUsageWindow(rec.seven_day, WEEKLY_WINDOW_MINUTES),
     monthly: null,
+    resetCredits: null,
     updatedAt: Date.now(),
     error: null,
     status: "ok",
@@ -311,6 +331,9 @@ export function parseCodexRateLimits(result: unknown): ProviderRateLimits {
     session: mapCodexSnapshot(classified.session, SESSION_WINDOW_MINUTES),
     weekly: mapCodexSnapshot(classified.weekly, WEEKLY_WINDOW_MINUTES),
     monthly: null,
+    resetCredits: parseResetCredits(
+      rec?.rateLimitResetCredits ?? rec?.rate_limit_reset_credits,
+    ),
     updatedAt: Date.now(),
     error: null,
     status: "ok",
@@ -448,4 +471,51 @@ function numberField(rec: Record<string, unknown>, key: string): number | null {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+function stringField(rec: Record<string, unknown>, key: string): string | null {
+  const value = rec[key];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function parseResetCredits(raw: unknown): RateLimitResetCredits | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const count =
+    numberField(rec, "availableCount") ?? numberField(rec, "available_count");
+  if (count == null) return null;
+  const rawCredits = rec.credits;
+  const credits = Array.isArray(rawCredits)
+    ? rawCredits
+        .map(parseResetCredit)
+        .filter((credit): credit is RateLimitResetCredit => credit != null)
+    : null;
+  return {
+    availableCount: Math.max(0, Math.floor(count)),
+    credits,
+  };
+}
+
+function parseResetCredit(raw: unknown): RateLimitResetCredit | null {
+  const rec = asRecord(raw);
+  if (!rec || typeof rec.id !== "string" || rec.id.trim() === "") {
+    return null;
+  }
+  const resetType =
+    rec.resetType === "codexRateLimits" ? "codexRateLimits" : "unknown";
+  const status =
+    rec.status === "available" ||
+    rec.status === "redeeming" ||
+    rec.status === "redeemed"
+      ? rec.status
+      : "unknown";
+  return {
+    id: rec.id,
+    resetType,
+    status,
+    grantedAt: parseResetTimestamp(rec.grantedAt ?? rec.granted_at),
+    expiresAt: parseResetTimestamp(rec.expiresAt ?? rec.expires_at),
+    title: stringField(rec, "title"),
+    description: stringField(rec, "description"),
+  };
 }

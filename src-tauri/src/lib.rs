@@ -637,6 +637,7 @@ pub fn run() {
             harness::host::harness_resolve_hermes,
             harness::host::harness_free_port,
             harness::host::harness_spawn,
+            harness::host::provider_account_remove,
             harness::host::harness_write,
             harness::host::harness_kill,
             harness::host::harness_kill_all,
