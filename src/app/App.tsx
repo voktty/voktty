@@ -3,6 +3,7 @@ import {
   planRemoteExplorerSessionRelease,
   prepareRemoteExplorerEnv,
 } from "@/app/lib/remoteExplorerEnv";
+import { coerceCwd, firstCwd } from "@/app/lib/activeCwd";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
 import { TransferQueuePanel } from "@/modules/ssh-native/components/TransferQueuePanel";
 import { decideTransferConflict } from "@/modules/ssh-native/transferBridge";
@@ -933,18 +934,28 @@ function DesktopApp() {
 
   useEffect(() => {
     const handleHarnessCwd = (e: Event) => {
-      const detail = (e as CustomEvent<{ cwd: string }>).detail;
-      if (detail?.cwd) {
-        setHarnessCwd(detail.cwd);
-        const harnessTab =
-          tabsRef.current.find(
-            (t): t is HarnessTab =>
-              t.id === effectiveActiveId && t.kind === "harness",
-          ) ??
-          tabsRef.current.find((t): t is HarnessTab => t.kind === "harness");
-        if (harnessTab && harnessTab.cwd !== detail.cwd) {
-          updateTab(harnessTab.id, { cwd: detail.cwd });
+      const detail = (e as CustomEvent<{ cwd?: unknown }>).detail;
+      // The event type is an assertion, not a guarantee. A non-string here
+      // would be written straight into the persisted tab and survive
+      // restarts, so reject it loudly instead of storing it.
+      const cwd = coerceCwd(detail?.cwd);
+      if (cwd === null) {
+        if (detail?.cwd !== undefined) {
+          console.warn(
+            "[voktty] ignoring harness cwd change with a non-path value:",
+            detail.cwd,
+          );
         }
+        return;
+      }
+      setHarnessCwd(cwd);
+      const harnessTab =
+        tabsRef.current.find(
+          (t): t is HarnessTab =>
+            t.id === effectiveActiveId && t.kind === "harness",
+        ) ?? tabsRef.current.find((t): t is HarnessTab => t.kind === "harness");
+      if (harnessTab && harnessTab.cwd !== cwd) {
+        updateTab(harnessTab.id, { cwd });
       }
     };
     window.addEventListener("voktty:harness-cwd-change", handleHarnessCwd);
@@ -3616,20 +3627,24 @@ function DesktopApp() {
     gitHistoryHandle,
   ]);
 
-  const activeCwd =
-    activeTerminalLeafCwd ??
-    (activeTab?.kind === "harness"
+  // Every source here crosses a boundary where the type is asserted and not
+  // checked: a persisted session document, a harness row, a CustomEvent
+  // detail. Coerce once, so a poisoned value cannot reach a consumer that
+  // calls a string method on it.
+  const activeCwd = firstCwd(
+    activeTerminalLeafCwd,
+    activeTab?.kind === "harness"
       ? activeHarnessCwd
-      : ((activeTab &&
-        "cwd" in activeTab &&
-        typeof (activeTab as any).cwd === "string"
-          ? (activeTab as any).cwd
-          : null) ??
-        explorerRoot ??
-        inheritedCwdForNewTab ??
-        activeSpace?.root ??
-        lastProjectPath() ??
-        null));
+      : firstCwd(
+          activeTab && "cwd" in activeTab
+            ? (activeTab as { cwd?: unknown }).cwd
+            : null,
+          explorerRoot,
+          inheritedCwdForNewTab,
+          activeSpace?.root,
+          lastProjectPath(),
+        ),
+  );
   const localWorkspaceRoot = localHome;
 
   const handleStatusBarCd = useCallback(
