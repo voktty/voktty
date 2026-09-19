@@ -60,19 +60,20 @@ export function useSpacePersistence({
     });
   }, []);
 
+  // Identity of everything that can reach the persisted snapshot. Building it
+  // is O(1): it only re-arms the debounce. The snapshot itself is built and
+  // serialized inside the flush, never during render, so a tab switch no
+  // longer pays a full session serialization before it can paint.
   const persistenceRevision = useMemo(
-    () =>
-      JSON.stringify(
-        snapshotFromRuntime({
-          workspaceContexts,
-          activeWorkspaceContextId: activeSpaceId,
-          tabs,
-          activeTabId: activeId,
-          viewSpaces,
-          stripEntries,
-          activeStripItem,
-        }),
-      ),
+    () => ({
+      activeId,
+      activeSpaceId,
+      activeStripItem,
+      stripEntries,
+      tabs,
+      viewSpaces,
+      workspaceContexts,
+    }),
     [
       activeId,
       activeSpaceId,
@@ -112,9 +113,9 @@ export function useSpacePersistence({
     lastWorkingJson.current = JSON.stringify(snapshot);
   }, [currentSnapshot, enabled, ownerInstanceId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies(persistenceRevision): its identity is the re-arm signal; the flush reads current state through refs
   useEffect(() => {
     if (!enabled) return;
-    if (persistenceRevision === lastWorkingJson.current) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       timer.current = null;
