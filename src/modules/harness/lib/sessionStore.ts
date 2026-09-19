@@ -577,7 +577,27 @@ function normalizeSummary(summary: SessionSummary): SessionSummary {
   };
 }
 
-function recordToSession(record: SessionRecord): Session {
+/**
+ * A session record is a database row, not a typed value: its declared types
+ * are an assertion about what was written, and a legacy or partially written
+ * row does not have to honour them. A non-string reaching a consumer that
+ * calls a string method on it crashes the surface rendering it, which is how
+ * a row's cwd took the status bar down.
+ */
+function recordText(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/** Omits the key entirely when the row holds nothing usable for it. */
+function textField<K extends string>(
+  key: K,
+  value: unknown,
+): Record<K, string> | Record<string, never> {
+  const text = recordText(value);
+  return text === undefined ? {} : ({ [key]: text } as Record<K, string>);
+}
+
+export function recordToSession(record: SessionRecord): Session {
   const blocks = Array.isArray(record.blocks)
     ? record.blocks
         .map(sanitizeBlock)
@@ -585,29 +605,22 @@ function recordToSession(record: SessionRecord): Session {
     : [];
   return {
     id: record.id,
-    // Every other field here is sanitized because the record is a database
-    // row, not a typed value. cwd was not, so a row holding a non-string
-    // reached the status bar and crashed whatever called a string method on
-    // it. "~" is the existing no-project sentinel.
-    cwd: typeof record.cwd === "string" && record.cwd ? record.cwd : "~",
+    // "~" is the existing no-project sentinel.
+    cwd: recordText(record.cwd) ?? "~",
     harness: asHarness(record.harness),
-    model: record.model,
+    model: recordText(record.model) ?? "",
     modelSettings:
       record.modelSettings && typeof record.modelSettings === "object"
         ? record.modelSettings
         : {},
     runtimeMode: asRuntimeMode(record.runtimeMode),
-    title: record.title,
+    title: recordText(record.title) ?? "",
     blocks,
     busy: false,
-    ...(record.providerSessionId
-      ? { providerSessionId: record.providerSessionId }
-      : {}),
-    ...(record.providerAccountId
-      ? { providerAccountId: record.providerAccountId }
-      : {}),
-    ...(record.branch ? { branch: record.branch } : {}),
-    ...(record.worktreeCwd ? { worktreeCwd: record.worktreeCwd } : {}),
+    ...textField("providerSessionId", record.providerSessionId),
+    ...textField("providerAccountId", record.providerAccountId),
+    ...textField("branch", record.branch),
+    ...textField("worktreeCwd", record.worktreeCwd),
     ...(contextFromRecord(record) ?? {}),
   };
 }
