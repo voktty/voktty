@@ -20,9 +20,13 @@ use crate::modules::workspace::WorkspaceEnv;
 const AGENT_EVENT: &str = "voktty:agent-signal";
 
 // Flusher coalesces a short window after first-byte arrival so we send chunks,
-// not single bytes. MAX_IDLE is only a safety net for missed signals.
+// not single bytes. MAX_IDLE is only a safety net for missed signals: the
+// reader notifies under the same mutex and the waiter notify_all's on `done`,
+// so nothing depends on this timeout firing. It is kept long because an idle
+// session otherwise wakes its thread on every expiry forever, and a user with
+// twenty terminals open pays that for each of them.
 const FLUSH_COALESCE: Duration = Duration::from_millis(4);
-const FLUSH_MAX_IDLE: Duration = Duration::from_millis(50);
+const FLUSH_MAX_IDLE: Duration = Duration::from_secs(1);
 const READ_BUF: usize = 16 * 1024;
 // Cap on buffered-but-not-yet-flushed bytes. On overflow we discard the
 // entire pending buffer and emit an SGR-reset + notice in its place.
