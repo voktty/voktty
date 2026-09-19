@@ -7,6 +7,7 @@ import {
   getCachedSession,
   isPersistableId,
   persistFingerprint,
+  recordToSession,
   sanitizeSessionForPersist,
 } from "./sessionStore";
 
@@ -328,3 +329,69 @@ describe("session memory cache", () => {
   });
 });
 
+describe("recordToSession", () => {
+  // A session record is a database row: its declared types describe what was
+  // meant to be written, not what a legacy or partially written row holds.
+  const row = {
+    id: "s1",
+    cwd: "/repo",
+    harness: "claude",
+    model: "sonnet",
+    modelSettings: {},
+    runtimeMode: "agent",
+    title: "Session",
+    blocks: [],
+    createdAt: 0,
+    updatedAt: 0,
+  };
+
+  it("passes a well-formed row through", () => {
+    const session = recordToSession(row as never);
+    expect(session.cwd).toBe("/repo");
+    expect(session.title).toBe("Session");
+    expect(session.model).toBe("sonnet");
+  });
+
+  it("falls back to the no-project sentinel for a non-string cwd", () => {
+    // The shape that crashed the status bar with cwd.replace is not a function.
+    expect(
+      recordToSession({ ...row, cwd: { path: "/repo" } } as never).cwd,
+    ).toBe("~");
+    expect(recordToSession({ ...row, cwd: 42 } as never).cwd).toBe("~");
+    expect(recordToSession({ ...row, cwd: null } as never).cwd).toBe("~");
+    expect(recordToSession({ ...row, cwd: "" } as never).cwd).toBe("~");
+  });
+
+  it("keeps other text fields usable rather than propagating a bad shape", () => {
+    const session = recordToSession({
+      ...row,
+      title: { text: "x" },
+      model: [],
+    } as never);
+    expect(session.title).toBe("");
+    expect(session.model).toBe("");
+  });
+
+  it("omits optional paths entirely when the row holds a non-string", () => {
+    // worktreeCwd reaches normalizeProjectPath, which calls trim on it.
+    const session = recordToSession({
+      ...row,
+      worktreeCwd: { path: "/wt" },
+      branch: 7,
+      providerSessionId: {},
+    } as never);
+    expect(session.worktreeCwd).toBeUndefined();
+    expect(session.branch).toBeUndefined();
+    expect(session.providerSessionId).toBeUndefined();
+  });
+
+  it("keeps optional paths that are usable", () => {
+    const session = recordToSession({
+      ...row,
+      worktreeCwd: "/wt",
+      branch: "main",
+    } as never);
+    expect(session.worktreeCwd).toBe("/wt");
+    expect(session.branch).toBe("main");
+  });
+});
