@@ -17,7 +17,7 @@ import { getCustomEndpointKey, getKey } from "@/modules/ai/lib/keyring";
 import { useChatStore } from "@/modules/ai/store/chatStore";
 import { useTranslation } from "@/modules/i18n";
 import type { WorkspaceTextEditRequest } from "@/modules/workspace-edit";
-import type { WorkspaceEnv } from "@/modules/workspace";
+import { type WorkspaceEnv, workspaceScopeKey } from "@/modules/workspace";
 import {
   lspFormatDocument,
   lspNavigate,
@@ -155,6 +155,7 @@ import {
   saveEditorViewState,
 } from "./lib/editorViewStateStore";
 import { sendActiveEditorCodeToTerminal } from "./lib/terminalExecution";
+import { registerEditorProbe } from "./lib/editorInstrumentation";
 import { FORCE_READ_LIMIT, useDocument } from "./lib/useDocument";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
@@ -394,6 +395,29 @@ export const EditorPane = memo(
       workspaceEnv,
       onDirtyChange,
     });
+    const probeStateRef = useRef({ doc, dirty, path, workspaceEnv });
+    probeStateRef.current = { doc, dirty, path, workspaceEnv };
+    useEffect(
+      () =>
+        registerEditorProbe(editorId, () => {
+          const current = probeStateRef.current;
+          const dom = cmRef.current?.view?.dom;
+          return {
+            editorId,
+            path: current.path,
+            workspaceKey: workspaceScopeKey(current.workspaceEnv),
+            docChars:
+              current.doc.status === "ready" ? current.doc.content.length : 0,
+            dirty: current.dirty,
+            status: current.doc.status,
+            // A hidden pane keeps its geometry, so offsetParent cannot tell
+            // them apart; checkVisibility accounts for visibility and display.
+            visible: dom?.checkVisibility?.() ?? false,
+          };
+        }),
+      [editorId],
+    );
+
     const reloadRef = useRef(reload);
     reloadRef.current = reload;
     const adoptDiskTextRef = useRef(adoptDiskText);

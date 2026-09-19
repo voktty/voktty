@@ -440,6 +440,43 @@ export async function lspRequestSignatureHelp(
   return requestSignatureHelpForView(view);
 }
 
+export type LspSessionStat = {
+  key: string;
+  presetId: string;
+  root: string;
+  /** Distinct document URIs currently referenced by this session. */
+  documents: number;
+  /** Sum of the per-URI reference counts. */
+  refs: number;
+  ageMs: number;
+};
+
+/**
+ * Live session and document-reference counters. A document reference is held
+ * for as long as an editor keeps the document open, so this is how a leak of
+ * references from views that never unmount becomes visible.
+ */
+export function lspDebugStats(): {
+  sessions: LspSessionStat[];
+  totalDocuments: number;
+  totalRefs: number;
+} {
+  const now = Date.now();
+  const stats = [...sessions.values()].map((managed) => ({
+    key: managed.key,
+    presetId: managed.preset.id,
+    root: managed.root,
+    documents: managed.refs.size,
+    refs: [...managed.refs.values()].reduce((sum, n) => sum + n, 0),
+    ageMs: now - managed.bornAt,
+  }));
+  return {
+    sessions: stats,
+    totalDocuments: stats.reduce((sum, s) => sum + s.documents, 0),
+    totalRefs: stats.reduce((sum, s) => sum + s.refs, 0),
+  };
+}
+
 // Open docs re-acquire automatically via the generation bump, so a stop
 // while still enabled is a restart.
 export async function restartPresetSessions(presetId: string): Promise<void> {
