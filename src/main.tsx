@@ -11,11 +11,27 @@ import { StartupCommitMarker } from "@/app/StartupCommitMarker";
 import { initLaunchRequests } from "@/lib/launchRequest";
 import { IS_LINUX, IS_MAC, IS_WINDOWS } from "@/lib/platform";
 import { markStartupPhase } from "@/lib/startupTiming";
-import { applyDocumentLocale, loadLocale, readFastLanguage } from "@/modules/i18n";
+import {
+  applyDocumentLocale,
+  loadLocale,
+  readFastLanguage,
+} from "@/modules/i18n";
 import type { QuitConfirmPayload } from "@/modules/harness/lib/appLifecycle";
 
 markStartupPhase("js-start");
 const startupLanguage = readFastLanguage();
+
+// Start the native bootstrap before awaiting the dictionary. Neither depends
+// on the other, so awaiting them in sequence delayed first paint by the sum of
+// a chunk fetch and an IPC round-trip instead of the longer of the two. Both
+// are still settled before render: pty_close_all reaps sessions orphaned by a
+// prior webview load before any tab spawns, and the launch request has to be
+// seeded so the default tab mounts at its target cwd without flicker.
+const nativeBootstrap = Promise.all([
+  invoke("pty_close_all").catch(() => {}),
+  initLaunchRequests(),
+]);
+
 await loadLocale(startupLanguage);
 applyDocumentLocale(startupLanguage);
 
@@ -81,12 +97,7 @@ if (import.meta.env.DEV && import.meta.env.VITE_REACT_SCAN === "true") {
   scan({ enabled: true });
 }
 
-// Reap PTY sessions orphaned by a prior webview load before any tab spawns.
-// Seed before first paint so default tab mounts at target cwd (no flicker).
-await Promise.all([
-  invoke("pty_close_all").catch(() => {}),
-  initLaunchRequests(),
-]);
+await nativeBootstrap;
 
 void listen<number>("quit_poll", async (event) => {
   const { reportQuitPoll } = await import("@/modules/harness/lib/appLifecycle");
