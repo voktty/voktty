@@ -1824,7 +1824,10 @@ export function terminalDebugStats() {
   };
 }
 
-if (import.meta.env?.DEV && typeof window !== "undefined") {
+// Exposed in production too: renderer retention is the difference between an
+// instant view switch and a rebuilt terminal, and the only way to confirm the
+// pool behaves on a given machine is to read its live counters there.
+if (typeof window !== "undefined") {
   (window as unknown as { __vokttyTerm?: unknown }).__vokttyTerm =
     terminalDebugStats;
 }

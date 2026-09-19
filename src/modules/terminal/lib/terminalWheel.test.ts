@@ -75,8 +75,6 @@ describe("handleTerminalWheel", () => {
       observer: null,
       fitTimer: null,
       ptyTimer: null,
-      webglReapTimer: null,
-      slotReapTimer: null,
       unhideRaf: null,
       resizeRaf: null,
       lastCols: 80,
