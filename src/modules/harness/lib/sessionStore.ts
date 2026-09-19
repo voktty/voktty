@@ -210,7 +210,8 @@ export async function upsertSessions(
 ): Promise<SessionSummary[]> {
   const pending = new Map<string, SessionUpsertPayload>();
   for (const session of sessions) {
-    if (!shouldPersistSession(session) || deletedSessionIds.has(session.id)) continue;
+    if (!shouldPersistSession(session) || deletedSessionIds.has(session.id))
+      continue;
     pending.set(session.id, sanitizeSessionForPersist(session));
   }
   const payloads = [...pending.values()];
@@ -230,7 +231,9 @@ export async function upsertSessions(
       }),
     ),
   );
-  return summaries.filter((summary): summary is SessionSummary => summary != null);
+  return summaries.filter(
+    (summary): summary is SessionSummary => summary != null,
+  );
 }
 
 /**
@@ -582,7 +585,11 @@ function recordToSession(record: SessionRecord): Session {
     : [];
   return {
     id: record.id,
-    cwd: record.cwd,
+    // Every other field here is sanitized because the record is a database
+    // row, not a typed value. cwd was not, so a row holding a non-string
+    // reached the status bar and crashed whatever called a string method on
+    // it. "~" is the existing no-project sentinel.
+    cwd: typeof record.cwd === "string" && record.cwd ? record.cwd : "~",
     harness: asHarness(record.harness),
     model: record.model,
     modelSettings:
