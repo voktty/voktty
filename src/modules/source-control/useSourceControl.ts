@@ -158,7 +158,11 @@ export async function loadSharedSourceControlSnapshot(
   load: () => Promise<SharedSourceControlSnapshot>,
 ): Promise<SharedSourceControlSnapshot> {
   const cached = sharedSnapshots.get(key);
-  if (reuseCached && cached && Date.now() - cached.loadedAt < SC_STATUS_TTL_MS) {
+  if (
+    reuseCached &&
+    cached &&
+    Date.now() - cached.loadedAt < SC_STATUS_TTL_MS
+  ) {
     return {
       repo: cached.repo,
       status: cached.status,
@@ -529,9 +533,10 @@ export function useSourceControl(
 
       const refreshPromise = (async () => {
         try {
-          const snapshotKey = current.repo && canReuseRepo
-            ? sharedRootKey(workspaceKey, current.repo.repoRoot)
-            : sharedContextKey(workspaceKey, activeContextPath);
+          const snapshotKey =
+            current.repo && canReuseRepo
+              ? sharedRootKey(workspaceKey, current.repo.repoRoot)
+              : sharedContextKey(workspaceKey, activeContextPath);
           const snapshot = await loadSharedSourceControlSnapshot(
             snapshotKey,
             workspaceKey,
@@ -540,7 +545,10 @@ export function useSourceControl(
               let repo = canReuseRepo ? current.repo : null;
               let remoteError: string | null = null;
               if (!repo) {
-                repo = await native.gitResolveRepo(activeContextPath, workspaceEnv);
+                repo = await native.gitResolveRepo(
+                  activeContextPath,
+                  workspaceEnv,
+                );
               }
               if (!repo) return { repo: null, status: null, remoteError };
 
@@ -559,7 +567,10 @@ export function useSourceControl(
                   remoteError = normalizeError(error);
                 }
               }
-              const status = await native.gitStatus(repo.repoRoot, workspaceEnv);
+              const status = await native.gitStatus(
+                repo.repoRoot,
+                workspaceEnv,
+              );
               return {
                 repo: repositoryInfoFromStatus(status),
                 status,
@@ -733,12 +744,17 @@ export function useSourceControl(
   }, [doRefresh, workspaceEnv]);
 
   useEffect(() => {
-    const onGitRefresh = () => {
+    // The explorer emits one of these per coalesced filesystem batch, so a
+    // build or an install fires them back to back and each one is a full
+    // status snapshot. Debounce here rather than at every emitter; explicit
+    // Git actions call doRefresh directly and are unaffected.
+    const refresh = createDebouncedSourceControlRefresh(() => {
       void doRefresh("never");
-    };
-    window.addEventListener("voktty:git-refresh", onGitRefresh);
+    });
+    window.addEventListener("voktty:git-refresh", refresh.schedule);
     return () => {
-      window.removeEventListener("voktty:git-refresh", onGitRefresh);
+      window.removeEventListener("voktty:git-refresh", refresh.schedule);
+      refresh.cancel();
     };
   }, [doRefresh]);
 
