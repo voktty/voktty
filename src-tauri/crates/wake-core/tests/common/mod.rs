@@ -454,6 +454,7 @@ pub fn clear_agent_env_overrides() {
         "QODER_CONFIG_DIR",
         "HERMES_HOME",
         "OPENCLAW_STATE_DIR",
+        "OPENCODE_DB",
     ] {
         std::env::remove_var(var);
     }
