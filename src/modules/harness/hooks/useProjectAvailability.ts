@@ -57,13 +57,14 @@ export function useProjectAvailability(paths: string[]): ProjectAvailability {
           .map((info) => normalizeProjectPath(info.path)),
       );
 
+      // Materialized once: sameProjectPath is a fuzzy comparison so the set
+      // cannot be probed directly, but rebuilding the array per project made
+      // this quadratic in allocations as well as in comparisons.
+      const existing = Array.from(existingSet);
       const missing = new Set<string>();
       for (const p of valid) {
         const norm = normalizeProjectPath(p);
-        const exists = Array.from(existingSet).some((e) =>
-          sameProjectPath(e, norm),
-        );
-        if (!exists) {
+        if (!existing.some((e) => sameProjectPath(e, norm))) {
           missing.add(norm);
         }
       }
@@ -76,6 +77,10 @@ export function useProjectAvailability(paths: string[]): ProjectAvailability {
   useEffect(() => {
     void checkAvailability();
     const interval = setInterval(() => {
+      // Each pass stats every project path. A hidden window has nothing to
+      // repaint with the answer, and the focus listener below rechecks the
+      // moment it comes back, so nothing is lost by skipping.
+      if (document.hidden) return;
       void checkAvailability();
     }, 10000);
     const onFocus = () => {
