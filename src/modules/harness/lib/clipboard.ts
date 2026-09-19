@@ -51,7 +51,7 @@ export async function copyMessage(
     if (!text) throw new Error("No copyable content is available.");
     return copyText(text);
   }
-  const escape = (value: string) =>
+  const escapeHtml = (value: string) =>
     value.replace(
       /[&<>"']/g,
       (char) =>
@@ -63,12 +63,12 @@ export async function copyMessage(
           "'": "&#39;",
         })[char]!,
     );
-  const html = `<div data-monocode-files="${encodeURIComponent(JSON.stringify(files))}"><pre>${escape(text)}</pre>${files
+  const html = `<div data-monocode-files="${encodeURIComponent(JSON.stringify(files))}"><pre>${escapeHtml(text)}</pre>${files
     .map((file) => {
-      const src = `data:${escape(file.mimeType)};base64,${escape(file.data)}`;
+      const src = `data:${escapeHtml(file.mimeType)};base64,${escapeHtml(file.data)}`;
       return file.mimeType.startsWith("image/")
-        ? `<img src="${src}" alt="${escape(file.name)}">`
-        : `<a href="${src}" download="${escape(file.name)}">${escape(file.name)}</a>`;
+        ? `<img src="${src}" alt="${escapeHtml(file.name)}">`
+        : `<a href="${src}" download="${escapeHtml(file.name)}">${escapeHtml(file.name)}</a>`;
     })
     .join("")}</div>`;
   const formats: Record<string, Blob> = {

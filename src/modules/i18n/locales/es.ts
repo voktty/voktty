@@ -4954,7 +4954,10 @@ export const es: TranslationSchema = {
       dropFilesToAttach: "Suelta archivos para adjuntarlos",
       waitingForApproval: "Esperando aprobación",
       copied: "Copiado",
+      copyFailed: "Error al copiar.",
+      copyMessage: "Copiar mensaje",
       copyResponse: "Copiar respuesta",
+      couldNotSaveNote: "No se pudo guardar la nota.",
       savedToNotes: "Guardado en Notas",
       saveAsNote: "Guardar como nota",
       showPreviousToolCalls:
@@ -5423,6 +5426,7 @@ export const es: TranslationSchema = {
       branchNamePlaceholder: "feature/mi-rama",
       createBranch: "Crear rama",
       showLess: "Mostrar menos",
+      showMore: "Mostrar más",
       moreCount: "{count} mas",
       collapseFiles: "Contraer archivos",
       expandFiles: "Expandir archivos",

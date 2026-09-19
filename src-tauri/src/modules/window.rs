@@ -218,6 +218,7 @@ fn resurface_prompt(app: &AppHandle) {
     let Some(window) = label.and_then(|label| app.get_webview_window(&label)) else {
         return;
     };
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
@@ -293,6 +294,7 @@ fn start_confirm(app: &AppHandle, id: u32) {
         return;
     }
     for window in app.webview_windows().values() {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let _ = window.unminimize();
         let _ = window.show();
     }
