@@ -31,6 +31,9 @@ type TerminalProgressStore = {
   acknowledgeLeaf: (leafId: number) => void;
 };
 
+/** Upper bound on how much of one PTY flush the progress regexes look at. */
+export const PROGRESS_SCAN_TAIL_CHARS = 8 * 1024;
+
 const AUTO_RESET_COMPLETED_MS = 14000;
 const completedTimers = new Map<number, ReturnType<typeof setTimeout>>();
 const INFERRED_RUNNING_SETTLE_MS = 6000;
@@ -67,12 +70,14 @@ export function extractProgressFromText(text: string): number | null {
     }
   }
 
-  // Match percentage like "45%", "[45%]", "45.2%", "Progress: 80%"
-  const percentMatches = Array.from(
-    text.matchAll(/(?:^|[^\w.])(\d{1,3}(?:\.\d+)?)\s*%/g),
-  );
-  if (percentMatches.length > 0) {
-    const lastMatch = percentMatches[percentMatches.length - 1];
+  // Match percentage like "45%", "[45%]", "45.2%", "Progress: 80%". Only the
+  // last match is used, so keep it as the iterator walks rather than building
+  // an array of every match in the chunk.
+  let lastMatch: RegExpExecArray | null = null;
+  for (const match of text.matchAll(/(?:^|[^\w.])(\d{1,3}(?:\.\d+)?)\s*%/g)) {
+    lastMatch = match;
+  }
+  if (lastMatch) {
     const val = parseFloat(lastMatch[1]);
     if (!isNaN(val) && val >= 0 && val <= 100) {
       return Math.round(val);
@@ -143,7 +148,8 @@ export const useTerminalProgressStore = create<TerminalProgressStore>(
       set((s) => {
         const prev = s.leaves[leafId];
         if (!prev && state === "idle") return s;
-        if (prev && prev.progress === progress && prev.state === state) return s;
+        if (prev && prev.progress === progress && prev.state === state)
+          return s;
         const next: LeafProcessInfo = {
           leafId,
           state,
@@ -169,7 +175,7 @@ export const useTerminalProgressStore = create<TerminalProgressStore>(
         const next: LeafProcessInfo = {
           leafId,
           state: targetState,
-          progress: isSuccess ? 100 : prev?.progress ?? null,
+          progress: isSuccess ? 100 : (prev?.progress ?? null),
           command: prev?.command ?? null,
           exitCode,
           startedAt: prev?.startedAt ?? null,
@@ -208,7 +214,15 @@ export const useTerminalProgressStore = create<TerminalProgressStore>(
         return;
       }
 
-      const percent = extractProgressFromText(text);
+      // A single flush can carry megabytes from a verbose build, and running
+      // two regexes over all of it blocks the main thread for no gain: a
+      // progress indicator only ever wants the most recent value, and these
+      // markers repeat. Scan a bounded tail instead.
+      const percent = extractProgressFromText(
+        text.length > PROGRESS_SCAN_TAIL_CHARS
+          ? text.slice(-PROGRESS_SCAN_TAIL_CHARS)
+          : text,
+      );
       if (percent !== null) {
         if (percent >= 100) {
           store.setLeafCommandEnd(leafId, 0);

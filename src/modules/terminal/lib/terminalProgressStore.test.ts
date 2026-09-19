@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   extractProgressFromText,
   parseOsc9Progress,
+  PROGRESS_SCAN_TAIL_CHARS,
   useTerminalProgressStore,
 } from "./terminalProgressStore";
 
@@ -15,13 +16,45 @@ describe("extractProgressFromText", () => {
   it("extracts percentages correctly", () => {
     expect(extractProgressFromText("Progress: 45%")).toBe(45);
     expect(extractProgressFromText("[  78% ] Linking...")).toBe(78);
-    expect(extractProgressFromText("Downloading package (45.2 MB) 92%")).toBe(92);
+    expect(extractProgressFromText("Downloading package (45.2 MB) 92%")).toBe(
+      92,
+    );
   });
 
   it("returns null on non-progress text", () => {
     expect(extractProgressFromText("npm run build")).toBeNull();
     expect(extractProgressFromText("error: failed to compile")).toBeNull();
     expect(extractProgressFromText("")).toBeNull();
+  });
+
+  it("uses the last percentage when a chunk carries many", () => {
+    const line = Array.from({ length: 100 }, (_, i) => `step ${i}%`).join("\n");
+    expect(extractProgressFromText(line)).toBe(99);
+  });
+});
+
+describe("processPtyOutput scan bound", () => {
+  beforeEach(() => {
+    useTerminalProgressStore.setState({ leaves: {} });
+  });
+
+  it("still finds progress at the end of an oversized chunk", () => {
+    const store = useTerminalProgressStore.getState();
+    store.setLeafCommandStart(7);
+    const noise = "x".repeat(PROGRESS_SCAN_TAIL_CHARS * 3);
+    store.processPtyOutput(7, `${noise}\nBuilding 42%`);
+    expect(useTerminalProgressStore.getState().leaves[7]?.progress).toBe(42);
+  });
+
+  it("ignores progress buried beyond the scanned tail", () => {
+    const store = useTerminalProgressStore.getState();
+    store.setLeafCommandStart(8);
+    const noise = "x".repeat(PROGRESS_SCAN_TAIL_CHARS * 3);
+    store.processPtyOutput(8, `Building 42%\n${noise}`);
+    // Bounded on purpose: a stale marker megabytes back is not the value a
+    // progress indicator should report, and scanning for it costs the frame.
+    // progress stays at its command-start value of null.
+    expect(useTerminalProgressStore.getState().leaves[8]?.progress).toBeNull();
   });
 });
 
