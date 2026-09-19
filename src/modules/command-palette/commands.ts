@@ -7,6 +7,7 @@ import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
 import { leafIds, useCommandHistoryStore } from "@/modules/terminal";
 import { useVaultStore } from "@/modules/vault";
+import { copyPerfSnapshot } from "./copyPerfSnapshot";
 import {
   Alert02Icon,
   ArrowLeft01Icon,
@@ -266,6 +267,25 @@ export function createCommandItems(
       icon: LockPasswordIcon,
       run: () => {
         useVaultStore.getState().lockVault();
+      },
+    },
+    {
+      id: "diagnostics.copyPerf",
+      title: t("commandPalette.commands.copyPerfSnapshot"),
+      group: "General",
+      keywords: [
+        "diagnostics",
+        "performance",
+        "memory",
+        "rendimiento",
+        "memoria",
+        "diagnostico",
+        "webgl",
+        "heap",
+      ],
+      icon: DashboardSquare01Icon,
+      run: () => {
+        void copyPerfSnapshot();
       },
     },
     {
