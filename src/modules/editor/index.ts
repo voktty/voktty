@@ -1,3 +1,5 @@
+import "./lib/editorDebugBridge";
+
 export { AiDiffStack } from "./AiDiffStackLazy";
 export type { EditorPaneHandle } from "./EditorPane";
 export { OutlinePanel } from "./OutlinePanelLazy";
