@@ -144,7 +144,7 @@ fn installed_mac_app(editor: &EditorDefinition) -> Option<PathBuf> {
             .map(|root| root.join(name))
             .filter(|path| path.is_dir())
             .or_else(|| {
-                let path = Path::new("/Applications").join(name);
+                let path = std::path::Path::new("/Applications").join(name);
                 path.is_dir().then_some(path)
             })
     })
