@@ -34,6 +34,7 @@ import {
 import { historyRecord } from "../block/lib/history";
 import type { BlockMode } from "../block/lib/modeMachine";
 import { DormantRing } from "./dormantRing";
+import { PtyTextDecoder } from "./ptyText";
 import {
   createShellIntegrationState,
   registerCwdHandler,
@@ -111,6 +112,7 @@ type Session = {
   snapshot: string | null;
   searchQuery: string | null;
   dormantRing: DormantRing;
+  textDecoder: PtyTextDecoder;
   pendingInput: string;
   hasSlot: boolean;
   blocks: boolean;
@@ -812,6 +814,7 @@ function ensureSession(
     snapshot: null,
     searchQuery: null,
     dormantRing: new DormantRing(),
+    textDecoder: new PtyTextDecoder(),
     pendingInput: "",
     hasSlot: false,
     blocks,
@@ -841,16 +844,42 @@ function ensureSession(
   return session;
 }
 
+/**
+ * Progress markers only mean anything inside a running command. With shell
+ * integration the session knows when that is, so an idle terminal sitting at
+ * a prompt stops being scanned. Without it there is no marker to rely on, so
+ * keep scanning rather than silently losing the feature on those shells.
+ */
+function wantsProgressScan(s: Session): boolean {
+  return s.commandRunning || !s.sawPromptMarker;
+}
+
 function deliverPtyBytes(leafId: number, bytes: Uint8Array): void {
   const s = sessions.get(leafId);
   if (!s) return;
   let devServerChunk: string | null = null;
   if (!isGuestPtyTarget(leafId)) {
-    try {
-      const chunk = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-      useTerminalProgressStore.getState().processPtyOutput(leafId, chunk);
-      devServerChunk = chunk;
-    } catch {}
+    // Decoding copies the whole chunk into a JS string, so only pay for it
+    // when something downstream actually reads the text.
+    const wantsDevServer =
+      useDevServerCaptureStore.getState().commandsByLeaf[leafId] !== undefined;
+    const wantsProgress = wantsProgressScan(s);
+    if (wantsDevServer || wantsProgress) {
+      try {
+        const chunk = s.textDecoder.decode(bytes);
+        if (chunk.length > 0) {
+          if (wantsProgress) {
+            useTerminalProgressStore.getState().processPtyOutput(leafId, chunk);
+          }
+          if (wantsDevServer) devServerChunk = chunk;
+        }
+      } catch {}
+    } else if (bytes.length > 0) {
+      // Nothing reads this chunk, so it is never fed to the decoder. Drop any
+      // bytes it was holding mid-character: joining them to whatever arrives
+      // after the gap would fabricate a character that was never sent.
+      s.textDecoder.reset();
+    }
     if (s.pty !== null) touchAgentActivity(s.pty.id);
   }
   // Retained slots keep parsing live (render paused); the ring is only for
@@ -1229,6 +1258,9 @@ export async function respawnSession(
   s.pty = null;
   s.snapshot = null;
   s.dormantRing = new DormantRing();
+  // The dead shell may have left a character half-written; those bytes must
+  // not prefix the new shell's first output.
+  s.textDecoder.reset();
   s.shellExited = false;
   s.pendingExit = null;
   s.pendingInput = "";
