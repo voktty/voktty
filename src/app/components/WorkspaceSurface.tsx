@@ -9,7 +9,7 @@ import { RdpStack } from "@/modules/rdp";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { Tab } from "@/modules/tabs";
 import { TerminalStack } from "@/modules/terminal";
-import type { ComponentProps } from "react";
+import { type ComponentProps, useMemo } from "react";
 
 type TerminalStackProps = ComponentProps<typeof TerminalStack>;
 type EditorStackProps = ComponentProps<typeof EditorStack>;
@@ -107,19 +107,32 @@ export function WorkspaceSurface({
   placements,
 }: WorkspaceSurfaceProps) {
   const kind = activeTab?.kind;
-  const placementByTabId = new Map(
-    (placements ?? []).map((placement) => [placement.tabId, placement]),
-  );
   const visualLayout = placements !== undefined;
-  const layerVisible = (tabKinds: Tab["kind"] | Tab["kind"][]) => {
-    const kinds = new Set(Array.isArray(tabKinds) ? tabKinds : [tabKinds]);
-    return visualLayout
-      ? tabs.some(
-          (tab) =>
-            kinds.has(tab.kind) && placementByTabId.has(tab.id) && !tab.cold,
-        )
-      : kinds.has(kind as Tab["kind"]);
-  };
+  const placementByTabId = useMemo(
+    () =>
+      new Map(
+        (placements ?? []).map((placement) => [placement.tabId, placement]),
+      ),
+    [placements],
+  );
+  // One pass over the tabs per render instead of one Set plus one scan for
+  // each of the eleven layers, twice over (className and aria-hidden). A tab
+  // switch rebuilds this once; the layers then only do a Set lookup.
+  const visibleKinds = useMemo(() => {
+    const kinds = new Set<Tab["kind"]>();
+    if (!visualLayout) {
+      if (kind !== undefined) kinds.add(kind);
+      return kinds;
+    }
+    for (const tab of tabs) {
+      if (!tab.cold && placementByTabId.has(tab.id)) kinds.add(tab.kind);
+    }
+    return kinds;
+  }, [kind, placementByTabId, tabs, visualLayout]);
+  const layerVisible = (tabKinds: Tab["kind"] | Tab["kind"][]) =>
+    Array.isArray(tabKinds)
+      ? tabKinds.some((k) => visibleKinds.has(k))
+      : visibleKinds.has(tabKinds);
 
   return (
     <div className="relative h-full min-h-0">

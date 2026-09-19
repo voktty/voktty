@@ -3,7 +3,7 @@ import { useSpaces } from "@/modules/spaces";
 import type { Tab } from "@/modules/tabs";
 import { LOCAL_WORKSPACE } from "@/modules/workspace";
 import type { SearchAddon } from "@xterm/addon-search";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { selectLiveTerminals } from "./lib/liveTerminals";
 import { leafIds } from "./lib/panes";
 import { PaneTreeView } from "./PaneTreeView";
@@ -53,6 +53,10 @@ export function TerminalStack({
   const cwdRef = useRef(onCwd);
   const exitRef = useRef(onExit);
   const titleRef = useRef(onTitle);
+  const focusLeafRef = useRef(onFocusLeaf);
+  useEffect(() => {
+    focusLeafRef.current = onFocusLeaf;
+  }, [onFocusLeaf]);
   useEffect(() => {
     registerRef.current = registerHandle;
   }, [registerHandle]);
@@ -70,7 +74,10 @@ export function TerminalStack({
   }, [onTitle]);
 
   const bundles = useRef(new Map<number, Bundle>());
-  const getBundle = (leafId: number): Bundle => {
+  // Identity-stable: PaneTreeView is memoized, and a fresh getBundle on every
+  // render would miss that memo and re-render every pane of every terminal
+  // tab on each tab switch, not just the one being shown.
+  const getBundle = useCallback((leafId: number): Bundle => {
     let b = bundles.current.get(leafId);
     if (!b) {
       b = {
@@ -83,7 +90,19 @@ export function TerminalStack({
       bundles.current.set(leafId, b);
     }
     return b;
-  };
+  }, []);
+
+  // Same reason as getBundle, but keyed by tab: an inline arrow here would
+  // hand every PaneTreeView a new onFocusLeaf on each render.
+  const focusHandlers = useRef(new Map<number, (leafId: number) => void>());
+  const getFocusLeaf = useCallback((tabId: number) => {
+    let handler = focusHandlers.current.get(tabId);
+    if (!handler) {
+      handler = (leafId: number) => focusLeafRef.current(tabId, leafId);
+      focusHandlers.current.set(tabId, handler);
+    }
+    return handler;
+  }, []);
 
   useEffect(() => {
     const live = new Set<number>();
@@ -91,6 +110,10 @@ export function TerminalStack({
       for (const id of leafIds(t.paneTree)) live.add(id);
     for (const id of bundles.current.keys()) {
       if (!live.has(id)) bundles.current.delete(id);
+    }
+    const liveTabs = new Set(terminals.map((t) => t.id));
+    for (const id of focusHandlers.current.keys()) {
+      if (!liveTabs.has(id)) focusHandlers.current.delete(id);
     }
   }, [terminals]);
 
@@ -132,7 +155,7 @@ export function TerminalStack({
                 t.workspaceEnv ?? spaceEnvs.get(t.spaceId) ?? LOCAL_WORKSPACE
               }
               shellOverride={t.shellOverride}
-              onFocusLeaf={(leafId) => onFocusLeaf(t.id, leafId)}
+              onFocusLeaf={getFocusLeaf(t.id)}
               getBundle={getBundle}
             />
           </div>
