@@ -25,6 +25,11 @@ import {
 import { terminalReadlineSequence } from "./keymap";
 import { RENDERER_POOL_SIZE } from "./paneLimits";
 import {
+  planSlotReap,
+  planWebglRelease,
+  type RetentionSlot,
+} from "./slotRetention";
+import {
   readTerminalClipboard,
   writeTerminalClipboard,
 } from "./terminalClipboard";
@@ -104,8 +109,6 @@ export type Slot = {
   observer: ResizeObserver | null;
   fitTimer: ReturnType<typeof setTimeout> | null;
   ptyTimer: ReturnType<typeof setTimeout> | null;
-  webglReapTimer: ReturnType<typeof setTimeout> | null;
-  slotReapTimer: ReturnType<typeof setTimeout> | null;
   unhideRaf: number | null;
   resizeRaf: number | null;
   lastCols: number;
@@ -487,8 +490,6 @@ function createSlot(): Slot {
     observer: null,
     fitTimer: null,
     ptyTimer: null,
-    webglReapTimer: null,
-    slotReapTimer: null,
     unhideRaf: null,
     resizeRaf: null,
     lastCols: term.cols,
@@ -1130,6 +1131,9 @@ export function acquireSlot(params: AcquireParams): Slot {
     discardRetention(pick.slot);
   }
   bindSlot(pick.slot, params);
+  // Binding is when new pressure appears: a freshly attached context may
+  // push the pool over its ceiling.
+  enforceRetentionPolicy();
   return pick.slot;
 }
 
@@ -1157,8 +1161,6 @@ function bindSlot(slot: Slot, p: AcquireParams): void {
   transitionImeBridgeOwner(slot.imeState, p.leafId);
 
   cancelPendingUnhide(slot);
-  cancelWebglReap(slot);
-  cancelSlotReap(slot);
   unparkSlotHost(slot);
   if (!fast) {
     slot.host.style.visibility = "hidden";
@@ -1376,6 +1378,7 @@ export function releaseSlot(leafId: number): ReleaseOutput | null {
   const slot = slots.find((s) => s.currentLeafId === leafId);
   if (!slot) return null;
   detachSlotFromLeaf(slot, true);
+  enforceRetentionPolicy();
   return { cols: slot.term.cols, rows: slot.term.rows };
 }
 
@@ -1487,8 +1490,6 @@ function detachSlotFromLeaf(slot: Slot, retain: boolean): void {
   slot.currentLeafId = null;
   slot.lastUsedAt = performance.now();
   transitionImeBridgeOwner(slot.imeState, null);
-  scheduleWebglReap(slot);
-  scheduleSlotReap(slot);
 }
 
 // display:none makes xterm's IntersectionObserver pause rendering while the
@@ -1505,53 +1506,43 @@ function unparkSlotHost(slot: Slot): void {
   slot.host.style.display = "";
 }
 
-function scheduleWebglReap(slot: Slot): void {
-  cancelWebglReap(slot);
-  if (!slot.webglAddon) return;
-  slot.webglReapTimer = setTimeout(() => {
-    slot.webglReapTimer = null;
-    if (slot.currentLeafId === null || slot.parked) disposeSlotWebgl(slot);
-  }, WEBGL_REAP_GRACE_MS);
+function retentionView(slot: Slot): RetentionSlot {
+  return {
+    id: slot.id,
+    currentLeafId: slot.currentLeafId,
+    retainedLeafId: slot.retainedLeafId,
+    parked: slot.parked,
+    lastUsedAt: slot.lastUsedAt,
+    bufferCells: slot.term.buffer.active.length * slot.term.cols,
+    hasWebgl: !!slot.webglAddon,
+  };
 }
 
-function cancelWebglReap(slot: Slot): void {
-  if (slot.webglReapTimer !== null) {
-    clearTimeout(slot.webglReapTimer);
-    slot.webglReapTimer = null;
+/**
+ * Applies the retention policy to the whole pool. Called at the end of a slot
+ * transition, never from detachSlotFromLeaf: acquireSlot detaches the very
+ * slot it is about to bind, and the policy would dispose it out from under
+ * bindSlot.
+ */
+function enforceRetentionPolicy(): void {
+  const view = slots.map(retentionView);
+
+  for (const id of planWebglRelease(view)) {
+    const slot = slots.find((s) => s.id === id);
+    if (slot) disposeSlotWebgl(slot);
   }
-}
 
-function scheduleSlotReap(slot: Slot): void {
-  cancelSlotReap(slot);
-  slot.slotReapTimer = setTimeout(() => {
-    slot.slotReapTimer = null;
-    reapIdleSlot(slot);
-  }, SLOT_REAP_GRACE_MS);
-}
-
-function cancelSlotReap(slot: Slot): void {
-  if (slot.slotReapTimer !== null) {
-    clearTimeout(slot.slotReapTimer);
-    slot.slotReapTimer = null;
+  for (const id of planSlotReap(view)) {
+    const slot = slots.find((s) => s.id === id);
+    if (!slot || slot.currentLeafId !== null) continue;
+    if (slot.retainedLeafId !== null) {
+      adapter?.storeSnapshot(slot.retainedLeafId, serializeSlot(slot));
+    }
+    disposeSlot(slot);
   }
-}
-
-function reapIdleSlot(slot: Slot): void {
-  if (slot.currentLeafId !== null) return;
-  const idle = slots.filter((s) => s.currentLeafId === null);
-  if (idle.length <= IDLE_SLOTS_KEEP_WARM) return;
-  idle.sort((a, b) => a.lastUsedAt - b.lastUsedAt);
-  const surplus = idle.slice(0, idle.length - IDLE_SLOTS_KEEP_WARM);
-  if (!surplus.includes(slot)) return;
-  if (slot.retainedLeafId !== null) {
-    adapter?.storeSnapshot(slot.retainedLeafId, serializeSlot(slot));
-  }
-  disposeSlot(slot);
 }
 
 function disposeSlot(slot: Slot): void {
-  cancelSlotReap(slot);
-  cancelWebglReap(slot);
   cancelPendingUnhide(slot);
   if (slot.fitTimer) clearTimeout(slot.fitTimer);
   if (slot.ptyTimer) clearTimeout(slot.ptyTimer);
@@ -1586,9 +1577,6 @@ const WEBGL_RECOVERY_DELAY_MS = 250;
 // Below this a re-shown slot is fresh enough to trust; above it, repaint on
 // unhide to defeat silent GPU/context staleness.
 const SLOT_STALE_MS = 10_000;
-const WEBGL_REAP_GRACE_MS = 30_000;
-const SLOT_REAP_GRACE_MS = 45_000;
-const IDLE_SLOTS_KEEP_WARM = 1;
 
 function attachWebgl(slot: Slot): void {
   if (slot.webglAddon || !slot.term.element) return;
@@ -1703,7 +1691,6 @@ export function applyWebglPreference(enabled: boolean): void {
         }
       }
     } else if (slot.webglAddon) {
-      cancelWebglReap(slot);
       disposeSlotWebgl(slot);
     }
   }
@@ -1827,13 +1814,12 @@ export function parkLeafSlot(leafId: number): void {
   const slot = slots.find((s) => s.currentLeafId === leafId);
   if (!slot) return;
   parkSlotHost(slot);
-  scheduleWebglReap(slot);
+  enforceRetentionPolicy();
 }
 
 export function refreshLeafSlot(leafId: number): void {
   const slot = slots.find((s) => s.currentLeafId === leafId);
   if (!slot) return;
-  cancelWebglReap(slot);
   unparkSlotHost(slot);
   if (usePreferencesStore.getState().terminalWebglEnabled && !slot.webglAddon) {
     attachWebgl(slot);
@@ -1884,6 +1870,7 @@ export function disposeLeafSlot(leafId: number): void {
     (s) => s.currentLeafId === leafId || s.retainedLeafId === leafId,
   );
   if (slot) disposeSlot(slot);
+  enforceRetentionPolicy();
 }
 
 export function discardRetainedSlot(leafId: number): void {
@@ -1894,6 +1881,7 @@ export function discardRetainedSlot(leafId: number): void {
   discardRetention(slot);
   slot.term.clear();
   slot.term.reset();
+  enforceRetentionPolicy();
 }
 
 export function getLiveSlotForLeaf(leafId: number): Slot | null {
