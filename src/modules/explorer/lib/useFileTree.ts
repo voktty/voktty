@@ -15,6 +15,7 @@ import {
 } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { selectDirtyDirectories } from "./dirtyDirectories";
 import { parentPath as pathParent } from "./path";
 import {
   isNetworkFilesystemPath,
@@ -379,25 +380,12 @@ export function useFileTree(rootPath: string | null, options?: Options) {
     let unlisten: (() => void) | undefined;
     void listenFsChanged((paths) => {
       const current = nodesRef.current;
-      const dirs = new Set<string>();
       const loadedKeys = Object.keys(current).filter(
         (k) => current[k]?.status === "loaded",
       );
-      const norm = (s: string) =>
-        s.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
-
-      for (const p of paths) {
-        const parent = dirname(p);
-        const pNorm = norm(p);
-        const parentNorm = norm(parent);
-        for (const key of loadedKeys) {
-          const keyNorm = norm(key);
-          if (keyNorm === parentNorm || keyNorm === pNorm) {
-            dirs.add(key);
-          }
-        }
+      for (const d of selectDirtyDirectories(paths, loadedKeys)) {
+        void fetchChildren(d);
       }
-      for (const d of dirs) void fetchChildren(d);
       window.dispatchEvent(new CustomEvent("voktty:git-refresh"));
     }, workspace).then((un) => {
       if (alive) unlisten = un;
