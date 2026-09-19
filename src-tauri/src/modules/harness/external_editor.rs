@@ -3,10 +3,10 @@ use std::process::{Command, Stdio};
 
 use serde::Serialize;
 
-#[cfg(target_os = "macos")]
-use crate::dirs_home;
 use super::fs::expand_home;
 use super::host::{apply_gui_env, resolve_gui_binary};
+#[cfg(target_os = "macos")]
+use crate::dirs_home;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
