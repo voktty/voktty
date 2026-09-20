@@ -51,7 +51,6 @@ import {
   MODELS,
   PROVIDERS,
   STT_PROVIDER_LABELS,
-  type CustomEndpoint,
   type ModelCapabilities,
   type ModelId,
   type ModelInfo,
@@ -62,42 +61,7 @@ import { getLocalizedModelDescription } from "../lib/modelDisplay";
 import { toggleFavoriteModel } from "../lib/modelPrefs";
 import { useChatStore } from "../store/chatStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import type { ProviderKeys } from "../lib/keyring";
-
-function isProviderActive(
-  id: ProviderId,
-  apiKeys: ProviderKeys,
-  prefs: {
-    lmstudioModelId?: string;
-    mlxModelId?: string;
-    ollamaModelId?: string;
-    openrouterModelId?: string;
-    openaiCompatibleBaseURL?: string;
-    openaiCompatibleModelId?: string;
-    customEndpoints?: readonly CustomEndpoint[];
-  },
-): boolean {
-  if (id === "openrouter") {
-    return !!apiKeys[id] && !!prefs.openrouterModelId?.trim();
-  }
-  if (id === "ollama") {
-    return !!prefs.ollamaModelId?.trim();
-  }
-  if (id === "lmstudio") {
-    return !!prefs.lmstudioModelId?.trim();
-  }
-  if (id === "mlx") {
-    return !!prefs.mlxModelId?.trim();
-  }
-  if (id === "openai-compatible") {
-    return (
-      (prefs.customEndpoints && prefs.customEndpoints.length > 0) ||
-      (!!prefs.openaiCompatibleBaseURL?.trim() &&
-        !!prefs.openaiCompatibleModelId?.trim())
-    );
-  }
-  return !!apiKeys[id];
-}
+import { isProviderUsable } from "../lib/availability";
 
 const PROVIDER_ICON = {
   openai: ChatGptIcon,
@@ -296,6 +260,9 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
   const ollamaModelId = usePreferencesStore((s) => s.ollamaModelId);
   const openrouterModelId = usePreferencesStore((s) => s.openrouterModelId);
   const customEndpoints = usePreferencesStore((s) => s.customEndpoints);
+  const harnessProviderEnabled = usePreferencesStore(
+    (s) => s.harnessProviderEnabled,
+  );
   const [search, setSearch] = useState("");
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
@@ -304,14 +271,22 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
   const configuredProviders = useMemo(() => {
     return PROVIDERS.filter((p) => {
       if (p.id === "openai-compatible") return false;
-      return isProviderActive(p.id, apiKeys, {
+      return isProviderUsable(p.id, apiKeys, {
+        harnessProviderEnabled,
         lmstudioModelId,
         mlxModelId,
         ollamaModelId,
         openrouterModelId,
       });
     });
-  }, [apiKeys, lmstudioModelId, mlxModelId, ollamaModelId, openrouterModelId]);
+  }, [
+    apiKeys,
+    harnessProviderEnabled,
+    lmstudioModelId,
+    mlxModelId,
+    ollamaModelId,
+    openrouterModelId,
+  ]);
 
   const epModelInfos = useMemo(() => {
     return customEndpoints.map((ep) =>
@@ -459,7 +434,9 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
             />
           ) : (
             <>
-              {hasAnyConfigured ? current.label : t("settings.models.noProvidersConnected")}
+              {hasAnyConfigured
+                ? current.label
+                : t("settings.models.noProvidersConnected")}
               <HugeiconsIcon
                 icon={ArrowDown01Icon}
                 size={11}
@@ -682,8 +659,6 @@ function ProviderHeader({ providerId }: { providerId: ProviderId }) {
     </div>
   );
 }
-
-
 
 function ModelRow({
   model,

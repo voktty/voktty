@@ -268,7 +268,10 @@ export const SPACE_VIEW_LIMITS = [2, 4, 6, 8] as const;
 export type SpaceViewLimit = (typeof SPACE_VIEW_LIMITS)[number];
 
 export function isSpaceViewLimit(value: unknown): value is SpaceViewLimit {
-  return typeof value === "number" && SPACE_VIEW_LIMITS.includes(value as SpaceViewLimit);
+  return (
+    typeof value === "number" &&
+    SPACE_VIEW_LIMITS.includes(value as SpaceViewLimit)
+  );
 }
 
 export type EditorFormatter =
@@ -650,7 +653,8 @@ export async function loadPreferences(): Promise<Preferences> {
     surfaceProfile:
       get<string>(KEY_SURFACE_PROFILE) ?? DEFAULT_PREFERENCES.surfaceProfile,
     typographyProfile:
-      get<string>(KEY_TYPOGRAPHY_PROFILE) ?? DEFAULT_PREFERENCES.typographyProfile,
+      get<string>(KEY_TYPOGRAPHY_PROFILE) ??
+      DEFAULT_PREFERENCES.typographyProfile,
     backgroundKind:
       get<BackgroundKind>(KEY_BG_KIND) ?? DEFAULT_PREFERENCES.backgroundKind,
     backgroundImageId:
@@ -833,8 +837,7 @@ export async function loadPreferences(): Promise<Preferences> {
     lastWslDistro:
       get<string | null>(KEY_LAST_WSL_DISTRO) ??
       DEFAULT_PREFERENCES.lastWslDistro,
-    zoomLevel:
-      get<number>(KEY_ZOOM_LEVEL) ?? getOptimalInitialZoomLevel(),
+    zoomLevel: get<number>(KEY_ZOOM_LEVEL) ?? getOptimalInitialZoomLevel(),
     soundEnabled:
       get<boolean>(KEY_SOUND_ENABLED) ?? DEFAULT_PREFERENCES.soundEnabled,
     soundVolume: clampSoundVolume(
@@ -1003,7 +1006,6 @@ export async function setTypographyProfile(value: string): Promise<void> {
   await writePref(KEY_TYPOGRAPHY_PROFILE, value);
 }
 
-
 /** Slider stores 0..1. Actual rendered opacity is halved in SurfaceLayer
  *  so the image never exceeds 50% — keeps UI/terminal readable at any setting. */
 export const BG_OPACITY_RENDER_FACTOR = 0.5;
@@ -1053,6 +1055,18 @@ export async function setAiEnabled(value: boolean): Promise<void> {
     if ((revision ?? 0) !== healthRevision) return;
   }
   await writePref(KEY_AI_ENABLED, value);
+}
+
+/**
+ * Current configuration revision straight from the store.
+ *
+ * A caller that intentionally writes an AI configuration preference bumps this
+ * itself, so it has to re-read afterwards: recording a health check against
+ * the value captured beforehand can never match, and the check is discarded
+ * even though it passed.
+ */
+export async function getAiConfigRevision(): Promise<number> {
+  return (await store.get<number>(KEY_AI_CONFIG_REVISION)) ?? 0;
 }
 
 export async function recordAiHealthCheck(
@@ -1348,9 +1362,7 @@ export async function setConfirmCloseRunningTerminal(
   await writePref(KEY_CONFIRM_CLOSE_RUNNING_TERMINAL, value);
 }
 
-export async function setTerminalSuggestEnabled(
-  value: boolean,
-): Promise<void> {
+export async function setTerminalSuggestEnabled(value: boolean): Promise<void> {
   await writePref(KEY_TERMINAL_SUGGEST_ENABLED, value);
 }
 
