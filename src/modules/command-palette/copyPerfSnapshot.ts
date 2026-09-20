@@ -1,4 +1,5 @@
 import { formatPerfSnapshot } from "@/lib/perfSnapshot";
+import { harnessOpenTiming } from "@/modules/harness/lib/openTiming";
 import { t } from "@/modules/i18n";
 import { collectEditorDiagnostics } from "@/modules/editor/lib/editorDebugBridge";
 import { writeTerminalClipboard } from "@/modules/terminal/lib/terminalClipboard";
@@ -17,6 +18,7 @@ export async function copyPerfSnapshot(): Promise<void> {
   try {
     const terminal = terminalDebugStats();
     const editor = collectEditorDiagnostics();
+    const harnessTiming = harnessOpenTiming();
     const report = formatPerfSnapshot({
       terminal: {
         poolSize: terminal.poolSize,
@@ -41,6 +43,9 @@ export async function copyPerfSnapshot(): Promise<void> {
         totalDocuments: editor.lsp.totalDocuments,
         totalRefs: editor.lsp.totalRefs,
       },
+      harnessOpen: harnessTiming
+        ? { ...harnessTiming.spans, complete: harnessTiming.complete }
+        : null,
       platform: document.documentElement.dataset.platform,
     });
     await writeTerminalClipboard(report);

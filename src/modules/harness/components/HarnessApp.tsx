@@ -397,6 +397,7 @@ import {
   openFindInActiveEditor,
 } from "../surfaces/editorSearchBridge";
 import type { InboxSessionPortal } from "../surfaces/InboxDiscussionPanel";
+import { markHarnessOpenPhase } from "../lib/openTiming";
 import { PaneTree } from "../surfaces/PaneTree";
 import { SessionSurface } from "../surfaces/SessionSurface";
 import type { SettingsAnchor } from "../surfaces/SettingsView";
@@ -650,6 +651,7 @@ export function HarnessApp({
   initialCwd?: string;
   initialSessionId?: string;
 } = {}) {
+  markHarnessOpenPhase("rendered");
   const [projectCwd, setProjectCwd] = useState(
     () =>
       (initialCwd && looksLikeProject(initialCwd) ? initialCwd : undefined) ??
@@ -973,6 +975,7 @@ export function HarnessApp({
   );
 
   useEffect(() => {
+    markHarnessOpenPhase("ready");
     registerBuiltinHarnesses();
     if (resumed?.sessions.length) bindResumedSessions(resumed.sessions);
     const stopBridge = startHarnessBridge();

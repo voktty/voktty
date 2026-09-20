@@ -4,12 +4,24 @@ import { useTranslation } from "@/modules/i18n";
 import type { WorkspacePlacement } from "@/modules/spaces";
 import type { HarnessTab, Tab } from "@/modules/tabs";
 
+import { markHarnessOpenPhase } from "../lib/openTiming";
+
 export function preloadHarnessApp() {
-  void import("./HarnessApp");
+  void loadHarnessApp();
+}
+
+// Marks bracket the dynamic import so its fetch-and-evaluate cost is separable
+// from the render and the mount work that follow it.
+function loadHarnessApp() {
+  markHarnessOpenPhase("requested");
+  return import("./HarnessApp").then((m) => {
+    markHarnessOpenPhase("loaded");
+    return m;
+  });
 }
 
 const LazyHarnessApp = lazy(() =>
-  import("./HarnessApp").then((m) => ({
+  loadHarnessApp().then((m) => ({
     default: m.HarnessApp,
   })),
 );
