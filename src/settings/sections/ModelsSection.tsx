@@ -76,6 +76,7 @@ import {
   setAutocompleteModelId,
   setAutocompleteProvider,
   setAutocompleteTrigger,
+  getAiConfigRevision,
   recordAiHealthCheck,
   setAiEnabled,
   setCustomEndpoints,
@@ -328,7 +329,8 @@ export function ModelsSection() {
 
   const isConfigured = (id: ProviderId): boolean => {
     if (id === "harness") return harnessProviderEnabled;
-    if (id === "openrouter") return !!currentKeys[id] && !!openrouterModelId?.trim();
+    if (id === "openrouter")
+      return !!currentKeys[id] && !!openrouterModelId?.trim();
     if (!isLocalProvider(id)) return !!currentKeys[id];
     const cfg = localConfig(id);
     if (!cfg) return false;
@@ -411,7 +413,11 @@ export function ModelsSection() {
                 : "text-muted-foreground hover:text-foreground hover:bg-card/40",
             )}
           >
-            <HugeiconsIcon icon={UserMultiple02Icon} size={14} strokeWidth={2} />
+            <HugeiconsIcon
+              icon={UserMultiple02Icon}
+              size={14}
+              strokeWidth={2}
+            />
             <span>{t("settings.models.subTabs.agents")}</span>
           </button>
         </div>
@@ -510,17 +516,17 @@ export function ModelsSection() {
                   {customEndpoints.map((ep) => (
                     <CustomEndpointCard
                       key={ep.id}
-                endpoint={ep}
-                endpointKey={epKeys[ep.id] ?? null}
-                onSaveKey={(v) => onSaveEndpointKey(ep.id, v)}
-                onClearKey={() => onClearEndpointKey(ep.id)}
-                onUpdate={(patch) => updateCustomEndpoint(ep.id, patch)}
-                onRemove={() => removeCustomEndpoint(ep.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+                      endpoint={ep}
+                      endpointKey={epKeys[ep.id] ?? null}
+                      onSaveKey={(v) => onSaveEndpointKey(ep.id, v)}
+                      onClearKey={() => onClearEndpointKey(ep.id)}
+                      onUpdate={(patch) => updateCustomEndpoint(ep.id, patch)}
+                      onRemove={() => removeCustomEndpoint(ep.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -806,19 +812,29 @@ function DefaultsBlock({
   const isDefaultConfigured =
     configuredIds.has(defaultModelInfo.provider) ||
     (isCompatModelId(defaultModel) &&
-      customEndpoints.some((e) => compatModelIdForEndpoint(e.id) === defaultModel));
+      customEndpoints.some(
+        (e) => compatModelIdForEndpoint(e.id) === defaultModel,
+      ));
 
   useEffect(() => {
     if (!isDefaultConfigured && hasAny) {
-      const fallback = getFirstConfiguredModelId(configuredIds, customEndpoints);
+      const fallback = getFirstConfiguredModelId(
+        configuredIds,
+        customEndpoints,
+      );
       if (fallback && fallback !== defaultModel) {
         void setDefaultModel(fallback);
       }
     }
-  }, [isDefaultConfigured, hasAny, configuredIds, customEndpoints, defaultModel]);
+  }, [
+    isDefaultConfigured,
+    hasAny,
+    configuredIds,
+    customEndpoints,
+    defaultModel,
+  ]);
 
   const testAi = async () => {
-    const revision = aiConfigRevision;
     const controller = new AbortController();
     setHealthStatus({ phase: "testing" });
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -827,11 +843,18 @@ function DefaultsBlock({
       const preferences = usePreferencesStore.getState();
       targetModel = isDefaultConfigured
         ? defaultModel
-        : (getFirstConfiguredModelId(configuredIds, customEndpoints) ?? defaultModel);
+        : (getFirstConfiguredModelId(configuredIds, customEndpoints) ??
+          defaultModel);
 
       if (!isDefaultConfigured && targetModel !== defaultModel) {
         await setDefaultModel(targetModel);
       }
+
+      // After the write above, not before: setDefaultModel bumps the
+      // configuration revision, so a value captured earlier could never match
+      // and a passing check was discarded as stale, leaving AI disabled with
+      // no way to turn it on.
+      const revision = await getAiConfigRevision();
 
       timeout = setTimeout(
         () => controller.abort(),
@@ -1026,7 +1049,10 @@ function DefaultModelPicker({
                   <span>{p.label}</span>
                 </div>
                 {models.map((mod) => {
-                  const displayMod = resolveDisplayModel(mod.id, customEndpoints);
+                  const displayMod = resolveDisplayModel(
+                    mod.id,
+                    customEndpoints,
+                  );
                   return (
                     <DropdownMenuItem
                       key={mod.id}
@@ -1066,7 +1092,11 @@ function DefaultModelPicker({
                     )}
                   >
                     <span className="flex flex-1 flex-col">
-                      <span>{ep.name || ep.modelId || t("settings.models.customEndpoint")}</span>
+                      <span>
+                        {ep.name ||
+                          ep.modelId ||
+                          t("settings.models.customEndpoint")}
+                      </span>
                       <span className="text-[10px] text-muted-foreground">
                         {ep.baseURL}
                       </span>
@@ -1201,7 +1231,16 @@ function AutocompleteRow({
       (m) => m.provider === provider && m.id === modelId,
     );
     return foundCloud ?? items[0] ?? fallbackModel;
-  }, [items, provider, modelId, customEndpoints, configuredIds, local, eligible, fallbackModel]);
+  }, [
+    items,
+    provider,
+    modelId,
+    customEndpoints,
+    configuredIds,
+    local,
+    eligible,
+    fallbackModel,
+  ]);
 
   const setModel = (id: string, providerId: ProviderId) => {
     void setAutocompleteProvider(providerId);
