@@ -22,6 +22,7 @@ const CLIENT_CAPABILITIES = {
 type LiveText = {
   acp: AcpClient;
   cwd: string;
+  model: string;
   acpSessionId: string;
   collecting: boolean;
   output: string;
@@ -42,9 +43,11 @@ export async function stopCursorTextPrompt(childId?: string): Promise<void> {
 /** Start the shared text ACP process in the background so the first prompt is fast. */
 export function warmupCursorText(cwd: string): Promise<void> {
   if (!cwd || cwd === "~") return Promise.resolve();
-  const run = turns.catch(() => undefined).then(async () => {
-    await ensureLive(cwd);
-  });
+  const run = turns
+    .catch(() => undefined)
+    .then(async () => {
+      await ensureLive(cwd);
+    });
   turns = run.then(
     () => undefined,
     () => undefined,
@@ -57,6 +60,8 @@ export async function runCursorTextPrompt(input: {
   cwd: string;
   prompt: string;
   timeoutMs: number;
+  /** Native model id. Defaults to the cheap one used for titles and commits. */
+  model?: string;
 }): Promise<string> {
   const run = turns.catch(() => undefined).then(() => promptOnLive(input));
   turns = run.then(
@@ -96,27 +101,31 @@ async function promptOnLive(input: {
   }
 }
 
-async function ensureLive(cwd: string): Promise<LiveText> {
+async function ensureLive(cwd: string, model?: string): Promise<LiveText> {
+  // The model is part of the session identity: a live ACP session was opened
+  // for one model and cannot answer as another.
+  const wanted = model ?? TEXT_MODEL;
   if (live && !live.closed) {
-    if (live.cwd === cwd) return live;
+    if (live.cwd === cwd && live.model === wanted) return live;
     try {
-      await openSession(live, cwd);
+      await openSession(live, cwd, wanted);
       return live;
     } catch {
       await dropLive();
     }
   }
-  return startLive(cwd);
+  return startLive(cwd, wanted);
 }
 
-async function startLive(cwd: string): Promise<LiveText> {
+async function startLive(cwd: string, model?: string): Promise<LiveText> {
   await dropLive();
   const { path } = await resolveCursorBinary();
   const acpRef: { session: LiveText | null } = { session: null };
   const acp = new AcpClient(TEXT_CHILD_ID, {
     onNotification: (method, params) => {
       const session = acpRef.session;
-      if (!session || method !== "session/update" || !session.collecting) return;
+      if (!session || method !== "session/update" || !session.collecting)
+        return;
       session.output = mergeStream(session.output, textFromUpdate(params));
     },
     onRequest: (id, method, params) => {
@@ -126,6 +135,7 @@ async function startLive(cwd: string): Promise<LiveText> {
   const session: LiveText = {
     acp,
     cwd,
+    model: model ?? TEXT_MODEL,
     acpSessionId: "",
     collecting: false,
     output: "",
@@ -157,7 +167,7 @@ async function startLive(cwd: string): Promise<LiveText> {
     await acp
       .request("authenticate", { methodId: "cursor_login" }, REQUEST_TIMEOUT_MS)
       .catch(() => undefined);
-    await openSession(session, cwd);
+    await openSession(session, cwd, model);
     live = session;
     return session;
   } catch (error) {
@@ -169,15 +179,16 @@ async function startLive(cwd: string): Promise<LiveText> {
   }
 }
 
-async function openSession(session: LiveText, cwd: string): Promise<void> {
+async function openSession(
+  session: LiveText,
+  cwd: string,
+  model?: string,
+): Promise<void> {
+  const resolvedModel = model ?? TEXT_MODEL;
   const setup = await session.acp.request<{
     sessionId?: string;
     configOptions?: unknown;
-  }>(
-    "session/new",
-    { cwd, mcpServers: [] },
-    REQUEST_TIMEOUT_MS,
-  );
+  }>("session/new", { cwd, mcpServers: [] }, REQUEST_TIMEOUT_MS);
   const acpSessionId = setup.sessionId?.trim();
   if (!acpSessionId) throw new Error("Cursor did not return a session id");
 
@@ -196,7 +207,7 @@ async function openSession(session: LiveText, cwd: string): Promise<void> {
       {
         sessionId: acpSessionId,
         configId: modelConfigId,
-        value: TEXT_MODEL,
+        value: resolvedModel,
       },
       REQUEST_TIMEOUT_MS,
     )
@@ -204,13 +215,14 @@ async function openSession(session: LiveText, cwd: string): Promise<void> {
       session.acp
         .request(
           "session/set_model",
-          { sessionId: acpSessionId, modelId: TEXT_MODEL },
+          { sessionId: acpSessionId, modelId: resolvedModel },
           REQUEST_TIMEOUT_MS,
         )
         .catch(() => undefined),
     );
 
   session.cwd = cwd;
+  session.model = resolvedModel;
   session.acpSessionId = acpSessionId;
 }
 

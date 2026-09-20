@@ -154,6 +154,40 @@ export type CustomEndpoint = {
   autocompleteProfile?: CompatibleCompletionProfile;
 };
 
+/**
+ * Local agent models.
+ *
+ * The harness keeps a catalog of what each agent CLI can actually run, and a
+ * picker that offers only one entry per agent cannot say which of them to use.
+ * These ids wrap a catalog id, which already carries the agent as its first
+ * segment ("claude:sonnet-5"), so the agent is recoverable from the id alone
+ * and the catalog is only needed for display.
+ */
+const HARNESS_MODEL_PREFIX = "harness@";
+
+export function harnessModelId(agentModelId: string): string {
+  return `${HARNESS_MODEL_PREFIX}${agentModelId}`;
+}
+
+export function isHarnessModelId(modelId: string): boolean {
+  return modelId.startsWith(HARNESS_MODEL_PREFIX);
+}
+
+/** Catalog id inside a chat model id, or "" when it is not one of ours. */
+export function agentModelIdFromHarnessModel(modelId: string): string {
+  return isHarnessModelId(modelId)
+    ? modelId.slice(HARNESS_MODEL_PREFIX.length)
+    : "";
+}
+
+/** Agent that runs a chat model id, e.g. "claude" for "harness@claude:opus-5". */
+export function harnessIdFromModelId(modelId: string): string {
+  const agentModelId = agentModelIdFromHarnessModel(modelId);
+  if (!agentModelId) return "";
+  const separator = agentModelId.indexOf(":");
+  return separator === -1 ? agentModelId : agentModelId.slice(0, separator);
+}
+
 const COMPAT_MODEL_PREFIX = "compat-";
 
 export function compatModelIdForEndpoint(endpointId: string): string {
@@ -400,7 +434,8 @@ export const MODELS = [
     provider: "google",
     label: "Gemini 3.8 Flash",
     hint: "Frontier",
-    description: "Google's newest flagship fast multimodal model with dynamic thinking.",
+    description:
+      "Google's newest flagship fast multimodal model with dynamic thinking.",
     capabilities: { intelligence: 5, speed: 5, cost: 4 },
     tags: ["vision", "reasoning", "tools", "coding"],
   },
@@ -409,7 +444,8 @@ export const MODELS = [
     provider: "google",
     label: "Gemini 3.7 Flash",
     hint: "Frontier",
-    description: "Google's flagship fast multimodal model with dynamic thinking/reasoning.",
+    description:
+      "Google's flagship fast multimodal model with dynamic thinking/reasoning.",
     capabilities: { intelligence: 5, speed: 5, cost: 4 },
     tags: ["vision", "reasoning", "tools", "coding"],
   },
@@ -418,7 +454,8 @@ export const MODELS = [
     provider: "google",
     label: "Gemini 3.6 Flash",
     hint: "Fast",
-    description: "High-intelligence, extremely fast multimodal reasoning model.",
+    description:
+      "High-intelligence, extremely fast multimodal reasoning model.",
     capabilities: { intelligence: 4, speed: 5, cost: 4 },
     tags: ["vision", "reasoning", "tools", "coding"],
   },
@@ -739,9 +776,30 @@ export function resolveModel(
   endpoints: readonly CustomEndpoint[] = [],
 ): ModelInfo {
   if (isCompatModelId(modelId)) return getCompatModelInfo(modelId, endpoints);
+  if (isHarnessModelId(modelId)) return getHarnessModelInfo(modelId);
   const m = MODELS.find((x) => x.id === modelId);
   if (!m) throw new Error(`Unknown model: ${modelId}`);
   return m;
+}
+
+/**
+ * Chat model for a local agent id, without consulting the catalog.
+ *
+ * Kept free of the catalog so this stays synchronous and usable from anywhere;
+ * the pickers build richer entries from `harnessChatModels`, which has the
+ * real names. The label here is the catalog id, which is already readable and
+ * only shows when a saved selection outlives the model it names.
+ */
+function getHarnessModelInfo(modelId: string): ModelInfo {
+  const agentModelId = agentModelIdFromHarnessModel(modelId);
+  return {
+    id: modelId,
+    provider: "harness",
+    label: agentModelId || modelId,
+    hint: "Local OAuth",
+    description: "",
+    capabilities: { intelligence: 5, speed: 4, cost: 5 },
+  };
 }
 
 export function getModel(id: ModelId): ModelInfo {

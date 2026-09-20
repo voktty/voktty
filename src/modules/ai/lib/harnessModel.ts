@@ -1,4 +1,6 @@
 import { useChatStore } from "@/modules/ai/store/chatStore";
+import { agentModelIdFromHarnessModel, harnessIdFromModelId } from "../config";
+import { findModel } from "@/modules/harness/lib/models";
 import { acquireHarnessBridge } from "@/modules/harness/lib/harness/child";
 import {
   runClaudeTextPrompt,
@@ -63,10 +65,14 @@ export class HarnessLanguageModel implements HarnessLanguageModelContract {
       cwd: string;
       prompt: string;
       timeoutMs: number;
+      model?: string;
     }) => Promise<string>;
     stop: () => Promise<void>;
   } {
-    if (this.modelId.includes("codex")) {
+    // Prefer the agent encoded in a per-model id; fall back to substring
+    // matching for the plain agent ids that predate it.
+    const harness = harnessIdFromModelId(this.modelId) || this.modelId;
+    if (harness.includes("codex")) {
       return {
         binary: "codex",
         labelKey: "agentHistory.agents.codex",
@@ -74,7 +80,7 @@ export class HarnessLanguageModel implements HarnessLanguageModelContract {
         stop: stopCodexTextPrompt,
       };
     }
-    if (this.modelId.includes("agy") || this.modelId.includes("cursor")) {
+    if (harness.includes("agy") || harness.includes("cursor")) {
       return {
         binary: "cursor-agent",
         labelKey: "agentHistory.agents.cursor",
@@ -82,7 +88,7 @@ export class HarnessLanguageModel implements HarnessLanguageModelContract {
         stop: stopCursorTextPrompt,
       };
     }
-    if (this.modelId.includes("opencode")) {
+    if (harness.includes("opencode")) {
       return {
         binary: "opencode",
         labelKey: "agentHistory.agents.opencode",
@@ -90,7 +96,7 @@ export class HarnessLanguageModel implements HarnessLanguageModelContract {
         stop: stopOpenCodeTextPrompt,
       };
     }
-    if (this.modelId.includes("grok")) {
+    if (harness.includes("grok")) {
       return {
         binary: "grok",
         labelKey: "agentHistory.agents.grok",
@@ -134,6 +140,18 @@ export class HarnessLanguageModel implements HarnessLanguageModelContract {
     return parts.join("\n\n");
   }
 
+  /**
+   * Native model id the agent should run, for a per-model chat selection.
+   * Undefined for the plain agent ids, where the runner keeps its own cheap
+   * default.
+   */
+  private resolveNativeModel(): string | undefined {
+    const agentModelId = agentModelIdFromHarnessModel(this.modelId);
+    if (!agentModelId) return undefined;
+    const model = findModel(agentModelId);
+    return model?.nativeId ?? model?.id;
+  }
+
   private async run(options: HarnessCallOptions): Promise<string> {
     const { binary, labelKey, run, stop } = this.resolveAgent();
     const formattedPrompt = this.formatPrompt(options.prompt);
@@ -153,7 +171,12 @@ export class HarnessLanguageModel implements HarnessLanguageModelContract {
       return await this.withAbort(
         options.abortSignal,
         stop,
-        run({ cwd, prompt: formattedPrompt, timeoutMs: 45_000 }),
+        run({
+          cwd,
+          prompt: formattedPrompt,
+          timeoutMs: 45_000,
+          model: this.resolveNativeModel(),
+        }),
       );
     } catch (error) {
       if (options.abortSignal?.aborted) throw error;

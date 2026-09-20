@@ -49,7 +49,9 @@ function pickTextModel(): string {
 
 function pickTextEffort(modelId: string): string {
   const model = modelsFor("codex").find((entry) => entry.nativeId === modelId);
-  const setting = model?.settings?.find((entry) => entry.id === "reasoningEffort");
+  const setting = model?.settings?.find(
+    (entry) => entry.id === "reasoningEffort",
+  );
   const options = setting?.options?.map((option) => option.value) ?? [];
   if (options.includes("low")) return "low";
   if (options.includes("none")) return "none";
@@ -64,9 +66,11 @@ export async function stopCodexTextPrompt(): Promise<void> {
 /** Start the shared Codex app-server in the background so the first prompt is fast. */
 export function warmupCodexText(cwd: string): Promise<void> {
   if (!cwd || cwd === "~") return Promise.resolve();
-  const run = turns.catch(() => undefined).then(async () => {
-    await ensureLive(cwd);
-  });
+  const run = turns
+    .catch(() => undefined)
+    .then(async () => {
+      await ensureLive(cwd);
+    });
   turns = run.then(
     () => undefined,
     () => undefined,
@@ -80,6 +84,8 @@ export async function runCodexTextPrompt(input: {
   providerAccountId?: string;
   prompt: string;
   timeoutMs?: number;
+  /** Native model id. Defaults to the cheap one used for titles and commits. */
+  model?: string;
 }): Promise<string> {
   const run = turns.catch(() => undefined).then(() => promptOnLive(input));
   turns = run.then(
@@ -94,8 +100,13 @@ async function promptOnLive(input: {
   providerAccountId?: string;
   prompt: string;
   timeoutMs?: number;
+  model?: string;
 }): Promise<string> {
-  const session = await ensureLive(input.cwd, input.providerAccountId);
+  const session = await ensureLive(
+    input.cwd,
+    input.providerAccountId,
+    input.model,
+  );
   session.output = "";
   session.collecting = true;
   const timeoutMs = input.timeoutMs ?? REQUEST_TIMEOUT_MS;
@@ -146,8 +157,9 @@ async function promptOnLive(input: {
 async function ensureLive(
   cwd: string,
   providerAccountId?: string,
+  requestedModel?: string,
 ): Promise<LiveText> {
-  const model = pickTextModel();
+  const model = requestedModel ?? pickTextModel();
   const effort = pickTextEffort(model);
   if (live && !live.closed) {
     if (
@@ -160,7 +172,7 @@ async function ensureLive(
     }
     if (live.providerAccountId !== providerAccountId) {
       await dropLive();
-      return startLive(cwd, providerAccountId);
+      return startLive(cwd, providerAccountId, model);
     }
     try {
       live.model = model;
@@ -171,12 +183,13 @@ async function ensureLive(
       await dropLive();
     }
   }
-  return startLive(cwd, providerAccountId);
+  return startLive(cwd, providerAccountId, model);
 }
 
 async function startLive(
   cwd: string,
   providerAccountId?: string,
+  requestedModel?: string,
 ): Promise<LiveText> {
   await dropLive();
   const { path } = await resolveCodexBinary();
@@ -194,7 +207,7 @@ async function startLive(
     { includeJsonrpc: false, label: "codex-text" },
   );
 
-  const model = pickTextModel();
+  const model = requestedModel ?? pickTextModel();
   const session: LiveText = {
     rpc,
     cwd,
@@ -224,17 +237,10 @@ async function startLive(
   );
 
   try {
-    await spawnChild(
-      TEXT_CHILD_ID,
-      path,
-      ["app-server"],
-      cwd,
-      null,
-      {
-        provider: "codex",
-        id: providerAccountId ?? "default",
-      },
-    );
+    await spawnChild(TEXT_CHILD_ID, path, ["app-server"], cwd, null, {
+      provider: "codex",
+      id: providerAccountId ?? "default",
+    });
     await rpc.request(
       "initialize",
       {
