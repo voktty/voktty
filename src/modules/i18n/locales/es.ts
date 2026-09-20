@@ -777,6 +777,24 @@ export const es: TranslationSchema = {
         openai_compatible_custom: "Cualquier endpoint compatible con OpenAI.",
         lmstudio_local: "Modelos GGUF locales mediante LM Studio.",
         mlx_local: "Modelos para Apple Silicon mediante mlx_lm.server.",
+        claude_fable_5_1:
+          "El modelo clase Mythos más reciente de Anthropic, para programación agéntica autónoma y razonamiento profundo.",
+        gemini_3_8_flash:
+          "El modelo multimodal rápido más reciente de Google, con razonamiento dinámico.",
+        gemini_3_7_flash:
+          "Modelo multimodal rápido insignia de Google, con razonamiento dinámico.",
+        gemini_3_6_flash:
+          "Modelo multimodal de razonamiento, muy rápido y de alta inteligencia.",
+        gemini_3_1_pro:
+          "Razonamiento profundo, contexto de 1M y buena capacidad de programación.",
+        harness_claude:
+          "Se ejecuta con el CLI local de Claude y su sesión OAuth.",
+        harness_codex:
+          "Se ejecuta con el CLI local de Codex y su sesión OAuth.",
+        harness_agy:
+          "Se ejecuta con el agente local Agy / Cursor y su sesión OAuth.",
+        harness_opencode: "Se ejecuta con el agente local OpenCode.",
+        harness_grok: "Se ejecuta con el CLI local de Grok y su sesión OAuth.",
         ollama_local: "Modelos locales mediante Ollama.",
       },
     },
@@ -2032,7 +2050,8 @@ export const es: TranslationSchema = {
       toggleAi: "Alternar agente de IA",
       askAiSelection: "Preguntar a IA sobre la selección",
       copyPerfSnapshot: "Copiar diagnóstico de rendimiento",
-      copyPerfSnapshotDone: "Diagnóstico de rendimiento copiado al portapapeles",
+      copyPerfSnapshotDone:
+        "Diagnóstico de rendimiento copiado al portapapeles",
       copyPerfSnapshotFailed: "No se pudo copiar el diagnóstico de rendimiento",
       exportConfig: "Exportar configuración (JSON)...",
       importConfig: "Importar configuración (JSON)...",
@@ -4366,7 +4385,8 @@ export const es: TranslationSchema = {
     closeFind: "Cerrar búsqueda (Esc)",
     loadingTranscript: "Cargando mensajes de la transcripción...",
     loadMoreMessages: "Cargar más mensajes",
-    messageLimitReached: "Se muestran los primeros {count} mensajes. Exporte la transcripción para acceder a todos.",
+    messageLimitReached:
+      "Se muestran los primeros {count} mensajes. Exporte la transcripción para acceder a todos.",
     noMessages: "No hay mensajes registrados en esta transcripción de sesión",
     agent: "Agente",
     resume: "Reanudar",
@@ -4622,7 +4642,8 @@ export const es: TranslationSchema = {
       openSession: "Abrir sesión",
       snooze: "Posponer",
       dismiss: "Descartar",
-      desktopAlertsOff: "Las alertas de escritorio están desactivadas. Actívalas en Ajustes.",
+      desktopAlertsOff:
+        "Las alertas de escritorio están desactivadas. Actívalas en Ajustes.",
       reminder: "Recordatorio",
     },
     notes: {
