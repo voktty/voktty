@@ -747,6 +747,23 @@ export const en = {
         openai_compatible_custom: "Any OpenAI-compatible endpoint.",
         lmstudio_local: "Local GGUF models through LM Studio.",
         mlx_local: "Apple Silicon models through mlx_lm.server.",
+        claude_fable_5_1:
+          "Anthropic's latest Mythos-class model for autonomous agentic coding and deep reasoning.",
+        gemini_3_8_flash:
+          "Google's newest flagship fast multimodal model with dynamic thinking.",
+        gemini_3_7_flash:
+          "Google's flagship fast multimodal model with dynamic thinking.",
+        gemini_3_6_flash:
+          "High-intelligence, extremely fast multimodal reasoning model.",
+        gemini_3_1_pro: "Deep reasoning, 1M context, strong coding.",
+        harness_claude:
+          "Runs through the local Claude CLI and its OAuth session.",
+        harness_codex:
+          "Runs through the local Codex CLI and its OAuth session.",
+        harness_agy:
+          "Runs through the local Agy / Cursor agent and its OAuth session.",
+        harness_opencode: "Runs through the local OpenCode agent.",
+        harness_grok: "Runs through the local Grok CLI and its OAuth session.",
         ollama_local: "Local models through Ollama.",
       },
     },
@@ -4266,7 +4283,8 @@ export const en = {
     closeFind: "Close find (Esc)",
     loadingTranscript: "Loading transcript messages...",
     loadMoreMessages: "Load more messages",
-    messageLimitReached: "Showing the first {count} messages. Export the transcript to access all messages.",
+    messageLimitReached:
+      "Showing the first {count} messages. Export the transcript to access all messages.",
     noMessages: "No messages recorded in this session transcript",
     agent: "Agent",
     resume: "Resume",
@@ -4777,8 +4795,7 @@ export const en = {
       workingTreeChanges: "Working tree changes",
       sessionChanges: "Session Changes",
       closeTabWithUnsavedFiles: "Close this tab with unsaved files?",
-      closeOtherTabsWithUnsavedFiles:
-        "Close other tabs with unsaved files?",
+      closeOtherTabsWithUnsavedFiles: "Close other tabs with unsaved files?",
       closeFileWithoutSaving: "Close {name} without saving?",
       closeConversationWithUnsavedFiles:
         "Close this conversation with unsaved files?",
