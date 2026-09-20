@@ -395,7 +395,7 @@ import {
 import {
   handleEditorFindKey,
   openFindInActiveEditor,
-} from "../surfaces/editorSearch";
+} from "../surfaces/editorSearchBridge";
 import type { InboxSessionPortal } from "../surfaces/InboxDiscussionPanel";
 import { PaneTree } from "../surfaces/PaneTree";
 import { SessionSurface } from "../surfaces/SessionSurface";
@@ -403,22 +403,34 @@ import type { SettingsAnchor } from "../surfaces/SettingsView";
 import type { ConnectableInboxSource } from "../lib/inboxFilters";
 
 const LazyDiffPane = lazy(() =>
-  import("../surfaces/DiffPane").then((module) => ({ default: module.DiffPane })),
+  import("../surfaces/DiffPane").then((module) => ({
+    default: module.DiffPane,
+  })),
 );
 const LazyInboxDetailPane = lazy(() =>
-  import("../surfaces/InboxView").then((module) => ({ default: module.InboxDetailPane })),
+  import("../surfaces/InboxView").then((module) => ({
+    default: module.InboxDetailPane,
+  })),
 );
 const LazyInboxView = lazy(() =>
-  import("../surfaces/InboxView").then((module) => ({ default: module.InboxView })),
+  import("../surfaces/InboxView").then((module) => ({
+    default: module.InboxView,
+  })),
 );
 const LazyNotesView = lazy(() =>
-  import("../surfaces/NotesView").then((module) => ({ default: module.NotesView })),
+  import("../surfaces/NotesView").then((module) => ({
+    default: module.NotesView,
+  })),
 );
 const LazySearchView = lazy(() =>
-  import("../surfaces/SearchView").then((module) => ({ default: module.SearchView })),
+  import("../surfaces/SearchView").then((module) => ({
+    default: module.SearchView,
+  })),
 );
 const LazySettingsView = lazy(() =>
-  import("../surfaces/SettingsView").then((module) => ({ default: module.SettingsView })),
+  import("../surfaces/SettingsView").then((module) => ({
+    default: module.SettingsView,
+  })),
 );
 const LazyApprovalToasts = lazy(() =>
   import("../chrome/ApprovalToasts").then((module) => ({
@@ -426,10 +438,14 @@ const LazyApprovalToasts = lazy(() =>
   })),
 );
 const LazyFilePicker = lazy(() =>
-  import("../chrome/FilePicker").then((module) => ({ default: module.FilePicker })),
+  import("../chrome/FilePicker").then((module) => ({
+    default: module.FilePicker,
+  })),
 );
 const LazyUpdateToast = lazy(() =>
-  import("../chrome/UpdateToast").then((module) => ({ default: module.UpdateToast })),
+  import("../chrome/UpdateToast").then((module) => ({
+    default: module.UpdateToast,
+  })),
 );
 const LazyReminderNotices = lazy(() =>
   import("../chrome/ReminderNotices").then((module) => ({
@@ -437,7 +453,9 @@ const LazyReminderNotices = lazy(() =>
   })),
 );
 const LazyUsageFooter = lazy(() =>
-  import("../chrome/UsageFooter").then((module) => ({ default: module.UsageFooter })),
+  import("../chrome/UsageFooter").then((module) => ({
+    default: module.UsageFooter,
+  })),
 );
 const LazyProjectTerminalDock = lazy(() =>
   import("../surfaces/ProjectTerminalDock").then((module) => ({
@@ -900,10 +918,7 @@ export function HarnessApp({
       );
       if (!open?.busy) return open;
 
-      turnGen.current.set(
-        sessionId,
-        (turnGen.current.get(sessionId) ?? 0) + 1,
-      );
+      turnGen.current.set(sessionId, (turnGen.current.get(sessionId) ?? 0) + 1);
       flushHarnessEvents();
       await Promise.all(
         sessionChildHarnesses(open).map((harness: any) =>
@@ -1374,7 +1389,10 @@ export function HarnessApp({
           for (const summary of summaries) {
             const session = changed.find((item) => item.id === summary.id);
             if (session) {
-              lastPersisted.current.set(session.id, persistFingerprint(session));
+              lastPersisted.current.set(
+                session.id,
+                persistFingerprint(session),
+              );
             }
             if (summary.cwd === sidebarCwdRef.current) {
               setHistory((current) =>
@@ -1701,7 +1719,8 @@ export function HarnessApp({
             const cached = peekLinearIssueDetails(item.id);
             description = cached
               ? cached.body
-              : (await linearIssueDetails(item.id).catch(() => undefined))?.body;
+              : (await linearIssueDetails(item.id).catch(() => undefined))
+                  ?.body;
           }
         } else {
           const kind =
@@ -1851,11 +1870,11 @@ export function HarnessApp({
       setTabs((prev) =>
         prev.map((tab) =>
           tab.id === activeTab.id
-            ? openAddToChatSessionPane({
+            ? (openAddToChatSessionPane({
                 tab,
                 sessions: [...sessions, session],
                 sessionId: session.id,
-              }) ?? tab
+              }) ?? tab)
             : tab,
         ),
       );
@@ -2182,7 +2201,9 @@ export function HarnessApp({
     const projectPath = projectCwdRef.current;
     const dock = findProjectTerminal(projectTerminalsRef.current, projectPath);
     if (!dock?.pane.files.some((file: any) => file.id === fileId)) return;
-    const closingFiles = dock.pane.files.filter((file: any) => file.id !== fileId);
+    const closingFiles = dock.pane.files.filter(
+      (file: any) => file.id !== fileId,
+    );
     if (closingFiles.length === 0) return;
     const closingIds = new Set(closingFiles.map((file: any) => file.id));
 
@@ -2203,7 +2224,9 @@ export function HarnessApp({
       );
     };
 
-    void confirmCloseTerminals(closingFiles).then((ok: any) => ok && finishClose());
+    void confirmCloseTerminals(closingFiles).then(
+      (ok: any) => ok && finishClose(),
+    );
   }, []);
 
   const onTerminalMetaChange = useCallback(
@@ -2370,7 +2393,8 @@ export function HarnessApp({
         ...(tab.terminalPanes ?? []).flatMap((pane: any) => pane.files),
       ]);
       const unsaved = closingFiles.filter(
-        (file: any) => isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
+        (file: any) =>
+          isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
       );
       const terminals = closingFiles.filter((file: any) => file.terminal);
 
@@ -2392,7 +2416,9 @@ export function HarnessApp({
           for (const file of closingFiles) next.delete(file.id);
           return next;
         });
-        setTabs((prev: any) => prev.filter((tab: any) => !closingIds.has(tab.id)));
+        setTabs((prev: any) =>
+          prev.filter((tab: any) => !closingIds.has(tab.id)),
+        );
         if (closingIds.has(activeTabIdRef.current)) activateTab(fallback.id);
         void refreshHistory(sidebarCwd);
       };
@@ -2677,65 +2703,73 @@ export function HarnessApp({
     [activeTabId, dirtyFiles, onCloseTab, projectCwd, tabCloseScope],
   );
 
-  const onCloseOtherFiles = useCallback((paneId: string, fileId: string) => {
-    const tab = tabsRef.current.find((entry: any) => findSurfacePane(entry, paneId));
-    if (!tab) return;
-    const found = findSurfacePane(tab, paneId);
-    if (!found?.pane.files.some((file: any) => file.id === fileId)) return;
-    const closingFiles = found.pane.files.filter((file: any) => file.id !== fileId);
-    if (closingFiles.length === 0) return;
-    const closingIds = new Set(closingFiles.map((file: any) => file.id));
-    const unsaved = closingFiles.filter(
-      (file: any) => isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
-    );
-    const terminals = closingFiles.filter((file: any) => file.terminal);
-
-    const finishClose = () => {
-      setTabs((prev: any) =>
-        prev.map((entry: any) => {
-          if (entry.id !== tab.id) return entry;
-          const current = findSurfacePane(entry, paneId);
-          if (!current?.pane.files.some((file: any) => file.id === fileId)) {
-            return entry;
-          }
-          return withSurfacePanes(
-            { ...entry, focusedId: paneId },
-            current.kind,
-            surfacePanes(entry, current.kind).map((pane: any) =>
-              pane.id === paneId
-                ? {
-                    ...pane,
-                    files: pane.files.filter(
-                      (file: any) => !closingIds.has(file.id),
-                    ),
-                    activeFileId: fileId,
-                  }
-                : pane,
-            ),
-          );
-        }),
+  const onCloseOtherFiles = useCallback(
+    (paneId: string, fileId: string) => {
+      const tab = tabsRef.current.find((entry: any) =>
+        findSurfacePane(entry, paneId),
       );
-      setDirtyFiles((prev: Set<string>) => {
-        const next = new Set(prev);
-        for (const id of closingIds) next.delete(id);
-        return next;
-      });
-    };
+      if (!tab) return;
+      const found = findSurfacePane(tab, paneId);
+      if (!found?.pane.files.some((file: any) => file.id === fileId)) return;
+      const closingFiles = found.pane.files.filter(
+        (file: any) => file.id !== fileId,
+      );
+      if (closingFiles.length === 0) return;
+      const closingIds = new Set(closingFiles.map((file: any) => file.id));
+      const unsaved = closingFiles.filter(
+        (file: any) =>
+          isFilesystemTab(file) && dirtyFilesRef.current.has(file.id),
+      );
+      const terminals = closingFiles.filter((file: any) => file.terminal);
 
-    void (async () => {
-      if (unsaved.length > 0) {
-        const ok = await confirmDiscardUnsaved(
-          t("harness.chrome.closeOtherTabsWithUnsavedFiles"),
+      const finishClose = () => {
+        setTabs((prev: any) =>
+          prev.map((entry: any) => {
+            if (entry.id !== tab.id) return entry;
+            const current = findSurfacePane(entry, paneId);
+            if (!current?.pane.files.some((file: any) => file.id === fileId)) {
+              return entry;
+            }
+            return withSurfacePanes(
+              { ...entry, focusedId: paneId },
+              current.kind,
+              surfacePanes(entry, current.kind).map((pane: any) =>
+                pane.id === paneId
+                  ? {
+                      ...pane,
+                      files: pane.files.filter(
+                        (file: any) => !closingIds.has(file.id),
+                      ),
+                      activeFileId: fileId,
+                    }
+                  : pane,
+              ),
+            );
+          }),
         );
-        if (!ok) return;
-      }
-      if (terminals.length > 0) {
-        const ok = await confirmCloseTerminals(terminals);
-        if (!ok) return;
-      }
-      finishClose();
-    })();
-  }, [t]);
+        setDirtyFiles((prev: Set<string>) => {
+          const next = new Set(prev);
+          for (const id of closingIds) next.delete(id);
+          return next;
+        });
+      };
+
+      void (async () => {
+        if (unsaved.length > 0) {
+          const ok = await confirmDiscardUnsaved(
+            t("harness.chrome.closeOtherTabsWithUnsavedFiles"),
+          );
+          if (!ok) return;
+        }
+        if (terminals.length > 0) {
+          const ok = await confirmCloseTerminals(terminals);
+          if (!ok) return;
+        }
+        finishClose();
+      })();
+    },
+    [t],
+  );
 
   const onClearTabSession = useCallback(
     (id: string) => {
@@ -4217,7 +4251,9 @@ export function HarnessApp({
       },
     ) => {
       if (removingSessionIds.current.has(sessionId)) return;
-      const storedCurrent = sessionsRef.current.find((s: any) => s.id === sessionId);
+      const storedCurrent = sessionsRef.current.find(
+        (s: any) => s.id === sessionId,
+      );
       if (!storedCurrent) return;
       const current = options?.buildTarget
         ? withPlanBuildTarget(storedCurrent, options.buildTarget)
@@ -5048,28 +5084,23 @@ export function HarnessApp({
     [onSubmit],
   );
 
-  const onResumeQueue = useCallback(
-    (sessionId: string) => {
-      const session = sessionsRef.current.find(
-        (entry: any) => entry.id === sessionId,
-      );
-      if (
-        !session ||
-        session.queueStatus !== "paused" ||
-        !session.queuedMessages?.length
-      ) {
-        return;
-      }
-      setSessions((prev: any) =>
-        prev.map((entry: any) =>
-          entry.id === sessionId
-            ? { ...entry, queueStatus: "resuming" }
-            : entry,
-        ),
-      );
-    },
-    [],
-  );
+  const onResumeQueue = useCallback((sessionId: string) => {
+    const session = sessionsRef.current.find(
+      (entry: any) => entry.id === sessionId,
+    );
+    if (
+      !session ||
+      session.queueStatus !== "paused" ||
+      !session.queuedMessages?.length
+    ) {
+      return;
+    }
+    setSessions((prev: any) =>
+      prev.map((entry: any) =>
+        entry.id === sessionId ? { ...entry, queueStatus: "resuming" } : entry,
+      ),
+    );
+  }, []);
 
   const onCompactContext = useCallback(
     (sessionId: string) => {
@@ -5220,7 +5251,8 @@ export function HarnessApp({
   const onQuestionInteraction = useCallback(
     (sessionId: string, requestId: number) => {
       const session = sessionsRef.current.find((s: any) => s.id === sessionId);
-      if (session) keepHarnessQuestionOpen(session.harness, sessionId, requestId);
+      if (session)
+        keepHarnessQuestionOpen(session.harness, sessionId, requestId);
     },
     [],
   );
@@ -5905,22 +5937,16 @@ export function HarnessApp({
     );
   }, [currentProjectDock, dockVisible]);
 
-  const ensureSaved = useCallback(
-    async (sessionIds: readonly string[]) => {
-      const candidates = sessionIds.flatMap((id) => {
-        const session = sessionsRef.current.find((entry) => entry.id === id);
-        return session ? [session] : [];
-      });
-      if (candidates.length > 0) {
-        await upsertSessions(candidates);
-      }
-    },
-    [],
-  );
-  const activeOpenSessionIds = useMemo(
-    () => [...openSessionIds(tabs)],
-    [tabs],
-  );
+  const ensureSaved = useCallback(async (sessionIds: readonly string[]) => {
+    const candidates = sessionIds.flatMap((id) => {
+      const session = sessionsRef.current.find((entry) => entry.id === id);
+      return session ? [session] : [];
+    });
+    if (candidates.length > 0) {
+      await upsertSessions(candidates);
+    }
+  }, []);
+  const activeOpenSessionIds = useMemo(() => [...openSessionIds(tabs)], [tabs]);
   const reminders = useSessionReminders(
     onSelectHistorySession,
     ensureSaved,
@@ -5928,9 +5954,7 @@ export function HarnessApp({
   );
 
   return (
-    <div
-      className="voktty-harness-root flex h-full bg-background text-foreground"
-    >
+    <div className="voktty-harness-root flex h-full bg-background text-foreground">
       <Sidebar
         cwd={sidebarCwd}
         gitCwd={gitCwd}
@@ -6241,61 +6265,69 @@ export function HarnessApp({
           </main>
         </div>
         {searchViewOpen ? (
-          <Suspense fallback={null}><LazySearchView
-            open
-            cwd={sidebarCwd}
-            recents={recents}
-            history={projectHistory}
-            sessions={sessions}
-            focusToken={searchViewFocusToken}
-            besideRail={deckLayout && projectRailOpen}
-            onClose={onLeaveSearch}
-            onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
-            onOpenFile={onOpenFile}
-            onOpenSession={onSelectHistorySession}
-            onOpenProject={onSelectProject}
-          /></Suspense>
+          <Suspense fallback={null}>
+            <LazySearchView
+              open
+              cwd={sidebarCwd}
+              recents={recents}
+              history={projectHistory}
+              sessions={sessions}
+              focusToken={searchViewFocusToken}
+              besideRail={deckLayout && projectRailOpen}
+              onClose={onLeaveSearch}
+              onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
+              onOpenFile={onOpenFile}
+              onOpenSession={onSelectHistorySession}
+              onOpenProject={onSelectProject}
+            />
+          </Suspense>
         ) : null}
         {inboxViewOpen ? (
-          <Suspense fallback={null}><LazyInboxView
-            cwd={sidebarCwd}
-            recents={recents}
-            besideRail={deckLayout && projectRailOpen}
-            onClose={onLeaveInbox}
-            onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
-            onStart={onStartInboxItem}
-            onAsk={onAskInboxItem}
-            onAskRestart={onRestartInboxAsk}
-            onAskMount={setInboxAskPortal}
-            onOpenIntegrations={onOpenInboxIntegrations}
-          /></Suspense>
+          <Suspense fallback={null}>
+            <LazyInboxView
+              cwd={sidebarCwd}
+              recents={recents}
+              besideRail={deckLayout && projectRailOpen}
+              onClose={onLeaveInbox}
+              onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
+              onStart={onStartInboxItem}
+              onAsk={onAskInboxItem}
+              onAskRestart={onRestartInboxAsk}
+              onAskMount={setInboxAskPortal}
+              onOpenIntegrations={onOpenInboxIntegrations}
+            />
+          </Suspense>
         ) : null}
         {notesViewOpen ? (
-          <Suspense fallback={null}><LazyNotesView
-            besideRail={deckLayout && projectRailOpen}
-            cwd={projectCwd}
-            onClose={onLeaveNotes}
-            onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
-          /></Suspense>
+          <Suspense fallback={null}>
+            <LazyNotesView
+              besideRail={deckLayout && projectRailOpen}
+              cwd={projectCwd}
+              onClose={onLeaveNotes}
+              onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
+            />
+          </Suspense>
         ) : null}
         {settingsOpen ? (
-          <Suspense fallback={null}><LazySettingsView
-            section={settingsSection}
-            onSelectSection={onSelectSettingsSection}
-            anchor={settingsAnchor}
-            cwd={sidebarCwd}
-            sessions={sidebarHistory}
-            besideRail={deckLayout || sidebarOpen || settingsOpen}
-            onClose={onCloseSettings}
-            onOpenSession={onOpenArchivedSession}
-            onArchiveSession={onArchiveHistorySession}
-            onDeleteSession={onDeleteHistorySession}
-            onRestoreProject={onRestoreProject}
-            onDeleteProject={(path) =>
-              onRemoveProject(path, { purgeData: true })
-            }
-            onOpenWhatsNew={onOpenWhatsNew}
-          /></Suspense>
+          <Suspense fallback={null}>
+            <LazySettingsView
+              section={settingsSection}
+              onSelectSection={onSelectSettingsSection}
+              anchor={settingsAnchor}
+              cwd={sidebarCwd}
+              sessions={sidebarHistory}
+              besideRail={deckLayout || sidebarOpen || settingsOpen}
+              onClose={onCloseSettings}
+              onOpenSession={onOpenArchivedSession}
+              onArchiveSession={onArchiveHistorySession}
+              onDeleteSession={onDeleteHistorySession}
+              onRestoreProject={onRestoreProject}
+              onDeleteProject={(path) =>
+                onRemoveProject(path, { purgeData: true })
+              }
+              onOpenWhatsNew={onOpenWhatsNew}
+            />
+          </Suspense>
         ) : null}
         {searchViewOpen ||
         inboxViewOpen ||
@@ -6422,7 +6454,6 @@ function lastUserBlockId(session: Session): string | undefined {
   }
   return undefined;
 }
-
 
 function selectedChangePath(
   tab: WorkspaceTab,
@@ -6619,7 +6650,9 @@ function trackSessionEdits(
     cwd !== "~" &&
     (event.status === "in_progress" || event.status === "pending")
   ) {
-    void prepareSessionCheckpoint(sessionId, cwd, [path]).catch(() => undefined);
+    void prepareSessionCheckpoint(sessionId, cwd, [path]).catch(
+      () => undefined,
+    );
     return;
   }
 

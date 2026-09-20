@@ -27,6 +27,7 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { MOD, ALT, SHIFT } from "../lib/platform";
+import { registerEditorSearchHandlers } from "./editorSearchBridge";
 
 const MATCH_CAP = 999;
 const panels = new WeakMap<EditorView, FindPanel>();
@@ -809,3 +810,8 @@ export const editorSearch: Extension = [
   Prec.high(keymap.of(findKeymap())),
   findTheme,
 ];
+
+// Self-registering: the shell reaches these through the bridge so it never
+// has to import CodeMirror, and evaluating this module is what makes them
+// available. Only a mounted editor surface gets us here.
+registerEditorSearchHandlers({ handleEditorFindKey, openFindInActiveEditor });

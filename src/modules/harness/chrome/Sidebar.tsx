@@ -16,7 +16,9 @@ import {
   StickyNote,
 } from "./icons";
 import {
+  lazy,
   memo,
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -79,10 +81,7 @@ import {
   pruneSessionSelection,
   toggleSessionSelection,
 } from "../lib/sessionSelection";
-import {
-  paneDropFromPoint,
-  setExternalPaneDrop,
-} from "../lib/paneDrop";
+import { paneDropFromPoint, setExternalPaneDrop } from "../lib/paneDrop";
 import type { PaneEdge } from "../lib/layout";
 import { suppressTextSelection } from "../lib/drag";
 import {
@@ -145,7 +144,15 @@ import { ProjectMascot } from "./ProjectMascot";
 import { SessionFiltersMenu } from "./SessionFiltersMenu";
 import { SessionsEmpty } from "./SessionsEmpty";
 import { SourceControl } from "./SourceControl";
-import { InboxView } from "../surfaces/InboxView";
+// Lazy on purpose: HarnessApp already splits this surface, and importing it
+// here statically pulled it back into the first-click graph along with the
+// markdown renderer and its maths and highlighting dependencies. The inbox is
+// a secondary panel, so it must not be parsed before the harness can paint.
+const InboxView = lazy(() =>
+  import("../surfaces/InboxView").then((module) => ({
+    default: module.InboxView,
+  })),
+);
 
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 560;
@@ -747,7 +754,11 @@ function SidebarComponent({
         ]
       : []),
     { kind: "sep" as const },
-    { kind: "item" as const, id: "folder-new", label: t("harness.chrome.newFolder") },
+    {
+      kind: "item" as const,
+      id: "folder-new",
+      label: t("harness.chrome.newFolder"),
+    },
     ...(sessionFolders.length > 0 ? [{ kind: "sep" as const }] : []),
     ...sessionFolders.map((folder) => ({
       kind: "item" as const,
@@ -1022,10 +1033,7 @@ function SidebarComponent({
         onListDrop={onSessionListDrop}
         onListDropTargetChange={setSessionDrop}
         onContextMenu={
-          onPinSession ||
-          onRenameSession ||
-          onArchiveSession ||
-          onDeleteSession
+          onPinSession || onRenameSession || onArchiveSession || onDeleteSession
             ? (e) => onSessionContextMenu(session.id, e)
             : undefined
         }
@@ -1421,7 +1429,9 @@ function SidebarComponent({
                         : t("harness.chrome.noSessionsMatchFilters")}
                     </p>
                   ) : (
-                    <SessionsEmpty message={t("harness.chrome.sessionsEmptyHint")} />
+                    <SessionsEmpty
+                      message={t("harness.chrome.sessionsEmptyHint")}
+                    />
                   )
                 ) : (
                   <ul className="flex flex-col gap-0.5 p-1.5">
@@ -1545,7 +1555,9 @@ function SidebarComponent({
                                 shellFill ? "" : "bg-content/5"
                               }`}
                               style={
-                                shellFill ? { background: shellFill } : undefined
+                                shellFill
+                                  ? { background: shellFill }
+                                  : undefined
                               }
                             >
                               {renamingFolderId === entry.folder.id ? (
@@ -1584,8 +1596,9 @@ function SidebarComponent({
                                   done={entry.sessions.some((session) =>
                                     unseenFinishedIds.has(session.id),
                                   )}
-                                  needsApproval={entry.sessions.some((session) =>
-                                    approvalSessionIds.has(session.id),
+                                  needsApproval={entry.sessions.some(
+                                    (session) =>
+                                      approvalSessionIds.has(session.id),
                                   )}
                                   onPointerDown={(event) =>
                                     folderSortable.onItemPointerDown(
@@ -1628,7 +1641,9 @@ function SidebarComponent({
                                         data-no-drag
                                         data-tauri-drag-region="false"
                                         title={t("harness.chrome.newSession")}
-                                        aria-label={t("harness.chrome.newSession")}
+                                        aria-label={t(
+                                          "harness.chrome.newSession",
+                                        )}
                                         onClick={() =>
                                           onNewInFolder(entry.folder.id)
                                         }
@@ -1690,7 +1705,9 @@ function SidebarComponent({
           ) : null}
           {!deckLayout && tab === "inbox" ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <InboxView cwd={cwd} recents={recents} variant="sidebar" />
+              <Suspense fallback={null}>
+                <InboxView cwd={cwd} recents={recents} variant="sidebar" />
+              </Suspense>
             </div>
           ) : null}
           {showSidebarFooter ? (
@@ -1981,7 +1998,9 @@ function SidebarProjectPicker({
           >
             <label className="flex h-11 shrink-0 items-center gap-2.5 border-b border-content/10 px-3 text-content/45 focus-within:text-content/70">
               <Search className="size-4 shrink-0" strokeWidth={1.75} />
-              <span className="sr-only">{t("harness.chrome.searchProjects")}</span>
+              <span className="sr-only">
+                {t("harness.chrome.searchProjects")}
+              </span>
               <input
                 autoFocus
                 value={query}
@@ -2095,7 +2114,11 @@ function SidebarProjectPicker({
         ) : null}
         {onOpenInbox ? (
           <IconButton
-            label={inboxUnseen ? t("harness.chrome.inboxNewItems") : t("harness.chrome.inbox")}
+            label={
+              inboxUnseen
+                ? t("harness.chrome.inboxNewItems")
+                : t("harness.chrome.inbox")
+            }
             active={inboxActive}
             onClick={onOpenInbox}
           >
@@ -2111,7 +2134,11 @@ function SidebarProjectPicker({
           </IconButton>
         ) : null}
         {onOpenNotes ? (
-          <IconButton label={t("harness.chrome.notes")} active={notesActive} onClick={onOpenNotes}>
+          <IconButton
+            label={t("harness.chrome.notes")}
+            active={notesActive}
+            onClick={onOpenNotes}
+          >
             <StickyNote className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
@@ -2135,12 +2162,20 @@ function WorkspaceTitleActions({
       data-tauri-drag-region="false"
     >
       {onSearch ? (
-        <IconButton label={t("harness.chrome.goToFileShortcut", { shortcut: `${MOD}P` })} onClick={onSearch}>
+        <IconButton
+          label={t("harness.chrome.goToFileShortcut", { shortcut: `${MOD}P` })}
+          onClick={onSearch}
+        >
           <Search className="size-3.5" strokeWidth={1.75} />
         </IconButton>
       ) : null}
       {onNew ? (
-        <IconButton label={t("harness.chrome.newSessionShortcut", { shortcut: `${MOD}T` })} onClick={onNew}>
+        <IconButton
+          label={t("harness.chrome.newSessionShortcut", {
+            shortcut: `${MOD}T`,
+          })}
+          onClick={onNew}
+        >
           <Plus className="size-3.5" strokeWidth={1.75} />
         </IconButton>
       ) : null}
