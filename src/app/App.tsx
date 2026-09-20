@@ -5,6 +5,7 @@ import {
 } from "@/app/lib/remoteExplorerEnv";
 import { coerceCwd, firstCwd } from "@/app/lib/activeCwd";
 import { terminalCwdTarget } from "@/app/lib/terminalCwd";
+import { planTerminalTitle } from "@/app/lib/terminalTitle";
 import { TransferQueuePanel } from "@/modules/ssh-native/components/TransferQueuePanel";
 import { decideTransferConflict } from "@/modules/ssh-native/transferBridge";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -212,6 +213,7 @@ import {
   navigateFocusedBlocks,
   type PaneBounds,
   markLeafFocused,
+  isAgentActivePty,
   ptyIdForLeaf,
   respawnSession,
   setLeafBlocks,
@@ -3429,22 +3431,16 @@ function DesktopApp() {
       );
       if (!tab || tab.kind !== "terminal") return;
 
-      // If the tab already has a customTitle (e.g. launched via agent panel),
-      // skip — the user-set or system-set label takes precedence.
-      if (tab.customTitle) return;
-
-      // Auto-detect agent binary names in the terminal title.
-      // When a user types "claude" or "codex" in a regular terminal,
-      // the shell's OSC title reports the process name — promote it to
-      // a sticky customTitle so it survives subsequent cwd changes.
-      const agent = matchAgentFromTitle(title);
-      if (agent) {
-        updateTab(tab.id, { title: agent.label, customTitle: agent.label });
-        return;
-      }
-
-      if (tab.title !== title) {
-        updateTab(tab.id, { title });
+      const ptyId = ptyIdForLeaf(leafId);
+      const decision = planTerminalTitle({
+        customTitle: tab.customTitle,
+        currentTitle: tab.title,
+        incomingTitle: title,
+        agentActive: ptyId !== null && isAgentActivePty(ptyId),
+        agentLabel: matchAgentFromTitle(title)?.label ?? null,
+      });
+      if (decision.kind === "rename") {
+        updateTab(tab.id, { title: decision.title });
       }
     },
     [updateTab],

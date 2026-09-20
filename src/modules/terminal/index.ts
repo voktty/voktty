@@ -1,6 +1,7 @@
 export {
   type AgentTabStatus,
   detectAgentFromName,
+  isAgentActivePty,
   tabAgentStatus,
   useAgentActivityStore,
 } from "./lib/agentActivity";
