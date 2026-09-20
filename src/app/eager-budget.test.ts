@@ -60,7 +60,9 @@ describe("startup bundle budget", () => {
   }, 15000);
 
   it("keeps optional Harness workbench surfaces behind local lazy boundaries", () => {
-    const { files } = traceEager("src/modules/harness/components/HarnessApp.tsx");
+    const { files } = traceEager(
+      "src/modules/harness/components/HarnessApp.tsx",
+    );
     const normalized = files.map((file) => file.replace(/\\/g, "/"));
     const optionalSurfaces = [
       "/modules/harness/chrome/ApprovalToasts",
@@ -89,6 +91,43 @@ describe("startup bundle budget", () => {
       (file) =>
         file.includes("/modules/api-client/") &&
         !file.endsWith("/modules/api-client/components/ApiClientStackLazy.tsx"),
+    );
+    expect(offenders).toEqual([]);
+  }, 15000);
+});
+
+/**
+ * The first click on the harness pays for whatever its chunk statically
+ * reaches, and the second click is instant because it is already parsed. That
+ * is the cost this locks down.
+ *
+ * Both offenders found here were lazy boundaries defeated by a second static
+ * import: the sidebar imported the inbox surface that HarnessApp had already
+ * split out, dragging the markdown renderer in with it, and the shell imported
+ * the editor find helpers for two key handlers, dragging in CodeMirror.
+ */
+describe("harness first-open budget", () => {
+  const HARNESS_ENTRY = "src/modules/harness/components/HarnessApp.tsx";
+
+  it("does not statically reach the markdown or editor stacks", () => {
+    const { hits } = traceEager(HARNESS_ENTRY, HEAVY);
+    expect(
+      [...hits.entries()].map(([pkg, info]) => `${pkg} <- ${info.file}`),
+    ).toEqual([]);
+  }, 15000);
+
+  it("keeps the surfaces that own those stacks behind their lazy boundary", () => {
+    const { files } = traceEager(HARNESS_ENTRY);
+    const normalized = files.map((file) => file.replace(/\\/g, "/"));
+    const lazySurfaces = [
+      "/modules/harness/surfaces/AgentMarkdown",
+      "/modules/harness/surfaces/AgentTranscript",
+      "/modules/harness/surfaces/FileEditor",
+      "/modules/harness/surfaces/InboxView",
+      "/modules/harness/surfaces/editorSearch.ts",
+    ];
+    const offenders = normalized.filter((file) =>
+      lazySurfaces.some((surface) => file.includes(surface)),
     );
     expect(offenders).toEqual([]);
   }, 15000);
