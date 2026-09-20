@@ -48,6 +48,8 @@ import {
   getCompatModelInfo,
   getModel,
   isCompatModelId,
+  isHarnessModelId,
+  resolveModel,
   MODELS,
   PROVIDERS,
   STT_PROVIDER_LABELS,
@@ -62,6 +64,7 @@ import { toggleFavoriteModel } from "../lib/modelPrefs";
 import { useChatStore } from "../store/chatStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { isProviderUsable } from "../lib/availability";
+import { harnessChatModelInfo, harnessChatModels } from "../lib/harnessCatalog";
 
 const PROVIDER_ICON = {
   openai: ChatGptIcon,
@@ -337,7 +340,15 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
         return m;
       },
     );
-    return [...models, ...epModelInfos];
+    // The generic per-agent entries are replaced by the agent's catalog, so a
+    // selection names the model that will actually run.
+    const withoutAgentPlaceholders = models.filter(
+      (m) => m.provider !== "harness",
+    );
+    const agentModels = configuredProviders.some((p) => p.id === "harness")
+      ? harnessChatModels(t)
+      : [];
+    return [...withoutAgentPlaceholders, ...agentModels, ...epModelInfos];
   }, [
     configuredProviders,
     ollamaModelId,
@@ -352,11 +363,17 @@ function ModelDropdown({ compact = false }: { compact?: boolean }) {
     if (isCompatModelId(selected)) {
       return getCompatModelInfo(selected, customEndpoints);
     }
+    if (isHarnessModelId(selected)) {
+      return (
+        harnessChatModelInfo(selected, t) ??
+        resolveModel(selected, customEndpoints)
+      );
+    }
     const found = allModels.find((m) => m.id === selected);
     if (found) return found;
     if (allModels.length > 0) return allModels[0]!;
     return getModel(selected as ModelId);
-  }, [selected, customEndpoints, allModels]);
+  }, [selected, customEndpoints, allModels, t]);
 
   useEffect(() => {
     if (allModels.length > 0) {

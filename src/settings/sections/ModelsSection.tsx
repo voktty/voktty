@@ -29,6 +29,8 @@ import {
   getProvider,
   isCompatModelId,
   MODELS,
+  isHarnessModelId,
+  resolveModel,
   type ModelId,
   type ModelInfo,
   PROVIDERS,
@@ -39,6 +41,10 @@ import {
   type SttProvider,
   WHISPERCPP_DEFAULT_BASE_URL,
 } from "@/modules/ai/config";
+import {
+  harnessChatModelInfo,
+  harnessChatModels,
+} from "@/modules/ai/lib/harnessCatalog";
 import {
   type CustomEndpointKeys,
   clearCustomEndpointKey,
@@ -630,7 +636,7 @@ function HarnessProviderCard({
   onRemove: () => void;
 }) {
   const { t } = useTranslation();
-  const models = MODELS.filter((model) => model.provider === "harness");
+  const models = harnessChatModels(t);
   const selected = models.some((model) => model.id === selectedModel)
     ? selectedModel
     : (models[0]?.id ?? "harness-claude");
@@ -720,6 +726,12 @@ function resolveDisplayModel(
   }
   if (isCompatModelId(modelId)) {
     return getCompatModelInfo(modelId, customEndpoints);
+  }
+  if (isHarnessModelId(modelId)) {
+    return (
+      harnessChatModelInfo(modelId, globalT) ??
+      resolveModel(modelId, customEndpoints)
+    );
   }
   const found = MODELS.find((x) => x.id === modelId);
   if (found) {
@@ -1040,7 +1052,10 @@ function DefaultModelPicker({
       >
         <div className="max-h-72 overflow-y-auto overscroll-contain pr-1">
           {PROVIDERS.filter((p) => configuredIds.has(p.id)).map((p) => {
-            const models = MODELS.filter((x) => x.provider === p.id);
+            const models =
+              p.id === "harness"
+                ? harnessChatModels(t)
+                : MODELS.filter((x) => x.provider === p.id);
             if (models.length === 0) return null;
             return (
               <div key={p.id} className="px-1 pt-1.5 first:pt-1">

@@ -25,6 +25,7 @@ const CLIENT_CAPABILITIES = {
 type LiveText = {
   acp: AcpClient;
   cwd: string;
+  model: string;
   acpSessionId: string;
   collecting: boolean;
   output: string;
@@ -44,9 +45,11 @@ export async function stopGrokTextPrompt(childId?: string): Promise<void> {
 
 export function warmupGrokText(cwd: string): Promise<void> {
   if (!cwd || cwd === "~") return Promise.resolve();
-  const run = turns.catch(() => undefined).then(async () => {
-    await ensureLive(cwd);
-  });
+  const run = turns
+    .catch(() => undefined)
+    .then(async () => {
+      await ensureLive(cwd);
+    });
   turns = run.then(
     () => undefined,
     () => undefined,
@@ -58,6 +61,8 @@ export async function runGrokTextPrompt(input: {
   cwd: string;
   prompt: string;
   timeoutMs: number;
+  /** Native model id. Defaults to the cheap one used for titles and commits. */
+  model?: string;
 }): Promise<string> {
   const run = turns.catch(() => undefined).then(() => promptOnLive(input));
   turns = run.then(
@@ -97,27 +102,31 @@ async function promptOnLive(input: {
   }
 }
 
-async function ensureLive(cwd: string): Promise<LiveText> {
+async function ensureLive(cwd: string, model?: string): Promise<LiveText> {
+  // The model is part of the session identity: a live ACP session was opened
+  // for one model and cannot answer as another.
+  const wanted = model ?? TEXT_MODEL;
   if (live && !live.closed) {
-    if (live.cwd === cwd) return live;
+    if (live.cwd === cwd && live.model === wanted) return live;
     try {
-      await openSession(live, cwd);
+      await openSession(live, cwd, wanted);
       return live;
     } catch {
       await dropLive();
     }
   }
-  return startLive(cwd);
+  return startLive(cwd, wanted);
 }
 
-async function startLive(cwd: string): Promise<LiveText> {
+async function startLive(cwd: string, model?: string): Promise<LiveText> {
   await dropLive();
   const { path } = await resolveGrokBinary();
   const acpRef: { session: LiveText | null } = { session: null };
   const acp = new AcpClient(TEXT_CHILD_ID, {
     onNotification: (method, params) => {
       const session = acpRef.session;
-      if (!session || method !== "session/update" || !session.collecting) return;
+      if (!session || method !== "session/update" || !session.collecting)
+        return;
       session.output = mergeStream(session.output, textFromUpdate(params));
     },
     onRequest: (id, method, params) => {
@@ -127,6 +136,7 @@ async function startLive(cwd: string): Promise<LiveText> {
   const session: LiveText = {
     acp,
     cwd,
+    model: model ?? TEXT_MODEL,
     acpSessionId: "",
     collecting: false,
     output: "",
@@ -165,7 +175,7 @@ async function startLive(cwd: string): Promise<LiveText> {
         )
         .catch(() => undefined);
     }
-    await openSession(session, cwd);
+    await openSession(session, cwd, model);
     live = session;
     return session;
   } catch (error) {
@@ -177,7 +187,12 @@ async function startLive(cwd: string): Promise<LiveText> {
   }
 }
 
-async function openSession(session: LiveText, cwd: string): Promise<void> {
+async function openSession(
+  session: LiveText,
+  cwd: string,
+  model?: string,
+): Promise<void> {
+  const resolvedModel = model ?? TEXT_MODEL;
   const setup = await session.acp.request<{ sessionId?: string }>(
     "session/new",
     { cwd, mcpServers: [] },
@@ -189,7 +204,7 @@ async function openSession(session: LiveText, cwd: string): Promise<void> {
   await session.acp
     .request(
       "session/set_model",
-      { sessionId: acpSessionId, modelId: TEXT_MODEL },
+      { sessionId: acpSessionId, modelId: resolvedModel },
       REQUEST_TIMEOUT_MS,
     )
     .catch(() => undefined);
@@ -202,6 +217,7 @@ async function openSession(session: LiveText, cwd: string): Promise<void> {
     .catch(() => undefined);
 
   session.cwd = cwd;
+  session.model = resolvedModel;
   session.acpSessionId = acpSessionId;
 }
 
@@ -236,9 +252,7 @@ async function handleTextRequest(
     method === "_x.ai/ask_user_question" ||
     method === "x.ai/ask_user_question"
   ) {
-    await acp
-      .respond(id, { outcome: "skip_interview" })
-      .catch(() => undefined);
+    await acp.respond(id, { outcome: "skip_interview" }).catch(() => undefined);
     return;
   }
   await acp.respond(id, {}).catch(() => undefined);
