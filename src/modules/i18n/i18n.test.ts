@@ -50,7 +50,7 @@ function getAllMessages(
 
 function getInterpolationVariables(message: string): string[] {
   const withoutPluralBranches = message.replace(
-    /(?:=\d+|zero|one|two|few|many|other)\s*\{[^{}]*\}/g,
+    /(?:=\d+|\bzero\b|\bone\b|\btwo\b|\bfew\b|\bmany\b|\bother\b)\s*\{[^{}]*\}/g,
     "",
   );
   return [...withoutPluralBranches.matchAll(/\{([A-Za-z][\w]*)/g)]
