@@ -14,11 +14,11 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -55,7 +55,7 @@ jobs:
   rust:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Linux build dependencies
         run: |
@@ -76,7 +76,7 @@ jobs:
         with:
           workspaces: ./src-tauri -> target
 
-      - uses: taiki-e/install-action@v2.87.7
+      - uses: taiki-e/install-action@v2.87.17
         with:
           tool: cargo-nextest,cargo-machete
 
@@ -108,7 +108,7 @@ jobs:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -116,7 +116,7 @@ jobs:
         with:
           workspaces: ./src-tauri -> target
 
-      - uses: taiki-e/install-action@v2.87.7
+      - uses: taiki-e/install-action@v2.87.17
         with:
           tool: cargo-nextest
 
@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: rust
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Linux build dependencies
         run: |
@@ -153,7 +153,7 @@ jobs:
           workspaces: ./src-tauri -> target
           key: coverage
 
-      - uses: taiki-e/install-action@v2.87.7
+      - uses: taiki-e/install-action@v2.87.17
         with:
           tool: cargo-llvm-cov,cargo-nextest
 
@@ -162,7 +162,7 @@ jobs:
         run: cargo llvm-cov nextest --locked --lcov --output-path lcov.info
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lcov-report
           path: src-tauri/lcov.info
