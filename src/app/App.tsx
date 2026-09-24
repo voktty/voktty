@@ -535,6 +535,8 @@ function DesktopApp() {
     for (const sessionId of planRemoteExplorerSessionRelease(
       explorerWorkspaceEnvsRef.current,
       explorerTabIds,
+      tabsRef.current,
+      useSpaces.getState().spaces,
     )) {
       void closeRemoteWorkspace(sessionId).catch(() => {});
     }
@@ -1139,6 +1141,8 @@ function DesktopApp() {
         const sessionsToClose = planRemoteExplorerSessionRelease(
           explorerWorkspaceEnvsRef.current,
           [id],
+          tabsRef.current,
+          useSpaces.getState().spaces,
         );
         explorerWorkspaceEnvsRef.current.delete(id);
         setExplorerWorkspaceRevision((revision) => revision + 1);
@@ -1220,6 +1224,8 @@ function DesktopApp() {
       const explorerSessionsToClose = planRemoteExplorerSessionRelease(
         explorerWorkspaceEnvsRef.current,
         closedTabIds,
+        tabsRef.current,
+        useSpaces.getState().spaces,
       );
       let removedExplorerWorkspace = false;
       for (const tab of closedTabs) {
@@ -3492,9 +3498,17 @@ function DesktopApp() {
           prepared.workspaceEnv.kind === "ssh" &&
           prepared.workspaceEnv.sessionId !== undefined
         ) {
-          void closeRemoteWorkspace(prepared.workspaceEnv.sessionId).catch(
-            () => {},
+          const sessionsToClose = planRemoteExplorerSessionRelease(
+            explorerWorkspaceEnvsRef.current,
+            [tab.id],
+            tabsRef.current,
+            useSpaces.getState().spaces,
           );
+          if (sessionsToClose.includes(prepared.workspaceEnv.sessionId)) {
+            void closeRemoteWorkspace(prepared.workspaceEnv.sessionId).catch(
+              () => {},
+            );
+          }
         }
         return false;
       }
@@ -3506,9 +3520,17 @@ function DesktopApp() {
         prepared.workspaceEnv.kind === "ssh" &&
         previousExplorerEnv.sessionId !== prepared.workspaceEnv.sessionId
       ) {
-        void closeRemoteWorkspace(previousExplorerEnv.sessionId).catch(
-          () => {},
+        const sessionsToClose = planRemoteExplorerSessionRelease(
+          explorerWorkspaceEnvsRef.current,
+          [],
+          tabsRef.current,
+          useSpaces.getState().spaces,
         );
+        if (sessionsToClose.includes(previousExplorerEnv.sessionId)) {
+          void closeRemoteWorkspace(previousExplorerEnv.sessionId).catch(
+            () => {},
+          );
+        }
       }
       return true;
     },
@@ -3531,12 +3553,17 @@ function DesktopApp() {
   }, [presentChat, focusInput]);
 
   const handleLeafExit = useCallback(
-    (leafId: number, _code: number) => {
+    (leafId: number, code: number) => {
       const all = tabsRef.current;
       const tab = all.find(
         (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
       );
       if (tab?.kind !== "terminal") return;
+      const isRemoteTerminal =
+        "workspaceEnv" in tab && tab.workspaceEnv?.kind === "ssh";
+      if (isRemoteTerminal && code !== 0) {
+        return;
+      }
       // A shell exit only closes its terminal surface. Voktty stays open so the
       // workspace can render its empty state and offer a new terminal/file.
       if (leafIds(tab.paneTree).length === 1) disposeTab(tab.id);

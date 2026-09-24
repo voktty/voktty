@@ -1,3 +1,4 @@
+import type { Tab } from "@/modules/tabs";
 import {
   isPathWithinRemoteRoot,
   type RemoteSessionInfo,
@@ -57,6 +58,8 @@ export function explorerNavigationScopeKey(env: WorkspaceEnv): string {
 export function planRemoteExplorerSessionRelease(
   environments: ReadonlyMap<number, WorkspaceEnv>,
   closingTabIds: readonly number[],
+  tabs?: readonly Tab[],
+  spaces?: readonly { env?: WorkspaceEnv }[],
 ): number[] {
   const closing = new Set(closingTabIds);
   const survivingSessions = new Set<number>();
@@ -69,7 +72,27 @@ export function planRemoteExplorerSessionRelease(
       environment.sessionId,
     );
   }
+  if (tabs) {
+    for (const tab of tabs) {
+      if (closing.has(tab.id)) continue;
+      if (
+        "workspaceEnv" in tab &&
+        tab.workspaceEnv?.kind === "ssh" &&
+        tab.workspaceEnv.sessionId !== undefined
+      ) {
+        survivingSessions.add(tab.workspaceEnv.sessionId);
+      }
+    }
+  }
+  if (spaces) {
+    for (const space of spaces) {
+      if (space.env?.kind === "ssh" && space.env.sessionId !== undefined) {
+        survivingSessions.add(space.env.sessionId);
+      }
+    }
+  }
   return [...closingSessions].filter(
     (sessionId) => !survivingSessions.has(sessionId),
   );
 }
+
