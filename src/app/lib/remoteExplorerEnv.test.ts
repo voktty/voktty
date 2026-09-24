@@ -96,6 +96,32 @@ describe("prepareRemoteExplorerEnv", () => {
       7, 9,
     ]);
   });
+
+  it("keeps a remote explorer session when an active terminal tab in another space uses it", () => {
+    const environments = new Map<number, WorkspaceEnv>([[1, remote]]);
+    const activeTabs = [
+      {
+        id: 2,
+        spaceId: "space-2",
+        kind: "terminal" as const,
+        tabKey: "tab-2" as any,
+        title: "SSH",
+        paneTree: { kind: "leaf" as const, leafId: 2, cwd: "/root" },
+        workspaceEnv: remote,
+      },
+    ];
+    expect(
+      planRemoteExplorerSessionRelease(environments, [1], activeTabs as any),
+    ).toEqual([]);
+  });
+
+  it("keeps a remote explorer session when a space configuration still uses it", () => {
+    const environments = new Map<number, WorkspaceEnv>([[1, remote]]);
+    const spaces = [{ id: "space-remote", env: remote }];
+    expect(
+      planRemoteExplorerSessionRelease(environments, [1], [], spaces as any),
+    ).toEqual([]);
+  });
 });
 
 describe("explorerNavigationScopeKey", () => {

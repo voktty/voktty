@@ -1,6 +1,7 @@
 import { native } from "@/modules/ai/lib/native";
 import { t } from "@/modules/i18n";
 import { closeRemoteWorkspace, openRemoteWorkspace } from "@/modules/remote";
+import { useSpaces } from "@/modules/spaces/lib/useSpaces";
 import type { Tab } from "@/modules/tabs";
 import {
   getWslHome,
@@ -48,8 +49,31 @@ async function connectRemoteEnv(
   };
 }
 
-async function closeRemoteEnv(env: WorkspaceEnv): Promise<void> {
+async function closeRemoteEnv(
+  env: WorkspaceEnv,
+  tabs?: readonly Tab[],
+  spaces?: readonly { env?: WorkspaceEnv }[],
+): Promise<void> {
   if (env.kind === "ssh" && env.sessionId !== undefined) {
+    if (
+      tabs &&
+      tabs.some(
+        (t) =>
+          "workspaceEnv" in t &&
+          t.workspaceEnv?.kind === "ssh" &&
+          t.workspaceEnv.sessionId === env.sessionId,
+      )
+    ) {
+      return;
+    }
+    if (
+      spaces &&
+      spaces.some(
+        (s) => s.env?.kind === "ssh" && s.env.sessionId === env.sessionId,
+      )
+    ) {
+      return;
+    }
     await closeRemoteWorkspace(env.sessionId).catch(() => {});
   }
 }
@@ -183,7 +207,11 @@ export function useWorkspaceSwitcher({
       }
 
       clearWorkspaceState();
-      await closeRemoteEnv(workspaceEnv);
+      await closeRemoteEnv(
+        workspaceEnv,
+        tabsRef.current,
+        useSpaces.getState().spaces,
+      );
       setWorkspaceEnv(prepared.kind === "local" ? LOCAL_WORKSPACE : prepared);
       const nextHome = await resolveEnvHome(prepared);
       await authorizeHome(nextHome, prepared.kind === "ssh");
@@ -200,6 +228,7 @@ export function useWorkspaceSwitcher({
       tabsRef,
       clearWorkspaceState,
       authorizeHome,
+      t,
     ],
   );
 
@@ -223,7 +252,6 @@ export function useWorkspaceSwitcher({
           );
         return null;
       }
-      await closeRemoteEnv(workspaceEnv);
       setWorkspaceEnv(prepared.kind === "local" ? LOCAL_WORKSPACE : prepared);
       let nextHome: string;
       try {
@@ -237,7 +265,7 @@ export function useWorkspaceSwitcher({
       }
       return prepared;
     },
-    [workspaceEnv, setWorkspaceEnv, authorizeHome],
+    [setWorkspaceEnv, authorizeHome],
   );
 
   const activateWorkspaceEnv = useCallback(
