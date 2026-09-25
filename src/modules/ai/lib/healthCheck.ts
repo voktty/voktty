@@ -22,6 +22,11 @@ export function aiHealthCheckTimeoutMs(modelId: string): number {
   return modelId.startsWith("harness-") ? 75_000 : 20_000;
 }
 
+// Enough output budget for a reasoning model to finish thinking and still
+// emit visible text on the OpenRouter gateway. Kept small and bounded: the
+// probe must stay cheap, and this is not a chat turn.
+const OPENROUTER_RETRY_MAX_OUTPUT_TOKENS = 256;
+
 export function aiHealthCheckErrorDetail(
   modelId: string,
   error: unknown,
@@ -58,10 +63,9 @@ export async function runAiHealthCheck(
     config.customEndpoints,
   ).provider;
   const { generateText } = await import("ai");
-  const result = await generateText({
+  const probe = {
     model,
     prompt: "Reply with OK.",
-    maxOutputTokens: 8,
     temperature: 0,
     abortSignal,
     ...(provider === "deepseek"
@@ -71,7 +75,25 @@ export async function runAiHealthCheck(
           },
         }
       : {}),
+  };
+  let result = await generateText({
+    ...probe,
+    maxOutputTokens: 8,
   });
+  // Reasoning models served through OpenRouter can spend the whole tiny
+  // budget on reasoning and stop before emitting any visible text
+  // (finishReason "length"). Probe once more with a bounded larger budget
+  // instead of failing a healthy model.
+  if (
+    !result.text.trim() &&
+    provider === "openrouter" &&
+    result.finishReason === "length"
+  ) {
+    result = await generateText({
+      ...probe,
+      maxOutputTokens: OPENROUTER_RETRY_MAX_OUTPUT_TOKENS,
+    });
+  }
   if (!result.text.trim())
     throw new Error("The model returned an empty response");
   return { latencyMs: Math.max(0, Math.round(performance.now() - startedAt)) };
