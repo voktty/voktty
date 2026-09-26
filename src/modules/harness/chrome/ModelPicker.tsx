@@ -9,6 +9,11 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "@/modules/i18n";
+import {
+  modelSettingLabel,
+  modelSettingOptionLabel,
+} from "../lib/catalogLabels";
 import {
   coerceModelPickerTab,
   findModel,
@@ -95,12 +100,6 @@ function pickerSettings(model: AgentModel): ModelSetting[] {
     });
 }
 
-function settingLabel(setting: ModelSetting): string {
-  return setting.id === "effort" || setting.id === "reasoning"
-    ? "Effort"
-    : setting.label;
-}
-
 function settingValue(
   setting: ModelSetting,
   values: Record<string, string>,
@@ -109,13 +108,13 @@ function settingValue(
 }
 
 function settingValueLabel(
+  t: (key: string) => string,
   setting: ModelSetting,
   values: Record<string, string>,
 ): string {
   const value = settingValue(setting, values);
-  return (
-    setting.options.find((option) => option.value === value)?.label ?? value
-  );
+  const option = setting.options.find((item) => item.value === value);
+  return option ? modelSettingOptionLabel(t, setting, option) : value;
 }
 
 function recentMenuModels(current: AgentModel): AgentModel[] {
@@ -136,6 +135,7 @@ export function ModelPicker({
   onSettingsChange,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const catalogVersion = useSyncExternalStore(
     subscribeModels,
     getModelSnapshot,
@@ -609,7 +609,7 @@ export function ModelPicker({
                   }`}
                 >
                   <span className="min-w-0 flex-1">
-                    {settingLabel(setting)}
+                    {modelSettingLabel(t, setting)}
                   </span>
                   {isToggle ? (
                     <span
@@ -629,7 +629,7 @@ export function ModelPicker({
                   ) : (
                     <>
                       <span className="min-w-0 max-w-28 truncate text-content/55">
-                        {settingValueLabel(setting, values)}
+                        {settingValueLabel(t, setting, values)}
                       </span>
                       <ChevronRight
                         className="size-3.5 shrink-0 text-content/45"
@@ -651,7 +651,7 @@ export function ModelPicker({
               width={SETTING_MENU_WIDTH}
               layer={LAYER.submenu}
               role="menu"
-              aria-label={settingLabel(submenu.setting)}
+              aria-label={modelSettingLabel(t, submenu.setting)}
               onMouseEnter={() => setSubmenu(submenu)}
               data-model-picker
               className="p-1 font-sans"
@@ -676,7 +676,7 @@ export function ModelPicker({
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate">
-                      {option.label}
+                      {modelSettingOptionLabel(t, submenu.setting, option)}
                     </span>
                     {selected ? (
                       <Check
@@ -810,6 +810,7 @@ function ModelFlyout({
   onPick: (model: AgentModel) => void;
   onToggleFavorite: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const activeRef = useRef<HTMLButtonElement>(null);
 
@@ -914,12 +915,12 @@ function ModelFlyout({
           {models.length === 0 ? (
             <div className="px-2 py-3 text-[12px] text-content/50">
               {tab === "favorites" && !query.trim()
-                ? "No favorite models"
+                ? t("harness.chrome.noFavoriteModels")
                 : tab !== "favorites" && !isHarnessAvailable(tab)
                   ? harnessUnavailableHint(tab)
                   : tab === "codex" && !query.trim()
-                    ? "Loading Codex models…"
-                    : "No matching models"}
+                    ? t("harness.chrome.loadingCodexModels")
+                    : t("harness.chrome.noMatchingModels")}
             </div>
           ) : (
             models.map((item, index) => {

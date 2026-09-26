@@ -471,9 +471,9 @@ function SettingsSearch({
                       {settingsSectionLabel(t, item.section)}
                     </span>
                   </div>
-                  {item.description ? (
+                  {item.settingId == null ? (
                     <span className="line-clamp-1 text-[11px] text-content/50">
-                      {item.description}
+                      {settingsSectionDescription(t, item.section)}
                     </span>
                   ) : null}
                 </button>
@@ -772,7 +772,7 @@ function InboxPage() {
       <Heading title={t("harness.settings.github")} id={ANCHOR_IDS.github} first />
       <GithubSettings />
 
-      <Heading title="GitLab" id={ANCHOR_IDS.gitlab} />
+      <Heading title={t("harness.settings.gitlab")} id={ANCHOR_IDS.gitlab} />
       <GitlabSettings />
 
       <Heading title={t("harness.chrome.linear")} id={ANCHOR_IDS.linear} />

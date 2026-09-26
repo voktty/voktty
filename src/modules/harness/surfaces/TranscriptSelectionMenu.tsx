@@ -92,6 +92,7 @@ function SelectionAction({
   onSelect: () => void | Promise<void>;
   onDismiss: () => void;
 }) {
+  const { t } = useTranslation();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -124,7 +125,7 @@ function SelectionAction({
           role="alert"
           className="max-w-xs px-2.5 py-1 text-xs text-content/70"
         >
-          Could not save note. {error}
+          {t("harness.chrome.couldNotSaveNote")} {error}
         </span>
       )}
     </>

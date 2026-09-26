@@ -162,7 +162,7 @@ export function notificationText(
   session: Session,
   event: NotificationEvent,
 ): NotificationText {
-  const title = t("notifications.title") || "Voktty";
+  const title = t("notifications.title");
   const subtitle = sessionDisplayTitle(session.title, session.harness);
   const harness = HARNESS_TITLE[session.harness] || session.harness;
   if (event !== "finished") {
@@ -176,7 +176,7 @@ export function notificationText(
         title,
         subtitle,
         body: clip(
-          prompt || t("notifications.questionPrompt", { harness }) || `${harness} has a question for you`,
+          prompt || t("notifications.questionPrompt", { harness }),
         ),
       };
     }
@@ -191,8 +191,8 @@ export function notificationText(
       subtitle,
       body: clip(
         what
-          ? t("notifications.approveTool", { what }) || `Approve: ${what}`
-          : t("notifications.approvalNeeded", { harness }) || `${harness} needs your approval`,
+          ? t("notifications.approveTool", { what })
+          : t("notifications.approvalNeeded", { harness }),
       ),
     };
   }
@@ -203,7 +203,7 @@ export function notificationText(
     title,
     subtitle,
     body: clip(
-      reply?.text || t("notifications.harnessFinished", { harness }) || `${harness} finished`,
+      reply?.text || t("notifications.harnessFinished", { harness }),
     ),
   };
 }
