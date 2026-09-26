@@ -65,7 +65,7 @@ mod platform {
     use block2::RcBlock;
     use objc2::rc::Retained;
     use objc2::runtime::{Bool, NSObject, NSObjectProtocol, ProtocolObject};
-    use objc2::{define_class, DefinedClass, MainThreadMarker};
+    use objc2::{define_class, ClassType, DefinedClass, MainThreadMarker};
     use objc2_foundation::{NSArray, NSError, NSSet, NSString};
     use objc2_user_notifications::{
         UNAlertStyle, UNAuthorizationOptions, UNAuthorizationStatus, UNMutableNotificationContent,
