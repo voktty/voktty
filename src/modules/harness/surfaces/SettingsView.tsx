@@ -28,6 +28,9 @@ import {
 } from "react";
 import { useTranslation } from "@/modules/i18n";
 import {
+  keybindingCommandLabel,
+  keybindingWhenLabel,
+  settingsEntryLabel,
   settingsSectionDescription,
   settingsSectionLabel,
 } from "../lib/catalogLabels";
@@ -105,6 +108,7 @@ import {
 } from "../lib/session";
 import {
   PROVIDER_ACCOUNT_PROVIDERS,
+  displayProviderAccountLabel,
   newProviderAccount,
   providerAccounts,
   removeProviderAccount,
@@ -350,7 +354,12 @@ function SettingsSearch({
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
-    return searchSettings(query, (section) => settingsSectionLabel(t, section));
+    return searchSettings(
+      query,
+      (section) => settingsSectionLabel(t, section),
+      undefined,
+      (id) => settingsEntryLabel(t, id),
+    );
   }, [query, t]);
 
   useEffect(() => {
@@ -1442,7 +1451,13 @@ function ChatBackgroundCard({
 function KeybindingsPage() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const rows = useMemo(() => filterKeybindings(KEYBINDINGS, query), [query]);
+  const rows = useMemo(
+    () =>
+      filterKeybindings(KEYBINDINGS, query, (command) =>
+        keybindingCommandLabel(t, command),
+      ),
+    [query, t],
+  );
 
   return (
     <>
@@ -1480,12 +1495,14 @@ function KeybindingsPage() {
               key={`${row.command}-${row.keys}`}
               className="flex items-center border-b border-content/5 px-3 py-2 text-[12px] last:border-b-0"
             >
-              <span className="min-w-0 flex-1 truncate">{row.command}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {keybindingCommandLabel(t, row.command)}
+              </span>
               <span className="w-40 shrink-0 font-mono text-[12px] text-content/80">
                 {row.keys}
               </span>
               <span className="w-28 shrink-0 font-mono text-[11px] text-content/40">
-                {row.when}
+                {keybindingWhenLabel(t, row.when)}
               </span>
             </div>
           ))
@@ -1506,6 +1523,7 @@ type AccountEditor = {
 };
 
 function ProviderAccountsSettings() {
+  const { t } = useTranslation();
   const [, setVersion] = useState(0);
   const [editor, setEditor] = useState<AccountEditor | null>(null);
   const [working, setWorking] = useState<string | null>(null);
@@ -1551,7 +1569,7 @@ function ProviderAccountsSettings() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Could not save this account",
+          : t("harness.accounts.couldNotSaveAccount"),
       );
     } finally {
       setWorking(null);
@@ -1561,12 +1579,14 @@ function ProviderAccountsSettings() {
   const removeAccount = async (account: ProviderAccount) => {
     if (account.isDefault || working) return;
     const confirmed = await ask(
-      `Remove “${account.label}”? Its stored credentials will be deleted and any running turns for this account will stop. Existing conversations stay in history, but cannot continue until you switch accounts.`,
+      t("harness.accounts.removeConfirm", { name: account.label }),
       {
-        title: `Remove ${HARNESS_TITLE[account.provider]} account`,
+        title: t("harness.accounts.removeAccountTitle", {
+          name: HARNESS_TITLE[account.provider],
+        }),
         kind: "warning",
-        okLabel: "Remove account",
-        cancelLabel: "Cancel",
+        okLabel: t("harness.accounts.removeAccount"),
+        cancelLabel: t("common.cancel"),
       },
     );
     if (!confirmed) return;
@@ -1586,7 +1606,7 @@ function ProviderAccountsSettings() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Could not remove this account",
+          : t("harness.accounts.couldNotRemoveAccount"),
       );
     } finally {
       setWorking(null);
@@ -1596,8 +1616,8 @@ function ProviderAccountsSettings() {
   return (
     <Group
       id="provider-accounts"
-      title="Accounts"
-      description="Create isolated sign-ins for providers that support account profiles. Account switching stays available from the usage control in the footer."
+      title={t("harness.accounts.settingsTitle")}
+      description={t("harness.accounts.settingsDescription")}
     >
       {PROVIDER_ACCOUNT_PROVIDERS.map((provider) => {
         const accounts = providerAccounts(provider);
@@ -1617,8 +1637,9 @@ function ProviderAccountsSettings() {
                     {HARNESS_TITLE[provider]}
                   </div>
                   <div className="mt-0.5 text-[11px] text-content/40">
-                    {accounts.length}{" "}
-                    {accounts.length === 1 ? "account" : "accounts"}
+                    {t("harness.accounts.accountCount", {
+                      count: accounts.length,
+                    })}
                   </div>
                 </div>
               </div>
@@ -1629,7 +1650,7 @@ function ProviderAccountsSettings() {
                 className="flex shrink-0 items-center gap-1.5 rounded-md border border-content/10 px-2.5 py-1 text-[12px] text-content/70 transition-transform duration-150 hover:bg-content/10 hover:text-content active:scale-[0.97] disabled:cursor-default disabled:opacity-40"
               >
                 <Plus className="size-3.5" strokeWidth={1.75} aria-hidden />
-                Add account
+                {t("harness.accounts.addAccount")}
               </button>
             </div>
             <div className="border-t border-content/5 bg-content/[0.015] pl-10">
@@ -1658,25 +1679,30 @@ function ProviderAccountsSettings() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[12px] text-content/85">
-                        {account.label}
+                        {displayProviderAccountLabel(
+                          account.label,
+                          t("harness.accounts.defaultAccount"),
+                        )}
                       </div>
                       <div className="mt-0.5 text-[10px] text-content/35">
                         {account.isDefault
-                          ? "Provider CLI profile"
-                          : "Isolated profile"}
+                          ? t("harness.accounts.providerCliProfile")
+                          : t("harness.accounts.isolatedProfile")}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       {account.isDefault ? (
                         <span className="mr-1 text-[10px] font-medium uppercase tracking-wide text-content/30">
-                          Default
+                          {t("common.default")}
                         </span>
                       ) : null}
                       <button
                         type="button"
                         disabled={Boolean(working)}
-                        aria-label={`Rename ${account.label}`}
-                        title="Rename account"
+                        aria-label={t("harness.accounts.renameNamed", {
+                          name: account.label,
+                        })}
+                        title={t("harness.accounts.renameAccount")}
                         onClick={() => startRename(account)}
                         className="grid size-7 place-items-center rounded-md text-content/40 transition-transform duration-150 hover:bg-content/10 hover:text-content active:scale-[0.96] disabled:opacity-35"
                       >
@@ -1686,8 +1712,10 @@ function ProviderAccountsSettings() {
                         <button
                           type="button"
                           disabled={Boolean(working)}
-                          aria-label={`Remove ${account.label}`}
-                          title="Remove account"
+                          aria-label={t("harness.accounts.removeNamed", {
+                            name: account.label,
+                          })}
+                          title={t("harness.accounts.removeAccount")}
                           onClick={() => void removeAccount(account)}
                           className="grid size-7 place-items-center rounded-md text-content/35 transition-transform duration-150 hover:bg-red-400/10 hover:text-red-400 active:scale-[0.96] disabled:opacity-35"
                         >
@@ -1744,6 +1772,7 @@ function ProviderAccountEditor({
   onCancel: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useTranslation();
   const adding = !editor.accountId;
   return (
     <form
@@ -1755,15 +1784,20 @@ function ProviderAccountEditor({
         className="flex items-center pr-1 h-8 min-w-0 flex-1 overflow-hidden rounded-md border border-content/10 bg-content/[0.04] focus-within:border-accent/45"
       >
         <label className="h-full min-w-0 flex-1">
-          <span className="sr-only">Account name</span>
+          <span className="sr-only">{t("harness.accounts.accountName")}</span>
           <input
             autoFocus
             type="text"
             maxLength={48}
             value={editor.label}
             disabled={working}
-            placeholder="Work or Personal"
-            aria-label={`${adding ? "New" : "Rename"} ${HARNESS_TITLE[editor.provider]} account`}
+            placeholder={t("harness.accounts.workOrPersonal")}
+            aria-label={t(
+              adding
+                ? "harness.accounts.newNamedAccount"
+                : "harness.accounts.renameNamedAccount",
+              { name: HARNESS_TITLE[editor.provider] },
+            )}
             onChange={(event) => onLabel(event.target.value)}
             className="h-full w-full bg-transparent px-2.5 text-[12px] text-content outline-none placeholder:text-content/25 disabled:opacity-50"
           />
@@ -1774,7 +1808,7 @@ function ProviderAccountEditor({
           onClick={onCancel}
           className="flex h-7 shrink-0 items-center rounded-md bg-content/[0.05] px-2.5 text-[11px] text-content/45 transition-transform duration-150 hover:bg-content/10 hover:text-content active:scale-[0.97] disabled:opacity-40"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="submit"
@@ -1784,9 +1818,9 @@ function ProviderAccountEditor({
           {working ? <Loader className="size-3 animate-spin" /> : null}
           {adding
             ? working
-              ? "Waiting for browser…"
-              : "Sign in and add"
-            : "Save"}
+              ? t("harness.accounts.waitingForBrowser")
+              : t("harness.accounts.signInAndAdd")
+            : t("common.save")}
         </button>
       </div>
     </form>

@@ -52,7 +52,7 @@ describe("ModelPicker", () => {
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('aria-label="Grok Build Grok 4.6"');
     expect(html).toContain("Grok 4.6");
-    expect(html).toContain("Recent models: right-click or");
+    expect(html).toContain('title="harness.modelPicker.recentHint"');
   });
 
   it("renders with claude model name and harness icon", () => {

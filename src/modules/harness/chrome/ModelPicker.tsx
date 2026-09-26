@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useTranslation } from "@/modules/i18n";
 import {
+  modelSettingDescription,
   modelSettingLabel,
   modelSettingOptionLabel,
 } from "../lib/catalogLabels";
@@ -491,7 +492,11 @@ export function ModelPicker({
       <button
         ref={button}
         type="button"
-        title={`${HARNESS_TITLE[current.harness]} · ${current.name} · Recent models: right-click or ${MOD}.`}
+        title={t("harness.modelPicker.recentHint", {
+          harness: HARNESS_TITLE[current.harness],
+          model: current.name,
+          shortcut: MOD,
+        })}
         aria-label={`${HARNESS_TITLE[current.harness]} ${current.name}`}
         aria-keyshortcuts={`${MOD}.`}
         aria-expanded={open || recentMenu != null}
@@ -528,7 +533,7 @@ export function ModelPicker({
             ignore={SELF}
             onDismiss={() => dismiss(false)}
             role="menu"
-            aria-label="Model and effort"
+            aria-label={t("harness.modelPicker.modelAndEffort")}
             tabIndex={-1}
             onKeyDown={onMenuKey}
             data-model-picker
@@ -558,7 +563,9 @@ export function ModelPicker({
                         : "text-content hover:bg-content/5"
                     }`}
                   >
-                    <span className="min-w-0 flex-1">Model</span>
+                    <span className="min-w-0 flex-1">
+                      {t("harness.modelPicker.model")}
+                    </span>
                     <span className="flex min-w-0 max-w-36 items-center gap-1 text-content/55">
                       <HarnessIcon
                         harness={current.harness}
@@ -589,7 +596,7 @@ export function ModelPicker({
                   aria-expanded={
                     !isToggle && highlighted ? showSubmenu : undefined
                   }
-                  title={setting.description}
+                  title={modelSettingDescription(t, setting)}
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => {
                     setActive(index);
@@ -719,7 +726,7 @@ export function ModelPicker({
           autoFocus
           onDismiss={() => setRecentMenu(null)}
           role="menu"
-          aria-label="Recently used models"
+          aria-label={t("harness.modelPicker.recentlyUsed")}
           aria-activedescendant={`${recentMenuId}-${recentActive}`}
           tabIndex={-1}
           onContextMenu={(event) => event.preventDefault()}
@@ -853,7 +860,7 @@ function ModelFlyout({
       maxHeight={MODEL_MENU_FRAME_HEIGHT}
       layer={LAYER.submenu}
       role="dialog"
-      aria-label="Models"
+      aria-label={t("harness.modelPicker.models")}
       data-model-picker
       style={{
         height: MODEL_MENU_HEIGHT,
@@ -864,12 +871,12 @@ function ModelFlyout({
     >
       <nav
         role="tablist"
-        aria-label="Providers"
+        aria-label={t("harness.modelPicker.providers")}
         aria-orientation="vertical"
         className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-content/10 p-1.5"
       >
         <ProviderTabButton
-          title="Favorites"
+          title={t("harness.modelPicker.favorites")}
           selected={tab === "favorites"}
           onSelect={() => onSelectTab("favorites")}
         >
@@ -898,8 +905,8 @@ function ModelFlyout({
             ref={searchRef}
             type="text"
             value={query}
-            placeholder="Search models"
-            aria-label="Search models"
+            placeholder={t("harness.modelPicker.searchModels")}
+            aria-label={t("harness.modelPicker.searchModels")}
             className="min-w-0 flex-1 bg-transparent text-[13px] text-content outline-none placeholder:text-content/40"
             onChange={(event) => onQuery(event.target.value)}
             onKeyDown={onSearchKey}
@@ -909,7 +916,7 @@ function ModelFlyout({
         <div
           ref={lockOverscroll}
           role="listbox"
-          aria-label="Models"
+          aria-label={t("harness.modelPicker.models")}
           className="min-h-0 flex-1 overflow-y-auto overscroll-none p-1"
         >
           {models.length === 0 ? (

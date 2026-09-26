@@ -741,7 +741,7 @@ function SidebarComponent({
       id: "reminder",
       label: t("harness.chrome.remindMe"),
       disabled: !onSetReminders,
-      submenu: sessionReminderPresets(),
+      submenu: sessionReminderPresets(t),
     },
     ...(!multipleMenuSessions && onRenameSession
       ? [

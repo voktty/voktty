@@ -105,7 +105,7 @@ function projectMenuExtraItems(
   currentProjectGroupId?: string,
 ): TabGroupMenuExtraItem[] {
   const groupSubmenu: TabGroupMenuExtraItem["submenu"] = [
-    { kind: "item", id: "project-group:new", label: "New group…" },
+    { kind: "item", id: "project-group:new", label: t("harness.projectGroups.newGroup") },
     ...(projectGroups.length > 0 ? [{ kind: "sep" } as const] : []),
     ...projectGroups.map((group) => ({
       kind: "item" as const,
@@ -117,7 +117,7 @@ function projectMenuExtraItems(
     {
       kind: "item",
       id: "project-group:none",
-      label: "Ungrouped",
+      label: t("harness.projectGroups.ungrouped"),
       checked: currentProjectGroupId == null,
     },
   ];
@@ -129,7 +129,7 @@ function projectMenuExtraItems(
     },
     {
       id: "project-group",
-      label: "Move to group",
+      label: t("harness.projectGroups.moveToGroup"),
       icon: FolderTree,
       submenu: groupSubmenu,
     },
@@ -1152,6 +1152,7 @@ function ProjectSectionHeader({
   onAdd?: () => void;
   onAddGroup?: (x: number, y: number) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-1 px-3 pb-1.5 pt-1">
       <span className="min-w-0 flex-1 truncate px-1 text-xs text-content/50">
@@ -1160,8 +1161,8 @@ function ProjectSectionHeader({
       {onAddGroup ? (
         <button
           type="button"
-          title="New project group"
-          aria-label="New project group"
+          title={t("harness.projectGroups.newProjectGroup")}
+          aria-label={t("harness.projectGroups.newProjectGroup")}
           onClick={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
             onAddGroup(rect.left, rect.bottom);
@@ -1174,8 +1175,8 @@ function ProjectSectionHeader({
       {onAdd ? (
         <button
           type="button"
-          title="Open project"
-          aria-label="Open project"
+          title={t("harness.chrome.openProject")}
+          aria-label={t("harness.chrome.openProject")}
           onClick={onAdd}
           className="grid size-5 shrink-0 place-items-center rounded-md text-content/50 hover:bg-content/8 hover:text-content"
         >
@@ -1206,6 +1207,7 @@ function ProjectGroupAppearanceMenu({
   onClose: () => void;
 }) {
   const group = groups.find((item) => item.id === menu.id);
+  const { t } = useTranslation();
   if (!group) return null;
   return (
     <TabGroupMenu
@@ -1227,12 +1229,12 @@ function ProjectGroupAppearanceMenu({
       onPick={() => {}}
       onClose={onClose}
       showActions={false}
-      ariaLabel="Project group actions"
+      ariaLabel={t("harness.projectGroups.actions")}
       extraItems={[
         {
           id: "delete-project-group",
-          label: "Delete group",
-          description: "Projects will become ungrouped",
+          label: t("harness.chrome.deleteGroup"),
+          description: t("harness.projectGroups.projectsUngrouped"),
           icon: Trash2,
           danger: true,
         },
@@ -1283,12 +1285,15 @@ function ProjectGroupSection({
   groupLogos: ReturnType<typeof useTabGroupLogos>;
   groupMascots: Record<string, string>;
 }) {
+  const { t } = useTranslation();
   const sortable = useSortable(
     items.map((item) => item.path),
     onReorder,
     { axis: "y", onActivate: onSelect },
   );
-  const countLabel = `${items.length} ${items.length === 1 ? "project" : "projects"}`;
+  const countLabel = t("harness.projectGroups.projectCount", {
+    count: items.length,
+  });
   const expanded = !group.collapsed;
   const openMenu = (target: HTMLElement, x?: number, y?: number) => {
     const rect = target.getBoundingClientRect();
@@ -1315,8 +1320,14 @@ function ProjectGroupSection({
         <button
           type="button"
           aria-expanded={!group.collapsed}
-          aria-label={`${group.name}, ${countLabel}`}
-          title={`${group.name} · ${countLabel}`}
+          aria-label={t("harness.projectGroups.groupSummary", {
+            name: group.name,
+            detail: countLabel,
+          })}
+          title={t("harness.projectGroups.groupSummaryTitle", {
+            name: group.name,
+            detail: countLabel,
+          })}
           onClick={onToggleCollapsed}
           className="flex min-w-0 flex-1 cursor-default items-center gap-2 text-left transition-[padding] duration-150 motion-reduce:transition-none group-hover:pr-6 group-has-[:focus-visible]:pr-6"
         >
@@ -1353,8 +1364,10 @@ function ProjectGroupSection({
         <button
           type="button"
           data-no-drag
-          title="Group options"
-          aria-label={`${group.name} group options`}
+          title={t("harness.projectGroups.groupOptions")}
+          aria-label={t("harness.projectGroups.namedGroupOptions", {
+            name: group.name,
+          })}
           aria-haspopup="menu"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {

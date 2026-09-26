@@ -9,6 +9,7 @@ import {
 import { Popover } from "./Popover";
 import { useTranslation } from "@/modules/i18n";
 import {
+  modelSettingDescription,
   modelSettingLabel,
   modelSettingOptionLabel,
 } from "../lib/catalogLabels";
@@ -115,7 +116,7 @@ function ToggleSetting({
   return (
     <button
       type="button"
-      title={setting.description ?? label}
+      title={modelSettingDescription(t, setting) ?? label}
       aria-label={label}
       aria-pressed={on}
       onMouseDown={(e) => e.preventDefault()}
@@ -206,7 +207,7 @@ function SelectSetting({
     <div ref={root} className="relative">
       <button
         type="button"
-        title={setting.description ?? label}
+        title={modelSettingDescription(t, setting) ?? label}
         aria-label={`${label}: ${currentLabel}`}
         aria-expanded={open}
         aria-haspopup="listbox"

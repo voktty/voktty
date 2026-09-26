@@ -458,7 +458,7 @@ export function UsageFooter({
               onClick={onTerminalClick}
             >
               <Terminal className="size-3.5" strokeWidth={1.75} aria-hidden />
-              <span>Terminal</span>
+              <span>{t("harness.menu.terminal")}</span>
             </button>
           ) : null}
         </div>
@@ -478,6 +478,7 @@ function TerminalLiveMark() {
 }
 
 function SessionChip({ session }: { session: UsageFooterSession }) {
+  const { t } = useTranslation();
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [loginState, setLoginState] = useState<ProviderSignInState>("idle");
@@ -509,7 +510,9 @@ function SessionChip({ session }: { session: UsageFooterSession }) {
       setLoginState("complete");
     } catch (error) {
       setLoginError(
-        error instanceof Error ? error.message : "Could not complete sign-in",
+        error instanceof Error
+          ? error.message
+          : t("harness.accounts.couldNotCompleteSignIn"),
       );
       setLoginState("error");
     }
@@ -533,17 +536,21 @@ function SessionChip({ session }: { session: UsageFooterSession }) {
         ref={trigger}
         type="button"
         className="-mx-1 inline-flex h-5 min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-1 text-content/55 transition-[background-color,color,transform] duration-150 ease-out hover:bg-content/10 hover:text-content focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97]"
-        aria-label={`${HARNESS_TITLE[session.harness]} sign-in required`}
+        aria-label={t("harness.accounts.signInRequired", {
+          name: HARNESS_TITLE[session.harness],
+        })}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title={`${HARNESS_TITLE[session.harness]} sign-in required`}
+        title={t("harness.accounts.signInRequired", {
+          name: HARNESS_TITLE[session.harness],
+        })}
         onClick={() => setOpen((value) => !value)}
       >
         <HarnessIcon harness={session.harness} className="size-3 shrink-0" />
         <span>{HARNESS_LABEL[session.harness]}</span>
         {authRequired ? (
           <span className="text-[10px] text-amber-600 dark:text-amber-300">
-            sign in
+            {t("harness.accounts.signIn")}
           </span>
         ) : null}
       </button>
@@ -557,7 +564,9 @@ function SessionChip({ session }: { session: UsageFooterSession }) {
           autoFocus
           onDismiss={dismiss}
           role="dialog"
-          aria-label={`${HARNESS_TITLE[session.harness]} sign-in`}
+          aria-label={t("harness.accounts.signInDialog", {
+            name: HARNESS_TITLE[session.harness],
+          })}
           tabIndex={-1}
           className="text-content"
         >
@@ -582,21 +591,30 @@ function RunningTerminalChip({
   open: boolean;
   onToggle?: (fileId: string) => void;
 }) {
+  const { t } = useTranslation();
   const root = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const label = runningTerminalChipLabel(terminals);
   const many = terminals.length > 1;
   const title = terminals
-    .map((terminal) => `"${terminal.process}" in ${terminal.label}`)
+    .map((terminal) =>
+      t("harness.terminals.processIn", {
+        process: terminal.process,
+        label: terminal.label,
+      }),
+    )
     .join("\n");
   const ariaLabel =
     terminals.length === 1
-      ? panelOpen
-        ? `Hide ${terminals[0]?.process}`
-        : `Show ${terminals[0]?.process}`
+      ? t(
+          panelOpen
+            ? "harness.terminals.hideProcess"
+            : "harness.terminals.showProcess",
+          { name: terminals[0]?.process ?? "" },
+        )
       : panelOpen
-        ? "Hide running terminals"
-        : `${terminals.length} terminals are running processes`;
+        ? t("harness.terminals.hideRunning")
+        : t("harness.terminals.runningCount", { count: terminals.length });
 
   const toggle = (fileId: string) => {
     setMenuOpen(false);
@@ -636,7 +654,7 @@ function RunningTerminalChip({
           autoFocus
           onDismiss={() => setMenuOpen(false)}
           role="menu"
-          aria-label="Running terminals"
+          aria-label={t("harness.chrome.runningTerminals")}
           className="min-w-[12rem] p-1"
         >
           {terminals.map((terminal) => (

@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useTranslation } from "@/modules/i18n";
+import { displayProviderAccountLabel } from "../lib/providerAccounts";
 import {
   clampUsedPercent,
   formatRateLimitWindowChipLabel,
@@ -66,6 +68,7 @@ export function UsageProviderChip({
   onConsumeReset?: (creditId?: string) => Promise<CodexRateLimitResetOutcome>;
   onReconnect?: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [accountView, setAccountView] = useState<"usage" | "accounts" | "add">(
@@ -102,7 +105,12 @@ export function UsageProviderChip({
   const providerLabel = HARNESS_TITLE[limits.provider];
   const activeAccount = accounts.find((account) => account.id === accountId);
   const canManageAccounts = Boolean(onSelectAccount && onAddAccount);
-  const activeAccountLabel = activeAccount?.label ?? "Removed account";
+  const activeAccountLabel = activeAccount
+    ? displayProviderAccountLabel(
+        activeAccount.label,
+        t("harness.accounts.defaultAccount"),
+      )
+    : t("harness.accounts.removedAccountShort");
   const mascotProject = project ? projectName(project) : providerLabel;
   const appearanceKey = project ? projectKey(project) : mascotProject;
   const mascotName = resolveTabGroupMascot(
@@ -160,7 +168,9 @@ export function UsageProviderChip({
       setReconnectState("complete");
     } catch (error) {
       setReconnectError(
-        error instanceof Error ? error.message : "Could not complete sign-in",
+        error instanceof Error
+          ? error.message
+          : t("harness.accounts.couldNotCompleteSignIn"),
       );
       setReconnectState("error");
     }
@@ -172,17 +182,17 @@ export function UsageProviderChip({
         ref={trigger}
         type="button"
         className="-mx-1 inline-flex h-5 min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-1 text-content/55 transition-[background-color,color,transform] duration-150 ease-out hover:bg-content/10 hover:text-content focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97]"
-        aria-label={`${providerLabel} usage details`}
+        aria-label={t("harness.accounts.usageDetails", { name: providerLabel })}
         aria-expanded={open}
         aria-haspopup="dialog"
         title={
           tooltip ||
           limits.error ||
           (disconnected
-            ? "Not connected"
+            ? t("harness.accounts.notConnectedTitle")
             : loading
-              ? "Loading usage…"
-              : "Usage details")
+              ? t("harness.accounts.loadingUsage")
+              : t("harness.accounts.usageDetailsShort"))
         }
         onClick={() => setOpen((value) => !value)}
       >
@@ -190,9 +200,11 @@ export function UsageProviderChip({
         {loading ? (
           <span className="animate-pulse text-content/35">···</span>
         ) : disconnected ? (
-          <span className="text-content/35">not connected</span>
+          <span className="text-content/35">
+            {t("harness.accounts.notConnected")}
+          </span>
         ) : windows.length === 0 ? (
-          <span className="text-content/35">{emptyUsageLabel(limits)}</span>
+          <span className="text-content/35">{emptyUsageLabel(t, limits)}</span>
         ) : (
           <>
             {accounts.length > 1 && activeAccount ? (
@@ -231,7 +243,7 @@ export function UsageProviderChip({
           autoFocus
           onDismiss={dismiss}
           role="dialog"
-          aria-label={`${providerLabel} usage details`}
+          aria-label={t("harness.accounts.usageDetails", { name: providerLabel })}
           tabIndex={-1}
           className={`overflow-y-auto text-content ${accountView === "usage" && loginView ? "" : "p-2.5"}`}
         >
@@ -285,16 +297,18 @@ export function UsageProviderChip({
                 </span>
                 <div className="min-w-0 flex-1">
                   <h2 className="text-[13px] font-medium leading-4">
-                    {providerLabel} usage
+                    {t("harness.accounts.usageTitle", { name: providerLabel })}
                   </h2>
                   <p className="mt-0.5 text-[10px] leading-4 text-content/40">
-                    {updatedLabel(limits, now)}
+                    {updatedLabel(t, limits, now)}
                   </p>
                   {canManageAccounts ? (
                     <button
                       type="button"
                       className="mt-1 -ml-1 inline-flex max-w-full items-center gap-1 rounded px-1 py-0.5 text-[10px] text-content/55 hover:bg-content/10 hover:text-content"
-                      aria-label={`Switch ${providerLabel} account`}
+                      aria-label={t("harness.accounts.switchAccount", {
+                        name: providerLabel,
+                      })}
                       onClick={() => setAccountView("accounts")}
                     >
                       <span className="truncate">{activeAccountLabel}</span>
@@ -313,14 +327,14 @@ export function UsageProviderChip({
                       strokeWidth={1.75}
                       aria-hidden
                     />
-                    Updating
+                    {t("harness.accounts.updating")}
                   </span>
                 ) : null}
               </div>
 
               {limits.status === "error" && windows.length > 0 ? (
                 <p className="mb-2 rounded-lg bg-amber-400/10 px-2.5 py-2 text-[10px] leading-4 text-amber-700 dark:text-amber-300">
-                  Couldn’t refresh. Showing the last available snapshot.
+                  {t("harness.accounts.couldntRefresh")}
                 </p>
               ) : null}
 
@@ -376,16 +390,21 @@ function AccountSwitchRow({
   accountLabel: string;
   onClick: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="px-2.5 pt-2.5">
       <button
         type="button"
         className="flex h-8 w-full items-center gap-2 rounded-lg bg-content/[0.045] px-2.5 text-left text-[11px] ring-1 ring-inset ring-content/[0.06] hover:bg-content/[0.08]"
-        aria-label={`Switch account from ${accountLabel}`}
+        aria-label={t("harness.accounts.switchAccountFrom", {
+          name: accountLabel,
+        })}
         onClick={onClick}
       >
         <span className="min-w-0 flex-1 truncate">{accountLabel}</span>
-        <span className="text-[10px] text-content/40">Switch</span>
+        <span className="text-[10px] text-content/40">
+          {t("harness.accounts.switch")}
+        </span>
         <ChevronRight
           className="size-3 shrink-0 text-content/35"
           strokeWidth={1.75}
@@ -413,21 +432,24 @@ function ProviderAccountPicker({
   onManage?: () => void;
   onSelect: (accountId: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div>
       <div className="flex h-7 items-center gap-1">
         <button
           type="button"
           className="grid size-6 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
-          aria-label="Back to usage"
+          aria-label={t("harness.accounts.backToUsage")}
           onClick={onBack}
         >
           <ArrowLeft className="size-3.5" strokeWidth={1.75} aria-hidden />
         </button>
-        <h2 className="text-[13px] font-medium">{providerLabel} accounts</h2>
+        <h2 className="text-[13px] font-medium">
+          {t("harness.accounts.accountsTitle", { name: providerLabel })}
+        </h2>
       </div>
       <p className="mt-1 px-1 text-[10px] leading-4 text-content/40">
-        Each conversation stays pinned to the account that started it.
+        {t("harness.accounts.accountPinned")}
       </p>
       <div className="mt-2 flex flex-col gap-1" role="listbox">
         {accounts.map((account) => {
@@ -445,7 +467,12 @@ function ProviderAccountPicker({
               }`}
               onClick={() => onSelect(account.id)}
             >
-              <span className="min-w-0 flex-1 truncate">{account.label}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {displayProviderAccountLabel(
+                  account.label,
+                  t("harness.accounts.defaultAccount"),
+                )}
+              </span>
               {selected ? (
                 <Check
                   className="size-3.5 shrink-0 text-accent"
@@ -463,7 +490,7 @@ function ProviderAccountPicker({
         onClick={onAdd}
       >
         <Plus className="size-3.5" strokeWidth={1.75} aria-hidden />
-        Add account
+        {t("harness.accounts.addAccount")}
       </button>
       {onManage ? (
         <button
@@ -473,7 +500,7 @@ function ProviderAccountPicker({
             onManage();
           }}
         >
-          Manage accounts…
+          {t("harness.accounts.manageAccounts")}
         </button>
       ) : null}
     </div>
@@ -491,6 +518,7 @@ function AddProviderAccount({
   onAdd?: (label: string) => Promise<ProviderAccount>;
   onComplete: () => void;
 }) {
+  const { t } = useTranslation();
   const [label, setLabel] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -505,7 +533,9 @@ function AddProviderAccount({
       onComplete();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Could not create account",
+        err instanceof Error
+          ? err.message
+          : t("harness.accounts.couldNotCreateAccount"),
       );
     } finally {
       setRunning(false);
@@ -518,26 +548,28 @@ function AddProviderAccount({
         <button
           type="button"
           className="grid size-6 place-items-center rounded-md text-content/45 hover:bg-content/10 hover:text-content"
-          aria-label="Back to accounts"
+          aria-label={t("harness.accounts.backToAccounts")}
           disabled={running}
           onClick={onBack}
         >
           <ArrowLeft className="size-3.5" strokeWidth={1.75} aria-hidden />
         </button>
-        <h2 className="text-[13px] font-medium">Add {providerLabel} account</h2>
+        <h2 className="text-[13px] font-medium">
+          {t("harness.accounts.addNamedAccount", { name: providerLabel })}
+        </h2>
       </div>
       <p className="mt-1 px-1 text-[10px] leading-4 text-content/40">
-        Give this account a local name, then finish sign-in in your browser.
+        {t("harness.accounts.addAccountHint")}
       </p>
       <label className="mt-3 block text-[10px] font-medium text-content/55">
-        Account name
+        {t("harness.accounts.accountName")}
         <input
           autoFocus
           type="text"
           maxLength={48}
           value={label}
           disabled={running}
-          placeholder="Work or Personal"
+          placeholder={t("harness.accounts.workOrPersonal")}
           className="mt-1.5 h-8 w-full rounded-lg border border-content/10 bg-content/[0.04] px-2.5 text-[11px] text-content outline-none placeholder:text-content/25 focus:border-accent/45 disabled:opacity-55"
           onChange={(event) => setLabel(event.target.value)}
         />
@@ -550,7 +582,9 @@ function AddProviderAccount({
         {running ? (
           <RefreshCw className="size-3.5 animate-spin" aria-hidden />
         ) : null}
-        {running ? "Waiting for browser…" : "Sign in and add account"}
+        {running
+          ? t("harness.accounts.waitingForBrowser")
+          : t("harness.accounts.signInAndAddAccount")}
       </button>
       {error ? (
         <p className="mt-2 text-[10px] leading-4 text-red-500" role="status">
@@ -582,28 +616,33 @@ function UsageWindowCard({
   window: RateLimitWindow;
   now: number;
 }) {
+  const { t } = useTranslation();
   const pct = clampUsedPercent(window.usedPercent);
   const remaining = Math.max(0, Math.round(100 - pct));
   const title =
     kind === "session"
-      ? "5-hour limit"
+      ? t("harness.accounts.fiveHourLimit")
       : kind === "weekly"
-        ? "Weekly limit"
+        ? t("harness.accounts.weeklyLimit")
         : kind === "monthly"
-          ? "Monthly limit"
-          : `${formatWindowLabel(window.windowMinutes)} limit`;
+          ? t("harness.accounts.monthlyLimit")
+          : t("harness.accounts.windowLimit", {
+              window: formatWindowLabel(window.windowMinutes),
+            });
   return (
     <section className="rounded-lg bg-content/[0.045] px-3 py-2.5 ring-1 ring-inset ring-content/[0.06]">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-[11px] font-medium text-content/65">{title}</h3>
         <span className="shrink-0 text-[11px] font-medium tabular-nums">
-          {formatUsagePercent(pct)} used
+          {t("harness.accounts.percentUsed", {
+            percent: formatUsagePercent(pct),
+          })}
         </span>
       </div>
       <div
         className="mt-2 h-1.5 overflow-hidden rounded-full bg-content/10"
         role="progressbar"
-        aria-label={`${title} used`}
+        aria-label={t("harness.accounts.limitUsed", { title })}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(pct)}
@@ -614,7 +653,9 @@ function UsageWindowCard({
         />
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-3 text-[10px] leading-4 text-content/40">
-        <span className="tabular-nums">{remaining}% remaining</span>
+        <span className="tabular-nums">
+          {t("harness.accounts.percentRemaining", { percent: remaining })}
+        </span>
         <span
           className="truncate text-right tabular-nums"
           title={
@@ -624,7 +665,9 @@ function UsageWindowCard({
           }
         >
           {window.resetsAt == null
-            ? `${formatWindowLabel(window.windowMinutes)} window`
+            ? t("harness.accounts.windowName", {
+                window: formatWindowLabel(window.windowMinutes),
+              })
             : formatResetCountdown(window.resetsAt - now)}
         </span>
       </div>
@@ -659,6 +702,7 @@ function BankedResets({
   onUse: (credit: RateLimitResetCredit | undefined, rowKey: string) => void;
   canUse: boolean;
 }) {
+  const { t } = useTranslation();
   const summary = limits.resetCredits;
   const count = summary?.availableCount ?? null;
   const detailedCredits = (summary?.credits ?? []).filter(
@@ -675,7 +719,9 @@ function BankedResets({
       <div className="relative min-h-[78px] overflow-hidden rounded-lg bg-content/[0.04] px-3 py-3 pr-[84px] ring-1 ring-inset ring-content/[0.06]">
         <div className="relative z-10 min-w-0">
           <div className="flex items-center gap-1.5">
-            <h3 className="text-[11px] font-medium">Banked resets</h3>
+            <h3 className="text-[11px] font-medium">
+              {t("harness.accounts.bankedResets")}
+            </h3>
             {count != null ? (
               <span className="rounded-full bg-content/[0.07] px-1.5 py-px text-[9px] font-medium tabular-nums text-content/65 ring-1 ring-inset ring-content/[0.07]">
                 {count}
@@ -684,10 +730,10 @@ function BankedResets({
           </div>
           <p className="mt-0.5 text-[10px] leading-4 text-content/40">
             {count == null
-              ? "Not reported by this account"
+              ? t("harness.accounts.notReported")
               : count === 0
-                ? "No resets available"
-                : `${count} ${count === 1 ? "reset" : "resets"} available`}
+                ? t("harness.accounts.noResets")
+                : t("harness.accounts.resetsAvailable", { count })}
           </p>
         </div>
         <BankedResetMascot
@@ -701,7 +747,7 @@ function BankedResets({
       {count != null && count > 0 ? (
         <div
           className="mt-2 max-h-56 overflow-y-auto overscroll-contain"
-          aria-label="Available banked resets"
+          aria-label={t("harness.accounts.availableBankedResets")}
         >
           <div className="flex flex-col gap-1.5">
             {rows.map((credit, index) => {
@@ -831,10 +877,12 @@ function BankedResetRow({
   onCancel: () => void;
   onUse: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <article className="rounded-lg bg-content/[0.04] px-2.5 py-2 ring-1 ring-inset ring-content/[0.06]">
       <h4 className="text-[10px] font-medium leading-4 text-content/70">
-        {credit?.title ?? `Banked reset ${index + 1}`}
+        {credit?.title ??
+          t("harness.accounts.bankedReset", { index: index + 1 })}
       </h4>
       {credit?.description ? (
         <p className="mt-0.5 text-[10px] leading-4 text-content/45">
@@ -851,10 +899,12 @@ function BankedResetRow({
           }
         >
           {credit?.expiresAt == null
-            ? "Expiry not provided"
+            ? t("harness.accounts.expiryNotProvided")
             : credit.expiresAt <= now
-              ? "Expires now"
-              : `Expires in ${formatResetDuration(credit.expiresAt - now)}`}
+              ? t("harness.accounts.expiresNow")
+              : t("harness.accounts.expiresIn", {
+                  time: formatResetDuration(credit.expiresAt - now),
+                })}
         </p>
         {action === "using" ? (
           <span className="inline-flex shrink-0 items-center gap-1.5 text-[10px] text-content/45">
@@ -863,7 +913,7 @@ function BankedResetRow({
               strokeWidth={1.75}
               aria-hidden
             />
-            Applying…
+            {t("harness.accounts.applying")}
           </span>
         ) : isResetOutcome(action) || action === "error" ? (
           <span
@@ -874,7 +924,7 @@ function BankedResetRow({
             }`}
             role="status"
           >
-            {action === "error" ? error : resetOutcomeLabel(action)}
+            {action === "error" ? error : resetOutcomeLabel(t, action)}
           </span>
         ) : canUse && action !== "confirming" ? (
           <button
@@ -883,14 +933,14 @@ function BankedResetRow({
             disabled={disabled}
             onClick={onConfirm}
           >
-            Use reset
+            {t("harness.accounts.useReset")}
           </button>
         ) : null}
       </div>
       {action === "confirming" ? (
         <div className="mt-2 flex items-center justify-between gap-2 border-t border-content/[0.07] pt-2">
           <p className="text-[10px] leading-4 text-content/50">
-            Spend this reset now?
+            {t("harness.accounts.spendReset")}
           </p>
           <div className="flex shrink-0 gap-1">
             <button
@@ -898,14 +948,14 @@ function BankedResetRow({
               className="h-6 rounded-md px-2 text-[10px] text-content/50 hover:bg-content/10 hover:text-content"
               onClick={onCancel}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="button"
               className="h-6 rounded-md bg-content px-2.5 text-[10px] font-medium text-background-base transition-transform duration-150 ease-out active:scale-[0.97]"
               onClick={onUse}
             >
-              Confirm
+              {t("common.confirm")}
             </button>
           </div>
         </div>
@@ -921,14 +971,15 @@ function EmptyUsageState({
   limits: ProviderRateLimits;
   loading: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-lg bg-content/[0.04] px-3 py-4 text-center ring-1 ring-inset ring-content/[0.06]">
       <p className="text-[11px] font-medium text-content/65">
         {loading
-          ? "Loading usage…"
+          ? t("harness.accounts.loadingUsage")
           : limits.status === "unavailable"
-            ? "Not connected"
-            : "Usage unavailable"}
+            ? t("harness.accounts.notConnectedTitle")
+            : t("harness.accounts.usageUnavailable")}
       </p>
       {limits.error ? (
         <p className="mx-auto mt-1 max-w-[15rem] text-[10px] leading-4 text-content/40">
@@ -952,22 +1003,33 @@ export function needsProviderLogin(limits: ProviderRateLimits): boolean {
   );
 }
 
-function updatedLabel(limits: ProviderRateLimits, now: number): string {
-  if (limits.updatedAt <= 0) return "Rate-limit details";
+function updatedLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  limits: ProviderRateLimits,
+  now: number,
+): string {
+  if (limits.updatedAt <= 0) return t("harness.accounts.rateLimitDetails");
   const elapsedMinutes = Math.max(
     0,
     Math.floor((now - limits.updatedAt) / 60_000),
   );
-  if (elapsedMinutes === 0) return "Updated just now";
-  if (elapsedMinutes < 60) return `Updated ${elapsedMinutes}m ago`;
-  return `Updated ${Math.floor(elapsedMinutes / 60)}h ago`;
+  if (elapsedMinutes === 0) return t("harness.accounts.updatedJustNow");
+  if (elapsedMinutes < 60) {
+    return t("harness.accounts.updatedMinutesAgo", { count: elapsedMinutes });
+  }
+  return t("harness.accounts.updatedHoursAgo", {
+    count: Math.floor(elapsedMinutes / 60),
+  });
 }
 
-function resetOutcomeLabel(outcome: CodexRateLimitResetOutcome): string {
-  if (outcome === "reset") return "Codex usage was reset.";
-  if (outcome === "nothingToReset") return "There’s no active usage to reset.";
-  if (outcome === "noCredit") return "No banked resets are available.";
-  return "That reset was already used.";
+function resetOutcomeLabel(
+  t: (key: string) => string,
+  outcome: CodexRateLimitResetOutcome,
+): string {
+  if (outcome === "reset") return t("harness.accounts.resetDone");
+  if (outcome === "nothingToReset") return t("harness.accounts.nothingToReset");
+  if (outcome === "noCredit") return t("harness.accounts.noCredit");
+  return t("harness.accounts.alreadyRedeemed");
 }
 
 function isResetOutcome(
@@ -981,10 +1043,15 @@ function isResetOutcome(
   );
 }
 
-function emptyUsageLabel(limits: ProviderRateLimits): string {
+function emptyUsageLabel(
+  t: (key: string) => string,
+  limits: ProviderRateLimits,
+): string {
   if (limits.status !== "error") return "—";
   const text = limits.error?.toLowerCase() ?? "";
-  if (text.includes("expired") || text.includes("sign-in")) return "expired";
+  if (text.includes("expired") || text.includes("sign-in")) {
+    return t("harness.accounts.expired");
+  }
   return "—";
 }
 
