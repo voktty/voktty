@@ -821,7 +821,7 @@ function CopyTurnButton({
       </button>
       {error && (
         <span role="alert" className="max-w-xs text-xs text-content/70">
-          {t("harness.chrome.copyFailed", { defaultValue: "Copy failed." })} {error}
+          {t("harness.chrome.copyFailed")} {error}
         </span>
       )}
     </>
@@ -882,7 +882,7 @@ function SaveNoteButton({
       </button>
       {error && (
         <span role="alert" className="max-w-xs text-xs text-content/70">
-          {t("harness.chrome.couldNotSaveNote", { defaultValue: "Could not save note." })} {error}
+          {t("harness.chrome.couldNotSaveNote")} {error}
         </span>
       )}
     </>
@@ -1166,7 +1166,7 @@ function UserMessageBlock({
               className="mt-1 rounded px-1 py-0.5 text-xs text-content/60 hover:bg-content/8 hover:text-content"
               onClick={toggle}
             >
-              {expanded ? t("harness.chrome.showLess", { defaultValue: "Show less" }) : t("harness.chrome.showMore", { defaultValue: "Show more" })}
+              {expanded ? t("harness.chrome.showLess") : t("harness.chrome.showMore")}
             </button>
           ) : null}
         </div>
@@ -1175,7 +1175,7 @@ function UserMessageBlock({
             <CopyTurnButton
               text={text}
               attachments={block.attachments}
-              label={t("harness.chrome.copyMessage", { defaultValue: "Copy message" })}
+              label={t("harness.chrome.copyMessage")}
             />
             {text && onSaveNote ? (
               <SaveNoteButton text={text} onSave={onSaveNote} />
