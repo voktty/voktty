@@ -16,7 +16,12 @@ export function InboxMiniCard({ card, onDismiss }: Props) {
     card.kind === "pr"
       ? t("harness.chrome.pullRequest")
       : t("harness.chrome.issue");
-  const providerLabel = card.provider === "linear" ? "Linear" : "GitHub";
+  const providerLabel =
+    card.provider === "linear"
+      ? "Linear"
+      : card.provider === "gitlab"
+        ? "GitLab"
+        : "GitHub";
 
   return (
     <div className="px-3 pt-2">

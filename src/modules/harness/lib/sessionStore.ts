@@ -10,6 +10,7 @@ import type {
   HarnessId,
   HandoffMeta,
   HandoffStatus,
+  LinkedWorkItem,
   RuntimeMode,
   SecondOpinionMeta,
   Session,
@@ -34,6 +35,7 @@ export type SessionSummary = {
   updatedAt: number;
   archived?: boolean;
   pinned?: boolean;
+  linkedWorkItem?: LinkedWorkItem;
 };
 
 type SessionRecord = {
@@ -51,6 +53,7 @@ type SessionRecord = {
   contextWindow?: number | null;
   branch?: string | null;
   worktreeCwd?: string | null;
+  linkedWorkItem?: LinkedWorkItem | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -70,6 +73,7 @@ type SessionUpsertPayload = {
   contextWindow?: number;
   branch?: string;
   worktreeCwd?: string;
+  linkedWorkItem?: LinkedWorkItem;
 };
 
 /** Only real chats belong in project history: blank tabs and inbox discussions stay ephemeral. */
@@ -86,9 +90,37 @@ export function isPersistableId(value: string): boolean {
   return /^[A-Za-z0-9_-]+$/.test(value);
 }
 
+export function sanitizeLinkedWorkItem(
+  value: unknown,
+): LinkedWorkItem | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const item = value as Partial<LinkedWorkItem>;
+  const kind = item.kind;
+  const repo = typeof item.repo === "string" ? item.repo.trim() : "";
+  const number = item.number;
+  if (
+    (kind !== "issue" && kind !== "pr") ||
+    !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) ||
+    typeof number !== "number" ||
+    !Number.isSafeInteger(number) ||
+    number <= 0
+  ) {
+    return undefined;
+  }
+  return {
+    kind,
+    repo,
+    number,
+    url: `https://github.com/${repo}/${kind === "pr" ? "pull" : "issues"}/${number}`,
+  };
+}
+
 function persistableMeta(
   session: Session,
 ): Omit<SessionUpsertPayload, "blocks"> {
+  const linkedWorkItem = sanitizeLinkedWorkItem(session.linkedWorkItem);
   return {
     id: session.id,
     cwd: normalizeProjectPath(session.cwd),
@@ -109,6 +141,7 @@ function persistableMeta(
       : {}),
     ...(session.branch ? { branch: session.branch } : {}),
     ...(session.worktreeCwd ? { worktreeCwd: session.worktreeCwd } : {}),
+    ...(linkedWorkItem ? { linkedWorkItem } : {}),
   };
 }
 
@@ -267,6 +300,11 @@ export async function listSessionsByProject(
   const rows = await invoke<SessionSummary[]>("session_list_by_project", {
     cwd: normalizeProjectPath(cwd),
   });
+  return rows.map(normalizeSummary);
+}
+
+export async function listLinkedSessions(): Promise<SessionSummary[]> {
+  const rows = await invoke<SessionSummary[]>("session_list_linked");
   return rows.map(normalizeSummary);
 }
 
@@ -561,6 +599,7 @@ function sanitizeTaskList(value: unknown): TaskListMeta | null {
 }
 
 function normalizeSummary(summary: SessionSummary): SessionSummary {
+  const linkedWorkItem = sanitizeLinkedWorkItem(summary.linkedWorkItem);
   return {
     ...summary,
     harness: asHarness(summary.harness),
@@ -574,6 +613,7 @@ function normalizeSummary(summary: SessionSummary): SessionSummary {
     deletions: summary.deletions ?? 0,
     archived: summary.archived || undefined,
     pinned: summary.pinned || undefined,
+    linkedWorkItem,
   };
 }
 
@@ -603,6 +643,7 @@ export function recordToSession(record: SessionRecord): Session {
         .map(sanitizeBlock)
         .filter((block): block is Block => block != null)
     : [];
+  const linkedWorkItem = sanitizeLinkedWorkItem(record.linkedWorkItem);
   return {
     id: record.id,
     // "~" is the existing no-project sentinel.
@@ -621,6 +662,7 @@ export function recordToSession(record: SessionRecord): Session {
     ...textField("providerAccountId", record.providerAccountId),
     ...textField("branch", record.branch),
     ...textField("worktreeCwd", record.worktreeCwd),
+    ...(linkedWorkItem ? { linkedWorkItem } : {}),
     ...(contextFromRecord(record) ?? {}),
   };
 }

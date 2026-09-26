@@ -4575,6 +4575,14 @@ export const en = {
       githubInstallGuide: "Install GitHub CLI",
       githubCheckAgain: "Check connection",
       githubChecking: "Checking GitHub CLI...",
+      gitlab: "GitLab",
+      gitlabConnection: "GitLab connection",
+      gitlabConnectionDesc:
+        "Connect GitLab.com or a self-managed GitLab instance. Use a personal access token with API access; the token is stored locally and Disconnect deletes it.",
+      gitlabUrl: "GitLab URL",
+      gitlabToken: "GitLab access token",
+      connect: "Connect",
+      disconnect: "Disconnect",
       skills: "Skills",
       groups: {
         app: "App",

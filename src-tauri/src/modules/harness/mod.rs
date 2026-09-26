@@ -4,6 +4,7 @@ pub mod cursor_store;
 pub mod external_editor;
 pub mod external_history;
 pub mod fs;
+pub mod gitlab;
 pub mod host;
 pub mod linear;
 pub mod link_preview;

@@ -127,6 +127,11 @@ import {
   type GithubStatus,
 } from "../lib/githubTasks";
 import {
+  disconnectGitlab,
+  gitlabConnected,
+  saveGitlabConfig,
+} from "../lib/gitlab";
+import {
   disconnectLinear,
   LINEAR_CHANGE_EVENT,
   linearConnected,
@@ -767,6 +772,9 @@ function InboxPage() {
       <Heading title={t("harness.settings.github")} id={ANCHOR_IDS.github} first />
       <GithubSettings />
 
+      <Heading title="GitLab" id={ANCHOR_IDS.gitlab} />
+      <GitlabSettings />
+
       <Heading title={t("harness.chrome.linear")} id={ANCHOR_IDS.linear} />
       <LinearSettings />
     </>
@@ -842,6 +850,133 @@ function GithubSettings() {
             ? t("harness.settings.githubChecking")
             : t("harness.settings.githubCheckAgain")}
         </SecondaryButton>
+      </Row>
+      {error ? (
+        <p className="pb-2 text-[12px] text-red-400/90">{error}</p>
+      ) : null}
+    </>
+  );
+}
+
+function GitlabSettings() {
+  const { t } = useTranslation();
+  const [url, setUrl] = useState("https://gitlab.com");
+  const [token, setToken] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void gitlabConnected()
+      .then((status) => {
+        if (cancelled) return;
+        setConnected(status.connected);
+        setUrl(status.url);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const onSave = async () => {
+    if (!token.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const status = await saveGitlabConfig(url, token);
+      setUrl(status.url);
+      setToken("");
+      setConnected(status.connected);
+      clearInboxCache();
+    } catch (err: unknown) {
+      setConnected(false);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDisconnect = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const status = await disconnectGitlab(url);
+      setConnected(false);
+      setUrl(status.url);
+      clearInboxCache();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Row
+        label={
+          <span className="flex items-center gap-2">
+            <InboxProviderMark provider="gitlab" className="size-4 shrink-0" />
+            {t("harness.settings.gitlabConnection")}
+          </span>
+        }
+        description={t("harness.settings.gitlabConnectionDesc")}
+      >
+        {connected ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="max-w-56 truncate text-[12px] text-content/50">
+              {url}
+            </span>
+            <SecondaryButton
+              onClick={() => void onDisconnect()}
+              disabled={busy}
+            >
+              {t("harness.chrome.disconnect")}
+            </SecondaryButton>
+          </div>
+        ) : (
+          <div className="flex min-w-0 items-center gap-2">
+            <label className="flex h-7 w-52 shrink-0 items-center rounded-md border border-content/10 px-2 focus-within:border-content/20">
+              <input
+                type="url"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="https://gitlab.com"
+                aria-label={t("harness.settings.gitlabUrl")}
+                autoComplete="url"
+                spellCheck={false}
+                className="min-w-0 flex-1 bg-transparent text-[12px] text-content outline-none placeholder:text-content/35"
+              />
+            </label>
+            <label className="flex h-7 w-52 shrink-0 items-center rounded-md border border-content/10 px-2 focus-within:border-content/20">
+              <input
+                type="password"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void onSave();
+                }}
+                placeholder="glpat-…"
+                aria-label={t("harness.settings.gitlabToken")}
+                autoComplete="off"
+                spellCheck={false}
+                className="min-w-0 flex-1 bg-transparent text-[12px] text-content outline-none placeholder:text-content/35"
+              />
+            </label>
+            <SecondaryButton
+              onClick={() => void onSave()}
+              disabled={busy || !token.trim()}
+            >
+              {busy ? t("common.saving") : t("harness.chrome.connect")}
+            </SecondaryButton>
+          </div>
+        )}
       </Row>
       {error ? (
         <p className="pb-2 text-[12px] text-red-400/90">{error}</p>

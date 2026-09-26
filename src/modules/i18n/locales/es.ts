@@ -4686,6 +4686,14 @@ export const es: TranslationSchema = {
       githubInstallGuide: "Instalar GitHub CLI",
       githubCheckAgain: "Comprobar conexión",
       githubChecking: "Comprobando GitHub CLI...",
+      gitlab: "GitLab",
+      gitlabConnection: "Conexión con GitLab",
+      gitlabConnectionDesc:
+        "Conecta GitLab.com o una instancia autohospedada de GitLab. Usa un token de acceso personal con acceso API; se almacena localmente y Desconectar lo elimina.",
+      gitlabUrl: "URL de GitLab",
+      gitlabToken: "Token de acceso personal de GitLab",
+      connect: "Conectar",
+      disconnect: "Desconectar",
       skills: "Habilidades",
       groups: {
         app: "Aplicación",

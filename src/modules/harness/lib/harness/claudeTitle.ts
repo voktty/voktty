@@ -1,6 +1,7 @@
 import {
   buildThreadTitlePrompt,
-  parseGeneratedThreadTitle,
+  parseGeneratedSessionTitle,
+  type GeneratedSessionTitle,
 } from "../sessionTitle";
 import { runClaudeTextPrompt } from "./claudeText";
 
@@ -11,7 +12,7 @@ export async function generateClaudeSessionTitle(input: {
   cwd: string;
   message: string;
   providerAccountId?: string;
-}): Promise<string | null> {
+}): Promise<GeneratedSessionTitle | null> {
   try {
     const output = await runClaudeTextPrompt({
       cwd: input.cwd,
@@ -19,9 +20,10 @@ export async function generateClaudeSessionTitle(input: {
       prompt: buildThreadTitlePrompt(input.message),
       timeoutMs: TITLE_TIMEOUT_MS,
     });
-    return parseGeneratedThreadTitle(output);
+    return parseGeneratedSessionTitle(output, input.message);
   } catch (error) {
     console.debug("[monocode] session title", error);
     return null;
   }
 }
+

@@ -131,7 +131,8 @@ describe("workspace navigation keybindings", () => {
   it("documents session and project cycling in the shortcut list", () => {
     const rows = KEYBINDINGS.filter(
       (row) =>
-        row.command.startsWith("Session:") ||
+        row.command === "Session: Previous" ||
+        row.command === "Session: Next" ||
         row.command.startsWith("Project:"),
     );
     expect(rows.map((row) => row.command)).toEqual([
@@ -145,6 +146,12 @@ describe("workspace navigation keybindings", () => {
         (row) => row.when === "!overlay && (!textFocus || emptyComposer)",
       ),
     ).toBe(true);
+  });
+
+  it("documents session archive shortcut", () => {
+    const archiveRow = KEYBINDINGS.find((row) => row.command === "Session: Archive");
+    expect(archiveRow).toBeDefined();
+    expect(archiveRow?.when).toBe("sessionFocus && !overlay");
   });
 });
 
