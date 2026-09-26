@@ -428,6 +428,7 @@ export const SessionPane = memo(function SessionPane({
             <EmptySession
               cwd={session.cwd}
               composer={dockComposer ? undefined : composer}
+              hasChatBackground={Boolean(projectBackground)}
             />
           )
         ) : (

@@ -238,6 +238,8 @@ pub fn run() {
             }
             harness::host::reap_orphaned_harness_processes();
             harness::reminders::init(_app.handle());
+            #[cfg(target_os = "macos")]
+            harness::notifications::install_delegate(&_app.handle());
             // TCP bind + descriptor-file write + stale-launcher sweep + CLI
             // launcher prep are all blocking I/O; do them off the setup()
             // path so they can't delay the main window's first frame. The
@@ -684,6 +686,11 @@ pub fn run() {
             harness::rate_limits::fetch_claude_usage,
             harness::rate_limits::fetch_opencode_go_usage,
             harness::link_preview::fetch_link_preview,
+            harness::inbox_media::fetch_inbox_media,
+            harness::notifications::notification_permission,
+            harness::notifications::request_notification_permission,
+            harness::notifications::show_notification,
+            harness::notifications::open_notification_settings,
             quota::get_quota_overview,
             quota::refresh_quota_provider,
             harness::fs::git_branches,
