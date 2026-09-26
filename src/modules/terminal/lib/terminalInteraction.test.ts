@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   copyTerminalSelection,
   pasteClipboardIntoTerminal,
+  shouldHandleTerminalContextMenuPaste,
 } from "./terminalInteraction";
 import { resetTerminalPasteDeduplication } from "./terminalPaste";
 
@@ -67,5 +68,63 @@ describe("pasteClipboardIntoTerminal", () => {
     ).resolves.toBe(false);
     expect(canPaste).toHaveBeenCalledOnce();
     expect(terminal.paste).not.toHaveBeenCalled();
+  });
+});
+
+describe("shouldHandleTerminalContextMenuPaste", () => {
+  it("returns false if terminal is null", () => {
+    expect(shouldHandleTerminalContextMenuPaste(null)).toBe(false);
+  });
+
+  it("returns true for standard shells where mouse tracking is inactive", () => {
+    expect(shouldHandleTerminalContextMenuPaste({})).toBe(true);
+    expect(
+      shouldHandleTerminalContextMenuPaste({
+        modes: { mouseTrackingMode: "none" },
+      }),
+    ).toBe(true);
+    expect(
+      shouldHandleTerminalContextMenuPaste({
+        modes: { mouseTrackingMode: "" },
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false when mouse tracking is enabled (e.g. Claude Code, ink CLI, vim)", () => {
+    expect(
+      shouldHandleTerminalContextMenuPaste({
+        modes: { mouseTrackingMode: "normal" },
+      }),
+    ).toBe(false);
+    expect(
+      shouldHandleTerminalContextMenuPaste({
+        modes: { mouseTrackingMode: "button-event" },
+      }),
+    ).toBe(false);
+    expect(
+      shouldHandleTerminalContextMenuPaste({
+        modes: { mouseTrackingMode: "any-event" },
+      }),
+    ).toBe(false);
+    expect(
+      shouldHandleTerminalContextMenuPaste({
+        modes: { mouseTrackingMode: "vt200" },
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true when shiftKey is pressed, overriding mouse tracking", () => {
+    expect(
+      shouldHandleTerminalContextMenuPaste(
+        { modes: { mouseTrackingMode: "normal" } },
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      shouldHandleTerminalContextMenuPaste(
+        { modes: { mouseTrackingMode: "any-event" } },
+        true,
+      ),
+    ).toBe(true);
   });
 });

@@ -36,6 +36,7 @@ import {
 import {
   copyTerminalSelection,
   pasteClipboardIntoTerminal,
+  shouldHandleTerminalContextMenuPaste,
 } from "./terminalInteraction";
 import {
   createTerminalLinkHandler,
@@ -543,11 +544,19 @@ function createSlot(): Slot {
     }
   }
 
-  // Suppress redundant native DOM paste events on the hidden helper textarea.
+  // Suppress redundant native DOM paste events on the hidden helper textarea and host.
   // In Voktty, clipboard pastes are driven explicitly by isTerminalPaste (Ctrl+V / Cmd+V)
   // and host contextmenu (right-click). Native browser/WebView2 right-click dispatch
   // on focused textareas otherwise causes double-pasting in agents/TUIs.
   slot.term.textarea?.addEventListener(
+    "paste",
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true,
+  );
+  host.addEventListener(
     "paste",
     (event) => {
       event.preventDefault();
@@ -818,10 +827,11 @@ function createSlot(): Slot {
     if (isTerminalPaste(event)) {
       if (event.type === "keydown") {
         const targetLeafId = slot.currentLeafId;
-        void readTerminalClipboard().then((text) => {
-          if (text && slot.currentLeafId === targetLeafId)
-            slot.term.paste(text);
-        });
+        void pasteClipboardIntoTerminal(
+          slot.term,
+          readTerminalClipboard,
+          () => slot.currentLeafId === targetLeafId,
+        );
       }
       event.preventDefault();
       return false;
@@ -899,6 +909,14 @@ function createSlot(): Slot {
 
     const leafId = slot.currentLeafId;
     if (leafId === null) return;
+
+    // If an application running inside the terminal (e.g. Claude Code, Codex, vim, tmux, ink TUIs)
+    // has requested mouse tracking mode, it receives mouse events directly and handles
+    // right-click internally (e.g. its own native paste). Do not paste from the host
+    // to avoid duplicating the text, unless the user holds Shift to force terminal emulator paste.
+    if (!shouldHandleTerminalContextMenuPaste(term, event.shiftKey)) {
+      return;
+    }
 
     // Right click is intentionally a direct paste. xterm.paste() preserves
     // bracketed-paste mode and does not submit an extra Enter key.

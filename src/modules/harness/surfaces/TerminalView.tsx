@@ -101,8 +101,26 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
       event.preventDefault();
       term.paste(text);
     };
+    const onContextMenu = async (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const mouseMode = term.modes.mouseTrackingMode;
+      if (mouseMode && mouseMode !== "none" && !event.shiftKey) return;
+      if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            term.paste(text);
+            term.focus();
+          }
+        } catch {
+          // ignore clipboard read failure
+        }
+      }
+    };
     host.addEventListener("copy", onCopy);
     host.addEventListener("paste", onPaste);
+    host.addEventListener("contextmenu", onContextMenu);
 
     term.attachCustomKeyEventHandler((event) => {
       const mod = event.metaKey || event.ctrlKey;
@@ -239,6 +257,7 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
       applySizeRef.current = () => {};
       host.removeEventListener("copy", onCopy);
       host.removeEventListener("paste", onPaste);
+      host.removeEventListener("contextmenu", onContextMenu);
       window.removeEventListener(THEME_CHANGED_EVENT, onSchemeChange);
       dataSub.dispose();
       oscFg.dispose();
