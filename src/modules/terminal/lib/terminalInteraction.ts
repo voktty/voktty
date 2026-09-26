@@ -4,6 +4,12 @@ export type TerminalSelectionSource = {
   getSelection: () => string;
 };
 
+export type TerminalMouseModeSource = {
+  modes?: {
+    mouseTrackingMode?: string;
+  };
+};
+
 export async function copyTerminalSelection(
   terminal: TerminalSelectionSource,
   writeText: (text: string) => Promise<void>,
@@ -33,4 +39,19 @@ export async function pasteClipboardIntoTerminal(
 
   if (!text || !canPaste()) return false;
   return pasteIntoTerminal(terminal, text);
+}
+
+export function shouldHandleTerminalContextMenuPaste(
+  terminal: TerminalMouseModeSource | null,
+  shiftKey: boolean = false,
+): boolean {
+  if (!terminal) return false;
+  if (shiftKey) return true;
+
+  const mouseMode = terminal.modes?.mouseTrackingMode;
+  if (mouseMode && mouseMode !== "none") {
+    return false;
+  }
+
+  return true;
 }
