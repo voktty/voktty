@@ -159,6 +159,17 @@ function setWindowActive(active: boolean): void {
       slot,
       adapter?.isLeafFocused(slot.currentLeafId) ?? false,
     );
+    if (active && !slot.parked && slot.webglAddon) {
+      try {
+        slot.webglAddon.clearTextureAtlas();
+      } catch {
+        disposeSlotWebgl(slot);
+        attachWebgl(slot);
+      }
+      try {
+        slot.term.refresh(0, slot.term.rows - 1);
+      } catch {}
+    }
   }
 }
 
@@ -1285,7 +1296,16 @@ function scheduleUnhide(
     if (slot.currentLeafId !== expectedLeafId) return;
     slot.host.style.visibility = "";
     if (stale) {
-      if (!slot.webglAddon) attachWebgl(slot);
+      if (!slot.webglAddon) {
+        attachWebgl(slot);
+      } else {
+        try {
+          slot.webglAddon.clearTextureAtlas();
+        } catch {
+          disposeSlotWebgl(slot);
+          attachWebgl(slot);
+        }
+      }
       try {
         slot.term.refresh(0, slot.term.rows - 1);
       } catch {}
@@ -1604,7 +1624,7 @@ function attachWebgl(slot: Slot): void {
     elem.querySelectorAll<HTMLCanvasElement>("canvas"),
   );
   try {
-    const webgl = new WebglAddon();
+    const webgl = new WebglAddon(true);
     webgl.onContextLoss(() => {
       const cur = slot.webglAddon;
       if (cur === webgl) {
@@ -1763,6 +1783,11 @@ export function applyTerminalFont(font: RendererFont): void {
     if (slot.term.options.fontWeight !== next.fontWeight) {
       slot.term.options.fontWeight = next.fontWeight as FontWeight;
     }
+    if (slot.webglAddon) {
+      try {
+        slot.webglAddon.clearTextureAtlas();
+      } catch {}
+    }
     if (refit) refitSlot(slot);
   }
 }
@@ -1781,6 +1806,11 @@ export function applyTheme(): void {
   appliedThemeSignature = signature;
   for (const slot of slots) {
     slot.term.options.theme = theme;
+    if (slot.webglAddon) {
+      try {
+        slot.webglAddon.clearTextureAtlas();
+      } catch {}
+    }
   }
 }
 
@@ -1841,6 +1871,13 @@ export function refreshLeafSlot(leafId: number): void {
   unparkSlotHost(slot);
   if (usePreferencesStore.getState().terminalWebglEnabled && !slot.webglAddon) {
     attachWebgl(slot);
+  } else if (slot.webglAddon) {
+    try {
+      slot.webglAddon.clearTextureAtlas();
+    } catch {
+      disposeSlotWebgl(slot);
+      attachWebgl(slot);
+    }
   }
   // The observer skips parked slots; catch up on container resizes here.
   const container = slot.host.parentElement;
@@ -1862,6 +1899,20 @@ export function refreshLeafSlot(leafId: number): void {
   try {
     slot.term.refresh(0, slot.term.rows - 1);
   } catch {}
+}
+
+export function clearTerminalTextureAtlases(): void {
+  for (const slot of slots) {
+    if (slot.webglAddon) {
+      try {
+        slot.webglAddon.clearTextureAtlas();
+        slot.term.refresh(0, slot.term.rows - 1);
+      } catch {
+        disposeSlotWebgl(slot);
+        attachWebgl(slot);
+      }
+    }
+  }
 }
 
 export function setLeafCanonicalGrid(
