@@ -140,12 +140,14 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
 keyring = { version = "3.6", default-features = false, features = [
 	"apple-native",
 ] }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSPasteboard", "NSPasteboardItem"] }
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSURL", "NSUserDefaults"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSError", "NSSet", "NSString", "NSURL", "NSUserDefaults"] }
+objc2-user-notifications = { version = "0.3.2", features = ["UNUserNotificationCenter", "block2"] }
 window-vibrancy = "0.8"
 
 # WebKitGTK can't read external clipboard copies; mac/win webviews can.
