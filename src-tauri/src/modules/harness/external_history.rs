@@ -153,6 +153,7 @@ pub fn list_external_sessions_for_project(
                 updated_at: updated,
                 archived: meta.archived,
                 pinned: meta.pinned,
+                linked_work_item: None,
             });
         }
     }
@@ -253,6 +254,7 @@ pub fn get_external_session_record(
         context_window: None,
         branch: meta.git_branch,
         worktree_cwd: None,
+        linked_work_item: None,
         created_at: created,
         updated_at: updated,
     }))

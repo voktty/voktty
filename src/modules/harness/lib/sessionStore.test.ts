@@ -25,6 +25,24 @@ describe("isPersistableId", () => {
 });
 
 describe("sanitizeSessionForPersist", () => {
+  it("persists a canonical GitHub work-item identity", () => {
+    const session = newSession("codex", "/tmp/project");
+    session.blocks = [{ id: "u1", role: "user", text: "fix PR #42" }];
+    session.linkedWorkItem = {
+      kind: "pr",
+      repo: "openai/codex",
+      number: 42,
+      url: "https://example.com/not-trusted",
+    };
+
+    expect(sanitizeSessionForPersist(session).linkedWorkItem).toEqual({
+      kind: "pr",
+      repo: "openai/codex",
+      number: 42,
+      url: "https://github.com/openai/codex/pull/42",
+    });
+  });
+
   it("persists model provenance recorded on a user turn", () => {
     const session = newSession("claude", "/tmp/project", "claude:opus-5");
     session.blocks = [

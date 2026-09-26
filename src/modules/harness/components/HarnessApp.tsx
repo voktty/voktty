@@ -263,6 +263,7 @@ import {
   type AddToChatMode,
   type AddToChatRequest,
 } from "../lib/quoteDraft";
+import { archiveFocusedSession } from "../lib/archiveShortcut";
 import { openAddToChatSessionPane } from "../lib/workspaceTabGroups";
 import { mergeOrderedSubset, orderByIds } from "../lib/reorder";
 import type { EditorNavigationTarget, OpenFileFn } from "../lib/search";
@@ -3611,6 +3612,31 @@ export function HarnessApp({
     [onRemoveHistorySession],
   );
 
+  const onArchiveFocusedSession = useCallback(
+    (event: KeyboardEvent) => {
+      archiveFocusedSession(
+        event,
+        {
+          activeTabId: activeTabIdRef.current,
+          tabs: tabsRef.current,
+          sessions: sessionsRef.current,
+          projectTerminalFocused: projectTerminalFocusedRef.current,
+          surfaceOpen: Boolean(
+            searchViewOpenRef.current ||
+            inboxViewOpenRef.current ||
+            notesViewOpenRef.current ||
+            settingsOpenRef.current ||
+            filePickerOpenRef.current,
+          ),
+        },
+        (sessionId) => {
+          void onArchiveHistorySession(sessionId, true);
+        },
+      );
+    },
+    [onArchiveHistorySession],
+  );
+
   const onPinHistorySession = useCallback(
     async (sessionId: string, pinned: boolean) => {
       const open = sessionsRef.current.find(
@@ -5610,6 +5636,7 @@ export function HarnessApp({
 
   const actions = useRef({
     onNew,
+    onArchiveFocusedSession,
     onCloseOtherTabs,
     onClosePane,
     onNext,
@@ -5637,6 +5664,7 @@ export function HarnessApp({
   });
   actions.current = {
     onNew,
+    onArchiveFocusedSession,
     onCloseOtherTabs,
     onClosePane,
     onNext,
@@ -5676,6 +5704,10 @@ export function HarnessApp({
     const onKey = (e: KeyboardEvent) => {
       const cmd = tabCommand(e);
       if (cmd) {
+        if (cmd === "archive-session") {
+          actions.current.onArchiveFocusedSession(e);
+          return;
+        }
         const target = e.target instanceof Element ? e.target : null;
         const listNavigation =
           cmd === "prev-session" ||

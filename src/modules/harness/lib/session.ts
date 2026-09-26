@@ -242,6 +242,14 @@ export type RuntimeMode =
   | "act"
   | "review";
 
+/** One GitHub issue or pull request associated with a coding session. */
+export type LinkedWorkItem = {
+  kind: "issue" | "pr";
+  repo: string;
+  number: number;
+  url: string;
+};
+
 export const RUNTIME_MODES: RuntimeMode[] = [
   "supervised",
   "auto-accept-edits",
@@ -319,6 +327,8 @@ export type Session = {
   composerSeed?: string;
   /** Inbox issue/PR chip shown above the composer. In-memory, one-shot. */
   inboxCard?: InboxComposerCard;
+  /** GitHub issue or pull request shown on the persisted session card. */
+  linkedWorkItem?: LinkedWorkItem;
   /** Note chip shown above the composer. In-memory, one-shot. */
   noteCard?: NoteComposerCard;
   /** Handoff chip shown above the composer. In-memory, one-shot. */

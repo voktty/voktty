@@ -1007,7 +1007,6 @@ function SidebarComponent({
       <SessionRenameRow
         session={session}
         isActive={session.id === activeSessionId}
-        busy={busySessionIds.has(session.id)}
         needsApproval={approvalSessionIds.has(session.id)}
         onCommit={(title) => {
           onRenameSession(session.id, title);

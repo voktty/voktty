@@ -1,6 +1,7 @@
 import {
   buildThreadTitlePrompt,
-  parseGeneratedThreadTitle,
+  parseGeneratedSessionTitle,
+  type GeneratedSessionTitle,
 } from "../sessionTitle";
 import { runCodexTextPrompt } from "./codexText";
 
@@ -12,7 +13,7 @@ export async function generateCodexSessionTitle(input: {
   cwd: string;
   message: string;
   providerAccountId?: string;
-}): Promise<string | null> {
+}): Promise<GeneratedSessionTitle | null> {
   try {
     const output = await runCodexTextPrompt({
       cwd: input.cwd,
@@ -20,9 +21,10 @@ export async function generateCodexSessionTitle(input: {
       prompt: buildThreadTitlePrompt(input.message),
       timeoutMs: TITLE_TIMEOUT_MS,
     });
-    return parseGeneratedThreadTitle(output);
+    return parseGeneratedSessionTitle(output, input.message);
   } catch (error) {
     console.debug("[monocode] session title", error);
     return null;
   }
 }
+
