@@ -6,7 +6,14 @@ const SELECTIONS_KEY = "monocode.providerAccountSelections.v1";
 const CHANGE_EVENT = "monocode-provider-accounts-changed";
 
 export const DEFAULT_PROVIDER_ACCOUNT_ID = "default";
-const DEFAULT_PROVIDER_ACCOUNT_LABEL = "Default account";
+export const DEFAULT_PROVIDER_ACCOUNT_LABEL = "Default account";
+
+export function displayProviderAccountLabel(
+  label: string,
+  localizedDefault: string,
+): string {
+  return label === DEFAULT_PROVIDER_ACCOUNT_LABEL ? localizedDefault : label;
+}
 
 /** Legacy sessions predate persisted account ids and belong to the default profile. */
 export function sameProviderAccountId(

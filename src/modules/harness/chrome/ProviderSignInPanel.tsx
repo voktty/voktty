@@ -1,3 +1,4 @@
+import { useTranslation } from "@/modules/i18n";
 import type { HarnessId } from "../lib/session";
 import { HARNESS_TITLE } from "../lib/session";
 import { HarnessIcon } from "./HarnessIcon";
@@ -22,6 +23,7 @@ export function ProviderSignInPanel({
   completeActionLabel?: string;
   autoFocus?: boolean;
 }) {
+  const { t } = useTranslation();
   const title = HARNESS_TITLE[harness];
   const complete = state === "complete";
 
@@ -34,12 +36,14 @@ export function ProviderSignInPanel({
         <HarnessIcon harness={harness} className="size-9" />
       </span>
       <h2 className="mt-3.5 text-[15px] font-medium leading-5 text-content">
-        {complete ? `Signed in to ${title}` : "Authentication required"}
+        {complete
+          ? t("harness.accounts.signedInTo", { name: title })
+          : t("harness.accounts.authenticationRequired")}
       </h2>
       <p className="mt-1 max-w-56 text-[11px] leading-4 text-content/45">
         {complete
-          ? "You can retry your last message now."
-          : `Sign in to continue using ${title}.`}
+          ? t("harness.accounts.retryLastMessage")
+          : t("harness.accounts.signInToContinue", { name: title })}
       </p>
       <button
         type="button"
@@ -54,10 +58,10 @@ export function ProviderSignInPanel({
           <Check className="size-3.5" aria-hidden />
         ) : null}
         {state === "running"
-          ? "Waiting for browser…"
+          ? t("harness.accounts.waitingForBrowser")
           : complete
-            ? (completeActionLabel ?? "Signed in")
-            : `Sign in to ${title}`}
+            ? (completeActionLabel ?? t("harness.accounts.signedIn"))
+            : t("harness.accounts.signInTo", { name: title })}
       </button>
       {state === "error" && error ? (
         <p

@@ -328,6 +328,7 @@ export function searchSettings(
   query: string,
   limitOrLabel?: number | ((section: SettingsSectionId) => string),
   getSectionLabel?: (section: SettingsSectionId) => string,
+  getEntryLabel?: (entryId: string) => string,
 ): SettingsSearchResult[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
@@ -341,7 +342,8 @@ export function searchSettings(
     sec;
 
   for (const entry of SETTINGS_INDEX) {
-    const score = matchScore(needle, entry.label, entry.keywords);
+    const label = getEntryLabel?.(entry.id) ?? entry.label;
+    const score = matchScore(needle, label, `${entry.label} ${entry.keywords ?? ""}`);
     if (score == null) continue;
     scored.push({
       score,
@@ -350,8 +352,8 @@ export function searchSettings(
         section: entry.section,
         sectionLabel: resolveSectionLabel(entry.section),
         settingId: entry.id,
-        label: entry.label,
-        title: entry.label,
+        label,
+        title: label,
       },
     });
   }
@@ -708,13 +710,17 @@ export const KEYBINDINGS: KeybindingRow[] = [
 export function filterKeybindings(
   rows: KeybindingRow[],
   query: string,
+  labelCommand?: (command: string) => string,
 ): KeybindingRow[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return rows;
-  return rows.filter(
-    (row) =>
+  return rows.filter((row) => {
+    const command = labelCommand?.(row.command) ?? row.command;
+    return (
+      command.toLowerCase().includes(needle) ||
       row.command.toLowerCase().includes(needle) ||
       row.keys.toLowerCase().includes(needle) ||
-      row.when.toLowerCase().includes(needle),
-  );
+      row.when.toLowerCase().includes(needle)
+    );
+  });
 }

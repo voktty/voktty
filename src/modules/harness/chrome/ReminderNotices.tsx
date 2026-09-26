@@ -169,7 +169,7 @@ export function ReminderNotices({
         <ExplorerMenu
           x={snooze.x}
           y={snooze.y}
-          items={sessionReminderPresets()}
+          items={sessionReminderPresets(t)}
           ariaLabel={t("harness.reminders.snooze")}
           onClose={() => setSnooze(null)}
           onPick={(id) => {

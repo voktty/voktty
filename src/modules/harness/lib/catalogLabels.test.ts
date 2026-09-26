@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  keybindingCommandLabel,
+  keybindingWhenLabel,
+  modelSettingDescription,
   modelSettingLabel,
   modelSettingOptionLabel,
+  settingsEntryLabel,
   settingsSectionDescription,
   settingsSectionLabel,
 } from "./catalogLabels";
 import type { ModelSetting } from "./models";
+import { KEYBINDINGS, SETTINGS_INDEX } from "./settings";
 
 const t = (key: string) => key;
 
@@ -48,5 +53,30 @@ describe("harness catalog labels", () => {
     expect(settingsSectionDescription(t, "archive")).toBe(
       "harness.modelSettings.sectionDescriptions.archive",
     );
+  });
+
+  it("covers every visible keybinding and settings search label", () => {
+    for (const row of KEYBINDINGS) {
+      expect(keybindingCommandLabel(t, row.command)).toMatch(
+        /^harness\.keybindings\.commands\./,
+      );
+    }
+    expect(keybindingWhenLabel(t, "Always")).toBe("harness.keybindings.always");
+    expect(keybindingWhenLabel(t, "!editorFocus")).toBe("!editorFocus");
+    for (const entry of SETTINGS_INDEX) {
+      expect(settingsEntryLabel(t, entry.id)).toMatch(
+        /^harness\.settingsEntries\./,
+      );
+    }
+    expect(
+      modelSettingDescription(t, {
+        id: "fast",
+        label: "Fast",
+        kind: "toggle",
+        value: "false",
+        description: "raw",
+        options: [],
+      }),
+    ).toBe("harness.modelSettings.fastDescription");
   });
 });

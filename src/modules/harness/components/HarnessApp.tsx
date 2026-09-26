@@ -4334,7 +4334,7 @@ export function HarnessApp({
         enqueueHarnessEvent(sessionId, {
           type: "session.error",
           message:
-            "This conversation uses a removed provider account. Switch accounts from the usage control to start a new conversation.",
+            t("harness.accounts.removedAccount"),
         });
         flushHarnessEvents();
         return;

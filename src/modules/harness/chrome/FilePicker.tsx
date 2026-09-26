@@ -331,7 +331,7 @@ function ActionList({
     <div
       ref={lockOverscroll}
       role="listbox"
-      aria-label="Commands"
+      aria-label={t("harness.modelPicker.commands")}
       className="max-h-[min(380px,50vh)] overflow-y-auto overscroll-none px-1.5 pb-1.5"
     >
       {actions.map((action, index) => {
