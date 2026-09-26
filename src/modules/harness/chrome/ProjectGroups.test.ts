@@ -62,7 +62,7 @@ describe("ProjectGroups rail rendering", () => {
     expect(html).toContain('data-project-group="clients"');
     expect(html).toContain('role="group"');
     expect(html).toContain('aria-label="Client work"');
-    expect(html).toContain("harness.projectGroups.namedGroupOptions");
+    expect(html).toContain("Client work group options");
     expect(html).toContain("data-project-group-items");
   });
 

@@ -11,6 +11,6 @@ describe("BinaryFileView", () => {
         cwd: "/repo",
       }),
     );
-    expect(html).toContain("harness.binary.opening");
+    expect(html).toContain("Opening image.png…");
   });
 });

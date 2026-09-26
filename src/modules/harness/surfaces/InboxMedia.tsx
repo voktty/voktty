@@ -64,6 +64,7 @@ export function InboxMedia({ src, alt }: Props) {
   if (state.type.kind === "video") {
     return (
       <span className="inbox-media my-2 inline-block w-full max-w-xl overflow-hidden rounded-[10px] border border-content/10 bg-content/6">
+        {/* biome-ignore lint/a11y/useMediaCaption: local user attachment preview */}
         <video
           src={state.url}
           controls
