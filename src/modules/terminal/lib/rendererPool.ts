@@ -159,17 +159,6 @@ function setWindowActive(active: boolean): void {
       slot,
       adapter?.isLeafFocused(slot.currentLeafId) ?? false,
     );
-    if (active && !slot.parked && slot.webglAddon) {
-      try {
-        slot.webglAddon.clearTextureAtlas();
-      } catch {
-        disposeSlotWebgl(slot);
-        attachWebgl(slot);
-      }
-      try {
-        slot.term.refresh(0, slot.term.rows - 1);
-      } catch {}
-    }
   }
 }
 
@@ -1296,16 +1285,7 @@ function scheduleUnhide(
     if (slot.currentLeafId !== expectedLeafId) return;
     slot.host.style.visibility = "";
     if (stale) {
-      if (!slot.webglAddon) {
-        attachWebgl(slot);
-      } else {
-        try {
-          slot.webglAddon.clearTextureAtlas();
-        } catch {
-          disposeSlotWebgl(slot);
-          attachWebgl(slot);
-        }
-      }
+      if (!slot.webglAddon) attachWebgl(slot);
       try {
         slot.term.refresh(0, slot.term.rows - 1);
       } catch {}
@@ -1624,7 +1604,7 @@ function attachWebgl(slot: Slot): void {
     elem.querySelectorAll<HTMLCanvasElement>("canvas"),
   );
   try {
-    const webgl = new WebglAddon(true);
+    const webgl = new WebglAddon();
     webgl.onContextLoss(() => {
       const cur = slot.webglAddon;
       if (cur === webgl) {
@@ -1871,13 +1851,6 @@ export function refreshLeafSlot(leafId: number): void {
   unparkSlotHost(slot);
   if (usePreferencesStore.getState().terminalWebglEnabled && !slot.webglAddon) {
     attachWebgl(slot);
-  } else if (slot.webglAddon) {
-    try {
-      slot.webglAddon.clearTextureAtlas();
-    } catch {
-      disposeSlotWebgl(slot);
-      attachWebgl(slot);
-    }
   }
   // The observer skips parked slots; catch up on container resizes here.
   const container = slot.host.parentElement;
