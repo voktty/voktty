@@ -401,4 +401,3 @@ mod tests {
         assert_eq!(result.matches[0].preview, "find me");
     }
 }
-
