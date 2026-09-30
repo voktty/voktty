@@ -77,7 +77,7 @@ type FileLinkMenu = {
   navigation?: EditorNavigation;
 };
 
-function fileLinkMenuItems(
+export function fileLinkMenuItems(
   canOpenInVoktty: boolean,
   canCopyRelativePath: boolean,
   t: (key: string) => string,
