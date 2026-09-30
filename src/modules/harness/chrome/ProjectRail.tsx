@@ -19,6 +19,7 @@ import {
   Search,
   Settings,
   Trash2,
+  Zap,
 } from "./icons";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { t, useTranslation } from "@/modules/i18n";
@@ -206,6 +207,8 @@ type Props = {
   notesEnabled?: boolean;
   onOpenNotes?: () => void;
   notesActive?: boolean;
+  onOpenAutomations?: () => void;
+  automationsActive?: boolean;
   onTogglePanel?: () => void;
   onSelectProject: (path: string) => void;
   onOpenProject: () => void;
@@ -236,6 +239,8 @@ export function ProjectRail({
   notesEnabled = true,
   onOpenNotes,
   notesActive = false,
+  onOpenAutomations,
+  automationsActive = false,
   onTogglePanel,
   onSelectProject,
   onOpenProject,
@@ -673,6 +678,13 @@ export function ProjectRail({
                 ariaLabel={t("harness.chrome.notes")}
               />
             ) : null}
+            <RailAction
+              label="Automations"
+              icon={Zap}
+              onClick={onOpenAutomations}
+              active={automationsActive}
+              ariaLabel="Automations"
+            />
           </div>
 
           <div
@@ -691,7 +703,12 @@ export function ProjectRail({
                 unavailablePaths={unavailablePaths}
                 sortable={pinnedSortable}
                 pinned
-                searchActive={searchActive || inboxActive || notesActive}
+                searchActive={
+                  searchActive ||
+                  inboxActive ||
+                  notesActive ||
+                  automationsActive
+                }
                 onSelect={handleSelectProject}
                 onTogglePin={onTogglePin}
                 onContextMenu={onProjectContextMenu}
@@ -716,7 +733,12 @@ export function ProjectRail({
                       cwd={cwd}
                       busy={busy}
                       unavailablePaths={unavailablePaths}
-                      searchActive={searchActive || inboxActive || notesActive}
+                      searchActive={
+                        searchActive ||
+                        inboxActive ||
+                        notesActive ||
+                        automationsActive
+                      }
                       onSelect={handleSelectProject}
                       onTogglePin={onTogglePin}
                       onContextMenu={onProjectContextMenu}
@@ -762,7 +784,12 @@ export function ProjectRail({
               unavailablePaths={unavailablePaths}
               sortable={projectSortable}
               pinned={false}
-              searchActive={searchActive || inboxActive || notesActive}
+              searchActive={
+                searchActive ||
+                inboxActive ||
+                notesActive ||
+                automationsActive
+              }
               onSelect={handleSelectProject}
               onTogglePin={onTogglePin}
               onContextMenu={onProjectContextMenu}

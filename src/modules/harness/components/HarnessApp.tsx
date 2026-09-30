@@ -17,10 +17,26 @@ import {
 import { flushSync } from "react-dom";
 import { Sidebar } from "../chrome/Sidebar";
 import { TitleBar, type Tab as TitleTab } from "../chrome/TitleBar";
+import { useInboxUnseen } from "../hooks/useInboxUnseen";
 import { useInputNotifications } from "../hooks/useInputNotifications";
 import { useProjectBranches } from "../hooks/useProjectBranches";
 import { useSessionReminders } from "../hooks/useSessionReminders";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
+import {
+  claimDueAutomations,
+  recoverAutomationRuns,
+  updateAutomationRun,
+  type Automation,
+  type AutomationRun,
+} from "../lib/automations";
+import {
+  claimInboxAutomationRuns,
+} from "../lib/automationEvents";
+import {
+  loadSessionFolders,
+  placeSessionInFolder,
+  saveSessionFolders,
+} from "../lib/sessionFolders";
 import {
   LAYOUT_CHANGE_EVENT,
   loadProjectRailOpen,
@@ -288,6 +304,7 @@ import {
   HARNESS_TITLE,
   type HarnessId,
   hasPendingApproval,
+  type LinkedWorkItem,
   type ModelTarget,
   newDefaultSession,
   newSession,
@@ -430,6 +447,11 @@ const LazyInboxView = lazy(() =>
 const LazyNotesView = lazy(() =>
   import("../surfaces/NotesView").then((module) => ({
     default: module.NotesView,
+  })),
+);
+const LazyAutomationsView = lazy(() =>
+  import("../surfaces/AutomationsView").then((module) => ({
+    default: module.AutomationsView,
   })),
 );
 const LazySearchView = lazy(() =>
@@ -751,6 +773,7 @@ export function HarnessApp({
     useState<InboxSessionPortal | null>(null);
   const openingInboxSessions = useRef(new Map<string, Promise<string>>());
   const [notesViewOpen, setNotesViewOpen] = useState(false);
+  const [automationsViewOpen, setAutomationsViewOpen] = useState(false);
   const notesEnabled = useSyncExternalStore(
     subscribeNotesEnabled,
     loadNotesEnabled,
@@ -830,6 +853,8 @@ export function HarnessApp({
   inboxViewOpenRef.current = inboxViewOpen;
   const notesViewOpenRef = useRef(notesViewOpen);
   notesViewOpenRef.current = notesViewOpen;
+  const automationsViewOpenRef = useRef(automationsViewOpen);
+  automationsViewOpenRef.current = automationsViewOpen;
   const settingsOpenRef = useRef(settingsOpen);
   settingsOpenRef.current = settingsOpen;
   const filePickerOpenRef = useRef(filePickerOpen);
@@ -851,6 +876,9 @@ export function HarnessApp({
   const turnGen = useRef(new Map<string, number>());
   const editedResends = useRef(createEditedResendCoordinator()).current;
   const queueDispatchingRef = useRef<Set<string>>(new Set());
+  const automationRecoveryRef = useRef<Promise<void> | null>(null);
+  const automationRecoveryCutoffRef = useRef<string | null>(null);
+  const automationActiveRuns = useRef(new Map<string, string>());
   const dirtyFilesRef = useRef(dirtyFiles);
   dirtyFilesRef.current = dirtyFiles;
   const removingSessionIds = useRef(new Set<string>());
@@ -1184,6 +1212,17 @@ export function HarnessApp({
     busyForDoneRef.current !== busySessionIds ||
     focusedForDoneRef.current !== activeSessionId
   ) {
+    for (const prevId of busyForDoneRef.current) {
+      if (!busySessionIds.has(prevId)) {
+        const runId = automationActiveRuns.current.get(prevId);
+        if (runId) {
+          const finishedSession = sessions.find((s) => s.id === prevId);
+          const hasError = finishedSession?.blocks.some((b) => b.notice === "error");
+          void updateAutomationRun(runId, hasError ? "failed" : "succeeded");
+          automationActiveRuns.current.delete(prevId);
+        }
+      }
+    }
     unseenFinishedRef.current = nextUnseenFinishedSessions({
       previousBusyIds: busyForDoneRef.current,
       busyIds: busySessionIds,
@@ -1227,6 +1266,7 @@ export function HarnessApp({
             !searchViewOpenRef.current &&
             !inboxViewOpenRef.current &&
             !notesViewOpenRef.current &&
+            !automationsViewOpenRef.current &&
             !settingsOpenRef.current &&
             !projectTerminalFocusedRef.current
           ) {
@@ -1631,6 +1671,7 @@ export function HarnessApp({
       setSearchViewOpen(false);
       setInboxViewOpen(false);
       setNotesViewOpen(false);
+      setAutomationsViewOpen(false);
       setSettingsOpen(false);
 
       const plan = planReleaseNotesOpen(tabsRef.current, version);
@@ -1652,6 +1693,7 @@ export function HarnessApp({
     setSearchViewOpen(false);
     setInboxViewOpen(false);
     setNotesViewOpen(false);
+    setAutomationsViewOpen(false);
     const cwd = active?.cwd ?? sessionDefaults?.cwd ?? projectCwd;
     const session = newDefaultSession(cwd, sessionDefaults?.runtimeMode);
     const tab = newTab(session.id);
@@ -1673,6 +1715,7 @@ export function HarnessApp({
       const start = (description?: string) => {
         setInboxViewOpen(false);
         setNotesViewOpen(false);
+        setAutomationsViewOpen(false);
         setSidebarTab("sessions");
         const cwd =
           item.projectPath || active?.cwd || sessionDefaults?.cwd || projectCwd;
@@ -1829,6 +1872,7 @@ export function HarnessApp({
       setSearchViewOpen(false);
       setInboxViewOpen(false);
       setNotesViewOpen(false);
+      setAutomationsViewOpen(false);
       setSidebarTab("sessions");
       const cwd =
         (card.sourceCwd && looksLikeProject(card.sourceCwd)
@@ -3641,6 +3685,7 @@ export function HarnessApp({
             searchViewOpenRef.current ||
             inboxViewOpenRef.current ||
             notesViewOpenRef.current ||
+            automationsViewOpenRef.current ||
             settingsOpenRef.current ||
             filePickerOpenRef.current,
           ),
@@ -3844,6 +3889,7 @@ export function HarnessApp({
       setSearchViewOpen(false);
       setInboxViewOpen(false);
       setNotesViewOpen(false);
+      setAutomationsViewOpen(false);
       const normalized = normalizeProjectPath(path);
       if (!looksLikeProject(normalized)) return;
 
@@ -5048,6 +5094,172 @@ export function HarnessApp({
     [openSessionBeside],
   );
 
+  const assignAutomationFolder = useCallback(
+    (folderId: string | undefined, sessionId: string, cwd: string) => {
+      if (!folderId || !looksLikeProject(cwd)) return;
+      const current = loadSessionFolders(cwd);
+      const updated = placeSessionInFolder(
+        current,
+        { kind: "existing", folderId },
+        sessionId,
+      );
+      saveSessionFolders(cwd, updated.folders);
+    },
+    [],
+  );
+
+  const launchAutomation = useCallback(
+    async (
+      automation: Automation,
+      run: AutomationRun,
+      options?: {
+        prompt?: string;
+        linkedWorkItem?: LinkedWorkItem;
+        focus?: boolean;
+        openBeside?: boolean;
+      },
+    ) => {
+      const sessionId = run.sessionId || run.id;
+      const cwd = automation.cwd;
+      const model = resolveModel(automation.harness, automation.model).id;
+      const prompt = options?.prompt || run.prompt || automation.prompt;
+      const session: Session = {
+        ...newSession(
+          automation.harness,
+          cwd,
+          model,
+          automation.runtimeMode,
+          automation.modelSettings,
+        ),
+        id: sessionId,
+        automationId: automation.id,
+        linkedWorkItem: options?.linkedWorkItem,
+        title: formatSessionTitle(
+          automation.harness,
+          automation.name || HARNESS_LABEL[automation.harness],
+        ),
+      };
+
+      assignAutomationFolder(
+        automation.sessionFolderId,
+        sessionId,
+        cwd,
+      );
+
+      if (options?.focus) {
+        setAutomationsViewOpen(false);
+        setSessions((prev: any) =>
+          prev.some((s: any) => s.id === sessionId) ? prev : [...prev, session],
+        );
+        sessionsRef.current = sessionsRef.current.some((s: any) => s.id === sessionId)
+          ? sessionsRef.current
+          : [...sessionsRef.current, session];
+        if (options.openBeside && active?.id) {
+          openSessionBeside(active.id, session, cwd);
+        } else if (!focusOpenSession(sessionId)) {
+          const tab = newTab(sessionId);
+          appendTab(tab, cwd);
+          setActiveTabId(tab.id);
+          activeTabIdRef.current = tab.id;
+          setProjectTerminalFocused(false);
+          setComposerFocused(true);
+        }
+      } else {
+        setSessions((prev: any) =>
+          prev.some((s: any) => s.id === sessionId) ? prev : [...prev, session],
+        );
+        sessionsRef.current = sessionsRef.current.some((s: any) => s.id === sessionId)
+          ? sessionsRef.current
+          : [...sessionsRef.current, session];
+      }
+
+      const summary = summaryFromSession(session);
+      setHistory((current: any) => mergeHistorySummary(current, summary));
+
+      automationActiveRuns.current.set(sessionId, run.id);
+      void updateAutomationRun(run.id, "running", { sessionId });
+
+      if (prompt) {
+        onSubmit(sessionId, prompt);
+      }
+    },
+    [
+      active?.id,
+      appendTab,
+      assignAutomationFolder,
+      focusOpenSession,
+      onSubmit,
+      openSessionBeside,
+    ],
+  );
+
+  const ensureAutomationRecovery = useCallback(async () => {
+    if (automationRecoveryRef.current) {
+      return automationRecoveryRef.current;
+    }
+    const cutoff = Date.now();
+    automationRecoveryCutoffRef.current = String(cutoff);
+    const task = (async () => {
+      try {
+        await recoverAutomationRuns(cutoff);
+      } catch (error) {
+        console.error("Failed to recover automation runs:", error);
+      } finally {
+        automationRecoveryRef.current = null;
+      }
+    })();
+    automationRecoveryRef.current = task;
+    return task;
+  }, []);
+
+  useEffect(() => {
+    void ensureAutomationRecovery();
+    let unmounted = false;
+    const poll = async () => {
+      if (document.hidden) return;
+      try {
+        const claims = await claimDueAutomations();
+        if (unmounted) return;
+        for (const claim of claims) {
+          void launchAutomation(claim.automation, claim.run, { focus: false });
+        }
+      } catch (error) {
+        console.error("Automation claim failed:", error);
+      }
+    };
+    const interval = window.setInterval(() => {
+      void poll();
+    }, 15000);
+    void poll();
+    return () => {
+      unmounted = true;
+      window.clearInterval(interval);
+    };
+  }, [ensureAutomationRecovery, launchAutomation]);
+
+  const onInboxAppeared = useCallback(
+    async (items: InboxItem[]) => {
+      if (items.length === 0) return;
+      try {
+        const claims = await claimInboxAutomationRuns(items);
+        for (const claim of claims) {
+          void launchAutomation(claim.automation, claim.run, {
+            prompt: claim.prompt,
+            linkedWorkItem: claim.linkedWorkItem,
+            focus: false,
+          });
+        }
+      } catch (error) {
+        console.error("Inbox automation trigger failed:", error);
+      }
+    },
+    [launchAutomation],
+  );
+
+  useInboxUnseen(recents, sidebarCwd, {
+    onAppeared: onInboxAppeared,
+  });
+
   const autoContinueKey = sessions
     .filter(
       (session) => canAutoContinue(session) && isLiveHarness(session.harness),
@@ -5387,6 +5599,7 @@ export function HarnessApp({
       setSearchViewOpen(false);
       setInboxViewOpen(false);
       setNotesViewOpen(false);
+      setAutomationsViewOpen(false);
       onOpenApprovalSession(sessionId);
     },
     [onOpenApprovalSession],
@@ -5470,6 +5683,7 @@ export function HarnessApp({
     setSearchViewOpen(false);
     setInboxViewOpen(false);
     setNotesViewOpen(false);
+    setAutomationsViewOpen(false);
     setFilePickerInitialQuery("");
     setFilePickerResetToken((token) => token + 1);
     setFilePickerOpen(true);
@@ -5479,6 +5693,7 @@ export function HarnessApp({
     setSearchViewOpen(false);
     setInboxViewOpen(false);
     setNotesViewOpen(false);
+    setAutomationsViewOpen(false);
     setFilePickerInitialQuery(">");
     setFilePickerResetToken((token) => token + 1);
     setFilePickerOpen(true);
@@ -5495,6 +5710,7 @@ export function HarnessApp({
     setSearchViewOpen(false);
     setInboxViewOpen(false);
     setNotesViewOpen(false);
+    setAutomationsViewOpen(false);
     setSidebarOpen(true);
     saveSidebarOpen(true);
     setSidebarTab("files");
@@ -5507,6 +5723,7 @@ export function HarnessApp({
     setSettingsOpen(false);
     setInboxViewOpen(false);
     setNotesViewOpen(false);
+    setAutomationsViewOpen(false);
     setSearchViewOpen(true);
     setSearchViewFocusToken((token) => token + 1);
   }, []);
@@ -5520,6 +5737,7 @@ export function HarnessApp({
     setSettingsOpen(false);
     setSearchViewOpen(false);
     setNotesViewOpen(false);
+    setAutomationsViewOpen(false);
     if (deckLayout) {
       setInboxViewOpen(true);
       return;
@@ -5540,6 +5758,7 @@ export function HarnessApp({
     setSettingsOpen(false);
     setSearchViewOpen(false);
     setInboxViewOpen(false);
+    setAutomationsViewOpen(false);
     setNotesViewOpen(true);
   }, []);
 
@@ -5547,12 +5766,36 @@ export function HarnessApp({
     setNotesViewOpen(false);
   }, []);
 
+  const onOpenAutomations = useCallback(() => {
+    setFilePickerOpen(false);
+    setSettingsOpen(false);
+    setSearchViewOpen(false);
+    setInboxViewOpen(false);
+    setNotesViewOpen(false);
+    setAutomationsViewOpen(true);
+  }, []);
+
+  const onLeaveAutomations = useCallback(() => {
+    setAutomationsViewOpen(false);
+  }, []);
+
+  const onOpenAutomationSession = useCallback(
+    (sessionId: string) => {
+      setAutomationsViewOpen(false);
+      if (!focusOpenSession(sessionId)) {
+        void onSelectHistorySession(sessionId);
+      }
+    },
+    [focusOpenSession, onSelectHistorySession],
+  );
+
   const openSettings = useCallback(
     (section?: SettingsSectionId, anchor?: SettingsAnchor) => {
       setFilePickerOpen(false);
       setSearchViewOpen(false);
       setInboxViewOpen(false);
       setNotesViewOpen(false);
+      setAutomationsViewOpen(false);
       if (section) {
         setSettingsSection(section);
         saveSettingsSection(section);
@@ -5604,14 +5847,26 @@ export function HarnessApp({
       setNotesViewOpen(false);
       return;
     }
+    if (automationsViewOpen) {
+      setAutomationsViewOpen(false);
+      return;
+    }
     onVisitBack();
-  }, [onVisitBack, searchViewOpen, settingsOpen, inboxViewOpen, notesViewOpen]);
+  }, [
+    onVisitBack,
+    searchViewOpen,
+    settingsOpen,
+    inboxViewOpen,
+    notesViewOpen,
+    automationsViewOpen,
+  ]);
 
   const onRailForward = useCallback(() => {
     setSearchViewOpen(false);
     setSettingsOpen(false);
     setInboxViewOpen(false);
     setNotesViewOpen(false);
+    setAutomationsViewOpen(false);
     onVisitForward();
   }, [onVisitForward]);
 
@@ -5741,6 +5996,8 @@ export function HarnessApp({
     onOpenSearch,
     onOpenInbox,
     onOpenNotes,
+    onOpenAutomations,
+    onLeaveAutomations,
     pickProject,
     onNewTerminal,
     onNewTerminalTab,
@@ -5769,6 +6026,8 @@ export function HarnessApp({
     onOpenSearch,
     onOpenInbox,
     onOpenNotes,
+    onOpenAutomations,
+    onLeaveAutomations,
     pickProject,
     onNewTerminal,
     onNewTerminalTab,
@@ -5814,6 +6073,7 @@ export function HarnessApp({
             searchViewOpenRef.current ||
             inboxViewOpenRef.current ||
             notesViewOpenRef.current ||
+            automationsViewOpenRef.current ||
             settingsOpenRef.current ||
             filePickerOpenRef.current;
           if (
@@ -5890,6 +6150,7 @@ export function HarnessApp({
         !searchViewOpenRef.current &&
         !inboxViewOpenRef.current &&
         !notesViewOpenRef.current &&
+        !automationsViewOpenRef.current &&
         handleEditorFindKey(e)
       ) {
         e.stopPropagation();
@@ -6116,7 +6377,8 @@ export function HarnessApp({
           searchViewOpen ||
           settingsOpen ||
           inboxViewOpen ||
-          notesViewOpen
+          notesViewOpen ||
+          automationsViewOpen
         }
         canGoForward={tabVisitNav.canForward}
         onGoBack={onRailBack}
@@ -6142,10 +6404,12 @@ export function HarnessApp({
         onSearch={onOpenSearch}
         onOpenInbox={onOpenInbox}
         onOpenNotes={notesEnabled ? onOpenNotes : undefined}
+        onOpenAutomations={onOpenAutomations}
         onGoToFile={deckLayout ? onGoToFile : undefined}
         searchActive={searchViewOpen}
         inboxActive={inboxViewOpen}
         notesActive={notesViewOpen}
+        automationsActive={automationsViewOpen}
         notesEnabled={notesEnabled}
         projectRailOpen={projectRailOpen}
         onToggleProjectRail={onToggleProjectRail}
@@ -6160,18 +6424,27 @@ export function HarnessApp({
       <div className="body-glass flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           className={
-            searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen
+            searchViewOpen ||
+            settingsOpen ||
+            inboxViewOpen ||
+            notesViewOpen ||
+            automationsViewOpen
               ? "hidden"
               : "flex min-h-0 min-w-0 flex-1 flex-col"
           }
           aria-hidden={
-            searchViewOpen || settingsOpen || inboxViewOpen || notesViewOpen
+            searchViewOpen ||
+            settingsOpen ||
+            inboxViewOpen ||
+            notesViewOpen ||
+            automationsViewOpen
           }
           inert={
             searchViewOpen ||
             settingsOpen ||
             inboxViewOpen ||
             notesViewOpen ||
+            automationsViewOpen ||
             undefined
           }
         >
@@ -6430,6 +6703,22 @@ export function HarnessApp({
             />
           </Suspense>
         ) : null}
+        {automationsViewOpen ? (
+          <Suspense fallback={null}>
+            <LazyAutomationsView
+              cwd={sidebarCwd}
+              recents={recents}
+              besideRail={deckLayout && projectRailOpen}
+              compactRail={deckLayout && !projectRailOpen}
+              onClose={onLeaveAutomations}
+              onToggleSidebar={deckLayout ? onToggleSidebar : undefined}
+              onLaunch={(automation, run) =>
+                launchAutomation(automation, run, { focus: true })
+              }
+              onOpenSession={onOpenAutomationSession}
+            />
+          </Suspense>
+        ) : null}
         {settingsOpen ? (
           <Suspense fallback={null}>
             <LazySettingsView
@@ -6454,6 +6743,7 @@ export function HarnessApp({
         {searchViewOpen ||
         inboxViewOpen ||
         notesViewOpen ||
+        automationsViewOpen ||
         settingsOpen ? null : (
           <Suspense fallback={null}>
             <LazyUsageFooter

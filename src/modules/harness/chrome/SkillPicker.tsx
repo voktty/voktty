@@ -21,6 +21,8 @@ type Props = {
   active: number;
   creating: boolean;
   cwd: string;
+  compact?: boolean;
+  showCreate?: boolean;
   error?: string | null;
   busy?: boolean;
   onActive: (index: number) => void;
@@ -36,6 +38,8 @@ export function SkillPicker({
   active,
   creating,
   cwd,
+  compact: _compact = false,
+  showCreate = true,
   error,
   busy,
   onActive,
@@ -69,15 +73,17 @@ export function SkillPicker({
             onActive={onActive}
             onPick={onPick}
           />
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={onStartCreate}
-            className="flex w-full items-center gap-2 border-t border-content/10 px-2.5 py-2 text-left text-[12px] text-content/70 hover:bg-content/10 hover:text-content"
-          >
-            <Plus className="size-3.5 shrink-0" strokeWidth={1.75} />
-            {t("harness.chrome.newSkill")}
-          </button>
+          {showCreate ? (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={onStartCreate}
+              className="flex w-full items-center gap-2 border-t border-content/10 px-2.5 py-2 text-left text-[12px] text-content/70 hover:bg-content/10 hover:text-content"
+            >
+              <Plus className="size-3.5 shrink-0" strokeWidth={1.75} />
+              {t("harness.chrome.newSkill")}
+            </button>
+          ) : null}
         </>
       )}
     </div>

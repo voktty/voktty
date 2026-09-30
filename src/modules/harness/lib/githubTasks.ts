@@ -15,7 +15,7 @@ import {
 } from "./recents";
 
 export type GithubTaskKind = "issue" | "pr";
-export type InboxKind = GithubTaskKind | "linear";
+export type InboxKind = GithubTaskKind | "linear" | "jira" | "azuredevops";
 
 export type GithubLabel = {
   name: string;
@@ -40,7 +40,12 @@ export type GithubWorkItem = {
   repo: string;
 };
 
-export type InboxProvider = "github" | "linear" | "gitlab";
+export type InboxProvider =
+  | "github"
+  | "linear"
+  | "gitlab"
+  | "jira"
+  | "azuredevops";
 
 export type InboxItem = Omit<GithubWorkItem, "kind"> & {
   kind: InboxKind;
@@ -54,6 +59,7 @@ export type InboxItem = Omit<GithubWorkItem, "kind"> & {
   projectId?: string;
   projectName?: string;
   stateType?: string;
+  createdAt?: string;
 };
 
 export type GithubWorkItemDetails = {
@@ -789,10 +795,11 @@ export function inboxItemRef(item: {
 }
 
 export function inboxStartDraft(item: InboxItem, body?: string): string {
-  if (item.provider === "linear") {
-    const id = item.identifier?.trim() || `Linear #${item.number}`;
+  if (item.provider === "linear" || item.provider === "jira") {
+    const provider = item.provider === "jira" ? "Jira" : "Linear";
+    const id = item.identifier?.trim() || `${provider} #${item.number}`;
     const title = item.title.trim() || id;
-    const lines = ["Work on this Linear issue:", "", `${id} ${title}`];
+    const lines = [`Work on this ${provider} issue:`, "", `${id} ${title}`];
     const url = item.url.trim();
     if (url) lines.push(url);
     const description = body?.trim();
@@ -802,9 +809,18 @@ export function inboxStartDraft(item: InboxItem, body?: string): string {
     return `${lines.join("\n")}\n`;
   }
   const kind = item.kind === "pr" ? "pull request" : "issue";
-  const title = item.title.trim() || `GitHub ${kind} #${item.number}`;
+  const provider =
+    item.provider === "gitlab"
+      ? "GitLab"
+      : item.provider === "azuredevops"
+        ? "ADO"
+        : "GitHub";
+  const providerKind =
+    item.provider === "gitlab" && item.kind === "pr" ? "merge request" : kind;
+  const title =
+    item.title.trim() || `${provider} ${providerKind} #${item.number}`;
   const lines = [
-    `Work on this GitHub ${kind}:`,
+    `Work on this ${provider} ${providerKind}:`,
     "",
     `#${item.number} ${title}`,
   ];

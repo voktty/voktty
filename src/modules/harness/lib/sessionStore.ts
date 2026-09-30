@@ -36,6 +36,7 @@ export type SessionSummary = {
   archived?: boolean;
   pinned?: boolean;
   linkedWorkItem?: LinkedWorkItem;
+  automationId?: string;
 };
 
 type SessionRecord = {
@@ -54,6 +55,7 @@ type SessionRecord = {
   branch?: string | null;
   worktreeCwd?: string | null;
   linkedWorkItem?: LinkedWorkItem | null;
+  automationId?: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -74,6 +76,7 @@ type SessionUpsertPayload = {
   branch?: string;
   worktreeCwd?: string;
   linkedWorkItem?: LinkedWorkItem;
+  automationId?: string;
 };
 
 /** Only real chats belong in project history: blank tabs and inbox discussions stay ephemeral. */
@@ -142,6 +145,9 @@ function persistableMeta(
     ...(session.branch ? { branch: session.branch } : {}),
     ...(session.worktreeCwd ? { worktreeCwd: session.worktreeCwd } : {}),
     ...(linkedWorkItem ? { linkedWorkItem } : {}),
+    ...(session.automationId && isPersistableId(session.automationId)
+      ? { automationId: session.automationId }
+      : {}),
   };
 }
 
@@ -627,6 +633,10 @@ function normalizeSummary(summary: SessionSummary): SessionSummary {
     archived: summary.archived || undefined,
     pinned: summary.pinned || undefined,
     linkedWorkItem,
+    ...(typeof summary.automationId === "string" &&
+    isPersistableId(summary.automationId)
+      ? { automationId: summary.automationId }
+      : {}),
   };
 }
 
@@ -676,6 +686,9 @@ export function recordToSession(record: SessionRecord): Session {
     ...textField("branch", record.branch),
     ...textField("worktreeCwd", record.worktreeCwd),
     ...(linkedWorkItem ? { linkedWorkItem } : {}),
+    ...(record.automationId && isPersistableId(record.automationId)
+      ? { automationId: record.automationId }
+      : {}),
     ...(contextFromRecord(record) ?? {}),
   };
 }

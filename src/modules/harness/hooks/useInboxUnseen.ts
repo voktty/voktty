@@ -31,9 +31,15 @@ function seenEntries(items: readonly InboxItem[]): InboxSeenEntry[] {
   }));
 }
 
-export function useInboxUnseen(recents: RecentProject[], cwd: string): boolean {
+export function useInboxUnseen(
+  recents: RecentProject[],
+  cwd: string,
+  options?: { onAppeared?: (items: InboxItem[]) => void },
+): boolean {
   const [unseen, setUnseen] = useState(false);
   const entriesRef = useRef<InboxSeenEntry[]>([]);
+  const onAppearedRef = useRef(options?.onAppeared);
+  onAppearedRef.current = options?.onAppeared;
 
   const applyUnseen = useCallback((next: boolean) => {
     noteInboxUnseen(next);
@@ -69,6 +75,7 @@ export function useInboxUnseen(recents: RecentProject[], cwd: string): boolean {
         .then((listed) => {
           if (cancelled) return;
           const visible = applyInboxFilters(listed.items, filters, "");
+          onAppearedRef.current?.(listed.items);
           const entries = seenEntries(visible);
           entriesRef.current = entries;
           seedInboxSeenIfNeeded(entries);
@@ -80,10 +87,9 @@ export function useInboxUnseen(recents: RecentProject[], cwd: string): boolean {
     };
 
     pull(false);
-    const timer = window.setInterval(() => {
-      if (document.hidden) return;
-      pull(true);
-    }, POLL_MS);
+    // Keep polling while minimized or closed-to-tray: the webview is still
+    // alive, and GitHub/GitLab automation triggers ride this same refresh.
+    const timer = window.setInterval(() => pull(true), POLL_MS);
     const onVis = () => {
       if (!document.hidden) pull(true);
     };

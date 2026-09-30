@@ -6,7 +6,20 @@ const RAIL_ORDER_KEY = "monocode.projectRailOrder";
 const RAIL_PINNED_KEY = "monocode.projectRailPinned";
 const ARCHIVED_KEY = "monocode.archivedProjects";
 const ARCHIVED_CHANGED = "monocode:archived-projects-changed";
+const RECENTS_CHANGED = "monocode:recent-projects-changed";
 const MAX = 500;
+
+export function subscribeProjectPathsChanged(onChange: () => void): () => void {
+  const handler = () => onChange();
+  window.addEventListener(RECENTS_CHANGED, handler);
+  window.addEventListener(ARCHIVED_CHANGED, handler);
+  window.addEventListener("storage", handler);
+  return () => {
+    window.removeEventListener(RECENTS_CHANGED, handler);
+    window.removeEventListener(ARCHIVED_CHANGED, handler);
+    window.removeEventListener("storage", handler);
+  };
+}
 
 export type RecentProject = {
   path: string;
