@@ -70,6 +70,7 @@ import {
   type SidebarTabId,
 } from "../lib/appearance";
 import { basename } from "../lib/fs";
+import { copyText } from "../lib/clipboard";
 import { IS_MAC, MOD } from "../lib/platform";
 import { resolveModel } from "../lib/models";
 import { prettyParent, projectKey, projectName } from "../lib/paths";
@@ -157,6 +158,7 @@ const InboxView = lazy(() =>
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 560;
 const DEFAULT_WIDTH = 260;
+const EMPTY_SET = new Set<string>();
 
 let rememberedWidth = DEFAULT_WIDTH;
 
@@ -266,8 +268,8 @@ function SidebarComponent({
   layout,
   sessions,
   openSessions = [],
-  busySessionIds,
-  approvalSessionIds,
+  busySessionIds = EMPTY_SET,
+  approvalSessionIds = EMPTY_SET,
   activeSessionId,
   status,
   pending,
@@ -332,7 +334,13 @@ function SidebarComponent({
   const inboxUnseen = useInboxUnseen(recents, cwd);
   const resize = useDragResize({
     min: MIN_WIDTH,
-    max: () => Math.min(MAX_WIDTH, Math.floor(window.innerWidth * 0.5)),
+    max: () =>
+      Math.min(
+        MAX_WIDTH,
+        Math.floor(
+          (typeof window !== "undefined" ? window.innerWidth : 1200) * 0.5,
+        ),
+      ),
     defaultWidth: DEFAULT_WIDTH,
     initial: rememberedWidth,
     onCommit: (next) => {
@@ -753,6 +761,28 @@ function SidebarComponent({
           },
         ]
       : []),
+    ...(!multipleMenuSessions
+      ? [
+          {
+            kind: "item" as const,
+            id: "copy-session-id",
+            label: t("harness.chrome.copySessionId"),
+            submenu: [
+              {
+                kind: "item" as const,
+                id: "copy-harness-session-id",
+                label: t("harness.chrome.harnessSessionId"),
+                disabled: !menuSessions[0]?.providerSessionId,
+              },
+              {
+                kind: "item" as const,
+                id: "copy-voktty-session-id",
+                label: t("harness.chrome.vokttySessionId"),
+              },
+            ],
+          },
+        ]
+      : []),
     { kind: "sep" as const },
     {
       kind: "item" as const,
@@ -842,6 +872,7 @@ function SidebarComponent({
     if (!sessionMenu) return;
     const sessionId = sessionMenu.sessionId;
     const sessionIds = menuSessionIds;
+    const providerSessionId = menuSessions[0]?.providerSessionId;
     const archived = allMenuSessionsArchived;
     const pinned = allMenuSessionsPinned;
     setSessionMenu(null);
@@ -850,6 +881,16 @@ function SidebarComponent({
         onPinSessions(sessionIds, !pinned);
       } else {
         for (const id of sessionIds) onPinSession?.(id, !pinned);
+      }
+      return;
+    }
+    if (id === "copy-harness-session-id" || id === "copy-voktty-session-id") {
+      const value =
+        id === "copy-harness-session-id" ? providerSessionId : sessionId;
+      if (value) {
+        void copyText(value).catch((error) => {
+          console.error("Failed to copy session ID:", error);
+        });
       }
       return;
     }
