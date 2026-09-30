@@ -1465,3 +1465,32 @@ html.theme-light .explorer-file-drag-preview {
   }
 }
 
+.edit-last-turn-composer {
+  border-style: dashed;
+  border-color: color-mix(
+    in srgb,
+    var(--user-accent-color, var(--color-accent)) 32%,
+    transparent
+  );
+}
+
+.edit-last-turn-bubble {
+  outline: 1px dashed
+    color-mix(
+      in srgb,
+      var(--user-accent-color, var(--color-accent)) 45%,
+      transparent
+    );
+  outline-offset: 1px;
+}
+
+.edit-last-turn-button {
+  color: var(--user-accent-color, var(--color-accent));
+  background: color-mix(
+    in srgb,
+    var(--user-accent-color, var(--color-accent)) 10%,
+    transparent
+  );
+}
+
+

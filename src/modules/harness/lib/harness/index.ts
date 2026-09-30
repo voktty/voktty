@@ -153,11 +153,15 @@ export {
   generateHarnessTitle,
   generateHarnessCommitMessage,
   generateHarnessPrContent,
+  canRewindHarnessLastTurn,
+  rewindHarnessLastTurn,
 } from "./registry";
 export type {
   ApprovalDecision,
   CompactContextInput,
   HarnessEvent,
+  RewindLastTurnInput,
+  RewindLastTurnResult,
   SteerTurnInput,
 } from "./types";
 export type {

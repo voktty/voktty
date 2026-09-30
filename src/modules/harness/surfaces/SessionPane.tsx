@@ -18,11 +18,13 @@ import type { ApprovalDecision } from "../lib/harness/types";
 import type { UserQuestionReply } from "../lib/userQuestion";
 import { canCompactHarnessContext } from "../lib/harness";
 import { looksLikeProject, type RecentProject } from "../lib/recents";
+import { canEditLastTurn, lastTurnRecall } from "../lib/editLastTurn";
 import {
   sessionDisplayTitle,
   sessionWorkCwd,
   type Attachment,
   type Block,
+  type ComposerTurnOptions,
   type HarnessId,
   type ModelTarget,
   type NetworkSandboxConfig,
@@ -75,6 +77,7 @@ type Props = {
     sessionId: string,
     text: string,
     attachments: Attachment[],
+    options?: ComposerTurnOptions,
   ) => void;
   onStop: (sessionId: string) => void;
   onCompactContext: (sessionId: string) => boolean;
@@ -274,6 +277,20 @@ export const SessionPane = memo(function SessionPane({
   const showDeckProjectPicker = isEmpty && !looksLikeProject(session.cwd);
   const dockComposer = !isEmpty || inSplit || !!session.inboxAsk;
   const draftRef = useRef<string | undefined>(undefined);
+  const editLastTurnSupported = canEditLastTurn(session);
+  const turnRecall = editLastTurnSupported ? lastTurnRecall(session) : null;
+  const [editingLastTurn, setEditingLastTurn] = useState(false);
+  const recallLastTurnRef = useRef<(() => void) | null>(null);
+  const onRecallLastTurnReady = useCallback((recall: () => void) => {
+    recallLastTurnRef.current = recall;
+  }, []);
+  const onEditLastTurn = useCallback(() => {
+    recallLastTurnRef.current?.();
+  }, []);
+  useEffect(() => {
+    setEditingLastTurn(false);
+  }, [session.id, editLastTurnSupported]);
+
   const composer = (
     <Composer
       enabled={visible}
@@ -295,6 +312,9 @@ export const SessionPane = memo(function SessionPane({
       hideBranchPicker={!!session.inboxAsk}
       hideTopBar={!!session.inboxAsk}
       context={session.context}
+      compactSupported={canCompactHarnessContext(session.harness)}
+      editLastTurnSupported={editLastTurnSupported}
+      lastTurnRecall={turnRecall}
       quoteRequest={quoteRequest}
       initialDraft={
         draftRef.current ??
@@ -337,10 +357,13 @@ export const SessionPane = memo(function SessionPane({
       onNetworkSandboxChange={(config) =>
         onNetworkSandboxChange?.(session.id, config)
       }
-      onSubmit={(text, attachments) => onSubmit(session.id, text, attachments)}
+      onSubmit={(text, attachments, options) =>
+        onSubmit(session.id, text, attachments, options)
+      }
       onStop={() => onStop(session.id)}
-      compactSupported={canCompactHarnessContext(session.harness)}
       onCompactContext={() => onCompactContext(session.id)}
+      onRecallLastTurnReady={onRecallLastTurnReady}
+      onEditingLastTurnChange={setEditingLastTurn}
       queuedMessages={session.queuedMessages}
       queueStatus={session.queueStatus}
       onDeleteQueuedMessage={(messageId) =>
@@ -461,6 +484,12 @@ export const SessionPane = memo(function SessionPane({
                       onHandoff(session.id, target, turn)
                   : undefined
               }
+              onEditLastTurn={
+                editLastTurnSupported && !session.inboxAsk
+                  ? onEditLastTurn
+                  : undefined
+              }
+              editingLastTurn={editingLastTurn}
               onJumpToBottomChange={setShowJumpToBottom}
               onJumpToBottomReady={onJumpToBottomReady}
               onRevealReady={onRevealReady}

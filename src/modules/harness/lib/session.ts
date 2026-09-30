@@ -231,6 +231,12 @@ export type Block = {
   secondOpinion?: SecondOpinionMeta;
   /** Note chip shown on this user turn. Body is not stored; the harness already received it. */
   noteCard?: NoteCardMeta;
+  /** Provider turn boundary for the visible user message, when known. */
+  providerTurnId?: string;
+  /** Draft prompt saved locally without sending. */
+  draft?: boolean;
+  /** Internal session prompt not counted as a user-initiated turn. */
+  internal?: boolean;
 };
 
 export type RuntimeMode =
@@ -486,3 +492,46 @@ export function sessionWorkCwd(session: {
 }): string {
   return session.worktreeCwd || session.cwd;
 }
+
+export type EditedResendRejection = {
+  providerRewound: boolean;
+};
+
+export type ComposerTurnOptions = {
+  resendEdited?: boolean;
+  onResendRejected?: (recovery: EditedResendRejection) => void;
+};
+
+/** The single unsent user turn held by a session, when present. */
+export function sessionDraftBlock(
+  session: Pick<Session, "blocks">,
+): Block | undefined {
+  return session.blocks.find((block) => block.role === "user" && block.draft);
+}
+
+/** Remove one saved draft without disturbing the conversation before it. */
+export function removeSessionDraft(
+  session: Session,
+  draftBlockId: string,
+): Session | undefined {
+  const draft = session.blocks.find(
+    (block) =>
+      block.id === draftBlockId && block.role === "user" && block.draft,
+  );
+  if (!draft) return undefined;
+  const blocks = session.blocks.filter((block) => block.id !== draftBlockId);
+  const draftTitle = titleFromPrompt(
+    draft.text,
+    session.harness,
+    draft.attachments,
+  );
+  return {
+    ...session,
+    blocks,
+    title:
+      blocks.length === 0 && session.title === draftTitle
+        ? HARNESS_LABEL[session.harness]
+        : session.title,
+  };
+}
+

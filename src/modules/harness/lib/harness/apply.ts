@@ -118,6 +118,18 @@ export function applyHarnessEvent(
       });
     case "session.providerBound":
       return { ...session, providerSessionId: event.providerSessionId };
+    case "turn.started": {
+      const index = lastMatchingBlock(
+        session.blocks,
+        (block) => block.role === "user",
+      );
+      if (index < 0) return session;
+      const block = session.blocks[index];
+      if (block.providerTurnId === event.providerTurnId) return session;
+      const blocks = session.blocks.slice();
+      blocks[index] = { ...block, providerTurnId: event.providerTurnId };
+      return { ...session, blocks };
+    }
     case "session.configChanged":
       return {
         ...session,
