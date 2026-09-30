@@ -94,6 +94,7 @@ import {
   nestedScrollAbsorbsWheel,
   proseSummary,
   splitActivityRows,
+  isFailedStatus,
   subagentBrief,
   subagentName,
   subagentReport,
@@ -1382,6 +1383,23 @@ function SubagentGroup({
   );
 }
 
+function subagentStatusLine(
+  block: Block,
+  steps: import("../lib/session").AgentStep[],
+): string {
+  if (toolCallState(block) === "rejected") return "failed";
+  const tools = steps.filter((step) => step.kind === "tool").length;
+  if (tools === 0) return "";
+  const count = tools === 1 ? "1 step" : `${tools} steps`;
+  // A step that failed inside a run that went on to finish still has to say so
+  // here, or the row reads clean until someone opens the trail.
+  const failed = steps.filter(
+    (step) => step.kind === "tool" && isFailedStatus(step.status),
+  ).length;
+  if (!failed) return count;
+  return `${count}, ${failed === 1 ? "1 failed" : `${failed} failed`}`;
+}
+
 function SubagentRunRow({
   block,
   cwd,
@@ -1395,8 +1413,9 @@ function SubagentRunRow({
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [override, setOverride] = useState<boolean | null>(null);
   const state = toolCallState(block);
+  const open = override ?? (state === "rejected");
   const meta = block.agentRun;
   const name = subagentName(block);
   const brief = subagentBrief(block);
@@ -1404,6 +1423,7 @@ function SubagentRunRow({
   const steps = meta?.steps ?? [];
   const model = meta?.model ?? block.tool?.agentModel;
   const agentType = meta?.agentType;
+  const statusLine = subagentStatusLine(block, steps);
   const hasSteps = steps.length > 0 || !!report;
 
   return (
@@ -1419,6 +1439,11 @@ function SubagentRunRow({
               {model ? (
                 <span className="rounded bg-content/8 px-1.5 py-0.5 text-[11px] font-mono text-content/60">
                   {model}
+                </span>
+              ) : null}
+              {statusLine ? (
+                <span className="shrink-0 font-mono text-xs text-content/50">
+                  {statusLine}
                 </span>
               ) : null}
             </div>
@@ -1441,7 +1466,7 @@ function SubagentRunRow({
           {hasSteps ? (
             <button
               type="button"
-              onClick={() => setOpen((v) => !v)}
+              onClick={() => setOverride(!open)}
               className="rounded p-0.5 text-content/40 hover:bg-content/8 hover:text-content/70"
               aria-label={open ? t("harness.chrome.hideDetails") : t("harness.chrome.showDetails")}
             >
@@ -1532,6 +1557,7 @@ function SubagentStepRow({
   onOpenFile?: (path: string) => void;
   onOpenDiff?: (path: string) => void;
 }) {
+  const [errorOpen, setErrorOpen] = useState(false);
   if (step.kind === "reasoning") {
     return (
       <div className="flex min-w-0 items-center gap-1.5 font-sans text-xs text-content/40 italic">
@@ -1549,22 +1575,42 @@ function SubagentStepRow({
   }
   const status = step.status;
   const isDone = status === "completed" || status === "success";
-  const isFail = status === "failed" || status === "error";
+  const isFail = isFailedStatus(status);
+  const label = step.text || t("harness.chrome.toolExecution");
+
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-content/70">
-        {isFail ? (
-          <X className="size-3 shrink-0 text-destructive" strokeWidth={2} />
-        ) : isDone ? (
-          <Check className="size-3 shrink-0 text-emerald-500" strokeWidth={2} />
-        ) : (
-          <TerminalSpinner className="size-3 shrink-0 text-content/50" />
-        )}
-        <span className="truncate">
-          {step.text || t("harness.chrome.toolExecution")}
-        </span>
+      <div className="flex min-w-0 items-center justify-between gap-1.5 font-mono text-xs text-content/70">
+        <div className="flex min-w-0 items-center gap-1.5">
+          {isFail ? (
+            <X className="size-3 shrink-0 text-destructive" strokeWidth={2} />
+          ) : isDone ? (
+            <Check className="size-3 shrink-0 text-emerald-500" strokeWidth={2} />
+          ) : (
+            <TerminalSpinner className="size-3 shrink-0 text-content/50" />
+          )}
+          <span className="truncate">{label}</span>
+        </div>
+        {isFail && step.detail ? (
+          <button
+            type="button"
+            aria-expanded={errorOpen}
+            aria-label={`${errorOpen ? "Hide" : "Show"} error details for ${label}`}
+            onClick={() => setErrorOpen((v) => !v)}
+            className="-m-1 shrink-0 rounded p-1 text-content/40 hover:text-content/70"
+          >
+            <ChevronRight
+              className={`size-3 transition-transform ${errorOpen ? "rotate-90" : ""}`}
+              strokeWidth={1.75}
+            />
+          </button>
+        ) : null}
       </div>
-      {step.preview?.output ? (
+      {isFail && step.detail && errorOpen ? (
+        <pre className="max-h-28 overflow-y-auto rounded bg-[var(--surface-active-item)] p-1.5 font-mono text-[11px] leading-4 text-destructive/80 whitespace-pre-wrap break-words">
+          {step.detail}
+        </pre>
+      ) : step.preview?.output ? (
         <pre className="max-h-28 overflow-y-auto rounded bg-[var(--surface-active-item)] p-1.5 font-mono text-[11px] leading-4 text-content/60 whitespace-pre-wrap break-words">
           {step.preview.output}
         </pre>

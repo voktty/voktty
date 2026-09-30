@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newSession, type Block, type Session } from "./session";
+import { newSession, type AgentRunMeta, type Block, type Session } from "./session";
 import {
   cacheSession,
   clearSessionCache,
@@ -21,6 +21,79 @@ describe("isPersistableId", () => {
     expect(isPersistableId("/Users/me/.pi/agent/sessions/abc.jsonl")).toBe(
       false,
     );
+  });
+});
+
+describe("persisting a subagent's trail", () => {
+  const withRun = (steps: AgentRunMeta) => {
+    const session = newSession("codex", "/tmp/project");
+    session.blocks = [
+      {
+        id: "b1",
+        role: "tool",
+        text: "Agent",
+        agentRun: steps,
+      },
+    ];
+    return sanitizeSessionForPersist(session)?.blocks[0].agentRun;
+  };
+
+  it("keeps the run so a reopened session can still be inspected", () => {
+    expect(
+      withRun({
+        name: "Correctness review",
+        agentType: "code-reviewer",
+        steps: [
+          {
+            id: "s1",
+            kind: "tool",
+            text: "Read src/App.tsx",
+            toolKind: "read",
+            status: "failed",
+            detail: "File not found",
+          },
+          { id: "s2", kind: "message", text: "Nothing to flag." },
+        ],
+      }),
+    ).toEqual({
+      name: "Correctness review",
+      agentType: "code-reviewer",
+      steps: [
+        {
+          id: "s1",
+          kind: "tool",
+          text: "Read src/App.tsx",
+          toolKind: "read",
+          status: "failed",
+          detail: "File not found",
+        },
+        { id: "s2", kind: "message", text: "Nothing to flag." },
+      ],
+    });
+  });
+
+  it("drops steps a provider left malformed", () => {
+    expect(
+      withRun({
+        name: "Correctness review",
+        steps: [
+          { id: "", kind: "tool", text: "Read" },
+          { id: "s2", kind: "bogus", text: "Read" },
+          { id: "s3", kind: "tool", text: "Read src/App.tsx" },
+        ] as never,
+      })?.steps,
+    ).toEqual([{ id: "s3", kind: "tool", text: "Read src/App.tsx" }]);
+  });
+
+  it("keeps only the tail of a long run", () => {
+    const steps = Array.from({ length: 260 }, (_, index) => ({
+      id: `s${index}`,
+      kind: "tool" as const,
+      text: `Read file-${index}.ts`,
+    }));
+    const saved = withRun({ name: "Correctness review", steps });
+    expect(saved?.steps).toHaveLength(100);
+    expect(saved?.steps[99].id).toBe("s259");
   });
 });
 

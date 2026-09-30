@@ -745,6 +745,10 @@ function handleSessionUpdate(live: Live, params: unknown) {
   const rec = asRecord(params);
   const update = asRecord(rec?.update) ?? rec;
   if (!update) return;
+  const emit = (event: HarnessEvent) => {
+    for (const routed of live.subagents.route(params, [event]))
+      live.onEvent(routed);
+  };
   const kind = String(
     update.sessionUpdate ?? update.session_update ?? update.type ?? "",
   );
@@ -755,7 +759,7 @@ function handleSessionUpdate(live: Live, params: unknown) {
       update.content ?? update.text,
       kind === "agent_message" ? "\n" : "",
     );
-    if (text) live.onEvent({ type: "message.delta", text });
+    if (text) emit({ type: "message.delta", text });
     return;
   }
   if (kind === "agent_thought_chunk" || kind === "agent_thought") {
@@ -763,7 +767,7 @@ function handleSessionUpdate(live: Live, params: unknown) {
       update.content ?? update.text,
       kind === "agent_thought" ? "\n" : "",
     );
-    if (text) live.onEvent({ type: "reasoning.delta", text });
+    if (text) emit({ type: "reasoning.delta", text });
     return;
   }
   if (
@@ -832,6 +836,19 @@ function handleSessionUpdate(live: Live, params: unknown) {
           query: preview?.query ?? extractSearchQuery(rawInput),
           previewKind: preview?.kind,
         }) || rawTitle;
+    if (live.subagents.isChild(params)) {
+      // The shared child route decides what is worth keeping on a step.
+      emit({
+        type: "tool.updated",
+        callId,
+        title,
+        kind: toolKind,
+        status,
+        detail: toolOutput(update, tool),
+        preview,
+      });
+      return;
+    }
     if (agent && title) live.agentTools.set(callId, title);
     if (agent) scheduleCursorSubagents(live, 0);
     const background =
@@ -841,7 +858,7 @@ function handleSessionUpdate(live: Live, params: unknown) {
     if (background) live.backgroundAgentTools.add(callId);
     const displayedStatus = background ? "in_progress" : status;
     if (displayedStatus) live.toolStatuses.set(callId, displayedStatus);
-    live.onEvent({
+    emit({
       type: "tool.updated",
       callId,
       title,
@@ -1265,7 +1282,12 @@ function toolLabel(
   return kindTitle(kind);
 }
 
-function toolDetail(
+/**
+ * What the call produced. A step that opens an error control wants the reason
+ * it failed, and the request it was making is already its title, so the input
+ * fallback below belongs to a top-level row and not to this.
+ */
+function toolOutput(
   update: Record<string, unknown>,
   tool: Record<string, unknown>,
 ): string | undefined {
@@ -1273,12 +1295,26 @@ function toolDetail(
     textFromContent(update.content, "\n") ||
     textFromContent(tool.content, "\n");
   if (content.trim()) return capToolDetail(content);
-  const output = update.rawOutput ?? tool.rawOutput;
+  const output =
+    update.rawOutput ??
+    tool.rawOutput ??
+    update.output ??
+    tool.output ??
+    update.result ??
+    tool.result;
   if (typeof output === "string" && output.trim()) return capToolDetail(output);
   const outputText = textFromContent(output);
   if (outputText.trim()) return capToolDetail(outputText);
-  return inputLabel(
-    update.rawInput ?? tool.rawInput ?? update.input ?? tool.input,
+  return undefined;
+}
+
+function toolDetail(
+  update: Record<string, unknown>,
+  tool: Record<string, unknown>,
+): string | undefined {
+  return (
+    toolOutput(update, tool) ??
+    inputLabel(update.rawInput ?? tool.rawInput ?? update.input ?? tool.input)
   );
 }
 

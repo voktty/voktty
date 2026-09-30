@@ -149,6 +149,7 @@ export type AgentStep = {
   text: string;
   toolKind?: string;
   status?: string;
+  detail?: string;
   preview?: ToolPreview;
 };
 
