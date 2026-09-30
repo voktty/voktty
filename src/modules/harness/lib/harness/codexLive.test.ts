@@ -108,6 +108,7 @@ async function startTurn(
     turn: { id: "turn_1", status: "inProgress" },
   });
   notify("turn/started", { turn: { id: "turn_1", status: "inProgress" } });
+  await Promise.resolve();
   return { events, turn };
 }
 

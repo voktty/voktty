@@ -83,6 +83,23 @@ export class OpenCodeClient {
     }).catch(() => undefined);
   }
 
+  async revertSession(sessionID: string, messageID: string): Promise<void> {
+    await this.request<unknown>("POST", `/session/${enc(sessionID)}/revert`, {
+      body: { messageID },
+    });
+  }
+
+  async getMessages(
+    sessionID: string,
+    limit?: number,
+  ): Promise<Array<{ info?: Record<string, unknown>; parts?: unknown[] }>> {
+    return this.request<
+      Array<{ info?: Record<string, unknown>; parts?: unknown[] }>
+    >("GET", `/session/${enc(sessionID)}/message`, {
+      query: limit ? { limit: String(limit) } : undefined,
+    });
+  }
+
   async summarizeSession(
     sessionID: string,
     model: { providerID: string; modelID: string },

@@ -22,6 +22,7 @@ import {
   Copy,
   FilePlusCorner,
   Minus,
+  Pencil,
   PenLine,
   Search,
   Terminal,
@@ -44,6 +45,7 @@ import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import { useTranscriptZen } from "../hooks/useTranscriptZen";
 import type { TranscriptLayout } from "../lib/appearance";
 import { copyMessage } from "../lib/clipboard";
+import { lastUserTurnBlock } from "../lib/editLastTurn";
 import type { ApprovalDecision } from "../lib/harness";
 import {
   isEditTool,
@@ -134,6 +136,8 @@ type Props = {
   onBuildPlan?: (blockId: string, target?: PlanBuildTarget) => void;
   onSecondOpinion?: (target: ModelTarget, turn: Block[]) => void;
   onHandoff?: (target: ModelTarget, turn: Block[]) => void;
+  onEditLastTurn?: () => void;
+  editingLastTurn?: boolean;
   onJumpToBottomChange?: (show: boolean) => void;
   onJumpToBottomReady?: (jump: () => void) => void;
   /** Passes a function that renders the turn that holds a block. The render completes before the function returns. */
@@ -161,6 +165,8 @@ function AgentTranscriptComponent({
   onBuildPlan,
   onSecondOpinion,
   onHandoff,
+  onEditLastTurn,
+  editingLastTurn = false,
   onJumpToBottomChange,
   onJumpToBottomReady,
   onRevealReady,
@@ -193,6 +199,10 @@ function AgentTranscriptComponent({
   const zen = useTranscriptZen();
   const promptAnchor = useTranscriptAnchor();
   const lastUserId = lastUserBlockId(blocks);
+  const editableUserBlockId = useMemo(
+    () => lastUserTurnBlock(blocks)?.id,
+    [blocks],
+  );
   const seenUserId = useRef(lastUserId);
   if (!visible) {
     if (anchorTurn) setAnchorTurn(false);
@@ -517,6 +527,20 @@ function AgentTranscriptComponent({
                 planModel={model}
                 planModelSettings={modelSettings}
                 cwd={cwd}
+                onEditLastTurn={
+                  onEditLastTurn &&
+                  settled &&
+                  item.block.role === "user" &&
+                  item.block.id === editableUserBlockId &&
+                  !item.block.draft
+                    ? onEditLastTurn
+                    : undefined
+                }
+                editing={
+                  editingLastTurn &&
+                  item.block.role === "user" &&
+                  item.block.id === editableUserBlockId
+                }
               />
             );
           const foldLineRow = (
@@ -905,6 +929,8 @@ const TranscriptBlock = memo(function TranscriptBlock({
   planHarness,
   planModel,
   planModelSettings,
+  onEditLastTurn,
+  editing = false,
 }: {
   block: Block;
   layout: TranscriptLayout;
@@ -922,6 +948,8 @@ const TranscriptBlock = memo(function TranscriptBlock({
   planHarness?: HarnessId;
   planModel?: string;
   planModelSettings?: Record<string, string>;
+  onEditLastTurn?: () => void;
+  editing?: boolean;
 }) {
   if (block.role === "user") {
     return (
@@ -929,6 +957,8 @@ const TranscriptBlock = memo(function TranscriptBlock({
         block={block}
         layout={layout}
         stickyIndex={stickyIndex}
+        onEdit={onEditLastTurn}
+        editing={editing}
         onSaveNote={onSaveNote}
       />
     );
@@ -1033,15 +1063,50 @@ const TranscriptBlock = memo(function TranscriptBlock({
   );
 });
 
+function EditLastTurnButton({
+  onEdit,
+  editing = false,
+}: {
+  onEdit: () => void;
+  editing?: boolean;
+}) {
+  const label = editing
+    ? t("harness.chrome.cancelEdit") || "Cancel edit"
+    : t("harness.chrome.editAndResend") || "Edit and resend";
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={editing}
+      onClick={(event) => {
+        event.stopPropagation();
+        onEdit();
+      }}
+      className={`rounded-md p-1 transition-[background-color,color] duration-150 focus-visible:ring-1 focus-visible:ring-accent ${
+        editing
+          ? "edit-last-turn-button"
+          : "text-content/40 hover:bg-content/8 hover:text-content/70"
+      }`}
+    >
+      <Pencil className="size-3.5" strokeWidth={1.75} />
+    </button>
+  );
+}
+
 function UserMessageBlock({
   block,
   layout,
   stickyIndex,
+  onEdit,
+  editing = false,
   onSaveNote,
 }: {
   block: Block;
   layout: TranscriptLayout;
   stickyIndex: number;
+  onEdit?: () => void;
+  editing?: boolean;
   onSaveNote?: (text: string) => void | Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1107,6 +1172,8 @@ function UserMessageBlock({
       >
         <div
           className={`${USER_MESSAGE_SURFACE_CLASS} ${
+            editing ? "edit-last-turn-bubble" : ""
+          } ${
             chat
               ? `w-fit max-w-xl ${singleLine ? "rounded-full py-2" : "rounded-[14px] py-3"}`
               : "w-full rounded-[14px] py-3"
@@ -1177,6 +1244,9 @@ function UserMessageBlock({
               attachments={block.attachments}
               label={t("harness.chrome.copyMessage")}
             />
+            {onEdit ? (
+              <EditLastTurnButton onEdit={onEdit} editing={editing} />
+            ) : null}
             {text && onSaveNote ? (
               <SaveNoteButton text={text} onSave={onSaveNote} />
             ) : null}
