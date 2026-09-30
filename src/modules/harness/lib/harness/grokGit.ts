@@ -13,8 +13,13 @@ import { runGrokTextPrompt } from "./grokText";
 
 const GIT_TIMEOUT_MS = 60_000;
 
-export async function generateGrokCommitMessage(cwd: string): Promise<string> {
+export async function generateGrokCommitMessage(
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  signal?.throwIfAborted();
   const context = await gitStagedContext(cwd);
+  signal?.throwIfAborted();
   const output = await runGrokTextPrompt({
     cwd,
     prompt: buildCommitMessagePrompt({
@@ -23,6 +28,7 @@ export async function generateGrokCommitMessage(cwd: string): Promise<string> {
       stagedPatch: context.patch,
     }),
     timeoutMs: GIT_TIMEOUT_MS,
+    signal,
   });
   const parsed = parseCommitMessage(output);
   if (parsed) return formatCommitMessage(parsed);

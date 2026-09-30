@@ -13,8 +13,13 @@ import { runCodexTextPrompt } from "./codexText";
 
 const GIT_TIMEOUT_MS = 90_000;
 
-export async function generateCodexCommitMessage(cwd: string): Promise<string> {
+export async function generateCodexCommitMessage(
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  signal?.throwIfAborted();
   const context = await gitStagedContext(cwd);
+  signal?.throwIfAborted();
   const output = await runCodexTextPrompt({
     cwd,
     prompt: buildCommitMessagePrompt({
@@ -23,6 +28,7 @@ export async function generateCodexCommitMessage(cwd: string): Promise<string> {
       stagedPatch: context.patch,
     }),
     timeoutMs: GIT_TIMEOUT_MS,
+    signal,
   });
   const parsed = parseCommitMessage(output);
   if (parsed) return formatCommitMessage(parsed);

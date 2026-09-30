@@ -56,6 +56,7 @@ export async function runOpenCodeTextPrompt(input: {
   timeoutMs?: number;
   /** Native model slug. Defaults to the cheap one used for titles. */
   model?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
   const run = turns.catch(() => undefined).then(() => promptOnLive(input));
   turns = run.then(
@@ -70,8 +71,11 @@ async function promptOnLive(input: {
   prompt: string;
   timeoutMs?: number;
   model?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
+  input.signal?.throwIfAborted();
   const session = await ensureLive(input.cwd, input.model);
+  input.signal?.throwIfAborted();
   try {
     const result = await session.client.prompt({
       sessionID: session.sessionId,

@@ -62,6 +62,7 @@ export async function runCursorTextPrompt(input: {
   timeoutMs: number;
   /** Native model id. Defaults to the cheap one used for titles and commits. */
   model?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
   const run = turns.catch(() => undefined).then(() => promptOnLive(input));
   turns = run.then(
@@ -75,8 +76,12 @@ async function promptOnLive(input: {
   cwd: string;
   prompt: string;
   timeoutMs: number;
+  model?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
-  const session = await ensureLive(input.cwd);
+  input.signal?.throwIfAborted();
+  const session = await ensureLive(input.cwd, input.model);
+  input.signal?.throwIfAborted();
   session.output = "";
   session.collecting = true;
   try {

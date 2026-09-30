@@ -71,6 +71,7 @@ export async function runClaudeTextPrompt(input: {
   timeoutMs?: number;
   /** Native model id. Defaults to the cheap one used for titles and commits. */
   model?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
   const run = turns.catch(() => undefined).then(() => promptOnLive(input));
   turns = run.then(
@@ -86,15 +87,30 @@ async function promptOnLive(input: {
   prompt: string;
   timeoutMs?: number;
   model?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
+  input.signal?.throwIfAborted();
   const session = await ensureLive(
     input.cwd,
     input.providerAccountId,
     input.model,
   );
+  input.signal?.throwIfAborted();
   session.output = "";
   session.collecting = true;
   const timeoutMs = input.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  let abortHandler: (() => void) | undefined;
+  const abortPromise = input.signal
+    ? new Promise<never>((_, reject) => {
+        const cancel = () => {
+          session.turnFailed?.(new Error("Claude text generation cancelled"));
+          reject(new Error("Claude text generation cancelled"));
+        };
+        abortHandler = cancel;
+        input.signal!.addEventListener("abort", cancel, { once: true });
+        if (input.signal!.aborted) cancel();
+      })
+    : null;
 
   try {
     const turnPromise = new Promise<void>((resolve, reject) => {
@@ -115,6 +131,7 @@ async function promptOnLive(input: {
           timeoutMs,
         );
       }),
+      ...(abortPromise ? [abortPromise] : []),
     ]);
 
     const output = session.output.trim();
@@ -124,6 +141,9 @@ async function promptOnLive(input: {
     if (session.closed) await dropLive();
     throw error;
   } finally {
+    if (abortHandler && input.signal) {
+      input.signal.removeEventListener("abort", abortHandler);
+    }
     session.collecting = false;
     session.turnDone = null;
     session.turnFailed = null;

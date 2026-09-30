@@ -8,11 +8,8 @@ import {
   ModeCommandText,
 } from "./modeCommands";
 import { PLAN_COMMAND, consumePlanCommand } from "../lib/plan";
-import {
-  ORCHESTRATOR_COMMAND,
-  consumeOrchestratorCommand,
-} from "../lib/orchestratorCommand";
-import { DRAFT_COMMAND, consumeDraftCommand } from "../lib/draftCommand";
+import { consumeOrchestratorCommand } from "../lib/orchestratorCommand";
+import { consumeDraftCommand } from "../lib/draftCommand";
 
 describe("modeCommands", () => {
   const allNames = new Set(["plan", "orchestrator", "draft", "btw", "operator"]);
