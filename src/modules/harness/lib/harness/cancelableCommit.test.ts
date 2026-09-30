@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { generateCommitMessage } from "./textHarness";
 import { registerHarness } from "./registry";
 
@@ -7,12 +7,13 @@ describe("cancelable commit message generation", () => {
     let receivedSignal: AbortSignal | undefined;
     registerHarness({
       id: "cursor",
-      name: "Cursor",
       live: true,
       async sendTurn() {},
+      async steerTurn() {},
       async cancelTurn() {},
       async stopSession() {},
       async forgetSession() {},
+      bindSession() {},
       respondApproval() {},
       async generateCommitMessage(cwd, signal) {
         receivedSignal = signal;
@@ -30,12 +31,13 @@ describe("cancelable commit message generation", () => {
   it("aborts when signal is triggered before or during generation", async () => {
     registerHarness({
       id: "claude",
-      name: "Claude",
       live: true,
       async sendTurn() {},
+      async steerTurn() {},
       async cancelTurn() {},
       async stopSession() {},
       async forgetSession() {},
+      bindSession() {},
       respondApproval() {},
       async generateCommitMessage(_cwd, signal) {
         signal?.throwIfAborted();

@@ -3310,6 +3310,8 @@ export function HarnessApp({
           restored.id,
           restored.providerSessionId,
           sessionWorkCwd(restored),
+          restored.providerAccountId,
+          restored.blocks,
         );
       }
       lastPersisted.current.set(restored.id, persistFingerprint(restored));

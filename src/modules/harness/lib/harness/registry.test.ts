@@ -3,6 +3,7 @@ import { resetHarnessModelOverlays, setHarnessModels } from "../models";
 import type { HarnessId } from "../session";
 import {
   HARNESS_IDLE_PARK_MS,
+  bindHarnessSession,
   canCompactHarnessContext,
   compactHarnessContext,
   isLiveHarness,
@@ -171,5 +172,26 @@ describe("harness registry", () => {
     expect(stopSession).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(stopSession).toHaveBeenCalledWith("s1");
+  });
+
+  it("binds a restored session and forwards its task panels", () => {
+    const bindSession = vi.fn();
+    const restoreTaskLists = vi.fn();
+    registerHarness(stub("claude", { bindSession, restoreTaskLists }));
+    const taskList = {
+      key: "claude-tasks",
+      items: [{ id: "1", text: "Write tests", status: "pending" as const }],
+    };
+
+    bindHarnessSession("claude", "s1", "sess_1", "/repo", "work", [
+      { id: "b1", role: "user", text: "go" },
+      { id: "b2", role: "tasks", text: "Write tests", taskList },
+    ]);
+    bindHarnessSession("claude", "s2", "sess_2", "/repo");
+
+    expect(bindSession).toHaveBeenCalledWith("s1", "sess_1", "/repo", "work");
+    expect(bindSession).toHaveBeenCalledWith("s2", "sess_2", "/repo", undefined);
+    expect(restoreTaskLists).toHaveBeenCalledTimes(1);
+    expect(restoreTaskLists).toHaveBeenCalledWith("s1", [taskList]);
   });
 });
