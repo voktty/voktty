@@ -18,10 +18,16 @@ import {
   CREATE_SKILL_DESCRIPTION,
   CREATE_SKILL_NAME,
 } from "./createSkill";
+import { PLAN_COMMAND } from "./plan";
+import { ORCHESTRATOR_COMMAND } from "./orchestratorCommand";
+import { DRAFT_COMMAND } from "./draftCommand";
 export {
   CREATE_SKILL_BODY,
   CREATE_SKILL_DESCRIPTION,
   CREATE_SKILL_NAME,
+  PLAN_COMMAND,
+  ORCHESTRATOR_COMMAND,
+  DRAFT_COMMAND,
 };
 
 const DISABLED_SKILL_PATHS_KEY = "voktty.disabledSkillPaths";
@@ -291,6 +297,9 @@ export function mergeCatalog(
     if (skill.source === "agents") add(asSkill(skill));
   }
   add(BUILTIN_CREATE_SKILL);
+  add(PLAN_COMMAND);
+  add(ORCHESTRATOR_COMMAND);
+  add(DRAFT_COMMAND);
   for (const skill of discovered) {
     if (disabled?.has(skill.path)) continue;
     if (skill.source !== "agents") add(asSkill(skill));

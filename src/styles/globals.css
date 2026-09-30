@@ -1493,4 +1493,47 @@ html.theme-light .explorer-file-drag-preview {
   );
 }
 
+/* Keep selected text hidden so the styled highlight layer still shows through,
+   rather than the raw `/command` and `@path` text. */
+.composer-field::selection {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: color-mix(
+    in srgb,
+    var(--user-accent-color, var(--color-accent, #3b82f6)) 30%,
+    transparent
+  );
+}
+
+/* One light sweep across a composer mode command as it appears. */
+.composer-mode-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    currentColor 0 40%,
+    color-mix(in srgb, currentColor 25%, white) 50%,
+    currentColor 60% 100%
+  );
+  background-size: 300% 100%;
+  background-position: 0% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: composer-mode-shimmer 900ms ease-out;
+}
+
+@keyframes composer-mode-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-mode-shimmer {
+    animation: none;
+  }
+}
+
 
