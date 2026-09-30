@@ -109,3 +109,18 @@ describe("AgentMarkdown file links and navigation", () => {
     expect(markup).not.toContain('href="javascript:alert(1)"');
   });
 });
+
+describe("AgentMarkdown block boxes", () => {
+  it("wraps each block in a real block box with no contents style", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentMarkdown, {
+        text: "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+      }),
+    );
+
+    expect(markup).toContain('class="agent-markdown-block"');
+    expect(markup).not.toContain("display:contents");
+    expect(markup).not.toContain("display: contents");
+  });
+});
+

@@ -16,11 +16,13 @@ import {
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { harden } from "rehype-harden";
 import {
+  Block,
   CodeBlock,
   Streamdown,
   defaultRehypePlugins,
   defaultRemarkPlugins,
   useIsCodeFenceIncomplete,
+  type BlockProps,
   type Components,
 } from "streamdown";
 import type { PluggableList } from "unified";
@@ -324,6 +326,25 @@ const MARKDOWN_COMPONENTS = {
   code: MarkdownCode,
 } satisfies Components;
 
+/**
+ * With dir="auto" Streamdown wraps each block in
+ * `<div dir="..." style="display: contents">`. WebKit's triple-click then runs
+ * past the block to the end of the reply, because a contents box gives the
+ * selection no block boundary to stop at (#496). Keep the per-block direction
+ * but put it on a real block box; globals.css zeroes its margins so spacing still
+ * comes from the block inside it.
+ */
+function DirectionalBlock({ dir, ...props }: BlockProps) {
+  const block = <Block {...props} />;
+  return dir ? (
+    <div dir={dir} className="agent-markdown-block">
+      {block}
+    </div>
+  ) : (
+    block
+  );
+}
+
 export const AgentMarkdown = memo(function AgentMarkdown({
   text,
   streaming,
@@ -395,6 +416,7 @@ export const AgentMarkdown = memo(function AgentMarkdown({
   return (
     <FileOpenContext.Provider value={fileOpen}>
       <Streamdown
+        BlockComponent={DirectionalBlock}
         className={`agent-markdown min-w-0 font-sans text-sm leading-6 ${className ?? ""}`}
         components={MARKDOWN_COMPONENTS}
         controls={false}
