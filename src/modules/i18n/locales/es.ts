@@ -5540,6 +5540,7 @@ export const es: TranslationSchema = {
       windowLimit: "Límite de {window}",
       percentUsed: "{percent} usado",
       limitUsed: "{title} usado",
+      limitRemaining: "{title} restante",
       percentRemaining: "{percent}% restante",
       windowName: "Ventana de {window}",
       bankedResets: "Reinicios acumulados",
