@@ -1,4 +1,4 @@
-import type { HarnessId } from "../session";
+import type { Block, HarnessId, TaskListMeta } from "../session";
 import type { GeneratedSessionTitle } from "../sessionTitle";
 import type { PrContent } from "../gitText";
 import { hasLiveCatalog } from "../models";
@@ -60,6 +60,8 @@ export type HarnessAdapter = {
     cwd: string,
     providerAccountId?: string,
   ): void;
+  /** Seed provider task state from a restored session's persisted panels. */
+  restoreTaskLists?(threadId: string, lists: TaskListMeta[]): void;
   /** Refresh the model catalog overlay when supported. */
   refreshCatalog?(): Promise<void>;
   /** Optional LLM tab title for the first turn. */
@@ -272,13 +274,16 @@ export function bindHarnessSession(
   providerSessionId: string,
   cwd: string,
   providerAccountId?: string,
+  /** Restored transcript, so the adapter can reseed its task state. */
+  blocks?: Block[],
 ): void {
-  getHarness(harness)?.bindSession(
-    threadId,
-    providerSessionId,
-    cwd,
-    providerAccountId,
+  const adapter = getHarness(harness);
+  adapter?.bindSession(threadId, providerSessionId, cwd, providerAccountId);
+  if (!blocks || !adapter?.restoreTaskLists) return;
+  const lists = blocks.flatMap((block) =>
+    block.role === "tasks" && block.taskList ? [block.taskList] : [],
   );
+  if (lists.length > 0) adapter.restoreTaskLists(threadId, lists);
 }
 
 /**
