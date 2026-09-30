@@ -125,6 +125,19 @@ import {
   formatComponentPromptDirective,
 } from "@/modules/preview";
 import { COMPACT_COMMAND, isCompactCommand } from "../lib/compact";
+import { PLAN_COMMAND, consumePlanCommand } from "../lib/plan";
+import {
+  ORCHESTRATOR_COMMAND,
+  consumeOrchestratorCommand,
+} from "../lib/orchestratorCommand";
+import { DRAFT_COMMAND, consumeDraftCommand } from "../lib/draftCommand";
+import {
+  leadingModeCommand,
+  MODE_COMMAND_INDENT,
+  ModeCommandPill,
+  ModeCommandText,
+  type ModeCommandToken,
+} from "./modeCommands";
 import type { LastTurnRecall } from "../lib/editLastTurn";
 import type { ComposerTurnOptions } from "../lib/session";
 
@@ -174,6 +187,11 @@ type Props = {
   onHandoffCardDismiss?: () => void;
   onQuestionReply?: (requestId: number, reply: UserQuestionReply) => void;
   onQuestionInteraction?: (requestId: number) => void;
+  canSaveDraft?: boolean;
+  onSaveDraft?: (
+    text: string,
+    attachments: Attachment[],
+  ) => void | boolean;
   onSubmit: (
     text: string,
     attachments: Attachment[],
@@ -435,6 +453,8 @@ export function Composer({
   onHandoffCardDismiss,
   onQuestionReply,
   onQuestionInteraction,
+  canSaveDraft,
+  onSaveDraft,
   onSubmit,
   onStop,
   onCompactContext,
@@ -461,6 +481,9 @@ export function Composer({
   const mentionRef = useRef<MentionToken | null>(null);
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [resendEdited, setResendEdited] = useState(false);
+  const [planSelected, setPlanSelected] = useState(false);
+  const [orchestrationSelected, setOrchestrationSelected] = useState(false);
+  const [draftSelected, setDraftSelected] = useState(false);
   const [hasValue, setHasValue] = useState(
     () =>
       (initialDraft ?? "").trim().length > 0 ||
@@ -517,10 +540,19 @@ export function Composer({
   const skills = skillCatalog.skills;
   const slashItems = useMemo(
     () => [
+      PLAN_COMMAND,
+      ORCHESTRATOR_COMMAND,
+      ...(canSaveDraft && onSaveDraft ? [DRAFT_COMMAND] : []),
       COMPACT_COMMAND,
-      ...skills.filter((skill) => skill.name !== COMPACT_COMMAND.name),
+      ...skills.filter(
+        (skill) =>
+          skill.name !== COMPACT_COMMAND.name &&
+          skill.name !== PLAN_COMMAND.name &&
+          skill.name !== ORCHESTRATOR_COMMAND.name &&
+          skill.name !== DRAFT_COMMAND.name,
+      ),
     ],
-    [skills],
+    [skills, canSaveDraft, onSaveDraft],
   );
   const skillLimit =
     harness === "pi" ? Number.POSITIVE_INFINITY : undefined;
@@ -534,6 +566,31 @@ export function Composer({
     () => new Set(slashItems.map((skill) => skill.invocation)),
     [slashItems],
   );
+  const leadingMode = leadingModeCommand(draft, skillNames);
+  const modeIndent = leadingMode ? MODE_COMMAND_INDENT : undefined;
+  useLayoutEffect(() => {
+    // The indent can rewrap the first line after the input already resized.
+    if (ref.current) resizeComposer(ref.current);
+  }, [modeIndent]);
+
+  // A leading mode command in the text shows the same pill as picking the mode.
+  const orchestrationActive =
+    orchestrationSelected || leadingMode?.name === ORCHESTRATOR_COMMAND.name;
+  const draftActive = draftSelected || leadingMode?.name === DRAFT_COMMAND.name;
+  const planActive = planSelected || leadingMode?.name === PLAN_COMMAND.name;
+
+  /** Turning a mode off also drops its leading command from the text. */
+  const clearLeadingMode = (name: string) => {
+    const el = ref.current;
+    if (!el || leadingModeCommand(el.value, skillNames)?.name !== name) return;
+    const next = el.value.replace(/^\/[a-z]+\s?/, "");
+    el.value = next;
+    resizeComposer(el);
+    el.setSelectionRange(0, 0);
+    setDraft(next);
+    onDraftChange?.(next);
+    syncHasValue(next, attachmentsRef.current);
+  };
   const mentionFiles = useMemo(
     () =>
       notesEnabled ? [...files, ...notesAsProjectFiles(notes)] : files,
@@ -1085,7 +1142,38 @@ export function Composer({
       return;
     }
 
-    let text = composeInboxMessage(inboxCard, value);
+    const draftCommand = canSaveDraft
+      ? consumeDraftCommand(value)
+      : { text: value, matched: false };
+    if ((draftSelected || draftCommand.matched) && onSaveDraft) {
+      const files = attachmentsRef.current;
+      const text = draftCommand.text;
+      if (!text.trim() && files.length === 0) return;
+      const accepted = onSaveDraft(text, files);
+      if (accepted === false) return;
+      if (!ref.current) return;
+      ref.current.value = "";
+      ref.current.style.height = "auto";
+      setDraft("");
+      onDraftChange?.("");
+      borrowedAttachmentIdsRef.current.clear();
+      attachmentsRef.current = [];
+      setAttachments([]);
+      setDraftSelected(false);
+      setSlash(null);
+      setMention(null);
+      setCreatingSkill(false);
+      setCreateError(null);
+      syncHasValue("", attachmentsRef.current);
+      return;
+    }
+
+    const command = consumePlanCommand(value);
+    const orchestratorCommand = !command.planning
+      ? consumeOrchestratorCommand(command.text)
+      : { text: command.text, matched: false };
+
+    let text = composeInboxMessage(inboxCard, orchestratorCommand.text);
     const files = attachments;
     const selectedComp = useLiveComponentStore.getState().selectedComponent;
     if (selectedComp) {
@@ -1123,6 +1211,9 @@ export function Composer({
     attachmentsRef.current = [];
     setAttachments([]);
     setResendEdited(false);
+    setPlanSelected(false);
+    setOrchestrationSelected(false);
+    setDraftSelected(false);
     onEditingLastTurnChange?.(false);
     setSlash(null);
     setMention(null);
@@ -1455,6 +1546,7 @@ export function Composer({
             >
               <ComposerHighlight
                 text={draft}
+                mode={leadingMode}
                 names={skillNames}
                 mentions={mentionIndex.labels}
               />
@@ -1462,6 +1554,7 @@ export function Composer({
             <textarea
               ref={ref}
               data-composer-empty={navigationEmpty ? "true" : undefined}
+              style={{ textIndent: modeIndent }}
               rows={1}
               spellCheck={false}
               defaultValue={initialDraft}
@@ -1508,6 +1601,36 @@ export function Composer({
             >
               <Plus className="size-3.5" strokeWidth={1.5} />
             </ToolButton>
+            {orchestrationActive ? (
+              <ModeCommandPill
+                name={ORCHESTRATOR_COMMAND.name}
+                onClear={() => {
+                  setOrchestrationSelected(false);
+                  clearLeadingMode(ORCHESTRATOR_COMMAND.name);
+                  ref.current?.focus();
+                }}
+              />
+            ) : null}
+            {planActive ? (
+              <ModeCommandPill
+                name={PLAN_COMMAND.name}
+                onClear={() => {
+                  setPlanSelected(false);
+                  clearLeadingMode(PLAN_COMMAND.name);
+                  ref.current?.focus();
+                }}
+              />
+            ) : null}
+            {draftActive ? (
+              <ModeCommandPill
+                name={DRAFT_COMMAND.name}
+                onClear={() => {
+                  setDraftSelected(false);
+                  clearLeadingMode(DRAFT_COMMAND.name);
+                  ref.current?.focus();
+                }}
+              />
+            ) : null}
             <div
               className="composer-toolbar flex min-w-0 flex-1 items-center"
               onWheel={(e) => {
@@ -1569,6 +1692,7 @@ export function Composer({
               <ComposerAction
                 busy={busy}
                 hasValue={hasValue}
+                label={draftActive ? "Save draft" : undefined}
                 onSend={() => submit(ref.current?.value ?? "")}
                 onStop={() => onStop?.()}
               />
@@ -1591,16 +1715,20 @@ export function Composer({
 
 function ComposerHighlight({
   text,
+  mode,
   names,
   mentions,
 }: {
   text: string;
+  mode: ModeCommandToken | null;
   names: ReadonlySet<string>;
   mentions: ReadonlyMap<string, ProjectFile>;
 }) {
-  const parts = skillTextParts(text, names);
+  const rest = mode ? text.slice(mode.end) : text;
+  const parts = skillTextParts(rest, names);
   return (
     <>
+      {mode ? <ModeCommandText text={text} mode={mode} /> : null}
       {parts.map((part, index) =>
         part.skill ? (
           <span key={index} className="text-skill">
@@ -1634,7 +1762,9 @@ function MentionRuns({
                 lockstep; the file icon sits on top of it. */}
             <span className="relative text-transparent">
               {"@"}
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+              {/* `indent-0`: a leading mode command indents the first line,
+                  and this box would otherwise inherit that indent. */}
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 indent-0">
                 {part.file && isNoteMentionPath(part.file.path) ? (
                   <StickyNote className="size-3.5" strokeWidth={1.75} />
                 ) : (
@@ -1658,22 +1788,40 @@ function MentionRuns({
 
 export function ComposerAction({
   busy,
+  disabled = false,
   hasValue,
+  label,
   onSend,
   onStop,
 }: {
   busy: boolean;
+  disabled?: boolean;
   hasValue: boolean;
+  label?: string;
   onSend: () => void;
   onStop: () => void;
 }) {
   const { t } = useTranslation();
+  const sendLabel = label ?? t("harness.chrome.send");
+  if (disabled) {
+    return (
+      <button
+        type="button"
+        title={sendLabel}
+        aria-label={sendLabel}
+        disabled
+        className="composer-send grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90 disabled:cursor-default disabled:bg-white/30 disabled:text-black/40 disabled:hover:bg-white/30"
+      >
+        <ArrowUp className="size-3.5" strokeWidth={2.25} />
+      </button>
+    );
+  }
   if (busy) {
     return hasValue ? (
       <button
         type="button"
-        title={t("harness.chrome.send")}
-        aria-label={t("harness.chrome.send")}
+        title={sendLabel}
+        aria-label={sendLabel}
         onClick={onSend}
         className="composer-send grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90"
       >
@@ -1695,8 +1843,8 @@ export function ComposerAction({
   return (
     <button
       type="button"
-      title={t("harness.chrome.send")}
-      aria-label={t("harness.chrome.send")}
+      title={sendLabel}
+      aria-label={sendLabel}
       disabled={!hasValue}
       onClick={onSend}
       className="grid size-6.5 place-items-center rounded-md bg-white text-black hover:bg-white/90 disabled:cursor-default disabled:bg-white/30 disabled:text-black/40 disabled:hover:bg-white/30"
