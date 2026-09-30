@@ -1,4 +1,5 @@
 import type { HarnessEvent } from "./types";
+import { isFailedStatus } from "@/modules/harness/surfaces/transcriptActivity";
 import {
   agentToolTitle,
   isAgentTool,
@@ -48,6 +49,11 @@ export class AcpSubagents {
           text: event.title ?? "",
           toolKind: event.kind,
           status: event.status,
+          ...(event.type === "tool.updated" &&
+          isFailedStatus(event.status) &&
+          event.detail
+            ? { detail: event.detail }
+            : {}),
           preview: event.preview,
         });
       } else if (

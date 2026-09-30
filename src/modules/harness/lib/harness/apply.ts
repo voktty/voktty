@@ -798,12 +798,14 @@ function recordAgentStep(
   if (!text && event.kind !== "tool") return session;
 
   const run = prev.agentRun;
+  const detail = capToolDetail(event.detail);
   const step: AgentStep = {
     id: event.stepId,
     kind: event.kind,
     text,
     ...(event.toolKind ? { toolKind: event.toolKind } : {}),
     ...(event.status ? { status: event.status } : {}),
+    ...(detail ? { detail } : {}),
     ...(event.preview ? { preview: event.preview } : {}),
   };
 
@@ -860,6 +862,7 @@ function sameAgentStep(a: AgentStep, b: AgentStep): boolean {
     a.text === b.text &&
     a.toolKind === b.toolKind &&
     a.status === b.status &&
+    a.detail === b.detail &&
     samePreview(a.preview, b.preview)
   );
 }

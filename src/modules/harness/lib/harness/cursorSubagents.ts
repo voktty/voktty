@@ -81,6 +81,9 @@ export function cursorSubagentEvents(
         ? {
             toolKind: kind,
             status: step.status,
+            ...(step.status === "failed" && step.output
+              ? { detail: step.output }
+              : {}),
             preview: step.output
               ? {
                   ...(preview ?? { kind: "read" as const, contentOnly: true }),

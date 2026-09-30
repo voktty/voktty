@@ -660,3 +660,48 @@ describe("clarifying questions", () => {
     expect(session.pendingQuestion).toBeUndefined();
   });
 });
+
+describe("subagent steps", () => {
+  function spawn() {
+    let session = newSession("claude", "/repo");
+    session = applyHarnessEvent(session, {
+      type: "tool.started",
+      callId: "agent-1",
+      title: "Run tests",
+      kind: "agent",
+    });
+    return session;
+  }
+
+  it("caps a failed step's error output like the parent's own", () => {
+    let session = spawn();
+    session = applyHarnessEvent(session, {
+      type: "agent.step",
+      callId: "agent-1",
+      stepId: "t1",
+      kind: "tool",
+      text: "npm test",
+      status: "failed",
+      detail: "boom ".repeat(4_000),
+    });
+
+    const detail = session.blocks[0].agentRun?.steps[0].detail ?? "";
+    expect(detail.length).toBeLessThanOrEqual(8_002);
+    expect(detail.endsWith("…")).toBe(true);
+  });
+
+  it("drops a blank error output rather than carrying it around", () => {
+    let session = spawn();
+    session = applyHarnessEvent(session, {
+      type: "agent.step",
+      callId: "agent-1",
+      stepId: "t1",
+      kind: "tool",
+      text: "npm test",
+      status: "failed",
+      detail: "   ",
+    });
+
+    expect(session.blocks[0].agentRun?.steps[0]).not.toHaveProperty("detail");
+  });
+});
