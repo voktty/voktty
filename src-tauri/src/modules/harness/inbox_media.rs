@@ -269,6 +269,7 @@ fn github_auth_token() -> Option<String> {
         .args(["auth", "token"])
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GH_PAGER", "cat");
+    crate::modules::proc::hide_console(&mut cmd);
     crate::modules::harness::host::apply_gui_env(&mut cmd);
     let output = cmd.output().ok()?;
     if !output.status.success() {

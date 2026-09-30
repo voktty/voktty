@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { HarnessId } from "../session";
 
 type LinePayload = { sessionId: string; line: string };
 type ExitPayload = { sessionId: string; code: number | null; pid?: number };
@@ -358,4 +359,68 @@ export function execChild(
   cwd?: string,
 ): Promise<string> {
   return invoke("harness_exec", { command, args, cwd });
+}
+
+export async function resolveHarnessBinary(
+  provider: HarnessId,
+): Promise<{ path: string }> {
+  switch (provider) {
+    case "claude":
+      return resolveClaudeBinary();
+    case "codex":
+      return resolveCodexBinary();
+    case "cursor":
+      return resolveCursorBinary();
+    case "opencode":
+      return resolveOpenCodeBinary();
+    case "pi":
+      return resolvePiBinary();
+    case "omp":
+      return resolveOmpBinary();
+    case "fx":
+      return resolveFxBinary();
+    case "grok":
+      return resolveGrokBinary();
+    case "hermes":
+      return resolveHermesBinary();
+    case "gemini":
+      return resolveGeminiBinary();
+    default:
+      throw new Error(`Unsupported harness provider: ${provider}`);
+  }
+}
+
+export type HarnessBinaryInspection = {
+  path: string;
+  version?: string;
+  error?: string;
+};
+
+export function inspectHarnessBinary(
+  provider: HarnessId,
+): Promise<HarnessBinaryInspection> {
+  return resolveHarnessBinary(provider).then(async (resolved) => {
+    try {
+      const version = (
+        await execChild(resolved.path, ["--version"])
+      ).trim();
+      return /\d+\.\d+\.\d+/.test(version)
+        ? { path: resolved.path, version }
+        : { path: resolved.path, error: "CLI returned no valid version." };
+    } catch (error) {
+      return {
+        path: resolved.path,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+}
+
+/** Runs the CLI's own self-update against the binary Voktty uses. */
+export async function updateHarnessCli(provider: HarnessId): Promise<void> {
+  const resolved = await resolveHarnessBinary(provider);
+  await invoke("harness_update", {
+    command: resolved.path,
+    binaryProvider: provider,
+  });
 }
