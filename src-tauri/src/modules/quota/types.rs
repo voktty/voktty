@@ -40,9 +40,7 @@ impl LimitState {
     pub fn is_danger(&self) -> bool {
         matches!(
             self,
-            LimitState::Reached { .. }
-                | LimitState::RateLimited { .. }
-                | LimitState::Unauthenticated { .. }
+            LimitState::Reached { .. } | LimitState::RateLimited { .. }
         )
     }
 
