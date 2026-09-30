@@ -5419,6 +5419,7 @@ export const en = {
       windowLimit: "{window} limit",
       percentUsed: "{percent} used",
       limitUsed: "{title} used",
+      limitRemaining: "{title} remaining",
       percentRemaining: "{percent}% remaining",
       windowName: "{window} window",
       bankedResets: "Banked resets",
