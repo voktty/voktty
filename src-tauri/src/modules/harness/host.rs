@@ -1036,7 +1036,7 @@ fn exec_args_allowed(args: &[String]) -> bool {
 
 /// Must be a path a resolver would hand back, not an arbitrary binary
 /// that merely shares a file name.
-fn is_resolved_harness_binary(command: &str) -> bool {
+pub(crate) fn is_resolved_harness_binary(command: &str) -> bool {
     let path = PathBuf::from(command);
     [
         resolve_cursor_agent(),
@@ -1047,6 +1047,8 @@ fn is_resolved_harness_binary(command: &str) -> bool {
         resolve_omp(),
         resolve_fx(),
         resolve_grok(),
+        resolve_hermes(),
+        resolve_agy(),
     ]
     .into_iter()
     .flatten()
@@ -1073,11 +1075,29 @@ pub async fn harness_exec(
     .map_err(|e| e.to_string())?
 }
 
+const EXEC_TIMEOUT: Duration = Duration::from_secs(15);
+
 fn exec_capture(command: &str, args: &[String], cwd: Option<&str>) -> Result<String, String> {
+    let output = exec_output(command, args, cwd, EXEC_TIMEOUT)?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    if output.status.success() || !stdout.trim().is_empty() {
+        return Ok(stdout);
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(stderr.trim().to_string())
+}
+
+pub(crate) fn exec_output(
+    command: &str,
+    args: &[String],
+    cwd: Option<&str>,
+    timeout: Duration,
+) -> Result<std::process::Output, String> {
     let mut cmd = build_exec_command(command, args);
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    crate::modules::proc::hide_console(&mut cmd);
     prepare_child(&mut cmd, command);
     if let Some(dir) = cwd {
         let workdir = expand_home(dir);
@@ -1095,15 +1115,8 @@ fn exec_capture(command: &str, args: &[String], cwd: Option<&str>) -> Result<Str
         let _ = tx.send(child.wait_with_output());
     });
 
-    match rx.recv_timeout(Duration::from_secs(15)) {
-        Ok(Ok(output)) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-            if output.status.success() || !stdout.trim().is_empty() {
-                return Ok(stdout);
-            }
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(stderr.trim().to_string())
-        }
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(output)) => Ok(output),
         Ok(Err(e)) => Err(format!("Failed to run {command}: {e}")),
         Err(_) => {
             terminate(pid);

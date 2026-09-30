@@ -457,6 +457,11 @@ const LazyUpdateToast = lazy(() =>
     default: module.UpdateToast,
   })),
 );
+const LazyHarnessUpdateNotice = lazy(() =>
+  import("../chrome/HarnessUpdateNotice").then((module) => ({
+    default: module.HarnessUpdateNotice,
+  })),
+);
 const LazyReminderNotices = lazy(() =>
   import("../chrome/ReminderNotices").then((module) => ({
     default: module.ReminderNotices,
@@ -6513,6 +6518,9 @@ export function HarnessApp({
           />
         </Suspense>
       ) : null}
+      <Suspense fallback={null}>
+        <LazyHarnessUpdateNotice />
+      </Suspense>
       <div className="hidden" aria-hidden="true">
         {sessions
           .filter((session) => session.inboxAsk)

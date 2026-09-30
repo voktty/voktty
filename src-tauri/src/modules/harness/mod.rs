@@ -18,6 +18,7 @@ pub mod reminders;
 pub mod search;
 pub mod session_store;
 pub mod skills;
+pub mod updates;
 pub mod window_transfer;
 
 pub use checkpoint::CheckpointStore;
