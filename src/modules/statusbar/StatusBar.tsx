@@ -38,7 +38,6 @@ import { useArcadeStore } from "./arcadeStore";
 import { PacmanIcon } from "./components/PacmanIcon";
 import Note01Icon from "@hugeicons/core-free-icons/Note01Icon";
 import { useNotesBoardStore } from "@/modules/notes-board/store/notesBoardStore";
-import { QuotaUsageWidget } from "@/modules/quota";
 
 const LazyFloatingArcadeWidget = lazy(() =>
   import("./components/FloatingArcadeWidget").then((m) => ({
@@ -227,7 +226,6 @@ export function StatusBar({
         >
           <HugeiconsIcon icon={Settings01Icon} size={14} strokeWidth={1.75} />
         </Button>
-        <QuotaUsageWidget />
         <Button
           variant="ghost"
           size="icon"
