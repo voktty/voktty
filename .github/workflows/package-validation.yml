@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install musl toolchain
         run: |
@@ -44,7 +44,7 @@ jobs:
           test -s src-tauri/resources/remote/linux-x86_64/voktty-remote
 
       - name: Upload remote helper
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-validation-remote-linux-x86_64
           path: src-tauri/resources/remote/linux-x86_64/
@@ -97,7 +97,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Linux build dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -112,9 +112,9 @@ jobs:
             libudev-dev \
             patchelf
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -133,7 +133,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download remote helper
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: package-validation-remote-linux-x86_64
           path: src-tauri/resources/remote/linux-x86_64
@@ -181,7 +181,7 @@ jobs:
           $msi.FullName
 
       - name: Upload validation packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: voktty-${{ matrix.artifact-name }}-${{ github.sha }}
           path: ${{ matrix.artifact-path }}
