@@ -99,6 +99,8 @@ export function gitDiffIndex(cwd: string): Promise<GitDiffIndex> {
   return invoke<GitDiffIndex>("git_diff_index", { cwd });
 }
 
+export type GitFileDiffKind = "staged" | "unstaged";
+
 export type GitFileDiff = {
   path: string;
   relative: string;
@@ -109,8 +111,16 @@ export type GitFileDiff = {
   tooLarge: boolean;
 };
 
-export function gitFileDiff(cwd: string, relative: string): Promise<GitFileDiff> {
-  return invoke<GitFileDiff>("git_file_diff", { cwd, relative });
+export function gitFileDiff(
+  cwd: string,
+  relative: string,
+  staged?: boolean,
+): Promise<GitFileDiff> {
+  return invoke<GitFileDiff>("git_file_diff", {
+    cwd,
+    relative,
+    staged: staged ?? false,
+  });
 }
 
 export function gitStageContents(
