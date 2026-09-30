@@ -43,6 +43,7 @@ import {
 import { useColorScheme } from "../hooks/useColorScheme";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { isLightScheme } from "../lib/appearance";
+import { loadAutosave } from "../lib/settings";
 import { syncWatchedMtime, watchFile } from "../lib/fileWatch";
 import { formatText } from "../lib/format";
 import {
@@ -82,6 +83,8 @@ import { editorLint } from "./editorLint";
 import { editorSearch } from "./editorSearch";
 
 type EditorNavigationRequest = EditorNavigation & { token: number };
+
+export const FILE_EDITOR_AUTOSAVE_DELAY_MS = 1_000;
 
 const editorScheme = new Compartment();
 
@@ -419,6 +422,7 @@ export function FileEditor({
                 onDirtyChange={dirtyChange}
                 onErrorCountChange={errorCountChange}
                 onSave={save}
+                canAutosave={() => !pendingDiskRef.current}
                 onStageGit={showDiff ? stageGit : undefined}
                 onDocChange={setDraft}
               />
@@ -438,6 +442,7 @@ export function FileEditor({
           onDirtyChange={dirtyChange}
           onErrorCountChange={errorCountChange}
           onSave={save}
+          canAutosave={() => !pendingDiskRef.current}
           onStageGit={showDiff ? stageGit : undefined}
         />
       )}
@@ -473,6 +478,7 @@ function CodeMirrorEditor({
   onDirtyChange,
   onErrorCountChange,
   onSave,
+  canAutosave,
   onStageGit,
   onDocChange,
 }: {
@@ -486,6 +492,7 @@ function CodeMirrorEditor({
   onDirtyChange: (dirty: boolean) => void;
   onErrorCountChange: (count: number) => void;
   onSave: (content: string) => Promise<void>;
+  canAutosave: () => boolean;
   onStageGit?: (contents: string) => Promise<void>;
   onDocChange?: (content: string) => void;
 }) {
@@ -497,6 +504,7 @@ function CodeMirrorEditor({
   const onDirtyChangeRef = useRef(onDirtyChange);
   const onErrorCountChangeRef = useRef(onErrorCountChange);
   const onSaveRef = useRef(onSave);
+  const canAutosaveRef = useRef(canAutosave);
   const onStageGitRef = useRef(onStageGit);
   const onDocChangeRef = useRef(onDocChange);
   const valueRef = useRef(value);
@@ -521,6 +529,7 @@ function CodeMirrorEditor({
   onDirtyChangeRef.current = onDirtyChange;
   onErrorCountChangeRef.current = onErrorCountChange;
   onSaveRef.current = onSave;
+  canAutosaveRef.current = canAutosave;
   onStageGitRef.current = onStageGit;
   onDocChangeRef.current = onDocChange;
   const navigationTokenRef = useRef<number | undefined>(undefined);
@@ -604,6 +613,7 @@ function CodeMirrorEditor({
     const language = new Compartment();
     let disposed = false;
     let saveGeneration = 0;
+    let autosaveTimer = 0;
     let view: EditorView;
 
     const markDirty = () => {
@@ -611,7 +621,9 @@ function CodeMirrorEditor({
       setDirty(saved ? !view.state.doc.eq(saved) : false);
     };
 
-    const save = () => {
+    const save = (automatic = false) => {
+      const retryPendingAutosave = autosaveTimer !== 0 && loadAutosave();
+      window.clearTimeout(autosaveTimer);
       const generation = ++saveGeneration;
       void (async () => {
         const before = view.state.doc.toString();
@@ -638,9 +650,18 @@ function CodeMirrorEditor({
         }
 
         const document = view.state.doc;
+        if (automatic && !canAutosaveRef.current()) return;
         try {
           await onSaveRef.current(document.toString());
         } catch {
+          if (
+            retryPendingAutosave &&
+            !disposed &&
+            generation === saveGeneration &&
+            dirtyRef.current
+          ) {
+            scheduleAutosave();
+          }
           return;
         }
         if (disposed || generation !== saveGeneration) return;
@@ -649,6 +670,21 @@ function CodeMirrorEditor({
       })();
       return true;
     };
+
+    function scheduleAutosave() {
+      window.clearTimeout(autosaveTimer);
+      if (!loadAutosave()) return;
+      autosaveTimer = window.setTimeout(() => {
+        autosaveTimer = 0;
+        if (
+          dirtyRef.current &&
+          loadAutosave() &&
+          canAutosaveRef.current()
+        ) {
+          save(true);
+        }
+      }, FILE_EDITOR_AUTOSAVE_DELAY_MS);
+    }
 
     view = new EditorView({
       doc: valueRef.current,
@@ -684,7 +720,7 @@ function CodeMirrorEditor({
         Prec.high(
           keymap.of([
             ...foldKeymap,
-            { key: "Mod-s", run: save, preventDefault: true },
+            { key: "Mod-s", run: () => save(), preventDefault: true },
             {
               key: "Tab",
               run: (view) => {
@@ -723,6 +759,7 @@ function CodeMirrorEditor({
             return;
           }
           markDirty();
+          scheduleAutosave();
         }),
         EditorView.domEventHandlers({
           blur: () => {
@@ -765,6 +802,7 @@ function CodeMirrorEditor({
 
     return () => {
       disposed = true;
+      window.clearTimeout(autosaveTimer);
       onErrorCountChangeRef.current(0);
       lockOverscroll(null);
       viewRef.current = null;

@@ -1,4 +1,4 @@
-import { Loader, WandSparkles } from "./icons";
+import { Loader, WandSparkles, X } from "./icons";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "@/modules/i18n";
 import { createPortal } from "react-dom";
@@ -32,6 +32,7 @@ export function SwitchBranchDialog({
   const { t } = useTranslation();
   const [message, setMessage] = useState("");
   const [generating, setGenerating] = useState(false);
+  const generateAbortRef = useRef<AbortController | null>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const trimmed = message.trim();
   const canCommit = trimmed.length > 0 && !busy && !generating;
@@ -39,6 +40,17 @@ export function SwitchBranchDialog({
   useEffect(() => {
     messageRef.current?.focus();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (generateAbortRef.current) {
+        generateAbortRef.current.abort();
+        generateAbortRef.current = null;
+        setGenerating(false);
+      }
+    },
+    [cwd],
+  );
 
   useEffect(() => {
     const el = messageRef.current;
@@ -59,19 +71,38 @@ export function SwitchBranchDialog({
   }, [busy, generating, onCancel]);
 
   const generate = async () => {
-    if (busy || generating) return;
+    if (busy || generating || generateAbortRef.current) return;
+    const controller = new AbortController();
+    generateAbortRef.current = controller;
     setGenerating(true);
     try {
-      setMessage(await generateCommitMessage(cwd));
+      const generated = await generateCommitMessage(
+        cwd,
+        undefined,
+        controller.signal,
+      );
+      if (!controller.signal.aborted) setMessage(generated);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : String(err));
+      if (!controller.signal.aborted) {
+        window.alert(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setGenerating(false);
-      messageRef.current?.focus();
+      if (generateAbortRef.current === controller) {
+        generateAbortRef.current = null;
+        setGenerating(false);
+        messageRef.current?.focus();
+      }
     }
   };
 
-  return createPortal(
+  const cancelGenerate = () => {
+    generateAbortRef.current?.abort();
+    generateAbortRef.current = null;
+    setGenerating(false);
+    messageRef.current?.focus();
+  };
+
+  const dialog = (
     <div className="fixed inset-0" style={{ zIndex: LAYER.dialog }}>
       <div
         className="absolute inset-0 bg-black/30"
@@ -127,14 +158,31 @@ export function SwitchBranchDialog({
           />
           <button
             type="button"
-            title={t("harness.chrome.generateCommit")}
-            aria-label={t("harness.chrome.generateCommit")}
-            disabled={Boolean(busy) || generating}
-            onClick={() => void generate()}
-            className="absolute top-1 right-1 grid size-5 place-items-center rounded-md bg-content/10 text-content hover:bg-content/20 hover:text-content disabled:opacity-40"
+            title={
+              generating
+                ? "Cancel commit message generation"
+                : t("harness.chrome.generateCommit")
+            }
+            aria-label={
+              generating
+                ? "Cancel commit message generation"
+                : t("harness.chrome.generateCommit")
+            }
+            disabled={Boolean(busy)}
+            onClick={() => (generating ? cancelGenerate() : void generate())}
+            className="group absolute top-1 right-1 grid size-5 place-items-center rounded-md bg-content/10 text-content hover:bg-content/20 hover:text-content disabled:opacity-40"
           >
             {generating ? (
-              <Loader className="size-3.5 animate-spin" strokeWidth={1.75} />
+              <>
+                <Loader
+                  className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden"
+                  strokeWidth={1.75}
+                />
+                <X
+                  className="hidden size-3.5 group-hover:block group-focus-visible:block"
+                  strokeWidth={1.75}
+                />
+              </>
             ) : (
               <WandSparkles className="size-3" strokeWidth={1} />
             )}
@@ -180,7 +228,8 @@ export function SwitchBranchDialog({
           </button>
         </div>
       </div>
-    </div>,
-    document.body,
+    </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(dialog, document.body) : dialog;
 }

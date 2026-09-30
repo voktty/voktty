@@ -627,6 +627,48 @@ export function saveClaudeHooks(value: boolean) {
   }
 }
 
+const AUTOSAVE_KEY = "voktty.autosave";
+const AUTOSAVE_CHANGE_EVENT = "voktty:autosave-change";
+
+export const AUTOSAVE_DEFAULT = false;
+
+export function loadAutosave(): boolean {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (raw == null) return AUTOSAVE_DEFAULT;
+    return raw === "1" || raw === "true";
+  } catch {
+    return AUTOSAVE_DEFAULT;
+  }
+}
+
+export function saveAutosave(value: boolean): boolean {
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, value ? "1" : "0");
+  } catch {
+    // private mode / quota
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<boolean>(AUTOSAVE_CHANGE_EVENT, { detail: value }),
+    );
+  }
+  return loadAutosave();
+}
+
+export function subscribeAutosave(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === AUTOSAVE_KEY) onStoreChange();
+  };
+  window.addEventListener(AUTOSAVE_CHANGE_EVENT, onStoreChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(AUTOSAVE_CHANGE_EVENT, onStoreChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
 const CTRL = IS_MAC ? "⌃" : "Ctrl+";
 
 export type KeybindingRow = {
