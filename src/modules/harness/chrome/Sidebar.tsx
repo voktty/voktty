@@ -14,6 +14,7 @@ import {
   Search,
   Settings,
   StickyNote,
+  Zap,
 } from "./icons";
 import {
   lazy,
@@ -243,10 +244,12 @@ type Props = {
   onSearch?: () => void;
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
+  onOpenAutomations?: () => void;
   onGoToFile?: () => void;
   searchActive?: boolean;
   inboxActive?: boolean;
   notesActive?: boolean;
+  automationsActive?: boolean;
   notesEnabled?: boolean;
   onToggleProjectRail?: () => void;
   projectRailOpen?: boolean;
@@ -312,10 +315,12 @@ function SidebarComponent({
   onSearch,
   onOpenInbox,
   onOpenNotes,
+  onOpenAutomations,
   onGoToFile,
   searchActive = false,
   inboxActive = false,
   notesActive = false,
+  automationsActive = false,
   notesEnabled = true,
   onToggleProjectRail,
   projectRailOpen = true,
@@ -603,6 +608,7 @@ function SidebarComponent({
     !searchActive &&
     !inboxActive &&
     !notesActive &&
+    !automationsActive &&
     (classicSettings || (!settingsOpen && !(deckLayout && !inProject)));
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
   const changeStats = useProjectDiffStats(gitRoot, open);
@@ -1302,9 +1308,11 @@ function SidebarComponent({
               onSearch={onSearch}
               onOpenInbox={onOpenInbox}
               onOpenNotes={notesEnabled ? onOpenNotes : undefined}
+              onOpenAutomations={onOpenAutomations}
               searchActive={searchActive}
               inboxActive={inboxActive}
               notesActive={notesActive}
+              automationsActive={automationsActive}
               inboxUnseen={inboxUnseen}
             />
           ) : null}
@@ -1848,6 +1856,8 @@ function SidebarComponent({
           notesEnabled={notesEnabled}
           onOpenNotes={onOpenNotes}
           notesActive={notesActive}
+          onOpenAutomations={onOpenAutomations}
+          automationsActive={automationsActive}
           onTogglePanel={onToggleProjectRail}
           onSelectProject={onSelectProject}
           onOpenProject={onOpenProject}
@@ -1876,9 +1886,11 @@ function SidebarProjectPicker({
   onSearch,
   onOpenInbox,
   onOpenNotes,
+  onOpenAutomations,
   searchActive = false,
   inboxActive = false,
   notesActive = false,
+  automationsActive = false,
   inboxUnseen = false,
 }: {
   cwd: string;
@@ -1890,9 +1902,11 @@ function SidebarProjectPicker({
   onSearch?: () => void;
   onOpenInbox?: () => void;
   onOpenNotes?: () => void;
+  onOpenAutomations?: () => void;
   searchActive?: boolean;
   inboxActive?: boolean;
   notesActive?: boolean;
+  automationsActive?: boolean;
   inboxUnseen?: boolean;
 }) {
   const { t } = useTranslation();
@@ -2180,6 +2194,15 @@ function SidebarProjectPicker({
             onClick={onOpenNotes}
           >
             <StickyNote className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
+        {onOpenAutomations ? (
+          <IconButton
+            label="Automations"
+            active={automationsActive}
+            onClick={onOpenAutomations}
+          >
+            <Zap className="size-3.5" strokeWidth={1.75} />
           </IconButton>
         ) : null}
       </div>
@@ -2746,6 +2769,17 @@ function SessionCard({
         <span className="min-w-0 flex-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
           {title}
         </span>
+        {session.automationId ? (
+          <span
+            data-automation-icon
+            role="img"
+            title="Started by an automation"
+            aria-label="Started by an automation"
+            className="grid size-5 -mr-1 shrink-0 place-items-center text-amber-400"
+          >
+            <Zap className="size-3" strokeWidth={1.75} />
+          </span>
+        ) : null}
         {compact ? status : null}
       </span>
       <span className="relative mt-1 flex items-center gap-2">

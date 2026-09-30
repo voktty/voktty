@@ -1,4 +1,5 @@
 pub mod account_identity;
+pub mod automations;
 pub mod chat_background;
 pub mod checkpoint;
 pub mod cursor_store;

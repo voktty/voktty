@@ -27,6 +27,7 @@ export function mergeHistorySummary(
     ...summary,
     archived: summary.archived ?? previous?.archived,
     pinned: summary.pinned ?? previous?.pinned,
+    automationId: summary.automationId ?? previous?.automationId,
   };
   return [next, ...current.filter((entry) => entry.id !== summary.id)].sort(
     compareSessionSummaries,
@@ -104,6 +105,7 @@ export function summaryFromSession(
     ...(session.linkedWorkItem
       ? { linkedWorkItem: session.linkedWorkItem }
       : {}),
+    ...(session.automationId ? { automationId: session.automationId } : {}),
     ...(git?.branch ? { branch: git.branch } : {}),
     ...(git?.repo ? { repo: git.repo } : {}),
     createdAt: 0,
@@ -146,7 +148,18 @@ export function historyWithLiveSessions(
     if (!sameProjectPath(session.cwd, cwd)) continue;
     const live = session.busy || hasPendingApproval(session.blocks);
     if (!shouldPersistSession(session) && !live) continue;
-    if (rows.some((row) => row.id === session.id)) continue;
+    const storedIndex = rows.findIndex((row) => row.id === session.id);
+    if (storedIndex >= 0) {
+      const stored = rows[storedIndex];
+      const automationId = session.automationId || stored.automationId;
+      if (stored.automationId !== automationId) {
+        rows[storedIndex] = {
+          ...stored,
+          ...(automationId ? { automationId } : {}),
+        };
+      }
+      continue;
+    }
     const sessionHint: SessionGitHint = {
       ...hint,
       ...(session.branch ? { branch: session.branch } : {}),

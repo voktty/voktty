@@ -3,7 +3,6 @@ import {
   inboxItemStatus,
   type InboxItem,
   type InboxKind,
-  type InboxProvider,
 } from "./githubTasks";
 import { normalizeProjectPath } from "./recents";
 import {
@@ -57,9 +56,9 @@ export const DEFAULT_INBOX_FILTERS: InboxFilters = {
   status: DEFAULT_INBOX_STATUS_FILTER,
 };
 
-export type InboxSource = InboxProvider;
+export type ConnectableInboxSource = "github" | "linear" | "gitlab";
 
-export type ConnectableInboxSource = InboxSource;
+export type InboxSource = ConnectableInboxSource;
 
 /** `null` means the status check has not resolved yet. */
 export type InboxSourceConnections = Record<

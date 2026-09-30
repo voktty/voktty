@@ -739,6 +739,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     )?;
     super::notes::ensure_notes_table(conn)?;
     super::reminders::ensure_table(conn)?;
+    super::automations::ensure_tables(conn)?;
     Ok(())
 }
 

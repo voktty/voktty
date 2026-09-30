@@ -338,6 +338,8 @@ export type Session = {
   inboxCard?: InboxComposerCard;
   /** GitHub issue or pull request shown on the persisted session card. */
   linkedWorkItem?: LinkedWorkItem;
+  /** Automation that created or last launched this session. */
+  automationId?: string;
   /** Note chip shown above the composer. In-memory, one-shot. */
   noteCard?: NoteComposerCard;
   /** Handoff chip shown above the composer. In-memory, one-shot. */

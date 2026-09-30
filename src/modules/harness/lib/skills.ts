@@ -359,8 +359,16 @@ function scopeRank(skill: Skill): number {
   return 2;
 }
 
+export function hasNativeCommands(harness: HarnessId): boolean {
+  return harness === "pi";
+}
+
 /** Slash token that contains `cursor`, if the user is typing `/skill`. */
-export function slashTokenAt(text: string, cursor: number): SlashToken | null {
+export function slashTokenAt(
+  text: string,
+  cursor: number,
+  _nativeCommands = false,
+): SlashToken | null {
   const i = clamp(cursor, 0, text.length);
   let start = i;
   while (start > 0 && !isSpace(text[start - 1]!)) start -= 1;
