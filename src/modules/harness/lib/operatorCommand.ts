@@ -16,12 +16,12 @@ export function consumeOperatorCommand(text: string): {
   text: string;
   matched: boolean;
 } {
-  const match = text.match(/^\s*\/(?:operator|terax|voktty)(?=\s|$)\s*/i);
+  const match = text.match(/^\s*\/(?:operator|mono|monocode|terax|voktty)(?=\s|$)\s*/i);
   if (!match) return { text, matched: false };
   return { text: text.slice(match[0].length), matched: true };
 }
 
-const LEGACY_COMMAND = /^\s*\/(?:terax|voktty)(?=\s|$)\s*/i;
+const LEGACY_COMMAND = /^\s*\/(?:mono|monocode|terax|voktty)(?=\s|$)\s*/i;
 
 export function isOperatorUserTurn(block: Block): boolean {
   return (
