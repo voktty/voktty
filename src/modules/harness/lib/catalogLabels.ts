@@ -30,6 +30,7 @@ const SECTION_LABEL_KEYS: Record<SettingsSectionId, string> = {
   inbox: "harness.settings.inbox",
   skills: "harness.settings.skills",
   mcp: "harness.settings.mcp",
+  worktrees: "harness.settings.worktrees",
   archive: "harness.modelSettings.archive",
 };
 
@@ -42,6 +43,7 @@ const SECTION_DESCRIPTION_KEYS: Record<SettingsSectionId, string> = {
   inbox: "harness.modelSettings.sectionDescriptions.inbox",
   skills: "harness.modelSettings.sectionDescriptions.skills",
   mcp: "harness.modelSettings.sectionDescriptions.mcp",
+  worktrees: "harness.modelSettings.sectionDescriptions.worktrees",
   archive: "harness.modelSettings.sectionDescriptions.archive",
 };
 
@@ -84,14 +86,16 @@ export function settingsGroupLabel(t: Translate, group: SettingsGroupId): string
 }
 
 export function settingsSectionLabel(t: Translate, id: SettingsSectionId): string {
-  return t(SECTION_LABEL_KEYS[id]);
+  const key = SECTION_LABEL_KEYS[id];
+  return key ? t(key) : id;
 }
 
 export function settingsSectionDescription(
   t: Translate,
   id: SettingsSectionId,
 ): string {
-  return t(SECTION_DESCRIPTION_KEYS[id]);
+  const key = SECTION_DESCRIPTION_KEYS[id];
+  return key ? t(key) : "";
 }
 
 const ENTRY_LABEL_KEYS: Record<string, string> = {
@@ -123,6 +127,7 @@ const ENTRY_LABEL_KEYS: Record<string, string> = {
   github: "harness.settingsEntries.github",
   gitlab: "harness.settingsEntries.gitlab",
   linear: "harness.settingsEntries.linear",
+  "project-worktrees": "harness.settingsEntries.projectWorktrees",
   "show-archived": "harness.settingsEntries.showArchived",
   "mcp-servers": "harness.settingsEntries.mcpServers",
 };
