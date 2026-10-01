@@ -29,6 +29,7 @@ const SECTION_LABEL_KEYS: Record<SettingsSectionId, string> = {
   providers: "harness.settings.providers",
   inbox: "harness.settings.inbox",
   skills: "harness.settings.skills",
+  mcp: "harness.settings.mcp",
   archive: "harness.modelSettings.archive",
 };
 
@@ -40,6 +41,7 @@ const SECTION_DESCRIPTION_KEYS: Record<SettingsSectionId, string> = {
   providers: "harness.modelSettings.sectionDescriptions.providers",
   inbox: "harness.modelSettings.sectionDescriptions.inbox",
   skills: "harness.modelSettings.sectionDescriptions.skills",
+  mcp: "harness.modelSettings.sectionDescriptions.mcp",
   archive: "harness.modelSettings.sectionDescriptions.archive",
 };
 

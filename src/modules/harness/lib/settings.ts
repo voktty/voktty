@@ -9,6 +9,7 @@ export type SettingsSectionId =
   | "chat"
   | "providers"
   | "skills"
+  | "mcp"
   | "inbox"
   | "archive";
 
@@ -79,6 +80,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description:
       "Discover and manage file skills from project, personal, and harness folders.",
     keywords: "skill instructions prompt",
+  },
+  {
+    id: "mcp",
+    group: "agents",
+    label: "MCP",
+    description:
+      "Configured Model Context Protocol servers for your projects and provider accounts.",
+    keywords: "mcp model context protocol claude codex cursor opencode servers",
   },
   {
     id: "inbox",
@@ -268,6 +277,12 @@ export const SETTINGS_INDEX: SettingsEntry[] = [
     section: "providers",
     label: "Claude Code hooks",
     keywords: "pretooluse settings.json block command notification",
+  },
+  {
+    id: "mcp-servers",
+    section: "mcp",
+    label: "MCP connections",
+    keywords: "mcp model context protocol servers claude codex cursor opencode connect sign in",
   },
   {
     id: "github",

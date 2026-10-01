@@ -209,6 +209,7 @@ struct HarnessInner {
 pub struct HarnessHost {
     inner: Mutex<HarnessInner>,
     sse: Mutex<HashMap<String, Arc<LiveSse>>>,
+    runtime_binary_paths: Mutex<Option<HashMap<String, String>>>,
     /// Bumped by `kill_all` so a spawn that started before quit cannot reinsert.
     kill_all_gen: AtomicU64,
 }
@@ -228,8 +229,18 @@ impl HarnessHost {
                 proxies: HashMap::new(),
             }),
             sse: Mutex::new(HashMap::new()),
+            runtime_binary_paths: Mutex::new(None),
             kill_all_gen: AtomicU64::new(0),
         }
+    }
+
+    pub(crate) fn runtime_binary_path(&self, provider: &str) -> Option<String> {
+        self.runtime_binary_paths
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .and_then(|paths| paths.get(provider).cloned())
+            .filter(|path| !path.trim().is_empty())
     }
 
     fn lock_inner(&self) -> std::sync::MutexGuard<'_, HarnessInner> {
@@ -530,6 +541,55 @@ pub fn harness_resolve_gemini() -> Result<CursorBinary, String> {
             "Antigravity (agy) CLI not found. Ensure `agy` is installed and in your PATH, then retry."
                 .into()
         })
+}
+
+pub(crate) fn resolve_harness_binary_default(provider: &str) -> Option<PathBuf> {
+    match provider {
+        "claude" => resolve_claude(),
+        "codex" => resolve_codex(),
+        "opencode" => resolve_opencode(),
+        "cursor" => resolve_cursor_agent(),
+        "pi" => resolve_pi(),
+        "omp" => resolve_omp(),
+        "fx" => resolve_fx(),
+        "grok" => resolve_grok(),
+        "hermes" => resolve_hermes(),
+        "antigravity" | "gemini" => resolve_agy(),
+        _ => None,
+    }
+}
+
+fn initialize_runtime_binary_paths(
+    runtime_binary_paths: &Mutex<Option<HashMap<String, String>>>,
+    paths: HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut guard = runtime_binary_paths
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some(existing) = guard.as_ref() {
+        return existing.clone();
+    }
+    let sanitized: HashMap<String, String> = paths
+        .into_iter()
+        .filter_map(|(key, value)| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some((key, trimmed.to_owned()))
+            }
+        })
+        .collect();
+    *guard = Some(sanitized.clone());
+    sanitized
+}
+
+#[tauri::command]
+pub fn harness_runtime_binary_paths(
+    host: State<'_, HarnessHost>,
+    paths: HashMap<String, String>,
+) -> HashMap<String, String> {
+    initialize_runtime_binary_paths(&host.runtime_binary_paths, paths)
 }
 
 /// Bind an ephemeral loopback port for `opencode serve`.

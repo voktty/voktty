@@ -11,6 +11,7 @@ pub mod host;
 pub mod inbox_media;
 pub mod linear;
 pub mod link_preview;
+pub mod mcp;
 pub mod notes;
 pub mod notifications;
 pub mod pasteboard;
