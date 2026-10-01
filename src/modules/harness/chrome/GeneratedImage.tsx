@@ -25,7 +25,9 @@ export function GeneratedImage({ image }: { image: GeneratedImageMeta }) {
           setState({ status: "error" });
           return;
         }
-        created = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        created = URL.createObjectURL(
+          new Blob([bytes as unknown as BlobPart], { type: mime }),
+        );
         setState({ status: "ready", url: created, size: bytes.byteLength });
       },
       () => {

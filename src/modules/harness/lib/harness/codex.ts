@@ -85,10 +85,21 @@ type Live = {
   emittedReasoning: string;
   emittedGeneratedImages: Set<string>;
   turnGeneration: number;
+  notificationQueue: Promise<void> | null;
   subagentThreads: Map<string, string>;
   pendingSubagent: Map<string, Array<{ method: string; params: unknown }>>;
   openAgentRows: Map<string, string>;
 };
+
+function trackNotificationQueue(
+  live: Live,
+  queued: Promise<void>,
+): void {
+  live.notificationQueue = queued;
+  void queued.then(() => {
+    if (live.notificationQueue === queued) live.notificationQueue = null;
+  });
+}
 
 type Resume = {
   threadId: string;
@@ -409,7 +420,26 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       onNotification: (method, params) => {
         const live = liveRef.current;
         if (!live || live.muteUpdates) return;
-        handleNotification(live, method, params);
+        if (live.notificationQueue) {
+          const turnGeneration = live.turnGeneration;
+          const queued = live.notificationQueue
+            .catch(() => undefined)
+            .then(() => {
+              if (
+                live.muteUpdates ||
+                live.cancelled ||
+                turnGeneration !== live.turnGeneration
+              ) {
+                return;
+              }
+              return handleNotification(live, method, params);
+            });
+          trackNotificationQueue(live, queued.catch(() => undefined));
+          return;
+        }
+        const result = handleNotification(live, method, params);
+        if (!result) return;
+        trackNotificationQueue(live, result.catch(() => undefined));
       },
       onRequest: (id, method, params) => {
         const live = liveRef.current;
@@ -547,6 +577,7 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       emittedReasoning: "",
       emittedGeneratedImages: new Set(),
       turnGeneration: 0,
+      notificationQueue: null,
       subagentThreads: new Map(),
       pendingSubagent: new Map(),
       openAgentRows: new Map(),
@@ -652,7 +683,11 @@ async function runCompaction(live: Live): Promise<void> {
   }
 }
 
-function handleNotification(live: Live, method: string, params: unknown): void {
+function handleNotification(
+  live: Live,
+  method: string,
+  params: unknown,
+): void | Promise<void> {
   if (method === "serverRequest/resolved") {
     const rec = asRecord(params);
     if (rec?.threadId !== live.threadId) return;
@@ -674,8 +709,7 @@ function handleNotification(live: Live, method: string, params: unknown): void {
       ? stringField(asRecord(rec?.thread), "id")
       : undefined);
   if (threadId && threadId !== live.threadId) {
-    handleSubagentNotification(live, threadId, method, params);
-    return;
+    return handleSubagentNotification(live, threadId, method, params);
   }
   // A Codex turn is a sequence of items. Completing an agentMessage does not
   // mean the turn is over — more tools and messages can still arrive. Only
@@ -825,11 +859,10 @@ function handleSubagentNotification(
   threadId: string,
   method: string,
   params: unknown,
-): void {
+): void | Promise<void> {
   const callId = live.subagentThreads.get(threadId);
   if (callId) {
-    emitSubagentSteps(live, callId, method, params);
-    return;
+    return emitSubagentSteps(live, callId, method, params);
   }
   if (
     method !== "item/started" &&

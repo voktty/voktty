@@ -847,28 +847,6 @@ fn is_png(bytes: &[u8]) -> bool {
     bytes.len() >= 8 && bytes.starts_with(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 }
 
-fn safe_attachment_name(name: &str) -> String {
-    let leaf = Path::new(name)
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("attachment");
-    let cleaned: String = leaf
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    if cleaned.trim_matches('-').is_empty() {
-        "attachment".to_string()
-    } else {
-        cleaned
-    }
-}
-
 fn git_diff_stats_for(root: &Path) -> GitDiffStats {
     if !git_is_work_tree(root) {
         return GitDiffStats::default();
