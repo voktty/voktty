@@ -11,6 +11,7 @@ export type SettingsSectionId =
   | "skills"
   | "mcp"
   | "inbox"
+  | "worktrees"
   | "archive";
 
 /** Rail buckets. Sections list in order under their group label. */
@@ -95,6 +96,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Inbox",
     description: "Connect and manage the services that appear in your Inbox.",
     keywords: "github gitlab linear connect token integration",
+  },
+  {
+    id: "worktrees",
+    group: "workspace",
+    label: "Worktrees",
+    description: "Manage additional worktrees for each project.",
+    keywords: "git branch worktree working copy project create delete",
   },
   {
     id: "archive",
@@ -301,6 +309,12 @@ export const SETTINGS_INDEX: SettingsEntry[] = [
     section: "inbox",
     label: "Linear",
     keywords: "api key issues teams connect",
+  },
+  {
+    id: "project-worktrees",
+    section: "worktrees",
+    label: "Project worktrees",
+    keywords: "worktree branch git working copy folder clone create remove",
   },
   {
     id: "show-archived",

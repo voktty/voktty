@@ -9,4 +9,3 @@ export {
   type SourceControlSummary,
 } from "./useSourceControl";
 export { useSourceControlContext } from "./useSourceControlContext";
-

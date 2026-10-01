@@ -40,6 +40,8 @@ import { Popover } from "../chrome/Popover";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
 import { SkillsPage } from "./SkillsPage";
 import { McpSettings } from "./McpSettings";
+import { WorktreesPage } from "./WorktreesPage";
+import { removeWorktree, type RemoveWorktree } from "../lib/worktrees";
 import { ProjectNotificationSettings } from "@/modules/notifications";
 import type { RecentProject } from "../lib/recents";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
@@ -108,6 +110,7 @@ import {
   HARNESS_TITLE,
   sessionDisplayTitle,
   type HarnessId,
+  type Session,
 } from "../lib/session";
 import {
   PROVIDER_ACCOUNT_PROVIDERS,
@@ -192,7 +195,8 @@ export type SettingsAnchor =
   | "gitlab"
   | "linear"
   | "provider-accounts"
-  | "project-notifications";
+  | "project-notifications"
+  | "project-worktrees";
 
 const ANCHOR_IDS: Record<SettingsAnchor, string> = {
   github: "settings-github",
@@ -200,6 +204,7 @@ const ANCHOR_IDS: Record<SettingsAnchor, string> = {
   linear: "settings-linear",
   "provider-accounts": "provider-accounts",
   "project-notifications": "settings-project-notifications",
+  "project-worktrees": "setting-project-worktrees",
 };
 
 const RevealedSettingContext = createContext<string | null>(null);
@@ -215,6 +220,12 @@ type Props = {
   recents?: RecentProject[];
   notificationProjectPath?: string | null;
   notificationSettingsRequest?: number;
+  liveSessions?: Session[];
+  onRemoveWorktree?: RemoveWorktree;
+  onCheckWorktreeRemoval?: RemoveWorktree;
+  onDeleteWorktreeSessions?: (
+    sessionIds: readonly string[],
+  ) => Promise<boolean>;
   onClose: () => void;
   onOpenSession: (sessionId: string) => void;
   onArchiveSession: (sessionId: string, archived: boolean) => void;
@@ -234,6 +245,10 @@ export function SettingsView({
   recents = [],
   notificationProjectPath = null,
   notificationSettingsRequest = 0,
+  liveSessions = [],
+  onRemoveWorktree = removeWorktree,
+  onCheckWorktreeRemoval,
+  onDeleteWorktreeSessions,
   onClose,
   onOpenSession,
   onArchiveSession,
@@ -347,6 +362,16 @@ export function SettingsView({
             ) : null}
             {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
             {section === "mcp" ? <McpSettings cwd={cwd} /> : null}
+            {section === "worktrees" ? (
+              <WorktreesPage
+                cwd={cwd}
+                recents={recents}
+                liveSessions={liveSessions}
+                onRemove={onRemoveWorktree}
+                onCheckRemove={onCheckWorktreeRemoval}
+                onDeleteSessions={onDeleteWorktreeSessions}
+              />
+            ) : null}
             {section === "archive" ? (
               <ArchivePage
                 cwd={cwd}
