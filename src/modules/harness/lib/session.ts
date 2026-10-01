@@ -39,6 +39,7 @@ export const HARNESSES: HarnessId[] = [
 export type BlockRole =
   | "user"
   | "assistant"
+  | "image"
   | "reasoning"
   | "tool"
   | "approval"
@@ -170,6 +171,14 @@ export type AgentRunMeta = {
 
 export type AttachmentKind = "image" | "audio" | "file";
 
+export type GeneratedImageMeta = {
+  path: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  alt?: string;
+};
+
 export type Attachment = {
   /** Live transcript only; deliberately excluded from persisted attachments. */
   copyFromPath?: boolean;
@@ -203,6 +212,7 @@ export type Block = {
   id: string;
   role: BlockRole;
   text: string;
+  image?: GeneratedImageMeta;
   attachments?: Attachment[];
   streaming?: boolean;
   /** Epoch ms when this user turn started. */

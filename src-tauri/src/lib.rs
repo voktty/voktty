@@ -733,6 +733,8 @@ pub fn run() {
             harness::fs::inspect_paths,
             harness::fs::read_file_base64,
             harness::fs::read_binary_file,
+            harness::fs::save_generated_image,
+            harness::fs::delete_generated_images,
             harness::fs::write_attachment,
             harness::fs::read_text_file,
             harness::fs::write_text_file,

@@ -410,3 +410,20 @@ export function basename(path: string): string {
   const parts = trimmed.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? trimmed;
 }
+
+export type GeneratedImageAsset = {
+  path: string;
+  mimeType: string;
+  size: number;
+};
+
+export function saveGeneratedImage(input: {
+  data: string;
+  name: string;
+}): Promise<GeneratedImageAsset> {
+  return invoke<GeneratedImageAsset>("save_generated_image", input);
+}
+
+export function deleteGeneratedImages(paths: string[]): Promise<void> {
+  return invoke<void>("delete_generated_images", { paths });
+}

@@ -1,3 +1,4 @@
+import { deleteGeneratedImages, saveGeneratedImage } from "../fs";
 import { nativeModelId } from "../models";
 import { sameProviderAccountId } from "../providerAccounts";
 import type { RuntimeMode } from "../session";
@@ -82,6 +83,8 @@ type Live = {
   turnEndPending: boolean;
   emittedAssistant: string;
   emittedReasoning: string;
+  emittedGeneratedImages: Set<string>;
+  turnGeneration: number;
   subagentThreads: Map<string, string>;
   pendingSubagent: Map<string, Array<{ method: string; params: unknown }>>;
   openAgentRows: Map<string, string>;
@@ -542,6 +545,8 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
       turnEndPending: false,
       emittedAssistant: "",
       emittedReasoning: "",
+      emittedGeneratedImages: new Set(),
+      turnGeneration: 0,
       subagentThreads: new Map(),
       pendingSubagent: new Map(),
       openAgentRows: new Map(),
@@ -588,6 +593,8 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
 
   live.emittedAssistant = "";
   live.emittedReasoning = "";
+  live.emittedGeneratedImages.clear();
+  live.turnGeneration += 1;
 
   const turnPromise = new Promise<void>((resolve, reject) => {
     live.turnDone = resolve;
@@ -626,6 +633,7 @@ async function runTurn(live: Live, input: SendTurnInput): Promise<void> {
 async function runCompaction(live: Live): Promise<void> {
   live.emittedAssistant = "";
   live.emittedReasoning = "";
+  live.emittedGeneratedImages.clear();
   const turnPromise = new Promise<void>((resolve, reject) => {
     live.turnDone = resolve;
     live.turnFailed = reject;
@@ -685,8 +693,20 @@ function handleNotification(live: Live, method: string, params: unknown): void {
   // would otherwise stand up a second agent that never does anything.
   const duplicate = bindSubagentThreads(live, method, rec);
   const snapshot = method === "item/completed";
+  let pending: Promise<void> | undefined;
   for (const event of mapped.events) {
     if (duplicate && duplicateAgentRow(event)) continue;
+    if (event.type === "image.generated") {
+      if (live.emittedGeneratedImages.has(event.itemId)) continue;
+      live.emittedGeneratedImages.add(event.itemId);
+      if ("data" in event) {
+        const save = () => materializeGeneratedImage(live, event);
+        pending = pending ? pending.then(save) : save();
+        continue;
+      }
+      live.onEvent(event);
+      continue;
+    }
     trackAgentRow(live, event);
     if (event.type === "message.delta") {
       publishCodexText(live, "assistant", event.text, snapshot);
@@ -699,21 +719,39 @@ function handleNotification(live: Live, method: string, params: unknown): void {
     live.onEvent(event);
   }
   // Metadata and steps can arrive before the spawn. Create its row first.
+  let replay: Promise<void> | undefined;
   for (const childId of codexSubagentThreadIds(asRecord(rec?.item) ?? {})) {
     const owner = live.subagentThreads.get(childId);
     if (!owner) continue;
     const backlog = live.pendingSubagent.get(childId);
     live.pendingSubagent.delete(childId);
-    for (const pending of backlog ?? [])
-      emitSubagentSteps(live, owner, pending.method, pending.params);
+    for (const pendingStep of backlog ?? []) {
+      const emit = () =>
+        emitSubagentSteps(live, owner, pendingStep.method, pendingStep.params);
+      if (replay) {
+        replay = replay.then(emit);
+      } else {
+        const result = emit();
+        if (result) replay = result;
+      }
+    }
   }
-  settleSubagentRows(live, rec);
-  if (mapped.activeTurnId !== undefined) {
-    live.activeTurnId = mapped.activeTurnId;
-  }
-  if (mapped.turnCompleted) {
-    finishActiveTurn(live);
-  }
+  const finish = () => {
+    settleSubagentRows(live, rec);
+    if (mapped.activeTurnId !== undefined) {
+      live.activeTurnId = mapped.activeTurnId;
+    }
+    if (mapped.turnCompleted) {
+      finishActiveTurn(live);
+    }
+  };
+  const afterImages = () => {
+    if (live.muteUpdates || live.cancelled) return;
+    if (replay) return replay.then(finish);
+    finish();
+  };
+  if (pending) return pending.then(afterImages);
+  return afterImages();
 }
 
 /**
@@ -810,9 +848,64 @@ function emitSubagentSteps(
   callId: string,
   method: string,
   params: unknown,
-): void {
+): void | Promise<void> {
+  const image = mapCodexNotification(method, params).events.find(
+    (event): event is Extract<HarnessEvent, { type: "image.generated" }> =>
+      event.type === "image.generated",
+  );
+  if (image) {
+    if (live.emittedGeneratedImages.has(image.itemId)) return;
+    live.emittedGeneratedImages.add(image.itemId);
+    if ("data" in image) return materializeGeneratedImage(live, image);
+    live.onEvent(image);
+    return;
+  }
   for (const event of mapCodexSubagentSteps(callId, method, params)) {
     live.onEvent(event);
+  }
+}
+
+async function materializeGeneratedImage(
+  live: Live,
+  event: Extract<HarnessEvent, { type: "image.generated"; data: string }>,
+): Promise<void> {
+  const turnGeneration = live.turnGeneration;
+  try {
+    const asset = await saveGeneratedImage({
+      data: event.data,
+      name: event.name,
+    });
+    if (
+      live.cancelled ||
+      live.muteUpdates ||
+      turnGeneration !== live.turnGeneration
+    ) {
+      void deleteGeneratedImages([asset.path]).catch(() => undefined);
+      return;
+    }
+    live.onEvent({
+      type: "image.generated",
+      itemId: event.itemId,
+      path: asset.path,
+      name: event.name,
+      mimeType: asset.mimeType,
+      size: asset.size,
+      ...(event.alt ? { alt: event.alt } : {}),
+    });
+  } catch (cause) {
+    if (
+      live.cancelled ||
+      live.muteUpdates ||
+      turnGeneration !== live.turnGeneration
+    ) {
+      return;
+    }
+    live.onEvent({
+      type: "session.error",
+      message: `Could not save generated image: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+    });
   }
 }
 
@@ -897,6 +990,8 @@ function finishActiveTurn(live: Live, extraEvents: HarnessEvent[] = []): void {
   live.activeTurnId = null;
   live.emittedAssistant = "";
   live.emittedReasoning = "";
+  live.emittedGeneratedImages.clear();
+  live.turnGeneration += 1;
   for (const event of extraEvents) {
     live.onEvent(event);
   }
