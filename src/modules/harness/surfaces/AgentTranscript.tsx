@@ -11,6 +11,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { AttachmentChip } from "../chrome/AttachmentChip";
+import { GeneratedImage } from "../chrome/GeneratedImage";
 import { FilePreview } from "../chrome/FilePreview";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { HarnessIcon } from "../chrome/HarnessIcon";
@@ -975,6 +976,10 @@ const TranscriptBlock = memo(function TranscriptBlock({
         onOpenDiff={onOpenDiff}
       />
     );
+  }
+
+  if (block.role === "image") {
+    return block.image ? <GeneratedImage image={block.image} /> : null;
   }
 
   if (block.role === "reasoning") {
