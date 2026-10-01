@@ -71,7 +71,7 @@ export type TaskListMeta = {
 };
 
 /** One-shot behavior selected in the composer for the next harness turn. */
-export type TurnIntent = "default" | "plan" | "build";
+export type TurnIntent = "default" | "plan" | "build" | "orchestrate";
 
 export type PlanStatus = "streaming" | "ready" | "building" | "built";
 
@@ -250,6 +250,10 @@ export type Block = {
   draft?: boolean;
   /** Internal session prompt not counted as a user-initiated turn. */
   internal?: boolean;
+  /** This user turn activated MonoCode/operator app access for its thread. */
+  monocode?: boolean;
+  /** The Plan or Orchestrator mode this user turn was sent in. */
+  intent?: Extract<TurnIntent, "plan" | "orchestrate">;
 };
 
 export type RuntimeMode =
