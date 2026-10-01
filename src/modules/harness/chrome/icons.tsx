@@ -203,6 +203,7 @@ export const GitPullRequestDraft = wrap(
   "GitPullRequestDraft",
 );
 export const Globe = wrap(GlobeIcon, "Globe");
+export const Internet = Globe;
 export const GripVertical = wrap(DragDropVerticalIcon, "GripVertical");
 export const ImagePlus = wrap(ImageAdd01Icon, "ImagePlus");
 export const Inbox = wrap(InboxIcon, "Inbox");

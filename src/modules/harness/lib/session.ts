@@ -530,8 +530,10 @@ export type EditedResendRejection = {
 };
 
 export type ComposerTurnOptions = {
+  intent?: TurnIntent;
   resendEdited?: boolean;
   onResendRejected?: (recovery: EditedResendRejection) => void;
+  draftBlockId?: string;
 };
 
 /** The single unsent user turn held by a session, when present. */

@@ -138,6 +138,13 @@ export const CLAUDE_MODEL_CATALOG: AgentModel[] = [
     settings: [EFFORT_WITH_XHIGH, FAST_MODE, contextWindow("1m")],
   },
   {
+    id: "claude:opus-5-5",
+    harness: "claude",
+    name: "Claude Opus 5.5",
+    nativeId: "claude-opus-5-5",
+    settings: [EFFORT_WITH_XHIGH, FAST_MODE, contextWindow("1m")],
+  },
+  {
     id: "claude:sonnet-5",
     harness: "claude",
     name: "Claude Sonnet 5",
