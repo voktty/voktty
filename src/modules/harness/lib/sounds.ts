@@ -1,4 +1,8 @@
 import { play, setEnabled, setVolume, type SoundName } from "cuelume";
+import {
+  allowsProjectNotification,
+  type NotificationSubject,
+} from "@/modules/notifications/model/notificationPreferences";
 
 const KEY = "monocode.sounds";
 
@@ -57,10 +61,19 @@ export function initSounds() {
   applySoundEngine();
 }
 
-export function playCue(cue: SoundCue) {
-  if (!loadSoundsEnabled()) return;
+type ProjectSoundCue = "turnFinished" | "inboxUnseen";
+
+export function playCue(cue: Exclude<SoundCue, ProjectSoundCue>): boolean;
+export function playCue(
+  cue: ProjectSoundCue,
+  subject?: NotificationSubject,
+): boolean;
+export function playCue(cue: SoundCue, subject?: NotificationSubject): boolean {
+  if (!loadSoundsEnabled()) return false;
+  if (subject && !allowsProjectNotification(subject)) return false;
   applySoundEngine();
   play(CUES[cue]);
+  return true;
 }
 
 let inboxDotOn = false;

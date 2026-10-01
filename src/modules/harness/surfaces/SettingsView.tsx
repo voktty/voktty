@@ -40,6 +40,8 @@ import { Popover } from "../chrome/Popover";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
 import { SkillsPage } from "./SkillsPage";
 import { McpSettings } from "./McpSettings";
+import { ProjectNotificationSettings } from "@/modules/notifications";
+import type { RecentProject } from "../lib/recents";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   applyChatBackground,
@@ -189,13 +191,15 @@ export type SettingsAnchor =
   | "github"
   | "gitlab"
   | "linear"
-  | "provider-accounts";
+  | "provider-accounts"
+  | "project-notifications";
 
 const ANCHOR_IDS: Record<SettingsAnchor, string> = {
   github: "settings-github",
   gitlab: "settings-gitlab",
   linear: "settings-linear",
   "provider-accounts": "provider-accounts",
+  "project-notifications": "settings-project-notifications",
 };
 
 const RevealedSettingContext = createContext<string | null>(null);
@@ -208,6 +212,9 @@ type Props = {
   cwd: string;
   sessions: SessionSummary[];
   besideRail?: boolean;
+  recents?: RecentProject[];
+  notificationProjectPath?: string | null;
+  notificationSettingsRequest?: number;
   onClose: () => void;
   onOpenSession: (sessionId: string) => void;
   onArchiveSession: (sessionId: string, archived: boolean) => void;
@@ -224,6 +231,9 @@ export function SettingsView({
   cwd,
   sessions,
   besideRail = false,
+  recents = [],
+  notificationProjectPath = null,
+  notificationSettingsRequest = 0,
   onClose,
   onOpenSession,
   onArchiveSession,
@@ -327,7 +337,14 @@ export function SettingsView({
             {section === "chat" ? <ChatPage /> : null}
             {section === "keybindings" ? <KeybindingsPage /> : null}
             {section === "providers" ? <ProvidersPage /> : null}
-            {section === "inbox" ? <InboxPage /> : null}
+            {section === "inbox" ? (
+              <InboxPage
+                cwd={cwd}
+                recents={recents}
+                notificationProjectPath={notificationProjectPath}
+                notificationSettingsRequest={notificationSettingsRequest}
+              />
+            ) : null}
             {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
             {section === "mcp" ? <McpSettings cwd={cwd} /> : null}
             {section === "archive" ? (
@@ -782,11 +799,35 @@ function ChatPage() {
   );
 }
 
-function InboxPage() {
+function InboxPage({
+  cwd,
+  recents = [],
+  notificationProjectPath = null,
+  notificationSettingsRequest = 0,
+}: {
+  cwd: string;
+  recents?: RecentProject[];
+  notificationProjectPath?: string | null;
+  notificationSettingsRequest?: number;
+}) {
   const { t } = useTranslation();
+  const revealed = useContext(RevealedSettingContext);
   return (
     <>
-      <Heading title={t("harness.settings.github")} id={ANCHOR_IDS.github} first />
+      <div
+        id={settingDomId("project-notifications")}
+        data-setting-id="project-notifications"
+      >
+        <ProjectNotificationSettings
+          cwd={cwd}
+          recents={recents}
+          notificationProjectPath={notificationProjectPath}
+          notificationSettingsRequest={notificationSettingsRequest}
+          highlighted={revealed === "project-notifications"}
+        />
+      </div>
+
+      <Heading title={t("harness.settings.github")} id={ANCHOR_IDS.github} />
       <GithubSettings />
 
       <Heading title={t("harness.settings.gitlab")} id={ANCHOR_IDS.gitlab} />
