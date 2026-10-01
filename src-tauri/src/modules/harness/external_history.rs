@@ -154,6 +154,8 @@ pub fn list_external_sessions_for_project(
                 archived: meta.archived,
                 pinned: meta.pinned,
                 linked_work_item: None,
+                orchestration: None,
+                orchestration_lead_id: None,
             });
         }
     }
@@ -255,6 +257,7 @@ pub fn get_external_session_record(
         branch: meta.git_branch,
         worktree_cwd: None,
         linked_work_item: None,
+        orchestration_lead_id: None,
         created_at: created,
         updated_at: updated,
     }))

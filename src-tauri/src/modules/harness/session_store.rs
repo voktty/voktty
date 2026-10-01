@@ -187,6 +187,10 @@ pub struct SessionSummary {
     pub pinned: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub linked_work_item: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orchestration: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orchestration_lead_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -214,6 +218,8 @@ pub struct SessionRecord {
     pub worktree_cwd: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub linked_work_item: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orchestration_lead_id: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -740,6 +746,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     super::notes::ensure_notes_table(conn)?;
     super::reminders::ensure_table(conn)?;
     super::automations::ensure_tables(conn)?;
+    super::orchestration::ensure_tables(conn)?;
     Ok(())
 }
 
@@ -900,6 +907,9 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         ],
     )?;
 
+    let orchestration = super::orchestration::orchestration_summary(conn, &session.id)?;
+    let orchestration_lead_id = super::orchestration::worker_parent(conn, &session.id)?;
+
     Ok(SessionSummary {
         id: session.id.clone(),
         cwd: session.cwd.clone(),
@@ -917,6 +927,8 @@ fn upsert_session(conn: &Connection, session: &SessionUpsert) -> rusqlite::Resul
         archived,
         pinned,
         linked_work_item: session.linked_work_item.clone(),
+        orchestration,
+        orchestration_lead_id,
     })
 }
 
@@ -1171,10 +1183,12 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
     let mut statement = conn.prepare(
         "SELECT id, cwd, harness, model, runtime_mode, title, provider_session_id,
                 created_at, updated_at, branch, archived, pinned,
-                linked_work_item_json
+                linked_work_item_json,
+                (SELECT summary FROM orchestration_sidebar WHERE lead_id = sessions.id)
          FROM sessions
          WHERE cwd = ?1
            AND has_user_message = 1
+           AND id NOT IN (SELECT session_id FROM orchestration_workers)
          ORDER BY updated_at DESC, id ASC",
     )?;
     let rows = statement.query_map(params![cwd], |row| {
@@ -1182,6 +1196,7 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
         let archived: i64 = row.get(10)?;
         let pinned: i64 = row.get(11)?;
         let linked_work_item = optional_json(row.get(12)?);
+        let orchestration = optional_json(row.get(13)?);
         Ok(SessionSummary {
             id: row.get(0)?,
             cwd: row.get(1)?,
@@ -1199,6 +1214,8 @@ fn list_by_project(conn: &Connection, cwd: &str) -> rusqlite::Result<Vec<Session
             archived: archived != 0,
             pinned: pinned != 0,
             linked_work_item,
+            orchestration,
+            orchestration_lead_id: None,
         })
     })?;
     rows.collect()
@@ -1234,6 +1251,8 @@ fn list_linked(conn: &Connection) -> rusqlite::Result<Vec<SessionSummary>> {
             archived: archived != 0,
             pinned: pinned != 0,
             linked_work_item: optional_json(row.get(12)?),
+            orchestration: None,
+            orchestration_lead_id: None,
         })
     })?;
     rows.collect()
@@ -1266,6 +1285,7 @@ fn optional_json(raw: Option<String>) -> Option<Value> {
 
 fn delete_session(conn: &Connection, session_id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM sessions WHERE id = ?1", params![session_id])?;
+    super::orchestration::cleanup_session_orchestration(conn, session_id)?;
     Ok(())
 }
 
@@ -1327,6 +1347,7 @@ fn get_session(conn: &Connection, session_id: &str) -> rusqlite::Result<Option<S
                 worktree_cwd: row.get(14)?,
                 provider_account_id: row.get(15)?,
                 linked_work_item: optional_json(row.get(16)?),
+                orchestration_lead_id: super::orchestration::worker_parent(conn, session_id)?,
                 created_at: row.get(9)?,
                 updated_at: row.get(10)?,
             })

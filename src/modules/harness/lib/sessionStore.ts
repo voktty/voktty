@@ -4,6 +4,7 @@ import { recoverCursorSubagents } from "./harness/cursorSubagents";
 import { persistableAttachment } from "./attachments";
 import type { ContextUsage } from "./contextUsage";
 import { normalizeProjectPath } from "./recents";
+import { restoreOrchestrationProposal } from "@/modules/orchestration/model/orchestrationPlan";
 import type {
   AgentRunMeta,
   AgentStep,
@@ -56,8 +57,10 @@ type SessionRecord = {
   contextWindow?: number | null;
   branch?: string | null;
   worktreeCwd?: string | null;
+  worktreeRemoved?: boolean | null;
   linkedWorkItem?: LinkedWorkItem | null;
   automationId?: string | null;
+  orchestrationLeadId?: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -156,10 +159,17 @@ function persistableMeta(
 export function sanitizeSessionForPersist(
   session: Session,
 ): SessionUpsertPayload {
+  const firstUser = session.blocks.findIndex((block) => block.role === "user");
   return {
     ...persistableMeta(session),
     blocks: session.blocks
-      .map(sanitizeBlock)
+      .map((block, index) =>
+        sanitizeBlock(
+          index === firstUser && session.orchestrationLeadId
+            ? { ...block, orchestrationLeadId: session.orchestrationLeadId }
+            : block,
+        ),
+      )
       .filter((block): block is Block => block != null),
   };
 }
@@ -171,6 +181,7 @@ export function sanitizeSessionForPersist(
  * write concurrently.
  */
 const sessionWriteQueues = new Map<string, Promise<unknown>>();
+const sessionWriteLeadById = new Map<string, string>();
 const deletedSessionIds = new Set<string>();
 const sessionMemoryCache = new Map<string, Session>();
 const MAX_CACHED_SESSIONS = 64;
@@ -221,6 +232,7 @@ function enqueueSessionWrite<T>(
   void tail.then(() => {
     if (sessionWriteQueues.get(sessionId) === tail) {
       sessionWriteQueues.delete(sessionId);
+      sessionWriteLeadById.delete(sessionId);
     }
   });
   return run;
@@ -234,9 +246,24 @@ export async function upsertSession(
   }
   cacheSession(session);
   const payload = sanitizeSessionForPersist(session);
+  if (session.orchestrationLeadId) {
+    sessionWriteLeadById.set(session.id, session.orchestrationLeadId);
+  } else {
+    sessionWriteLeadById.delete(session.id);
+  }
   const summary = await enqueueSessionWrite(session.id, async () => {
     if (deletedSessionIds.has(session.id)) return null;
-    return invoke<SessionSummary>("session_upsert", { session: payload });
+    return invoke<SessionSummary>("session_upsert", {
+      session: {
+        ...payload,
+        blocks: payload.blocks.map((block) =>
+          block.orchestrationLeadId &&
+          deletedSessionIds.has(block.orchestrationLeadId)
+            ? { ...block, orchestrationLeadId: undefined }
+            : block,
+        ),
+      },
+    });
   });
   return summary ? normalizeSummary(summary) : null;
 }
@@ -296,7 +323,7 @@ function blockToken(block: Block): number {
 }
 
 export function persistFingerprint(session: Session): string {
-  return `${JSON.stringify(persistableMeta(session))}|${session.blocks
+  return `${JSON.stringify(persistableMeta(session))}|${session.orchestrationLeadId ?? ""}|${session.blocks
     .map(blockToken)
     .join(",")}`;
 }
@@ -489,6 +516,16 @@ function sanitizeBlock(block: Block): Block | null {
     isPersistableId(block.providerTurnId)
   )
     next.providerTurnId = block.providerTurnId;
+  if (
+    block.role === "user" &&
+    typeof block.orchestrationLeadId === "string" &&
+    isPersistableId(block.orchestrationLeadId)
+  )
+    next.orchestrationLeadId = block.orchestrationLeadId;
+  if (block.role === "user" && block.internal) next.internal = true;
+  if (block.orchestration) {
+    next.orchestration = restoreOrchestrationProposal(block.orchestration);
+  }
   if (block.tool) next.tool = block.tool;
   if (block.approval?.decided) {
     next.approval = {
@@ -692,6 +729,13 @@ export function recordToSession(record: SessionRecord): Session {
     title: recordText(record.title) ?? "",
     blocks,
     busy: false,
+    orchestrationLeadId:
+      record.orchestrationLeadId ??
+      blocks.find(
+        (block) =>
+          block.orchestrationLeadId && block.orchestrationLeadId !== record.id,
+      )?.orchestrationLeadId,
+    ...(record.worktreeRemoved ? { worktreeRemoved: true } : {}),
     ...textField("providerSessionId", record.providerSessionId),
     ...textField("providerAccountId", record.providerAccountId),
     ...textField("branch", record.branch),

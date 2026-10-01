@@ -927,7 +927,7 @@ mod tests {
         )
         .unwrap();
 
-        let skills = list_skills_from(&project.0, Some(&home.0));
+        let skills = list_skills_from(&project.0, Some(&home.0), None);
         assert!(!skills.iter().any(|skill| skill.name == "stale-skill"));
     }
 
@@ -935,7 +935,7 @@ mod tests {
     fn skips_dirs_without_skill_md() {
         let project = tmp("empty");
         std::fs::create_dir_all(project.0.join(".agents/skills/nope")).unwrap();
-        let skills = list_skills_from(&project.0, None);
+        let skills = list_skills_from(&project.0, None, None);
         assert!(skills.is_empty());
     }
 }

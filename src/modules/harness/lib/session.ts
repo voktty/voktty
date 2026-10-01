@@ -1,4 +1,5 @@
 import type { ContextUsage } from "./contextUsage";
+import type { OrchestrationProposal } from "@/modules/orchestration/model/orchestrationPlan";
 import type { HandoffComposerCard } from "./handoff";
 import type { InboxComposerCard } from "./githubTasks";
 import type { InboxAskContext } from "./inboxAsk";
@@ -240,6 +241,9 @@ export type Block = {
   agentRun?: AgentRunMeta;
   taskList?: TaskListMeta;
   plan?: PlanBlockMeta;
+  orchestration?: OrchestrationProposal;
+  /** Parent conversation for an internal orchestration worker. */
+  orchestrationLeadId?: string;
   handoff?: HandoffMeta;
   secondOpinion?: SecondOpinionMeta;
   /** Note chip shown on this user turn. Body is not stored; the harness already received it. */
@@ -320,6 +324,9 @@ export type WorkspaceMode = "current" | "worktree";
 
 export type Session = {
   id: string;
+  /** Internal worker: displayed in its lead's panel rather than a workspace tab. */
+  orchestrationLeadId?: string;
+  worktreeRemoved?: boolean;
   harness: HarnessId;
   model: string;
   modelSettings: Record<string, string>;
@@ -558,5 +565,12 @@ export function removeSessionDraft(
         ? HARNESS_LABEL[session.harness]
         : session.title,
   };
+}
+
+export function sessionNeedsInput(session: Session): boolean {
+  return (
+    !session.worktreeRemoved &&
+    (hasPendingApproval(session.blocks) || session.pendingQuestion != null)
+  );
 }
 
