@@ -3,7 +3,7 @@ import { deleteGeneratedImages } from "./fs";
 import { recoverCursorSubagents } from "./harness/cursorSubagents";
 import { persistableAttachment } from "./attachments";
 import type { ContextUsage } from "./contextUsage";
-import { normalizeProjectPath } from "./recents";
+import { isRemoteProjectPath, normalizeProjectPath } from "./recents";
 import { restoreOrchestrationProposal } from "@/modules/orchestration/model/orchestrationPlan";
 import type {
   AgentRunMeta,
@@ -89,6 +89,7 @@ export function shouldPersistSession(session: Session): boolean {
   return (
     !session.inboxAsk &&
     session.cwd !== "~" &&
+    !isRemoteProjectPath(session.cwd) &&
     session.blocks.some((block) => block.role === "user")
   );
 }

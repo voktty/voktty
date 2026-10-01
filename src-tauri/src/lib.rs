@@ -337,6 +337,7 @@ pub fn run() {
         })
         .manage(quick_composer::QuickComposerState::default())
         .manage(harness::window_transfer::WindowTransferState::new())
+        .manage(harness::remote_connections::RemoteConnections::default())
         .invoke_handler(tauri::generate_handler![
             bootstrap_status,
             launch::launch_bootstrap,
@@ -814,6 +815,15 @@ pub fn run() {
             harness::chat_background::remove_project_chat_background,
             harness::window_transfer::stage_window_transfer,
             harness::window_transfer::take_window_transfer,
+            harness::remote_connections::remote_machines,
+            harness::remote_connections::remote_connect,
+            harness::remote_connections::remote_disconnect,
+            harness::remote_connections::remote_machine_request,
+            harness::remote_connections::remote_ssh_begin,
+            harness::remote_connections::remote_ssh_reconnect,
+            harness::remote_connections::remote_ssh_poll,
+            harness::remote_connections::remote_ssh_answer,
+            harness::remote_connections::remote_ssh_cancel,
             modules::window::hide_window,
             modules::window::destroy_window,
             modules::window::quit_poll_reply,
@@ -829,6 +839,9 @@ pub fn run() {
                 tauri::RunEvent::Exit => {
                     if let Some(state) = app.try_state::<harness::host::HarnessHost>() {
                         state.kill_all();
+                    }
+                    if let Some(state) = app.try_state::<harness::remote_connections::RemoteConnections>() {
+                        state.shutdown();
                     }
                     if let Some(state) = app.try_state::<tunnel::TunnelState>() {
                         let _ = state.0.stop_all_tunnels();

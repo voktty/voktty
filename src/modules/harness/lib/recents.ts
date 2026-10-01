@@ -407,9 +407,24 @@ export function projectRailItems(
   return [...pinned, ...unpinned];
 }
 
+/** Projects on another machine use `remote://<host id>/<host path>` keys. They
+ * appear in the rail like any project, but are never folders on this computer. */
+export const REMOTE_PROJECT_PREFIX = "remote://";
+
+export function isRemoteProjectPath(path: string): boolean {
+  return path.replace(/\\/g, "/").startsWith(REMOTE_PROJECT_PREFIX);
+}
+
+/** A project folder on this computer: safe to index, search, or run git and
+ * terminals in. Use `looksLikeProject` where a remote project also counts. */
+export function isLocalProject(path: string): boolean {
+  return looksLikeProject(path) && !isRemoteProjectPath(path);
+}
+
 /** True if this looks like a user project, not an app bundle or system root. */
 export function looksLikeProject(path: string): boolean {
   if (!path || path === "/" || path === "~") return false;
+  if (isRemoteProjectPath(path)) return true;
   if (path === "/root" || path === "/root/") return false;
   if (
     IS_WINDOWS &&

@@ -19,9 +19,12 @@ pub mod pasteboard;
 pub mod project_logo;
 pub mod rate_limits;
 pub mod reminders;
+pub mod remote_connections;
+pub mod remote_ssh;
 pub mod search;
 pub mod session_store;
 pub mod skills;
+pub mod ssh_askpass;
 pub mod updates;
 pub mod window_transfer;
 

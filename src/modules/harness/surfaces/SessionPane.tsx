@@ -49,7 +49,7 @@ import {
 } from "../lib/projectChatBackground";
 import { projectChatBackgroundSrc } from "../lib/chatBackground";
 
-type Props = {
+export type SessionPaneProps = {
   session: Session;
   visible: boolean;
   focused: boolean;
@@ -176,7 +176,7 @@ export const SessionPane = memo(function SessionPane({
   onHandoff,
   onNewTerminal,
   onPaneDragStart,
-}: Props) {
+}: SessionPaneProps) {
   const title = sessionDisplayTitle(session.title, session.harness);
   const backgroundRevision = useSyncExternalStore(
     subscribeProjectChatBackground,

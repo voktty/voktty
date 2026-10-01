@@ -2,6 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    if let Some(code) = voktty_lib::modules::harness::ssh_askpass::maybe_run() {
+        std::process::exit(code);
+    }
+
     #[cfg(target_os = "macos")]
     {
         // Disable macOS press-and-hold character popup, so key repeat works in terminal.

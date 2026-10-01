@@ -1,6 +1,43 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
+export type RemoteCommandRunner = (
+  command: string,
+  args: Record<string, unknown>,
+) => Promise<unknown>;
+
+let remoteRunner: RemoteCommandRunner | undefined;
+
+export function setRemoteCommandRunner(runner: RemoteCommandRunner) {
+  remoteRunner = runner;
+}
+
+const isRemotePath = (value: unknown): boolean =>
+  typeof value === "string"
+    ? value.replace(/\\/g, "/").startsWith("remote://")
+    : Array.isArray(value) && value.some(isRemotePath);
+
+const PATH_ARGS = ["path", "cwd", "parent", "from", "destParent", "paths"];
+
+/** Runs a command on the machine that owns its paths, so the same file and
+ * Git UI works for a local project and one on a connected machine. */
+export function invokeWorkspace<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  const options = args?.options;
+  const remoteOptions =
+    options && typeof options === "object" && !Array.isArray(options)
+      ? isRemotePath((options as Record<string, unknown>).cwd)
+      : false;
+  if (args && (PATH_ARGS.some((key) => isRemotePath(args[key])) || remoteOptions)) {
+    if (!remoteRunner)
+      return Promise.reject(new Error("Connecting to the machine…"));
+    return remoteRunner(command, args) as Promise<T>;
+  }
+  return invoke<T>(command, args);
+}
+
 export type FsEntry = {
   name: string;
   path: string;
@@ -32,7 +69,7 @@ export type ProjectFile = {
 };
 
 export function listDir(path: string): Promise<FsEntry[]> {
-  return invoke<FsEntry[]>("list_dir", { path });
+  return invokeWorkspace<FsEntry[]>("list_dir", { path });
 }
 
 export type DiscoveredSkill = {
@@ -59,7 +96,7 @@ export function listSkills(cwd: string): Promise<DiscoveredSkill[]> {
 }
 
 export function listProjectFiles(cwd: string): Promise<ProjectFile[]> {
-  return invoke<ProjectFile[]>("list_project_files", { cwd });
+  return invokeWorkspace<ProjectFile[]>("list_project_files", { cwd });
 }
 
 export type GitDiffStats = {
@@ -69,7 +106,7 @@ export type GitDiffStats = {
 };
 
 export function gitDiffStats(cwd: string): Promise<GitDiffStats> {
-  return invoke<GitDiffStats>("git_diff_stats", { cwd });
+  return invokeWorkspace<GitDiffStats>("git_diff_stats", { cwd });
 }
 
 export type GitChangedFile = {
@@ -96,7 +133,7 @@ export type GitDiffIndex = {
 };
 
 export function gitDiffIndex(cwd: string): Promise<GitDiffIndex> {
-  return invoke<GitDiffIndex>("git_diff_index", { cwd });
+  return invokeWorkspace<GitDiffIndex>("git_diff_index", { cwd });
 }
 
 export type GitFileDiffKind = "staged" | "unstaged";
@@ -116,7 +153,7 @@ export function gitFileDiff(
   relative: string,
   staged?: boolean,
 ): Promise<GitFileDiff> {
-  return invoke<GitFileDiff>("git_file_diff", {
+  return invokeWorkspace<GitFileDiff>("git_file_diff", {
     cwd,
     relative,
     staged: staged ?? false,
@@ -128,31 +165,31 @@ export function gitStageContents(
   relative: string,
   contents: string,
 ): Promise<void> {
-  return invoke<void>("git_stage_contents", { cwd, relative, contents });
+  return invokeWorkspace<void>("git_stage_contents", { cwd, relative, contents });
 }
 
 export function gitStageFile(cwd: string, relative: string): Promise<void> {
-  return invoke<void>("git_stage_file", { cwd, relative });
+  return invokeWorkspace<void>("git_stage_file", { cwd, relative });
 }
 
 export function gitUnstageFile(cwd: string, relative: string): Promise<void> {
-  return invoke<void>("git_unstage_file", { cwd, relative });
+  return invokeWorkspace<void>("git_unstage_file", { cwd, relative });
 }
 
 export function gitDiscardFile(cwd: string, relative: string): Promise<void> {
-  return invoke<void>("git_discard_file", { cwd, relative });
+  return invokeWorkspace<void>("git_discard_file", { cwd, relative });
 }
 
 export function gitStageAll(cwd: string): Promise<void> {
-  return invoke<void>("git_stage_all", { cwd });
+  return invokeWorkspace<void>("git_stage_all", { cwd });
 }
 
 export function gitUnstageAll(cwd: string): Promise<void> {
-  return invoke<void>("git_unstage_all", { cwd });
+  return invokeWorkspace<void>("git_unstage_all", { cwd });
 }
 
 export function gitCommit(cwd: string, message: string): Promise<void> {
-  return invoke<void>("harness_git_commit", { cwd, message });
+  return invokeWorkspace<void>("harness_git_commit", { cwd, message });
 }
 
 export type GitStagedContext = {
@@ -162,19 +199,19 @@ export type GitStagedContext = {
 };
 
 export function gitStagedContext(cwd: string): Promise<GitStagedContext> {
-  return invoke<GitStagedContext>("git_staged_context", { cwd });
+  return invokeWorkspace<GitStagedContext>("git_staged_context", { cwd });
 }
 
 export function gitPush(cwd: string): Promise<void> {
-  return invoke<void>("harness_git_push", { cwd });
+  return invokeWorkspace<void>("harness_git_push", { cwd });
 }
 
 export function gitPull(cwd: string): Promise<void> {
-  return invoke<void>("git_pull", { cwd });
+  return invokeWorkspace<void>("git_pull", { cwd });
 }
 
 export function gitSync(cwd: string): Promise<void> {
-  return invoke<void>("git_sync", { cwd });
+  return invokeWorkspace<void>("git_sync", { cwd });
 }
 
 export type GitRangeContext = {
@@ -186,7 +223,7 @@ export type GitRangeContext = {
 };
 
 export function gitRangeContext(cwd: string): Promise<GitRangeContext> {
-  return invoke<GitRangeContext>("git_range_context", { cwd });
+  return invokeWorkspace<GitRangeContext>("git_range_context", { cwd });
 }
 
 export type GitPr = {
@@ -197,7 +234,7 @@ export type GitPr = {
 };
 
 export function gitPrStatus(cwd: string): Promise<GitPr | null> {
-  return invoke<GitPr | null>("git_pr_status", { cwd });
+  return invokeWorkspace<GitPr | null>("git_pr_status", { cwd });
 }
 
 export function gitPrCreate(
@@ -207,7 +244,7 @@ export function gitPrCreate(
   base: string,
   head: string,
 ): Promise<string> {
-  return invoke<string>("git_pr_create", { cwd, title, body, base, head });
+  return invokeWorkspace<string>("git_pr_create", { cwd, title, body, base, head });
 }
 
 export type GitBranchInfo = {
@@ -223,7 +260,7 @@ export type GitBranches = {
 };
 
 export function gitBranches(cwd: string): Promise<GitBranches> {
-  return invoke<GitBranches>("git_branches", { cwd });
+  return invokeWorkspace<GitBranches>("git_branches", { cwd });
 }
 
 export function gitCheckout(
@@ -231,15 +268,15 @@ export function gitCheckout(
   name: string,
   remote?: string | null,
 ): Promise<string> {
-  return invoke<string>("git_checkout", { cwd, name, remote: remote ?? null });
+  return invokeWorkspace<string>("git_checkout", { cwd, name, remote: remote ?? null });
 }
 
 export function gitCreateBranch(cwd: string, name: string): Promise<string> {
-  return invoke<string>("git_create_branch", { cwd, name });
+  return invokeWorkspace<string>("git_create_branch", { cwd, name });
 }
 
 export function gitStash(cwd: string, message?: string): Promise<void> {
-  return invoke<void>("git_stash", { cwd, message: message ?? null });
+  return invokeWorkspace<void>("git_stash", { cwd, message: message ?? null });
 }
 
 /** Git refused a checkout because the working tree would be overwritten. */
@@ -283,23 +320,23 @@ export function createPath(
   name: string,
   isDir: boolean,
 ): Promise<string> {
-  return invoke<string>("create_path", { parent, name, isDir });
+  return invokeWorkspace<string>("create_path", { parent, name, isDir });
 }
 
 export function renamePath(path: string, name: string): Promise<string> {
-  return invoke<string>("rename_path", { path, name });
+  return invokeWorkspace<string>("rename_path", { path, name });
 }
 
 export function deletePath(path: string): Promise<void> {
-  return invoke<void>("delete_path", { path });
+  return invokeWorkspace<void>("delete_path", { path });
 }
 
 export function copyPath(from: string, destParent: string): Promise<string> {
-  return invoke<string>("copy_path", { from, destParent });
+  return invokeWorkspace<string>("copy_path", { from, destParent });
 }
 
 export function movePath(from: string, destParent: string): Promise<string> {
-  return invoke<string>("move_path", { from, destParent });
+  return invokeWorkspace<string>("move_path", { from, destParent });
 }
 
 export function revealPath(path: string): Promise<void> {
@@ -373,7 +410,7 @@ export function readFilePreview(
   maxLines = 6,
   startLine?: number,
 ): Promise<string[]> {
-  return invoke<string[]>("read_file_preview", {
+  return invokeWorkspace<string[]>("read_file_preview", {
     path,
     maxLines,
     startLine,
@@ -387,21 +424,23 @@ export type FileMtime = {
 
 export function statFiles(paths: string[]): Promise<FileMtime[]> {
   if (paths.length === 0) return Promise.resolve([]);
-  return invoke<FileMtime[]>("stat_files", { paths });
+  return invokeWorkspace<FileMtime[]>("stat_files", { paths });
 }
 
 export function readTextFile(path: string): Promise<string> {
-  return invoke<string>("read_text_file", { path });
+  return invokeWorkspace<string>("read_text_file", { path });
 }
 
-/** Raw bytes for the image viewer. Arrives as an ArrayBuffer, not base64. */
+/** Raw bytes for the image viewer. Arrives as an ArrayBuffer or base64 string from remote. */
 export async function readBinaryFile(path: string): Promise<Uint8Array> {
-  const buffer = await invoke<ArrayBuffer>("read_binary_file", { path });
-  return new Uint8Array(buffer);
+  const buffer = await invokeWorkspace<ArrayBuffer | string>("read_binary_file", { path });
+  return typeof buffer === "string"
+    ? Uint8Array.from(atob(buffer), (char) => char.charCodeAt(0))
+    : new Uint8Array(buffer);
 }
 
 export function writeTextFile(path: string, content: string): Promise<void> {
-  return invoke<void>("write_text_file", { path, content });
+  return invokeWorkspace<void>("write_text_file", { path, content });
 }
 
 /** Last path segment, or `/` for the filesystem root. */

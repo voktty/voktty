@@ -61,7 +61,7 @@ import {
   type HostShareTarget,
 } from "@/modules/collab";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
-import { ConnectionsLaunchpad } from "@/modules/connections";
+import { ConnectionsLaunchpad } from "@/modules/connections/ConnectionsLaunchpad";
 import {
   createLauncherItems,
   type LauncherActionContext,
