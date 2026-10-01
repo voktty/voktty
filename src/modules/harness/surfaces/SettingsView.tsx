@@ -39,6 +39,7 @@ import { InboxProviderMark } from "../chrome/InboxProviderMark";
 import { Popover } from "../chrome/Popover";
 import { RemoveProjectDialog } from "../chrome/RemoveProjectDialog";
 import { SkillsPage } from "./SkillsPage";
+import { McpSettings } from "./McpSettings";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import {
   applyChatBackground,
@@ -328,6 +329,7 @@ export function SettingsView({
             {section === "providers" ? <ProvidersPage /> : null}
             {section === "inbox" ? <InboxPage /> : null}
             {section === "skills" ? <SkillsPage cwd={cwd} /> : null}
+            {section === "mcp" ? <McpSettings cwd={cwd} /> : null}
             {section === "archive" ? (
               <ArchivePage
                 cwd={cwd}

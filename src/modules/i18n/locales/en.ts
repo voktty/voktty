@@ -4590,6 +4590,7 @@ export const en = {
       connect: "Connect",
       disconnect: "Disconnect",
       skills: "Skills",
+      mcp: "MCP",
       groups: {
         app: "App",
         agents: "Agents",
@@ -4691,6 +4692,7 @@ export const en = {
           "Source connections and authentication for issues, PRs, and review feeds.",
         skills:
           "Discover and manage file skills from project, personal, and harness folders.",
+        mcp: "Configured Model Context Protocol servers for your projects and provider accounts.",
         archive: "Projects and conversations you have archived.",
       },
     },

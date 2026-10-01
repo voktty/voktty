@@ -4701,6 +4701,7 @@ export const es: TranslationSchema = {
       connect: "Conectar",
       disconnect: "Desconectar",
       skills: "Habilidades",
+      mcp: "MCP",
       groups: {
         app: "Aplicación",
         agents: "Agentes",
@@ -4804,6 +4805,7 @@ export const es: TranslationSchema = {
           "Conexiones de origen y autenticación para incidencias, PRs y feeds de revisión.",
         skills:
           "Explorar y administrar habilidades basadas en archivos desde el proyecto, carpetas personales y el harness.",
+        mcp: "Servidores configurados del Protocolo de Contexto de Modelo (MCP) para tus proyectos y cuentas de proveedores.",
         archive: "Proyectos y conversaciones que has archivado.",
       },
     },

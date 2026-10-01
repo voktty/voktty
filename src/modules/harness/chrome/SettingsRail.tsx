@@ -2,6 +2,7 @@ import {
   Archive,
   ArrowLeft,
   Bot,
+  Globe,
   Inbox,
   Keyboard,
   MessageSquare,
@@ -29,6 +30,7 @@ const SECTION_ICONS: Record<SettingsSectionId, IconComponent> = {
   providers: Bot,
   inbox: Inbox,
   skills: Sparkles,
+  mcp: Globe,
   archive: Archive,
 };
 
