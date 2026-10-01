@@ -124,6 +124,7 @@ const ENTRY_LABEL_KEYS: Record<string, string> = {
   gitlab: "harness.settingsEntries.gitlab",
   linear: "harness.settingsEntries.linear",
   "show-archived": "harness.settingsEntries.showArchived",
+  "mcp-servers": "harness.settingsEntries.mcpServers",
 };
 
 export function settingsEntryLabel(t: Translate, id: string): string {

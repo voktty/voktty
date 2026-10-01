@@ -164,6 +164,7 @@ describe("settingsSectionsByGroup", () => {
       "chat",
       "providers",
       "skills",
+      "mcp",
     ]);
   });
 });
