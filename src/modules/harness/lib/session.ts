@@ -316,6 +316,8 @@ export type QueuedMessage = {
 
 export type MessageQueueStatus = "active" | "paused" | "resuming";
 
+export type WorkspaceMode = "current" | "worktree";
+
 export type Session = {
   id: string;
   harness: HarnessId;
@@ -344,7 +346,11 @@ export type Session = {
    * kept so older session records still load.
    */
   branch?: string;
-  /** Extra git worktree from the old session-branch feature. Unused. */
+  /** Workspace mode: current working copy or dedicated git worktree. */
+  workspaceMode?: WorkspaceMode;
+  /** Base branch for worktree creations. */
+  worktreeBase?: string;
+  /** Extra git worktree path when running in a worktree. */
   worktreeCwd?: string;
   /** One-shot composer text when opening a session from Inbox. */
   composerSeed?: string;
