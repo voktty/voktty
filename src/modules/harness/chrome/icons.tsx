@@ -46,6 +46,7 @@ import GitPullRequestClosedIcon from "@hugeicons/core-free-icons/GitPullRequestC
 import GitPullRequestDraftIcon from "@hugeicons/core-free-icons/GitPullRequestDraftIcon";
 import GitPullRequestIcon from "@hugeicons/core-free-icons/GitPullRequestIcon";
 import GlobeIcon from "@hugeicons/core-free-icons/GlobeIcon";
+import HelpCircleIcon from "@hugeicons/core-free-icons/HelpCircleIcon";
 import ImageAdd01Icon from "@hugeicons/core-free-icons/ImageAdd01Icon";
 import InboxIcon from "@hugeicons/core-free-icons/InboxIcon";
 import KeyboardIcon from "@hugeicons/core-free-icons/KeyboardIcon";
@@ -172,6 +173,8 @@ export const ChevronUp = wrap(ArrowUp01Icon, "ChevronUp");
 export const CircleAlert = wrap(AlertCircleIcon, "CircleAlert");
 export const CircleDashed = wrap(CircleDashedIcon, "CircleDashed");
 export const CircleDot = wrap(CircleDotIcon, "CircleDot");
+export const CircleHelp = wrap(HelpCircleIcon, "CircleHelp");
+export const HelpCircle = CircleHelp;
 export const Clock = wrap(ClockIcon, "Clock");
 export const CloudUpload = wrap(CloudUploadIcon, "CloudUpload");
 export const Copy = wrap(Copy01Icon, "Copy");
