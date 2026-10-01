@@ -855,10 +855,18 @@ export function preferredModelId(harness: HarnessId): string {
   return defaultModelId(harness);
 }
 
+export function firstEnabledHarness(preferred: HarnessId): HarnessId {
+  if (isPickerProviderVisible(preferred)) return preferred;
+  for (const harness of HARNESSES) {
+    if (isPickerProviderVisible(harness)) return harness;
+  }
+  return "cursor";
+}
+
 /** Provider + model new conversations should start with. */
 export function defaultSessionChoice(): LastModelChoice {
   const last = loadLastModelChoice();
-  const harness = last?.harness ?? "cursor";
+  const harness = firstEnabledHarness(last?.harness ?? "cursor");
   return { harness, model: preferredModelId(harness) };
 }
 

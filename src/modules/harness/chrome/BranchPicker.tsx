@@ -26,7 +26,10 @@ import { SwitchBranchDialog } from "./SwitchBranchDialog";
 type Props = {
   cwd: string;
   branch?: string;
+  worktree?: boolean;
   enabled?: boolean;
+  initialOpen?: boolean;
+  onDismiss?: () => void;
   onChange?: () => void;
   onClose?: () => void;
 };
@@ -47,12 +50,15 @@ const MENU_MAX_HEIGHT = 280;
 export function BranchPicker({
   cwd,
   branch,
+  worktree: _worktree = false,
   enabled = true,
+  initialOpen = false,
+  onDismiss,
   onChange,
   onClose,
 }: Props) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -67,6 +73,8 @@ export function BranchPicker({
   const search = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -85,6 +93,7 @@ export function BranchPicker({
     setBlocked(null);
     setBlockedError(null);
     setBlockedBusy(null);
+    onDismissRef.current?.();
     if (restore) onCloseRef.current?.();
   };
 

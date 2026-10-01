@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { MAX_ATTACHMENTS, MAX_EMBED_BYTES } from "./attachments";
+import {
+  attachmentsFromFiles,
+  attachmentsFromPaths,
+  isAttachmentFolder,
+  MAX_ATTACHMENTS,
+  MAX_EMBED_BYTES,
+} from "./attachments";
 import type { Attachment } from "./session";
 
 type CopiedFile = { name: string; mimeType: string; data: string };
@@ -14,13 +20,29 @@ const MAX_CLIPBOARD_HTML_CHARS =
   MAX_CLIPBOARD_BASE64_CHARS +
   MAX_CLIPBOARD_METADATA_CHARS;
 
+/** Folder paths the plain text does not already list, one per line. */
+function textWithFolderPaths(text: string, paths: string[]): string {
+  const lines = new Set(text.split("\n"));
+  const extra = paths.filter((path) => !lines.has(path));
+  if (!extra.length) return text;
+  const suffix = extra.join("\n");
+  if (!text) return suffix;
+  return text.endsWith("\n") ? text + suffix : `${text}\n${suffix}`;
+}
+
 /** HTML keeps arbitrary files together with text across windows. */
 export async function copyMessage(
   text: string,
   attachments: Attachment[] = [],
 ): Promise<void> {
   const files: CopiedFile[] = [];
+  const folderPaths: string[] = [];
   for (const attachment of attachments) {
+    if (isAttachmentFolder(attachment)) {
+      const path = attachment.path?.trim();
+      if (path) folderPaths.push(path);
+      continue;
+    }
     if (
       attachment.kind === "image" &&
       !attachment.data &&
@@ -47,9 +69,10 @@ export async function copyMessage(
       throw new Error(`Could not copy ${attachment.name}: ${reason}`);
     }
   }
+  const payload = textWithFolderPaths(text, folderPaths);
   if (!files.length) {
-    if (!text) throw new Error("No copyable content is available.");
-    return copyText(text);
+    if (!payload) throw new Error("No copyable content is available.");
+    return copyText(payload);
   }
   const escapeHtml = (value: string) =>
     value.replace(
@@ -63,7 +86,7 @@ export async function copyMessage(
           "'": "&#39;",
         })[char]!,
     );
-  const html = `<div data-monocode-files="${encodeURIComponent(JSON.stringify(files))}"><pre>${escapeHtml(text)}</pre>${files
+  const html = `<div data-monocode-files="${encodeURIComponent(JSON.stringify(files))}"><pre>${escapeHtml(payload)}</pre>${files
     .map((file) => {
       const src = `data:${escapeHtml(file.mimeType)};base64,${escapeHtml(file.data)}`;
       return file.mimeType.startsWith("image/")
@@ -72,7 +95,7 @@ export async function copyMessage(
     })
     .join("")}</div>`;
   const formats: Record<string, Blob> = {
-    "text/plain": new Blob([text], { type: "text/plain" }),
+    "text/plain": new Blob([payload], { type: "text/plain" }),
     "text/html": new Blob([html], { type: "text/html" }),
   };
   const png = files.find((file) => file.mimeType === "image/png");
@@ -152,4 +175,80 @@ export async function copyText(text: string): Promise<void> {
   const ok = document.execCommand("copy");
   el.remove();
   if (!ok) throw new Error("copy failed");
+}
+
+export function isFileReferenceText(text: string): boolean {
+  return text.trim().toLowerCase().startsWith("file:");
+}
+
+export type NativeClipboardPaste = {
+  files: Attachment[];
+  warning?: string;
+};
+
+async function attachmentsFromClipboardPaths(paths: string[]) {
+  const files: Attachment[] = [];
+  let consumed = 0;
+  while (consumed < paths.length && files.length < MAX_ATTACHMENTS) {
+    const batch = paths.slice(consumed, consumed + MAX_ATTACHMENTS);
+    for (const file of await attachmentsFromPaths(batch)) {
+      if (files.length >= MAX_ATTACHMENTS) break;
+      files.push(file);
+    }
+    consumed += batch.length;
+  }
+  return { files, consumed };
+}
+
+export async function nativeClipboardAttachments(
+  text: string,
+): Promise<NativeClipboardPaste> {
+  const paths = await readClipboardFilePaths();
+  if (paths.length) {
+    const { files, consumed } = await attachmentsFromClipboardPaths(paths);
+    if (!files.length)
+      throw new Error(
+        `Nothing to attach from ${
+          paths.length === 1 ? "that path" : "those paths"
+        } — the file may have been moved, renamed, or deleted.`,
+      );
+    return {
+      files,
+      ...(consumed < paths.length
+        ? {
+            warning: `Attached ${files.length} of ${paths.length} copied files. A turn carries up to ${MAX_ATTACHMENTS}.`,
+          }
+        : {}),
+    };
+  }
+  if (text) return { files: [] };
+  try {
+    return { files: await attachmentsFromFiles([await readClipboardImage()]) };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (reason === "The clipboard does not contain an image.") return { files: [] };
+    throw error;
+  }
+}
+
+export async function readClipboardFilePaths(): Promise<string[]> {
+  try {
+    const paths = await invoke<string[]>("clipboard_file_paths");
+    return Array.isArray(paths) ? paths.filter((path) => path.trim()) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function readClipboardImage(): Promise<File> {
+  let buffer: ArrayBuffer;
+  try {
+    buffer = await invoke<ArrayBuffer>("clipboard_image");
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(reason || "The clipboard could not be read.");
+  }
+  if (!buffer?.byteLength)
+    throw new Error("The clipboard does not contain an image.");
+  return new File([buffer], "clipboard-image.png", { type: "image/png" });
 }

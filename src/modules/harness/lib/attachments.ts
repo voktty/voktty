@@ -27,6 +27,8 @@ export type PromptContentBlock =
 
 const SKIP_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
 
+export const FOLDER_MIME = "inode/directory";
+
 /** MIME types providers typically send as vision input. */
 const VISION_MIME = new Set([
   "image/png",
@@ -296,10 +298,20 @@ export function attachmentPath(file: Attachment): string {
 
 /** Native harnesses without file blocks can ask their tools to read this path. */
 export function attachmentPathText(file: Attachment): string {
+  if (isAttachmentFolder(file)) {
+    return `Attached folder (list or read the files inside from this path): ${JSON.stringify(attachmentPath(file))}`;
+  }
   return `Attached file (read from disk): ${JSON.stringify(attachmentPath(file))}`;
 }
 
+export function isAttachmentFolder(file: Attachment): boolean {
+  return file.mimeType === FOLDER_MIME;
+}
+
 function contentBlockFor(file: Attachment): PromptContentBlock {
+  if (isAttachmentFolder(file)) {
+    return { type: "text", text: attachmentPathText(file) };
+  }
   if (file.data && isVisionImage(file.mimeType)) {
     return {
       type: "image",
@@ -318,8 +330,8 @@ function contentBlockFor(file: Attachment): PromptContentBlock {
 }
 
 async function attachmentFromPath(info: PathInfo): Promise<Attachment | null> {
-  if (info.isDir || skipName(info.name)) return null;
-  const mimeType = mimeFromName(info.name);
+  if (skipName(info.name)) return null;
+  const mimeType = info.isDir ? FOLDER_MIME : mimeFromName(info.name);
   const kind = kindFromMime(mimeType);
   const file: Attachment = {
     id: crypto.randomUUID(),

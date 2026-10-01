@@ -4,7 +4,7 @@ pub mod modules;
 
 use modules::{
     agent, agent_history, aliases, api_client, collab, companion, control, dap, docker, extensions,
-    fs, git, git_review, harness, history, lsp, mcp, net, pty, quota, rdp, remote, secrets, serial,
+    fs, git, git_review, harness, history, lsp, mcp, net, pty, quick_composer, quota, rdp, remote, secrets, serial,
     shell, ssh_native, tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -335,6 +335,7 @@ pub fn run() {
                 .join("harness.db");
             harness::session_store::SessionStoreState::new(db_path)
         })
+        .manage(quick_composer::QuickComposerState::default())
         .manage(harness::window_transfer::WindowTransferState::new())
         .invoke_handler(tauri::generate_handler![
             bootstrap_status,
@@ -735,6 +736,19 @@ pub fn run() {
             harness::fs::read_binary_file,
             harness::fs::save_generated_image,
             harness::fs::delete_generated_images,
+            quick_composer::quick_composer_set_enabled,
+            quick_composer::quick_composer_prepare,
+            quick_composer::quick_composer_fit,
+            quick_composer::quick_composer_submit,
+            quick_composer::quick_composer_take,
+            quick_composer::quick_composer_ack,
+            quick_composer::quick_composer_release_capture,
+            quick_composer::quick_composer_capture,
+            quick_composer::quick_git_open,
+            quick_composer::quick_git_state,
+            quick_composer::quick_git_fit,
+            quick_composer::quick_git_complete,
+            quick_composer::quick_composer_dismiss,
             harness::fs::write_attachment,
             harness::fs::read_text_file,
             harness::fs::write_text_file,

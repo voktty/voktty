@@ -21,6 +21,7 @@ pub mod net;
 pub mod net_proxy;
 pub mod proc;
 pub mod pty;
+pub mod quick_composer;
 pub mod quota;
 pub mod rdp;
 pub mod remote;

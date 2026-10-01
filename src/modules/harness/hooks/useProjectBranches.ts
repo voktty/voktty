@@ -1,6 +1,8 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { gitBranches, subscribeGitChanged, type GitBranches } from "../lib/fs";
 
+export type { GitBranches };
+
 export type ProjectBranchesState = {
   branches: GitBranches | null;
   /** First lookup for this cwd has finished, repo or not. */
@@ -64,6 +66,12 @@ function publish(entry: Entry, branches: GitBranches | null) {
   }
   entry.state = { branches, settled: true };
   for (const listener of entry.listeners) listener();
+}
+
+/** Carry an already loaded snapshot into a separate picker webview before
+ * mounting its controls. Subscribing still revalidates against Git. */
+export function seedProjectBranches(cwd: string, branches: GitBranches) {
+  if (cwd && cwd !== "~") publish(entryFor(cwd), branches);
 }
 
 async function load(entry: Entry, force = false) {

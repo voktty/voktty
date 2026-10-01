@@ -58,6 +58,7 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
       input: {
         main: path.resolve(rootDir, "index.html"),
         settings: path.resolve(rootDir, "settings.html"),
+        quickComposer: path.resolve(rootDir, "quick-composer.html"),
       },
       // Oxc drops `debugger` by default. These calls return undefined, so
       // marking them pure lets DCE strip them from production builds.
