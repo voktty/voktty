@@ -30,8 +30,11 @@ import {
   Wrench,
   X,
 } from "../chrome/icons";
+import { MonocodeSparkles } from "../chrome/MonocodeSparkles";
 import { NoteMiniCard } from "../chrome/NoteMiniCard";
+import { OrchestratorConstellation } from "../chrome/OrchestratorConstellation";
 import { PlanPreview } from "../chrome/PlanPreview";
+import { PlanStepsBurst } from "../chrome/PlanStepsBurst";
 import {
   HandoffButton,
   SecondOpinionButton,
@@ -113,7 +116,7 @@ const INITIAL_TURNS = 20;
 const TURN_PAGE_SIZE = 20;
 
 export const USER_MESSAGE_SURFACE_CLASS =
-  "min-w-0 border border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 text-card-foreground shadow-lg transition-colors hover:border-input";
+  "relative overflow-hidden min-w-0 border border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 text-card-foreground shadow-lg transition-colors hover:border-input";
 export const COMMAND_SUMMARY_SURFACE_CLASS =
   "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-active-item)] px-2 py-0.5 font-mono text-[11.5px]";
 export const APPROVAL_ALLOW_CLASS =
@@ -1241,6 +1244,16 @@ function UserMessageBlock({
             >
               {expanded ? t("harness.chrome.showLess") : t("harness.chrome.showMore")}
             </button>
+          ) : null}
+          {block.monocode ? (
+            <MonocodeSparkles blockId={block.id} startedAt={block.startedAt} />
+          ) : block.intent === "plan" ? (
+            <PlanStepsBurst blockId={block.id} startedAt={block.startedAt} />
+          ) : block.intent === "orchestrate" ? (
+            <OrchestratorConstellation
+              blockId={block.id}
+              startedAt={block.startedAt}
+            />
           ) : null}
         </div>
         {text || block.attachments?.length ? (

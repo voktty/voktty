@@ -56,7 +56,7 @@ import {
   type FsEntry,
 } from "../lib/fs";
 import { displayPath, parentPath, rebasePath } from "../lib/paths";
-import { IS_MAC, MOD } from "../lib/platform";
+import { IS_MAC, MOD, SHIFT } from "../lib/platform";
 import type { OpenFileFn } from "../lib/search";
 import type { GitStatusMap } from "../hooks/useGitFileStatuses";
 import { useProjectDiffStats } from "../hooks/useProjectDiffStats";
@@ -150,6 +150,11 @@ async function copyText(text: string) {
   }
 }
 
+function shortcutLetter(e: ReactKeyboardEvent): string {
+  const key = e.key.toLowerCase();
+  return /^Key[A-Z]$/.test(e.code) ? e.code.slice(3).toLowerCase() : key;
+}
+
 function explorerItems(
   target: MenuTarget,
   clip: Clip | null,
@@ -191,7 +196,12 @@ function explorerItems(
       disabled: target.isRoot,
     },
     { kind: "sep" },
-    { kind: "item", id: "copy-path", label: t("harness.chrome.copyPath") },
+    {
+      kind: "item",
+      id: "copy-path",
+      label: t("harness.chrome.copyPath"),
+      shortcut: `${MOD}${SHIFT}C`,
+    },
     { kind: "item", id: "copy-relative-path", label: t("harness.chrome.copyRelativePath") },
     { kind: "sep" },
     {
@@ -689,7 +699,9 @@ export const FileTree = memo(function FileTree({
     if ((e.target as HTMLElement).closest("input")) return;
     if (
       (e.target as HTMLElement).closest("button") &&
-      !(e.target as HTMLElement).closest("[role='treeitem']")
+      !(e.target as HTMLElement).closest(
+        "[role='treeitem'], [data-explorer-root]",
+      )
     ) {
       return;
     }
@@ -697,7 +709,12 @@ export const FileTree = memo(function FileTree({
     const isRoot = path === cwd;
     const isDir = isDirAt(cwd, path);
     const mod = e.metaKey || e.ctrlKey;
-    const key = e.key.toLowerCase();
+    const key = shortcutLetter(e);
+    if (mod && !e.altKey && e.shiftKey && key === "c") {
+      e.preventDefault();
+      void copyText(path);
+      return;
+    }
     if (mod && !e.altKey && !e.shiftKey && key === "c") {
       if (isRoot) return;
       e.preventDefault();
@@ -889,6 +906,7 @@ export const FileTree = memo(function FileTree({
         <div className="flex h-8 shrink-0 items-center">
           <button
             type="button"
+            data-explorer-root
             aria-expanded={rootOpen}
             title={cwd}
             onClick={() => {
