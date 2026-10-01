@@ -19,16 +19,86 @@ pub struct DiscoveredSkill {
     pub source: String,
 }
 
+struct DisabledFilter {
+    normalized: HashSet<String>,
+    canonical: HashSet<PathBuf>,
+}
+
+impl DisabledFilter {
+    fn new(paths: Option<&[String]>) -> Option<Self> {
+        let paths = paths?;
+        if paths.is_empty() {
+            return None;
+        }
+        let normalized = paths
+            .iter()
+            .map(|p| normalize_path_for_compare(p))
+            .collect();
+        let canonical = paths
+            .iter()
+            .filter_map(|p| std::fs::canonicalize(expand_home(p)).ok())
+            .collect();
+        Some(Self {
+            normalized,
+            canonical,
+        })
+    }
+
+    fn is_disabled(&self, path: &str) -> bool {
+        let normalized = normalize_path_for_compare(path);
+        if self.normalized.contains(&normalized) {
+            return true;
+        }
+        if !self.canonical.is_empty() {
+            if let Ok(canon) = std::fs::canonicalize(path) {
+                if self.canonical.contains(&canon) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
+#[cfg(windows)]
+fn normalize_path_for_compare(path: &str) -> String {
+    let mut s = path.replace('\\', "/");
+    if let Some(stripped) = s.strip_prefix("//?/") {
+        s = stripped.to_string();
+    }
+    while s.contains("//") {
+        s = s.replace("//", "/");
+    }
+    s.to_lowercase()
+}
+
+#[cfg(not(windows))]
+fn normalize_path_for_compare(path: &str) -> String {
+    path.to_string()
+}
+
 /// Skills visible for the open project: `.agents/skills` first, then native
 /// harness folders. Same name: earlier roots win.
 #[tauri::command(async)]
-pub fn list_skills(cwd: String) -> Result<Vec<DiscoveredSkill>, String> {
+pub fn list_skills(
+    cwd: String,
+    disabled_paths: Option<Vec<String>>,
+) -> Result<Vec<DiscoveredSkill>, String> {
     let project = expand_home(&cwd);
     let home = dirs_home().map(PathBuf::from);
-    Ok(list_skills_from(&project, home.as_deref()))
+    Ok(list_skills_from(
+        &project,
+        home.as_deref(),
+        disabled_paths.as_deref(),
+    ))
 }
 
-pub(crate) fn list_skills_from(project: &Path, home: Option<&Path>) -> Vec<DiscoveredSkill> {
+pub(crate) fn list_skills_from(
+    project: &Path,
+    home: Option<&Path>,
+    disabled_paths: Option<&[String]>,
+) -> Vec<DiscoveredSkill> {
+    let disabled_filter = DisabledFilter::new(disabled_paths);
     let mut by_name: HashMap<String, DiscoveredSkill> = HashMap::new();
     let mut seen_roots: HashSet<PathBuf> = HashSet::new();
 
@@ -41,6 +111,12 @@ pub(crate) fn list_skills_from(project: &Path, home: Option<&Path>) -> Vec<Disco
             return;
         }
         for skill in scan_root(&root, scope, source) {
+            if disabled_filter
+                .as_ref()
+                .is_some_and(|f| f.is_disabled(&skill.path))
+            {
+                continue;
+            }
             if by_name.len() >= MAX_SKILLS {
                 break;
             }
@@ -73,8 +149,23 @@ pub(crate) fn list_skills_from(project: &Path, home: Option<&Path>) -> Vec<Disco
     if let Some(home) = home {
         add_root(home.join(".pi/agent/skills"), "user", "pi");
         add_root(home.join(".omp/agent/skills"), "user", "omp");
+        let root = home.join(".gemini/antigravity/skills");
+        if root.is_dir() {
+            add_root(root, "user", "antigravity");
+        }
+        let root = home.join(".gemini/config/skills");
+        if root.is_dir() {
+            add_root(root, "user", "antigravity");
+        }
         for (root, scope, namespace) in claude_plugin_skill_roots(home, project) {
-            add_namespaced_root(&mut by_name, root, scope, "claude", &namespace);
+            add_namespaced_root(
+                &mut by_name,
+                root,
+                scope,
+                "claude",
+                &namespace,
+                disabled_filter.as_ref(),
+            );
         }
     }
 
@@ -89,11 +180,15 @@ fn add_namespaced_root(
     scope: &str,
     source: &str,
     namespace: &str,
+    disabled_filter: Option<&DisabledFilter>,
 ) {
     if by_name.len() >= MAX_SKILLS {
         return;
     }
     for mut skill in scan_root(&root, scope, source) {
+        if disabled_filter.is_some_and(|f| f.is_disabled(&skill.path)) {
+            continue;
+        }
         if by_name.len() >= MAX_SKILLS {
             break;
         }
@@ -548,7 +643,7 @@ mod tests {
             "---\nname: cursor-only\ndescription: Cursor native\n---\n",
         );
 
-        let skills = list_skills_from(&project.0, Some(&home.0));
+        let skills = list_skills_from(&project.0, Some(&home.0), None);
         let ship = skills.iter().find(|s| s.name == "ship").unwrap();
         assert_eq!(ship.description, "MonoCode ship");
         assert_eq!(ship.source, "agents");
@@ -578,7 +673,7 @@ mod tests {
             "---\nname: pi-global\ndescription: Pi user skill\n---\n",
         );
 
-        let skills = list_skills_from(&project.0, Some(&home.0));
+        let skills = list_skills_from(&project.0, Some(&home.0), None);
         let project_skill = skills.iter().find(|s| s.name == "pi-review").unwrap();
         assert_eq!(project_skill.source, "pi");
         assert_eq!(project_skill.scope, "project");
@@ -602,7 +697,7 @@ mod tests {
             "---\nname: fx-global\ndescription: fx user skill\n---\n",
         );
 
-        let skills = list_skills_from(&project.0, Some(&home.0));
+        let skills = list_skills_from(&project.0, Some(&home.0), None);
         let project_skill = skills.iter().find(|s| s.name == "fx-review").unwrap();
         assert_eq!(project_skill.source, "fx");
         assert_eq!(project_skill.scope, "project");
@@ -626,7 +721,7 @@ mod tests {
             "---\nname: grok-global\ndescription: grok user skill\n---\n",
         );
 
-        let skills = list_skills_from(&project.0, Some(&home.0));
+        let skills = list_skills_from(&project.0, Some(&home.0), None);
         let project_skill = skills.iter().find(|s| s.name == "grok-review").unwrap();
         assert_eq!(project_skill.source, "grok");
         assert_eq!(project_skill.scope, "project");
@@ -659,7 +754,7 @@ mod tests {
         )
         .unwrap();
 
-        let skills = list_skills_from(&project.0, Some(&home.0));
+        let skills = list_skills_from(&project.0, Some(&home.0), None);
         let skill = skills
             .iter()
             .find(|skill| skill.name == "workflow-kit:quick-plan")
@@ -707,14 +802,14 @@ mod tests {
 
         let nested = project.0.join("src");
         std::fs::create_dir_all(&nested).unwrap();
-        let matching = list_skills_from(&nested, Some(&home.0));
+        let matching = list_skills_from(&nested, Some(&home.0), None);
         let skill = matching
             .iter()
             .find(|skill| skill.name == "workflow-kit:feature-delivery")
             .unwrap();
         assert_eq!(skill.scope, "project");
 
-        let unrelated = list_skills_from(&other.0, Some(&home.0));
+        let unrelated = list_skills_from(&other.0, Some(&home.0), None);
         assert!(!unrelated
             .iter()
             .any(|skill| skill.name == "workflow-kit:feature-delivery"));
@@ -740,7 +835,7 @@ mod tests {
         .unwrap();
         write_plugin_setting(&home.0, "settings.json", "workflow-kit@community", false);
 
-        let skills = list_skills_from(&project.0, Some(&home.0));
+        let skills = list_skills_from(&project.0, Some(&home.0), None);
         assert!(!skills
             .iter()
             .any(|skill| skill.name == "workflow-kit:quick-plan"));
