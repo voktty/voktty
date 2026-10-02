@@ -25,9 +25,29 @@ describe("settings structure", () => {
     expect(settingDomId("provider-accounts")).toBe("setting-provider-accounts");
   });
 
+  it("indexes show-remaining-usage and mask-emails under providers section", () => {
+    const remaining = SETTINGS_INDEX.find((item) => item.id === "show-remaining-usage");
+    expect(remaining).toBeDefined();
+    expect(remaining?.section).toBe("providers");
+    expect(settingDomId("show-remaining-usage")).toBe("setting-show-remaining-usage");
+
+    const mask = SETTINGS_INDEX.find((item) => item.id === "mask-emails");
+    expect(mask).toBeDefined();
+    expect(mask?.section).toBe("providers");
+    expect(settingDomId("mask-emails")).toBe("setting-mask-emails");
+  });
+
   it("finds provider accounts via settings search", () => {
     const results = searchSettings("account");
     expect(results.some((r) => r.id === "provider-accounts")).toBe(true);
+  });
+
+  it("finds display preferences via settings search", () => {
+    const remaining = searchSettings("remaining");
+    expect(remaining.some((r) => r.id === "show-remaining-usage")).toBe(true);
+
+    const mask = searchSettings("mask");
+    expect(mask.some((r) => r.id === "mask-emails")).toBe(true);
   });
 
   it("supports provider account providers", () => {

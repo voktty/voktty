@@ -123,6 +123,8 @@ const ENTRY_LABEL_KEYS: Record<string, string> = {
   "diff-view": "harness.settingsEntries.diffView",
   "empty-session-games": "harness.settingsEntries.emptySessionGames",
   "provider-accounts": "harness.settingsEntries.providerAccounts",
+  "show-remaining-usage": "harness.settingsEntries.showRemainingUsage",
+  "mask-emails": "harness.settingsEntries.maskEmails",
   "claude-hooks": "harness.settingsEntries.claudeHooks",
   github: "harness.settingsEntries.github",
   gitlab: "harness.settingsEntries.gitlab",

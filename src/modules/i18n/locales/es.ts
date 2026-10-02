@@ -5701,6 +5701,8 @@ export const es: TranslationSchema = {
       diffView: "Vista de diferencias",
       emptySessionGames: "Juegos de sesión vacía",
       providerAccounts: "Cuentas de proveedor",
+      showRemainingUsage: "Mostrar uso restante",
+      maskEmails: "Enmascarar correos de cuenta",
       claudeHooks: "Hooks de Claude Code",
       github: "GitHub",
       gitlab: "GitLab",

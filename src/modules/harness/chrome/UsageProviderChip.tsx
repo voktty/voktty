@@ -38,6 +38,7 @@ import {
   useProviderAccountIdentities,
   type ProviderAccountIdentity,
 } from "../lib/providerAccountIdentity";
+import { useShowRemainingUsage } from "../lib/displayPrefs";
 import { ProviderAccountSubtitle } from "./ProviderAccountSubtitle";
 
 type UsageWindowEntry = {
@@ -665,8 +666,10 @@ function UsageWindowCard({
   now: number;
 }) {
   const { t } = useTranslation();
+  const showRemaining = useShowRemainingUsage();
   const pct = clampUsedPercent(window.usedPercent);
   const remaining = 100 - pct;
+  const shown = showRemaining ? remaining : pct;
   const title =
     kind === "session"
       ? t("harness.accounts.fiveHourLimit")
@@ -690,14 +693,18 @@ function UsageWindowCard({
       <div
         className="mt-2 h-1.5 overflow-hidden rounded-full bg-content/10"
         role="progressbar"
-        aria-label={t("harness.accounts.limitRemaining", { title })}
+        aria-label={
+          showRemaining
+            ? t("harness.accounts.limitRemaining", { title })
+            : t("harness.accounts.limitUsed", { title })
+        }
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={Math.round(remaining)}
+        aria-valuenow={Math.round(shown)}
       >
         <span
           className={`block h-full rounded-full ${barClass(pct)}`}
-          style={{ width: `${remaining}%` }}
+          style={{ width: `${shown}%` }}
         />
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-3 text-[10px] leading-4 text-content/40">
@@ -1104,6 +1111,7 @@ function emptyUsageLabel(
 }
 
 function MiniBar({ usedPct }: { usedPct: number }) {
+  const showRemaining = useShowRemainingUsage();
   const pct = clampUsedPercent(usedPct);
   return (
     <span
@@ -1112,7 +1120,7 @@ function MiniBar({ usedPct }: { usedPct: number }) {
     >
       <span
         className={`block h-full rounded-full ${barClass(pct)}`}
-        style={{ width: `${100 - pct}%` }}
+        style={{ width: `${showRemaining ? 100 - pct : pct}%` }}
       />
     </span>
   );
