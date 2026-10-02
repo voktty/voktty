@@ -1,10 +1,17 @@
 import type { HighlightResult } from "@streamdown/code";
+import * as shiki from "shiki";
 import type { BundledLanguage } from "shiki";
-import { describe, expect, it } from "vitest";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { describe, expect, it, vi } from "vitest";
 import {
   createBoundedCodePlugin,
   type BoundedCodePlugin,
 } from "./codeHighlightPlugin";
+
+vi.mock("shiki", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("shiki")>();
+  return { ...actual, createHighlighter: vi.fn(actual.createHighlighter) };
+});
 
 function highlight(
   plugin: BoundedCodePlugin,
@@ -31,6 +38,83 @@ function text(result: HighlightResult): string {
 }
 
 describe("bounded code highlight plugin", () => {
+  it("shares one highlight run across concurrent requests and notifies every callback", async () => {
+    const plugin = createBoundedCodePlugin();
+    const source = "const shared = 1;";
+    const highlighter = await shiki.createHighlighter({
+      themes: plugin.getThemes(),
+      langs: [],
+      engine: createJavaScriptRegexEngine({ forgiving: true }),
+    });
+    const createHighlighter = vi
+      .mocked(shiki.createHighlighter)
+      .mockClear()
+      .mockResolvedValueOnce(highlighter);
+    const codeToTokens = vi.spyOn(highlighter, "codeToTokens");
+
+    try {
+      const callbacks = [vi.fn(), vi.fn(), vi.fn()];
+      const requests = callbacks.map((callback) =>
+        new Promise<HighlightResult>((resolve) => {
+          const cached = plugin.highlight(
+            { code: source, language: "ts" as BundledLanguage, themes: plugin.getThemes() },
+            (result) => {
+              callback(result);
+              resolve(result);
+            },
+          );
+          expect(cached).toBeNull();
+        }),
+      );
+      const results = await Promise.all(requests);
+
+      expect(createHighlighter).toHaveBeenCalledTimes(1);
+      expect(codeToTokens).toHaveBeenCalledTimes(1);
+      expect(text(results[0])).toBe(source);
+      for (let i = 0; i < callbacks.length; i += 1) {
+        expect(callbacks[i]).toHaveBeenCalledTimes(1);
+        expect(callbacks[i]).toHaveBeenCalledWith(results[0]);
+        expect(results[i]).toBe(results[0]);
+      }
+      expect(plugin.cachedResults()).toBe(1);
+      expect(
+        plugin.highlight({
+          code: source,
+          language: "ts" as BundledLanguage,
+          themes: plugin.getThemes(),
+        }),
+      ).toBe(results[0]);
+      expect(codeToTokens).toHaveBeenCalledTimes(1);
+    } finally {
+      createHighlighter.mockReset();
+      codeToTokens.mockRestore();
+      highlighter.dispose();
+    }
+  }, 20_000);
+
+  it("refreshes recency on a cache hit and rehighlights the least recently used entry", async () => {
+    const plugin = createBoundedCodePlugin({ maxEntries: 2 });
+    const first = "const first = 1;";
+    const second = "const second = 2;";
+    const third = "const third = 3;";
+    const cached = (code: string) =>
+      plugin.highlight({ code, language: "ts" as BundledLanguage, themes: plugin.getThemes() });
+    const firstResult = await highlight(plugin, first);
+    const secondResult = await highlight(plugin, second);
+
+    expect(cached(first)).toBe(firstResult);
+    const thirdResult = await highlight(plugin, third);
+
+    expect(plugin.cachedResults()).toBe(2);
+    expect(cached(first)).toBe(firstResult);
+    expect(cached(third)).toBe(thirdResult);
+    expect(cached(second)).toBeNull();
+    const rehighlighted = await highlight(plugin, second);
+    expect(text(rehighlighted)).toBe(second);
+    expect(rehighlighted).not.toBe(secondResult);
+    expect(cached(second)).toBe(rehighlighted);
+    expect(plugin.cachedResults()).toBe(2);
+  }, 20_000);
   it("keeps the cache bounded while a fence streams in", async () => {
     const plugin = createBoundedCodePlugin({ maxEntries: 8 });
     const source = Array.from(
