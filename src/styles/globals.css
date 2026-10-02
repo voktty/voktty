@@ -1234,6 +1234,47 @@ html *::-webkit-scrollbar {
   unicode-bidi: isolate;
 }
 
+.agent-markdown .markdown-code-fallback-label {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  left: 34px;
+  right: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+  color: color-mix(in srgb, var(--color-content, #f4f4f6) 65%, transparent);
+  pointer-events: none;
+}
+
+/* highlightLanguageFor swaps text/plaintext/txt/untagged fences to the "js"
+   grammar so Shiki still colors them, but Streamdown's own header reuses
+   that same value as its visible label. Hide the vendor label here and show
+   the real fence language via .markdown-code-fallback-label instead. */
+.agent-markdown
+  .markdown-code-shell:has(.markdown-code-fallback-label)
+  [data-streamdown="code-block-header"]
+  > span {
+  visibility: hidden;
+}
+
+.agent-markdown
+  .markdown-code-shell:has(.markdown-code-fallback-label:empty)
+  [data-streamdown="code-block-header"] {
+  display: none;
+}
+
+.agent-markdown
+  .markdown-code-shell:has(.markdown-code-fallback-label:empty)
+  [data-streamdown="code-block-header"]
+  + [data-streamdown="code-block-body"] {
+  border-top: 0;
+}
+
 /* Two-frame mascot loop — a hard swap plus a one-pixel hop, arcade style. */
 .mascot-active {
   animation: mascot-hop var(--mascot-beat, 460ms) infinite;
