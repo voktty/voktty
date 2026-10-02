@@ -23,6 +23,9 @@ import { useInputNotifications } from "../hooks/useInputNotifications";
 import { useProjectBranches } from "../hooks/useProjectBranches";
 import { useSessionReminders } from "../hooks/useSessionReminders";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
+import { useUnseenFinishedSessions } from "../hooks/useUnseenFinishedSessions";
+import { useIdleSessionDetach } from "../hooks/useIdleSessionDetach";
+import type { OrchestrationRun } from "@/modules/orchestration/model/orchestration";
 import {
   claimDueAutomations,
   listAutomations,
@@ -200,7 +203,7 @@ import {
   withSurfacePanes,
 } from "../lib/layout";
 import { linearIssueDetails, peekLinearIssueDetails } from "../lib/linear";
-import { isLiveAgentSession, liveAgentsFromSessions } from "../lib/liveAgents";
+import { liveAgentsFromSessions } from "../lib/liveAgents";
 import {
   canDispatchQueuedHead,
   dequeueQueuedMessage,
@@ -328,7 +331,6 @@ import {
   createEditedResendAttempt,
   createEditedResendCoordinator,
 } from "../lib/editLastTurn";
-import { nextUnseenFinishedSessions } from "../lib/sessionDone";
 import {
   historyWithLiveSessions,
   mergeHistorySummary,
@@ -877,6 +879,9 @@ export function HarnessApp({
   const filePickerOpenRef = useRef(filePickerOpen);
   filePickerOpenRef.current = filePickerOpen;
   const sessionNavigationIdsRef = useRef<readonly string[]>([]);
+  const openingSessionIds = useRef(new Set<string>());
+  const loadedSessionCache = useRef(new Map<string, Session>());
+  const orchestrationRuns = useMemo(() => [] as OrchestrationRun[], []);
 
   useEffect(() => {
     if (!notesEnabled) setNotesViewOpen(false);
@@ -1234,12 +1239,7 @@ export function HarnessApp({
 
   const activeSessionId = active?.id;
   const busyForDoneRef = useRef(busySessionIds);
-  const focusedForDoneRef = useRef(activeSessionId);
-  const unseenFinishedRef = useRef<Set<string>>(new Set());
-  if (
-    busyForDoneRef.current !== busySessionIds ||
-    focusedForDoneRef.current !== activeSessionId
-  ) {
+  if (busyForDoneRef.current !== busySessionIds) {
     for (const prevId of busyForDoneRef.current) {
       if (!busySessionIds.has(prevId)) {
         const runId = automationActiveRuns.current.get(prevId);
@@ -1251,21 +1251,13 @@ export function HarnessApp({
         }
       }
     }
-    unseenFinishedRef.current = nextUnseenFinishedSessions({
-      previousBusyIds: busyForDoneRef.current,
-      busyIds: busySessionIds,
-      previousUnseenIds: unseenFinishedRef.current,
-      focusedSessionId: activeSessionId,
-      untrackedIds: new Set(
-        sessions
-          .filter((session) => !isLiveAgentSession(session))
-          .map((session) => session.id),
-      ),
-    });
     busyForDoneRef.current = busySessionIds;
-    focusedForDoneRef.current = activeSessionId;
   }
-  const unseenFinishedIds = unseenFinishedRef.current;
+  const unseenFinishedIds = useUnseenFinishedSessions(
+    sessions,
+    busySessionIds,
+    activeSessionId,
+  );
 
   const liveAgents = useMemo(
     () =>
@@ -1577,33 +1569,20 @@ export function HarnessApp({
   // Tabs are views. Hidden idle sessions drop their child. A visible session
   // keeps its child for a few minutes after a turn so follow-ups stay instant,
   // then parks it and resumes on the next prompt.
-  useEffect(() => {
-    const visibleIds = openSessionIds(tabs);
-    const keepUnseen = liveAgentsEnabled;
-    const idleDetached = sessions.filter(
-      (session) =>
-        !visibleIds.has(session.id) &&
-        !session.busy &&
-        !(keepUnseen && unseenFinishedRef.current.has(session.id)),
-    );
-    if (idleDetached.length === 0) return;
-    for (const session of idleDetached) {
-      if (skipForgetSessionIds.current.has(session.id)) continue;
-      persistSession(session);
-      for (const harness of sessionChildHarnesses(session)) {
-        void forgetHarnessSession(harness, session.id);
-      }
-    }
-    setSessions((prev: any) =>
-      prev.filter(
-        (session: any) =>
-          visibleIds.has(session.id) ||
-          session.busy ||
-          (keepUnseen && unseenFinishedRef.current.has(session.id)) ||
-          skipForgetSessionIds.current.has(session.id),
-      ),
-    );
-  }, [sessions, tabs, persistSession, liveAgentsEnabled]);
+  useIdleSessionDetach({
+    sessions,
+    sessionsRef,
+    tabs,
+    tabsRef,
+    orchestrationRuns,
+    liveAgentsEnabled,
+    unseenFinishedIds,
+    openingSessionIds,
+    loadedSessionCache,
+    skipForgetSessionIds,
+    persistSession,
+    setSessions,
+  });
 
   const activateTab = useCallback(
     (id: string, paneId?: string) => {
