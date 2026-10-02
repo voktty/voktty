@@ -735,7 +735,7 @@ function NoteEditor({
             }}
           />
         ) : body.trim() ? (
-          <AgentMarkdown text={body} cwd={note.sourceCwd} />
+          <AgentMarkdown text={body} cwd={note.sourceCwd} hardBreaks />
         ) : (
           <p className="text-[13px] text-content/45">
             {t("harness.chrome.noDescription")}

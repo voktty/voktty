@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { newSession, type AgentRunMeta, type Block, type Session } from "./session";
 import {
+  backfillCodexShellCommands,
   cacheSession,
   clearSessionCache,
   evictCachedSession,
@@ -21,6 +22,102 @@ describe("isPersistableId", () => {
     expect(isPersistableId("/Users/me/.pi/agent/sessions/abc.jsonl")).toBe(
       false,
     );
+  });
+});
+
+describe("Codex Shell row recovery", () => {
+  it("relabels from the command saved on the row, keeping redactions", () => {
+    const redacted = "/usr/bin/zsh -lc 'curl -H \"token=[redacted]\" example'";
+    const blocks: Block[] = [
+      {
+        id: "shell",
+        role: "tool",
+        text: "Shell",
+        tool: {
+          callId: "exec-1",
+          title: "Shell",
+          kind: "execute",
+          preview: { kind: "shell", title: redacted },
+        },
+      },
+    ];
+    const repaired = backfillCodexShellCommands(blocks);
+    expect(repaired[0].text).not.toBe("Shell");
+    expect(repaired[0].tool?.preview?.title).toContain("[redacted]");
+  });
+
+  it("leaves a row with no usable saved command as it is", () => {
+    const blocks: Block[] = [
+      {
+        id: "shell",
+        role: "tool",
+        text: "Shell",
+        tool: {
+          callId: "exec-1",
+          title: "Shell",
+          kind: "execute",
+          preview: { kind: "shell", title: "Shell" },
+        },
+      },
+    ];
+    expect(backfillCodexShellCommands(blocks)).toBe(blocks);
+  });
+
+  it("labels placeholder rows with the saved command and rebuilds the preview", () => {
+    const blocks: Block[] = [
+      {
+        id: "shell",
+        role: "tool",
+        text: "Shell",
+        tool: {
+          callId: "exec-1",
+          title: "Shell",
+          kind: "execute",
+          status: "failed",
+          detail: "exit 1",
+          preview: {
+            kind: "shell",
+            title: "rg --files -g AGENTS.md -g '!node_modules'",
+          },
+        },
+      },
+      {
+        id: "read",
+        role: "tool",
+        text: "Read file.ts",
+        tool: { callId: "exec-2", kind: "read" },
+      },
+    ];
+    const repaired = backfillCodexShellCommands(blocks);
+    expect(repaired[0]).toMatchObject({
+      text: "Find files",
+      tool: {
+        title: "Find files",
+        status: "failed",
+        detail: "exit 1",
+        preview: { kind: "shell", title: "rg --files -g AGENTS.md -g '!node_modules'" },
+      },
+    });
+    expect(repaired[1]).toBe(blocks[1]);
+    expect(backfillCodexShellCommands(repaired)).toBe(repaired);
+  });
+
+  it("keeps the raw command when no readable intent is inferred", () => {
+    const blocks: Block[] = [
+      {
+        id: "shell",
+        role: "tool",
+        text: "Shell",
+        tool: {
+          callId: "exec-3",
+          title: "Shell",
+          kind: "execute",
+          preview: { kind: "shell", title: "git commit -m 'Fix shell labels'" },
+        },
+      },
+    ];
+    const repaired = backfillCodexShellCommands(blocks);
+    expect(repaired[0].text).toBe("git commit -m 'Fix shell labels'");
   });
 });
 

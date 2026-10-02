@@ -18,7 +18,7 @@ const READABLE_BIN =
  * should stay as typed (git, npm, scripts, mixed opaque work).
  */
 export function inferShellIntent(command: string): ShellIntent | undefined {
-  const text = command.trim();
+  const text = unwrapShellCommand(command);
   if (!text || text.length > MAX_COMMAND_CHARS) return undefined;
   if (/^(Read|Find|List|Edit|Write)\s+\S/.test(text)) return undefined;
   if (looksUnsafe(text)) return undefined;
@@ -168,6 +168,9 @@ function classifyArgv(argv: string[]): Classified {
   if (bin === "head" || bin === "tail") return headTailIntent(argv);
   if (bin === "sed") return sedIntent(argv);
   if (bin === "tee") return teeIntent(argv);
+  if (bin === "rg" && argv.includes("--files")) {
+    return { verb: "Find", query: "files" };
+  }
   if (SEARCH_BINS.has(bin)) return grepIntent(argv);
   if (bin === "find") return findIntent(argv);
   if (bin === "ls" || bin === "tree") return listIntent(argv);

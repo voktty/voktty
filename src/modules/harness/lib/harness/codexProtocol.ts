@@ -17,6 +17,8 @@ import {
   extractToolPreview,
   formatAgentType,
 } from "./preview";
+import { displayPath } from "../paths";
+import { formatShellIntent, inferShellIntent } from "./shellIntent";
 import { streamTextDelta } from "./streamText";
 import type { HarnessEvent } from "./types";
 
@@ -198,6 +200,80 @@ export function stringField(
   if (!rec) return undefined;
   const value = rec[key];
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+/**
+ * Where a Codex item records the commands it parsed out of a script. The live
+ * app-server protocol spells it `commandActions`; older rollout files on disk
+ * used `parsed_cmd`/`parsedCmd`, and an item replayed from one still carries
+ * those, so every spelling is read.
+ */
+const PARSED_COMMAND_KEYS = ["commandActions", "parsed_cmd", "parsedCmd"] as const;
+
+/** The action's own text. `command` is the protocol's, `cmd` the rollout files'. */
+const PARSED_COMMAND_FIELDS = ["command", "cmd"] as const;
+
+/**
+ * The command a Codex `commandExecution` item ran. The app-server sends a plain
+ * string, but a shell launcher can also reach us as argv
+ * (`["/bin/zsh","-lc","rg --files"]`), which `stringField` silently drops, so
+ * the argv shape is unwrapped too. The parsed actions are the last fallback.
+ */
+export function codexCommandText(
+  item: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (!item) return undefined;
+  const command = item.command;
+  if (typeof command === "string" && command.trim()) return command.trim();
+  if (Array.isArray(command)) {
+    const parts = command.filter(
+      (part): part is string => typeof part === "string" && !!part.trim(),
+    );
+    // The script is one argv element that keeps its own spaces. Match command
+    // flags for the launcher; other options may also contain "c".
+    const launcher = parts[0]
+      ?.replace(/^(['"])(.*)\1$/, "$2")
+      .replace(/\\/g, "/")
+      .split("/")
+      .pop()
+      ?.toLowerCase();
+    const posixShell = ["sh", "bash", "zsh", "dash", "ksh"].includes(
+      launcher ?? "",
+    );
+    const powerShell = ["pwsh", "pwsh.exe", "powershell", "powershell.exe"].includes(
+      launcher ?? "",
+    );
+    const cmd = launcher === "cmd" || launcher === "cmd.exe";
+    let flag = -1;
+    for (let index = 1; index < parts.length - 1; index += 1) {
+      const part = parts[index];
+      if (powerShell && /^-(?:file|f)$/i.test(part)) break;
+      if (
+        (posixShell &&
+          (part.toLowerCase() === "--command" ||
+            /^-[A-Za-z]*c[A-Za-z]*$/.test(part))) ||
+        (powerShell && /^-(?:command|c)$/i.test(part)) ||
+        (cmd && /^\/c$/i.test(part))
+      ) {
+        flag = index;
+        break;
+      }
+    }
+    if (flag > 0 && parts.length > flag + 1) return parts[flag + 1].trim();
+    if (parts.length) return parts.join(" ").trim();
+  }
+  for (const key of PARSED_COMMAND_KEYS) {
+    const actions = item[key];
+    if (!Array.isArray(actions)) continue;
+    for (const raw of actions) {
+      const action = asRecord(raw);
+      for (const field of PARSED_COMMAND_FIELDS) {
+        const found = stringField(action, field);
+        if (found) return found;
+      }
+    }
+  }
+  return undefined;
 }
 
 function numberField(
@@ -570,30 +646,30 @@ function mapToolItem(
   if (!callId) return null;
 
   if (itemType === "commandExecution") {
-    const command = stringField(item, "command") ?? "Shell";
+    const command = codexCommandText(item) ?? "Shell";
     const status = mapItemStatus(stringField(item, "status"), completed);
     const output =
       stringField(item, "aggregatedOutput") ?? stringField(item, "output");
-    const preview: ToolPreview | undefined = undefined;
+    const presentation = codexCommandPresentation(item, command);
     const eventType = completed ? "tool.updated" : "tool.started";
     if (eventType === "tool.started") {
       return {
         type: "tool.started",
         callId,
-        title: command,
+        title: presentation.title,
         kind: "execute",
         status,
-        preview,
+        preview: presentation.preview,
       };
     }
     return {
       type: "tool.updated",
       callId,
-      title: command,
+      title: presentation.title,
       kind: "execute",
       status,
       ...(output ? { detail: output } : {}),
-      preview,
+      preview: presentation.preview,
     };
   }
 
@@ -771,6 +847,101 @@ function mapCollabAgentToolCall(
       : {}),
     status: settled ? (failed ? "failed" : "completed") : "in_progress",
     ...(detail ? { detail } : {}),
+  };
+}
+
+/** Prefer Codex's own best-effort command parsing, then our legacy fallback. */
+export function codexCommandPresentation(
+  item: Record<string, unknown>,
+  command: string,
+): { title: string; preview?: ToolPreview } {
+  const cwd = stringField(item, "cwd");
+  const actions = Array.isArray(item.commandActions)
+    ? item.commandActions.flatMap((value) => {
+        const action = asRecord(value);
+        return action ? [action] : [];
+      })
+    : [];
+
+  // The last meaningful stage usually describes the pipeline's visible goal
+  // (`cat file | grep term` is a Find), while unknown filters are ignored.
+  for (let index = actions.length - 1; index >= 0; index -= 1) {
+    const action = actions[index];
+    const type = stringField(action, "type");
+    const path = stringField(action, "path");
+    const shownPath = path ? displayPath(path, cwd) : undefined;
+    if (type === "search") {
+      const query = stringField(action, "query");
+      if (!query) continue;
+      return {
+        title: `Find ${query}`,
+        preview: shellCommandPreview(command, path, query),
+      };
+    }
+    if (type === "read" && path) {
+      return {
+        title: `Read ${shownPath}`,
+        preview: shellCommandPreview(command, path),
+      };
+    }
+    if (type === "listFiles") {
+      // The reported "Shell" row: a path-less listing (`rg --files -g AGENTS.md`)
+      // made this derive a bare "List", and `composeToolTitle` collapses that
+      // weak title to "Shell" because no path is left to show. Fall through so
+      // the command itself — or the intent inferred from it — becomes the label.
+      if (!shownPath) continue;
+      return {
+        title: `List ${shownPath}`,
+        preview: shellCommandPreview(command, path),
+      };
+    }
+  }
+
+  const inferred = inferShellIntent(command);
+  if (inferred) {
+    const path = inferred.path;
+    const shownPath = path ? displayPath(path, cwd) : undefined;
+    const title = formatShellIntent(inferred, shownPath, inferred.query);
+    if (title) {
+      return {
+        title,
+        preview: shellCommandPreview(
+          command,
+          path,
+          inferred.query,
+          inferred.startLine,
+        ),
+      };
+    }
+  }
+  // `ls` with no path derives a bare "List", which the activity stack treats as
+  // an empty placeholder. The command itself is the honest label.
+  return {
+    title: command,
+    preview: shellCommandPreview(command),
+  };
+}
+
+function shellCommandPreview(
+  command: string,
+  path?: string,
+  query?: string,
+  startLine?: number,
+): ToolPreview {
+  return {
+    kind: "shell",
+    title: command,
+    ...(path
+      ? {
+          path,
+          fileName: path
+            .replace(/[/\\]+$/, "")
+            .split(/[/\\]/)
+            .pop(),
+        }
+      : {}),
+    ...(query ? { query } : {}),
+    ...(startLine ? { startLine } : {}),
   };
 }
 
@@ -1064,18 +1235,19 @@ export function mapApprovalRequest(
   if (!rec) return null;
 
   if (method === "item/commandExecution/requestApproval") {
-    const command = stringField(rec, "command") ?? "Shell";
+    const command = codexCommandText(rec) ?? "Shell";
     const callId = stringField(rec, "itemId");
     const reason = stringField(rec, "reason");
+    const presentation = codexCommandPresentation(rec, command);
     return {
       kind: "command",
       event: {
         type: "approval.requested",
         requestId,
-        title: reason ? `${command} — ${reason}` : command,
+        title: reason ? `${presentation.title} — ${reason}` : presentation.title,
         kind: "execute",
         callId,
-        preview: undefined,
+        preview: presentation.preview,
       },
     };
   }
