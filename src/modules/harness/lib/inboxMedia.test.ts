@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  fetchInboxMedia,
   INBOX_MEDIA_PREFIXES,
   isInboxMediaUrl,
   sniffInboxMedia,
@@ -97,9 +96,15 @@ describe("fetchInboxMedia", () => {
   const MB = 1024 * 1024;
   const url = (i: number) =>
     `https://github.com/user-attachments/assets/cache-${i}`;
+  let fetchInboxMedia: typeof import("./inboxMedia").fetchInboxMedia;
+
+  beforeEach(async () => {
+    invoke.mockReset();
+    vi.resetModules();
+    ({ fetchInboxMedia } = await import("./inboxMedia"));
+  });
 
   it("shares a request in flight and serves repeats from cache", async () => {
-    invoke.mockReset();
     invoke.mockResolvedValue(new ArrayBuffer(16));
     const [first, second] = await Promise.all([
       fetchInboxMedia(url(100)),
@@ -111,7 +116,6 @@ describe("fetchInboxMedia", () => {
   });
 
   it("keeps cached bytes under a total budget", async () => {
-    invoke.mockReset();
     invoke.mockImplementation(async () => new ArrayBuffer(10 * MB));
     for (let i = 0; i < 6; i += 1) await fetchInboxMedia(url(i));
     expect(invoke).toHaveBeenCalledTimes(6);
@@ -123,8 +127,94 @@ describe("fetchInboxMedia", () => {
     expect(invoke).toHaveBeenCalledTimes(7);
   });
 
+  it("refreshes recency on cache hits before evicting", async () => {
+    invoke.mockImplementation(async () => new ArrayBuffer(10 * MB));
+    const first = await fetchInboxMedia(url(0));
+    const second = await fetchInboxMedia(url(1));
+    const third = await fetchInboxMedia(url(2));
+
+    // Compare identities as booleans so Vitest never deep-compares large arrays.
+    expect((await fetchInboxMedia(url(0))) === first).toBe(true);
+    const fourth = await fetchInboxMedia(url(3));
+
+    expect((await fetchInboxMedia(url(0))) === first).toBe(true);
+    expect((await fetchInboxMedia(url(2))) === third).toBe(true);
+    expect((await fetchInboxMedia(url(3))) === fourth).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(4);
+    expect((await fetchInboxMedia(url(1))) === second).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(5);
+  });
+
+  it.each([0, 1])(
+    "evicts older mixed-size entry %i to fit the byte budget",
+    async (older) => {
+      const sizes = new Map([
+        [url(0), 4 * MB],
+        [url(1), 8 * MB],
+        [url(2), 20 * MB],
+        [url(3), 12 * MB],
+      ]);
+      invoke.mockImplementation(
+        async (_command, { url: src }: { url: string }) =>
+          new ArrayBuffer(sizes.get(src)!),
+      );
+      const small = await fetchInboxMedia(url(0));
+      const medium = await fetchInboxMedia(url(1));
+      const large = await fetchInboxMedia(url(2));
+
+      // All three entries fit at exactly 32 MiB.
+      expect((await fetchInboxMedia(url(0))) === small).toBe(true);
+      expect((await fetchInboxMedia(url(1))) === medium).toBe(true);
+      expect((await fetchInboxMedia(url(2))) === large).toBe(true);
+      expect(invoke).toHaveBeenCalledTimes(3);
+
+      // Adding 12 MiB must evict both the 4 MiB and 8 MiB entries.
+      const newest = await fetchInboxMedia(url(3));
+      expect((await fetchInboxMedia(url(2))) === large).toBe(true);
+      expect((await fetchInboxMedia(url(3))) === newest).toBe(true);
+      expect(invoke).toHaveBeenCalledTimes(4);
+
+      const previous = older === 0 ? small : medium;
+      expect((await fetchInboxMedia(url(older))) === previous).toBe(false);
+      expect(invoke).toHaveBeenCalledTimes(5);
+    },
+  );
+
+  it("evicts when one new byte exceeds the exact budget", async () => {
+    invoke.mockImplementation(async () => new ArrayBuffer(16 * MB));
+    const first = await fetchInboxMedia(url(0));
+    const second = await fetchInboxMedia(url(1));
+
+    expect((await fetchInboxMedia(url(0))) === first).toBe(true);
+    expect((await fetchInboxMedia(url(1))) === second).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(2);
+
+    invoke.mockResolvedValueOnce(new ArrayBuffer(1));
+    const tiny = await fetchInboxMedia(url(2));
+    expect((await fetchInboxMedia(url(1))) === second).toBe(true);
+    expect((await fetchInboxMedia(url(2))) === tiny).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(3);
+    expect((await fetchInboxMedia(url(0))) === first).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(4);
+  });
+
+  it("returns oversized responses without caching or evicting existing entries", async () => {
+    invoke.mockResolvedValueOnce(new ArrayBuffer(16 * MB));
+    invoke.mockImplementation(async () => new ArrayBuffer(32 * MB + 1));
+    const cached = await fetchInboxMedia(url(0));
+    const oversized = await fetchInboxMedia(url(1));
+
+    expect(oversized.byteLength).toBe(32 * MB + 1);
+    expect((await fetchInboxMedia(url(0))) === cached).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(2);
+    const repeat = await fetchInboxMedia(url(1));
+    expect(repeat.byteLength).toBe(32 * MB + 1);
+    expect(repeat === oversized).toBe(false);
+    expect((await fetchInboxMedia(url(0))) === cached).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(3);
+  });
+
   it("retries after a failed request", async () => {
-    invoke.mockReset();
     invoke.mockRejectedValueOnce(new Error("offline"));
     invoke.mockResolvedValueOnce(new ArrayBuffer(8));
     await expect(fetchInboxMedia(url(200))).rejects.toThrow("offline");
