@@ -60,11 +60,12 @@ export function surfaceTabPresentation(
   }
 
   if (isChangesTab(file)) {
+    const staged = file.changeKind === "staged";
     return {
-      name: t("harness.chrome.changes"),
-      label: t("harness.chrome.changes"),
+      name: staged ? "Staged Changes" : t("harness.chrome.changes"),
+      label: staged ? "Staged Changes" : t("harness.chrome.changes"),
       iconName: "CHANGES",
-      tooltip: t("harness.chrome.workingTreeChanges"),
+      tooltip: staged ? "Staged changes" : t("harness.chrome.workingTreeChanges"),
     };
   }
 
