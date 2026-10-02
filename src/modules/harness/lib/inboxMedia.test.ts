@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  fetchInboxMedia,
   INBOX_MEDIA_PREFIXES,
   isInboxMediaUrl,
   sniffInboxMedia,
@@ -86,5 +87,47 @@ describe("sniffInboxMedia", () => {
     expect(
       sniffInboxMedia(new TextEncoder().encode("<html><script>x()</script>")),
     ).toBeNull();
+  });
+});
+
+const invoke = vi.hoisted(() => vi.fn());
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+
+describe("fetchInboxMedia", () => {
+  const MB = 1024 * 1024;
+  const url = (i: number) =>
+    `https://github.com/user-attachments/assets/cache-${i}`;
+
+  it("shares a request in flight and serves repeats from cache", async () => {
+    invoke.mockReset();
+    invoke.mockResolvedValue(new ArrayBuffer(16));
+    const [first, second] = await Promise.all([
+      fetchInboxMedia(url(100)),
+      fetchInboxMedia(url(100)),
+    ]);
+    expect(first).toBe(second);
+    expect(await fetchInboxMedia(url(100))).toBe(first);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps cached bytes under a total budget", async () => {
+    invoke.mockReset();
+    invoke.mockImplementation(async () => new ArrayBuffer(10 * MB));
+    for (let i = 0; i < 6; i += 1) await fetchInboxMedia(url(i));
+    expect(invoke).toHaveBeenCalledTimes(6);
+
+    // The newest files are still cached; the oldest were dropped.
+    await fetchInboxMedia(url(5));
+    expect(invoke).toHaveBeenCalledTimes(6);
+    await fetchInboxMedia(url(0));
+    expect(invoke).toHaveBeenCalledTimes(7);
+  });
+
+  it("retries after a failed request", async () => {
+    invoke.mockReset();
+    invoke.mockRejectedValueOnce(new Error("offline"));
+    invoke.mockResolvedValueOnce(new ArrayBuffer(8));
+    await expect(fetchInboxMedia(url(200))).rejects.toThrow("offline");
+    expect((await fetchInboxMedia(url(200))).byteLength).toBe(8);
   });
 });

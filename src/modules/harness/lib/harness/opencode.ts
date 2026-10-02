@@ -2,6 +2,7 @@ import { modelContextWindow, nativeModelId } from "../models";
 import type { RuntimeMode } from "../session";
 import { taskListFromToolInput } from "../taskList";
 import {
+  closeHarnessSse,
   execChild,
   freeHarnessPort,
   killChild,
@@ -329,6 +330,10 @@ export async function stopOpenCodeSession(sessionId: string): Promise<void> {
     live.turnFailed = null;
     await live.client.abortSession(live.openCodeSessionId);
     await live.client.closeEvents(sessionId);
+  } else {
+    // A stream or server that ended on its own already dropped `live`, but
+    // its SSE handlers still hold it until the stream is closed.
+    await closeHarnessSse(sessionId).catch(() => undefined);
   }
   unwatchChild(sessionId);
   await killChild(sessionId).catch(() => undefined);

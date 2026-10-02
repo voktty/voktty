@@ -57,6 +57,13 @@ function oscColors() {
   };
 }
 
+/**
+ * Teardown still in flight per PTY id. A view that mounts with an id another
+ * view (or a StrictMode replay of itself) is still stopping must wait, or the
+ * late kill lands on the replacement shell and drops its data handler.
+ */
+const stoppingPtys = new Map<string, Promise<void>>();
+
 export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
   const outerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -137,38 +144,68 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
 
     let oscBuffer = "";
 
-    const unsubscribe = subscribePty(
-      id,
-      (data) => {
-        const onMeta = onMetaChangeRef.current;
-        if (onMeta) {
-          const text = new TextDecoder().decode(data);
-          const scanned = scanOscCwd(text, oscBuffer);
-          oscBuffer = scanned.rest;
-          if (scanned.cwd) {
-            const patch: TerminalMetaPatch = { cwd: scanned.cwd };
-            if (!runningProcessRef.current) {
-              patch.title = defaultTerminalTitle(scanned.cwd);
+    let unsubscribe = () => {};
+    let didStart = false;
+    const start = () => {
+      if (closed) return;
+      unsubscribe = subscribePty(
+        id,
+        (data) => {
+          if (closed) return;
+          const onMeta = onMetaChangeRef.current;
+          if (onMeta) {
+            const text = new TextDecoder().decode(data);
+            const scanned = scanOscCwd(text, oscBuffer);
+            oscBuffer = scanned.rest;
+            if (scanned.cwd) {
+              const patch: TerminalMetaPatch = { cwd: scanned.cwd };
+              if (!runningProcessRef.current) {
+                patch.title = defaultTerminalTitle(scanned.cwd);
+              }
+              onMeta(patch);
             }
-            onMeta(patch);
           }
+          term.write(data);
+        },
+        (code) => {
+          if (closed) return;
+          const status = code == null ? "" : ` (${code})`;
+          term.writeln(`\r\n[process exited${status}]`);
+        },
+      );
+      didStart = true;
+      return spawnPty(id, cwd, term.cols, term.rows);
+    };
+
+    const starting = (stoppingPtys.get(id) ?? Promise.resolve())
+      .then(start)
+      .then(() => {
+        if (!closed) spawned.current = true;
+      })
+      .catch((error) => {
+        spawned.current = false;
+        if (!closed) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          term.writeln(`\x1b[31m${message}\x1b[0m`);
         }
-        term.write(data);
-      },
-      (code) => {
-        if (closed) return;
-        const status = code == null ? "" : ` (${code})`;
-        term.writeln(`\r\n[process exited${status}]`);
-      },
-    );
+        throw error;
+      });
+    void starting.catch(() => undefined);
 
     const dataSub = term.onData((data) => {
-      void writePty(id, data);
+      void starting
+        .then(() => (closed ? undefined : writePty(id, data)))
+        .catch(() => undefined);
     });
 
     const replyOsc = (code: 10 | 11 | 12, hex: string) => {
       const reply = oscColorReply(code, hex);
-      if (reply) void writePty(id, reply);
+      if (reply) {
+        void starting
+          .then(() => (closed ? undefined : writePty(id, reply)))
+          .catch(() => undefined);
+      }
       return true;
     };
     const oscFg = term.parser.registerOscHandler(10, (data) =>
@@ -218,16 +255,12 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
       if (cols === lastCols && rows === lastRows) return;
       lastCols = cols;
       lastRows = rows;
-      if (!spawned.current) {
-        spawned.current = true;
-        void spawnPty(id, cwd, cols, rows).catch((error) => {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          term.writeln(`\x1b[31m${message}\x1b[0m`);
+      void starting
+        .then(() => (closed ? undefined : resizePty(id, cols, rows)))
+        .catch(() => {
+          lastCols = 0;
+          lastRows = 0;
         });
-        return;
-      }
-      void resizePty(id, cols, rows);
     };
 
     const schedule = () => {
@@ -265,8 +298,16 @@ export function TerminalView({ id, cwd, active, onMetaChange }: Props) {
       oscCursor.dispose();
       renderSub.dispose();
       bufferSub.dispose();
-      unsubscribe();
-      void killPty(id);
+      const stopping = starting
+        .catch(() => undefined)
+        .then(() => {
+          unsubscribe();
+          return didStart ? killPty(id) : undefined;
+        })
+        .finally(() => {
+          if (stoppingPtys.get(id) === stopping) stoppingPtys.delete(id);
+        });
+      stoppingPtys.set(id, stopping);
       term.dispose();
       termRef.current = null;
       spawned.current = false;
