@@ -25,6 +25,14 @@ import { useSessionReminders } from "../hooks/useSessionReminders";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
 import { useUnseenFinishedSessions } from "../hooks/useUnseenFinishedSessions";
 import { useIdleSessionDetach } from "../hooks/useIdleSessionDetach";
+import { useWorkspaceNavigation } from "../hooks/useWorkspaceNavigation";
+import {
+  type WorktreeFocus,
+  useWorktreeFocus,
+  worktreeFocus,
+} from "../lib/worktreeFocus";
+import { listWorktrees, type Worktree } from "../lib/worktrees";
+import { sessionInWorktree } from "../lib/sessionWorktrees";
 import type { OrchestrationRun } from "@/modules/orchestration/model/orchestration";
 import {
   claimDueAutomations,
@@ -231,6 +239,7 @@ import {
 import {
   displayPath,
   isEqualOrInside,
+  pathKey,
   projectName,
   rebasePath,
   resolveWorkspacePath,
@@ -271,6 +280,7 @@ import {
 import {
   archiveProject,
   forgetProject,
+  isRemoteProjectPath,
   lastProjectPath,
   loadRecents,
   looksLikeProject,
@@ -417,6 +427,7 @@ import {
   filterTabsForProject,
   planWorkspaceTabClose,
   workspaceTabCwd,
+  workspaceTabWorktree,
   focusedWorkspaceTabCwd,
 } from "../lib/workspaceTabGroups";
 import {
@@ -687,6 +698,11 @@ function titleTabsEqual(a: TitleTab[], b: TitleTab[]): boolean {
   });
 }
 
+/** The worktree a project's workspace currently shows. */
+function currentWorkspace(project: string): string {
+  return worktreeFocus(project)?.path ?? project;
+}
+
 export function HarnessApp({
   windowTransfer = null,
   resumed = null,
@@ -743,7 +759,7 @@ export function HarnessApp({
     () => windowTransfer?.projectTerminals ?? resumed?.projectTerminals ?? [],
   );
   const [projectTerminalFocused, setProjectTerminalFocused] = useState(false);
-  const [activeTabId, setActiveTabId] = useState(
+  const [activeTabId, setActiveTabIdState] = useState(
     () => windowTransfer?.activeTabId ?? resumed?.activeTabId ?? seed.tab.id,
   );
   const [composerFocused, setComposerFocused] = useState(() => {
@@ -1164,6 +1180,83 @@ export function HarnessApp({
     Boolean(sidebarCwd) && sidebarCwd !== "~",
   );
 
+  const projectWorktree = useWorktreeFocus(projectCwd);
+  /** Tab or session id -> the workspace it was opened or moved in. A tab
+   * belongs to the workspace it was opened in, whatever worktree it runs in:
+   * opening a session, or moving one from its composer, never switches the
+   * workspace. Unpinned tabs (restored ones) group by their own worktree. */
+  // Only the default workspace's tabs were saved, so every restored tab
+  // belongs to it, including one its composer moved to a worktree.
+  const [restoredPins] = useState(
+    () =>
+      new Map(
+        tabs.flatMap((tab) => {
+          const project = workspaceTabCwd(tab, sessions);
+          return project && !isRemoteProjectPath(project)
+            ? [[tab.id, project] as const]
+            : [];
+        }),
+      ),
+  );
+  const workspacePins = useRef(restoredPins);
+  const tabWorkspace = useCallback(
+    (tab: WorkspaceTab, list: readonly Session[]) => {
+      const pinnedTab = workspacePins.current.get(tab.id);
+      if (pinnedTab) return pinnedTab;
+      for (const id of leafIds(tab.layout)) {
+        const pinned = workspacePins.current.get(id);
+        if (pinned) return pinned;
+      }
+      return workspaceTabWorktree(tab, list);
+    },
+    [],
+  );
+  const tabWorktreeOf = useCallback(
+    (tab: WorkspaceTab) => tabWorkspace(tab, sessionsRef.current),
+    [tabWorkspace],
+  );
+  /** Saved tabs: the app reopens on each project's default workspace, so
+   * tabs from other worktrees close with it instead of piling up. */
+  const keepWorkspaceTab = useCallback(
+    (tab: WorkspaceTab) => {
+      const project = workspaceTabCwd(tab, sessionsRef.current);
+      if (!project || isRemoteProjectPath(project)) return true;
+      const workspace = tabWorkspace(tab, sessionsRef.current);
+      return !workspace || sameProjectPath(workspace, project);
+    },
+    [tabWorkspace],
+  );
+
+  const workspaceNavigation = useWorkspaceNavigation({
+    project: projectCwd,
+    activeTabId,
+    tabs,
+    sessions,
+    pins: workspacePins.current,
+    tabWorkspace,
+    moveSession: (id, tree, isCurrent) =>
+      onWorktreeChange(id, tree, false, isCurrent),
+    activateTab: (id) => {
+      if (tabsRef.current.some((tab) => tab.id === id)) {
+        activateTab(id, undefined, "workspace");
+      } else {
+        // A newly created tab has not rendered into tabsRef yet.
+        setActiveTabIdState(id);
+        setComposerFocused(true);
+      }
+    },
+    createTab: (project, focus) => createWorkspaceTab(project, focus),
+  });
+  // Every ordinary tab activation supersedes an unfinished workspace request,
+  // including opening a session in the same tab or selecting a project.
+  const setActiveTabId = useCallback(
+    (id: string) => {
+      workspaceNavigation.cancel();
+      setActiveTabIdState(id);
+    },
+    [workspaceNavigation.cancel],
+  );
+
   const nextBusySessionIds = useMemo(() => {
     const ids = new Set<string>();
     for (const session of sessions) {
@@ -1326,6 +1419,7 @@ export function HarnessApp({
       () => projectTerminalsRef.current,
       readProjectReturnMemory,
       flushHarnessEvents,
+      keepWorkspaceTab,
     );
     void getCurrentWindow()
       .onCloseRequested((event: any) => {
@@ -1347,6 +1441,7 @@ export function HarnessApp({
             readProjectReturnMemory(),
             projectTerminalsRef.current,
             flushHarnessEvents,
+            keepWorkspaceTab,
           );
           return;
         }
@@ -1358,6 +1453,7 @@ export function HarnessApp({
           readProjectReturnMemory(),
           "unload",
           projectTerminalsRef.current,
+          keepWorkspaceTab,
         ).finally(() => {
           void closeCurrentWindow();
         });
@@ -1369,7 +1465,7 @@ export function HarnessApp({
       releaseQuit();
       unlistenClose?.();
     };
-  }, [flushHarnessEvents, readProjectReturnMemory]);
+  }, [flushHarnessEvents, keepWorkspaceTab, readProjectReturnMemory]);
 
   const refreshHistory = useCallback(async (cwd: string) => {
     if (!cwd || cwd === "~") return;
@@ -1585,7 +1681,11 @@ export function HarnessApp({
   });
 
   const activateTab = useCallback(
-    (id: string, paneId?: string) => {
+    (
+      id: string,
+      paneId?: string,
+      reason: "session" | "workspace" = "session",
+    ) => {
       const tab = tabsRef.current.find((entry: any) => entry.id === id);
       const nextFocusedId =
         tab &&
@@ -1596,7 +1696,8 @@ export function HarnessApp({
           ? paneId
           : tab?.focusedId;
 
-      setActiveTabId(id);
+      if (reason === "workspace") setActiveTabIdState(id);
+      else setActiveTabId(id);
       if (tab && nextFocusedId && nextFocusedId !== tab.focusedId) {
         setTabs((prev: any) =>
           prev.map((entry: any) =>
@@ -1627,7 +1728,7 @@ export function HarnessApp({
           ),
       );
     },
-    [deckLayout],
+    [deckLayout, setActiveTabId],
   );
 
   const commitTabVisit = useCallback((history: TabVisitHistory) => {
@@ -2388,6 +2489,7 @@ export function HarnessApp({
         sessions: sessionsRef.current,
         closingTabId: id,
         scope: tabCloseScope,
+        worktreeOf: tabWorktreeOf,
       });
       if (closePlan.action === "keep") return;
       const closing = current[index];
@@ -2696,6 +2798,7 @@ export function HarnessApp({
               sessions: sessionsRef.current,
               closingTabId: tab.id,
               scope: tabCloseScope,
+              worktreeOf: tabWorktreeOf,
             });
             if (closePlan.action === "close") {
               onCloseTab(
@@ -2959,6 +3062,7 @@ export function HarnessApp({
           sessions: sessionsRef.current,
           closingTabId: activeTab.id,
           scope: tabCloseScope,
+          worktreeOf: tabWorktreeOf,
         });
         if (closePlan.action === "keep") onClearTabSession(activeTab.id);
         else onCloseTab(activeTab.id);
@@ -3004,6 +3108,7 @@ export function HarnessApp({
         sessions: sessionsRef.current,
         closingTabId: id,
         scope: tabCloseScope,
+        worktreeOf: tabWorktreeOf,
       });
       if (closePlan.action === "keep" && id === activeTabIdRef.current) {
         onClosePane();
@@ -3014,14 +3119,48 @@ export function HarnessApp({
     [onClosePane, onCloseTab, tabCloseScope],
   );
 
+  /** Open tabs per workspace in the sidebar's project, keyed by worktree
+   * path, so the switcher can show what each worktree still has open. */
+  const worktreeTabStats = useMemo(() => {
+    const stats = new Map<string, { tabs: number; busy: boolean }>();
+    if (!sidebarCwd || sidebarCwd === "~" || isRemoteProjectPath(sidebarCwd))
+      return stats;
+    for (const tab of filterTabsForProject(tabs, sessions, sidebarCwd)) {
+      const workspace = tabWorkspace(tab, sessions) ?? sidebarCwd;
+      const key = pathKey(workspace);
+      const entry = stats.get(key) ?? { tabs: 0, busy: false };
+      entry.tabs += 1;
+      entry.busy ||= leafIds(tab.layout).some(
+        (id) => sessions.find((session) => session.id === id)?.busy,
+      );
+      stats.set(key, entry);
+    }
+    return stats;
+  }, [tabs, sessions, sidebarCwd, tabWorkspace, workspaceNavigation.revision]);
+
   const deckProjectTabs = useMemo(() => {
     if (!deckLayout) return tabs;
     // A projectless session belongs to no project, so it stands on its own
     // rather than trailing the last project's tabs.
     const active = tabs.find((tab: any) => tab.id === activeTabId);
     if (active && !workspaceTabCwd(active, sessions)) return [active];
-    return filterTabsForProject(tabs, sessions, projectCwd);
-  }, [activeTabId, deckLayout, tabs, sessions, projectCwd]);
+    // Each worktree keeps its own tabs; the others stay open, just hidden.
+    const worktree = projectWorktree?.path ?? projectCwd;
+    return filterTabsForProject(tabs, sessions, projectCwd).filter((tab) => {
+      if (tab.id === activeTabId) return true;
+      const workspace = tabWorkspace(tab, sessions);
+      return !workspace || sameProjectPath(workspace, worktree);
+    });
+  }, [
+    activeTabId,
+    deckLayout,
+    tabs,
+    sessions,
+    projectCwd,
+    projectWorktree?.path,
+    tabWorkspace,
+    workspaceNavigation.revision,
+  ]);
 
   const onNext = useCallback(() => {
     const scope = deckLayout ? deckProjectTabs : tabs;
@@ -3387,8 +3526,11 @@ export function HarnessApp({
 
   const onSelectHistorySession = useCallback(
     async (sessionId: string) => {
+      workspaceNavigation.cancel();
       const session = await ensureOpenSession(sessionId);
       if (!session) return;
+      if (looksLikeProject(session.cwd))
+        setProjectCwd(normalizeProjectPath(session.cwd));
       if (focusOpenSession(sessionId)) return;
       if (replaceBlankPaneWithSession(session)) return;
       const tab = newTab(session.id);
@@ -3403,6 +3545,8 @@ export function HarnessApp({
       ensureOpenSession,
       focusOpenSession,
       replaceBlankPaneWithSession,
+      setActiveTabId,
+      workspaceNavigation.cancel,
     ],
   );
 
@@ -3896,14 +4040,87 @@ export function HarnessApp({
     [persistSession],
   );
 
+  const createWorkspaceTab = useCallback(
+    (cwd: string, focus?: WorktreeFocus) => {
+      const session = {
+        ...newDefaultSession(cwd, sessionDefaults?.runtimeMode),
+        ...(focus && !sameProjectPath(focus.path, cwd)
+          ? { worktreeCwd: focus.path, branch: focus.branch ?? undefined }
+          : {}),
+      };
+      const tab = newTab(session.id);
+      setSessions((prev: any) => [...prev, session]);
+      appendTab(tab, cwd);
+      return tab.id;
+    },
+    [appendTab, sessionDefaults?.runtimeMode],
+  );
+
+  const onWorktreeChange = useCallback(
+    async (
+      sessionId: string,
+      tree: Worktree,
+      fromComposer = false,
+      isCurrent: () => boolean = () => true,
+    ) => {
+      if (!isCurrent()) return;
+      const current = sessionsRef.current.find((s: any) => s.id === sessionId);
+      if (
+        !current ||
+        (!current.worktreeRemoved &&
+          pathKey(sessionWorkCwd(current)) === pathKey(tree.path))
+      )
+        return;
+      const source = { ...current };
+      const listed = await listWorktrees(current.cwd);
+      if (!isCurrent()) return;
+      const target = listed.worktrees.find(
+        (entry) =>
+          pathKey(entry.path) === pathKey(tree.path) && !entry.missing,
+      );
+      if (!target) {
+        throw new Error("This worktree is no longer available.");
+      }
+      const next = sessionInWorktree(source, target);
+      if (fromComposer) {
+        workspacePins.current.set(
+          sessionId,
+          currentWorkspace(source.cwd),
+        );
+      } else {
+        workspacePins.current.delete(sessionId);
+      }
+      if (shouldPersistSession(next)) await upsertSession(next);
+      if (!isCurrent()) return;
+      sessionsRef.current = sessionsRef.current.map((s: any) =>
+        s.id === sessionId ? next : s,
+      );
+      setSessions(sessionsRef.current);
+      notifyGitChanged();
+      notifyReviewChanged(sessionId);
+      void refreshHistory(next.cwd);
+    },
+    [refreshHistory],
+  );
+
+  const onSelectWorkspace = useCallback(
+    (focus?: WorktreeFocus) => {
+      setProjectCwd(sidebarCwdRef.current);
+      workspaceNavigation.selectWorkspace(sidebarCwdRef.current, focus);
+    },
+    [workspaceNavigation.selectWorkspace],
+  );
+
   const onSelectProject = useCallback(
     (path: string) => {
+      workspaceNavigation.cancel();
       setSearchViewOpen(false);
       setInboxViewOpen(false);
       setNotesViewOpen(false);
       setAutomationsViewOpen(false);
       const normalized = normalizeProjectPath(path);
       if (!looksLikeProject(normalized)) return;
+      workspaceNavigation.selectProject(normalized);
 
       const activeWorkspace = tabsRef.current.find(
         (entry) => entry.id === activeTabIdRef.current,
@@ -3957,7 +4174,15 @@ export function HarnessApp({
       setActiveTabId(tab.id);
       setComposerFocused(true);
     },
-    [activateTab, appendTab, onCwdChange, readProjectReturnMemory],
+    [
+      activateTab,
+      appendTab,
+      onCwdChange,
+      readProjectReturnMemory,
+      setActiveTabId,
+      workspaceNavigation.cancel,
+      workspaceNavigation.selectProject,
+    ],
   );
 
   useEffect(() => {
@@ -4353,7 +4578,11 @@ export function HarnessApp({
         buildTarget?: PlanBuildTarget;
       },
     ) => {
-      if (removingSessionIds.current.has(sessionId)) return;
+      if (
+        removingSessionIds.current.has(sessionId) ||
+        workspaceNavigation.isSwitching(sessionId)
+      )
+        return;
       const storedCurrent = sessionsRef.current.find(
         (s: any) => s.id === sessionId,
       );
@@ -5731,6 +5960,7 @@ export function HarnessApp({
   }, []);
 
   const onOpenSearch = useCallback(() => {
+    workspaceNavigation.cancel();
     startTransition(() => {
       setFilePickerOpen(false);
       setSettingsOpen(false);
@@ -5740,13 +5970,14 @@ export function HarnessApp({
       setSearchViewOpen(true);
       setSearchViewFocusToken((token) => token + 1);
     });
-  }, []);
+  }, [workspaceNavigation.cancel]);
 
   const onLeaveSearch = useCallback(() => {
     setSearchViewOpen(false);
   }, []);
 
   const onOpenInbox = useCallback(() => {
+    workspaceNavigation.cancel();
     startTransition(() => {
       setFilePickerOpen(false);
       setSettingsOpen(false);
@@ -5762,13 +5993,14 @@ export function HarnessApp({
       saveSidebarOpen(true);
       setSidebarTab("inbox");
     });
-  }, [deckLayout]);
+  }, [deckLayout, workspaceNavigation.cancel]);
 
   const onLeaveInbox = useCallback(() => {
     setInboxViewOpen(false);
   }, []);
 
   const onOpenNotes = useCallback(() => {
+    workspaceNavigation.cancel();
     if (!loadNotesEnabled()) return;
     startTransition(() => {
       setFilePickerOpen(false);
@@ -5778,13 +6010,14 @@ export function HarnessApp({
       setAutomationsViewOpen(false);
       setNotesViewOpen(true);
     });
-  }, []);
+  }, [workspaceNavigation.cancel]);
 
   const onLeaveNotes = useCallback(() => {
     setNotesViewOpen(false);
   }, []);
 
   const onOpenAutomations = useCallback(() => {
+    workspaceNavigation.cancel();
     startTransition(() => {
       setFilePickerOpen(false);
       setSettingsOpen(false);
@@ -5793,7 +6026,7 @@ export function HarnessApp({
       setNotesViewOpen(false);
       setAutomationsViewOpen(true);
     });
-  }, []);
+  }, [workspaceNavigation.cancel]);
 
   const onLeaveAutomations = useCallback(() => {
     setAutomationsViewOpen(false);
@@ -5811,6 +6044,7 @@ export function HarnessApp({
 
   const openSettings = useCallback(
     (section?: SettingsSectionId, anchor?: SettingsAnchor) => {
+      workspaceNavigation.cancel();
       if (!settingsOpenRef.current) {
         settingsReturnViewRef.current = {
           search: searchViewOpenRef.current,
@@ -5833,7 +6067,7 @@ export function HarnessApp({
         setSettingsOpen(true);
       });
     },
-    [],
+    [workspaceNavigation.cancel],
   );
 
   const onOpenSettings = useCallback(() => openSettings(), [openSettings]);
@@ -6377,6 +6611,16 @@ export function HarnessApp({
       <Sidebar
         cwd={sidebarCwd}
         gitCwd={gitCwd}
+        worktreeTabStats={worktreeTabStats}
+        onSelectWorkspace={onSelectWorkspace}
+        workspaceSwitchPending={
+          workspaceNavigation.pending?.project === sidebarCwd
+        }
+        workspaceSwitchError={
+          workspaceNavigation.error?.project === sidebarCwd
+            ? workspaceNavigation.error.message
+            : undefined
+        }
         open={deckLayout || sidebarOpen || settingsOpen}
         layout={sidebarLayout}
         tab={sidebarTab}
@@ -6601,6 +6845,11 @@ export function HarnessApp({
                       >
                         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                           <PaneTree
+                            workspaceSwitchingSessionId={
+                              workspaceNavigation.pending
+                                ? active?.id
+                                : undefined
+                            }
                             visible={tab.id === activeTabId}
                             layout={tab.layout}
                             sessions={sessions}
