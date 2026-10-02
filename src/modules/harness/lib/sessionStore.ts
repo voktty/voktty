@@ -537,6 +537,11 @@ export async function takeInFlightSessions(): Promise<
   return Array.isArray(rows) ? rows : [];
 }
 
+/** Drain pending saves before a worktree removal changes stored session context. */
+export async function flushSessionWrites(): Promise<void> {
+  await Promise.all([...sessionWriteQueues.values()]);
+}
+
 /**
  * `workspace_set_snapshot` runs off the main thread, so two saves could
  * otherwise finish out of order and keep an older layout.
