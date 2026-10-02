@@ -47,6 +47,60 @@ import { LAYER } from "../lib/layers";
 import { HarnessIcon } from "./HarnessIcon";
 import { Popover } from "./Popover";
 import { MOD } from "../lib/platform";
+import "./ModelPicker.css";
+
+function isEffortSetting(setting: ModelSetting): boolean {
+  return (
+    setting.id === "effort" ||
+    setting.id === "reasoning" ||
+    setting.id === "reasoningEffort"
+  );
+}
+
+function effortTileTone(
+  harness: HarnessId,
+  setting: ModelSetting,
+  value: string,
+): "ultra" | "max" | undefined {
+  if (harness !== "codex" || !isEffortSetting(setting)) return undefined;
+  const normalized = value.toLowerCase();
+  return normalized === "ultra"
+    ? "ultra"
+    : normalized === "max"
+      ? "max"
+      : undefined;
+}
+
+const EFFORT_TILE_COLUMNS = 32;
+const EFFORT_TILE_ROWS = 5;
+
+function EffortTileShimmer() {
+  return (
+    <span className="codex-effort-tiles" aria-hidden="true">
+      {Array.from(
+        { length: EFFORT_TILE_COLUMNS * EFFORT_TILE_ROWS },
+        (_, index) => {
+          const column = index % EFFORT_TILE_COLUMNS;
+          const row = Math.floor(index / EFFORT_TILE_COLUMNS);
+          const centerColumn = (EFFORT_TILE_COLUMNS - 1) / 2;
+          const centerRow = (EFFORT_TILE_ROWS - 1) / 2;
+          const distance = Math.hypot(
+            (column - centerColumn) / centerColumn,
+            (row - centerRow) / centerRow,
+          );
+          const filled = (index * 73 + index * index * 19 + 23) % 101 < 65;
+          return (
+            <span
+              key={index}
+              className={`codex-effort-tile${filled ? " codex-effort-tile--filled" : ""}`}
+              style={{ "--tile-distance": distance } as React.CSSProperties}
+            />
+          );
+        },
+      )}
+    </span>
+  );
+}
 
 type Props = {
   harness: HarnessId;
@@ -667,6 +721,11 @@ export function ModelPicker({
                 const selected =
                   option.value === settingValue(submenu.setting, values);
                 const highlighted = index === activeSetting;
+                const tileTone = effortTileTone(
+                  current.harness,
+                  submenu.setting,
+                  option.value,
+                );
                 return (
                   <button
                     key={option.value}
@@ -680,8 +739,10 @@ export function ModelPicker({
                       highlighted
                         ? "bg-content/10 text-content"
                         : "text-content hover:bg-content/5"
-                    }`}
+                    } ${tileTone ? "codex-effort-option" : ""}`}
+                    data-effort-tone={tileTone}
                   >
+                    {tileTone ? <EffortTileShimmer /> : null}
                     <span className="min-w-0 flex-1 truncate">
                       {modelSettingOptionLabel(t, submenu.setting, option)}
                     </span>
