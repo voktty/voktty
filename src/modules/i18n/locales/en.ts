@@ -5580,6 +5580,8 @@ export const en = {
       diffView: "Diff view",
       emptySessionGames: "Empty session games",
       providerAccounts: "Provider accounts",
+      showRemainingUsage: "Show remaining usage",
+      maskEmails: "Mask account emails",
       claudeHooks: "Claude Code hooks",
       github: "GitHub",
       gitlab: "GitLab",
