@@ -200,7 +200,7 @@ import {
   withSurfacePanes,
 } from "../lib/layout";
 import { linearIssueDetails, peekLinearIssueDetails } from "../lib/linear";
-import { liveAgentsFromSessions } from "../lib/liveAgents";
+import { isLiveAgentSession, liveAgentsFromSessions } from "../lib/liveAgents";
 import {
   canDispatchQueuedHead,
   dequeueQueuedMessage,
@@ -1256,6 +1256,11 @@ export function HarnessApp({
       busyIds: busySessionIds,
       previousUnseenIds: unseenFinishedRef.current,
       focusedSessionId: activeSessionId,
+      untrackedIds: new Set(
+        sessions
+          .filter((session) => !isLiveAgentSession(session))
+          .map((session) => session.id),
+      ),
     });
     busyForDoneRef.current = busySessionIds;
     focusedForDoneRef.current = activeSessionId;
