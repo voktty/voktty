@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { deleteGeneratedImages } from "./fs";
+import { isWeakToolTitle } from "./harness/preview";
+import { codexCommandPresentation } from "./harness/codexProtocol";
 import { recoverCursorSubagents } from "./harness/cursorSubagents";
 import { persistableAttachment } from "./attachments";
 import type { ContextUsage } from "./contextUsage";
@@ -390,9 +392,71 @@ export async function getSession(sessionId: string): Promise<Session | null> {
     sessionId,
   });
   if (!record) return null;
-  const session = await recoverCursorSubagents(recordToSession(record));
-  cacheSession(session);
-  return session;
+  const session = recordToSession(record);
+  if (session.harness === "codex") {
+    // Relabel from the command already saved on the row. Codex sends it with
+    // the item and `shellCommandPreview` stores it as the preview title, so
+    // this needs no disk read at all.
+    const blocks = backfillCodexShellCommands(session.blocks);
+    if (blocks !== session.blocks) {
+      session.blocks = blocks;
+      // A failed write must not cost the reader the session. The repair stays
+      // in memory and the next load retries it.
+      await upsertSession(session).catch(() => undefined);
+    }
+  }
+  const recovered = await recoverCursorSubagents(session);
+  cacheSession(recovered);
+  return recovered;
+}
+
+/** Exec rows that were saved without their command, keyed by their tool call. */
+export function shellPlaceholderIds(blocks: Block[]): string[] {
+  return blocks.flatMap((block) =>
+    block.role === "tool" &&
+    block.tool?.kind === "execute" &&
+    block.text.trim() === "Shell" &&
+    block.tool.callId
+      ? [block.tool.callId]
+      : [],
+  );
+}
+
+/**
+ * Relabel exec rows that were saved without their command.
+ *
+ * The command is already on the row: Codex sends it with the item, and
+ * `shellCommandPreview` stores it as the preview title. Reading it back from
+ * there keeps whatever Codex chose to show the user — including anything it
+ * redacted — and never re-reads a secret off disk into the transcript store. A
+ * row saved without a usable preview has no command left to recover, so it keeps
+ * its placeholder label.
+ */
+export function backfillCodexShellCommands(blocks: Block[]): Block[] {
+  let changed = false;
+  const repaired = blocks.map((block) => {
+    if (
+      block.role !== "tool" ||
+      block.tool?.kind !== "execute" ||
+      block.text.trim() !== "Shell"
+    ) {
+      return block;
+    }
+    const saved = block.tool.preview?.title?.trim();
+    if (!saved || isWeakToolTitle(saved)) return block;
+    changed = true;
+    const { title, preview } = codexCommandPresentation({}, saved);
+    return {
+      ...block,
+      text: title,
+      tool: {
+        ...block.tool,
+        title,
+        ...(preview ? { preview } : {}),
+      },
+    };
+  });
+  return changed ? repaired : blocks;
 }
 
 export async function deleteSession(

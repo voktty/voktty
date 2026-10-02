@@ -3,6 +3,7 @@ import {
   buildThreadStartParams,
   buildTurnStartParams,
   buildTurnSteerParams,
+  codexCommandText,
   isRecoverableThreadResumeError,
   mapApprovalRequest,
   mapCodexNotification,
@@ -11,6 +12,68 @@ import {
   toCodexApprovalDecision,
 } from "./codexProtocol";
 import { parseCodexModelList } from "./codexCatalog";
+
+describe("codexCommandText", () => {
+  it("unwraps commands passed as shell argv", () => {
+    expect(
+      codexCommandText({
+        command: ["/bin/zsh", "-lc", "rg --files -g AGENTS.md"],
+      }),
+    ).toBe("rg --files -g AGENTS.md");
+    expect(
+      codexCommandText({ command: ["bash", "-c", "echo hello"] }),
+    ).toBe("echo hello");
+    expect(
+      codexCommandText({ command: ["bash", "--command", "echo x"] }),
+    ).toBe("echo x");
+    expect(
+      codexCommandText({ command: ["bash", "-C", "script.sh"] }),
+    ).toBe("bash -C script.sh");
+    expect(
+      codexCommandText({
+        command: [
+          '"C:\\Program Files\\PowerShell\\7\\pwsh.exe"',
+          "-Command",
+          "Get-Date",
+        ],
+      }),
+    ).toBe("Get-Date");
+  });
+
+  it("falls back to commandActions when the command field is missing", () => {
+    const mapped = mapCodexNotification("item/started", {
+      item: {
+        id: "cmd_actions",
+        type: "commandExecution",
+        status: "inProgress",
+        commandActions: [{ type: "unknown", command: "gh auth status" }],
+      },
+    });
+    expect((mapped.events[0] as { title: string }).title).toBe("gh auth status");
+  });
+
+  it("falls back to the older snake_case spelling of the parsed actions", () => {
+    expect(
+      codexCommandText({ parsed_cmd: [{ type: "unknown", cmd: "gh auth status" }] }),
+    ).toBe("gh auth status");
+  });
+
+  it("keeps the command when a path-less listing would hide the row", () => {
+    const mapped = mapCodexNotification("item/started", {
+      item: {
+        id: "cmd_rg",
+        type: "commandExecution",
+        command: `/usr/bin/zsh -lc "rg --files -g AGENTS.md"`,
+        cwd: "/home/me/proj",
+        status: "inProgress",
+        commandActions: [
+          { type: "listFiles", command: "rg --files -g AGENTS.md", path: null },
+        ],
+      },
+    });
+    expect((mapped.events[0] as { title: string }).title).toBe("Find files");
+  });
+});
 
 describe("runtimeModeToCodexConfig", () => {
   it("maps supervised to untrusted read-only", () => {

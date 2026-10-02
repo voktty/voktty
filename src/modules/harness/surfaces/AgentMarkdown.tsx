@@ -42,6 +42,7 @@ import { IS_MAC, IS_WIN } from "../lib/platform";
 import { isAtxHeadingLine } from "../lib/markdownSource";
 import { useColorScheme } from "../hooks/useColorScheme";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import { rehypeHardBreaks } from "./hardBreaks";
 
 const MERMAID_BASE_CONFIG = {
   startOnLoad: false,
@@ -367,12 +368,15 @@ export const AgentMarkdown = memo(function AgentMarkdown({
   className,
   cwd,
   onOpenFile,
+  hardBreaks,
 }: {
   text: string;
   streaming?: boolean;
   className?: string;
   cwd?: string;
   onOpenFile?: OpenFileFn;
+  /** Show a newline inside a block as a line break, as a document does (#591). */
+  hardBreaks?: boolean;
 }) {
   const { t } = useTranslation();
   const [fileMenu, setFileMenu] = useState<FileLinkMenu | null>(null);
@@ -394,6 +398,13 @@ export const AgentMarkdown = memo(function AgentMarkdown({
       [remarkWorkspaceFileLinks, { cwd }],
     ],
     [cwd],
+  );
+  const rehypePlugins = useMemo(
+    () =>
+      hardBreaks
+        ? [...MARKDOWN_REHYPE_PLUGINS, rehypeHardBreaks]
+        : MARKDOWN_REHYPE_PLUGINS,
+    [hardBreaks],
   );
 
   const onFileMenuPick = (id: string) => {
@@ -440,7 +451,7 @@ export const AgentMarkdown = memo(function AgentMarkdown({
         isAnimating={!!streaming}
         plugins={MARKDOWN_PLUGINS}
         remarkPlugins={remarkPlugins}
-        rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+        rehypePlugins={rehypePlugins}
       >
         {text}
       </Streamdown>
@@ -463,11 +474,13 @@ export const MarkdownPreview = memo(function MarkdownPreview({
   streaming,
   cwd,
   onOpenFile,
+  hardBreaks,
 }: {
   text: string;
   streaming?: boolean;
   cwd?: string;
   onOpenFile?: OpenFileFn;
+  hardBreaks?: boolean;
 }) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
 
@@ -482,6 +495,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({
           streaming={streaming}
           cwd={cwd}
           onOpenFile={onOpenFile}
+          hardBreaks={hardBreaks}
         />
       </div>
     </div>
