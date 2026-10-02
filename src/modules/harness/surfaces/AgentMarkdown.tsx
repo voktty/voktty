@@ -1,4 +1,4 @@
-import { code } from "@streamdown/code";
+import { boundedCode as code } from "./codeHighlightPlugin";
 import { useTranslation } from "@/modules/i18n";
 import {
   createContext,
