@@ -1,4 +1,5 @@
 import type { ReleaseNotesTabSource } from "./releaseNotes";
+import type { GitFileDiffKind } from "./workingTreeDiff";
 import {
   applyTerminalMeta,
   defaultTerminalTitle,
@@ -48,6 +49,7 @@ export type FilePaneTab = {
   review?: boolean;
   /** Single working-tree review of every changed file (unified diff). */
   changes?: boolean;
+  changeKind?: GitFileDiffKind;
   /** Read-only diff built from one session's captured before/after snapshots. */
   sessionChanges?: SessionChangesSource;
   terminal?: boolean;
@@ -106,13 +108,18 @@ export function newFileTab(
   };
 }
 
-export function newChangesTab(cwd: string, focusPath?: string): FilePaneTab {
+export function newChangesTab(
+  cwd: string,
+  focusPath?: string,
+  focusKind?: GitFileDiffKind,
+): FilePaneTab {
   return {
     id: crypto.randomUUID(),
     path: focusPath || cwd,
     cwd,
     review: true,
     changes: true,
+    ...(focusKind ? { changeKind: focusKind } : {}),
   };
 }
 
@@ -424,8 +431,9 @@ export function openChangesTab(
   tab: WorkspaceTab,
   cwd: string,
   focusPath?: string,
+  focusKind?: GitFileDiffKind,
 ): WorkspaceTab {
-  const next = newChangesTab(cwd, focusPath);
+  const next = newChangesTab(cwd, focusPath, focusKind);
   const key = editorTabKey(next);
   const existingPane = tab.editorPanes.find((pane) =>
     pane.files.some((file) => editorTabKey(file) === key),
@@ -435,7 +443,12 @@ export function openChangesTab(
   );
   if (!existingPane || !existingFile) return openEditorTab(tab, next);
 
-  const updated = focusPath ? { ...existingFile, path: focusPath } : existingFile;
+  const { changeKind: _previousKind, ...rest } = existingFile;
+  const updated = {
+    ...rest,
+    ...(focusPath ? { path: focusPath } : {}),
+    ...(focusKind ? { changeKind: focusKind } : {}),
+  };
   return {
     ...tab,
     focusedId: existingPane.id,
