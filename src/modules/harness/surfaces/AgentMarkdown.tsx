@@ -229,6 +229,17 @@ function MarkdownLink({
   );
 }
 
+// Shiki (via Streamdown's CodeBlock) treats these as plaintext and renders no
+// syntax colors at all, which is common in agent output (pseudocode, file
+// trees, command output) fenced as `text` or left untagged. Falling back to
+// the JS grammar for these still colors strings, numbers, and punctuation,
+// matching what most agent-output fences actually look like.
+const PLAINTEXT_FENCE_LANGUAGES = new Set(["text", "plaintext", "txt", ""]);
+
+function highlightLanguageFor(language: string): string {
+  return PLAINTEXT_FENCE_LANGUAGES.has(language.toLowerCase()) ? "js" : language;
+}
+
 type MarkdownCodeProps = ComponentProps<"code"> & { node?: unknown };
 
 function MarkdownCode({
@@ -298,6 +309,9 @@ function MarkdownCode({
     fence.fileName ??
     (fence.language ? fileNameForLanguage(fence.language) : "");
   const lineNumbers = !/\bnoLineNumbers\b/.test(meta);
+  const isPlaintextFallback = PLAINTEXT_FENCE_LANGUAGES.has(
+    fence.language.toLowerCase(),
+  );
 
   return (
     <div className="markdown-code-shell" dir="ltr">
@@ -308,12 +322,14 @@ function MarkdownCode({
       ) : null}
       {fence.filePath ? (
         <MarkdownCodePath path={fence.filePath} startLine={fence.startLine} />
+      ) : isPlaintextFallback ? (
+        <span className="markdown-code-fallback-label">{fence.language}</span>
       ) : null}
       <CodeBlock
         className={className}
         code={textContent(children)}
         isIncomplete={incomplete}
-        language={fence.language}
+        language={highlightLanguageFor(fence.language)}
         lineNumbers={lineNumbers}
         startLine={fence.startLine}
       />
