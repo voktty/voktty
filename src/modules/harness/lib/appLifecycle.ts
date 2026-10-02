@@ -61,6 +61,7 @@ let liveWorkspace: {
   projectCwd: () => string;
   projectTerminals: () => ProjectTerminalDock[];
   projectReturnMemory: () => ProjectReturnMemory;
+  keepTab?: (tab: WorkspaceTab) => boolean;
   flush: () => void;
 } | null = null;
 
@@ -76,6 +77,7 @@ export function setQuitWorkspace(
   projectTerminals: () => ProjectTerminalDock[],
   projectReturnMemory: () => ProjectReturnMemory,
   flush: () => void,
+  keepTab?: (tab: WorkspaceTab) => boolean,
 ): () => void {
   liveWorkspace = {
     sessions,
@@ -84,6 +86,7 @@ export function setQuitWorkspace(
     projectCwd,
     projectTerminals,
     projectReturnMemory,
+    keepTab,
     flush,
   };
   bootingResumed = null;
@@ -156,6 +159,7 @@ export async function commitQuit(id: number): Promise<void> {
         liveWorkspace.projectReturnMemory(),
         "quit",
         liveWorkspace.projectTerminals(),
+        liveWorkspace.keepTab,
       );
       persisted = true;
     } else {
@@ -187,6 +191,7 @@ export async function handleQuitRequested(): Promise<void> {
       liveWorkspace.projectCwd(),
       liveWorkspace.projectReturnMemory(),
       liveWorkspace.projectTerminals(),
+      liveWorkspace.keepTab,
     );
     return;
   }
@@ -323,6 +328,7 @@ export async function persistQuitState(
   memory: ProjectReturnMemory,
   mode: "quit" | "unload" = "quit",
   projectTerminals: ProjectTerminalDock[] = [],
+  keepTab?: (tab: WorkspaceTab) => boolean,
 ): Promise<void> {
   const refs = inFlightRefs(sessions, tabs);
   const interrupted = new Set(refs.map((ref) => ref.sessionId));
@@ -339,6 +345,7 @@ export async function persistQuitState(
       projectCwd,
       memory,
       projectTerminals,
+      keepTab,
     ),
   ).catch(() => undefined);
   // Vite/webview reload must not wipe a restored snapshot: those chats are idle
@@ -378,6 +385,7 @@ export async function confirmAndCloseWindow(
   memory: ProjectReturnMemory,
   projectTerminals: ProjectTerminalDock[] = [],
   flush?: () => void,
+  keepTab?: (tab: WorkspaceTab) => boolean,
 ): Promise<void> {
   const refs = inFlightRefs(sessions, tabs);
   if (refs.length > 0) {
@@ -398,6 +406,7 @@ export async function confirmAndCloseWindow(
       memory,
       "unload",
       projectTerminals,
+      keepTab,
     );
   } finally {
     await closeCurrentWindow();
@@ -411,6 +420,7 @@ async function confirmQuitAndExit(
   projectCwd: string,
   memory: ProjectReturnMemory,
   projectTerminals: ProjectTerminalDock[] = [],
+  keepTab?: (tab: WorkspaceTab) => boolean,
 ): Promise<void> {
   if (quitDialogOpen) return;
   quitDialogOpen = true;
@@ -434,6 +444,7 @@ async function confirmQuitAndExit(
         memory,
         "quit",
         projectTerminals,
+        keepTab,
       );
       await invoke("confirm_quit");
     } catch {

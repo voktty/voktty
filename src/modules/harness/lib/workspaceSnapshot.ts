@@ -60,10 +60,24 @@ export function collectWorkspaceSnapshot(
   projectCwd: string,
   memory: ProjectReturnMemory,
   projectTerminals: ProjectTerminalDock[] = [],
+  keepTab?: (tab: WorkspaceTab) => boolean,
 ): WorkspaceSnapshot {
+  // Tabs left out (another worktree's, say) do not reopen, and neither do
+  // sessions that only they showed.
+  const kept = keepTab ? tabs.filter(keepTab) : tabs;
+  const keptIds = new Set(kept.flatMap((tab) => leafIds(tab.layout)));
+  const droppedIds = new Set(
+    tabs
+      .filter((tab) => !kept.includes(tab))
+      .flatMap((tab) => leafIds(tab.layout))
+      .filter((id) => !keptIds.has(id)),
+  );
   const snapshot = withoutInboxSessions({
-    tabs: tabs.map(sanitizeTab).filter((tab): tab is WorkspaceTab => tab != null),
-    sessions: sessions.map(sessionStub).filter((stub): stub is WorkspaceSessionStub => stub != null),
+    tabs: kept.map(sanitizeTab).filter((tab): tab is WorkspaceTab => tab != null),
+    sessions: sessions
+      .filter((session) => !droppedIds.has(session.id))
+      .map(sessionStub)
+      .filter((stub): stub is WorkspaceSessionStub => stub != null),
     activeTabId,
     projectCwd: projectCwd.trim() || "~",
     projectTerminals: projectTerminals

@@ -132,6 +132,7 @@ export type SessionPaneProps = {
   onPaneDragStart?: (event: ReactPointerEvent<HTMLElement>) => void;
   showHeader?: boolean;
   undoLocked?: boolean;
+  workspaceSwitchingSessionId?: string;
 };
 
 export const SessionPane = memo(function SessionPane({
@@ -142,6 +143,7 @@ export const SessionPane = memo(function SessionPane({
   inSplit,
   showHeader,
   undoLocked = false,
+  workspaceSwitchingSessionId,
   composerFocused,
   composerFocusToken,
   recents,
@@ -293,7 +295,8 @@ export const SessionPane = memo(function SessionPane({
 
   const composer = (
     <Composer
-      enabled={visible}
+      key={session.id}
+      enabled={visible && workspaceSwitchingSessionId !== session.id}
       focused={focused && composerFocused}
       focusToken={composerFocusToken}
       hotkeys={focused}

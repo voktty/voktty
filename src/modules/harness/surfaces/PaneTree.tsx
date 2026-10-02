@@ -56,6 +56,7 @@ type Shared = {
   composerFocusToken?: number;
   recents: RecentProject[];
   hideProjectPicker?: boolean;
+  workspaceSwitchingSessionId?: string;
   onFocus: (paneId: string) => void;
   onClose: (sessionId: string) => void;
   onSelectFile: (paneId: string, fileId: string) => void;
@@ -158,6 +159,7 @@ function PaneTreeComponent({
   composerFocusToken,
   recents,
   hideProjectPicker,
+  workspaceSwitchingSessionId,
   onFocus,
   onClose,
   onSelectFile,
@@ -370,6 +372,7 @@ function PaneTreeComponent({
               >
                 <LazySessionPane
                   session={session}
+                  workspaceSwitchingSessionId={workspaceSwitchingSessionId}
                   visible={visible}
                   focused={focusedId === session.id}
                   addToChatTarget={addToChatSessionId === session.id}

@@ -17,6 +17,12 @@ import {
   Zap,
 } from "./icons";
 import {
+  inWorktreeFocus,
+  useWorktreeFocus,
+  type WorktreeFocus,
+} from "../lib/worktreeFocus";
+import { SidebarWorktreeSwitcher } from "./SidebarWorktreeSwitcher";
+import {
   lazy,
   memo,
   Suspense,
@@ -262,6 +268,11 @@ type Props = {
   onOpenSettings?: () => void;
   onSelectSettingsSection?: (section: SettingsSectionId) => void;
   onCloseSettings?: () => void;
+  /** Open tabs per worktree path key, for the worktree switcher. */
+  worktreeTabStats?: ReadonlyMap<string, { tabs: number; busy: boolean }>;
+  onSelectWorkspace?: (focus?: WorktreeFocus) => void;
+  workspaceSwitchPending?: boolean;
+  workspaceSwitchError?: string;
 };
 
 function SidebarComponent({
@@ -333,6 +344,10 @@ function SidebarComponent({
   onOpenSettings,
   onSelectSettingsSection,
   onCloseSettings,
+  worktreeTabStats,
+  onSelectWorkspace,
+  workspaceSwitchPending,
+  workspaceSwitchError,
 }: Props) {
   const { t } = useTranslation();
   const gitRoot = gitCwd || cwd;
@@ -417,11 +432,13 @@ function SidebarComponent({
   // Revisits render straight from cache, so this is only ever true the first
   // time a project is opened.
   const pendingFirstLoad = pending && sessions.length === 0;
+  const worktreeFocus = useWorktreeFocus(cwd);
+  const focusedWorktree = worktreeFocus;
   const listedSessions = mergeFolderSessionSummaries(
     sessions,
     openSessions,
     sessionFolders,
-  );
+  ).filter((session) => inWorktreeFocus(session, focusedWorktree));
   const visibleSessions = [
     ...filterSessionsByQuery(
       filterSessionsByStatus(
@@ -1251,9 +1268,21 @@ function SidebarComponent({
             className="flex h-10 shrink-0 select-none items-center gap-1 border-b border-content/10 pl-3 pr-1.5"
             data-tauri-drag-region="deep"
           >
-            <span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
-              {t("harness.chrome.sessions")}
-            </span>
+            <div className="flex min-w-0 flex-1 items-center">
+              {cwd && cwd !== "~" ? (
+                <SidebarWorktreeSwitcher
+                  cwd={cwd}
+                  tabStats={worktreeTabStats}
+                  onSelect={onSelectWorkspace}
+                  pending={workspaceSwitchPending}
+                  switchError={workspaceSwitchError}
+                />
+              ) : (
+                <span className="min-w-0 truncate text-sm font-medium leading-tight">
+                  {t("harness.chrome.sessions")}
+                </span>
+              )}
+            </div>
             <WorkspaceTitleActions onSearch={onGoToFile} onNew={onNew} />
           </div>
           {visibleTabs.length > 1 ? (
