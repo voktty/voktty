@@ -3716,7 +3716,7 @@ pub fn reveal_path(path: String) -> Result<(), String> {
     if !path.exists() {
         return Err(format!("{}: No such file or directory", path.display()));
     }
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[cfg(target_os = "macos")]
     let path_str = path.to_str().ok_or_else(|| "Invalid path".to_string())?;
 
     #[cfg(target_os = "macos")]
@@ -3733,13 +3733,16 @@ pub fn reveal_path(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        let status = Command::new("explorer")
-            .arg(format!("/select,{path_str}"))
-            .status()
+        use std::os::windows::process::CommandExt;
+        // explorer.exe returns 1 even when it opened the folder.
+        let path_str = path.to_string_lossy().replace('/', "\\");
+        // `.arg` would wrap the whole `/select,...` switch in quotes when the
+        // path has spaces; explorer ignores a quoted switch and opens its
+        // default folder instead. Only the path itself may be quoted.
+        Command::new("explorer")
+            .raw_arg(format!("/select,\"{path_str}\""))
+            .spawn()
             .map_err(|e| e.to_string())?;
-        if !status.success() {
-            return Err("Could not reveal in File Explorer.".into());
-        }
         Ok(())
     }
 
