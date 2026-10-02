@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import {
   lazy,
+  startTransition,
   Suspense,
   useCallback,
   useEffect,
@@ -24,11 +25,14 @@ import { useSessionReminders } from "../hooks/useSessionReminders";
 import { useSidebarLayout } from "../hooks/useSidebarLayout";
 import {
   claimDueAutomations,
+  listAutomations,
   recoverAutomationRuns,
   updateAutomationRun,
   type Automation,
   type AutomationRun,
 } from "../lib/automations";
+import { lazySurface } from "../lib/lazySurface";
+import { preloadNavigationWhenIdle } from "../lib/preloadNavigation";
 import {
   claimInboxAutomationRuns,
 } from "../lib/automationEvents";
@@ -217,6 +221,7 @@ import {
 import {
   ADD_NOTE_TO_CHAT_EVENT,
   composeNoteMessage,
+  loadNotes,
   type NoteComposerCard,
   noteCardMeta,
 } from "../lib/notes";
@@ -439,20 +444,26 @@ const LazyInboxDetailPane = lazy(() =>
     default: module.InboxDetailPane,
   })),
 );
-const LazyInboxView = lazy(() =>
-  import("../surfaces/InboxView").then((module) => ({
-    default: module.InboxView,
-  })),
+const LazyInboxView = lazySurface(
+  async () => {
+    const module = await import("../surfaces/InboxView");
+    return { default: module.InboxView };
+  },
+  { suspense: false },
 );
-const LazyNotesView = lazy(() =>
-  import("../surfaces/NotesView").then((module) => ({
-    default: module.NotesView,
-  })),
+const LazyNotesView = lazySurface(
+  async () => {
+    const module = await import("../surfaces/NotesView");
+    return { default: module.NotesView };
+  },
+  { suspense: false },
 );
-const LazyAutomationsView = lazy(() =>
-  import("../surfaces/AutomationsView").then((module) => ({
-    default: module.AutomationsView,
-  })),
+const LazyAutomationsView = lazySurface(
+  async () => {
+    const module = await import("../surfaces/AutomationsView");
+    return { default: module.AutomationsView };
+  },
+  { suspense: false },
 );
 const LazySearchView = lazy(() =>
   import("../surfaces/SearchView").then((module) => ({
@@ -864,6 +875,17 @@ export function HarnessApp({
   useEffect(() => {
     if (!notesEnabled) setNotesViewOpen(false);
   }, [notesEnabled]);
+
+  useEffect(
+    () =>
+      preloadNavigationWhenIdle([
+        LazyInboxView.preload,
+        LazyAutomationsView.preload,
+        listAutomations,
+        ...(notesEnabled ? [LazyNotesView.preload, loadNotes] : []),
+      ]),
+    [notesEnabled],
+  );
 
   const deckLayoutRef = useRef(deckLayout);
   deckLayoutRef.current = deckLayout;
@@ -5719,13 +5741,15 @@ export function HarnessApp({
   }, []);
 
   const onOpenSearch = useCallback(() => {
-    setFilePickerOpen(false);
-    setSettingsOpen(false);
-    setInboxViewOpen(false);
-    setNotesViewOpen(false);
-    setAutomationsViewOpen(false);
-    setSearchViewOpen(true);
-    setSearchViewFocusToken((token) => token + 1);
+    startTransition(() => {
+      setFilePickerOpen(false);
+      setSettingsOpen(false);
+      setInboxViewOpen(false);
+      setNotesViewOpen(false);
+      setAutomationsViewOpen(false);
+      setSearchViewOpen(true);
+      setSearchViewFocusToken((token) => token + 1);
+    });
   }, []);
 
   const onLeaveSearch = useCallback(() => {
@@ -5733,19 +5757,21 @@ export function HarnessApp({
   }, []);
 
   const onOpenInbox = useCallback(() => {
-    setFilePickerOpen(false);
-    setSettingsOpen(false);
-    setSearchViewOpen(false);
-    setNotesViewOpen(false);
-    setAutomationsViewOpen(false);
-    if (deckLayout) {
-      setInboxViewOpen(true);
-      return;
-    }
-    setInboxViewOpen(false);
-    setSidebarOpen(true);
-    saveSidebarOpen(true);
-    setSidebarTab("inbox");
+    startTransition(() => {
+      setFilePickerOpen(false);
+      setSettingsOpen(false);
+      setSearchViewOpen(false);
+      setNotesViewOpen(false);
+      setAutomationsViewOpen(false);
+      if (deckLayout) {
+        setInboxViewOpen(true);
+        return;
+      }
+      setInboxViewOpen(false);
+      setSidebarOpen(true);
+      saveSidebarOpen(true);
+      setSidebarTab("inbox");
+    });
   }, [deckLayout]);
 
   const onLeaveInbox = useCallback(() => {
@@ -5754,12 +5780,14 @@ export function HarnessApp({
 
   const onOpenNotes = useCallback(() => {
     if (!loadNotesEnabled()) return;
-    setFilePickerOpen(false);
-    setSettingsOpen(false);
-    setSearchViewOpen(false);
-    setInboxViewOpen(false);
-    setAutomationsViewOpen(false);
-    setNotesViewOpen(true);
+    startTransition(() => {
+      setFilePickerOpen(false);
+      setSettingsOpen(false);
+      setSearchViewOpen(false);
+      setInboxViewOpen(false);
+      setAutomationsViewOpen(false);
+      setNotesViewOpen(true);
+    });
   }, []);
 
   const onLeaveNotes = useCallback(() => {
@@ -5767,12 +5795,14 @@ export function HarnessApp({
   }, []);
 
   const onOpenAutomations = useCallback(() => {
-    setFilePickerOpen(false);
-    setSettingsOpen(false);
-    setSearchViewOpen(false);
-    setInboxViewOpen(false);
-    setNotesViewOpen(false);
-    setAutomationsViewOpen(true);
+    startTransition(() => {
+      setFilePickerOpen(false);
+      setSettingsOpen(false);
+      setSearchViewOpen(false);
+      setInboxViewOpen(false);
+      setNotesViewOpen(false);
+      setAutomationsViewOpen(true);
+    });
   }, []);
 
   const onLeaveAutomations = useCallback(() => {
@@ -5791,17 +5821,19 @@ export function HarnessApp({
 
   const openSettings = useCallback(
     (section?: SettingsSectionId, anchor?: SettingsAnchor) => {
-      setFilePickerOpen(false);
-      setSearchViewOpen(false);
-      setInboxViewOpen(false);
-      setNotesViewOpen(false);
-      setAutomationsViewOpen(false);
-      if (section) {
-        setSettingsSection(section);
-        saveSettingsSection(section);
-      }
-      setSettingsAnchor(anchor ?? null);
-      setSettingsOpen(true);
+      startTransition(() => {
+        setFilePickerOpen(false);
+        setSearchViewOpen(false);
+        setInboxViewOpen(false);
+        setNotesViewOpen(false);
+        setAutomationsViewOpen(false);
+        if (section) {
+          setSettingsSection(section);
+          saveSettingsSection(section);
+        }
+        setSettingsAnchor(anchor ?? null);
+        setSettingsOpen(true);
+      });
     },
     [],
   );

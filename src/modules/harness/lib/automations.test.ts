@@ -13,7 +13,9 @@ import {
   nextAutomationRunAt,
   nextRunPreview,
   nextTriggersRunAt,
+  notifyAutomationsChanged,
   overdueTriggerOccurrences,
+  peekAutomations,
   type Automation,
 } from "./automations";
 
@@ -232,5 +234,12 @@ describe("automation run display", () => {
         createdAt + 90_000,
       ),
     ).toBe("1m");
+  });
+});
+
+describe("peekAutomations", () => {
+  it("starts as null and invalidates on change notification", () => {
+    notifyAutomationsChanged();
+    expect(peekAutomations()).toBeNull();
   });
 });
