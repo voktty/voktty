@@ -258,6 +258,7 @@ export function ConnectionsSettings() {
         </div>
         {!adding && (
           <button
+            type="button"
             className={`${button} flex shrink-0 items-center gap-2`}
             disabled={busy}
             onClick={() => {
@@ -299,6 +300,7 @@ export function ConnectionsSettings() {
                   <div className="flex shrink-0 items-center gap-2">
                     {needsUpdate[machine.id] ? (
                       <button
+                        type="button"
                         className={button}
                         disabled={busy}
                         title="Downloads the matching host package and restarts the host; active agent turns will be interrupted"
@@ -308,6 +310,7 @@ export function ConnectionsSettings() {
                       </button>
                     ) : null}
                     <button
+                      type="button"
                       className={button}
                       disabled={busy}
                       onClick={() => void begin(machine)}
@@ -317,6 +320,7 @@ export function ConnectionsSettings() {
                   </div>
                 )}
                 <button
+                  type="button"
                   disabled={busy || revoking}
                   className="rounded p-2 text-content/40 hover:bg-selection hover:text-content disabled:opacity-40"
                   aria-label={`Remove ${machine.name}`}
@@ -362,6 +366,7 @@ export function ConnectionsSettings() {
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <button
+                      type="button"
                       className={button}
                       disabled={revoking}
                       onClick={() => void remove(machine, true)}
@@ -369,6 +374,7 @@ export function ConnectionsSettings() {
                       Revoke access and remove
                     </button>
                     <button
+                      type="button"
                       className={button}
                       disabled={revoking}
                       onClick={() => void remove(machine, false)}
@@ -376,6 +382,7 @@ export function ConnectionsSettings() {
                       Remove from this desktop only
                     </button>
                     <button
+                      type="button"
                       className="px-3 py-2 text-[13px] text-content/50"
                       disabled={revoking}
                       onClick={() => setRemoving(undefined)}
@@ -477,7 +484,7 @@ export function ConnectionsSettings() {
             >
               Cancel
             </button>
-            <button className={button} disabled={busy || !target.trim()}>
+            <button type="submit" className={button} disabled={busy || !target.trim()}>
               {busy ? "Connecting…" : "Connect"}
             </button>
           </div>
@@ -518,7 +525,7 @@ export function ConnectionsSettings() {
                 />
               )}
               <div className="flex gap-2">
-                <button className={button} disabled={answering}>
+                <button type="submit" className={button} disabled={answering}>
                   {job.prompt.confirm ? "Trust host and continue" : "Continue"}
                 </button>
                 {job.prompt.confirm && (
@@ -603,7 +610,7 @@ export function ConnectionsSettings() {
               onChange={(event) => setToken(event.target.value)}
             />
           </label>
-          <button className={`${button} self-start`} disabled={busy}>
+          <button type="submit" className={`${button} self-start`} disabled={busy}>
             Connect by URL
           </button>
         </form>
