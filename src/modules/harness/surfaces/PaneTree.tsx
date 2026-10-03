@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useReducer,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -21,6 +22,7 @@ import {
   layoutSashes,
   setSplitRatio,
   type EditorPane,
+  type LayoutLeaf,
   type LayoutNode,
   type LayoutSash,
   type PaneEdge,
@@ -237,6 +239,21 @@ function PaneTreeComponent({
   const sashes = layoutSashes(tree);
   const inSplit = leaves.length > 1;
 
+  // A pane split into an existing layout slides in from the edge it was added
+  // on, like the linked work item panel. The neighbours reflow once up front;
+  // only the new pane's content moves, so nothing rewraps mid-animation.
+  // Panes present when the tree mounts, or swapped in place, just appear.
+  const knownLeafIds = useRef<ReadonlySet<string> | null>(null);
+  const enteringPanes = useRef(new Map<string, PaneEnterFrom>());
+  const [, rerender] = useReducer((tick: number) => tick + 1, 0);
+  if (knownLeafIds.current && leaves.length > knownLeafIds.current.size) {
+    for (const leaf of leaves) {
+      if (knownLeafIds.current.has(leaf.id)) continue;
+      enteringPanes.current.set(leaf.id, paneEnterFrom(leaf));
+    }
+  }
+  knownLeafIds.current = new Set(leaves.map((leaf) => leaf.id));
+
   const startPaneDrag = useCallback(
     (fromId: string, event: ReactPointerEvent<HTMLElement>) => {
       if (event.button !== 0) return;
@@ -325,6 +342,15 @@ function PaneTreeComponent({
             key={leaf.id}
             data-pane-id={leaf.id}
             className={`absolute flex min-h-0 min-w-0 flex-col overflow-hidden ${dragging ? "opacity-40" : ""}`}
+            // The new pane focuses its composer or editor while it is still
+            // offscreen, and focus scrolls this clip box to reveal it, which
+            // fights the slide. Scroll events land before paint, so undoing
+            // it here never shows.
+            onScroll={(event) => {
+              if (!enteringPanes.current.has(leaf.id)) return;
+              event.currentTarget.scrollLeft = 0;
+              event.currentTarget.scrollTop = 0;
+            }}
             style={{
               left: `${leaf.rect.x * 100}%`,
               top: `${leaf.rect.y * 100}%`,
@@ -335,87 +361,97 @@ function PaneTreeComponent({
             {drop && drop.overId === leaf.id && drop.fromId !== leaf.id ? (
               <PaneDropHint edge={drop.edge} />
             ) : null}
-            {editorPane ? (
-              <Suspense
-                fallback={
-                  <div
-                    aria-busy="true"
-                    className="h-full bg-background"
+            <div
+              data-pane-enter={enteringPanes.current.get(leaf.id)}
+              onAnimationEnd={(event) => {
+                if (event.animationName !== "pane-enter") return;
+                enteringPanes.current.delete(leaf.id);
+                rerender();
+              }}
+              className="flex min-h-0 min-w-0 flex-1 flex-col"
+            >
+              {editorPane ? (
+                <Suspense
+                  fallback={
+                    <div
+                      aria-busy="true"
+                      className="h-full bg-background"
+                    />
+                  }
+                >
+                  <LazyFilePane
+                    pane={editorPane}
+                    focused={focusedId === editorPane.id}
+                    dirtyFileIds={dirtyFileIds}
+                    fileErrorCounts={fileErrorCounts}
+                    sessions={sessions}
+                    onFocus={onFocus}
+                    onSelectFile={onSelectFile}
+                    onCloseFile={onCloseFile}
+                    onCloseOtherFiles={onCloseOtherFiles}
+                    onReorderFiles={onReorderFiles}
+                    onDirtyChange={onFileDirtyChange}
+                    onErrorCountChange={onFileErrorCountChange}
+                    onOpenFile={onOpenFile}
+                    onUpdatePlan={onUpdatePlan}
+                    onBuildPlan={onBuildPlan}
+                    editorNavigation={editorNavigation}
+                    onPaneDragStart={onPaneDragStart}
+                    onTerminalMetaChange={onTerminalMetaChange}
+                    onAddTerminal={onAddTerminalToPane}
                   />
-                }
-              >
-                <LazyFilePane
-                  pane={editorPane}
-                  focused={focusedId === editorPane.id}
-                  dirtyFileIds={dirtyFileIds}
-                  fileErrorCounts={fileErrorCounts}
-                  sessions={sessions}
-                  onFocus={onFocus}
-                  onSelectFile={onSelectFile}
-                  onCloseFile={onCloseFile}
-                  onCloseOtherFiles={onCloseOtherFiles}
-                  onReorderFiles={onReorderFiles}
-                  onDirtyChange={onFileDirtyChange}
-                  onErrorCountChange={onFileErrorCountChange}
-                  onOpenFile={onOpenFile}
-                  onUpdatePlan={onUpdatePlan}
-                  onBuildPlan={onBuildPlan}
-                  editorNavigation={editorNavigation}
-                  onPaneDragStart={onPaneDragStart}
-                  onTerminalMetaChange={onTerminalMetaChange}
-                  onAddTerminal={onAddTerminalToPane}
-                />
-              </Suspense>
-            ) : session ? (
-              <Suspense
-                fallback={<div aria-busy="true" className="h-full bg-background" />}
-              >
-                <LazySessionPane
-                  session={session}
-                  workspaceSwitchingSessionId={workspaceSwitchingSessionId}
-                  visible={visible}
-                  focused={focusedId === session.id}
-                  addToChatTarget={addToChatSessionId === session.id}
-                  inSplit={inSplit}
-                  undoLocked={sessions.some(
-                    (s) => s.id !== session.id && s.cwd === session.cwd && !!s.busy,
-                  )}
-                  composerFocused={composerFocused}
-                  composerFocusToken={composerFocusToken}
-                  recents={recents}
-                  hideProjectPicker={hideProjectPicker}
-                  onFocus={onFocus}
-                  onClose={onClose}
-                  onCwdChange={onCwdChange}
-                  onBranchChange={onBranchChange}
-                  onModelChange={onModelChange}
-                  onModelSettingsChange={onModelSettingsChange}
-                  onRuntimeModeChange={onRuntimeModeChange}
-                  onSubmit={onSubmit}
-                  onStop={onStop}
-                  onCompactContext={onCompactContext}
-                  onDeleteQueuedMessage={onDeleteQueuedMessage}
-                  onEditQueuedMessage={onEditQueuedMessage}
-                  onQueuedMessageEditingChange={onQueuedMessageEditingChange}
-                  onSteerQueuedMessage={onSteerQueuedMessage}
-                  onResumeQueue={onResumeQueue}
-                  onInboxCardDismiss={onInboxCardDismiss}
-                  onNoteCardDismiss={onNoteCardDismiss}
-                  onHandoffCardDismiss={onHandoffCardDismiss}
-                  onQuestionReply={onQuestionReply}
-                  onQuestionInteraction={onQuestionInteraction}
-                  onApproval={onApproval}
-                  onOpenFile={onOpenFile}
-                  onOpenDiff={onOpenDiff}
-                  onOpenPlan={onOpenPlan}
-                  onBuildPlan={onBuildPlan}
-                  onSecondOpinion={onSecondOpinion}
-                  onHandoff={onHandoff}
-                  onNewTerminal={onNewTerminal}
-                  onPaneDragStart={onPaneDragStart}
-                />
-              </Suspense>
-            ) : null}
+                </Suspense>
+              ) : session ? (
+                <Suspense
+                  fallback={<div aria-busy="true" className="h-full bg-background" />}
+                >
+                  <LazySessionPane
+                    session={session}
+                    workspaceSwitchingSessionId={workspaceSwitchingSessionId}
+                    visible={visible}
+                    focused={focusedId === session.id}
+                    addToChatTarget={addToChatSessionId === session.id}
+                    inSplit={inSplit}
+                    undoLocked={sessions.some(
+                      (s) => s.id !== session.id && s.cwd === session.cwd && !!s.busy,
+                    )}
+                    composerFocused={composerFocused}
+                    composerFocusToken={composerFocusToken}
+                    recents={recents}
+                    hideProjectPicker={hideProjectPicker}
+                    onFocus={onFocus}
+                    onClose={onClose}
+                    onCwdChange={onCwdChange}
+                    onBranchChange={onBranchChange}
+                    onModelChange={onModelChange}
+                    onModelSettingsChange={onModelSettingsChange}
+                    onRuntimeModeChange={onRuntimeModeChange}
+                    onSubmit={onSubmit}
+                    onStop={onStop}
+                    onCompactContext={onCompactContext}
+                    onDeleteQueuedMessage={onDeleteQueuedMessage}
+                    onEditQueuedMessage={onEditQueuedMessage}
+                    onQueuedMessageEditingChange={onQueuedMessageEditingChange}
+                    onSteerQueuedMessage={onSteerQueuedMessage}
+                    onResumeQueue={onResumeQueue}
+                    onInboxCardDismiss={onInboxCardDismiss}
+                    onNoteCardDismiss={onNoteCardDismiss}
+                    onHandoffCardDismiss={onHandoffCardDismiss}
+                    onQuestionReply={onQuestionReply}
+                    onQuestionInteraction={onQuestionInteraction}
+                    onApproval={onApproval}
+                    onOpenFile={onOpenFile}
+                    onOpenDiff={onOpenDiff}
+                    onOpenPlan={onOpenPlan}
+                    onBuildPlan={onBuildPlan}
+                    onSecondOpinion={onSecondOpinion}
+                    onHandoff={onHandoff}
+                    onNewTerminal={onNewTerminal}
+                    onPaneDragStart={onPaneDragStart}
+                  />
+                </Suspense>
+              ) : null}
+            </div>
           </div>
         );
       })}
@@ -444,6 +480,20 @@ export const PaneTree = memo(
   PaneTreeComponent,
   (previous, next) => !previous.visible && !next.visible,
 );
+
+type PaneEnterFrom = "left" | "right" | "top" | "bottom" | "fade";
+
+function paneEnterFrom({ rect, axis }: LayoutLeaf): PaneEnterFrom {
+  const edge = 0.001;
+  if (axis === "x") {
+    if (rect.x + rect.w >= 1 - edge) return "right";
+    if (rect.x <= edge) return "left";
+  } else {
+    if (rect.y + rect.h >= 1 - edge) return "bottom";
+    if (rect.y <= edge) return "top";
+  }
+  return "fade";
+}
 
 function PaneDropHint({ edge }: { edge: PaneEdge }) {
   const wash =
