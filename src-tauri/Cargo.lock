@@ -9052,7 +9052,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voktty"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -9143,7 +9143,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-aliases"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "dirs 7.0.0",
  "serde",
@@ -9153,7 +9153,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-cli"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "base64 0.23.1",
  "dirs 7.0.0",
@@ -9170,7 +9170,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-collab-protocol"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "serde",
  "serde_json",
@@ -9178,7 +9178,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-companion-protocol"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "serde",
  "serde_json",
@@ -9186,7 +9186,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-control-protocol"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "serde",
  "serde_json",
@@ -9194,7 +9194,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-remote"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "base64 0.23.1",
  "globset",
@@ -9213,7 +9213,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-remote-protocol"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "serde",
  "serde_json",
@@ -9221,7 +9221,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-tool-policy"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "proptest",
  "serde",
@@ -9231,7 +9231,7 @@ dependencies = [
 
 [[package]]
 name = "voktty-workspace-edit"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "hex",
  "regex",
