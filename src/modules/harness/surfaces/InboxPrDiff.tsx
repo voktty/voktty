@@ -6,9 +6,10 @@ import { UnifiedDiffView, type UnifiedDiffFileModel } from "./UnifiedDiffView";
 
 type Props = {
   diff: GithubPrDiff;
+  focusPath?: string;
 };
 
-export function InboxPrDiff({ diff }: Props) {
+export function InboxPrDiff({ diff, focusPath }: Props) {
   const files = useMemo(() => {
     const parsed = mergePrDiff(diff.files, parsePrPatch(diff.patch));
     return parsed.map((file) => toModel(file, diff.truncated));
@@ -22,6 +23,7 @@ export function InboxPrDiff({ diff }: Props) {
       fill={false}
       fileLayout="cards"
       initialExpansion="first"
+      focusPath={focusPath}
     />
   );
 }

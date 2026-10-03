@@ -56,6 +56,7 @@ import {
   peekGithubWorkItemThread,
   peekInboxList,
   formatRelativeTime,
+  GITHUB_WORK_ITEM_FRESH_MS,
   inboxPersonAvatarUrl,
   type GithubLabel,
   type GithubPrDiff,
@@ -125,6 +126,10 @@ import {
   type InboxReplyTarget,
 } from "./InboxComments";
 import { InboxPrDiff } from "./InboxPrDiff";
+import {
+  InboxDescriptionSummary,
+  InboxPrChangesGlance,
+} from "./InboxPrOverview";
 
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 420;
@@ -238,10 +243,12 @@ function InboxSourceTab({
 
 function InboxDetailTab({
   label,
+  count,
   selected,
   onSelect,
 }: {
   label: string;
+  count?: number;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -256,6 +263,11 @@ function InboxDetailTab({
       }`}
     >
       {label}
+      {count ? (
+        <span className="ml-1.5 rounded-full bg-content/10 px-1.5 py-0.5 text-[10px] tabular-nums text-content/60">
+          {count}
+        </span>
+      ) : null}
       {selected ? (
         <span className="absolute inset-x-0 bottom-0 h-0.5 bg-content" />
       ) : null}
@@ -869,6 +881,7 @@ export function InboxDetailPane({
         cwd={cwd}
         projects={projectOptions}
         onStart={onStart}
+        panel
       />
     </div>
   );
@@ -882,6 +895,7 @@ function InboxDetailBody({
   onStart,
   onAsk,
   asking,
+  panel = false,
 }: {
   item: InboxItem | null;
   cwd: string;
@@ -890,6 +904,7 @@ function InboxDetailBody({
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
   onAsk?: () => void;
   asking?: boolean;
+  panel?: boolean;
 }) {
   const { t } = useTranslation();
   if (!item) {
@@ -912,6 +927,7 @@ function InboxDetailBody({
       onStart={onStart}
       onAsk={onAsk}
       asking={asking}
+      panel={panel}
     />
   );
 }
@@ -1028,6 +1044,7 @@ function InboxDetail({
   onStart,
   onAsk,
   asking,
+  panel = false,
 }: {
   item: InboxItem;
   cwd: string;
@@ -1036,6 +1053,7 @@ function InboxDetail({
   onStart?: (item: InboxItem, body?: string) => void | Promise<void>;
   onAsk?: () => void;
   asking?: boolean;
+  panel?: boolean;
 }) {
   const { t } = useTranslation();
   const linear = item.provider === "linear";
@@ -1059,6 +1077,12 @@ function InboxDetail({
   const [loading, setLoading] = useState(cached == null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"summary" | "code">("summary");
+  // The side panel often opens right after a hover prefetch, so it reuses
+  // recent GitHub data. Inbox keeps refetching so its refresh stays live.
+  const panelMaxAge = panel ? GITHUB_WORK_ITEM_FRESH_MS : undefined;
+  const [diffFocusPath, setDiffFocusPath] = useState<string | undefined>();
+  // The panel summary lists changed files, so it shares the Code tab's fetch.
+  const diffWanted = tab === "code" || (panel && tab === "summary");
   const [prDiff, setPrDiff] = useState<GithubPrDiff | null>(cachedDiff);
   const [diffLoading, setDiffLoading] = useState(isPr && cachedDiff == null);
   const [diffError, setDiffError] = useState<string | null>(null);
@@ -1137,7 +1161,9 @@ function InboxDetail({
         ? linearIssueDetails(item.id)
         : Promise.reject(new Error("Missing Linear issue"))
       : githubKind
-        ? githubWorkItemDetails(item.projectPath, githubKind, item.number)
+        ? githubWorkItemDetails(item.projectPath, githubKind, item.number, {
+            maxAgeMs: panelMaxAge,
+          })
         : Promise.reject(new Error("Unknown inbox item"));
     void pending
       .then((next) => {
@@ -1156,7 +1182,7 @@ function InboxDetail({
     return () => {
       cancelled = true;
     };
-  }, [githubKind, item.id, item.number, item.projectPath, linear, revision]);
+  }, [githubKind, item.id, item.number, item.projectPath, linear, panelMaxAge, revision]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1205,7 +1231,9 @@ function InboxDetail({
       setThreadError(null);
       setThread(null);
     }
-    void githubWorkItemThread(item.projectPath, githubKind, item.number)
+    void githubWorkItemThread(item.projectPath, githubKind, item.number, {
+      maxAgeMs: panelMaxAge,
+    })
       .then((next) => {
         if (cancelled) return;
         setThread(next);
@@ -1222,10 +1250,10 @@ function InboxDetail({
     return () => {
       cancelled = true;
     };
-  }, [githubKind, item.id, item.number, item.projectPath, linear, revision]);
+  }, [githubKind, item.id, item.number, item.projectPath, linear, panelMaxAge, revision]);
 
   useEffect(() => {
-    if (!isPr) return;
+    if (!isPr || !diffWanted) return;
     let cancelled = false;
     const cachedDiff = peekGithubPrDiff(item.projectPath, item.number);
     if (cachedDiff) {
@@ -1237,7 +1265,9 @@ function InboxDetail({
       setDiffError(null);
       setPrDiff(null);
     }
-    void githubPrDiff(item.projectPath, item.number)
+    void githubPrDiff(item.projectPath, item.number, {
+      maxAgeMs: panelMaxAge,
+    })
       .then((next) => {
         if (cancelled) return;
         setPrDiff(next);
@@ -1254,7 +1284,12 @@ function InboxDetail({
     return () => {
       cancelled = true;
     };
-  }, [isPr, item.number, item.projectPath, revision]);
+  }, [diffWanted, isPr, item.number, item.projectPath, panelMaxAge, revision]);
+
+  // The side panel reveals its overview in one piece rather than letting the
+  // description, files and activity land and reshuffle one after another.
+  const overviewSettling =
+    panel && (loading || threadLoading || (isPr && diffLoading));
 
   const postComment = async (body: string) => {
     setPosting(true);
@@ -1303,7 +1338,11 @@ function InboxDetail({
   };
 
   return (
-    <div className={`mx-auto flex w-full flex-col gap-5 px-8 py-8 max-w-5xl`}>
+    <div
+      className={`mx-auto flex w-full flex-col ${
+        panel ? "gap-6 px-4 py-5" : "gap-5 px-8 py-8"
+      } max-w-5xl`}
+    >
       <header className="flex flex-col gap-3">
         <div className="flex items-center gap-2 text-[12px] text-content/50">
           <InboxProviderMark provider={item.provider} className="size-3.5" />
@@ -1487,8 +1526,12 @@ function InboxDetail({
           />
           <InboxDetailTab
             label={t("harness.chrome.code")}
+            count={panel ? prDiff?.files.length : undefined}
             selected={tab === "code"}
-            onSelect={() => setTab("code")}
+            onSelect={() => {
+              setDiffFocusPath(undefined);
+              setTab("code");
+            }}
           />
         </div>
       ) : (
@@ -1505,13 +1548,14 @@ function InboxDetail({
           <InboxPrDiff
             key={`${item.projectPath}:${item.number}:${revision}`}
             diff={prDiff}
+            focusPath={diffFocusPath}
           />
         ) : (
           <p className="text-[13px] text-content/45">
             {t("harness.chrome.noFileChanges")}
           </p>
         )
-      ) : loading ? (
+      ) : loading || overviewSettling ? (
         <div className="flex justify-center py-10 text-content/40">
           <LoaderCircle className="size-4 animate-spin" strokeWidth={1.75} />
         </div>
@@ -1519,13 +1563,29 @@ function InboxDetail({
         <p className="text-[13px] text-content/50">{error}</p>
       ) : (
         <>
-          {details?.body.trim() ? (
+          {panel ? (
+            <InboxDescriptionSummary
+              body={details?.body ?? ""}
+              cwd={markdownCwd}
+            />
+          ) : details?.body.trim() ? (
             <AgentMarkdown text={details.body} cwd={markdownCwd} />
           ) : (
             <p className="text-[13px] text-content/45">
               {t("harness.chrome.noDescription")}
             </p>
           )}
+          {panel && isPr ? (
+            <InboxPrChangesGlance
+              diff={prDiff}
+              loading={diffLoading}
+              error={diffError}
+              onOpenFile={(path) => {
+                setDiffFocusPath(path);
+                setTab("code");
+              }}
+            />
+          ) : null}
           <InboxComments
             thread={thread}
             loading={threadLoading}
