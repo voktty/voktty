@@ -152,10 +152,18 @@ export function historyWithLiveSessions(
     if (storedIndex >= 0) {
       const stored = rows[storedIndex];
       const automationId = session.automationId || stored.automationId;
-      if (stored.automationId !== automationId) {
+      // Live title and work item land before the next persist, e.g. mid-turn.
+      const linkedWorkItem = session.linkedWorkItem ?? stored.linkedWorkItem;
+      if (
+        stored.automationId !== automationId ||
+        stored.title !== session.title ||
+        stored.linkedWorkItem?.url !== linkedWorkItem?.url
+      ) {
         rows[storedIndex] = {
           ...stored,
+          title: session.title,
           ...(automationId ? { automationId } : {}),
+          ...(linkedWorkItem ? { linkedWorkItem } : {}),
         };
       }
       continue;

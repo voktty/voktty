@@ -4583,6 +4583,9 @@ export function HarnessApp({
         workspaceNavigation.isSwitching(sessionId)
       )
         return;
+      // Output already received belongs before the submitted user message.
+      // Flush before reading the session too, since pending errors can settle it.
+      flushHarnessEvents();
       const storedCurrent = sessionsRef.current.find(
         (s: any) => s.id === sessionId,
       );
