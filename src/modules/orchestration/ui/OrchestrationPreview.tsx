@@ -545,6 +545,7 @@ export function OrchestrationPreview({
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {!run && proposal.status === "invalid" && (
             <button
+              type="button"
               className={secondary}
               disabled={busy || !actions}
               onClick={() => actions?.retry(proposal.leadId, block.id)}
@@ -554,6 +555,7 @@ export function OrchestrationPreview({
           )}
           {!run && ["ready", "starting"].includes(proposal.status) && (
             <button
+              type="button"
               className="flex h-7 items-center gap-1.5 rounded-md bg-content px-2.5 text-[11px] font-medium text-background-base hover:bg-content/80 disabled:opacity-40"
               disabled={!editable}
               onClick={() =>
@@ -566,6 +568,7 @@ export function OrchestrationPreview({
           )}
           {run && (
             <button
+              type="button"
               className={secondary}
               onClick={() =>
                 actions?.openAgents?.(

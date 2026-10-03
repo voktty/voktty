@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
   QuickProjectIcon,
-  loadQuickProjectAppearance,
+  type loadQuickProjectAppearance,
 } from "./QuickProjectIcon";
 import { projectKey, projectName } from "@/modules/harness/lib/paths";
 import { projectMascot } from "@/modules/harness/lib/projectMascots";

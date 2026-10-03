@@ -25,7 +25,7 @@ const internalMetadataPaths = [
   /\/modules\/api-client\/lib\/presets\.ts$/,
   /\/modules\/notes-board\/lib\/mcpKanbanTools\.ts$/,
   /\/modules\/theme\/(?:packs\.ts|themes\/|skins\/)/,
-  /\/modules\/harness\//,
+  /\/modules\/(?:harness|orchestration|quick-composer|skills|connections|notifications)\//,
 ];
 
 
