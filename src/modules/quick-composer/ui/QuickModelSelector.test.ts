@@ -53,7 +53,7 @@ describe("QuickModelSelector", () => {
     setHarnessModels("grok", [grok]);
   });
 
-  it("renders provider tabs, model lists, and permissions", () => {
+  it("renders provider tabs and model lists", () => {
     const markup = renderToStaticMarkup(
       createElement(QuickModelSelector, {
         model: claude,
@@ -61,8 +61,6 @@ describe("QuickModelSelector", () => {
         availableHarnesses: ["claude", "grok"],
         onChange: vi.fn(),
         onSettingsChange: vi.fn(),
-        runtimeMode: "supervised",
-        onRuntimeModeChange: vi.fn(),
         onClose: vi.fn(),
       }),
     );
@@ -70,7 +68,6 @@ describe("QuickModelSelector", () => {
     expect(markup).toContain('role="tab"');
     expect(markup).toContain('aria-label="Search models"');
     expect(markup).toContain("Test Claude");
-    expect(markup).toContain('aria-label="Permissions"');
   });
 
   it("renders model reasoning effort and toggle controls when model supports them", () => {
@@ -81,8 +78,6 @@ describe("QuickModelSelector", () => {
         availableHarnesses: ["claude"],
         onChange: vi.fn(),
         onSettingsChange: vi.fn(),
-        runtimeMode: "supervised",
-        onRuntimeModeChange: vi.fn(),
         onClose: vi.fn(),
       }),
     );
