@@ -126,4 +126,81 @@ describe("UsageProviderChip", () => {
     const bar = container.querySelector(".w-8 > span");
     expect(bar?.getAttribute("style")).toBe("width: 58%;");
   });
+
+  it.each(["this window", "another window"])(
+    "updates the footer and open popover when the preference changes in %s",
+    async (source) => {
+      const now = Date.parse("2026-08-27T08:00:00Z");
+      const limits: ProviderRateLimits = {
+        provider: "codex",
+        session: {
+          usedPercent: 42,
+          windowMinutes: 300,
+          resetsAt: now + 2 * 3_600_000,
+        },
+        weekly: {
+          usedPercent: 81,
+          windowMinutes: 10_080,
+          resetsAt: now + (2 * 24 + 23) * 3_600_000,
+        },
+        monthly: null,
+        resetCredits: null,
+        updatedAt: now,
+        error: null,
+        status: "ok",
+      };
+      await act(async () => {
+        root.render(
+          React.createElement(UsageProviderChip, { limits, now }),
+        );
+      });
+      const trigger = container.querySelector<HTMLButtonElement>("button")!;
+      await act(async () => trigger.click());
+      const changePreference = async (remaining: boolean) => {
+        await act(async () => {
+          if (source === "this window") {
+            saveShowRemainingUsage(remaining);
+          } else {
+            localStorage.setItem(
+              "monocode.showRemainingUsage",
+              remaining ? "1" : "0",
+            );
+            window.dispatchEvent(
+              new StorageEvent("storage", {
+                key: "monocode.showRemainingUsage",
+              }),
+            );
+          }
+        });
+      };
+
+      await changePreference(true);
+      expect(trigger.textContent).toBe("58% 2h·19% 2d 23h");
+      expect(trigger.title).toContain("19% remaining");
+      expect(trigger.querySelector(".w-8 > span")?.getAttribute("style")).toBe(
+        "width: 19%;",
+      );
+      const remainingBar = document.querySelector(
+        '[aria-label="Weekly limit remaining"]',
+      );
+      expect(remainingBar?.getAttribute("aria-valuenow")).toBe("19");
+      expect(remainingBar?.previousElementSibling?.textContent).toBe(
+        "Weekly limit19% remaining",
+      );
+
+      await changePreference(false);
+      expect(trigger.textContent).toBe("42% 2h·81% 2d 23h");
+      expect(trigger.title).toContain("81% used");
+      expect(trigger.querySelector(".w-8 > span")?.getAttribute("style")).toBe(
+        "width: 81%;",
+      );
+      const usedBar = document.querySelector(
+        '[aria-label="Weekly limit used"]',
+      );
+      expect(usedBar?.getAttribute("aria-valuenow")).toBe("81");
+      expect(usedBar?.previousElementSibling?.textContent).toBe(
+        "Weekly limit81% used",
+      );
+    },
+  );
 });

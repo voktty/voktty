@@ -5543,7 +5543,7 @@ export const es: TranslationSchema = {
       percentUsed: "{percent} usado",
       limitUsed: "{title} usado",
       limitRemaining: "{title} restante",
-      percentRemaining: "{percent}% restante",
+      percentRemaining: "{percent} restante",
       windowName: "Ventana de {window}",
       bankedResets: "Reinicios acumulados",
       notReported: "Esta cuenta no lo informa",

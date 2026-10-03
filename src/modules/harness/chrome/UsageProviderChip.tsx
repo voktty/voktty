@@ -77,6 +77,7 @@ export function UsageProviderChip({
   onReconnect?: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const showRemaining = useShowRemainingUsage();
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [accountView, setAccountView] = useState<"usage" | "accounts" | "add">(
@@ -108,7 +109,7 @@ export function UsageProviderChip({
     return best;
   }, null);
   const tooltip = windows
-    .map((entry) => rateLimitWindowTooltip(entry.window, now))
+    .map((entry) => rateLimitWindowTooltip(entry.window, now, showRemaining))
     .join(" · ");
   const providerLabel = HARNESS_TITLE[limits.provider];
   const activeAccount = accounts.find((account) => account.id === accountId);
@@ -238,7 +239,11 @@ export function UsageProviderChip({
                     <span className="text-content/25">·</span>
                   ) : null}
                   <span>
-                    {formatUsagePercent(entry.window.usedPercent)}{" "}
+                    {formatUsagePercent(
+                      showRemaining
+                        ? 100 - clampUsedPercent(entry.window.usedPercent)
+                        : entry.window.usedPercent,
+                    )}{" "}
                     {formatRateLimitWindowChipLabel(entry.window, now)}
                   </span>
                 </span>
@@ -685,9 +690,13 @@ function UsageWindowCard({
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-[11px] font-medium text-content/65">{title}</h3>
         <span className="shrink-0 text-[11px] font-medium tabular-nums">
-          {t("harness.accounts.percentUsed", {
-            percent: formatUsagePercent(pct),
-          })}
+          {showRemaining
+            ? t("harness.accounts.percentRemaining", {
+                percent: formatUsagePercent(shown),
+              })
+            : t("harness.accounts.percentUsed", {
+                percent: formatUsagePercent(shown),
+              })}
         </span>
       </div>
       <div
@@ -709,7 +718,13 @@ function UsageWindowCard({
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-3 text-[10px] leading-4 text-content/40">
         <span className="tabular-nums">
-          {t("harness.accounts.percentRemaining", { percent: Math.round(remaining) })}
+          {showRemaining
+            ? t("harness.accounts.percentUsed", {
+                percent: formatUsagePercent(pct),
+              })
+            : t("harness.accounts.percentRemaining", {
+                percent: Math.round(remaining),
+              })}
         </span>
         <span
           className="truncate text-right tabular-nums"

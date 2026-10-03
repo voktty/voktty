@@ -5422,7 +5422,7 @@ export const en = {
       percentUsed: "{percent} used",
       limitUsed: "{title} used",
       limitRemaining: "{title} remaining",
-      percentRemaining: "{percent}% remaining",
+      percentRemaining: "{percent} remaining",
       windowName: "{window} window",
       bankedResets: "Banked resets",
       notReported: "Not reported by this account",
