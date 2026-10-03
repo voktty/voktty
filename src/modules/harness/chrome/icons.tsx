@@ -177,6 +177,7 @@ export const ArrowUp = wrap(ArrowUp01Icon, "ArrowUp");
 export const Bot = wrap(BotIcon, "Bot");
 export const Brain = wrap(BrainIcon, "Brain");
 export const CancelCircle = wrap(CancelCircleIcon, "CancelCircle");
+export const CircleX = CancelCircle;
 export const CaseSensitive = wrap(CaseSensitiveIcon, "CaseSensitive");
 export const Check = wrap(Tick02Icon, "Check");
 export const CheckmarkCircle = wrap(CheckmarkCircle02Icon, "CheckmarkCircle");
