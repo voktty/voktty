@@ -83,6 +83,7 @@ import { resolveModel } from "../lib/models";
 import { prettyParent, projectKey, projectName } from "../lib/paths";
 import type { OpenFileFn } from "../lib/search";
 import { sessionDisplayTitle } from "../lib/session";
+import { ParticleText } from "./ParticleText";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
 import {
   orderedSessionActionIds,
@@ -2795,9 +2796,10 @@ function SessionCard({
         {session.pinned ? (
           <Pin className="size-3 shrink-0 text-content/45" strokeWidth={1.75} />
         ) : null}
-        <span className="min-w-0 flex-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
-          {title}
-        </span>
+        <ParticleText
+          text={title}
+          className="line-clamp-1 text-[13px] font-semibold leading-snug text-content"
+        />
         {session.automationId ? (
           <span
             data-automation-icon
