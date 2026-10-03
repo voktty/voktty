@@ -4,8 +4,8 @@ pub mod modules;
 
 use modules::{
     agent, agent_history, aliases, api_client, collab, companion, control, dap, docker, extensions,
-    fs, git, git_review, harness, history, lsp, mcp, net, pty, quick_composer, quota, rdp, remote, secrets, serial,
-    shell, ssh_native, tray, tunnel, vibrancy, web_server, workspace,
+    fs, git, git_review, harness, history, lsp, mcp, net, pty, quick_composer, quota, rdp, remote,
+    secrets, serial, shell, ssh_native, tray, tunnel, vibrancy, web_server, workspace,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -840,7 +840,9 @@ pub fn run() {
                     if let Some(state) = app.try_state::<harness::host::HarnessHost>() {
                         state.kill_all();
                     }
-                    if let Some(state) = app.try_state::<harness::remote_connections::RemoteConnections>() {
+                    if let Some(state) =
+                        app.try_state::<harness::remote_connections::RemoteConnections>()
+                    {
                         state.shutdown();
                     }
                     if let Some(state) = app.try_state::<tunnel::TunnelState>() {

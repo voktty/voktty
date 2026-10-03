@@ -71,10 +71,7 @@ pub async fn harness_latest_version(provider: String) -> Result<String, String> 
 /// it. stdin is closed, so an updater that stops to ask fails instead of
 /// hanging.
 #[tauri::command]
-pub async fn harness_update(
-    command: String,
-    binary_provider: String,
-) -> Result<(), String> {
+pub async fn harness_update(command: String, binary_provider: String) -> Result<(), String> {
     let args: Vec<String> = update_args(&binary_provider)
         .ok_or_else(|| format!("No updater for harness: {binary_provider}"))?
         .iter()

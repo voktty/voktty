@@ -104,18 +104,9 @@ pub(crate) fn orchestration_summary(
     Ok(raw.and_then(|s| serde_json::from_str(&s).ok()))
 }
 
-pub(crate) fn cleanup_session_orchestration(
-    conn: &Connection,
-    id: &str,
-) -> rusqlite::Result<()> {
-    conn.execute(
-        "DELETE FROM orchestration_runs WHERE lead_id = ?1",
-        [id],
-    )?;
-    conn.execute(
-        "DELETE FROM orchestration_sidebar WHERE lead_id = ?1",
-        [id],
-    )?;
+pub(crate) fn cleanup_session_orchestration(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM orchestration_runs WHERE lead_id = ?1", [id])?;
+    conn.execute("DELETE FROM orchestration_sidebar WHERE lead_id = ?1", [id])?;
     conn.execute(
         "DELETE FROM orchestration_workers WHERE session_id = ?1 OR lead_id = ?1",
         [id],
@@ -307,7 +298,10 @@ mod tests {
         assert_eq!(summary["status"], "active");
         assert_eq!(summary["tasks"][0]["sessionId"], "worker-1");
 
-        assert_eq!(worker_parent(&conn, "worker-1").unwrap().as_deref(), Some("lead-1"));
+        assert_eq!(
+            worker_parent(&conn, "worker-1").unwrap().as_deref(),
+            Some("lead-1")
+        );
 
         cleanup_session_orchestration(&conn, "lead-1").unwrap();
         assert!(orchestration_summary(&conn, "lead-1").unwrap().is_none());
