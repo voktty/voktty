@@ -328,10 +328,7 @@ pub(crate) fn add_mcp_via_cli(
     Ok(())
 }
 
-pub(crate) fn opencode_major_version(
-    cwd: &str,
-    binary_path: Option<&str>,
-) -> Result<u32, String> {
+pub(crate) fn opencode_major_version(cwd: &str, binary_path: Option<&str>) -> Result<u32, String> {
     let binary = resolve_mcp_binary("opencode", binary_path)?;
     let version = mcp_command(
         binary,
@@ -412,10 +409,7 @@ fn mcp_add_args(
             return Err("MCP URL must use HTTP or HTTPS".into());
         }
         args.extend(["--url".into(), url.into()]);
-        if let Some(var) = object
-            .get("bearerTokenEnvVar")
-            .and_then(Value::as_str)
-        {
+        if let Some(var) = object.get("bearerTokenEnvVar").and_then(Value::as_str) {
             args.extend(["--bearer-token-env-var".into(), var.into()]);
         }
     } else {
@@ -443,11 +437,7 @@ fn mcp_add_args(
     Ok((binary, args))
 }
 
-fn mcp_key_values(
-    config: &Value,
-    field: &str,
-    flag: &str,
-) -> Result<Vec<String>, String> {
+fn mcp_key_values(config: &Value, field: &str, flag: &str) -> Result<Vec<String>, String> {
     let Some(value) = config.get(field) else {
         return Ok(Vec::new());
     };
@@ -1195,10 +1185,8 @@ mod tests {
 
     #[test]
     fn adds_opencode_two_server_without_changing_existing_timeouts_or_servers() {
-        let root = std::env::temp_dir().join(format!(
-            "voktty-opencode-timeout-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("voktty-opencode-timeout-{}", uuid::Uuid::new_v4()));
         let path = root.join("opencode.json");
         std::fs::create_dir_all(&root).unwrap();
         let original = serde_json::json!({
@@ -1373,8 +1361,7 @@ mod tests {
 
     #[test]
     fn writes_server_without_discarding_other_configuration() {
-        let root =
-            std::env::temp_dir().join(format!("voktty-mcp-write-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("voktty-mcp-write-{}", uuid::Uuid::new_v4()));
         let path = root.join(".cursor/mcp.json");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(
@@ -1393,8 +1380,7 @@ mod tests {
 
     #[test]
     fn adds_to_existing_cursor_jsonc() {
-        let root =
-            std::env::temp_dir().join(format!("voktty-mcp-jsonc-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("voktty-mcp-jsonc-{}", uuid::Uuid::new_v4()));
         let path = root.join(".cursor/mcp.json");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(
