@@ -439,8 +439,16 @@ export async function readBinaryFile(path: string): Promise<Uint8Array> {
     : new Uint8Array(buffer);
 }
 
-export function writeTextFile(path: string, content: string): Promise<void> {
-  return invokeWorkspace<void>("write_text_file", { path, content });
+export function writeTextFile(
+  path: string,
+  content: string,
+  expectedContent?: string,
+): Promise<void> {
+  return invokeWorkspace<void>("write_text_file", {
+    path,
+    content,
+    ...(expectedContent === undefined ? {} : { expectedContent }),
+  });
 }
 
 /** Last path segment, or `/` for the filesystem root. */

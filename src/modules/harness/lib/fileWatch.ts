@@ -1,4 +1,4 @@
-import { statFiles } from "./fs";
+import { type FileMtime, statFiles } from "./fs";
 import { editorPathsEqual } from "./search";
 
 const MAX_PATHS = 64;
@@ -109,27 +109,42 @@ async function poll(paths: string[] | "all") {
 
   inFlight = true;
   try {
-    for (let i = 0; i < list.length; i += MAX_PATHS) {
-      const batch = list.slice(i, i + MAX_PATHS);
-      const stats = await statFiles(batch);
-      for (const stat of stats) {
-        if (!listeners.has(stat.path)) continue;
-        const previous = mtimes.get(stat.path);
-        const firstObservation = unobserved.delete(stat.path);
-        mtimes.set(stat.path, stat.mtimeMs);
-        // The file may have changed after its initial read but before the
-        // watcher established this baseline. Reconcile on the first sample so
-        // that race cannot leave an open editor permanently stale.
-        if (
-          !firstObservation &&
-          (previous === undefined || previous === stat.mtimeMs)
-        )
+    const groups = new Map<string, string[]>();
+    for (const path of list) {
+      const remoteHost = path.startsWith("remote://")
+        ? path.slice("remote://".length).split("/", 1)[0]
+        : null;
+      const key = remoteHost === null ? "local" : `remote:${remoteHost}`;
+      const group = groups.get(key) ?? [];
+      group.push(path);
+      groups.set(key, group);
+    }
+    for (const group of groups.values()) {
+      for (let i = 0; i < group.length; i += MAX_PATHS) {
+        const batch = group.slice(i, i + MAX_PATHS);
+        let stats: FileMtime[];
+        try {
+          stats = await statFiles(batch);
+        } catch {
           continue;
-        listeners.get(stat.path)?.forEach((listener) => listener());
+        }
+        for (const stat of stats) {
+          if (!listeners.has(stat.path)) continue;
+          const previous = mtimes.get(stat.path);
+          const firstObservation = unobserved.delete(stat.path);
+          mtimes.set(stat.path, stat.mtimeMs);
+          // The file may have changed after its initial read but before the
+          // watcher established this baseline. Reconcile on the first sample so
+          // that race cannot leave an open editor permanently stale.
+          if (
+            !firstObservation &&
+            (previous === undefined || previous === stat.mtimeMs)
+          )
+            continue;
+          listeners.get(stat.path)?.forEach((listener) => listener());
+        }
       }
     }
-  } catch {
-    /* next nudge will retry */
   } finally {
     inFlight = false;
     const next = queued;

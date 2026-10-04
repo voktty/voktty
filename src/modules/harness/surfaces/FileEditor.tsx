@@ -43,6 +43,11 @@ import {
 import { useColorScheme } from "../hooks/useColorScheme";
 import { useLockOverscroll } from "../hooks/useLockOverscroll";
 import { isLightScheme } from "../lib/appearance";
+import {
+  diskContentChanged,
+  EditorSaveConflictError,
+  saveEditorFile,
+} from "../lib/editorSave";
 import { loadAutosave } from "../lib/settings";
 import { syncWatchedMtime, watchFile } from "../lib/fileWatch";
 import { formatText } from "../lib/format";
@@ -53,7 +58,6 @@ import {
   notifyGitChanged,
   readTextFile,
   subscribeGitChanged,
-  writeTextFile,
 } from "../lib/fs";
 import { displayPath } from "../lib/paths";
 import type { EditorNavigation } from "../lib/search";
@@ -145,10 +149,12 @@ export function FileEditor({
   const loadGeneration = useRef(0);
   const dirtyRef = useRef(false);
   const pendingDiskRef = useRef(false);
+  const savedContentRef = useRef<string | null>(null);
   const onDirtyChangeRef = useRef(onDirtyChange);
   onDirtyChangeRef.current = onDirtyChange;
 
   const applyDiskContent = useCallback((content: string) => {
+    savedContentRef.current = content;
     setLoadState((current) => {
       if (current.status === "ready" && current.content === content) {
         return current;
@@ -165,7 +171,10 @@ export function FileEditor({
         const content = await readTextFile(path);
         if (generation !== loadGeneration.current) return;
         if (dirtyRef.current && !force) {
-          pendingDiskRef.current = true;
+          pendingDiskRef.current = diskContentChanged(
+            content,
+            savedContentRef.current,
+          );
           return;
         }
         pendingDiskRef.current = false;
@@ -192,6 +201,7 @@ export function FileEditor({
   useEffect(() => {
     dirtyRef.current = false;
     pendingDiskRef.current = false;
+    savedContentRef.current = null;
     let cancelled = false;
     setLoadState({ status: "loading" });
     setSaveState({ status: "idle" });
@@ -199,6 +209,7 @@ export function FileEditor({
     void readTextFile(path)
       .then((content) => {
         if (cancelled || generation !== loadGeneration.current) return;
+        savedContentRef.current = content;
         setLoadState({ status: "ready", content });
         setDraft(content);
       })
@@ -279,10 +290,6 @@ export function FileEditor({
     if (loadState.status !== "ready") return;
     let timer = 0;
     const stop = watchFile(path, () => {
-      if (dirtyRef.current) {
-        pendingDiskRef.current = true;
-        return;
-      }
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         void reloadFromDisk();
@@ -298,9 +305,15 @@ export function FileEditor({
     async (content: string) => {
       const generation = ++saveGeneration.current;
       setSaveState({ status: "saving" });
-      const operation = saveQueue.current.then(() =>
-        writeTextFile(path, content),
-      );
+      const operation = saveQueue.current.then(async () => {
+        const expected = savedContentRef.current;
+        if (expected === null)
+          throw new EditorSaveConflictError("File changed on disk");
+        await saveEditorFile(path, content, expected);
+        savedContentRef.current = content;
+        pendingDiskRef.current = false;
+        ++loadGeneration.current;
+      });
       saveQueue.current = operation.catch(() => {});
       try {
         await operation;
@@ -310,14 +323,22 @@ export function FileEditor({
           setSaveState({ status: "saved" });
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof EditorSaveConflictError) {
+          pendingDiskRef.current = true;
+        }
+        const message =
+          error instanceof EditorSaveConflictError
+            ? t("feedback.fileChangedOnDisk")
+            : error instanceof Error
+              ? error.message
+              : String(error);
         if (generation === saveGeneration.current) {
           setSaveState({ status: "error", message });
         }
         throw error;
       }
     },
-    [path],
+    [path, t],
   );
 
   const stageGit = useCallback(

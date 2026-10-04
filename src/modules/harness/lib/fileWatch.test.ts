@@ -63,4 +63,26 @@ describe("file watch", () => {
     await vi.waitFor(() => expect(statFiles).toHaveBeenCalledTimes(2));
     expect(changed).toHaveBeenCalledTimes(2);
   });
+
+  it("samples local and remote files separately and keeps polling after a remote failure", async () => {
+    const local = "/repo/a.txt";
+    const remote = "remote://machine/repo/b.txt";
+    statFiles.mockImplementation(async (paths: string[]) => {
+      if (paths.includes(remote)) throw new Error("Machine disconnected");
+      return paths.map((path) => ({ path, mtimeMs: 1 }));
+    });
+    const localChanged = vi.fn();
+    const remoteChanged = vi.fn();
+    stops.push(watchFile(remote, remoteChanged));
+    stops.push(watchFile(local, localChanged));
+    await vi.waitFor(() => expect(localChanged).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(statFiles).toHaveBeenCalledTimes(2));
+
+    nudgeWatchedFiles();
+    await vi.waitFor(() => expect(statFiles).toHaveBeenCalledTimes(4));
+    expect(statFiles.mock.calls.every(([paths]) => paths.length === 1)).toBe(
+      true,
+    );
+    expect(remoteChanged).not.toHaveBeenCalled();
+  });
 });
