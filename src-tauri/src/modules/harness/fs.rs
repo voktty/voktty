@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -3428,18 +3428,31 @@ fn read_text_file_sync(path: &str) -> Result<String, String> {
 
 /// Atomically replace a text file from a temporary file in the same directory.
 #[tauri::command]
-pub async fn write_text_file(path: String, content: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || write_text_file_sync(&path, &content))
-        .await
-        .map_err(|e| e.to_string())?
+pub async fn write_text_file(
+    path: String,
+    content: String,
+    expected_content: Option<String>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        write_text_file_checked_sync(&path, &content, expected_content.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-fn write_text_file_sync(path: &str, content: &str) -> Result<(), String> {
+fn write_text_file_checked_sync(
+    path: &str,
+    content: &str,
+    expected_content: Option<&str>,
+) -> Result<(), String> {
     if content.len() as u64 > MAX_TEXT_FILE_BYTES {
         return Err(format!(
             "File is too large to save (maximum {} MB).",
             MAX_TEXT_FILE_BYTES / 1024 / 1024
         ));
+    }
+    if expected_content.is_some_and(|expected| expected.len() as u64 > MAX_TEXT_FILE_BYTES) {
+        return Err("Expected file content is too large.".into());
     }
 
     let requested = expand_home(path);
@@ -3451,6 +3464,19 @@ fn write_text_file_sync(path: &str, content: &str) -> Result<(), String> {
     if destination.is_dir() {
         return Err("Cannot save text to a directory.".into());
     }
+    let check_expected = || -> Result<(), String> {
+        if let Some(expected) = expected_content {
+            let mut current = Vec::new();
+            std::fs::File::open(&destination)
+                .and_then(|file| file.take(MAX_TEXT_FILE_BYTES + 1).read_to_end(&mut current))
+                .map_err(|_| "File changed on disk; save cancelled.".to_string())?;
+            if current != expected.as_bytes() {
+                return Err("File changed on disk; save cancelled.".into());
+            }
+        }
+        Ok(())
+    };
+    check_expected()?;
 
     let parent = destination
         .parent()
@@ -3495,6 +3521,7 @@ fn write_text_file_sync(path: &str, content: &str) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
         drop(file);
+        check_expected()?;
         std::fs::rename(&temporary_path, &destination).map_err(|e| e.to_string())?;
         if let Ok(dir) = std::fs::File::open(parent) {
             let _ = dir.sync_all();
@@ -3799,7 +3826,7 @@ mod tests {
         let path_string = path.to_string_lossy().into_owned();
 
         assert_eq!(read_text_file_sync(&path_string).unwrap(), "fn old() {}\n");
-        write_text_file_sync(&path_string, "fn new() {}\n").unwrap();
+        write_text_file_checked_sync(&path_string, "fn new() {}\n", None).unwrap();
         assert_eq!(read_text_file_sync(&path_string).unwrap(), "fn new() {}\n");
 
         let names: Vec<_> = std::fs::read_dir(&dir)
@@ -3808,6 +3835,24 @@ mod tests {
             .collect();
         assert_eq!(names, vec![std::ffi::OsString::from("example.rs")]);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn checked_editor_save_preserves_external_changes_and_deletions() {
+        let dir = tmp("checked-editor-save");
+        let path = dir.0.join("example.txt");
+        let name = path.to_string_lossy().into_owned();
+        std::fs::write(&path, "original").unwrap();
+        write_text_file_checked_sync(&name, "edited", Some("original")).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "edited");
+
+        std::fs::write(&path, "external").unwrap();
+        assert!(write_text_file_checked_sync(&name, "second edit", Some("edited")).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "external");
+
+        std::fs::remove_file(&path).unwrap();
+        assert!(write_text_file_checked_sync(&name, "second edit", Some("edited")).is_err());
+        assert!(!path.exists());
     }
 
     #[test]
