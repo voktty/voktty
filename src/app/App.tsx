@@ -583,7 +583,7 @@ function DesktopApp() {
   }, [tabs, activeId, activeSpaceId]);
   const sourceControlSpaceId = activeSpaceId ?? DEFAULT_SPACE_ID;
 
-  useSpacesBoot({
+  const { bootError, retryBoot } = useSpacesBoot({
     ready: launchCwdResolved,
     initialRequest: initialLaunchRequest,
     launchCwd,
@@ -3756,19 +3756,38 @@ function DesktopApp() {
               color: targetSpace.color,
             })
           : viewSpaceId;
-      if (targetSpaceId && targetSpaceId !== tab.spaceId) {
-        state.extractMemberFromViewSpace(tab.tabKey);
-        moveTabToSpace(tab.id, targetSpaceId);
+      const targetViewSpace = state.viewSpaces.find(
+        (space) => space.id === resolvedViewSpaceId,
+      );
+      if (
+        !targetViewSpace ||
+        !tabAssignmentPaneBudget(
+          tabsRef.current,
+          targetViewSpace.memberOrder,
+          tab.tabKey,
+        ).allowed
+      ) {
+        toast.error(t("spaces.rendererCapacity"));
+        return;
       }
-      if (!state.moveMemberToViewSpace(resolvedViewSpaceId, tab.tabKey)) {
+      if (
+        !state.addMemberToViewSpace(
+          resolvedViewSpaceId,
+          tab.tabKey,
+          spaceViewLimit,
+        )
+      ) {
         toast.error(t("spaces.noFreeSlots"));
         return;
+      }
+      if (targetSpaceId && targetSpaceId !== tab.spaceId) {
+        moveTabToSpace(tab.id, targetSpaceId);
       }
       state.openViewSpace(resolvedViewSpaceId);
       state.setActive(targetSpaceId ?? tab.spaceId);
       setActiveId(tab.id);
     },
-    [moveTabToSpace, setActiveId, t],
+    [moveTabToSpace, setActiveId, spaceViewLimit, t],
   );
 
   const handleCreateSpaceFromTab = useCallback(
@@ -3829,6 +3848,7 @@ function DesktopApp() {
         target: resolvedTarget,
         viewSpaces: viewState.viewSpaces,
         tabs: tabsRef.current,
+        maxSlots: spaceViewLimit,
       });
       if (!plan.accepted) {
         toast.error(
@@ -3866,11 +3886,6 @@ function DesktopApp() {
       }
 
       const targetSpaceId = plan.viewSpaceId.slice("view-".length);
-      if (tab.spaceId !== targetSpaceId) {
-        viewState.extractMemberFromViewSpace(tab.tabKey);
-        moveTabToSpace(tab.id, targetSpaceId);
-      }
-
       if (plan.operation === "assign" || plan.operation === "append") {
         if (
           !viewState.addMemberToViewSpace(
@@ -3881,6 +3896,9 @@ function DesktopApp() {
         ) {
           toast.error(t("spaces.maxSlots"));
           return;
+        }
+        if (tab.spaceId !== targetSpaceId) {
+          moveTabToSpace(tab.id, targetSpaceId);
         }
         viewState.openViewSpace(plan.viewSpaceId);
         viewState.focusVisualMember(tab.tabKey);
@@ -4022,7 +4040,6 @@ function DesktopApp() {
   const handleSelectViewSpace = useCallback(
     (viewSpaceId: string) => {
       const state = useSpaces.getState();
-      const focusedMember = state.openViewSpace(viewSpaceId);
       const viewSpace = state.viewSpaces.find(
         (space) => space.id === viewSpaceId,
       );
@@ -4033,6 +4050,7 @@ function DesktopApp() {
         toast.error(t("spaces.rendererCapacity"));
         return;
       }
+      const focusedMember = state.openViewSpace(viewSpaceId);
       const memberKey = focusedMember ?? viewSpace?.memberOrder[0] ?? null;
       const tab = memberKey
         ? tabsRef.current.find((candidate) => candidate.tabKey === memberKey)
@@ -4189,17 +4207,28 @@ function DesktopApp() {
         return;
       }
       if (
-        !state.addMemberToViewSpace(viewSpaceId, tab.tabKey, spaceViewLimit)
+        !state.assignMemberToSlot(
+          viewSpaceId,
+          slotId,
+          tab.tabKey,
+          spaceViewLimit,
+        )
       ) {
         toast.error(t("spaces.maxSlots"));
         return;
       }
+      const targetSpaceId = viewSpaceId.startsWith("view-")
+        ? viewSpaceId.slice("view-".length)
+        : null;
+      if (targetSpaceId && targetSpaceId !== tab.spaceId) {
+        moveTabToSpace(tab.id, targetSpaceId);
+      }
       state.openViewSpace(viewSpaceId);
       setActiveId(tab.id);
-      state.setActive(tab.spaceId);
-      state.focusViewSpaceSlot(viewSpaceId, slotId);
+      state.setActive(targetSpaceId ?? tab.spaceId);
+      state.focusVisualMember(tab.tabKey);
     },
-    [setActiveId, spaceViewLimit, t],
+    [moveTabToSpace, setActiveId, spaceViewLimit, t],
   );
 
   const handleFocusViewSlot = useCallback(
@@ -5167,7 +5196,21 @@ function DesktopApp() {
                 <div className="h-full min-h-0">
                   <div className="voktty-pane flex h-full min-h-0 flex-col">
                     <div className="relative min-h-0 flex-1">
-                      {spaceTabs.length === 0 && !activeViewSpace ? (
+                      {bootError ? (
+                        <div
+                          className="flex h-full flex-col items-center justify-center gap-3"
+                          role="alert"
+                        >
+                          <p>{t("feedback.somethingWentWrong")}</p>
+                          <button
+                            type="button"
+                            className="rounded border px-3 py-1"
+                            onClick={retryBoot}
+                          >
+                            {t("feedback.tryAgain")}
+                          </button>
+                        </div>
+                      ) : spaceTabs.length === 0 && !activeViewSpace ? (
                         <EmptyWorkspace
                           projectName={activeSpace?.name}
                           onOpenFile={pickAndOpenFile}

@@ -367,7 +367,42 @@ export function assignMemberToSlot(
     return { ok: true, spaces: [...spaces] };
   }
 
-  return addMemberToViewSpace(spaces, targetSpaceId, tabKey, maxMembers);
+  if (target.memberOrder.includes(tabKey)) {
+    return {
+      ok: true,
+      spaces: spaces.map((space) =>
+        space.id === targetSpaceId
+          ? {
+              ...space,
+              layout: mapLayoutSlots(space.layout, (slot) =>
+                slot.id === targetSlotId
+                  ? { ...slot, memberTabKey: tabKey }
+                  : slot.memberTabKey === tabKey
+                    ? { ...slot, memberTabKey: null }
+                    : slot,
+              ),
+              focusedSlotId: targetSlotId,
+            }
+          : space,
+      ),
+    };
+  }
+
+  if (target.memberOrder.length >= maxMembers) {
+    return { ok: false, reason: "max-slots", spaces };
+  }
+
+  const prepared = spaces.map((space) =>
+    space.id === targetSpaceId
+      ? {
+          ...space,
+          layout: mapLayoutSlots(space.layout, (slot) =>
+            slot.id === targetSlotId ? { ...slot, memberTabKey: tabKey } : slot,
+          ),
+        }
+      : space,
+  );
+  return addMemberToViewSpace(prepared, targetSpaceId, tabKey, maxMembers);
 }
 
 export function extractSpaceMember(

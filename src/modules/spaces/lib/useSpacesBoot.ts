@@ -14,11 +14,11 @@ import {
   parseWorkspaceScopeKey,
   type WorkspaceEnv,
 } from "@/modules/workspace";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { activeSpaceEnv } from "./activeSpace";
-import { planSpacesBoot } from "./bootPlan";
+import { hydratePersistedSpaceTabs, planSpacesBoot } from "./bootPlan";
 import { bindRestoredSshSession } from "./restoreRemoteWorkspace";
-import { freshTerminalTab, hydrateTabs } from "./serialize";
+import { freshTerminalTab } from "./serialize";
 import { loadAll, type SpaceMeta } from "./store";
 import { useSpaces } from "./useSpaces";
 
@@ -58,13 +58,20 @@ export function useSpacesBoot({
   setActiveSpaceForNewTabs,
   adoptWorkspaceEnv,
 }: Params) {
-  const done = useRef(false);
+  const attemptedRevision = useRef<number | null>(null);
+  const [bootError, setBootError] = useState(false);
+  const [retryRevision, setRetryRevision] = useState(0);
+  const retryBoot = () => {
+    setBootError(false);
+    setRetryRevision((revision) => revision + 1);
+  };
 
   useEffect(() => {
-    if (!ready || done.current) return;
-    done.current = true;
+    if (!ready || attemptedRevision.current === retryRevision) return;
+    attemptedRevision.current = retryRevision;
 
     void (async () => {
+      let succeeded = false;
       try {
         const latestBootstrap = await refreshLaunchBootstrap();
         const bootRequest = selectBootLaunchRequest(
@@ -104,6 +111,7 @@ export function useSpacesBoot({
             },
           );
           replaceTabs(initialTabs, activeTab?.id ?? NO_ACTIVE_TAB_ID);
+          succeeded = true;
           return;
         }
         const { spaces, activeId, states, session } = await loadAll();
@@ -138,28 +146,16 @@ export function useSpacesBoot({
             },
           );
           replaceTabs([initialTab], initialTab.id);
+          succeeded = true;
           return;
         }
 
-        const restored: Tab[] = [];
-        for (const space of spaces) {
-          const st = states.get(space.id);
-          if (!st) continue;
-          restored.push(...hydrateTabs(st.tabs, space.id, allocId, space.env));
-        }
+        const restored = hydratePersistedSpaceTabs(spaces, states, allocId);
 
         for (const space of spaces) {
           if (space.env.kind === "ssh") {
             space.env = LOCAL_WORKSPACE;
             space.root = launchCwd ?? home ?? null;
-          }
-          const spaceTabs = restored.filter((t) => t.spaceId === space.id);
-          if (spaceTabs.length === 0) {
-            const root =
-              space.root ??
-              (space.id === DEFAULT_SPACE_ID ? (launchCwd ?? home) : null);
-            const freshTab = freshTerminalTab(space.id, root, allocId);
-            restored.push(freshTab);
           }
         }
 
@@ -224,10 +220,12 @@ export function useSpacesBoot({
           );
         }
         replaceTabs(restoredState.tabs, activeTab?.id ?? NO_ACTIVE_TAB_ID);
+        succeeded = true;
       } catch (e) {
         console.error("[voktty] spaces boot failed:", e);
+        setBootError(true);
       } finally {
-        markBooted();
+        if (succeeded) markBooted();
       }
     })();
   }, [
@@ -240,5 +238,7 @@ export function useSpacesBoot({
     markBooted,
     setActiveSpaceForNewTabs,
     adoptWorkspaceEnv,
+    retryRevision,
   ]);
+  return { bootError, retryBoot };
 }

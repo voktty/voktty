@@ -160,6 +160,24 @@ describe("space lifecycle", () => {
     });
   });
 
+  it("does not orphan a source member when its destination is full", () => {
+    const source = twoSlotSpace("source", "moving", null);
+    const target = rebalanceViewSpace(
+      twoSlotSpace("target", "fixed", null),
+      ["fixed", "a", "b", "c"].map(tab),
+    );
+    const original = [source, target];
+    const rejected = addMemberToViewSpace(original, target.id, tab("moving"), 4);
+    expect(rejected).toEqual({ ok: false, reason: "max-slots", spaces: original });
+    expect(source.memberOrder).toContain(tab("moving"));
+
+    const accepted = addMemberToViewSpace(original, target.id, tab("moving"), 6);
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) return;
+    expect(accepted.spaces[0].memberOrder).toEqual([]);
+    expect(accepted.spaces[1].memberOrder).toHaveLength(5);
+  });
+
   it("rebuilds the visual layout when member order changes", () => {
     const original = rebalanceViewSpace(
       createViewSpace({
@@ -225,6 +243,35 @@ describe("space lifecycle", () => {
     expect(result.spaces[0].memberOrder).toEqual([]);
     expect(result.spaces[1].memberOrder).toEqual([tab("fixed"), tab("moving")]);
     expect(validateViewSpaces(result.spaces)).toEqual([]);
+  });
+
+  it("places an assigned member in the requested empty slot", () => {
+    const source = twoSlotSpace("source", "moving", null);
+    const target = twoSlotSpace("target", "fixed", null);
+    const withTwoEmptySlots: ViewSpace = {
+      ...target,
+      layout: {
+        kind: "split",
+        id: "split-target-outer",
+        direction: "column",
+        ratio: 0.5,
+        first: target.layout,
+        second: createSlot(slotId("target-c"), null),
+      },
+    };
+    const result = assignMemberToSlot(
+      [source, withTwoEmptySlots],
+      withTwoEmptySlots.id,
+      slotId("target-c"),
+      tab("moving"),
+      4,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(collectLayoutSlots(result.spaces[1].layout).find(
+      (slot) => slot.memberTabKey === tab("moving"),
+    )?.id).toBe(slotId("target-c"));
+    expect(result.spaces[0].memberOrder).toEqual([]);
   });
 
   it("rejects assignment into an occupied slot without partial mutation", () => {

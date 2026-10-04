@@ -1,5 +1,6 @@
 import { asTabKey } from "@/modules/tabs/lib/tabIdentity";
 import { describe, expect, it } from "vitest";
+import { asViewSpaceId, collectLayoutSlots, createSlot, createSplit } from "./spaceLayout";
 import {
   createSessionEnvelope,
   migrateLegacySpaces,
@@ -225,6 +226,42 @@ describe("session snapshot v2", () => {
     );
     expect(restored.viewSpaces[0].focusedSlotId).toBe("slot-empty");
     expect(restored.stripEntries).toEqual(snapshot.stripEntries);
+  });
+
+  it.each([6, 8])("preserves all %i visual members during snapshot repair", (count) => {
+    const keys = Array.from({ length: count }, (_, index) => asTabKey(`tab-${index}`));
+    const layout = keys.slice(1).reduce<ReturnType<typeof createSlot>>(
+      (current, key, index) => createSplit(
+        `split-${index}`,
+        "row",
+        0.6,
+        current,
+        createSlot(`slot-${index + 1}` as never, key),
+      ),
+      createSlot("slot-0" as never, keys[0]),
+    );
+    const snapshot: SessionSnapshot = {
+      schemaVersion: SESSION_SCHEMA_VERSION,
+      workspaceContexts: [legacySpace],
+      activeWorkspaceContextId: "legacy",
+      tabs: keys.map((key, index) => editor(`/repo/${index}.ts`, key)),
+      activeTabKey: keys[count - 1],
+      viewSpaces: [{
+        id: asViewSpaceId("view-legacy"),
+        name: "Legacy",
+        presentation: "composite",
+        memberOrder: keys,
+        focusedSlotId: `slot-${count - 1}` as never,
+        layout,
+      }],
+      stripEntries: [{ kind: "space", spaceId: asViewSpaceId("view-legacy") }],
+      activeStripItem: { kind: "space", spaceId: asViewSpaceId("view-legacy"), focusedSlotId: `slot-${count - 1}` as never },
+    };
+    const repaired = repairSessionSnapshot(snapshot);
+    expect(repaired.viewSpaces[0].memberOrder).toEqual(keys);
+    expect(collectLayoutSlots(repaired.viewSpaces[0].layout)).toHaveLength(count);
+    expect(repaired.viewSpaces[0].focusedSlotId).toBe(`slot-${count - 1}`);
+    expect(repaired.stripEntries).toEqual(snapshot.stripEntries);
   });
 });
 
