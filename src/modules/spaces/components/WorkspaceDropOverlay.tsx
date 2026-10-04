@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/modules/i18n";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { ViewSpace, WorkspaceRect } from "@/modules/spaces";
 import type { Tab } from "@/modules/tabs";
 import { planWorkspaceDrop } from "../lib/planWorkspaceDrop";
@@ -20,6 +21,7 @@ export function WorkspaceDropOverlay({
   tabs,
 }: Props) {
   const { t } = useTranslation();
+  const spaceViewLimit = usePreferencesStore((state) => state.spaceViewLimit);
   const drag = useWorkspaceDrag();
   const resourceSource =
     drag.source?.kind === "file" || drag.source?.kind === "directory";
@@ -32,6 +34,7 @@ export function WorkspaceDropOverlay({
         target: drag.target,
         viewSpaces,
         tabs,
+        maxSlots: spaceViewLimit,
       })
     : null;
 
@@ -74,6 +77,7 @@ export function WorkspaceDragLiveRegion({
   tabs: readonly Tab[];
 }) {
   const { t } = useTranslation();
+  const spaceViewLimit = usePreferencesStore((state) => state.spaceViewLimit);
   const drag = useWorkspaceDrag();
   if (!drag.active || !drag.source) return null;
   const plan = drag.target
@@ -82,6 +86,7 @@ export function WorkspaceDragLiveRegion({
         target: drag.target,
         viewSpaces,
         tabs,
+        maxSlots: spaceViewLimit,
       })
     : null;
   const resourceSource =

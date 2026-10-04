@@ -280,6 +280,13 @@ describe("planWorkspaceDrop", () => {
       accepted: false,
       reason: "max-slots",
     });
+
+    expect(planWorkspaceDrop({
+      source: standalone("tab-new"),
+      target: { kind: "space", viewSpaceId: asViewSpaceId("view-a") },
+      viewSpaces: [fullSpace],
+      maxSlots: 6,
+    })).toMatchObject({ accepted: true, operation: "append" });
   });
 
   it("rejects dropping a tab to a space if it already belongs to that space", () => {

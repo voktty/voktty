@@ -76,7 +76,12 @@ type State = {
     visibleTabKeys: string[],
   ) => void;
   resizeViewSpaceSplit: (id: string, splitId: string, ratio: number) => void;
-  assignMemberToSlot: (id: string, slotId: string, tabKey: string) => boolean;
+  assignMemberToSlot: (
+    id: string,
+    slotId: string,
+    tabKey: string,
+    maxMembers?: number,
+  ) => boolean;
   addMemberToViewSpace: (
     id: string,
     tabKey: string,
@@ -375,7 +380,7 @@ export const useSpaces = create<State>((set, get) => ({
     });
   },
 
-  assignMemberToSlot: (id, slotId, tabKey) => {
+  assignMemberToSlot: (id, slotId, tabKey, maxMembers = 4) => {
     const targetWasDeleted = get().viewSpaces.some(
       (space) => space.id === id && space.deleted,
     );
@@ -384,6 +389,7 @@ export const useSpaces = create<State>((set, get) => ({
       id as ViewSpaceId,
       slotId as SlotId,
       asTabKey(tabKey),
+      maxMembers,
     );
     if (!result.ok) return false;
     const stripEntries = targetWasDeleted

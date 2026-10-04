@@ -444,7 +444,7 @@ function repairLayoutNode(
   value: unknown,
   state: RepairLayoutState,
 ): SpaceLayoutNode | null {
-  if (state.slots >= 4 || typeof value !== "object" || value === null)
+  if (state.slots >= 8 || typeof value !== "object" || value === null)
     return null;
   if (state.objects.has(value)) return null;
   state.objects.add(value);
