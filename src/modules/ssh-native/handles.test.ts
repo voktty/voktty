@@ -4,6 +4,7 @@ const connect = vi.fn();
 const open = vi.fn();
 const close = vi.fn();
 const disconnect = vi.fn();
+const requestPrompt = vi.fn();
 let backend = "helper";
 
 vi.mock("./client", () => ({
@@ -17,6 +18,9 @@ vi.mock("@/modules/settings/preferences", () => ({
   usePreferencesStore: {
     getState: () => ({ remoteFilesystemBackend: backend }),
   },
+}));
+vi.mock("@/modules/ssh/promptQueue", () => ({
+  requestSshPrompt: (...args: unknown[]) => requestPrompt(...args),
 }));
 
 const {
@@ -41,10 +45,13 @@ function env(overrides: Record<string, unknown> = {}): Env {
 
 beforeEach(() => {
   resetNativeHandles();
+  vi.useRealTimers();
   connect.mockReset();
   open.mockReset();
   close.mockReset();
   disconnect.mockReset();
+  requestPrompt.mockReset();
+  requestPrompt.mockResolvedValue(null);
   backend = "helper";
   connect.mockResolvedValue({ id: "ssh-1" });
   open.mockResolvedValue({ handle: "sftp-1", root: "/srv/app" });
@@ -54,15 +61,20 @@ beforeEach(() => {
 
 describe("workspaceKey", () => {
   it("identifies the connection and root, not the helper session", () => {
-    expect(workspaceKey(env())).toBe("root@example.com:2222/srv/app");
+    expect(JSON.parse(workspaceKey(env()))).toEqual([null, "root", "example.com", 2222, null, null, "/srv/app"]);
   });
 
   it("defaults the port to 22", () => {
-    expect(workspaceKey(env({ connection: { host: "h" } }))).toBe("@h:22/srv/app");
+    expect(JSON.parse(workspaceKey(env({ connection: { host: "h" } })))[3]).toBe(22);
   });
 
   it("separates two roots on the same host", () => {
     expect(workspaceKey(env())).not.toBe(workspaceKey(env({ root: "/other" })));
+  });
+
+  it("separates identities and proxy settings on the same host", () => {
+    expect(workspaceKey(env())).not.toBe(workspaceKey(env({ connection: { host: "example.com", port: 2222, user: "root", identityFile: "key" } })));
+    expect(workspaceKey(env())).not.toBe(workspaceKey(env({ connection: { host: "example.com", port: 2222, user: "root", extraArgs: "-J bastion" } })));
   });
 });
 
@@ -89,7 +101,8 @@ describe("ensureNativeHandle", () => {
     expect(open).toHaveBeenCalledTimes(1);
   });
 
-  it("records a failure instead of throwing, and does not retry it", async () => {
+  it("backs off failed attempts, then retries", async () => {
+    vi.useFakeTimers();
     connect.mockRejectedValue({ code: "auth_failed", message: "no key" });
 
     const state = await ensureNativeHandle(env());
@@ -100,6 +113,9 @@ describe("ensureNativeHandle", () => {
 
     await ensureNativeHandle(env());
     expect(connect).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(15_001);
+    await ensureNativeHandle(env());
+    expect(connect).toHaveBeenCalledTimes(2);
   });
 
   it("does not leave a session behind when the channel fails to open", async () => {
@@ -117,6 +133,36 @@ describe("ensureNativeHandle", () => {
       kind: "unavailable",
       error: { code: "protocol", message: "boom" },
     });
+  });
+
+  it("retries an explicitly approved host key using the exact presented key", async () => {
+    connect.mockRejectedValueOnce({ code: "host_key_unknown", message: "unknown", prompt: {
+      host: "example.com", port: 2222, keyType: "ssh-ed25519", keyBase64: "presented-key", fingerprint: "SHA256:test", changed: false,
+    } });
+    requestPrompt.mockResolvedValueOnce("yes");
+    await ensureNativeHandle(env());
+    expect(connect).toHaveBeenNthCalledWith(2, expect.anything(), expect.anything(), {
+      kind: "approve", keyBase64: "presented-key", remember: true,
+    });
+  });
+
+  it("does not approve a revoked host key", async () => {
+    connect.mockRejectedValueOnce({ code: "host_key_revoked", message: "revoked", prompt: {
+      host: "example.com", port: 2222, keyType: "ssh-ed25519", keyBase64: "revoked", fingerprint: "SHA256:test", changed: true,
+    } });
+    expect((await ensureNativeHandle(env())).kind).toBe("unavailable");
+    expect(requestPrompt).not.toHaveBeenCalled();
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a user-entered password only after key authentication fails", async () => {
+    connect.mockRejectedValueOnce({ code: "auth_failed", message: "no key" });
+    connect.mockRejectedValueOnce({ code: "auth_failed", message: "no key" });
+    requestPrompt.mockResolvedValueOnce("typed-password");
+    await ensureNativeHandle(env());
+    expect(connect).toHaveBeenNthCalledWith(3, expect.anything(), [
+      { kind: "password", secret: "typed-password" },
+    ], { kind: "none" });
   });
 });
 

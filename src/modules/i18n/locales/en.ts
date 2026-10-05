@@ -3253,6 +3253,12 @@ export const en = {
     connect: "Connect",
     errors: {
       hostRequired: "Host or IP address is required",
+      invalidPort: "Port must be a number from 1 to 65535",
+    },
+    prompt: {
+      hostKeyTitle: "Verify SSH host key",
+      authTitle: "SSH authentication",
+      secretLabel: "Password or key passphrase",
     },
     sessionPicker: {
       title: "Remote Sessions Detected",

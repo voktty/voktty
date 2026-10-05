@@ -6,6 +6,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,7 @@ use voktty_remote_protocol::{
     METHOD_READ_FILE, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD,
     METHOD_WATCH_TREE_REMOVE, PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
+use crate::modules::harness::ssh_askpass::Askpass;
 
 const REMOTE_OS: &str = "linux";
 const REMOTE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -71,6 +73,7 @@ pub struct RemoteState {
     next_id: Arc<AtomicU64>,
     next_pty_id: Arc<AtomicU64>,
     next_request_id: Arc<AtomicU64>,
+    ssh_prompts: Arc<Mutex<HashMap<String, mpsc::SyncSender<Option<String>>>>>,
 }
 
 impl Default for RemoteState {
@@ -80,6 +83,7 @@ impl Default for RemoteState {
             next_id: Arc::new(AtomicU64::new(1)),
             next_pty_id: Arc::new(AtomicU64::new(1)),
             next_request_id: Arc::new(AtomicU64::new(1)),
+            ssh_prompts: Arc::new(Mutex::new(HashMap::new())),
         };
         let _ = GLOBAL_REMOTE.set(state.clone());
         state
@@ -222,11 +226,54 @@ impl RemoteState {
     }
 }
 
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SshPromptEvent {
+    id: String,
+    message: String,
+    confirm: bool,
+}
+
+fn start_ssh_askpass(app: &AppHandle, state: &RemoteState) -> Result<Askpass, String> {
+    let app = app.clone();
+    let prompts = Arc::clone(&state.ssh_prompts);
+    Askpass::start(move |message, confirm| {
+        let id = uuid::Uuid::new_v4().to_string();
+        let (sender, receiver) = mpsc::sync_channel(1);
+        prompts.lock().ok()?.insert(id.clone(), sender);
+        let emitted = app.emit("voktty:ssh-prompt", SshPromptEvent { id: id.clone(), message, confirm });
+        let answer = if emitted.is_ok() {
+            receiver.recv_timeout(Duration::from_secs(120)).ok().flatten()
+        } else {
+            None
+        };
+        if let Ok(mut pending) = prompts.lock() {
+            pending.remove(&id);
+        }
+        answer
+    })
+}
+
+#[tauri::command]
+pub fn remote_ssh_prompt_answer(
+    state: State<'_, RemoteState>,
+    id: String,
+    answer: Option<String>,
+) -> Result<(), String> {
+    if answer.as_ref().is_some_and(|value| value.len() > 8192 || value.chars().any(|c| c == '\r' || c == '\n' || c == '\0')) {
+        return Err("SSH answer is invalid".to_string());
+    }
+    let sender = state.ssh_prompts.lock().map_err(|_| "SSH prompt state is poisoned")?.remove(&id)
+        .ok_or_else(|| "SSH prompt expired".to_string())?;
+    sender.send(answer).map_err(|_| "SSH prompt expired".to_string())
+}
+
 struct RemoteSession {
     child: Mutex<Child>,
     stdin: Mutex<BufWriter<ChildStdin>>,
     routing: Arc<RemoteRouting>,
     connection: RemoteSshConnection,
+    _askpass: Askpass,
 }
 
 #[derive(Clone)]
@@ -281,9 +328,13 @@ impl RemoteSession {
             }
             return Err(error);
         }
-        receiver
-            .recv()
-            .map_err(|_| "remote helper closed before replying".to_string())?
+        let response = receiver.recv_timeout(Duration::from_secs(60));
+        if response.is_err() {
+            if let Ok(mut pending) = self.routing.pending.lock() {
+                pending.remove(&request.id);
+            }
+        }
+        response.map_err(|_| "remote helper did not reply within 60 seconds".to_string())?
     }
 
     fn send(&self, frame: &Frame) -> Result<(), String> {
@@ -413,8 +464,9 @@ pub async fn remote_open(
     workspace_root: Option<String>,
 ) -> Result<RemoteSessionInfo, String> {
     validate_connection(&connection)?;
+    let state_for_task = state.inner().clone();
     let (session, mut info) = tauri::async_runtime::spawn_blocking(move || {
-        open_remote_session(app, connection, workspace_root)
+        open_remote_session(app, state_for_task, connection, workspace_root)
     })
     .await
     .map_err(|error| format!("remote bootstrap task failed: {error}"))??;
@@ -1007,10 +1059,13 @@ pub async fn ssh_ping(host: String, port: Option<u16>) -> Result<SshPingResult, 
 
 #[tauri::command]
 pub async fn ssh_fetch_metrics(
+    app: AppHandle,
+    state: State<'_, RemoteState>,
     connection: RemoteSshConnection,
 ) -> Result<SshServerMetrics, String> {
     validate_connection(&connection)?;
     let conn_clone = connection.clone();
+    let state = state.inner().clone();
 
     tokio::task::spawn_blocking(move || {
         let p = conn_clone.port.unwrap_or(22);
@@ -1029,7 +1084,8 @@ pub async fn ssh_fetch_metrics(
             }
         }
 
-        let output = run_ssh_capture(&conn_clone, METRICS_PROBE_SCRIPT)?;
+        let askpass = start_ssh_askpass(&app, &state)?;
+        let output = run_ssh_capture_with_askpass(&conn_clone, METRICS_PROBE_SCRIPT, &askpass)?;
         parse_metrics_line(&output, ping_ms)
             .ok_or_else(|| "Failed to parse remote server metrics".to_string())
     })
@@ -1039,6 +1095,8 @@ pub async fn ssh_fetch_metrics(
 
 #[tauri::command]
 pub async fn ssh_upload_files(
+    app: AppHandle,
+    state: State<'_, RemoteState>,
     connection: RemoteSshConnection,
     sources: Vec<String>,
     dest_dir: String,
@@ -1047,8 +1105,10 @@ pub async fn ssh_upload_files(
     if sources.is_empty() {
         return Ok(());
     }
+    let state = state.inner().clone();
 
     tokio::task::spawn_blocking(move || {
+        let askpass = start_ssh_askpass(&app, &state)?;
         let mut cmd = std::process::Command::new("scp");
         cmd.arg("-r");
         let user_extra = connection
@@ -1058,7 +1118,7 @@ pub async fn ssh_upload_files(
             .unwrap_or_default();
 
         if !has_ssh_option(&user_extra, "BatchMode") {
-            cmd.arg("-o").arg("BatchMode=yes");
+            cmd.arg("-o").arg("BatchMode=no");
         }
         if !has_ssh_option(&user_extra, "ServerAliveInterval") {
             cmd.arg("-o").arg("ServerAliveInterval=15");
@@ -1067,7 +1127,7 @@ pub async fn ssh_upload_files(
             cmd.arg("-o").arg("ServerAliveCountMax=3");
         }
         if !has_ssh_option(&user_extra, "StrictHostKeyChecking") {
-            cmd.arg("-o").arg("StrictHostKeyChecking=accept-new");
+            cmd.arg("-o").arg("StrictHostKeyChecking=ask");
         }
 
         if let Some(port) = connection.port.filter(|p| *p != 22) {
@@ -1094,6 +1154,7 @@ pub async fn ssh_upload_files(
         let clean_dest = dest_dir.replace('\\', "/");
         cmd.arg(format!("{}:{}", dest_host, clean_dest));
 
+        askpass.configure(&mut cmd)?;
         crate::modules::proc::hide_console(&mut cmd);
         let output = cmd
             .output()
@@ -1111,6 +1172,8 @@ pub async fn ssh_upload_files(
 
 #[tauri::command]
 pub async fn ssh_download_files(
+    app: AppHandle,
+    state: State<'_, RemoteState>,
     connection: RemoteSshConnection,
     remote_sources: Vec<String>,
     local_dest_dir: String,
@@ -1119,14 +1182,16 @@ pub async fn ssh_download_files(
     if remote_sources.is_empty() {
         return Ok(());
     }
+    let state = state.inner().clone();
 
     tokio::task::spawn_blocking(move || {
+        let askpass = start_ssh_askpass(&app, &state)?;
         let mut cmd = std::process::Command::new("scp");
         cmd.arg("-r");
-        cmd.arg("-o").arg("BatchMode=yes");
+        cmd.arg("-o").arg("BatchMode=no");
         cmd.arg("-o").arg("ServerAliveInterval=15");
         cmd.arg("-o").arg("ServerAliveCountMax=3");
-        cmd.arg("-o").arg("StrictHostKeyChecking=accept-new");
+        cmd.arg("-o").arg("StrictHostKeyChecking=ask");
 
         if let Some(port) = connection.port.filter(|p| *p != 22) {
             cmd.arg("-P").arg(port.to_string());
@@ -1137,11 +1202,11 @@ pub async fn ssh_download_files(
             .as_deref()
             .filter(|p| !p.trim().is_empty())
         {
-            cmd.arg("-i").arg(identity_file.trim());
+            cmd.arg("-i").arg(expand_tilde(identity_file));
         }
 
         if let Some(extra_args) = connection.extra_args.as_deref() {
-            for arg in extra_args.split_whitespace() {
+            for arg in parse_extra_args(extra_args) {
                 cmd.arg(arg);
             }
         }
@@ -1154,6 +1219,7 @@ pub async fn ssh_download_files(
 
         cmd.arg(&local_dest_dir);
 
+        askpass.configure(&mut cmd)?;
         crate::modules::proc::hide_console(&mut cmd);
         let output = cmd
             .output()
@@ -1171,13 +1237,17 @@ pub async fn ssh_download_files(
 
 #[tauri::command]
 pub async fn ssh_list_multiplexer_sessions(
+    app: AppHandle,
+    state: State<'_, RemoteState>,
     connection: RemoteSshConnection,
 ) -> Result<RemoteMultiplexerProbe, String> {
     validate_connection(&connection)?;
     let conn_clone = connection.clone();
+    let state = state.inner().clone();
 
     tokio::task::spawn_blocking(move || {
-        let output = run_ssh_capture(&conn_clone, MULTIPLEXER_PROBE_SCRIPT)?;
+        let askpass = start_ssh_askpass(&app, &state)?;
+        let output = run_ssh_capture_with_askpass(&conn_clone, MULTIPLEXER_PROBE_SCRIPT, &askpass)?;
         Ok(parse_multiplexer_probe(&output))
     })
     .await
@@ -1459,7 +1529,7 @@ fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
         .unwrap_or_default();
 
     if !has_ssh_option(&user_extra, "BatchMode") {
-        args.extend(["-o".to_string(), "BatchMode=yes".to_string()]);
+        args.extend(["-o".to_string(), "BatchMode=no".to_string()]);
     }
     if !has_ssh_option(&user_extra, "ServerAliveInterval") {
         args.extend(["-o".to_string(), "ServerAliveInterval=15".to_string()]);
@@ -1476,7 +1546,7 @@ fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
     if !has_ssh_option(&user_extra, "StrictHostKeyChecking") {
         args.extend([
             "-o".to_string(),
-            "StrictHostKeyChecking=accept-new".to_string(),
+            "StrictHostKeyChecking=ask".to_string(),
         ]);
     }
 
@@ -1495,16 +1565,72 @@ fn ssh_args(connection: &RemoteSshConnection) -> Vec<String> {
     args
 }
 
+fn read_capped(mut stream: impl Read) -> Vec<u8> {
+    let mut result = Vec::new();
+    let mut buffer = [0u8; 4096];
+    while let Ok(count) = stream.read(&mut buffer) {
+        if count == 0 { break; }
+        let remaining = 65_536usize.saturating_sub(result.len());
+        result.extend_from_slice(&buffer[..count.min(remaining)]);
+    }
+    result
+}
+
+fn command_output_with_timeout(command: &mut Command, timeout: Duration) -> Result<std::process::Output, String> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|e| format!("could not start SSH command: {e}"))?;
+    let stdout = child.stdout.take().ok_or("SSH stdout unavailable")?;
+    let stderr = child.stderr.take().ok_or("SSH stderr unavailable")?;
+    let stdout_reader = std::thread::spawn(move || read_capped(stdout));
+    let stderr_reader = std::thread::spawn(move || read_capped(stderr));
+    let start = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if start.elapsed() < timeout => std::thread::sleep(Duration::from_millis(50)),
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("SSH command timed out".to_string());
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("could not wait for SSH command: {error}"));
+            }
+        }
+    };
+    Ok(std::process::Output {
+        status,
+        stdout: stdout_reader.join().unwrap_or_default(),
+        stderr: stderr_reader.join().unwrap_or_default(),
+    })
+}
+
 pub fn run_ssh_capture(
     connection: &RemoteSshConnection,
     remote_command: &str,
 ) -> Result<String, String> {
     let mut command = Command::new("ssh");
-    command.args(ssh_args(connection)).arg(remote_command);
+    command.arg("-o").arg("BatchMode=yes").args(ssh_args(connection)).arg(remote_command);
     crate::modules::proc::hide_console(&mut command);
-    let output = command
-        .output()
-        .map_err(|e| format!("could not start ssh: {e}"))?;
+    let output = command_output_with_timeout(&mut command, Duration::from_secs(60))?;
+    if !output.status.success() {
+        return Err(command_error(&output.stderr));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn run_ssh_capture_with_askpass(
+    connection: &RemoteSshConnection,
+    remote_command: &str,
+    askpass: &Askpass,
+) -> Result<String, String> {
+    let mut command = Command::new("ssh");
+    command.args(ssh_args(connection)).arg(remote_command);
+    askpass.configure(&mut command)?;
+    crate::modules::proc::hide_console(&mut command);
+    let output = command_output_with_timeout(&mut command, Duration::from_secs(180))?;
     if !output.status.success() {
         return Err(command_error(&output.stderr));
     }
@@ -1522,8 +1648,8 @@ struct BundledHelper {
     digest: String,
 }
 
-fn probe_remote_helper(connection: &RemoteSshConnection) -> Result<HelperProbe, String> {
-    parse_helper_probe(&run_ssh_capture(connection, &probe_command())?)
+fn probe_remote_helper(connection: &RemoteSshConnection, askpass: &Askpass) -> Result<HelperProbe, String> {
+    parse_helper_probe(&run_ssh_capture_with_askpass(connection, &probe_command(), askpass)?)
 }
 
 fn parse_helper_probe(output: &str) -> Result<HelperProbe, String> {
@@ -1647,6 +1773,7 @@ fn install_helper(
     connection: &RemoteSshConnection,
     helper: &BundledHelper,
     architecture: &str,
+    askpass: &Askpass,
 ) -> Result<(), String> {
     let encoded = base64::engine::general_purpose::STANDARD.encode(&helper.bytes);
     let command_line = install_command(architecture, &helper.digest);
@@ -1658,6 +1785,7 @@ fn install_helper(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
     let mut child = command
         .spawn()
@@ -1722,6 +1850,7 @@ fn remote_shell_bundle_digest() -> String {
 fn install_remote_shell_integration(
     connection: &RemoteSshConnection,
     digest: &str,
+    askpass: &Askpass,
 ) -> Result<(), String> {
     let payload = format!(
         "{}\n",
@@ -1739,6 +1868,7 @@ fn install_remote_shell_integration(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
     let mut child = command
         .spawn()
@@ -1766,22 +1896,24 @@ fn install_remote_shell_integration(
 
 fn open_remote_session(
     app: AppHandle,
+    state: RemoteState,
     connection: RemoteSshConnection,
     workspace_root: Option<String>,
 ) -> Result<(RemoteSession, RemoteSessionInfo), String> {
-    let probe = probe_remote_helper(&connection)?;
+    let askpass = start_ssh_askpass(&app, &state)?;
+    let probe = probe_remote_helper(&connection, &askpass)?;
     let helper = get_bundled_helper(&app, &probe.architecture)?;
     if probe.digest.as_deref() != Some(helper.digest.as_str()) {
-        install_helper(&connection, &helper, &probe.architecture)?;
+        install_helper(&connection, &helper, &probe.architecture, &askpass)?;
     }
     let shell_digest = remote_shell_bundle_digest();
     if probe.shell_digest.as_deref() != Some(shell_digest.as_str()) {
-        if let Err(error) = install_remote_shell_integration(&connection, &shell_digest) {
+        if let Err(error) = install_remote_shell_integration(&connection, &shell_digest, &askpass) {
             log::warn!("Remote shell integration unavailable; using login shell fallback: {error}");
         }
     }
 
-    let session = start_helper(&app, &connection, &probe.architecture)?;
+    let session = start_helper(&app, &connection, &probe.architecture, askpass)?;
     let workspace_root = workspace_root
         .filter(|r| !r.trim().is_empty() && r != ".")
         .or_else(|| {
@@ -1809,6 +1941,7 @@ fn start_helper(
     app: &AppHandle,
     connection: &RemoteSshConnection,
     architecture: &str,
+    askpass: Askpass,
 ) -> Result<RemoteSession, String> {
     let mut command = Command::new("ssh");
     command
@@ -1817,6 +1950,7 @@ fn start_helper(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    askpass.configure(&mut command)?;
     crate::modules::proc::hide_console(&mut command);
     let mut child = command
         .spawn()
@@ -1854,6 +1988,7 @@ fn start_helper(
         stdin: Mutex::new(BufWriter::new(stdin)),
         routing,
         connection: connection.clone(),
+        _askpass: askpass,
     })
 }
 
@@ -1981,7 +2116,7 @@ mod tests {
             vec![
                 "-T",
                 "-o",
-                "BatchMode=yes",
+                "BatchMode=no",
                 "-o",
                 "ServerAliveInterval=15",
                 "-o",
@@ -1989,7 +2124,7 @@ mod tests {
                 "-o",
                 "TCPKeepAlive=yes",
                 "-o",
-                "StrictHostKeyChecking=accept-new",
+                "StrictHostKeyChecking=ask",
                 "-p",
                 "2222",
                 "-i",
@@ -2016,7 +2151,7 @@ mod tests {
             multiplexer_action: None,
         };
         let args = ssh_args(&conn);
-        assert!(!args.iter().any(|a| a == "StrictHostKeyChecking=accept-new"));
+        assert!(!args.iter().any(|a| a == "StrictHostKeyChecking=ask"));
         assert!(args.iter().any(|a| a == "HostKeyAlias=forgenex-code4"));
         assert!(args.iter().any(|a| a == "StrictHostKeyChecking=no"));
         assert!(args.iter().any(|a| a == "UserKnownHostsFile=/dev/null"));

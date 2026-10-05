@@ -83,7 +83,7 @@ impl TunnelManager {
             "-N".to_string(), // Do not execute a remote shell
             "-T".to_string(), // Disable PTY allocation
             "-o".to_string(),
-            "ExitOnReply=no".to_string(),
+            "ExitOnForwardFailure=yes".to_string(),
             "-o".to_string(),
             "BatchMode=yes".to_string(),
             "-o".to_string(),
@@ -91,7 +91,7 @@ impl TunnelManager {
             "-o".to_string(),
             "ServerAliveCountMax=3".to_string(),
             "-o".to_string(),
-            "StrictHostKeyChecking=accept-new".to_string(),
+            "StrictHostKeyChecking=yes".to_string(),
             flag,
             spec,
         ];
@@ -137,7 +137,7 @@ impl TunnelManager {
         cmd.args(&args)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::null());
 
         crate::modules::proc::hide_console(&mut cmd);
 
@@ -197,7 +197,7 @@ impl TunnelManager {
                         };
 
                         if let Ok(mut map) = tunnels_ref.write() {
-                            if let Some(t) = map.get_mut(&mon_id) {
+                            if let Some(t) = map.get_mut(&mon_id).filter(|t| Arc::ptr_eq(&t.child, &mon_child)) {
                                 t.status = TunnelStatus::Error;
                                 t.error = Some(err_str.clone());
                             }
@@ -220,7 +220,7 @@ impl TunnelManager {
                 if !early_exit {
                     // Tunnel survived grace period, mark as Active!
                     if let Ok(mut map) = tunnels_ref.write() {
-                        if let Some(t) = map.get_mut(&mon_id) {
+                        if let Some(t) = map.get_mut(&mon_id).filter(|t| Arc::ptr_eq(&t.child, &mon_child)) {
                             t.status = TunnelStatus::Active;
                         }
                     }
@@ -250,7 +250,7 @@ impl TunnelManager {
                         };
 
                         if let Ok(mut map) = tunnels_ref.write() {
-                            if let Some(t) = map.get_mut(&mon_id) {
+                            if let Some(t) = map.get_mut(&mon_id).filter(|t| Arc::ptr_eq(&t.child, &mon_child)) {
                                 t.status = final_status.clone();
                                 t.error = final_error.clone();
                             }
@@ -338,6 +338,8 @@ mod tests {
         assert_eq!(spec, "127.0.0.1:3307:10.0.0.5:3306");
 
         let args = TunnelManager::build_ssh_args(&config).unwrap();
+        assert!(args.contains(&"ExitOnForwardFailure=yes".to_string()));
+        assert!(args.contains(&"StrictHostKeyChecking=yes".to_string()));
         assert!(args.contains(&"-L".to_string()));
         assert!(args.contains(&"127.0.0.1:3307:10.0.0.5:3306".to_string()));
         assert!(args.contains(&"-p".to_string()));

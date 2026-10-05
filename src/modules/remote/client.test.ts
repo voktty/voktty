@@ -11,6 +11,9 @@ import {
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
+vi.mock("@/modules/ssh-native/handles", () => ({
+  releaseNativeHandlesForRemoteSession: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe("remote client", () => {
   beforeEach(() => {

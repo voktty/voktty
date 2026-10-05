@@ -263,7 +263,14 @@ async fn open_hop(
 
     let mut handle = handle;
     let user = hop.user.clone().unwrap_or_else(default_user);
-    auth::authenticate(&mut handle, &user, &credentials).await?;
+    tokio::time::timeout(CONNECT_TIMEOUT, auth::authenticate(&mut handle, &user, &credentials))
+        .await
+        .map_err(|_| {
+            SshNativeError::new(
+                SshErrorCode::Timeout,
+                format!("authentication with {} timed out", hop.host),
+            )
+        })??;
 
     Ok((handle, take_remember_line(&outcome)))
 }
@@ -310,16 +317,23 @@ pub async fn connect(
     for (index, hop) in chain.into_iter().enumerate() {
         let stream = match hops.last() {
             None => HopStream::Tcp(
-                tokio::net::TcpStream::connect((hop.host.as_str(), hop.port()))
-                    .await
-                    .map_err(|e| unreachable(&hop, e))?,
+                tokio::time::timeout(
+                    CONNECT_TIMEOUT,
+                    tokio::net::TcpStream::connect((hop.host.as_str(), hop.port())),
+                )
+                .await
+                .map_err(|_| SshNativeError::new(SshErrorCode::Timeout, format!("connection to {} timed out", hop.host)))?
+                .map_err(|e| unreachable(&hop, e))?,
             ),
             Some(previous) => HopStream::Tunnelled(Box::new(
-                previous
-                    .channel_open_direct_tcpip(hop.host.as_str(), hop.port() as u32, "127.0.0.1", 0)
-                    .await
-                    .map_err(|e| unreachable(&hop, e))?
-                    .into_stream(),
+                tokio::time::timeout(
+                    CONNECT_TIMEOUT,
+                    previous.channel_open_direct_tcpip(hop.host.as_str(), hop.port() as u32, "127.0.0.1", 0),
+                )
+                .await
+                .map_err(|_| SshNativeError::new(SshErrorCode::Timeout, format!("jump to {} timed out", hop.host)))?
+                .map_err(|e| unreachable(&hop, e))?
+                .into_stream(),
             )),
         };
 

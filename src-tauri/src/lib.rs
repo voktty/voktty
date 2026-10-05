@@ -354,6 +354,7 @@ pub fn run() {
             pty::pty_shell_name,
             pty::pty_list_shells,
             remote::remote_open,
+            remote::remote_ssh_prompt_answer,
             remote::remote_request,
             remote::remote_close,
             remote::remote_pty_open,
