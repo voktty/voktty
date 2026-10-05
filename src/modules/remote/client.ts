@@ -1,4 +1,5 @@
 import type { SshConnectionConfig } from "@/modules/workspace";
+import { releaseNativeHandlesForRemoteSession } from "@/modules/ssh-native/handles";
 import { invoke } from "@tauri-apps/api/core";
 
 export type RemoteSshConnection = SshConnectionConfig;
@@ -64,8 +65,9 @@ export function requestRemote(
   });
 }
 
-export function closeRemoteWorkspace(sessionId: number): Promise<void> {
-  return invoke("remote_close", { sessionId });
+export async function closeRemoteWorkspace(sessionId: number): Promise<void> {
+  await releaseNativeHandlesForRemoteSession(sessionId);
+  await invoke("remote_close", { sessionId });
 }
 
 export async function requestRemoteResult<T>(

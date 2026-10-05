@@ -3338,6 +3338,12 @@ export const es: TranslationSchema = {
     connect: "Conectar",
     errors: {
       hostRequired: "El host o dirección IP es obligatorio",
+      invalidPort: "El puerto debe ser un número entre 1 y 65535",
+    },
+    prompt: {
+      hostKeyTitle: "Verificar clave del servidor SSH",
+      authTitle: "Autenticación SSH",
+      secretLabel: "Contraseña o frase de la clave",
     },
     sessionPicker: {
       title: "Sesiones Remotas Detectadas",

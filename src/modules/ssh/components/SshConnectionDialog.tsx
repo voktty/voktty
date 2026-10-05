@@ -10,10 +10,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTranslation } from "@/modules/i18n";
-import { useVaultStore } from "@/modules/vault";
-import { Key01Icon, ServerStack03Icon } from "@hugeicons/core-free-icons";
+import { ServerStack03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { SshPromptDialog } from "./SshPromptDialog";
 import { addSshConnection, updateSshConnection } from "../sshStore";
 import type { SshConnection } from "../types";
 
@@ -31,7 +31,6 @@ export function SshConnectionDialog({
   onSaved,
 }: Props) {
   const { t } = useTranslation();
-  const { isUnlocked, items: vaultItems } = useVaultStore();
 
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
@@ -44,10 +43,6 @@ export function SshConnectionDialog({
   const [tmuxSessionName, setTmuxSessionName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const hostInputRef = useRef<HTMLInputElement>(null);
-
-  const vaultSshKeys = useMemo(() => {
-    return vaultItems.filter((item) => item.type === "ssh_key");
-  }, [vaultItems]);
 
   useEffect(() => {
     if (!open) return;
@@ -87,8 +82,12 @@ export function SshConnectionDialog({
       return;
     }
 
-    const parsedPort = parseInt(port.trim(), 10);
-    const finalPort = !Number.isNaN(parsedPort) && parsedPort > 0 ? parsedPort : 22;
+    const portText = port.trim();
+    if (!/^\d+$/.test(portText) || Number(portText) < 1 || Number(portText) > 65535) {
+      setError(t("ssh.errors.invalidPort"));
+      return;
+    }
+    const finalPort = Number(portText);
     const finalName = name.trim() || (user.trim() ? `${user.trim()}@${trimmedHost}` : trimmedHost);
     const sanitizedExtraArgs = extraArgs.trim()
       ? extraArgs.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
@@ -160,6 +159,8 @@ export function SshConnectionDialog({
   };
 
   return (
+    <>
+    <SshPromptDialog />
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden shadow-2xl border-border bg-popover text-popover-foreground">
         <DialogHeader className="p-5 pb-3 border-b border-border/40 shrink-0">
@@ -246,24 +247,6 @@ export function SshConnectionDialog({
                 placeholder="~/.ssh/id_ed25519 or C:/keys/server.pem"
                 className="h-8 text-xs font-mono"
               />
-              {isUnlocked && vaultSshKeys.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1 pt-1">
-                  <span className="text-[10.5px] text-muted-foreground flex items-center gap-1">
-                    <HugeiconsIcon icon={Key01Icon} size={11} />
-                    {t("ssh.dialog.fromVault")}:
-                  </span>
-                  {vaultSshKeys.map((k) => (
-                    <button
-                      key={k.id}
-                      type="button"
-                      onClick={() => setIdentityFile(`~/.ssh/${k.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`)}
-                      className="rounded bg-muted/70 hover:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground cursor-pointer transition-colors"
-                    >
-                      {k.name}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -463,5 +446,6 @@ export function SshConnectionDialog({
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
