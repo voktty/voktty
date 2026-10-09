@@ -173,6 +173,12 @@ export function useSortable(
       const onMove = (ev: PointerEvent) => {
         const current = drag.current;
         if (!current || current.id !== id) return;
+        if (ev.pointerId !== current.pointerId) return;
+        // A missed pointerup must not leave the item attached to the cursor.
+        if (ev.pointerType === "mouse" && ev.buttons === 0) {
+          stop(false);
+          return;
+        }
         if (!current.active) {
           if (
             Math.hypot(ev.clientX - current.startX, ev.clientY - current.startY) <
