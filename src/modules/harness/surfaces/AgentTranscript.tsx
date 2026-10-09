@@ -47,6 +47,7 @@ import {
   useLockOverscroll,
 } from "@/modules/harness/hooks/useLockOverscroll";
 import { useTranscriptAnchor } from "../hooks/useTranscriptAnchor";
+import { useTurnScrollAnchor } from "@/modules/harness/hooks/useTurnScrollAnchor";
 import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import { useTranscriptZen } from "../hooks/useTranscriptZen";
@@ -270,6 +271,8 @@ function AgentTranscriptComponent({
       el.scrollHeight - el.scrollTop - el.clientHeight;
   }, []);
 
+  useTurnScrollAnchor(scrollerEl, visible, stickToBottom, rememberScroll);
+
   const pinTranscript = useCallback(
     (el: HTMLElement | null) => {
       if (!el) return;
@@ -442,7 +445,10 @@ function AgentTranscriptComponent({
       ref={setScroller}
       className="agent-transcript h-full overflow-y-auto overscroll-none [overflow-anchor:none] font-mono text-[13px] leading-5"
     >
-      <div className="mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-1 pb-1">
+      <div
+        data-transcript-content
+        className="mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-1 pb-1"
+      >
         {firstVisibleTurn > 0 ? (
           <div className="flex justify-center px-4 py-3">
             <button

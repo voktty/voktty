@@ -48,6 +48,102 @@ afterEach(() => {
 });
 
 describe("transcript scrolling", () => {
+  it("holds the reader's place when a turn above the view lays out", () => {
+    const blocks: Block[] = Array.from({ length: 3 }, (_, index) => [
+      { id: `user-${index}`, role: "user" as const, text: `Question ${index}` },
+      { id: `reply-${index}`, role: "assistant" as const, text: "Answer" },
+    ]).flat();
+    act(() => root.render(createElement(AgentTranscript, { blocks })));
+    const scroller =
+      container.querySelector<HTMLDivElement>(".agent-transcript")!;
+    let height = 3000;
+    let top = 0;
+    Object.defineProperties(scroller, {
+      scrollHeight: { get: () => height },
+      clientHeight: { get: () => 400 },
+      scrollTop: {
+        get: () => top,
+        set: (value: number) => {
+          top = Math.max(0, Math.min(value, height - 400));
+        },
+      },
+    });
+    act(() => {
+      scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: -100 }));
+      top = 1000;
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+    const [above, reading] = scroller.querySelectorAll(".transcript-turn");
+    const observer = observers.find((item) => item.targets.includes(above))!;
+    expect(observer).toBeDefined();
+    above.getBoundingClientRect = () => ({ top: -800 }) as DOMRect;
+    let readingTop = -100;
+    reading.getBoundingClientRect = () => ({ top: readingTop }) as DOMRect;
+    const size = (target: Element, blockSize: number) => ({
+      target,
+      borderBoxSize: [{ blockSize }],
+      contentRect: { height: blockSize },
+    });
+    // Off-screen turns report their placeholder size first.
+    act(() => observer.resize([size(above, 240), size(reading, 240)]));
+    expect(top).toBe(1000);
+
+    // Scrolling up lays them out. Only the turn wholly above the view moves
+    // the reader; the one on screen grows below where they are reading.
+    height = 4420;
+    readingTop += 900 - 240;
+    act(() => observer.resize([size(above, 900), size(reading, 1000)]));
+    expect(top).toBe(1660);
+  });
+
+  it.each(["paused", "following", "detached"])(
+    "reconciles an out-of-order resize batch while %s",
+    (mode) => {
+      const blocks: Block[] = Array.from({ length: 3 }, (_, index) => [
+        {
+          id: `user-${index}`,
+          role: "user" as const,
+          text: `Question ${index}`,
+        },
+        { id: `reply-${index}`, role: "assistant" as const, text: "Answer" },
+      ]).flat();
+      act(() => root.render(createElement(AgentTranscript, { blocks })));
+      const scroller =
+        container.querySelector<HTMLDivElement>(".agent-transcript")!;
+      let top = 1000;
+      Object.defineProperties(scroller, {
+        scrollHeight: { get: () => 4000 },
+        clientHeight: { get: () => 400 },
+        scrollTop: {
+          get: () => top,
+          set: (value: number) => {
+            top = value;
+          },
+        },
+      });
+      if (mode !== "following")
+        act(() => {
+          scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: -100 }));
+          scroller.dispatchEvent(new Event("scroll"));
+        });
+      const [first, second] = scroller.querySelectorAll(".transcript-turn");
+      const observer = observers.find((item) => item.targets.includes(first))!;
+      const size = (target: Element, blockSize: number) => ({
+        target,
+        borderBoxSize: [{ blockSize }],
+        contentRect: { height: blockSize },
+      });
+      act(() => observer.resize([size(first, 240), size(second, 240)]));
+      first.getBoundingClientRect = () => ({ top: -1000 }) as DOMRect;
+      // Before layout this turn ended at -510. Growing the first turn by
+      // 660 pushes its new top to -90, though it was wholly above the view.
+      second.getBoundingClientRect = () => ({ top: -90 }) as DOMRect;
+      // ResizeObserver entries need not be in DOM order.
+      if (mode === "detached") container.remove();
+      act(() => observer.resize([size(second, 500), size(first, 900)]));
+      expect(top).toBe(mode === "paused" ? 1920 : 1000);
+    },
+  );
   it("preserves manual scroll intent inside a live activity phase", () => {
     const previousZen = loadTranscriptZen();
     saveTranscriptZen(true);
