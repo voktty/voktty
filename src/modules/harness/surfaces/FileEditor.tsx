@@ -720,8 +720,9 @@ function CodeMirrorEditor({
               onComment: setCommentTarget,
             })
           : [],
-        lineNumbers(),
-        foldGutter(),
+        showDiff
+          ? [foldGutter(), lineNumbers()]
+          : [lineNumbers(), foldGutter()],
         highlightActiveLine(),
         highlightActiveLineGutter(),
         EditorView.lineWrapping,
@@ -1070,10 +1071,10 @@ function DiffChunkStat({
   return (
     <span className="flex min-w-0 shrink-0 items-center gap-1.5 font-mono text-[11px] font-semibold tabular-nums">
       {additions > 0 ? (
-        <span className="text-emerald-400">+{additions}</span>
+        <span className="text-[var(--color-diff-add-fg)]">+{additions}</span>
       ) : null}
       {deletions > 0 ? (
-        <span className="text-red-400">-{deletions}</span>
+        <span className="text-[var(--color-diff-del-fg)]">-{deletions}</span>
       ) : null}
     </span>
   );

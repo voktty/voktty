@@ -69,6 +69,14 @@
 /* Baseline tokens mirror the built-in default theme, so the first paint already
  * matches what `applyTheme` writes a frame later. */
 :root {
+    --color-diff-add: #10b981;
+    --color-diff-add-fg: #047857;
+    --color-diff-add-bg: color-mix(in srgb, var(--color-diff-add) 15%, transparent);
+    --color-diff-add-gutter: color-mix(in srgb, var(--color-diff-add) 25%, transparent);
+    --color-diff-del: #f43f5e;
+    --color-diff-del-fg: #be123c;
+    --color-diff-del-bg: color-mix(in srgb, var(--color-diff-del) 15%, transparent);
+    --color-diff-del-gutter: color-mix(in srgb, var(--color-diff-del) 25%, transparent);
     --background: #fafafc;
     --foreground: #18191c;
     --card: #ffffff;
@@ -156,6 +164,8 @@
 }
 
 .dark {
+    --color-diff-add-fg: #6ee7b7;
+    --color-diff-del-fg: #fda4af;
     --background: #121214;
     --foreground: #f4f4f6;
     --card: #1e2025;
