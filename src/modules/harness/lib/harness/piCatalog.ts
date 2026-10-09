@@ -29,7 +29,7 @@ function refreshCatalog(flavor: PiFlavor): Promise<void> {
 async function discoverModels(flavor: PiFlavor, projectCwd?: string) {
   const { path } = await flavor.resolveBinary();
   const cwd = projectCwd ?? (await homeDir());
-  const probeId = flavor.probeChildId;
+  const probeId = `${flavor.probeChildId}-${crypto.randomUUID()}`;
   const rpc = new PiRpc(probeId, () => undefined, flavor.label);
 
   const stop = async () => {

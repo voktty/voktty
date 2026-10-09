@@ -254,6 +254,7 @@ export async function discoverClaudeModels(
 async function discoverViaListModels(cwd: string): Promise<AgentModel[]> {
   const { path } = await resolveClaudeBinary();
   const sessionId = crypto.randomUUID();
+  const probeId = `${PROBE_ID}-${crypto.randomUUID()}`;
 
   let listed: ((models: AgentModel[]) => void) | null = null;
   let failed: ((error: Error) => void) | null = null;
@@ -267,7 +268,7 @@ async function discoverViaListModels(cwd: string): Promise<AgentModel[]> {
     if (asked) return;
     asked = true;
     void writeChild(
-      PROBE_ID,
+      probeId,
       JSON.stringify(
         buildControlRequest(LIST_MODELS_REQUEST_ID, { subtype: "list_models" }),
       ),
@@ -277,12 +278,12 @@ async function discoverViaListModels(cwd: string): Promise<AgentModel[]> {
   };
 
   const stop = async () => {
-    unwatchChild(PROBE_ID);
-    await killChild(PROBE_ID).catch(() => undefined);
+    unwatchChild(probeId);
+    await killChild(probeId).catch(() => undefined);
   };
 
   watchChild(
-    PROBE_ID,
+    probeId,
     (line) => {
       const rec = parseJsonLine(line);
       if (!rec) return;
@@ -297,13 +298,13 @@ async function discoverViaListModels(cwd: string): Promise<AgentModel[]> {
 
   try {
     await spawnChild(
-      PROBE_ID,
+      probeId,
       path,
       buildClaudeSpawnArgs({ isolated: true, sessionId }),
       cwd,
     );
     await writeChild(
-      PROBE_ID,
+      probeId,
       JSON.stringify(
         buildControlRequest(INIT_REQUEST_ID, { subtype: "initialize" }),
       ),

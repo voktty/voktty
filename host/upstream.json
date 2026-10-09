@@ -36,7 +36,11 @@
     "host/windows.ts": "a1c4ecd5b75be6bb7e8e2d8e8acbfe76a0d312aaca58193989bac3e7a435e",
     "host/windows.test.ts": "01e493cc5a74a4e56ac582c5fc0fd90a2078243f0ca6d1e5de294be35f2ed74d",
     "host/windows-acl.ps1": "1a36cb6626c90ee6e8741e9a7026743cd9b869aea595a99d92edc749d0a57379",
-    "host/package.mjs": "1b16e555d108e9977ced55acd507f31efa68d7f30015aa69434eb29742121dc7"
+    "host/package.mjs": "1b16e555d108e9977ced55acd507f31efa68d7f30015aa69434eb29742121dc7",
+    "host/large-sync.test.ts": "67760beaf0a3a4ef505946b5b1a9e94038ad6a1b9b37071a0d1af812b534d0c7",
+    "host/opencode-transport.test.ts": "b291db54d3f0b3f21de0554f2869ad49526e9c10e379235861164f793bd95b8a",
+    "host/provider-transport.test.ts": "2a5d3e2e8d9dfab5b7648a22dbd1ea04c361692d88c922e984987c588cd5ebe6",
+    "host/windows-bootstrap.test.ts": "2ba0dbc9d15a209c86af1fe0aa1ee31f79224b3bd456bab0467a0e950f10520d"
   },
   "patches": [
     "Map host imports to Voktty modules and providers; keep Gemini instead of Antigravity.",
@@ -52,6 +56,7 @@
     "Map workspace commands to Voktty IPC types and preserve expected-content conflict checks and file modes on atomic saves.",
     "Use Voktty model discovery at an explicit registered project cwd, serialize same-provider probes and authorize worktrees before session creation.",
     "Use Voktty service and data names, reject linked data directories, acquire the owner lock before opening the store, and restore process authorization for registered worktrees.",
-    "Package pinned Node 24 runtimes with verified hashes and normalized timestamps for repeatable archives; publish Voktty host assets before undrafting releases."
+    "Package pinned Node 24 runtimes with verified hashes and normalized timestamps for repeatable archives; publish Voktty host assets before undrafting releases.",
+    "Use unique process IDs for concurrent provider model probes; adapt transport fixtures to Voktty workspace authorization and Gemini stream-json."
   ]
 }

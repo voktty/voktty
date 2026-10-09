@@ -73,7 +73,7 @@ case "$url" in *.sha256) cp "$TEST_CHECKSUM" "$output" ;; *) cp "$TEST_ARCHIVE" 
     )
       .replace("@@VERSION@@", `'${version}'`)
       .replace("@@RELEASE@@", "'https://example.invalid'");
-    const run = () =>
+    const run = (forceUpgrade = false) =>
       spawnSync("sh", ["-s"], {
         input: script,
         encoding: "utf8",
@@ -85,6 +85,7 @@ case "$url" in *.sha256) cp "$TEST_CHECKSUM" "$output" ;; *) cp "$TEST_ARCHIVE" 
           TEST_CHECKSUM: checksum,
           TEST_DOWNLOADS: downloads,
           TEST_EVENTS: events,
+          VOKTTY_HOST_FORCE_UPGRADE: forceUpgrade ? "1" : "0",
         },
       });
 
@@ -96,8 +97,20 @@ case "$url" in *.sha256) cp "$TEST_CHECKSUM" "$output" ;; *) cp "$TEST_ARCHIVE" 
     const reused = run();
     expect(reused.status, reused.stderr).toBe(0);
     expect(readFileSync(downloads, "utf8").trim().split("\n")).toHaveLength(2);
+    const pointer = readFileSync(
+      join(home, ".voktty-host/runtime-path"),
+      "utf8",
+    );
+    const upgraded = run(true);
+    expect(upgraded.status, upgraded.stderr).toBe(0);
+    expect(
+      readFileSync(join(home, ".voktty-host/runtime-path"), "utf8"),
+    ).not.toBe(pointer);
+    expect(readFileSync(downloads, "utf8").trim().split("\n")).toHaveLength(4);
     expect(readFileSync(events, "utf8").trim().split("\n")).toEqual([
       "service install",
+      "service install",
+      "service uninstall",
       "service install",
     ]);
 
