@@ -26,7 +26,16 @@
     "host/workspace.test.ts": "b55f29297e9f295d1acb715b3360fda43fdc1fad46d98e2bed12bdd02e647b95",
     "host/workspace-commands.ts": "21f401a1100f91c6672aa37ce1ab7d5e1a7245ce112bc4e9625f9e592a9ff79a",
     "host/server.ts": "e68654c04ecae5149dcda4b0c696b5ceb4980620c1736ab32b295b6110035428",
-    "host/server.test.ts": "ea0446b60ff57b502492b643ade6e3393e2767d4730d19fa7d4063a3980ca33c"
+    "host/server.test.ts": "ea0446b60ff57b502492b643ade6e3393e2767d4730d19fa7d4063a3980ca33c",
+    "host/cli.ts": "81bef8f5cfa408da1a0fbd2b190034fd6bea5cae43732ab20fa700829557cebf",
+    "host/cli.test.ts": "baac3b73f66edb6778693270ffe899367bc2dbe5ed18f4e3ca487e21a3587245",
+    "host/owner.ts": "fb19cc34d4093f15f8a51ce679a1e8f2c3c2b35e763bc4f35d772782505b0735",
+    "host/owner.test.ts": "7e171ae0d66b86fda322810253a0945958a63661597c410cec48ca0381203e9e",
+    "host/service.ts": "089eff312fed7cfb3b675200ad42eb75f41ee7a81b820c6d96bef79e2aa16b71",
+    "host/service.test.ts": "cf62315ae96f2d7faad6680341503348e47e215987aa620484fdfe088cd780b6",
+    "host/windows.ts": "a1c4ecd5b75be6bb7e8e2d8e8acbfe76a0d312aaca58193989bac3e7a435e",
+    "host/windows.test.ts": "01e493cc5a74a4e56ac582c5fc0fd90a2078243f0ca6d1e5de294be35f2ed74d",
+    "host/windows-acl.ps1": "1a36cb6626c90ee6e8741e9a7026743cd9b869aea595a99d92edc749d0a57379"
   },
   "patches": [
     "Map host imports to Voktty modules and providers; keep Gemini instead of Antigravity.",
@@ -40,6 +49,7 @@
     "Use verified attachment reads; preserve durable interrupted-turn duration and bound custom answers.",
     "Redact host engine errors in process logs.",
     "Map workspace commands to Voktty IPC types and preserve expected-content conflict checks and file modes on atomic saves.",
-    "Use Voktty model discovery at an explicit registered project cwd, serialize same-provider probes and authorize worktrees before session creation."
+    "Use Voktty model discovery at an explicit registered project cwd, serialize same-provider probes and authorize worktrees before session creation.",
+    "Use Voktty service and data names, reject linked data directories, acquire the owner lock before opening the store, and restore process authorization for registered worktrees."
   ]
 }
