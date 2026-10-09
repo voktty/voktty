@@ -229,6 +229,55 @@
     --elevation-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.7);
 }
 
+html.diff-palette-colorblind {
+  --color-diff-add: #388bfd;
+  --color-diff-add-fg: #79c0ff;
+  --color-diff-del: #db6d28;
+  --color-diff-del-fg: #ffa657;
+}
+
+html.diff-palette-colorblind.light {
+  --color-diff-add: #0969da;
+  --color-diff-add-fg: #0550ae;
+  --color-diff-del: #bc4c00;
+  --color-diff-del-fg: #953800;
+}
+
+/* Colorblind-safe hues with heavier tints and maximum-contrast text. */
+html.diff-palette-high-contrast {
+  --color-diff-add: #58a6ff;
+  --color-diff-add-fg: #cae8ff;
+  --color-diff-add-bg: color-mix(
+    in srgb,
+    var(--color-diff-add) 28%,
+    transparent
+  );
+  --color-diff-add-gutter: color-mix(
+    in srgb,
+    var(--color-diff-add) 45%,
+    transparent
+  );
+  --color-diff-del: #f0883e;
+  --color-diff-del-fg: #ffdfb6;
+  --color-diff-del-bg: color-mix(
+    in srgb,
+    var(--color-diff-del) 28%,
+    transparent
+  );
+  --color-diff-del-gutter: color-mix(
+    in srgb,
+    var(--color-diff-del) 45%,
+    transparent
+  );
+}
+
+html.diff-palette-high-contrast.light {
+  --color-diff-add: #0550ae;
+  --color-diff-add-fg: #032563;
+  --color-diff-del: #953800;
+  --color-diff-del-fg: #471700;
+}
+
 /* Structural variants: Elevation */
 [data-elevation="flat"] {
     --elevation-2xs: none;

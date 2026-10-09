@@ -17,8 +17,10 @@ import {
   readFastLanguage,
 } from "@/modules/i18n";
 import type { QuitConfirmPayload } from "@/modules/harness/lib/appLifecycle";
+import { initDiffPalette } from "@/modules/harness/lib/diffPalette";
 
 markStartupPhase("js-start");
+initDiffPalette();
 const startupLanguage = readFastLanguage();
 
 // Start the native bootstrap before awaiting the dictionary. Neither depends

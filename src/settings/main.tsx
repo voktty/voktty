@@ -6,8 +6,10 @@ import { applyDocumentLocale, loadLocale, readFastLanguage } from "@/modules/i18
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import ReactDOM from "react-dom/client";
 import { SettingsApp } from "./SettingsApp";
+import { initDiffPalette } from "@/modules/harness/lib/diffPalette";
 
 const startupLanguage = readFastLanguage();
+initDiffPalette();
 await loadLocale(startupLanguage);
 applyDocumentLocale(startupLanguage);
 
