@@ -1,5 +1,6 @@
 import { boundedCode as code } from "./codeHighlightPlugin";
 import { HighlightedCodeBlock } from "@/modules/harness/surfaces/HighlightedCodeBlock";
+import { parseStreamingMarkdown } from "@/modules/harness/surfaces/streamingMarkdown";
 import { useTranslation } from "@/modules/i18n";
 import {
   createContext,
@@ -449,6 +450,8 @@ export const AgentMarkdown = memo(function AgentMarkdown({
         controls={false}
         dir="auto"
         isAnimating={!!streaming}
+        parseIncompleteMarkdown={false}
+        parseMarkdownIntoBlocksFn={parseStreamingMarkdown}
         plugins={MARKDOWN_PLUGINS}
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}

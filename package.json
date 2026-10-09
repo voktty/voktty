@@ -126,6 +126,7 @@
     "react-material-icon-theme": "^1.2.0",
     "react-resizable-panels": "^4.12.4",
     "rehype-harden": "^1.1.8",
+    "remend": "^1.3.0",
     "shiki": "^3.23.0",
     "sonner": "^2.0.8",
     "streamdown": "^2.6.0",
