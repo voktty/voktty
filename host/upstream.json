@@ -24,7 +24,9 @@
     "host/git-branches.test.ts": "4f70c3c272133b11f336af5e265816dbe155dd78f879abedbb1c798415205450",
     "host/workspace.ts": "eb4c43808083e252110c24c4459359db6218a221500caf8427390e209ac119f1",
     "host/workspace.test.ts": "b55f29297e9f295d1acb715b3360fda43fdc1fad46d98e2bed12bdd02e647b95",
-    "host/workspace-commands.ts": "21f401a1100f91c6672aa37ce1ab7d5e1a7245ce112bc4e9625f9e592a9ff79a"
+    "host/workspace-commands.ts": "21f401a1100f91c6672aa37ce1ab7d5e1a7245ce112bc4e9625f9e592a9ff79a",
+    "host/server.ts": "e68654c04ecae5149dcda4b0c696b5ceb4980620c1736ab32b295b6110035428",
+    "host/server.test.ts": "ea0446b60ff57b502492b643ade6e3393e2767d4730d19fa7d4063a3980ca33c"
   },
   "patches": [
     "Map host imports to Voktty modules and providers; keep Gemini instead of Antigravity.",
@@ -37,6 +39,7 @@
     "Use Voktty providers, including Gemini, and authorize canonical projects before registration.",
     "Use verified attachment reads; preserve durable interrupted-turn duration and bound custom answers.",
     "Redact host engine errors in process logs.",
-    "Map workspace commands to Voktty IPC types and preserve expected-content conflict checks and file modes on atomic saves."
+    "Map workspace commands to Voktty IPC types and preserve expected-content conflict checks and file modes on atomic saves.",
+    "Use Voktty model discovery at an explicit registered project cwd, serialize same-provider probes and authorize worktrees before session creation."
   ]
 }

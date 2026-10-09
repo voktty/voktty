@@ -42,21 +42,23 @@ export function refreshCursorCatalog(): Promise<void> {
   return inflight;
 }
 
-async function discoverCursorModels(): Promise<AgentModel[]> {
-  const fromAcp = await discoverViaAcp().catch((error: unknown) => {
+export async function discoverCursorModels(
+  projectCwd?: string,
+): Promise<AgentModel[]> {
+  const cwd = projectCwd ?? (await homeDir());
+  const fromAcp = await discoverViaAcp(cwd).catch((error: unknown) => {
     console.debug("[monocode] cursor ACP catalog failed", error);
     return [];
   });
   if (fromAcp.length > 0) return fromAcp;
-  return discoverViaCli().catch((error: unknown) => {
+  return discoverViaCli(cwd).catch((error: unknown) => {
     console.debug("[monocode] cursor CLI catalog failed", error);
     return [];
   });
 }
 
-async function discoverViaAcp(): Promise<AgentModel[]> {
+async function discoverViaAcp(cwd: string): Promise<AgentModel[]> {
   const { path } = await resolveCursorBinary();
-  const cwd = await homeDir();
   const acp = new AcpClient(PROBE_ID, {
     onRequest: (id) => {
       void acp.respond(id, {}).catch(() => undefined);
@@ -77,44 +79,51 @@ async function discoverViaAcp(): Promise<AgentModel[]> {
 
   try {
     await spawnChild(PROBE_ID, path, ["acp"], cwd);
-    return await withTimeout(DISCOVERY_TIMEOUT_MS, async () => {
-      await acp.request(
-        "initialize",
-        {
-          protocolVersion: 1,
-          clientCapabilities: CURSOR_CLIENT_CAPABILITIES,
-          clientInfo: { name: "monocode", version: "0.1.0" },
-        },
-        REQUEST_TIMEOUT_MS,
-      );
-      await acp
-        .request("authenticate", { methodId: "cursor_login" }, REQUEST_TIMEOUT_MS)
-        .catch(() => undefined);
-      const listed = await acp.request<unknown>(
-        "cursor/list_available_models",
-        {},
-        REQUEST_TIMEOUT_MS,
-      );
-      const models = modelsFromListAvailable(listed);
-      if (models.length > 0) return models;
+    return await withTimeout(
+      DISCOVERY_TIMEOUT_MS,
+      async () => {
+        await acp.request(
+          "initialize",
+          {
+            protocolVersion: 1,
+            clientCapabilities: CURSOR_CLIENT_CAPABILITIES,
+            clientInfo: { name: "monocode", version: "0.1.0" },
+          },
+          REQUEST_TIMEOUT_MS,
+        );
+        await acp
+          .request(
+            "authenticate",
+            { methodId: "cursor_login" },
+            REQUEST_TIMEOUT_MS,
+          )
+          .catch(() => undefined);
+        const listed = await acp.request<unknown>(
+          "cursor/list_available_models",
+          {},
+          REQUEST_TIMEOUT_MS,
+        );
+        const models = modelsFromListAvailable(listed);
+        if (models.length > 0) return models;
 
-      const created = await acp.request<unknown>(
-        "session/new",
-        { cwd, mcpServers: [] },
-        REQUEST_TIMEOUT_MS,
-      );
-      return modelsFromSessionNew(created);
-    }, () => {
-      void stop();
-    });
+        const created = await acp.request<unknown>(
+          "session/new",
+          { cwd, mcpServers: [] },
+          REQUEST_TIMEOUT_MS,
+        );
+        return modelsFromSessionNew(created);
+      },
+      () => {
+        void stop();
+      },
+    );
   } finally {
     await stop();
   }
 }
 
-async function discoverViaCli(): Promise<AgentModel[]> {
+async function discoverViaCli(cwd: string): Promise<AgentModel[]> {
   const { path } = await resolveCursorBinary();
-  const cwd = await homeDir();
   const stdout = await execChild(path, ["--list-models"], cwd);
   return modelsFromListModelsOutput(stdout);
 }
@@ -337,7 +346,9 @@ function parseConfigOptions(raw: unknown): ModelSetting[] | undefined {
     const rec = asRecord(item);
     if (!rec) continue;
     const id = String(rec.id ?? rec.configId ?? "").trim();
-    const category = String(rec.category ?? "").trim().toLowerCase();
+    const category = String(rec.category ?? "")
+      .trim()
+      .toLowerCase();
     if (
       !id ||
       id === "mode" ||
@@ -436,7 +447,11 @@ function stripVariantWords(name: string): string {
 }
 
 function effortKeyFor(base: string): string {
-  if (base.startsWith("gpt-") || base.startsWith("kimi-") || base.startsWith("glm-")) {
+  if (
+    base.startsWith("gpt-") ||
+    base.startsWith("kimi-") ||
+    base.startsWith("glm-")
+  ) {
     return "reasoning";
   }
   return "effort";

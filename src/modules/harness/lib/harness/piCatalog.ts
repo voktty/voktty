@@ -1,11 +1,6 @@
 import { homeDir } from "../fs";
 import { setHarnessModels } from "../models";
-import {
-  killChild,
-  spawnChild,
-  unwatchChild,
-  watchChild,
-} from "./child";
+import { killChild, spawnChild, unwatchChild, watchChild } from "./child";
 import { PiRpc } from "./piClient";
 import { OMP_FLAVOR, PI_FLAVOR, type PiFlavor } from "./piFlavor";
 import { buildPiSpawnArgs, modelsFromRpcData } from "./piProtocol";
@@ -31,9 +26,9 @@ function refreshCatalog(flavor: PiFlavor): Promise<void> {
   return run;
 }
 
-async function discoverModels(flavor: PiFlavor) {
+async function discoverModels(flavor: PiFlavor, projectCwd?: string) {
   const { path } = await flavor.resolveBinary();
-  const cwd = await homeDir();
+  const cwd = projectCwd ?? (await homeDir());
   const probeId = flavor.probeChildId;
   const rpc = new PiRpc(probeId, () => undefined, flavor.label);
 
@@ -75,6 +70,14 @@ export function refreshPiCatalog(): Promise<void> {
   return refreshCatalog(PI_FLAVOR);
 }
 
+export function discoverPiModels(cwd: string) {
+  return discoverModels(PI_FLAVOR, cwd);
+}
+
 export function refreshOmpCatalog(): Promise<void> {
   return refreshCatalog(OMP_FLAVOR);
+}
+
+export function discoverOmpModels(cwd: string) {
+  return discoverModels(OMP_FLAVOR, cwd);
 }

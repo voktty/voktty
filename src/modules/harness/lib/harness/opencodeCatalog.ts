@@ -66,9 +66,11 @@ export function refreshOpenCodeCatalog(): Promise<void> {
   return inflight;
 }
 
-async function discoverOpenCodeModels(): Promise<AgentModel[]> {
+export async function discoverOpenCodeModels(
+  projectCwd?: string,
+): Promise<AgentModel[]> {
   const { path } = await resolveOpenCodeBinary();
-  const cwd = await homeDir();
+  const cwd = projectCwd ?? (await homeDir());
   const versionOut = await execChild(path, ["--version"], cwd);
   const version = parseOpenCodeVersion(versionOut);
   const generation = assertSupportedOpenCodeVersion(version);
@@ -289,7 +291,8 @@ export function flattenOpenCodeModels(
 ): AgentModel[] {
   const connected = new Set(parsed.connected);
   const primaryAgents = agents.filter(
-    (agent) => !agent.hidden && (agent.mode === "primary" || agent.mode === "all"),
+    (agent) =>
+      !agent.hidden && (agent.mode === "primary" || agent.mode === "all"),
   );
   const models: AgentModel[] = [];
   for (const provider of parsed.providers.values()) {

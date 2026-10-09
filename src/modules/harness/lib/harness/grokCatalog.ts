@@ -44,13 +44,14 @@ export function refreshGrokCatalog(): Promise<void> {
   return inflight;
 }
 
-async function discoverGrokModels() {
-  const fromAcp = await discoverViaAcp().catch((error: unknown) => {
+export async function discoverGrokModels(projectCwd?: string) {
+  const cwd = projectCwd ?? (await homeDir());
+  const fromAcp = await discoverViaAcp(cwd).catch((error: unknown) => {
     console.debug("[monocode] grok ACP catalog failed", error);
     return [];
   });
   if (fromAcp.length > 0) return fromAcp;
-  const fromCli = await discoverViaCli().catch((error: unknown) => {
+  const fromCli = await discoverViaCli(cwd).catch((error: unknown) => {
     console.debug("[monocode] grok CLI catalog failed", error);
     return [];
   });
@@ -58,9 +59,8 @@ async function discoverGrokModels() {
   return fallbackGrokModels();
 }
 
-async function discoverViaAcp() {
+async function discoverViaAcp(cwd: string) {
   const { path } = await resolveGrokBinary();
-  const cwd = await homeDir();
   const acp = new AcpClient(PROBE_ID, {
     onRequest: (id) => {
       void acp.respond(id, {}).catch(() => undefined);
@@ -81,46 +81,49 @@ async function discoverViaAcp() {
 
   try {
     await spawnChild(PROBE_ID, path, grokSpawnArgs({ model: "" }), cwd);
-    return await withTimeout(DISCOVERY_TIMEOUT_MS, async () => {
-      const init = await acp.request(
-        "initialize",
-        {
-          protocolVersion: 1,
-          clientCapabilities: CLIENT_CAPABILITIES,
-          clientInfo: { name: "monocode", version: "0.1.0" },
-        },
-        REQUEST_TIMEOUT_MS,
-      );
-      const fromInit = modelsFromInitialize(init);
-      if (fromInit.length > 0) return fromInit;
+    return await withTimeout(
+      DISCOVERY_TIMEOUT_MS,
+      async () => {
+        const init = await acp.request(
+          "initialize",
+          {
+            protocolVersion: 1,
+            clientCapabilities: CLIENT_CAPABILITIES,
+            clientInfo: { name: "monocode", version: "0.1.0" },
+          },
+          REQUEST_TIMEOUT_MS,
+        );
+        const fromInit = modelsFromInitialize(init);
+        if (fromInit.length > 0) return fromInit;
 
-      const methodId = grokAuthMethodId(init);
-      if (methodId) {
-        await acp
-          .request(
-            "authenticate",
-            { methodId, _meta: { headless: true } },
-            REQUEST_TIMEOUT_MS,
-          )
-          .catch(() => undefined);
-      }
-      const created = await acp.request(
-        "session/new",
-        { cwd, mcpServers: [] },
-        REQUEST_TIMEOUT_MS,
-      );
-      return modelsFromSessionNew(created);
-    }, () => {
-      void stop();
-    });
+        const methodId = grokAuthMethodId(init);
+        if (methodId) {
+          await acp
+            .request(
+              "authenticate",
+              { methodId, _meta: { headless: true } },
+              REQUEST_TIMEOUT_MS,
+            )
+            .catch(() => undefined);
+        }
+        const created = await acp.request(
+          "session/new",
+          { cwd, mcpServers: [] },
+          REQUEST_TIMEOUT_MS,
+        );
+        return modelsFromSessionNew(created);
+      },
+      () => {
+        void stop();
+      },
+    );
   } finally {
     await stop();
   }
 }
 
-async function discoverViaCli() {
+async function discoverViaCli(cwd: string) {
   const { path } = await resolveGrokBinary();
-  const cwd = await homeDir();
   const stdout = await execChild(path, ["models"], cwd);
   return modelsFromGrokModelsOutput(stdout);
 }

@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute } from "node:path";
-import { renameHostWorktreeBranch, resolveHostWorktree } from "./git-worktrees";
+import {
+  renameHostWorktreeBranch,
+  resolveHostWorktree,
+  resolveHostWorktreeAsync,
+} from "./git-worktrees";
 import {
   applyHarnessEvent,
   stopStreaming,
@@ -310,6 +314,15 @@ export class HostEngine {
       throw new Error("Project path is not a directory");
     await this.authorizeWorkspace?.(cwd);
     return this.store.addProject(cwd, basename(cwd));
+  }
+
+  async authorizeProjectCwd(
+    projectId: string,
+    requested: unknown,
+  ): Promise<void> {
+    const project = this.store.project(projectId);
+    const cwd = await resolveHostWorktreeAsync(project.cwd, requested);
+    await this.authorizeWorkspace?.(cwd);
   }
 
   async withIdleProject<T>(

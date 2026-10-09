@@ -31,9 +31,11 @@ export function refreshHermesCatalog(): Promise<void> {
   return inflight;
 }
 
-async function discoverHermesModels(): Promise<AgentModel[]> {
+export async function discoverHermesModels(
+  projectCwd?: string,
+): Promise<AgentModel[]> {
   const { path } = await resolveHermesBinary();
-  const cwd = await homeDir();
+  const cwd = projectCwd ?? (await homeDir());
   const acp = new AcpClient(PROBE_ID, {
     onRequest: (id, method) => {
       void acp

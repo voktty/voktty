@@ -239,18 +239,20 @@ export function refreshClaudeCatalog(): Promise<void> {
   return inflight;
 }
 
-async function discoverClaudeModels(): Promise<AgentModel[]> {
-  const listed = await discoverViaListModels().catch((error: unknown) => {
+export async function discoverClaudeModels(
+  projectCwd?: string,
+): Promise<AgentModel[]> {
+  const cwd = projectCwd ?? (await homeDir());
+  const listed = await discoverViaListModels(cwd).catch((error: unknown) => {
     console.debug("[monocode] claude list_models catalog failed", error);
     return [];
   });
   if (listed.length > 0) return listed;
-  return discoverViaVersion();
+  return discoverViaVersion(cwd);
 }
 
-async function discoverViaListModels(): Promise<AgentModel[]> {
+async function discoverViaListModels(cwd: string): Promise<AgentModel[]> {
   const { path } = await resolveClaudeBinary();
-  const cwd = await homeDir();
   const sessionId = crypto.randomUUID();
 
   let listed: ((models: AgentModel[]) => void) | null = null;
@@ -314,9 +316,8 @@ async function discoverViaListModels(): Promise<AgentModel[]> {
   }
 }
 
-async function discoverViaVersion(): Promise<AgentModel[]> {
+async function discoverViaVersion(cwd: string): Promise<AgentModel[]> {
   const { path } = await resolveClaudeBinary();
-  const cwd = await homeDir();
   const versionOut = await execChild(path, ["--version"], cwd);
   const version = parseClaudeVersion(versionOut);
   return modelsForClaudeVersion(version);
@@ -373,7 +374,10 @@ function modelFromListRow(raw: unknown): AgentModel | null {
   const displayName = stringField(rec, "displayName") ?? "";
   const description = stringField(rec, "description") ?? "";
   const name = pickerName(displayName, description, nativeId);
-  const settings = settingsFromListRow(rec, fromValue.context1m || fromResolved.context1m);
+  const settings = settingsFromListRow(
+    rec,
+    fromValue.context1m || fromResolved.context1m,
+  );
 
   return {
     id: claudeCatalogId(nativeId),
@@ -403,14 +407,17 @@ function settingsFromListRow(
 function advertisedEffortLevels(rec: Record<string, unknown>): string[] {
   const raw = rec.supportedEffortLevels;
   if (!Array.isArray(raw)) return [];
-  return raw.filter((level): level is string => typeof level === "string" && level.trim() !== "");
+  return raw.filter(
+    (level): level is string =>
+      typeof level === "string" && level.trim() !== "",
+  );
 }
 
 function effortSetting(levels: string[]): ModelSetting {
   const known = levels.filter((level) => EFFORT_LABELS[level]);
-  const options = (known.length > 0 ? known : ["low", "medium", "high", "max"]).map(
-    (value) => ({ value, label: EFFORT_LABELS[value] ?? value }),
-  );
+  const options = (
+    known.length > 0 ? known : ["low", "medium", "high", "max"]
+  ).map((value) => ({ value, label: EFFORT_LABELS[value] ?? value }));
   if (options.some((option) => option.value === "xhigh")) {
     options.push({ value: "ultracode", label: "Ultracode" });
   }
@@ -445,14 +452,19 @@ function pickerName(
   return name || head || fallback;
 }
 
-function splitClaudeModelValue(value: string): { id: string; context1m: boolean } {
+function splitClaudeModelValue(value: string): {
+  id: string;
+  context1m: boolean;
+} {
   const match = /^(.*)\[1m\]$/i.exec(value.trim());
   if (match?.[1]?.trim()) return { id: match[1].trim(), context1m: true };
   return { id: value.trim(), context1m: false };
 }
 
 function claudeCatalogId(nativeId: string): string {
-  const slug = nativeId.startsWith("claude-") ? nativeId.slice("claude-".length) : nativeId;
+  const slug = nativeId.startsWith("claude-")
+    ? nativeId.slice("claude-".length)
+    : nativeId;
   return `claude:${slug}`;
 }
 

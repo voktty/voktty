@@ -107,11 +107,13 @@ export function refreshAgyCatalog(): Promise<void> {
   return inflight;
 }
 
-export async function discoverAgyModels(): Promise<AgentModel[]> {
+export async function discoverAgyModels(
+  projectCwd?: string,
+): Promise<AgentModel[]> {
   try {
     const [{ path }, cwd] = await Promise.all([
       resolveGeminiBinary(),
-      homeDir(),
+      projectCwd ?? homeDir(),
     ]);
     const raw = await execChild(path, ["models"], cwd);
     const lines = raw
