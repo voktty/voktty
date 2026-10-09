@@ -48,6 +48,7 @@ import {
 } from "@/modules/harness/hooks/useLockOverscroll";
 import { useTranscriptAnchor } from "../hooks/useTranscriptAnchor";
 import { useTurnScrollAnchor } from "@/modules/harness/hooks/useTurnScrollAnchor";
+import { PhaseStep, useStepQueue } from "@/modules/harness/surfaces/PhaseStep";
 import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
 import { useTranscriptZen } from "../hooks/useTranscriptZen";
@@ -2027,6 +2028,12 @@ function ActivityPhaseGroup({
   const open = waiting || (override ?? active);
   const [liveScroller, setLiveScroller] = useState<HTMLDivElement | null>(null);
   useLivePhaseScroll(liveScroller, active && open, phase.steps);
+  const settled = useRef<Set<Block["id"]> | null>(null);
+  settled.current ??= new Set(phase.steps.map((step) => step.id));
+  useEffect(() => {
+    for (const step of phase.steps) settled.current?.add(step.id);
+  }, [phase.steps]);
+  const turnFor = useStepQueue();
   const title = activityPhaseTitle(phase, active);
   // Opening a group on purpose is also how you read the line that titled it,
   // whole. The auto-open while it runs is a live view, not a reading one, and
@@ -2133,9 +2140,14 @@ function ActivityPhaseGroup({
                 </div>
               ) : null}
               {phase.steps.map((block) => (
-                <div
+                <PhaseStep
                   key={block.id}
-                  className={`zen-phase-step${active ? " zen-step-in" : ""}`}
+                  live={active}
+                  turn={
+                    active && !settled.current?.has(block.id)
+                      ? turnFor(block.id)
+                      : undefined
+                  }
                 >
                   <ActivityRow
                     block={block}
@@ -2146,7 +2158,7 @@ function ActivityPhaseGroup({
                     onOpenFile={onOpenFile}
                     onOpenDiff={onOpenDiff}
                   />
-                </div>
+                </PhaseStep>
               ))}
             </div>
           </div>

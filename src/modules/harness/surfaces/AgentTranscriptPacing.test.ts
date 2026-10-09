@@ -43,6 +43,70 @@ const reply =
   "The investigation is complete. The updated implementation keeps replies smooth while preserving your place in the transcript.";
 const prompt: Block = { id: "prompt", role: "user", text: "Investigate" };
 
+it("preserves the entrance queue across repeated tool updates", () => {
+  const tool = (id: string): Block => ({
+    id,
+    role: "tool",
+    text: `Run ${id}`,
+    tool: { kind: "shell", status: "in_progress" },
+  });
+  const head = [prompt, tool("first"), tool("second")];
+  render(head);
+  const stages = () =>
+    [...container.querySelectorAll(".zen-phase-step")].map((step) =>
+      step.hasAttribute("data-waiting")
+        ? "waiting"
+        : step.hasAttribute("data-entering")
+          ? "entering"
+          : "settled",
+    );
+  expect(stages()).toEqual(["settled", "settled"]);
+  const burst = [...head, tool("third"), tool("fourth"), tool("fifth")];
+  render(burst);
+  expect(stages()).toEqual([
+    "settled",
+    "settled",
+    "entering",
+    "waiting",
+    "waiting",
+  ]);
+  render([...burst]);
+  expect(stages()).toEqual([
+    "settled",
+    "settled",
+    "entering",
+    "waiting",
+    "waiting",
+  ]);
+  act(() => vi.advanceTimersByTime(480));
+  expect(stages()).toEqual([
+    "settled",
+    "settled",
+    "entering",
+    "entering",
+    "waiting",
+  ]);
+  act(() => vi.advanceTimersByTime(480));
+  expect(stages()).toEqual([
+    "settled",
+    "settled",
+    "entering",
+    "entering",
+    "entering",
+  ]);
+  const step = container.querySelectorAll(".zen-phase-step")[2];
+  const ended = new Event("animationend", { bubbles: true });
+  Object.defineProperty(ended, "animationName", { value: "zen-step-in" });
+  act(() => step.firstElementChild?.dispatchEvent(ended));
+  expect(stages()).toEqual([
+    "settled",
+    "settled",
+    "settled",
+    "entering",
+    "entering",
+  ]);
+});
+
 function history(): Block[] {
   return Array.from({ length: 25 }, (_, index): Block[] => [
     { id: `prompt-${index}`, role: "user", text: `Question ${index}` },
