@@ -495,6 +495,9 @@ export function Composer({
   const slashRef = useRef<SlashToken | null>(null);
   const mentionRef = useRef<MentionToken | null>(null);
   const [draft, setDraft] = useState(initialDraft ?? "");
+  // Changing defaultValue rewrites the text node and commits WebKit IME.
+  // Later drafts are applied by the existing effect without changing it.
+  const [mountDraft] = useState(initialDraft);
   const [resendEdited, setResendEdited] = useState(false);
   const [planSelected, setPlanSelected] = useState(false);
   const [orchestrationSelected, setOrchestrationSelected] = useState(false);
@@ -1725,7 +1728,7 @@ export function Composer({
               style={{ textIndent: modeIndent }}
               rows={1}
               spellCheck={false}
-              defaultValue={initialDraft}
+              defaultValue={mountDraft}
               placeholder={
                 inboxCard
                   ? t("harness.chrome.placeholderNote")
