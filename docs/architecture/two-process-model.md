@@ -160,6 +160,10 @@ snapshots. Block revision stamps let clients reconstruct a transcript delta,
 including removed blocks. `host/sync-transfer.ts` splits large serialized
 revisions into bounded chunks without splitting Unicode surrogate pairs.
 Transfers expire after two minutes and retain at most eight revisions.
+Uploaded attachments use validated IDs, bounded chunks and sequential offsets.
+The host rejects symlinked attachment directories and linked files before
+reading or writing; image reads are tied to a saved session reference. The
+execution engine must read verified attachment bytes through this host module.
 
 These components require Node 22.13 or newer and run outside the webview.
 The execution engine, authenticated session server, private data-directory

@@ -9,7 +9,9 @@
     "host/child-backend.test.ts": "1b80146716437e688c608d7c39385b857572157d7dd8e2a0d253fc32d87d0f66",
     "host/store.ts": "90e1abd00fdc144db613a45e43ca4000cbc50626bbd7974bf9e9b2a42639f7fd",
     "host/sync-transfer.ts": "4f47898ff59e4e5372d0fa70d088815e0e806306b727889c69d5f0c3f9bf9821",
-    "host/sync-transfer.test.ts": "1b2ee8dc7f7c334e66e02da972491a2073719d773ba0362f1a552b343e12e30a"
+    "host/sync-transfer.test.ts": "1b2ee8dc7f7c334e66e02da972491a2073719d773ba0362f1a552b343e12e30a",
+    "host/attachments.ts": "afa5292e7b6267e2cd233763307b61558445f8e45972902b21e6c97891efdf70",
+    "host/attachments.test.ts": "d8dee04b02d0acd5d5dec1fcf419632754284231efe13aaa6ff58e4e735f9ca5"
   },
   "patches": [
     "Map host imports to Voktty modules and providers; keep Gemini instead of Antigravity.",
@@ -17,6 +19,7 @@
     "Adapt process gateway to the existing desktop contract.",
     "Do not expose transcript filesystem reads until host ownership is defined.",
     "Keep standalone session saves atomic with event persistence and clear cached snapshots after rollback.",
-    "Validate transfer limits and reject offsets inside Unicode surrogate pairs."
+    "Validate transfer limits and reject offsets inside Unicode surrogate pairs.",
+    "Reject attachment directory symlinks and non-owned symlink or hard-link files; read from verified file descriptors."
   ]
 }
