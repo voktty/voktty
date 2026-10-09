@@ -8,6 +8,7 @@ import {
   bundledLanguagesInfo,
   createHighlighter,
   type BundledLanguage,
+  type GrammarState,
 } from "shiki";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 
@@ -69,6 +70,15 @@ export function createBoundedCodePlugin(
   const results = new Map<string, HighlightResult>();
   const pending = new Map<string, Set<HighlightCallback>>();
   let cachedChars = 0;
+  // Complete lines retain their grammar state; unfinished syntax is parsed again.
+  let checkpoint:
+    | {
+        config: string;
+        source: string;
+        tokens: HighlightResult["tokens"];
+        state: GrammarState | undefined;
+      }
+    | undefined;
 
   const highlighterFor = (pair: [ThemeInput, ThemeInput]) => {
     const key = `${themeName(pair[0])}\u0000${themeName(pair[1])}`;
@@ -130,10 +140,65 @@ export function createBoundedCodePlugin(
           const usable = highlighter.getLoadedLanguages().includes(lang)
             ? lang
             : "text";
-          const result = highlighter.codeToTokens(code, {
+          const config = `${usable}\u0000${names[0]}\u0000${names[1]}`;
+          const previous =
+            checkpoint?.config === config && code.startsWith(checkpoint.source)
+              ? checkpoint
+              : undefined;
+          const offset = previous?.source.length ?? 0;
+          const boundary = code.lastIndexOf("\n") + 1;
+          const settings = {
             lang: usable as BundledLanguage,
             themes: { light: names[0], dark: names[1] },
+          };
+          let prefix = previous?.tokens ?? [];
+          let state = previous?.state;
+          if (boundary > offset) {
+            const lineEnd =
+              code[boundary - 2] === "\r" ? boundary - 2 : boundary - 1;
+            const complete = highlighter.codeToTokens(
+              code.slice(offset, lineEnd),
+              {
+                ...settings,
+                grammarState: state,
+              },
+            );
+            prefix = [
+              ...prefix,
+              ...complete.tokens.map((line) =>
+                line.map((token) => ({
+                  ...token,
+                  offset: token.offset + offset,
+                })),
+              ),
+            ];
+            state = complete.grammarState;
+          }
+          const tail = highlighter.codeToTokens(code.slice(boundary), {
+            ...settings,
+            grammarState: state,
           });
+          const result = {
+            ...tail,
+            tokens: [
+              ...prefix,
+              ...tail.tokens.map((line) =>
+                line.map((token) => ({
+                  ...token,
+                  offset: token.offset + boundary,
+                })),
+              ),
+            ],
+          };
+          checkpoint =
+            boundary > 0 && boundary <= maxChars
+              ? {
+                  config,
+                  source: code.slice(0, boundary),
+                  tokens: prefix,
+                  state,
+                }
+              : undefined;
           remember(key, result);
           const callbacks = pending.get(key);
           pending.delete(key);
