@@ -42,7 +42,10 @@ import {
 import { SecondOpinionCard } from "../chrome/SecondOpinionCard";
 import { TaskListPreview } from "../chrome/TaskListPreview";
 import { TerminalSpinner } from "../chrome/TerminalSpinner";
-import { useLockOverscroll } from "../hooks/useLockOverscroll";
+import {
+  innerScrollerTakes,
+  useLockOverscroll,
+} from "@/modules/harness/hooks/useLockOverscroll";
 import { useTranscriptAnchor } from "../hooks/useTranscriptAnchor";
 import { useTranscriptLayout } from "../hooks/useTranscriptLayout";
 import { useTranscriptSelection } from "../hooks/useTranscriptSelection";
@@ -114,6 +117,7 @@ import {
 const NEAR_BOTTOM_PX = 16;
 const INITIAL_TURNS = 20;
 const TURN_PAGE_SIZE = 20;
+const WHEEL_HOLD_MS = 150;
 
 export const USER_MESSAGE_SURFACE_CLASS =
   "relative overflow-hidden min-w-0 border border-[var(--border-subtle)] bg-[var(--surface-card)] px-4 text-card-foreground shadow-lg transition-colors hover:border-input";
@@ -183,6 +187,8 @@ function AgentTranscriptComponent({
   const stickToBottom = useRef(true);
   const showJumpRef = useRef(false);
   const distanceFromBottom = useRef(0);
+  const lastScrollTop = useRef(0);
+  const wheelHold = useRef(0);
   const prependHeight = useRef<number | null>(null);
   const wasVisible = useRef(false);
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
@@ -246,13 +252,43 @@ function AgentTranscriptComponent({
 
   const syncPinned = useCallback(
     (el: HTMLElement) => {
-      const near = isNearBottom(el);
-      stickToBottom.current = near;
+      stickToBottom.current = followsAfterScroll(
+        el,
+        lastScrollTop.current,
+        stickToBottom.current,
+      );
+      lastScrollTop.current = el.scrollTop;
       distanceFromBottom.current =
         el.scrollHeight - el.scrollTop - el.clientHeight;
-      setShowJump(!near);
+      setShowJump(!stickToBottom.current && el.scrollHeight > el.clientHeight);
     },
     [setShowJump],
+  );
+
+  const rememberScroll = useCallback((el: HTMLElement) => {
+    lastScrollTop.current = el.scrollTop;
+    distanceFromBottom.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+  }, []);
+
+  const pinTranscript = useCallback(
+    (el: HTMLElement | null) => {
+      if (!el) return;
+      pinToBottom(el);
+      rememberScroll(el);
+    },
+    [rememberScroll],
+  );
+
+  const followTranscript = useCallback(
+    (el: HTMLElement | null) => {
+      if (!el) return;
+      // Reconcile manual movement before its queued scroll event arrives.
+      syncPinned(el);
+      if (stickToBottom.current && performance.now() >= wheelHold.current)
+        pinTranscript(el);
+    },
+    [pinTranscript, syncPinned],
   );
 
   const jumpToBottom = useCallback(() => {
@@ -261,8 +297,8 @@ function AgentTranscriptComponent({
     setShowJump(false);
     const el = scroller.current;
     syncTranscriptViewport(el);
-    pinToBottom(el);
-  }, [setShowJump]);
+    pinTranscript(el);
+  }, [pinTranscript, setShowJump]);
 
   const setScroller = useCallback(
     (el: HTMLDivElement | null) => {
@@ -278,30 +314,42 @@ function AgentTranscriptComponent({
   }, [jumpToBottom, onJumpToBottomReady]);
 
   useEffect(() => {
-    if (!scrollerEl) return;
-    syncPinned(scrollerEl);
-    const onScroll = () => syncPinned(scrollerEl);
+    if (!visible || !scrollerEl) return;
+    const onScroll = () => {
+      if (scrollerEl.isConnected && scrollerEl.clientHeight > 0)
+        syncPinned(scrollerEl);
+    };
+    let release: ReturnType<typeof setTimeout> | undefined;
     const onWheel = (e: WheelEvent) => {
+      if (innerScrollerTakes(scrollerEl, e)) return;
       if (e.deltaY < 0) {
         stickToBottom.current = false;
         setShowJump(true);
+      } else if (e.deltaY === 0) {
+        // Trackpads can start a gesture before reporting its direction.
+        wheelHold.current = performance.now() + WHEEL_HOLD_MS;
+        clearTimeout(release);
+        release = setTimeout(() => {
+          if (scrollerEl.isConnected) followTranscript(scrollerEl);
+        }, WHEEL_HOLD_MS);
       }
     };
     scrollerEl.addEventListener("scroll", onScroll, { passive: true });
     scrollerEl.addEventListener("wheel", onWheel, { passive: true });
     return () => {
+      clearTimeout(release);
       scrollerEl.removeEventListener("scroll", onScroll);
       scrollerEl.removeEventListener("wheel", onWheel);
     };
-  }, [scrollerEl, setShowJump, syncPinned]);
+  }, [scrollerEl, followTranscript, setShowJump, syncPinned, visible]);
 
   useLayoutEffect(() => {
     stickToBottom.current = true;
     setShowJump(false);
     const el = scroller.current;
     syncTranscriptViewport(el);
-    pinToBottom(el);
-  }, [lastUserId, setShowJump]);
+    pinTranscript(el);
+  }, [lastUserId, pinTranscript, setShowJump]);
 
   useLayoutEffect(() => {
     const opened = visible && !wasVisible.current;
@@ -313,37 +361,31 @@ function AgentTranscriptComponent({
     syncTranscriptViewport(el);
     stickToBottom.current = true;
     setShowJump(false);
-    pinToBottom(el);
-  }, [visible, busy, setShowJump]);
+    pinTranscript(el);
+  }, [visible, busy, pinTranscript, setShowJump]);
 
   useLayoutEffect(() => {
-    if (!stickToBottom.current) return;
+    if (!visible || !stickToBottom.current) return;
     const el = scroller.current;
     syncTranscriptViewport(el);
-    pinToBottom(el);
-  }, [blocks, busy]);
+    followTranscript(el);
+  }, [blocks, busy, followTranscript, visible]);
 
   useLayoutEffect(() => {
     const el = scrollerEl;
     const inner = el?.firstElementChild;
-    if (!el || !inner) return;
+    if (!visible || !el || !inner) return;
     const onResize = () => {
+      if (!el.isConnected) return;
       syncTranscriptViewport(el);
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (stickToBottom.current) {
-        pinToBottom(el);
-        distanceFromBottom.current = 0;
-        return;
-      }
-      distanceFromBottom.current = distance;
-      setShowJump(!isNearBottom(el));
+      followTranscript(el);
     };
     const observer = new ResizeObserver(onResize);
     observer.observe(inner);
     observer.observe(el);
     onResize();
     return () => observer.disconnect();
-  }, [scrollerEl, setShowJump]);
+  }, [scrollerEl, followTranscript, visible]);
 
   const turns = groupTurns(blocks);
   const firstVisibleTurn = Math.max(0, turns.length - visibleTurnCount);
@@ -359,9 +401,8 @@ function AgentTranscriptComponent({
     if (previousHeight == null || !el) return;
     prependHeight.current = null;
     el.scrollTop += el.scrollHeight - previousHeight;
-    distanceFromBottom.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight;
-  }, [visibleTurnCount]);
+    rememberScroll(el);
+  }, [visibleTurnCount, rememberScroll]);
 
   const prepareToPrepend = useCallback(() => {
     const el = scroller.current;
@@ -2951,6 +2992,18 @@ function turnUserBlock(blocks: Block[]): Block | undefined {
     if (blocks[i].role === "user") return blocks[i];
   }
   return undefined;
+}
+
+function followsAfterScroll(
+  el: HTMLElement,
+  previousTop: number,
+  following: boolean,
+): boolean {
+  const movement = el.scrollTop - previousTop;
+  const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
+  const clamped = previousTop > bottom && Math.abs(el.scrollTop - bottom) < 1;
+  if (movement === 0 || clamped) return following;
+  return movement > 0 && el.scrollHeight - el.scrollTop - el.clientHeight <= 1;
 }
 
 function isNearBottom(el: HTMLElement): boolean {
