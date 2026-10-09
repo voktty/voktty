@@ -264,6 +264,10 @@ function ProviderRow({
     void refreshHarnessCatalogs([harness]);
   }, [available, harness, models.length]);
 
+  const refreshModels = () => {
+    if (available) void refreshHarnessCatalogs([harness], { force: true });
+  };
+
   return (
     <Row
       label={
@@ -284,6 +288,8 @@ function ProviderRow({
           aria-label={t("harness.settings.modelAria", { name: HARNESS_TITLE[harness] })}
           value={current.id}
           onChange={(e) => onModelChange(harness, e.target.value)}
+          onFocus={refreshModels}
+          onPointerDown={refreshModels}
           className="max-w-52 rounded-md border border-border/60 bg-card/60 px-2 py-1 text-[12px] text-foreground outline-none hover:border-border"
         >
           {models.map((item) => (

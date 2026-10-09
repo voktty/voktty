@@ -125,21 +125,25 @@ export function buildTurnStartParams(input: {
           sandboxPolicy: { type: "readOnly" },
         }
       : runtimeConfig;
+  const model = input.model?.trim() ?? "";
+  const collaborationMode = model
+    ? {
+        mode: input.intent === "plan" ? "plan" : "default",
+        settings: {
+          model,
+          reasoning_effort: input.effort ?? null,
+          developer_instructions: null,
+        },
+      }
+    : undefined;
   return {
     threadId: input.threadId,
     input: codexInput(input.prompt, input.attachments),
     approvalPolicy: config.approvalPolicy,
     approvalsReviewer: config.approvalsReviewer,
     sandboxPolicy: config.sandboxPolicy,
-    collaborationMode: {
-      mode: input.intent === "plan" ? "plan" : "default",
-      settings: {
-        model: input.model ?? null,
-        reasoning_effort: input.effort ?? null,
-        developer_instructions: null,
-      },
-    },
-    ...(input.model ? { model: input.model } : {}),
+    ...(collaborationMode ? { collaborationMode } : {}),
+    ...(model ? { model } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
     ...(input.serviceTier && input.serviceTier !== "default"
       ? { serviceTier: input.serviceTier }

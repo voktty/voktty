@@ -15,6 +15,7 @@ use super::fs::expand_home;
 use crate::dirs_home;
 use crate::modules::control;
 use crate::modules::net_proxy;
+use crate::modules::workspace::{authorize_spawn_cwd, WorkspaceEnv, WorkspaceRegistry};
 use crate::passwd_identity;
 
 const STDOUT_EVENT: &str = "harness-stdout";
@@ -930,7 +931,10 @@ pub async fn harness_http(
     tauri::async_runtime::spawn_blocking(move || {
         assert_loopback(&url)?;
         let timeout = Duration::from_millis(timeout_ms.unwrap_or(30_000).max(1));
-        let agent = ureq::AgentBuilder::new().timeout(timeout).build();
+        let agent = ureq::AgentBuilder::new()
+            .timeout(timeout)
+            .redirects(0)
+            .build();
         let mut request = agent.request(&method, &url);
         if let Some(headers) = &headers {
             for (key, value) in headers {
@@ -974,6 +978,7 @@ pub fn harness_sse_open(
 
     thread::spawn(move || {
         let agent = ureq::AgentBuilder::new()
+            .redirects(0)
             .timeout_connect(Duration::from_secs(10))
             .timeout_read(Duration::from_secs(60 * 60 * 6))
             .timeout_write(Duration::from_secs(30))
@@ -1016,6 +1021,9 @@ pub fn harness_sse_close(host: State<HarnessHost>, session_id: String) -> Result
 
 fn read_http_response(response: ureq::Response) -> Result<HarnessHttpResponse, String> {
     let status = response.status();
+    if (300..400).contains(&status) {
+        return Err("OpenCode HTTP redirects are not allowed".to_string());
+    }
     let body = response
         .into_string()
         .map_err(|e| format!("Failed to read OpenCode response: {e}"))?;
@@ -1067,11 +1075,11 @@ fn emit_sse_end(app: &AppHandle, session_id: &str, error: Option<String>) {
 }
 
 fn assert_loopback(url: &str) -> Result<(), String> {
-    let lower = url.to_ascii_lowercase();
-    if lower.starts_with("http://127.0.0.1:")
-        || lower.starts_with("http://127.0.0.1/")
-        || lower.starts_with("http://localhost:")
-        || lower.starts_with("http://localhost/")
+    let parsed = url::Url::parse(url).map_err(|_| "Invalid OpenCode HTTP URL".to_string())?;
+    if parsed.scheme() == "http"
+        && matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"))
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
     {
         return Ok(());
     }
@@ -1088,10 +1096,28 @@ const EXEC_ALLOWED_ARGS: &[&[&str]] = &[
     &["agent", "list"],
 ];
 
-fn exec_args_allowed(args: &[String]) -> bool {
-    EXEC_ALLOWED_ARGS
-        .iter()
-        .any(|a| a.len() == args.len() && a.iter().zip(args).all(|(x, y)| x == y))
+const OPENCODE_EXEC_ALLOWED_ARGS: &[&[&str]] = &[
+    &["service", "status"],
+    &["service", "start"],
+    &["service", "get", "password"],
+];
+
+fn exec_args_allowed(binary_provider: Option<&str>, args: &[String]) -> bool {
+    let matches = |a: &&[&str]| a.len() == args.len() && a.iter().zip(args).all(|(x, y)| x == y);
+    EXEC_ALLOWED_ARGS.iter().any(matches)
+        || (binary_provider == Some("opencode") && OPENCODE_EXEC_ALLOWED_ARGS.iter().any(matches))
+}
+
+fn exec_provider_matches(
+    command: &str,
+    binary_provider: Option<&str>,
+    opencode: Option<PathBuf>,
+) -> bool {
+    match binary_provider {
+        None => true,
+        Some("opencode") => opencode.is_some_and(|path| path == Path::new(command)),
+        Some(_) => false,
+    }
 }
 
 /// Must be a path a resolver would hand back, not an arbitrary binary
@@ -1118,18 +1144,40 @@ pub(crate) fn is_resolved_harness_binary(command: &str) -> bool {
 /// One-shot capture of stdout (used for `cursor-agent --list-models`).
 #[tauri::command]
 pub async fn harness_exec(
+    app: AppHandle,
     command: String,
     args: Vec<String>,
     cwd: Option<String>,
+    binary_provider: Option<String>,
 ) -> Result<String, String> {
-    if !exec_args_allowed(&args) {
+    if !exec_args_allowed(binary_provider.as_deref(), &args) {
         return Err("harness_exec: unsupported arguments".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        if !is_resolved_harness_binary(&command) {
+        let provider_matches = exec_provider_matches(
+            &command,
+            binary_provider.as_deref(),
+            if binary_provider.is_some() {
+                resolve_opencode()
+            } else {
+                None
+            },
+        );
+        if !provider_matches || (binary_provider.is_none() && !is_resolved_harness_binary(&command))
+        {
             return Err("harness_exec: not a resolved harness CLI".to_string());
         }
-        exec_capture(&command, &args, cwd.as_deref())
+        let cwd = if binary_provider.as_deref() == Some("opencode")
+            && args.first().is_some_and(|arg| arg == "service")
+        {
+            let registry = app.state::<WorkspaceRegistry>();
+            Some(authorized_service_cwd(&registry, cwd.as_deref())?)
+        } else {
+            cwd
+        };
+        let shared_service =
+            binary_provider.as_deref() == Some("opencode") && args == ["service", "start"];
+        exec_capture(&command, &args, cwd.as_deref(), shared_service)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1137,8 +1185,22 @@ pub async fn harness_exec(
 
 const EXEC_TIMEOUT: Duration = Duration::from_secs(15);
 
-fn exec_capture(command: &str, args: &[String], cwd: Option<&str>) -> Result<String, String> {
-    let output = exec_output(command, args, cwd, EXEC_TIMEOUT)?;
+fn authorized_service_cwd(
+    registry: &WorkspaceRegistry,
+    cwd: Option<&str>,
+) -> Result<String, String> {
+    authorize_spawn_cwd(registry, cwd, &WorkspaceEnv::Local)?
+        .map(|path| path.to_string_lossy().into_owned())
+        .ok_or_else(|| "OpenCode service commands require an authorized directory".to_string())
+}
+
+fn exec_capture(
+    command: &str,
+    args: &[String],
+    cwd: Option<&str>,
+    shared_service: bool,
+) -> Result<String, String> {
+    let output = exec_output_with_ownership(command, args, cwd, EXEC_TIMEOUT, shared_service)?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     if output.status.success() || !stdout.trim().is_empty() {
         return Ok(stdout);
@@ -1153,12 +1215,23 @@ pub(crate) fn exec_output(
     cwd: Option<&str>,
     timeout: Duration,
 ) -> Result<std::process::Output, String> {
+    exec_output_with_ownership(command, args, cwd, timeout, false)
+}
+
+fn exec_output_with_ownership(
+    command: &str,
+    args: &[String],
+    cwd: Option<&str>,
+    timeout: Duration,
+    shared_service: bool,
+) -> Result<std::process::Output, String> {
     let mut cmd = build_exec_command(command, args);
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::modules::proc::hide_console(&mut cmd);
     prepare_child(&mut cmd, command);
+    preserve_service_ownership(&mut cmd, shared_service);
     if let Some(dir) = cwd {
         let workdir = expand_home(dir);
         if workdir.is_dir() {
@@ -1186,6 +1259,13 @@ pub(crate) fn exec_output(
 }
 
 const KILL_ESCALATE: Duration = Duration::from_secs(2);
+
+fn preserve_service_ownership(cmd: &mut Command, shared_service: bool) {
+    if shared_service {
+        // The CLI owns its shared daemon; orphan cleanup must not reap it on restart.
+        cmd.env_remove(HARNESS_PARENT_ENV);
+    }
+}
 /// Quit and `Drop` cannot wait on a detached escalate thread — the process
 /// exits first and isolated harness groups stay behind as PID-1 orphans.
 const KILL_ALL_GRACE: Duration = Duration::from_millis(300);
@@ -1710,14 +1790,18 @@ fn resolve_codex() -> Option<PathBuf> {
         candidates.push(PathBuf::from("/usr/bin/codex"));
         candidates.push(PathBuf::from("/snap/bin/codex"));
     }
-    if let Some(from_shell) = which_via_login_shell("codex") {
-        candidates.push(from_shell);
-    }
     if let Some(from_gui) = resolve_gui_binary("codex") {
         candidates.push(from_gui);
     }
 
-    first_binary(candidates)
+    resolve_codex_candidates(which_via_login_shell("codex"), candidates)
+}
+
+fn resolve_codex_candidates(
+    preferred: Option<PathBuf>,
+    fallbacks: Vec<PathBuf>,
+) -> Option<PathBuf> {
+    first_binary(preferred.into_iter().chain(fallbacks).collect())
 }
 
 fn resolve_opencode() -> Option<PathBuf> {
@@ -3018,23 +3102,141 @@ mod exec_allowlist_tests {
     }
 
     #[test]
+    fn authenticated_transport_stays_on_loopback_without_url_credentials() {
+        for valid in [
+            "http://127.0.0.1:4096/api/event",
+            "http://localhost/session",
+        ] {
+            assert!(assert_loopback(valid).is_ok());
+        }
+        for invalid in [
+            "http://127.0.0.1:4096@remote.example/api/event",
+            "http://localhost:4096@remote.example/api/event",
+            "http://user:password@localhost:4096/api/event",
+            "https://127.0.0.1:4096/api/event",
+            "http://remote.example:4096/api/event",
+            "http://localhost.remote.example:4096/api/event",
+        ] {
+            assert!(assert_loopback(invalid).is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn authenticated_http_does_not_follow_redirects() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0_u8; 4096];
+            let _ = stream.read(&mut request).unwrap();
+            stream
+                .write_all(b"HTTP/1.1 302 Found\r\nLocation: http://remote.example/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .unwrap();
+        });
+        let response = harness_http(
+            format!("http://{address}/api/model"),
+            "GET".into(),
+            Some(HashMap::from([(
+                "Authorization".into(),
+                "Basic test".into(),
+            )])),
+            None,
+            Some(2000),
+        )
+        .await;
+        server.join().unwrap();
+        assert!(matches!(response, Err(error) if error.contains("redirects are not allowed")));
+    }
+
+    #[test]
     fn allows_known_catalog_args() {
-        assert!(exec_args_allowed(&args(&["--version"])));
-        assert!(exec_args_allowed(&args(&["--list-models"])));
-        assert!(exec_args_allowed(&args(&["models", "--verbose"])));
-        assert!(exec_args_allowed(&args(&["models", "--json"])));
-        assert!(exec_args_allowed(&args(&["models"])));
-        assert!(exec_args_allowed(&args(&["status", "--json"])));
-        assert!(exec_args_allowed(&args(&["agent", "list"])));
+        assert!(exec_args_allowed(None, &args(&["--version"])));
+        assert!(exec_args_allowed(None, &args(&["--list-models"])));
+        assert!(exec_args_allowed(None, &args(&["models", "--verbose"])));
+        assert!(exec_args_allowed(None, &args(&["models", "--json"])));
+        assert!(exec_args_allowed(None, &args(&["models"])));
+        assert!(exec_args_allowed(None, &args(&["status", "--json"])));
+        assert!(exec_args_allowed(None, &args(&["agent", "list"])));
     }
 
     #[test]
     fn rejects_other_args() {
-        assert!(!exec_args_allowed(&args(&[])));
-        assert!(!exec_args_allowed(&args(&["--help"])));
-        assert!(!exec_args_allowed(&args(&["--version", "--json"])));
-        assert!(!exec_args_allowed(&args(&["-c", "id"])));
-        assert!(!exec_args_allowed(&args(&["agent", "list", "--json"])));
+        assert!(!exec_args_allowed(None, &args(&[])));
+        assert!(!exec_args_allowed(None, &args(&["--help"])));
+        assert!(!exec_args_allowed(None, &args(&["--version", "--json"])));
+        assert!(!exec_args_allowed(None, &args(&["-c", "id"])));
+        assert!(!exec_args_allowed(
+            None,
+            &args(&["agent", "list", "--json"])
+        ));
+    }
+
+    #[test]
+    fn service_commands_require_the_resolved_opencode_provider() {
+        for service in [
+            &["service", "status"][..],
+            &["service", "start"][..],
+            &["service", "get", "password"][..],
+        ] {
+            assert!(exec_args_allowed(Some("opencode"), &args(service)));
+            assert!(!exec_args_allowed(None, &args(service)));
+            assert!(!exec_args_allowed(Some("codex"), &args(service)));
+        }
+        for rejected in [
+            &["service", "stop"][..],
+            &["service", "get"][..],
+            &["service", "status", "--json"][..],
+        ] {
+            assert!(!exec_args_allowed(Some("opencode"), &args(rejected)));
+        }
+        let resolved = PathBuf::from("/resolved/opencode");
+        assert!(exec_provider_matches(
+            "/resolved/opencode",
+            Some("opencode"),
+            Some(resolved.clone()),
+        ));
+        assert!(!exec_provider_matches(
+            "/other/opencode",
+            Some("opencode"),
+            Some(resolved),
+        ));
+        assert!(!exec_provider_matches("opencode", Some("opencode"), None));
+        assert!(!exec_provider_matches("codex", Some("codex"), None));
+    }
+
+    #[test]
+    fn shared_service_daemons_do_not_inherit_harness_cleanup_ownership() {
+        for shared in [false, true] {
+            let mut cmd = Command::new("opencode");
+            isolate_child(&mut cmd);
+            preserve_service_ownership(&mut cmd, shared);
+            let marker = cmd
+                .get_envs()
+                .find(|(key, _)| *key == std::ffi::OsStr::new(HARNESS_PARENT_ENV))
+                .unwrap()
+                .1;
+            assert_eq!(marker.is_none(), shared);
+        }
+    }
+
+    #[test]
+    fn service_commands_require_an_existing_authorized_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let cwd = dir.path().to_string_lossy().into_owned();
+        let registry = WorkspaceRegistry::default();
+        assert!(authorized_service_cwd(&registry, Some(&cwd)).is_err());
+        registry.authorize(dir.path()).unwrap();
+        assert_eq!(
+            authorized_service_cwd(&registry, Some(&cwd)).unwrap(),
+            std::fs::canonicalize(dir.path()).unwrap().to_string_lossy(),
+        );
+        assert!(authorized_service_cwd(&registry, None).is_err());
+        assert!(authorized_service_cwd(&registry, Some(" ")).is_err());
+        let missing = dir.path().join("missing");
+        assert!(authorized_service_cwd(&registry, Some(&missing.to_string_lossy())).is_err());
     }
 
     #[test]
@@ -3255,6 +3457,38 @@ mod proxy_lifecycle_tests {
 #[cfg(test)]
 mod binary_resolution_tests {
     use super::*;
+
+    #[test]
+    fn codex_prefers_the_shell_binary_and_keeps_install_fallbacks() {
+        let dir = tempfile::tempdir().unwrap();
+        #[cfg(windows)]
+        let name = "codex.exe";
+        #[cfg(not(windows))]
+        let name = "codex";
+        let shell = dir.path().join("shell").join(name);
+        let installed = dir.path().join("installed").join(name);
+        for path in [&shell, &installed] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"test executable").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
+        assert_eq!(
+            resolve_codex_candidates(Some(shell.clone()), vec![installed.clone()]),
+            Some(shell)
+        );
+        assert_eq!(
+            resolve_codex_candidates(None, vec![installed.clone()]),
+            Some(installed.clone())
+        );
+        assert_eq!(
+            resolve_codex_candidates(Some(dir.path().join("missing")), vec![installed.clone()]),
+            Some(installed)
+        );
+    }
 
     #[test]
     fn binary_name_eq_matches_bare_name() {

@@ -108,6 +108,30 @@ Three distinct surfaces:
 - `workspace_authorize` / `workspace_current_dir` - the spawn/git/AI cwd authorization registry
 - `wsl_list_distros` / `wsl_default_distro` / `wsl_home` - WSL bridge
 
+### Harness OpenCode transport
+
+OpenCode 1.x uses a Voktty-owned `serve` child. OpenCode 2.x uses the CLI's
+shared background service and authenticated `/api` HTTP and SSE routes.
+Rust performs every process and network operation; React translates v2
+events into the existing harness transcript and correlates completion with
+the admitted inbox item. Minimum supported versions are 1.14.19 and 2.0.15;
+other major versions are rejected.
+
+`harness_exec` accepts an optional `binaryProvider: "opencode"` for exactly
+`service status`, `service start`, and `service get password`. Rust checks the
+command against the resolved OpenCode path and requires an existing,
+authorized local directory. The service password remains in memory and is
+never persisted or logged. HTTP and SSE stay on loopback, reject URL
+credentials, and never follow redirects. The shared daemon does not inherit Voktty's
+orphan-cleanup ownership marker. Closing a harness session interrupts its
+run and closes its event stream, without stopping the shared service;
+temporary text-generation sessions are deleted after use.
+
+The v2 shared service cannot enforce Voktty's per-session network allowlist.
+Sandboxed v2 turns are rejected before starting or reusing the service.
+The v1 owned server retains its network proxy. This desktop transport does
+not add or deploy a remote Node host.
+
 ### Network (`src-tauri/src/modules/net.rs`)
 
 - `ai_http_request` / `ai_http_stream` - AI HTTP proxy with SSRF guard
