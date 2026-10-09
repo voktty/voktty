@@ -88,28 +88,49 @@ const BASIC_SETUP = {
 };
 const DIFF_THEME = EditorView.theme({
   "&.cm-merge-b .cm-changedText, .cm-changedText": {
-    background: "rgba(110, 200, 120, 0.20) !important",
+    background: "var(--color-diff-add-gutter) !important",
     borderRadius: "3px",
     padding: "0 1px",
   },
   ".cm-deletedChunk .cm-deletedText, &.cm-merge-b .cm-deletedText": {
-    background: "rgba(220, 90, 90, 0.22) !important",
+    background: "var(--color-diff-del-gutter) !important",
     borderRadius: "3px",
     padding: "0 1px",
   },
   "&.cm-merge-b .cm-changedLine, .cm-changedLine, .cm-inlineChangedLine": {
-    backgroundColor: "rgba(110, 200, 120, 0.05) !important",
+    backgroundColor: "var(--color-diff-add-bg) !important",
   },
   ".cm-deletedChunk": {
-    backgroundColor: "rgba(220, 90, 90, 0.05) !important",
+    backgroundColor: "var(--color-diff-del-bg) !important",
     paddingTop: "1px",
     paddingBottom: "1px",
   },
   "&.cm-merge-b .cm-changedLineGutter, .cm-changedLineGutter": {
-    background: "rgba(110, 200, 120, 0.55) !important",
+    background: "var(--color-diff-add-gutter) !important",
   },
   ".cm-deletedLineGutter, &.cm-merge-a .cm-changedLineGutter": {
-    background: "rgba(220, 90, 90, 0.5) !important",
+    background: "var(--color-diff-del-gutter) !important",
+  },
+  ".cm-line, .cm-deletedLine": {
+    position: "relative",
+    paddingLeft: "22px",
+  },
+  ".cm-changedLine::before, .cm-deletedLine::before": {
+    position: "absolute",
+    left: "4px",
+    width: "14px",
+    textAlign: "center",
+    fontWeight: "600",
+    userSelect: "none",
+    pointerEvents: "none",
+  },
+  ".cm-changedLine::before": {
+    content: '"+"',
+    color: "var(--color-diff-add-fg)",
+  },
+  ".cm-deletedLine::before": {
+    content: '"−"',
+    color: "var(--color-diff-del-fg)",
   },
   ".cm-changeGutter": {
     width: "2px !important",
@@ -135,14 +156,14 @@ const DIFF_THEME = EditorView.theme({
     padding: 0,
     border: "none",
     borderRadius: "3px",
-    background: "rgba(110, 200, 120, 0.18)",
-    color: "rgb(80, 170, 100)",
+    background: "var(--color-diff-add-bg)",
+    color: "var(--color-diff-add-fg)",
     fontSize: "11px",
     lineHeight: "1",
     cursor: "pointer",
   },
   ".cm-stageHunkMarker:hover": {
-    background: "rgba(110, 200, 120, 0.32)",
+    background: "var(--color-diff-add-gutter)",
   },
 });
 
@@ -652,10 +673,10 @@ export function GitDiffPane({ source, chipLabel, active, review }: Props) {
           </span>
           {useFallback ? (
             <>
-              <span className="text-emerald-600 dark:text-emerald-400">
+              <span className="text-diff-add-fg">
                 +{stats.added}
               </span>
-              <span className="text-rose-600 dark:text-rose-400">
+              <span className="text-diff-del-fg">
                 −{stats.removed}
               </span>
             </>
