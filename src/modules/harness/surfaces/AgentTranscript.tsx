@@ -186,6 +186,17 @@ function AgentTranscriptComponent({
   const prependHeight = useRef<number | null>(null);
   const wasVisible = useRef(false);
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
+  const seenBlocks = useRef<Set<string> | null>(null);
+  if (!seenBlocks.current) {
+    seenBlocks.current = new Set(
+      blocks.filter((block) => block.text).map((block) => block.id),
+    );
+  }
+  useLayoutEffect(() => {
+    for (const block of blocks) {
+      if (block.text) seenBlocks.current?.add(block.id);
+    }
+  }, [blocks]);
   const [visibleTurnCount, setVisibleTurnCount] = useState(INITIAL_TURNS);
   // Turns whose folded work the reader has opened, by turn id.
   const [openWork, setOpenWork] = useState<Record<string, boolean>>({});
@@ -511,6 +522,11 @@ function AgentTranscriptComponent({
               <TranscriptBlock
                 key={item.block.id}
                 block={item.block}
+                revealOnMount={
+                  visible &&
+                  wasVisible.current &&
+                  !seenBlocks.current?.has(item.block.id)
+                }
                 layout={transcriptLayout}
                 visible={item.block.role === "user" ? visible : undefined}
                 stickyIndex={firstVisibleTurn + turnIndex + 1}
@@ -921,6 +937,7 @@ function SaveNoteButton({
 
 const TranscriptBlock = memo(function TranscriptBlock({
   block,
+  revealOnMount,
   layout,
   visible,
   stickyIndex,
@@ -940,6 +957,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
   editing = false,
 }: {
   block: Block;
+  revealOnMount?: boolean;
   layout: TranscriptLayout;
   visible?: boolean;
   stickyIndex: number;
@@ -1069,6 +1087,7 @@ const TranscriptBlock = memo(function TranscriptBlock({
       <AgentMarkdown
         text={block.text}
         streaming={block.streaming}
+        revealOnMount={revealOnMount}
         cwd={cwd}
         onOpenFile={onOpenFile}
       />
