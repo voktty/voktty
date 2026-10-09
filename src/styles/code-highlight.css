@@ -177,3 +177,25 @@
   color: var(--tok-invalid);
   text-decoration: underline wavy;
 }
+
+.markdown-code-numbered-line::before {
+  content: counter(line);
+  counter-increment: line;
+  display: inline-block;
+  text-align: right;
+  user-select: none;
+  width: 1.5rem;
+  margin-right: 1rem;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--color-content) 50%, transparent);
+}
+
+.markdown-code-token {
+  color: var(--sdm-c, inherit);
+  background-color: var(--sdm-tbg, transparent);
+}
+
+html:not(.theme-light) .markdown-code-token {
+  color: var(--shiki-dark, var(--sdm-c, inherit));
+  background-color: var(--shiki-dark-bg, var(--sdm-tbg, transparent));
+}

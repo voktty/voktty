@@ -1,4 +1,5 @@
 import { boundedCode as code } from "./codeHighlightPlugin";
+import { HighlightedCodeBlock } from "@/modules/harness/surfaces/HighlightedCodeBlock";
 import { useTranslation } from "@/modules/i18n";
 import {
   createContext,
@@ -326,8 +327,7 @@ function MarkdownCode({
       ) : isPlaintextFallback ? (
         <span className="markdown-code-fallback-label">{fence.language}</span>
       ) : null}
-      <CodeBlock
-        className={className}
+      <HighlightedCodeBlock
         code={textContent(children)}
         isIncomplete={incomplete}
         language={highlightLanguageFor(fence.language)}
