@@ -151,8 +151,20 @@ The shared OpenCode service is not owned by this guard.
 Run `pnpm check-types:host` and `pnpm test:host` for this adapter. The latter
 includes an authenticated OpenCode 2.x fixture using the existing controller
 and real local process/HTTP transports. `host/upstream.json` records the
-fixed source revision and local adaptations. The authenticated session
-server, durable store and release packaging are separate pending work.
+fixed source revision and local adaptations.
+
+`host/store.ts` persists projects, session revisions, command receipts and
+hashed device credentials using Node's built-in SQLite. A session snapshot
+and its event are committed together; failed transactions invalidate cached
+snapshots. Block revision stamps let clients reconstruct a transcript delta,
+including removed blocks. `host/sync-transfer.ts` splits large serialized
+revisions into bounded chunks without splitting Unicode surrogate pairs.
+Transfers expire after two minutes and retain at most eight revisions.
+
+These components require Node 22.13 or newer and run outside the webview.
+The execution engine, authenticated session server, private data-directory
+permissions and release packaging remain pending; the desktop does not use
+this store yet.
 
 ### Network (`src-tauri/src/modules/net.rs`)
 
