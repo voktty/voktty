@@ -17,7 +17,14 @@
     "host/providers.ts": "eec0d3d4252153911630ebc34a83daee08287ab44e67628c174cd07b5edb758d",
     "host/git-worktrees.ts": "14ec42ce6b935de74c2ceecd7f186291662b60b5da5231ec4ef54bfd31935391",
     "host/git-worktrees.test.ts": "127df446db9bcb80ce6f30e080e8f8210148532c9feda16eb1bce7ac33bb5b0c",
-    "host/providers.test.ts": "ef91ed743000243382c9e1d82c93427fd7457eed5e5cd04e6643ebb8d36a69ac"
+    "host/providers.test.ts": "ef91ed743000243382c9e1d82c93427fd7457eed5e5cd04e6643ebb8d36a69ac",
+    "host/browse.ts": "76faa3271736ac3b20623d7966c2504d357cec8324f6b37ddb6fcbd6cbed4421",
+    "host/browse.test.ts": "a3abcbb01dd8a2c76eaa17e8446148c5b1f2033286621cfb32a0542ed29b9a49",
+    "host/git-branches.ts": "e764763e42146546c16b12e0ec8ef8f6a8dd4fb34c10032f0e7950b326bcf416",
+    "host/git-branches.test.ts": "4f70c3c272133b11f336af5e265816dbe155dd78f879abedbb1c798415205450",
+    "host/workspace.ts": "eb4c43808083e252110c24c4459359db6218a221500caf8427390e209ac119f1",
+    "host/workspace.test.ts": "b55f29297e9f295d1acb715b3360fda43fdc1fad46d98e2bed12bdd02e647b95",
+    "host/workspace-commands.ts": "21f401a1100f91c6672aa37ce1ab7d5e1a7245ce112bc4e9625f9e592a9ff79a"
   },
   "patches": [
     "Map host imports to Voktty modules and providers; keep Gemini instead of Antigravity.",
@@ -29,6 +36,7 @@
     "Reject attachment directory symlinks and non-owned symlink or hard-link files; read from verified file descriptors.",
     "Use Voktty providers, including Gemini, and authorize canonical projects before registration.",
     "Use verified attachment reads; preserve durable interrupted-turn duration and bound custom answers.",
-    "Redact host engine errors in process logs."
+    "Redact host engine errors in process logs.",
+    "Map workspace commands to Voktty IPC types and preserve expected-content conflict checks and file modes on atomic saves."
   ]
 }
