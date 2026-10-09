@@ -11,7 +11,13 @@
     "host/sync-transfer.ts": "4f47898ff59e4e5372d0fa70d088815e0e806306b727889c69d5f0c3f9bf9821",
     "host/sync-transfer.test.ts": "1b2ee8dc7f7c334e66e02da972491a2073719d773ba0362f1a552b343e12e30a",
     "host/attachments.ts": "afa5292e7b6267e2cd233763307b61558445f8e45972902b21e6c97891efdf70",
-    "host/attachments.test.ts": "d8dee04b02d0acd5d5dec1fcf419632754284231efe13aaa6ff58e4e735f9ca5"
+    "host/attachments.test.ts": "d8dee04b02d0acd5d5dec1fcf419632754284231efe13aaa6ff58e4e735f9ca5",
+    "host/engine.ts": "182f2bcc2b1b6af5519d426e969b34427aaf7f0523752808a01f19c33d2bf483",
+    "host/engine.test.ts": "571decef64ef31d3e22759a0f4ef835a7c45374f7caf18be44db080dea3f65c2",
+    "host/providers.ts": "eec0d3d4252153911630ebc34a83daee08287ab44e67628c174cd07b5edb758d",
+    "host/git-worktrees.ts": "14ec42ce6b935de74c2ceecd7f186291662b60b5da5231ec4ef54bfd31935391",
+    "host/git-worktrees.test.ts": "127df446db9bcb80ce6f30e080e8f8210148532c9feda16eb1bce7ac33bb5b0c",
+    "host/providers.test.ts": "ef91ed743000243382c9e1d82c93427fd7457eed5e5cd04e6643ebb8d36a69ac"
   },
   "patches": [
     "Map host imports to Voktty modules and providers; keep Gemini instead of Antigravity.",
@@ -20,6 +26,9 @@
     "Do not expose transcript filesystem reads until host ownership is defined.",
     "Keep standalone session saves atomic with event persistence and clear cached snapshots after rollback.",
     "Validate transfer limits and reject offsets inside Unicode surrogate pairs.",
-    "Reject attachment directory symlinks and non-owned symlink or hard-link files; read from verified file descriptors."
+    "Reject attachment directory symlinks and non-owned symlink or hard-link files; read from verified file descriptors.",
+    "Use Voktty providers, including Gemini, and authorize canonical projects before registration.",
+    "Use verified attachment reads; preserve durable interrupted-turn duration and bound custom answers.",
+    "Redact host engine errors in process logs."
   ]
 }

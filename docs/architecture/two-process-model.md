@@ -166,9 +166,16 @@ reading or writing; image reads are tied to a saved session reference. The
 execution engine must read verified attachment bytes through this host module.
 
 These components require Node 22.13 or newer and run outside the webview.
-The execution engine, authenticated session server, private data-directory
-permissions and release packaging remain pending; the desktop does not use
-this store yet.
+`host/engine.ts` owns command validation, durable receipts, provider runs and
+event flushes. A receipt records acceptance before dispatch. On restart, a
+running turn becomes interrupted and is never replayed automatically. It
+rejects replies for stale runs, stops the old provider before accepting a new
+turn, and retains provider identity only for an explicit follow-up. Project
+registration calls the configured workspace authorizer on a canonical path.
+Git worktree selection accepts registered checkouts of that project.
+
+The authenticated session server, private data-directory permissions and
+release packaging remain pending; the desktop does not use this host yet.
 
 ### Network (`src-tauri/src/modules/net.rs`)
 

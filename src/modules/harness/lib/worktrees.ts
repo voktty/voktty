@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { notifyGitChanged } from "./fs";
 import { isEqualOrInside } from "./paths";
+export { namedWorktreeBranch } from "./worktreeNaming";
 
 export type Worktree = {
   path: string;
@@ -78,14 +79,6 @@ export function orchestrationWorktreeBranchName(id: string): string {
     .slice(0, 12)
     .toLowerCase();
   return `mc/orch-${token || Date.now().toString(36)}`;
-}
-
-export function namedWorktreeBranch(fragment: string): string | null {
-  const clean = fragment
-    .trim()
-    .replace(/^(?:mc|monocode)\/+/, "")
-    .replace(/^\/+|\/+$/g, "");
-  return clean ? `mc/${clean}` : null;
 }
 
 export async function removeWorktree(
