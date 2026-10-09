@@ -9,6 +9,8 @@
     "includes": [
       "src/**/*.ts",
       "src/**/*.tsx",
+      "host/**/*.ts",
+      "host/**/*.mjs",
       "!src/components/ui/**",
       "!src/components/ai-elements/**"
     ]

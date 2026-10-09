@@ -132,6 +132,28 @@ Sandboxed v2 turns are rejected before starting or reusing the service.
 The v1 owned server retains its network proxy. This desktop transport does
 not add or deploy a remote Node host.
 
+### Headless harness process adapter
+
+`child.ts` accepts a `ChildBackend` once, before any bridge listener starts.
+The desktop continues to use Tauri. `host/child-backend.ts` provides a Node
+adapter for the same provider controllers, outside the webview. It requires
+explicit canonical workspace registration before process spawn or service
+commands, resolves provider executables without running ambiguous binaries,
+and rejects network allowlists it cannot enforce. It does not expose a
+remote command endpoint or generic filesystem reads.
+
+Provider processes run behind an ownership pipe guard. Losing the host
+terminates the provider tree; a cancelled pending spawn cannot create a
+late process. HTTP stays on loopback with bounded responses and no redirects.
+SSE replacement suppresses output and completion from the previous stream.
+The shared OpenCode service is not owned by this guard.
+
+Run `pnpm check-types:host` and `pnpm test:host` for this adapter. The latter
+includes an authenticated OpenCode 2.x fixture using the existing controller
+and real local process/HTTP transports. `host/upstream.json` records the
+fixed source revision and local adaptations. The authenticated session
+server, durable store and release packaging are separate pending work.
+
 ### Network (`src-tauri/src/modules/net.rs`)
 
 - `ai_http_request` / `ai_http_stream` - AI HTTP proxy with SSRF guard

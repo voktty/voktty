@@ -1,0 +1,17 @@
+{
+  "upstream": "https://github.com/hardbeat920/monocode",
+  "commit": "d68bfa8768b2f7e61686a5925c8d26e20cf6cba0",
+  "sourceSha256": {
+    "host/child-backend.ts": "78c99d154918a574cfe952e9ed055510db2d821a3cad92432eeee8b96a8223d4",
+    "host/process.ts": "30072c8ff365e2c5e1d1575fc827bb729a02d8dd3582cc0893216c129f108e72",
+    "host/provider-guard.mjs": "ce56138292687effeb2d432f3c72cdbd0e0e9e8157c967448a64507991eac350",
+    "host/process.test.ts": "ac6153c1cee5e4a133cc3d6a4e7f8cec1c27643215911153786a35b69497c30d",
+    "host/child-backend.test.ts": "1b80146716437e688c608d7c39385b857572157d7dd8e2a0d253fc32d87d0f66"
+  },
+  "patches": [
+    "Map host imports to Voktty modules and providers; keep Gemini instead of Antigravity.",
+    "Require explicit workspace authorization and enforce Voktty network restrictions.",
+    "Adapt process gateway to the existing desktop contract.",
+    "Do not expose transcript filesystem reads until host ownership is defined."
+  ]
+}

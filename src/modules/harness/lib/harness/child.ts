@@ -1,6 +1,35 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { HarnessId } from "../session";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { HarnessId } from "@/modules/harness/lib/session";
+
+export interface ChildBackend {
+  invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
+  listen<T>(
+    event: string,
+    handler: (event: { payload: T }) => void,
+  ): Promise<UnlistenFn>;
+}
+
+let backend: ChildBackend | undefined;
+
+export function configureChildBackend(next: ChildBackend): void {
+  if (backend || bridge || users)
+    throw new Error("Configure the child backend once before starting the bridge");
+  backend = next;
+}
+
+function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return backend
+    ? backend.invoke<T>(command, args)
+    : tauriInvoke<T>(command, args);
+}
+
+function listen<T>(
+  event: string,
+  handler: (event: { payload: T }) => void,
+): Promise<UnlistenFn> {
+  return backend ? backend.listen(event, handler) : tauriListen(event, handler);
+}
 
 type LinePayload = { sessionId: string; line: string };
 type ExitPayload = { sessionId: string; code: number | null; pid?: number };

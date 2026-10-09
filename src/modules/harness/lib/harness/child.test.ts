@@ -63,6 +63,33 @@ describe("isCurrentChildExit", () => {
 });
 
 describe("child bridge", () => {
+  it("uses a headless backend without installing Tauri listeners", async () => {
+    vi.useFakeTimers();
+    const child = await loadChild();
+    const invoke = vi.fn(async () => ({ path: "/fixture/opencode" }));
+    const listen = vi.fn(async () => vi.fn());
+    child.configureChildBackend({ invoke: invoke as never, listen });
+    const release = await child.acquireHarnessBridge();
+    expect(await child.resolveOpenCodeBinary()).toEqual({ path: "/fixture/opencode" });
+    expect(invoke).toHaveBeenCalledWith("harness_resolve_opencode", undefined);
+    expect(listen).toHaveBeenCalledTimes(5);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.listen).not.toHaveBeenCalled();
+    expect(() => child.configureChildBackend({ invoke: invoke as never, listen })).toThrow("once before");
+    release();
+    await vi.runAllTimersAsync();
+  });
+
+  it("rejects backend replacement after the desktop bridge starts", async () => {
+    vi.useFakeTimers();
+    installResolvedListeners();
+    const child = await loadChild();
+    const release = await child.acquireHarnessBridge();
+    expect(() => child.configureChildBackend({ invoke: vi.fn(), listen: vi.fn() })).toThrow("once before");
+    release();
+    await vi.runAllTimersAsync();
+  });
+
   it("waits until every listener is installed", async () => {
     const pending = deferred<UnlistenFn>();
     mocks.listen.mockImplementation(
