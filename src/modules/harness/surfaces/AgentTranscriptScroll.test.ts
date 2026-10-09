@@ -3,6 +3,10 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block } from "@/modules/harness/lib/session";
+import {
+  loadTranscriptZen,
+  saveTranscriptZen,
+} from "@/modules/harness/lib/appearance";
 import { AgentTranscript } from "@/modules/harness/surfaces/AgentTranscript";
 
 let container: HTMLDivElement;
@@ -44,6 +48,71 @@ afterEach(() => {
 });
 
 describe("transcript scrolling", () => {
+  it("preserves manual scroll intent inside a live activity phase", () => {
+    const previousZen = loadTranscriptZen();
+    saveTranscriptZen(true);
+    try {
+      const blocks: Block[] = [
+        { id: "user", role: "user", text: "Explain auth" },
+        { id: "intro", role: "assistant", text: "Checking authentication" },
+        {
+          id: "tool",
+          role: "tool",
+          text: "Inspect files",
+          tool: { kind: "shell", status: "in_progress" },
+        },
+        {
+          id: "tool-2",
+          role: "tool",
+          text: "Inspect config",
+          tool: { kind: "shell", status: "in_progress" },
+        },
+      ];
+      act(() =>
+        root.render(createElement(AgentTranscript, { blocks, busy: true })),
+      );
+      const scroller =
+        container.querySelector<HTMLDivElement>(".zen-phase-live");
+      expect(scroller).not.toBeNull();
+      const geometry = { height: 600, top: 0 };
+      Object.defineProperties(scroller!, {
+        scrollHeight: { get: () => geometry.height },
+        clientHeight: { get: () => 280 },
+        scrollTop: {
+          get: () => geometry.top,
+          set: (value: number) => {
+            geometry.top = Math.max(0, Math.min(value, geometry.height - 280));
+          },
+        },
+      });
+      const observer = observers.find((item) =>
+        item.targets.includes(scroller!.firstElementChild!),
+      )!;
+      act(() => observer.resize());
+      expect(geometry.top).toBe(320);
+      act(() => {
+        scroller!.dispatchEvent(new WheelEvent("wheel", { deltaY: -4 }));
+        scroller!.dispatchEvent(new Event("scroll"));
+      });
+      geometry.height = 640;
+      act(() => observer.resize());
+      expect(geometry.top).toBe(320);
+      act(() => {
+        geometry.top = 360;
+        scroller!.dispatchEvent(new Event("scroll"));
+      });
+      geometry.height = 680;
+      act(() => observer.resize());
+      expect(geometry.top).toBe(400);
+      // Resize can precede the browser's scroll event after a scrollbar move.
+      geometry.top = 396;
+      geometry.height = 720;
+      act(() => observer.resize());
+      expect(geometry.top).toBe(396);
+    } finally {
+      act(() => saveTranscriptZen(previousZen));
+    }
+  });
   it("holds a directionless wheel gesture until its release timer", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     const { scroller, geometry, observer } = mountScroller();

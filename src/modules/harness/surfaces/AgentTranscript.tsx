@@ -114,7 +114,6 @@ import {
   workSummaryLine,
 } from "./transcriptActivity";
 
-const NEAR_BOTTOM_PX = 16;
 const INITIAL_TURNS = 20;
 const TURN_PAGE_SIZE = 20;
 const WHEEL_HOLD_MS = 150;
@@ -1929,8 +1928,7 @@ function sameActivity(a: ActivityPhasesProps, b: ActivityPhasesProps): boolean {
 
 /**
  * Keep a live phase body on its newest step. Pinning happens in layout
- * before paint so the window follows without a visible hitch; only a real
- * wheel away from the bottom pauses that.
+ * before paint, while preserving manual movement before its scroll event.
  */
 function useLivePhaseScroll(
   el: HTMLDivElement | null,
@@ -1939,6 +1937,17 @@ function useLivePhaseScroll(
 ) {
   const stickToBottom = useRef(true);
   const wasEnabled = useRef(false);
+  const lastScrollTop = useRef(0);
+  const pin = useCallback(() => {
+    if (!el) return;
+    stickToBottom.current = followsAfterScroll(
+      el,
+      lastScrollTop.current,
+      stickToBottom.current,
+    );
+    if (stickToBottom.current) el.scrollTop = el.scrollHeight;
+    lastScrollTop.current = el.scrollTop;
+  }, [el]);
 
   useLayoutEffect(() => {
     if (!enabled) {
@@ -1948,19 +1957,21 @@ function useLivePhaseScroll(
     if (!wasEnabled.current) {
       stickToBottom.current = true;
       wasEnabled.current = true;
+      lastScrollTop.current = el?.scrollTop ?? 0;
     }
-    if (!el || !stickToBottom.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [el, enabled, steps]);
+    pin();
+  }, [el, enabled, pin, steps]);
 
   useEffect(() => {
     if (!el || !enabled) return;
 
-    const pin = () => {
-      if (stickToBottom.current) el.scrollTop = el.scrollHeight;
-    };
     const onScroll = () => {
-      if (isNearBottom(el)) stickToBottom.current = true;
+      stickToBottom.current = followsAfterScroll(
+        el,
+        lastScrollTop.current,
+        stickToBottom.current,
+      );
+      lastScrollTop.current = el.scrollTop;
     };
     const onWheel = (e: WheelEvent) => {
       if (!nestedScrollAbsorbsWheel(el, e.deltaY)) return;
@@ -1979,7 +1990,7 @@ function useLivePhaseScroll(
       el.removeEventListener("wheel", onWheel);
       observer.disconnect();
     };
-  }, [el, enabled]);
+  }, [el, enabled, pin]);
 }
 
 /**
@@ -3004,10 +3015,6 @@ function followsAfterScroll(
   const clamped = previousTop > bottom && Math.abs(el.scrollTop - bottom) < 1;
   if (movement === 0 || clamped) return following;
   return movement > 0 && el.scrollHeight - el.scrollTop - el.clientHeight <= 1;
-}
-
-function isNearBottom(el: HTMLElement): boolean {
-  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
 }
 
 function pinToBottom(el: HTMLElement | null) {
