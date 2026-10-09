@@ -199,3 +199,19 @@ html:not(.theme-light) .markdown-code-token {
   color: var(--shiki-dark, var(--sdm-c, inherit));
   background-color: var(--shiki-dark-bg, var(--sdm-tbg, transparent));
 }
+
+@keyframes word-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.agent-markdown.word-fading [data-word-fade] {
+  animation: word-fade-in 320ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-markdown.word-fading [data-word-fade] {
+    animation: none;
+  }
+}

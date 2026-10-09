@@ -1,6 +1,14 @@
 import { boundedCode as code } from "./codeHighlightPlugin";
 import { HighlightedCodeBlock } from "@/modules/harness/surfaces/HighlightedCodeBlock";
-import { parseStreamingMarkdown } from "@/modules/harness/surfaces/streamingMarkdown";
+import {
+  isFenceBlock,
+  parseStreamingMarkdown,
+} from "@/modules/harness/surfaces/streamingMarkdown";
+import {
+  rehypeWordFade,
+  usePacedText,
+  useWordFading,
+} from "@/modules/harness/surfaces/wordFade";
 import { useTranslation } from "@/modules/i18n";
 import {
   createContext,
@@ -81,6 +89,12 @@ type FileLinkMenu = {
   path: string;
   navigation?: EditorNavigation;
 };
+
+const FADING_MARKDOWN_REHYPE_PLUGINS: PluggableList = [
+  ...MARKDOWN_REHYPE_PLUGINS,
+  rehypeWordFade,
+];
+const MarkdownFadeContext = createContext(false);
 
 export function fileLinkMenuItems(
   canOpenInVoktty: boolean,
@@ -353,7 +367,14 @@ const MARKDOWN_COMPONENTS = {
  * comes from the block inside it.
  */
 function DirectionalBlock({ dir, ...props }: BlockProps) {
-  const block = <Block {...props} />;
+  const fading = useContext(MarkdownFadeContext);
+  // Keep literal fences mounted when prose drops its temporary fade spans.
+  const block = (
+    <Block
+      key={isFenceBlock(props.content) ? "code" : fading ? "fade" : "plain"}
+      {...props}
+    />
+  );
   return dir ? (
     <div dir={dir} className="agent-markdown-block">
       {block}
@@ -366,6 +387,7 @@ function DirectionalBlock({ dir, ...props }: BlockProps) {
 export const AgentMarkdown = memo(function AgentMarkdown({
   text,
   streaming,
+  revealOnMount,
   className,
   cwd,
   onOpenFile,
@@ -373,6 +395,8 @@ export const AgentMarkdown = memo(function AgentMarkdown({
 }: {
   text: string;
   streaming?: boolean;
+  /** Pace new output that completed before its first paint. */
+  revealOnMount?: boolean;
   className?: string;
   cwd?: string;
   onOpenFile?: OpenFileFn;
@@ -400,12 +424,17 @@ export const AgentMarkdown = memo(function AgentMarkdown({
     ],
     [cwd],
   );
+  const paced = usePacedText(text, !!streaming, revealOnMount);
+  const fading = useWordFading(!!streaming || paced.revealing);
+  const baseRehypePlugins = fading
+    ? FADING_MARKDOWN_REHYPE_PLUGINS
+    : MARKDOWN_REHYPE_PLUGINS;
   const rehypePlugins = useMemo(
     () =>
       hardBreaks
-        ? [...MARKDOWN_REHYPE_PLUGINS, rehypeHardBreaks]
-        : MARKDOWN_REHYPE_PLUGINS,
-    [hardBreaks],
+        ? [...baseRehypePlugins, rehypeHardBreaks]
+        : baseRehypePlugins,
+    [baseRehypePlugins, hardBreaks],
   );
 
   const onFileMenuPick = (id: string) => {
@@ -443,21 +472,23 @@ export const AgentMarkdown = memo(function AgentMarkdown({
 
   return (
     <FileOpenContext.Provider value={fileOpen}>
-      <Streamdown
-        BlockComponent={DirectionalBlock}
-        className={`agent-markdown min-w-0 font-sans text-sm leading-6 ${className ?? ""}`}
-        components={MARKDOWN_COMPONENTS}
-        controls={false}
-        dir="auto"
-        isAnimating={!!streaming}
-        parseIncompleteMarkdown={false}
-        parseMarkdownIntoBlocksFn={parseStreamingMarkdown}
-        plugins={MARKDOWN_PLUGINS}
-        remarkPlugins={remarkPlugins}
-        rehypePlugins={rehypePlugins}
-      >
-        {text}
-      </Streamdown>
+      <MarkdownFadeContext.Provider value={fading}>
+        <Streamdown
+          BlockComponent={DirectionalBlock}
+          className={`agent-markdown min-w-0 font-sans text-sm leading-6 ${fading ? "word-fading" : ""} ${className ?? ""}`}
+          components={MARKDOWN_COMPONENTS}
+          controls={false}
+          dir="auto"
+          isAnimating={!!streaming || paced.revealing}
+          parseIncompleteMarkdown={false}
+          parseMarkdownIntoBlocksFn={parseStreamingMarkdown}
+          plugins={MARKDOWN_PLUGINS}
+          remarkPlugins={remarkPlugins}
+          rehypePlugins={rehypePlugins}
+        >
+          {paced.text}
+        </Streamdown>
+      </MarkdownFadeContext.Provider>
       {fileMenu ? (
         <ExplorerMenu
           x={fileMenu.x}
