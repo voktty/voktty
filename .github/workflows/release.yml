@@ -17,12 +17,19 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
       - name: Require a semantic version tag
         shell: bash
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
             echo "Release workflows require a semantic version tag such as v1.2.3."
+            exit 1
+          fi
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          CARGO_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' src-tauri/Cargo.toml | head -n1)
+          if [[ "$TAG" != "v$PACKAGE_VERSION" || "$PACKAGE_VERSION" != "$CARGO_VERSION" ]]; then
+            echo "Release tag, package.json and Cargo.toml versions must match."
             exit 1
           fi
 
@@ -64,6 +71,39 @@ jobs:
         with:
           name: voktty-remote-linux-x86_64
           path: src-tauri/resources/remote/linux-x86_64/
+          if-no-files-found: error
+          retention-days: 1
+
+  build-host-packages:
+    needs: validate-release-tag
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build pinned host runtimes
+        run: |
+          pnpm build:host
+          node host/package.mjs --all
+      - name: Verify host package reproducibility
+        run: |
+          sha256sum build/host-packages/*.tar.gz build/host-packages/*.zip > "$RUNNER_TEMP/host-first.sha256"
+          node host/package.mjs --all
+          sha256sum build/host-packages/*.tar.gz build/host-packages/*.zip > "$RUNNER_TEMP/host-second.sha256"
+          diff -u "$RUNNER_TEMP/host-first.sha256" "$RUNNER_TEMP/host-second.sha256"
+      - name: Upload host packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: voktty-host-packages
+          path: |
+            build/host-packages/*.tar.gz
+            build/host-packages/*.zip
+            build/host-packages/*.sha256
           if-no-files-found: error
           retention-days: 1
 
@@ -335,8 +375,29 @@ jobs:
             $env:MSI_REAL_PATH "$($env:MSI_REAL_PATH).sig" `
             --clobber --repo $env:GITHUB_REPOSITORY
 
+  publish-host-packages:
+    needs: [build-host-packages, publish-tauri]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: voktty-host-packages
+          path: host-packages
+      - name: Verify and publish host packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd host-packages
+          sha256sum -c ./*.sha256
+          test "$(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 6
+          gh release upload "$GITHUB_REF_NAME" ./*.tar.gz ./*.zip ./*.sha256 \
+            --clobber --repo "$GITHUB_REPOSITORY"
+
   patch-updater-manifest:
-    needs: publish-tauri
+    needs: [publish-tauri, publish-host-packages]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

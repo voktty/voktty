@@ -1,16 +1,13 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$base = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.terax-host'
-if (-not (Test-Path -LiteralPath $base) -and (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.monocode-host'))) {
-  $base = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.monocode-host'
-}
+$base = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.voktty-host'
 $version = @@VERSION@@
 $release = @@RELEASE@@
-$forceUpgrade = ($env:TERAX_HOST_FORCE_UPGRADE -eq '1') -or ($env:MONOCODE_HOST_FORCE_UPGRADE -eq '1')
-$hostPort = if ($env:TERAX_HOST_PORT) { [int] $env:TERAX_HOST_PORT } elseif ($env:MONOCODE_HOST_PORT) { [int] $env:MONOCODE_HOST_PORT } else { 3774 }
+$forceUpgrade = $env:VOKTTY_HOST_FORCE_UPGRADE -eq '1'
+$hostPort = if ($env:VOKTTY_HOST_PORT) { [int] $env:VOKTTY_HOST_PORT } else { 3774 }
 @@ACL@@
 
-function Download-TeraxHost([string] $Url, [string] $Destination) {
+function Download-VokttyHost([string] $Url, [string] $Destination) {
   Add-Type -AssemblyName System.Net.Http
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
   $handler = New-Object Net.Http.HttpClientHandler
@@ -38,7 +35,7 @@ function Download-TeraxHost([string] $Url, [string] $Destination) {
 }
 
 New-Item -ItemType Directory -Force -Path $base | Out-Null
-Protect-MonoCodeDirectory $base
+Protect-VokttyDirectory $base
 $lock = $null
 $temporary = $null
 try {
@@ -60,7 +57,7 @@ try {
       'ARM64' { $target = 'win32-arm64' }
       default { throw 'Host requires x64 or ARM64 Windows.' }
     }
-    $filename = "terax-host-$target.zip"
+    $filename = "voktty-host-$target.zip"
     $runtimeRoot = Join-Path $base 'runtime'
     New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
     $temporary = Join-Path $runtimeRoot ('.install-' + [Guid]::NewGuid().ToString('N'))
@@ -68,17 +65,10 @@ try {
     $archive = Join-Path $temporary $filename
     $checksum = Join-Path $temporary 'checksum'
     try {
-      Download-TeraxHost "$release/$filename" $archive
-      Download-TeraxHost "$release/$filename.sha256" $checksum
+      Download-VokttyHost "$release/$filename" $archive
+      Download-VokttyHost "$release/$filename.sha256" $checksum
     } catch {
-      $filename = "monocode-host-$target.zip"
-      $archive = Join-Path $temporary $filename
-      try {
-        Download-TeraxHost "$release/$filename" $archive
-        Download-TeraxHost "$release/$filename.sha256" $checksum
-      } catch {
-        throw "The Windows host package for version $version could not be downloaded. Install a release with host packages. $($_.Exception.Message)"
-      }
+      throw "The Windows host package for version $version could not be downloaded. Install a release with host packages. $($_.Exception.Message)"
     }
     $expected = ((Get-Content -LiteralPath $checksum -Raw).Trim() -split '\s+')[0]
     if ($expected -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid host package checksum.' }
@@ -94,8 +84,7 @@ try {
     $runtimeName = Split-Path -Leaf $runtime
     # Keep the batch file ASCII; cmd's set /p would misread a UTF-8 profile path.
     $launcher = "@echo off`r`nsetlocal DisableDelayedExpansion`r`n`"%~dp0..\runtime\$runtimeName\node.exe`" `"%~dp0..\runtime\$runtimeName\host.mjs`" %*`r`nexit /b %errorlevel%`r`n"
-    [IO.File]::WriteAllText((Join-Path $bin 'terax-host.cmd'), $launcher, [Text.Encoding]::ASCII)
-    [IO.File]::WriteAllText((Join-Path $bin 'monocode-host.cmd'), $launcher, [Text.Encoding]::ASCII)
+    [IO.File]::WriteAllText((Join-Path $bin 'voktty-host.cmd'), $launcher, [Text.Encoding]::ASCII)
     $nextPointer = Join-Path $temporary 'runtime-path'
     [IO.File]::WriteAllText($nextPointer, $runtime, (New-Object Text.UTF8Encoding($false)))
     if (Test-Path -LiteralPath $pointer) {

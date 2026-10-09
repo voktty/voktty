@@ -35,7 +35,8 @@
     "host/service.test.ts": "cf62315ae96f2d7faad6680341503348e47e215987aa620484fdfe088cd780b6",
     "host/windows.ts": "a1c4ecd5b75be6bb7e8e2d8e8acbfe76a0d312aaca58193989bac3e7a435e",
     "host/windows.test.ts": "01e493cc5a74a4e56ac582c5fc0fd90a2078243f0ca6d1e5de294be35f2ed74d",
-    "host/windows-acl.ps1": "1a36cb6626c90ee6e8741e9a7026743cd9b869aea595a99d92edc749d0a57379"
+    "host/windows-acl.ps1": "1a36cb6626c90ee6e8741e9a7026743cd9b869aea595a99d92edc749d0a57379",
+    "host/package.mjs": "1b16e555d108e9977ced55acd507f31efa68d7f30015aa69434eb29742121dc7"
   },
   "patches": [
     "Map host imports to Voktty modules and providers; keep Gemini instead of Antigravity.",
@@ -50,6 +51,7 @@
     "Redact host engine errors in process logs.",
     "Map workspace commands to Voktty IPC types and preserve expected-content conflict checks and file modes on atomic saves.",
     "Use Voktty model discovery at an explicit registered project cwd, serialize same-provider probes and authorize worktrees before session creation.",
-    "Use Voktty service and data names, reject linked data directories, acquire the owner lock before opening the store, and restore process authorization for registered worktrees."
+    "Use Voktty service and data names, reject linked data directories, acquire the owner lock before opening the store, and restore process authorization for registered worktrees.",
+    "Package pinned Node 24 runtimes with verified hashes and normalized timestamps for repeatable archives; publish Voktty host assets before undrafting releases."
   ]
 }

@@ -251,11 +251,12 @@ pub enum HostPlatform {
     Windows,
 }
 
-const PLATFORM_PROBE: &[&str] = &["echo", "TERAX_PLATFORM", "$env:OS", "%OS%", "$OS"];
+const PLATFORM_PROBE: &[&str] = &["echo", "VOKTTY_PLATFORM", "$env:OS", "%OS%", "$OS"];
 
 fn parse_platform(output: &str) -> Result<HostPlatform, String> {
     let marker = output
-        .rsplit_once("TERAX_PLATFORM")
+        .rsplit_once("VOKTTY_PLATFORM")
+        .or_else(|| output.rsplit_once("TERAX_PLATFORM"))
         .or_else(|| output.rsplit_once("MONOCODE_PLATFORM"))
         .ok_or("Could not identify the remote shell. Use cmd.exe, PowerShell, or a Unix shell.")?
         .1;
@@ -427,10 +428,10 @@ pub fn upgrade_script(platform: HostPlatform, port: u16) -> String {
     let script = bootstrap_script(platform);
     match platform {
         HostPlatform::Unix => {
-            format!("TERAX_HOST_FORCE_UPGRADE=1\nTERAX_HOST_PORT={port}\n{script}")
+            format!("VOKTTY_HOST_FORCE_UPGRADE=1\nVOKTTY_HOST_PORT={port}\n{script}")
         }
         HostPlatform::Windows => format!(
-            "$env:TERAX_HOST_FORCE_UPGRADE = '1'\n$env:TERAX_HOST_PORT = '{port}'\n{script}"
+            "$env:VOKTTY_HOST_FORCE_UPGRADE = '1'\n$env:VOKTTY_HOST_PORT = '{port}'\n{script}"
         ),
     }
 }
@@ -438,11 +439,11 @@ pub fn upgrade_script(platform: HostPlatform, port: u16) -> String {
 pub fn pairing_script(platform: HostPlatform, name: &str) -> String {
     match platform {
         HostPlatform::Unix => format!(
-            "set -eu\nHOST_BIN=\"$HOME/.terax-host/bin/terax-host\"\n[ -x \"$HOST_BIN\" ] || HOST_BIN=\"$HOME/.monocode-host/bin/monocode-host\"\n\"$HOST_BIN\" pair --name {} --json\n",
+            "set -eu\n\"$HOME/.voktty-host/bin/voktty-host\" pair --name {} --json\n",
             shell_quote(name)
         ),
         HostPlatform::Windows => format!(
-            "$ErrorActionPreference = 'Stop'\n$base = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.terax-host'\nif (-not (Test-Path -LiteralPath $base)) {{ $base = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.monocode-host' }}\n$runtime = [IO.File]::ReadAllText((Join-Path $base 'runtime-path')).Trim()\n& (Join-Path $runtime 'node.exe') (Join-Path $runtime 'host.mjs') pair --name {} --json\nif ($LASTEXITCODE -ne 0) {{ throw 'Host pairing failed.' }}\n",
+            "$ErrorActionPreference = 'Stop'\n$base = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.voktty-host'\n$runtime = [IO.File]::ReadAllText((Join-Path $base 'runtime-path')).Trim()\n& (Join-Path $runtime 'node.exe') (Join-Path $runtime 'host.mjs') pair --name {} --json\nif ($LASTEXITCODE -ne 0) {{ throw 'Host pairing failed.' }}\n",
             powershell_quote(name)
         ),
     }
@@ -670,15 +671,33 @@ pub fn device_name() -> String {
         .take(80)
         .collect();
     if name.is_empty() {
-        "Terax AI desktop".into()
+        "Voktty desktop".into()
     } else {
-        format!("Terax AI on {name}")
+        format!("Voktty on {name}")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bootstrap_uses_voktty_host_packages_and_private_data() {
+        let unix = bootstrap_script(HostPlatform::Unix);
+        assert!(unix.contains("$HOME/.voktty-host"));
+        assert!(unix.contains("voktty-host-$OS-$ARCH.tar.gz"));
+        assert!(unix.contains("Host package checksum mismatch"));
+        assert!(!unix.contains("terax-host"));
+
+        let windows = bootstrap_script(HostPlatform::Windows);
+        assert!(windows.contains(".voktty-host"));
+        assert!(windows.contains("voktty-host-$target.zip"));
+        assert!(windows.contains("Protect-VokttyDirectory"));
+        assert!(!windows.contains("monocode-host"));
+
+        assert!(upgrade_script(HostPlatform::Unix, 3775).contains("VOKTTY_HOST_PORT=3775"));
+        assert!(pairing_script(HostPlatform::Unix, "Desktop").contains("voktty-host"));
+    }
 
     #[test]
     fn stale_requests_cannot_invalidate_a_newer_tunnel() {

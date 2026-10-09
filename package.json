@@ -12,6 +12,7 @@
     "build:cli": "node scripts/build-cli.mjs --release",
     "build:cli:dev": "node scripts/build-cli.mjs",
     "build:host": "node host/build.mjs",
+    "package:host": "pnpm build:host && node host/package.mjs",
     "build:remote": "pwsh -NoProfile -File scripts/build-remote-helper.ps1",
     "dev": "vite",
     "dev:runner": "pwsh -NoProfile -File scripts/dev-runner.ps1",

@@ -1,4 +1,4 @@
-function Protect-MonoCodeDirectory([string] $Path) {
+function Protect-VokttyDirectory([string] $Path) {
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
     throw 'The host data directory must not be a link or junction.'

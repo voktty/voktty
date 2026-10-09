@@ -1,22 +1,18 @@
 set -eu
 umask 077
-BASE="$HOME/.terax-host"
-ENTRY="$BASE/bin/terax-host"
-if [ ! -x "$ENTRY" ] && [ -x "$HOME/.monocode-host/bin/monocode-host" ]; then
-  BASE="$HOME/.monocode-host"
-  ENTRY="$BASE/bin/monocode-host"
-fi
+BASE="$HOME/.voktty-host"
+ENTRY="$BASE/bin/voktty-host"
 VERSION=@@VERSION@@
 RELEASE=@@RELEASE@@
 EXISTED=0
 [ -x "$ENTRY" ] && EXISTED=1
-FORCE_UPGRADE=${TERAX_HOST_FORCE_UPGRADE:-${MONOCODE_HOST_FORCE_UPGRADE:-0}}
-HOST_PORT=${TERAX_HOST_PORT:-${MONOCODE_HOST_PORT:-3774}}
+FORCE_UPGRADE=${VOKTTY_HOST_FORCE_UPGRADE:-0}
+HOST_PORT=${VOKTTY_HOST_PORT:-3774}
 
 if [ ! -x "$ENTRY" ] || [ "$FORCE_UPGRADE" = 1 ]; then
-  case "$(uname -s)" in Darwin) OS=darwin ;; Linux) OS=linux ;; *) echo 'Terax Host supports Linux and macOS.' >&2; exit 1 ;; esac
+  case "$(uname -s)" in Darwin) OS=darwin ;; Linux) OS=linux ;; *) echo 'Voktty Host supports Linux and macOS.' >&2; exit 1 ;; esac
   case "$(uname -m)" in arm64|aarch64) ARCH=arm64 ;; x86_64|amd64) ARCH=x64 ;; *) echo 'Unsupported host architecture.' >&2; exit 1 ;; esac
-  FILE="terax-host-$OS-$ARCH.tar.gz"
+  FILE="voktty-host-$OS-$ARCH.tar.gz"
   mkdir -p "$BASE/runtime" "$BASE/bin"
   TMP=$(mktemp -d "$BASE/runtime/.install.XXXXXXXX")
   trap 'rm -rf "$TMP"' EXIT
@@ -31,10 +27,7 @@ if [ ! -x "$ENTRY" ] || [ "$FORCE_UPGRADE" = 1 ]; then
     fi
   }
   if ! download "$RELEASE/$FILE" "$TMP/$FILE" || ! download "$RELEASE/$FILE.sha256" "$TMP/checksum"; then
-    FILE="monocode-host-$OS-$ARCH.tar.gz"
-    if ! download "$RELEASE/$FILE" "$TMP/$FILE" || ! download "$RELEASE/$FILE.sha256" "$TMP/checksum"; then
-      echo "The host package for version $VERSION is unavailable. Install a release that includes host packages." >&2; exit 1
-    fi
+    echo "The host package for version $VERSION is unavailable. Install a release that includes host packages." >&2; exit 1
   fi
   EXPECTED=$(awk 'NR == 1 {print $1}' "$TMP/checksum")
   case "$EXPECTED" in *[!0-9a-f]*|'') echo 'Invalid host package checksum.' >&2; exit 1 ;; esac
@@ -49,13 +42,11 @@ if [ ! -x "$ENTRY" ] || [ "$FORCE_UPGRADE" = 1 ]; then
   [ "$EXPECTED" = "$ACTUAL" ] || { echo 'Host package checksum mismatch.' >&2; exit 1; }
   mkdir "$TMP/unpacked"
   tar -xzf "$TMP/$FILE" -C "$TMP/unpacked"
-  BIN_NAME="terax-host"
-  [ -x "$TMP/unpacked/monocode-host" ] && BIN_NAME="monocode-host"
-  [ "$("$TMP/unpacked/$BIN_NAME" --version)" = "$VERSION" ] || { echo 'Host version mismatch.' >&2; exit 1; }
+  [ "$("$TMP/unpacked/voktty-host" --version)" = "$VERSION" ] || { echo 'Host version mismatch.' >&2; exit 1; }
   DEST="$BASE/runtime/$VERSION-$OS-$ARCH-$(basename "$TMP")"
   # Concurrent installations never replace a directory used by a running host.
   mv "$TMP/unpacked" "$DEST"
-  [ "$("$DEST/$BIN_NAME" --version)" = "$VERSION" ] || exit 1
+  [ "$("$DEST/voktty-host" --version)" = "$VERSION" ] || exit 1
   printf '%s\n' "$DEST" > "$TMP/runtime-path"
   mv "$TMP/runtime-path" "$BASE/runtime-path"
   cat > "$TMP/launcher" <<SH
@@ -63,7 +54,7 @@ if [ ! -x "$ENTRY" ] || [ "$FORCE_UPGRADE" = 1 ]; then
 set -eu
 BASE=\$(CDPATH= cd -- "\$(dirname -- "\$0")/.." && pwd)
 RUNTIME=\$(cat "\$BASE/runtime-path")
-exec "\$RUNTIME/$BIN_NAME" "\$@"
+exec "\$RUNTIME/voktty-host" "\$@"
 SH
   chmod 700 "$TMP/launcher"
   mv "$TMP/launcher" "$ENTRY"
