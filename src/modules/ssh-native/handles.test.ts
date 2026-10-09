@@ -6,6 +6,7 @@ const close = vi.fn();
 const disconnect = vi.fn();
 const requestPrompt = vi.fn();
 let backend = "helper";
+let language = "en";
 
 vi.mock("./client", () => ({
   sshNativeConnect: (...args: unknown[]) => connect(...args),
@@ -16,7 +17,7 @@ vi.mock("./client", () => ({
 
 vi.mock("@/modules/settings/preferences", () => ({
   usePreferencesStore: {
-    getState: () => ({ remoteFilesystemBackend: backend }),
+    getState: () => ({ remoteFilesystemBackend: backend, language }),
   },
 }));
 vi.mock("@/modules/ssh/promptQueue", () => ({
@@ -53,6 +54,7 @@ beforeEach(() => {
   requestPrompt.mockReset();
   requestPrompt.mockResolvedValue(null);
   backend = "helper";
+  language = "en";
   connect.mockResolvedValue({ id: "ssh-1" });
   open.mockResolvedValue({ handle: "sftp-1", root: "/srv/app" });
   close.mockResolvedValue(undefined);
@@ -155,12 +157,71 @@ describe("ensureNativeHandle", () => {
     expect(connect).toHaveBeenCalledTimes(1);
   });
 
-  it("uses a user-entered password only after key authentication fails", async () => {
+  it("does not approve a key presented for a different port", async () => {
+    connect.mockRejectedValueOnce({ code: "host_key_unknown", message: "wrong port", prompt: {
+      host: "example.com", port: 22, keyType: "ssh-ed25519", keyBase64: "wrong-port", fingerprint: "SHA256:test", changed: false,
+    } });
+    expect((await ensureNativeHandle(env())).kind).toBe("unavailable");
+    expect(requestPrompt).not.toHaveBeenCalled();
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops when the host key is declined", async () => {
+    connect.mockRejectedValueOnce({ code: "host_key_unknown", message: "unknown", prompt: {
+      host: "example.com", port: 2222, keyType: "ssh-ed25519", keyBase64: "declined", fingerprint: "SHA256:test", changed: false,
+    } });
+    expect((await ensureNativeHandle(env())).kind).toBe("unavailable");
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("retries a private key only after its passphrase is supplied", async () => {
+    connect.mockRejectedValueOnce({ code: "auth_failed", message: "encrypted key" });
+    requestPrompt.mockResolvedValueOnce("typed-passphrase");
+    const state = await ensureNativeHandle(env({ connection: {
+      host: "example.com", port: 2222, user: "root", identityFile: "/keys/test-key",
+    } }));
+    expect(state.kind).toBe("ready");
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(connect).toHaveBeenNthCalledWith(2, expect.anything(), [
+      { kind: "agent" }, { kind: "privateKey", path: "/keys/test-key", passphrase: "typed-passphrase" },
+    ], { kind: "none" });
+    expect(requestPrompt).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the approved key when password authentication is needed", async () => {
+    connect.mockRejectedValueOnce({ code: "host_key_unknown", message: "unknown", prompt: {
+      host: "example.com", port: 2222, keyType: "ssh-ed25519", keyBase64: "approved", fingerprint: "SHA256:test", changed: false,
+    } });
     connect.mockRejectedValueOnce({ code: "auth_failed", message: "no key" });
+    requestPrompt.mockResolvedValueOnce("yes").mockResolvedValueOnce("typed-password");
+    expect((await ensureNativeHandle(env())).kind).toBe("ready");
+    expect(connect).toHaveBeenCalledTimes(3);
+    expect(connect).toHaveBeenNthCalledWith(3, expect.anything(), [
+      { kind: "password", secret: "typed-password" },
+    ], { kind: "approve", keyBase64: "approved", remember: true });
+  });
+
+  it("localizes the changed-key warning and trust question", async () => {
+    const { loadLocale } = await import("@/modules/i18n");
+    await loadLocale("es");
+    language = "es";
+    connect.mockRejectedValueOnce({ code: "host_key_changed", message: "changed", prompt: {
+      host: "example.com", port: 2222, keyType: "ssh-ed25519", keyBase64: "changed", fingerprint: "SHA256:test", changed: true,
+    } });
+    await ensureNativeHandle(env());
+    expect(requestPrompt).toHaveBeenCalledWith(
+      "ADVERTENCIA: La clave del servidor SSH ha cambiado\nexample.com:2222\nssh-ed25519 SHA256:test\n\n¿Confiar en esta clave?", true,
+    );
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a user-entered password only after key authentication fails", async () => {
     connect.mockRejectedValueOnce({ code: "auth_failed", message: "no key" });
     requestPrompt.mockResolvedValueOnce("typed-password");
     await ensureNativeHandle(env());
-    expect(connect).toHaveBeenNthCalledWith(3, expect.anything(), [
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(connect).toHaveBeenNthCalledWith(2, expect.anything(), [
       { kind: "password", secret: "typed-password" },
     ], { kind: "none" });
   });

@@ -3257,6 +3257,11 @@ export const en = {
     },
     prompt: {
       hostKeyTitle: "Verify SSH host key",
+      hostKeyUnknown: "Unknown SSH host key",
+      hostKeyChanged: "WARNING: SSH host key changed",
+      trustKey: "Trust this key?",
+      passphraseFor: "Passphrase for {path}",
+      passwordFor: "Password for {target}",
       authTitle: "SSH authentication",
       secretLabel: "Password or key passphrase",
     },

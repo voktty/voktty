@@ -1,9 +1,10 @@
 import type { RemoteWorkspaceEnv } from "@/modules/remote";
+import { t } from "@/modules/i18n";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { requestSshPrompt } from "@/modules/ssh/promptQueue";
 import { defaultCredentials, hostKeyPrompt, toSshNativeError, toTarget } from "./adapt";
 import { sftpClose, sftpOpen, sshNativeConnect, sshNativeDisconnect } from "./client";
-import type { HostKeyApproval, SshCredential, SshNativeError } from "./types";
+import type { HostKeyApproval, SshCredential, SshNativeError, SshSessionInfo } from "./types";
 
 /**
  * A workspace either has a usable native handle or a recorded reason why not.
@@ -58,25 +59,28 @@ async function openHandle(env: RemoteWorkspaceEnv): Promise<NativeHandleState> {
   const target = toTarget(connection);
   let credentials: SshCredential[] = defaultCredentials(connection);
   let approval: HostKeyApproval = { kind: "none" };
-  let session;
+  let session: SshSessionInfo | undefined;
   try {
     session = await sshNativeConnect(target, credentials, approval);
   } catch (failure) {
     const error = toSshNativeError(failure);
-    const prompt = hostKeyPrompt(error);
-    if (!prompt || error.code === "host_key_revoked" || prompt.host !== target.host) {
-      if (error.code !== "auth_failed") throw failure;
-    } else {
-      const message = `${prompt.changed ? "WARNING: SSH host key changed" : "Unknown SSH host key"}\n${prompt.host}:${prompt.port}\n${prompt.keyType} ${prompt.fingerprint}\n\nTrust this key?`;
+    let authenticationFailure = failure;
+    if (error.code !== "auth_failed") {
+      const prompt = hostKeyPrompt(error);
+      if (!prompt || error.code === "host_key_revoked" || prompt.host !== target.host || prompt.port !== (target.port ?? 22)) throw failure;
+      const message = `${prompt.changed ? t("ssh.prompt.hostKeyChanged") : t("ssh.prompt.hostKeyUnknown")}\n${prompt.host}:${prompt.port}\n${prompt.keyType} ${prompt.fingerprint}\n\n${t("ssh.prompt.trustKey")}`;
       if (await requestSshPrompt(message, true) !== "yes") throw failure;
       approval = { kind: "approve", keyBase64: prompt.keyBase64, remember: true };
+      try {
+        session = await sshNativeConnect(target, credentials, approval);
+      } catch (retryFailure) {
+        if (toSshNativeError(retryFailure).code !== "auth_failed") throw retryFailure;
+        authenticationFailure = retryFailure;
+      }
     }
-    try {
-      session = await sshNativeConnect(target, credentials, approval);
-    } catch (retryFailure) {
-      if (toSshNativeError(retryFailure).code !== "auth_failed") throw retryFailure;
+    if (!session) {
       if (connection.identityFile) {
-        const passphrase = await requestSshPrompt(`Passphrase for ${connection.identityFile}`, false);
+        const passphrase = await requestSshPrompt(t("ssh.prompt.passphraseFor", { path: connection.identityFile }), false);
         if (passphrase !== null) {
           credentials = credentials.map((credential) => credential.kind === "privateKey"
             ? { ...credential, passphrase }
@@ -89,8 +93,8 @@ async function openHandle(env: RemoteWorkspaceEnv): Promise<NativeHandleState> {
         }
       }
       if (!session) {
-        const password = await requestSshPrompt(`Password for ${connection.user ?? "user"}@${connection.host}`, false);
-        if (password === null) throw retryFailure;
+        const password = await requestSshPrompt(t("ssh.prompt.passwordFor", { target: connection.user ? `${connection.user}@${connection.host}` : connection.host }), false);
+        if (password === null) throw authenticationFailure;
         session = await sshNativeConnect(target, [{ kind: "password", secret: password }], approval);
       }
     }

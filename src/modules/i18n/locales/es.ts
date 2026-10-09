@@ -3342,6 +3342,11 @@ export const es: TranslationSchema = {
     },
     prompt: {
       hostKeyTitle: "Verificar clave del servidor SSH",
+      hostKeyUnknown: "Clave del servidor SSH desconocida",
+      hostKeyChanged: "ADVERTENCIA: La clave del servidor SSH ha cambiado",
+      trustKey: "¿Confiar en esta clave?",
+      passphraseFor: "Frase de contraseña para {path}",
+      passwordFor: "Contraseña para {target}",
       authTitle: "Autenticación SSH",
       secretLabel: "Contraseña o frase de la clave",
     },
