@@ -4617,6 +4617,10 @@ export const en = {
       transcriptLayout: "Transcript layout",
       transcriptLayoutDesc:
         "Full width keeps prompts as a spanning card. Chat aligns them to the right.",
+      diffColors: "Diff colors",
+      diffColorsDesc: "Choose colors for added and removed lines.",
+      colorblind: "Colorblind",
+      highContrast: "High contrast",
       fullWidth: "Full width",
       chat: "Chat",
       anchorPrompts: "Anchor prompts to top",

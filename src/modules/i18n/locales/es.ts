@@ -4728,6 +4728,10 @@ export const es: TranslationSchema = {
       transcriptLayout: "Distribucion del transcript",
       transcriptLayoutDesc:
         "Full width deja los prompts como una tarjeta a todo el ancho. Chat los alinea a la derecha.",
+      diffColors: "Colores de diferencias",
+      diffColorsDesc: "Elige los colores de las líneas añadidas y eliminadas.",
+      colorblind: "Daltonismo",
+      highContrast: "Alto contraste",
       fullWidth: "Ancho completo",
       chat: "Chat",
       anchorPrompts: "Anclar prompts arriba",

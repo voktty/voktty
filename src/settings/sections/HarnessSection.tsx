@@ -57,6 +57,7 @@ import {
   type HarnessId,
 } from "@/modules/harness/lib/session";
 import { HarnessIcon } from "@/modules/harness/chrome/HarnessIcon";
+import { DiffPalettePicker } from "@/modules/harness/chrome/DiffPalettePicker";
 import { SectionHeader } from "../components/SectionHeader";
 import { Button } from "@/components/ui/button";
 
@@ -211,6 +212,12 @@ function GeneralBlock() {
           ]}
           onChange={(next) => { saveTranscriptLayout(next); setTranscriptLayout(next); }}
         />
+      </Row>
+      <Row
+        label={t("harness.settings.diffColors")}
+        description={t("harness.settings.diffColorsDesc")}
+      >
+        <DiffPalettePicker />
       </Row>
       <Row label={t("harness.settings.anchorPrompts")} description={t("harness.settings.anchorPromptsDesc")}>
         <HarnessToggle label={t("harness.settings.anchorPrompts")} on={transcriptAnchor} onChange={(next) => { saveTranscriptAnchor(next); setTranscriptAnchor(next); }} />
