@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "upstreamBase": "6bd432cada0f492f076cc93f7ccb3027f4ff7102",
+  "upstreamTarget": "d68bfa8768b2f7e61686a5925c8d26e20cf6cba0",
+  "localBaseline": "e8cb8a453faa80de8f476ed1e529e25529651db4",
+  "records": [
+    {
+      "upstreamCommit": "98da85ae7c2b44c2f2427c17b381433ef4f23ea9",
+      "upstreamTitle": "Support async Codex agent questions",
+      "localCommit": "6d3ec038a09399df0ef5f609ccee82a399d0e56a",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/integrations/harness/providers/codex/codex.ts",
+          "local": "src/modules/harness/lib/harness/codex.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/codex/codexQuestions.ts",
+          "local": "src/modules/harness/lib/harness/codexQuestions.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/harness/codexAsyncQuestions.test.ts",
+            "src/modules/harness/lib/harness/codexAsyncLive.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Adapt asynchronous agentMessage questions to Voktty's shared question queue and turn/steer response lifecycle, preserving cancellation and secret-input protections."
+    },
+    {
+      "upstreamCommit": "c2b479dde61be031c6406e83bde5b1e2ccf1c40c",
+      "upstreamTitle": "fix(codex): omit collaboration mode until a model is known (#771)",
+      "localCommit": "6d3ec038a09399df0ef5f609ccee82a399d0e56a",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/integrations/harness/providers/codex/codexProtocol.ts",
+          "local": "src/modules/harness/lib/harness/codexProtocol.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/harness/codexModelSelection.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Omit model overrides until the provider model is selected while retaining Voktty's read-only plan sandbox and approval policy."
+    },
+    {
+      "upstreamCommit": "db006a4a19c0f5ce23b3bd58a44f62b9b78a2d97",
+      "upstreamTitle": "Run the same codex the user's shell does (#878)",
+      "localCommit": "6d3ec038a09399df0ef5f609ccee82a399d0e56a",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src-tauri/src/harness.rs",
+          "local": "src-tauri/src/modules/harness/host.rs"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src-tauri/src/modules/harness/host.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "codex_prefers_the_shell_binary_and_keeps_install_fallbacks"
+        }
+      ],
+      "rationale": "Prefer the Codex executable found by the login shell and retain platform-specific installation fallbacks; keep the resolver in the native Harness host."
+    }
+  ]
+}

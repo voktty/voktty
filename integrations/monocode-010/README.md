@@ -17,3 +17,15 @@ node scripts/monocode/audit.mjs /path/to/monocode --check
 ```
 
 Update the pinned revisions in `manifest.json` only when a new review range is chosen. Keep functional decisions and exclusions in the active Spanish integration plan under `PROMPTS/planes/monocode-010/`.
+
+Integrated commit mappings, MIT provenance, and focused test selections live in `ports.json`. The verifier checks both Git histories and the upstream license. Its test runners are restricted to Vitest and a named cargo-nextest filter. Verify mappings without running tests:
+
+```bash
+node scripts/monocode/verify-ports.mjs /path/to/monocode
+```
+
+Verify the mappings and run each recorded test command:
+
+```bash
+node scripts/monocode/verify-ports.mjs /path/to/monocode --run-tests
+```
