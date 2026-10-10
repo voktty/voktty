@@ -1305,6 +1305,27 @@
         }
       ],
       "rationale": "The composer keeps its mount-time textarea defaultValue while the existing effect applies later remote draft updates. This prevents polling-driven React renders from rewriting the text node during a WebKit IME composition; the regression preserves the in-progress value after a parent rerender."
+    },
+    {
+      "upstreamCommit": "07f29c13f18e0d8c4258897a9ff658e2691032b0",
+      "upstreamTitle": "fix(skills): raise the skill catalog cap from 300 to 5,000 (#750)",
+      "localCommit": "bc59b97",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src-tauri/src/skills.rs",
+          "local": "src-tauri/src/modules/harness/skills.rs"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src-tauri/src/modules/harness/skills.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "modules::harness::skills::tests::lists_large_catalogs_from_every_root"
+        }
+      ],
+      "rationale": "Voktty's native skill catalog now permits up to 5,000 unique skills across its ordered project, user, and provider roots. A regression creates 1,400 user skills and a Codex-only skill to ensure the larger personal root no longer hides later provider skills. Frontmatter reads remain bounded to 16 KiB per skill."
     }
   ]
 }
