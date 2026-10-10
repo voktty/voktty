@@ -16,6 +16,7 @@ pub mod notes;
 pub mod notifications;
 pub mod orchestration;
 pub mod pasteboard;
+mod pi_package;
 pub mod project_logo;
 pub mod rate_limits;
 pub mod reminders;

@@ -2074,7 +2074,9 @@ fn is_pi_coding_agent(path: &Path) -> bool {
     if !binary_name_eq(path, "pi") {
         return false;
     }
-    file_mentions_pi_coding_agent(path) || help_mentions_rpc_mode(path)
+    file_mentions_pi_coding_agent(path)
+        || super::pi_package::is_pi_npm_package(path)
+        || help_mentions_rpc_mode(path)
 }
 
 fn file_mentions_pi_coding_agent(path: &Path) -> bool {
@@ -2975,6 +2977,62 @@ mod tests {
 
         assert!(!is_pi_coding_agent(&dir.join("missing")));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pi_accepts_npm_launcher_through_its_package_manifest() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let dir = tempfile::tempdir().unwrap();
+        let package = dir
+            .path()
+            .join("lib/node_modules/@earendil-works/pi-coding-agent");
+        let bundle = package.join("dist/bundle");
+        std::fs::create_dir_all(&bundle).unwrap();
+        let target = bundle.join("cli.js");
+        std::fs::write(
+            &target,
+            b"#!/usr/bin/env node\nimport { createRequire } from 'node:module';\ncreateRequire(import.meta.url)('./cli-runtime.js');\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(
+            package.join("package.json"),
+            br#"{"name":"@earendil-works/pi-coding-agent"}"#,
+        )
+        .unwrap();
+
+        let bin = dir.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let candidate = bin.join("pi");
+        symlink(&target, &candidate).unwrap();
+
+        assert!(is_pi_coding_agent(&candidate));
+    }
+
+    #[test]
+    fn pi_rejects_an_unrelated_npm_package_named_pi() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let dir = tempfile::tempdir().unwrap();
+        let package = dir.path().join("lib/node_modules/pi-coding-agent-tools");
+        let bundle = package.join("dist");
+        std::fs::create_dir_all(&bundle).unwrap();
+        let target = bundle.join("cli.js");
+        std::fs::write(&target, b"#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(
+            package.join("package.json"),
+            br#"{"name":"pi-coding-agent-tools"}"#,
+        )
+        .unwrap();
+
+        let bin = dir.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let candidate = bin.join("pi");
+        symlink(&target, &candidate).unwrap();
+
+        assert!(!is_pi_coding_agent(&candidate));
     }
 
     #[test]
