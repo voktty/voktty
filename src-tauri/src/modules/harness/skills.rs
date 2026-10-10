@@ -6,7 +6,7 @@ use serde::Serialize;
 use super::fs::expand_home;
 use crate::dirs_home;
 
-const MAX_SKILLS: usize = 300;
+const MAX_SKILLS: usize = 5_000;
 const MAX_FRONTMATTER_BYTES: usize = 16 * 1024;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -656,6 +656,34 @@ mod tests {
         let native = skills.iter().find(|s| s.name == "cursor-only").unwrap();
         assert_eq!(native.source, "cursor");
         assert_eq!(native.scope, "project");
+    }
+
+    #[test]
+    fn lists_large_catalogs_from_every_root() {
+        let project = tmp("proj-large-skills");
+        let home = tmp("home-large-skills");
+        for index in 0..1_400 {
+            let name = format!("shared-{index:04}");
+            write_skill(
+                &home.0.join(".agents/skills"),
+                &name,
+                &format!("---\nname: {name}\ndescription: Shared skill {index}\n---\n"),
+            );
+        }
+        write_skill(
+            &home.0.join(".codex/skills"),
+            "codex-only",
+            "---\nname: codex-only\ndescription: Codex native\n---\n",
+        );
+
+        let skills = list_skills_from(&project.0, Some(&home.0), None);
+        assert_eq!(skills.len(), 1_401);
+        assert!(skills.iter().any(|skill| skill.name == "shared-1399"));
+        let codex = skills
+            .iter()
+            .find(|skill| skill.name == "codex-only")
+            .unwrap();
+        assert_eq!(codex.source, "codex");
     }
 
     #[test]
