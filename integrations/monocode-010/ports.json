@@ -1007,6 +1007,32 @@
         }
       ],
       "rationale": "Merge request diff loading falls back to the older /changes endpoint only when /diffs returns HTTP 404. It preserves pagination/overflow truncation, keeps authentication and other HTTP failures visible, and uses the existing timeout and redirect-disabled GitLab client. Mock-server regressions cover the fallback, the modern endpoint, and non-404 errors; the Tauri command contract is unchanged."
+    },
+    {
+      "upstreamCommit": "43602cde68496fe2a75a5c5c86e91c63aa47eb59",
+      "upstreamTitle": "Make the live activity ticker expandable",
+      "localCommit": "bac0b72",
+      "basis": "preexisting",
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.inlineWork.test.ts",
+          "local": "src/modules/harness/surfaces/transcriptActivity.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/transcriptActivity.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty's session transcript shows active work inline and puts answered work behind its WorkFoldLine, which users can expand again. The Mono-specific header state from upstream has no local counterpart; the existing transcript fold supplies the activity access in Voktty's layout without a second control or state owner. This implementation and its fold tests were present before the pinned local baseline."
     }
   ]
 }
