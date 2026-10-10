@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -8,9 +9,11 @@ use uuid::Uuid;
 use crate::modules::git::errors::{GitError, Result as GitResult};
 use crate::modules::git::process::{ensure_git_available, ensure_success, run_git};
 use crate::modules::git::utils::authorized_repo_root;
-use crate::modules::workspace::{resolve_path, WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry, resolve_path};
 
 const MAX_WORKTREES: usize = 128;
+const WORKTREE_STATUS_BUDGET: Duration = Duration::from_secs(15);
+const WORKTREE_STATUS_TIMEOUT_SECS: u64 = 5;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -127,6 +130,7 @@ fn list_worktrees(
 
     let default_root = path_parent(&raw[0].path, &repo.workspace)?;
     let mut worktrees = Vec::with_capacity(raw.len());
+    let status_started = Instant::now();
     for (index, entry) in raw.into_iter().enumerate() {
         let mut missing = entry.prunable;
         if !repo.workspace.is_remote() && !missing {
@@ -139,6 +143,12 @@ fn list_worktrees(
                 _ => missing = true,
             }
         }
+        let status_timeout_secs = worktree_status_timeout_secs(status_started.elapsed());
+        let (dirty, unpushed) = if missing || status_timeout_secs == 0 {
+            (None, None)
+        } else {
+            worktree_status(&repo.workspace, &entry.path, status_timeout_secs)
+        };
         worktrees.push(Worktree {
             path: entry.path,
             branch: entry.branch,
@@ -147,8 +157,8 @@ fn list_worktrees(
             locked: entry.locked,
             prunable: entry.prunable,
             missing,
-            dirty: None,
-            unpushed: None,
+            dirty,
+            unpushed,
             session_ids: Vec::new(),
         });
     }
@@ -157,6 +167,57 @@ fn list_worktrees(
         worktrees,
         default_root,
     })
+}
+
+fn worktree_status(
+    workspace: &WorkspaceEnv,
+    path: &str,
+    timeout_secs: u64,
+) -> (Option<bool>, Option<u32>) {
+    let Ok(output) = run_git(
+        workspace,
+        Some(path),
+        [
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--ahead-behind",
+            "--untracked-files=normal",
+        ],
+        timeout_secs,
+    ) else {
+        return (None, None);
+    };
+    if output.exit_code != Some(0) || output.timed_out || output.truncated {
+        return (None, None);
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let (dirty, unpushed) = parse_worktree_status(&text);
+    (Some(dirty), unpushed)
+}
+
+fn worktree_status_timeout_secs(elapsed: Duration) -> u64 {
+    WORKTREE_STATUS_BUDGET
+        .saturating_sub(elapsed)
+        .as_secs()
+        .min(WORKTREE_STATUS_TIMEOUT_SECS)
+}
+
+fn parse_worktree_status(output: &str) -> (bool, Option<u32>) {
+    let dirty = output
+        .lines()
+        .any(|line| !line.is_empty() && !line.starts_with('#'));
+    let unpushed = output.lines().find_map(|line| {
+        let ahead_behind = line.strip_prefix("# branch.ab ")?;
+        ahead_behind
+            .split_whitespace()
+            .next()?
+            .strip_prefix('+')?
+            .parse::<u32>()
+            .ok()
+    });
+    (dirty, unpushed)
 }
 
 fn create_worktree(
@@ -469,6 +530,34 @@ mod tests {
     }
 
     #[test]
+    fn parses_dirty_and_upstream_ahead_metadata_from_porcelain_v2() {
+        assert_eq!(
+            parse_worktree_status(
+                "# branch.head feature\n# branch.upstream origin/main\n# branch.ab +2 -1\n1 .M N... 100644 100644 100644 abc abc file.txt\n"
+            ),
+            (true, Some(2))
+        );
+        assert_eq!(
+            parse_worktree_status("# branch.head feature\n# branch.ab +0 -0\n"),
+            (false, Some(0))
+        );
+        assert_eq!(
+            parse_worktree_status("# branch.head feature\n"),
+            (false, None)
+        );
+    }
+
+    #[test]
+    fn bounds_worktree_status_queries_by_per_query_and_total_budgets() {
+        assert_eq!(worktree_status_timeout_secs(Duration::ZERO), 5);
+        assert_eq!(worktree_status_timeout_secs(Duration::from_secs(9)), 5);
+        assert_eq!(worktree_status_timeout_secs(Duration::from_secs(10)), 5);
+        assert_eq!(worktree_status_timeout_secs(Duration::from_secs(14)), 1);
+        assert_eq!(worktree_status_timeout_secs(Duration::from_millis(14_999)), 0);
+        assert_eq!(worktree_status_timeout_secs(Duration::from_secs(15)), 0);
+    }
+
+    #[test]
     fn lists_main_worktree_and_authorizes_registered_worktrees() {
         let (_parent, repo, registry) = repository();
         let output = run_git(
@@ -483,6 +572,66 @@ mod tests {
         assert!(listed.worktrees[0].is_main);
         assert_eq!(listed.worktrees[1].branch.as_deref(), Some("feature"));
         assert!(registry.is_authorized(Path::new(&listed.worktrees[1].path)));
+    }
+
+    #[test]
+    fn lists_dirty_state_and_unpushed_commits_for_each_worktree() {
+        let (parent, repo, registry) = repository();
+        run_git(&repo, &["branch", "-M", "main"]);
+
+        let origin = parent.path().join("origin.git");
+        let output = Command::new("git")
+            .args(["init", "--bare", "--quiet"])
+            .arg(&origin)
+            .output()
+            .expect("git is available");
+        assert!(output.status.success());
+        run_git(
+            &repo,
+            &[
+                "remote",
+                "add",
+                "origin",
+                origin.to_str().expect("utf-8 path"),
+            ],
+        );
+        run_git(&repo, &["push", "--quiet", "-u", "origin", "main"]);
+
+        let feature = parent.path().join("feature");
+        run_git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "--quiet",
+                "-b",
+                "feature",
+                feature.to_str().unwrap(),
+            ],
+        );
+        run_git(&feature, &["branch", "--set-upstream-to", "origin/main"]);
+        std::fs::write(feature.join("feature.txt"), "feature\n").expect("write commit file");
+        run_git(&feature, &["add", "feature.txt"]);
+        run_git(&feature, &["commit", "--quiet", "-m", "feature"]);
+        std::fs::write(feature.join("dirty.txt"), "uncommitted\n").expect("write dirty file");
+
+        let listed = list_worktrees(&registry, &repo.to_string_lossy(), &WorkspaceEnv::Local)
+            .expect("list worktrees");
+        let main = listed
+            .worktrees
+            .iter()
+            .find(|tree| tree.branch.as_deref() == Some("main"))
+            .expect("main worktree");
+        assert_eq!(main.dirty, Some(false));
+        assert_eq!(main.unpushed, Some(0));
+
+        let feature = listed
+            .worktrees
+            .iter()
+            .find(|tree| tree.branch.as_deref() == Some("feature"))
+            .expect("feature worktree");
+        assert_eq!(feature.dirty, Some(true));
+        assert_eq!(feature.unpushed, Some(1));
     }
 
     #[test]
