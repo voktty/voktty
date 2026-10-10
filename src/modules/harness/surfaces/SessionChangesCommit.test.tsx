@@ -449,6 +449,26 @@ it("generates a commit message from selected diffs through the active remote wor
   );
 });
 
+it("keeps the commit message editable without selected files", async () => {
+  await act(async () => {
+    root.render(
+      <SessionChangesCommit
+        cwd="/repo"
+        sessionId="session-a"
+        files={[]}
+        onNotice={vi.fn()}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  const message = container.querySelector<HTMLTextAreaElement>(
+    "#session-commit-message",
+  );
+  expect(message).not.toBeNull();
+  expect(message?.disabled).toBe(false);
+});
+
 it("commits, publishes through the native workspace, and opens the pull request", async () => {
   const sshWorkspace = {
     kind: "ssh" as const,
