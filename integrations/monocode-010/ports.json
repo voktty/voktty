@@ -1281,6 +1281,30 @@
         }
       ],
       "rationale": "Voktty shows project and session diff counts in both its Changes tab and session cards. The extracted DiffStat component scales its text to the measured space and watches the container so counts grow again after a sidebar resize. Existing localization and monospace styling remain in use; the session-card trailing row can shrink so long counts do not push out its label or Harness icon."
+    },
+    {
+      "upstreamCommit": "680e1ab96907f2171f9e7fb5d83e14261f3d8f70",
+      "upstreamTitle": "Keep IME composition intact in remote session composers (#741)",
+      "localCommit": "973578b",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/Composer.tsx",
+          "local": "src/modules/harness/chrome/Composer.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/Composer.ime.test.ts",
+          "local": "src/modules/harness/chrome/Composer.ime.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/Composer.ime.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The composer keeps its mount-time textarea defaultValue while the existing effect applies later remote draft updates. This prevents polling-driven React renders from rewriting the text node during a WebKit IME composition; the regression preserves the in-progress value after a parent rerender."
     }
   ]
 }
