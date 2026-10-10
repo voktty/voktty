@@ -1887,6 +1887,76 @@
         }
       ],
       "rationale": "The OMP Copilot catalog includes internal agent endpoints and legacy snapshots that the provider picker omits. Filter only github-copilot model ids, preserving current Copilot choices and identically named models from other providers."
+    },
+    {
+      "upstreamCommit": "80ba2c091245af2fe5372e63f405c89e7fb074cc",
+      "upstreamTitle": "Throttle GitHub polling and handle rate-limit backoff",
+      "localCommit": "c4499fb",
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "Voktty does not have MonoCode's PR Checks tab or its foreground checks polling. Revisit if that surface is added."
+      ],
+      "mappings": [
+        {
+          "upstream": "src-tauri/src/fs.rs",
+          "local": "src-tauri/src/modules/harness/fs.rs"
+        },
+        {
+          "upstream": "src-tauri/src/fs.rs",
+          "local": "src-tauri/src/modules/harness/github_rate_limit.rs"
+        },
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/surfaces/InboxView.tsx"
+        },
+        {
+          "upstream": "src/features/inbox/hooks/useInboxUnseen.ts",
+          "local": "src/modules/harness/hooks/useInboxUnseen.ts"
+        },
+        {
+          "upstream": "src/features/inbox/hooks/useInboxUnseen.test.ts",
+          "local": "src/modules/harness/hooks/useInboxUnseen.test.ts"
+        },
+        {
+          "upstream": "src/features/inbox/model/githubTasks.ts",
+          "local": "src/modules/harness/lib/githubTasks.ts"
+        },
+        {
+          "upstream": "src/features/inbox/model/githubTasks.repositories.test.ts",
+          "local": "src/modules/harness/lib/githubTasks.rateLimit.test.ts"
+        },
+        {
+          "upstream": "src/features/inbox/model/githubTasks.ts",
+          "local": "src/modules/harness/lib/githubWorkItemFreshness.test.ts"
+        },
+        {
+          "upstream": "src/features/inbox/ui/InboxView.tsx",
+          "local": "src/modules/harness/surfaces/InboxView.tsx"
+        },
+        {
+          "upstream": "src/features/notifications/hooks/projectNotificationFlow.test.ts",
+          "local": "src/modules/harness/hooks/useInboxUnseen.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/hooks/useInboxUnseen.test.ts",
+            "src/modules/harness/lib/githubTasks.rateLimit.test.ts",
+            "src/modules/harness/lib/githubWorkItemFreshness.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        },
+        {
+          "files": ["src-tauri/src/modules/harness/github_rate_limit.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "modules::harness::github_rate_limit::tests"
+        }
+      ],
+      "rationale": "Voktty routes Harness GitHub CLI calls through one native gh_run path. A shared backoff pauses primary and secondary rate-limited requests, probes the GraphQL quota reset when appropriate, and falls back to a short pause if the probe fails. Inbox lists stay fresh for two minutes, detail data for thirty seconds, the badge refreshes every two minutes while visible and five minutes while hidden, and stale GitHub entries remain visible when refresh is rate limited. The Inbox card no longer prefetches linked GitHub details on hover. The Checks tab polling is deferred because Voktty has no corresponding tab."
     }
   ]
 }
