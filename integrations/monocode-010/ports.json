@@ -2305,6 +2305,29 @@
         }
       ],
       "rationale": "Voktty now pauses pending follow-ups when a provider session errors, preventing the idle queue dispatcher from retrying against a failed connection. The commit's Mono-specific session model and transcript changes do not apply to the current Harness queue."
+    },
+    {
+      "upstreamCommit": "6ec7c52e2606f7998f89228d0aa7900b3bba36a7",
+      "upstreamTitle": "Allow editing commit message without selected files",
+      "localCommits": ["7e1af5c", "13d3b57"],
+      "localCommitBases": ["integrated", "integrated"],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/surfaces/SessionChangesCommit.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/surfaces/SessionChangesCommit.test.tsx"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty has allowed commit-message editing without file selection since the SessionChangesCommit flow was added in 7e1af5c. The compatibility test now protects that behavior in the local Harness review surface."
     }
   ],
   "mergeCoverage": [
