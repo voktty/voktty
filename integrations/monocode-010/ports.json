@@ -424,6 +424,32 @@
         }
       ],
       "rationale": "The permissions selector is extracted into the dedicated picker modal in Voktty's quick composer. The existing model-selector test covers the picker behavior while Voktty keeps its own model catalog and permission policy."
+    },
+    {
+      "upstreamCommit": "6c677052bf798fa82e73cfabe83632cd0f545384",
+      "upstreamTitle": "Fix Changes list file selection click target and latency (#830)",
+      "localCommit": "06ab9ee",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessApp.tsx"
+        },
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/chrome/SourceControl.tsx"
+        },
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/chrome/Sidebar.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/GitChangesPanel.tsx",
+          "local": "src/modules/source-control/SourceControlPanel.tsx"
+        }
+      ],
+      "tests": [],
+      "rationale": "Voktty opens source-control diffs through exact repo-root paths, avoiding a project-index scan and preserving ignored files. The change row's file button fills the row height. The existing file-index regression covers exact opens when the path is absent from the index."
     }
   ]
 }
