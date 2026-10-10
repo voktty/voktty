@@ -73,6 +73,30 @@
         }
       ],
       "rationale": "Prefer the Codex executable found by the login shell and retain platform-specific installation fallbacks; keep the resolver in the native Harness host."
+    },
+    {
+      "upstreamCommit": "b93b95a45069b9999a5c8bbff61e0db131d981bf",
+      "upstreamTitle": "Preserve remote sessions when opening local projects",
+      "localCommit": "a699e88",
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "Remote tab matching and stale connection bindings in the connections Host surface; revisit with the Voktty-native SSH agent and tmux integration."
+      ],
+      "mappings": [
+        {
+          "upstream": "src/features/projects/model/projectReturn.ts",
+          "local": "src/modules/harness/lib/projectReturn.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/projectReturn.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Do not reuse a restored remote:// session as a blank local conversation before its transcript arrives. This is a partial adaptation; the connections tab-binding behavior is deferred to the native SSH/tmux migration."
     }
   ]
 }

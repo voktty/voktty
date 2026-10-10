@@ -60,6 +60,8 @@ it("verifies mapped upstream and local changes with test paths", () => {
         upstreamTitle: "Update Codex behavior",
         localCommit,
         license: "MIT",
+        coverage: "partial",
+        deferred: ["A host-specific behavior remains to be reviewed."],
         mappings: [
           {
             upstream: "src/features/codex.ts",
@@ -80,11 +82,26 @@ it("verifies mapped upstream and local changes with test paths", () => {
 
   const result = verifyPorts({ upstream, localRoot: local, manifest });
   assert.equal(result.records.length, 1);
+  assert.equal(result.records[0].coverage, "partial");
+  assert.deepEqual(result.records[0].deferred, [
+    "A host-specific behavior remains to be reviewed.",
+  ]);
   assert.deepEqual(result.records[0].localPaths, [
     "src/modules/harness/codex.test.ts",
     "src/modules/harness/codex.ts",
   ]);
 
+  delete manifest.records[0].coverage;
+  delete manifest.records[0].deferred;
+  assert.equal(verifyPorts({ upstream, localRoot: local, manifest }).records[0].coverage, "complete");
+
+  manifest.records[0].coverage = "unknown";
+  assert.throws(
+    () => verifyPorts({ upstream, localRoot: local, manifest }),
+    /Invalid coverage details/,
+  );
+
+  delete manifest.records[0].coverage;
   manifest.records[0].mappings[0].local = "src/modules/harness/missing.ts";
   assert.throws(
     () => verifyPorts({ upstream, localRoot: local, manifest }),

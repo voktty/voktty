@@ -102,6 +102,17 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
     const upstreamChanged = commitPaths(upstream, upstreamCommit);
     const localChanged = commitPaths(localRoot, localCommit);
     const localTree = treePaths(localRoot, localCommit);
+    const coverage = record.coverage ?? "complete";
+    const deferred = record.deferred ?? [];
+    if (
+      !["complete", "partial"].includes(coverage) ||
+      !Array.isArray(deferred) ||
+      deferred.some((item) => typeof item !== "string" || item.trim() === "") ||
+      (coverage === "partial" && deferred.length === 0) ||
+      (coverage === "complete" && deferred.length > 0)
+    ) {
+      throw new Error(`Invalid coverage details for ${record.upstreamCommit}`);
+    }
     const expectedLocalPaths = [];
     for (const mapping of record.mappings) {
       const upstreamPath = relativePath(mapping.upstream, "Mapped upstream path");
@@ -160,6 +171,8 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
       upstreamTitle: record.upstreamTitle,
       localCommit,
       license: record.license,
+      coverage,
+      deferred,
       mappings: record.mappings,
       tests,
       rationale: record.rationale,
