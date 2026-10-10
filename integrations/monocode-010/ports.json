@@ -2328,6 +2328,21 @@
         }
       ],
       "rationale": "Voktty has allowed commit-message editing without file selection since the SessionChangesCommit flow was added in 7e1af5c. The compatibility test now protects that behavior in the local Harness review surface."
+    },
+    {
+      "upstreamCommit": "daaad71c2046c1a6d335008ae949ffc8b8d52f6e",
+      "upstreamTitle": "Hide scrollbars in Zen phase live content",
+      "localCommit": "e7f7edd4d2f76044b99a6dc061ac8267ebd6e5bb",
+      "basis": "preexisting",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/styles/index.css",
+          "local": "src/styles/globals.css"
+        }
+      ],
+      "tests": [],
+      "rationale": "The upstream commit hides the Zen activity scroller scrollbar. Voktty's global scrollbar rules already apply scrollbar-width:none and hide WebKit scrollbar pseudo-elements on every descendant, including this scroller; this equivalent behavior predates the pinned integration baseline."
     }
   ],
   "mergeCoverage": [
@@ -2475,6 +2490,90 @@
       "upstreamTitle": "Use chatting icon for session toggle",
       "category": "mono-only",
       "rationale": "Changes the icon on Mono's transcript toggle for its spawned sessions. Voktty's Harness transcript has no corresponding Mono session toggle."
+    },
+    {
+      "upstreamCommit": "bbb91627725747f3f7c9793a510fd962e542f4e3",
+      "upstreamTitle": "Wrap active agent names in signature pills",
+      "category": "mono-only",
+      "rationale": "Styles active Mono agent names inside their mascot signature pill in Mono transcripts. Voktty's Harness activity fold has no Mono identity or signature component."
+    },
+    {
+      "upstreamCommit": "b9e2a13fa5f85985dec4a1009d0b11b19395a7a3",
+      "upstreamTitle": "Self-update the Linux AppImage (#825)",
+      "category": "release-only",
+      "rationale": "Adds Linux AppImage update channels and release workflow behavior. This packaging and updater work is independent of Harness behavior and Voktty maintains its own release pipeline."
+    },
+    {
+      "upstreamCommit": "de9650ce9f4901f479455613fa38dbb167c769a7",
+      "upstreamTitle": "Use host WebKitGTK in the Linux AppImage (#824)",
+      "category": "release-only",
+      "rationale": "Changes MonoCode's Linux AppImage packaging to use host WebKitGTK and adds packaging checks. It does not change Harness code and must be evaluated with Voktty's own Linux release setup."
+    },
+    {
+      "upstreamCommit": "1c532697609924c1ee00bf11ee5b250881b4211f",
+      "upstreamTitle": "Add artifact sheet overlay in floating Mono chat",
+      "category": "mono-only",
+      "rationale": "Adds a document reader overlay to the macOS floating Mono chat and its menu bar actions. Voktty has no floating Mono chat or artifact store."
+    },
+    {
+      "upstreamCommit": "c0d1fa0da78f023001897394e809d5263b77906a",
+      "upstreamTitle": "Add menu bar icon visibility toggle",
+      "category": "mono-only",
+      "rationale": "Adds a setting for the macOS Mono menu bar item. Voktty's Harness runs inside its project workspace and has no Mono menu bar item to control."
+    },
+    {
+      "upstreamCommit": "11b539742b461bb0c04df834717c90708bef46a6",
+      "upstreamTitle": "Add Mono rail to floating chats for switching and creating",
+      "category": "mono-only",
+      "rationale": "Adds Mono selection and creation to the floating chat window. Voktty has no Mono roster or standalone floating chat window."
+    },
+    {
+      "upstreamCommit": "0ee745e945e531adea226cff9ee3e8927447e61c",
+      "upstreamTitle": "Remove accidental document preview mockup",
+      "category": "not-harness",
+      "rationale": "Deletes an unshipped Mono document mockup under work/ and ignores that local preview path. The mockup is absent from Voktty and is not part of Harness source."
+    },
+    {
+      "upstreamCommit": "4d24fd7e322e73ad1ba43eee6449a8ddb2e3d38e",
+      "upstreamTitle": "Add persisted artifacts with chat attachments and panels",
+      "category": "mono-only",
+      "rationale": "Adds persisted document artifacts and AgentApp artifact commands guarded to Mono sessions and habit runs. Voktty has no Mono AgentApp caller or artifact-card workflow; its Notes store remains a separate Harness feature."
+    },
+    {
+      "upstreamCommit": "53d91c8262e6375e13d31cc8b51dab022b95a686",
+      "upstreamTitle": "Fix macOS Clippy chunking warnings",
+      "category": "mono-only",
+      "rationale": "Resolves Clippy warnings in the macOS-only mono_chat module introduced for Mono's floating chat. Voktty does not contain that module or behavior."
+    },
+    {
+      "upstreamCommit": "b1660e7635a84f689199adc2ae67cd0beab5fcc4",
+      "upstreamTitle": "Fix ModelPicker type error from stale harness prop",
+      "category": "not-harness",
+      "rationale": "Removes a stale prop from MonoCode's ModelSettingRows call site after its component API changed. Voktty's Harness has a separate ModelPicker implementation and no matching stale prop."
+    },
+    {
+      "upstreamCommit": "e79778cdb55f7e2ca24580055c3bca9df25a9cf9",
+      "upstreamTitle": "Resize menu bar portrait and fix macOS 27 image visibility",
+      "category": "mono-only",
+      "rationale": "Adjusts the mascot portrait rendered by Mono's macOS menu bar item. Voktty has no equivalent Mono menu bar UI."
+    },
+    {
+      "upstreamCommit": "140c6e566c34f8db5130d45c0ce5bdca2feeba70",
+      "upstreamTitle": "Add floating Mono chat panel with menu bar integration",
+      "category": "mono-only",
+      "rationale": "Adds a macOS floating chat, AppKit menu bar integration, and request synchronization for Mono agents. Voktty embeds the Harness in project workspaces and does not include Mono agents or their independent sessions."
+    },
+    {
+      "upstreamCommit": "93ee54c8b95be7d4dfcb9b584e7b71ef6797dd5b",
+      "upstreamTitle": "Add Mono permission controls to Details",
+      "category": "mono-only",
+      "rationale": "Adds per-Mono runtime permission controls to the Mono profile panel. Voktty's Harness access picker configures ordinary sessions and has no per-Mono profile state."
+    },
+    {
+      "upstreamCommit": "de033ffabc7088f1f0643d8133191a9ff77af8f2",
+      "upstreamTitle": "fix(monos): keep IME candidate selection from sending in Mono inputs (#790)",
+      "category": "mono-only",
+      "rationale": "Guards Enter in Mono composer, profile, habit, and fact inputs. Those Mono pages are absent from Voktty; the Harness Composer already uses its shared IME composition guard."
     }
   ]
 }
