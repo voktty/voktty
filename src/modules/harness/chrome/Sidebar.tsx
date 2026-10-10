@@ -83,7 +83,7 @@ import { copyText } from "../lib/clipboard";
 import { IS_MAC, MOD } from "../lib/platform";
 import { resolveModel } from "../lib/models";
 import { prettyParent, projectKey, projectName } from "../lib/paths";
-import type { OpenFileFn } from "../lib/search";
+import type { FileOpenOptions, OpenFileFn } from "../lib/search";
 import { sessionDisplayTitle } from "../lib/session";
 import { ParticleText } from "./ParticleText";
 import { nextUnseenFinishedSessions } from "../lib/sessionDone";
@@ -237,7 +237,7 @@ type Props = {
   canGoForward?: boolean;
   onGoBack?: () => void;
   onGoForward?: () => void;
-  onOpenDiff?: (path: string) => void;
+  onOpenDiff?: (path: string, options?: FileOpenOptions) => void;
   selectedDiffPath?: string;
   textHarness?: HarnessId;
   onShowSourceControl?: () => void;

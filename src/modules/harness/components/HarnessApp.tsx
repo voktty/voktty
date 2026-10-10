@@ -99,7 +99,6 @@ import {
   prefetchProjectFiles,
   rememberOpenedFile,
   resolveFileOpenRequest,
-  resolveOpenablePath,
 } from "../lib/fileIndex";
 import { notifyDirsChanged } from "../lib/fileTree";
 import { nudgeWatchedFiles } from "../lib/fileWatch";
@@ -307,7 +306,11 @@ import {
 import { archiveFocusedSession } from "../lib/archiveShortcut";
 import { openAddToChatSessionPane } from "../lib/workspaceTabGroups";
 import { mergeOrderedSubset, orderByIds } from "../lib/reorder";
-import type { EditorNavigationTarget, OpenFileFn } from "../lib/search";
+import type {
+  EditorNavigationTarget,
+  FileOpenOptions,
+  OpenFileFn,
+} from "../lib/search";
 import {
   buildSecondOpinionCard,
   buildSecondOpinionPrompt,
@@ -3221,11 +3224,15 @@ export function HarnessApp({
   );
 
   const onOpenDiff = useCallback(
-    (path?: string, session?: { sessionId: string; cwd: string }) => {
+    (
+      path?: string,
+      session?: { sessionId: string; cwd: string },
+      options?: FileOpenOptions,
+    ) => {
       void (async () => {
         const diffCwd = session?.cwd ?? gitCwdRef.current;
         const resolved = path
-          ? ((await resolveOpenablePath(diffCwd, path)) ?? path)
+          ? await resolveFileOpenRequest(diffCwd, path, options)
           : undefined;
         if (resolved) rememberOpenedFile(sidebarCwdRef.current, resolved);
         setTabs((prev: any) =>
@@ -3266,6 +3273,12 @@ export function HarnessApp({
       })();
     },
     [activeTabId, deckLayout],
+  );
+
+  const onOpenWorkingTreeDiff = useCallback(
+    (path: string, options?: FileOpenOptions) =>
+      onOpenDiff(path, undefined, options),
+    [onOpenDiff],
   );
 
   const onToggleDiff = useCallback(() => {
@@ -6656,7 +6669,7 @@ export function HarnessApp({
         canGoForward={tabVisitNav.canForward}
         onGoBack={onRailBack}
         onGoForward={onRailForward}
-        onOpenDiff={onOpenDiff}
+        onOpenDiff={onOpenWorkingTreeDiff}
         onShowSourceControl={onToggleChanges}
         selectedDiffPath={
           activeTab ? selectedChangePath(activeTab, gitCwd) : undefined

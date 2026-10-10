@@ -1,7 +1,9 @@
 import { useCallback } from "react";
+import { joinPath } from "@/modules/explorer/lib/useFileTree";
 import { SourceControlPanel } from "@/modules/source-control/SourceControlPanel";
 import { useSourceControl } from "@/modules/source-control/useSourceControl";
 import type { HarnessId } from "../lib/session";
+import type { FileOpenOptions } from "../lib/search";
 
 type Props = {
   cwd: string;
@@ -9,7 +11,7 @@ type Props = {
   textHarness?: HarnessId;
   selectedPath?: string;
   onOpenFile: (path: string) => void;
-  onOpenDiff?: (path: string) => void;
+  onOpenDiff?: (path: string, options?: FileOpenOptions) => void;
 };
 
 export function SourceControl({
@@ -28,10 +30,11 @@ export function SourceControl({
       originalPath: string | null;
       title?: string;
     }) => {
+      const path = joinPath(input.repoRoot, input.path);
       if (onOpenDiff) {
-        onOpenDiff(input.path);
+        onOpenDiff(path, { exact: true });
       } else {
-        onOpenFile(input.path);
+        onOpenFile(path);
       }
     },
     [onOpenFile, onOpenDiff],

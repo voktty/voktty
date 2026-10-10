@@ -1896,7 +1896,7 @@ const EntryRow = memo(function EntryRow({
               onFocusRow(row.key);
               void onSelectFile(entry);
             }}
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
+            className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
           >
             {iconUrl ? (
               <img src={iconUrl} alt="" className="size-4 shrink-0" />
