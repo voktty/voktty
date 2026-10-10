@@ -2231,6 +2231,82 @@
         }
       ],
       "rationale": "This was already adapted in Voktty before the current port review. On macOS, main registers WebContinuousSpellCheckingEnabled before starting Tauri without replacing a saved user preference, and the Harness composer opts into HTML spell checking. Its IME regression test asserts the textarea spellcheck attribute."
+    },
+    {
+      "upstreamCommit": "3e157b755d1e988b349294d187d04b6f71daa07f",
+      "upstreamTitle": "Clean up temporary provider sessions",
+      "localCommits": [
+        "db828c5947e0ee22253a0bcd527e07d1573b7db0",
+        "6d3ec038a09399df0ef5f609ccee82a399d0e56a",
+        "034eb5709e1194308baa09397819230a3d20ae29"
+      ],
+      "localCommitBases": ["integrated", "integrated", "integrated"],
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "MonoCode opts side-question Codex text requests into resumable threads through its app and registry. Voktty has no equivalent text-prompt call site, so this fork-specific caller behavior remains deferred."
+      ],
+      "mappings": [
+        {
+          "upstream": "host/child-backend.ts",
+          "local": "host/child-backend.ts"
+        },
+        {
+          "upstream": "host/child-backend.test.ts",
+          "local": "host/child-backend.test.ts"
+        },
+        {
+          "upstream": "src-tauri/src/harness.rs",
+          "local": "src-tauri/src/modules/harness/host.rs"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/codex/codexText.ts",
+          "local": "src/modules/harness/lib/harness/codexText.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/codex/codexText.test.ts",
+          "local": "src/modules/harness/lib/harness/codexText.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/grok/grokText.ts",
+          "local": "src/modules/harness/lib/harness/grokText.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/grok/grokText.test.ts",
+          "local": "src/modules/harness/lib/harness/grokText.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeClient.ts",
+          "local": "src/modules/harness/lib/harness/opencodeClient.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeClient.test.ts",
+          "local": "src/modules/harness/lib/harness/opencodeClient.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/opencode/opencodeText.test.ts",
+          "local": "src/modules/harness/lib/harness/opencodeV2Text.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/harness/codexText.test.ts",
+            "src/modules/harness/lib/harness/grokText.test.ts",
+            "src/modules/harness/lib/harness/opencodeClient.test.ts",
+            "src/modules/harness/lib/harness/opencodeV2Text.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        },
+        {
+          "files": ["src-tauri/src/modules/harness/host.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "grok_cleanup_is_limited_to_a_resolved_binary_and_valid_session_id"
+        }
+      ],
+      "rationale": "Voktty text-only Codex threads now use ephemeral storage, and Grok cleanup deletes only a canonical ACP session UUID through the resolved Grok binary after stopping its writer. The native Rust command allowlist and Node child backend both scope deletion to Grok; OpenCode v1 and v2 generated-text sessions are interrupted and deleted on completion or cancellation."
     }
   ]
 }
