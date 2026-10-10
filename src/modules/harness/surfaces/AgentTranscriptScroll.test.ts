@@ -96,6 +96,49 @@ describe("transcript scrolling", () => {
     expect(top).toBe(1660);
   });
 
+  it("restores a parked transcript at the reader's previous distance from the end", () => {
+    const blocks: Block[] = [
+      { id: "user", role: "user", text: "Question" },
+      { id: "reply", role: "assistant", text: "Answer" },
+    ];
+    const render = (visible: boolean, parked = false) =>
+      act(() =>
+        root.render(
+          createElement(AgentTranscript, { blocks, visible, parked }),
+        ),
+      );
+    render(true);
+    const scroller =
+      container.querySelector<HTMLDivElement>(".agent-transcript")!;
+    let top = 0;
+    Object.defineProperties(scroller, {
+      scrollHeight: { get: () => 4000 },
+      clientHeight: { get: () => 400 },
+      scrollTop: {
+        get: () => top,
+        set: (value: number) => {
+          top = Math.max(0, Math.min(value, 3600));
+        },
+      },
+    });
+    const observer = observers.find((item) => item.targets.includes(scroller));
+    expect(observer).toBeDefined();
+    act(() => observer?.resize());
+    expect(top).toBe(3600);
+
+    act(() => {
+      scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: -100 }));
+      top = 1000;
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+    render(false);
+    render(false, true);
+    top = 0;
+    render(true);
+
+    expect(top).toBe(1000);
+  });
+
   it.each(["paused", "following", "detached"])(
     "reconciles an out-of-order resize batch while %s",
     (mode) => {

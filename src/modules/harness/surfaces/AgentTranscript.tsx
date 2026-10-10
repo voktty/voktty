@@ -155,6 +155,8 @@ type Props = {
   latestTurnAccessory?: ReactNode;
   /** False while the pane is `display: none` (another tab). */
   visible?: boolean;
+  /** True while a retained transcript is detached from its pane. */
+  parked?: boolean;
 };
 
 function AgentTranscriptComponent({
@@ -181,6 +183,7 @@ function AgentTranscriptComponent({
   onRevealReady,
   latestTurnAccessory,
   visible = true,
+  parked = false,
 }: Props) {
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
   const scroller = useRef<HTMLDivElement>(null);
@@ -191,6 +194,12 @@ function AgentTranscriptComponent({
   const wheelHold = useRef(0);
   const prependHeight = useRef<number | null>(null);
   const wasVisible = useRef(false);
+  const restoreScroll = useRef(false);
+  const wasParked = useRef(parked);
+  if (wasParked.current !== parked) {
+    wasParked.current = parked;
+    if (parked) restoreScroll.current = true;
+  }
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
   const seenBlocks = useRef<Set<string> | null>(null);
   if (!seenBlocks.current) {
@@ -361,10 +370,21 @@ function AgentTranscriptComponent({
     const el = scroller.current;
     if (!el) return;
     syncTranscriptViewport(el);
-    stickToBottom.current = true;
-    setShowJump(false);
-    pinTranscript(el);
-  }, [visible, busy, pinTranscript, setShowJump]);
+    const restore = restoreScroll.current;
+    restoreScroll.current = false;
+    if (restore && !stickToBottom.current) {
+      el.scrollTop = Math.max(
+        0,
+        el.scrollHeight - el.clientHeight - distanceFromBottom.current,
+      );
+      rememberScroll(el);
+      setShowJump(el.scrollHeight > el.clientHeight);
+    } else {
+      stickToBottom.current = true;
+      setShowJump(false);
+      pinTranscript(el);
+    }
+  }, [visible, busy, pinTranscript, rememberScroll, setShowJump]);
 
   useLayoutEffect(() => {
     if (!visible || !stickToBottom.current) return;
@@ -720,7 +740,10 @@ function AgentTranscriptComponent({
 // Keep hidden panes' local state, and catch up with current props on activation.
 export const AgentTranscript = memo(
   AgentTranscriptComponent,
-  (previous, next) => previous.visible === false && next.visible === false,
+  (previous, next) =>
+    previous.visible === false &&
+    next.visible === false &&
+    previous.parked === next.parked,
 );
 
 /** Placeholder for private reasoning before the first assistant text arrives. */
