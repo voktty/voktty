@@ -1,4 +1,5 @@
 import { t } from "@/modules/i18n";
+import { TranscriptTurnCache } from "@/modules/harness/surfaces/transcriptTurnCache";
 import {
   memo,
   type ReactNode,
@@ -92,8 +93,6 @@ import {
   firstFoldableIndex,
   foldableWork,
   foldedBlocks,
-  groupTurnItems,
-  groupTurns,
   initialThinkingIndex,
   isIncompleteTool,
   isProseBlock,
@@ -390,7 +389,8 @@ function AgentTranscriptComponent({
     return () => observer.disconnect();
   }, [scrollerEl, followTranscript, visible]);
 
-  const turns = groupTurns(blocks);
+  const [turnCache] = useState(() => new TranscriptTurnCache());
+  const turns = turnCache.group(blocks);
   const firstVisibleTurn = Math.max(0, turns.length - visibleTurnCount);
   const visibleTurns = turns.slice(firstVisibleTurn);
   const turnsRef = useRef(turns);
@@ -466,7 +466,7 @@ function AgentTranscriptComponent({
           const userBlock = turnUserBlock(turn);
           const durationMs = userBlock?.durationMs;
           const settled = !(busy && isLastTurn);
-          const items = groupTurnItems(turn, zen);
+          const items = turnCache.turnItems(turn, zen);
           // Earlier activity groups have already been followed by prose or
           // more work. Only the last one can still be the live group.
           const foldedAt = zen ? lastActivityIndex(items) : -1;
