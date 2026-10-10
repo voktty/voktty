@@ -618,12 +618,13 @@
         "8a148a5",
         "b8069b3",
         "2b7c3ba",
-        "0ae6db2"
+        "0ae6db2",
+        "5a263ea"
       ],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Remote OpenCode uses Voktty's native SSH helper, authenticated loopback HTTP/SSE tunnel, and saved session resume. Remote folder discovery now uses that helper and its saved SSH profile, but machine identity still comes from the existing remote-machine catalog and other remote project operations still use its Host path. Automatic recovery from active-turn tunnel loss is not implemented, and no live Docker SSH smoke has run. Verify a Docker host and decide whether active-turn retry is in scope before claiming full remote parity."
+        "Saved SSH profiles can now create remote Harness projects directly. Their environment identity resolves the saved profile for native folder browsing, OpenCode 2.x sessions, and worktree Git operations; legacy machine IDs keep using the machine catalog. Other remote file, Git, and session operations still use the Host route. Automatic recovery from active-turn tunnel loss and a live Docker SSH smoke remain outstanding. Verify a Docker host and migrate the remaining Host-dependent operations before claiming full remote parity."
       ],
       "mappings": [
         {
@@ -706,6 +707,15 @@
       "tests": [
         {
           "files": [
+            "src/modules/connections/model/remoteSshProfiles.test.ts",
+            "src/modules/connections/ui/AddRemoteProjectDialog.test.ts",
+            "src/modules/harness/lib/harness/remoteOpenCodeService.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        },
+        {
+          "files": [
             "src/modules/harness/lib/harness/opencodeV2Client.test.ts",
             "src/modules/harness/lib/harness/opencodeV2Events.test.ts",
             "src/modules/harness/lib/harness/opencodeV2Live.test.ts",
@@ -738,7 +748,7 @@
           "filter": "opencode_service"
         }
       ],
-      "rationale": "Voktty supports OpenCode 2.x on desktop and connects remote OpenCode through its native SSH helper, authenticated loopback HTTP/SSE tunnel, tmux-backed service startup, and saved session resume. The machine identity still comes from the existing remote-machine catalog, and other remote project operations still use its Host path. Active-turn tunnel recovery and a live Docker SSH smoke remain outstanding, so this port stays partial."
+      "rationale": "Voktty supports OpenCode 2.x on desktop and connects remote OpenCode through its native SSH helper, authenticated loopback HTTP/SSE tunnel, tmux-backed service startup, and saved session resume. Projects can now be created from saved SSH profiles directly; native folder browsing, OpenCode and worktree operations resolve those profiles without a Host machine record. Legacy machine IDs remain supported. Other remote file, Git, and session operations still use the Host path, and active-turn tunnel recovery plus a live Docker SSH smoke remain outstanding, so this port stays partial."
     },
     {
       "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
