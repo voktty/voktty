@@ -16,7 +16,23 @@ const NERD_FONT_CANDIDATES = [
   "Hasklug Nerd Font",
 ];
 
-const FALLBACK_CHAIN = '"JetBrains Mono", SFMono-Regular, Menlo, monospace';
+const FALLBACK_CHAIN = [
+  '"JetBrains Mono"',
+  "SFMono-Regular",
+  "Menlo",
+  "Monaco",
+  '"Symbols Nerd Font Mono"',
+  '"Symbols Nerd Font"',
+  '"MesloLGS NF"',
+  '"MesloLGS Nerd Font Mono"',
+  '"FiraCode Nerd Font Mono"',
+  '"Hack Nerd Font Mono"',
+  '"CaskaydiaCove Nerd Font Mono"',
+  "Consolas",
+  '"Liberation Mono"',
+  '"Courier New"',
+  "monospace",
+].join(", ");
 
 let detected: string | null = null;
 let monoReady: Promise<void> | null = null;
@@ -39,9 +55,7 @@ export function resolveFontFamily(userInput: string): string {
   if (!name) return detectMonoFontFamily();
   // A comma means the user gave a full stack; otherwise quote the single family.
   // Strip any quotes first so a stray quote can't produce a malformed token.
-  const head = name.includes(",")
-    ? name
-    : `"${name.replace(/['"]/g, "")}"`;
+  const head = name.includes(",") ? name : `"${name.replace(/['"]/g, "")}"`;
   return `${head}, ${FALLBACK_CHAIN}`;
 }
 

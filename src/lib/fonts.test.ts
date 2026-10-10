@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { resolveFontFamily } from "./fonts";
 
-const FALLBACK = '"JetBrains Mono", SFMono-Regular, Menlo, monospace';
+const FALLBACK = [
+  '"JetBrains Mono"',
+  "SFMono-Regular",
+  "Menlo",
+  "Monaco",
+  '"Symbols Nerd Font Mono"',
+  '"Symbols Nerd Font"',
+  '"MesloLGS NF"',
+  '"MesloLGS Nerd Font Mono"',
+  '"FiraCode Nerd Font Mono"',
+  '"Hack Nerd Font Mono"',
+  '"CaskaydiaCove Nerd Font Mono"',
+  "Consolas",
+  '"Liberation Mono"',
+  '"Courier New"',
+  "monospace",
+].join(", ");
 
 describe("resolveFontFamily", () => {
   it("quotes a bare family and appends the mono fallback", () => {
@@ -16,6 +32,14 @@ describe("resolveFontFamily", () => {
 
   it("passes a comma-separated stack through and still appends fallback", () => {
     expect(resolveFontFamily("Foo, Bar")).toBe(`Foo, Bar, ${FALLBACK}`);
+  });
+
+  it("keeps Nerd Font symbol families after the user's preferred stack", () => {
+    const family = resolveFontFamily('"Custom Font", ui-monospace');
+    expect(family).toBe(`"Custom Font", ui-monospace, ${FALLBACK}`);
+    expect(family.indexOf('"Symbols Nerd Font Mono"')).toBeGreaterThan(
+      family.indexOf("ui-monospace"),
+    );
   });
 
   it("strips stray internal quotes to avoid a malformed token", () => {
