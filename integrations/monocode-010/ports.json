@@ -2151,6 +2151,58 @@
         }
       ],
       "rationale": "Account emails now start masked in the Harness, while users can still reveal them and saved preferences remain effective across windows. Preference and rendering tests cover the default and explicit unmasked state. Voktty has no equivalent Mono shell UsageProviderChip, so that shell-specific test change has no local component to port."
+    },
+    {
+      "upstreamCommit": "296d7fd01a56c83521d1614858fddc6a9dd2fc04",
+      "upstreamTitle": "Stabilize chat history scrolling and add browser regression coverage (#818)",
+      "localCommit": "74cfce0e3296915cf192153433facf89361047d9",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        },
+        {
+          "upstream": "tests/browser/transcript-scroll.spec.ts",
+          "local": "src/modules/harness/surfaces/AgentTranscriptScroll.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/AgentTranscriptScroll.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty already lays out transcript turns at their real heights; it does not apply content-visibility placeholders to chat history. The scroll-anchor hook and focused Vitest suite protect the reader position while asynchronous content changes above the viewport. The added Playwright setup is not needed for this behavior in Voktty's existing test architecture."
+    },
+    {
+      "upstreamCommit": "b6e0db8def499677e080bc6a31a14f6a5e94ac03",
+      "upstreamTitle": "Stabilize transcript scroll pinning and settled Mono turn headers",
+      "localCommit": "74cfce0e3296915cf192153433facf89361047d9",
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "Settled Mono turns use mascot signature pills; Voktty has no Mono mascot identity or matching header surface."
+      ],
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        },
+        {
+          "upstream": "tests/browser/transcript-scroll.spec.ts",
+          "local": "src/modules/harness/surfaces/AgentTranscriptScroll.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/AgentTranscriptScroll.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty's existing transcript implementation already holds the bottom pin during directionless trackpad ticks, reconciles scroll position before async updates, and preserves manual movement. Regression tests cover the wheel hold, upward gesture, streaming growth and live activity phase. The upstream temporary scroll logging was not copied. The Mono-specific settled header styling remains deferred."
     }
   ]
 }
