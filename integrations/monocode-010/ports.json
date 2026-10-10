@@ -358,12 +358,18 @@
     {
       "upstreamCommit": "00d68d342eff3adf23a320fa5e2be97d5e212683",
       "upstreamTitle": "Add activity timeline to PR/issue panels with commit interleaving",
-      "localCommit": "37d16c9",
-      "basis": "preexisting",
+      "localCommits": [
+        "37d16c9",
+        "d769e29"
+      ],
+      "localCommitBases": [
+        "preexisting",
+        "integrated"
+      ],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "MonoCode preloads LinkedWorkItemPanel and prefetches its data from a linked-work-item button on session cards. Voktty opens issue and PR details from Inbox selection and has no equivalent session-card action; revisit only as a Voktty-native workflow adaptation."
+        "Voktty prefetches GitHub issue and PR details when an Inbox card is hovered. MonoCode triggers prefetch from a linked-work-item action on session cards; Voktty has no matching session-card entry point, so the interaction remains adapted to Inbox."
       ],
       "mappings": [
         {
@@ -410,7 +416,7 @@
           "runner": "vitest"
         }
       ],
-      "rationale": "The chronological comments and commits timeline, freshness-aware GitHub cache, PR overview, changed-file glance and focused diff behavior already existed in Voktty before the audit baseline. The Inbox detail pane is opened from Inbox selection, so MonoCode's session-card panel preloading and hover prefetch have no matching Voktty entry point and remain a partial adaptation."
+      "rationale": "The chronological comments and commits timeline, freshness-aware GitHub cache, PR overview, changed-file glance and focused diff behavior existed in Voktty before the audit baseline. GitHub issue and PR details now prefetch on Inbox card hover using the existing freshness cache. The trigger follows Voktty's Inbox workflow; MonoCode's linked-work-item action on session cards has no matching Voktty entry point, so coverage remains partial."
     },
     {
       "upstreamCommit": "31fcb0903fd6ba969e11fab3a0dd288ee5df1571",

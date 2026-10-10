@@ -185,6 +185,9 @@ it("verifies behavior adapted before the pinned local baseline", () => {
   const preexistingCommit = commit(local, "Adapt Codex behavior");
   writeFileSync(join(local, "README.md"), "baseline\n");
   const localBaseline = commit(local, "Pin local baseline");
+  writeFileSync(join(local, "src/modules/harness/codex.ts"), "export const updated = true;\n// adapted\n");
+  writeFileSync(join(local, "src/modules/harness/codex.test.ts"), "test\n// prefetch coverage\n");
+  const integratedCommit = commit(local, "Complete Inbox prefetch adaptation");
 
   const manifest = {
     upstreamBase,
@@ -194,8 +197,8 @@ it("verifies behavior adapted before the pinned local baseline", () => {
       {
         upstreamCommit,
         upstreamTitle: "Update Codex behavior",
-        localCommit: preexistingCommit,
-        basis: "preexisting",
+        localCommits: [preexistingCommit, integratedCommit],
+        localCommitBases: ["preexisting", "integrated"],
         license: "MIT",
         mappings: [
           {
@@ -216,8 +219,9 @@ it("verifies behavior adapted before the pinned local baseline", () => {
   };
 
   const result = verifyPorts({ upstream, localRoot: local, manifest });
-  assert.equal(result.records[0].basis, "preexisting");
-  assert.equal(result.records[0].localCommit, preexistingCommit);
+  assert.equal(result.records[0].basis, "mixed");
+  assert.deepEqual(result.records[0].localCommitBases, ["preexisting", "integrated"]);
+  assert.deepEqual(result.records[0].localCommits, [preexistingCommit, integratedCommit]);
 
   manifest.localBaseline = localRootCommit;
   assert.throws(
