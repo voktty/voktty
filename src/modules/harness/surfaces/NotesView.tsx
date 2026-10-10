@@ -551,6 +551,7 @@ function NoteEditor({
   const bodyRef = useRef(body);
   const tagsRef = useRef(tags);
   const noteRef = useRef(note);
+  const titleFieldRef = useRef<HTMLInputElement>(null);
   const skipSave = useRef(false);
   const saveTimer = useRef<number | null>(null);
   const saveQueue = useRef(Promise.resolve());
@@ -571,7 +572,10 @@ function NoteEditor({
   const persist = useCallback(async () => {
     if (skipSave.current) return;
     const current = noteRef.current;
-    const nextTitle = titleRef.current.trim() || noteTitle(bodyRef.current);
+    const titleFocused = document.activeElement === titleFieldRef.current;
+    const nextTitle =
+      titleRef.current.trim() ||
+      (titleFocused ? current.title : noteTitle(bodyRef.current));
     const nextBody = bodyRef.current;
     const nextTags = tagsRef.current;
     if (
@@ -589,9 +593,10 @@ function NoteEditor({
       });
       setSaveError(null);
       if (
-        titleRef.current.trim() === "" ||
-        titleRef.current === current.title
+        document.activeElement !== titleFieldRef.current &&
+        (titleRef.current.trim() === "" || titleRef.current === current.title)
       ) {
+        titleRef.current = saved.title;
         setTitle(saved.title);
       }
       onSavedRef.current(saved);
@@ -600,20 +605,26 @@ function NoteEditor({
     }
   }, []);
 
+  const saveNow = useCallback(() => {
+    if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    saveQueue.current = saveQueue.current.then(persist, persist);
+    return saveQueue.current;
+  }, [persist]);
+
   const scheduleSave = useCallback(() => {
     if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       saveTimer.current = null;
-      saveQueue.current = saveQueue.current.then(persist, persist);
+      void saveNow();
     }, 400);
-  }, [persist]);
+  }, [saveNow]);
 
   useEffect(() => {
     return () => {
-      if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
-      void persist();
+      void saveNow();
     };
-  }, [persist]);
+  }, [saveNow]);
 
   const onTitleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
@@ -654,6 +665,7 @@ function NoteEditor({
             ) : null}
           </div>
           <input
+            ref={titleFieldRef}
             value={title}
             onChange={(event) => {
               setTitle(event.target.value);
@@ -662,7 +674,7 @@ function NoteEditor({
             onBlur={() => {
               const next = title.trim() || noteTitle(body);
               if (next !== title) setTitle(next);
-              void persist();
+              void saveNow();
             }}
             onKeyDown={onTitleKeyDown}
             aria-label={t("harness.chrome.noteTitle")}
