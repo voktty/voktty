@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
 import { KEYRING_SERVICE } from "@/lib/identity";
+import { invoke } from "@tauri-apps/api/core";
 
 /**
  * Optional remote GitHub provider for git-review (Fase 4 of
@@ -30,6 +30,13 @@ export type GithubPrDiff = {
   diff: string;
   truncated: boolean;
   headSha: string;
+};
+
+export type GithubPrBranchStatus = {
+  defaultBranch: string;
+  pullRequest: GithubPullRequest | null;
+  aheadBy: number | null;
+  behindBy: number | null;
 };
 
 export type ReviewEvent = "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
@@ -75,6 +82,26 @@ export function listGithubPullRequests(
   return invoke<GithubPullRequest[]>("git_review_github_list_prs", {
     ownerRepo,
   });
+}
+
+export function githubPullRequestBranchStatus(
+  ownerRepo: string,
+  head: string,
+): Promise<GithubPrBranchStatus> {
+  return invoke<GithubPrBranchStatus>("git_review_github_branch_status", {
+    ownerRepo,
+    head,
+  });
+}
+
+export function createGithubPullRequest(input: {
+  ownerRepo: string;
+  title: string;
+  body: string;
+  base: string;
+  head: string;
+}): Promise<string> {
+  return invoke<string>("git_review_github_create_pr", input);
 }
 
 export function getGithubPrDiff(

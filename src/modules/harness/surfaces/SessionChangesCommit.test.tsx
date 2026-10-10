@@ -1,14 +1,24 @@
 // @vitest-environment happy-dom
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { CheckpointFile } from "../lib/checkpoint";
 import { SessionChangesCommit } from "./SessionChangesCommit";
 
 const mocks = vi.hoisted(() => ({
   gitResolveRepo: vi.fn(),
+  gitStatus: vi.fn(),
+  gitRemoteUrl: vi.fn(),
+  gitFetch: vi.fn(),
   gitCommit: vi.fn(),
+  gitPush: vi.fn(),
+  gitPublish: vi.fn(),
+  githubPullRequestBranchStatus: vi.fn(),
+  createGithubPullRequest: vi.fn(),
+  isGithubConnected: vi.fn(),
+  openExternalUrl: vi.fn(),
   keepSessionChanges: vi.fn(),
   notifyReviewChanged: vi.fn(),
   notifyGitChanged: vi.fn(),
@@ -19,8 +29,21 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/modules/ai/lib/native", () => ({
   native: {
     gitResolveRepo: mocks.gitResolveRepo,
+    gitStatus: mocks.gitStatus,
+    gitRemoteUrl: mocks.gitRemoteUrl,
+    gitFetch: mocks.gitFetch,
     gitCommit: mocks.gitCommit,
+    gitPush: mocks.gitPush,
+    gitPublish: mocks.gitPublish,
   },
+}));
+vi.mock("@/modules/git-review/lib/githubProvider", () => ({
+  githubPullRequestBranchStatus: mocks.githubPullRequestBranchStatus,
+  createGithubPullRequest: mocks.createGithubPullRequest,
+  isGithubConnected: mocks.isGithubConnected,
+}));
+vi.mock("@/lib/external-link", () => ({
+  openExternalUrl: mocks.openExternalUrl,
 }));
 vi.mock("../lib/checkpoint", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/checkpoint")>()),
@@ -38,6 +61,7 @@ vi.mock("../lib/fs", () => ({ notifyGitChanged: mocks.notifyGitChanged }));
 let container: HTMLDivElement;
 let root: Root;
 const originalLanguage = usePreferencesStore.getState().language;
+const originalWorkspace = useWorkspaceEnvStore.getState().env;
 
 const files: CheckpointFile[] = [
   {
@@ -73,6 +97,39 @@ beforeEach(() => {
     commitSha: "abcdef123456",
     summary: "Update session changes",
   });
+  mocks.gitStatus.mockResolvedValue({
+    repoRoot: "/repo",
+    branch: "main",
+    upstream: "origin/main",
+    ahead: 0,
+    behind: 0,
+    isDetached: false,
+    truncated: false,
+    changedFiles: [],
+  });
+  mocks.gitRemoteUrl.mockResolvedValue(null);
+  mocks.gitFetch.mockResolvedValue(undefined);
+  mocks.gitPush.mockResolvedValue({
+    pushed: true,
+    remote: "origin",
+    branch: "feature",
+  });
+  mocks.gitPublish.mockResolvedValue({
+    pushed: true,
+    remote: "origin",
+    branch: "feature",
+  });
+  mocks.githubPullRequestBranchStatus.mockResolvedValue({
+    defaultBranch: "main",
+    pullRequest: null,
+    aheadBy: 2,
+    behindBy: 0,
+  });
+  mocks.createGithubPullRequest.mockResolvedValue(
+    "https://github.com/acme/widgets/pull/42",
+  );
+  mocks.isGithubConnected.mockResolvedValue(true);
+  mocks.openExternalUrl.mockResolvedValue(undefined);
   mocks.keepSessionChanges.mockResolvedValue({ files: [] });
   container = document.createElement("div");
   document.body.append(container);
@@ -83,6 +140,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   usePreferencesStore.setState({ language: originalLanguage });
+  useWorkspaceEnvStore.setState({ env: originalWorkspace });
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
@@ -129,4 +187,194 @@ it("commits only the checked session file and refreshes its checkpoint", async (
     kind: "success",
     message: "Committed as abcdef1",
   });
+});
+
+it("commits, publishes through the native workspace, and opens the pull request", async () => {
+  const sshWorkspace = {
+    kind: "ssh" as const,
+    connection: { id: "server-1", name: "Build", host: "build.example" },
+    root: "/repo",
+    sessionId: 17,
+  };
+  useWorkspaceEnvStore.setState({ env: sshWorkspace });
+  mocks.gitStatus.mockResolvedValue({
+    repoRoot: "/repo",
+    branch: "feature/session",
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    isDetached: false,
+    truncated: false,
+    changedFiles: [],
+  });
+  mocks.gitRemoteUrl.mockResolvedValue("git@github.com:acme/widgets.git");
+
+  const onNotice = vi.fn();
+  await act(async () => {
+    root.render(
+      <SessionChangesCommit
+        cwd="/repo"
+        sessionId="session-a"
+        files={files}
+        onNotice={onNotice}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  const createButton = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent?.includes("Commit, Push & Create PR"),
+  );
+  expect(createButton).toBeDefined();
+  await act(async () => {
+    createButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(mocks.gitCommit).toHaveBeenCalledWith(
+    "/repo",
+    "Update session changes",
+    sshWorkspace,
+    ["/repo/src/a.ts", "/repo/src/b.ts"],
+  );
+  expect(mocks.gitPublish).toHaveBeenCalledWith("/repo", "origin", {
+    ...sshWorkspace,
+  });
+  expect(mocks.gitFetch).toHaveBeenCalledWith("/repo", sshWorkspace);
+  expect(mocks.githubPullRequestBranchStatus).toHaveBeenCalledWith(
+    "acme/widgets",
+    "feature/session",
+  );
+  expect(mocks.createGithubPullRequest).toHaveBeenCalledWith({
+    ownerRepo: "acme/widgets",
+    title: "Update session changes",
+    body: "Update session changes",
+    base: "main",
+    head: "feature/session",
+  });
+  expect(mocks.openExternalUrl).toHaveBeenCalledWith(
+    "https://github.com/acme/widgets/pull/42",
+  );
+  expect(onNotice).toHaveBeenCalledWith({
+    kind: "success",
+    message: "Create PR: https://github.com/acme/widgets/pull/42",
+  });
+});
+
+it("does not offer pull request creation while the branch is behind", async () => {
+  useWorkspaceEnvStore.setState({ env: { kind: "local" } });
+  mocks.gitStatus.mockResolvedValue({
+    repoRoot: "/repo",
+    branch: "feature/session",
+    upstream: "origin/feature/session",
+    ahead: 1,
+    behind: 0,
+    isDetached: false,
+    truncated: false,
+    changedFiles: [],
+  });
+  mocks.gitRemoteUrl.mockResolvedValue("git@github.com:acme/widgets.git");
+  mocks.githubPullRequestBranchStatus.mockResolvedValue({
+    defaultBranch: "main",
+    pullRequest: null,
+    aheadBy: 2,
+    behindBy: 1,
+  });
+
+  await act(async () => {
+    root.render(
+      <SessionChangesCommit
+        cwd="/repo"
+        sessionId="session-a"
+        files={files}
+        onNotice={vi.fn()}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(
+    [...container.querySelectorAll("button")].some((button) =>
+      button.textContent?.includes("Create PR"),
+    ),
+  ).toBe(false);
+});
+
+it("fetches before commit and rejects a branch that became behind", async () => {
+  const freshStatus = {
+    repoRoot: "/repo",
+    branch: "feature/session",
+    upstream: "origin/feature/session",
+    ahead: 0,
+    behind: 0,
+    isDetached: false,
+    truncated: false,
+    changedFiles: [],
+  };
+  mocks.gitStatus.mockResolvedValue(freshStatus);
+  mocks.gitRemoteUrl.mockResolvedValue("https://github.com/acme/widgets.git");
+
+  await act(async () => {
+    root.render(
+      <SessionChangesCommit
+        cwd="/repo"
+        sessionId="session-a"
+        files={files}
+        onNotice={vi.fn()}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  mocks.gitStatus
+    .mockResolvedValueOnce(freshStatus)
+    .mockResolvedValueOnce({ ...freshStatus, behind: 1 });
+
+  const commitPushButton = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent?.includes("Commit & Push"),
+  );
+  expect(commitPushButton).toBeDefined();
+  await act(async () => {
+    commitPushButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(mocks.gitFetch).toHaveBeenCalledWith("/repo", { kind: "local" });
+  expect(mocks.gitCommit).not.toHaveBeenCalled();
+});
+
+it("keeps push available after the session changes have been committed", async () => {
+  mocks.gitStatus.mockResolvedValue({
+    repoRoot: "/repo",
+    branch: "feature/session",
+    upstream: "origin/feature/session",
+    ahead: 1,
+    behind: 0,
+    isDetached: false,
+    truncated: false,
+    changedFiles: [],
+  });
+  mocks.gitRemoteUrl.mockResolvedValue("git@github.com:acme/widgets.git");
+  mocks.isGithubConnected.mockResolvedValue(false);
+
+  await act(async () => {
+    root.render(
+      <SessionChangesCommit
+        cwd="/repo"
+        sessionId="session-a"
+        files={[]}
+        onNotice={vi.fn()}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  const pushButton = [...container.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("Push"),
+  );
+  expect(pushButton).toBeDefined();
+  await act(async () => {
+    pushButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(mocks.gitPush).toHaveBeenCalledWith("/repo", { kind: "local" });
 });

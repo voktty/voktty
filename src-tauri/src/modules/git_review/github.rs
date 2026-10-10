@@ -51,6 +51,15 @@ pub struct GithubPrDiff {
     pub head_sha: String,
 }
 
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPrBranchStatus {
+    pub default_branch: String,
+    pub pull_request: Option<GithubPullRequest>,
+    pub ahead_by: Option<u32>,
+    pub behind_by: Option<u32>,
+}
+
 #[derive(Deserialize)]
 struct PrApiRow {
     number: u64,
@@ -143,10 +152,38 @@ pub async fn git_review_github_detect_repo(cwd: String) -> Result<Option<String>
 /// Splits `owner/repo` as accepted from the frontend, resolved via
 /// `git_review_github_detect_repo` above (plain `git remote`, never `gh`).
 fn split_owner_repo(owner_repo: &str) -> Result<(&str, &str), String> {
-    owner_repo
+    let (owner, repo) = owner_repo
         .split_once('/')
         .filter(|(owner, repo)| !owner.is_empty() && !repo.is_empty())
-        .ok_or_else(|| format!("Invalid owner/repo: {owner_repo}"))
+        .ok_or_else(|| format!("Invalid owner/repo: {owner_repo}"))?;
+    if !valid_repo_segment(owner) || !valid_repo_segment(repo) {
+        return Err("Invalid GitHub repository name".into());
+    }
+    Ok((owner, repo))
+}
+
+fn valid_repo_segment(value: &str) -> bool {
+    value.len() <= 100
+        && value != "."
+        && value != ".."
+        && value
+            .chars()
+            .all(|char| char.is_ascii_alphanumeric() || matches!(char, '-' | '_' | '.'))
+}
+
+fn valid_git_ref(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 255
+        && !value.starts_with('-')
+        && !value.ends_with(['.', '/'])
+        && !value.contains("..")
+        && !value.contains("@{")
+        && !value.chars().any(|char| {
+            char.is_control() || matches!(char, ' ' | '~' | '^' | ':' | '?' | '*' | '[' | '\\')
+        })
+        && !value
+            .split('/')
+            .any(|part| part.is_empty() || part.starts_with('.') || part.ends_with(".lock"))
 }
 
 fn agent() -> ureq::Agent {
@@ -191,6 +228,217 @@ pub fn list_pull_requests(
             Err(map_status_error(status, &body))
         }
         Err(e) => Err(format!("Network error: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct GithubRepository {
+    default_branch: String,
+}
+
+#[derive(Deserialize)]
+struct GithubBranchComparison {
+    ahead_by: u32,
+    behind_by: u32,
+}
+
+pub fn pull_request_branch_status(
+    token: &str,
+    owner: &str,
+    repo: &str,
+    head: &str,
+) -> Result<GithubPrBranchStatus, String> {
+    pull_request_branch_status_at(GITHUB_API_BASE, token, owner, repo, head)
+}
+
+fn pull_request_branch_status_at(
+    api_base: &str,
+    token: &str,
+    owner: &str,
+    repo: &str,
+    head: &str,
+) -> Result<GithubPrBranchStatus, String> {
+    if !valid_git_ref(head) {
+        return Err("Invalid Git branch name".into());
+    }
+
+    let repository_url = format!("{api_base}/repos/{owner}/{repo}");
+    let repository = github_get(token, &repository_url)?;
+    let repository: GithubRepository =
+        serde_json::from_str(&repository).map_err(|error| error.to_string())?;
+    if !valid_git_ref(&repository.default_branch) {
+        return Err("GitHub returned an invalid default branch name".into());
+    }
+
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("head", &format!("{owner}:{head}"))
+        .append_pair("state", "open")
+        .append_pair("per_page", "1")
+        .finish();
+    let pulls_url = format!("{repository_url}/pulls?{query}");
+    let pulls = github_get(token, &pulls_url)?;
+    let pulls: Vec<PrApiRow> = serde_json::from_str(&pulls).map_err(|error| error.to_string())?;
+    let pull_request = pulls
+        .into_iter()
+        .map(GithubPullRequest::from)
+        .find(|pull| pull.head_ref == head && pull.state == "open");
+
+    let comparison = if head == repository.default_branch {
+        Some((0, 0))
+    } else {
+        compare_github_branches(
+            api_base,
+            token,
+            owner,
+            repo,
+            &repository.default_branch,
+            head,
+        )?
+    };
+
+    Ok(GithubPrBranchStatus {
+        default_branch: repository.default_branch,
+        pull_request,
+        ahead_by: comparison.map(|(ahead, _)| ahead),
+        behind_by: comparison.map(|(_, behind)| behind),
+    })
+}
+
+fn github_get(token: &str, url: &str) -> Result<String, String> {
+    match agent()
+        .get(url)
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("Accept", "application/vnd.github+json")
+        .set("X-GitHub-Api-Version", API_VERSION)
+        .set("User-Agent", USER_AGENT)
+        .call()
+    {
+        Ok(response) => response.into_string().map_err(|error| error.to_string()),
+        Err(ureq::Error::Status(status, response)) => {
+            let body = response.into_string().unwrap_or_default();
+            Err(map_status_error(status, &body))
+        }
+        Err(error) => Err(format!("Network error: {error}")),
+    }
+}
+
+fn compare_github_branches(
+    api_base: &str,
+    token: &str,
+    owner: &str,
+    repo: &str,
+    base: &str,
+    head: &str,
+) -> Result<Option<(u32, u32)>, String> {
+    let compare = format!("{base}...{owner}:{head}");
+    let mut url = url::Url::parse(api_base).map_err(|error| error.to_string())?;
+    url.path_segments_mut()
+        .map_err(|_| "Invalid GitHub API base URL")?
+        .extend(["repos", owner, repo, "compare", &compare]);
+
+    match agent()
+        .get(url.as_str())
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("Accept", "application/vnd.github+json")
+        .set("X-GitHub-Api-Version", API_VERSION)
+        .set("User-Agent", USER_AGENT)
+        .call()
+    {
+        Ok(response) => {
+            let body = response.into_string().map_err(|error| error.to_string())?;
+            let comparison: GithubBranchComparison =
+                serde_json::from_str(&body).map_err(|error| error.to_string())?;
+            Ok(Some((comparison.ahead_by, comparison.behind_by)))
+        }
+        Err(ureq::Error::Status(404, _)) => Ok(None),
+        Err(ureq::Error::Status(status, response)) => {
+            let body = response.into_string().unwrap_or_default();
+            Err(map_status_error(status, &body))
+        }
+        Err(error) => Err(format!("Network error: {error}")),
+    }
+}
+
+pub struct CreatePullRequestInput<'a> {
+    pub owner: &'a str,
+    pub repo: &'a str,
+    pub title: &'a str,
+    pub body: &'a str,
+    pub base: &'a str,
+    pub head: &'a str,
+}
+
+fn validate_create_pull_request(input: &CreatePullRequestInput<'_>) -> Result<(), String> {
+    if !valid_repo_segment(input.owner) || !valid_repo_segment(input.repo) {
+        return Err("Invalid GitHub repository name".into());
+    }
+    if input.title.trim().is_empty()
+        || input.title.chars().count() > 256
+        || input.title.contains(['\n', '\r'])
+    {
+        return Err("Pull request title must be one line with at most 256 characters".into());
+    }
+    if input.body.chars().count() > 65_536 {
+        return Err("Pull request description exceeds 65536 characters".into());
+    }
+    if !valid_git_ref(input.base) || !valid_git_ref(input.head) || input.base == input.head {
+        return Err("Invalid pull request base or head branch".into());
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct GithubCreatedPullRequest {
+    html_url: String,
+}
+
+pub fn create_pull_request(
+    token: &str,
+    input: &CreatePullRequestInput<'_>,
+) -> Result<String, String> {
+    create_pull_request_at(GITHUB_API_BASE, token, input)
+}
+
+fn create_pull_request_at(
+    api_base: &str,
+    token: &str,
+    input: &CreatePullRequestInput<'_>,
+) -> Result<String, String> {
+    validate_create_pull_request(input)?;
+    let url = format!("{api_base}/repos/{}/{}/pulls", input.owner, input.repo);
+    let payload = json!({
+        "title": input.title.trim(),
+        "body": input.body,
+        "base": input.base,
+        "head": input.head,
+    })
+    .to_string();
+    let response = agent()
+        .post(&url)
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("Accept", "application/vnd.github+json")
+        .set("Content-Type", "application/json")
+        .set("X-GitHub-Api-Version", API_VERSION)
+        .set("User-Agent", USER_AGENT)
+        .send_string(&payload);
+
+    match response {
+        Ok(response) => {
+            let body = response.into_string().map_err(|error| error.to_string())?;
+            let created: GithubCreatedPullRequest =
+                serde_json::from_str(&body).map_err(|error| error.to_string())?;
+            let parsed_url = url::Url::parse(&created.html_url)
+                .map_err(|_| "GitHub returned an invalid pull request URL")?;
+            if parsed_url.scheme() != "https" || parsed_url.host_str() != Some("github.com") {
+                return Err("GitHub returned an invalid pull request URL".into());
+            }
+            Ok(created.html_url)
+        }
+        Err(ureq::Error::Status(status, response)) => {
+            let body = response.into_string().unwrap_or_default();
+            Err(map_status_error(status, &body))
+        }
+        Err(error) => Err(format!("Network error: {error}")),
     }
 }
 
@@ -372,6 +620,43 @@ pub async fn git_review_github_list_prs(
 }
 
 #[tauri::command]
+pub async fn git_review_github_branch_status(
+    owner_repo: String,
+    head: String,
+    app: AppHandle,
+    state: State<'_, SecretsState>,
+) -> Result<GithubPrBranchStatus, String> {
+    let token = read_token(&app, &state)?;
+    let (owner, repo) = split_owner_repo(&owner_repo)?;
+    pull_request_branch_status(&token, owner, repo, &head)
+}
+
+#[tauri::command]
+pub async fn git_review_github_create_pr(
+    owner_repo: String,
+    title: String,
+    body: String,
+    base: String,
+    head: String,
+    app: AppHandle,
+    state: State<'_, SecretsState>,
+) -> Result<String, String> {
+    let token = read_token(&app, &state)?;
+    let (owner, repo) = split_owner_repo(&owner_repo)?;
+    create_pull_request(
+        &token,
+        &CreatePullRequestInput {
+            owner,
+            repo,
+            title: &title,
+            body: &body,
+            base: &base,
+            head: &head,
+        },
+    )
+}
+
+#[tauri::command]
 pub async fn git_review_github_pr_diff(
     owner_repo: String,
     number: u64,
@@ -455,6 +740,8 @@ pub async fn git_review_github_submit_review(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
 
     #[test]
     fn splits_valid_owner_repo() {
@@ -466,6 +753,175 @@ mod tests {
         assert!(split_owner_repo("no-slash").is_err());
         assert!(split_owner_repo("/widgets").is_err());
         assert!(split_owner_repo("acme/").is_err());
+        assert!(split_owner_repo("acme/widgets?state=all").is_err());
+        assert!(split_owner_repo("acme/widgets/extra").is_err());
+    }
+
+    #[test]
+    fn validates_pull_request_inputs_before_network_access() {
+        let valid = CreatePullRequestInput {
+            owner: "acme",
+            repo: "widgets",
+            title: "Add widgets",
+            body: "Summary",
+            base: "main",
+            head: "feature/widgets",
+        };
+        assert!(validate_create_pull_request(&valid).is_ok());
+
+        let empty_title = CreatePullRequestInput {
+            title: "  ",
+            ..valid
+        };
+        assert!(validate_create_pull_request(&empty_title).is_err());
+
+        let same_branch = CreatePullRequestInput {
+            base: "main",
+            head: "main",
+            ..valid
+        };
+        assert!(validate_create_pull_request(&same_branch).is_err());
+
+        let invalid_ref = CreatePullRequestInput {
+            head: "feature\n--force",
+            ..valid
+        };
+        assert!(validate_create_pull_request(&invalid_ref).is_err());
+
+        let long_body = "x".repeat(65_537);
+        let oversized = CreatePullRequestInput {
+            body: &long_body,
+            ..valid
+        };
+        assert!(validate_create_pull_request(&oversized).is_err());
+    }
+
+    #[test]
+    fn validates_git_refs_used_for_pull_requests() {
+        assert!(valid_git_ref("feature/a-b"));
+        assert!(!valid_git_ref("-option"));
+        assert!(!valid_git_ref("feature..branch"));
+        assert!(!valid_git_ref("feature/"));
+        assert!(!valid_git_ref("feature/.hidden"));
+    }
+
+    #[test]
+    fn creates_pull_request_with_the_requested_branches_and_content() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream);
+            let mut request_line = String::new();
+            reader.read_line(&mut request_line).unwrap();
+            assert!(request_line.starts_with("POST /repos/acme/widgets/pulls HTTP/1.1"));
+
+            let mut content_length = 0;
+            let mut authorization = String::new();
+            loop {
+                let mut header = String::new();
+                reader.read_line(&mut header).unwrap();
+                if header == "\r\n" {
+                    break;
+                }
+                if let Some(value) = header.strip_prefix("Content-Length: ") {
+                    content_length = value.trim().parse::<usize>().unwrap();
+                }
+                if let Some(value) = header.strip_prefix("Authorization: ") {
+                    authorization = value.trim().to_string();
+                }
+            }
+            assert_eq!(authorization, "Bearer test-token");
+            let mut body = vec![0; content_length];
+            reader.read_exact(&mut body).unwrap();
+            let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(payload["title"], "Add widgets");
+            assert_eq!(payload["body"], "Summary");
+            assert_eq!(payload["base"], "main");
+            assert_eq!(payload["head"], "feature/widgets");
+
+            let response = r#"{"html_url":"https://github.com/acme/widgets/pull/42"}"#;
+            write!(
+                reader.get_mut(),
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+        });
+
+        let input = CreatePullRequestInput {
+            owner: "acme",
+            repo: "widgets",
+            title: "Add widgets",
+            body: "Summary",
+            base: "main",
+            head: "feature/widgets",
+        };
+        let result = create_pull_request_at(&format!("http://{address}"), "test-token", &input);
+        assert_eq!(
+            result.as_deref(),
+            Ok("https://github.com/acme/widgets/pull/42")
+        );
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn loads_default_branch_open_pr_and_remote_comparison() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let requests = [
+                (
+                    "/repos/acme/widgets HTTP/1.1",
+                    r#"{"default_branch":"main"}"#,
+                ),
+                (
+                    "/repos/acme/widgets/pulls?head=acme%3Afeature%2Fwidgets&state=open&per_page=1 HTTP/1.1",
+                    r#"[{"number":42,"title":"Add widgets","user":{"login":"octocat"},"state":"open","draft":false,"base":{"ref":"main","sha":"aaa"},"head":{"ref":"feature/widgets","sha":"bbb"},"html_url":"https://github.com/acme/widgets/pull/42","updated_at":"2026-09-08T00:00:00Z"}]"#,
+                ),
+                (
+                    "/repos/acme/widgets/compare/main...acme:feature%2Fwidgets HTTP/1.1",
+                    r#"{"ahead_by":2,"behind_by":0}"#,
+                ),
+            ];
+
+            for (expected_path, body) in requests {
+                let (stream, _) = listener.accept().unwrap();
+                let mut reader = BufReader::new(stream);
+                let mut request_line = String::new();
+                reader.read_line(&mut request_line).unwrap();
+                assert!(request_line.contains(expected_path), "{request_line}");
+                loop {
+                    let mut header = String::new();
+                    reader.read_line(&mut header).unwrap();
+                    if header == "\r\n" {
+                        break;
+                    }
+                }
+                write!(
+                    reader.get_mut(),
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                )
+                .unwrap();
+            }
+        });
+
+        let status = pull_request_branch_status_at(
+            &format!("http://{address}"),
+            "test-token",
+            "acme",
+            "widgets",
+            "feature/widgets",
+        )
+        .unwrap();
+        assert_eq!(status.default_branch, "main");
+        assert_eq!(status.ahead_by, Some(2));
+        assert_eq!(status.behind_by, Some(0));
+        assert_eq!(status.pull_request.unwrap().number, 42);
+        server.join().unwrap();
     }
 
     #[test]

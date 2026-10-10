@@ -627,6 +627,8 @@ pub fn run() {
             git_review::github::git_review_github_is_connected,
             git_review::github::git_review_github_detect_repo,
             git_review::github::git_review_github_list_prs,
+            git_review::github::git_review_github_branch_status,
+            git_review::github::git_review_github_create_pr,
             git_review::github::git_review_github_pr_diff,
             git_review::github::git_review_github_post_comment,
             git_review::github::git_review_github_submit_review,
