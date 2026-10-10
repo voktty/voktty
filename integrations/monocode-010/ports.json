@@ -620,12 +620,13 @@
         "2b7c3ba",
         "0ae6db2",
         "5a263ea",
-        "d99277f"
+        "d99277f",
+        "04ee7e1"
       ],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Saved SSH profiles create remote Harness projects directly and resolve their credential-free environment identity for native folder browsing, OpenCode 2.x sessions, and worktree Git operations. Supported project file commands now use the authenticated Voktty helper fs.* API with root-confined mutations and expectedContent writes; they do not fall back to Host. Git, project search, and session operations for direct profiles still fail closed pending migration; legacy machine IDs keep using Host. list_project_files currently applies only root-level .gitignore patterns, and read_file_preview inherits the helper's 8 MiB read limit. Active-turn tunnel recovery and a live Docker SSH smoke remain outstanding. Verify a Docker host and migrate the remaining operations before claiming full remote parity."
+        "Saved SSH profiles create remote Harness projects directly and resolve their credential-free environment identity for native folder browsing, OpenCode 2.x sessions, and worktree Git operations. Supported project file commands use the authenticated Voktty helper fs.* API with root-confined mutations and expectedContent writes; file and search operations do not fall back to Host. Search supports nested directories and returns at most 500 matches. A git.execWorkspace RPC now constrains its cwd to the authenticated root, but the direct-profile Harness Git UI and session operations still fail closed pending migration; legacy machine IDs keep using Host. list_project_files currently applies only root-level .gitignore patterns, and read_file_preview inherits the helper's 8 MiB read limit. Active-turn tunnel recovery and a live Docker SSH smoke remain outstanding. Verify a Docker host and migrate the remaining operations before claiming full remote parity."
       ],
       "mappings": [
         {
