@@ -474,6 +474,39 @@
         }
       ],
       "rationale": "The max and ultra effort shimmer applies to Codex reasoning effort, OpenCode variants, Claude effort, and Cursor effort. Other settings and ordinary values remain unanimated; focused tests cover all four setting IDs and the non-effort case."
+    },
+    {
+      "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
+      "upstreamTitle": "Route ⌘W and ⌘T to the focused project terminal (#774)",
+      "localCommit": "5c71821",
+      "basis": "preexisting",
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "Route the new-tab shortcut to add a dock terminal while the project terminal has keyboard focus; currently it creates a workspace tab.",
+        "Track keyboard focus on the project-terminal dock and verify DOM focus before routing close, instead of trusting the mouse-set focus flag.",
+        "Revisit native New Tab and Close Tab menu dispatch only if Voktty adds a matching native app-menu command surface."
+      ],
+      "mappings": [
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessApp.tsx"
+        },
+        {
+          "upstream": "src/features/projects/model/projectTerminal.ts",
+          "local": "src/modules/harness/lib/projectTerminal.ts"
+        },
+        {
+          "upstream": "src/features/projects/model/projectTerminal.test.ts",
+          "local": "src/modules/harness/lib/projectTerminal.test.ts"
+        },
+        {
+          "upstream": "src/features/terminal/ui/ProjectTerminalDock.tsx",
+          "local": "src/modules/harness/surfaces/ProjectTerminalDock.tsx"
+        }
+      ],
+      "tests": [],
+      "rationale": "Voktty already has a project-terminal dock and can close its active terminal through the workspace shortcut when the dock's focus flag is set. The full upstream focus-aware routing is incomplete: ⌘/Ctrl+T still creates a workspace tab, the flag is set on mouse input only, and Voktty has no corresponding native app-menu events."
     }
   ]
 }
