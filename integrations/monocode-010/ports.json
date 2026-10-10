@@ -1737,6 +1737,31 @@
         }
       ],
       "rationale": "Voktty now explicitly layers each dialog backdrop below its panel. The remote-folder dialog keeps the clear backdrop required by its earlier fix while adding a light-theme base surface; Harness dialogs retain Voktty's theme-aware floating surface and existing title style. Regression tests cover the remote backdrop and panel surface, SwitchBranchDialog stacking, and shared Modal panel stacking."
+    },
+    {
+      "upstreamCommit": "3e05e03258",
+      "upstreamTitle": "Preserve transcript scroll position during asynchronous updates",
+      "localCommits": ["74cfce0", "11aaf40"],
+      "localCommitBases": ["integrated", "integrated"],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscriptScroll.test.ts",
+          "local": "src/modules/harness/surfaces/AgentTranscriptScroll.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/AgentTranscriptScroll.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty already reconciles the browser's scroll offset before asynchronous stream commits and ResizeObserver updates, and resumes following only when the reader reaches the bottom. The same intent rule covers live activity phases. Local scroll tests cover delayed scroll events, async content growth, small downward reversals, and wheel gestures."
     }
   ]
 }
