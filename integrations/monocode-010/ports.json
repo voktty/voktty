@@ -1463,6 +1463,68 @@
         }
       ],
       "rationale": "Voktty already has a searchable worktree picker and a branch-creation dialog in its session UI, but its sidebar switcher only selects existing entries. The shared helper calls git_worktrees and git_worktree_create, neither of which is registered in Voktty's Tauri command handler. Existing git_list_branches and session-scoped git_worktree_add do not provide the generic list/create contract. Keep this row partial until the sidebar uses authorized native Git operations and the Voktty SSH agent for remote workspaces."
+    },
+    {
+      "upstreamCommit": "610550e4ddde1ee22a66a28eb88fb08e3ac5cd09",
+      "upstreamTitle": "Move workspace actions into the sidebar header",
+      "localCommits": ["5c71821", "7ad7830"],
+      "localCommitBases": ["preexisting", "preexisting"],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessApp.tsx"
+        },
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/Sidebar.tsx"
+        },
+        {
+          "upstream": "src/app/shell/TitleBar.tsx",
+          "local": "src/modules/harness/chrome/TitleBar.tsx"
+        }
+      ],
+      "tests": [],
+      "rationale": "Voktty places Go to File and New Session in the workspace sidebar header while the project rail is visible. When the rail is collapsed, that header is unavailable, so Voktty keeps the actions in TitleBar to preserve access. This adapts the action placement to Voktty's layout while keeping the same workspace actions reachable."
+    },
+    {
+      "upstreamCommit": "990f1411488ca37d18edc15aca859ef65dd833b0",
+      "upstreamTitle": "Add soft fades to clipped tabs and scroll areas",
+      "localCommits": ["9549dd6", "9d4dfcf"],
+      "localCommitBases": ["integrated", "integrated"],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/Sidebar.tsx"
+        },
+        {
+          "upstream": "src/app/shell/TitleBar.tsx",
+          "local": "src/modules/harness/chrome/TitleBar.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/SessionPane.tsx",
+          "local": "src/modules/harness/surfaces/SessionPane.tsx"
+        },
+        {
+          "upstream": "src/features/workspace/ui/SurfaceTabs.tsx",
+          "local": "src/modules/harness/chrome/SurfaceTabs.tsx"
+        },
+        {
+          "upstream": "src/shared/ui/TabLabel.tsx",
+          "local": "src/modules/harness/chrome/TabLabel.tsx"
+        },
+        {
+          "upstream": "src/styles/index.css",
+          "local": "src/styles/globals.css"
+        }
+      ],
+      "tests": [],
+      "rationale": "Voktty already fades overflowing tab labels and the bottom edge of long session lists and docked transcripts. The transcript content also has bottom padding so the final reply can scroll clear of the fade; the selector and class names follow Voktty's Harness structure."
     }
   ]
 }
