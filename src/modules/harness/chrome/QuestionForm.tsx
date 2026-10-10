@@ -88,6 +88,10 @@ export function QuestionForm({ prompt, onReply, onInteraction }: Props) {
     setStep(index + 1);
   };
 
+  const goBack = () => {
+    if (index > 0) setStep(index - 1);
+  };
+
   if (!question) return null;
 
   const title = question.header?.trim() || prompt.title?.trim() || t("questions.question");
@@ -179,6 +183,15 @@ export function QuestionForm({ prompt, onReply, onInteraction }: Props) {
                     seconds: Math.max(0, Math.ceil((prompt.autoResolveAt - now) / 1000)),
                   })}
             </span>
+          ) : null}
+          {index > 0 ? (
+            <button
+              type="button"
+              className="h-6 rounded-md px-2 text-[11px] text-content/55 hover:bg-content/10 hover:text-content"
+              onClick={goBack}
+            >
+              {t("common.back")}
+            </button>
           ) : null}
           <button
             type="submit"
