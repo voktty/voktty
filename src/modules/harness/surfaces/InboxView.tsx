@@ -52,7 +52,6 @@ import {
   inboxListIsFresh,
   inboxProjectsForRail,
   listInboxItems,
-  prefetchGithubWorkItem,
   peekGithubPrDiff,
   peekGithubWorkItemDetails,
   peekGithubWorkItemThread,
@@ -994,7 +993,6 @@ function InboxCard({
       title={item.title}
       aria-current={active ? "true" : undefined}
       aria-label={unseen ? `${item.title}, new` : undefined}
-      onPointerEnter={() => prefetchGithubWorkItem(item)}
       onClick={onSelect}
       className={`flex w-full flex-col rounded-md border px-2.5 py-2 text-left ${
         active

@@ -5,7 +5,6 @@ import {
   githubPrDiff,
   githubWorkItemDetails,
   githubWorkItemThread,
-  prefetchGithubWorkItem,
 } from "./githubTasks";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -48,45 +47,4 @@ describe("github work item freshness", () => {
     expect(mocked).toHaveBeenCalledTimes(4);
   });
 
-  it("warms a hovered pull request once for the Inbox detail view", async () => {
-    const item = {
-      provider: "github" as const,
-      kind: "pr" as const,
-      projectPath: "/repo",
-      number: 17,
-    };
-
-    prefetchGithubWorkItem(item);
-    await vi.waitFor(() => expect(mocked).toHaveBeenCalledTimes(3));
-
-    expect(mocked).toHaveBeenCalledWith("git_github_work_item_details", {
-      cwd: "/repo",
-      kind: "pr",
-      number: 17,
-    });
-    expect(mocked).toHaveBeenCalledWith("git_github_work_item_thread", {
-      cwd: "/repo",
-      kind: "pr",
-      number: 17,
-    });
-    expect(mocked).toHaveBeenCalledWith("git_github_pr_diff", {
-      cwd: "/repo",
-      number: 17,
-    });
-
-    prefetchGithubWorkItem(item);
-    await Promise.resolve();
-    expect(mocked).toHaveBeenCalledTimes(3);
-  });
-
-  it("does not prefetch non-GitHub Inbox items", () => {
-    prefetchGithubWorkItem({
-      provider: "linear",
-      kind: "linear",
-      projectPath: "/repo",
-      number: 17,
-    });
-
-    expect(mocked).not.toHaveBeenCalled();
-  });
 });

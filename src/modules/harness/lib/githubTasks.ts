@@ -516,29 +516,6 @@ export async function githubPrDiff(
   return promise;
 }
 
-/** Warm the details shown after selecting a GitHub Inbox card. */
-export function prefetchGithubWorkItem(
-  item: Pick<InboxItem, "provider" | "kind" | "projectPath" | "number">,
-) {
-  if (
-    item.provider !== "github" ||
-    (item.kind !== "issue" && item.kind !== "pr")
-  ) {
-    return;
-  }
-  const { kind, number, projectPath } = item;
-  const quiet = () => undefined;
-  if (!peekGithubWorkItemDetails(projectPath, kind, number)) {
-    void githubWorkItemDetails(projectPath, kind, number).catch(quiet);
-  }
-  if (!peekGithubWorkItemThread(projectPath, kind, number)) {
-    void githubWorkItemThread(projectPath, kind, number).catch(quiet);
-  }
-  if (kind === "pr" && !peekGithubPrDiff(projectPath, number)) {
-    void githubPrDiff(projectPath, number).catch(quiet);
-  }
-}
-
 export async function listInboxItems(
   projects: readonly { path: string }[],
   query: InboxQuery,
