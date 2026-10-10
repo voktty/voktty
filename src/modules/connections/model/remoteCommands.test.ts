@@ -41,12 +41,14 @@ vi.mock("@/modules/settings/preferences", () => ({
 }));
 
 import {
+  gitCommit,
   gitDiffIndex,
   gitDiffStats,
   gitDiscardFile,
   gitFileDiff,
   gitStageAll,
   gitStageContents,
+  gitStagedContext,
   gitStageFile,
   gitUnstageAll,
   gitUnstageFile,
@@ -318,6 +320,146 @@ it("stages and unstages remote paths with literal Git pathspecs", async () => {
   ]);
   expect(remoteRequest).not.toHaveBeenCalled();
   expect(closeRemoteWorkspace).toHaveBeenCalledTimes(4);
+});
+
+it("reads bounded staged Git context through the native SSH helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (
+        args[0] === "diff" &&
+        args[1] === "--cached" &&
+        args[2] === "--stat"
+      ) {
+        return gitExecResult("src/main.ts | 2 +\n 1 file changed\n");
+      }
+      if (args[0] === "diff" && args[1] === "--cached") {
+        return gitExecResult("diff --git a/src/main.ts b/src/main.ts\n");
+      }
+      if (args[0] === "symbolic-ref") return gitExecResult("feature/demo\n");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    gitStagedContext(remotePath(environmentId, "/srv/app/src")),
+  ).resolves.toEqual({
+    branch: "feature/demo",
+    summary: "src/main.ts | 2 +\n 1 file changed\n",
+    patch: "diff --git a/src/main.ts b/src/main.ts\n",
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("includes unstaged changes and untracked names in remote commit context", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") {
+        return gitExecResult("/srv/app\n");
+      }
+      if (args[0] === "diff" && args[1] === "--cached") {
+        return gitExecResult("");
+      }
+      if (args[0] === "diff" && args[1] === "HEAD" && args[2] === "--stat") {
+        return gitExecResult("tracked.txt | 1 +\n");
+      }
+      if (args[0] === "diff" && args[1] === "HEAD") {
+        return gitExecResult("diff --git a/tracked.txt b/tracked.txt\n");
+      }
+      if (args[0] === "ls-files") return gitExecResult("new file.txt\n");
+      if (args[0] === "symbolic-ref") return gitExecResult("", 1);
+      if (args[0] === "rev-parse") return gitExecResult("abc1234\n");
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await expect(
+    gitStagedContext(remotePath(environmentId, "/srv/app")),
+  ).resolves.toEqual({
+    branch: "abc1234",
+    summary: "tracked.txt | 1 +\n\nUntracked files:\nnew file.txt",
+    patch: "diff --git a/tracked.txt b/tracked.txt\n",
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+});
+
+it("commits remote staged changes with bounded message and helper timeout", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      if (args[0] === "rev-parse") return gitExecResult("/srv/app\n");
+      if (args[0] === "commit") {
+        return { ...gitExecResult(""), stderrTruncated: true };
+      }
+      throw new Error(`Unexpected Git command: ${args.join(" ")}`);
+    },
+  );
+
+  await gitCommit(
+    remotePath(environmentId, "/srv/app"),
+    "  fix: quote 'paths' safely\n",
+  );
+
+  expect(requestRemoteResult).toHaveBeenLastCalledWith(9, "git.execWorkspace", {
+    cwd: ".",
+    args: ["commit", "--cleanup=strip", "-m", "fix: quote 'paths' safely"],
+    timeoutSecs: 120,
+    maxOutputBytes: 64 * 1024,
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("refuses to read or commit a Git repository above the saved project root", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValue(gitExecResult("/srv\n"));
+
+  await expect(
+    gitStagedContext(remotePath(environmentId, "/srv/app")),
+  ).rejects.toThrow("Git repository root is outside the saved project");
+  await expect(
+    gitCommit(remotePath(environmentId, "/srv/app"), "fix: keep root"),
+  ).rejects.toThrow("Git repository root is outside the saved project");
+  expect(requestRemoteResult).toHaveBeenCalledTimes(2);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+});
+
+it("rejects oversized remote commit messages before invoking Git", async () => {
+  const { environmentId } = registerNativeProfileProject();
+
+  await expect(
+    gitCommit(remotePath(environmentId, "/srv/app"), "é".repeat(8 * 1024 + 1)),
+  ).rejects.toThrow("Commit message is too large");
+  expect(requestRemoteResult).not.toHaveBeenCalled();
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
 it("stages unsaved SSH editor contents through bounded helper stdin", async () => {

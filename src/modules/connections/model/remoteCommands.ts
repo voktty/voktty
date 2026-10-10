@@ -49,6 +49,7 @@ const HOST_COMMANDS = new Set([
   "git_stage_all",
   "git_unstage_all",
   "git_commit",
+  "harness_git_commit",
   "git_head_message",
   "git_push",
   "git_pull",
@@ -104,6 +105,9 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_discard_all",
   "git_stage_all",
   "git_unstage_all",
+  "git_commit",
+  "harness_git_commit",
+  "git_staged_context",
 ]);
 
 const HELPER_FS = {
@@ -198,6 +202,7 @@ const HELPER_GIT_EXEC_WORKSPACE_INPUT = "git.execWorkspaceInput";
 const MAX_GIT_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_GIT_DIFF_BYTES = 1024 * 1024;
 const MAX_GIT_INPUT_BYTES = 8 * 1024 * 1024;
+const MAX_GIT_COMMIT_MESSAGE_BYTES = 16 * 1024;
 
 type HelperGitOutput = {
   stdout: string;
@@ -368,6 +373,7 @@ async function runHelperGit(
   allowFailure = false,
   allowTruncated = false,
   stdin?: string,
+  timeoutSecs = 10,
 ): Promise<HelperGitOutput> {
   const raw = await requestRemoteResult<unknown>(
     sessionId,
@@ -375,7 +381,7 @@ async function runHelperGit(
     {
       cwd,
       args,
-      timeoutSecs: 10,
+      timeoutSecs,
       maxOutputBytes,
       ...(stdin === undefined ? {} : { stdin }),
     },
@@ -553,6 +559,140 @@ async function nativeProfileGitStatus(
     throw new Error("Could not read Git changes on the remote project.");
   }
   return parseGitPorcelainV2(decodeGitMetadata(statusOutput.stdoutBytes));
+}
+
+async function nativeProfileGitStagedContext(
+  sessionId: number,
+  root: string,
+  cwd: string,
+): Promise<{ branch: string | null; summary: string; patch: string }> {
+  await assertProfileGitRoot(sessionId, root, cwd);
+  const stagedSummary = await runHelperGit(
+    sessionId,
+    cwd,
+    ["diff", "--cached", "--stat", "--", "."],
+    MAX_GIT_OUTPUT_BYTES,
+    true,
+  );
+  const stagedPatch = await runHelperGit(
+    sessionId,
+    cwd,
+    ["diff", "--cached", "--no-ext-diff", "--", "."],
+    MAX_GIT_OUTPUT_BYTES,
+    true,
+  );
+  let summary = stagedSummary.stdout;
+  let patch = stagedPatch.stdout;
+
+  if (!summary.trim() && !patch.trim()) {
+    summary = (
+      await runHelperGit(
+        sessionId,
+        cwd,
+        ["diff", "HEAD", "--stat", "--", "."],
+        MAX_GIT_OUTPUT_BYTES,
+        true,
+      )
+    ).stdout;
+    patch = (
+      await runHelperGit(
+        sessionId,
+        cwd,
+        ["diff", "HEAD", "--no-ext-diff", "--", "."],
+        MAX_GIT_OUTPUT_BYTES,
+        true,
+      )
+    ).stdout;
+    const untracked = await runHelperGit(
+      sessionId,
+      cwd,
+      ["ls-files", "--others", "--exclude-standard"],
+      MAX_GIT_OUTPUT_BYTES,
+      true,
+    );
+    if (untracked.stdout.trim()) {
+      if (summary.trim()) summary += "\n";
+      summary += `Untracked files:\n${untracked.stdout.trim()}`;
+    }
+  }
+
+  if (!summary.trim() && !patch.trim()) {
+    throw new Error("No changes to summarize");
+  }
+
+  const branch = await runHelperGit(
+    sessionId,
+    cwd,
+    ["symbolic-ref", "--quiet", "--short", "HEAD"],
+    64 * 1024,
+    true,
+  );
+  if (branch.exitCode === 0 && branch.stdout.trim()) {
+    return { branch: branch.stdout.trim(), summary, patch };
+  }
+  const head = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "--short", "HEAD"],
+    64 * 1024,
+    true,
+  );
+  return {
+    branch: head.exitCode === 0 ? head.stdout.trim() || null : null,
+    summary,
+    patch,
+  };
+}
+
+async function assertProfileGitRoot(
+  sessionId: number,
+  root: string,
+  cwd: string,
+): Promise<void> {
+  const result = await runHelperGit(
+    sessionId,
+    cwd,
+    ["rev-parse", "--show-toplevel"],
+    64 * 1024,
+    true,
+  );
+  if (result.exitCode !== 0 || !result.stdout.trim()) {
+    throw new Error("No Git repository is available in the saved project.");
+  }
+  const repositoryRoot = normalizeRemoteAbsolute(result.stdout.trim());
+  const projectRoot = normalizeRemoteAbsolute(root);
+  if (
+    repositoryRoot !== projectRoot &&
+    !repositoryRoot.startsWith(projectRoot === "/" ? "/" : `${projectRoot}/`)
+  ) {
+    throw new Error("The Git repository root is outside the saved project.");
+  }
+}
+
+async function nativeProfileGitCommit(
+  sessionId: number,
+  root: string,
+  cwd: string,
+  value: unknown,
+): Promise<void> {
+  const message = requireString({ message: value }, "message").trim();
+  if (!message) throw new Error("Commit message cannot be empty");
+  if (
+    new TextEncoder().encode(message).byteLength > MAX_GIT_COMMIT_MESSAGE_BYTES
+  ) {
+    throw new Error("Commit message is too large");
+  }
+  await assertProfileGitRoot(sessionId, root, cwd);
+  await runHelperGit(
+    sessionId,
+    cwd,
+    ["commit", "--cleanup=strip", "-m", message],
+    64 * 1024,
+    false,
+    true,
+    undefined,
+    120,
+  );
 }
 
 async function nativeProfileGitStageContents(
@@ -811,6 +951,21 @@ async function runProfileFileCommand(
   if (!PROFILE_HELPER_COMMANDS.has(command))
     throw new Error(PROFILE_UNAVAILABLE);
   const remoteResultPath = (value: string) => remotePath(environmentId, value);
+  if (command === "git_staged_context") {
+    return nativeProfileGitStagedContext(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+    );
+  }
+  if (command === "git_commit" || command === "harness_git_commit") {
+    return nativeProfileGitCommit(
+      sessionId,
+      root,
+      relativePath(args.cwd),
+      args.message,
+    );
+  }
   if (
     command === "git_diff_index" ||
     command === "git_diff_files" ||

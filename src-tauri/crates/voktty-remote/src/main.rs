@@ -3323,6 +3323,64 @@ mod tests {
     }
 
     #[test]
+    fn git_workspace_creates_a_commit_with_a_quoted_message() {
+        let workspace = tempdir().expect("workspace");
+        let initialized = std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(workspace.path())
+            .status()
+            .expect("git init");
+        assert!(initialized.success());
+        fs::write(workspace.path().join("note.txt"), "commit this\n").expect("worktree file");
+
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "handshake".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        for (id, args) in [
+            ("name", vec!["config", "user.name", "Voktty Test"]),
+            (
+                "email",
+                vec!["config", "user.email", "voktty@example.invalid"],
+            ),
+            ("stage", vec!["add", "--", "note.txt"]),
+            (
+                "commit",
+                vec!["commit", "--cleanup=strip", "-m", "fix: quote 'path'"],
+            ),
+        ] {
+            let response = server.handle(RemoteRequest {
+                protocol: PROTOCOL_VERSION,
+                id: id.to_string(),
+                method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+                params: json!({ "cwd": ".", "args": args }),
+            });
+            assert!(response.ok, "{id}: {:?}", response.error);
+            let result = response.result.expect("Git result");
+            assert_eq!(result["exitCode"], 0, "{id}: {result}");
+        }
+
+        let log = std::process::Command::new("git")
+            .args(["log", "-1", "--format=%s"])
+            .current_dir(workspace.path())
+            .output()
+            .expect("read commit");
+        assert!(log.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&log.stdout).trim(),
+            "fix: quote 'path'"
+        );
+    }
+
+    #[test]
     fn git_workspace_input_rejects_unbounded_or_unexpected_input() {
         let workspace = tempdir().expect("workspace");
         let mut server = RemoteServer::new();
