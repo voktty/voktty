@@ -1106,16 +1106,25 @@ fn exec_args_allowed(binary_provider: Option<&str>, args: &[String]) -> bool {
     let matches = |a: &&[&str]| a.len() == args.len() && a.iter().zip(args).all(|(x, y)| x == y);
     EXEC_ALLOWED_ARGS.iter().any(matches)
         || (binary_provider == Some("opencode") && OPENCODE_EXEC_ALLOWED_ARGS.iter().any(matches))
+        || (binary_provider == Some("grok")
+            && args.len() == 4
+            && args[0] == "--no-auto-update"
+            && args[1] == "sessions"
+            && args[2] == "delete"
+            && args[3].len() == 36
+            && uuid::Uuid::parse_str(&args[3]).is_ok())
 }
 
 fn exec_provider_matches(
     command: &str,
     binary_provider: Option<&str>,
     opencode: Option<PathBuf>,
+    grok: Option<PathBuf>,
 ) -> bool {
     match binary_provider {
         None => true,
         Some("opencode") => opencode.is_some_and(|path| path == Path::new(command)),
+        Some("grok") => grok.is_some_and(|path| path == Path::new(command)),
         Some(_) => false,
     }
 }
@@ -1154,14 +1163,21 @@ pub async fn harness_exec(
         return Err("harness_exec: unsupported arguments".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
+        let opencode = if binary_provider.as_deref() == Some("opencode") {
+            resolve_opencode()
+        } else {
+            None
+        };
+        let grok = if binary_provider.as_deref() == Some("grok") {
+            resolve_grok()
+        } else {
+            None
+        };
         let provider_matches = exec_provider_matches(
             &command,
             binary_provider.as_deref(),
-            if binary_provider.is_some() {
-                resolve_opencode()
-            } else {
-                None
-            },
+            opencode,
+            grok,
         );
         if !provider_matches || (binary_provider.is_none() && !is_resolved_harness_binary(&command))
         {
@@ -3255,14 +3271,58 @@ mod exec_allowlist_tests {
             "/resolved/opencode",
             Some("opencode"),
             Some(resolved.clone()),
+            None,
         ));
         assert!(!exec_provider_matches(
             "/other/opencode",
             Some("opencode"),
             Some(resolved),
+            None,
         ));
-        assert!(!exec_provider_matches("opencode", Some("opencode"), None));
-        assert!(!exec_provider_matches("codex", Some("codex"), None));
+        assert!(!exec_provider_matches("opencode", Some("opencode"), None, None));
+        assert!(!exec_provider_matches("codex", Some("codex"), None, None));
+    }
+
+    #[test]
+    fn grok_cleanup_is_limited_to_a_resolved_binary_and_valid_session_id() {
+        let cleanup = args(&[
+            "--no-auto-update",
+            "sessions",
+            "delete",
+            "550e8400-e29b-41d4-a716-446655440000",
+        ]);
+        assert!(exec_args_allowed(Some("grok"), &cleanup));
+        for provider in [None, Some("cursor"), Some("opencode")] {
+            assert!(!exec_args_allowed(provider, &cleanup));
+        }
+        for id in ["", "--all", "../sessions", "invalid"] {
+            let mut rejected = cleanup.clone();
+            rejected[3] = id.to_string();
+            assert!(!exec_args_allowed(Some("grok"), &rejected));
+        }
+        let mut extra = cleanup;
+        extra.push("--all".to_string());
+        assert!(!exec_args_allowed(Some("grok"), &extra));
+
+        let resolved = PathBuf::from("/resolved/grok");
+        assert!(exec_provider_matches(
+            "/resolved/grok",
+            Some("grok"),
+            None,
+            Some(resolved.clone()),
+        ));
+        assert!(!exec_provider_matches(
+            "/other/grok",
+            Some("grok"),
+            None,
+            Some(resolved.clone()),
+        ));
+        assert!(!exec_provider_matches(
+            "/resolved/grok",
+            Some("grok"),
+            Some(resolved),
+            None,
+        ));
     }
 
     #[test]

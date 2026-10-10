@@ -39,3 +39,30 @@ describe("OpenCodeClient.summarizeSession", () => {
     });
   });
 });
+
+describe("OpenCodeClient.deleteSession", () => {
+  beforeEach(() => {
+    mocks.harnessHttp.mockReset();
+    mocks.harnessHttp.mockResolvedValue({ status: 204, body: "" });
+  });
+
+  it.each(["v1", "v2"] as const)(
+    "deletes throwaway sessions from %s servers",
+    async (generation) => {
+      const client = new OpenCodeClient(
+        "http://127.0.0.1:4096",
+        "/repo",
+        generation,
+      );
+
+      await client.deleteSession("session_1");
+
+      expect(mocks.harnessHttp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "DELETE",
+          url: `http://127.0.0.1:4096/${generation === "v2" ? "api/" : ""}session/session_1?directory=%2Frepo`,
+        }),
+      );
+    },
+  );
+});

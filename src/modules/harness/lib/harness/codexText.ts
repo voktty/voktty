@@ -289,11 +289,14 @@ async function startLive(
 async function openThread(session: LiveText, cwd: string): Promise<void> {
   const opened = await session.rpc.request<{ thread?: { id?: string } }>(
     "thread/start",
-    buildThreadStartParams({
-      cwd,
-      runtimeMode: TEXT_RUNTIME_MODE,
-      model: session.model || undefined,
-    }),
+    {
+      ...buildThreadStartParams({
+        cwd,
+        runtimeMode: TEXT_RUNTIME_MODE,
+        model: session.model || undefined,
+      }),
+      ephemeral: true,
+    },
     INIT_TIMEOUT_MS,
   );
   const threadId = opened.thread?.id?.trim();

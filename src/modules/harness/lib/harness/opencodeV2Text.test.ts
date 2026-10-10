@@ -110,4 +110,55 @@ describe("OpenCode v2 text sessions", () => {
       );
     },
   );
+
+  it("interrupts and deletes its temporary session when cancelled", async () => {
+    let finishGenerate:
+      | ((response: { status: number; body: string }) => void)
+      | undefined;
+    mocks.http.mockImplementation(
+      async (request: { url: string; method: string }) => {
+        const path = new URL(request.url).pathname;
+        if (request.method === "POST" && path === "/api/session") {
+          return {
+            status: 200,
+            body: JSON.stringify({ data: { id: "text_session" } }),
+          };
+        }
+        if (path.endsWith("/generate")) {
+          return new Promise((resolve) => {
+            finishGenerate = resolve;
+          });
+        }
+        return { status: 204, body: "" };
+      },
+    );
+    const controller = new AbortController();
+    const prompt = runOpenCodeTextPrompt({
+      cwd: "/repo",
+      prompt: "Generate text",
+      model: "openai/test",
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(finishGenerate).toBeTypeOf("function"));
+    controller.abort();
+
+    await expect(prompt).rejects.toThrow("By-the-way request cancelled");
+    expect(mocks.http).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        url: "http://127.0.0.1:4096/api/session/text_session/interrupt?directory=%2Frepo&resume=false",
+      }),
+    );
+    expect(mocks.http).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        url: "http://127.0.0.1:4096/api/session/text_session?directory=%2Frepo",
+      }),
+    );
+    finishGenerate?.({
+      status: 200,
+      body: JSON.stringify({ data: { text: "late" } }),
+    });
+  });
 });

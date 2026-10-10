@@ -401,7 +401,7 @@ export function execChild(
   command: string,
   args: string[],
   cwd?: string,
-  binaryProvider?: "opencode",
+  binaryProvider?: "grok" | "opencode",
 ): Promise<string> {
   return invoke("harness_exec", {
     command,

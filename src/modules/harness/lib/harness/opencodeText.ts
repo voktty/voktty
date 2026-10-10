@@ -77,12 +77,15 @@ async function promptOnLive(input: {
   const session = await ensureLive(input.cwd, input.model);
   input.signal?.throwIfAborted();
   try {
-    const result = await session.client.prompt({
-      sessionID: session.sessionId,
-      model: session.model,
-      parts: [{ type: "text", text: input.prompt }],
-      timeoutMs: input.timeoutMs ?? REQUEST_TIMEOUT_MS,
-    });
+    const result = await requestWithAbort(
+      session.client.prompt({
+        sessionID: session.sessionId,
+        model: session.model,
+        parts: [{ type: "text", text: input.prompt }],
+        timeoutMs: input.timeoutMs ?? REQUEST_TIMEOUT_MS,
+      }),
+      input.signal,
+    );
     const error = result.info?.error;
     if (error) {
       throw new Error(
@@ -218,5 +221,25 @@ function waitForUrl(read: () => string, timeoutMs: number): Promise<string> {
       setTimeout(tick, 50);
     };
     tick();
+  });
+}
+
+function requestWithAbort<T>(
+  request: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return request;
+  if (signal.aborted)
+    return Promise.reject(new Error("By-the-way request cancelled"));
+
+  let abortHandler: (() => void) | undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    abortHandler = () => reject(new Error("By-the-way request cancelled"));
+    signal.addEventListener("abort", abortHandler, { once: true });
+    if (signal.aborted) abortHandler();
+  });
+
+  return Promise.race([request, aborted]).finally(() => {
+    if (abortHandler) signal.removeEventListener("abort", abortHandler);
   });
 }

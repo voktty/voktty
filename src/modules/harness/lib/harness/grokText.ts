@@ -1,5 +1,6 @@
 import { AcpClient } from "./acp";
 import {
+  execChild,
   killChild,
   resolveGrokBinary,
   spawnChild,
@@ -24,6 +25,7 @@ const CLIENT_CAPABILITIES = {
 
 type LiveText = {
   acp: AcpClient;
+  binaryPath: string;
   cwd: string;
   model: string;
   acpSessionId: string;
@@ -82,17 +84,20 @@ async function promptOnLive(input: {
 }): Promise<string> {
   input.signal?.throwIfAborted();
   const session = await ensureLive(input.cwd, input.model);
-  input.signal?.throwIfAborted();
   session.output = "";
   session.collecting = true;
   try {
-    await session.acp.request(
-      "session/prompt",
-      {
-        sessionId: session.acpSessionId,
-        prompt: [{ type: "text", text: input.prompt }],
-      },
-      input.timeoutMs,
+    input.signal?.throwIfAborted();
+    await requestWithAbort(
+      session.acp.request(
+        "session/prompt",
+        {
+          sessionId: session.acpSessionId,
+          prompt: [{ type: "text", text: input.prompt }],
+        },
+        input.timeoutMs,
+      ),
+      input.signal,
     );
     return session.output;
   } catch (error) {
@@ -107,18 +112,32 @@ async function promptOnLive(input: {
   }
 }
 
+function requestWithAbort<T>(
+  request: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return request;
+  if (signal.aborted)
+    return Promise.reject(new Error("By-the-way request cancelled"));
+
+  let abortHandler: (() => void) | undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    abortHandler = () => reject(new Error("By-the-way request cancelled"));
+    signal.addEventListener("abort", abortHandler, { once: true });
+    if (signal.aborted) abortHandler();
+  });
+
+  return Promise.race([request, aborted]).finally(() => {
+    if (abortHandler) signal.removeEventListener("abort", abortHandler);
+  });
+}
+
 async function ensureLive(cwd: string, model?: string): Promise<LiveText> {
   // The model is part of the session identity: a live ACP session was opened
   // for one model and cannot answer as another.
   const wanted = model ?? TEXT_MODEL;
   if (live && !live.closed) {
     if (live.cwd === cwd && live.model === wanted) return live;
-    try {
-      await openSession(live, cwd, wanted);
-      return live;
-    } catch {
-      await dropLive();
-    }
   }
   return startLive(cwd, wanted);
 }
@@ -140,6 +159,7 @@ async function startLive(cwd: string, model?: string): Promise<LiveText> {
   });
   const session: LiveText = {
     acp,
+    binaryPath: path,
     cwd,
     model: model ?? TEXT_MODEL,
     acpSessionId: "",
@@ -154,7 +174,6 @@ async function startLive(cwd: string, model?: string): Promise<LiveText> {
     (line) => acp.pushLine(line),
     () => {
       session.closed = true;
-      if (live === session) live = null;
       acp.close(new Error("Grok Build text generator exited"));
     },
   );
@@ -181,6 +200,7 @@ async function startLive(cwd: string, model?: string): Promise<LiveText> {
         .catch(() => undefined);
     }
     await openSession(session, cwd, model);
+    if (session.closed) throw new Error("Grok Build text generator exited");
     live = session;
     return session;
   } catch (error) {
@@ -188,6 +208,7 @@ async function startLive(cwd: string, model?: string): Promise<LiveText> {
     acp.close(error instanceof Error ? error : new Error(String(error)));
     unwatchChild(TEXT_CHILD_ID);
     await killChild(TEXT_CHILD_ID).catch(() => undefined);
+    await deleteTextSession(session);
     throw error;
   }
 }
@@ -205,6 +226,7 @@ async function openSession(
   );
   const acpSessionId = setup.sessionId?.trim();
   if (!acpSessionId) throw new Error("Grok Build did not return a session id");
+  session.acpSessionId = acpSessionId;
 
   await session.acp
     .request(
@@ -223,7 +245,6 @@ async function openSession(
 
   session.cwd = cwd;
   session.model = resolvedModel;
-  session.acpSessionId = acpSessionId;
 }
 
 async function dropLive(): Promise<void> {
@@ -235,6 +256,20 @@ async function dropLive(): Promise<void> {
   }
   unwatchChild(TEXT_CHILD_ID);
   await killChild(TEXT_CHILD_ID).catch(() => undefined);
+  if (current) await deleteTextSession(current);
+}
+
+async function deleteTextSession(session: LiveText): Promise<void> {
+  if (
+    !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(session.acpSessionId)
+  )
+    return;
+  await execChild(
+    session.binaryPath,
+    ["--no-auto-update", "sessions", "delete", session.acpSessionId],
+    session.cwd,
+    "grok",
+  ).catch(() => undefined);
 }
 
 async function handleTextRequest(
