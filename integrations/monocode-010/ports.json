@@ -1814,6 +1814,55 @@
         }
       ],
       "rationale": "The terminal renderer uses Voktty's configurable font-family resolver, so the Nerd Font fallback stack is attached to that shared runtime setting rather than a new CSS variable. User-selected families stay first, followed by system monospace and explicit Nerd Font symbol families for shell prompt glyphs."
+    },
+    {
+      "upstreamCommit": "b74e803e69",
+      "upstreamTitle": "Keep Pi extension status in one row per key (#760)",
+      "localCommit": "34826287f50e16d005355b1ff9984dabf31dff2d",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/model/session.ts",
+          "local": "src/modules/harness/lib/session.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/core/apply.ts",
+          "local": "src/modules/harness/lib/harness/apply.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/core/apply.test.ts",
+          "local": "src/modules/harness/lib/harness/apply.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/core/types.ts",
+          "local": "src/modules/harness/lib/harness/types.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/pi/piFamily.ts",
+          "local": "src/modules/harness/lib/harness/piFamily.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/pi/piLive.test.ts",
+          "local": "src/modules/harness/lib/harness/piLive.test.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/pi/piProtocol.ts",
+          "local": "src/modules/harness/lib/harness/piProtocol.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/harness/apply.test.ts",
+            "src/modules/harness/lib/harness/piLive.test.ts",
+            "src/modules/harness/lib/harness/piProtocol.test.ts",
+            "src/modules/harness/lib/sessionStore.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Pi extension setStatus calls now carry their statusKey into the transcript. Harness updates one system row for that key during the current user turn, removes it on clear, and preserves independent keys and unkeyed notifications. Voktty's session sanitizer keeps the key across storage and restore so the live status can continue updating after a reload."
     }
   ]
 }
