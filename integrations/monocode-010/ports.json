@@ -2115,6 +2115,42 @@
         }
       ],
       "rationale": "Both Voktty provider settings surfaces now distinguish visible fallback models from a live CLI catalog. They request a refresh whenever the harness is available and no live catalog exists; the registry prevents duplicate probes and skips providers that already have live data. A regression test covers Pi with its fallback model visible and no live overlay."
+    },
+    {
+      "upstreamCommit": "88994864d095ce4cca53763dcf1d5016298bdf0d",
+      "upstreamTitle": "Default to masking account emails",
+      "localCommit": "65a7ee9",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/settings/model/displayPrefs.ts",
+          "local": "src/modules/harness/lib/displayPrefs.ts"
+        },
+        {
+          "upstream": "src/features/settings/model/displayPrefs.test.ts",
+          "local": "src/modules/harness/lib/displayPrefs.test.ts"
+        },
+        {
+          "upstream": "src/shared/ui/PrivateEmail.test.ts",
+          "local": "src/modules/harness/chrome/PrivateEmail.test.ts"
+        },
+        {
+          "upstream": "src/features/settings/ui/SettingsView.test.ts",
+          "local": "src/modules/harness/lib/providerAccountIdentity.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/displayPrefs.test.ts",
+            "src/modules/harness/chrome/PrivateEmail.test.ts",
+            "src/modules/harness/lib/providerAccountIdentity.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Account emails now start masked in the Harness, while users can still reveal them and saved preferences remain effective across windows. Preference and rendering tests cover the default and explicit unmasked state. Voktty has no equivalent Mono shell UsageProviderChip, so that shell-specific test change has no local component to port."
     }
   ]
 }
