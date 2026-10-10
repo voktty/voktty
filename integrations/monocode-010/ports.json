@@ -1033,6 +1033,22 @@
         }
       ],
       "rationale": "Voktty's session transcript shows active work inline and puts answered work behind its WorkFoldLine, which users can expand again. The Mono-specific header state from upstream has no local counterpart; the existing transcript fold supplies the activity access in Voktty's layout without a second control or state owner. This implementation and its fold tests were present before the pinned local baseline."
+    },
+    {
+      "upstreamCommit": "a3f6f8a44b5f25bf712cbdaed1c831caa278d658",
+      "upstreamTitle": "Release v0.10.0",
+      "localCommit": "bac0b72",
+      "basis": "preexisting",
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        }
+      ],
+      "tests": [],
+      "rationale": "The source change removes temporary scroll-debug instrumentation, which Voktty's transcript does not contain. The remaining changes are MonoCode 0.10.0 release notes and package/version metadata, which are specific to the upstream product and have no Harness behavior to port."
     }
   ]
 }
