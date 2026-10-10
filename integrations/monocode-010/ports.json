@@ -985,6 +985,28 @@
         }
       ],
       "rationale": "Pi catalog probes now load extensions so models registered by Pi extensions can be discovered. OMP probes retain --no-extensions. Catalog refresh is requested per provider, so the larger Pi extension load remains on demand; probes still use --no-session."
+    },
+    {
+      "upstreamCommit": "e994afb81c0dd2cc63f412cdd2585e8c72fa4a57",
+      "upstreamTitle": "fix(gitlab): support merge request diffs on older instances (#723)",
+      "localCommit": "9fca835",
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "src-tauri/src/gitlab.rs",
+          "local": "src-tauri/src/modules/harness/gitlab.rs"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src-tauri/src/modules/harness/gitlab.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "modules::harness::gitlab::tests::mr_diff_"
+        }
+      ],
+      "rationale": "Merge request diff loading falls back to the older /changes endpoint only when /diffs returns HTTP 404. It preserves pagination/overflow truncation, keeps authentication and other HTTP failures visible, and uses the existing timeout and redirect-disabled GitLab client. Mock-server regressions cover the fallback, the modern endpoint, and non-404 errors; the Tauri command contract is unchanged."
     }
   ]
 }
