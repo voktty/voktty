@@ -21,6 +21,7 @@ pub struct RemoteSearchState {
 }
 
 pub struct PreparedSearch {
+    workspace_root: PathBuf,
     root: PathBuf,
     params: SearchParams,
     generation: Arc<AtomicU64>,
@@ -31,6 +32,8 @@ pub struct PreparedSearch {
 #[serde(rename_all = "camelCase")]
 struct SearchParams {
     pattern: String,
+    #[serde(default)]
+    cwd: Option<String>,
     #[serde(default)]
     include: Vec<String>,
     #[serde(default)]
@@ -60,13 +63,15 @@ struct SearchHit {
 
 impl RemoteSearchState {
     pub fn prepare(&self, root: &Path, params: Value) -> Result<PreparedSearch, String> {
-        let ticket = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let params: SearchParams = serde_json::from_value(params).map_err(|e| e.to_string())?;
         if params.pattern.trim().is_empty() {
             return Err("empty pattern".to_string());
         }
+        let search_root = resolve_search_root(root, params.cwd.as_deref())?;
+        let ticket = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         Ok(PreparedSearch {
-            root: root.to_path_buf(),
+            workspace_root: root.to_path_buf(),
+            root: search_root,
             params,
             generation: self.generation.clone(),
             ticket,
@@ -76,6 +81,35 @@ impl RemoteSearchState {
     pub fn cancel(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
     }
+}
+
+fn resolve_search_root(root: &Path, cwd: Option<&str>) -> Result<PathBuf, String> {
+    let Some(cwd) = cwd.filter(|cwd| !cwd.trim().is_empty()) else {
+        return Ok(root.to_path_buf());
+    };
+    let normalized = cwd.replace('\\', "/");
+    let relative = Path::new(&normalized);
+    if relative.is_absolute()
+        || relative.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        })
+    {
+        return Err("search path must stay inside the workspace root".to_string());
+    }
+    let search_root = std::fs::canonicalize(root.join(relative))
+        .map_err(|error| format!("search directory is not available: {error}"))?;
+    if !search_root.starts_with(root) {
+        return Err("search path is outside the workspace root".to_string());
+    }
+    if !search_root.is_dir() {
+        return Err("search path is not a directory".to_string());
+    }
+    Ok(search_root)
 }
 
 pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
@@ -107,7 +141,7 @@ pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
     let cancelled = || search.generation.load(Ordering::SeqCst) != search.ticket;
 
     walker.run(|| {
-        let root = search.root.clone();
+        let workspace_root = search.workspace_root.clone();
         let matcher = matcher.clone();
         let include = include.clone();
         let exclude = exclude.clone();
@@ -128,7 +162,7 @@ pub fn run_search(search: PreparedSearch) -> Result<Value, String> {
                 return WalkState::Continue;
             }
             let path = entry.path();
-            let rel = match path.strip_prefix(&root) {
+            let rel = match path.strip_prefix(&workspace_root) {
                 Ok(rel) => canonical_path(rel),
                 Err(_) => return WalkState::Continue,
             };
@@ -309,6 +343,69 @@ mod tests {
         assert_eq!(response["hits"][0]["column"], 4);
         assert_eq!(response["hits"][0]["match_length"], 6);
         assert_eq!(response["hits"][0]["preview_column"], 4);
+    }
+
+    #[test]
+    fn searches_a_nested_directory_but_keeps_paths_relative_to_the_workspace() {
+        let workspace = tempdir().unwrap();
+        std::fs::create_dir(workspace.path().join("src")).unwrap();
+        std::fs::write(workspace.path().join("src/main.ts"), "needle\n").unwrap();
+        std::fs::write(workspace.path().join("root.ts"), "needle\n").unwrap();
+
+        let search = RemoteSearchState::default()
+            .prepare(
+                workspace.path(),
+                json!({ "pattern": "needle", "cwd": "src" }),
+            )
+            .unwrap();
+        let response = run_search(search).unwrap();
+
+        assert_eq!(response["hits"].as_array().unwrap().len(), 1);
+        assert_eq!(response["hits"][0]["rel"], "src/main.ts");
+    }
+
+    #[test]
+    fn rejects_search_roots_outside_the_authenticated_workspace() {
+        let workspace = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        let state = RemoteSearchState::default();
+
+        assert!(matches!(
+            state.prepare(
+                workspace.path(),
+                json!({ "pattern": "needle", "cwd": "../outside" }),
+            ),
+            Err(error) if error.contains("stay inside")
+        ));
+
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(outside.path(), workspace.path().join("linked")).unwrap();
+            assert!(matches!(
+                state.prepare(
+                    workspace.path(),
+                    json!({ "pattern": "needle", "cwd": "linked" }),
+                ),
+                Err(error) if error.contains("outside the workspace")
+            ));
+        }
+    }
+
+    #[test]
+    fn invalid_search_root_does_not_cancel_a_valid_search() {
+        let workspace = tempdir().unwrap();
+        let state = RemoteSearchState::default();
+        let active = state
+            .prepare(workspace.path(), json!({ "pattern": "needle" }))
+            .unwrap();
+
+        assert!(state
+            .prepare(
+                workspace.path(),
+                json!({ "pattern": "other", "cwd": "../outside" }),
+            )
+            .is_err());
+        assert_eq!(run_search(active).unwrap()["cancelled"], false);
     }
 
     #[test]

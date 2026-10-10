@@ -31,6 +31,7 @@ pub const METHOD_PTY_RESIZE: &str = "pty.resize";
 pub const METHOD_PTY_CLOSE: &str = "pty.close";
 pub const METHOD_PTY_GET_CWD: &str = "pty.getCwd";
 pub const METHOD_GIT_EXEC: &str = "git.exec";
+pub const METHOD_GIT_EXEC_WORKSPACE: &str = "git.execWorkspace";
 pub const METHOD_OPENCODE_SERVICE: &str = "opencode.service";
 pub const REMOTE_SHELL_INTEGRATION_VERSION: &str = "3";
 

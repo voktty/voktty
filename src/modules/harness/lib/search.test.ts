@@ -1,5 +1,20 @@
-import { describe, expect, it } from "vitest";
-import { editorPathsEqual, normalizeEditorPath } from "./search";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { invokeWorkspaceMock } = vi.hoisted(() => ({
+  invokeWorkspaceMock: vi.fn(),
+}));
+vi.mock("@/modules/harness/lib/fs", () => ({
+  invokeWorkspace: invokeWorkspaceMock,
+}));
+
+import { editorPathsEqual, normalizeEditorPath, searchProject } from "./search";
+
+beforeEach(() => {
+  invokeWorkspaceMock.mockReset().mockResolvedValue({
+    matches: [],
+    truncated: false,
+  });
+});
 
 describe("normalizeEditorPath", () => {
   it("converts Windows backslashes to forward slashes", () => {
@@ -31,17 +46,21 @@ describe("editorPathsEqual", () => {
     ).toBe(true);
 
     expect(
-      editorPathsEqual(
-        "C:\\Users\\dev\\project/",
-        "C:/Users/dev/project",
-      ),
+      editorPathsEqual("C:\\Users\\dev\\project/", "C:/Users/dev/project"),
     ).toBe(true);
 
     expect(
-      editorPathsEqual(
-        "src/components/Button.tsx",
-        "src/components/Input.tsx",
-      ),
+      editorPathsEqual("src/components/Button.tsx", "src/components/Input.tsx"),
     ).toBe(false);
+  });
+});
+
+it("routes project search through the remote-aware workspace runner", async () => {
+  const options = { cwd: "remote://voktty-ssh-profile/srv/app", query: "foo" };
+
+  await searchProject(options);
+
+  expect(invokeWorkspaceMock).toHaveBeenCalledWith("search_project", {
+    options,
   });
 });

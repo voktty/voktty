@@ -43,6 +43,7 @@ vi.mock("@/modules/settings/preferences", () => ({
 import { runRemoteCommand } from "./remoteCommands";
 import { parseRemotePath, remotePath } from "./remoteProjects";
 import { remoteSshEnvironmentId } from "./remoteSshProfiles";
+import { searchProject } from "@/modules/harness/lib/search";
 import {
   listDir,
   readBinaryFile,
@@ -189,6 +190,26 @@ it("routes project search through the host and maps match paths", async () => {
   });
 });
 
+it("routes the Harness search caller through the legacy Host connection", async () => {
+  remoteRequest.mockResolvedValueOnce({
+    matches: [
+      { path: "/home/me/repo/src/app.ts", relative: "src/app.ts", line: 4 },
+    ],
+    truncated: false,
+  });
+
+  await expect(
+    searchProject({ cwd: "remote://env/home/me/repo", query: "hello" }),
+  ).resolves.toMatchObject({
+    matches: [{ path: "remote://env/home/me/repo/src/app.ts", line: 4 }],
+    truncated: false,
+  });
+  expect(remoteRequest).toHaveBeenCalledWith("machine", "workspace.run", {
+    command: "search_project",
+    args: { options: { cwd: "/home/me/repo", query: "hello" } },
+  });
+});
+
 function registerNativeProfileProject() {
   const profile = {
     id: "profile-native",
@@ -298,6 +319,86 @@ it("lists project files through bounded helper traversal and skips ignored entri
     "git.exec",
     expect.anything(),
   );
+});
+
+it("searches saved SSH projects through bounded helper grep results", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValueOnce({
+    hits: [
+      {
+        path: "/srv/app/src/app.ts",
+        rel: "src/app.ts",
+        line: 4,
+        column: 7,
+        match_length: 5,
+        preview_column: 7,
+        text: "export const hello = true;",
+      },
+    ],
+    truncated: true,
+    files_scanned: 23,
+    cancelled: false,
+  });
+
+  await expect(
+    searchProject({
+      cwd: remotePath(environmentId, "/srv/app/src"),
+      query: "hello",
+      caseSensitive: true,
+      wholeWord: true,
+      regex: false,
+      include: "src/**,*.tsx",
+      exclude: "*.lock",
+    }),
+  ).resolves.toEqual({
+    matches: [
+      {
+        path: remotePath(environmentId, "/srv/app/src/app.ts"),
+        relative: "src/app.ts",
+        line: 4,
+        column: 7,
+        preview: "export const hello = true;",
+      },
+    ],
+    truncated: true,
+  });
+  expect(requestRemoteResult).toHaveBeenCalledWith(9, "fs.grep", {
+    pattern: "hello",
+    cwd: "src",
+    include: ["src/**", "*.tsx"],
+    exclude: ["*.lock"],
+    caseSensitive: true,
+    wholeWord: true,
+    regex: false,
+    showHidden: true,
+    maxResults: 500,
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("rejects helper search results that escape the saved project root", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValueOnce({
+    hits: [
+      {
+        rel: "../secret.txt",
+        line: 1,
+        column: 1,
+        text: "secret",
+      },
+    ],
+    truncated: false,
+  });
+
+  await expect(
+    searchProject({
+      cwd: remotePath(environmentId, "/srv/app"),
+      query: "secret",
+    }),
+  ).rejects.toThrow("search path outside the project");
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
 it("rejects saved profile paths outside the project and leaves Git routing for the next port", async () => {

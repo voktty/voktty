@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeWorkspace } from "@/modules/harness/lib/fs";
 
 export type ProjectSearchMatch = {
   path: string;
@@ -55,5 +55,5 @@ export function editorPathsEqual(a: string, b: string): boolean {
 export function searchProject(
   options: ProjectSearchOptions,
 ): Promise<ProjectSearchResult> {
-  return invoke<ProjectSearchResult>("search_project", { options });
+  return invokeWorkspace<ProjectSearchResult>("search_project", { options });
 }

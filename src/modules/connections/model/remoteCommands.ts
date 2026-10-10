@@ -86,6 +86,7 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "delete_path",
   "copy_path",
   "move_path",
+  "search_project",
 ]);
 
 const HELPER_FS = {
@@ -262,6 +263,36 @@ function relativeNameParts(name: string): string[] {
   return parts;
 }
 
+function helperRelativePath(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("The remote helper returned an invalid search path.");
+  }
+  const normalized = value.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  if (
+    normalized.startsWith("/") ||
+    /^[A-Za-z]:/.test(normalized) ||
+    parts.length === 0 ||
+    parts.some((part) => part === "." || part === ".." || part.length > 255)
+  ) {
+    throw new Error(
+      "The remote helper returned a search path outside the project.",
+    );
+  }
+  return parts.join("/");
+}
+
+function searchPatterns(value: unknown): string[] {
+  if (value === undefined || value === null) return [];
+  if (typeof value !== "string") {
+    throw new Error("The project search patterns are invalid.");
+  }
+  return value
+    .split(",")
+    .map((pattern) => pattern.trim())
+    .filter(Boolean);
+}
+
 function requireString(args: Record<string, unknown>, key: string): string {
   const value = args[key];
   if (typeof value !== "string" || value.length === 0) {
@@ -421,6 +452,59 @@ async function runProfileFileCommand(
   }
   if (command === "list_project_files") {
     return listProjectFilesWithHelper(sessionId, environmentId, root);
+  }
+  if (command === "search_project") {
+    const options = args.options;
+    if (!options || typeof options !== "object" || Array.isArray(options)) {
+      throw new Error("The project search options are invalid.");
+    }
+    const searchOptions = options as Record<string, unknown>;
+    const query = requireString(searchOptions, "query").trim();
+    if (!query) return { matches: [], truncated: false };
+    const result = await requestRemoteResult<{
+      hits: Array<{
+        rel: string;
+        line: number;
+        column: number;
+        text: string;
+      }>;
+      truncated: boolean;
+    }>(sessionId, "fs.grep", {
+      pattern: query,
+      cwd: relativePath(searchOptions.cwd),
+      include: searchPatterns(searchOptions.include),
+      exclude: searchPatterns(searchOptions.exclude),
+      caseSensitive: searchOptions.caseSensitive === true,
+      wholeWord: searchOptions.wholeWord === true,
+      regex: searchOptions.regex === true,
+      showHidden: true,
+      maxResults: 500,
+    });
+    if (!result || !Array.isArray(result.hits)) {
+      throw new Error("The remote helper returned an invalid search result.");
+    }
+    const matches = result.hits.map((hit) => {
+      if (
+        !hit ||
+        typeof hit !== "object" ||
+        typeof hit.text !== "string" ||
+        !Number.isSafeInteger(hit.line) ||
+        hit.line < 1 ||
+        !Number.isSafeInteger(hit.column) ||
+        hit.column < 1
+      ) {
+        throw new Error("The remote helper returned an invalid search match.");
+      }
+      const relative = helperRelativePath(hit.rel);
+      return {
+        path: remoteResultPath(joinRemotePath(root, relative)),
+        relative,
+        line: hit.line,
+        column: hit.column,
+        preview: hit.text,
+      };
+    });
+    return { matches, truncated: result.truncated === true };
   }
   if (command === "read_text_file") {
     const result = await requestRemoteResult<{ content: string }>(

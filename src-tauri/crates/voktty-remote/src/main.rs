@@ -19,14 +19,14 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse, METHOD_COPY,
-    METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC, METHOD_GREP,
-    METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE,
-    METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
-    METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME, METHOD_REPLACE_APPLY,
-    METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE,
-    METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE, METHOD_WORKSPACE_EDIT_APPLY,
-    METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE, PROTOCOL_VERSION,
-    REMOTE_SHELL_INTEGRATION_VERSION,
+    METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC,
+    METHOD_GIT_EXEC_WORKSPACE, METHOD_GREP, METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR,
+    METHOD_OPENCODE_SERVICE, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN,
+    METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME,
+    METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
+    METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
+    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
+    PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -177,6 +177,7 @@ impl RemoteServer {
             METHOD_WATCH_REMOVE => self.remove_watch(request),
             METHOD_WATCH_TREE_REMOVE => self.remove_watch_tree(request),
             METHOD_GIT_EXEC => self.git_exec(request),
+            METHOD_GIT_EXEC_WORKSPACE => self.git_exec_workspace(request),
             METHOD_OPENCODE_SERVICE => self.opencode_service(request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
@@ -227,6 +228,7 @@ impl RemoteServer {
                     METHOD_PTY_CLOSE,
                     METHOD_PTY_GET_CWD,
                     METHOD_GIT_EXEC,
+                    METHOD_GIT_EXEC_WORKSPACE,
                     METHOD_OPENCODE_SERVICE
                 ]
             }),
@@ -1335,6 +1337,18 @@ impl RemoteServer {
     }
 
     fn git_exec(&self, request: RemoteRequest) -> RemoteResponse {
+        self.git_exec_with_workspace_cwd(request, false)
+    }
+
+    fn git_exec_workspace(&self, request: RemoteRequest) -> RemoteResponse {
+        self.git_exec_with_workspace_cwd(request, true)
+    }
+
+    fn git_exec_with_workspace_cwd(
+        &self,
+        request: RemoteRequest,
+        constrain_cwd: bool,
+    ) -> RemoteResponse {
         let params = match serde_json::from_value::<GitExecParams>(request.params) {
             Ok(params) => params,
             Err(error) => {
@@ -1342,19 +1356,31 @@ impl RemoteServer {
             }
         };
 
-        let cwd = match &params.cwd {
-            Some(s) if !s.trim().is_empty() => {
-                let p = expand_home(Path::new(s));
-                if !p.is_dir() {
-                    return RemoteResponse::failure(
-                        request.id,
-                        "invalid_cwd",
-                        "working directory is not a directory",
-                    );
-                }
-                Some(p)
+        let cwd = if constrain_cwd {
+            let requested = params
+                .cwd
+                .as_deref()
+                .filter(|path| !path.trim().is_empty())
+                .unwrap_or(".");
+            match self.resolve_existing_directory(requested) {
+                Ok(path) => Some(path),
+                Err(error) => return RemoteResponse::failure(request.id, "invalid_cwd", error),
             }
-            _ => self.root.clone(),
+        } else {
+            match &params.cwd {
+                Some(s) if !s.trim().is_empty() => {
+                    let path = expand_home(Path::new(s));
+                    if !path.is_dir() {
+                        return RemoteResponse::failure(
+                            request.id,
+                            "invalid_cwd",
+                            "working directory is not a directory",
+                        );
+                    }
+                    Some(path)
+                }
+                _ => self.root.clone(),
+            }
         };
 
         let timeout_secs = params.timeout_secs.unwrap_or(30).clamp(1, 300);
@@ -3096,6 +3122,67 @@ mod tests {
         assert!(stdout.contains("git version"));
         assert_eq!(result["exitCode"], 0);
         assert_eq!(result["timedOut"], false);
+    }
+
+    #[test]
+    fn git_exec_workspace_rejects_directories_outside_the_authenticated_root() {
+        let directory = tempdir().expect("temp dir");
+        let workspace = directory.path().join("workspace");
+        let nested = workspace.join("nested");
+        let outside = directory.path().join("outside");
+        fs::create_dir_all(&nested).expect("nested workspace directory");
+        fs::create_dir(&outside).expect("outside directory");
+
+        let mut server = RemoteServer::new();
+        let handshake = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "handshake".to_string(),
+            method: METHOD_HANDSHAKE.to_string(),
+            params: json!({ "workspaceRoot": workspace }),
+        });
+        assert!(handshake.ok);
+        assert!(handshake.result.expect("handshake")["capabilities"]
+            .as_array()
+            .expect("capabilities")
+            .iter()
+            .any(|capability| capability == METHOD_GIT_EXEC_WORKSPACE));
+
+        let inside = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "inside".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+            params: json!({ "cwd": "nested", "args": ["--version"] }),
+        });
+        assert!(inside.ok);
+
+        let outside_result = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "outside".to_string(),
+            method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+            params: json!({ "cwd": outside, "args": ["--version"] }),
+        });
+        assert!(!outside_result.ok);
+        assert_eq!(
+            outside_result.error.expect("invalid cwd").code,
+            "invalid_cwd"
+        );
+
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&outside, workspace.join("linked"))
+                .expect("outside directory symlink");
+            let linked = server.handle(RemoteRequest {
+                protocol: PROTOCOL_VERSION,
+                id: "linked".to_string(),
+                method: METHOD_GIT_EXEC_WORKSPACE.to_string(),
+                params: json!({ "cwd": "linked", "args": ["--version"] }),
+            });
+            assert!(!linked.ok);
+            assert_eq!(
+                linked.error.expect("invalid symlink cwd").code,
+                "invalid_cwd"
+            );
+        }
     }
 
     #[test]
