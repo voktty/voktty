@@ -478,15 +478,9 @@
     {
       "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
       "upstreamTitle": "Route ⌘W and ⌘T to the focused project terminal (#774)",
-      "localCommit": "5c71821",
-      "basis": "preexisting",
+      "localCommit": "b74c021",
       "license": "MIT",
-      "coverage": "partial",
-      "deferred": [
-        "Route the new-tab shortcut to add a dock terminal while the project terminal has keyboard focus; currently it creates a workspace tab.",
-        "Track keyboard focus on the project-terminal dock and verify DOM focus before routing close, instead of trusting the mouse-set focus flag.",
-        "Revisit native New Tab and Close Tab menu dispatch only if Voktty adds a matching native app-menu command surface."
-      ],
+      "coverage": "complete",
       "mappings": [
         {
           "upstream": "src/app/App.tsx",
@@ -505,8 +499,14 @@
           "local": "src/modules/harness/surfaces/ProjectTerminalDock.tsx"
         }
       ],
-      "tests": [],
-      "rationale": "Voktty already has a project-terminal dock and can close its active terminal through the workspace shortcut when the dock's focus flag is set. The full upstream focus-aware routing is incomplete: ⌘/Ctrl+T still creates a workspace tab, the flag is set on mouse input only, and Voktty has no corresponding native app-menu events."
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/projectTerminal.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Route ⌘/Ctrl+T and ⌘/Ctrl+W through the focused project dock only when the dock is open, its focus flag is set, and the active DOM element remains inside it. Keyboard focus is tracked by the dock, and a stale focus flag cannot redirect pane-close buttons. Voktty has no native app-menu command producer matching the upstream menu hunk; its existing new_tab/close_tab event bridge uses the same focus-aware routing."
     }
   ]
 }
