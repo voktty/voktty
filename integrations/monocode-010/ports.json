@@ -1086,11 +1086,10 @@
     {
       "upstreamCommit": "d26871f246d34479795bc9a00513b43d4d18add2",
       "upstreamTitle": "Add commit tab to Mono changes panel",
-      "localCommits": ["94a9b85", "7e1af5c", "a9a1bee"],
+      "localCommits": ["94a9b85", "7e1af5c", "a9a1bee", "a7c666e"],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Session Changes only includes exact files from the session checkpoint. It does not yet show or allow explicit selection of other changed files in the Git repository.",
         "Commit and pull request text still use the default commit message. Generate text with the active Harness only after Git context goes through Voktty's native WorkspaceEnv agent for SSH and Docker."
       ],
       "mappings": [
@@ -1134,6 +1133,7 @@
       "tests": [
         {
           "files": [
+            "src/modules/harness/lib/sessionCommit.test.ts",
             "src/modules/harness/surfaces/SessionChangesCommit.test.tsx",
             "src/modules/harness/lib/githubRemote.test.ts"
           ],
@@ -1147,7 +1147,7 @@
           "filter": "modules::git_review::github::tests"
         }
       ],
-      "rationale": "Voktty adapts the commit tab to its session-owned files and path-scoped native Git command, then adds push/publish and GitHub PR status and creation. Every Git operation keeps the active WorkspaceEnv so SSH and Docker work stays on Voktty's native agent transport. Project-wide change selection and Harness-generated commit/PR text remain partial until they can use that same workspace contract."
+      "rationale": "Voktty adapts the commit tab to the native Git status list. Exact session files start selected; other project changes are opt-in, and shared session files stay blocked. Path-scoped commit, push/publish, and GitHub PR status and creation all keep the active WorkspaceEnv for Voktty's native SSH and Docker transport. Harness-generated commit and PR text remains partial until its Git context uses that same workspace contract."
     }
   ]
 }
