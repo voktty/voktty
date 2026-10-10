@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { GitStagedContext } from "../fs";
+import type { GitRangeContext, GitStagedContext } from "../fs";
 import { registerHarness } from "./registry";
-import { generateCommitMessage } from "./textHarness";
+import { generateCommitMessage, generatePrContent } from "./textHarness";
 
 describe("cancelable commit message generation", () => {
   it("passes abort signal through generateCommitMessage to harness adapter", async () => {
@@ -65,5 +65,48 @@ describe("cancelable commit message generation", () => {
     await expect(
       generateCommitMessage("/path/to/repo", "claude", controller.signal),
     ).rejects.toThrow();
+  });
+});
+
+describe("PR content generation context", () => {
+  it("passes native branch-range context to the selected Harness", async () => {
+    let receivedContext: GitRangeContext | undefined;
+    const context = {
+      base: "main",
+      head: "feature/session",
+      commitSummary: "abcdef1 Improve session handling",
+      diffSummary: "Modified src/session.ts",
+      diffPatch: "diff --git a/src/session.ts b/src/session.ts",
+    };
+    registerHarness({
+      id: "cursor",
+      live: true,
+      async sendTurn() {},
+      async steerTurn() {},
+      async cancelTurn() {},
+      async stopSession() {},
+      async forgetSession() {},
+      bindSession() {},
+      respondApproval() {},
+      async generatePrContent(cwd, provided) {
+        receivedContext = provided;
+        return {
+          title: `Update from ${cwd}`,
+          body: "## Summary\n- Update",
+          base: provided?.base ?? "",
+          head: provided?.head ?? "",
+        };
+      },
+    });
+
+    const result = await generatePrContent(".", "cursor", context);
+
+    expect(receivedContext).toBe(context);
+    expect(result).toEqual({
+      title: "Update from .",
+      body: "## Summary\n- Update",
+      base: "main",
+      head: "feature/session",
+    });
   });
 });

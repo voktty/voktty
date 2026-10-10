@@ -19,7 +19,10 @@ import { invalidateProjectFiles } from "../lib/fileIndex";
 import { invalidateWatchedFiles } from "../lib/fileWatch";
 import { notifyGitChanged } from "../lib/fs";
 import { githubOwnerRepoFromRemote } from "../lib/githubRemote";
-import { generateCommitMessage } from "../lib/harness/textHarness";
+import {
+  generateCommitMessage,
+  generatePrContent,
+} from "../lib/harness/textHarness";
 import type { HarnessId } from "../lib/session";
 import {
   buildSessionCommitMessageContext,
@@ -30,6 +33,7 @@ import {
   type SessionCommitRepository,
   type SessionCommitRepositoryResolution,
 } from "../lib/sessionCommit";
+import { buildSessionPullRequestContext } from "../lib/sessionPr";
 
 type Props = {
   cwd: string;
@@ -148,16 +152,13 @@ export function SessionChangesCommit({
   const messageScope = `${activeRepo?.repoRoot ?? ""}\0${harness ?? ""}`;
   const previousMessageScope = useRef(messageScope);
 
-  useEffect(
-    () => {
-      if (previousMessageScope.current !== messageScope) {
-        previousMessageScope.current = messageScope;
-        messageAbort.current?.abort();
-      }
-      return () => messageAbort.current?.abort();
-    },
-    [messageScope],
-  );
+  useEffect(() => {
+    if (previousMessageScope.current !== messageScope) {
+      previousMessageScope.current = messageScope;
+      messageAbort.current?.abort();
+    }
+    return () => messageAbort.current?.abort();
+  }, [messageScope]);
 
   const readRepositoryState = useCallback(
     async (targetRepoRoot: string): Promise<RepositoryGitState> => {
@@ -487,13 +488,32 @@ export function SessionChangesCommit({
       );
     }
 
+    const comparison = await native.gitCompareBranches(
+      activeRepo.repoRoot,
+      `origin/${branchStatus.defaultBranch}`,
+      status.branch,
+      workspace,
+    );
+    if (comparison.ahead.length !== branchStatus.aheadBy) {
+      throw new Error("Could not load the complete pull request commit range");
+    }
+    const context = await buildSessionPullRequestContext(
+      branchStatus.defaultBranch,
+      status.branch,
+      comparison,
+      (sha) => native.gitShowCommit(activeRepo.repoRoot, sha, workspace),
+    );
+    const textCwd = workspace.kind === "local" ? activeRepo.repoRoot : ".";
+    const generated = await generatePrContent(textCwd, harness, context);
     const title =
+      generated?.title.trim().slice(0, 256) ||
       message.trim().split(/\r?\n/g)[0]?.trim().slice(0, 256) ||
       `Update ${status.branch}`;
+    const body = generated?.body.trim() || message.trim();
     return createGithubPullRequest({
       ownerRepo,
       title,
-      body: message.trim(),
+      body,
       base: branchStatus.defaultBranch,
       head: status.branch,
     });

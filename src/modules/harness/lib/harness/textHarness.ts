@@ -1,7 +1,7 @@
+import type { GitRangeContext, GitStagedContext } from "../fs";
+import type { PrContent } from "../gitText";
 import type { HarnessId } from "../session";
 import { isHarnessAvailable } from "./availability";
-import type { PrContent } from "../gitText";
-import type { GitStagedContext } from "../fs";
 import {
   generateHarnessCommitMessage,
   generateHarnessPrContent,
@@ -49,6 +49,7 @@ export function generateCommitMessage(
 export function generatePrContent(
   cwd: string,
   preferred?: HarnessId,
+  context?: GitRangeContext,
 ): Promise<(PrContent & { base: string; head: string }) | null> {
-  return generateHarnessPrContent(pickTextHarness(preferred), cwd);
+  return generateHarnessPrContent(pickTextHarness(preferred), cwd, context);
 }

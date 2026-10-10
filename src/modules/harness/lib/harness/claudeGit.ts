@@ -1,4 +1,4 @@
-import type { GitStagedContext } from "../fs";
+import type { GitRangeContext, GitStagedContext } from "../fs";
 import { gitRangeContext, gitStagedContext } from "../fs";
 import {
   buildBranchNamePrompt,
@@ -44,8 +44,9 @@ export async function generateClaudeCommitMessage(
 
 export async function generateClaudePrContent(
   cwd: string,
+  providedContext?: GitRangeContext,
 ): Promise<(PrContent & { base: string; head: string }) | null> {
-  const range = await gitRangeContext(cwd);
+  const range = providedContext ?? (await gitRangeContext(cwd));
   let parsed: PrContent | null = null;
   try {
     const output = await runClaudeTextPrompt({

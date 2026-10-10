@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   gitResolveRepo: vi.fn(),
   gitStatus: vi.fn(),
   gitDiff: vi.fn(),
+  gitCompareBranches: vi.fn(),
+  gitShowCommit: vi.fn(),
   gitRemoteUrl: vi.fn(),
   gitFetch: vi.fn(),
   gitCommit: vi.fn(),
@@ -26,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   invalidateProjectFiles: vi.fn(),
   invalidateWatchedFiles: vi.fn(),
   generateCommitMessage: vi.fn(),
+  generatePrContent: vi.fn(),
 }));
 
 vi.mock("@/modules/ai/lib/native", () => ({
@@ -33,6 +36,8 @@ vi.mock("@/modules/ai/lib/native", () => ({
     gitResolveRepo: mocks.gitResolveRepo,
     gitStatus: mocks.gitStatus,
     gitDiff: mocks.gitDiff,
+    gitCompareBranches: mocks.gitCompareBranches,
+    gitShowCommit: mocks.gitShowCommit,
     gitRemoteUrl: mocks.gitRemoteUrl,
     gitFetch: mocks.gitFetch,
     gitCommit: mocks.gitCommit,
@@ -42,6 +47,7 @@ vi.mock("@/modules/ai/lib/native", () => ({
 }));
 vi.mock("../lib/harness/textHarness", () => ({
   generateCommitMessage: mocks.generateCommitMessage,
+  generatePrContent: mocks.generatePrContent,
 }));
 vi.mock("@/modules/git-review/lib/githubProvider", () => ({
   githubPullRequestBranchStatus: mocks.githubPullRequestBranchStatus,
@@ -120,6 +126,51 @@ beforeEach(() => {
     }),
   );
   mocks.generateCommitMessage.mockResolvedValue("feat: update selected files");
+  mocks.generatePrContent.mockResolvedValue(null);
+  mocks.gitCompareBranches.mockResolvedValue({
+    ahead: [
+      {
+        sha: "abcdef1234567890",
+        shortSha: "abcdef1",
+        author: "A. Developer",
+        authorEmail: "dev@example.com",
+        timestampSecs: 1,
+        parents: [],
+        subject: "Update session changes",
+        filesChanged: 1,
+        insertions: 2,
+        deletions: 0,
+      },
+      {
+        sha: "123456abcdef7890",
+        shortSha: "123456a",
+        author: "A. Developer",
+        authorEmail: "dev@example.com",
+        timestampSecs: 2,
+        parents: [],
+        subject: "Polish session changes",
+        filesChanged: 1,
+        insertions: 1,
+        deletions: 0,
+      },
+    ],
+    behind: [],
+    files: [
+      {
+        path: "src/a.ts",
+        originalPath: null,
+        status: "M",
+        statusLabel: "Modified",
+        added: 3,
+        removed: 0,
+        isBinary: false,
+      },
+    ],
+  });
+  mocks.gitShowCommit.mockResolvedValue({
+    diffText: "diff --git a/src/a.ts b/src/a.ts",
+    truncated: false,
+  });
   mocks.gitRemoteUrl.mockResolvedValue(null);
   mocks.gitFetch.mockResolvedValue(undefined);
   mocks.gitPush.mockResolvedValue({
@@ -137,6 +188,12 @@ beforeEach(() => {
     pullRequest: null,
     aheadBy: 2,
     behindBy: 0,
+  });
+  mocks.generatePrContent.mockResolvedValue({
+    title: "Improve session change handling",
+    body: "## Summary\n- Improve handling",
+    base: "main",
+    head: "feature/session",
   });
   mocks.createGithubPullRequest.mockResolvedValue(
     "https://github.com/acme/widgets/pull/42",
@@ -418,6 +475,7 @@ it("commits, publishes through the native workspace, and opens the pull request"
       <SessionChangesCommit
         cwd="/repo"
         sessionId="session-a"
+        harness="codex"
         files={files}
         onNotice={onNotice}
       />,
@@ -441,6 +499,23 @@ it("commits, publishes through the native workspace, and opens the pull request"
     ["/repo/src/a.ts", "/repo/src/b.ts"],
   );
   expect(mocks.gitStatus).toHaveBeenCalledWith("/repo", sshWorkspace);
+  expect(mocks.gitCompareBranches).toHaveBeenCalledWith(
+    "/repo",
+    "origin/main",
+    "feature/session",
+    sshWorkspace,
+  );
+  expect(mocks.gitShowCommit).toHaveBeenCalledTimes(2);
+  expect(mocks.generatePrContent).toHaveBeenCalledWith(
+    ".",
+    "codex",
+    expect.objectContaining({
+      base: "main",
+      head: "feature/session",
+      commitSummary: expect.stringContaining("Update session changes"),
+      diffPatch: expect.stringContaining("abcdef1 Update session changes"),
+    }),
+  );
   expect(mocks.gitPublish).toHaveBeenCalledWith("/repo", "origin", {
     ...sshWorkspace,
   });
@@ -451,8 +526,8 @@ it("commits, publishes through the native workspace, and opens the pull request"
   );
   expect(mocks.createGithubPullRequest).toHaveBeenCalledWith({
     ownerRepo: "acme/widgets",
-    title: "Update session changes",
-    body: "Update session changes",
+    title: "Improve session change handling",
+    body: "## Summary\n- Improve handling",
     base: "main",
     head: "feature/session",
   });
