@@ -97,6 +97,65 @@
         }
       ],
       "rationale": "Do not reuse a restored remote:// session as a blank local conversation before its transcript arrives. This is a partial adaptation; the connections tab-binding behavior is deferred to the native SSH/tmux migration."
+    },
+    {
+      "upstreamCommit": "d68bfa8768b2f7e61686a5925c8d26e20cf6cba0",
+      "upstreamTitle": "Improve rendering performance for large streamed Markdown fences (#863)",
+      "localCommits": [
+        "fe5923c5cfa855410268f06c3dda1d519436535f",
+        "358bc213e1f200d2d6b6801e28f5ba1b3433cc80",
+        "13d845bdad9bd42305d85e574eca523f1cb2d57e",
+        "27a0adda66d818e191679e348f740299c0f84d39"
+      ],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/files/editor/codeHighlightPlugin.ts",
+          "local": "src/modules/harness/surfaces/codeHighlightPlugin.ts"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentMarkdown.tsx",
+          "local": "src/modules/harness/surfaces/AgentMarkdown.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/HighlightedCodeBlock.tsx",
+          "local": "src/modules/harness/surfaces/HighlightedCodeBlock.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/streamingMarkdown.ts",
+          "local": "src/modules/harness/surfaces/streamingMarkdown.ts"
+        },
+        {
+          "upstream": "src/styles/index.css",
+          "local": "src/styles/code-highlight.css"
+        },
+        {
+          "upstream": "package.json",
+          "local": "package.json"
+        },
+        {
+          "upstream": "package-lock.json",
+          "local": "pnpm-lock.yaml"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/surfaces/codeHighlightPlugin.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        },
+        {
+          "files": ["src/modules/harness/surfaces/HighlightedCodeBlock.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        },
+        {
+          "files": ["src/modules/harness/surfaces/streamingMarkdown.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The streamed-fence optimization is already adapted across four focused Voktty commits: incremental Shiki checkpoints, memoized highlighted lines, fence-aware Markdown repair, and fence-preserving word fades. Existing focused tests cover each core behavior; the upstream opt-in browser timing fixture is not needed for functional parity."
     }
   ]
 }

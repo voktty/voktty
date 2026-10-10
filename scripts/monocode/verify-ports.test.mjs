@@ -108,3 +108,58 @@ it("verifies mapped upstream and local changes with test paths", () => {
     /does not contain src\/modules\/harness\/missing\.ts/,
   );
 });
+
+it("verifies a port whose mappings and tests span local commits", () => {
+  const upstream = join(temp, "upstream-multi");
+  const local = join(temp, "local-multi");
+  initRepo(upstream);
+  initRepo(local);
+
+  writeFileSync(join(upstream, "README.md"), "base\n");
+  writeFileSync(join(upstream, "LICENSE"), "MIT License\n");
+  const upstreamBase = commit(upstream, "Base");
+  mkdirSync(join(upstream, "src"), { recursive: true });
+  writeFileSync(join(upstream, "src/first.ts"), "export const first = true;\n");
+  writeFileSync(join(upstream, "src/second.ts"), "export const second = true;\n");
+  const upstreamCommit = commit(upstream, "Improve two behaviors");
+
+  writeFileSync(join(local, "README.md"), "base\n");
+  const localBaseline = commit(local, "Local baseline");
+  mkdirSync(join(local, "src/modules/harness"), { recursive: true });
+  writeFileSync(join(local, "src/modules/harness/first.ts"), "export const first = true;\n");
+  writeFileSync(join(local, "src/modules/harness/first.test.ts"), "test first\n");
+  const firstCommit = commit(local, "Port first behavior");
+  writeFileSync(join(local, "src/modules/harness/second.ts"), "export const second = true;\n");
+  writeFileSync(join(local, "src/modules/harness/second.test.ts"), "test second\n");
+  const secondCommit = commit(local, "Port second behavior");
+
+  const manifest = {
+    upstreamBase,
+    upstreamTarget: upstreamCommit,
+    localBaseline,
+    records: [
+      {
+        upstreamCommit,
+        upstreamTitle: "Improve two behaviors",
+        localCommits: [firstCommit, secondCommit],
+        license: "MIT",
+        mappings: [
+          { upstream: "src/first.ts", local: "src/modules/harness/first.ts" },
+          { upstream: "src/second.ts", local: "src/modules/harness/second.ts" },
+        ],
+        tests: [
+          {
+            files: ["src/modules/harness/first.test.ts", "src/modules/harness/second.test.ts"],
+            cwd: ".",
+            runner: "vitest",
+          },
+        ],
+        rationale: "A larger upstream change was adapted across focused local commits.",
+      },
+    ],
+  };
+
+  const result = verifyPorts({ upstream, localRoot: local, manifest });
+  assert.deepEqual(result.records[0].localCommits, [firstCommit, secondCommit]);
+  assert.equal(result.records[0].mappings.length, 2);
+});

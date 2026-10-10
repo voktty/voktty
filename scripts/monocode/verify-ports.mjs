@@ -85,14 +85,29 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
 
   for (const record of manifest.records) {
     const upstreamCommit = resolveCommit(upstream, record.upstreamCommit);
-    const localCommit = resolveCommit(localRoot, record.localCommit);
+    const localCommitRefs = record.localCommits ?? [record.localCommit];
+    if (
+      !Array.isArray(localCommitRefs) ||
+      localCommitRefs.length === 0 ||
+      localCommitRefs.some((commit) => typeof commit !== "string") ||
+      new Set(localCommitRefs).size !== localCommitRefs.length
+    ) {
+      throw new Error(`Invalid local commit list for ${record.upstreamCommit}`);
+    }
+    const localCommits = localCommitRefs.map((commit) =>
+      resolveCommit(localRoot, commit),
+    );
+    const localCommit = localCommits.at(-1);
     if (!upstreamRange.has(upstreamCommit)) {
       throw new Error(`Upstream commit is outside the pinned range: ${upstreamCommit}`);
     }
     if (!upstreamCommit.startsWith(record.upstreamCommit)) {
       throw new Error(`Upstream commit does not match the manifest: ${record.upstreamCommit}`);
     }
-    if (!localCommit.startsWith(record.localCommit)) {
+    if (
+      record.localCommit &&
+      (localCommits.length !== 1 || !localCommit.startsWith(record.localCommit))
+    ) {
       throw new Error(`Local commit does not match the manifest: ${record.localCommit}`);
     }
     if (git(upstream, "show", "-s", "--format=%s", upstreamCommit) !== record.upstreamTitle) {
@@ -100,8 +115,20 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
     }
 
     const upstreamChanged = commitPaths(upstream, upstreamCommit);
-    const localChanged = commitPaths(localRoot, localCommit);
-    const localTree = treePaths(localRoot, localCommit);
+    const localChanged = new Set();
+    const localTree = new Set();
+    for (const commit of localCommits) {
+      for (const path of commitPaths(localRoot, commit)) localChanged.add(path);
+      for (const path of treePaths(localRoot, commit)) localTree.add(path);
+      try {
+        git(localRoot, "merge-base", "--is-ancestor", localBaseline, commit);
+        git(localRoot, "merge-base", "--is-ancestor", commit, localHead);
+      } catch {
+        throw new Error(
+          `Local port commit is outside the pinned integration history: ${commit}`,
+        );
+      }
+    }
     const coverage = record.coverage ?? "complete";
     const deferred = record.deferred ?? [];
     if (
@@ -159,17 +186,11 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
     ) {
       throw new Error(`License and rationale are required for ${record.upstreamCommit}`);
     }
-    if (
-      git(localRoot, "merge-base", "--is-ancestor", localBaseline, localCommit) !== "" ||
-      git(localRoot, "merge-base", "--is-ancestor", localCommit, localHead) !== ""
-    ) {
-      throw new Error(`Local port commit is outside the pinned integration history: ${record.localCommit}`);
-    }
-
     records.push({
       upstreamCommit,
       upstreamTitle: record.upstreamTitle,
       localCommit,
+      localCommits,
       license: record.license,
       coverage,
       deferred,
