@@ -2331,6 +2331,26 @@
         }
       ],
       "rationale": "This behavior was already present in the Voktty Harness before the upstream commit. The local tree supports arrow and page navigation, Home/End, folder expansion, Enter/Space activation, and prefix search with visible focus. Its focused suite covers selection, traversal, activation, and typeahead."
+    },
+    {
+      "upstreamCommit": "dddefe45391e5371e2fa824a511bcc8f469e25af",
+      "upstreamTitle": "Stabilize host Vitest integration runs under load. (#683)",
+      "localCommit": "db828c5947e0ee22253a0bcd527e07d1573b7db0",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "host/vitest.config.ts",
+          "local": "host/vitest.config.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/harness/child.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty's Host Vitest config already runs files serially and gives test and hook timeouts of 30 seconds on every platform. The matching behavior landed with the native Host process adapter and its integration suite."
     }
   ]
 }
