@@ -1,5 +1,5 @@
-import type { SshConnectionConfig } from "@/modules/workspace";
 import { releaseNativeHandlesForRemoteSession } from "@/modules/ssh-native/handles";
+import type { SshConnectionConfig } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
 
 export type RemoteSshConnection = SshConnectionConfig;
@@ -18,6 +18,8 @@ export type RemoteTunnelInfo = {
   localPort: number;
   remotePort: number;
 };
+
+export type RemoteOpenCodeServiceAction = "status" | "start" | "password";
 
 export type RemoteRequest = {
   protocol: typeof REMOTE_PROTOCOL_VERSION;
@@ -110,4 +112,20 @@ export async function requestRemoteResult<T>(
     throw new Error("Remote request failed");
   }
   return response.result as T;
+}
+
+export async function runRemoteOpenCodeServiceAction(
+  sessionId: number,
+  action: RemoteOpenCodeServiceAction,
+  cwd: string,
+): Promise<string> {
+  const result = await requestRemoteResult<{ stdout: unknown }>(
+    sessionId,
+    "opencode.service",
+    { action, cwd },
+  );
+  if (!result || typeof result.stdout !== "string") {
+    throw new Error("Remote OpenCode service returned invalid output");
+  }
+  return result.stdout;
 }

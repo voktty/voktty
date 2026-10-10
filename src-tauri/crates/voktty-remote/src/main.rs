@@ -1,3 +1,4 @@
+mod opencode_service;
 mod search;
 
 use std::collections::{HashMap, HashSet};
@@ -19,12 +20,13 @@ use serde_json::{json, Value};
 use voktty_remote_protocol::{
     read_frame, write_frame, Frame, RemoteFsChanged, RemoteRequest, RemoteResponse,
     METHOD_CREATE_DIR, METHOD_CREATE_FILE, METHOD_DELETE, METHOD_GIT_EXEC, METHOD_GREP,
-    METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD,
-    METHOD_PTY_OPEN, METHOD_PTY_RESIZE, METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME,
-    METHOD_REPLACE_APPLY, METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD,
-    METHOD_WATCH_REMOVE, METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE,
-    METHOD_WORKSPACE_EDIT_APPLY, METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE,
-    PROTOCOL_VERSION, REMOTE_SHELL_INTEGRATION_VERSION,
+    METHOD_GREP_CANCEL, METHOD_HANDSHAKE, METHOD_LIST_DIR, METHOD_OPENCODE_SERVICE,
+    METHOD_PTY_CLOSE, METHOD_PTY_GET_CWD, METHOD_PTY_OPEN, METHOD_PTY_RESIZE,
+    METHOD_READ_BINARY_FILE, METHOD_READ_FILE, METHOD_RENAME, METHOD_REPLACE_APPLY,
+    METHOD_REPLACE_PREVIEW, METHOD_STAT, METHOD_WATCH_ADD, METHOD_WATCH_REMOVE,
+    METHOD_WATCH_TREE_ADD, METHOD_WATCH_TREE_REMOVE, METHOD_WORKSPACE_EDIT_APPLY,
+    METHOD_WORKSPACE_EDIT_PREVIEW, METHOD_WRITE_FILE, PROTOCOL_VERSION,
+    REMOTE_SHELL_INTEGRATION_VERSION,
 };
 use voktty_workspace_edit::{
     apply_text_edits, apply_transaction, preview_text_edits, preview_transaction, DiskFile,
@@ -171,6 +173,7 @@ impl RemoteServer {
             METHOD_WATCH_REMOVE => self.remove_watch(request),
             METHOD_WATCH_TREE_REMOVE => self.remove_watch_tree(request),
             METHOD_GIT_EXEC => self.git_exec(request),
+            METHOD_OPENCODE_SERVICE => self.opencode_service(request),
             _ => RemoteResponse::failure(request.id, "method_not_found", "unknown remote method"),
         }
     }
@@ -218,7 +221,8 @@ impl RemoteServer {
                     METHOD_PTY_RESIZE,
                     METHOD_PTY_CLOSE,
                     METHOD_PTY_GET_CWD,
-                    METHOD_GIT_EXEC
+                    METHOD_GIT_EXEC,
+                    METHOD_OPENCODE_SERVICE
                 ]
             }),
         )
@@ -1346,6 +1350,30 @@ impl RemoteServer {
                 "timedOut": timed_out,
             }),
         )
+    }
+
+    fn opencode_service(&self, request: RemoteRequest) -> RemoteResponse {
+        let params = match serde_json::from_value::<opencode_service::Params>(request.params) {
+            Ok(params) => params,
+            Err(error) => {
+                return RemoteResponse::failure(request.id, "invalid_params", error.to_string())
+            }
+        };
+        if params.cwd.trim().is_empty() {
+            return RemoteResponse::failure(
+                request.id,
+                "invalid_cwd",
+                "working directory is required",
+            );
+        }
+        let cwd = match self.resolve_pty_cwd(Some(&params.cwd)) {
+            Ok(cwd) => cwd,
+            Err(error) => return RemoteResponse::failure(request.id, "invalid_cwd", error),
+        };
+        match opencode_service::run(params.action, &cwd) {
+            Ok(stdout) => RemoteResponse::success(request.id, json!({ "stdout": stdout })),
+            Err(error) => RemoteResponse::failure(request.id, "opencode_service_failed", error),
+        }
     }
 
     fn find_pty(&self, pty_id: u64) -> Result<Arc<RemotePty>, String> {
@@ -2549,5 +2577,58 @@ mod tests {
         assert!(stdout.contains("git version"));
         assert_eq!(result["exitCode"], 0);
         assert_eq!(result["timedOut"], false);
+    }
+
+    #[test]
+    fn opencode_service_actions_are_advertised_and_reject_unknown_actions() {
+        let workspace = tempdir().expect("workspace");
+        let mut server = RemoteServer::new();
+        let handshake = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "1".to_string(),
+            method: METHOD_HANDSHAKE.to_string(),
+            params: json!({ "workspaceRoot": workspace.path() }),
+        });
+        assert!(handshake.ok);
+        assert!(handshake.result.expect("handshake")["capabilities"]
+            .as_array()
+            .expect("capabilities")
+            .iter()
+            .any(|value| value == METHOD_OPENCODE_SERVICE));
+
+        let response = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "2".to_string(),
+            method: METHOD_OPENCODE_SERVICE.to_string(),
+            params: json!({ "action": "stop", "cwd": workspace.path() }),
+        });
+        assert!(!response.ok);
+        assert_eq!(response.error.expect("error").code, "invalid_params");
+    }
+
+    #[test]
+    fn opencode_service_cwd_cannot_escape_authenticated_workspace() {
+        let workspace = tempdir().expect("workspace");
+        let outside = tempdir().expect("outside workspace");
+        let mut server = RemoteServer::new();
+        assert!(
+            server
+                .handle(RemoteRequest {
+                    protocol: PROTOCOL_VERSION,
+                    id: "1".to_string(),
+                    method: METHOD_HANDSHAKE.to_string(),
+                    params: json!({ "workspaceRoot": workspace.path() }),
+                })
+                .ok
+        );
+
+        let response = server.handle(RemoteRequest {
+            protocol: PROTOCOL_VERSION,
+            id: "2".to_string(),
+            method: METHOD_OPENCODE_SERVICE.to_string(),
+            params: json!({ "action": "status", "cwd": outside.path() }),
+        });
+        assert!(!response.ok);
+        assert_eq!(response.error.expect("error").code, "invalid_cwd");
     }
 }

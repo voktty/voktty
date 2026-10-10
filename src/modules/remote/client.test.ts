@@ -1,13 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  closeRemoteWorkspace,
   closeRemoteTunnel,
+  closeRemoteWorkspace,
   openRemoteTunnel,
   openRemoteWorkspace,
-  requestRemote,
   type RemoteRequestError,
+  requestRemote,
   requestRemoteResult,
+  runRemoteOpenCodeServiceAction,
 } from "./client";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -106,5 +107,39 @@ describe("remote client", () => {
       code: "binary_file",
       message: "binary_file: file is not valid UTF-8",
     } satisfies Partial<RemoteRequestError>);
+  });
+
+  it("scopes OpenCode service actions to the authenticated workspace", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      protocol: 2,
+      id: "voktty-1-1",
+      ok: true,
+      result: { stdout: "http://127.0.0.1:4096\n" },
+    });
+
+    await expect(
+      runRemoteOpenCodeServiceAction(7, "status", "/srv/app"),
+    ).resolves.toBe("http://127.0.0.1:4096\n");
+    expect(invoke).toHaveBeenCalledWith("remote_request", {
+      sessionId: 7,
+      request: expect.objectContaining({
+        protocol: 2,
+        method: "opencode.service",
+        params: { action: "status", cwd: "/srv/app" },
+      }),
+    });
+  });
+
+  it("rejects malformed OpenCode service output", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      protocol: 2,
+      id: "voktty-1-2",
+      ok: true,
+      result: { stdout: [] },
+    });
+
+    await expect(
+      runRemoteOpenCodeServiceAction(7, "password", "/srv/app"),
+    ).rejects.toThrow("Remote OpenCode service returned invalid output");
   });
 });
