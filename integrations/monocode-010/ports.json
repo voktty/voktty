@@ -450,6 +450,30 @@
       ],
       "tests": [],
       "rationale": "Voktty opens source-control diffs through exact repo-root paths, avoiding a project-index scan and preserving ignored files. The change row's file button fills the row height. The existing file-index regression covers exact opens when the path is absent from the index."
+    },
+    {
+      "upstreamCommit": "40aa9feb4ca05364af9197a6be6f0afb7e2ffca3",
+      "upstreamTitle": "Add effort selection animations for other harnesses (#672)",
+      "localCommit": "8bf442b",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/ModelPicker.tsx",
+          "local": "src/modules/harness/chrome/ModelPicker.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/ModelPicker.test.ts",
+          "local": "src/modules/harness/chrome/ModelPicker.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/ModelPicker.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The max and ultra effort shimmer applies to Codex reasoning effort, OpenCode variants, Claude effort, and Cursor effort. Other settings and ordinary values remain unanimated; focused tests cover all four setting IDs and the non-effort case."
     }
   ]
 }
