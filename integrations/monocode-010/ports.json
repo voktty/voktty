@@ -1701,6 +1701,42 @@
         }
       ],
       "rationale": "Voktty had already integrated this performance work across five local commits: foreground/background event batching, hidden explorer retention, worktree file-index caching and resume validation, transcript turn memoization, and pooled transcript updates. Voktty's cache retains its Zen/classic grouping and its transcript pool keeps pane focus handling in the owning module. Its performance regression suite covers the changed behaviors, including hidden prompt measurement."
+    },
+    {
+      "upstreamCommit": "010364720e",
+      "upstreamTitle": "Improve modal layering and light-theme styling",
+      "localCommit": "867ef7a",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/connections/ui/AddRemoteProjectDialog.tsx",
+          "local": "src/modules/connections/ui/AddRemoteProjectDialog.tsx"
+        },
+        {
+          "upstream": "src/features/projects/ui/RemoveProjectDialog.tsx",
+          "local": "src/modules/harness/chrome/RemoveProjectDialog.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/SwitchBranchDialog.tsx",
+          "local": "src/modules/harness/chrome/SwitchBranchDialog.tsx"
+        },
+        {
+          "upstream": "src/shared/ui/Modal.tsx",
+          "local": "src/modules/harness/chrome/Modal.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/connections/ui/AddRemoteProjectDialog.test.ts",
+            "src/modules/harness/chrome/SwitchBranchDialog.test.tsx",
+            "src/modules/harness/chrome/Modal.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty now explicitly layers each dialog backdrop below its panel. The remote-folder dialog keeps the clear backdrop required by its earlier fix while adding a light-theme base surface; Harness dialogs retain Voktty's theme-aware floating surface and existing title style. Regression tests cover the remote backdrop and panel surface, SwitchBranchDialog stacking, and shared Modal panel stacking."
     }
   ]
 }
