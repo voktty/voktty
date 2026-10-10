@@ -163,3 +163,65 @@ it("verifies a port whose mappings and tests span local commits", () => {
   assert.deepEqual(result.records[0].localCommits, [firstCommit, secondCommit]);
   assert.equal(result.records[0].mappings.length, 2);
 });
+
+it("verifies behavior adapted before the pinned local baseline", () => {
+  const upstream = join(temp, "upstream-preexisting");
+  const local = join(temp, "local-preexisting");
+  initRepo(upstream);
+  initRepo(local);
+
+  writeFileSync(join(upstream, "README.md"), "base\n");
+  writeFileSync(join(upstream, "LICENSE"), "MIT License\n");
+  const upstreamBase = commit(upstream, "Base");
+  mkdirSync(join(upstream, "src/features"), { recursive: true });
+  writeFileSync(join(upstream, "src/features/codex.ts"), "export const updated = true;\n");
+  const upstreamCommit = commit(upstream, "Update Codex behavior");
+
+  writeFileSync(join(local, "README.md"), "base\n");
+  const localRootCommit = commit(local, "Local root");
+  mkdirSync(join(local, "src/modules/harness"), { recursive: true });
+  writeFileSync(join(local, "src/modules/harness/codex.ts"), "export const updated = true;\n");
+  writeFileSync(join(local, "src/modules/harness/codex.test.ts"), "test\n");
+  const preexistingCommit = commit(local, "Adapt Codex behavior");
+  writeFileSync(join(local, "README.md"), "baseline\n");
+  const localBaseline = commit(local, "Pin local baseline");
+
+  const manifest = {
+    upstreamBase,
+    upstreamTarget: upstreamCommit,
+    localBaseline,
+    records: [
+      {
+        upstreamCommit,
+        upstreamTitle: "Update Codex behavior",
+        localCommit: preexistingCommit,
+        basis: "preexisting",
+        license: "MIT",
+        mappings: [
+          {
+            upstream: "src/features/codex.ts",
+            local: "src/modules/harness/codex.ts",
+          },
+        ],
+        tests: [
+          {
+            files: ["src/modules/harness/codex.test.ts"],
+            cwd: ".",
+            runner: "vitest",
+          },
+        ],
+        rationale: "The behavior was adapted before this integration range.",
+      },
+    ],
+  };
+
+  const result = verifyPorts({ upstream, localRoot: local, manifest });
+  assert.equal(result.records[0].basis, "preexisting");
+  assert.equal(result.records[0].localCommit, preexistingCommit);
+
+  manifest.localBaseline = localRootCommit;
+  assert.throws(
+    () => verifyPorts({ upstream, localRoot: local, manifest }),
+    /outside the pinned preexisting history/,
+  );
+});

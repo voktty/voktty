@@ -5,6 +5,104 @@
   "localBaseline": "e8cb8a453faa80de8f476ed1e529e25529651db4",
   "records": [
     {
+      "upstreamCommit": "929c45b3c90211e636fc2f1e32838286dff1101a",
+      "upstreamTitle": "Add particle effect for session title updates",
+      "localCommit": "29b131d",
+      "basis": "preexisting",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessApp.tsx"
+        },
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/Sidebar.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/data/sessionHistory.ts",
+          "local": "src/modules/harness/lib/sessionHistory.ts"
+        },
+        {
+          "upstream": "src/features/sessions/data/sessionHistory.test.ts",
+          "local": "src/modules/harness/lib/sessionHistory.test.ts"
+        },
+        {
+          "upstream": "src/shared/ui/ParticleText.tsx",
+          "local": "src/modules/harness/chrome/ParticleText.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/sessionHistory.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty shows generated titles and linked work items in live session history, animates sidebar title updates with ParticleText, and flushes received Harness events before submitting the next message."
+    },
+    {
+      "upstreamCommit": "f4868d4ea6338ea6b0f47a4e9dfc046ed15a94f8",
+      "upstreamTitle": "Add insertion animation for new sidebar sessions",
+      "localCommit": "be44264",
+      "basis": "preexisting",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/Sidebar.tsx"
+        },
+        {
+          "upstream": "src/app/shell/SidebarRename.test.ts",
+          "local": "src/modules/harness/chrome/SidebarInsertMotion.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/SidebarInsertMotion.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "New session rows slide into Voktty's sidebar once after the list is established; restored and reordered rows do not replay the animation, and reduced-motion preferences are respected."
+    },
+    {
+      "upstreamCommit": "3ab724d8ebbcfc4ce4c3d6985d7d4210ca796171",
+      "upstreamTitle": "Support live remaining-usage display in provider chip",
+      "localCommit": "26991a7",
+      "basis": "preexisting",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/shell/UsageProviderChip.tsx",
+          "local": "src/modules/harness/chrome/UsageProviderChip.tsx"
+        },
+        {
+          "upstream": "src/app/shell/UsageProviderChip.test.ts",
+          "local": "src/modules/harness/chrome/UsageProviderChip.test.ts"
+        },
+        {
+          "upstream": "src/features/providers/model/rateLimits.ts",
+          "local": "src/modules/harness/lib/rateLimits.ts"
+        },
+        {
+          "upstream": "src/features/providers/model/rateLimits.test.ts",
+          "local": "src/modules/harness/lib/rateLimits.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/chrome/UsageProviderChip.test.ts",
+            "src/modules/harness/lib/rateLimits.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The Voktty usage preference updates chip values, progress bars, tooltips, and an open provider popover; the setting synchronizes across windows and clamps invalid percentages."
+    },
+    {
       "upstreamCommit": "98da85ae7c2b44c2f2427c17b381433ef4f23ea9",
       "upstreamTitle": "Support async Codex agent questions",
       "localCommit": "6d3ec038a09399df0ef5f609ccee82a399d0e56a",

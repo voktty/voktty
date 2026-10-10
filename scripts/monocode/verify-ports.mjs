@@ -80,6 +80,7 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
     git(upstream, "rev-list", `${base}..${target}`).split("\n").filter(Boolean),
   );
   const localHead = resolveCommit(localRoot, "HEAD");
+  const localBaselinePaths = treePaths(localRoot, localBaseline);
   const localHeadPaths = treePaths(localRoot, localHead);
   const records = [];
 
@@ -98,6 +99,10 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
       resolveCommit(localRoot, commit),
     );
     const localCommit = localCommits.at(-1);
+    const basis = record.basis ?? "integrated";
+    if (!["integrated", "preexisting"].includes(basis)) {
+      throw new Error(`Invalid port basis for ${record.upstreamCommit}`);
+    }
     if (!upstreamRange.has(upstreamCommit)) {
       throw new Error(`Upstream commit is outside the pinned range: ${upstreamCommit}`);
     }
@@ -121,12 +126,19 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
       for (const path of commitPaths(localRoot, commit)) localChanged.add(path);
       for (const path of treePaths(localRoot, commit)) localTree.add(path);
       try {
-        git(localRoot, "merge-base", "--is-ancestor", localBaseline, commit);
-        git(localRoot, "merge-base", "--is-ancestor", commit, localHead);
+        if (basis === "preexisting") {
+          git(localRoot, "merge-base", "--is-ancestor", commit, localBaseline);
+          git(localRoot, "merge-base", "--is-ancestor", localBaseline, localHead);
+        } else {
+          git(localRoot, "merge-base", "--is-ancestor", localBaseline, commit);
+          git(localRoot, "merge-base", "--is-ancestor", commit, localHead);
+        }
       } catch {
-        throw new Error(
-          `Local port commit is outside the pinned integration history: ${commit}`,
-        );
+        const history =
+          basis === "preexisting"
+            ? "the pinned preexisting history"
+            : "the pinned integration history";
+        throw new Error(`Local port commit is outside ${history}: ${commit}`);
       }
     }
     const coverage = record.coverage ?? "complete";
@@ -148,6 +160,9 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
       assertPathSet(upstreamTargetPaths, [upstreamPath], `Upstream target tree ${target}`);
       assertPathSet(localChanged, [localPath], `Local commit ${record.localCommit}`);
       assertPathSet(localTree, [localPath], `Local commit tree ${record.localCommit}`);
+      if (basis === "preexisting") {
+        assertPathSet(localBaselinePaths, [localPath], "Pinned local baseline tree");
+      }
       assertPathSet(localHeadPaths, [localPath], "Current local tree");
       expectedLocalPaths.push(localPath);
     }
@@ -157,6 +172,9 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
       const files = test.files.map((path) => relativePath(path, "Test path"));
       assertPathSet(localChanged, files, `Local commit ${record.localCommit}`);
       assertPathSet(localTree, files, `Local commit tree ${record.localCommit}`);
+      if (basis === "preexisting") {
+        assertPathSet(localBaselinePaths, files, "Pinned local baseline tree");
+      }
       assertPathSet(localHeadPaths, files, "Current local tree");
       if (test.runner === "vitest") {
         if (test.cwd !== "." || files.length === 0 || files.some((path) => !/\.(test|spec)\.[cm]?[jt]sx?$/.test(path))) {
@@ -191,6 +209,7 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
       upstreamTitle: record.upstreamTitle,
       localCommit,
       localCommits,
+      basis,
       license: record.license,
       coverage,
       deferred,

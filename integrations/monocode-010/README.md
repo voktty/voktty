@@ -18,6 +18,8 @@ node scripts/monocode/audit.mjs /path/to/monocode --check
 
 Update the pinned revisions in `manifest.json` only when a new review range is chosen. Keep functional decisions and exclusions in the active Spanish integration plan under `PROMPTS/planes/monocode-010/`.
 
+Records default to the `integrated` basis and cite local commits between `localBaseline` and the current HEAD. Use `basis: "preexisting"` when the adaptation predates that baseline; the verifier then requires each cited commit to be its ancestor and each mapped code and test path to exist in the pinned baseline tree.
+
 Integrated commit mappings, MIT provenance, focused test selections, and coverage state live in `ports.json`. A port can cite one local commit or several when the adaptation landed in separate focused changes. Partial records list the behavior deferred for a later milestone. The verifier checks both Git histories and the upstream license. Its test runners are restricted to Vitest and a named cargo-nextest filter. Verify mappings without running tests:
 
 ```bash
