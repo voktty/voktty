@@ -356,6 +356,63 @@
       "rationale": "The Voktty detail pane slides in and reveals each selected issue or pull request. Its reducer ignores stale animation completions after rapid selection changes, and the scoped styles honor reduced-motion preferences."
     },
     {
+      "upstreamCommit": "00d68d342eff3adf23a320fa5e2be97d5e212683",
+      "upstreamTitle": "Add activity timeline to PR/issue panels with commit interleaving",
+      "localCommit": "37d16c9",
+      "basis": "preexisting",
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "MonoCode preloads LinkedWorkItemPanel and prefetches its data from a linked-work-item button on session cards. Voktty opens issue and PR details from Inbox selection and has no equivalent session-card action; revisit only as a Voktty-native workflow adaptation."
+      ],
+      "mappings": [
+        {
+          "upstream": "src/features/inbox/model/githubTasks.ts",
+          "local": "src/modules/harness/lib/githubTasks.ts"
+        },
+        {
+          "upstream": "src/features/inbox/ui/InboxComments.tsx",
+          "local": "src/modules/harness/surfaces/InboxComments.tsx"
+        },
+        {
+          "upstream": "src/features/inbox/ui/InboxComments.test.ts",
+          "local": "src/modules/harness/surfaces/InboxComments.test.ts"
+        },
+        {
+          "upstream": "src/features/inbox/ui/InboxPrDiff.tsx",
+          "local": "src/modules/harness/surfaces/InboxPrDiff.tsx"
+        },
+        {
+          "upstream": "src/features/inbox/ui/InboxPrOverview.tsx",
+          "local": "src/modules/harness/surfaces/InboxPrOverview.tsx"
+        },
+        {
+          "upstream": "src/features/inbox/ui/InboxPrOverview.test.ts",
+          "local": "src/modules/harness/surfaces/InboxPrOverview.test.ts"
+        },
+        {
+          "upstream": "src/features/inbox/ui/InboxView.tsx",
+          "local": "src/modules/harness/surfaces/InboxView.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/UnifiedDiffView.tsx",
+          "local": "src/modules/harness/surfaces/UnifiedDiffView.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/surfaces/InboxComments.test.ts",
+            "src/modules/harness/surfaces/InboxPrOverview.test.ts",
+            "src/modules/harness/lib/githubWorkItemFreshness.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The chronological comments and commits timeline, freshness-aware GitHub cache, PR overview, changed-file glance and focused diff behavior already existed in Voktty before the audit baseline. The Inbox detail pane is opened from Inbox selection, so MonoCode's session-card panel preloading and hover prefetch have no matching Voktty entry point and remain a partial adaptation."
+    },
+    {
       "upstreamCommit": "45c9a2220724d5ae2ad65e9e29da9755fb143a86",
       "upstreamTitle": "Animate pane entry from split edge",
       "localCommit": "e7f7edd",
