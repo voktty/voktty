@@ -2451,6 +2451,30 @@
       "upstreamTitle": "Refine Mono activity display and completion handling",
       "category": "mono-only",
       "rationale": "Restructures Mono's mascot-signed inline-work header and activity trail. Voktty's Harness transcript uses a separate work-fold and has no Mono transcript mode."
+    },
+    {
+      "upstreamCommit": "de83c7963254048f9177528b6acd16cc4d49c63f",
+      "upstreamTitle": "Add MonoCode session lifecycle controls",
+      "category": "mono-only",
+      "rationale": "Adds stop, archive, and delete commands to Mono's private app CLI. Its file-preservation option applies to that CLI's workspace tabs; Voktty's Host sessions.delete operates on remote session storage and does not own desktop workspace tabs."
+    },
+    {
+      "upstreamCommit": "0b7a21fd2a2a820e4b1d3c797ed3610b663534ac",
+      "upstreamTitle": "Add Mono launched sessions panel and persistence",
+      "category": "mono-only",
+      "rationale": "Persists sessions started by a Mono on its originating chat turn and adds a dedicated Mono sessions panel. Voktty has no Mono launch roster or corresponding panel."
+    },
+    {
+      "upstreamCommit": "d8902e738aa3ef266c01c8b60a759d9797dbce99",
+      "upstreamTitle": "Add per-Mono session sidebar visibility",
+      "category": "mono-only",
+      "rationale": "Adds sidebar visibility preferences for each Mono's saved chats. Voktty's Harness session history and folder preferences are not scoped to Mono agents."
+    },
+    {
+      "upstreamCommit": "e5794cc015db7e44ece05de69e55501ffbd629ed",
+      "upstreamTitle": "Use chatting icon for session toggle",
+      "category": "mono-only",
+      "rationale": "Changes the icon on Mono's transcript toggle for its spawned sessions. Voktty's Harness transcript has no corresponding Mono session toggle."
     }
   ]
 }
