@@ -623,7 +623,7 @@
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Harness remote OpenCode uses the native SSH helper, authenticated loopback HTTP/SSE tunnel, and saved session resume. Automatic recovery from active-turn tunnel loss is not implemented, and no live Docker SSH smoke has run. Verify a Docker host and decide whether active-turn retry is in scope before claiming full remote parity."
+        "Remote OpenCode uses Voktty's native SSH helper, authenticated loopback HTTP/SSE tunnel, and saved session resume. Remote folder discovery now uses that helper and its saved SSH profile, but machine identity still comes from the existing remote-machine catalog and other remote project operations still use its Host path. Automatic recovery from active-turn tunnel loss is not implemented, and no live Docker SSH smoke has run. Verify a Docker host and decide whether active-turn retry is in scope before claiming full remote parity."
       ],
       "mappings": [
         {
@@ -738,7 +738,7 @@
           "filter": "opencode_service"
         }
       ],
-      "rationale": "Voktty already supports OpenCode 2.x on desktop: version gating, service authentication, the v2 catalog and agents, prompt and permission adaptation, event translation and correlation, compaction, resumed-session forks, and temporary text-session cleanup. Its service commands are scoped to OpenCode and authorized workspaces. The forced catalog refresh contract predated this port in Voktty's registry; the OpenCode settings action now calls it and a regression covers the bypass. Linux Host startup now falls back to a dedicated tmux session when systemd user services are unavailable, including Docker. The native SSH helper now provides the fixed remote OpenCode service action boundary and tunnel foundation. Harness still routes remote sessions through the Node Host until service discovery, authenticated HTTP/SSE, tab binding and reconnect are wired to Voktty's native agent."
+      "rationale": "Voktty supports OpenCode 2.x on desktop and connects remote OpenCode through its native SSH helper, authenticated loopback HTTP/SSE tunnel, tmux-backed service startup, and saved session resume. The machine identity still comes from the existing remote-machine catalog, and other remote project operations still use its Host path. Active-turn tunnel recovery and a live Docker SSH smoke remain outstanding, so this port stays partial."
     },
     {
       "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
