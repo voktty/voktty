@@ -2307,6 +2307,30 @@
         }
       ],
       "rationale": "Voktty text-only Codex threads now use ephemeral storage, and Grok cleanup deletes only a canonical ACP session UUID through the resolved Grok binary after stopping its writer. The native Rust command allowlist and Node child backend both scope deletion to Grok; OpenCode v1 and v2 generated-text sessions are interrupted and deleted on completion or cancellation."
+    },
+    {
+      "upstreamCommit": "bf5a30dca6210210007da3109c31e327c8c45be1",
+      "upstreamTitle": "Add keyboard navigation to the file tree",
+      "localCommit": "2cf30cadfbb2a737eb08b586c1cc2bcf7cd1c49e",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/files/ui/FileTree.tsx",
+          "local": "src/modules/harness/chrome/FileTree.tsx"
+        },
+        {
+          "upstream": "src/features/files/ui/FileTree.test.ts",
+          "local": "src/modules/harness/chrome/FileTree.navigation.test.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/FileTree.navigation.test.tsx"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "This behavior was already present in the Voktty Harness before the upstream commit. The local tree supports arrow and page navigation, Home/End, folder expansion, Enter/Space activation, and prefix search with visible focus. Its focused suite covers selection, traversal, activation, and typeahead."
     }
   ]
 }
