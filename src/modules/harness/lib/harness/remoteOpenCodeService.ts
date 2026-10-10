@@ -69,6 +69,9 @@ export function remoteSshConnectionFor(
     port,
     ...(saved?.identityFile ? { identityFile: saved.identityFile } : {}),
     ...(saved?.extraArgs ? { extraArgs: saved.extraArgs } : {}),
+    ...(saved?.initialDirectory
+      ? { initialDirectory: saved.initialDirectory }
+      : {}),
   };
 }
 

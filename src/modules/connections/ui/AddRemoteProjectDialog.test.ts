@@ -1,11 +1,16 @@
+import {
+  isLocalProject,
+  looksLikeProject,
+} from "@/modules/harness/lib/recents";
+import { invoke } from "@tauri-apps/api/core";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { invoke } from "@tauri-apps/api/core";
+import {
+  rememberRemoteProject,
+  remoteProjectFor,
+} from "../model/remoteProjects";
 import { AddRemoteProjectDialog } from "./AddRemoteProjectDialog";
-import { remoteProjectFor, rememberRemoteProject } from "../model/remoteProjects";
-import { remoteRequest } from "../model/connections";
-import { isLocalProject, looksLikeProject } from "@/modules/harness/lib/recents";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -63,54 +68,23 @@ describe("AddRemoteProjectDialog", () => {
     );
 
     expect(markup).toContain("Open folder on a machine");
-    expect(markup).toContain("Sessions in this project run on that machine");
-    expect(markup).toContain('class="absolute inset-0 z-0"');
+    expect(markup).toContain("Voktty’s authenticated SSH helper");
+    expect(markup).toContain('class="absolute inset-0 z-0 cursor-default"');
     expect(markup).toContain("bg-background-base dark:bg-content/5");
     expect(markup).not.toContain("bg-black/30");
   });
 
-  it("resolves and remembers remote project descriptors", async () => {
-    vi.mocked(invoke).mockImplementation(async (command, input) => {
-      if (command === "remote_machine_request") {
-        const { method, params } = input as {
-          method: string;
-          params: { path?: string; cwd?: string };
-        };
-        if (method === "projects.browse") {
-          return {
-            path: "/home/me/code/app",
-            parent: "/home/me/code",
-            entries: [{ name: "src", path: "/home/me/code/app/src" }],
-          };
-        }
-        if (method === "projects.open") {
-          return { id: "host-proj-1", cwd: params.cwd, name: "app" };
-        }
-      }
-      throw new Error(`Unexpected command: ${command}`);
+  it("remembers a remote folder with the machine identity", () => {
+    const project = rememberRemoteProject("env-1", {
+      id: "ssh-env-1-/home/me/code/app",
+      cwd: "/home/me/code/app",
+      name: "app",
     });
-
-    const browseResult = await remoteRequest<{ path: string; entries: { name: string }[] }>(
-      "machine-1",
-      "projects.browse",
-      { path: "/home/me/code/app" },
-    );
-    expect(browseResult.path).toBe("/home/me/code/app");
-    expect(browseResult.entries).toHaveLength(1);
-
-    const openResult = await remoteRequest<{ id: string; cwd: string; name: string }>(
-      "machine-1",
-      "projects.open",
-      { cwd: "/home/me/code/app" },
-    );
-    expect(openResult.id).toBe("host-proj-1");
-
-    const project = rememberRemoteProject("env-1", openResult);
     expect(project.key).toBe("remote://env-1/home/me/code/app");
     expect(remoteProjectFor(project.key)).toEqual({
       key: "remote://env-1/home/me/code/app",
       environmentId: "env-1",
-      projectId: "host-proj-1",
+      projectId: "ssh-env-1-/home/me/code/app",
       cwd: "/home/me/code/app",
     });
 

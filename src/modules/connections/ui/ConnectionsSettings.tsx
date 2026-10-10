@@ -1,6 +1,12 @@
+import {
+  FolderOpen,
+  Internet,
+  Loader,
+  Plus,
+  Trash2,
+} from "@/modules/harness/chrome/icons";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import { Internet, Loader, Plus, Trash2 } from "@/modules/harness/chrome/icons";
 import {
   connectMachine,
   disconnectMachine,
@@ -9,11 +15,12 @@ import {
   useRemoteMachines,
 } from "../model/connections";
 import {
-  REMOTE_PROVIDERS,
   type HostDescriptor,
+  REMOTE_PROVIDERS,
   type RemoteMachine,
   type SshSetup,
 } from "../model/protocol";
+import { AddRemoteProjectDialog } from "./AddRemoteProjectDialog";
 
 const input =
   "w-full rounded-lg border border-content/15 bg-content/3 px-3 py-2 text-[13px] outline-none focus:border-content/35";
@@ -38,6 +45,7 @@ export function ConnectionsSettings() {
   const [updatingMachine, setUpdatingMachine] = useState<string>();
   const [removing, setRemoving] = useState<string>();
   const [revoking, setRevoking] = useState(false);
+  const [projectMachineId, setProjectMachineId] = useState<string>();
   const [url, setUrl] = useState("http://127.0.0.1:3774");
   const [token, setToken] = useState("");
   const alive = useRef(true);
@@ -80,7 +88,7 @@ export function ConnectionsSettings() {
             setNotice(
               updatingMachine
                 ? `${next.machine.name} was updated and reconnected.`
-                : `${next.machine.name} is connected. To work on it, click + next to Projects in the project rail and choose Open folder on a machine.`,
+                : `${next.machine.name} is connected. Use Open folder to add a remote project to Harness.`,
             );
             setUpdatingMachine(undefined);
             setStatus((current) => ({
@@ -298,6 +306,15 @@ export function ConnectionsSettings() {
                 </div>
                 {machine.ssh && (
                   <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className={button}
+                      onClick={() => setProjectMachineId(machine.id)}
+                    >
+                      <span className="flex items-center gap-2">
+                        <FolderOpen className="size-4" /> Open folder
+                      </span>
+                    </button>
                     {needsUpdate[machine.id] ? (
                       <button
                         type="button"
@@ -484,7 +501,11 @@ export function ConnectionsSettings() {
             >
               Cancel
             </button>
-            <button type="submit" className={button} disabled={busy || !target.trim()}>
+            <button
+              type="submit"
+              className={button}
+              disabled={busy || !target.trim()}
+            >
               {busy ? "Connecting…" : "Connect"}
             </button>
           </div>
@@ -568,6 +589,20 @@ export function ConnectionsSettings() {
           {notice}
         </p>
       )}
+      {projectMachineId ? (
+        <AddRemoteProjectDialog
+          initialMachineId={projectMachineId}
+          onCancel={() => setProjectMachineId(undefined)}
+          onOpen={(path) => {
+            setProjectMachineId(undefined);
+            window.dispatchEvent(
+              new CustomEvent("voktty:harness-select-project", {
+                detail: { path },
+              }),
+            );
+          }}
+        />
+      ) : null}
       <details className="text-[12px] text-content/45">
         <summary className="cursor-pointer">
           Connect to an existing host by URL
@@ -610,7 +645,11 @@ export function ConnectionsSettings() {
               onChange={(event) => setToken(event.target.value)}
             />
           </label>
-          <button type="submit" className={`${button} self-start`} disabled={busy}>
+          <button
+            type="submit"
+            className={`${button} self-start`}
+            disabled={busy}
+          >
             Connect by URL
           </button>
         </form>

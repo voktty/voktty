@@ -1,42 +1,74 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { LAYER } from "@/modules/harness/lib/layers";
-import { SearchableSelect } from "@/modules/harness/chrome/SearchableSelect";
 import { ChevronRight, Folder } from "@/modules/harness/chrome/icons";
+import { SearchableSelect } from "@/modules/harness/chrome/SearchableSelect";
+import { remoteSshConnectionFor } from "@/modules/harness/lib/harness/remoteOpenCodeService";
+import { LAYER } from "@/modules/harness/lib/layers";
+import {
+  closeRemoteWorkspace,
+  openRemoteWorkspace,
+  type RemoteSessionInfo,
+  requestRemoteResult,
+} from "@/modules/remote/client";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   OPEN_CONNECTIONS_EVENT,
-  remoteRequest,
   useRemoteMachines,
 } from "../model/connections";
+import {
+  normalizeRemoteDirectoryRelative,
+  type RemoteDirectoryListing,
+  remoteDirectoryListing,
+} from "../model/remoteProjectBrowser";
 import { rememberRemoteProject } from "../model/remoteProjects";
-import type { HostDirectory, HostProject } from "../model/protocol";
 
-/** Adds a project whose folder is on a connected machine. Sessions in it run
- * on that machine; the project otherwise behaves like any other in the rail. */
+/** Adds a remote project after browsing it through the native SSH helper. */
 export function AddRemoteProjectDialog({
+  initialMachineId,
   onCancel,
   onOpen,
 }: {
+  initialMachineId?: string;
   onCancel: () => void;
   /** Receives the new project's rail key. */
   onOpen: (key: string) => void;
 }) {
   const { machines, loaded } = useRemoteMachines();
-  const [machineId, setMachineId] = useState<string>();
+  const nativeMachines = machines.filter((entry) => Boolean(entry.ssh));
+  const [machineId, setMachineId] = useState(initialMachineId);
   const machine =
-    machines.find((entry) => entry.id === machineId) ?? machines[0];
+    nativeMachines.find((entry) => entry.id === machineId) ?? nativeMachines[0];
+  const sshConnections = usePreferencesStore((state) => state.sshConnections);
+  const connectionState = useMemo(() => {
+    if (!machine) return { connection: undefined, error: "" };
+    try {
+      return {
+        connection: remoteSshConnectionFor(machine, sshConnections ?? []),
+        error: "",
+      };
+    } catch (reason) {
+      return {
+        connection: undefined,
+        error: String(reason).replace(/^Error: /, ""),
+      };
+    }
+  }, [machine, sshConnections]);
+  const { connection } = connectionState;
   const [path, setPath] = useState("");
-  const [directory, setDirectory] = useState<HostDirectory>();
+  const [directory, setDirectory] = useState<RemoteDirectoryListing>();
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const [error, setError] = useState("");
   const alive = useRef(true);
   const requestVersion = useRef(0);
-  const cancel = () => {
+  const sessionRef = useRef<RemoteSessionInfo | undefined>(undefined);
+  const rootRef = useRef<string | undefined>(undefined);
+  const cancel = useCallback(() => {
     alive.current = false;
     requestVersion.current++;
     onCancel();
-  };
+  }, [onCancel]);
   // Set on every mount: development StrictMode mounts, unmounts and mounts
   // again, and responses after the first cleanup must still be shown.
   useEffect(() => {
@@ -55,60 +87,122 @@ export function AddRemoteProjectDialog({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onCancel]);
+  }, [cancel]);
 
-  const browse = async (next?: string) => {
-    if (!machine) return;
+  const browse = useCallback(async (next = "") => {
+    const session = sessionRef.current;
+    const root = rootRef.current;
+    if (!session || !root) return;
     const version = ++requestVersion.current;
     setLoading(true);
     setOpening(false);
     setError("");
     try {
-      const value = await remoteRequest<HostDirectory>(
-        machine.id,
-        "projects.browse",
-        { path: next },
-      );
-      if (!alive.current || version !== requestVersion.current) return;
-      setDirectory(value);
-      setPath(value.path);
+      const relativePath = normalizeRemoteDirectoryRelative(next);
+      const value = await requestRemoteResult<{
+        entries: Array<{
+          name: string;
+          kind: "directory" | "file" | "symlink";
+        }>;
+      }>(session.session_id, "fs.readDir", {
+        path: relativePath || ".",
+      });
+      if (
+        !alive.current ||
+        sessionRef.current?.session_id !== session.session_id ||
+        version !== requestVersion.current
+      )
+        return;
+      const listing = remoteDirectoryListing(root, relativePath, value.entries);
+      setDirectory(listing);
+      setPath(listing.path);
     } catch (reason) {
-      if (alive.current && version === requestVersion.current) setError(String(reason).replace(/^Error: /, ""));
+      if (alive.current && version === requestVersion.current)
+        setError(String(reason).replace(/^Error: /, ""));
     } finally {
-      if (alive.current && version === requestVersion.current) setLoading(false);
+      if (alive.current && version === requestVersion.current)
+        setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    let disposed = false;
+    let sessionId: number | undefined;
+    requestVersion.current++;
     setDirectory(undefined);
     setPath("");
-    if (machine) void browse();
-  }, [machine?.id]);
+    setError("");
+    setSessionReady(false);
+    if (!connection) {
+      if (connectionState.error) setError(connectionState.error);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    void openRemoteWorkspace(connection)
+      .then(async (session) => {
+        sessionId = session.session_id;
+        if (disposed || !alive.current) {
+          await closeRemoteWorkspace(session.session_id).catch(() => undefined);
+          return;
+        }
+        sessionRef.current = session;
+        rootRef.current = session.workspace_root;
+        setSessionReady(true);
+        await browse("");
+      })
+      .catch((reason: unknown) => {
+        if (!disposed && alive.current) {
+          setError(String(reason).replace(/^Error: /, ""));
+          setLoading(false);
+        }
+      });
+    return () => {
+      disposed = true;
+      requestVersion.current++;
+      if (sessionRef.current?.session_id === sessionId) {
+        sessionRef.current = undefined;
+        rootRef.current = undefined;
+      }
+      if (sessionId !== undefined) {
+        void closeRemoteWorkspace(sessionId).catch(() => undefined);
+      }
+    };
+  }, [browse, connection, connectionState.error]);
 
   const open = async () => {
-    if (!machine || !path.trim() || opening) return;
+    if (!machine || !sessionReady || !path.trim() || opening) return;
     const version = ++requestVersion.current;
     setOpening(true);
     setLoading(false);
     setError("");
     try {
-      const project = await remoteRequest<HostProject>(
-        machine.id,
-        "projects.open",
-        { cwd: path.trim() },
-      );
+      const parts = path.split("/").filter(Boolean);
+      const name = parts[parts.length - 1] ?? path;
+      const project = rememberRemoteProject(machine.environmentId, {
+        id: `ssh-${machine.environmentId}-${path}`,
+        cwd: path,
+        name,
+      });
       if (alive.current && version === requestVersion.current)
-        onOpen(rememberRemoteProject(machine.environmentId, project).key);
+        onOpen(project.key);
     } catch (reason) {
-      if (alive.current && version === requestVersion.current) setError(String(reason).replace(/^Error: /, ""));
+      if (alive.current && version === requestVersion.current)
+        setError(String(reason).replace(/^Error: /, ""));
     } finally {
-      if (alive.current && version === requestVersion.current) setOpening(false);
+      if (alive.current && version === requestVersion.current)
+        setOpening(false);
     }
   };
 
   return createPortal(
     <div className="fixed inset-0" style={{ zIndex: LAYER.dialog }}>
-      <div className="absolute inset-0 z-0" onMouseDown={cancel} />
+      <button
+        type="button"
+        aria-label="Close dialog"
+        className="absolute inset-0 z-0 cursor-default"
+        onClick={cancel}
+      />
       <form
         role="dialog"
         aria-modal="true"
@@ -125,16 +219,15 @@ export function AddRemoteProjectDialog({
             Open folder on a machine
           </h2>
           <p className="text-[12px] leading-snug text-content/55">
-            Sessions in this project run on that machine, using its checkout and
-            its Codex or Claude Code sign-in. They keep running when you close
-            Terax here.
+            Folder discovery uses Voktty’s authenticated SSH helper and the
+            machine’s saved SSH connection.
           </p>
         </div>
         {!loaded ? null : !machine ? (
           <>
             <p className="text-[12px] leading-snug text-content/55">
-              No machines are connected yet. Add one in Settings, then open a
-              folder on it here.
+              No SSH-connected machines are available. Add a machine through SSH
+              in Connections settings, then open its folder here.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -158,11 +251,11 @@ export function AddRemoteProjectDialog({
           </>
         ) : (
           <>
-            {machines.length > 1 ? (
+            {nativeMachines.length > 1 ? (
               <SearchableSelect
                 label="Machine"
                 value={machine.id}
-                options={machines.map((entry) => ({
+                options={nativeMachines.map((entry) => ({
                   value: entry.id,
                   label: entry.name,
                   keywords: entry.ssh?.target ?? entry.endpoint,
@@ -178,30 +271,33 @@ export function AddRemoteProjectDialog({
             <input
               aria-label="Folder path on the machine"
               className="h-8 shrink-0 rounded-md border border-content/10 bg-content/3 px-2.5 font-mono text-[12px] text-content outline-none focus:border-content/25"
-              placeholder="/home/me/code/my-app"
+              placeholder="Connecting over SSH…"
               value={path}
+              readOnly
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
               autoComplete="off"
               onChange={(event) => setPath(event.target.value)}
             />
-            <div
+            <section
               aria-label="Folders"
               className="min-h-24 flex-1 overflow-y-auto overscroll-contain rounded-md border border-content/10"
             >
               <div className="p-1">
-                {directory?.parent ? (
+                {directory?.parentRelativePath !== null && directory ? (
                   <FolderRow
                     name=".."
-                    onOpen={() => void browse(directory.parent!)}
+                    onOpen={() =>
+                      void browse(directory.parentRelativePath ?? "")
+                    }
                   />
                 ) : null}
                 {directory?.entries.map((entry) => (
                   <FolderRow
-                    key={entry.path}
+                    key={entry.relativePath}
                     name={entry.name}
-                    onOpen={() => void browse(entry.path)}
+                    onOpen={() => void browse(entry.relativePath)}
                   />
                 ))}
                 {directory && !directory.entries.length ? (
@@ -211,11 +307,11 @@ export function AddRemoteProjectDialog({
                 ) : null}
                 {!directory && loading ? (
                   <p className="px-2 py-1.5 text-[12px] text-content/45">
-                    Loading folders…
+                    Connecting and loading folders…
                   </p>
                 ) : null}
               </div>
-            </div>
+            </section>
             {error ? (
               <p
                 role="alert"
@@ -234,7 +330,7 @@ export function AddRemoteProjectDialog({
               </button>
               <button
                 type="submit"
-                disabled={opening || !path.trim()}
+                disabled={opening || loading || !sessionReady || !path.trim()}
                 className="rounded-md bg-selection px-3 py-1.5 text-[12px] font-medium hover:bg-selection-hover disabled:opacity-40"
               >
                 {opening ? "Opening…" : "Open"}

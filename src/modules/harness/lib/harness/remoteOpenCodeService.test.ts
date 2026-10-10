@@ -64,6 +64,7 @@ describe("native remote OpenCode service", () => {
       port: 2222,
       identityFile: "/keys/build",
       extraArgs: "-o ProxyJump=bastion",
+      initialDirectory: "/srv/projects",
     };
     expect(remoteSshConnectionFor(machine(), [saved])).toEqual(saved);
     expect(
