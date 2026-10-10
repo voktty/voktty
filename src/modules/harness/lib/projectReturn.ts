@@ -1,7 +1,7 @@
 import { leafIds, type WorkspaceTab } from "./layout";
 import type { Session } from "./session";
 import { pathKey } from "./paths";
-import { sameProjectPath } from "./recents";
+import { isRemoteProjectPath, sameProjectPath } from "./recents";
 
 export type ProjectReturnMemory = ReadonlyMap<string, string>;
 
@@ -21,7 +21,8 @@ export type ProjectReturnDecision =
   | { action: "create" };
 
 export function isBlankSession(session: Session | undefined): boolean {
-  if (!session || session.busy) return false;
+  if (!session || session.busy || isRemoteProjectPath(session.cwd))
+    return false;
   return !session.blocks.some((block) => block.role === "user");
 }
 

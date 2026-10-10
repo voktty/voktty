@@ -281,6 +281,22 @@ describe("project selection", () => {
     });
   });
 
+  it("does not reuse a restored remote session before its transcript loads", () => {
+    const remote = chat("remote", "remote://host/home/project");
+    remote.blocks = [];
+    const tab = { ...newTab(remote.id), id: "tab-remote" };
+    const state = {
+      sessions: [remote],
+      tabs: [tab],
+      activeTabId: tab.id,
+      memory: new Map<string, string>(),
+    };
+
+    expect(
+      planProjectReturn({ ...state, projectPath: "/local/project" }),
+    ).toEqual({ action: "create" });
+  });
+
   it("never reuses a busy session even when it has no user blocks", () => {
     const state = workspace();
     state.sessions[3].blocks = [];
