@@ -364,17 +364,16 @@
       "upstreamTitle": "Add activity timeline to PR/issue panels with commit interleaving",
       "localCommits": [
         "37d16c9",
-        "d769e29"
+        "d769e29",
+        "2932424"
       ],
       "localCommitBases": [
         "preexisting",
+        "integrated",
         "integrated"
       ],
       "license": "MIT",
-      "coverage": "partial",
-      "deferred": [
-        "Voktty prefetches GitHub issue and PR details when an Inbox card is hovered. MonoCode triggers prefetch from a linked-work-item action on session cards; Voktty has no matching session-card entry point, so the interaction remains adapted to Inbox."
-      ],
+      "coverage": "complete",
       "mappings": [
         {
           "upstream": "src/features/inbox/model/githubTasks.ts",
@@ -420,7 +419,7 @@
           "runner": "vitest"
         }
       ],
-      "rationale": "The chronological comments and commits timeline, freshness-aware GitHub cache, PR overview, changed-file glance and focused diff behavior existed in Voktty before the audit baseline. GitHub issue and PR details now prefetch on Inbox card hover using the existing freshness cache. The trigger follows Voktty's Inbox workflow; MonoCode's linked-work-item action on session cards has no matching Voktty entry point, so coverage remains partial."
+      "rationale": "The chronological comments and commits timeline, freshness-aware GitHub cache, PR overview, changed-file glance and focused diff behavior existed in Voktty before the audit baseline. GitHub issue and PR details now prefetch on Inbox card hover using the existing freshness cache; pull requests also prefetch their diff. This adapts the prefetch trigger to Voktty's Inbox workflow, which has no MonoCode-style linked-work-item action on session cards."
     },
     {
       "upstreamCommit": "31fcb0903fd6ba969e11fab3a0dd288ee5df1571",
