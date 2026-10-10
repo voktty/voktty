@@ -53,16 +53,16 @@ function isEffortSetting(setting: ModelSetting): boolean {
   return (
     setting.id === "effort" ||
     setting.id === "reasoning" ||
-    setting.id === "reasoningEffort"
+    setting.id === "reasoningEffort" ||
+    setting.id === "variant"
   );
 }
 
-function effortTileTone(
-  harness: HarnessId,
+export function effortTileTone(
   setting: ModelSetting,
   value: string,
 ): "ultra" | "max" | undefined {
-  if (harness !== "codex" || !isEffortSetting(setting)) return undefined;
+  if (!isEffortSetting(setting)) return undefined;
   const normalized = value.toLowerCase();
   return normalized === "ultra"
     ? "ultra"
@@ -721,11 +721,7 @@ export function ModelPicker({
                 const selected =
                   option.value === settingValue(submenu.setting, values);
                 const highlighted = index === activeSetting;
-                const tileTone = effortTileTone(
-                  current.harness,
-                  submenu.setting,
-                  option.value,
-                );
+                const tileTone = effortTileTone(submenu.setting, option.value);
                 return (
                   <button
                     key={option.value}

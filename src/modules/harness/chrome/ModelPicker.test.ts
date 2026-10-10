@@ -1,8 +1,12 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ModelPicker } from "./ModelPicker";
-import { saveRecentModelChoice, loadRecentModelChoices } from "../lib/models";
+import { ModelPicker, effortTileTone } from "./ModelPicker";
+import {
+  loadRecentModelChoices,
+  saveRecentModelChoice,
+  type ModelSetting,
+} from "../lib/models";
 
 function mockLocalStorage() {
   const data = new Map<string, string>();
@@ -78,5 +82,37 @@ describe("ModelPicker", () => {
       { harness: "cursor", model: "cursor:composer-2.5" },
       { harness: "claude", model: "claude:opus-5" },
     ]);
+  });
+
+  it.each([
+    { harness: "codex", settingId: "reasoningEffort" },
+    { harness: "opencode", settingId: "variant" },
+    { harness: "claude", settingId: "effort" },
+    { harness: "cursor", settingId: "effort" },
+  ])("shimmers max and ultra effort options for $harness", ({ settingId }) => {
+    const setting: ModelSetting = {
+      id: settingId,
+      label: "Effort",
+      kind: "select",
+      value: "high",
+      options: [],
+    };
+
+    expect(effortTileTone(setting, "MAX")).toBe("max");
+    expect(effortTileTone(setting, "ultra")).toBe("ultra");
+    expect(effortTileTone(setting, "high")).toBeUndefined();
+  });
+
+  it("does not shimmer non-effort settings", () => {
+    const setting: ModelSetting = {
+      id: "context",
+      label: "Context",
+      kind: "select",
+      value: "large",
+      options: [],
+    };
+
+    expect(effortTileTone(setting, "max")).toBeUndefined();
+    expect(effortTileTone(setting, "ultra")).toBeUndefined();
   });
 });
