@@ -261,6 +261,7 @@ import {
   createProjectTerminal,
   type DockSide,
   findProjectTerminal,
+  focusedDockTerminalId,
   mapProjectTerminal,
   nextDockTerminalTitle,
   type ProjectTerminalDock as ProjectTerminal,
@@ -1806,6 +1807,7 @@ export function HarnessApp({
     setSessions((prev: any) => [...prev, session]);
     appendTab(tab, cwd);
     setActiveTabId(tab.id);
+    setProjectTerminalFocused(false);
     setComposerFocused(true);
     return session.id;
   }, [
@@ -2205,6 +2207,28 @@ export function HarnessApp({
   const onNewTerminal = useCallback(() => {
     openProjectTerminal(active?.cwd ?? projectCwd);
   }, [active?.cwd, openProjectTerminal, projectCwd]);
+
+  const focusedProjectTerminalFileId = useCallback(() => {
+    const dock = findProjectTerminal(
+      projectTerminalsRef.current,
+      projectCwdRef.current,
+    );
+    return focusedDockTerminalId(dock, {
+      layoutEnabled: deckLayoutRef.current,
+      dockFocused: projectTerminalFocusedRef.current,
+      activeElementInDock: Boolean(
+        document.activeElement?.closest("[data-project-terminal-dock]"),
+      ),
+    });
+  }, []);
+
+  const onNewFocusedTarget = useCallback(() => {
+    if (focusedProjectTerminalFileId()) {
+      onNewTerminal();
+      return;
+    }
+    onNew();
+  }, [focusedProjectTerminalFileId, onNew, onNewTerminal]);
 
   const onShowProjectTerminal = useCallback(() => {
     if (!deckLayout) {
@@ -3007,16 +3031,6 @@ export function HarnessApp({
 
   const onClosePane = useCallback(
     (sessionId?: string) => {
-      if (sessionId === undefined && deckLayout && projectTerminalFocused) {
-        const dock = findProjectTerminal(
-          projectTerminalsRef.current,
-          projectCwdRef.current,
-        );
-        if (dock) {
-          onCloseProjectTerminal(dock.pane.activeFileId);
-          return;
-        }
-      }
       if (!activeTab) return;
       if (
         !deckLayout &&
@@ -3083,16 +3097,23 @@ export function HarnessApp({
       activeTab,
       deckLayout,
       onCloseFile,
-      onCloseProjectTerminal,
       onCloseTab,
       onClearTabSession,
       persistSession,
-      projectTerminalFocused,
       refreshHistory,
       sidebarCwd,
       tabCloseScope,
     ],
   );
+
+  const onCloseFocusedTarget = useCallback(() => {
+    const fileId = focusedProjectTerminalFileId();
+    if (fileId) {
+      onCloseProjectTerminal(fileId);
+      return;
+    }
+    onClosePane();
+  }, [focusedProjectTerminalFileId, onClosePane, onCloseProjectTerminal]);
 
   const onCloseTitleTab = useCallback(
     (id: string) => {
@@ -6253,10 +6274,10 @@ export function HarnessApp({
   );
 
   const actions = useRef({
-    onNew,
+    onNewFocusedTarget,
     onArchiveFocusedSession,
     onCloseOtherTabs,
-    onClosePane,
+    onCloseFocusedTarget,
     onNext,
     onPrev,
     onVisitBack,
@@ -6283,10 +6304,10 @@ export function HarnessApp({
     openSettings,
   });
   actions.current = {
-    onNew,
+    onNewFocusedTarget,
     onArchiveFocusedSession,
     onCloseOtherTabs,
-    onClosePane,
+    onCloseFocusedTarget,
     onNext,
     onPrev,
     onVisitBack,
@@ -6392,10 +6413,10 @@ export function HarnessApp({
         e.preventDefault();
         e.stopPropagation();
         const a = actions.current;
-        if (cmd === "new") run("new", a.onNew);
+        if (cmd === "new") run("new", a.onNewFocusedTarget);
         else if (cmd === "close-others")
           run("close-others", a.onCloseOtherTabs);
-        else if (cmd === "close") run("close", a.onClosePane);
+        else if (cmd === "close") run("close", a.onCloseFocusedTarget);
         else if (cmd === "next") run("next", a.onNext);
         else if (cmd === "prev") run("prev", a.onPrev);
         else if (cmd === "back") run("back", a.onVisitBack);
@@ -6491,11 +6512,15 @@ export function HarnessApp({
 
   useEffect(() => {
     const unlisten: Array<Promise<() => void>> = [
-      listen("new_tab", () => run("new", actions.current.onNew)),
+      listen("new_tab", () =>
+        run("new", actions.current.onNewFocusedTarget),
+      ),
       listen("close_other_tabs", () =>
         run("close-others", actions.current.onCloseOtherTabs),
       ),
-      listen("close_tab", () => run("close", actions.current.onClosePane)),
+      listen("close_tab", () =>
+        run("close", actions.current.onCloseFocusedTarget),
+      ),
       listen("next_tab", () => run("next", actions.current.onNext)),
       listen("prev_tab", () => run("prev", actions.current.onPrev)),
       listen("back_tab", () => run("back", actions.current.onVisitBack)),

@@ -27,6 +27,30 @@ export type ProjectTerminalDock = {
   open: boolean;
 };
 
+export function focusedDockTerminalId(
+  dock: ProjectTerminalDock | undefined,
+  focus: {
+    layoutEnabled: boolean;
+    dockFocused: boolean;
+    activeElementInDock: boolean;
+  },
+): string | null {
+  if (
+    !focus.layoutEnabled ||
+    !focus.dockFocused ||
+    !focus.activeElementInDock ||
+    !dock?.open
+  ) {
+    return null;
+  }
+  const activeFileId = dock.pane.activeFileId;
+  return dock.pane.files.some(
+    (file) => file.id === activeFileId && file.terminal,
+  )
+    ? activeFileId
+    : null;
+}
+
 export const DOCK_SIZE_DEFAULT = {
   top: 220,
   bottom: 220,

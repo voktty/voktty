@@ -8,6 +8,7 @@ import {
   createProjectTerminal,
   dockGridStyle,
   findProjectTerminal,
+  focusedDockTerminalId,
   mapProjectTerminal,
   nextDockTerminalTitle,
   patchProjectTerminals,
@@ -42,6 +43,36 @@ describe("createProjectTerminal", () => {
     expect(dock.open).toBe(true);
     expect(dock.pane.files).toEqual([file]);
     expect(dock.pane.activeFileId).toBe(file.id);
+  });
+});
+
+describe("focusedDockTerminalId", () => {
+  it("returns the active terminal only when the dock owns DOM focus", () => {
+    const file = newTerminalFile("/tmp/a");
+    const dock = createProjectTerminal("/tmp/a", file);
+    const focus = {
+      layoutEnabled: true,
+      dockFocused: true,
+      activeElementInDock: true,
+    };
+
+    expect(focusedDockTerminalId(dock, focus)).toBe(file.id);
+    expect(focusedDockTerminalId(dock, { ...focus, dockFocused: false })).toBe(
+      null,
+    );
+    expect(
+      focusedDockTerminalId(dock, { ...focus, activeElementInDock: false }),
+    ).toBe(null);
+    expect(focusedDockTerminalId(dock, { ...focus, layoutEnabled: false })).toBe(
+      null,
+    );
+    expect(focusedDockTerminalId(withDockOpen(dock, false), focus)).toBe(null);
+    expect(
+      focusedDockTerminalId(
+        { ...dock, pane: { ...dock.pane, activeFileId: "missing" } },
+        focus,
+      ),
+    ).toBe(null);
   });
 });
 
