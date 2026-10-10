@@ -1525,6 +1525,26 @@
       ],
       "tests": [],
       "rationale": "Voktty already fades overflowing tab labels and the bottom edge of long session lists and docked transcripts. The transcript content also has bottom padding so the final reply can scroll clear of the fade; the selector and class names follow Voktty's Harness structure."
+    },
+    {
+      "upstreamCommit": "98845e58cfdc6c062ead43bcdbc9cf440e49d2cf",
+      "upstreamTitle": "Stop the remote folder dialog from darkening the window (#733)",
+      "localCommit": "0b77f3e",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/connections/ui/AddRemoteProjectDialog.tsx",
+          "local": "src/modules/connections/ui/AddRemoteProjectDialog.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/connections/ui/AddRemoteProjectDialog.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The remote folder dialog now leaves the full-window backdrop clear, preventing light content behind its glass panel from turning grey. The backdrop still handles outside-click cancellation."
     }
   ]
 }
