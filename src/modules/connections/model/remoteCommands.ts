@@ -97,6 +97,12 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "git_diff_files",
   "git_diff_stats",
   "git_file_diff",
+  "git_stage_file",
+  "git_unstage_file",
+  "git_discard_file",
+  "git_discard_all",
+  "git_stage_all",
+  "git_unstage_all",
 ]);
 
 const HELPER_FS = {
@@ -424,28 +430,8 @@ async function nativeProfileGitIndex(
   root: string,
   cwd: string,
 ): Promise<GitDiffIndex> {
-  const statusOutput = await runHelperGit(
-    sessionId,
-    cwd,
-    [
-      "status",
-      "--porcelain=v2",
-      "--branch",
-      "--ahead-behind",
-      "--untracked-files=all",
-      "-z",
-    ],
-    MAX_GIT_OUTPUT_BYTES,
-    true,
-  );
-  if (statusOutput.exitCode !== 0) {
-    if (/not a git repository/i.test(statusOutput.stderr))
-      return emptyGitIndex();
-    throw new Error("Could not read Git changes on the remote project.");
-  }
-  const status = parseGitPorcelainV2(
-    decodeGitMetadata(statusOutput.stdoutBytes),
-  );
+  const status = await nativeProfileGitStatus(sessionId, cwd);
+  if (!status) return emptyGitIndex();
   const numstatOutput = await runHelperGit(
     sessionId,
     cwd,
@@ -533,6 +519,31 @@ async function nativeProfileGitIndex(
     behind: status.behind,
     aheadOfDefault,
   };
+}
+
+async function nativeProfileGitStatus(
+  sessionId: number,
+  cwd: string,
+): Promise<ReturnType<typeof parseGitPorcelainV2> | null> {
+  const statusOutput = await runHelperGit(
+    sessionId,
+    cwd,
+    [
+      "status",
+      "--porcelain=v2",
+      "--branch",
+      "--ahead-behind",
+      "--untracked-files=all",
+      "-z",
+    ],
+    MAX_GIT_OUTPUT_BYTES,
+    true,
+  );
+  if (statusOutput.exitCode !== 0) {
+    if (/not a git repository/i.test(statusOutput.stderr)) return null;
+    throw new Error("Could not read Git changes on the remote project.");
+  }
+  return parseGitPorcelainV2(decodeGitMetadata(statusOutput.stdoutBytes));
 }
 
 async function nativeProfileFileDiff(
@@ -781,6 +792,75 @@ async function runProfileFileCommand(
       };
     }
     return index;
+  }
+  if (
+    command === "git_stage_file" ||
+    command === "git_unstage_file" ||
+    command === "git_discard_file" ||
+    command === "git_discard_all" ||
+    command === "git_stage_all" ||
+    command === "git_unstage_all"
+  ) {
+    const cwd = relativePath(args.cwd);
+    const runGitMutation = (gitArgs: string[]) =>
+      runHelperGit(sessionId, cwd, gitArgs).then(() => undefined);
+    if (command === "git_stage_file") {
+      return runGitMutation([
+        "--literal-pathspecs",
+        "add",
+        "--",
+        helperRelativePath(args.relative),
+      ]);
+    }
+    if (command === "git_unstage_file") {
+      return runGitMutation([
+        "--literal-pathspecs",
+        "restore",
+        "--staged",
+        "--",
+        helperRelativePath(args.relative),
+      ]);
+    }
+    if (command === "git_stage_all") {
+      return runGitMutation(["--literal-pathspecs", "add", "-A", "--", "."]);
+    }
+    if (command === "git_unstage_all") {
+      return runGitMutation([
+        "--literal-pathspecs",
+        "restore",
+        "--staged",
+        "--",
+        ".",
+      ]);
+    }
+
+    const status = await nativeProfileGitStatus(sessionId, cwd);
+    if (command === "git_discard_file") {
+      const relative = helperRelativePath(args.relative);
+      const file = status?.files.find((entry) => entry.relative === relative);
+      if (!file?.unstaged) throw new Error("File has no changes to discard.");
+      return runGitMutation(
+        file.status === "untracked"
+          ? ["--literal-pathspecs", "clean", "-f", "--", file.relative]
+          : [
+              "--literal-pathspecs",
+              "restore",
+              "--worktree",
+              "--",
+              file.relative,
+            ],
+      );
+    }
+    if (!status?.files.some((file) => file.unstaged)) return;
+    await runGitMutation([
+      "--literal-pathspecs",
+      "restore",
+      "--worktree",
+      "--",
+      ".",
+    ]);
+    await runGitMutation(["--literal-pathspecs", "clean", "-fd", "--", "."]);
+    return;
   }
   if (command === "list_dir") {
     const relative = relativePath(args.path);

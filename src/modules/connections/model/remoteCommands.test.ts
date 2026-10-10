@@ -43,7 +43,12 @@ vi.mock("@/modules/settings/preferences", () => ({
 import {
   gitDiffIndex,
   gitDiffStats,
+  gitDiscardFile,
   gitFileDiff,
+  gitStageAll,
+  gitStageFile,
+  gitUnstageAll,
+  gitUnstageFile,
   listDir,
   readBinaryFile,
   readTextFile,
@@ -198,7 +203,8 @@ function mockNativeGitIndex(status: string, numstat = "") {
       if (method !== "git.execWorkspace")
         throw new Error("Unexpected helper method");
       const args = params.args as string[];
-      switch (args[0]) {
+      const command = args[0] === "--literal-pathspecs" ? args[1] : args[0];
+      switch (command) {
         case "status":
           return gitExecResult(status);
         case "diff":
@@ -209,8 +215,12 @@ function mockNativeGitIndex(status: string, numstat = "") {
           return gitExecResult("origin/main\n");
         case "rev-list":
           return gitExecResult("3\n");
+        case "add":
+        case "restore":
+        case "clean":
+          return gitExecResult("");
         default:
-          throw new Error(`Unexpected Git command: ${args[0]}`);
+          throw new Error(`Unexpected Git command: ${command}`);
       }
     },
   );
@@ -280,6 +290,105 @@ it("loads remote Git status and statistics through the native helper", async () 
         "--untracked-files=all",
         "-z",
       ],
+    }),
+  );
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("stages and unstages remote paths with literal Git pathspecs", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValue(gitExecResult(""));
+
+  await gitStageFile(remotePath(environmentId, "/srv/app"), "src/a[1].ts");
+  await gitUnstageFile(remotePath(environmentId, "/srv/app"), "src/a[1].ts");
+  await gitStageAll(remotePath(environmentId, "/srv/app"));
+  await gitUnstageAll(remotePath(environmentId, "/srv/app"));
+
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toEqual([
+    ["--literal-pathspecs", "add", "--", "src/a[1].ts"],
+    ["--literal-pathspecs", "restore", "--staged", "--", "src/a[1].ts"],
+    ["--literal-pathspecs", "add", "-A", "--", "."],
+    ["--literal-pathspecs", "restore", "--staged", "--", "."],
+  ]);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(4);
+});
+
+it("discards only unstaged remote changes and preserves staged content", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  mockNativeGitIndex(
+    [
+      "1 .M N... 100644 100644 100644 abc def tracked.txt",
+      "1 M. N... 100644 100644 100644 abc def staged.txt",
+      "? nested/new file.txt",
+      "",
+    ].join("\0"),
+  );
+
+  await gitDiscardFile(remotePath(environmentId, "/srv/app"), "tracked.txt");
+  await runRemoteCommand("git_discard_all", {
+    cwd: remotePath(environmentId, "/srv/app"),
+  });
+
+  expect(
+    requestRemoteResult.mock.calls
+      .filter(([, method]) => method === "git.execWorkspace")
+      .map(([, , params]) => (params as { args: string[] }).args),
+  ).toEqual([
+    [
+      "status",
+      "--porcelain=v2",
+      "--branch",
+      "--ahead-behind",
+      "--untracked-files=all",
+      "-z",
+    ],
+    ["--literal-pathspecs", "restore", "--worktree", "--", "tracked.txt"],
+    [
+      "status",
+      "--porcelain=v2",
+      "--branch",
+      "--ahead-behind",
+      "--untracked-files=all",
+      "-z",
+    ],
+    ["--literal-pathspecs", "restore", "--worktree", "--", "."],
+    ["--literal-pathspecs", "clean", "-fd", "--", "."],
+  ]);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledTimes(2);
+});
+
+it("rejects remote Git paths that escape the saved project", async () => {
+  const { environmentId } = registerNativeProfileProject();
+
+  await expect(
+    gitStageFile(remotePath(environmentId, "/srv/app"), "../outside.txt"),
+  ).rejects.toThrow("outside the project");
+  expect(requestRemoteResult).not.toHaveBeenCalled();
+  expect(remoteRequest).not.toHaveBeenCalled();
+});
+
+it("discards an untracked remote file without a shell path", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  mockNativeGitIndex("? nested/new file.txt\0");
+
+  await gitDiscardFile(
+    remotePath(environmentId, "/srv/app"),
+    "nested/new file.txt",
+  );
+
+  expect(requestRemoteResult).toHaveBeenLastCalledWith(
+    9,
+    "git.execWorkspace",
+    expect.objectContaining({
+      cwd: ".",
+      args: ["--literal-pathspecs", "clean", "-f", "--", "nested/new file.txt"],
     }),
   );
   expect(remoteRequest).not.toHaveBeenCalled();
