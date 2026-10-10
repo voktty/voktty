@@ -611,11 +611,19 @@
     {
       "upstreamCommit": "0eb2773ec4f18c0533d5253ea6d4627cd5795299",
       "upstreamTitle": "feat(opencode): support OpenCode 2.x servers (#434)",
-      "localCommits": ["6d3ec03", "db828c5", "26dadaa", "8a148a5", "2b7c3ba"],
+      "localCommits": [
+        "6d3ec03",
+        "db828c5",
+        "26dadaa",
+        "8a148a5",
+        "b8069b3",
+        "2b7c3ba",
+        "0ae6db2"
+      ],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "The native SSH helper now exposes only OpenCode service status/start/password actions within the authenticated workspace, alongside the loopback tunnel foundation. Wire service discovery and Basic-auth HTTP/SSE into Harness, preserve tmux-backed session recovery, prevent stale tab binding, handle reconnect and cleanup, and verify on a Docker SSH host before claiming remote parity."
+        "Harness remote OpenCode uses the native SSH helper, authenticated loopback HTTP/SSE tunnel, and saved session resume. Automatic recovery from active-turn tunnel loss is not implemented, and no live Docker SSH smoke has run. Verify a Docker host and decide whether active-turn retry is in scope before claiming full remote parity."
       ],
       "mappings": [
         {
