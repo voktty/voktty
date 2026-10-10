@@ -741,6 +741,30 @@
         }
       ],
       "rationale": "Route ⌘/Ctrl+T and ⌘/Ctrl+W through the focused project dock only when the dock is open, its focus flag is set, and the active DOM element remains inside it. Keyboard focus is tracked by the dock, and a stale focus flag cannot redirect pane-close buttons. Voktty has no native app-menu command producer matching the upstream menu hunk; its existing new_tab/close_tab event bridge uses the same focus-aware routing."
+    },
+    {
+      "upstreamCommit": "6a5f7fa13750cb115ce461be278fded591dc794f",
+      "upstreamTitle": "Add `Back` to revisit earlier answers in the question panel (#688)",
+      "localCommit": "5756f08",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/QuestionForm.tsx",
+          "local": "src/modules/harness/chrome/QuestionForm.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/QuestionForm.test.ts",
+          "local": "src/modules/harness/chrome/QuestionForm.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/QuestionForm.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Add a localized Back action to the multi-question Harness form. Answers remain keyed by question id, so users can return, change an earlier choice, and submit the revised answers."
     }
   ]
 }
