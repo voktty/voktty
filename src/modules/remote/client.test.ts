@@ -130,6 +130,26 @@ describe("remote client", () => {
     });
   });
 
+  it("reads the remote OpenCode version through a fixed service action", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      protocol: 2,
+      id: "voktty-1-3",
+      ok: true,
+      result: { stdout: "opencode 2.0.15\n" },
+    });
+
+    await expect(
+      runRemoteOpenCodeServiceAction(7, "version", "/srv/app"),
+    ).resolves.toBe("opencode 2.0.15\n");
+    expect(invoke).toHaveBeenCalledWith("remote_request", {
+      sessionId: 7,
+      request: expect.objectContaining({
+        method: "opencode.service",
+        params: { action: "version", cwd: "/srv/app" },
+      }),
+    });
+  });
+
   it("rejects malformed OpenCode service output", async () => {
     vi.mocked(invoke).mockResolvedValueOnce({
       protocol: 2,

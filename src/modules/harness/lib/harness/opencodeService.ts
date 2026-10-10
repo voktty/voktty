@@ -3,6 +3,7 @@ import { execChild } from "./child";
 export type OpenCodeV2Service = {
   url: string;
   password: string;
+  directory?: string;
 };
 
 export function parseOpenCodeServiceUrl(output: string): string | null {

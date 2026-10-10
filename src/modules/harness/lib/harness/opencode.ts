@@ -1,6 +1,14 @@
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import { modelContextWindow, nativeModelId } from "../models";
 import type { RuntimeMode } from "../session";
 import { taskListFromToolInput } from "../taskList";
+import {
+  questionPromptTitle,
+  questionsFromUnknown,
+  selectedAnswerLabels,
+  type UserQuestion,
+  type UserQuestionReply,
+} from "../userQuestion";
 import {
   closeHarnessSse,
   execChild,
@@ -11,6 +19,7 @@ import {
   unwatchChild,
   watchChild,
 } from "./child";
+import { refreshOpenCodeCatalog } from "./opencodeCatalog";
 import { OpenCodeClient, OpenCodeHttpError } from "./opencodeClient";
 import {
   appendOpenCodeAssistantTextDelta,
@@ -21,8 +30,10 @@ import {
   detailFromToolPart,
   eventSessionId,
   isOpenCodeNotFound,
-  mergeOpenCodeAssistantText,
   KNOWN_HIDDEN_AGENTS,
+  mergeOpenCodeAssistantText,
+  type OpenCodeApiGeneration,
+  type OpenCodePart,
   openCodeChildSessionId,
   parseOpenCodeModelSlug,
   parseOpenCodeVersion,
@@ -36,19 +47,24 @@ import {
   toOpenCodeFileParts,
   toOpenCodePermissionReply,
   toolKindFromName,
-  type OpenCodeApiGeneration,
-  type OpenCodePart,
 } from "./opencodeProtocol";
-import { resolveOpenCodeV2Service } from "./opencodeService";
 import {
-  OpenCodeV2InboxTracker,
+  type OpenCodeV2Service,
+  resolveOpenCodeV2Service,
+} from "./opencodeService";
+import {
   type OpenCodeV2InboxOutcome,
+  OpenCodeV2InboxTracker,
 } from "./opencodeV2Events";
 import {
   composeToolTitle,
   extractShellCommand,
   extractSkillName,
 } from "./preview";
+import {
+  acquireRemoteOpenCodeService,
+  releaseRemoteOpenCodeService,
+} from "./remoteOpenCodeService";
 import { streamTextDelta } from "./streamText";
 import type {
   ApprovalDecision,
@@ -60,13 +76,6 @@ import type {
   SendTurnInput,
   SteerTurnInput,
 } from "./types";
-import {
-  questionPromptTitle,
-  questionsFromUnknown,
-  selectedAnswerLabels,
-  type UserQuestion,
-  type UserQuestionReply,
-} from "../userQuestion";
 
 type PendingApproval = {
   id: string;
@@ -338,26 +347,30 @@ export async function stopOpenCodeSession(sessionId: string): Promise<void> {
   cancelledThreads.delete(sessionId);
   const live = liveByThread.get(sessionId);
   liveByThread.delete(sessionId);
-  if (live) {
-    live.muteUpdates = true;
-    for (const [, pending] of live.approvals) pending.resolve("deny");
-    live.approvals.clear();
-    for (const [, pending] of live.questions)
-      pending.resolve({ kind: "skipped" });
-    live.questions.clear();
-    live.activeTurn = false;
-    live.turnDone?.();
-    live.turnDone = null;
-    live.turnFailed = null;
-    await live.client.abortSession(live.openCodeSessionId);
-    await live.client.closeEvents(sessionId);
-  } else {
-    // A stream or server that ended on its own already dropped `live`, but
-    // its SSE handlers still hold it until the stream is closed.
-    await closeHarnessSse(sessionId).catch(() => undefined);
+  try {
+    if (live) {
+      live.muteUpdates = true;
+      for (const [, pending] of live.approvals) pending.resolve("deny");
+      live.approvals.clear();
+      for (const [, pending] of live.questions)
+        pending.resolve({ kind: "skipped" });
+      live.questions.clear();
+      live.activeTurn = false;
+      live.turnDone?.();
+      live.turnDone = null;
+      live.turnFailed = null;
+      await live.client.abortSession(live.openCodeSessionId);
+      await live.client.closeEvents(sessionId);
+    } else {
+      // A stream or server that ended on its own already dropped `live`, but
+      // its SSE handlers still hold it until the stream is closed.
+      await closeHarnessSse(sessionId).catch(() => undefined);
+    }
+  } finally {
+    unwatchChild(sessionId);
+    await killChild(sessionId).catch(() => undefined);
+    await releaseRemoteOpenCodeService(sessionId);
   }
-  unwatchChild(sessionId);
-  await killChild(sessionId).catch(() => undefined);
 }
 
 export async function forgetOpenCodeSession(sessionId: string): Promise<void> {
@@ -399,19 +412,35 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
     resumeByThread.delete(input.sessionId);
   }
 
-  const { path } = await resolveOpenCodeBinaryImpl();
-  const generation = await assertOpenCodeVersion(path, input.cwd);
-  assertNetworkSandbox(generation, input.networkAllowlist);
+  const remote = parseRemotePath(input.cwd);
+  let localPath: string | undefined;
+  let generation: OpenCodeApiGeneration;
+  let service: OpenCodeV2Service | undefined;
+  if (remote) {
+    assertNetworkSandbox("v2", input.networkAllowlist);
+    service = await acquireRemoteOpenCodeService(input.sessionId, input.cwd);
+    if (!service)
+      throw new Error("Remote OpenCode service could not be opened.");
+    generation = "v2";
+    await refreshOpenCodeCatalog(input.cwd);
+  } else {
+    const binary = await resolveOpenCodeBinaryImpl();
+    localPath = binary.path;
+    generation = await assertOpenCodeVersion(localPath, input.cwd);
+    assertNetworkSandbox(generation, input.networkAllowlist);
+    service =
+      generation === "v2"
+        ? await resolveOpenCodeV2Service(localPath, input.cwd)
+        : undefined;
+  }
 
   const liveRef: { current: Live | null } = { current: null };
-  const service =
-    generation === "v2"
-      ? await resolveOpenCodeV2Service(path, input.cwd)
-      : undefined;
   let serverUrl = service?.url ?? "";
   let serverExited: number | null | undefined;
 
   if (generation === "v1") {
+    const path = localPath;
+    if (!path) throw new Error("The local OpenCode executable is unavailable.");
     watchChild(
       input.sessionId,
       (line) => {
@@ -459,14 +488,14 @@ async function ensureLive(input: HarnessSessionInput): Promise<Live> {
           );
     const client = new OpenCodeClient(
       url,
-      input.cwd,
+      service?.directory ?? input.cwd,
       generation,
       service?.password,
     );
     const openCodeSession = await resolveSession(client, {
       resume: canResume ? resume : undefined,
       runtimeMode: input.runtimeMode,
-      cwd: input.cwd,
+      cwd: service?.directory ?? input.cwd,
     });
 
     const live: Live = {

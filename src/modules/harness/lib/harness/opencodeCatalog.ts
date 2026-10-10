@@ -1,13 +1,13 @@
+import { parseRemotePath } from "@/modules/connections/model/remoteProjects";
 import { homeDir } from "../fs";
 import {
-  setHarnessModels,
   type AgentModel,
   type ModelSetting,
   type ModelSettingChoice,
+  setHarnessModels,
 } from "../models";
 import { execChild, resolveOpenCodeBinary } from "./child";
 import { OpenCodeClient } from "./opencodeClient";
-import { resolveOpenCodeV2Service } from "./opencodeService";
 import {
   asRecord,
   assertSupportedOpenCodeVersion,
@@ -18,6 +18,11 @@ import {
   stringField,
   titleCaseSlug,
 } from "./opencodeProtocol";
+import { resolveOpenCodeV2Service } from "./opencodeService";
+import {
+  acquireRemoteOpenCodeService,
+  releaseRemoteOpenCodeService,
+} from "./remoteOpenCodeService";
 
 const SLUG_LINE_RE = /^(\S+\/\S+)\s*$/;
 const AGENT_HEADER_RE = /^(.+)\s+\((\S+)\)\s*$/;
@@ -49,11 +54,13 @@ export type OpenCodeAgent = {
   hidden: boolean;
 };
 
-let inflight: Promise<void> | null = null;
+const inflight = new Map<string, Promise<void>>();
 
-export function refreshOpenCodeCatalog(): Promise<void> {
-  if (inflight) return inflight;
-  inflight = discoverOpenCodeModels()
+export function refreshOpenCodeCatalog(projectCwd?: string): Promise<void> {
+  const key = projectCwd ?? "";
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const pending = discoverOpenCodeModels(projectCwd)
     .then((models) => {
       if (models.length > 0) setHarnessModels("opencode", models);
     })
@@ -61,14 +68,29 @@ export function refreshOpenCodeCatalog(): Promise<void> {
       console.debug("[monocode] opencode catalog", error);
     })
     .finally(() => {
-      inflight = null;
+      if (inflight.get(key) === pending) inflight.delete(key);
     });
-  return inflight;
+  inflight.set(key, pending);
+  return pending;
 }
 
 export async function discoverOpenCodeModels(
   projectCwd?: string,
 ): Promise<AgentModel[]> {
+  const remote = projectCwd ? parseRemotePath(projectCwd) : undefined;
+  if (remote) {
+    const remoteCwd = projectCwd;
+    if (!remoteCwd) throw new Error("Remote OpenCode project path is missing.");
+    const owner = `opencode-catalog:${crypto.randomUUID()}`;
+    const service = await acquireRemoteOpenCodeService(owner, remoteCwd);
+    if (!service)
+      throw new Error("Remote OpenCode service could not be opened.");
+    try {
+      return await discoverOpenCodeModelsFromService(service);
+    } finally {
+      await releaseRemoteOpenCodeService(owner);
+    }
+  }
   const { path } = await resolveOpenCodeBinary();
   const cwd = projectCwd ?? (await homeDir());
   const versionOut = await execChild(path, ["--version"], cwd);
@@ -95,6 +117,13 @@ async function discoverOpenCodeV2Models(
   cwd: string,
 ): Promise<AgentModel[]> {
   const service = await resolveOpenCodeV2Service(path, cwd);
+  return discoverOpenCodeModelsFromService(service);
+}
+
+async function discoverOpenCodeModelsFromService(service: {
+  url: string;
+  password: string;
+}): Promise<AgentModel[]> {
   // Catalog requests stay on the server's default location: location-scoped
   // requests return an empty model snapshot for some projects on 2.x and a
   // 500 for directories the server has not registered.

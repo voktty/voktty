@@ -19,7 +19,11 @@ export type RemoteTunnelInfo = {
   remotePort: number;
 };
 
-export type RemoteOpenCodeServiceAction = "status" | "start" | "password";
+export type RemoteOpenCodeServiceAction =
+  | "version"
+  | "status"
+  | "start"
+  | "password";
 
 export type RemoteRequest = {
   protocol: typeof REMOTE_PROTOCOL_VERSION;

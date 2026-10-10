@@ -13,6 +13,7 @@ const READ_BUFFER_BYTES: usize = 4096;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum Action {
+    Version,
     Status,
     Start,
     Password,
@@ -21,6 +22,7 @@ pub enum Action {
 impl Action {
     fn args(self) -> &'static [&'static str] {
         match self {
+            Self::Version => &["--version"],
             Self::Status => &["service", "status"],
             Self::Start => &["service", "start"],
             Self::Password => &["service", "get", "password"],
@@ -138,6 +140,7 @@ mod tests {
 
     #[test]
     fn actions_map_to_fixed_opencode_service_arguments() {
+        assert_eq!(Action::Version.args(), ["--version"]);
         assert_eq!(Action::Status.args(), ["service", "status"]);
         assert_eq!(Action::Start.args(), ["service", "start"]);
         assert_eq!(Action::Password.args(), ["service", "get", "password"]);
