@@ -1091,13 +1091,11 @@
         "7e1af5c",
         "a9a1bee",
         "a7c666e",
-        "d068f09"
+        "d068f09",
+        "2dbc46f"
       ],
       "license": "MIT",
-      "coverage": "partial",
-      "deferred": [
-        "Pull request title and body generation remains deferred because Voktty currently reuses the commit message. Before adding it, collect branch-range context through native Git with the active WorkspaceEnv so SSH and Docker use Voktty's agent."
-      ],
+      "coverage": "complete",
       "mappings": [
         {
           "upstream": "src/app/App.tsx",
@@ -1114,6 +1112,10 @@
         {
           "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
           "local": "src/modules/harness/lib/sessionCommit.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/sessionPr.ts"
         },
         {
           "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
@@ -1180,6 +1182,7 @@
         {
           "files": [
             "src/modules/harness/lib/sessionCommit.test.ts",
+            "src/modules/harness/lib/sessionPr.test.ts",
             "src/modules/harness/surfaces/SessionChangesCommit.test.tsx",
             "src/modules/harness/lib/githubRemote.test.ts",
             "src/modules/harness/lib/harness/cancelableCommit.test.ts"
@@ -1194,7 +1197,7 @@
           "filter": "modules::git_review::github::tests"
         }
       ],
-      "rationale": "Voktty adapts the commit tab to the native Git status list. Exact session files start selected; other project changes are opt-in, and shared session files stay blocked. Path-scoped commit, push/publish, and GitHub PR status and creation keep the active WorkspaceEnv for Voktty's native SSH and Docker transport. Commit-message generation now builds bounded context from only selected files with native.gitDiff and passes it to the session's Harness without a second Git lookup; PR title/body generation still awaits native branch-range context."
+      "rationale": "Voktty adapts the commit tab to the native Git status list. Exact session files start selected; other project changes are opt-in, and shared session files stay blocked. Path-scoped commit, push/publish, and GitHub PR status and creation keep the active WorkspaceEnv for Voktty's native SSH and Docker transport. Commit messages use bounded selected-file context from native.gitDiff, while PR title and body use bounded branch-range context from native.gitCompareBranches and native.gitShowCommit. Both contexts go directly to the session's Harness without a second Git lookup; PR generation first checks that the native commit range matches GitHub's ahead count."
     }
   ]
 }
