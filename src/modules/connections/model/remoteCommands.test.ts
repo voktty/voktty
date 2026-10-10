@@ -40,17 +40,20 @@ vi.mock("@/modules/settings/preferences", () => ({
   usePreferencesStore: { getState: () => preferences },
 }));
 
-import { runRemoteCommand } from "./remoteCommands";
-import { parseRemotePath, remotePath } from "./remoteProjects";
-import { remoteSshEnvironmentId } from "./remoteSshProfiles";
-import { searchProject } from "@/modules/harness/lib/search";
 import {
+  gitDiffIndex,
+  gitDiffStats,
+  gitFileDiff,
   listDir,
   readBinaryFile,
   readTextFile,
   statFiles,
   writeTextFile,
 } from "@/modules/harness/lib/fs";
+import { searchProject } from "@/modules/harness/lib/search";
+import { runRemoteCommand } from "./remoteCommands";
+import { parseRemotePath, remotePath } from "./remoteProjects";
+import { remoteSshEnvironmentId } from "./remoteSshProfiles";
 
 const storage = new Map<string, string>();
 if (typeof globalThis.localStorage === "undefined") {
@@ -168,6 +171,227 @@ it("adds remote paths to Git index entries", async () => {
     cwd: "remote://env/home/me/repo",
   })) as { files: { path: string }[] };
   expect(index.files[0].path).toBe("remote://env/home/me/repo/src/app.ts");
+});
+
+function gitExecResult(
+  stdout: string,
+  exitCode: number | null = 0,
+  stderr = "",
+) {
+  return {
+    stdout: btoa(stdout),
+    stderr,
+    exitCode,
+    timedOut: false,
+    stdoutTruncated: false,
+    stderrTruncated: false,
+  };
+}
+
+function mockNativeGitIndex(status: string, numstat = "") {
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method !== "git.execWorkspace")
+        throw new Error("Unexpected helper method");
+      const args = params.args as string[];
+      switch (args[0]) {
+        case "status":
+          return gitExecResult(status);
+        case "diff":
+          return gitExecResult(numstat);
+        case "remote":
+          return gitExecResult("origin\n");
+        case "symbolic-ref":
+          return gitExecResult("origin/main\n");
+        case "rev-list":
+          return gitExecResult("3\n");
+        default:
+          throw new Error(`Unexpected Git command: ${args[0]}`);
+      }
+    },
+  );
+}
+
+it("loads remote Git status and statistics through the native helper", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  mockNativeGitIndex(
+    [
+      "# branch.oid abc123",
+      "# branch.head feature/demo",
+      "# branch.upstream origin/feature/demo",
+      "# branch.ab +2 -1",
+      "1 .M N... 100644 100644 100644 abc def main.ts",
+      "? new file.ts",
+      "",
+    ].join("\0"),
+    "3\t1\tmain.ts\0",
+  );
+
+  await expect(
+    gitDiffIndex(remotePath(environmentId, "/srv/app/src")),
+  ).resolves.toMatchObject({
+    branch: "feature/demo",
+    upstream: "origin/feature/demo",
+    ahead: 2,
+    behind: 1,
+    remote: "origin",
+    defaultBranch: "main",
+    aheadOfDefault: 3,
+    files: [
+      {
+        path: remotePath(environmentId, "/srv/app/src/main.ts"),
+        relative: "main.ts",
+        status: "modified",
+        additions: 3,
+        deletions: 1,
+        staged: false,
+        unstaged: true,
+      },
+      {
+        path: remotePath(environmentId, "/srv/app/src/new file.ts"),
+        relative: "new file.ts",
+        status: "untracked",
+      },
+    ],
+    additions: 3,
+    deletions: 1,
+  });
+  await expect(
+    gitDiffStats(remotePath(environmentId, "/srv/app/src")),
+  ).resolves.toEqual({
+    files: 2,
+    additions: 3,
+    deletions: 1,
+  });
+  expect(requestRemoteResult).toHaveBeenCalledWith(
+    9,
+    "git.execWorkspace",
+    expect.objectContaining({
+      cwd: "src",
+      args: [
+        "status",
+        "--porcelain=v2",
+        "--branch",
+        "--ahead-behind",
+        "--untracked-files=all",
+        "-z",
+      ],
+    }),
+  );
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("loads an unstaged remote Git diff with bounded helper reads", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method === "git.execWorkspace") {
+        const args = params.args as string[];
+        switch (args[0]) {
+          case "status":
+            return gitExecResult("? new.txt\0");
+          case "diff":
+            return gitExecResult("", 1, "fatal: no HEAD");
+          case "remote":
+            return gitExecResult("");
+          case "symbolic-ref":
+            return gitExecResult("", 1);
+          case "show":
+            return gitExecResult("", 128, "fatal: path not in the index");
+          default:
+            throw new Error(`Unexpected Git command: ${args[0]}`);
+        }
+      }
+      if (method === "fs.stat") return { size: 12, kind: "file", mtime: 1 };
+      if (method === "fs.readFile") return { content: "new file\n" };
+      throw new Error(`Unexpected helper method: ${method}`);
+    },
+  );
+
+  await expect(
+    gitFileDiff(remotePath(environmentId, "/srv/app"), "new.txt"),
+  ).resolves.toEqual({
+    path: remotePath(environmentId, "/srv/app/new.txt"),
+    relative: "new.txt",
+    status: "untracked",
+    original: "",
+    current: "new file\n",
+    binary: false,
+    tooLarge: false,
+  });
+  expect(requestRemoteResult).toHaveBeenCalledWith(9, "fs.readFile", {
+    path: "new.txt",
+  });
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("rejects truncated remote Git status instead of parsing partial paths", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockResolvedValueOnce({
+    ...gitExecResult("? partial.txt\0"),
+    stdoutTruncated: true,
+  });
+
+  await expect(
+    gitDiffIndex(remotePath(environmentId, "/srv/app")),
+  ).rejects.toThrow("Remote Git output exceeded its size limit");
+  expect(requestRemoteResult).toHaveBeenCalledTimes(1);
+  expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
+});
+
+it("marks remote file diffs too large when the helper caps a Git blob", async () => {
+  const { environmentId } = registerNativeProfileProject();
+  requestRemoteResult.mockImplementation(
+    async (
+      _sessionId: number,
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method === "git.execWorkspace") {
+        const args = params.args as string[];
+        switch (args[0]) {
+          case "status":
+            return gitExecResult(
+              "1 .M N... 100644 100644 100644 abc def large.txt\0",
+            );
+          case "diff":
+            return gitExecResult("1\t0\tlarge.txt\0");
+          case "remote":
+            return gitExecResult("");
+          case "symbolic-ref":
+            return gitExecResult("", 1);
+          case "show":
+            return { ...gitExecResult("partial"), stdoutTruncated: true };
+          default:
+            throw new Error(`Unexpected Git command: ${args[0]}`);
+        }
+      }
+      if (method === "fs.stat") return { size: 7, kind: "file", mtime: 1 };
+      if (method === "fs.readFile") return { content: "current" };
+      throw new Error(`Unexpected helper method: ${method}`);
+    },
+  );
+
+  await expect(
+    gitFileDiff(remotePath(environmentId, "/srv/app"), "large.txt"),
+  ).resolves.toMatchObject({
+    original: "",
+    current: "current",
+    binary: false,
+    tooLarge: true,
+  });
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
 it("routes project search through the host and maps match paths", async () => {
@@ -401,20 +625,22 @@ it("rejects helper search results that escape the saved project root", async () 
   expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
-it("rejects saved profile paths outside the project and leaves Git routing for the next port", async () => {
+it("rejects saved profile paths and Git results outside the project", async () => {
   const { environmentId } = registerNativeProfileProject();
   await expect(
     runRemoteCommand("list_dir", {
       path: remotePath(environmentId, "/srv/other/project"),
     }),
   ).rejects.toThrow("outside a saved remote project");
+  requestRemoteResult.mockResolvedValueOnce(
+    gitExecResult("? ../outside.txt\0"),
+  );
   await expect(
-    runRemoteCommand("git_diff_index", {
-      cwd: remotePath(environmentId, "/srv/app"),
-    }),
-  ).rejects.toThrow("not available for native SSH projects yet");
-  expect(openRemoteWorkspace).not.toHaveBeenCalled();
+    gitDiffIndex(remotePath(environmentId, "/srv/app")),
+  ).rejects.toThrow("Git returned a path outside the saved project");
+  expect(openRemoteWorkspace).toHaveBeenCalledTimes(1);
   expect(remoteRequest).not.toHaveBeenCalled();
+  expect(closeRemoteWorkspace).toHaveBeenCalledWith(9);
 });
 
 it("refuses what the host cannot do and explains outdated hosts", async () => {

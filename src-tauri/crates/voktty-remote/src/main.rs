@@ -1,3 +1,4 @@
+mod git_output;
 mod opencode_service;
 mod search;
 
@@ -12,6 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use base64::Engine;
+use git_output::read_capped;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use search::{run_search, PreparedSearch, RemoteSearchState};
@@ -36,6 +38,7 @@ use voktty_workspace_edit::{
 
 const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_BINARY_FILE_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_GIT_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
 const MAX_COPY_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_COPY_ENTRIES: usize = 20_000;
 const MAX_DIRECTORY_ENTRIES: usize = 20_000;
@@ -1385,6 +1388,10 @@ impl RemoteServer {
 
         let timeout_secs = params.timeout_secs.unwrap_or(30).clamp(1, 300);
         let dur = Duration::from_secs(timeout_secs);
+        let max_output_bytes = params
+            .max_output_bytes
+            .unwrap_or(MAX_GIT_OUTPUT_BYTES)
+            .clamp(1, MAX_GIT_OUTPUT_BYTES);
 
         let mut cmd = std::process::Command::new("git");
         cmd.args(&params.args);
@@ -1419,18 +1426,14 @@ impl RemoteServer {
         let stderr_pipe = child.stderr.take();
 
         let stdout_handle = thread::spawn(move || {
-            let mut buf = Vec::new();
-            if let Some(mut pipe) = stdout_pipe {
-                let _ = pipe.read_to_end(&mut buf);
-            }
-            buf
+            stdout_pipe
+                .and_then(|pipe| read_capped(pipe, max_output_bytes).ok())
+                .unwrap_or_default()
         });
         let stderr_handle = thread::spawn(move || {
-            let mut buf = Vec::new();
-            if let Some(mut pipe) = stderr_pipe {
-                let _ = pipe.read_to_end(&mut buf);
-            }
-            buf
+            stderr_pipe
+                .and_then(|pipe| read_capped(pipe, max_output_bytes).ok())
+                .unwrap_or_default()
         });
 
         let (tx, rx) = mpsc::channel();
@@ -1455,17 +1458,19 @@ impl RemoteServer {
             Err(mpsc::RecvTimeoutError::Disconnected) => (None, false),
         };
 
-        let stdout_bytes = stdout_handle.join().unwrap_or_default();
-        let stderr_bytes = stderr_handle.join().unwrap_or_default();
+        let stdout_output = stdout_handle.join().unwrap_or_default();
+        let stderr_output = stderr_handle.join().unwrap_or_default();
 
-        let stdout_base64 = base64::engine::general_purpose::STANDARD.encode(&stdout_bytes);
-        let stderr_string = String::from_utf8_lossy(&stderr_bytes).into_owned();
+        let stdout_base64 = base64::engine::general_purpose::STANDARD.encode(&stdout_output.bytes);
+        let stderr_string = String::from_utf8_lossy(&stderr_output.bytes).into_owned();
 
         RemoteResponse::success(
             request.id,
             json!({
                 "stdout": stdout_base64,
                 "stderr": stderr_string,
+                "stdoutTruncated": stdout_output.truncated,
+                "stderrTruncated": stderr_output.truncated,
                 "exitCode": exit_code,
                 "timedOut": timed_out,
             }),
@@ -2010,6 +2015,7 @@ struct GitExecParams {
     cwd: Option<String>,
     args: Vec<String>,
     timeout_secs: Option<u64>,
+    max_output_bytes: Option<usize>,
 }
 
 fn canonical_directory(path: &Path) -> Result<PathBuf, String> {
@@ -3122,6 +3128,8 @@ mod tests {
         assert!(stdout.contains("git version"));
         assert_eq!(result["exitCode"], 0);
         assert_eq!(result["timedOut"], false);
+        assert_eq!(result["stdoutTruncated"], false);
+        assert_eq!(result["stderrTruncated"], false);
     }
 
     #[test]

@@ -1,4 +1,9 @@
-import { setRemoteCommandRunner } from "@/modules/harness/lib/fs";
+import {
+  type GitChangedFile,
+  type GitDiffIndex,
+  type GitFileDiff,
+  setRemoteCommandRunner,
+} from "@/modules/harness/lib/fs";
 import {
   closeRemoteWorkspace,
   openRemoteWorkspace,
@@ -7,6 +12,7 @@ import {
 } from "@/modules/remote/client";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { remoteMachineFor, remoteRequest } from "./connections";
+import { parseGitNumstat, parseGitPorcelainV2 } from "./remoteGit";
 import {
   parseRemotePath,
   remotePath,
@@ -87,6 +93,10 @@ const PROFILE_HELPER_COMMANDS = new Set([
   "copy_path",
   "move_path",
   "search_project",
+  "git_diff_index",
+  "git_diff_files",
+  "git_diff_stats",
+  "git_file_diff",
 ]);
 
 const HELPER_FS = {
@@ -176,6 +186,19 @@ const OUTDATED =
 
 const PROFILE_UNAVAILABLE =
   "This operation is not available for native SSH projects yet.";
+const HELPER_GIT_EXEC = "git.execWorkspace";
+const MAX_GIT_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_GIT_DIFF_BYTES = 1024 * 1024;
+
+type HelperGitOutput = {
+  stdout: string;
+  stdoutBytes: Uint8Array;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+};
 
 function pathReferences(args: Record<string, unknown>): RemotePathReference[] {
   const values: string[] = [];
@@ -309,6 +332,303 @@ async function helperStat(sessionId: number, path: string) {
   }>(sessionId, HELPER_FS.stat, { path });
 }
 
+function decodeBase64Text(value: string): { text: string; bytes: Uint8Array } {
+  let binary: string;
+  try {
+    binary = globalThis.atob(value);
+  } catch {
+    throw new Error("The remote helper returned invalid Git output.");
+  }
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return { text: new TextDecoder().decode(bytes), bytes };
+}
+
+function decodeGitMetadata(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error("The remote helper returned invalid Git metadata.");
+  }
+}
+
+async function runHelperGit(
+  sessionId: number,
+  cwd: string,
+  args: string[],
+  maxOutputBytes = MAX_GIT_OUTPUT_BYTES,
+  allowFailure = false,
+  allowTruncated = false,
+): Promise<HelperGitOutput> {
+  const raw = await requestRemoteResult<unknown>(sessionId, HELPER_GIT_EXEC, {
+    cwd,
+    args,
+    timeoutSecs: 10,
+    maxOutputBytes,
+  });
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("The remote helper returned an invalid Git result.");
+  }
+  const result = raw as Record<string, unknown>;
+  if (
+    typeof result.stdout !== "string" ||
+    typeof result.stderr !== "string" ||
+    !(
+      result.exitCode === null ||
+      (typeof result.exitCode === "number" &&
+        Number.isSafeInteger(result.exitCode))
+    ) ||
+    typeof result.timedOut !== "boolean" ||
+    typeof result.stdoutTruncated !== "boolean" ||
+    typeof result.stderrTruncated !== "boolean"
+  ) {
+    throw new Error("The remote helper returned an invalid Git result.");
+  }
+  if (result.timedOut) throw new Error("Remote Git operation timed out.");
+  if (!allowTruncated && (result.stdoutTruncated || result.stderrTruncated)) {
+    throw new Error("Remote Git output exceeded its size limit.");
+  }
+  const decoded = decodeBase64Text(result.stdout);
+  const parsed: HelperGitOutput = {
+    stdout: decoded.text,
+    stdoutBytes: decoded.bytes,
+    stderr: result.stderr,
+    exitCode: result.exitCode,
+    timedOut: false,
+    stdoutTruncated: result.stdoutTruncated,
+    stderrTruncated: result.stderrTruncated,
+  };
+  if (!allowFailure && parsed.exitCode !== 0) {
+    throw new Error("Remote Git operation failed.");
+  }
+  return parsed;
+}
+
+function emptyGitIndex(): GitDiffIndex {
+  return {
+    branch: null,
+    files: [],
+    additions: 0,
+    deletions: 0,
+    remote: null,
+    upstream: null,
+    defaultBranch: null,
+    ahead: 0,
+    behind: 0,
+    aheadOfDefault: 0,
+  };
+}
+
+async function nativeProfileGitIndex(
+  sessionId: number,
+  environmentId: string,
+  root: string,
+  cwd: string,
+): Promise<GitDiffIndex> {
+  const statusOutput = await runHelperGit(
+    sessionId,
+    cwd,
+    [
+      "status",
+      "--porcelain=v2",
+      "--branch",
+      "--ahead-behind",
+      "--untracked-files=all",
+      "-z",
+    ],
+    MAX_GIT_OUTPUT_BYTES,
+    true,
+  );
+  if (statusOutput.exitCode !== 0) {
+    if (/not a git repository/i.test(statusOutput.stderr))
+      return emptyGitIndex();
+    throw new Error("Could not read Git changes on the remote project.");
+  }
+  const status = parseGitPorcelainV2(
+    decodeGitMetadata(statusOutput.stdoutBytes),
+  );
+  const numstatOutput = await runHelperGit(
+    sessionId,
+    cwd,
+    ["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", "HEAD", "--"],
+    MAX_GIT_OUTPUT_BYTES,
+    true,
+  );
+  const counts =
+    numstatOutput.exitCode === 0
+      ? parseGitNumstat(decodeGitMetadata(numstatOutput.stdoutBytes))
+      : new Map();
+  const files: GitChangedFile[] = status.files.map((file) => {
+    const count = counts.get(file.relative);
+    return {
+      ...file,
+      path: remotePath(
+        environmentId,
+        joinRemotePath(root, joinRelativePath(cwd, file.relative)),
+      ),
+      additions: count?.additions ?? 0,
+      deletions: count?.deletions ?? 0,
+    };
+  });
+  const [remoteOutput, defaultOutput] = await Promise.all([
+    runHelperGit(sessionId, cwd, ["remote"], 64 * 1024, true),
+    runHelperGit(
+      sessionId,
+      cwd,
+      ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+      64 * 1024,
+      true,
+    ),
+  ]);
+  const remote = remoteOutput.stdout.split(/\r?\n/).includes("origin")
+    ? "origin"
+    : null;
+  let defaultRef =
+    defaultOutput.exitCode === 0 ? defaultOutput.stdout.trim() : "";
+  if (!defaultRef.startsWith("origin/") && remote) {
+    for (const branch of ["main", "master"]) {
+      const candidate = `origin/${branch}`;
+      const result = await runHelperGit(
+        sessionId,
+        cwd,
+        ["rev-parse", "--verify", `refs/remotes/${candidate}`],
+        64 * 1024,
+        true,
+      );
+      if (result.exitCode === 0) {
+        defaultRef = candidate;
+        break;
+      }
+    }
+  }
+  const defaultBranch = defaultRef.startsWith("origin/")
+    ? defaultRef.slice("origin/".length) || null
+    : null;
+  let aheadOfDefault = 0;
+  if (defaultBranch) {
+    const aheadOutput = await runHelperGit(
+      sessionId,
+      cwd,
+      ["rev-list", "--count", `${defaultRef}..HEAD`],
+      64 * 1024,
+      true,
+    );
+    const count = Number(aheadOutput.stdout.trim());
+    if (
+      aheadOutput.exitCode === 0 &&
+      Number.isSafeInteger(count) &&
+      count >= 0
+    ) {
+      aheadOfDefault = count;
+    }
+  }
+  return {
+    branch: status.branch,
+    files,
+    additions: files.reduce((sum, file) => sum + file.additions, 0),
+    deletions: files.reduce((sum, file) => sum + file.deletions, 0),
+    remote,
+    upstream: status.upstream,
+    defaultBranch,
+    ahead: status.ahead,
+    behind: status.behind,
+    aheadOfDefault,
+  };
+}
+
+async function nativeProfileFileDiff(
+  sessionId: number,
+  environmentId: string,
+  root: string,
+  cwd: string,
+  requestedPath: unknown,
+  staged: boolean,
+): Promise<GitFileDiff> {
+  const relative = helperRelativePath(requestedPath);
+  const projectRelative = joinRelativePath(cwd, relative);
+  const index = await nativeProfileGitIndex(
+    sessionId,
+    environmentId,
+    root,
+    cwd,
+  );
+  const file = index.files.find((entry) => entry.relative === relative);
+  if (!file) throw new Error("File has no uncommitted changes.");
+
+  const readBlob = async (spec: string) => {
+    const output = await runHelperGit(
+      sessionId,
+      cwd,
+      ["show", "--no-ext-diff", "--no-textconv", spec],
+      MAX_GIT_DIFF_BYTES,
+      true,
+      true,
+    );
+    if (output.exitCode !== 0) {
+      return { text: "", binary: false, tooLarge: false };
+    }
+    const tooLarge =
+      output.stdoutTruncated ||
+      output.stdoutBytes.byteLength > MAX_GIT_DIFF_BYTES;
+    return {
+      text: tooLarge ? "" : output.stdout,
+      binary: !tooLarge && output.stdoutBytes.includes(0),
+      tooLarge,
+    };
+  };
+  const original = await readBlob(`${staged ? "HEAD" : ""}:${relative}`);
+  let current: { text: string; binary: boolean; tooLarge: boolean };
+  if (staged) {
+    current = await readBlob(`:${relative}`);
+  } else {
+    try {
+      const stat = await helperStat(sessionId, projectRelative);
+      if (stat.size > MAX_GIT_DIFF_BYTES) {
+        current = { text: "", binary: false, tooLarge: true };
+      } else {
+        const result = await requestRemoteResult<{ content: string }>(
+          sessionId,
+          HELPER_FS.readFile,
+          { path: projectRelative },
+        );
+        const tooLarge =
+          new TextEncoder().encode(result.content).byteLength >
+          MAX_GIT_DIFF_BYTES;
+        current = {
+          text: tooLarge ? "" : result.content,
+          binary: !tooLarge && result.content.includes("\0"),
+          tooLarge,
+        };
+      }
+    } catch (error) {
+      if (file.status === "deleted") {
+        current = { text: "", binary: false, tooLarge: false };
+      } else if (
+        error instanceof RemoteRequestError &&
+        error.code === "binary_file"
+      ) {
+        current = { text: "", binary: true, tooLarge: false };
+      } else if (
+        error instanceof RemoteRequestError &&
+        error.code === "file_too_large"
+      ) {
+        current = { text: "", binary: false, tooLarge: true };
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return {
+    path: file.path,
+    relative,
+    status: file.status,
+    original: original.text,
+    current: current.text,
+    binary: original.binary || current.binary,
+    tooLarge: original.tooLarge || current.tooLarge,
+  };
+}
+
 async function ensureRemoteDirectories(
   sessionId: number,
   relativeDirectory: string,
@@ -430,6 +750,38 @@ async function runProfileFileCommand(
   if (!PROFILE_HELPER_COMMANDS.has(command))
     throw new Error(PROFILE_UNAVAILABLE);
   const remoteResultPath = (value: string) => remotePath(environmentId, value);
+  if (
+    command === "git_diff_index" ||
+    command === "git_diff_files" ||
+    command === "git_diff_stats" ||
+    command === "git_file_diff"
+  ) {
+    const cwd = relativePath(args.cwd);
+    if (command === "git_file_diff") {
+      return nativeProfileFileDiff(
+        sessionId,
+        environmentId,
+        root,
+        cwd,
+        args.relative,
+        args.staged === true,
+      );
+    }
+    const index = await nativeProfileGitIndex(
+      sessionId,
+      environmentId,
+      root,
+      cwd,
+    );
+    if (command === "git_diff_stats") {
+      return {
+        files: index.files.length,
+        additions: index.additions,
+        deletions: index.deletions,
+      };
+    }
+    return index;
+  }
   if (command === "list_dir") {
     const relative = relativePath(args.path);
     const entries = await helperListDirectory(sessionId, relative);

@@ -99,11 +99,31 @@ function handleFrame(kind, payload) {
         "fs.readBinaryFile",
         "fs.replacePreview",
         "fs.replaceApply",
+        "git.execWorkspace",
       ];
       if (!expected.every((method) => response.result.capabilities.includes(method))) {
         throw new Error("Remote helper did not advertise required filesystem capabilities");
       }
       handshakeReady = true;
+      child.stdin.write(
+        request("git-output-cap", "git.execWorkspace", {
+          cwd: ".",
+          args: ["--version"],
+          maxOutputBytes: 4,
+        }),
+      );
+    } else if (response.id === "git-output-cap") {
+      const output = response.result;
+      if (
+        output.exitCode !== 0 ||
+        Buffer.from(output.stdout, "base64").toString("utf8") !== "git " ||
+        output.stdoutTruncated !== true ||
+        output.stderrTruncated !== false
+      ) {
+        throw new Error(
+          `Unexpected bounded Git result: ${JSON.stringify(output)}`,
+        );
+      }
       child.stdin.write(
         request("binary-read", "fs.readBinaryFile", {
           path: binarySmokeFile,
@@ -205,7 +225,7 @@ function handleFrame(kind, payload) {
       );
     } else if (response.id === "watch-remove") {
       console.log(
-        "Remote helper binary read, workspace search, PTY and file watcher smoke test passed",
+        "Remote helper binary read, bounded Git output, workspace search, PTY and file watcher smoke test passed",
       );
       finish();
     }
