@@ -6,6 +6,13 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "../..");
 const MANIFEST_PATH = join(REPO_ROOT, "integrations/monocode-010/ports.json");
+const EXCLUSION_CATEGORIES = new Set([
+  "independent-appearance",
+  "mono-only",
+  "not-harness",
+  "release-only",
+  "test-only",
+]);
 
 function git(root, ...args) {
   return execFileSync("git", ["-C", root, ...args], {
@@ -324,7 +331,48 @@ export function verifyPorts({ upstream, localRoot, manifest }) {
     });
   }
 
-  return { upstream: { base, target }, localBaseline, records, mergeCoverage };
+  const exclusions = [];
+  for (const record of manifest.exclusions ?? []) {
+    const upstreamCommit = resolveCommit(upstream, record.upstreamCommit);
+    if (!upstreamRange.has(upstreamCommit)) {
+      throw new Error(`Excluded upstream commit is outside the pinned range: ${upstreamCommit}`);
+    }
+    if (!upstreamCommit.startsWith(record.upstreamCommit)) {
+      throw new Error(`Excluded upstream commit does not match the manifest: ${record.upstreamCommit}`);
+    }
+    if (seenUpstreamCommits.has(upstreamCommit)) {
+      throw new Error(`Duplicate upstream coverage record: ${upstreamCommit}`);
+    }
+    seenUpstreamCommits.add(upstreamCommit);
+    if (git(upstream, "show", "-s", "--format=%s", upstreamCommit) !== record.upstreamTitle) {
+      throw new Error(`Excluded upstream title changed for ${record.upstreamCommit}`);
+    }
+    if (
+      !EXCLUSION_CATEGORIES.has(record.category) ||
+      typeof record.rationale !== "string" ||
+      record.rationale.trim() === ""
+    ) {
+      throw new Error(`Invalid exclusion details for ${record.upstreamCommit}`);
+    }
+    exclusions.push({
+      upstreamCommit,
+      upstreamTitle: record.upstreamTitle,
+      category: record.category,
+      rationale: record.rationale,
+    });
+  }
+
+  const unclassifiedCommits = [...upstreamRange].filter(
+    (commit) => !seenUpstreamCommits.has(commit),
+  );
+  return {
+    upstream: { base, target },
+    localBaseline,
+    records,
+    mergeCoverage,
+    exclusions,
+    unclassifiedCommits,
+  };
 }
 
 export function runPortTests(records, localRoot) {
@@ -377,6 +425,8 @@ function main(args) {
       {
         upstreamCommits: verification.records.length,
         mergeCoverageRecords: verification.mergeCoverage.length,
+        exclusions: verification.exclusions.length,
+        unclassifiedUpstreamCommits: verification.unclassifiedCommits.length,
         mappings: verification.records.reduce((total, record) => total + record.mappings.length, 0),
         testCommands: runTests ? testsRun : 0,
       },

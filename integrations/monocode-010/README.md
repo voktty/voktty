@@ -24,6 +24,8 @@ Integrated commit mappings, MIT provenance, focused test selections, and coverag
 
 Merge commits whose side-branch changes are already covered by individual port records live in the `mergeCoverage` list. The verifier checks that the list names every side-branch commit, that each has a port record, that their changed paths account for the merge diff, and that the merge has no conflict-resolution-only changes.
 
+Reviewed commits with no applicable port live in `exclusions`. Each exclusion records a bounded category (`test-only`, `release-only`, `not-harness`, `mono-only`, or `independent-appearance`) and a reason. The verifier checks the upstream identity and title, prevents overlaps with ports and merge coverage, and reports how many pinned commits still lack a decision.
+
 ```bash
 node scripts/monocode/verify-ports.mjs /path/to/monocode
 ```

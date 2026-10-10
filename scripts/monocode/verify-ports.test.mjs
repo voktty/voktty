@@ -299,3 +299,44 @@ it("verifies merge coverage against individually ported side commits", () => {
     /Invalid merge coverage details/,
   );
 });
+
+it("tracks explicit exclusions and reports unclassified upstream commits", () => {
+  const upstream = join(temp, "upstream-exclusion");
+  const local = join(temp, "local-exclusion");
+  initRepo(upstream);
+  initRepo(local);
+
+  writeFileSync(join(upstream, "README.md"), "base\n");
+  writeFileSync(join(upstream, "LICENSE"), "MIT License\n");
+  const upstreamBase = commit(upstream, "Base");
+  mkdirSync(join(upstream, "src/features"), { recursive: true });
+  writeFileSync(join(upstream, "src/features/panel.test.ts"), "test-only change\n");
+  const upstreamCommit = commit(upstream, "Stabilize unrelated tests");
+
+  writeFileSync(join(local, "README.md"), "base\n");
+  const localBaseline = commit(local, "Local baseline");
+  const manifest = {
+    upstreamBase,
+    upstreamTarget: upstreamCommit,
+    localBaseline,
+    records: [],
+    exclusions: [
+      {
+        upstreamCommit,
+        upstreamTitle: "Stabilize unrelated tests",
+        category: "test-only",
+        rationale: "The commit changes only tests for a product surface Voktty does not have.",
+      },
+    ],
+  };
+
+  const result = verifyPorts({ upstream, localRoot: local, manifest });
+  assert.equal(result.exclusions.length, 1);
+  assert.equal(result.unclassifiedCommits.length, 0);
+
+  manifest.exclusions[0].category = "unknown";
+  assert.throws(
+    () => verifyPorts({ upstream, localRoot: local, manifest }),
+    /Invalid exclusion details/,
+  );
+});

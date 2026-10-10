@@ -2307,5 +2307,37 @@
       ],
       "rationale": "Both side-branch commits have individual port records covering all five changed paths. Git reports no merge-only conflict resolution."
     }
+  ],
+  "exclusions": [
+    {
+      "upstreamCommit": "4361fdb6d0879a60d1b93513aa4ef17e0360122d",
+      "upstreamTitle": "Stabilize GitChangesPanel folder action tests",
+      "category": "test-only",
+      "rationale": "The commit only adds fake-timer cleanup and assertions to MonoCode's GitChangesPanel tests. Voktty has no GitChangesPanel equivalent; its SessionChangesCommit flow has separate file-watch tests and behavior."
+    },
+    {
+      "upstreamCommit": "807c70e0d56fad77a83e98dad12cef0e4f3ef460",
+      "upstreamTitle": "Release v0.7.1",
+      "category": "release-only",
+      "rationale": "This release commit changes MonoCode versions, lockfiles, and its changelog. Those release artifacts do not represent a Harness behavior to port."
+    },
+    {
+      "upstreamCommit": "889ac2062cad12fb6f279cae4e4075aa1c54a942",
+      "upstreamTitle": "Paint macOS glass tint natively during resize",
+      "category": "independent-appearance",
+      "rationale": "This changes MonoCode's app-wide macOS window and theme tint contract. It is separate from Harness integration and Voktty has its own native window appearance implementation."
+    },
+    {
+      "upstreamCommit": "9ccfc094615aa3170c01ae77a44298aefacdc9de",
+      "upstreamTitle": "Release v0.8.0",
+      "category": "release-only",
+      "rationale": "The commit updates MonoCode release artifacts and a test for the Checks panel, a GitHub inbox surface Voktty does not have. It adds no shared Harness behavior."
+    },
+    {
+      "upstreamCommit": "9a7b6a2581b6ac11bef8dffc8df461074346aa92",
+      "upstreamTitle": "Release v0.9.0",
+      "category": "release-only",
+      "rationale": "This release commit changes MonoCode versions, lockfiles, and its changelog. Those release artifacts do not represent a Harness behavior to port."
+    }
   ]
 }
