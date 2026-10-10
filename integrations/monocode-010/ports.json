@@ -156,6 +156,20 @@
         }
       ],
       "rationale": "The streamed-fence optimization is already adapted across four focused Voktty commits: incremental Shiki checkpoints, memoized highlighted lines, fence-aware Markdown repair, and fence-preserving word fades. Existing focused tests cover each core behavior; the upstream opt-in browser timing fixture is not needed for functional parity."
+    },
+    {
+      "upstreamCommit": "51b561ba40a8293923203e83668295af50434094",
+      "upstreamTitle": "fix: keep markdown table columns readable (#876)",
+      "localCommit": "67075fba94085984fbb61b7451921472abd43d7b",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/styles/index.css",
+          "local": "src/styles/globals.css"
+        }
+      ],
+      "tests": [],
+      "rationale": "Voktty already applies the same 10rem minimum width and top alignment to Harness Markdown table cells. This presentation-only CSS rule needs no additional test."
     }
   ]
 }
