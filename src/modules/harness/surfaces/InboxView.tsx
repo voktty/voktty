@@ -56,6 +56,7 @@ import {
   peekGithubWorkItemDetails,
   peekGithubWorkItemThread,
   peekInboxList,
+  prefetchGithubWorkItem,
   formatRelativeTime,
   GITHUB_WORK_ITEM_FRESH_MS,
   inboxPersonAvatarUrl,
@@ -715,7 +716,22 @@ export function InboxView({
               const key = inboxItemKey(item);
               const projectId = projectKey(item.projectPath);
               return (
-                <li key={key}>
+                <li
+                  key={key}
+                  onPointerEnter={() => {
+                    if (
+                      item.provider !== "github" ||
+                      (item.kind !== "issue" && item.kind !== "pr")
+                    ) {
+                      return;
+                    }
+                    prefetchGithubWorkItem(item.projectPath, {
+                      repo: item.repo,
+                      kind: item.kind,
+                      number: item.number,
+                    });
+                  }}
+                >
                   <InboxCard
                     item={item}
                     active={selected != null && key === inboxItemKey(selected)}
