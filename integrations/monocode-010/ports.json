@@ -1459,12 +1459,14 @@
     {
       "upstreamCommit": "22b48740499ab37c854b3018e6c207d79f8290f0",
       "upstreamTitle": "Add searchable worktree creation to sidebar switcher",
-      "localCommits": ["2fd0476", "7ad7830"],
-      "localCommitBases": ["preexisting", "preexisting"],
+      "localCommits": ["2fd0476", "7ad7830", "7feaa86"],
+      "localCommitBases": ["preexisting", "preexisting", "integrated"],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Expose search and creation in Voktty's sidebar switcher after replacing its unregistered git_worktrees and git_worktree_create calls with WorkspaceEnv-aware native APIs that cover local, WSL, SSH through Voktty's agent, and Docker workspaces."
+        "Add a native Git adapter for direct Docker workspaces; the current commands explicitly reject that environment rather than run Git on the desktop host.",
+        "Run a live SSH smoke test against a container host; current regression coverage verifies routing through Voktty's authenticated helper with mocks.",
+        "Populate dirty, unpushed, and session metadata for generic worktree listings; those fields currently report unavailable or empty."
       ],
       "mappings": [
         {
@@ -1478,16 +1480,33 @@
         {
           "upstream": "src/features/source-control/ui/SidebarWorktreeSwitcher.test.ts",
           "local": "src/modules/harness/chrome/SidebarWorktreeSwitcher.test.ts"
+        },
+        {
+          "upstream": "src/features/source-control/ui/SidebarWorktreeSwitcher.tsx",
+          "local": "src/modules/harness/lib/worktrees.ts"
+        },
+        {
+          "upstream": "src/features/source-control/ui/SidebarWorktreeSwitcher.tsx",
+          "local": "src-tauri/src/modules/git/worktrees.rs"
         }
       ],
       "tests": [
         {
-          "files": ["src/modules/harness/chrome/SidebarWorktreeSwitcher.test.ts"],
+          "files": [
+            "src/modules/harness/chrome/SidebarWorktreeSwitcher.test.ts",
+            "src/modules/harness/lib/worktrees.test.ts"
+          ],
           "cwd": ".",
           "runner": "vitest"
+        },
+        {
+          "files": ["src-tauri/src/modules/git/worktrees.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "modules::git::worktrees::tests"
         }
       ],
-      "rationale": "Voktty already has a searchable worktree picker and a branch-creation dialog in its session UI, but its sidebar switcher only selects existing entries. The shared helper calls git_worktrees and git_worktree_create, neither of which is registered in Voktty's Tauri command handler. Existing git_list_branches and session-scoped git_worktree_add do not provide the generic list/create contract. Keep this row partial until the sidebar uses authorized native Git operations and the Voktty SSH agent for remote workspaces."
+      "rationale": "Voktty now exposes searchable worktree selection and branch creation in the sidebar, backed by registered workspace-aware native Git commands. Local and Windows WSL workspaces retain their environment. Remote Harness projects establish a temporary authenticated Voktty SSH helper session and run Git through its native RPC, so the path also reaches Docker-hosted servers over SSH. Direct Docker Engine workspaces remain explicitly unsupported, and worktree status metadata plus a live container-host smoke are deferred."
     },
     {
       "upstreamCommit": "610550e4ddde1ee22a66a28eb88fb08e3ac5cd09",
