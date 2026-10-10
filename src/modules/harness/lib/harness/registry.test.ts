@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resetHarnessModelOverlays, setHarnessModels } from "../models";
+import {
+  hasLiveCatalog,
+  modelsFor,
+  resetHarnessModelOverlays,
+  setHarnessModels,
+} from "../models";
 import type { HarnessId } from "../session";
 import {
   HARNESS_IDLE_PARK_MS,
@@ -140,6 +145,18 @@ describe("harness registry", () => {
     registerHarness(stub("pi", { refreshCatalog: pi }));
 
     await refreshHarnessCatalogs(["pi"]);
+    await refreshHarnessCatalogs(["pi"]);
+
+    expect(pi).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes Pi when fallback models are visible but no live catalog exists", async () => {
+    const pi = vi.fn(async () => undefined);
+    registerHarness(stub("pi", { refreshCatalog: pi }));
+
+    expect(modelsFor("pi").length).toBeGreaterThan(0);
+    expect(hasLiveCatalog("pi")).toBe(false);
+
     await refreshHarnessCatalogs(["pi"]);
 
     expect(pi).toHaveBeenCalledOnce();

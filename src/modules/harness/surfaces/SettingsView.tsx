@@ -87,6 +87,7 @@ import { refreshHarnessCatalogs } from "../lib/harness/registry";
 import {
   defaultModelId,
   getModelSnapshot,
+  hasLiveCatalog,
   isPickerProviderVisible,
   loadDefaultModels,
   loadLastModelChoice,
@@ -2039,9 +2040,9 @@ function ProviderRow({
   );
 
   useEffect(() => {
-    if (!available || models.length > 0) return;
+    if (!available || hasLiveCatalog(harness)) return;
     void refreshHarnessCatalogs([harness]);
-  }, [available, harness, models.length]);
+  }, [available, harness]);
 
   const onPickerVisible = (visible: boolean) => {
     savePickerProviderVisible(harness, visible);
