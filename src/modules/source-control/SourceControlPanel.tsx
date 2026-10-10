@@ -168,13 +168,13 @@ function upstreamBadgeLabel(upstream: string | null | undefined): string {
 function statusAccent(code: string): string {
   switch (code) {
     case "A":
-      return "bg-emerald-500/85";
+      return "bg-diff-add/85";
     case "U":
       return "bg-teal-500/85";
     case "M":
       return "bg-amber-500/85";
     case "D":
-      return "bg-rose-500/85";
+      return "bg-diff-del/85";
     case "R":
       return "bg-sky-500/85";
     default:

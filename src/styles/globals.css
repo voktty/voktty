@@ -53,6 +53,14 @@
     --color-background: var(--background);
     --color-content: var(--content);
     --color-background-base: var(--background-base);
+    --color-diff-add: var(--color-diff-add);
+    --color-diff-add-fg: var(--color-diff-add-fg);
+    --color-diff-add-bg: var(--color-diff-add-bg);
+    --color-diff-add-gutter: var(--color-diff-add-gutter);
+    --color-diff-del: var(--color-diff-del);
+    --color-diff-del-fg: var(--color-diff-del-fg);
+    --color-diff-del-bg: var(--color-diff-del-bg);
+    --color-diff-del-gutter: var(--color-diff-del-gutter);
     --color-skill: var(--color-skill, #e8c547);
     --color-mention: var(--color-mention, #38bdf8);
     --color-markdown-heading: var(--color-markdown-heading, #f9a8c9);

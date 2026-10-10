@@ -1733,10 +1733,10 @@ function ProjectDiffStat({
       className="flex shrink-0 items-center gap-1 font-mono text-[11px] font-semibold tabular-nums"
     >
       {additions > 0 ? (
-        <span className="text-emerald-400">+{additions}</span>
+        <span className="text-diff-add-fg">+{additions}</span>
       ) : null}
       {deletions > 0 ? (
-        <span className="text-red-400">-{deletions}</span>
+        <span className="text-diff-del-fg">-{deletions}</span>
       ) : null}
     </span>
   );
