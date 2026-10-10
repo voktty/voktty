@@ -2059,6 +2059,38 @@
         }
       ],
       "rationale": "Voktty marks notes created with a blank title as carrying a provisional slug. It finalizes that slug once after a real title is committed, while preserving legacy slugs and explicit Untitled titles. The Harness editor and the notes board share this store, so both preserve and finalize the pending state correctly."
+    },
+    {
+      "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
+      "upstreamTitle": "Route ⌘W and ⌘T to the focused project terminal (#774)",
+      "localCommit": "b74c021a1ca48f0ae52c6b4538e196d9920256c6",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessApp.tsx"
+        },
+        {
+          "upstream": "src/features/projects/model/projectTerminal.test.ts",
+          "local": "src/modules/harness/lib/projectTerminal.test.ts"
+        },
+        {
+          "upstream": "src/features/projects/model/projectTerminal.ts",
+          "local": "src/modules/harness/lib/projectTerminal.ts"
+        },
+        {
+          "upstream": "src/features/terminal/ui/ProjectTerminalDock.tsx",
+          "local": "src/modules/harness/surfaces/ProjectTerminalDock.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/projectTerminal.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty already routes Cmd/Ctrl+T and Cmd/Ctrl+W to the active project terminal only when the dock layout is enabled, its focus flag is set, DOM focus remains inside the dock, and the active file is a terminal. Otherwise the shortcuts keep their workspace behavior. Voktty has no native application-menu dispatcher for the upstream menu broadcast adjustment; its local focused-target handlers and regression tests cover the available shortcut surface."
     }
   ]
 }
