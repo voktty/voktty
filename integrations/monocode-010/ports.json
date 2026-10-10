@@ -935,6 +935,31 @@
         }
       ],
       "rationale": "Voktty's native Rust Host first keeps the launcher marker scan, then resolves the executable symlink and checks the bounded enclosing npm package manifest for an exact supported Pi package name before trying a help probe. The native agent owns provider resolution, including for remote Harness execution."
+    },
+    {
+      "upstreamCommit": "a5410169fdd74b9b69a77b6c843fa97a1ef0f851",
+      "upstreamTitle": "Focus the model search once the flyout is on screen (#670)",
+      "localCommit": "63b7aeb",
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/ModelPicker.tsx",
+          "local": "src/modules/harness/chrome/ModelPicker.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/ModelPicker.test.ts",
+          "local": "src/modules/harness/chrome/ModelPicker.focus.test.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/ModelPicker.focus.test.tsx"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The local ModelFlyout now focuses its search after the next animation frame, once Popover finishes measuring and revealing the anchored surface. The regression verifies focus stays put until that frame and moves to search afterward. Voktty has one ModelFlyout call site, so the focus behavior covers its model submenu path."
     }
   ]
 }
