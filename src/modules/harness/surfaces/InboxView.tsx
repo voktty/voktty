@@ -20,6 +20,7 @@ import {
 import {
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -130,6 +131,11 @@ import {
   InboxDescriptionSummary,
   InboxPrChangesGlance,
 } from "./InboxPrOverview";
+import styles from "./InboxDetailPane.module.css";
+import {
+  createInboxDetailMotionState,
+  inboxDetailMotionReducer,
+} from "../lib/inboxDetailMotion";
 
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 420;
@@ -870,19 +876,42 @@ export function InboxDetailPane({
     () => inboxProjectOptions(projects, logos),
     [logos, projects],
   );
+  const itemKey = item ? inboxItemKey(item) : null;
+  const [motion, dispatchMotion] = useReducer(
+    inboxDetailMotionReducer,
+    itemKey,
+    createInboxDetailMotionState,
+  );
+  if (motion.itemKey !== itemKey) {
+    dispatchMotion({ type: "select", itemKey });
+  }
+
   return (
     <div
       role="region"
       aria-label={t("harness.chrome.inbox")}
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-none text-content"
+      data-inbox-detail-panel
+      className={`${styles.panel} flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-none text-content`}
     >
-      <InboxDetailBody
-        item={item}
-        cwd={cwd}
-        projects={projectOptions}
-        onStart={onStart}
-        panel
-      />
+      <div
+        key={itemKey ?? "empty"}
+        data-inbox-detail-content={itemKey ?? ""}
+        className={`min-h-0 min-w-0 flex-1 ${
+          itemKey && motion.revealKey === itemKey ? styles.reveal : ""
+        }`}
+        onAnimationEnd={(event) => {
+          if (event.target !== event.currentTarget || !itemKey) return;
+          dispatchMotion({ type: "reveal-finished", itemKey });
+        }}
+      >
+        <InboxDetailBody
+          item={item}
+          cwd={cwd}
+          projects={projectOptions}
+          onStart={onStart}
+          panel
+        />
+      </div>
     </div>
   );
 }

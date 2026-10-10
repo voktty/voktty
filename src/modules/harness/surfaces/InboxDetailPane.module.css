@@ -1,0 +1,36 @@
+.panel {
+  animation: inbox-panel-slide 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal {
+  animation: inbox-detail-reveal 240ms cubic-bezier(0.22, 1, 0.36, 1) 90ms both;
+}
+
+@keyframes inbox-panel-slide {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@keyframes inbox-detail-reveal {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .reveal {
+    animation: none;
+  }
+}
