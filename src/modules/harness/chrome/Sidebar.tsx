@@ -71,6 +71,7 @@ import {
 import { sessionReminderPresets } from "./sessionReminderPresets";
 import { SESSION_LIST_PAGE, sessionListWindow } from "../lib/sessionListWindow";
 import { ColorPickerPopover, ColorSwatchRow } from "./ColorPickerPopover";
+import { DiffStat } from "./DiffStat";
 import { normalizeHex } from "../lib/colorUtils";
 import {
   loadSidebarTabOrder,
@@ -2932,7 +2933,7 @@ function SessionCard({
           <span className="min-w-0 flex-1" />
         )}
         <span
-          className={`flex shrink-0 items-center gap-1.5 ${
+          className={`flex min-w-0 items-center gap-1.5 ${
             onArchive && !compact
               ? "transition-[padding] group-focus-within:pl-5 group-hover:pl-5"
               : ""
@@ -3048,37 +3049,6 @@ function SessionRenameRow({
         className="w-full rounded bg-content/10 px-2 py-1 text-[13px] font-semibold leading-snug text-content outline-none ring-1 ring-accent/40"
       />
     </div>
-  );
-}
-
-function DiffStat({
-  additions,
-  deletions,
-}: {
-  additions: number;
-  deletions: number;
-}) {
-  if (additions <= 0 && deletions <= 0) return null;
-
-  const label = [
-    additions > 0 ? `+${additions}` : "",
-    deletions > 0 ? `-${deletions}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return (
-    <span
-      title={t("harness.chrome.uncommittedSummary", { label })}
-      className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] font-semibold tabular-nums"
-    >
-      {additions > 0 ? (
-        <span className="text-diff-add-fg">+{additions}</span>
-      ) : null}
-      {deletions > 0 ? (
-        <span className="text-diff-del-fg">-{deletions}</span>
-      ) : null}
-    </span>
   );
 }
 
