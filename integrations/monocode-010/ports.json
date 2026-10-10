@@ -619,12 +619,13 @@
         "b8069b3",
         "2b7c3ba",
         "0ae6db2",
-        "5a263ea"
+        "5a263ea",
+        "d99277f"
       ],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Saved SSH profiles can now create remote Harness projects directly. Their environment identity resolves the saved profile for native folder browsing, OpenCode 2.x sessions, and worktree Git operations; legacy machine IDs keep using the machine catalog. Other remote file, Git, and session operations still use the Host route. Automatic recovery from active-turn tunnel loss and a live Docker SSH smoke remain outstanding. Verify a Docker host and migrate the remaining Host-dependent operations before claiming full remote parity."
+        "Saved SSH profiles create remote Harness projects directly and resolve their credential-free environment identity for native folder browsing, OpenCode 2.x sessions, and worktree Git operations. Supported project file commands now use the authenticated Voktty helper fs.* API with root-confined mutations and expectedContent writes; they do not fall back to Host. Git, project search, and session operations for direct profiles still fail closed pending migration; legacy machine IDs keep using Host. list_project_files currently applies only root-level .gitignore patterns, and read_file_preview inherits the helper's 8 MiB read limit. Active-turn tunnel recovery and a live Docker SSH smoke remain outstanding. Verify a Docker host and migrate the remaining operations before claiming full remote parity."
       ],
       "mappings": [
         {
