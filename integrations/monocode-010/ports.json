@@ -2005,6 +2005,60 @@
         }
       ],
       "rationale": "Voktty omits Codex model and collaboration-mode overrides until a nonblank model is known, then trims and uses the selected id consistently. This avoids sending a null or missing model in a collaboration-mode setting. The behavior and focused protocol test are already present in the local Harness."
+    },
+    {
+      "upstreamCommit": "bdc2b64cc1ae009b0c75b81e171f3010acb62fc6",
+      "upstreamTitle": "Fix notes keeping an \"untitled\" slug after they get a real title (#788)",
+      "localCommit": "8ddcf81ea8cc88a32bd9c84797c50a8e0911bb3a",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src-tauri/src/notes.rs",
+          "local": "src-tauri/src/modules/harness/notes.rs"
+        },
+        {
+          "upstream": "src/features/agent-app/model/agentApp.test.ts",
+          "local": "src/modules/agent-app/model/agentApp.test.ts"
+        },
+        {
+          "upstream": "src/features/notes/notes.test.ts",
+          "local": "src/modules/harness/lib/notes.test.ts"
+        },
+        {
+          "upstream": "src/features/notes/notes.ts",
+          "local": "src/modules/harness/lib/notes.ts"
+        },
+        {
+          "upstream": "src/features/notes/notes.ts",
+          "local": "src/modules/notes-board/components/NotesTab.tsx"
+        },
+        {
+          "upstream": "src/features/notes/ui/NotesView.test.ts",
+          "local": "src/modules/harness/surfaces/NotesView.test.tsx"
+        },
+        {
+          "upstream": "src/features/notes/ui/NotesView.tsx",
+          "local": "src/modules/harness/surfaces/NotesView.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/agent-app/model/agentApp.test.ts",
+            "src/modules/harness/lib/notes.test.ts",
+            "src/modules/harness/surfaces/NotesView.test.tsx"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        },
+        {
+          "files": ["src-tauri/src/modules/harness/notes.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "modules::harness::notes::tests"
+        }
+      ],
+      "rationale": "Voktty marks notes created with a blank title as carrying a provisional slug. It finalizes that slug once after a real title is committed, while preserving legacy slugs and explicit Untitled titles. The Harness editor and the notes board share this store, so both preserve and finalize the pending state correctly."
     }
   ]
 }
