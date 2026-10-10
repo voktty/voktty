@@ -895,6 +895,46 @@
         }
       ],
       "rationale": "Voktty routes active review tabs through GitDiffPane, which already renders Markdown as source. FileEditor's optional diff mode now also uses an isolated review preference with source as its fallback, so normal file preview preferences remain independent."
+    },
+    {
+      "upstreamCommit": "e9fd233ba4ce47cb6eb8afaeaa87874bbe5992cf",
+      "upstreamTitle": "Detect npm-installed Pi agent via package manifest (#687)",
+      "localCommit": "f9bb570",
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "host/process.ts",
+          "local": "src-tauri/src/modules/harness/host.rs"
+        },
+        {
+          "upstream": "host/process.ts",
+          "local": "src-tauri/src/modules/harness/pi_package.rs"
+        },
+        {
+          "upstream": "host/process.ts",
+          "local": "src-tauri/src/modules/harness/mod.rs"
+        },
+        {
+          "upstream": "host/process.test.ts",
+          "local": "src-tauri/src/modules/harness/host.rs"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src-tauri/src/modules/harness/host.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "pi_accepts_npm_launcher_through_its_package_manifest"
+        },
+        {
+          "files": ["src-tauri/src/modules/harness/host.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "pi_rejects_an_unrelated_npm_package_named_pi"
+        }
+      ],
+      "rationale": "Voktty's native Rust Host first keeps the launcher marker scan, then resolves the executable symlink and checks the bounded enclosing npm package manifest for an exact supported Pi package name before trying a help probe. The native agent owns provider resolution, including for remote Harness execution."
     }
   ]
 }
