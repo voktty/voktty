@@ -960,6 +960,31 @@
         }
       ],
       "rationale": "The local ModelFlyout now focuses its search after the next animation frame, once Popover finishes measuring and revealing the anchored surface. The regression verifies focus stays put until that frame and moves to search afterward. Voktty has one ModelFlyout call site, so the focus behavior covers its model submenu path."
+    },
+    {
+      "upstreamCommit": "c7de48fd2f01fc961c6dd6a05ff5ad03be565133",
+      "upstreamTitle": "fix(pi): discover models registered by extensions (#645)",
+      "localCommit": "5ff55e2",
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "src/integrations/harness/providers/pi/piCatalog.ts",
+          "local": "src/modules/harness/lib/harness/piCatalog.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/pi/piCatalog.test.ts",
+          "local": "src/modules/harness/lib/harness/piCatalog.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/harness/piCatalog.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Pi catalog probes now load extensions so models registered by Pi extensions can be discovered. OMP probes retain --no-extensions. Catalog refresh is requested per provider, so the larger Pi extension load remains on demand; probes still use --no-session."
     }
   ]
 }
