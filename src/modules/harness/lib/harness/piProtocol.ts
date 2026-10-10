@@ -60,6 +60,7 @@ export type PiExtensionUiRequest =
       method:
         "notify" | "setStatus" | "setWidget" | "setTitle" | "set_editor_text";
       title?: string;
+      statusKey?: string;
     };
 
 export type PiRpcResponse = {
@@ -296,6 +297,8 @@ export function parseExtensionUiRequest(
     method === "setTitle" ||
     method === "set_editor_text"
   ) {
+    const statusKey =
+      method === "setStatus" ? stringField(rec, "statusKey") : undefined;
     return {
       id,
       method,
@@ -304,6 +307,7 @@ export function parseExtensionUiRequest(
         stringField(rec, "statusText") ??
         stringField(rec, "title") ??
         stringField(rec, "text"),
+      ...(statusKey ? { statusKey } : {}),
     };
   }
   return null;

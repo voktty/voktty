@@ -380,6 +380,33 @@ describe("sanitizeSessionForPersist", () => {
       },
     });
   });
+
+  it("persists and restores keyed extension status rows", () => {
+    const session = newSession("pi", "/tmp/project");
+    session.blocks = [
+      {
+        id: "status-1",
+        role: "system",
+        text: "Ponytail is ready",
+        statusKey: "ponytail",
+      },
+    ];
+
+    const persisted = sanitizeSessionForPersist(session);
+    expect(persisted.blocks[0]).toEqual({
+      id: "status-1",
+      role: "system",
+      text: "Ponytail is ready",
+      statusKey: "ponytail",
+    });
+
+    const restored = recordToSession({
+      ...persisted,
+      createdAt: 0,
+      updatedAt: 0,
+    } as never);
+    expect(restored.blocks[0]?.statusKey).toBe("ponytail");
+  });
 });
 
 describe("persistFingerprint", () => {

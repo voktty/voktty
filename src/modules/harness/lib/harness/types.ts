@@ -19,7 +19,7 @@ export type HarnessEvent =
       model?: string;
       modelSettings?: Record<string, string>;
     }
-  | { type: "status"; text: string }
+  | { type: "status"; text: string; key?: string }
   | { type: "message.delta"; text: string }
   | { type: "message.completed" }
   | {

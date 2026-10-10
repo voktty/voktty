@@ -222,6 +222,98 @@ describe("status blocks", () => {
     session = applyHarnessEvent(session, { type: "status", text: "  " });
     expect(session.blocks.some((block) => block.role === "system")).toBe(false);
   });
+
+  it("updates one keyed row in place within the current turn", () => {
+    let session = appendUser(newSession("pi", "/tmp"), "go");
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "ponytail",
+      text: "Loading",
+    });
+    const statusId = session.blocks.find(
+      (block) => block.statusKey === "ponytail",
+    )?.id;
+    session = applyHarnessEvent(session, { type: "message.delta", text: "Done" });
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "ponytail",
+      text: "Ready",
+    });
+
+    expect(session.blocks.filter((block) => block.statusKey === "ponytail"))
+      .toMatchObject([{ id: statusId, text: "Ready" }]);
+    expect(session.blocks.map((block) => block.role)).toEqual([
+      "user",
+      "system",
+      "assistant",
+    ]);
+  });
+
+  it("keeps status rows with different keys separate", () => {
+    let session = appendUser(newSession("pi", "/tmp"), "go");
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "progress",
+      text: "Working",
+    });
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "plugin",
+      text: "Connected",
+    });
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "progress",
+      text: "Complete",
+    });
+
+    expect(
+      session.blocks
+        .filter((block) => block.statusKey)
+        .map(({ statusKey, text }) => [statusKey, text]),
+    ).toEqual([
+      ["progress", "Complete"],
+      ["plugin", "Connected"],
+    ]);
+  });
+
+  it("removes a keyed status when the extension clears it", () => {
+    let session = appendUser(newSession("pi", "/tmp"), "go");
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "ponytail",
+      text: "Working",
+    });
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "ponytail",
+      text: "  ",
+    });
+
+    expect(session.blocks.some((block) => block.statusKey === "ponytail"))
+      .toBe(false);
+  });
+
+  it("starts a new keyed status row for each user turn", () => {
+    let session = appendUser(newSession("pi", "/tmp"), "first");
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "ponytail",
+      text: "First turn",
+    });
+    session = appendUser(session, "second");
+    session = applyHarnessEvent(session, {
+      type: "status",
+      key: "ponytail",
+      text: "Second turn",
+    });
+
+    expect(session.blocks.filter((block) => block.statusKey === "ponytail"))
+      .toMatchObject([
+        { text: "First turn" },
+        { text: "Second turn" },
+      ]);
+  });
 });
 
 describe("task list updates", () => {

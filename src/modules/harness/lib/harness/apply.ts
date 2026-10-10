@@ -142,7 +142,9 @@ export function applyHarnessEvent(
           : {}),
       };
     case "status":
-      return appendStatus(session, event.text);
+      return event.key
+        ? upsertKeyedStatus(session, event.key, event.text)
+        : appendStatus(session, event.text);
     default:
       return session;
   }
@@ -561,6 +563,36 @@ function appendStatus(session: Session, text: string): Session {
     role: "system",
     text: trimmed,
   });
+}
+
+function upsertKeyedStatus(
+  session: Session,
+  key: string,
+  text: string,
+): Session {
+  const trimmed = text.trim();
+  const turnStart = lastMatchingBlock(
+    session.blocks,
+    (block) => block.role === "user",
+  );
+  const index = lastMatchingBlock(
+    session.blocks,
+    (block, at) => at > turnStart && block.statusKey === key,
+  );
+  if (index < 0) {
+    if (!trimmed) return session;
+    return appendBlock(session, {
+      id: crypto.randomUUID(),
+      role: "system",
+      text: trimmed,
+      statusKey: key,
+    });
+  }
+  if (session.blocks[index].text === trimmed) return session;
+  const blocks = session.blocks.slice();
+  if (trimmed) blocks[index] = { ...blocks[index], text: trimmed };
+  else blocks.splice(index, 1);
+  return { ...session, blocks };
 }
 
 function appendImage(

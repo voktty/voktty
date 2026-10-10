@@ -946,7 +946,9 @@ async function handleExtensionUi(
 ): Promise<void> {
   if (!needsExtensionUiReply(request)) {
     const text = request.title ? extensionUiTitle(request) : "";
-    if (text.trim()) live.onEvent({ type: "status", text });
+    if (request.method === "setStatus" && request.statusKey)
+      live.onEvent({ type: "status", key: request.statusKey, text });
+    else if (text.trim()) live.onEvent({ type: "status", text });
     return;
   }
 

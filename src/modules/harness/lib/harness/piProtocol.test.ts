@@ -254,6 +254,21 @@ describe("RPC frames", () => {
       message: "loaded",
     });
     expect(needsExtensionUiReply(notify!)).toBe(false);
+
+    expect(
+      parseExtensionUiRequest({
+        type: "extension_ui_request",
+        id: "ui-4",
+        method: "setStatus",
+        statusKey: "ponytail",
+        statusText: "Ready",
+      }),
+    ).toEqual({
+      id: "ui-4",
+      method: "setStatus",
+      title: "Ready",
+      statusKey: "ponytail",
+    });
   });
 });
 

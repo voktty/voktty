@@ -117,11 +117,13 @@ describe("Pi live session", () => {
       type: "extension_ui_request",
       id: "empty-status",
       method: "setStatus",
+      statusKey: "ponytail",
       statusText: "\u001b[0m",
     });
     expect(events.filter((event) => event.type === "status")).toEqual([
-      { type: "status", text: "○ ponytail: ⚡ FULL" },
+      { type: "status", key: "ponytail", text: "○ ponytail: ⚡ FULL" },
       { type: "status", text: "Plugin ready" },
+      { type: "status", key: "ponytail", text: "" },
     ]);
     await stopPiSession("pi-ansi");
   });

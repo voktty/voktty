@@ -223,6 +223,7 @@ export type Block = {
   /** Stable model label for this turn. Present on newly created user blocks. */
   turnModel?: TurnModel;
   notice?: "error" | "interrupt";
+  statusKey?: string;
   interjection?: InterjectionMeta;
   tool?: {
     callId?: string;
