@@ -611,11 +611,11 @@
     {
       "upstreamCommit": "0eb2773ec4f18c0533d5253ea6d4627cd5795299",
       "upstreamTitle": "feat(opencode): support OpenCode 2.x servers (#434)",
-      "localCommits": ["6d3ec03", "db828c5", "26dadaa"],
+      "localCommits": ["6d3ec03", "db828c5", "26dadaa", "8a148a5"],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Route remote OpenCode 2.x service discovery and authenticated HTTP/SSE through Voktty's native SSH agent, with tmux recovery for Docker hosts; validate reconnect and cleanup before claiming remote parity."
+        "Route remote OpenCode 2.x service discovery and authenticated HTTP/SSE through Voktty's existing SSH agent and tunnel; validate reconnect, stale tab binding, and cleanup before claiming remote parity."
       ],
       "mappings": [
         {
@@ -716,7 +716,7 @@
           "filter": "service_commands_require_the_resolved_opencode_provider"
         }
       ],
-      "rationale": "Voktty already supports OpenCode 2.x on desktop: version gating, service authentication, the v2 catalog and agents, prompt and permission adaptation, event translation and correlation, compaction, resumed-session forks, and temporary text-session cleanup. Its service commands are scoped to OpenCode and authorized workspaces. The forced catalog refresh contract predated this port in Voktty's registry; the OpenCode settings action now calls it and a regression covers the bypass. Remote sessions still need the native SSH/tmux migration for Docker recovery."
+      "rationale": "Voktty already supports OpenCode 2.x on desktop: version gating, service authentication, the v2 catalog and agents, prompt and permission adaptation, event translation and correlation, compaction, resumed-session forks, and temporary text-session cleanup. Its service commands are scoped to OpenCode and authorized workspaces. The forced catalog refresh contract predated this port in Voktty's registry; the OpenCode settings action now calls it and a regression covers the bypass. Linux Host startup now falls back to a dedicated tmux session when systemd user services are unavailable, including Docker. Remote OpenCode discovery and authenticated HTTP/SSE still need to use Voktty's SSH agent and tunnel."
     },
     {
       "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
