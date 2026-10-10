@@ -1,4 +1,8 @@
 import { t } from "@/modules/i18n";
+import {
+  HarnessEventQueue,
+  isForegroundHarnessSession,
+} from "@/modules/harness/lib/harnessFlush";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -537,21 +541,6 @@ function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   return true;
 }
 
-type ScheduledFlush = { kind: "raf" | "timeout"; id: number };
-
-function cancelScheduledFlush(handle: ScheduledFlush | null) {
-  if (!handle) return;
-  if (handle.kind === "raf") cancelAnimationFrame(handle.id);
-  else clearTimeout(handle.id);
-}
-
-function scheduleHarnessFlush(run: () => void): ScheduledFlush {
-  if (document.hidden) {
-    return { kind: "timeout", id: window.setTimeout(run, 32) };
-  }
-  return { kind: "raf", id: requestAnimationFrame(run) };
-}
-
 function userTurnCards(
   noteCard: NoteComposerCard | undefined,
   secondOpinion?: SecondOpinionMeta,
@@ -939,10 +928,42 @@ export function HarnessApp({
   const workspaceSyncKey = useRef<string | null>(null);
   const observedSessions = useRef(new Map<string, Session>());
   const pendingPersist = useRef(new Map<string, Session>());
-  // Tokens arrive many times per frame; apply them once so React/markdown aren't
-  // recomputed for every delta.
-  const harnessQueued = useRef(new Map<string, HarnessEvent[]>());
-  const harnessFlush = useRef<ScheduledFlush | null>(null);
+  const foregroundSurfaceRef = useRef<{
+    workspaceVisible: boolean;
+    inboxSessionId?: string;
+  }>({ workspaceVisible: true });
+  foregroundSurfaceRef.current = {
+    workspaceVisible:
+      !searchViewOpen &&
+      !inboxViewOpen &&
+      !notesViewOpen &&
+      !automationsViewOpen &&
+      !settingsOpen &&
+      !classicInbox,
+    inboxSessionId: inboxViewOpen ? inboxAskPortal?.sessionId : undefined,
+  };
+  const [harnessEvents] = useState(
+    () =>
+      new HarnessEventQueue(
+        (sessionId) =>
+          isForegroundHarnessSession(
+            sessionId,
+            tabsRef.current.find((tab) => tab.id === activeTabIdRef.current),
+            foregroundSurfaceRef.current,
+          ),
+        (batches) => {
+          const prev = sessionsRef.current;
+          const next = prev.map((session) => {
+            const events = batches.get(session.id);
+            return events ? events.reduce(applyHarnessEvent, session) : session;
+          });
+          if (!next.some((session, index) => session !== prev[index])) return;
+          sessionsRef.current = next;
+          syncDockBadge(next);
+          setSessions(next);
+        },
+      ),
+  );
   const skipForgetSessionIds = useRef(new Set<string>());
   const importedSessionsApplied = useRef(false);
 
@@ -988,22 +1009,8 @@ export function HarnessApp({
     }
   }, [windowTransfer, resumed]);
 
-  const flushHarnessEvents = useCallback(() => {
-    cancelScheduledFlush(harnessFlush.current);
-    harnessFlush.current = null;
-    const batches = harnessQueued.current;
-    if (batches.size === 0) return;
-    harnessQueued.current = new Map();
-    const prev = sessionsRef.current;
-    const next = prev.map((session: any) => {
-      const events = batches.get(session.id);
-      return events ? events.reduce(applyHarnessEvent, session) : session;
-    });
-    if (!next.some((session, index) => session !== prev[index])) return;
-    sessionsRef.current = next;
-    syncDockBadge(next);
-    setSessions(next);
-  }, []);
+  const flushHarnessEvents = harnessEvents.flush;
+  const flushForegroundHarnessEvents = harnessEvents.flushForeground;
 
   const stopSessionForRemoval = useCallback(
     async (sessionId: string): Promise<Session | undefined> => {
@@ -1027,44 +1034,7 @@ export function HarnessApp({
     [flushHarnessEvents],
   );
 
-  const applyApprovalEvent = useCallback(
-    (sessionId: string, event: HarnessEvent) => {
-      const queued = harnessQueued.current.get(sessionId) ?? [];
-      harnessQueued.current.delete(sessionId);
-      const events = [...queued, event];
-      const prev = sessionsRef.current;
-      const next = prev.map((session: any) =>
-        session.id === sessionId
-          ? events.reduce(applyHarnessEvent, session)
-          : session,
-      );
-      if (!next.some((session, index) => session !== prev[index])) return;
-      sessionsRef.current = next;
-      syncDockBadge(next);
-      setSessions(next);
-    },
-    [],
-  );
-
-  const enqueueHarnessEvent = useCallback(
-    (sessionId: string, event: HarnessEvent) => {
-      if (
-        event.type === "approval.requested" ||
-        event.type === "approval.resolved"
-      ) {
-        applyApprovalEvent(sessionId, event);
-        return;
-      }
-      const queued = harnessQueued.current;
-      const events = queued.get(sessionId);
-      if (events) events.push(event);
-      else queued.set(sessionId, [event]);
-      if (!harnessFlush.current) {
-        harnessFlush.current = scheduleHarnessFlush(flushHarnessEvents);
-      }
-    },
-    [applyApprovalEvent, flushHarnessEvents],
-  );
+  const enqueueHarnessEvent = harnessEvents.enqueue;
 
   useEffect(() => {
     markHarnessOpenPhase("ready");
@@ -1073,6 +1043,7 @@ export function HarnessApp({
     const stopBridge = startHarnessBridge();
     const reap = () => {
       if (isAppQuitting()) return;
+      flushHarnessEvents();
       void persistQuitState(
         sessionsRef.current,
         tabsRef.current,
@@ -1095,10 +1066,9 @@ export function HarnessApp({
       window.removeEventListener("pagehide", reap);
       window.removeEventListener("beforeunload", reap);
       stopBridge();
-      cancelScheduledFlush(harnessFlush.current);
-      harnessFlush.current = null;
+      harnessEvents.cancelScheduled();
     };
-  }, [resumed, readProjectReturnMemory]);
+  }, [resumed, readProjectReturnMemory, harnessEvents, flushHarnessEvents]);
 
   useEffect(() => {
     // Only the harnesses already in this window. Probing every installed CLI
@@ -1376,7 +1346,7 @@ export function HarnessApp({
     void getCurrentWindow()
       .onFocusChanged(({ payload: focused }) => {
         if (focused) {
-          flushHarnessEvents();
+          flushForegroundHarnessEvents();
           syncDockBadge(sessionsRef.current);
           const el = document.activeElement;
           if (
@@ -1399,15 +1369,30 @@ export function HarnessApp({
     return () => {
       unlisten?.();
     };
-  }, [flushHarnessEvents]);
+  }, [flushForegroundHarnessEvents]);
 
   useEffect(() => {
     const onVisible = () => {
-      if (!document.hidden) flushHarnessEvents();
+      flushHarnessEvents();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [flushHarnessEvents]);
+
+  useLayoutEffect(() => {
+    flushForegroundHarnessEvents();
+  }, [
+    activeTabId,
+    tabs,
+    inboxViewOpen,
+    inboxAskPortal?.sessionId,
+    classicInbox,
+    searchViewOpen,
+    notesViewOpen,
+    automationsViewOpen,
+    settingsOpen,
+    flushForegroundHarnessEvents,
+  ]);
 
   useEffect(() => {
     let unlistenClose: (() => void) | undefined;
@@ -1426,8 +1411,8 @@ export function HarnessApp({
         // Listening here makes close our job. Letting the default path run
         // calls JS `window.destroy`, which Tauri denies without a permission.
         event.preventDefault();
+        flushHarnessEvents();
         if (loadCloseToTray()) {
-          flushHarnessEvents();
           void persistLiveTranscripts(sessionsRef.current);
           void hideCurrentWindow();
           return;
