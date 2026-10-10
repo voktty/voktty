@@ -765,6 +765,111 @@
         }
       ],
       "rationale": "Add a localized Back action to the multi-question Harness form. Answers remain keyed by question id, so users can return, change an earlier choice, and submit the revised answers."
+    },
+    {
+      "upstreamCommit": "e188ff1e271e6e3c8f991b74901b3d1e54894021",
+      "upstreamTitle": "Add colorblind-friendly diff palettes and +/- line markers (#707)",
+      "localCommits": [
+        "3ee0e4df111bfd670f18eab1d9dbc9380f21ebe3",
+        "6bd1ec4b3d5c873c05bbb5ab7e1895b1d6475191",
+        "2221db751822e453565a2f73e04383cd92dd9f64",
+        "8d83d4f8565805cb0f0c9c2221cf372d2d25ff88",
+        "eeffd8d99068cda3ad6f3912515439caf80da86d",
+        "13fd204b3a56a796b644a4d88f81019a56c2197d",
+        "02af2329a8afb98a5a60c5e15edb1146825d9347",
+        "58d41e418cb0cd190f0743c56d01685111c36752",
+        "ba72e96527b4e75abba11922e7841bed06712949"
+      ],
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "src/app/shell/ProjectRail.tsx",
+          "local": "src/modules/harness/chrome/ProjectRail.tsx"
+        },
+        {
+          "upstream": "src/app/shell/Sidebar.tsx",
+          "local": "src/modules/harness/chrome/Sidebar.tsx"
+        },
+        {
+          "upstream": "src/features/files/editor/editorGit.gutter.test.ts",
+          "local": "src/modules/harness/surfaces/editorGit.gutter.test.ts"
+        },
+        {
+          "upstream": "src/features/files/editor/editorGit.ts",
+          "local": "src/modules/harness/surfaces/editorGit.ts"
+        },
+        {
+          "upstream": "src/features/files/ui/FileEditor.tsx",
+          "local": "src/modules/harness/surfaces/FileEditor.tsx"
+        },
+        {
+          "upstream": "src/features/files/ui/FilePreview.tsx",
+          "local": "src/modules/harness/chrome/FilePreview.tsx"
+        },
+        {
+          "upstream": "src/features/files/ui/FileTree.tsx",
+          "local": "src/modules/harness/chrome/FileTree.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/SessionReview.tsx",
+          "local": "src/modules/harness/chrome/SessionReview.tsx"
+        },
+        {
+          "upstream": "src/features/settings/model/appearance.test.ts",
+          "local": "src/modules/harness/lib/diffPalette.test.ts"
+        },
+        {
+          "upstream": "src/features/settings/model/appearance.ts",
+          "local": "src/modules/harness/lib/diffPalette.ts"
+        },
+        {
+          "upstream": "src/features/settings/model/settings.ts",
+          "local": "src/settings/settingsSearch.ts"
+        },
+        {
+          "upstream": "src/features/settings/ui/SettingsView.tsx",
+          "local": "src/settings/sections/HarnessSection.tsx"
+        },
+        {
+          "upstream": "src/features/settings/ui/SettingsView.tsx",
+          "local": "src/modules/harness/chrome/DiffPalettePicker.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/GitChangesPanel.tsx",
+          "local": "src/modules/source-control/SourceControlPanel.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/UnifiedDiffView.markers.test.ts",
+          "local": "src/modules/harness/surfaces/UnifiedDiffView.markers.test.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/UnifiedDiffView.tsx",
+          "local": "src/modules/harness/surfaces/UnifiedDiffView.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/UnifiedDiffView.tsx",
+          "local": "src/modules/editor/GitDiffPane.tsx"
+        },
+        {
+          "upstream": "src/styles/index.css",
+          "local": "src/styles/globals.css"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/diffPalette.test.ts",
+            "src/modules/harness/chrome/DiffPalettePicker.test.tsx",
+            "src/modules/harness/surfaces/editorGit.gutter.test.ts",
+            "src/modules/harness/surfaces/UnifiedDiffView.markers.test.tsx",
+            "src/settings/settingsSearch.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty adapts the global palette tokens, persisted colorblind/high-contrast choices, accessible line glyphs, and all matching diff summaries and previews across its Harness and source-control surfaces. The setting lives in Voktty's Harness tab and is searchable from global Settings, rather than MonoCode's appearance page and search index. Voktty's existing untracked status remains visually distinct from added lines. The upstream changelog has no local counterpart."
     }
   ]
 }
