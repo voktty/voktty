@@ -48,7 +48,10 @@ async function discoverModels(flavor: PiFlavor, projectCwd?: string) {
     await spawnChild(
       probeId,
       path,
-      buildPiSpawnArgs(flavor, { noSession: true, noExtensions: true }),
+      buildPiSpawnArgs(flavor, {
+        noSession: true,
+        noExtensions: flavor.id !== "pi",
+      }),
       cwd,
     );
     const response = await Promise.race([
