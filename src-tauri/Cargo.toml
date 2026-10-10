@@ -148,7 +148,7 @@ keyring = { version = "3.6", default-features = false, features = [
 ] }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSPasteboard", "NSPasteboardItem"] }
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSError", "NSSet", "NSString", "NSURL", "NSUserDefaults"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSDictionary", "NSError", "NSSet", "NSString", "NSURL", "NSUserDefaults"] }
 objc2-user-notifications = { version = "0.3.2", features = ["UNUserNotificationCenter", "block2"] }
 window-vibrancy = "0.8"
 

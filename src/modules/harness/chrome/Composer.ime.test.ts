@@ -34,6 +34,7 @@ it("keeps the textarea's text node when a parent re-renders with the latest draf
     await act(async () => render("你"));
     const textarea = container.querySelector("textarea")!;
     expect(textarea.defaultValue).toBe("你");
+    expect(textarea.getAttribute("spellcheck")).toBe("true");
     // A remote session's poll re-renders the pane with the draft typed so
     // far. Rewriting the text node makes WebKit commit the IME composition.
     textarea.value = "你好";

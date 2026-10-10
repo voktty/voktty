@@ -10,11 +10,17 @@ fn main() {
     {
         // Disable macOS press-and-hold character popup, so key repeat works in terminal.
         use objc2::msg_send;
-        use objc2_foundation::{ns_string, NSUserDefaults};
+        use objc2::rc::Retained;
+        use objc2_foundation::{ns_string, NSDictionary, NSNumber, NSString, NSUserDefaults};
+        let key = NSString::from_str("WebContinuousSpellCheckingEnabled");
+        let enabled = NSNumber::numberWithBool(true);
+        let spellcheck_defaults: Retained<NSDictionary<NSString>> =
+            NSDictionary::from_slices(&[&*key], &[enabled.as_ref()]);
         unsafe {
             let defaults = NSUserDefaults::standardUserDefaults();
             let key = ns_string!("ApplePressAndHoldEnabled");
             let _: () = msg_send![&defaults, setBool: false, forKey: key];
+            defaults.registerDefaults(&spellcheck_defaults);
         }
     }
 
