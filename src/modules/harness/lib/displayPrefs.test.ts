@@ -32,7 +32,7 @@ const prefs = [
 
 afterEach(() => {
   vi.restoreAllMocks();
-  prefs.forEach((pref) => pref.save(pref.defaultValue));
+  for (const pref of prefs) pref.save(pref.defaultValue);
   localStorage.clear();
 });
 
