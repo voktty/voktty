@@ -9,6 +9,7 @@ import {
 } from "../lib/checkpoint";
 import { forEachConcurrent } from "../lib/concurrent";
 import type { SessionChangesView } from "../lib/layout";
+import type { HarnessId } from "../lib/session";
 import type { SessionCommitNotice } from "../lib/sessionCommit";
 import { buildUnifiedFile, type UnifiedFileDiff } from "../lib/unifiedDiff";
 import { SessionChangesCommit } from "./SessionChangesCommit";
@@ -17,6 +18,7 @@ import { UnifiedDiffView, type UnifiedDiffFileModel } from "./UnifiedDiffView";
 type Props = {
   cwd: string;
   sessionId: string;
+  harness?: HarnessId;
   focusPath?: string;
   initialView?: SessionChangesView;
 };
@@ -34,6 +36,7 @@ const DIFF_LOAD_CONCURRENCY = 4;
 export function SessionChangesDiff({
   cwd,
   sessionId,
+  harness,
   focusPath,
   initialView = "changes",
 }: Props) {
@@ -191,6 +194,7 @@ export function SessionChangesDiff({
       <SessionChangesCommit
         cwd={cwd}
         sessionId={sessionId}
+        harness={harness}
         files={files}
         onNotice={setCommitNotice}
       />

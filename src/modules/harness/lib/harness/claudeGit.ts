@@ -1,13 +1,14 @@
+import type { GitStagedContext } from "../fs";
 import { gitRangeContext, gitStagedContext } from "../fs";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   formatCommitMessage,
+  type PrContent,
   parseBranchName,
   parseCommitMessage,
   parsePrContent,
-  type PrContent,
 } from "../gitText";
 import { runClaudeTextPrompt } from "./claudeText";
 
@@ -16,9 +17,10 @@ const GIT_TIMEOUT_MS = 90_000;
 export async function generateClaudeCommitMessage(
   cwd: string,
   signal?: AbortSignal,
+  providedContext?: GitStagedContext,
 ): Promise<string> {
   signal?.throwIfAborted();
-  const context = await gitStagedContext(cwd);
+  const context = providedContext ?? (await gitStagedContext(cwd));
   signal?.throwIfAborted();
   const output = await runClaudeTextPrompt({
     cwd,

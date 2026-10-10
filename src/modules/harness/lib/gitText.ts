@@ -33,10 +33,10 @@ export function buildCommitMessagePrompt(input: {
     "",
     `Branch: ${input.branch ?? "(detached)"}`,
     "",
-    "Staged files:",
+    "Selected files:",
     limitSection(input.stagedSummary, 6_000),
     "",
-    "Staged patch:",
+    "Selected patch:",
     limitSection(input.stagedPatch, 40_000),
   ].join("\n");
 }

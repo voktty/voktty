@@ -5929,6 +5929,8 @@ export const en = {
     commitSelected: "Commit {count} {count, plural, one {file} other {files}}",
     committing: "Committing…",
     commitMessage: "Commit message",
+    generateCommitMessage: "Generate with AI",
+    generatingCommitMessage: "Generating…",
     defaultCommitMessage: "Update session changes",
     sharedFilesExcluded:
       "{count} shared {count, plural, one {file was} other {files were}} excluded from this commit.",

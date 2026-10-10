@@ -1,6 +1,7 @@
 import type { Block, HarnessId, TaskListMeta } from "../session";
 import type { GeneratedSessionTitle } from "../sessionTitle";
 import type { PrContent } from "../gitText";
+import type { GitStagedContext } from "../fs";
 import { hasLiveCatalog } from "../models";
 import type { UserQuestionReply } from "../userQuestion";
 import type { NativeCommandProvider } from "./nativeCommands";
@@ -66,8 +67,12 @@ export type HarnessAdapter = {
   refreshCatalog?(): Promise<void>;
   /** Optional LLM tab title for the first turn. */
   generateTitle?(input: TitleInput): Promise<GeneratedSessionTitle | null>;
-  /** Optional LLM commit message from staged changes. */
-  generateCommitMessage?(cwd: string, signal?: AbortSignal): Promise<string>;
+  /** Optional LLM commit message from supplied or staged Git context. */
+  generateCommitMessage?(
+    cwd: string,
+    signal?: AbortSignal,
+    context?: GitStagedContext,
+  ): Promise<string>;
   /** Optional LLM pull request title/body from branch diff context. */
   generatePrContent?(
     cwd: string,
@@ -322,12 +327,13 @@ export async function generateHarnessCommitMessage(
   harness: HarnessId,
   cwd: string,
   signal?: AbortSignal,
+  context?: GitStagedContext,
 ): Promise<string> {
   const adapter = requireHarness(harness);
   if (!adapter.generateCommitMessage) {
     throw new Error(`${harness} does not support commit message generation`);
   }
-  return adapter.generateCommitMessage(cwd, signal);
+  return adapter.generateCommitMessage(cwd, signal, context);
 }
 
 export async function generateHarnessPrContent(

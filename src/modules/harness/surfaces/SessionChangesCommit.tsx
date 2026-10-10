@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "@/modules/i18n";
 import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WandSparkles } from "../chrome/icons";
 import {
   type CheckpointFile,
   keepSessionChanges,
@@ -18,7 +19,10 @@ import { invalidateProjectFiles } from "../lib/fileIndex";
 import { invalidateWatchedFiles } from "../lib/fileWatch";
 import { notifyGitChanged } from "../lib/fs";
 import { githubOwnerRepoFromRemote } from "../lib/githubRemote";
+import { generateCommitMessage } from "../lib/harness/textHarness";
+import type { HarnessId } from "../lib/session";
 import {
+  buildSessionCommitMessageContext,
   mergeSessionCommitCandidates,
   resolveSessionCommitRepositories,
   type SessionCommitCandidate,
@@ -30,6 +34,7 @@ import {
 type Props = {
   cwd: string;
   sessionId: string;
+  harness?: HarnessId;
   files: CheckpointFile[];
   onNotice: (notice: SessionCommitNotice | null) => void;
 };
@@ -58,6 +63,7 @@ function errorMessage(error: unknown): string {
 export function SessionChangesCommit({
   cwd,
   sessionId,
+  harness,
   files,
   onNotice,
 }: Props) {
@@ -72,6 +78,7 @@ export function SessionChangesCommit({
     t("sessionReview.defaultCommitMessage"),
   );
   const [committing, setCommitting] = useState(false);
+  const [generatingMessage, setGeneratingMessage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [repositoryState, setRepositoryState] =
     useState<RepositoryGitState | null>(null);
@@ -82,6 +89,7 @@ export function SessionChangesCommit({
     key: string;
     repositories: SessionCommitRepository[];
   }>({ key: "", repositories: [] });
+  const messageAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -137,6 +145,19 @@ export function SessionChangesCommit({
   const repositories = resolution?.repositories ?? [];
   const activeRepo =
     repositories.find((repo) => repo.repoRoot === repoRoot) ?? repositories[0];
+  const messageScope = `${activeRepo?.repoRoot ?? ""}\0${harness ?? ""}`;
+  const previousMessageScope = useRef(messageScope);
+
+  useEffect(
+    () => {
+      if (previousMessageScope.current !== messageScope) {
+        previousMessageScope.current = messageScope;
+        messageAbort.current?.abort();
+      }
+      return () => messageAbort.current?.abort();
+    },
+    [messageScope],
+  );
 
   const readRepositoryState = useCallback(
     async (targetRepoRoot: string): Promise<RepositoryGitState> => {
@@ -254,6 +275,49 @@ export function SessionChangesCommit({
               statusLabel: null,
             }),
           ) ?? []);
+  const generateSelectedCommitMessage = async () => {
+    if (
+      !activeRepo ||
+      !gitStatus ||
+      gitStatus.truncated ||
+      selectedFiles.length === 0 ||
+      generatingMessage
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    messageAbort.current?.abort();
+    messageAbort.current = controller;
+    setGeneratingMessage(true);
+    setError(null);
+    try {
+      const context = await buildSessionCommitMessageContext(
+        gitStatus.branch,
+        selectedFiles,
+        (path, staged) =>
+          native.gitDiff(activeRepo.repoRoot, path, staged, workspace),
+      );
+      controller.signal.throwIfAborted();
+      const textCwd = workspace.kind === "local" ? activeRepo.repoRoot : ".";
+      const generated = await generateCommitMessage(
+        textCwd,
+        harness,
+        controller.signal,
+        context,
+      );
+      if (!controller.signal.aborted && messageAbort.current === controller) {
+        setMessage(generated);
+      }
+    } catch (caught: unknown) {
+      if (!controller.signal.aborted) setError(errorMessage(caught));
+    } finally {
+      if (messageAbort.current === controller) {
+        messageAbort.current = null;
+        setGeneratingMessage(false);
+      }
+    }
+  };
   const hasRemote = Boolean(
     currentRepositoryState?.remoteUrl ||
       currentRepositoryState?.status.upstream,
@@ -436,7 +500,7 @@ export function SessionChangesCommit({
   };
 
   const runWorkflow = async (workflow: Workflow) => {
-    if (!activeRepo || committing) return;
+    if (!activeRepo || committing || generatingMessage) return;
     if (workflow !== "push" && gitStatus?.truncated) return;
     if (workflow !== "push" && selectedFiles.length > 0 && !message.trim()) {
       return;
@@ -521,7 +585,7 @@ export function SessionChangesCommit({
             <select
               aria-label={t("sessionReview.repository")}
               value={activeRepo.repoRoot}
-              disabled={committing}
+              disabled={committing || generatingMessage}
               onChange={(event) => setRepoRoot(event.target.value)}
               className="h-8 min-w-0 flex-1 rounded-md border border-content/12 bg-content/5 px-2 text-[12px] text-content outline-none focus:border-content/30"
             >
@@ -541,6 +605,7 @@ export function SessionChangesCommit({
           type="button"
           disabled={
             committing ||
+            generatingMessage ||
             selectedFiles.length === 0 ||
             !message.trim() ||
             Boolean(gitStatus?.truncated)
@@ -559,6 +624,7 @@ export function SessionChangesCommit({
             type="button"
             disabled={
               committing ||
+              generatingMessage ||
               !hasRemote ||
               branchBehind ||
               branchDiverged ||
@@ -594,7 +660,12 @@ export function SessionChangesCommit({
             </span>
             <button
               type="button"
-              disabled={committing || repositoryLoading || !hasRemote}
+              disabled={
+                committing ||
+                generatingMessage ||
+                repositoryLoading ||
+                !hasRemote
+              }
               onClick={() => void refreshRepositoryState(true)}
               className="h-7 rounded-md border border-content/15 px-2 text-content/75 hover:bg-content/5 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -611,6 +682,7 @@ export function SessionChangesCommit({
                     type="button"
                     disabled={
                       committing ||
+                      generatingMessage ||
                       (selectedFiles.length > 0 &&
                         Boolean(gitStatus?.truncated))
                     }
@@ -625,7 +697,7 @@ export function SessionChangesCommit({
                 ) : canCreatePr ? (
                   <button
                     type="button"
-                    disabled={committing}
+                    disabled={committing || generatingMessage}
                     onClick={() =>
                       void runWorkflow(
                         selectedFiles.length > 0 ? "commit-pr" : "pr",
@@ -651,7 +723,7 @@ export function SessionChangesCommit({
             {createdPrUrl ? (
               <button
                 type="button"
-                disabled={committing}
+                disabled={committing || generatingMessage}
                 onClick={() => openPullRequest(createdPrUrl)}
                 className="h-7 rounded-md border border-content/15 px-2 text-content/75 hover:bg-content/5 disabled:opacity-40"
               >
@@ -697,6 +769,7 @@ export function SessionChangesCommit({
               checked={selectedPaths.has(file.path)}
               disabled={
                 committing ||
+                generatingMessage ||
                 Boolean(gitStatus?.truncated) ||
                 Boolean(file.sessionFile && !file.sessionFile.exact)
               }
@@ -732,17 +805,41 @@ export function SessionChangesCommit({
         </p>
       ) : null}
 
-      <label className="flex flex-col gap-1 text-[11px] text-content/55">
-        <span>{t("sessionReview.commitMessage")}</span>
+      <div className="flex flex-col gap-1 text-[11px] text-content/55">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="session-commit-message">
+            {t("sessionReview.commitMessage")}
+          </label>
+          <button
+            type="button"
+            disabled={
+              committing ||
+              generatingMessage ||
+              selectedFiles.length === 0 ||
+              !gitStatus ||
+              Boolean(gitStatus.truncated)
+            }
+            onClick={() => void generateSelectedCommitMessage()}
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-content/15 px-2 text-[11px] text-content/75 hover:bg-content/5 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <WandSparkles className="size-3" strokeWidth={1.5} />
+            {t(
+              generatingMessage
+                ? "sessionReview.generatingCommitMessage"
+                : "sessionReview.generateCommitMessage",
+            )}
+          </button>
+        </div>
         <textarea
+          id="session-commit-message"
           value={message}
-          disabled={committing}
+          disabled={committing || generatingMessage}
           onChange={(event) => setMessage(event.target.value)}
           rows={2}
           maxLength={4096}
           className="resize-y rounded-md border border-content/12 bg-content/5 px-2.5 py-2 font-mono text-[12px] text-content outline-none focus:border-content/30 disabled:opacity-50"
         />
-      </label>
+      </div>
 
       {sharedFileCount > 0 ? (
         <p className="text-[11px] text-amber-300/70">

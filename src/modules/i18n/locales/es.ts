@@ -6058,6 +6058,8 @@ export const es: TranslationSchema = {
       "Crear commit de {count} {count, plural, one {archivo} other {archivos}}",
     committing: "Creando commit…",
     commitMessage: "Mensaje del commit",
+    generateCommitMessage: "Generar con IA",
+    generatingCommitMessage: "Generando…",
     defaultCommitMessage: "Actualizar cambios de sesión",
     sharedFilesExcluded:
       "Se excluyeron {count} {count, plural, one {archivo compartido} other {archivos compartidos}} del commit.",

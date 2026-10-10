@@ -1,6 +1,7 @@
 import type { HarnessId } from "../session";
 import { isHarnessAvailable } from "./availability";
 import type { PrContent } from "../gitText";
+import type { GitStagedContext } from "../fs";
 import {
   generateHarnessCommitMessage,
   generateHarnessPrContent,
@@ -35,8 +36,14 @@ export function generateCommitMessage(
   cwd: string,
   preferred?: HarnessId,
   signal?: AbortSignal,
+  context?: GitStagedContext,
 ): Promise<string> {
-  return generateHarnessCommitMessage(pickTextHarness(preferred), cwd, signal);
+  return generateHarnessCommitMessage(
+    pickTextHarness(preferred),
+    cwd,
+    signal,
+    context,
+  );
 }
 
 export function generatePrContent(

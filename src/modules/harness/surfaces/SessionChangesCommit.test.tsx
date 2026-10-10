@@ -10,6 +10,7 @@ import { SessionChangesCommit } from "./SessionChangesCommit";
 const mocks = vi.hoisted(() => ({
   gitResolveRepo: vi.fn(),
   gitStatus: vi.fn(),
+  gitDiff: vi.fn(),
   gitRemoteUrl: vi.fn(),
   gitFetch: vi.fn(),
   gitCommit: vi.fn(),
@@ -24,18 +25,23 @@ const mocks = vi.hoisted(() => ({
   notifyGitChanged: vi.fn(),
   invalidateProjectFiles: vi.fn(),
   invalidateWatchedFiles: vi.fn(),
+  generateCommitMessage: vi.fn(),
 }));
 
 vi.mock("@/modules/ai/lib/native", () => ({
   native: {
     gitResolveRepo: mocks.gitResolveRepo,
     gitStatus: mocks.gitStatus,
+    gitDiff: mocks.gitDiff,
     gitRemoteUrl: mocks.gitRemoteUrl,
     gitFetch: mocks.gitFetch,
     gitCommit: mocks.gitCommit,
     gitPush: mocks.gitPush,
     gitPublish: mocks.gitPublish,
   },
+}));
+vi.mock("../lib/harness/textHarness", () => ({
+  generateCommitMessage: mocks.generateCommitMessage,
 }));
 vi.mock("@/modules/git-review/lib/githubProvider", () => ({
   githubPullRequestBranchStatus: mocks.githubPullRequestBranchStatus,
@@ -107,6 +113,13 @@ beforeEach(() => {
     truncated: false,
     changedFiles: [],
   });
+  mocks.gitDiff.mockImplementation(
+    async (_repoRoot: string, path: string, staged: boolean) => ({
+      diffText: `${staged ? "staged" : "working"}: ${path}`,
+      truncated: false,
+    }),
+  );
+  mocks.generateCommitMessage.mockResolvedValue("feat: update selected files");
   mocks.gitRemoteUrl.mockResolvedValue(null);
   mocks.gitFetch.mockResolvedValue(undefined);
   mocks.gitPush.mockResolvedValue({
@@ -308,6 +321,75 @@ it("blocks scoped commits when the native Git status is truncated", async () => 
     "incomplete",
   );
   expect(mocks.gitCommit).not.toHaveBeenCalled();
+});
+
+it("generates a commit message from selected diffs through the active remote workspace", async () => {
+  const sshWorkspace = {
+    kind: "ssh" as const,
+    connection: { id: "server-1", name: "Build", host: "build.example" },
+    root: "/repo",
+    sessionId: 17,
+  };
+  useWorkspaceEnvStore.setState({ env: sshWorkspace });
+  mocks.gitStatus.mockResolvedValue({
+    repoRoot: "/repo",
+    branch: "feature/session",
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    isDetached: false,
+    truncated: false,
+    changedFiles: [],
+  });
+
+  await act(async () => {
+    root.render(
+      <SessionChangesCommit
+        cwd="/repo"
+        sessionId="session-a"
+        harness="codex"
+        files={files}
+        onNotice={vi.fn()}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  const generateButton = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent?.includes("Generate with AI"),
+  );
+  expect(generateButton).toBeDefined();
+  await act(async () => {
+    generateButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(mocks.gitDiff).toHaveBeenCalledWith(
+    "/repo",
+    "/repo/src/a.ts",
+    true,
+    sshWorkspace,
+  );
+  expect(mocks.gitDiff).toHaveBeenCalledWith(
+    "/repo",
+    "/repo/src/a.ts",
+    false,
+    sshWorkspace,
+  );
+  expect(mocks.gitDiff).toHaveBeenCalledTimes(4);
+  expect(mocks.generateCommitMessage).toHaveBeenCalledWith(
+    ".",
+    "codex",
+    expect.any(AbortSignal),
+    expect.objectContaining({
+      branch: "feature/session",
+      summary: expect.stringContaining("src/a.ts"),
+      patch: expect.stringContaining("src/a.ts (staged)"),
+    }),
+  );
+  expect(container.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(
+    "feat: update selected files",
+  );
 });
 
 it("commits, publishes through the native workspace, and opens the pull request", async () => {

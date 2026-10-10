@@ -139,6 +139,12 @@ function FilePaneComponent({
               <SessionChangesDiff
                 cwd={file.cwd}
                 sessionId={file.sessionChanges.sessionId}
+                harness={
+                  sessions.find(
+                    (session) =>
+                      session.id === file.sessionChanges.sessionId,
+                  )?.harness
+                }
                 focusPath={file.path !== file.cwd ? file.path : undefined}
                 initialView={file.sessionChanges.view}
               />
@@ -204,13 +210,18 @@ export const FilePane = memo(FilePaneComponent, (previous, next) => {
   }
 
   for (const file of next.pane.files) {
-    const sessionId = file.plan?.sessionId;
+    const sessionId =
+      file.plan?.sessionId ??
+      (isSessionChangesTab(file) ? file.sessionChanges.sessionId : undefined);
     if (!sessionId) continue;
     const before = previous.sessions.find(
       (session) => session.id === sessionId,
     );
     const after = next.sessions.find((session) => session.id === sessionId);
-    if (before !== after) return false;
+    if (file.plan && before !== after) return false;
+    if (isSessionChangesTab(file) && before?.harness !== after?.harness) {
+      return false;
+    }
   }
   return true;
 });

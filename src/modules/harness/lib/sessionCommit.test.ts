@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CheckpointFile } from "./checkpoint";
 import {
+  buildSessionCommitMessageContext,
   mergeSessionCommitCandidates,
   resolveSessionCommitRepositories,
 } from "./sessionCommit";
@@ -124,5 +125,44 @@ describe("mergeSessionCommitCandidates", () => {
         statusLabel: "Untracked",
       },
     ]);
+  });
+});
+
+describe("buildSessionCommitMessageContext", () => {
+  it("uses staged and working diffs for selected files in stable order", async () => {
+    const selected = [
+      {
+        path: "/repo/src/a.ts",
+        relative: "src/a.ts",
+        sessionFile: file("/repo/src/a.ts"),
+        statusLabel: "Modified",
+      },
+      {
+        path: "/repo/README.md",
+        relative: "README.md",
+        sessionFile: null,
+        statusLabel: "Untracked",
+      },
+    ];
+    const readDiff = vi.fn(async (path: string, staged: boolean) => ({
+      diffText: `${staged ? "staged" : "working"}: ${path}`,
+      truncated: false,
+    }));
+
+    const context = await buildSessionCommitMessageContext(
+      "feature/session",
+      selected,
+      readDiff,
+    );
+
+    expect(context.branch).toBe("feature/session");
+    expect(context.summary).toContain("Modified src/a.ts");
+    expect(context.summary).toContain("Untracked README.md");
+    expect(context.patch.indexOf("src/a.ts (staged)")).toBeLessThan(
+      context.patch.indexOf("src/a.ts (unstaged)"),
+    );
+    expect(context.patch).toContain("README.md (staged)");
+    expect(context.patch).toContain("README.md (unstaged)");
+    expect(readDiff).toHaveBeenCalledTimes(4);
   });
 });
