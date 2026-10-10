@@ -417,6 +417,7 @@ import {
 } from "../lib/terminalClose";
 import {
   listRunningTerminals,
+  newTerminalCwd,
   type TerminalMetaPatch,
   terminalTabLabel,
 } from "../lib/terminalTab";
@@ -1140,6 +1141,11 @@ export function HarnessApp({
     active?.cwd ??
     (activeTab ? focusedFileTab(activeTab)?.cwd : undefined) ??
     projectCwd;
+  const terminalCwd = newTerminalCwd({
+    activeFile: activeTab ? focusedFileTab(activeTab) : undefined,
+    session: active,
+    fallback: projectCwd,
+  });
   const sidebarCwdRef = useRef(sidebarCwd);
   sidebarCwdRef.current = sidebarCwd;
   const sidebarCwdKey =
@@ -2206,8 +2212,8 @@ export function HarnessApp({
   );
 
   const onNewTerminal = useCallback(() => {
-    openProjectTerminal(active?.cwd ?? projectCwd);
-  }, [active?.cwd, openProjectTerminal, projectCwd]);
+    openProjectTerminal(terminalCwd);
+  }, [openProjectTerminal, terminalCwd]);
 
   const focusedProjectTerminalFileId = useCallback(() => {
     const dock = findProjectTerminal(
@@ -2233,12 +2239,12 @@ export function HarnessApp({
 
   const onShowProjectTerminal = useCallback(() => {
     if (!deckLayout) {
-      onOpenTerminal(active?.cwd ?? projectCwd);
+      onOpenTerminal(terminalCwd);
       return;
     }
     const projectPath = projectCwdRef.current;
     if (!looksLikeProject(projectPath)) {
-      onOpenTerminal(active?.cwd ?? projectCwd);
+      onOpenTerminal(terminalCwd);
       return;
     }
     const dock = findProjectTerminal(projectTerminalsRef.current, projectPath);
@@ -2254,14 +2260,13 @@ export function HarnessApp({
       }
       return;
     }
-    openProjectTerminal(active?.cwd ?? projectPath);
+    openProjectTerminal(terminalCwd);
   }, [
-    active?.cwd,
     deckLayout,
     focusProjectTerminal,
     onOpenTerminal,
     openProjectTerminal,
-    projectCwd,
+    terminalCwd,
   ]);
 
   const onNewTerminalInSession = useCallback(
@@ -2270,11 +2275,11 @@ export function HarnessApp({
         (entry) => entry.id === sessionId,
       );
       const cwd = session
-        ? sessionWorkCwd(session)
-        : (active?.cwd ?? projectCwd);
+        ? newTerminalCwd({ session, fallback: session.cwd })
+        : terminalCwd;
       openProjectTerminal(cwd);
     },
-    [active?.cwd, openProjectTerminal, projectCwd],
+    [openProjectTerminal, terminalCwd],
   );
 
   const onAddTerminalToPane = useCallback(
@@ -2494,8 +2499,8 @@ export function HarnessApp({
   );
 
   const onNewTerminalTab = useCallback(() => {
-    onOpenTerminal(active?.cwd ?? projectCwd, true);
-  }, [active?.cwd, onOpenTerminal, projectCwd]);
+    onOpenTerminal(terminalCwd, true);
+  }, [onOpenTerminal, terminalCwd]);
 
   const onCloseTab = useCallback(
     (id: string, opts?: { confirmedTerminalIds?: string[] }) => {

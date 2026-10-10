@@ -15,6 +15,21 @@ export type RunningTerminal = {
   label: string;
 };
 
+/** Working directory for a terminal opened from a general workspace action. */
+export function newTerminalCwd({
+  activeFile,
+  session,
+  fallback,
+}: {
+  activeFile?: Pick<FilePaneTab, "cwd">;
+  session?: { cwd: string; worktreeCwd?: string; worktreeRemoved?: boolean };
+  fallback: string;
+}): string {
+  if (session?.worktreeCwd && !session.worktreeRemoved)
+    return session.worktreeCwd;
+  return activeFile?.cwd ?? session?.cwd ?? fallback;
+}
+
 /** Default tab label from the working directory. */
 export function defaultTerminalTitle(cwd: string): string {
   const name = basename(cwd);

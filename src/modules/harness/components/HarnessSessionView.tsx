@@ -32,6 +32,7 @@ import type {
   RuntimeMode,
   Session,
 } from "../lib/session";
+import { newTerminalCwd } from "../lib/terminalTab";
 import { SessionPane } from "../surfaces/SessionPane";
 
 type HarnessSessionViewProps = {
@@ -283,9 +284,14 @@ export const HarnessSessionView: React.FC<HarnessSessionViewProps> = ({
   }, []);
 
   const handleNewTerminal = useCallback(() => {
+    const current = sessionRef.current;
     window.dispatchEvent(
       new CustomEvent("voktty:open-new-terminal-tab", {
-        detail: { cwd: sessionRef.current?.cwd },
+        detail: {
+          cwd: current
+            ? newTerminalCwd({ session: current, fallback: current.cwd })
+            : undefined,
+        },
       }),
     );
   }, []);
