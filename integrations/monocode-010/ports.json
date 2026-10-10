@@ -1049,6 +1049,39 @@
       ],
       "tests": [],
       "rationale": "The source change removes temporary scroll-debug instrumentation, which Voktty's transcript does not contain. The remaining changes are MonoCode 0.10.0 release notes and package/version metadata, which are specific to the upstream product and have no Harness behavior to port."
+    },
+    {
+      "upstreamCommit": "d4e40a975fced29e0307678b512a992523478506",
+      "upstreamTitle": "Add session changes panel for Mono diffs",
+      "localCommit": "7b4904b",
+      "basis": "preexisting",
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "src/app/App.tsx",
+          "local": "src/modules/harness/components/HarnessApp.tsx"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoChangesPanel.tsx",
+          "local": "src/modules/harness/surfaces/SessionChangesDiff.tsx"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoSidebar.tsx",
+          "local": "src/modules/harness/surfaces/FilePane.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/layout.test.ts",
+            "src/modules/harness/chrome/SurfaceTabs.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "MonoCode needs a separate side panel because its Mono view covers project tabs. Voktty's workspace already opens the exact session's checkpoint diff in a Session Changes file pane beside the chat, and reuses one tab per session while focusing the requested path. The session-aware panel, routing, and layout tests were in the pinned local baseline."
     }
   ]
 }
