@@ -22,6 +22,7 @@ const note: Note = {
   title: "Plan",
   body: "First paragraph.\n\nSecond paragraph.\n\nThird paragraph should stay out of list.",
   tags: ["work"],
+  slugPending: false,
   createdAt: 1,
   updatedAt: 2,
 };

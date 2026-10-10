@@ -3,6 +3,7 @@ import {
   appendNoteReference,
   composeNoteMessage,
   injectNotePrompt,
+  isNoteTitlePlaceholder,
   isNoteMentionPath,
   noteCardMeta,
   noteMentionLabel,
@@ -22,6 +23,7 @@ function note(
   return {
     body: "",
     tags: [],
+    slugPending: false,
     createdAt: 1,
     updatedAt: 1,
     ...partial,
@@ -49,6 +51,17 @@ describe("normalizeNoteTags", () => {
     expect(
       normalizeNoteTags([" Ideas ", "#Project Docs", "ideas", "###"]),
     ).toEqual(["ideas", "project-docs"]);
+  });
+});
+
+describe("isNoteTitlePlaceholder", () => {
+  it("recognizes generated placeholders and their localized display form", () => {
+    expect(isNoteTitlePlaceholder("Untitled")).toBe(true);
+    expect(isNoteTitlePlaceholder("Untitled 2")).toBe(true);
+    expect(isNoteTitlePlaceholder("Sin título", "Sin título")).toBe(true);
+    expect(isNoteTitlePlaceholder("Untitled draft", "Sin título")).toBe(
+      false,
+    );
   });
 });
 

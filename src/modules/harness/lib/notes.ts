@@ -16,6 +16,7 @@ export type Note = {
   tags: string[];
   sourceSessionId?: string;
   sourceCwd?: string;
+  slugPending: boolean;
   createdAt: number;
   updatedAt: number;
 };
@@ -27,6 +28,7 @@ export type NoteUpsert = {
   tags?: string[];
   sourceSessionId?: string;
   sourceCwd?: string;
+  finalizeSlug?: boolean;
 };
 
 /** Note chip shown in the composer and on the user turn in the thread. */
@@ -153,6 +155,20 @@ export function isNoteMentionPath(path: string): boolean {
 
 export function noteMentionLabel(note: Note): string {
   return `${NOTE_MENTION_PREFIX}${note.slug}`;
+}
+
+export function isNoteTitlePlaceholder(
+  title: string,
+  localizedPlaceholder?: string,
+): boolean {
+  const normalized = title.trim().toLowerCase();
+  if (
+    localizedPlaceholder &&
+    normalized === localizedPlaceholder.trim().toLowerCase()
+  ) {
+    return true;
+  }
+  return /^untitled(?:[-\s]+\d+)?$/i.test(normalized);
 }
 
 export function notesAsProjectFiles(notes: Note[]): ProjectFile[] {
@@ -351,6 +367,7 @@ export function composeNoteMessage(
       title: card.title,
       body: card.body,
       tags: [],
+      slugPending: false,
       createdAt: 0,
       updatedAt: 0,
     },

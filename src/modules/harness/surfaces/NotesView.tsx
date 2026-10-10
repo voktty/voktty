@@ -20,6 +20,7 @@ import { formatRelativeTime } from "../lib/githubTasks";
 import {
   createNote,
   deleteNote,
+  isNoteTitlePlaceholder,
   loadNotes,
   MAX_NOTE_TAGS,
   NOTES_CHANGED_EVENT,
@@ -161,7 +162,7 @@ export function NotesView({
     setCreating(true);
     try {
       const note = await createNote({
-        title: t("harness.chrome.untitled"),
+        title: "",
         body: "",
         ...(cwd && looksLikeProject(cwd) ? { sourceCwd: cwd } : {}),
       });
@@ -418,10 +419,17 @@ function NoteCard({
   active: boolean;
   onSelect: () => void;
 } & ProjectMarks) {
+  const { t } = useTranslation();
   const preview = notePreview(note.body, note.title);
   const project = noteSourceProject(note.sourceCwd);
   const time = formatRelativeTime(new Date(note.updatedAt).toISOString());
-  const hint = [note.title, project].filter(Boolean).join(" · ");
+  const placeholderTitle = t("harness.chrome.untitled");
+  const title =
+    note.slugPending &&
+    isNoteTitlePlaceholder(note.title, placeholderTitle)
+      ? placeholderTitle
+      : note.title;
+  const hint = [title, project].filter(Boolean).join(" · ");
   return (
     <button
       type="button"
@@ -455,7 +463,7 @@ function NoteCard({
         ) : null}
       </span>
       <span className="mt-1 line-clamp-1 text-[13px] font-semibold leading-snug text-content">
-        {note.title}
+        {title}
       </span>
       {preview ? (
         <span className="mt-1 line-clamp-1 text-[12px] leading-snug text-content/45">
@@ -541,9 +549,15 @@ function NoteEditor({
 } & ProjectMarks) {
   const { t } = useTranslation();
   const lockOverscroll = useLockOverscroll<HTMLDivElement>();
-  const blank = !note.body.trim() && note.title === t("harness.chrome.untitled");
+  const placeholderTitle = t("harness.chrome.untitled");
+  const pendingPlaceholder =
+    note.slugPending &&
+    isNoteTitlePlaceholder(note.title, placeholderTitle);
+  const blank =
+    pendingPlaceholder ||
+    (!note.body.trim() && note.title === placeholderTitle);
   const [mode, setMode] = useMarkdownMode(note.id);
-  const [title, setTitle] = useState(note.title);
+  const [title, setTitle] = useState(pendingPlaceholder ? "" : note.title);
   const [body, setBody] = useState(note.body);
   const [tags, setTags] = useState(note.tags);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -555,6 +569,7 @@ function NoteEditor({
   const skipSave = useRef(false);
   const saveTimer = useRef<number | null>(null);
   const saveQueue = useRef(Promise.resolve());
+  const finalizeRef = useRef<{ title: string } | null>(null);
   const onSavedRef = useRef(onSaved);
   titleRef.current = title;
   bodyRef.current = body;
@@ -578,7 +593,10 @@ function NoteEditor({
       (titleFocused ? current.title : noteTitle(bodyRef.current));
     const nextBody = bodyRef.current;
     const nextTags = tagsRef.current;
+    const finalizeRequest = finalizeRef.current;
+    const finalizeSlug = finalizeRequest?.title === nextTitle;
     if (
+      !finalizeSlug &&
       nextTitle === current.title &&
       nextBody === current.body &&
       sameTags(nextTags, current.tags)
@@ -590,7 +608,11 @@ function NoteEditor({
         title: nextTitle,
         body: nextBody,
         tags: nextTags,
+        ...(finalizeSlug ? { finalizeSlug } : {}),
       });
+      if (finalizeSlug && finalizeRef.current === finalizeRequest) {
+        finalizeRef.current = null;
+      }
       setSaveError(null);
       if (
         document.activeElement !== titleFieldRef.current &&
@@ -622,6 +644,11 @@ function NoteEditor({
 
   useEffect(() => {
     return () => {
+      if (noteRef.current.slugPending) {
+        finalizeRef.current = {
+          title: titleRef.current.trim() || noteTitle(bodyRef.current),
+        };
+      }
       void saveNow();
     };
   }, [saveNow]);
@@ -668,12 +695,20 @@ function NoteEditor({
             ref={titleFieldRef}
             value={title}
             onChange={(event) => {
+              titleRef.current = event.target.value;
+              finalizeRef.current = null;
               setTitle(event.target.value);
               scheduleSave();
             }}
             onBlur={() => {
               const next = title.trim() || noteTitle(body);
-              if (next !== title) setTitle(next);
+              if (next !== title) {
+                titleRef.current = next;
+                setTitle(next);
+              }
+              if (noteRef.current.slugPending) {
+                finalizeRef.current = { title: next };
+              }
               void saveNow();
             }}
             onKeyDown={onTitleKeyDown}

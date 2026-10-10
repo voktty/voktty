@@ -22,6 +22,8 @@ pub struct Note {
     pub source_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_cwd: Option<String>,
+    #[serde(default)]
+    pub slug_pending: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -38,6 +40,16 @@ pub struct NoteUpsert {
     pub source_session_id: Option<String>,
     #[serde(default)]
     pub source_cwd: Option<String>,
+    #[serde(default)]
+    pub finalize_slug: bool,
+}
+
+struct ExistingNote {
+    slug: String,
+    created_at: i64,
+    source_session_id: Option<String>,
+    source_cwd: Option<String>,
+    slug_pending: i64,
 }
 
 pub fn ensure_notes_table(conn: &Connection) -> rusqlite::Result<()> {
@@ -50,13 +62,15 @@ pub fn ensure_notes_table(conn: &Connection) -> rusqlite::Result<()> {
            tags_json TEXT NOT NULL DEFAULT '[]',
            source_session_id TEXT,
            source_cwd TEXT,
+           slug_pending INTEGER NOT NULL DEFAULT 0,
            created_at INTEGER NOT NULL,
            updated_at INTEGER NOT NULL
          );
          CREATE INDEX IF NOT EXISTS notes_updated_idx
            ON notes (updated_at DESC, id);",
     )?;
-    ensure_notes_column(conn, "tags_json", "TEXT NOT NULL DEFAULT '[]'")
+    ensure_notes_column(conn, "tags_json", "TEXT NOT NULL DEFAULT '[]'")?;
+    ensure_notes_column(conn, "slug_pending", "INTEGER NOT NULL DEFAULT 0")
 }
 
 fn ensure_notes_column(conn: &Connection, name: &str, definition: &str) -> rusqlite::Result<()> {
@@ -117,7 +131,7 @@ pub fn notes_delete(store: State<'_, SessionStoreState>, id: String) -> Result<(
 fn list_notes(conn: &Connection) -> rusqlite::Result<Vec<Note>> {
     let mut stmt = conn.prepare(
         "SELECT id, slug, title, body, source_session_id, source_cwd, tags_json,
-                created_at, updated_at
+                created_at, updated_at, slug_pending
          FROM notes
          ORDER BY updated_at DESC, id ASC",
     )?;
@@ -128,7 +142,7 @@ fn list_notes(conn: &Connection) -> rusqlite::Result<Vec<Note>> {
 fn get_note(conn: &Connection, id: &str) -> rusqlite::Result<Option<Note>> {
     conn.query_row(
         "SELECT id, slug, title, body, source_session_id, source_cwd, tags_json,
-                created_at, updated_at
+                created_at, updated_at, slug_pending
          FROM notes
          WHERE id = ?1",
         params![id],
@@ -155,21 +169,44 @@ fn upsert_note(conn: &Connection, note: &NoteUpsert) -> rusqlite::Result<Note> {
         .filter(|value| !value.is_empty());
     let now = now_millis();
 
-    let existing: Option<(String, i64, Option<String>, Option<String>)> = conn
+    let existing = conn
         .query_row(
-            "SELECT slug, created_at, source_session_id, source_cwd
+            "SELECT slug, created_at, source_session_id, source_cwd, slug_pending
              FROM notes WHERE id = ?1",
             params![note.id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| {
+                Ok(ExistingNote {
+                    slug: row.get(0)?,
+                    created_at: row.get(1)?,
+                    source_session_id: row.get(2)?,
+                    source_cwd: row.get(3)?,
+                    slug_pending: row.get(4)?,
+                })
+            },
         )
         .optional()?;
 
-    if let Some((slug, created_at, existing_session, existing_cwd)) = existing {
+    if let Some(existing) = existing {
+        let (slug, slug_pending) =
+            if note.finalize_slug && existing.slug_pending != 0 && !is_placeholder_title(&title) {
+                (unique_slug(conn, &title)?, false)
+            } else {
+                (existing.slug, existing.slug_pending != 0)
+            };
         conn.execute(
             "UPDATE notes
-             SET title = ?1, body = ?2, tags_json = ?3, updated_at = ?4
+             SET title = ?1, body = ?2, tags_json = ?3, updated_at = ?4,
+                 slug = ?6, slug_pending = ?7
              WHERE id = ?5",
-            params![title, body, tags_json, now, note.id],
+            params![
+                title,
+                body,
+                tags_json,
+                now,
+                note.id,
+                slug,
+                if slug_pending { 1i64 } else { 0i64 }
+            ],
         )?;
         Ok(Note {
             id: note.id.clone(),
@@ -177,18 +214,20 @@ fn upsert_note(conn: &Connection, note: &NoteUpsert) -> rusqlite::Result<Note> {
             title,
             body,
             tags,
-            source_session_id: existing_session,
-            source_cwd: existing_cwd,
-            created_at,
+            source_session_id: existing.source_session_id,
+            source_cwd: existing.source_cwd,
+            slug_pending,
+            created_at: existing.created_at,
             updated_at: now,
         })
     } else {
+        let slug_pending = note.title.trim().is_empty();
         let slug = unique_slug(conn, &title)?;
         conn.execute(
             "INSERT INTO notes (
                id, slug, title, body, source_session_id, source_cwd, tags_json,
-               created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+               created_at, updated_at, slug_pending
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 note.id,
                 slug,
@@ -198,7 +237,8 @@ fn upsert_note(conn: &Connection, note: &NoteUpsert) -> rusqlite::Result<Note> {
                 source_cwd,
                 tags_json,
                 now,
-                now
+                now,
+                if slug_pending { 1i64 } else { 0i64 }
             ],
         )?;
         Ok(Note {
@@ -209,6 +249,7 @@ fn upsert_note(conn: &Connection, note: &NoteUpsert) -> rusqlite::Result<Note> {
             tags,
             source_session_id: source_session_id.map(str::to_string),
             source_cwd: source_cwd.map(str::to_string),
+            slug_pending,
             created_at: now,
             updated_at: now,
         })
@@ -233,6 +274,7 @@ fn read_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
         source_cwd: row.get(5)?,
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
+        slug_pending: row.get::<_, i64>(9)? != 0,
     })
 }
 
@@ -271,6 +313,16 @@ fn normalize_title(title: &str) -> String {
 }
 
 fn slugify(title: &str) -> String {
+    let words = slug_words(title);
+    let slug = words[..words.len().min(48)].trim_end_matches('-');
+    if slug.is_empty() {
+        "note".into()
+    } else {
+        slug.into()
+    }
+}
+
+fn slug_words(title: &str) -> String {
     let mut out = String::new();
     let mut dash = false;
     for ch in title.chars() {
@@ -282,15 +334,18 @@ fn slugify(title: &str) -> String {
             out.push('-');
             dash = true;
         }
-        if out.len() >= 48 {
-            break;
-        }
     }
-    let slug = out.trim_end_matches('-').to_string();
-    if slug.is_empty() {
-        "note".into()
-    } else {
-        slug
+    out.trim_end_matches('-').to_string()
+}
+
+fn is_placeholder_title(title: &str) -> bool {
+    let words = slug_words(title);
+    match words.strip_prefix("untitled") {
+        Some("") => true,
+        Some(rest) => rest.strip_prefix('-').is_some_and(|suffix| {
+            !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit())
+        }),
+        None => false,
     }
 }
 
@@ -330,6 +385,24 @@ mod tests {
                 tags: Vec::new(),
                 source_session_id: None,
                 source_cwd: None,
+                finalize_slug: false,
+            },
+        )
+        .unwrap()
+    }
+
+    fn save(store: &SessionStore, id: &str, title: &str, finalize_slug: bool) -> Note {
+        let conn = store.lock_conn().unwrap();
+        upsert_note(
+            &conn,
+            &NoteUpsert {
+                id: id.into(),
+                title: title.into(),
+                body: String::new(),
+                tags: Vec::new(),
+                source_session_id: None,
+                source_cwd: None,
+                finalize_slug,
             },
         )
         .unwrap()
@@ -358,6 +431,17 @@ mod tests {
     }
 
     #[test]
+    fn note_upsert_defaults_to_not_finalizing_the_slug() {
+        let input: NoteUpsert = serde_json::from_value(serde_json::json!({
+            "id": "n1",
+            "title": "Plan",
+            "body": ""
+        }))
+        .unwrap();
+        assert!(!input.finalize_slug);
+    }
+
+    #[test]
     fn ensure_table_adds_tags_to_an_existing_notes_database() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
@@ -370,10 +454,13 @@ mod tests {
                source_cwd TEXT,
                created_at INTEGER NOT NULL,
                updated_at INTEGER NOT NULL
-             );",
+             );
+             INSERT INTO notes (id, slug, title, body, source_cwd, created_at, updated_at)
+               VALUES ('old', 'untitled', 'Untitled', 'kept', '/repo', 1, 2);",
         )
         .unwrap();
 
+        ensure_notes_table(&conn).unwrap();
         ensure_notes_table(&conn).unwrap();
 
         let tags_column: i64 = conn
@@ -384,6 +471,21 @@ mod tests {
             )
             .unwrap();
         assert_eq!(tags_column, 1);
+        let slug_pending_column: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name = 'slug_pending'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(slug_pending_column, 1);
+        let legacy = get_note(&conn, "old").unwrap().unwrap();
+        assert_eq!(legacy.slug, "untitled");
+        assert_eq!(legacy.title, "Untitled");
+        assert_eq!(legacy.body, "kept");
+        assert_eq!(legacy.source_cwd.as_deref(), Some("/repo"));
+        assert!(!legacy.slug_pending);
+        assert_eq!((legacy.created_at, legacy.updated_at), (1, 2));
     }
 
     #[test]
@@ -415,6 +517,7 @@ mod tests {
                 tags: vec!["Ideas".into(), "project docs".into(), "ideas".into()],
                 source_session_id: Some("sess-1".into()),
                 source_cwd: Some("/tmp/a".into()),
+                finalize_slug: false,
             },
         )
         .unwrap();
@@ -444,6 +547,88 @@ mod tests {
         let note = upsert(&store, "n1", "   ", "");
         assert_eq!(note.title, "Untitled");
         assert_eq!(note.slug, "untitled");
+        assert!(note.slug_pending);
+    }
+
+    #[test]
+    fn explicit_untitled_title_has_an_established_slug() {
+        let store = SessionStore::open_in_memory().unwrap();
+        let note = upsert(&store, "n1", "Untitled", "");
+        assert_eq!(note.slug, "untitled");
+        assert!(!note.slug_pending);
+    }
+
+    #[test]
+    fn pending_slug_survives_debounced_saves_and_finalizes_once() {
+        let store = SessionStore::open_in_memory().unwrap();
+        save(&store, "n1", "", false);
+        save(&store, "n1", "This i", false);
+        let typed = save(&store, "n1", "This is my first note", false);
+        assert_eq!(typed.slug, "untitled");
+        assert!(typed.slug_pending);
+
+        let finalized = save(&store, "n1", "This is my first note", true);
+        assert_eq!(finalized.slug, "this-is-my-first-note");
+        assert!(!finalized.slug_pending);
+
+        for title in ["Renamed", "", "Another name"] {
+            let renamed = save(&store, "n1", title, true);
+            assert_eq!(renamed.slug, "this-is-my-first-note");
+            assert!(!renamed.slug_pending);
+        }
+    }
+
+    #[test]
+    fn pending_slug_waits_for_a_real_title() {
+        let store = SessionStore::open_in_memory().unwrap();
+        save(&store, "n1", "", false);
+        for title in ["Untitled", "   ", "Untitled 2"] {
+            let saved = save(&store, "n1", title, true);
+            assert_eq!(saved.slug, "untitled");
+            assert!(saved.slug_pending);
+        }
+        let finalized = save(&store, "n1", "Auth approach", true);
+        assert_eq!(finalized.slug, "auth-approach");
+        assert!(!finalized.slug_pending);
+    }
+
+    #[test]
+    fn finalizing_a_pending_slug_avoids_collisions() {
+        let store = SessionStore::open_in_memory().unwrap();
+        save(&store, "n1", "Plan", false);
+        save(&store, "n2", "", false);
+        let second_blank = save(&store, "n3", "", false);
+        assert_eq!(second_blank.slug, "untitled-2");
+        assert_eq!(save(&store, "n2", "Plan", true).slug, "plan-2");
+        assert_eq!(save(&store, "n3", "Plan", true).slug, "plan-3");
+    }
+
+    #[test]
+    fn placeholder_title_detection_checks_the_whole_title() {
+        assert!(is_placeholder_title("Untitled"));
+        assert!(is_placeholder_title("untitled 2"));
+        assert!(is_placeholder_title("Untitled-137"));
+        assert!(!is_placeholder_title("Untitled draft"));
+        assert!(!is_placeholder_title("Untitled2"));
+        assert!(!is_placeholder_title("My untitled"));
+
+        let long = format!("Untitled {} draft", "1".repeat(40));
+        assert!(slugify(&long).len() <= 48);
+        assert!(!is_placeholder_title(&long));
+        assert!(is_placeholder_title(&format!(
+            "Untitled {}",
+            "1".repeat(60)
+        )));
+    }
+
+    #[test]
+    fn real_title_past_the_slug_cutoff_finalizes() {
+        let store = SessionStore::open_in_memory().unwrap();
+        save(&store, "n1", "", false);
+        let title = format!("Untitled {} draft", "1".repeat(40));
+        let finalized = save(&store, "n1", &title, true);
+        assert!(!finalized.slug_pending);
+        assert_eq!(finalized.slug, slugify(&title));
     }
 
     #[test]

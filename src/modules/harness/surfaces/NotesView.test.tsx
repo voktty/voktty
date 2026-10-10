@@ -39,6 +39,7 @@ beforeEach(() => {
     title: "Plan",
     body: "Keep this text.",
     tags: ["ideas"],
+    slugPending: false,
     createdAt: 1,
     updatedAt: 1,
   };
@@ -48,7 +49,21 @@ beforeEach(() => {
       if (command === "notes_list") return [{ ...stored }];
       if (command === "notes_upsert") {
         if (!args) throw new Error("Missing note arguments");
-        stored = { ...stored, ...args.note, updatedAt: stored.updatedAt + 1 };
+        const { finalizeSlug, ...updates } = args.note;
+        const candidateSlug = updates.title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+        const placeholder = /^untitled(?:-\d+)?$/.test(candidateSlug);
+        const finalized =
+          Boolean(finalizeSlug) && stored.slugPending && !placeholder;
+        stored = {
+          ...stored,
+          ...updates,
+          slug: finalized ? candidateSlug : stored.slug,
+          slugPending: finalized ? false : stored.slugPending,
+          updatedAt: stored.updatedAt + 1,
+        };
         return { ...stored };
       }
       throw new Error(`Unexpected command: ${command}`);
@@ -71,6 +86,21 @@ async function render() {
     root.render(createElement(NotesView, { onClose: vi.fn() })),
   );
 }
+
+it("creates a blank title so the native store can mark its slug pending", async () => {
+  await render();
+  const create = container.querySelector<HTMLButtonElement>(
+    '[aria-label="harness.chrome.newNote"]',
+  );
+  if (!create) throw new Error("Missing new note button");
+
+  await act(async () => create.click());
+
+  expect(invoke).toHaveBeenCalledWith(
+    "notes_upsert",
+    expect.objectContaining({ note: expect.objectContaining({ title: "" }) }),
+  );
+});
 
 function typeInto(
   field: HTMLInputElement | HTMLTextAreaElement,
@@ -141,6 +171,44 @@ it("autosaves a replacement title without trimming its focused draft", async () 
   expect(title.value).toBe("Replacement title");
 });
 
+it("finalizes a generated slug only after a real title leaves the field", async () => {
+  vi.useFakeTimers();
+  stored = {
+    ...stored,
+    slug: "untitled",
+    title: "Untitled",
+    body: "",
+    slugPending: true,
+  };
+  await render();
+  const title = titleField();
+  expect(title.value).toBe("");
+
+  act(() => {
+    title.focus();
+    typeInto(title, " New project plan ");
+  });
+  await act(async () => vi.advanceTimersByTime(400));
+
+  expect(stored.title).toBe("New project plan");
+  expect(stored.slug).toBe("untitled");
+  expect(stored.slugPending).toBe(true);
+
+  await act(async () => title.blur());
+
+  expect(stored.slug).toBe("new-project-plan");
+  expect(stored.slugPending).toBe(false);
+  expect(invoke).toHaveBeenLastCalledWith(
+    "notes_upsert",
+    expect.objectContaining({
+      note: expect.objectContaining({
+        title: "New project plan",
+        finalizeSlug: true,
+      }),
+    }),
+  );
+});
+
 it("preserves a cleared title while an earlier body save finishes", async () => {
   vi.useFakeTimers();
   await render();
@@ -205,5 +273,55 @@ it("commits a cleared title when its editor unmounts", async () => {
 
   expect(stored.title).toBe("Keep this text.");
   expect(stored.body).toBe("Keep this text.");
+  root = createRoot(container);
+});
+
+it("finalizes a pending slug when its editor unmounts", async () => {
+  stored = {
+    ...stored,
+    slug: "untitled",
+    title: "Untitled",
+    body: "",
+    slugPending: true,
+  };
+  await render();
+  const title = titleField();
+  act(() => {
+    title.focus();
+    typeInto(title, "Saved before close");
+  });
+
+  await act(async () => {
+    root.unmount();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(stored.slug).toBe("saved-before-close");
+  expect(stored.slugPending).toBe(false);
+  root = createRoot(container);
+});
+
+it("keeps an already generated title while its pending slug is finalized", async () => {
+  stored = {
+    ...stored,
+    slug: "untitled",
+    title: "Generated from the note body",
+    body: "Generated from the note body\n\nDetails",
+    slugPending: true,
+  };
+  await render();
+  const title = titleField();
+  expect(title.value).toBe("Generated from the note body");
+
+  await act(async () => {
+    root.unmount();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(stored.title).toBe("Generated from the note body");
+  expect(stored.slug).toBe("generated-from-the-note-body");
+  expect(stored.slugPending).toBe(false);
   root = createRoot(container);
 });

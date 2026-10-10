@@ -26,6 +26,7 @@ import { useAgentStore } from "@/modules/agents/store/agentStore";
 import { submitToLeaf } from "@/modules/terminal";
 import {
   deleteNote,
+  isNoteTitlePlaceholder,
   loadNotes,
   upsertNote,
   type Note,
@@ -98,10 +99,18 @@ export function NotesTab({
 
   useEffect(() => {
     if (selectedNote) {
-      setTitle(selectedNote.title);
+      setTitle(
+        selectedNote.slugPending &&
+          isNoteTitlePlaceholder(
+            selectedNote.title,
+            t("notesBoard.untitledNote"),
+          )
+          ? ""
+          : selectedNote.title,
+      );
       setBody(selectedNote.body);
     }
-  }, [selectedNote]);
+  }, [selectedNote, t]);
 
   const filteredNotes = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -122,6 +131,7 @@ export function NotesTab({
         title: initialTitle ?? t("notesBoard.newNote"),
         body: initialBody ?? "",
         tags: [],
+        slugPending: false,
         sourceCwd: cwd ?? undefined,
         createdAt: now,
         updatedAt: now,
@@ -165,11 +175,18 @@ export function NotesTab({
 
   const handleSave = async () => {
     if (!selectedId) return;
+    const currentTitle = title.trim();
+    const placeholderTitle = t("notesBoard.untitledNote");
     const noteUpsert = {
       id: selectedId,
-      title: title.trim() || t("notesBoard.untitledNote"),
+      title: currentTitle || placeholderTitle,
       body,
       sourceCwd: cwd ?? undefined,
+      ...(selectedNote?.slugPending &&
+      currentTitle !== "" &&
+      !isNoteTitlePlaceholder(currentTitle, placeholderTitle)
+        ? { finalizeSlug: true }
+        : {}),
     };
     await upsertNote(noteUpsert);
     await refreshNotes();
@@ -263,7 +280,15 @@ export function NotesTab({
                 type="button"
                 onClick={() => {
                   setSelectedId(note.id);
-                  setTitle(note.title);
+                  setTitle(
+                    note.slugPending &&
+                      isNoteTitlePlaceholder(
+                        note.title,
+                        t("notesBoard.untitledNote"),
+                      )
+                      ? ""
+                      : note.title,
+                  );
                   setBody(note.body);
                 }}
                 className={cn(
@@ -274,7 +299,13 @@ export function NotesTab({
                 )}
               >
                 <span className="truncate font-medium text-foreground">
-                  {note.title || t("notesBoard.untitledNote")}
+                  {note.slugPending &&
+                  isNoteTitlePlaceholder(
+                    note.title,
+                    t("notesBoard.untitledNote"),
+                  )
+                    ? t("notesBoard.untitledNote")
+                    : note.title || t("notesBoard.untitledNote")}
                 </span>
                 <span className="truncate text-[10.5px] text-muted-foreground/70">
                   {note.body.slice(0, 40) || t("notesBoard.emptyNote")}
