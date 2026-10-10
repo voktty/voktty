@@ -1430,6 +1430,39 @@
         }
       ],
       "rationale": "Voktty already applies the same behaviors across its native transcript design: it reconciles user movement with scroll events and layout clamping, observes turn-size changes in DOM order, leaves wheel gestures to nested scrollers, and preserves the composer viewport while resizing. Newly arrived replies are paced before their first paint; opening existing or hidden-tab output remains immediate."
+    },
+    {
+      "upstreamCommit": "22b48740499ab37c854b3018e6c207d79f8290f0",
+      "upstreamTitle": "Add searchable worktree creation to sidebar switcher",
+      "localCommits": ["2fd0476", "7ad7830"],
+      "localCommitBases": ["preexisting", "preexisting"],
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "Expose search and creation in Voktty's sidebar switcher after replacing its unregistered git_worktrees and git_worktree_create calls with WorkspaceEnv-aware native APIs that cover local, WSL, SSH through Voktty's agent, and Docker workspaces."
+      ],
+      "mappings": [
+        {
+          "upstream": "src/features/source-control/ui/SidebarWorktreeSwitcher.tsx",
+          "local": "src/modules/harness/chrome/SidebarWorktreeSwitcher.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/SidebarWorktreeSwitcher.tsx",
+          "local": "src/modules/harness/chrome/WorktreePicker.tsx"
+        },
+        {
+          "upstream": "src/features/source-control/ui/SidebarWorktreeSwitcher.test.ts",
+          "local": "src/modules/harness/chrome/SidebarWorktreeSwitcher.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/SidebarWorktreeSwitcher.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty already has a searchable worktree picker and a branch-creation dialog in its session UI, but its sidebar switcher only selects existing entries. The shared helper calls git_worktrees and git_worktree_create, neither of which is registered in Voktty's Tauri command handler. Existing git_list_branches and session-scoped git_worktree_add do not provide the generic list/create contract. Keep this row partial until the sidebar uses authorized native Git operations and the Voktty SSH agent for remote workspaces."
     }
   ]
 }
