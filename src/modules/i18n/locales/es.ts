@@ -6078,5 +6078,7 @@ export const es: TranslationSchema = {
     showMoreFiles:
       "Mostrar {count} {count, plural, one {archivo más} other {archivos más}}",
     sharedFile: "Archivo compartido",
+    statusTruncated:
+      "Git devolvió una lista de archivos incompleta. Los commits por selección se desactivan hasta obtener la lista completa.",
   },
 };

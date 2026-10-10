@@ -189,6 +189,127 @@ it("commits only the checked session file and refreshes its checkpoint", async (
   });
 });
 
+it("lists project changes without selecting or checkpointing them by default", async () => {
+  mocks.gitStatus.mockResolvedValue({
+    repoRoot: "/repo",
+    branch: "main",
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    isDetached: false,
+    truncated: false,
+    changedFiles: [
+      {
+        path: "src/a.ts",
+        originalPath: null,
+        indexStatus: " ",
+        worktreeStatus: "M",
+        staged: false,
+        unstaged: true,
+        untracked: false,
+        conflicted: false,
+        statusLabel: "Modified",
+      },
+      {
+        path: "src/b.ts",
+        originalPath: null,
+        indexStatus: " ",
+        worktreeStatus: "M",
+        staged: false,
+        unstaged: true,
+        untracked: false,
+        conflicted: false,
+        statusLabel: "Modified",
+      },
+      {
+        path: "README.md",
+        originalPath: null,
+        indexStatus: "?",
+        worktreeStatus: "?",
+        staged: false,
+        unstaged: true,
+        untracked: true,
+        conflicted: false,
+        statusLabel: "Untracked",
+      },
+    ],
+  });
+
+  await act(async () => {
+    root.render(
+      <SessionChangesCommit
+        cwd="/repo"
+        sessionId="session-a"
+        files={[files[0], { ...files[1], exact: false }]}
+        onNotice={vi.fn()}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  const checkboxes = container.querySelectorAll<HTMLInputElement>(
+    'input[type="checkbox"]',
+  );
+  expect(checkboxes).toHaveLength(3);
+  expect(checkboxes[0].checked).toBe(true);
+  expect(checkboxes[1].checked).toBe(false);
+  expect(checkboxes[1].disabled).toBe(true);
+  expect(container.textContent).toContain("README.md");
+
+  await act(async () => checkboxes[2].click());
+  const commitButton = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent?.includes("Commit 2 files"),
+  );
+  await act(async () => commitButton?.click());
+
+  expect(mocks.gitCommit).toHaveBeenCalledWith(
+    "/repo",
+    "Update session changes",
+    { kind: "local" },
+    ["/repo/src/a.ts", "/repo/README.md"],
+  );
+  expect(mocks.keepSessionChanges).toHaveBeenCalledTimes(1);
+  expect(mocks.keepSessionChanges).toHaveBeenCalledWith(
+    "session-a",
+    "/repo",
+    "src/a.ts",
+  );
+});
+
+it("blocks scoped commits when the native Git status is truncated", async () => {
+  mocks.gitStatus.mockResolvedValue({
+    repoRoot: "/repo",
+    branch: "main",
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    isDetached: false,
+    truncated: true,
+    changedFiles: [],
+  });
+
+  await act(async () => {
+    root.render(
+      <SessionChangesCommit
+        cwd="/repo"
+        sessionId="session-a"
+        files={[files[0]]}
+        onNotice={vi.fn()}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  const commitButton = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent?.includes("Commit 1 file"),
+  );
+  expect(commitButton?.disabled).toBe(true);
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+    "incomplete",
+  );
+  expect(mocks.gitCommit).not.toHaveBeenCalled();
+});
+
 it("commits, publishes through the native workspace, and opens the pull request", async () => {
   const sshWorkspace = {
     kind: "ssh" as const,
@@ -237,6 +358,7 @@ it("commits, publishes through the native workspace, and opens the pull request"
     sshWorkspace,
     ["/repo/src/a.ts", "/repo/src/b.ts"],
   );
+  expect(mocks.gitStatus).toHaveBeenCalledWith("/repo", sshWorkspace);
   expect(mocks.gitPublish).toHaveBeenCalledWith("/repo", "origin", {
     ...sshWorkspace,
   });
@@ -351,7 +473,19 @@ it("keeps push available after the session changes have been committed", async (
     behind: 0,
     isDetached: false,
     truncated: false,
-    changedFiles: [],
+    changedFiles: [
+      {
+        path: "README.md",
+        originalPath: null,
+        indexStatus: "?",
+        worktreeStatus: "?",
+        staged: false,
+        unstaged: true,
+        untracked: true,
+        conflicted: false,
+        statusLabel: "Untracked",
+      },
+    ],
   });
   mocks.gitRemoteUrl.mockResolvedValue("git@github.com:acme/widgets.git");
   mocks.isGithubConnected.mockResolvedValue(false);
@@ -368,6 +502,11 @@ it("keeps push available after the session changes have been committed", async (
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+  expect(container.textContent).toContain("README.md");
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="checkbox"]')
+      ?.checked,
+  ).toBe(false);
   const pushButton = [...container.querySelectorAll("button")].find((button) =>
     button.textContent?.includes("Push"),
   );

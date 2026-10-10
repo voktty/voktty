@@ -19,7 +19,9 @@ import { invalidateWatchedFiles } from "../lib/fileWatch";
 import { notifyGitChanged } from "../lib/fs";
 import { githubOwnerRepoFromRemote } from "../lib/githubRemote";
 import {
+  mergeSessionCommitCandidates,
   resolveSessionCommitRepositories,
+  type SessionCommitCandidate,
   type SessionCommitNotice,
   type SessionCommitRepository,
   type SessionCommitRepositoryResolution,
@@ -100,7 +102,7 @@ export function SessionChangesCommit({
           key: historyKey,
           repositories: result.repositories,
         };
-      } else if (files.length === 0) {
+      } else {
         const previous = repositoryHistory.current.repositories;
         if (previous.length > 0) {
           nextResult = {
@@ -225,15 +227,33 @@ export function SessionChangesCommit({
     };
   }, [activeRepo, readRepositoryState]);
 
-  const selectedFiles =
-    activeRepo?.files.filter(
-      (file) => file.exact && selectedPaths.has(file.path),
-    ) ?? [];
   const sharedFileCount = files.filter((file) => !file.exact).length;
   const currentRepositoryState =
     repositoryState?.repoRoot === activeRepo?.repoRoot ? repositoryState : null;
   const gitStatus = currentRepositoryState?.status ?? null;
   const githubStatus = currentRepositoryState?.githubStatus ?? null;
+  const selectedFiles =
+    activeRepo && gitStatus
+      ? mergeSessionCommitCandidates(
+          activeRepo.repoRoot,
+          activeRepo.files,
+          gitStatus.changedFiles,
+          files.filter((file) => !file.exact),
+        ).filter(
+          (file) =>
+            (!file.sessionFile || file.sessionFile.exact) &&
+            selectedPaths.has(file.path),
+        )
+      : (activeRepo?.files
+          .filter((file) => file.exact && selectedPaths.has(file.path))
+          .map(
+            (file): SessionCommitCandidate => ({
+              path: file.path,
+              relative: file.relative,
+              sessionFile: file,
+              statusLabel: null,
+            }),
+          ) ?? []);
   const hasRemote = Boolean(
     currentRepositoryState?.remoteUrl ||
       currentRepositoryState?.status.upstream,
@@ -293,7 +313,9 @@ export function SessionChangesCommit({
     invalidateProjectFiles(cwd);
 
     const checkpointFailures: string[] = [];
-    for (const file of committed) {
+    for (const candidate of committed) {
+      const file = candidate.sessionFile;
+      if (!file?.exact) continue;
       try {
         await keepSessionChanges(sessionId, cwd, file.relative);
       } catch {
@@ -415,6 +437,7 @@ export function SessionChangesCommit({
 
   const runWorkflow = async (workflow: Workflow) => {
     if (!activeRepo || committing) return;
+    if (workflow !== "push" && gitStatus?.truncated) return;
     if (workflow !== "push" && selectedFiles.length > 0 && !message.trim()) {
       return;
     }
@@ -452,9 +475,7 @@ export function SessionChangesCommit({
         });
         await openExternalUrl(url);
       }
-      if (workflow !== "commit") {
-        await refreshRepositoryState();
-      }
+      await refreshRepositoryState();
     } catch (caught: unknown) {
       const detail = errorMessage(caught);
       setError(detail);
@@ -518,7 +539,12 @@ export function SessionChangesCommit({
         )}
         <button
           type="button"
-          disabled={committing || selectedFiles.length === 0 || !message.trim()}
+          disabled={
+            committing ||
+            selectedFiles.length === 0 ||
+            !message.trim() ||
+            Boolean(gitStatus?.truncated)
+          }
           onClick={() => void runWorkflow("commit")}
           className="h-8 shrink-0 rounded-md bg-content px-3 text-[12px] font-medium text-background-base hover:bg-content/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -536,7 +562,8 @@ export function SessionChangesCommit({
               !hasRemote ||
               branchBehind ||
               branchDiverged ||
-              !message.trim()
+              !message.trim() ||
+              Boolean(gitStatus?.truncated)
             }
             onClick={() => void runWorkflow("commit-push")}
             className="h-8 shrink-0 rounded-md border border-content/15 px-3 text-[12px] text-content/80 hover:bg-content/5 disabled:cursor-not-allowed disabled:opacity-40"
@@ -582,7 +609,11 @@ export function SessionChangesCommit({
                 ) : githubStatus?.pullRequest ? (
                   <button
                     type="button"
-                    disabled={committing}
+                    disabled={
+                      committing ||
+                      (selectedFiles.length > 0 &&
+                        Boolean(gitStatus?.truncated))
+                    }
                     onClick={() => {
                       const url = githubStatus.pullRequest?.htmlUrl;
                       if (url) openPullRequest(url);
@@ -643,7 +674,20 @@ export function SessionChangesCommit({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-content/10">
-        {activeRepo.files.map((file) => (
+        {gitStatus &&
+        !gitStatus.truncated &&
+        activeRepo.files.length === 0 &&
+        gitStatus.changedFiles.length === 0 ? (
+          <p className="px-3 py-3 text-[12px] text-content/45">
+            {t("harness.chrome.noSessionChanges")}
+          </p>
+        ) : null}
+        {mergeSessionCommitCandidates(
+          activeRepo.repoRoot,
+          activeRepo.files,
+          gitStatus?.changedFiles ?? [],
+          files.filter((file) => !file.exact),
+        ).map((file) => (
           <label
             key={file.path}
             className="flex min-h-9 items-center gap-2 border-b border-content/6 px-3 text-[12px] last:border-b-0"
@@ -651,7 +695,11 @@ export function SessionChangesCommit({
             <input
               type="checkbox"
               checked={selectedPaths.has(file.path)}
-              disabled={!file.exact || committing}
+              disabled={
+                committing ||
+                Boolean(gitStatus?.truncated) ||
+                Boolean(file.sessionFile && !file.sessionFile.exact)
+              }
               onChange={(event) => {
                 setSelectedPaths((previous) => {
                   const next = new Set(previous);
@@ -665,14 +713,24 @@ export function SessionChangesCommit({
             <span className="min-w-0 flex-1 truncate font-mono text-content/75">
               {file.relative}
             </span>
-            {!file.exact ? (
+            {file.sessionFile && !file.sessionFile.exact ? (
               <span className="shrink-0 text-[10px] text-amber-300/75">
                 {t("sessionReview.sharedFile")}
+              </span>
+            ) : file.statusLabel ? (
+              <span className="shrink-0 text-[10px] text-content/45">
+                {file.statusLabel}
               </span>
             ) : null}
           </label>
         ))}
       </div>
+
+      {gitStatus?.truncated ? (
+        <p role="alert" className="text-[11px] text-amber-300/80">
+          {t("sessionReview.statusTruncated")}
+        </p>
+      ) : null}
 
       <label className="flex flex-col gap-1 text-[11px] text-content/55">
         <span>{t("sessionReview.commitMessage")}</span>

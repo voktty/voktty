@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CheckpointFile } from "./checkpoint";
-import { resolveSessionCommitRepositories } from "./sessionCommit";
+import {
+  mergeSessionCommitCandidates,
+  resolveSessionCommitRepositories,
+} from "./sessionCommit";
 
 function file(path: string, exact = true): CheckpointFile {
   return {
@@ -55,5 +58,71 @@ describe("resolveSessionCommitRepositories", () => {
     ]);
     expect(result.unresolvedFiles).toEqual([files[3]]);
     expect(resolveRepo).not.toHaveBeenCalledWith("/repo/shared.ts");
+  });
+});
+
+describe("mergeSessionCommitCandidates", () => {
+  it("adds repository changes while retaining session checkpoint ownership", () => {
+    const sessionFile = file("/repo/src/session.ts");
+    const result = mergeSessionCommitCandidates(
+      "/repo",
+      [sessionFile, file("/repo/shared.ts", false)],
+      [
+        {
+          path: "src/session.ts",
+          originalPath: null,
+          indexStatus: " ",
+          worktreeStatus: "M",
+          staged: false,
+          unstaged: true,
+          untracked: false,
+          conflicted: false,
+          statusLabel: "Modified",
+        },
+        {
+          path: "shared.ts",
+          originalPath: null,
+          indexStatus: " ",
+          worktreeStatus: "M",
+          staged: false,
+          unstaged: true,
+          untracked: false,
+          conflicted: false,
+          statusLabel: "Modified",
+        },
+        {
+          path: "README.md",
+          originalPath: null,
+          indexStatus: "?",
+          worktreeStatus: "?",
+          staged: false,
+          unstaged: true,
+          untracked: true,
+          conflicted: false,
+          statusLabel: "Untracked",
+        },
+      ],
+    );
+
+    expect(result).toEqual([
+      {
+        path: "/repo/src/session.ts",
+        relative: "/repo/src/session.ts",
+        sessionFile,
+        statusLabel: "Modified",
+      },
+      {
+        path: "/repo/shared.ts",
+        relative: "/repo/shared.ts",
+        sessionFile: expect.objectContaining({ exact: false }),
+        statusLabel: "Modified",
+      },
+      {
+        path: "/repo/README.md",
+        relative: "README.md",
+        sessionFile: null,
+        statusLabel: "Untracked",
+      },
+    ]);
   });
 });

@@ -1,7 +1,7 @@
-import type { GitRepoInfo } from "@/modules/ai/lib/native";
+import type { GitChangedFile, GitRepoInfo } from "@/modules/ai/lib/native";
 import type { CheckpointFile } from "./checkpoint";
 import { forEachConcurrent } from "./concurrent";
-import { isEqualOrInside, parentPath, pathKey } from "./paths";
+import { isEqualOrInside, joinPath, parentPath, pathKey } from "./paths";
 
 export type SessionCommitRepository = {
   repoRoot: string;
@@ -13,10 +13,57 @@ export type SessionCommitRepositoryResolution = {
   unresolvedFiles: CheckpointFile[];
 };
 
+export type SessionCommitCandidate = {
+  path: string;
+  relative: string;
+  sessionFile: CheckpointFile | null;
+  statusLabel: string | null;
+};
+
 export type SessionCommitNotice = {
   message: string;
   kind: "success" | "warning";
 };
+
+/** Merge session-owned paths with every changed path reported by Git. */
+export function mergeSessionCommitCandidates(
+  repoRoot: string,
+  sessionFiles: readonly CheckpointFile[],
+  changedFiles: readonly GitChangedFile[],
+  sharedFiles: readonly CheckpointFile[] = [],
+): SessionCommitCandidate[] {
+  const candidates = new Map<string, SessionCommitCandidate>();
+  const sharedByPath = new Map(
+    sharedFiles.map((file) => [pathKey(file.path), file]),
+  );
+  for (const file of sessionFiles) {
+    candidates.set(pathKey(file.path), {
+      path: file.path,
+      relative: file.relative,
+      sessionFile: file,
+      statusLabel: null,
+    });
+  }
+
+  for (const changed of changedFiles) {
+    const path = joinPath(repoRoot, changed.path);
+    const key = pathKey(path);
+    const existing = candidates.get(key);
+    if (existing) {
+      existing.statusLabel = changed.statusLabel;
+    } else {
+      const sharedFile = sharedByPath.get(key);
+      candidates.set(key, {
+        path: sharedFile?.path ?? path,
+        relative: sharedFile?.relative ?? changed.path,
+        sessionFile: sharedFile ?? null,
+        statusLabel: changed.statusLabel,
+      });
+    }
+  }
+
+  return [...candidates.values()];
+}
 
 /** Group exact session-owned files by their containing Git repository. */
 export async function resolveSessionCommitRepositories(
