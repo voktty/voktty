@@ -365,6 +365,38 @@ describe("tools and models", () => {
     expect(previewFromTool("write", { path: "src/a.ts" })?.kind).toBe("write");
   });
 
+  it("hides Copilot's internal and legacy snapshot models", () => {
+    const ids = [
+      "gpt-4o",
+      "gpt-4.1",
+      "gpt-5-mini",
+      "claude-sonnet-4.6",
+      "exec-agent-a",
+      "copilot-search-b",
+      "trajectory-compaction",
+      "gpt-3.5-turbo-0613",
+      "gpt-4",
+      "gpt-4-0613",
+      "gpt-4-o-preview",
+      "gpt-4o-mini",
+      "gpt-4o-2024-11-20",
+      "gpt-4.1-2025-04-14",
+    ];
+    const models = modelsFromRpcData(OMP_FLAVOR, {
+      models: [
+        ...ids.map((id) => ({ id, name: id, provider: "github-copilot" })),
+        { id: "gpt-4o-mini", name: "gpt-4o-mini", provider: "openai" },
+      ],
+    });
+    expect(models.map((model) => model.nativeId).sort()).toEqual([
+      "github-copilot/claude-sonnet-4.6",
+      "github-copilot/gpt-4.1",
+      "github-copilot/gpt-4o",
+      "github-copilot/gpt-5-mini",
+      "openai/gpt-4o-mini",
+    ]);
+  });
+
   it("keeps earlier tool args when a later update is partial", () => {
     expect(
       mergeToolInput({ command: "git status -s" }, { timeout: 30 }),
