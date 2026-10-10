@@ -1086,11 +1086,17 @@
     {
       "upstreamCommit": "d26871f246d34479795bc9a00513b43d4d18add2",
       "upstreamTitle": "Add commit tab to Mono changes panel",
-      "localCommits": ["94a9b85", "7e1af5c", "a9a1bee", "a7c666e"],
+      "localCommits": [
+        "94a9b85",
+        "7e1af5c",
+        "a9a1bee",
+        "a7c666e",
+        "d068f09"
+      ],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Commit and pull request text still use the default commit message. Generate text with the active Harness only after Git context goes through Voktty's native WorkspaceEnv agent for SSH and Docker."
+        "Pull request title and body generation remains deferred because Voktty currently reuses the commit message. Before adding it, collect branch-range context through native Git with the active WorkspaceEnv so SSH and Docker use Voktty's agent."
       ],
       "mappings": [
         {
@@ -1104,6 +1110,42 @@
         {
           "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
           "local": "src/modules/harness/surfaces/SessionChangesCommit.tsx"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/sessionCommit.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/harness/textHarness.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/harness/registry.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/gitText.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/harness/claudeGit.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/harness/codexGit.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/harness/cursorGit.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/harness/grokGit.ts"
+        },
+        {
+          "upstream": "src/features/monos/ui/MonoProjectCommit.tsx",
+          "local": "src/modules/harness/lib/harness/opencodeGit.ts"
         },
         {
           "upstream": "src/features/monos/ui/MonoSidebar.tsx",
@@ -1122,6 +1164,10 @@
           "local": "src/modules/harness/surfaces/SessionChangesCommit.tsx"
         },
         {
+          "upstream": "src/features/source-control/ui/GitChangesPanel.tsx",
+          "local": "src/modules/harness/lib/sessionCommit.ts"
+        },
+        {
           "upstream": "src/features/source-control/ui/SessionChangesDiff.tsx",
           "local": "src/modules/harness/surfaces/SessionChangesDiff.tsx"
         },
@@ -1135,7 +1181,8 @@
           "files": [
             "src/modules/harness/lib/sessionCommit.test.ts",
             "src/modules/harness/surfaces/SessionChangesCommit.test.tsx",
-            "src/modules/harness/lib/githubRemote.test.ts"
+            "src/modules/harness/lib/githubRemote.test.ts",
+            "src/modules/harness/lib/harness/cancelableCommit.test.ts"
           ],
           "cwd": ".",
           "runner": "vitest"
@@ -1147,7 +1194,7 @@
           "filter": "modules::git_review::github::tests"
         }
       ],
-      "rationale": "Voktty adapts the commit tab to the native Git status list. Exact session files start selected; other project changes are opt-in, and shared session files stay blocked. Path-scoped commit, push/publish, and GitHub PR status and creation all keep the active WorkspaceEnv for Voktty's native SSH and Docker transport. Harness-generated commit and PR text remains partial until its Git context uses that same workspace contract."
+      "rationale": "Voktty adapts the commit tab to the native Git status list. Exact session files start selected; other project changes are opt-in, and shared session files stay blocked. Path-scoped commit, push/publish, and GitHub PR status and creation keep the active WorkspaceEnv for Voktty's native SSH and Docker transport. Commit-message generation now builds bounded context from only selected files with native.gitDiff and passes it to the session's Harness without a second Git lookup; PR title/body generation still awaits native branch-range context."
     }
   ]
 }
