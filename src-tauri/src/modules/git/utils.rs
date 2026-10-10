@@ -85,6 +85,14 @@ pub fn authorized_repo_root(
 }
 
 pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
+    resolve_within_repo_impl(repo_root, rel, false)
+}
+
+pub fn resolve_literal_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
+    resolve_within_repo_impl(repo_root, rel, true)
+}
+
+fn resolve_within_repo_impl(repo_root: &Path, rel: &str, allow_colon: bool) -> Result<PathBuf> {
     let rel_norm = rel.replace('\\', "/");
     let repo_norm = repo_root.to_string_lossy().replace('\\', "/");
     let repo_clean = repo_norm
@@ -109,7 +117,7 @@ pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
     let clean_rel = stripped_rel.replace('\\', "/");
     let clean_rel = clean_rel.trim_start_matches('/');
 
-    if !is_safe_pathspec(clean_rel) {
+    if !is_safe_path(clean_rel, allow_colon) {
         return Err(GitError::InvalidPath(clean_rel.into()));
     }
     let joined = repo_root.join(clean_rel);
@@ -139,7 +147,11 @@ pub fn resolve_within_repo(repo_root: &Path, rel: &str) -> Result<PathBuf> {
 }
 
 pub fn is_safe_pathspec(rel: &str) -> bool {
-    if rel.is_empty() || rel.contains(':') || rel.contains('\0') {
+    is_safe_path(rel, false)
+}
+
+fn is_safe_path(rel: &str, allow_colon: bool) -> bool {
+    if rel.is_empty() || (!allow_colon && rel.contains(':')) || rel.contains('\0') {
         return false;
     }
     if rel.chars().any(|c| (c as u32) < 0x20) {
@@ -243,6 +255,22 @@ mod tests {
         let tmp = std::env::temp_dir();
         let err = resolve_within_repo(&tmp, "evil:path");
         assert!(matches!(err, Err(GitError::InvalidPath(_))));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_literal_within_repo_accepts_colon_directory_without_allowing_escape() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(":(glob)*");
+        std::fs::create_dir(&path).unwrap();
+        assert_eq!(
+            resolve_literal_within_repo(root.path(), ":(glob)*").unwrap(),
+            path.canonicalize().unwrap()
+        );
+        assert!(matches!(
+            resolve_literal_within_repo(root.path(), "../outside"),
+            Err(GitError::InvalidPath(_))
+        ));
     }
 
     #[test]

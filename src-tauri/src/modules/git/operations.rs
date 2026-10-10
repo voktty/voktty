@@ -15,7 +15,8 @@ use crate::modules::git::types::{
     DEFAULT_TIMEOUT_SECS, MAX_FILE_BYTES, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
-    authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream, ResolvedGitDirectory,
+    authorized_repo_root, canonical_dir, resolve_literal_within_repo, resolve_within_repo,
+    split_upstream, ResolvedGitDirectory,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
@@ -336,8 +337,8 @@ pub fn stage(
     if paths.is_empty() {
         return Ok(());
     }
-    let resolved = resolve_pathspecs(&repo_root.local_path, paths)?;
-    let mut args: Vec<OsString> = vec!["add".into(), "--".into()];
+    let resolved = resolve_literal_pathspecs(&repo_root.local_path, paths)?;
+    let mut args: Vec<OsString> = vec!["--literal-pathspecs".into(), "add".into(), "--".into()];
     for p in &resolved {
         args.push(p.clone().into());
     }
@@ -361,8 +362,13 @@ pub fn unstage(
     if paths.is_empty() {
         return Ok(());
     }
-    let resolved = resolve_pathspecs(&repo_root.local_path, paths)?;
-    let mut reset_args: Vec<OsString> = vec!["reset".into(), "HEAD".into(), "--".into()];
+    let resolved = resolve_literal_pathspecs(&repo_root.local_path, paths)?;
+    let mut reset_args: Vec<OsString> = vec![
+        "--literal-pathspecs".into(),
+        "reset".into(),
+        "HEAD".into(),
+        "--".into(),
+    ];
     for p in &resolved {
         reset_args.push(p.clone().into());
     }
@@ -378,7 +384,13 @@ pub fn unstage(
     if !looks_like_no_head(&output) {
         return ensure_success(&output, "git reset failed");
     }
-    let mut rm_args: Vec<OsString> = vec!["rm".into(), "--cached".into(), "-r".into(), "--".into()];
+    let mut rm_args: Vec<OsString> = vec![
+        "--literal-pathspecs".into(),
+        "rm".into(),
+        "--cached".into(),
+        "-r".into(),
+        "--".into(),
+    ];
     for p in &resolved {
         rm_args.push(p.clone().into());
     }
@@ -1186,10 +1198,11 @@ fn nothing_to_commit(output: &GitOutput) -> bool {
     stderr.contains("nothing to commit") || stdout.contains("nothing to commit")
 }
 
-fn resolve_pathspecs(repo_root: &Path, paths: &[String]) -> Result<Vec<String>> {
+fn resolve_literal_pathspecs(repo_root: &Path, paths: &[String]) -> Result<Vec<String>> {
     let mut out = Vec::with_capacity(paths.len());
     for p in paths {
-        out.push(pathspec_from_input(repo_root, p)?);
+        let resolved = resolve_literal_within_repo(repo_root, p)?;
+        out.push(pathspec(repo_root, &resolved));
     }
     Ok(out)
 }
@@ -2742,6 +2755,77 @@ mod tests {
         assert_eq!(committed.trim(), "literal[1].txt");
         let unstaged = output_text(run_test_git(repo.path(), &["diff", "--name-only"]));
         assert_eq!(unstaged.trim(), "literal1.txt");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stage_and_unstage_treat_folder_pathspec_metacharacters_literally() {
+        for folder in ["*", "folder?", "[ab]", ":(glob)*"] {
+            let Some((repo, registry)) = create_commit_test_repo() else {
+                return;
+            };
+            for directory in [folder, "a", "folderx"] {
+                std::fs::create_dir(repo.path().join(directory)).unwrap();
+            }
+            let inside = format!("{folder}/inside.txt");
+            let tracked = [
+                inside.as_str(),
+                "a/other.txt",
+                "folderx/other.txt",
+                "ready.txt",
+            ];
+            for path in tracked {
+                std::fs::write(repo.path().join(path), "before\n").unwrap();
+            }
+            run_test_git(repo.path(), &["add", "--all"]);
+            run_test_git(repo.path(), &["commit", "-m", "add pathspec fixtures"]);
+            for path in tracked {
+                std::fs::write(repo.path().join(path), "after\n").unwrap();
+            }
+            std::fs::write(repo.path().join("private.txt"), "unrelated\n").unwrap();
+
+            stage(
+                &registry,
+                &repo.path().to_string_lossy(),
+                &[selected_path(repo.path(), "ready.txt")],
+                &WorkspaceEnv::Local,
+            )
+            .unwrap();
+            stage(
+                &registry,
+                &repo.path().to_string_lossy(),
+                &[selected_path(repo.path(), folder)],
+                &WorkspaceEnv::Local,
+            )
+            .unwrap();
+
+            let staged_paths = || {
+                output_text(run_test_git(
+                    repo.path(),
+                    &["diff", "--cached", "--name-only", "-z"],
+                ))
+                .split('\0')
+                .filter(|path| !path.is_empty())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+            };
+            let mut expected = vec![inside.clone(), "ready.txt".to_string()];
+            expected.sort();
+            assert_eq!(staged_paths(), expected, "stage folder {folder}");
+
+            unstage(
+                &registry,
+                &repo.path().to_string_lossy(),
+                &[selected_path(repo.path(), folder)],
+                &WorkspaceEnv::Local,
+            )
+            .unwrap();
+            assert_eq!(staged_paths(), vec!["ready.txt"], "unstage folder {folder}");
+            assert_eq!(
+                std::fs::read_to_string(repo.path().join(inside)).unwrap(),
+                "after\n"
+            );
+        }
     }
 
     #[test]
