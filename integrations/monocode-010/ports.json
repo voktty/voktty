@@ -870,6 +870,31 @@
         }
       ],
       "rationale": "Voktty adapts the global palette tokens, persisted colorblind/high-contrast choices, accessible line glyphs, and all matching diff summaries and previews across its Harness and source-control surfaces. The setting lives in Voktty's Harness tab and is searchable from global Settings, rather than MonoCode's appearance page and search index. Voktty's existing untracked status remains visually distinct from added lines. The upstream changelog has no local counterpart."
+    },
+    {
+      "upstreamCommit": "e65ed823027e4e05f4b36b86b3e02a44d4d52158",
+      "upstreamTitle": "fix(files): open markdown diffs as source instead of preview (#660)",
+      "localCommit": "f7d8d85",
+      "license": "MIT",
+      "coverage": "complete",
+      "mappings": [
+        {
+          "upstream": "src/features/files/ui/FileEditor.tsx",
+          "local": "src/modules/harness/surfaces/FileEditor.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/MarkdownModeToggle.tsx",
+          "local": "src/modules/harness/chrome/MarkdownModeToggle.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/MarkdownModeToggle.test.tsx"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty routes active review tabs through GitDiffPane, which already renders Markdown as source. FileEditor's optional diff mode now also uses an isolated review preference with source as its fallback, so normal file preview preferences remain independent."
     }
   ]
 }
