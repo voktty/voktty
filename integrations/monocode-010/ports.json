@@ -622,12 +622,13 @@
         "5a263ea",
         "d99277f",
         "04ee7e1",
-        "7243754"
+        "7243754",
+        "fc65524"
       ],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Saved SSH profiles create remote Harness projects directly and resolve their credential-free environment identity for native folder browsing, OpenCode 2.x sessions, and worktree Git operations. Supported project file commands use the authenticated Voktty helper fs.* API with root-confined mutations and expectedContent writes; file, search, Git status, and file diff operations do not fall back to Host. Search supports nested directories and returns at most 500 matches. Git status and file diffs use fixed commands through git.execWorkspace, which constrains cwd to the authenticated root; captured Git streams are capped at 4 MiB and file blobs at 1 MiB. Legacy machine IDs keep using Host. list_project_files currently applies only root-level .gitignore patterns, read_file_preview inherits the helper's 8 MiB read limit, and untracked file line counts are not computed. Git writes, sync, branches, history, and session catalog operations for direct profiles remain pending. Active-turn tunnel recovery and a live Docker SSH smoke remain outstanding. Verify a Docker host and migrate the remaining operations before claiming full remote parity."
+        "Saved SSH profiles create remote Harness projects directly and resolve their credential-free environment identity for native folder browsing, OpenCode 2.x sessions, and worktree Git operations. Supported project file commands use the authenticated Voktty helper fs.* API with root-confined mutations and expectedContent writes; file, search, Git status, file diff, stage, unstage, and discard operations do not fall back to Host. Search supports nested directories and returns at most 500 matches. Git commands use fixed argument arrays through git.execWorkspace, which constrains cwd to the authenticated root; captured Git streams are capped at 4 MiB and file blobs at 1 MiB. Discard restores tracked files to the index and removes only untracked files, preserving staged changes. Legacy machine IDs keep using Host. list_project_files currently applies only root-level .gitignore patterns, read_file_preview inherits the helper's 8 MiB read limit, and untracked file line counts are not computed. Staging unsaved editor contents, commit, sync, branches, history, and session catalog operations for direct profiles remain pending. Active-turn tunnel recovery and a live Docker SSH smoke remain outstanding. Verify a Docker host and migrate the remaining operations before claiming full remote parity."
       ],
       "mappings": [
         {
@@ -765,7 +766,7 @@
           "filter": "git_output::tests"
         }
       ],
-      "rationale": "Voktty supports OpenCode 2.x on desktop and connects remote OpenCode through its native SSH helper, authenticated loopback HTTP/SSE tunnel, tmux-backed service startup, and saved session resume. Projects can now be created from saved SSH profiles directly; native folder browsing, OpenCode and worktree operations resolve those profiles without a Host machine record. Git status and file diffs for direct profiles now use the root-confined Voktty helper. Legacy machine IDs remain supported. Direct-profile Git mutations, sync, branches, history, session catalog, active-turn tunnel recovery, and a live Docker SSH smoke remain outstanding, so this port stays partial."
+      "rationale": "Voktty supports OpenCode 2.x on desktop and connects remote OpenCode through its native SSH helper, authenticated loopback HTTP/SSE tunnel, tmux-backed service startup, and saved session resume. Projects can now be created from saved SSH profiles directly; native folder browsing, OpenCode and worktree operations resolve those profiles without a Host machine record. Git status, file diffs, stage, unstage, and discard for direct profiles now use fixed commands through the root-confined Voktty helper. Legacy machine IDs remain supported. Unsaved-buffer staging, commit and sync, branches, history, session catalog, active-turn tunnel recovery, and a live Docker SSH smoke remain outstanding, so this port stays partial."
     },
     {
       "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
