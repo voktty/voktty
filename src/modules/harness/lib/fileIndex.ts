@@ -8,18 +8,13 @@ import { normalizeEditorPath, type FileOpenOptions } from "./search";
 const MAX_RECENTS = 30;
 const MAX_RESULTS = 80;
 const REFRESH_MS = 150;
-
-type Cache = {
-  cwd: string;
-  files: ProjectFile[];
-};
+const CACHE_LIMIT = 8;
 
 type Listener = () => void;
 
-let cache: Cache | null = null;
-let inflight: { cwd: string; promise: Promise<ProjectFile[]> } | null = null;
+const cache = new Map<string, ProjectFile[]>();
+const inflight = new Map<string, Promise<ProjectFile[]>>();
 let lastCwd: string | null = null;
-let epoch = 0;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let refreshing = false;
 let refreshAgain = false;
@@ -42,17 +37,17 @@ export function subscribeProjectFiles(listener: Listener): () => void {
 }
 
 export function peekProjectFiles(cwd: string): ProjectFile[] | null {
-  return cache?.cwd === cwd ? cache.files : null;
+  return cache.get(cwd) ?? null;
 }
 
 export function invalidateProjectFiles(cwd?: string) {
-  if (cwd && cache?.cwd !== cwd && inflight?.cwd !== cwd) return;
-  if (!cwd || cache?.cwd === cwd) cache = null;
-  if (!cwd || inflight?.cwd === cwd) {
-    inflight = null;
-    epoch += 1;
-  }
-  if (!cwd) {
+  if (cwd) {
+    if (!cache.has(cwd) && !inflight.has(cwd)) return;
+    cache.delete(cwd);
+    inflight.delete(cwd);
+  } else {
+    cache.clear();
+    inflight.clear();
     lastCwd = null;
     if (refreshTimer != null) {
       clearTimeout(refreshTimer);
@@ -118,21 +113,32 @@ export function loadProjectFiles(
 ): Promise<ProjectFile[]> {
   if (!looksLikeProject(cwd)) return Promise.resolve([]);
   lastCwd = cwd;
-  if (!refresh && cache?.cwd === cwd) return Promise.resolve(cache.files);
-  if (!refresh && inflight?.cwd === cwd) return inflight.promise;
+  const cached = cache.get(cwd);
+  if (!refresh && cached) {
+    cache.delete(cwd);
+    cache.set(cwd, cached);
+    return Promise.resolve(cached);
+  }
+  const pending = inflight.get(cwd);
+  if (!refresh && pending) return pending;
 
-  const id = ++epoch;
   const promise = listProjectFiles(cwd)
     .then((files) => {
-      if (id !== epoch) return files;
-      cache = { cwd, files };
+      // A refresh or invalidation supersedes only this checkout's scan.
+      if (inflight.get(cwd) !== promise) return files;
+      cache.delete(cwd);
+      cache.set(cwd, files);
+      if (cache.size > CACHE_LIMIT) {
+        const oldest = cache.keys().next().value;
+        if (oldest !== undefined) cache.delete(oldest);
+      }
       notifyProjectFilesChanged();
       return files;
     })
     .finally(() => {
-      if (inflight?.promise === promise) inflight = null;
+      if (inflight.get(cwd) === promise) inflight.delete(cwd);
     });
-  inflight = { cwd, promise };
+  inflight.set(cwd, promise);
   return promise;
 }
 
@@ -294,10 +300,14 @@ function pickOpenableFile(
 subscribeDirsChanged(scheduleIndexRefresh);
 
 if (typeof document !== "undefined") {
-  window.addEventListener("focus", () => {
-    if (!document.hidden) scheduleIndexRefresh();
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) scheduleIndexRefresh();
-  });
+  const resume = () => {
+    if (document.hidden) return;
+    // External changes have no checkout-scoped notification.
+    for (const cwd of new Set([...cache.keys(), ...inflight.keys()])) {
+      if (cwd !== lastCwd) invalidateProjectFiles(cwd);
+    }
+    scheduleIndexRefresh();
+  };
+  window.addEventListener("focus", resume);
+  document.addEventListener("visibilitychange", resume);
 }
