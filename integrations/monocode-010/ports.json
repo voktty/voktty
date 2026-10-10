@@ -611,11 +611,11 @@
     {
       "upstreamCommit": "0eb2773ec4f18c0533d5253ea6d4627cd5795299",
       "upstreamTitle": "feat(opencode): support OpenCode 2.x servers (#434)",
-      "localCommits": ["6d3ec03", "db828c5", "26dadaa", "8a148a5"],
+      "localCommits": ["6d3ec03", "db828c5", "26dadaa", "8a148a5", "2b7c3ba"],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
-        "Voktty's native SSH session now owns loopback tunnel processes and reuses its SSH prompt bridge. Add remote OpenCode service discovery, authenticated HTTP/SSE, tmux-backed service startup and recovery, stale tab binding, reconnect, and cleanup before claiming remote parity."
+        "The native SSH helper now exposes only OpenCode service status/start/password actions within the authenticated workspace, alongside the loopback tunnel foundation. Wire service discovery and Basic-auth HTTP/SSE into Harness, preserve tmux-backed session recovery, prevent stale tab binding, handle reconnect and cleanup, and verify on a Docker SSH host before claiming remote parity."
       ],
       "mappings": [
         {
@@ -714,9 +714,23 @@
           "cwd": "src-tauri",
           "runner": "cargo-nextest",
           "filter": "service_commands_require_the_resolved_opencode_provider"
+        },
+        {
+          "files": ["src/modules/remote/client.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        },
+        {
+          "files": [
+            "src-tauri/crates/voktty-remote/src/main.rs",
+            "src-tauri/crates/voktty-remote/src/opencode_service.rs"
+          ],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "opencode_service"
         }
       ],
-      "rationale": "Voktty already supports OpenCode 2.x on desktop: version gating, service authentication, the v2 catalog and agents, prompt and permission adaptation, event translation and correlation, compaction, resumed-session forks, and temporary text-session cleanup. Its service commands are scoped to OpenCode and authorized workspaces. The forced catalog refresh contract predated this port in Voktty's registry; the OpenCode settings action now calls it and a regression covers the bypass. Linux Host startup now falls back to a dedicated tmux session when systemd user services are unavailable, including Docker. Remote OpenCode discovery and authenticated HTTP/SSE still need to use Voktty's SSH agent and tunnel."
+      "rationale": "Voktty already supports OpenCode 2.x on desktop: version gating, service authentication, the v2 catalog and agents, prompt and permission adaptation, event translation and correlation, compaction, resumed-session forks, and temporary text-session cleanup. Its service commands are scoped to OpenCode and authorized workspaces. The forced catalog refresh contract predated this port in Voktty's registry; the OpenCode settings action now calls it and a regression covers the bypass. Linux Host startup now falls back to a dedicated tmux session when systemd user services are unavailable, including Docker. The native SSH helper now provides the fixed remote OpenCode service action boundary and tunnel foundation. Harness still routes remote sessions through the Node Host until service discovery, authenticated HTTP/SSE, tab binding and reconnect are wired to Voktty's native agent."
     },
     {
       "upstreamCommit": "3597485c93a5ef05761b4b09e2ae19f6d842bf49",
