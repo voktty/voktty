@@ -1459,14 +1459,14 @@
     {
       "upstreamCommit": "22b48740499ab37c854b3018e6c207d79f8290f0",
       "upstreamTitle": "Add searchable worktree creation to sidebar switcher",
-      "localCommits": ["2fd0476", "7ad7830", "7feaa86"],
-      "localCommitBases": ["preexisting", "preexisting", "integrated"],
+      "localCommits": ["2fd0476", "7ad7830", "7feaa86", "04b2561"],
+      "localCommitBases": ["preexisting", "preexisting", "integrated", "integrated"],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
         "Add a native Git adapter for direct Docker workspaces; the current commands explicitly reject that environment rather than run Git on the desktop host.",
         "Run a live SSH smoke test against a container host; current regression coverage verifies routing through Voktty's authenticated helper with mocks.",
-        "Populate dirty, unpushed, and session metadata for generic worktree listings; those fields currently report unavailable or empty."
+        "Associate remote Harness session ids with generic worktree listings once Voktty has a live session catalog and binding for that surface; sessionIds is currently empty."
       ],
       "mappings": [
         {
@@ -1506,7 +1506,7 @@
           "filter": "modules::git::worktrees::tests"
         }
       ],
-      "rationale": "Voktty now exposes searchable worktree selection and branch creation in the sidebar, backed by registered workspace-aware native Git commands. Local and Windows WSL workspaces retain their environment. Remote Harness projects establish a temporary authenticated Voktty SSH helper session and run Git through its native RPC, so the path also reaches Docker-hosted servers over SSH. Direct Docker Engine workspaces remain explicitly unsupported, and worktree status metadata plus a live container-host smoke are deferred."
+      "rationale": "Voktty exposes searchable worktree selection and branch creation in the sidebar, backed by registered workspace-aware native Git commands. Local and Windows WSL workspaces retain their environment. Remote Harness projects establish a temporary authenticated Voktty SSH helper session and run Git through its native RPC, so the path also reaches Docker-hosted servers over SSH. Successful status queries provide dirty state and upstream commits ahead within bounded per-query and total time budgets. Session ids remain empty because the generic picker has no live session catalog. Direct Docker Engine workspaces remain unsupported, and a live container-host smoke is pending."
     },
     {
       "upstreamCommit": "610550e4ddde1ee22a66a28eb88fb08e3ac5cd09",
