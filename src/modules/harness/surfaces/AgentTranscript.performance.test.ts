@@ -20,15 +20,26 @@ vi.mock(
 
 let container: HTMLDivElement;
 let root: Root;
+let observers: { callback: () => void; target?: Element }[];
 
 beforeEach(() => {
   vi.clearAllMocks();
+  observers = [];
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "ResizeObserver",
     class {
-      observe() {}
-      disconnect() {}
+      record: { callback: () => void; target?: Element };
+      constructor(callback: () => void) {
+        this.record = { callback };
+        observers.push(this.record);
+      }
+      observe(target: Element) {
+        this.record.target = target;
+      }
+      disconnect() {
+        this.record.target = undefined;
+      }
     },
   );
   container = document.createElement("div");
@@ -39,7 +50,40 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("measures skipped prompts only when visible and removes hidden observers", () => {
+  let skipped = false;
+  vi.spyOn(Element.prototype, "checkVisibility").mockImplementation(
+    () => !skipped,
+  );
+  const blocks: Block[] = [{ id: "prompt", role: "user", text: "Long prompt" }];
+  const render = (visible = true) =>
+    act(() => root.render(createElement(AgentTranscript, { blocks, visible })));
+  render();
+  const pre = container.querySelector(".user-message-row pre") as HTMLElement;
+  const height = vi.fn(() => 120);
+  Object.defineProperty(pre, "scrollHeight", { get: height });
+  Object.defineProperty(pre, "clientHeight", { get: () => 40 });
+  const observer = observers.find((record) => record.target === pre);
+  if (!observer) throw new Error("Prompt observer did not mount");
+  skipped = true;
+  act(() => observer.callback());
+  expect(height).not.toHaveBeenCalled();
+  skipped = false;
+  const turn = pre.closest(".transcript-turn");
+  if (!turn) throw new Error("Prompt turn did not mount");
+  const event = new Event("contentvisibilityautostatechange");
+  Object.defineProperty(event, "skipped", { value: false });
+  act(() => turn.dispatchEvent(event));
+  expect(height).toHaveBeenCalled();
+  render(false);
+  height.mockClear();
+  act(() => turn.dispatchEvent(event));
+  expect(observer.target).toBeUndefined();
+  expect(height).not.toHaveBeenCalled();
 });
 
 it("only regroups the changed turn while preserving rendered history", () => {

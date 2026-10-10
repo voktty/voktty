@@ -1207,6 +1207,7 @@ function UserMessageBlock({
   const roundsSingleLine = chat && textOnly;
 
   useLayoutEffect(() => {
+    if (!visible) return;
     const el = textRef.current;
     if (!el || !displayText) {
       setOverflows(false);
@@ -1216,6 +1217,12 @@ function UserMessageBlock({
 
     let lineHeight = 0;
     const measure = () => {
+      if (
+        !el.isConnected ||
+        (el.checkVisibility &&
+          !el.checkVisibility({ contentVisibilityAuto: true }))
+      )
+        return;
       if (!expanded) {
         setOverflows(el.scrollHeight > el.clientHeight + 1);
       }
@@ -1236,10 +1243,18 @@ function UserMessageBlock({
       );
     };
 
+    const turn = el.closest(".transcript-turn");
+    const onVisible = (event: Event) => {
+      if (!(event as ContentVisibilityAutoStateChangeEvent).skipped) measure();
+    };
+    turn?.addEventListener("contentvisibilityautostatechange", onVisible);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      turn?.removeEventListener("contentvisibilityautostatechange", onVisible);
+    };
   }, [displayText, roundsSingleLine, expanded, visible]);
 
   const toggle = () => {

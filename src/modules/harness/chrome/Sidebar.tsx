@@ -642,6 +642,8 @@ function SidebarComponent({
     !notesActive &&
     !automationsActive &&
     (classicSettings || (!settingsOpen && !(deckLayout && !inProject)));
+  const explorer = useRef<string | null>(null);
+  if (sidebarVisible && tab === "files") explorer.current = gitRoot;
   const gitStatuses = useGitFileStatuses(gitRoot, open && tab === "files");
   const changeStats = useProjectDiffStats(gitRoot, open);
   const groupLogos = useTabGroupLogos();
@@ -1397,18 +1399,20 @@ function SidebarComponent({
               />
             ) : cwd && cwd !== "~" ? (
               <div className="flex min-h-0 flex-1 flex-col">
-                <FileTree
-                  key={gitRoot}
-                  cwd={gitRoot}
-                  onOpenFile={onOpenFile}
-                  onOpenTerminal={onOpenTerminal}
-                  onFileMoved={onFileMoved}
-                  onFileDeleted={onFileDeleted}
-                  onSearch={onOpenFilesSearch}
-                  gitStatuses={gitStatuses}
-                  sourceControlActive={open && tab === "changes"}
-                  onShowSourceControl={onShowSourceControl}
-                />
+                {explorer.current ? (
+                  <FileTree
+                    key={explorer.current}
+                    cwd={explorer.current}
+                    onOpenFile={onOpenFile}
+                    onOpenTerminal={onOpenTerminal}
+                    onFileMoved={onFileMoved}
+                    onFileDeleted={onFileDeleted}
+                    onSearch={onOpenFilesSearch}
+                    gitStatuses={gitStatuses}
+                    sourceControlActive={open && tab === "changes"}
+                    onShowSourceControl={onShowSourceControl}
+                  />
+                ) : null}
               </div>
             ) : (
               <p className="px-3 py-2 text-[12px] text-content/50">
