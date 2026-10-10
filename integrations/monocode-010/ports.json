@@ -1786,6 +1786,34 @@
         }
       ],
       "rationale": "Focused note title drafts, including blank drafts, remain visible while body saves complete. Blur and unmount normalize and commit the draft, with all writes serialized to prevent an earlier save from overwriting the final title. Regression tests cover blank and replacement drafts, delayed body saves, and unmount."
+    },
+    {
+      "upstreamCommit": "57366970be",
+      "upstreamTitle": "Render Nerd Font prompt glyphs in the terminal (#767)",
+      "localCommit": "221c524",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/terminal/ui/TerminalView.tsx",
+          "local": "src/lib/fonts.ts"
+        },
+        {
+          "upstream": "src/styles/index.css",
+          "local": "src/lib/fonts.ts"
+        },
+        {
+          "upstream": "src/features/terminal/ui/TerminalView.test.ts",
+          "local": "src/lib/fonts.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/lib/fonts.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The terminal renderer uses Voktty's configurable font-family resolver, so the Nerd Font fallback stack is attached to that shared runtime setting rather than a new CSS variable. User-selected families stay first, followed by system monospace and explicit Nerd Font symbol families for shell prompt glyphs."
     }
   ]
 }
