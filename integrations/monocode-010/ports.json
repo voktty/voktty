@@ -1351,6 +1351,85 @@
         }
       ],
       "rationale": "Voktty's Composer accepts DOM and native file drops, checks native coordinates with the platform-aware converter, retains the listener across Harness capability changes, discards stale reads, and waits for reads before Send. It reports empty native image paths and failed reads with localized generic guidance, without exposing filesystem paths."
+    },
+    {
+      "upstreamCommit": "7933972a5b86bdffad4b3414f1faf4c36103eff7",
+      "upstreamTitle": "Improve scroll stability and output reveal pacing",
+      "localCommits": [
+        "280f597",
+        "27a0add",
+        "d3452b9",
+        "a88c004",
+        "74cfce0",
+        "11aaf40",
+        "9d4dfcf"
+      ],
+      "localCommitBases": [
+        "integrated",
+        "integrated",
+        "integrated",
+        "integrated",
+        "integrated",
+        "integrated",
+        "integrated"
+      ],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/model/composerResize.test.ts",
+          "local": "src/modules/harness/lib/composerResize.test.ts"
+        },
+        {
+          "upstream": "src/features/sessions/model/composerResize.ts",
+          "local": "src/modules/harness/lib/composerResize.ts"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentMarkdown.tsx",
+          "local": "src/modules/harness/surfaces/AgentMarkdown.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscript.tsx",
+          "local": "src/modules/harness/surfaces/AgentTranscript.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscriptPacing.test.ts",
+          "local": "src/modules/harness/surfaces/AgentTranscriptPacing.test.ts"
+        },
+        {
+          "upstream": "src/features/sessions/ui/AgentTranscriptScroll.test.ts",
+          "local": "src/modules/harness/surfaces/AgentTranscriptScroll.test.ts"
+        },
+        {
+          "upstream": "src/features/sessions/ui/Composer.tsx",
+          "local": "src/modules/harness/chrome/Composer.tsx"
+        },
+        {
+          "upstream": "src/features/sessions/ui/wordFade.test.ts",
+          "local": "src/modules/harness/surfaces/wordFade.test.ts"
+        },
+        {
+          "upstream": "src/features/sessions/ui/wordFade.tsx",
+          "local": "src/modules/harness/surfaces/wordFade.tsx"
+        },
+        {
+          "upstream": "src/shared/hooks/useLockOverscroll.ts",
+          "local": "src/modules/harness/hooks/useLockOverscroll.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": [
+            "src/modules/harness/lib/composerResize.test.ts",
+            "src/modules/harness/surfaces/AgentTranscriptPacing.test.ts",
+            "src/modules/harness/surfaces/AgentTranscriptScroll.test.ts",
+            "src/modules/harness/surfaces/wordFade.test.ts",
+            "src/modules/harness/hooks/useLockOverscroll.test.ts"
+          ],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty already applies the same behaviors across its native transcript design: it reconciles user movement with scroll events and layout clamping, observes turn-size changes in DOM order, leaves wheel gestures to nested scrollers, and preserves the composer viewport while resizing. Newly arrived replies are paced before their first paint; opening existing or hidden-tab output remains immediate."
     }
   ]
 }
