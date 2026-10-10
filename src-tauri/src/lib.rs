@@ -437,6 +437,8 @@ pub fn run() {
             git::commands::git_checkout_branch,
             git::commands::git_worktree_add,
             git::commands::git_worktree_remove,
+            git::worktrees::git_worktrees,
+            git::worktrees::git_worktree_create,
             git::commands::git_add_safe_directory,
             git::commands::git_init,
             git::commands::git_clone,

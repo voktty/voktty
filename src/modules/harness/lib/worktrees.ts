@@ -1,6 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
+import { remoteMachineFor } from "@/modules/connections/model/connections";
+import {
+  parseRemotePath,
+  remotePath,
+} from "@/modules/connections/model/remoteProjects";
+import {
+  closeRemoteWorkspace,
+  openRemoteWorkspace,
+} from "@/modules/remote/client";
+import {
+  currentWorkspaceEnv,
+  isWindowsNativePath,
+  LOCAL_WORKSPACE,
+} from "@/modules/workspace";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { notifyGitChanged } from "./fs";
 import { isEqualOrInside } from "./paths";
+import { remoteSshConnectionFor } from "./harness/remoteOpenCodeService";
 export { namedWorktreeBranch } from "./worktreeNaming";
 
 export type Worktree = {
@@ -18,8 +34,136 @@ export type Worktree = {
 
 export type Worktrees = { worktrees: Worktree[]; defaultRoot: string };
 
+type GitWorkspace =
+  | { kind: "local" }
+  | { kind: "wsl"; distro: string }
+  | {
+      kind: "ssh";
+      root: string;
+      sessionId: number;
+      connection: { host: string; user?: string; port?: number };
+    };
+
+type OpenWorkspace = {
+  cwd: string;
+  workspace: GitWorkspace;
+  environmentId?: string;
+};
+
+async function withGitWorkspace<T>(
+  cwd: string,
+  operation: (workspace: OpenWorkspace) => Promise<T>,
+): Promise<T> {
+  const remoteProject = parseRemotePath(cwd);
+  if (remoteProject) {
+    const machine = await remoteMachineFor(remoteProject.environmentId);
+    if (!machine) throw new Error("The remote machine is no longer connected.");
+    const connection = remoteSshConnectionFor(
+      machine,
+      usePreferencesStore.getState().sshConnections,
+    );
+    const session = await openRemoteWorkspace(connection, remoteProject.hostPath);
+    const workspace: GitWorkspace = {
+      kind: "ssh",
+      root: session.workspace_root,
+      sessionId: session.session_id,
+      connection: {
+        host: connection.host,
+        ...(connection.user ? { user: connection.user } : {}),
+        ...(connection.port ? { port: connection.port } : {}),
+      },
+    };
+    try {
+      return await operation({
+        cwd: remoteProject.hostPath,
+        workspace,
+        environmentId: remoteProject.environmentId,
+      });
+    } finally {
+      await closeRemoteWorkspace(session.session_id).catch(() => undefined);
+    }
+  }
+
+  let env = currentWorkspaceEnv();
+  if (cwd && isWindowsNativePath(cwd) && env.kind !== "local") {
+    env = LOCAL_WORKSPACE;
+  }
+  if (env.kind === "serial") {
+    throw new Error("Git worktrees are unavailable in serial workspaces.");
+  }
+  if (env.kind === "docker") {
+    throw new Error(
+      "Git worktrees are unavailable in Docker workspaces until native container Git support is enabled.",
+    );
+  }
+  if (env.kind !== "ssh") {
+    return operation({ cwd, workspace: env });
+  }
+
+  if (env.sessionId) {
+    return operation({
+      cwd,
+      workspace: {
+        kind: "ssh",
+        root: env.root,
+        sessionId: env.sessionId,
+        connection: {
+          host: env.connection.host,
+          ...(env.connection.user ? { user: env.connection.user } : {}),
+          ...(env.connection.port ? { port: env.connection.port } : {}),
+        },
+      },
+    });
+  }
+
+  const session = await openRemoteWorkspace(env.connection, cwd || env.root);
+  try {
+    return await operation({
+      cwd,
+      workspace: {
+        kind: "ssh",
+        root: session.workspace_root,
+        sessionId: session.session_id,
+        connection: {
+          host: env.connection.host,
+          ...(env.connection.user ? { user: env.connection.user } : {}),
+          ...(env.connection.port ? { port: env.connection.port } : {}),
+        },
+      },
+    });
+  } finally {
+    await closeRemoteWorkspace(session.session_id).catch(() => undefined);
+  }
+}
+
+function remapWorktrees(result: Worktrees, environmentId?: string): Worktrees {
+  if (!environmentId) return result;
+  return {
+    defaultRoot: remotePath(environmentId, result.defaultRoot),
+    worktrees: result.worktrees.map((tree) => ({
+      ...tree,
+      path: remotePath(environmentId, tree.path),
+    })),
+  };
+}
+
+function remapWorktree(tree: Worktree, environmentId?: string): Worktree {
+  return environmentId
+    ? { ...tree, path: remotePath(environmentId, tree.path) }
+    : tree;
+}
+
+function workspaceArgs(workspace: GitWorkspace) {
+  return workspace.kind === "local" ? {} : { workspace };
+}
+
 export const listWorktrees = (cwd: string) =>
-  invoke<Worktrees>("git_worktrees", { cwd });
+  withGitWorkspace(cwd, ({ cwd: nativeCwd, workspace, environmentId }) =>
+    invoke<Worktrees>("git_worktrees", {
+      cwd: nativeCwd,
+      ...workspaceArgs(workspace),
+    }).then((result) => remapWorktrees(result, environmentId)),
+  );
 
 export async function createWorktree(
   cwd: string,
@@ -27,14 +171,20 @@ export async function createWorktree(
   base: string,
   existing: boolean,
 ): Promise<Worktree> {
-  const tree = await invoke<Worktree>("git_worktree_create", {
+  return withGitWorkspace(
     cwd,
-    branch,
-    base,
-    existing,
-  });
-  notifyGitChanged();
-  return tree;
+    async ({ cwd: nativeCwd, workspace, environmentId }) => {
+      const tree = await invoke<Worktree>("git_worktree_create", {
+        cwd: nativeCwd,
+        branch,
+        base,
+        existing,
+        ...workspaceArgs(workspace),
+      });
+      notifyGitChanged();
+      return remapWorktree(tree, environmentId);
+    },
+  );
 }
 
 export async function createOrchestrationWorktree(
