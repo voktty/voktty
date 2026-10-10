@@ -419,7 +419,7 @@
           "runner": "vitest"
         }
       ],
-      "rationale": "The chronological comments and commits timeline, freshness-aware GitHub cache, PR overview, changed-file glance and focused diff behavior existed in Voktty before the audit baseline. GitHub issue and PR details now prefetch on Inbox card hover using the existing freshness cache; pull requests also prefetch their diff. This adapts the prefetch trigger to Voktty's Inbox workflow, which has no MonoCode-style linked-work-item action on session cards."
+      "rationale": "The chronological comments and commits timeline, freshness-aware GitHub cache, PR overview, changed-file glance and focused diff behavior existed in Voktty before the audit baseline. The Inbox adaptation briefly added hover prefetch in 2932424, then the rate-limit hardening port removed it in 09dc36b to match MonoCode's later removal of linked-session prefetch. The final Voktty state loads GitHub detail data after selection and performs no hover-triggered requests."
     },
     {
       "upstreamCommit": "31fcb0903fd6ba969e11fab3a0dd288ee5df1571",
@@ -1894,7 +1894,14 @@
     {
       "upstreamCommit": "80ba2c091245af2fe5372e63f405c89e7fb074cc",
       "upstreamTitle": "Throttle GitHub polling and handle rate-limit backoff",
-      "localCommit": "c4499fb",
+      "localCommits": [
+        "c4499fb",
+        "09dc36b"
+      ],
+      "localCommitBases": [
+        "integrated",
+        "integrated"
+      ],
       "license": "MIT",
       "coverage": "partial",
       "deferred": [
@@ -1959,7 +1966,7 @@
           "filter": "modules::harness::github_rate_limit::tests"
         }
       ],
-      "rationale": "Voktty routes Harness GitHub CLI calls through one native gh_run path. A shared backoff pauses primary and secondary rate-limited requests, probes the GraphQL quota reset when appropriate, and falls back to a short pause if the probe fails. Inbox lists stay fresh for two minutes, detail data for thirty seconds, the badge refreshes every two minutes while visible and five minutes while hidden, and stale GitHub entries remain visible when refresh is rate limited. The Inbox card no longer prefetches linked GitHub details on hover. The Checks tab polling is deferred because Voktty has no corresponding tab."
+      "rationale": "Voktty routes Harness GitHub CLI calls through one native gh_run path. A shared backoff pauses primary and secondary rate-limited requests, probes the GraphQL quota reset when appropriate, and falls back to a short pause if the probe fails. Inbox lists stay fresh for two minutes, detail data for thirty seconds, the badge refreshes every two minutes while visible and five minutes while hidden, and stale GitHub entries remain visible when refresh is rate limited. Voktty keeps detail requests on selection and does not prefetch on Inbox card hover, matching MonoCode's later removal of linked-session prefetch. Checks-tab polling remains deferred because Voktty has no corresponding tab."
     },
     {
       "upstreamCommit": "bdc2b64cc1ae009b0c75b81e171f3010acb62fc6",
