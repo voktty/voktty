@@ -2275,6 +2275,36 @@
         }
       ],
       "rationale": "Voktty's Host Vitest config already runs files serially and gives test and hook timeouts of 30 seconds on every platform. The matching behavior landed with the native Host process adapter and its integration suite."
+    },
+    {
+      "upstreamCommit": "850be653809ee3e0b243d1ad7a39aff27a64ea83",
+      "upstreamTitle": "Add persistent Mono agents with memory and scheduled habits (#773)",
+      "localCommit": "e782088",
+      "license": "MIT",
+      "coverage": "partial",
+      "deferred": [
+        "Mono turn readiness and delivery of queued follow-ups during an active turn; Voktty dispatches its queue after the provider becomes idle.",
+        "Mono agents, habits, memory, persistent transcripts, and their native commands and UI.",
+        "Session-level usage-limit detection and recovery controls."
+      ],
+      "mappings": [
+        {
+          "upstream": "src/integrations/harness/core/apply.ts",
+          "local": "src/modules/harness/lib/harness/apply.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/core/apply.test.ts",
+          "local": "src/modules/harness/lib/harness/apply.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/harness/apply.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Voktty now pauses pending follow-ups when a provider session errors, preventing the idle queue dispatcher from retrying against a failed connection. The commit's Mono-specific session model and transcript changes do not apply to the current Harness queue."
     }
   ],
   "mergeCoverage": [
