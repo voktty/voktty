@@ -1863,6 +1863,30 @@
         }
       ],
       "rationale": "Pi extension setStatus calls now carry their statusKey into the transcript. Harness updates one system row for that key during the current user turn, removes it on clear, and preserves independent keys and unkeyed notifications. Voktty's session sanitizer keeps the key across storage and restore so the live status can continue updating after a reload."
+    },
+    {
+      "upstreamCommit": "5aef862304b78133e078faacbf86406f2e9a9b8f",
+      "upstreamTitle": "Hide internal and legacy Copilot models from Pi/omp catalogs (#766)",
+      "localCommit": "c4b2943a3dc38d6297c5f8f073751672de4cd09b",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/integrations/harness/providers/pi/piProtocol.ts",
+          "local": "src/modules/harness/lib/harness/piProtocol.ts"
+        },
+        {
+          "upstream": "src/integrations/harness/providers/pi/piProtocol.test.ts",
+          "local": "src/modules/harness/lib/harness/piProtocol.test.ts"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/harness/piProtocol.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The OMP Copilot catalog includes internal agent endpoints and legacy snapshots that the provider picker omits. Filter only github-copilot model ids, preserving current Copilot choices and identically named models from other providers."
     }
   ]
 }
