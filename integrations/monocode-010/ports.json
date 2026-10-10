@@ -2391,6 +2391,48 @@
       "upstreamTitle": "Release v0.9.0",
       "category": "release-only",
       "rationale": "This release commit changes MonoCode versions, lockfiles, and its changelog. Those release artifacts do not represent a Harness behavior to port."
+    },
+    {
+      "upstreamCommit": "7c4bb7e50ab990da6525a38b451eabd0ca4bd1b2",
+      "upstreamTitle": "Add Mono session sidebar folder preferences",
+      "category": "mono-only",
+      "rationale": "Adds folder visibility preferences for Mono chats in Mono's project rail and settings pages. Voktty has no Mono chat roster; its Harness session folders and project navigation use separate state."
+    },
+    {
+      "upstreamCommit": "8a63eb693c9e2e6b5dd4d8001549f2befcd69809",
+      "upstreamTitle": "Tone down settled turn agent names",
+      "category": "mono-only",
+      "rationale": "Changes text weight in transcript branches that render Mono signatures and mascot names. Voktty's Harness transcript has no Mono signature model or corresponding branch."
+    },
+    {
+      "upstreamCommit": "eb5f69a541362735f15d5adc819742ea9ea8f1cf",
+      "upstreamTitle": "Allow mono habits to run for up to one hour",
+      "category": "mono-only",
+      "rationale": "Only changes the maximum runtime of Mono's scheduled habit jobs. Voktty does not include the Mono habit scheduler."
+    },
+    {
+      "upstreamCommit": "004cab5b749c06260707c17a30f678e48c31daa2",
+      "upstreamTitle": "Add isolated Codex mono storage and rollout persistence",
+      "category": "mono-only",
+      "rationale": "Adds a private Codex store and rollout persistence for saved Mono agents. The new provider flags and store calls are used only by Mono sessions; Voktty's Harness Codex sessions use their existing provider and session lifecycle."
+    },
+    {
+      "upstreamCommit": "0b2c391f3994ba4cdb1b0ee6e6941faa5e1fbae3",
+      "upstreamTitle": "Fix Windows path links and file syncing",
+      "category": "mono-only",
+      "rationale": "Repairs Windows links and file syncing only inside the new private Mono Codex store. Voktty has no corresponding store or link path."
+    },
+    {
+      "upstreamCommit": "322fc2a090c6a38cfa2e497ce00377e8b64aff24",
+      "upstreamTitle": "Fix Windows Codex directory junction creation",
+      "category": "mono-only",
+      "rationale": "Replaces junction creation for the private Mono Codex store. Voktty has no `codex_mono_store` module or callers of this path."
+    },
+    {
+      "upstreamCommit": "e92d803854c28857026d45691cd98ed6ce5b2aa5",
+      "upstreamTitle": "Keep Mono Codex sessions ephemeral and rotate by context",
+      "category": "mono-only",
+      "rationale": "Adds ephemeral Codex sessions and context rotation for persisted Mono chats. This depends on the Mono session model and isolated store, which Voktty does not have."
     }
   ]
 }
