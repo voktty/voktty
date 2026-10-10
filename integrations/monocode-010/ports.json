@@ -2091,6 +2091,30 @@
         }
       ],
       "rationale": "Voktty already routes Cmd/Ctrl+T and Cmd/Ctrl+W to the active project terminal only when the dock layout is enabled, its focus flag is set, DOM focus remains inside the dock, and the active file is a terminal. Otherwise the shortcuts keep their workspace behavior. Voktty has no native application-menu dispatcher for the upstream menu broadcast adjustment; its local focused-target handlers and regression tests cover the available shortcut surface."
+    },
+    {
+      "upstreamCommit": "eb14d1a9cdfaeba97da099d944199dd38c61cfaf",
+      "upstreamTitle": "Fix Settings catalog refresh behind fallback models (#783)",
+      "localCommit": "1002575986c61a5a380d10a7272d646ccc840224",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/settings/ui/SettingsView.tsx",
+          "local": "src/modules/harness/surfaces/SettingsView.tsx"
+        },
+        {
+          "upstream": "src/features/settings/ui/SettingsView.tsx",
+          "local": "src/settings/sections/HarnessSection.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/lib/harness/registry.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "Both Voktty provider settings surfaces now distinguish visible fallback models from a live CLI catalog. They request a refresh whenever the harness is available and no live catalog exists; the registry prevents duplicate probes and skips providers that already have live data. A regression test covers Pi with its fallback model visible and no live overlay."
     }
   ]
 }
