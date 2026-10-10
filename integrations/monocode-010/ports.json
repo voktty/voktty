@@ -413,6 +413,26 @@
       "rationale": "The chronological comments and commits timeline, freshness-aware GitHub cache, PR overview, changed-file glance and focused diff behavior already existed in Voktty before the audit baseline. The Inbox detail pane is opened from Inbox selection, so MonoCode's session-card panel preloading and hover prefetch have no matching Voktty entry point and remain a partial adaptation."
     },
     {
+      "upstreamCommit": "31fcb0903fd6ba969e11fab3a0dd288ee5df1571",
+      "upstreamTitle": "Prevent model picker labels from truncating",
+      "localCommit": "d7117c1",
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "src/features/sessions/ui/ModelPicker.tsx",
+          "local": "src/modules/harness/chrome/ModelPicker.tsx"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src/modules/harness/chrome/ModelPicker.test.ts"],
+          "cwd": ".",
+          "runner": "vitest"
+        }
+      ],
+      "rationale": "The selected Harness model label stays on one line and the trigger keeps its intrinsic width, so long model names are not clipped in the composer."
+    },
+    {
       "upstreamCommit": "45c9a2220724d5ae2ad65e9e29da9755fb143a86",
       "upstreamTitle": "Animate pane entry from split edge",
       "localCommit": "e7f7edd",
