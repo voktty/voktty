@@ -1204,6 +1204,55 @@
         }
       ],
       "rationale": "Voktty adapts the commit tab to the native Git status list. Exact session files start selected; other project changes are opt-in, and shared session files stay blocked. Path-scoped commit, push/publish, and GitHub PR status and creation keep the active WorkspaceEnv for Voktty's native SSH and Docker transport. Commit messages use bounded selected-file context from native.gitDiff, while PR title and body use bounded branch-range context from native.gitCompareBranches and native.gitShowCommit. Both contexts go directly to the session's Harness without a second Git lookup; PR generation first checks that the native commit range matches GitHub's ahead count."
+    },
+    {
+      "upstreamCommit": "60102ab3a608519598066b04cefbbde9d312b4c5",
+      "upstreamTitle": "Treat Git paths literally when staging folders",
+      "localCommits": ["22c2707", "61c89b8"],
+      "license": "MIT",
+      "mappings": [
+        {
+          "upstream": "host/workspace.ts",
+          "local": "host/workspace.ts"
+        },
+        {
+          "upstream": "host/workspace.test.ts",
+          "local": "host/workspace.test.ts"
+        },
+        {
+          "upstream": "src-tauri/src/fs.rs",
+          "local": "src-tauri/src/modules/git/operations.rs"
+        },
+        {
+          "upstream": "src-tauri/src/fs.rs",
+          "local": "src-tauri/src/modules/git/utils.rs"
+        },
+        {
+          "upstream": "src-tauri/src/fs.rs",
+          "local": "src-tauri/src/modules/harness/fs.rs"
+        }
+      ],
+      "tests": [
+        {
+          "files": ["src-tauri/src/modules/git/operations.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "modules::git::operations::tests::stage_and_unstage_treat_folder_pathspec_metacharacters_literally"
+        },
+        {
+          "files": ["src-tauri/src/modules/git/utils.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "modules::git::utils::tests::resolve_literal_within_repo_accepts_colon_directory_without_allowing_escape"
+        },
+        {
+          "files": ["src-tauri/src/modules/harness/fs.rs"],
+          "cwd": "src-tauri",
+          "runner": "cargo-nextest",
+          "filter": "modules::harness::fs::tests::git_stage_and_unstage_treat_folder_pathspec_metacharacters_literally"
+        }
+      ],
+      "rationale": "The existing Host sidecar already treats folder arguments literally and has its regression test in 22c2707. Native Git stage/unstage and legacy Harness staging now pass --literal-pathspecs through local, SSH, Docker, and WSL Git execution. A stage/unstage-only path resolver permits colon-containing literal folder names while preserving traversal and repository-boundary checks; ordinary path validation remains strict."
     }
   ]
 }
