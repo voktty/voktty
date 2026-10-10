@@ -8,6 +8,7 @@ import {
   type FilePaneTab,
   type LayoutNode,
   type PlanTabSource,
+  type SessionChangesSource,
   type WorkspaceTab,
 } from "./layout";
 import type { ReleaseNotesTabSource } from "./releaseNotes";
@@ -481,10 +482,19 @@ function sanitizeFile(raw: unknown): FilePaneTab | null {
   const plan = sanitizePlan(value.plan);
   const hasReleaseNotes = "releaseNotes" in value;
   const releaseNotes = sanitizeReleaseNotes(value.releaseNotes);
+  const hasSessionChanges = "sessionChanges" in value;
+  const sessionChanges = sanitizeSessionChanges(value.sessionChanges);
   if (hasReleaseNotes && !releaseNotes) return null;
+  if (hasSessionChanges && !sessionChanges) return null;
   if (
     releaseNotes &&
     (value.plan != null || value.review === true || value.terminal === true)
+  ) {
+    return null;
+  }
+  if (
+    sessionChanges &&
+    (value.plan != null || releaseNotes || value.terminal === true)
   ) {
     return null;
   }
@@ -494,8 +504,30 @@ function sanitizeFile(raw: unknown): FilePaneTab | null {
     cwd: value.cwd,
     ...(plan ? { plan } : {}),
     ...(releaseNotes ? { releaseNotes } : {}),
-    ...(value.review === true ? { review: true } : {}),
+    ...(sessionChanges || value.review === true ? { review: true } : {}),
+    ...(sessionChanges ? { sessionChanges } : {}),
     ...(value.terminal === true ? { terminal: true } : {}),
+  };
+}
+
+function sanitizeSessionChanges(
+  raw: unknown,
+): SessionChangesSource | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.sessionId !== "string" || !value.sessionId) return undefined;
+  if (
+    value.view !== undefined &&
+    value.view !== "changes" &&
+    value.view !== "commit"
+  ) {
+    return undefined;
+  }
+  return {
+    sessionId: value.sessionId,
+    ...(value.view === "changes" || value.view === "commit"
+      ? { view: value.view }
+      : {}),
   };
 }
 

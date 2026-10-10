@@ -3,7 +3,9 @@ import { INTERRUPT_MESSAGE } from "./inFlight";
 import {
   leaf,
   newFileTab,
+  newEditorPane,
   newReleaseNotesWorkspaceTab,
+  newSessionChangesTab,
   newTab,
   newTerminalFile,
 } from "./layout";
@@ -139,6 +141,27 @@ describe("project return snapshots", () => {
     );
     expect(restored?.projectReturnMemory?.has("/alpha")).toBe(false);
     expect(restored?.projectReturnMemory?.get("/beta")).toBe("b2");
+  });
+});
+
+describe("session changes workspace tabs", () => {
+  it("restores the selected changes or commit view", () => {
+    const file = newSessionChangesTab("/repo", "session-a", undefined, "commit");
+    const pane = newEditorPane(file);
+    const tab = { ...newTab(pane.id), editorPanes: [pane] };
+    const snapshot = collectWorkspaceSnapshot(
+      [tab],
+      [],
+      tab.id,
+      "/repo",
+      new Map(),
+    );
+
+    const restored = hydrateWorkspaceSnapshot(snapshot, new Map());
+    expect(restored?.tabs[0]?.editorPanes[0]?.files[0]?.sessionChanges).toEqual({
+      sessionId: "session-a",
+      view: "commit",
+    });
   });
 });
 

@@ -11,6 +11,7 @@ import {
 import { invalidateProjectFiles } from "../lib/fileIndex";
 import { invalidateWatchedFiles } from "../lib/fileWatch";
 import { basename, notifyGitChanged, subscribeGitChanged } from "../lib/fs";
+import type { SessionChangesView } from "../lib/layout";
 import { FileTypeIcon } from "./FileTypeIcon";
 
 type Props = {
@@ -21,7 +22,7 @@ type Props = {
   undoLocked?: boolean;
   onOpenDiff: (
     path?: string,
-    session?: { sessionId: string; cwd: string },
+    session?: { sessionId: string; cwd: string; view?: SessionChangesView },
   ) => void;
 };
 
@@ -171,10 +172,22 @@ export function SessionReview({
             <button
               type="button"
               title={t("sessionReview.reviewChanges")}
-              onClick={() => onOpenDiff(undefined, { sessionId, cwd })}
+              onClick={() =>
+                onOpenDiff(undefined, { sessionId, cwd, view: "changes" })
+              }
               className="h-7 rounded-md border border-content/12 bg-content/8 px-2.5 text-[11px] font-medium text-content/75 hover:bg-content/12 hover:text-content"
             >
               {t("sessionReview.review")}
+            </button>
+            <button
+              type="button"
+              title={t("sessionReview.commitChanges")}
+              onClick={() =>
+                onOpenDiff(undefined, { sessionId, cwd, view: "commit" })
+              }
+              className="h-7 rounded-md border border-content/12 bg-content/8 px-2.5 text-[11px] font-medium text-content/75 hover:bg-content/12 hover:text-content"
+            >
+              {t("sessionReview.commit")}
             </button>
           </div>
         </div>
@@ -229,7 +242,7 @@ function FileRow({
   cwd: string;
   onOpenDiff: (
     path?: string,
-    session?: { sessionId: string; cwd: string },
+    session?: { sessionId: string; cwd: string; view?: SessionChangesView },
   ) => void;
 }) {
   const name = basename(file.relative);

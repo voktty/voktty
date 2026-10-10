@@ -42,6 +42,7 @@ import {
   subscribeNotesEnabled,
 } from "../lib/settings";
 import { projectKey } from "../lib/paths";
+import type { SessionChangesView } from "../lib/layout";
 import {
   loadProjectChatBackground,
   projectChatBackgroundRevision,
@@ -112,7 +113,7 @@ export type SessionPaneProps = {
   onOpenFile: (path: string) => void;
   onOpenDiff: (
     path?: string,
-    session?: { sessionId: string; cwd: string },
+    session?: { sessionId: string; cwd: string; view?: SessionChangesView },
   ) => void;
   onOpenPlan: (sessionId: string, blockId: string) => void;
   onBuildPlan?: (

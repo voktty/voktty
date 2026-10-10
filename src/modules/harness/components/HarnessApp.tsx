@@ -184,6 +184,7 @@ import {
   type EditorPane,
   type FilePaneTab,
   type FocusDir,
+  type SessionChangesView,
   findSurfacePane,
   firstLeafId,
   focusedFileTab,
@@ -3247,7 +3248,7 @@ export function HarnessApp({
   const onOpenDiff = useCallback(
     (
       path?: string,
-      session?: { sessionId: string; cwd: string },
+      session?: { sessionId: string; cwd: string; view?: SessionChangesView },
       options?: FileOpenOptions,
     ) => {
       void (async () => {
@@ -3265,6 +3266,7 @@ export function HarnessApp({
                 session.cwd,
                 session.sessionId,
                 resolved,
+                session.view,
               );
             }
             const opened = resolved

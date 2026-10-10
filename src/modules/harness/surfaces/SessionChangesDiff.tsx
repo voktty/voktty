@@ -8,13 +8,17 @@ import {
   type CheckpointFile,
 } from "../lib/checkpoint";
 import { forEachConcurrent } from "../lib/concurrent";
+import type { SessionChangesView } from "../lib/layout";
+import type { SessionCommitNotice } from "../lib/sessionCommit";
 import { buildUnifiedFile, type UnifiedFileDiff } from "../lib/unifiedDiff";
+import { SessionChangesCommit } from "./SessionChangesCommit";
 import { UnifiedDiffView, type UnifiedDiffFileModel } from "./UnifiedDiffView";
 
 type Props = {
   cwd: string;
   sessionId: string;
   focusPath?: string;
+  initialView?: SessionChangesView;
 };
 
 type LoadedDiff = {
@@ -27,11 +31,22 @@ type LoadedDiff = {
 const DIFF_LOAD_CONCURRENCY = 4;
 
 /** Read-only review of the exact before/after snapshots owned by one session. */
-export function SessionChangesDiff({ cwd, sessionId, focusPath }: Props) {
+export function SessionChangesDiff({
+  cwd,
+  sessionId,
+  focusPath,
+  initialView = "changes",
+}: Props) {
   const { t } = useTranslation();
   const [files, setFiles] = useState<CheckpointFile[] | null>(null);
   const [diffs, setDiffs] = useState<Map<string, LoadedDiff>>(new Map());
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<SessionChangesView>(initialView);
+  const [commitNotice, setCommitNotice] = useState<SessionCommitNotice | null>(
+    null,
+  );
+
+  useEffect(() => setView(initialView), [initialView]);
 
   useEffect(() => {
     if (!cwd || cwd === "~" || !sessionId) {
@@ -51,6 +66,7 @@ export function SessionChangesDiff({ cwd, sessionId, focusPath }: Props) {
           if (disposed || current !== generation) return;
           setFiles(status.files);
           setError(null);
+          if (view === "commit") return;
           await forEachConcurrent(
             prioritizeFile(status.files, focusPath),
             DIFF_LOAD_CONCURRENCY,
@@ -104,7 +120,7 @@ export function SessionChangesDiff({ cwd, sessionId, focusPath }: Props) {
       disposed = true;
       unsubscribe();
     };
-  }, [cwd, focusPath, sessionId]);
+  }, [cwd, focusPath, sessionId, view]);
 
   const models = useMemo<UnifiedDiffFileModel[]>(() => {
     if (!files) return [];
@@ -147,39 +163,91 @@ export function SessionChangesDiff({ cwd, sessionId, focusPath }: Props) {
     [models],
   );
 
+  let content: React.ReactNode;
   if (!cwd || cwd === "~") {
-    return (
+    content = (
       <p className="grid h-full place-items-center text-[13px] text-content/45">
         {t("harness.chrome.noProjectFolder")}
       </p>
     );
-  }
-  if (error) {
-    return (
+  } else if (error) {
+    content = (
       <div className="grid h-full place-items-center p-6 text-center">
         <AlertCircle className="mx-auto mb-3 size-5 text-red-400" />
-        <p className="text-[13px] text-content">{t("harness.chrome.couldntLoadSessionChanges")}</p>
+        <p className="text-[13px] text-content">
+          {t("harness.chrome.couldntLoadSessionChanges")}
+        </p>
         <p className="mt-1 text-[12px] text-content/50">{error}</p>
       </div>
     );
-  }
-  if (files == null) {
-    return (
+  } else if (files == null) {
+    content = (
       <div className="grid h-full place-items-center text-content/40">
         <Loader className="size-4 animate-spin" strokeWidth={1.75} />
       </div>
     );
-  }
-  if (files.length === 0) {
-    return (
+  } else if (view === "commit") {
+    content = (
+      <SessionChangesCommit
+        cwd={cwd}
+        sessionId={sessionId}
+        files={files}
+        onNotice={setCommitNotice}
+      />
+    );
+  } else if (files.length === 0) {
+    content = (
       <p className="grid h-full place-items-center text-[13px] text-content/45">
         {t("harness.chrome.noSessionChanges")}
       </p>
     );
+  } else {
+    content = (
+      <UnifiedDiffView files={models} focusPath={focusPath} totals={totals} />
+    );
   }
-
   return (
-    <UnifiedDiffView files={models} focusPath={focusPath} totals={totals} />
+    <div className="flex h-full min-h-0 flex-col">
+      <fieldset className="flex h-9 shrink-0 items-center gap-1 border-b border-content/10 px-2 font-sans">
+        <legend className="sr-only">
+          {t("sessionReview.sessionChangesViews")}
+        </legend>
+        {(["changes", "commit"] as const).map((nextView) => (
+          <button
+            key={nextView}
+            type="button"
+            aria-pressed={view === nextView}
+            onClick={() => setView(nextView)}
+            className={`h-7 rounded-md px-2.5 text-[11px] font-medium ${
+              view === nextView
+                ? "bg-content/10 text-content"
+                : "text-content/45 hover:bg-content/5 hover:text-content/75"
+            }`}
+          >
+            {t(
+              nextView === "changes"
+                ? "sessionReview.changesView"
+                : "sessionReview.commitView",
+            )}
+          </button>
+        ))}
+      </fieldset>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {view === "commit" && commitNotice ? (
+          <p
+            role={commitNotice.kind === "success" ? "status" : "alert"}
+            className={`shrink-0 px-4 pt-2 text-[12px] ${
+              commitNotice.kind === "success"
+                ? "text-emerald-300"
+                : "text-amber-300"
+            }`}
+          >
+            {commitNotice.message}
+          </p>
+        ) : null}
+        <div className="min-h-0 flex-1">{content}</div>
+      </div>
+    </div>
   );
 }
 

@@ -140,6 +140,7 @@ function FilePaneComponent({
                 cwd={file.cwd}
                 sessionId={file.sessionChanges.sessionId}
                 focusPath={file.path !== file.cwd ? file.path : undefined}
+                initialView={file.sessionChanges.view}
               />
             ) : isReviewTab(file) ? (
               <GitDiffPane

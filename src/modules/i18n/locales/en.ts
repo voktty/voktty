@@ -5915,6 +5915,28 @@ export const en = {
     undo: "Undo",
     keep: "Keep",
     review: "Review",
+    commit: "Commit",
+    commitChanges: "Commit session changes",
+    sessionChangesViews: "Session change views",
+    changesView: "Changes",
+    commitView: "Commit",
+    findingRepositories: "Finding Git repositories…",
+    noExactFilesToCommit:
+      "These changes are shared with another session and cannot be committed here.",
+    noRepositoryForChanges:
+      "No Git repository was found for this session's changes.",
+    repository: "Repository",
+    commitSelected: "Commit {count} {count, plural, one {file} other {files}}",
+    committing: "Committing…",
+    commitMessage: "Commit message",
+    defaultCommitMessage: "Update session changes",
+    sharedFilesExcluded:
+      "{count} shared {count, plural, one {file was} other {files were}} excluded from this commit.",
+    unresolvedFilesExcluded:
+      "{count} {count, plural, one {file was} other {files were}} outside a Git repository and excluded.",
+    commitCheckpointRefreshFailed:
+      "The commit succeeded, but the session review could not be refreshed.",
+    commitSucceeded: "Committed as {sha}",
     undoAllSessionChanges: "Undo all session changes",
     undoLockedOtherSession:
       "Undo is unavailable while another session is running in this project",

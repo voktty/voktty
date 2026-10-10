@@ -424,6 +424,28 @@ describe("openSessionChangesTab", () => {
         ?.path,
     ).toBe("/repo/b.ts");
   });
+
+  it("switches the reused session tab to the requested view", () => {
+    const cwd = "/repo";
+    const commit = openSessionChangesTab(
+      newTab("session-a"),
+      cwd,
+      "session-a",
+      undefined,
+      "commit",
+    );
+    const changes = openSessionChangesTab(
+      commit,
+      cwd,
+      "session-a",
+      undefined,
+      "changes",
+    );
+    const file = changes.editorPanes[0]?.files.find(isSessionChangesTab);
+
+    expect(file?.sessionChanges.view).toBe("changes");
+    expect(changes.editorPanes[0]?.files).toHaveLength(1);
+  });
 });
 
 describe("openChangesTab", () => {

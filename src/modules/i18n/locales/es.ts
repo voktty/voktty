@@ -6043,6 +6043,29 @@ export const es: TranslationSchema = {
     undo: "Deshacer",
     keep: "Conservar",
     review: "Revisar",
+    commit: "Commit",
+    commitChanges: "Crear commit con los cambios de la sesión",
+    sessionChangesViews: "Vistas de cambios de sesión",
+    changesView: "Cambios",
+    commitView: "Commit",
+    findingRepositories: "Buscando repositorios Git…",
+    noExactFilesToCommit:
+      "Estos cambios son compartidos con otra sesión y no se pueden incluir aquí.",
+    noRepositoryForChanges:
+      "No se encontró un repositorio Git para los cambios de esta sesión.",
+    repository: "Repositorio",
+    commitSelected:
+      "Crear commit de {count} {count, plural, one {archivo} other {archivos}}",
+    committing: "Creando commit…",
+    commitMessage: "Mensaje del commit",
+    defaultCommitMessage: "Actualizar cambios de sesión",
+    sharedFilesExcluded:
+      "Se excluyeron {count} {count, plural, one {archivo compartido} other {archivos compartidos}} del commit.",
+    unresolvedFilesExcluded:
+      "Se excluyeron {count} {count, plural, one {archivo} other {archivos}} que no pertenecen a un repositorio Git.",
+    commitCheckpointRefreshFailed:
+      "El commit se creó, pero no se pudo actualizar la revisión de la sesión.",
+    commitSucceeded: "Commit creado: {sha}",
     undoAllSessionChanges: "Deshacer todos los cambios de la sesión",
     undoLockedOtherSession:
       "Deshacer no está disponible mientras otra sesión se ejecuta en este proyecto",

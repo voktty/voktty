@@ -38,7 +38,10 @@ export type PlanTabSource = {
 
 export type SessionChangesSource = {
   sessionId: string;
+  view?: SessionChangesView;
 };
+
+export type SessionChangesView = "changes" | "commit";
 
 export type FilePaneTab = {
   id: string;
@@ -127,13 +130,14 @@ export function newSessionChangesTab(
   cwd: string,
   sessionId: string,
   focusPath?: string,
+  view: SessionChangesView = "changes",
 ): FilePaneTab {
   return {
     id: crypto.randomUUID(),
     path: focusPath || cwd,
     cwd,
     review: true,
-    sessionChanges: { sessionId },
+    sessionChanges: { sessionId, view },
   };
 }
 
@@ -473,8 +477,9 @@ export function openSessionChangesTab(
   cwd: string,
   sessionId: string,
   focusPath?: string,
+  view: SessionChangesView = "changes",
 ): WorkspaceTab {
-  const next = newSessionChangesTab(cwd, sessionId, focusPath);
+  const next = newSessionChangesTab(cwd, sessionId, focusPath, view);
   const key = editorTabKey(next);
   const existingPane = tab.editorPanes.find((pane) =>
     pane.files.some((file) => editorTabKey(file) === key),
@@ -484,7 +489,11 @@ export function openSessionChangesTab(
   );
   if (!existingPane || !existingFile) return openEditorTab(tab, next);
 
-  const updated = focusPath ? { ...existingFile, path: focusPath } : existingFile;
+  const updated = {
+    ...existingFile,
+    ...(focusPath ? { path: focusPath } : {}),
+    sessionChanges: next.sessionChanges,
+  };
   return {
     ...tab,
     focusedId: existingPane.id,
